@@ -1,6 +1,6 @@
 /*
 
-Package test implements a integration testing framework for kubernetes.
+Package integration implements a integration testing framework for kubernetes.
 
 It provides a kubernetes API you can connect to and test your
 kubernetes client implementations against. The lifecycle of the components
@@ -49,4 +49,4 @@ pre-compiled versions of the needed binaries and place them in the default
 location.
 
 */
-package test
+package integration

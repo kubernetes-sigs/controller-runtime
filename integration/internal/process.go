@@ -16,12 +16,11 @@ import (
 
 type ProcessState struct {
 	DefaultedProcessInput
-	Session      *gexec.Session // TODO private?
+	Session      *gexec.Session
 	StartMessage string
 	Args         []string
 }
 
-// TODO explore ProcessInputs, Defaulter, ProcessState, ...
 type DefaultedProcessInput struct {
 	URL              url.URL
 	Dir              string

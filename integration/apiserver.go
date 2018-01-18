@@ -1,11 +1,11 @@
-package test
+package integration
 
 import (
 	"fmt"
 	"net/url"
 	"time"
 
-	"k8s.io/kubectl/pkg/framework/test/internal"
+	"github.com/kubernetes-sig-testing/frameworks/integration/internal"
 )
 
 // APIServer knows how to run a kubernetes apiserver.

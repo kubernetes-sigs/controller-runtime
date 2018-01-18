@@ -1,4 +1,4 @@
-package test
+package integration
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 
 	"net/url"
 
-	"k8s.io/kubectl/pkg/framework/test/internal"
+	"github.com/kubernetes-sig-testing/frameworks/integration/internal"
 )
 
 // Etcd knows how to run an etcd server.

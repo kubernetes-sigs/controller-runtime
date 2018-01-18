@@ -1,7 +1,7 @@
 package internal_test
 
 import (
-	. "k8s.io/kubectl/pkg/framework/test/internal"
+	. "github.com/kubernetes-sig-testing/frameworks/integration/internal"
 
 	"fmt"
 	"net"

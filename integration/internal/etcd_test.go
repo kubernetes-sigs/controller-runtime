@@ -3,7 +3,7 @@ package internal_test
 import (
 	"net/url"
 
-	. "k8s.io/kubectl/pkg/framework/test/internal"
+	. "github.com/kubernetes-sig-testing/frameworks/integration/internal"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
-	. "k8s.io/kubectl/pkg/framework/test/internal"
+	. "github.com/kubernetes-sig-testing/frameworks/integration/internal"
 )
 
 var _ = Describe("Start method", func() {

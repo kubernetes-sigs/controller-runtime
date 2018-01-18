@@ -19,7 +19,8 @@ type APIServer struct {
 	//
 	// If this is left as the empty string, we will attempt to locate a binary,
 	// by checking for the TEST_ASSET_KUBE_APISERVER environment variable, and
-	// the default test assets directory.
+	// the default test assets directory. See the "Binaries" section above (in
+	// doc.go) for details.
 	Path string
 
 	// CertDir is a path to a directory containing whatever certificates the

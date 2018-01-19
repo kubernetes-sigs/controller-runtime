@@ -13,7 +13,7 @@ and Etcd, you can use `./scripts/download-binaries.sh` to download APIServer
 and Etcd binaries for your platform. Then add something like the following to
 your tests:
 
-	cp := integration.NewControlPlane()
+	cp := &integration.ControlPlane{}
 	cp.Start()
 	// test your client against the API listening at cp.APIURL()
 	cp.Stop()
@@ -23,8 +23,8 @@ Components
 Currently the framework provides the following components:
 
 ControlPlane: The ControlPlane wraps Etcd & APIServer (see below) and wires
-them together correctly. A ControlPlane can be new'd up, stopped & started and
-can provide the URL to connect to the API. The ControlPlane is a good entry
+them together correctly. A ControlPlane can be stopped & started and can
+provide the URL to connect to the API. The ControlPlane is a good entry
 point for default setups.
 
 Etcd: Manages an Etcd binary, which can be started, stopped and connected to.
@@ -47,8 +47,12 @@ use when they get started.
 binary.
 For example:
 
-	cp := integration.NewControlPlane()
-	cp.Etcd.Path = "/usr/bin/etcd"
+	myEtcd := &Etcd{
+		Path: "/some/other/etcd",
+	}
+	cp := &integration.ControlPlane{
+		Etcd: myEtcd,
+	}
 	cp.Start()
 
 2. If the Path field on APIServer or Etcd is left unset and an environment

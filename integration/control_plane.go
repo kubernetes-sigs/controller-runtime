@@ -13,24 +13,18 @@ type ControlPlane struct {
 	Etcd      *Etcd
 }
 
-// NewControlPlane will give you a ControlPlane struct that's properly wired
-// together.
-func NewControlPlane() *ControlPlane {
-	etcd := &Etcd{}
-	apiserver := &APIServer{}
-
-	return &ControlPlane{
-		APIServer: apiserver,
-		Etcd:      etcd,
-	}
-}
-
 // Start will start your control plane processes. To stop them, call Stop().
 func (f *ControlPlane) Start() error {
+	if f.Etcd == nil {
+		f.Etcd = &Etcd{}
+	}
 	if err := f.Etcd.Start(); err != nil {
 		return err
 	}
 
+	if f.APIServer == nil {
+		f.APIServer = &APIServer{}
+	}
 	f.APIServer.EtcdURL = &f.Etcd.processState.URL
 	return f.APIServer.Start()
 }

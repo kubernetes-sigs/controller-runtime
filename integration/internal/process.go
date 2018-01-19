@@ -112,6 +112,13 @@ func (ps *ProcessState) Stop() error {
 		return nil
 	}
 
+	// gexec's Session methods (Signal, Kill, ...) do not check if the Process is
+	// nil, so we are doing this here for now.
+	// This should probably be fixed in gexec.
+	if ps.Session.Command.Process == nil {
+		return nil
+	}
+
 	detectedStop := ps.Session.Terminate().Exited
 	timedOut := time.After(ps.StopTimeout)
 

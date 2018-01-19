@@ -7,10 +7,10 @@ import (
 	"os/exec"
 	"time"
 
+	. "github.com/kubernetes-sig-testing/frameworks/integration/internal"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
-	. "github.com/kubernetes-sig-testing/frameworks/integration/internal"
 )
 
 var _ = Describe("Start method", func() {
@@ -43,27 +43,61 @@ var _ = Describe("Start method", func() {
 	})
 
 	Context("when the command cannot be started", func() {
-		It("propagates the error", func() {
-			processState := &ProcessState{}
+		var (
+			processState *ProcessState
+		)
+		BeforeEach(func() {
+			processState = &ProcessState{}
 			processState.Path = "/nonexistent"
+		})
 
+		It("propagates the error", func() {
 			err := processState.Start()
 
 			Expect(os.IsNotExist(err)).To(BeTrue())
+		})
+
+		Context("but Stop() is called on it", func() {
+			It("does not panic", func() {
+				processState.Start()
+
+				stoppingFailedProcess := func() {
+					Expect(processState.Stop()).To(Succeed())
+				}
+
+				Expect(stoppingFailedProcess).NotTo(Panic())
+			})
 		})
 	})
 })
 
 var _ = Describe("Stop method", func() {
-	It("can stop a process", func() {
-		var err error
+	Context("when Stop() is called", func() {
+		var (
+			processState *ProcessState
+		)
+		BeforeEach(func() {
+			var err error
+			processState = &ProcessState{}
+			processState.Session, err = gexec.Start(getSimpleCommand(), nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			processState.StopTimeout = 10 * time.Second
+		})
 
-		processState := &ProcessState{}
-		processState.Session, err = gexec.Start(getSimpleCommand(), nil, nil)
-		Expect(err).NotTo(HaveOccurred())
-		processState.StopTimeout = 10 * time.Second
+		It("stops the process", func() {
+			Expect(processState.Stop()).To(Succeed())
+		})
 
-		Expect(processState.Stop()).To(Succeed())
+		Context("multiple times", func() {
+			It("does not error or panic on consecutive calls", func() {
+				stoppingTheProcess := func() {
+					Expect(processState.Stop()).To(Succeed())
+				}
+				Expect(stoppingTheProcess).NotTo(Panic())
+				Expect(stoppingTheProcess).NotTo(Panic())
+				Expect(stoppingTheProcess).NotTo(Panic())
+			})
+		})
 	})
 
 	Context("when the command cannot be stopped", func() {

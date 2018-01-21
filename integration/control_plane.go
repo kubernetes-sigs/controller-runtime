@@ -48,3 +48,12 @@ func (f *ControlPlane) Stop() error {
 func (f *ControlPlane) APIURL() url.URL {
 	return f.APIServer.processState.URL
 }
+
+// KubeCtl returns a pre-configured KubeCtl, ready to connect to this
+// ControlPlane.
+func (f *ControlPlane) KubeCtl() *KubeCtl {
+	k := &KubeCtl{}
+	u := f.APIURL()
+	k.Opts = append(k.Opts, "--server="+(&u).String())
+	return k
+}

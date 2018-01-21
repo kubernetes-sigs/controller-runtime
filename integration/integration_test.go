@@ -40,6 +40,12 @@ var _ = Describe("The Testing Framework", func() {
 		Expect(isAPIServerListening()).To(BeTrue(),
 			fmt.Sprintf("Expected APIServer to listen on %s", apiServerURL.Host))
 
+		By("getting a kubectl & run it against the control plane")
+		kubeCtl := controlPlane.KubeCtl()
+		Expect(kubeCtl.Run("get", "pods")).To(Succeed())
+		Expect(kubeCtl.Stdout).To(BeEmpty())
+		Expect(kubeCtl.Stderr).To(ContainSubstring("No resources found."))
+
 		By("Stopping all the control plane processes")
 		err = controlPlane.Stop()
 		Expect(err).NotTo(HaveOccurred(), "Expected controlPlane to stop successfully")

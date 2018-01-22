@@ -1,4 +1,4 @@
-package integration_test
+package integration_tests
 
 import (
 	"fmt"
@@ -39,6 +39,12 @@ var _ = Describe("The Testing Framework", func() {
 		By("Ensuring APIServer is listening")
 		Expect(isAPIServerListening()).To(BeTrue(),
 			fmt.Sprintf("Expected APIServer to listen on %s", apiServerURL.Host))
+
+		By("getting a kubectl & run it against the control plane")
+		kubeCtl := controlPlane.KubeCtl()
+		Expect(kubeCtl.Run("get", "pods")).To(Succeed())
+		Expect(kubeCtl.Stdout).To(BeEmpty())
+		Expect(kubeCtl.Stderr).To(ContainSubstring("No resources found."))
 
 		By("Stopping all the control plane processes")
 		err = controlPlane.Stop()

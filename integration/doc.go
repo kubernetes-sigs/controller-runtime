@@ -15,7 +15,10 @@ your tests:
 
 	cp := &integration.ControlPlane{}
 	cp.Start()
-	// test your client against the API listening at cp.APIURL()
+	kubeCtl := cp.KubeCtl()
+	err := kubeCtl.Run("get", "pods")
+	// You can check on err, kubeCtl.Stdout & kubeCtl.Stderr and build up
+	// your tests
 	cp.Stop()
 
 Components
@@ -24,8 +27,9 @@ Currently the framework provides the following components:
 
 ControlPlane: The ControlPlane wraps Etcd & APIServer (see below) and wires
 them together correctly. A ControlPlane can be stopped & started and can
-provide the URL to connect to the API. The ControlPlane is a good entry
-point for default setups.
+provide the URL to connect to the API. The ControlPlane can also be asked for a
+KubeCtl which is already correctly configured for this ControlPlane. The
+ControlPlane is a good entry point for default setups.
 
 Etcd: Manages an Etcd binary, which can be started, stopped and connected to.
 By default Etcd will listen on a random port for http connections and will
@@ -37,6 +41,9 @@ connected to. By default APIServer will listen on a random port for http
 connections and will create a temporary directory to store the (auto-generated)
 certificates.  To configure it differently, see the APIServer type
 documentation below.
+
+KubeCtl: Wraps around a `kubectl` binary and can `Run(...)` arbitrary commands
+against a kubernetes control plane.
 
 Binaries
 

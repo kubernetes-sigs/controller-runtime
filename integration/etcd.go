@@ -19,8 +19,9 @@ type Etcd struct {
 	// Path is the path to the etcd binary.
 	//
 	// If this is left as the empty string, we will attempt to locate a binary,
-	// by checking for the TEST_ASSET_ETCD environment variable, and
-	// the default test assets directory.
+	// by checking for the TEST_ASSET_ETCD environment variable, and the default
+	// test assets directory. See the "Binaries" section above (in doc.go) for
+	// details.
 	Path string
 
 	// DataDir is a path to a directory in which etcd can store its state.

@@ -43,6 +43,25 @@ var _ = Describe("The Testing Framework", func() {
 
 		By("Ensuring APIServer is not listening anymore")
 		Expect(isAPIServerListening()).To(BeFalse(), "Expected APIServer not to listen anymore")
+
+		By("Not erroring when stopping a stopped ControlPlane")
+		Expect(func() {
+			Expect(controlPlane.Stop()).To(Succeed())
+		}).NotTo(Panic())
+	})
+
+	Context("when Stop() is called", func() {
+		Context("but the control plane is not started yet", func() {
+			It("does not error", func() {
+				cp := &integration.ControlPlane{}
+
+				stoppingTheControlPlane := func() {
+					Expect(cp.Stop()).To(Succeed())
+				}
+
+				Expect(stoppingTheControlPlane).NotTo(Panic())
+			})
+		})
 	})
 
 	Measure("It should be fast to bring up and tear down the control plane", func(b Benchmarker) {

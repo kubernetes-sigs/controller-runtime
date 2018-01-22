@@ -37,10 +37,17 @@ func (f *ControlPlane) Start() error {
 
 // Stop will stop your control plane processes, and clean up their data.
 func (f *ControlPlane) Stop() error {
-	if err := f.APIServer.Stop(); err != nil {
-		return err
+	if f.APIServer != nil {
+		if err := f.APIServer.Stop(); err != nil {
+			return err
+		}
 	}
-	return f.Etcd.Stop()
+	if f.Etcd != nil {
+		if err := f.Etcd.Stop(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // APIURL returns the URL you should connect to to talk to your API.

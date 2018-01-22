@@ -14,7 +14,7 @@ var _ = Describe("The Testing Framework", func() {
 	It("Successfully manages the control plane lifecycle", func() {
 		var err error
 
-		controlPlane := integration.NewControlPlane()
+		controlPlane := &integration.ControlPlane{}
 
 		By("Starting all the control plane processes")
 		err = controlPlane.Start()
@@ -50,7 +50,7 @@ var _ = Describe("The Testing Framework", func() {
 		}).NotTo(Panic())
 	})
 
-	Context("when Stop() is called", func() {
+	Context("when Stop() is called on the control plane", func() {
 		Context("but the control plane is not started yet", func() {
 			It("does not error", func() {
 				cp := &integration.ControlPlane{}
@@ -64,9 +64,32 @@ var _ = Describe("The Testing Framework", func() {
 		})
 	})
 
+	Context("when the control plane is configured with its components", func() {
+		It("it does not default them", func() {
+			myEtcd, myAPIServer :=
+				&integration.Etcd{StartTimeout: 15 * time.Second},
+				&integration.APIServer{StopTimeout: 16 * time.Second}
+
+			cp := &integration.ControlPlane{
+				Etcd:      myEtcd,
+				APIServer: myAPIServer,
+			}
+
+			defer func() {
+				Expect(cp.Stop()).To(Succeed())
+			}()
+
+			Expect(cp.Start()).To(Succeed())
+			Expect(cp.Etcd).To(BeIdenticalTo(myEtcd))
+			Expect(cp.APIServer).To(BeIdenticalTo(myAPIServer))
+			Expect(cp.Etcd.StartTimeout).To(Equal(15 * time.Second))
+			Expect(cp.APIServer.StopTimeout).To(Equal(16 * time.Second))
+		})
+	})
+
 	Measure("It should be fast to bring up and tear down the control plane", func(b Benchmarker) {
 		b.Time("lifecycle", func() {
-			controlPlane := integration.NewControlPlane()
+			controlPlane := &integration.ControlPlane{}
 
 			controlPlane.Start()
 			controlPlane.Stop()

@@ -17,8 +17,8 @@ var _ = Describe("Kubectl", func() {
 		Expect(k.Stderr).To(BeEmpty())
 	})
 
-	Context("when the command runs into an error", func() {
-		It("doesn't populate .Output but returns StdErr wrapped in an error", func() {
+	Context("when the command returns a non-zero exit code", func() {
+		It("returns an error", func() {
 			k := &KubeCtl{Path: "bash"}
 			args := []string{
 				"-c", "echo 'this is StdErr' >&2; echo 'but this is StdOut' >&1; exit 66",

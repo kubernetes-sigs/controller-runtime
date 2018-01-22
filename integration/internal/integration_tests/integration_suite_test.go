@@ -1,4 +1,4 @@
-package integration_test
+package integration_tests
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -9,5 +9,5 @@ import (
 
 func TestIntegration(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Integration Framework Unit Tests")
+	RunSpecs(t, "Integration Framework Integration Tests")
 }

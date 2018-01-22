@@ -11,10 +11,16 @@ import (
 )
 
 var _ = Describe("The Testing Framework", func() {
+	var controlPlane *integration.ControlPlane
+
+	AfterEach(func() {
+		Expect(controlPlane.Stop()).To(Succeed())
+	})
+
 	It("Successfully manages the control plane lifecycle", func() {
 		var err error
 
-		controlPlane := &integration.ControlPlane{}
+		controlPlane = &integration.ControlPlane{}
 
 		By("Starting all the control plane processes")
 		err = controlPlane.Start()
@@ -53,10 +59,10 @@ var _ = Describe("The Testing Framework", func() {
 	Context("when Stop() is called on the control plane", func() {
 		Context("but the control plane is not started yet", func() {
 			It("does not error", func() {
-				cp := &integration.ControlPlane{}
+				controlPlane = &integration.ControlPlane{}
 
 				stoppingTheControlPlane := func() {
-					Expect(cp.Stop()).To(Succeed())
+					Expect(controlPlane.Stop()).To(Succeed())
 				}
 
 				Expect(stoppingTheControlPlane).NotTo(Panic())
@@ -70,26 +76,22 @@ var _ = Describe("The Testing Framework", func() {
 				&integration.Etcd{StartTimeout: 15 * time.Second},
 				&integration.APIServer{StopTimeout: 16 * time.Second}
 
-			cp := &integration.ControlPlane{
+			controlPlane = &integration.ControlPlane{
 				Etcd:      myEtcd,
 				APIServer: myAPIServer,
 			}
 
-			defer func() {
-				Expect(cp.Stop()).To(Succeed())
-			}()
-
-			Expect(cp.Start()).To(Succeed())
-			Expect(cp.Etcd).To(BeIdenticalTo(myEtcd))
-			Expect(cp.APIServer).To(BeIdenticalTo(myAPIServer))
-			Expect(cp.Etcd.StartTimeout).To(Equal(15 * time.Second))
-			Expect(cp.APIServer.StopTimeout).To(Equal(16 * time.Second))
+			Expect(controlPlane.Start()).To(Succeed())
+			Expect(controlPlane.Etcd).To(BeIdenticalTo(myEtcd))
+			Expect(controlPlane.APIServer).To(BeIdenticalTo(myAPIServer))
+			Expect(controlPlane.Etcd.StartTimeout).To(Equal(15 * time.Second))
+			Expect(controlPlane.APIServer.StopTimeout).To(Equal(16 * time.Second))
 		})
 	})
 
 	Measure("It should be fast to bring up and tear down the control plane", func(b Benchmarker) {
 		b.Time("lifecycle", func() {
-			controlPlane := &integration.ControlPlane{}
+			controlPlane = &integration.ControlPlane{}
 
 			controlPlane.Start()
 			controlPlane.Stop()

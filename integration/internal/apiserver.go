@@ -14,7 +14,7 @@ func MakeAPIServerArgs(ps DefaultedProcessInput, etcdURL *url.URL) ([]string, er
 		"--authorization-mode=Node,RBAC",
 		"--runtime-config=admissionregistration.k8s.io/v1alpha1",
 		"--v=3", "--vmodule=",
-		"--admission-control=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,SecurityContextDeny,DefaultStorageClass,DefaultTolerationSeconds,GenericAdmissionWebhook,ResourceQuota",
+		"--admission-control=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,SecurityContextDeny,DefaultStorageClass,DefaultTolerationSeconds,ResourceQuota",
 		"--admission-control-config-file=",
 		"--bind-address=0.0.0.0",
 		"--storage-backend=etcd3",

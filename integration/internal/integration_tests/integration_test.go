@@ -2,6 +2,7 @@ package integration_tests
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"time"
 
@@ -42,9 +43,12 @@ var _ = Describe("The Testing Framework", func() {
 
 		By("getting a kubectl & run it against the control plane")
 		kubeCtl := controlPlane.KubeCtl()
-		Expect(kubeCtl.Run("get", "pods")).To(Succeed())
-		Expect(kubeCtl.Stdout).To(BeEmpty())
-		Expect(kubeCtl.Stderr).To(ContainSubstring("No resources found."))
+		stdout, stderr, err := kubeCtl.Run("get", "pods")
+		Expect(err).NotTo(HaveOccurred())
+		bytes, err := ioutil.ReadAll(stdout)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(bytes).To(BeEmpty())
+		Expect(stderr).To(ContainSubstring("No resources found."))
 
 		By("Stopping all the control plane processes")
 		err = controlPlane.Stop()

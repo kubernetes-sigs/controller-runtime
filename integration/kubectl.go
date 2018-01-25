@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bytes"
+	"io"
 	"os/exec"
 
 	"github.com/kubernetes-sig-testing/frameworks/integration/internal"
@@ -22,32 +23,25 @@ type KubeCtl struct {
 	// For example, you might want to use this to set the URL of the APIServer to
 	// connect to.
 	Opts []string
-
-	// Stdout & Stderr capture and store both Stdout & Stderr of the binary.
-	Stdout []byte
-	Stderr []byte
 }
 
 // Run executes the wrapped binary with some preconfigured options and the
-// arguments given to this method.
-func (k *KubeCtl) Run(args ...string) error {
+// arguments given to this method. It returns Readers for the stdout and
+// stderr.
+func (k *KubeCtl) Run(args ...string) (stdout, stderr io.Reader, err error) {
 	if k.Path == "" {
 		k.Path = internal.BinPathFinder("kubectl")
 	}
 
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-
+	stdoutBuffer := &bytes.Buffer{}
+	stderrBuffer := &bytes.Buffer{}
 	allArgs := append(k.Opts, args...)
 
 	cmd := exec.Command(k.Path, allArgs...)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stdout = stdoutBuffer
+	cmd.Stderr = stderrBuffer
 
-	err := cmd.Run()
+	err = cmd.Run()
 
-	k.Stdout = stdout.Bytes()
-	k.Stderr = stderr.Bytes()
-
-	return err
+	return stdoutBuffer, stderrBuffer, err
 }

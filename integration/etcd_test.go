@@ -1,6 +1,8 @@
 package integration_test
 
 import (
+	"bytes"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -27,5 +29,19 @@ var _ = Describe("Etcd", func() {
 		Expect(etcd.Path).NotTo(BeZero())
 		Expect(etcd.StartTimeout).NotTo(BeZero())
 		Expect(etcd.StopTimeout).NotTo(BeZero())
+	})
+
+	It("can inspect IO", func() {
+		stderr := &bytes.Buffer{}
+		etcd := &Etcd{
+			Err: stderr,
+		}
+
+		Expect(etcd.Start()).To(Succeed())
+		defer func() {
+			Expect(etcd.Stop()).To(Succeed())
+		}()
+
+		Expect(stderr.String()).NotTo(BeEmpty())
 	})
 })

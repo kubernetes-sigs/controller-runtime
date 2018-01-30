@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"io"
 	"time"
 
 	"net/url"
@@ -36,6 +37,14 @@ type Etcd struct {
 	StartTimeout time.Duration
 	StopTimeout  time.Duration
 
+	// Out, Err speficy where Etcd should write its StdOut, StdErr to.
+	//
+	// If not specified, these will be left as `nil` and the output of the
+	// process will be descarded and cannot be inspected. However, leaving either
+	// of those to `nil` is perfectly fine and will not result in any error.
+	Out io.Writer
+	Err io.Writer
+
 	processState *internal.ProcessState
 }
 
@@ -66,7 +75,7 @@ func (e *Etcd) Start() error {
 		&e.URL, &e.DataDir, &e.Path, &e.StartTimeout, &e.StopTimeout,
 	)
 
-	return e.processState.Start(nil, nil)
+	return e.processState.Start(e.Out, e.Err)
 }
 
 // Stop stops this process gracefully, waits for its termination, and cleans up

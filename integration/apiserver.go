@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"io"
 	"net/url"
 	"time"
 
@@ -41,6 +42,14 @@ type APIServer struct {
 	StartTimeout time.Duration
 	StopTimeout  time.Duration
 
+	// Out, Err speficy where Etcd should write its StdOut, StdErr to.
+	//
+	// If not specified, these will be left as `nil` and the output of the
+	// process will be descarded and cannot be inspected. However, leaving either
+	// of those to `nil` is perfectly fine and will not result in any error.
+	Out io.Writer
+	Err io.Writer
+
 	processState *internal.ProcessState
 }
 
@@ -77,7 +86,7 @@ func (s *APIServer) Start() error {
 		&s.URL, &s.CertDir, &s.Path, &s.StartTimeout, &s.StopTimeout,
 	)
 
-	return s.processState.Start(nil, nil)
+	return s.processState.Start(s.Out, s.Err)
 }
 
 // Stop stops this process gracefully, waits for its termination, and cleans up

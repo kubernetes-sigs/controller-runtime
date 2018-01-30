@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"os/exec"
 	"time"
@@ -86,14 +87,20 @@ func DoDefaulting(
 	return defaults, nil
 }
 
-func (ps *ProcessState) Start() (err error) {
+func (ps *ProcessState) Start(stdout, stderr io.Writer) (err error) {
 	command := exec.Command(ps.Path, ps.Args...)
 
-	stdErr := gbytes.NewBuffer()
-	detectedStart := stdErr.Detect(ps.StartMessage)
+	startDetectStream := gbytes.NewBuffer()
+	detectedStart := startDetectStream.Detect(ps.StartMessage)
 	timedOut := time.After(ps.StartTimeout)
 
-	ps.Session, err = gexec.Start(command, nil, stdErr)
+	if stderr == nil {
+		stderr = startDetectStream
+	} else {
+		stderr = io.MultiWriter(startDetectStream, stderr)
+	}
+
+	ps.Session, err = gexec.Start(command, stdout, stderr)
 	if err != nil {
 		return err
 	}

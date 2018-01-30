@@ -66,7 +66,7 @@ func (e *Etcd) Start() error {
 		&e.URL, &e.DataDir, &e.Path, &e.StartTimeout, &e.StopTimeout,
 	)
 
-	return e.processState.Start()
+	return e.processState.Start(nil, nil)
 }
 
 // Stop stops this process gracefully, waits for its termination, and cleans up

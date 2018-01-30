@@ -77,7 +77,7 @@ func (s *APIServer) Start() error {
 		&s.URL, &s.CertDir, &s.Path, &s.StartTimeout, &s.StopTimeout,
 	)
 
-	return s.processState.Start()
+	return s.processState.Start(nil, nil)
 }
 
 // Stop stops this process gracefully, waits for its termination, and cleans up

@@ -16,8 +16,8 @@ your tests:
 	cp := &integration.ControlPlane{}
 	cp.Start()
 	kubeCtl := cp.KubeCtl()
-	err := kubeCtl.Run("get", "pods")
-	// You can check on err, kubeCtl.Stdout & kubeCtl.Stderr and build up
+	stdout, stderr, err := kubeCtl.Run("get", "pods")
+	// You can check on err, stdout & stderr and build up
 	// your tests
 	cp.Stop()
 

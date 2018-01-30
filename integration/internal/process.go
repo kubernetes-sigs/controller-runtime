@@ -135,3 +135,18 @@ func (ps *ProcessState) Stop() error {
 
 	return nil
 }
+
+func (ps *ProcessState) CopyTo(
+	url **url.URL,
+	dir *string,
+	path *string,
+	startTimeout *time.Duration,
+	stopTimeout *time.Duration,
+) {
+	copiedURL := ps.URL
+	*url = &copiedURL
+	*dir = ps.Dir
+	*path = ps.Path
+	*startTimeout = ps.StartTimeout
+	*stopTimeout = ps.StopTimeout
+}

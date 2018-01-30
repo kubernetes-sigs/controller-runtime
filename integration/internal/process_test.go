@@ -197,6 +197,42 @@ var _ = Describe("DoDefaulting", func() {
 	})
 })
 
+var _ = Describe("CopyTo method", func() {
+	It("copies process state into external variables", func() {
+		ps := ProcessState{}
+		ps.URL = url.URL{Scheme: "https", Host: "some.host.tld:2233"}
+		ps.Dir = "some dir"
+		ps.Path = "some path"
+		ps.StartTimeout = 123
+		ps.StopTimeout = 456
+
+		destination := struct {
+			URL          *url.URL
+			Dir          string
+			Path         string
+			StartTimeout time.Duration
+			StopTimeout  time.Duration
+		}{}
+
+		ps.CopyTo(
+			&destination.URL, &destination.Dir, &destination.Path,
+			&destination.StartTimeout, &destination.StopTimeout,
+		)
+
+		ps.URL = url.URL{}
+		ps.Dir = ""
+		ps.Path = ""
+		ps.StartTimeout = 0
+		ps.StopTimeout = 0
+
+		Expect(destination.URL.String()).To(Equal("https://some.host.tld:2233"))
+		Expect(destination.Dir).To(Equal("some dir"))
+		Expect(destination.Path).To(Equal("some path"))
+		Expect(destination.StartTimeout).To(BeNumerically("==", 123))
+		Expect(destination.StopTimeout).To(BeNumerically("==", 456))
+	})
+})
+
 var simpleBashScript = []string{
 	"-c",
 	`

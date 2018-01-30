@@ -73,6 +73,10 @@ func (s *APIServer) Start() error {
 
 	s.processState.StartMessage = internal.GetAPIServerStartMessage(s.processState.URL)
 
+	s.processState.CopyTo(
+		&s.URL, &s.CertDir, &s.Path, &s.StartTimeout, &s.StopTimeout,
+	)
+
 	return s.processState.Start()
 }
 

@@ -26,7 +26,7 @@ func (f *ControlPlane) Start() error {
 	if f.APIServer == nil {
 		f.APIServer = &APIServer{}
 	}
-	f.APIServer.EtcdURL = &f.Etcd.processState.URL
+	f.APIServer.EtcdURL = f.Etcd.URL
 	return f.APIServer.Start()
 }
 
@@ -47,7 +47,7 @@ func (f *ControlPlane) Stop() error {
 
 // APIURL returns the URL you should connect to to talk to your API.
 func (f *ControlPlane) APIURL() *url.URL {
-	return &f.APIServer.processState.URL
+	return f.APIServer.URL
 }
 
 // KubeCtl returns a pre-configured KubeCtl, ready to connect to this

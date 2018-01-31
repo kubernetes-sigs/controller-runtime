@@ -47,7 +47,7 @@ against a kubernetes control plane.
 
 Binaries
 
-Both Etcd and APIServer use the same mechanism to determine which binaries to
+Etcd, APIServer & KubeCtl use the same mechanism to determine which binaries to
 use when they get started.
 
 1. If the component is configured with a `Path` the framework tries to run that
@@ -62,13 +62,14 @@ For example:
 	}
 	cp.Start()
 
-2. If the Path field on APIServer or Etcd is left unset and an environment
-variable named `TEST_ASSET_KUBE_APISERVER` or `TEST_ASSET_ETCD` is set, its
-value is used as a path to the binary for the APIServer or Etcd.
+2. If the Path field on APIServer, Etcd or KubeCtl is left unset and an
+environment variable named `TEST_ASSET_KUBE_APISERVER`, `TEST_ASSET_ETCD` or
+`TEST_ASSET_KUBECTL` is set, its value is used as a path to the binary for the
+APIServer, Etcd or KubeCtl.
 
 3. If neither the `Path` field, nor the environment variable is set, the
-framework tries to use the binaries `kube-apiserver` or `etcd` in the directory
-`${FRAMEWORK_DIR}/assets/bin/`.
+framework tries to use the binaries `kube-apiserver`, `etcd` or `kubectl` in
+the directory `${FRAMEWORK_DIR}/assets/bin/`.
 
 For convenience this framework ships with
 `${FRAMEWORK_DIR}/scripts/download-binaries.sh` which can be used to download

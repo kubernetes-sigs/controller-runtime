@@ -42,10 +42,10 @@ type APIServer struct {
 	StartTimeout time.Duration
 	StopTimeout  time.Duration
 
-	// Out, Err speficy where Etcd should write its StdOut, StdErr to.
+	// Out, Err specify where APIServer should write its StdOut, StdErr to.
 	//
 	// If not specified, these will be left as `nil` and the output of the
-	// process will be descarded and cannot be inspected. However, leaving either
+	// process will be discarded and cannot be inspected. However, leaving either
 	// of those to `nil` is perfectly fine and will not result in any error.
 	Out io.Writer
 	Err io.Writer

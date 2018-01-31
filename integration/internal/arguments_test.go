@@ -25,7 +25,7 @@ var _ = Describe("Arguments", func() {
 			nil,
 		}
 
-		out, err := TemplateArgs(templates, data)
+		out, err := RenderTemplates(templates, data)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(out).To(BeEquivalentTo([]string{
 			"plain URL: https://the.host.name:3456",
@@ -48,7 +48,7 @@ var _ = Describe("Arguments", func() {
 			"",
 		}
 
-		out, err := TemplateArgs(templates, data)
+		out, err := RenderTemplates(templates, data)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(out).To(BeEquivalentTo([]string{
 			"a string: this is some random string",
@@ -63,7 +63,7 @@ var _ = Describe("Arguments", func() {
 		}
 		data := struct{ test string }{"ooops private"}
 
-		out, err := TemplateArgs(templates, data)
+		out, err := RenderTemplates(templates, data)
 		Expect(out).To(BeEmpty())
 		Expect(err).To(MatchError(
 			ContainSubstring("is an unexported field of struct"),
@@ -71,10 +71,10 @@ var _ = Describe("Arguments", func() {
 	})
 
 	It("errors when field cannot be found", func() {
-		tmplArgs := []string{"this does {{ .NotExist }}"}
+		templates := []string{"this does {{ .NotExist }}"}
 		data := struct{ Unused string }{"unused"}
 
-		out, err := TemplateArgs(tmplArgs, data)
+		out, err := RenderTemplates(templates, data)
 		Expect(out).To(BeEmpty())
 		Expect(err).To(MatchError(
 			ContainSubstring("can't evaluate field"),

@@ -5,7 +5,7 @@ import (
 	"html/template"
 )
 
-func TemplateArgs(argTemplates []string, data interface{}) (args []string, err error) {
+func RenderTemplates(argTemplates []string, data interface{}) (args []string, err error) {
 	var t *template.Template
 
 	for _, arg := range argTemplates {

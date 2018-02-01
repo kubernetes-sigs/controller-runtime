@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"fmt"
 	"time"
 
 	"net/url"
@@ -61,7 +60,7 @@ func (e *Etcd) Start() error {
 
 	e.processState.Args = internal.MakeEtcdArgs(e.processState.DefaultedProcessInput)
 
-	e.processState.StartMessage = fmt.Sprintf("serving insecure client requests on %s", e.processState.URL.Hostname())
+	e.processState.StartMessage = internal.GetEtcdStartMessage(e.processState.URL)
 
 	return e.processState.Start()
 }

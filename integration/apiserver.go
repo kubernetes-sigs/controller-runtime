@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"fmt"
 	"net/url"
 	"time"
 
@@ -72,10 +71,7 @@ func (s *APIServer) Start() error {
 		return err
 	}
 
-	s.processState.StartMessage = fmt.Sprintf(
-		"Serving insecurely on %s",
-		s.processState.URL.Host,
-	)
+	s.processState.StartMessage = internal.GetAPIServerStartMessage(s.processState.URL)
 
 	return s.processState.Start()
 }

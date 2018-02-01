@@ -1,7 +1,8 @@
-package integration_test
+package integration_tests
 
 import (
 	"bytes"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -43,5 +44,23 @@ var _ = Describe("Etcd", func() {
 		}()
 
 		Expect(stderr.String()).NotTo(BeEmpty())
+	})
+
+	It("can use user specified Args", func() {
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		etcd := &Etcd{
+			Args:         []string{"--help"},
+			Out:          stdout,
+			Err:          stderr,
+			StartTimeout: 500 * time.Millisecond,
+		}
+
+		// it will timeout, as we'll never see the "startup message" we are waiting
+		// for on StdErr
+		Expect(etcd.Start()).To(MatchError(ContainSubstring("timeout")))
+
+		Expect(stdout.String()).To(ContainSubstring("member flags"))
+		Expect(stderr.String()).To(ContainSubstring("usage: etcd"))
 	})
 })

@@ -1,19 +1,20 @@
 package internal
 
-import (
-	"fmt"
-	"net/url"
-)
+import "net/url"
 
-func MakeEtcdArgs(input DefaultedProcessInput) []string {
-	args := []string{
-		"--debug",
-		"--listen-peer-urls=http://localhost:0",
-		fmt.Sprintf("--advertise-client-urls=%s", input.URL.String()),
-		fmt.Sprintf("--listen-client-urls=%s", input.URL.String()),
-		fmt.Sprintf("--data-dir=%s", input.Dir),
+var EtcdDefaultArgs = []string{
+	"--listen-peer-urls=http://localhost:0",
+	"--advertise-client-urls={{ .URL.String }}",
+	"--listen-client-urls={{ .URL.String }}",
+	"--data-dir={{ .DataDir }}",
+}
+
+func DoEtcdArgDefaulting(args []string) []string {
+	if len(args) != 0 {
+		return args
 	}
-	return args
+
+	return EtcdDefaultArgs
 }
 
 func isSecureScheme(scheme string) bool {

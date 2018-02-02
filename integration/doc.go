@@ -76,5 +76,38 @@ For convenience this framework ships with
 pre-compiled versions of the needed binaries and place them in the default
 location (`${FRAMEWORK_DIR}/assets/bin/`).
 
+Arguments for Etcd and APIServer
+
+Those components will start without any configuration. However, if you want our
+need to, you can override certain configuration -- one of which are the
+arguments used when calling the binary.
+
+When you choose to specify your own set of arguments, those won't be appended
+to the default set of arguments, it is your responsibility to provide all the
+arguments needed for the binary to start successfully.
+
+All arguments are interpreted as go templates. Those templates have access to
+all exported fields of the `APIServer`/`Etcd` struct. It does not matter if
+those fields where explicitly set up or if they were defaulted by calling the
+`Start()` method, the template evaluation runs just before the binary is
+executed and right after the defaulting of all the struct's fields has
+happened.
+
+	// All arguments needed for a successful start must be specified
+	etcdArgs := []string{
+		"--listen-peer-urls=http://localhost:0",
+		"--advertise-client-urls={{ .URL.String }}",
+		"--listen-client-urls={{ .URL.String }}",
+		"--data-dir={{ .DataDir }}",
+		// add some custom arguments
+		"--this-is-my-very-important-custom-argument",
+		"--arguments-dont-have-to-be-templates=but they can",
+	}
+
+	etcd := &Etcd{
+		Args:    etcdArgs,
+		DataDir: "/my/special/data/dir",
+	}
+
 */
 package integration

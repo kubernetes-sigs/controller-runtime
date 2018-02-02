@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"io"
 	"time"
 
 	"net/url"
@@ -36,6 +37,12 @@ type Etcd struct {
 	StartTimeout time.Duration
 	StopTimeout  time.Duration
 
+	// Out, Err specify where Etcd should write its StdOut, StdErr to.
+	//
+	// If not specified, the output will be discarded.
+	Out io.Writer
+	Err io.Writer
+
 	processState *internal.ProcessState
 }
 
@@ -62,7 +69,13 @@ func (e *Etcd) Start() error {
 
 	e.processState.StartMessage = internal.GetEtcdStartMessage(e.processState.URL)
 
-	return e.processState.Start()
+	e.URL = &e.processState.URL
+	e.DataDir = e.processState.Dir
+	e.Path = e.processState.Path
+	e.StartTimeout = e.processState.StartTimeout
+	e.StopTimeout = e.processState.StopTimeout
+
+	return e.processState.Start(e.Out, e.Err)
 }
 
 // Stop stops this process gracefully, waits for its termination, and cleans up

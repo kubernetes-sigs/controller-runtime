@@ -1,6 +1,7 @@
 package internal_test
 
 import (
+	"bytes"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -21,7 +22,7 @@ var _ = Describe("Start method", func() {
 		processState.StartTimeout = 10 * time.Second
 		processState.StartMessage = "loop 5"
 
-		err := processState.Start()
+		err := processState.Start(nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		Consistently(processState.Session.ExitCode).Should(BeNumerically("==", -1))
@@ -35,7 +36,7 @@ var _ = Describe("Start method", func() {
 			processState.StartTimeout = 200 * time.Millisecond
 			processState.StartMessage = "loop 5000"
 
-			err := processState.Start()
+			err := processState.Start(nil, nil)
 			Expect(err).To(MatchError(ContainSubstring("timeout")))
 
 			Eventually(processState.Session.ExitCode).Should(Equal(143))
@@ -52,14 +53,14 @@ var _ = Describe("Start method", func() {
 		})
 
 		It("propagates the error", func() {
-			err := processState.Start()
+			err := processState.Start(nil, nil)
 
 			Expect(os.IsNotExist(err)).To(BeTrue())
 		})
 
 		Context("but Stop() is called on it", func() {
 			It("does not panic", func() {
-				processState.Start()
+				processState.Start(nil, nil)
 
 				stoppingFailedProcess := func() {
 					Expect(processState.Stop()).To(Succeed())
@@ -67,6 +68,31 @@ var _ = Describe("Start method", func() {
 
 				Expect(stoppingFailedProcess).NotTo(Panic())
 			})
+		})
+	})
+
+	Context("when IO is configured", func() {
+		It("can inspect stdout & stderr", func() {
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+
+			processState := &ProcessState{}
+			processState.Path = "bash"
+			processState.Args = []string{
+				"-c",
+				`
+					echo 'this is stderr' >&2
+					echo 'that is stdout'
+					echo 'i started' >&2
+				`,
+			}
+			processState.StartMessage = "i started"
+			processState.StartTimeout = 1 * time.Second
+
+			Expect(processState.Start(stdout, stderr)).To(Succeed())
+
+			Expect(stdout.String()).To(Equal("that is stdout\n"))
+			Expect(stderr.String()).To(Equal("this is stderr\ni started\n"))
 		})
 	})
 })

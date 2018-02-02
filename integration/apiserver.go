@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"io"
 	"net/url"
 	"time"
 
@@ -41,6 +42,12 @@ type APIServer struct {
 	StartTimeout time.Duration
 	StopTimeout  time.Duration
 
+	// Out, Err specify where APIServer should write its StdOut, StdErr to.
+	//
+	// If not specified, the output will be discarded.
+	Out io.Writer
+	Err io.Writer
+
 	processState *internal.ProcessState
 }
 
@@ -73,7 +80,13 @@ func (s *APIServer) Start() error {
 
 	s.processState.StartMessage = internal.GetAPIServerStartMessage(s.processState.URL)
 
-	return s.processState.Start()
+	s.URL = &s.processState.URL
+	s.CertDir = s.processState.Dir
+	s.Path = s.processState.Path
+	s.StartTimeout = s.processState.StartTimeout
+	s.StopTimeout = s.processState.StopTimeout
+
+	return s.processState.Start(s.Out, s.Err)
 }
 
 // Stop stops this process gracefully, waits for its termination, and cleans up

@@ -44,9 +44,7 @@ type APIServer struct {
 
 	// Out, Err specify where APIServer should write its StdOut, StdErr to.
 	//
-	// If not specified, these will be left as `nil` and the output of the
-	// process will be discarded and cannot be inspected. However, leaving either
-	// of those to `nil` is perfectly fine and will not result in any error.
+	// If not specified, the output will be discarded.
 	Out io.Writer
 	Err io.Writer
 

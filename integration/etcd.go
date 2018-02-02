@@ -69,9 +69,11 @@ func (e *Etcd) Start() error {
 
 	e.processState.StartMessage = internal.GetEtcdStartMessage(e.processState.URL)
 
-	e.processState.CopyTo(
-		&e.URL, &e.DataDir, &e.Path, &e.StartTimeout, &e.StopTimeout,
-	)
+	e.URL = &e.processState.URL
+	e.DataDir = e.processState.Dir
+	e.Path = e.processState.Path
+	e.StartTimeout = e.processState.StartTimeout
+	e.StopTimeout = e.processState.StopTimeout
 
 	return e.processState.Start(e.Out, e.Err)
 }

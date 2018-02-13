@@ -150,7 +150,7 @@ var _ = Describe("Stop method", func() {
 			processState.Dir, err = ioutil.TempDir("", "k8s_test_framework_")
 			Expect(err).NotTo(HaveOccurred())
 			processState.DirNeedsCleaning = true
-			processState.StopTimeout = 200 * time.Millisecond
+			processState.StopTimeout = 400 * time.Millisecond
 
 			Expect(processState.Stop()).To(Succeed())
 			Expect(processState.Dir).NotTo(BeAnExistingFile())

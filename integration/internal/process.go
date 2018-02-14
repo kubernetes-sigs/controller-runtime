@@ -3,13 +3,12 @@ package internal
 import (
 	"fmt"
 	"io"
-	"net/url"
-	"os/exec"
-	"time"
-
-	"os"
-
 	"io/ioutil"
+	"net/url"
+	"os"
+	"os/exec"
+	"path"
+	"time"
 
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
@@ -110,7 +109,7 @@ func (ps *ProcessState) Start(stdout, stderr io.Writer) (err error) {
 		return nil
 	case <-timedOut:
 		ps.Session.Terminate()
-		return fmt.Errorf("timeout waiting for process to start serving")
+		return fmt.Errorf("timeout waiting for process %s to start", path.Base(ps.Path))
 	}
 }
 
@@ -133,7 +132,7 @@ func (ps *ProcessState) Stop() error {
 	case <-detectedStop:
 		break
 	case <-timedOut:
-		return fmt.Errorf("timeout waiting for process to stop")
+		return fmt.Errorf("timeout waiting for process %s to stop", path.Base(ps.Path))
 	}
 
 	if ps.DirNeedsCleaning {

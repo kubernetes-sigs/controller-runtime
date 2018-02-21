@@ -3,10 +3,10 @@ package internal
 import "net/url"
 
 var APIServerDefaultArgs = []string{
-	"--etcd-servers={{ .EtcdURL.String }}",
+	"--etcd-servers={{ if .EtcdURL }}{{ .EtcdURL.String }}{{ end }}",
 	"--cert-dir={{ .CertDir }}",
-	"--insecure-port={{ .URL.Port }}",
-	"--insecure-bind-address={{ .URL.Hostname }}",
+	"--insecure-port={{ if .URL }}{{ .URL.Port }}{{ end }}",
+	"--insecure-bind-address={{ if .URL }}{{ .URL.Hostname }}{{ end }}",
 	"--secure-port=0",
 }
 

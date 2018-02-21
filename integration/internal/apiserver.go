@@ -7,6 +7,7 @@ var APIServerDefaultArgs = []string{
 	"--cert-dir={{ .CertDir }}",
 	"--insecure-port={{ if .URL }}{{ .URL.Port }}{{ end }}",
 	"--insecure-bind-address={{ if .URL }}{{ .URL.Hostname }}{{ end }}",
+	"--secure-port=0",
 }
 
 func DoAPIServerArgDefaulting(args []string) []string {

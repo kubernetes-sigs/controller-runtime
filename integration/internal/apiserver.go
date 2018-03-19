@@ -19,11 +19,5 @@ func DoAPIServerArgDefaulting(args []string) []string {
 }
 
 func GetAPIServerStartMessage(u url.URL) string {
-	if isSecureScheme(u.Scheme) {
-		// https://github.com/kubernetes/kubernetes/blob/5337ff8009d02fad613440912e540bb41e3a88b1/staging/src/k8s.io/apiserver/pkg/server/serve.go#L89
-		return "Serving securely on " + u.Host
-	}
-
-	// https://github.com/kubernetes/kubernetes/blob/5337ff8009d02fad613440912e540bb41e3a88b1/pkg/kubeapiserver/server/insecure_handler.go#L121
-	return "Serving insecurely on " + u.Host
+	return "Caches are synced for autoregister controller"
 }

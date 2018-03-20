@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -16,7 +17,13 @@ import (
 
 type ProcessState struct {
 	DefaultedProcessInput
-	Session      *gexec.Session
+	Session *gexec.Session
+	// Healthcheck Endpoint. If we get http.StatusOK from this endpoint, we
+	// assume the process is ready to operate. E.g. "/healthz". If this is set,
+	// we ignore StartMessage.
+	HealthCheckEndpoint string
+	// Message to wait for on stderr. If we recieve this message, we assume the
+	// process is ready to operate. Ignored if HealthCheckEndpoint is specified.
 	StartMessage string
 	Args         []string
 }
@@ -89,14 +96,17 @@ func DoDefaulting(
 func (ps *ProcessState) Start(stdout, stderr io.Writer) (err error) {
 	command := exec.Command(ps.Path, ps.Args...)
 
-	startDetectStream := gbytes.NewBuffer()
-	detectedStart := startDetectStream.Detect(ps.StartMessage)
+	ready := make(chan bool)
 	timedOut := time.After(ps.StartTimeout)
 
-	if stderr == nil {
-		stderr = startDetectStream
+	if ps.HealthCheckEndpoint != "" {
+		healthCheckURL := ps.URL
+		healthCheckURL.Path = ps.HealthCheckEndpoint
+		go pollURLUntilOK(healthCheckURL, ready)
 	} else {
-		stderr = io.MultiWriter(startDetectStream, stderr)
+		startDetectStream := gbytes.NewBuffer()
+		ready = startDetectStream.Detect(ps.StartMessage)
+		stderr = safeMultiWriter(stderr, startDetectStream)
 	}
 
 	ps.Session, err = gexec.Start(command, stdout, stderr)
@@ -105,11 +115,34 @@ func (ps *ProcessState) Start(stdout, stderr io.Writer) (err error) {
 	}
 
 	select {
-	case <-detectedStart:
+	case <-ready:
 		return nil
 	case <-timedOut:
-		ps.Session.Terminate()
+		if ps.Session != nil {
+			ps.Session.Terminate()
+		}
 		return fmt.Errorf("timeout waiting for process %s to start", path.Base(ps.Path))
+	}
+}
+
+func safeMultiWriter(writers ...io.Writer) io.Writer {
+	safeWriters := []io.Writer{}
+	for _, w := range writers {
+		if w != nil {
+			safeWriters = append(safeWriters, w)
+		}
+	}
+	return io.MultiWriter(safeWriters...)
+}
+
+func pollURLUntilOK(url url.URL, ready chan bool) {
+	for {
+		res, err := http.Get(url.String())
+		if err == nil && res.StatusCode == http.StatusOK {
+			ready <- true
+			return
+		}
+		time.Sleep(time.Millisecond * 100)
 	}
 }
 

@@ -38,8 +38,7 @@ var _ = Describe("The Testing Framework", func() {
 			fmt.Sprintf("Expected Etcd to listen for clients on %s,", etcdClientURL.Host))
 
 		By("Ensuring APIServer is listening")
-		Expect(isAPIServerListening()).To(BeTrue(),
-			fmt.Sprintf("Expected APIServer to listen on %s", apiServerURL.Host))
+		CheckAPIServerIsReady(controlPlane.KubeCtl())
 
 		By("getting a kubectl & run it against the control plane")
 		kubeCtl := controlPlane.KubeCtl()
@@ -120,5 +119,29 @@ func isSomethingListeningOnPort(hostAndPort string) portChecker {
 		}
 		conn.Close()
 		return true
+	}
+}
+
+func CheckAPIServerIsReady(kubeCtl *integration.KubeCtl) {
+	expectedAPIS := []string{
+		"/api/v1/namespaces/default/pods 200 OK",
+		"/api/v1/namespaces/default/replicationcontrollers 200 OK",
+		"/api/v1/namespaces/default/services 200 OK",
+		"/apis/apps/v1/namespaces/default/daemonsets 200 OK",
+		"/apis/apps/v1/namespaces/default/deployments 200 OK",
+		"/apis/apps/v1/namespaces/default/replicasets 200 OK",
+		"/apis/apps/v1/namespaces/default/statefulsets 200 OK",
+		"/apis/autoscaling/v1/namespaces/default/horizontalpodautoscalers 200",
+		"/apis/batch/v1/namespaces/default/jobs 200 OK",
+	}
+
+	_, output, err := kubeCtl.Run("--v=6", "--namespace", "default", "get", "all", "--chunk-size=0")
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	stdoutBytes, err := ioutil.ReadAll(output)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	for _, api := range expectedAPIS {
+		ExpectWithOffset(1, string(stdoutBytes)).To(ContainSubstring(api))
 	}
 }

@@ -1,7 +1,5 @@
 package internal
 
-import "net/url"
-
 var APIServerDefaultArgs = []string{
 	"--etcd-servers={{ if .EtcdURL }}{{ .EtcdURL.String }}{{ end }}",
 	"--cert-dir={{ .CertDir }}",
@@ -16,8 +14,4 @@ func DoAPIServerArgDefaulting(args []string) []string {
 	}
 
 	return APIServerDefaultArgs
-}
-
-func GetAPIServerStartMessage(u url.URL) string {
-	return "Caches are synced for autoregister controller"
 }

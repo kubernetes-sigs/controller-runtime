@@ -87,7 +87,7 @@ func (s *APIServer) Start() error {
 		return err
 	}
 
-	s.processState.StartMessage = internal.GetAPIServerStartMessage(s.processState.URL)
+	s.processState.HealthCheckEndpoint = "/healthz"
 
 	s.URL = &s.processState.URL
 	s.CertDir = s.processState.Dir

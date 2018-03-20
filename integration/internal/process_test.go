@@ -2,7 +2,9 @@ package internal_test
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -12,6 +14,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
+	"github.com/onsi/gomega/ghttp"
 )
 
 var _ = Describe("Start method", func() {
@@ -28,45 +31,155 @@ var _ = Describe("Start method", func() {
 		Consistently(processState.Session.ExitCode).Should(BeNumerically("==", -1))
 	})
 
-	Context("when process takes too long to start", func() {
-		It("returns a timeout error", func() {
-			processState := &ProcessState{}
-			processState.Path = "bash"
-			processState.Args = simpleBashScript
-			processState.StartTimeout = 200 * time.Millisecond
-			processState.StartMessage = "loop 5000"
+	Context("when a health check endpoint is provided", func() {
+		var server *ghttp.Server
+		BeforeEach(func() {
+			server = ghttp.NewServer()
 
-			err := processState.Start(nil, nil)
-			Expect(err).To(MatchError(ContainSubstring("timeout")))
+		})
+		AfterEach(func() {
+			server.Close()
+		})
 
-			Eventually(processState.Session.ExitCode).Should(Equal(143))
+		Context("when the healthcheck returns ok", func() {
+			BeforeEach(func() {
+				server.RouteToHandler("GET", "/healthz", ghttp.RespondWith(http.StatusOK, ""))
+			})
+
+			It("hits the endpoint, and successfully starts", func() {
+				processState := &ProcessState{}
+				processState.Path = "bash"
+				processState.Args = simpleBashScript
+				processState.HealthCheckEndpoint = "/healthz"
+				processState.StartTimeout = 100 * time.Millisecond
+
+				url, err := url.Parse(server.URL())
+				Expect(err).NotTo(HaveOccurred())
+				processState.URL = *url
+
+				err = processState.Start(nil, nil)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(server.ReceivedRequests()).To(HaveLen(1))
+				Consistently(processState.Session.ExitCode).Should(BeNumerically("==", -1))
+			})
+		})
+
+		Context("when the healthcheck always returns failure", func() {
+			BeforeEach(func() {
+				server.RouteToHandler("GET", "/healthz", ghttp.RespondWith(http.StatusInternalServerError, ""))
+			})
+			It("returns a timeout error", func() {
+				processState := &ProcessState{}
+				processState.Path = "bash"
+				processState.Args = simpleBashScript
+				processState.HealthCheckEndpoint = "/healthz"
+				processState.StartTimeout = 500 * time.Millisecond
+
+				url, err := url.Parse(server.URL())
+				Expect(err).NotTo(HaveOccurred())
+				processState.URL = *url
+
+				err = processState.Start(nil, nil)
+				Expect(err).To(MatchError(ContainSubstring("timeout")))
+			})
+		})
+		Context("when the healthcheck isn't even listening", func() {
+			BeforeEach(func() {
+				server.Close()
+			})
+
+			It("returns a timeout error", func() {
+				processState := &ProcessState{}
+				processState.Path = "bash"
+				processState.Args = simpleBashScript
+				processState.HealthCheckEndpoint = "/healthz"
+				processState.StartTimeout = 500 * time.Millisecond
+
+				am := &AddressManager{}
+				port, host, err := am.Initialize()
+				Expect(err).NotTo(HaveOccurred())
+
+				processState.URL = url.URL{
+					Scheme: "http",
+					Host:   fmt.Sprintf("%s:%d", host, port),
+				}
+
+				err = processState.Start(nil, nil)
+				Expect(err).To(MatchError(ContainSubstring("timeout")))
+			})
+		})
+
+		Context("when the healthcheck fails initially but succeeds eventually", func() {
+			BeforeEach(func() {
+				server.AppendHandlers(
+					ghttp.RespondWith(http.StatusInternalServerError, ""),
+					ghttp.RespondWith(http.StatusInternalServerError, ""),
+					ghttp.RespondWith(http.StatusInternalServerError, ""),
+					ghttp.RespondWith(http.StatusOK, ""),
+				)
+			})
+
+			It("hits the endpoint repeatedly, and successfully starts", func() {
+				processState := &ProcessState{}
+				processState.Path = "bash"
+				processState.Args = simpleBashScript
+				processState.HealthCheckEndpoint = "/healthz"
+				processState.StartTimeout = 20 * time.Second
+
+				url, err := url.Parse(server.URL())
+				Expect(err).NotTo(HaveOccurred())
+				processState.URL = *url
+
+				err = processState.Start(nil, nil)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(server.ReceivedRequests()).To(HaveLen(4))
+				Consistently(processState.Session.ExitCode).Should(BeNumerically("==", -1))
+			})
 		})
 	})
 
-	Context("when the command cannot be started", func() {
-		var (
-			processState *ProcessState
-		)
-		BeforeEach(func() {
-			processState = &ProcessState{}
-			processState.Path = "/nonexistent"
+	Context("when a health check endpoint is not provided", func() {
+
+		Context("when process takes too long to start", func() {
+			It("returns a timeout error", func() {
+				processState := &ProcessState{}
+				processState.Path = "bash"
+				processState.Args = simpleBashScript
+				processState.StartTimeout = 200 * time.Millisecond
+				processState.StartMessage = "loop 5000"
+
+				err := processState.Start(nil, nil)
+				Expect(err).To(MatchError(ContainSubstring("timeout")))
+
+				Eventually(processState.Session.ExitCode).Should(Equal(143))
+			})
 		})
 
-		It("propagates the error", func() {
-			err := processState.Start(nil, nil)
+		Context("when the command cannot be started", func() {
+			var (
+				processState *ProcessState
+			)
+			BeforeEach(func() {
+				processState = &ProcessState{}
+				processState.Path = "/nonexistent"
+			})
 
-			Expect(os.IsNotExist(err)).To(BeTrue())
-		})
+			It("propagates the error", func() {
+				err := processState.Start(nil, nil)
 
-		Context("but Stop() is called on it", func() {
-			It("does not panic", func() {
-				processState.Start(nil, nil)
+				Expect(os.IsNotExist(err)).To(BeTrue())
+			})
 
-				stoppingFailedProcess := func() {
-					Expect(processState.Stop()).To(Succeed())
-				}
+			Context("but Stop() is called on it", func() {
+				It("does not panic", func() {
+					processState.Start(nil, nil)
 
-				Expect(stoppingFailedProcess).NotTo(Panic())
+					stoppingFailedProcess := func() {
+						Expect(processState.Stop()).To(Succeed())
+					}
+
+					Expect(stoppingFailedProcess).NotTo(Panic())
+				})
 			})
 		})
 	})

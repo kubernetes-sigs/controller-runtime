@@ -122,6 +122,19 @@ func isSomethingListeningOnPort(hostAndPort string) portChecker {
 	}
 }
 
+// CheckAPIServerIsReady checks if the APIServer is really ready and not only
+// listening.
+//
+// While porting some tests in k/k
+// (https://github.com/hoegaarden/kubernetes/blob/287fdef1bd98646bc521f4433c1009936d5cf7a2/hack/make-rules/test-cmd-util.sh#L1524-L1535)
+// we found, that the APIServer was
+// listening but not serving certain APIs yet.
+//
+// We changed the readiness detection in the PR at
+// https://github.com/kubernetes-sigs/testing_frameworks/pull/48. To confirm
+// this changed behaviour does what it should do, we used the same test as in
+// k/k's test-cmd (see link above) and test if certain well-known known APIs
+// are actually available.
 func CheckAPIServerIsReady(kubeCtl *integration.KubeCtl) {
 	expectedAPIS := []string{
 		"/api/v1/namespaces/default/pods 200 OK",

@@ -71,7 +71,7 @@ var _ = Describe("Start method", func() {
 			BeforeEach(func() {
 				server.RouteToHandler("GET", "/healthz", ghttp.RespondWith(http.StatusInternalServerError, ""))
 			})
-			It("returns a timeout error", func() {
+			It("returns a timeout error and stops health API checker", func() {
 				processState.HealthCheckEndpoint = "/healthz"
 				processState.StartTimeout = 500 * time.Millisecond
 
@@ -81,8 +81,14 @@ var _ = Describe("Start method", func() {
 
 				err = processState.Start(nil, nil)
 				Expect(err).To(MatchError(ContainSubstring("timeout")))
+
+				nrReceivedRequests := len(server.ReceivedRequests())
+				Expect(nrReceivedRequests).To(Equal(5))
+				time.Sleep(200 * time.Millisecond)
+				Expect(nrReceivedRequests).To(Equal(5))
 			})
 		})
+
 		Context("when the healthcheck isn't even listening", func() {
 			BeforeEach(func() {
 				server.Close()

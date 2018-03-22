@@ -97,12 +97,12 @@ func (ps *ProcessState) Start(stdout, stderr io.Writer) (err error) {
 	command := exec.Command(ps.Path, ps.Args...)
 
 	ready := make(chan bool)
-	timedOut := time.After(ps.StartTimeout)
+	timedOut, timeOutPoller := teeTimer(time.After(ps.StartTimeout))
 
 	if ps.HealthCheckEndpoint != "" {
 		healthCheckURL := ps.URL
 		healthCheckURL.Path = ps.HealthCheckEndpoint
-		go pollURLUntilOK(healthCheckURL, ready)
+		go pollURLUntilOK(healthCheckURL, ready, timeOutPoller)
 	} else {
 		startDetectStream := gbytes.NewBuffer()
 		ready = startDetectStream.Detect(ps.StartMessage)
@@ -125,6 +125,25 @@ func (ps *ProcessState) Start(stdout, stderr io.Writer) (err error) {
 	}
 }
 
+func teeTimer(src <-chan time.Time) (chan time.Time, chan time.Time) {
+	destLeft := make(chan time.Time)
+	destRight := make(chan time.Time)
+
+	go func() {
+		for {
+			t, more := <-src
+			destLeft <- t
+			destRight <- t
+			if !more {
+				close(destLeft)
+				close(destRight)
+			}
+		}
+	}()
+
+	return destLeft, destRight
+}
+
 func safeMultiWriter(writers ...io.Writer) io.Writer {
 	safeWriters := []io.Writer{}
 	for _, w := range writers {
@@ -135,14 +154,29 @@ func safeMultiWriter(writers ...io.Writer) io.Writer {
 	return io.MultiWriter(safeWriters...)
 }
 
-func pollURLUntilOK(url url.URL, ready chan bool) {
-	for {
+func pollURLUntilOK(url url.URL, ready chan bool, timedOut <-chan time.Time) {
+	checker := func() bool {
 		res, err := http.Get(url.String())
 		if err == nil && res.StatusCode == http.StatusOK {
 			ready <- true
+			return true
+		}
+		return false
+	}
+
+	if isReady := checker(); isReady {
+		return
+	}
+
+	for {
+		select {
+		case <-time.Tick(time.Millisecond * 100):
+			if isReady := checker(); isReady {
+				return
+			}
+		case <-timedOut:
 			return
 		}
-		time.Sleep(time.Millisecond * 100)
 	}
 }
 

@@ -22,8 +22,14 @@ type ProcessState struct {
 	// assume the process is ready to operate. E.g. "/healthz". If this is set,
 	// we ignore StartMessage.
 	HealthCheckEndpoint string
-	// Message to wait for on stderr. If we recieve this message, we assume the
-	// process is ready to operate. Ignored if HealthCheckEndpoint is specified.
+	// StartMessage is the message to wait for on stderr. If we recieve this
+	// message, we assume the process is ready to operate. Ignored if
+	// HealthCheckEndpoint is specified.
+	//
+	// The usage of StartMessage is discouraged, favour HealthCheckEndpoint
+	// instead!
+	//
+	// Deprecated: Use HealthCheckEndpoint in favour of StartMessage
 	StartMessage string
 	Args         []string
 }

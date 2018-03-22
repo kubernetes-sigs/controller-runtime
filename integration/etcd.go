@@ -6,7 +6,7 @@ import (
 
 	"net/url"
 
-	"github.com/kubernetes-sig-testing/frameworks/integration/internal"
+	"github.com/kubernetes-sigs/testing_frameworks/integration/internal"
 )
 
 // Etcd knows how to run an etcd server.

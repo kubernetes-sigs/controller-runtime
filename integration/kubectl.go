@@ -5,7 +5,7 @@ import (
 	"io"
 	"os/exec"
 
-	"github.com/kubernetes-sig-testing/frameworks/integration/internal"
+	"github.com/kubernetes-sigs/testing_frameworks/integration/internal"
 )
 
 // KubeCtl is a wrapper around the kubectl binary.

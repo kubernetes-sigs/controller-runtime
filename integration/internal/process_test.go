@@ -18,10 +18,16 @@ import (
 )
 
 var _ = Describe("Start method", func() {
-	It("can start a process", func() {
-		processState := &ProcessState{}
+	var (
+		processState *ProcessState
+	)
+	BeforeEach(func() {
+		processState = &ProcessState{}
 		processState.Path = "bash"
 		processState.Args = simpleBashScript
+	})
+
+	It("can start a process", func() {
 		processState.StartTimeout = 10 * time.Second
 		processState.StartMessage = "loop 5"
 
@@ -47,9 +53,6 @@ var _ = Describe("Start method", func() {
 			})
 
 			It("hits the endpoint, and successfully starts", func() {
-				processState := &ProcessState{}
-				processState.Path = "bash"
-				processState.Args = simpleBashScript
 				processState.HealthCheckEndpoint = "/healthz"
 				processState.StartTimeout = 100 * time.Millisecond
 
@@ -69,9 +72,6 @@ var _ = Describe("Start method", func() {
 				server.RouteToHandler("GET", "/healthz", ghttp.RespondWith(http.StatusInternalServerError, ""))
 			})
 			It("returns a timeout error", func() {
-				processState := &ProcessState{}
-				processState.Path = "bash"
-				processState.Args = simpleBashScript
 				processState.HealthCheckEndpoint = "/healthz"
 				processState.StartTimeout = 500 * time.Millisecond
 
@@ -89,9 +89,6 @@ var _ = Describe("Start method", func() {
 			})
 
 			It("returns a timeout error", func() {
-				processState := &ProcessState{}
-				processState.Path = "bash"
-				processState.Args = simpleBashScript
 				processState.HealthCheckEndpoint = "/healthz"
 				processState.StartTimeout = 500 * time.Millisecond
 
@@ -120,9 +117,6 @@ var _ = Describe("Start method", func() {
 			})
 
 			It("hits the endpoint repeatedly, and successfully starts", func() {
-				processState := &ProcessState{}
-				processState.Path = "bash"
-				processState.Args = simpleBashScript
 				processState.HealthCheckEndpoint = "/healthz"
 				processState.StartTimeout = 20 * time.Second
 
@@ -142,9 +136,6 @@ var _ = Describe("Start method", func() {
 
 		Context("when process takes too long to start", func() {
 			It("returns a timeout error", func() {
-				processState := &ProcessState{}
-				processState.Path = "bash"
-				processState.Args = simpleBashScript
 				processState.StartTimeout = 200 * time.Millisecond
 				processState.StartMessage = "loop 5000"
 
@@ -156,9 +147,6 @@ var _ = Describe("Start method", func() {
 		})
 
 		Context("when the command cannot be started", func() {
-			var (
-				processState *ProcessState
-			)
 			BeforeEach(func() {
 				processState = &ProcessState{}
 				processState.Path = "/nonexistent"
@@ -189,8 +177,6 @@ var _ = Describe("Start method", func() {
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
 
-			processState := &ProcessState{}
-			processState.Path = "bash"
 			processState.Args = []string{
 				"-c",
 				`

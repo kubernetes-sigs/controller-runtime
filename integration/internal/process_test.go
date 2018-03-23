@@ -41,7 +41,6 @@ var _ = Describe("Start method", func() {
 		var server *ghttp.Server
 		BeforeEach(func() {
 			server = ghttp.NewServer()
-
 		})
 		AfterEach(func() {
 			server.Close()
@@ -134,6 +133,38 @@ var _ = Describe("Start method", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(server.ReceivedRequests()).To(HaveLen(4))
 				Consistently(processState.Session.ExitCode).Should(BeNumerically("==", -1))
+			})
+
+			Context("when the polling interval is not configured", func() {
+				It("uses the default interval for polling", func() {
+					processState.HealthCheckEndpoint = "/helathz"
+					processState.StartTimeout = 300 * time.Millisecond
+
+					url, err := url.Parse(server.URL())
+					Expect(err).NotTo(HaveOccurred())
+					processState.URL = *url
+
+					Expect(processState.Start(nil, nil)).To(MatchError(ContainSubstring("timeout")))
+					Expect(server.ReceivedRequests()).To(HaveLen(3))
+				})
+			})
+
+			Context("when the polling interval is configured", func() {
+				BeforeEach(func() {
+					processState.HealthCheckPollInterval = time.Millisecond * 20
+				})
+
+				It("hits the endpoint in the configured interval", func() {
+					processState.HealthCheckEndpoint = "/healthz"
+					processState.StartTimeout = 3 * processState.HealthCheckPollInterval
+
+					url, err := url.Parse(server.URL())
+					Expect(err).NotTo(HaveOccurred())
+					processState.URL = *url
+
+					Expect(processState.Start(nil, nil)).To(MatchError(ContainSubstring("timeout")))
+					Expect(server.ReceivedRequests()).To(HaveLen(3))
+				})
 			})
 		})
 	})

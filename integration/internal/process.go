@@ -22,6 +22,10 @@ type ProcessState struct {
 	// assume the process is ready to operate. E.g. "/healthz". If this is set,
 	// we ignore StartMessage.
 	HealthCheckEndpoint string
+	// HealthCheckPollInterval is the interval which will be used for polling the
+	// HealthCheckEndpoint.
+	// If left empty it will default to 100 Milliseconds.
+	HealthCheckPollInterval time.Duration
 	// StartMessage is the message to wait for on stderr. If we recieve this
 	// message, we assume the process is ready to operate. Ignored if
 	// HealthCheckEndpoint is specified.
@@ -112,7 +116,7 @@ func (ps *ProcessState) Start(stdout, stderr io.Writer) (err error) {
 		healthCheckURL := ps.URL
 		healthCheckURL.Path = ps.HealthCheckEndpoint
 		pollerStopCh = make(stopChannel)
-		go pollURLUntilOK(healthCheckURL, ready, pollerStopCh)
+		go pollURLUntilOK(healthCheckURL, ps.HealthCheckPollInterval, ready, pollerStopCh)
 	} else {
 		startDetectStream := gbytes.NewBuffer()
 		ready = startDetectStream.Detect(ps.StartMessage)
@@ -148,7 +152,10 @@ func safeMultiWriter(writers ...io.Writer) io.Writer {
 	return io.MultiWriter(safeWriters...)
 }
 
-func pollURLUntilOK(url url.URL, ready chan bool, stopCh stopChannel) {
+func pollURLUntilOK(url url.URL, interval time.Duration, ready chan bool, stopCh stopChannel) {
+	if interval <= 0 {
+		interval = 100 * time.Millisecond
+	}
 	for {
 		res, err := http.Get(url.String())
 		if err == nil && res.StatusCode == http.StatusOK {
@@ -160,7 +167,7 @@ func pollURLUntilOK(url url.URL, ready chan bool, stopCh stopChannel) {
 		case <-stopCh:
 			return
 		default:
-			time.Sleep(time.Millisecond * 100)
+			time.Sleep(interval)
 		}
 	}
 }

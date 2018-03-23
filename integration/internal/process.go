@@ -99,16 +99,20 @@ func DoDefaulting(
 	return defaults, nil
 }
 
+type stopChannel chan struct{}
+
 func (ps *ProcessState) Start(stdout, stderr io.Writer) (err error) {
 	command := exec.Command(ps.Path, ps.Args...)
 
 	ready := make(chan bool)
-	timedOut, timeOutPoller := teeTimer(time.After(ps.StartTimeout))
+	timedOut := time.After(ps.StartTimeout)
+	var pollerStopCh stopChannel
 
 	if ps.HealthCheckEndpoint != "" {
 		healthCheckURL := ps.URL
 		healthCheckURL.Path = ps.HealthCheckEndpoint
-		go pollURLUntilOK(healthCheckURL, ready, timeOutPoller)
+		pollerStopCh = make(stopChannel)
+		go pollURLUntilOK(healthCheckURL, ready, pollerStopCh)
 	} else {
 		startDetectStream := gbytes.NewBuffer()
 		ready = startDetectStream.Detect(ps.StartMessage)
@@ -124,30 +128,14 @@ func (ps *ProcessState) Start(stdout, stderr io.Writer) (err error) {
 	case <-ready:
 		return nil
 	case <-timedOut:
+		if pollerStopCh != nil {
+			close(pollerStopCh)
+		}
 		if ps.Session != nil {
 			ps.Session.Terminate()
 		}
 		return fmt.Errorf("timeout waiting for process %s to start", path.Base(ps.Path))
 	}
-}
-
-func teeTimer(src <-chan time.Time) (chan time.Time, chan time.Time) {
-	destLeft := make(chan time.Time)
-	destRight := make(chan time.Time)
-
-	go func() {
-		for {
-			t, more := <-src
-			destLeft <- t
-			destRight <- t
-			if !more {
-				close(destLeft)
-				close(destRight)
-			}
-		}
-	}()
-
-	return destLeft, destRight
 }
 
 func safeMultiWriter(writers ...io.Writer) io.Writer {
@@ -160,28 +148,19 @@ func safeMultiWriter(writers ...io.Writer) io.Writer {
 	return io.MultiWriter(safeWriters...)
 }
 
-func pollURLUntilOK(url url.URL, ready chan bool, timedOut <-chan time.Time) {
-	checker := func() bool {
+func pollURLUntilOK(url url.URL, ready chan bool, stopCh stopChannel) {
+	for {
 		res, err := http.Get(url.String())
 		if err == nil && res.StatusCode == http.StatusOK {
 			ready <- true
-			return true
-		}
-		return false
-	}
-
-	if isReady := checker(); isReady {
-		return
-	}
-
-	for {
-		select {
-		case <-time.Tick(time.Millisecond * 100):
-			if isReady := checker(); isReady {
-				return
-			}
-		case <-timedOut:
 			return
+		}
+
+		select {
+		case <-stopCh:
+			return
+		default:
+			time.Sleep(time.Millisecond * 100)
 		}
 	}
 }

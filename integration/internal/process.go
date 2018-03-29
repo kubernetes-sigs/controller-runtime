@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -16,7 +17,23 @@ import (
 
 type ProcessState struct {
 	DefaultedProcessInput
-	Session      *gexec.Session
+	Session *gexec.Session
+	// Healthcheck Endpoint. If we get http.StatusOK from this endpoint, we
+	// assume the process is ready to operate. E.g. "/healthz". If this is set,
+	// we ignore StartMessage.
+	HealthCheckEndpoint string
+	// HealthCheckPollInterval is the interval which will be used for polling the
+	// HealthCheckEndpoint.
+	// If left empty it will default to 100 Milliseconds.
+	HealthCheckPollInterval time.Duration
+	// StartMessage is the message to wait for on stderr. If we recieve this
+	// message, we assume the process is ready to operate. Ignored if
+	// HealthCheckEndpoint is specified.
+	//
+	// The usage of StartMessage is discouraged, favour HealthCheckEndpoint
+	// instead!
+	//
+	// Deprecated: Use HealthCheckEndpoint in favour of StartMessage
 	StartMessage string
 	Args         []string
 }
@@ -86,17 +103,24 @@ func DoDefaulting(
 	return defaults, nil
 }
 
+type stopChannel chan struct{}
+
 func (ps *ProcessState) Start(stdout, stderr io.Writer) (err error) {
 	command := exec.Command(ps.Path, ps.Args...)
 
-	startDetectStream := gbytes.NewBuffer()
-	detectedStart := startDetectStream.Detect(ps.StartMessage)
+	ready := make(chan bool)
 	timedOut := time.After(ps.StartTimeout)
+	var pollerStopCh stopChannel
 
-	if stderr == nil {
-		stderr = startDetectStream
+	if ps.HealthCheckEndpoint != "" {
+		healthCheckURL := ps.URL
+		healthCheckURL.Path = ps.HealthCheckEndpoint
+		pollerStopCh = make(stopChannel)
+		go pollURLUntilOK(healthCheckURL, ps.HealthCheckPollInterval, ready, pollerStopCh)
 	} else {
-		stderr = io.MultiWriter(startDetectStream, stderr)
+		startDetectStream := gbytes.NewBuffer()
+		ready = startDetectStream.Detect(ps.StartMessage)
+		stderr = safeMultiWriter(stderr, startDetectStream)
 	}
 
 	ps.Session, err = gexec.Start(command, stdout, stderr)
@@ -105,11 +129,46 @@ func (ps *ProcessState) Start(stdout, stderr io.Writer) (err error) {
 	}
 
 	select {
-	case <-detectedStart:
+	case <-ready:
 		return nil
 	case <-timedOut:
-		ps.Session.Terminate()
+		if pollerStopCh != nil {
+			close(pollerStopCh)
+		}
+		if ps.Session != nil {
+			ps.Session.Terminate()
+		}
 		return fmt.Errorf("timeout waiting for process %s to start", path.Base(ps.Path))
+	}
+}
+
+func safeMultiWriter(writers ...io.Writer) io.Writer {
+	safeWriters := []io.Writer{}
+	for _, w := range writers {
+		if w != nil {
+			safeWriters = append(safeWriters, w)
+		}
+	}
+	return io.MultiWriter(safeWriters...)
+}
+
+func pollURLUntilOK(url url.URL, interval time.Duration, ready chan bool, stopCh stopChannel) {
+	if interval <= 0 {
+		interval = 100 * time.Millisecond
+	}
+	for {
+		res, err := http.Get(url.String())
+		if err == nil && res.StatusCode == http.StatusOK {
+			ready <- true
+			return
+		}
+
+		select {
+		case <-stopCh:
+			return
+		default:
+			time.Sleep(interval)
+		}
 	}
 }
 

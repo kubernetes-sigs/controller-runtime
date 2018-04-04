@@ -6,7 +6,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/kubernetes-sig-testing/frameworks/integration"
+	. "github.com/kubernetes-sigs/testing_frameworks/integration"
 )
 
 var _ = Describe("Kubectl", func() {

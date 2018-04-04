@@ -3,7 +3,7 @@ language: go
 go:
   - 1.9.x
 
-go_import_path: github.com/kubernetes-sig-testing/frameworks
+go_import_path: github.com/kubernetes-sigs/testing_frameworks
 
 before_install:
   - source ./bin/consider-early-travis-exit.sh

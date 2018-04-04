@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/kubernetes-sig-testing/frameworks/integration/internal"
+	"github.com/kubernetes-sigs/testing_frameworks/integration/internal"
 )
 
 // APIServer knows how to run a kubernetes apiserver.

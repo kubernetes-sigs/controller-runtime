@@ -6,9 +6,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/kubernetes-sigs/testing_frameworks/integration"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/testing_frameworks/integration"
 )
 
 var _ = Describe("The Testing Framework", func() {

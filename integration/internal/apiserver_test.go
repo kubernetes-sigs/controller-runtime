@@ -1,9 +1,9 @@
 package internal_test
 
 import (
-	. "github.com/kubernetes-sigs/testing_frameworks/integration/internal"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	. "sigs.k8s.io/testing_frameworks/integration/internal"
 )
 
 var _ = Describe("Apiserver", func() {

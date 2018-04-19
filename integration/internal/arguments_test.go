@@ -6,7 +6,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/kubernetes-sigs/testing_frameworks/integration/internal"
+	. "sigs.k8s.io/testing_frameworks/integration/internal"
 )
 
 var _ = Describe("Arguments", func() {

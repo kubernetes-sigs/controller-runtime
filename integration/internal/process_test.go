@@ -10,11 +10,11 @@ import (
 	"os/exec"
 	"time"
 
-	. "github.com/kubernetes-sigs/testing_frameworks/integration/internal"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	"github.com/onsi/gomega/ghttp"
+	. "sigs.k8s.io/testing_frameworks/integration/internal"
 )
 
 var _ = Describe("Start method", func() {

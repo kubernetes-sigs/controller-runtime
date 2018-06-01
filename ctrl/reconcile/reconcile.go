@@ -18,8 +18,6 @@ package reconcile
 
 import (
 	"log"
-
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // ReconcileResult contains the result of a Reconcile.
@@ -37,9 +35,6 @@ type ReconcileRequest struct {
 
 	// Namespace is the namespace of the object.  Empty for non-namespaced objects.
 	Namespace string
-
-	// GroupVersionKind is the GroupVersionKind type of the object to Reconcile.
-	GroupVersionKind v1.GroupVersionKind
 }
 
 /*

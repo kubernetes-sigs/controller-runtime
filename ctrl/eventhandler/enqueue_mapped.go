@@ -19,6 +19,8 @@ package eventhandler
 import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -32,27 +34,73 @@ type EnqueueMappedHandler struct {
 }
 
 // Create implements EventHandler
-func (e EnqueueMappedHandler) Create(q workqueue.RateLimitingInterface, event event.CreateEvent) {}
+func (e EnqueueMappedHandler) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
+	reqs := e.ToRequests.Map(ToRequestArg{
+		MetaOld: evt.Meta,
+		Object:  evt.Object,
+	})
+	for _, req := range reqs {
+		q.AddRateLimited(req)
+	}
+}
 
 // Update implements EventHandler
-func (e EnqueueMappedHandler) Update(q workqueue.RateLimitingInterface, event event.UpdateEvent) {}
+func (e EnqueueMappedHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
+	reqs := e.ToRequests.Map(ToRequestArg{
+		MetaOld: evt.MetaOld,
+		Object:  evt.ObjectOld,
+	})
+	for _, req := range reqs {
+		q.AddRateLimited(req)
+	}
+
+	reqs = e.ToRequests.Map(ToRequestArg{
+		MetaOld: evt.MetaNew,
+		Object:  evt.ObjectNew,
+	})
+	for _, req := range reqs {
+		q.AddRateLimited(req)
+	}
+}
 
 // Delete implements EventHandler
-func (e EnqueueMappedHandler) Delete(q workqueue.RateLimitingInterface, event event.DeleteEvent) {}
+func (e EnqueueMappedHandler) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
+	reqs := e.ToRequests.Map(ToRequestArg{
+		MetaOld: evt.Meta,
+		Object:  evt.Object,
+	})
+	for _, req := range reqs {
+		q.AddRateLimited(req)
+	}
+}
 
 // Generic implements EventHandler
-func (e EnqueueMappedHandler) Generic(workqueue.RateLimitingInterface, event.GenericEvent) {}
+func (e EnqueueMappedHandler) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
+	reqs := e.ToRequests.Map(ToRequestArg{
+		MetaOld: evt.Meta,
+		Object:  evt.Object,
+	})
+	for _, req := range reqs {
+		q.AddRateLimited(req)
+	}
+
+}
 
 // ToRequests maps an object to a collection of keys to be enqueued
 type ToRequests interface {
-	Map(interface{}) []reconcile.ReconcileRequest
+	Map(ToRequestArg) []reconcile.ReconcileRequest
 }
 
-var _ ToRequests = ToRequestsFunc(func(interface{}) []reconcile.ReconcileRequest { return nil })
+type ToRequestArg struct {
+	MetaOld metav1.Object
+	Object  runtime.Object
+}
+
+var _ ToRequests = ToRequestsFunc(func(ToRequestArg) []reconcile.ReconcileRequest { return nil })
 
 // ToRequestsFunc implements ToRequests using a function.
-type ToRequestsFunc func(interface{}) []reconcile.ReconcileRequest
+type ToRequestsFunc func(ToRequestArg) []reconcile.ReconcileRequest
 
-func (m ToRequestsFunc) Map(i interface{}) []reconcile.ReconcileRequest {
+func (m ToRequestsFunc) Map(i ToRequestArg) []reconcile.ReconcileRequest {
 	return m(i)
 }

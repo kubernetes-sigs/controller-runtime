@@ -17,9 +17,17 @@ limitations under the License.
 package source
 
 import (
+	"fmt"
+
+	"github.com/golang/glog"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/informer"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -30,17 +38,7 @@ import (
 //
 // * Use ChannelSource for events originating outside the cluster (e.g. GitHub Webhook callback, Polling external urls).
 type Source interface {
-	// Start is an internal function.  It is used by Controllers to start the event Source watching for events and
-	// blocks.  Returns an error if there is an error starting the Source.
-	Start(Config) error
-
-	// SetEventHandler is an internal function.  It is used by Controllers to set the EventHandler used to handle
-	// events from this Source.
-	SetEventHandler(eventhandler.EventHandler)
-
-	// SetEventQueue is an internal function.  It used by Controllers to set the EventHandler used to handle
-	// events from this Source.
-	SetEventQueue(workqueue.RateLimitingInterface)
+	Start(eventhandler.EventHandler, workqueue.RateLimitingInterface) error
 }
 
 // Config provides shared structures required for starting a Source.
@@ -53,25 +51,118 @@ var _ Source = ChannelSource(make(chan event.GenericEvent))
 // source (e.g. http handler) to write GenericEvents to the underlying channel.
 type ChannelSource chan event.GenericEvent
 
-// SetEventHandler implements Source and should only be called by the Controller.
-func (g ChannelSource) SetEventHandler(handler eventhandler.EventHandler) {}
-
-// SetEventQueue implements Source and should only be called by the Controller.
-func (g ChannelSource) SetEventQueue(queue workqueue.RateLimitingInterface) {}
-
 // Start implements Source and should only be called by the Controller.
-func (g ChannelSource) Start(Config) error { return nil }
+func (ks ChannelSource) Start(
+	handler eventhandler.EventHandler,
+	queue workqueue.RateLimitingInterface) error {
+
+	return nil
+}
 
 var _ Source = KindSource{}
 
 // KindSource is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create)
-type KindSource v1.GroupVersionKind
+type KindSource struct {
+	Group   string
+	Version string
+	Kind    string
 
-// SetEventHandler implements Source and should only be called by the Controller.
-func (g KindSource) SetEventHandler(handler eventhandler.EventHandler) {}
+	Object runtime.Object
 
-// SetEventQueue implements Source and should only be called by the Controller.
-func (g KindSource) SetEventQueue(queue workqueue.RateLimitingInterface) {}
+	informerCache informer.IndexInformerCache
+}
 
-// Start implements Source and should only be called by the Controller.
-func (g KindSource) Start(Config) error { return nil }
+// Start implements Source and should only be called by the Controller to start the Source watching events.
+func (ks KindSource) Start(
+	handler eventhandler.EventHandler,
+	queue workqueue.RateLimitingInterface) error {
+
+	// TODO: If the informerCache cache isn't set, use the default package level implementation
+
+	i, err := ks.informerCache.GetSharedIndexInformer(schema.GroupVersionKind{
+		Group:   ks.Group,
+		Kind:    ks.Version,
+		Version: ks.Kind,
+	}, ks.Object)
+
+	if err != nil {
+		return err
+	}
+
+	i.AddEventHandler(EventHandler{
+		q: queue,
+		e: handler,
+	})
+
+	return nil
+}
+
+func (ks KindSource) SetInformerCache(informer informer.IndexInformerCache) {
+	ks.informerCache = informer
+}
+
+var _ cache.ResourceEventHandler = EventHandler{}
+
+type EventHandler struct {
+	e eventhandler.EventHandler
+	q workqueue.RateLimitingInterface
+}
+
+func (e EventHandler) OnAdd(obj interface{}) {
+	c := event.CreateEvent{}
+	if o, ok := obj.(metav1.ObjectMetaAccessor); ok {
+		c.Meta = o.GetObjectMeta()
+	}
+	if o, ok := obj.(runtime.Object); ok {
+		c.Object = o
+	}
+	e.e.Create(e.q, c)
+}
+
+func (e EventHandler) OnUpdate(oldObj, newObj interface{}) {
+	u := event.UpdateEvent{}
+	if o, ok := oldObj.(metav1.ObjectMetaAccessor); ok {
+		u.MetaOld = o.GetObjectMeta()
+	}
+	if o, ok := oldObj.(runtime.Object); ok {
+		u.ObjectOld = o
+	}
+
+	if o, ok := newObj.(metav1.ObjectMetaAccessor); ok {
+		u.MetaNew = o.GetObjectMeta()
+	}
+	if o, ok := newObj.(runtime.Object); ok {
+		u.ObjectNew = o
+	}
+
+	e.e.Update(e.q, u)
+}
+
+func (e EventHandler) OnDelete(obj interface{}) {
+	c := event.DeleteEvent{}
+
+	var object metav1.Object
+	var ok bool
+	if object, ok = obj.(metav1.Object); !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
+			return
+		}
+		object, ok = tombstone.Obj.(metav1.Object)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
+			return
+		}
+		// Set obj to the tombstone obj
+		obj = tombstone.Obj
+		glog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
+	}
+	c.Meta = object
+
+	if o, ok := obj.(runtime.Object); ok {
+		c.Object = o
+	}
+
+	e.e.Delete(e.q, c)
+}

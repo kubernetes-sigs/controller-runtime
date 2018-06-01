@@ -18,6 +18,7 @@ package eventhandler
 
 import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -27,13 +28,58 @@ var _ EventHandler = EnqueueHandler{}
 type EnqueueHandler struct{}
 
 // Create implements EventHandler
-func (e EnqueueHandler) Create(q workqueue.RateLimitingInterface, event event.CreateEvent) {}
+func (e EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
+	if evt.Meta == nil {
+		// TODO: Log an error and increment a metric
+		return
+	}
+	q.AddRateLimited(reconcile.ReconcileRequest{
+		Name:      evt.Meta.GetName(),
+		Namespace: evt.Meta.GetNamespace(),
+	})
+}
 
 // Update implements EventHandler
-func (e EnqueueHandler) Update(q workqueue.RateLimitingInterface, event event.UpdateEvent) {}
+func (e EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
+	if evt.MetaOld != nil {
+		q.AddRateLimited(reconcile.ReconcileRequest{
+			Name:      evt.MetaOld.GetName(),
+			Namespace: evt.MetaOld.GetNamespace(),
+		})
+	} else {
+		// TODO: Log an error and increment a metric
+	}
+
+	if evt.MetaNew != nil {
+		q.AddRateLimited(reconcile.ReconcileRequest{
+			Name:      evt.MetaNew.GetName(),
+			Namespace: evt.MetaNew.GetNamespace(),
+		})
+	} else {
+		// TODO: Log an error and increment a metric
+	}
+}
 
 // Delete implements EventHandler
-func (e EnqueueHandler) Delete(q workqueue.RateLimitingInterface, event event.DeleteEvent) {}
+func (e EnqueueHandler) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
+	if evt.Meta == nil {
+		// TODO: Log an error and increment a metric
+		return
+	}
+	q.AddRateLimited(reconcile.ReconcileRequest{
+		Name:      evt.Meta.GetName(),
+		Namespace: evt.Meta.GetNamespace(),
+	})
+}
 
 // Generic implements EventHandler
-func (e EnqueueHandler) Generic(workqueue.RateLimitingInterface, event.GenericEvent) {}
+func (e EnqueueHandler) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
+	if evt.Meta == nil {
+		// TODO: Log an error and increment a metric
+		return
+	}
+	q.AddRateLimited(reconcile.ReconcileRequest{
+		Name:      evt.Meta.GetName(),
+		Namespace: evt.Meta.GetNamespace(),
+	})
+}

@@ -65,8 +65,8 @@ type Controller struct {
 //
 // Watch may be provided one or more Predicates to filter events before they are given to the EventHandler.
 // Events will be passed to the EventHandler iff all provided Predicates evaluate to true.
-func (*Controller) Watch(source.Source, eventhandler.EventHandler, ...predicate.Predicate) {
-
+func (c *Controller) Watch(s source.Source, e eventhandler.EventHandler, p ...predicate.Predicate) {
+	s.Start(e, c.queue)
 }
 
 // init defaults field values on c

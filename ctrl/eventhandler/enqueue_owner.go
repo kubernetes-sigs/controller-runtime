@@ -21,6 +21,7 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -91,10 +92,10 @@ func (e EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) (rec
 		// Compare the owner UID of the reference against the UID of the OwnerType object with the same name
 		l := e.lookupObjectFromCache(e.OwnerType, object.GetNamespace(), ref.Name)
 		if l.GetUID() == ref.UID {
-			return reconcile.ReconcileRequest{
+			return reconcile.ReconcileRequest{types.NamespacedName{
 				Name:      ref.Name,
 				Namespace: object.GetNamespace(),
-			}, true
+			}}, true
 		}
 
 		// If we care about transitive ownership, add the OwnersReferences for the Owner to the queue

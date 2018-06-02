@@ -36,8 +36,8 @@ type EnqueueMappedHandler struct {
 // Create implements EventHandler
 func (e EnqueueMappedHandler) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
 	reqs := e.ToRequests.Map(ToRequestArg{
-		MetaOld: evt.Meta,
-		Object:  evt.Object,
+		Meta:   evt.Meta,
+		Object: evt.Object,
 	})
 	for _, req := range reqs {
 		q.AddRateLimited(req)
@@ -47,16 +47,16 @@ func (e EnqueueMappedHandler) Create(q workqueue.RateLimitingInterface, evt even
 // Update implements EventHandler
 func (e EnqueueMappedHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 	reqs := e.ToRequests.Map(ToRequestArg{
-		MetaOld: evt.MetaOld,
-		Object:  evt.ObjectOld,
+		Meta:   evt.MetaOld,
+		Object: evt.ObjectOld,
 	})
 	for _, req := range reqs {
 		q.AddRateLimited(req)
 	}
 
 	reqs = e.ToRequests.Map(ToRequestArg{
-		MetaOld: evt.MetaNew,
-		Object:  evt.ObjectNew,
+		Meta:   evt.MetaNew,
+		Object: evt.ObjectNew,
 	})
 	for _, req := range reqs {
 		q.AddRateLimited(req)
@@ -66,8 +66,8 @@ func (e EnqueueMappedHandler) Update(q workqueue.RateLimitingInterface, evt even
 // Delete implements EventHandler
 func (e EnqueueMappedHandler) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 	reqs := e.ToRequests.Map(ToRequestArg{
-		MetaOld: evt.Meta,
-		Object:  evt.Object,
+		Meta:   evt.Meta,
+		Object: evt.Object,
 	})
 	for _, req := range reqs {
 		q.AddRateLimited(req)
@@ -77,8 +77,8 @@ func (e EnqueueMappedHandler) Delete(q workqueue.RateLimitingInterface, evt even
 // Generic implements EventHandler
 func (e EnqueueMappedHandler) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
 	reqs := e.ToRequests.Map(ToRequestArg{
-		MetaOld: evt.Meta,
-		Object:  evt.Object,
+		Meta:   evt.Meta,
+		Object: evt.Object,
 	})
 	for _, req := range reqs {
 		q.AddRateLimited(req)
@@ -92,8 +92,8 @@ type ToRequests interface {
 }
 
 type ToRequestArg struct {
-	MetaOld metav1.Object
-	Object  runtime.Object
+	Meta   metav1.Object
+	Object runtime.Object
 }
 
 var _ ToRequests = ToRequestsFunc(func(ToRequestArg) []reconcile.ReconcileRequest { return nil })

@@ -18,6 +18,8 @@ package reconcile
 
 import (
 	"log"
+
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // ReconcileResult contains the result of a Reconcile.
@@ -30,11 +32,8 @@ type ReconcileResult struct {
 // information to uniquely identify the object - its Name and Namespace.  It does NOT contain information about
 // any specific Event or the object contents itself.
 type ReconcileRequest struct {
-	// Name is the name of the object.
-	Name string
-
-	// Namespace is the namespace of the object.  Empty for non-namespaced objects.
-	Namespace string
+	// NamespacedName is the name and namespace of the object to Reconcile.
+	types.NamespacedName
 }
 
 /*

@@ -22,8 +22,8 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
-	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -46,7 +46,7 @@ func ExampleEnqueueOwnerHandler_1() {
 	c.Watch(
 		source.KindSource{Group: "core", Version: "v1", Kind: "ReplicaSet"},
 		eventhandler.EnqueueOwnerHandler{
-			OwnerType:    v1.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
+			OwnerType:    schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
 			IsController: true,
 		},
 	)
@@ -59,7 +59,7 @@ func ExampleEnqueueOwnerHandler_2() {
 	c.Watch(
 		source.KindSource{Group: "core", Version: "v1", Kind: "Pod"},
 		eventhandler.EnqueueOwnerHandler{
-			OwnerType:        v1.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
+			OwnerType:        schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
 			TransitiveOwners: true,
 			IsController:     true,
 		},
@@ -73,17 +73,16 @@ func ExampleEnqueueMappedHandler() {
 	c.Watch(
 		source.KindSource{Group: "apps", Version: "v1", Kind: "Deployment"},
 		eventhandler.EnqueueMappedHandler{
-			ToRequests: eventhandler.ToRequestsFunc(func(i interface{}) []reconcile.ReconcileRequest {
-				d := i.(*appsv1.Deployment)
+			ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.ToRequestArg) []reconcile.ReconcileRequest {
 				return []reconcile.ReconcileRequest{
-					{GroupVersionKind: v1.GroupVersionKind{Group: "mygroup", Version: "myversion", Kind: "MyKind"},
-						Name:      d.Name + "-1",
-						Namespace: d.Namespace,
-					},
-					{GroupVersionKind: v1.GroupVersionKind{Group: "mygroup", Version: "myversion", Kind: "MyKind"},
-						Name:      d.Name + "-2",
-						Namespace: d.Namespace,
-					},
+					{NamespacedName: types.NamespacedName{
+						Name:      a.Meta.GetName() + "-1",
+						Namespace: a.Meta.GetNamespace(),
+					}},
+					{NamespacedName: types.NamespacedName{
+						Name:      a.Meta.GetName() + "-2",
+						Namespace: a.Meta.GetNamespace(),
+					}},
 				}
 			}),
 		})
@@ -96,28 +95,28 @@ func ExampleEventHandlerFunc() {
 		source.KindSource{Group: "core", Version: "v1", Kind: "Pod"},
 		eventhandler.EventHandlerFuncs{
 			CreateFunc: func(q workqueue.RateLimitingInterface, e event.CreateEvent) {
-				q.Add(reconcile.ReconcileRequest{
-					Name:      e.Meta.Name,
-					Namespace: e.Meta.Namespace,
-				})
+				q.Add(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+					Name:      e.Meta.GetName(),
+					Namespace: e.Meta.GetNamespace(),
+				}})
 			},
 			UpdateFunc: func(q workqueue.RateLimitingInterface, e event.UpdateEvent) {
-				q.Add(reconcile.ReconcileRequest{
-					Name:      e.MetaNew.Name,
-					Namespace: e.MetaNew.Namespace,
-				})
+				q.Add(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+					Name:      e.MetaNew.GetName(),
+					Namespace: e.MetaNew.GetNamespace(),
+				}})
 			},
 			DeleteFunc: func(q workqueue.RateLimitingInterface, e event.DeleteEvent) {
-				q.Add(reconcile.ReconcileRequest{
-					Name:      e.Meta.Name,
-					Namespace: e.Meta.Namespace,
-				})
+				q.Add(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+					Name:      e.Meta.GetName(),
+					Namespace: e.Meta.GetNamespace(),
+				}})
 			},
 			GenericFunc: func(q workqueue.RateLimitingInterface, e event.GenericEvent) {
-				q.Add(reconcile.ReconcileRequest{
-					Name:      e.Meta.Name,
-					Namespace: e.Meta.Namespace,
-				})
+				q.Add(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+					Name:      e.Meta.GetName(),
+					Namespace: e.Meta.GetNamespace(),
+				}})
 			},
 		},
 	)

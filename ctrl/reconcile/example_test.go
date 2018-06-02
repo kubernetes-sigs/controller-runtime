@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // This example implements a simple no-op Reconcile function that prints the object to be Reconciled.
@@ -30,7 +31,7 @@ func ExampleReconcileFunc() {
 		return reconcile.ReconcileResult{}, nil
 	})
 
-	r.Reconcile(reconcile.ReconcileRequest{Namespace: "default", Name: "test"})
+	r.Reconcile(reconcile.ReconcileRequest{types.NamespacedName{Namespace: "default", Name: "test"}})
 
 	// Output: Name: test, Namespace: default
 }

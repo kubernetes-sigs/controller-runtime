@@ -25,7 +25,6 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/predicate"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
-	appsv1 "k8s.io/api/apps/v1"
 )
 
 var c = &ctrl.Controller{Name: "deployment-controller"}
@@ -68,13 +67,7 @@ func ExampleController_Watch_2() {
 		eventhandler.EnqueueHandler{},
 		predicate.PredicateFuncs{
 			UpdateFunc: func(e event.UpdateEvent) bool {
-				oDep := &appsv1.Deployment{}
-				e.UnmarshalObjOld(oDep)
-
-				nDep := &appsv1.Deployment{}
-				e.UnmarshalObjNew(nDep)
-
-				return oDep.Generation != nDep.Generation
+				return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()
 			},
 		},
 	)

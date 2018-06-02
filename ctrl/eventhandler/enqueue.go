@@ -19,6 +19,7 @@ package eventhandler
 import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -33,28 +34,28 @@ func (e EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.Crea
 		// TODO: Log an error and increment a metric
 		return
 	}
-	q.AddRateLimited(reconcile.ReconcileRequest{
+	q.AddRateLimited(reconcile.ReconcileRequest{types.NamespacedName{
 		Name:      evt.Meta.GetName(),
 		Namespace: evt.Meta.GetNamespace(),
-	})
+	}})
 }
 
 // Update implements EventHandler
 func (e EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 	if evt.MetaOld != nil {
-		q.AddRateLimited(reconcile.ReconcileRequest{
+		q.AddRateLimited(reconcile.ReconcileRequest{types.NamespacedName{
 			Name:      evt.MetaOld.GetName(),
 			Namespace: evt.MetaOld.GetNamespace(),
-		})
+		}})
 	} else {
 		// TODO: Log an error and increment a metric
 	}
 
 	if evt.MetaNew != nil {
-		q.AddRateLimited(reconcile.ReconcileRequest{
+		q.AddRateLimited(reconcile.ReconcileRequest{types.NamespacedName{
 			Name:      evt.MetaNew.GetName(),
 			Namespace: evt.MetaNew.GetNamespace(),
-		})
+		}})
 	} else {
 		// TODO: Log an error and increment a metric
 	}
@@ -66,10 +67,10 @@ func (e EnqueueHandler) Delete(q workqueue.RateLimitingInterface, evt event.Dele
 		// TODO: Log an error and increment a metric
 		return
 	}
-	q.AddRateLimited(reconcile.ReconcileRequest{
+	q.AddRateLimited(reconcile.ReconcileRequest{types.NamespacedName{
 		Name:      evt.Meta.GetName(),
 		Namespace: evt.Meta.GetNamespace(),
-	})
+	}})
 }
 
 // Generic implements EventHandler
@@ -78,8 +79,8 @@ func (e EnqueueHandler) Generic(q workqueue.RateLimitingInterface, evt event.Gen
 		// TODO: Log an error and increment a metric
 		return
 	}
-	q.AddRateLimited(reconcile.ReconcileRequest{
+	q.AddRateLimited(reconcile.ReconcileRequest{types.NamespacedName{
 		Name:      evt.Meta.GetName(),
 		Namespace: evt.Meta.GetNamespace(),
-	})
+	}})
 }

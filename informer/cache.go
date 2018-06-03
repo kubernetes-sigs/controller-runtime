@@ -1,18 +1,23 @@
 package informer
 
 import (
-	"sync"
 	"fmt"
+	"log"
+	"sync"
 	"time"
 
-	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/rest"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/runtime"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	watch "k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 )
 
 // IndexInformerCache knows how to create or fetch informers for different group-version-kinds.
@@ -29,42 +34,88 @@ type IndexInformerCache interface {
 	Start(stopCh <-chan struct{}) error
 }
 
-// indexInformerCache lazily creates informers, and then caches them for the next time that informer is
-// requested.  It uses a standard parameter codec constructed based on the given generated scheme.
-type indexInformerCache struct {
+func NewInformerCacheOrDie(config *rest.Config) IndexInformerCache {
+	discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(config)
+	groupResources, err := discovery.GetAPIGroupResources(discoveryClient)
+	if err != nil {
+		log.Fatalf("Could not get API GroupResoures %v", err)
+	}
+	discoMapper := discovery.NewRESTMapper(groupResources, dynamic.VersionInterfaces)
+
+	return NewInformerCache(discoMapper, config, scheme.Scheme)
+}
+
+var _ IndexInformerCache = &IndexedCache{}
+
+// IndexedCache lazily creates informers, and then caches them for the next time that informer is
+// requested.  It uses a standard parameter codec constructed based on the given generated Scheme.
+type IndexedCache struct {
+	Config *rest.Config
+	Scheme *runtime.Scheme
+	Mapper meta.RESTMapper
+
+	once           sync.Once
+	mu             sync.Mutex
 	informersByGVK map[schema.GroupVersionKind]cache.SharedIndexInformer
-	mu sync.Mutex
-	config *rest.Config
-	scheme *runtime.Scheme
-	codecs serializer.CodecFactory
-	paramCodec runtime.ParameterCodec
-	mapper meta.RESTMapper
+	codecs         serializer.CodecFactory
+	paramCodec     runtime.ParameterCodec
+}
+
+func (c *IndexedCache) init() {
+	c.once.Do(func() {
+		// Get a config
+		if c.Config == nil {
+			c.Config = config.GetConfigOrDie()
+		}
+
+		// Get a scheme
+		if c.Scheme == nil {
+			c.Scheme = scheme.Scheme
+		}
+
+		// Get a mapper
+		if c.Mapper == nil {
+			dc := discovery.NewDiscoveryClientForConfigOrDie(c.Config)
+			gr, err := discovery.GetAPIGroupResources(dc)
+			if err != nil {
+				log.Fatalf("Failed to get API Group Resources: %v", err)
+			}
+			c.Mapper = discovery.NewRESTMapper(gr, dynamic.VersionInterfaces)
+		}
+
+		// Setup the codecs
+		c.codecs = serializer.NewCodecFactory(c.Scheme)
+		c.paramCodec = runtime.NewParameterCodec(c.Scheme)
+		c.informersByGVK = make(map[schema.GroupVersionKind]cache.SharedIndexInformer)
+	})
 }
 
 // NewInformerCache creates a new IndexInformerCache with clients based on the given base config.
-// The RESTMapper is used to convert kinds to resources.  It uses the given scheme to convert between types
+// The RESTMapper is used to convert kinds to resources.  It uses the given Scheme to convert between types
 // and kinds.
 func NewInformerCache(mapper meta.RESTMapper, baseConfig *rest.Config, scheme *runtime.Scheme) IndexInformerCache {
-	return &indexInformerCache{
+	return &IndexedCache{
 		informersByGVK: make(map[schema.GroupVersionKind]cache.SharedIndexInformer),
-		config: baseConfig,
-		scheme: scheme,
-		codecs: serializer.NewCodecFactory(scheme),
-		paramCodec: runtime.NewParameterCodec(scheme),
-		mapper: mapper,
+		Config:         baseConfig,
+		Scheme:         scheme,
+		codecs:         serializer.NewCodecFactory(scheme),
+		paramCodec:     runtime.NewParameterCodec(scheme),
+		Mapper:         mapper,
 	}
 }
 
-func (c *indexInformerCache) InformerForKind(gvk schema.GroupVersionKind) (cache.SharedIndexInformer, error) {
-	obj, err := c.scheme.New(gvk)
+func (c *IndexedCache) InformerForKind(gvk schema.GroupVersionKind) (cache.SharedIndexInformer, error) {
+	c.init()
+	obj, err := c.Scheme.New(gvk)
 	if err != nil {
 		return nil, err
 	}
 	return c.informerFor(gvk, obj)
 }
 
-func (c *indexInformerCache) InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error) {
-	gvks, isUnversioned, err := c.scheme.ObjectKinds(obj)
+func (c *IndexedCache) InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error) {
+	c.init()
+	gvks, isUnversioned, err := c.Scheme.ObjectKinds(obj)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +129,8 @@ func (c *indexInformerCache) InformerFor(obj runtime.Object) (cache.SharedIndexI
 	if len(gvks) > 1 {
 		// this should only trigger for things like metav1.XYZ --
 		// normal versioned types should be fine
-		return nil, fmt.Errorf("multiple group-version-kinds associated with type %T, refusing to guess at one")
+		return nil, fmt.Errorf(
+			"multiple group-version-kinds associated with type %T, refusing to guess at one", obj)
 	}
 	gvk := gvks[0]
 
@@ -86,10 +138,10 @@ func (c *indexInformerCache) InformerFor(obj runtime.Object) (cache.SharedIndexI
 }
 
 // informerFor actually fetches or constructs an informer.
-func (c *indexInformerCache) informerFor(gvk schema.GroupVersionKind, obj runtime.Object) (cache.SharedIndexInformer, error) {
+func (c *IndexedCache) informerFor(gvk schema.GroupVersionKind, obj runtime.Object) (cache.SharedIndexInformer, error) {
+	c.init()
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
 
 	informer, ok := c.informersByGVK[gvk]
 	if ok {
@@ -98,7 +150,7 @@ func (c *indexInformerCache) informerFor(gvk schema.GroupVersionKind, obj runtim
 
 	gv := gvk.GroupVersion()
 
-	cfg := rest.CopyConfig(c.config)
+	cfg := rest.CopyConfig(c.Config)
 	cfg.GroupVersion = &gv
 	if gvk.Group == "" {
 		cfg.APIPath = "/api"
@@ -114,13 +166,13 @@ func (c *indexInformerCache) informerFor(gvk schema.GroupVersionKind, obj runtim
 		return nil, err
 	}
 
-	mapping, err := c.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	mapping, err := c.Mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return nil, err
 	}
 
-	listGVK := gvk.GroupVersion().WithKind(gvk.Kind+"List")
-	listObj, err := c.scheme.New(listGVK)
+	listGVK := gvk.GroupVersion().WithKind(gvk.Kind + "List")
+	listObj, err := c.Scheme.New(listGVK)
 	if err != nil {
 		return nil, err
 	}
@@ -152,10 +204,14 @@ func (c *indexInformerCache) informerFor(gvk schema.GroupVersionKind, obj runtim
 	return res, nil
 }
 
-func (c *indexInformerCache) Start(stopCh <-chan struct{}) error {
+func (c *IndexedCache) Start(stopCh <-chan struct{}) error {
+	c.init()
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// TODO: Start new informers automatically when they are created if Start has already been called.
 	for _, informer := range c.informersByGVK {
+		//fmt.Printf("Hello world %v\n\n")
 		go informer.Run(stopCh)
 	}
 	return nil

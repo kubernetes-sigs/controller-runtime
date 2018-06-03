@@ -25,6 +25,8 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/predicate"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 var c = &ctrl.Controller{Name: "deployment-controller"}
@@ -53,7 +55,7 @@ func ExampleController_Start() {
 func ExampleController_Watch_1() {
 	// c is a ctrl.Controller instance
 	c.Watch(
-		source.KindSource{Group: "core", Version: "v1", Kind: "Pod"},
+		&source.KindSource{Type: &corev1.Pod{}},
 		eventhandler.EnqueueHandler{},
 	)
 }
@@ -63,7 +65,7 @@ func ExampleController_Watch_1() {
 func ExampleController_Watch_2() {
 	// c is a ctrl.Controller instance
 	c.Watch(
-		source.KindSource{Group: "apps", Version: "v1", Kind: "Deployment"},
+		&source.KindSource{Type: &appsv1.Deployment{}},
 		eventhandler.EnqueueHandler{},
 		predicate.PredicateFuncs{
 			UpdateFunc: func(e event.UpdateEvent) bool {

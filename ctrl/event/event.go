@@ -23,7 +23,7 @@ import (
 
 // Update is an event where a Kubernetes object was created.
 type CreateEvent struct {
-	// Meta is the ObjectMeta of the Kubernetes Object that was created
+	// Meta is the ObjectMeta of the Kubernetes Type that was created
 	Meta v1.Object
 
 	Object runtime.Object
@@ -31,12 +31,12 @@ type CreateEvent struct {
 
 // Update is an event where a Kubernetes object was updated.
 type UpdateEvent struct {
-	// MetaOld is the ObjectMeta of the Kubernetes Object that was updated (before the update)
+	// MetaOld is the ObjectMeta of the Kubernetes Type that was updated (before the update)
 	MetaOld v1.Object
 
 	ObjectOld runtime.Object
 
-	// MetaNew is the ObjectMeta of the Kubernetes Object that was updated (after the update)
+	// MetaNew is the ObjectMeta of the Kubernetes Type that was updated (after the update)
 	MetaNew v1.Object
 
 	ObjectNew runtime.Object
@@ -44,7 +44,7 @@ type UpdateEvent struct {
 
 // Update is an event where a Kubernetes object was deleted.
 type DeleteEvent struct {
-	// Meta is the ObjectMeta of the Kubernetes Object that was deleted
+	// Meta is the ObjectMeta of the Kubernetes Type that was deleted
 	Meta v1.Object
 
 	Object runtime.Object
@@ -54,7 +54,7 @@ type DeleteEvent struct {
 
 // GenericEvent is an event where the operation type is unknown (e.g. polling or event originating outside the cluster).
 type GenericEvent struct {
-	// Meta is the ObjectMeta of a Kubernetes Object this event is for
+	// Meta is the ObjectMeta of a Kubernetes Type this event is for
 	Meta v1.Object
 
 	Object runtime.Object

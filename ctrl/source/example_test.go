@@ -21,6 +21,7 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
+	"k8s.io/api/core/v1"
 )
 
 // This example Watches for Pod Events (e.g. Create / Update / Delete) and enqueues a ReconcileRequest
@@ -29,7 +30,7 @@ func ExampleKindSource() {
 	controller := &ctrl.Controller{Name: "pod-controller"}
 
 	controller.Watch(
-		source.KindSource{Group: "core", Version: "v1", Kind: "Pod"},
+		&source.KindSource{Type: &v1.Pod{}},
 		eventhandler.EnqueueHandler{},
 	)
 }

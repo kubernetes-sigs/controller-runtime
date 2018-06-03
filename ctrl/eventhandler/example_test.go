@@ -22,6 +22,8 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
@@ -34,7 +36,7 @@ var c = &ctrl.Controller{Name: "pod-controller"}
 func ExampleEnqueueHandler() {
 	// c is a ctrl.Controller
 	c.Watch(
-		source.KindSource{Group: "core", Version: "v1", Kind: "Pod"},
+		&source.KindSource{Type: &corev1.Pod{}},
 		eventhandler.EnqueueHandler{},
 	)
 }
@@ -44,7 +46,7 @@ func ExampleEnqueueHandler() {
 func ExampleEnqueueOwnerHandler_1() {
 	// c is a ctrl.Controller
 	c.Watch(
-		source.KindSource{Group: "core", Version: "v1", Kind: "ReplicaSet"},
+		&source.KindSource{Type: &appsv1.ReplicaSet{}},
 		eventhandler.EnqueueOwnerHandler{
 			OwnerType:    schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
 			IsController: true,
@@ -57,7 +59,7 @@ func ExampleEnqueueOwnerHandler_1() {
 func ExampleEnqueueOwnerHandler_2() {
 	// c is a ctrl.Controller
 	c.Watch(
-		source.KindSource{Group: "core", Version: "v1", Kind: "Pod"},
+		&source.KindSource{Type: &corev1.Pod{}},
 		eventhandler.EnqueueOwnerHandler{
 			OwnerType:        schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
 			TransitiveOwners: true,
@@ -67,11 +69,11 @@ func ExampleEnqueueOwnerHandler_2() {
 }
 
 // This example watches Deployments and enqueues a ReconcileRequest contain the Name and Namespace of different
-// objects (of Kind: MyKind) using a mapping function defined by the user.
+// objects (of Type: MyKind) using a mapping function defined by the user.
 func ExampleEnqueueMappedHandler() {
 	// c is a ctrl.Controller
 	c.Watch(
-		source.KindSource{Group: "apps", Version: "v1", Kind: "Deployment"},
+		&source.KindSource{Type: &appsv1.Deployment{}},
 		eventhandler.EnqueueMappedHandler{
 			ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.ToRequestArg) []reconcile.ReconcileRequest {
 				return []reconcile.ReconcileRequest{
@@ -92,7 +94,7 @@ func ExampleEnqueueMappedHandler() {
 func ExampleEventHandlerFunc() {
 	// c is a ctrl.Controller
 	c.Watch(
-		source.KindSource{Group: "core", Version: "v1", Kind: "Pod"},
+		&source.KindSource{Type: &corev1.Pod{}},
 		eventhandler.EventHandlerFuncs{
 			CreateFunc: func(q workqueue.RateLimitingInterface, e event.CreateEvent) {
 				q.Add(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{

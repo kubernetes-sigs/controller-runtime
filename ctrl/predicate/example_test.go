@@ -22,6 +22,7 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/predicate"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
+	appsv1 "k8s.io/api/apps/v1"
 )
 
 // This example filters Deployment events using a Predicate that drops Update Events where the Deployment
@@ -30,7 +31,7 @@ func ExamplePredicateFunc() {
 	controller := &ctrl.Controller{Name: "deployment-controller"}
 
 	controller.Watch(
-		source.KindSource{Group: "apps", Version: "v1", Kind: "Deployment"},
+		&source.KindSource{Type: &appsv1.Deployment{}},
 		eventhandler.EnqueueHandler{},
 		predicate.PredicateFuncs{
 			UpdateFunc: func(e event.UpdateEvent) bool {

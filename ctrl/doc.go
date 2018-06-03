@@ -148,7 +148,7 @@ Step 2: Create a Controller in the package init function and register it with th
 
 	  // Watch for changes to MyKind objects, and enqueues a ReconcileRequest with the Name and Namespace of the object.
 	  controller.Watch(
-	    source.KindSource{Group: "mygroup", Version: "myversion", Kind: "MyKind"},
+	    source.KindSource{Group: "mygroup", Version: "myversion", Type: "MyKind"},
 	    eventhandler.Enqueue{},
 	  )
 	}
@@ -183,10 +183,10 @@ key (transitive through ReplicaSet).
 Watching and EventHandling
 
 Controllers may Watch multiple Kinds of objects (e.g. Pods, ReplicaSets and Deployments), but they should
-enqueue keys for only a single Kind.  When one Kind of object must be be updated in response to changes
-in another Kind of object, an EnqueueMappedHandler may be used to Reconcile the Kind that is being
-updated and watch the other Kind for Events.  e.g. Respond to a cluster resize
-Event (add / delete Node) by re-reconciling all instances of another Kind that cares about the cluster size.
+enqueue keys for only a single Type.  When one Type of object must be be updated in response to changes
+in another Type of object, an EnqueueMappedHandler may be used to Reconcile the Type that is being
+updated and watch the other Type for Events.  e.g. Respond to a cluster resize
+Event (add / delete Node) by re-reconciling all instances of another Type that cares about the cluster size.
 
 For example, a Deployment Controller might use an EnqueueHandler and EnqueueOwnerHandler to:
 

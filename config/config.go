@@ -19,6 +19,7 @@ package config
 import (
 	"flag"
 	"log"
+	"os"
 	"time"
 
 	"k8s.io/client-go/informers"
@@ -48,6 +49,8 @@ func init() {
 // Will log.Fatal if KubernetesInformers cannot be created
 func GetConfig() (*rest.Config, error) {
 	if len(kubeconfig) > 0 {
+		return clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
+	} else if len(os.Getenv("KUBECONFIG")) > 0 {
 		return clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
 	} else {
 		return rest.InClusterConfig()

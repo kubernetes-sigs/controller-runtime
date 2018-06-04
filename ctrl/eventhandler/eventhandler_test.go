@@ -752,6 +752,142 @@ var _ = Describe("Eventhandler", func() {
 			})
 		})
 	})
+
+	Describe("EventHandlerFuncs", func() {
+
+		failingFuncs := eventhandler.EventHandlerFuncs{
+			CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
+				defer GinkgoRecover()
+				Fail("Did not expect CreateEvent to be called.")
+			},
+			DeleteFunc: func(q workqueue.RateLimitingInterface, e event.DeleteEvent) {
+				defer GinkgoRecover()
+				Fail("Did not expect DeleteEvent to be called.")
+			},
+			UpdateFunc: func(workqueue.RateLimitingInterface, event.UpdateEvent) {
+				defer GinkgoRecover()
+				Fail("Did not expect UpdateEvent to be called.")
+			},
+			GenericFunc: func(workqueue.RateLimitingInterface, event.GenericEvent) {
+				defer GinkgoRecover()
+				Fail("Did not expect GenericEvent to be called.")
+			},
+		}
+
+		It("should call CreateFunc for a CreateEvent if provided.", func(done Done) {
+			instance := failingFuncs
+			evt := event.CreateEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.CreateFunc = func(q2 workqueue.RateLimitingInterface, evt2 event.CreateEvent) {
+				defer GinkgoRecover()
+				Expect(q2).To(Equal(q))
+				Expect(evt2).To(Equal(evt))
+			}
+			instance.Create(q, evt)
+			close(done)
+		})
+
+		It("should NOT call CreateFunc for a CreateEvent if NOT provided.", func(done Done) {
+			instance := failingFuncs
+			instance.CreateFunc = nil
+			evt := event.CreateEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Create(q, evt)
+			close(done)
+		})
+
+		It("should call UpdateFunc for an UpdateEvent if provided.", func(done Done) {
+			newPod := pod.DeepCopy()
+			newPod.Name = pod.Name + "2"
+			newPod.Namespace = pod.Namespace + "2"
+			evt := event.UpdateEvent{
+				ObjectOld: pod,
+				MetaOld:   pod.GetObjectMeta(),
+				ObjectNew: newPod,
+				MetaNew:   newPod.GetObjectMeta(),
+			}
+
+			instance := failingFuncs
+			instance.UpdateFunc = func(q2 workqueue.RateLimitingInterface, evt2 event.UpdateEvent) {
+				defer GinkgoRecover()
+				Expect(q2).To(Equal(q))
+				Expect(evt2).To(Equal(evt))
+			}
+
+			instance.Update(q, evt)
+			close(done)
+		})
+
+		It("should NOT call UpdateFunc for an UpdateEvent if NOT provided.", func(done Done) {
+			newPod := pod.DeepCopy()
+			newPod.Name = pod.Name + "2"
+			newPod.Namespace = pod.Namespace + "2"
+			evt := event.UpdateEvent{
+				ObjectOld: pod,
+				MetaOld:   pod.GetObjectMeta(),
+				ObjectNew: newPod,
+				MetaNew:   newPod.GetObjectMeta(),
+			}
+			instance.Update(q, evt)
+			close(done)
+		})
+
+		It("should call DeleteFunc for a DeleteEvent if provided.", func(done Done) {
+			instance := failingFuncs
+			evt := event.DeleteEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.DeleteFunc = func(q2 workqueue.RateLimitingInterface, evt2 event.DeleteEvent) {
+				defer GinkgoRecover()
+				Expect(q2).To(Equal(q))
+				Expect(evt2).To(Equal(evt))
+			}
+			instance.Delete(q, evt)
+			close(done)
+		})
+
+		It("should NOT call DeleteFunc for a DeleteEvent if NOT provided.", func(done Done) {
+			instance := failingFuncs
+			instance.DeleteFunc = nil
+			evt := event.DeleteEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Delete(q, evt)
+			close(done)
+		})
+
+		It("should call GenericFunc for a GenericEvent if provided.", func(done Done) {
+			instance := failingFuncs
+			evt := event.GenericEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.GenericFunc = func(q2 workqueue.RateLimitingInterface, evt2 event.GenericEvent) {
+				defer GinkgoRecover()
+				Expect(q2).To(Equal(q))
+				Expect(evt2).To(Equal(evt))
+			}
+			instance.Generic(q, evt)
+			close(done)
+		})
+
+		It("should NOT call GenericFunc for a GenericEvent if NOT provided.", func(done Done) {
+			instance := failingFuncs
+			instance.GenericFunc = nil
+			evt := event.GenericEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Generic(q, evt)
+			close(done)
+		})
+	})
 })
 
 var _ runtime.Object = &OwnerType{}

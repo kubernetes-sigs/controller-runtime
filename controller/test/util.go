@@ -23,6 +23,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+var _ cache.SharedIndexInformer = &FakeInformer{}
+
 // FakeInformer provides fake Informer functionality for testing
 type FakeInformer struct {
 	// Synced is returned by the HasSynced functions to implement the Informer interface

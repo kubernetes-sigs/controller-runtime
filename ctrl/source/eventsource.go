@@ -75,7 +75,7 @@ func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.R
 	return nil
 }
 
-func (ks *KindSource) SetInformerCache(i informer.IndexInformerCache) {
+func (ks *KindSource) InitInformerCache(i informer.IndexInformerCache) {
 	if ks.InformerCache == nil {
 		ks.InformerCache = i
 	}

@@ -52,7 +52,7 @@ var _ IndexInformerCache = &IndexedCache{}
 type IndexedCache struct {
 	Config *rest.Config
 	Scheme *runtime.Scheme
-	Mapper meta.RESTMapper
+	mapper meta.RESTMapper
 
 	once           sync.Once
 	mu             sync.Mutex
@@ -63,25 +63,25 @@ type IndexedCache struct {
 
 func (c *IndexedCache) init() {
 	c.once.Do(func() {
-		// Get a config
+		// TODO: Make Start return an error instead of dying on errors
+
+		// Init a config if none provided
 		if c.Config == nil {
 			c.Config = config.GetConfigOrDie()
 		}
 
-		// Get a scheme
+		// Init a scheme if none provided
 		if c.Scheme == nil {
 			c.Scheme = scheme.Scheme
 		}
 
 		// Get a mapper
-		if c.Mapper == nil {
-			dc := discovery.NewDiscoveryClientForConfigOrDie(c.Config)
-			gr, err := discovery.GetAPIGroupResources(dc)
-			if err != nil {
-				log.Fatalf("Failed to get API Group Resources: %v", err)
-			}
-			c.Mapper = discovery.NewRESTMapper(gr, dynamic.VersionInterfaces)
+		dc := discovery.NewDiscoveryClientForConfigOrDie(c.Config)
+		gr, err := discovery.GetAPIGroupResources(dc)
+		if err != nil {
+			log.Fatalf("Failed to get API Group Resources: %v", err)
 		}
+		c.mapper = discovery.NewRESTMapper(gr, dynamic.VersionInterfaces)
 
 		// Setup the codecs
 		c.codecs = serializer.NewCodecFactory(c.Scheme)
@@ -100,7 +100,7 @@ func NewInformerCache(mapper meta.RESTMapper, baseConfig *rest.Config, scheme *r
 		Scheme:         scheme,
 		codecs:         serializer.NewCodecFactory(scheme),
 		paramCodec:     runtime.NewParameterCodec(scheme),
-		Mapper:         mapper,
+		mapper:         mapper,
 	}
 }
 
@@ -166,7 +166,7 @@ func (c *IndexedCache) informerFor(gvk schema.GroupVersionKind, obj runtime.Obje
 		return nil, err
 	}
 
-	mapping, err := c.Mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	mapping, err := c.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return nil, err
 	}

@@ -96,7 +96,7 @@ type ToRequestArg struct {
 	Object runtime.Object
 }
 
-var _ ToRequests = ToRequestsFunc(func(ToRequestArg) []reconcile.ReconcileRequest { return nil })
+var _ ToRequests = ToRequestsFunc(nil)
 
 // ToRequestsFunc implements ToRequests using a function.
 type ToRequestsFunc func(ToRequestArg) []reconcile.ReconcileRequest

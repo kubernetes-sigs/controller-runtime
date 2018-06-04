@@ -54,16 +54,7 @@ type EventHandler interface {
 	Generic(workqueue.RateLimitingInterface, event.GenericEvent)
 }
 
-var _ EventHandler = EmptyEventHandler{}
-
-// EmptyEventHandler implements EventHandler with no-op implementations.  EmptyEventHandler may be embedded
-// to only implement handling a subset of Event types.
-type EmptyEventHandler struct{}
-
-func (EmptyEventHandler) Create(workqueue.RateLimitingInterface, event.CreateEvent)   {}
-func (EmptyEventHandler) Update(workqueue.RateLimitingInterface, event.UpdateEvent)   {}
-func (EmptyEventHandler) Delete(workqueue.RateLimitingInterface, event.DeleteEvent)   {}
-func (EmptyEventHandler) Generic(workqueue.RateLimitingInterface, event.GenericEvent) {}
+var _ EventHandler = EventHandlerFuncs{}
 
 // EventHandlerFuncs allows specifying a subset of EventHandler functions are fields.
 type EventHandlerFuncs struct {

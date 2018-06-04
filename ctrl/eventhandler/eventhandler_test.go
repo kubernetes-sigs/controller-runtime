@@ -8,9 +8,13 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -18,6 +22,7 @@ var _ = Describe("Eventhandler", func() {
 	var q workqueue.RateLimitingInterface
 	var instance eventhandler.EnqueueHandler
 	var pod *corev1.Pod
+	t := true
 	BeforeEach(func() {
 		q = Queue{workqueue.New()}
 		instance = eventhandler.EnqueueHandler{}
@@ -168,79 +173,593 @@ var _ = Describe("Eventhandler", func() {
 		})
 	})
 
-	//Describe("EnqueueMappedHandler", func() {
-	//	It("should enqueue a ReconcileRequest with the function applied to the CreateEvent.", func() {
-	//		instance := eventhandler.EnqueueMappedHandler{}
-	//
-	//	})
-	//
-	//	It("should enqueue a ReconcileRequest with the function applied to the DeleteEvent.", func() {
-	//		instance := eventhandler.EnqueueMappedHandler{}
-	//
-	//	})
-	//
-	//	It("should enqueue a ReconcileRequest with the function applied to both objects in the UpdateEvent.",
-	//		func() {
-	//			instance := eventhandler.EnqueueMappedHandler{}
-	//
-	//		})
-	//
-	//	It("should enqueue a ReconcileRequest with the function applied to the GenericEvent.", func() {
-	//		instance := eventhandler.EnqueueMappedHandler{}
-	//
-	//	})
-	//})
-	//
-	//Describe("EnqueueOwnerHandler", func() {
-	//	It("should enqueue a ReconcileRequest with the Owner of the object in the CreateEvent.", func() {
-	//		instance := eventhandler.EnqueueMappedHandler{}
-	//
-	//	})
-	//
-	//	It("should enqueue a ReconcileRequest with the Owner of the object in the DeleteEvent.", func() {
-	//		instance := eventhandler.EnqueueMappedHandler{}
-	//
-	//	})
-	//
-	//	It("should enqueue a ReconcileRequest with the Owners of both objects in the UpdateEvent.", func() {
-	//		instance := eventhandler.EnqueueMappedHandler{}
-	//
-	//	})
-	//
-	//	It("should enqueue a ReconcileRequest with the Owner of the object in the GenericEvent.", func() {
-	//		instance := eventhandler.EnqueueMappedHandler{}
-	//	})
-	//
-	//	It("should not enqueue a ReconcileRequest if there are no matching owners.", func() {
-	//		instance := eventhandler.EnqueueMappedHandler{}
-	//	})
-	//
-	//	It("should not enqueue a ReconcileRequest if there are no owners.", func() {
-	//		instance := eventhandler.EnqueueMappedHandler{}
-	//	})
-	//
-	//	Context("with the Controller field set to true", func() {
-	//		It("should only enqueue ReconcileRequests for the Controller if there are multiple owners.", func() {
-	//			instance := eventhandler.EnqueueMappedHandler{}
-	//		})
-	//
-	//		It("should not enqueue ReconcileRequests if there are no Controller owners.", func() {
-	//			instance := eventhandler.EnqueueMappedHandler{}
-	//		})
-	//
-	//		It("should not enqueue ReconcileRequests if there are no owners.", func() {
-	//			instance := eventhandler.EnqueueMappedHandler{}
-	//		})
-	//	})
-	//
-	//	Context("with the Controller field set to false", func() {
-	//		It("should enqueue ReconcileRequests for all owners.", func() {
-	//			instance := eventhandler.EnqueueMappedHandler{}
-	//		})
-	//	})
-	//
-	//})
+	Describe("EnqueueMappedHandler", func() {
+		It("should enqueue a ReconcileRequest with the function applied to the CreateEvent.", func() {
+			req := []reconcile.ReconcileRequest{}
+			instance := eventhandler.EnqueueMappedHandler{
+				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.ToRequestArg) []reconcile.ReconcileRequest {
+					defer GinkgoRecover()
+					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
+					Expect(a.Object).To(Equal(pod))
+					req = []reconcile.ReconcileRequest{
+						{
+							types.NamespacedName{"foo", "bar"},
+						},
+						{
+							types.NamespacedName{"biz", "baz"},
+						},
+					}
+					return req
+				}),
+			}
+
+			evt := event.CreateEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Create(q, evt)
+			Expect(q.Len()).To(Equal(2))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.ReconcileRequest{
+				types.NamespacedName{"foo", "bar"}}))
+
+			i, _ = q.Get()
+			Expect(i).To(Equal(reconcile.ReconcileRequest{
+				types.NamespacedName{"biz", "baz"}}))
+		})
+
+		It("should enqueue a ReconcileRequest with the function applied to the DeleteEvent.", func() {
+			req := []reconcile.ReconcileRequest{}
+			instance := eventhandler.EnqueueMappedHandler{
+				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.ToRequestArg) []reconcile.ReconcileRequest {
+					defer GinkgoRecover()
+					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
+					Expect(a.Object).To(Equal(pod))
+					req = []reconcile.ReconcileRequest{
+						{
+							types.NamespacedName{"foo", "bar"},
+						},
+						{
+							types.NamespacedName{"biz", "baz"},
+						},
+					}
+					return req
+				}),
+			}
+
+			evt := event.DeleteEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Delete(q, evt)
+			Expect(q.Len()).To(Equal(2))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.ReconcileRequest{
+				types.NamespacedName{"foo", "bar"}}))
+
+			i, _ = q.Get()
+			Expect(i).To(Equal(reconcile.ReconcileRequest{
+				types.NamespacedName{"biz", "baz"}}))
+		})
+
+		It("should enqueue a ReconcileRequest with the function applied to both objects in the UpdateEvent.",
+			func() {
+				newPod := pod.DeepCopy()
+				newPod.Name = pod.Name + "2"
+				newPod.Namespace = pod.Namespace + "2"
+
+				req := []reconcile.ReconcileRequest{}
+				instance := eventhandler.EnqueueMappedHandler{
+					ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.ToRequestArg) []reconcile.ReconcileRequest {
+						defer GinkgoRecover()
+						req = []reconcile.ReconcileRequest{
+							{
+								types.NamespacedName{"foo", a.Meta.GetName() + "-bar"},
+							},
+							{
+								types.NamespacedName{"biz", a.Meta.GetName() + "-baz"},
+							},
+						}
+						return req
+					}),
+				}
+
+				evt := event.UpdateEvent{
+					ObjectOld: pod,
+					MetaOld:   pod.GetObjectMeta(),
+					ObjectNew: newPod,
+					MetaNew:   newPod.GetObjectMeta(),
+				}
+				instance.Update(q, evt)
+				Expect(q.Len()).To(Equal(4))
+
+				i, _ := q.Get()
+				Expect(i).To(Equal(reconcile.ReconcileRequest{
+					types.NamespacedName{"foo", "baz-bar"}}))
+
+				i, _ = q.Get()
+				Expect(i).To(Equal(reconcile.ReconcileRequest{
+					types.NamespacedName{"biz", "baz-baz"}}))
+
+				i, _ = q.Get()
+				Expect(i).To(Equal(reconcile.ReconcileRequest{
+					types.NamespacedName{"foo", "baz2-bar"}}))
+
+				i, _ = q.Get()
+				Expect(i).To(Equal(reconcile.ReconcileRequest{
+					types.NamespacedName{"biz", "baz2-baz"}}))
+			})
+
+		It("should enqueue a ReconcileRequest with the function applied to the GenericEvent.", func() {
+			req := []reconcile.ReconcileRequest{}
+			instance := eventhandler.EnqueueMappedHandler{
+				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.ToRequestArg) []reconcile.ReconcileRequest {
+					defer GinkgoRecover()
+					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
+					Expect(a.Object).To(Equal(pod))
+					req = []reconcile.ReconcileRequest{
+						{
+							types.NamespacedName{"foo", "bar"},
+						},
+						{
+							types.NamespacedName{"biz", "baz"},
+						},
+					}
+					return req
+				}),
+			}
+
+			evt := event.GenericEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Generic(q, evt)
+			Expect(q.Len()).To(Equal(2))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.ReconcileRequest{
+				types.NamespacedName{"foo", "bar"}}))
+
+			i, _ = q.Get()
+			Expect(i).To(Equal(reconcile.ReconcileRequest{
+				types.NamespacedName{"biz", "baz"}}))
+		})
+	})
+
+	Describe("EnqueueOwnerHandler", func() {
+		It("should enqueue a ReconcileRequest with the Owner of the object in the CreateEvent.", func() {
+			instance := eventhandler.EnqueueOwnerHandler{
+				OwnerType: &appsv1.ReplicaSet{},
+			}
+			instance.InitScheme(scheme.Scheme)
+
+			pod.OwnerReferences = []metav1.OwnerReference{
+				{
+					Name:       "foo-parent",
+					Kind:       "ReplicaSet",
+					APIVersion: "apps/v1",
+				},
+			}
+			evt := event.CreateEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Create(q, evt)
+			Expect(q.Len()).To(Equal(1))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.ReconcileRequest{
+				types.NamespacedName{pod.GetNamespace(), "foo-parent"}}))
+		})
+
+		It("should enqueue a ReconcileRequest with the Owner of the object in the DeleteEvent.", func() {
+			instance := eventhandler.EnqueueOwnerHandler{
+				OwnerType: &appsv1.ReplicaSet{},
+			}
+			instance.InitScheme(scheme.Scheme)
+
+			pod.OwnerReferences = []metav1.OwnerReference{
+				{
+					Name:       "foo-parent",
+					Kind:       "ReplicaSet",
+					APIVersion: "apps/v1",
+				},
+			}
+			evt := event.DeleteEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Delete(q, evt)
+			Expect(q.Len()).To(Equal(1))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.ReconcileRequest{
+				types.NamespacedName{pod.GetNamespace(), "foo-parent"}}))
+		})
+
+		It("should enqueue a ReconcileRequest with the Owners of both objects in the UpdateEvent.", func() {
+			newPod := pod.DeepCopy()
+			newPod.Name = pod.Name + "2"
+			newPod.Namespace = pod.Namespace + "2"
+
+			instance := eventhandler.EnqueueOwnerHandler{
+				OwnerType: &appsv1.ReplicaSet{},
+			}
+			instance.InitScheme(scheme.Scheme)
+
+			pod.OwnerReferences = []metav1.OwnerReference{
+				{
+					Name:       "foo1-parent",
+					Kind:       "ReplicaSet",
+					APIVersion: "apps/v1",
+				},
+			}
+			newPod.OwnerReferences = []metav1.OwnerReference{
+				{
+					Name:       "foo2-parent",
+					Kind:       "ReplicaSet",
+					APIVersion: "apps/v1",
+				},
+			}
+			evt := event.UpdateEvent{
+				ObjectOld: pod,
+				MetaOld:   pod.GetObjectMeta(),
+				ObjectNew: newPod,
+				MetaNew:   newPod.GetObjectMeta(),
+			}
+			instance.Update(q, evt)
+			Expect(q.Len()).To(Equal(2))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.ReconcileRequest{
+				types.NamespacedName{pod.GetNamespace(), "foo1-parent"}}))
+
+			i, _ = q.Get()
+			Expect(i).To(Equal(reconcile.ReconcileRequest{
+				types.NamespacedName{newPod.GetNamespace(), "foo2-parent"}}))
+		})
+
+		It("should enqueue a ReconcileRequest with the Owner of the object in the GenericEvent.", func() {
+			instance := eventhandler.EnqueueOwnerHandler{
+				OwnerType: &appsv1.ReplicaSet{},
+			}
+			instance.InitScheme(scheme.Scheme)
+
+			pod.OwnerReferences = []metav1.OwnerReference{
+				{
+					Name:       "foo-parent",
+					Kind:       "ReplicaSet",
+					APIVersion: "apps/v1",
+				},
+			}
+			evt := event.GenericEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Generic(q, evt)
+			Expect(q.Len()).To(Equal(1))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.ReconcileRequest{
+				types.NamespacedName{pod.GetNamespace(), "foo-parent"}}))
+		})
+
+		It("should not enqueue a ReconcileRequest if there are no owners matching Group and Kind.", func() {
+			instance := eventhandler.EnqueueOwnerHandler{
+				OwnerType:    &appsv1.ReplicaSet{},
+				IsController: t,
+			}
+			instance.InitScheme(scheme.Scheme)
+			pod.OwnerReferences = []metav1.OwnerReference{
+				{ // Wrong group
+					Name:       "foo1-parent",
+					Kind:       "ReplicaSet",
+					APIVersion: "extensions/v1",
+				},
+				{ // Wrong kind
+					Name:       "foo2-parent",
+					Kind:       "Deployment",
+					APIVersion: "apps/v1",
+				},
+			}
+			evt := event.CreateEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Create(q, evt)
+			Expect(q.Len()).To(Equal(0))
+		})
+
+		It("should enqueue a ReconcileRequest if there are owners matching Group "+
+			"and Kind with a different version.", func() {
+			instance := eventhandler.EnqueueOwnerHandler{
+				OwnerType: &appsv1.ReplicaSet{},
+			}
+			instance.InitScheme(scheme.Scheme)
+			pod.OwnerReferences = []metav1.OwnerReference{
+				{
+					Name:       "foo-parent",
+					Kind:       "ReplicaSet",
+					APIVersion: "apps/v2",
+				},
+			}
+			evt := event.CreateEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Create(q, evt)
+			Expect(q.Len()).To(Equal(1))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.ReconcileRequest{
+				types.NamespacedName{pod.GetNamespace(), "foo-parent"}}))
+		})
+
+		It("should not enqueue a ReconcileRequest if there are no owners.", func() {
+			instance := eventhandler.EnqueueOwnerHandler{
+				OwnerType: &appsv1.ReplicaSet{},
+			}
+			instance.InitScheme(scheme.Scheme)
+			evt := event.CreateEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Create(q, evt)
+			Expect(q.Len()).To(Equal(0))
+		})
+
+		Context("with the Controller field set to true", func() {
+			It("should enqueue ReconcileRequests for only the first the Controller if there are "+
+				"multiple Controller owners.", func() {
+				instance := eventhandler.EnqueueOwnerHandler{
+					OwnerType:    &appsv1.ReplicaSet{},
+					IsController: t,
+				}
+				instance.InitScheme(scheme.Scheme)
+				pod.OwnerReferences = []metav1.OwnerReference{
+					{
+						Name:       "foo1-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+					},
+					{
+						Name:       "foo2-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+						Controller: &t,
+					},
+					{
+						Name:       "foo3-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+					},
+					{
+						Name:       "foo4-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+						Controller: &t,
+					},
+					{
+						Name:       "foo5-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+					},
+				}
+				evt := event.CreateEvent{
+					Object: pod,
+					Meta:   pod.GetObjectMeta(),
+				}
+				instance.Create(q, evt)
+				Expect(q.Len()).To(Equal(1))
+				i, _ := q.Get()
+				Expect(i).To(Equal(reconcile.ReconcileRequest{
+					types.NamespacedName{pod.GetNamespace(), "foo2-parent"}}))
+			})
+
+			It("should not enqueue ReconcileRequests if there are no Controller owners.", func() {
+				instance := eventhandler.EnqueueOwnerHandler{
+					OwnerType:    &appsv1.ReplicaSet{},
+					IsController: t,
+				}
+				instance.InitScheme(scheme.Scheme)
+				pod.OwnerReferences = []metav1.OwnerReference{
+					{
+						Name:       "foo1-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+					},
+					{
+						Name:       "foo2-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+					},
+					{
+						Name:       "foo3-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+					},
+				}
+				evt := event.CreateEvent{
+					Object: pod,
+					Meta:   pod.GetObjectMeta(),
+				}
+				instance.Create(q, evt)
+				Expect(q.Len()).To(Equal(0))
+			})
+
+			It("should not enqueue ReconcileRequests if there are no owners.", func() {
+				instance := eventhandler.EnqueueOwnerHandler{
+					OwnerType:    &appsv1.ReplicaSet{},
+					IsController: t,
+				}
+				instance.InitScheme(scheme.Scheme)
+				evt := event.CreateEvent{
+					Object: pod,
+					Meta:   pod.GetObjectMeta(),
+				}
+				instance.Create(q, evt)
+				Expect(q.Len()).To(Equal(0))
+			})
+		})
+
+		Context("with the Controller field set to false", func() {
+			It("should enqueue a ReconcileRequests for all owners.", func() {
+				instance := eventhandler.EnqueueOwnerHandler{
+					OwnerType: &appsv1.ReplicaSet{},
+				}
+				instance.InitScheme(scheme.Scheme)
+				pod.OwnerReferences = []metav1.OwnerReference{
+					{
+						Name:       "foo1-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+					},
+					{
+						Name:       "foo2-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+					},
+					{
+						Name:       "foo3-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+					},
+				}
+				evt := event.CreateEvent{
+					Object: pod,
+					Meta:   pod.GetObjectMeta(),
+				}
+				instance.Create(q, evt)
+				Expect(q.Len()).To(Equal(3))
+
+				i, _ := q.Get()
+				Expect(i).To(Equal(reconcile.ReconcileRequest{
+					types.NamespacedName{pod.GetNamespace(), "foo1-parent"}}))
+				i, _ = q.Get()
+				Expect(i).To(Equal(reconcile.ReconcileRequest{
+					types.NamespacedName{pod.GetNamespace(), "foo2-parent"}}))
+				i, _ = q.Get()
+				Expect(i).To(Equal(reconcile.ReconcileRequest{
+					types.NamespacedName{pod.GetNamespace(), "foo3-parent"}}))
+			})
+		})
+
+		Context("with a nil metadata object", func() {
+			It("should do nothing.", func() {
+				instance := eventhandler.EnqueueOwnerHandler{
+					OwnerType: &appsv1.ReplicaSet{},
+				}
+				instance.InitScheme(scheme.Scheme)
+				pod.OwnerReferences = []metav1.OwnerReference{
+					{
+						Name:       "foo1-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+					},
+				}
+				evt := event.CreateEvent{
+					Object: pod,
+				}
+				instance.Create(q, evt)
+				Expect(q.Len()).To(Equal(0))
+			})
+		})
+
+		Context("with a nil metadata object", func() {
+			It("should do nothing.", func() {
+				instance := eventhandler.EnqueueOwnerHandler{
+					OwnerType: &metav1.ListOptions{},
+				}
+				instance.InitScheme(scheme.Scheme)
+				pod.OwnerReferences = []metav1.OwnerReference{
+					{
+						Name:       "foo1-parent",
+						Kind:       "ListOptions",
+						APIVersion: "meta/v1",
+					},
+				}
+				evt := event.CreateEvent{
+					Object: pod,
+					Meta:   pod.GetObjectMeta(),
+				}
+				instance.Create(q, evt)
+				Expect(q.Len()).To(Equal(0))
+			})
+		})
+		Context("with an OwnerType that cannot be resolved", func() {
+			It("should do nothing.", func() {
+				instance := eventhandler.EnqueueOwnerHandler{
+					OwnerType: &OwnerType{},
+				}
+				instance.InitScheme(scheme.Scheme)
+				pod.OwnerReferences = []metav1.OwnerReference{
+					{
+						Name:       "foo1-parent",
+						Kind:       "ListOptions",
+						APIVersion: "meta/v1",
+					},
+				}
+				evt := event.CreateEvent{
+					Object: pod,
+					Meta:   pod.GetObjectMeta(),
+				}
+				instance.Create(q, evt)
+				Expect(q.Len()).To(Equal(0))
+			})
+		})
+
+		Context("with a nil OwnerType", func() {
+			It("should do nothing.", func() {
+				instance := eventhandler.EnqueueOwnerHandler{}
+				instance.InitScheme(scheme.Scheme)
+				pod.OwnerReferences = []metav1.OwnerReference{
+					{
+						Name:       "foo1-parent",
+						Kind:       "OwnerType",
+						APIVersion: "meta/v1",
+					},
+				}
+				evt := event.CreateEvent{
+					Object: pod,
+					Meta:   pod.GetObjectMeta(),
+				}
+				instance.Create(q, evt)
+				Expect(q.Len()).To(Equal(0))
+			})
+		})
+
+		Context("with an invalid APIVersion in the OwnerReference", func() {
+			It("should do nothing.", func() {
+				instance := eventhandler.EnqueueOwnerHandler{
+					OwnerType: &appsv1.ReplicaSet{},
+				}
+				instance.InitScheme(scheme.Scheme)
+				pod.OwnerReferences = []metav1.OwnerReference{
+					{
+						Name:       "foo1-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1/fail",
+					},
+				}
+				evt := event.CreateEvent{
+					Object: pod,
+					Meta:   pod.GetObjectMeta(),
+				}
+				instance.Create(q, evt)
+				Expect(q.Len()).To(Equal(0))
+			})
+		})
+	})
 })
+
+var _ runtime.Object = &OwnerType{}
+
+type OwnerType struct{}
+
+func (OwnerType) GetObjectKind() schema.ObjectKind { return nil }
+func (OwnerType) DeepCopyObject() runtime.Object   { return nil }
 
 var _ workqueue.RateLimitingInterface = Queue{}
 

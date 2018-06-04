@@ -17,15 +17,21 @@ limitations under the License.
 package eventhandler
 
 import (
+	"sync"
+
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
+	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 )
 
 var _ EventHandler = EnqueueOwnerHandler{}
+
+var log = logf.KBLog.WithName("eventhandler").WithName("EnqueueOwnerHandler")
 
 // EnqueueOwnerHandler enqueues a ReconcileRequest containing the Name and Namespace of the Owner of the object in
 // the Event.  EnqueueOwnerHandler is used with Reconcile implementations that create objects to trigger a Reconcile
@@ -38,6 +44,10 @@ type EnqueueOwnerHandler struct {
 	IsController bool
 
 	Scheme *runtime.Scheme
+
+	once      sync.Once
+	groupKind schema.GroupKind
+	kindOk    bool
 }
 
 func (e *EnqueueOwnerHandler) InitScheme(s *runtime.Scheme) {
@@ -48,61 +58,77 @@ func (e *EnqueueOwnerHandler) InitScheme(s *runtime.Scheme) {
 
 // Create implements EventHandler
 func (e EnqueueOwnerHandler) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
-	if req, found := e.getOwnerReconcileRequest(evt.Meta); found {
+	for _, req := range e.getOwnerReconcileRequest(evt.Meta) {
 		q.AddRateLimited(req)
 	}
 }
 
 // Update implements EventHandler
 func (e EnqueueOwnerHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
-	if req, found := e.getOwnerReconcileRequest(evt.MetaOld); found {
+	for _, req := range e.getOwnerReconcileRequest(evt.MetaOld) {
 		q.AddRateLimited(req)
 	}
-	if req, found := e.getOwnerReconcileRequest(evt.MetaNew); found {
+	for _, req := range e.getOwnerReconcileRequest(evt.MetaNew) {
 		q.AddRateLimited(req)
 	}
 }
 
 // Delete implements EventHandler
 func (e EnqueueOwnerHandler) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
-	if req, found := e.getOwnerReconcileRequest(evt.Meta); found {
+	for _, req := range e.getOwnerReconcileRequest(evt.Meta) {
 		q.AddRateLimited(req)
 	}
 }
 
 // Generic implements EventHandler
 func (e EnqueueOwnerHandler) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
-	if req, found := e.getOwnerReconcileRequest(evt.Meta); found {
+	for _, req := range e.getOwnerReconcileRequest(evt.Meta) {
 		q.AddRateLimited(req)
 	}
 }
 
-// lookupObjectFromCache looks up an object from the cache by its GroupVersionKind and name, and returns it
-func (e EnqueueOwnerHandler) lookupObjectFromCache(kind runtime.Object, namespace, name string) metav1.Object {
-	return nil
-}
+func (e EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []reconcile.ReconcileRequest {
+	e.once.Do(func() {
+		kinds, _, err := e.Scheme.ObjectKinds(e.OwnerType)
+		if err != nil {
+			log.Error(err, "Could not get ObjectKinds for OwnerType", "OwnerType", e.OwnerType)
+			return
+		}
+		if len(kinds) != 1 {
+			log.Error(nil, "Expected exactly 1 kind for OwnerType",
+				"OwnerType", e.OwnerType, "Kinds", kinds)
+			return
+		}
+		e.groupKind = schema.GroupKind{Group: kinds[0].Group, Kind: kinds[0].Kind}
+		e.kindOk = true
+	})
+	if !e.kindOk {
+		return nil
+	}
 
-func (e EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) (reconcile.ReconcileRequest, bool) {
-	// Iterate through OwnerReferences to find one whose resource matches the OwnerType resource
-	// The only way to figure out if 2 different GroupVersionKinds
-	//kinds, _, err := e.Scheme.ObjectKinds(e.OwnerType)
-	//if err != nil {
-	//
-	//}
+	reqs := []reconcile.ReconcileRequest{}
 	for _, ref := range e.getOwnersReferences(object) {
+		// Parse the Group and Version from the OwnerReference
+		refGV, err := schema.ParseGroupVersion(ref.APIVersion)
+		if err != nil {
+			log.Error(err, "Could not parse OwnerReference GroupVersion",
+				"OwnerReference", ref.APIVersion)
+			return nil
+		}
 
-		// Check if this OwnerReference has the correct type
-		// Compare the owner UID of the reference against the UID of the OwnerType object with the same name
-		l := e.lookupObjectFromCache(e.OwnerType, object.GetNamespace(), ref.Name)
-		if l.GetUID() == ref.UID {
-			return reconcile.ReconcileRequest{types.NamespacedName{
-				Name:      ref.Name,
-				Namespace: object.GetNamespace(),
-			}}, true
+		// Kind and Group match
+		if ref.Kind == e.groupKind.Kind && refGV.Group == e.groupKind.Group {
+			reqs = append(reqs, reconcile.ReconcileRequest{
+				NamespacedName: types.NamespacedName{
+					Namespace: object.GetNamespace(),
+					Name:      ref.Name,
+				},
+			})
 		}
 	}
 
-	return reconcile.ReconcileRequest{}, false
+	// No matching owners
+	return reqs
 }
 
 func (e EnqueueOwnerHandler) getOwnersReferences(object metav1.Object) []metav1.OwnerReference {

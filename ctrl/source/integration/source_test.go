@@ -19,7 +19,7 @@ var _ = Describe("Source", func() {
 	var instance1, instance2 source.KindSource
 	var obj runtime.Object
 	var q workqueue.RateLimitingInterface
-	var c1, c2 chan string
+	var c1, c2 chan interface{}
 	var ns string
 	count := 0
 
@@ -33,8 +33,8 @@ var _ = Describe("Source", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		q = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-		c1 = make(chan string)
-		c2 = make(chan string)
+		c1 = make(chan interface{})
+		c2 = make(chan interface{})
 	})
 
 	JustBeforeEach(func() {
@@ -83,95 +83,122 @@ var _ = Describe("Source", func() {
 				}
 
 				// Create an event handler to verify the events
-				ehf := func(c chan string) eventhandler.EventHandlerFuncs {
+				newHandler := func(c chan interface{}) eventhandler.EventHandlerFuncs {
 					return eventhandler.EventHandlerFuncs{
 						CreateFunc: func(rli workqueue.RateLimitingInterface, evt event.CreateEvent) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))
-
-							// Compare meta and objects
-							<-c
-							m, ok := evt.Meta.(*metav1.ObjectMeta)
-							Expect(ok).To(BeTrue(), fmt.Sprintf(
-								"expect %T to be %T", evt.Meta, &metav1.ObjectMeta{}))
-							Expect(m).To(Equal(&created.ObjectMeta))
-							Expect(evt.Object).To(Equal(created))
-							c <- "create"
+							c <- evt
 						},
 						UpdateFunc: func(rli workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))
-
-							// Compare new meta and objects
-							<-c
-							m, ok := evt.MetaNew.(*metav1.ObjectMeta)
-							Expect(ok).To(BeTrue(), fmt.Sprintf(
-								"expect %T to be %T", evt.MetaNew, &metav1.ObjectMeta{}))
-							Expect(m).To(Equal(&updated.ObjectMeta))
-							Expect(evt.ObjectNew).To(Equal(updated))
-
-							// Compare old meta and objects
-							m, ok = evt.MetaOld.(*metav1.ObjectMeta)
-							Expect(ok).To(BeTrue(), fmt.Sprintf(
-								"expect %T to be %T", evt.MetaOld, &metav1.ObjectMeta{}))
-							Expect(m).To(Equal(&created.ObjectMeta))
-							Expect(evt.ObjectOld).To(Equal(created))
-							c <- "update"
+							c <- evt
 						},
 						DeleteFunc: func(rli workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))
-
-							// Compare meta and objects
-							<-c
-							deleted.SetResourceVersion("")
-							evt.Meta.SetResourceVersion("")
-
-							m, ok := evt.Meta.(*metav1.ObjectMeta)
-							Expect(ok).To(BeTrue(), fmt.Sprintf(
-								"expect %T to be %T", evt.Meta, &metav1.ObjectMeta{}))
-							Expect(m).To(Equal(&deleted.ObjectMeta))
-							Expect(evt.Object).To(Equal(deleted))
-							c <- "delete"
+							c <- evt
 						},
 					}
 				}
-				eh1 := ehf(c1)
-				eh2 := ehf(c2)
+				handler1 := newHandler(c1)
+				handler2 := newHandler(c2)
 
 				// Create 2 instances
-				instance1.Start(eh1, q)
-				instance2.Start(eh2, q)
+				instance1.Start(handler1, q)
+				instance2.Start(handler2, q)
 
 				By("Creating a Deployment and expecting the CreateEvent.")
 				created, err = client.Create(deployment)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(created).NotTo(BeNil())
-				c1 <- ""
-				c2 <- ""
-				Expect(<-c1).To(Equal("create"))
-				Expect(<-c2).To(Equal("create"))
+
+				// Check first CreateEvent
+				evt := <-c1
+				createEvt, ok := evt.(event.CreateEvent)
+				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.CreateEvent{}))
+				objMeta, ok := createEvt.Meta.(*metav1.ObjectMeta)
+				Expect(ok).To(BeTrue(), fmt.Sprintf(
+					"expect %T to be %T", createEvt.Meta, &metav1.ObjectMeta{}))
+				Expect(objMeta).To(Equal(&created.ObjectMeta))
+				Expect(createEvt.Object).To(Equal(created))
+
+				// Check second CreateEvent
+				evt = <-c2
+				createEvt, ok = evt.(event.CreateEvent)
+				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.CreateEvent{}))
+				objMeta, ok = createEvt.Meta.(*metav1.ObjectMeta)
+				Expect(ok).To(BeTrue(), fmt.Sprintf(
+					"expect %T to be %T", createEvt.Meta, &metav1.ObjectMeta{}))
+				Expect(objMeta).To(Equal(&created.ObjectMeta))
+				Expect(createEvt.Object).To(Equal(created))
 
 				By("Updating a Deployment and expecting the UpdateEvent.")
 				updated = created.DeepCopy()
-				fmt.Printf("\n\nO1 %v\n", updated)
 				updated.Labels = map[string]string{"biz": "buz"}
 				updated, err = client.Update(updated)
-				fmt.Printf("\n\nO2 %v\n", updated)
 				Expect(err).NotTo(HaveOccurred())
-				c1 <- ""
-				c2 <- ""
-				Expect(<-c1).To(Equal("update"))
-				Expect(<-c2).To(Equal("update"))
+
+				// Check first UpdateEvent
+				evt = <-c1
+				updateEvt, ok := evt.(event.UpdateEvent)
+				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.UpdateEvent{}))
+
+				objMeta, ok = updateEvt.MetaNew.(*metav1.ObjectMeta)
+				Expect(ok).To(BeTrue(), fmt.Sprintf(
+					"expect %T to be %T", updateEvt.MetaNew, &metav1.ObjectMeta{}))
+				Expect(objMeta).To(Equal(&updated.ObjectMeta))
+				Expect(updateEvt.ObjectNew).To(Equal(updated))
+
+				objMeta, ok = updateEvt.MetaOld.(*metav1.ObjectMeta)
+				Expect(ok).To(BeTrue(), fmt.Sprintf(
+					"expect %T to be %T", updateEvt.MetaOld, &metav1.ObjectMeta{}))
+				Expect(objMeta).To(Equal(&created.ObjectMeta))
+				Expect(updateEvt.ObjectOld).To(Equal(created))
+
+				// Check second UpdateEvent
+				evt = <-c2
+				updateEvt, ok = evt.(event.UpdateEvent)
+				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.UpdateEvent{}))
+
+				objMeta, ok = updateEvt.MetaNew.(*metav1.ObjectMeta)
+				Expect(ok).To(BeTrue(), fmt.Sprintf(
+					"expect %T to be %T", updateEvt.MetaNew, &metav1.ObjectMeta{}))
+				Expect(objMeta).To(Equal(&updated.ObjectMeta))
+				Expect(updateEvt.ObjectNew).To(Equal(updated))
+
+				objMeta, ok = updateEvt.MetaOld.(*metav1.ObjectMeta)
+				Expect(ok).To(BeTrue(), fmt.Sprintf(
+					"expect %T to be %T", updateEvt.MetaOld, &metav1.ObjectMeta{}))
+				Expect(objMeta).To(Equal(&created.ObjectMeta))
+				Expect(updateEvt.ObjectOld).To(Equal(created))
 
 				By("Deleting a Deployment and expecting the Delete.")
 				deleted = updated.DeepCopy()
 				err = client.Delete(created.Name, &metav1.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				c1 <- ""
-				c2 <- ""
-				Expect(<-c1).To(Equal("delete"))
-				Expect(<-c2).To(Equal("delete"))
+
+				deleted.SetResourceVersion("")
+				evt = <-c1
+				deleteEvt, ok := evt.(event.DeleteEvent)
+				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.DeleteEvent{}))
+				deleteEvt.Meta.SetResourceVersion("")
+				objMeta, ok = deleteEvt.Meta.(*metav1.ObjectMeta)
+				Expect(ok).To(BeTrue(), fmt.Sprintf(
+					"expect %T to be %T", deleteEvt.Meta, &metav1.ObjectMeta{}))
+				Expect(objMeta).To(Equal(&deleted.ObjectMeta))
+				Expect(deleteEvt.Object).To(Equal(deleted))
+
+				evt = <-c2
+				deleteEvt, ok = evt.(event.DeleteEvent)
+				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.DeleteEvent{}))
+				deleteEvt.Meta.SetResourceVersion("")
+				objMeta, ok = deleteEvt.Meta.(*metav1.ObjectMeta)
+				Expect(ok).To(BeTrue(), fmt.Sprintf(
+					"expect %T to be %T", deleteEvt.Meta, &metav1.ObjectMeta{}))
+				Expect(objMeta).To(Equal(&deleted.ObjectMeta))
+				Expect(deleteEvt.Object).To(Equal(deleted))
 
 				close(done)
 			}, 5)

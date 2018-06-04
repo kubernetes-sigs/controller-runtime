@@ -59,6 +59,3 @@ type GenericEvent struct {
 
 	Object runtime.Object
 }
-
-// UnmarshalObj parses the object in the event and stores the result in the value pointed to by i.
-func (GenericEvent) UnmarshalObj(i runtime.Object) error { return nil }

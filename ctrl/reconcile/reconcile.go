@@ -87,7 +87,7 @@ type Reconcile interface {
 // ReconcileFunc is a function that implements the Reconcile interface.
 type ReconcileFunc func(ReconcileRequest) (ReconcileResult, error)
 
-var _ Reconcile = ReconcileFunc(func(ReconcileRequest) (ReconcileResult, error) { return ReconcileResult{}, nil })
+var _ Reconcile = ReconcileFunc(nil)
 
 func (r ReconcileFunc) Reconcile(o ReconcileRequest) (ReconcileResult, error) { return r(o) }
 

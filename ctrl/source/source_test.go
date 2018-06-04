@@ -1,6 +1,8 @@
 package source_test
 
 import (
+	"fmt"
+
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
@@ -68,7 +70,7 @@ var _ = Describe("Source", func() {
 					Type: &corev1.Pod{},
 				}
 				instance.InitInformerCache(ic)
-				instance.Start(eventhandler.EventHandlerFuncs{
+				err := instance.Start(eventhandler.EventHandlerFuncs{
 					CreateFunc: func(q2 workqueue.RateLimitingInterface, evt event.CreateEvent) {
 						defer GinkgoRecover()
 						Expect(q2).To(Equal(q))
@@ -90,6 +92,7 @@ var _ = Describe("Source", func() {
 						Fail("Unexpected GenericEvent")
 					},
 				}, q)
+				Expect(err).NotTo(HaveOccurred())
 
 				i, err := ic.FakeInformerFor(&corev1.Pod{})
 				Expect(err).NotTo(HaveOccurred())
@@ -109,7 +112,7 @@ var _ = Describe("Source", func() {
 					Type: &corev1.Pod{},
 				}
 				instance.InitInformerCache(ic)
-				instance.Start(eventhandler.EventHandlerFuncs{
+				err := instance.Start(eventhandler.EventHandlerFuncs{
 					CreateFunc: func(q2 workqueue.RateLimitingInterface, evt event.CreateEvent) {
 						defer GinkgoRecover()
 						Fail("Unexpected CreateEvent")
@@ -136,6 +139,7 @@ var _ = Describe("Source", func() {
 						Fail("Unexpected GenericEvent")
 					},
 				}, q)
+				Expect(err).NotTo(HaveOccurred())
 
 				i, err := ic.FakeInformerFor(&corev1.Pod{})
 				Expect(err).NotTo(HaveOccurred())
@@ -160,7 +164,7 @@ var _ = Describe("Source", func() {
 					Type: &corev1.Pod{},
 				}
 				instance.InitInformerCache(ic)
-				instance.Start(eventhandler.EventHandlerFuncs{
+				err := instance.Start(eventhandler.EventHandlerFuncs{
 					CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
 						defer GinkgoRecover()
 						Fail("Unexpected DeleteEvent")
@@ -182,6 +186,7 @@ var _ = Describe("Source", func() {
 						Fail("Unexpected GenericEvent")
 					},
 				}, q)
+				Expect(err).NotTo(HaveOccurred())
 
 				i, err := ic.FakeInformerFor(&corev1.Pod{})
 				Expect(err).NotTo(HaveOccurred())
@@ -193,6 +198,21 @@ var _ = Describe("Source", func() {
 
 			It("should provide a Pod DeletedEvent for a tombstone", func(done Done) {
 				// TODO: Write this
+				close(done)
+			})
+		})
+		Context("for a Kind not in the cache", func() {
+			It("should return an error when Start is called", func(done Done) {
+				ic.Error = fmt.Errorf("test error")
+				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
+
+				instance := source.KindSource{
+					Type: &corev1.Pod{},
+				}
+				instance.InitInformerCache(ic)
+				err := instance.Start(eventhandler.EventHandlerFuncs{}, q)
+				Expect(err).To(HaveOccurred())
+
 				close(done)
 			})
 		})

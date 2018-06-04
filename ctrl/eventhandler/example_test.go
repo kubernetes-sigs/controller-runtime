@@ -24,7 +24,6 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 )
@@ -48,22 +47,8 @@ func ExampleEnqueueOwnerHandler_1() {
 	c.Watch(
 		&source.KindSource{Type: &appsv1.ReplicaSet{}},
 		eventhandler.EnqueueOwnerHandler{
-			OwnerType:    schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
+			OwnerType:    &appsv1.Deployment{},
 			IsController: true,
-		},
-	)
-}
-
-// This example watches Pods and enqueues a ReconcileRequest containing the Name and Namespace of the
-// owning (transitive) Deployment responsible for the creation of the Pod.
-func ExampleEnqueueOwnerHandler_2() {
-	// c is a ctrl.Controller
-	c.Watch(
-		&source.KindSource{Type: &corev1.Pod{}},
-		eventhandler.EnqueueOwnerHandler{
-			OwnerType:        schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
-			TransitiveOwners: true,
-			IsController:     true,
 		},
 	)
 }

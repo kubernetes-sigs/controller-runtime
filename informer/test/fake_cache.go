@@ -30,6 +30,7 @@ var _ informer.IndexInformerCache = &FakeIndexCache{}
 type FakeIndexCache struct {
 	InformersByGVK map[schema.GroupVersionKind]cache.SharedIndexInformer
 	Scheme         *runtime.Scheme
+	Error          error
 }
 
 func (c *FakeIndexCache) InformerForKind(gvk schema.GroupVersionKind) (cache.SharedIndexInformer, error) {
@@ -45,7 +46,10 @@ func (c *FakeIndexCache) FakeInformerForKind(gvk schema.GroupVersionKind) (*test
 		c.Scheme = scheme.Scheme
 	}
 	obj, _ := c.Scheme.New(gvk)
-	i, _ := c.informerFor(gvk, obj)
+	i, err := c.informerFor(gvk, obj)
+	if err != nil {
+		return nil, err
+	}
 	return i.(*test.FakeInformer), nil
 }
 
@@ -64,11 +68,17 @@ func (c *FakeIndexCache) FakeInformerFor(obj runtime.Object) (*test.FakeInformer
 	}
 	gvks, _, _ := c.Scheme.ObjectKinds(obj)
 	gvk := gvks[0]
-	i, _ := c.informerFor(gvk, obj)
+	i, err := c.informerFor(gvk, obj)
+	if err != nil {
+		return nil, err
+	}
 	return i.(*test.FakeInformer), nil
 }
 
 func (c *FakeIndexCache) informerFor(gvk schema.GroupVersionKind, obj runtime.Object) (cache.SharedIndexInformer, error) {
+	if c.Error != nil {
+		return nil, c.Error
+	}
 	if c.InformersByGVK == nil {
 		c.InformersByGVK = map[schema.GroupVersionKind]cache.SharedIndexInformer{}
 	}
@@ -82,5 +92,5 @@ func (c *FakeIndexCache) informerFor(gvk schema.GroupVersionKind, obj runtime.Ob
 }
 
 func (c *FakeIndexCache) Start(stopCh <-chan struct{}) error {
-	return nil
+	return c.Error
 }

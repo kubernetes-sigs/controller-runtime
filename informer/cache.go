@@ -2,11 +2,13 @@ package informer
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
+	"os"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/log"
+	"github.com/thockin/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,7 +40,9 @@ func NewInformerCacheOrDie(config *rest.Config) IndexInformerCache {
 	discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(config)
 	groupResources, err := discovery.GetAPIGroupResources(discoveryClient)
 	if err != nil {
-		log.Fatalf("Could not get API GroupResoures %v", err)
+		// TODO: return an error?
+		log.BaseLogger().WithName("informers.setup").Error(err, "Failed to get API Group-Resources")
+		os.Exit(1)
 	}
 	discoMapper := discovery.NewRESTMapper(groupResources, dynamic.VersionInterfaces)
 
@@ -59,11 +63,12 @@ type IndexedCache struct {
 	informersByGVK map[schema.GroupVersionKind]cache.SharedIndexInformer
 	codecs         serializer.CodecFactory
 	paramCodec     runtime.ParameterCodec
+	log            logr.Logger
 }
 
 func (c *IndexedCache) init() {
 	c.once.Do(func() {
-		// TODO: Make Start return an error instead of dying on errors
+		c.log = log.BaseLogger().WithName("informers.cache")
 
 		// Init a config if none provided
 		if c.Config == nil {
@@ -79,7 +84,8 @@ func (c *IndexedCache) init() {
 		dc := discovery.NewDiscoveryClientForConfigOrDie(c.Config)
 		gr, err := discovery.GetAPIGroupResources(dc)
 		if err != nil {
-			log.Fatalf("Failed to get API Group Resources: %v", err)
+			c.log.Error(err, "Failed to get API Group-Resources")
+			os.Exit(1)
 		}
 		c.mapper = discovery.NewRESTMapper(gr, dynamic.VersionInterfaces)
 

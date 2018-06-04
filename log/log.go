@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/thockin/logr"
+	tlogr "github.com/thockin/logr/testing"
 	"github.com/thockin/logr/impls/zaplogr"
 	"go.uber.org/zap"
 )
@@ -27,22 +28,21 @@ func ZapLogger(development bool) logr.Logger {
 	return zaplogr.NewLogger(zapLog)
 }
 
-// SetLogger configures the base logger used by kubebuilder
 func SetLogger(l logr.Logger) {
-	baseLogger = l
+	Log.promise.Fulfill(l)
 }
 
-// BaseLogger returns the base logger used by kubebuilder.
-// The default is a Zap-based one in a development configuration.
-// It should not be called from package level (instead, its result
-// should be captured when used).
-func BaseLogger() logr.Logger {
-	if baseLogger == nil {
-		baseLogger = ZapLogger(true).WithName("kubebuilder")
-	}
-
-	return baseLogger
+// Log is the base logger used by kubebuilder.  It delegates
+// to another logr.Logger.  You *must* call SetLogger to
+// get any actual logging.
+var Log = &DelegatingLogger{
+	Logger: tlogr.NullLogger{},
+	promise: &loggerPromise{},
 }
 
-// BaseLogger sets the  the base logger
-var baseLogger logr.Logger = nil
+var KBLog logr.Logger
+
+func init() {
+	Log.promise.logger = Log
+	KBLog = Log.WithName("kubebuilder")
+}

@@ -7,8 +7,7 @@ import (
 	"os"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/log"
-	"github.com/thockin/logr"
+	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -21,6 +20,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 )
+
+var log = logf.KBLog.WithName("informers")
 
 // IndexInformerCache knows how to create or fetch informers for different group-version-kinds.
 // It's safe to call InformerFor from multiple threads.
@@ -41,7 +42,7 @@ func NewInformerCacheOrDie(config *rest.Config) IndexInformerCache {
 	groupResources, err := discovery.GetAPIGroupResources(discoveryClient)
 	if err != nil {
 		// TODO: return an error?
-		log.BaseLogger().WithName("informers.setup").Error(err, "Failed to get API Group-Resources")
+		log.WithName("setup").Error(err, "Failed to get API Group-Resources")
 		os.Exit(1)
 	}
 	discoMapper := discovery.NewRESTMapper(groupResources, dynamic.VersionInterfaces)
@@ -63,13 +64,10 @@ type IndexedCache struct {
 	informersByGVK map[schema.GroupVersionKind]cache.SharedIndexInformer
 	codecs         serializer.CodecFactory
 	paramCodec     runtime.ParameterCodec
-	log            logr.Logger
 }
 
 func (c *IndexedCache) init() {
 	c.once.Do(func() {
-		c.log = log.BaseLogger().WithName("informers.cache")
-
 		// Init a config if none provided
 		if c.Config == nil {
 			c.Config = config.GetConfigOrDie()
@@ -84,7 +82,7 @@ func (c *IndexedCache) init() {
 		dc := discovery.NewDiscoveryClientForConfigOrDie(c.Config)
 		gr, err := discovery.GetAPIGroupResources(dc)
 		if err != nil {
-			c.log.Error(err, "Failed to get API Group-Resources")
+			log.WithName("setup").Error(err, "Failed to get API Group-Resources")
 			os.Exit(1)
 		}
 		c.mapper = discovery.NewRESTMapper(gr, dynamic.VersionInterfaces)

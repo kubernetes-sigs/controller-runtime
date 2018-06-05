@@ -46,7 +46,7 @@ func ExampleEnqueueOwnerHandler_1() {
 	// c is a ctrl.Controller
 	c.Watch(
 		&source.KindSource{Type: &appsv1.ReplicaSet{}},
-		eventhandler.EnqueueOwnerHandler{
+		&eventhandler.EnqueueOwnerHandler{
 			OwnerType:    &appsv1.Deployment{},
 			IsController: true,
 		},

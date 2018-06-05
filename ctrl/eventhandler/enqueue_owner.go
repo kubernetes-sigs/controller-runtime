@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
 	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,7 +30,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-var _ EventHandler = EnqueueOwnerHandler{}
+var _ EventHandler = &EnqueueOwnerHandler{}
 
 var log = logf.KBLog.WithName("eventhandler").WithName("EnqueueOwnerHandler")
 
@@ -50,22 +51,24 @@ type EnqueueOwnerHandler struct {
 	kindOk    bool
 }
 
+var _ inject.Scheme = &EnqueueOwnerHandler{}
+
 // TODO: Make sure this gets injected from the Controller
-func (e *EnqueueOwnerHandler) InitScheme(s *runtime.Scheme) {
+func (e *EnqueueOwnerHandler) InjectScheme(s *runtime.Scheme) {
 	if e.Scheme == nil {
 		e.Scheme = s
 	}
 }
 
 // Create implements EventHandler
-func (e EnqueueOwnerHandler) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
+func (e *EnqueueOwnerHandler) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
 	for _, req := range e.getOwnerReconcileRequest(evt.Meta) {
 		q.AddRateLimited(req)
 	}
 }
 
 // Update implements EventHandler
-func (e EnqueueOwnerHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
+func (e *EnqueueOwnerHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 	for _, req := range e.getOwnerReconcileRequest(evt.MetaOld) {
 		q.AddRateLimited(req)
 	}
@@ -75,21 +78,21 @@ func (e EnqueueOwnerHandler) Update(q workqueue.RateLimitingInterface, evt event
 }
 
 // Delete implements EventHandler
-func (e EnqueueOwnerHandler) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
+func (e *EnqueueOwnerHandler) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 	for _, req := range e.getOwnerReconcileRequest(evt.Meta) {
 		q.AddRateLimited(req)
 	}
 }
 
 // Generic implements EventHandler
-func (e EnqueueOwnerHandler) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
+func (e *EnqueueOwnerHandler) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
 	for _, req := range e.getOwnerReconcileRequest(evt.Meta) {
 		q.AddRateLimited(req)
 	}
 }
 
 // TODO: Add comments
-func (e EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []reconcile.ReconcileRequest {
+func (e *EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []reconcile.ReconcileRequest {
 	// TODO: Comment this more
 	e.once.Do(func() {
 		kinds, _, err := e.Scheme.ObjectKinds(e.OwnerType)
@@ -138,7 +141,7 @@ func (e EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []re
 }
 
 // TODO: Comment this more
-func (e EnqueueOwnerHandler) getOwnersReferences(object metav1.Object) []metav1.OwnerReference {
+func (e *EnqueueOwnerHandler) getOwnersReferences(object metav1.Object) []metav1.OwnerReference {
 	if object == nil {
 		return nil
 	}

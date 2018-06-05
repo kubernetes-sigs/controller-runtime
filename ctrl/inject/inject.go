@@ -20,6 +20,7 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 )
 
@@ -59,6 +60,18 @@ type Client interface {
 func InjectClient(c client.Interface, i interface{}) bool {
 	if s, ok := i.(Client); ok {
 		s.InjectClient(c)
+		return true
+	}
+	return false
+}
+
+type Scheme interface {
+	InjectScheme(scheme *runtime.Scheme)
+}
+
+func InjectScheme(s *runtime.Scheme, i interface{}) bool {
+	if is, ok := i.(Scheme); ok {
+		is.InjectScheme(s)
 		return true
 	}
 	return false

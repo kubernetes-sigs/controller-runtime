@@ -346,7 +346,7 @@ var _ = Describe("Eventhandler", func() {
 			instance := eventhandler.EnqueueOwnerHandler{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
-			instance.InitScheme(scheme.Scheme)
+			instance.InjectScheme(scheme.Scheme)
 
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -371,7 +371,7 @@ var _ = Describe("Eventhandler", func() {
 			instance := eventhandler.EnqueueOwnerHandler{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
-			instance.InitScheme(scheme.Scheme)
+			instance.InjectScheme(scheme.Scheme)
 
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -400,7 +400,7 @@ var _ = Describe("Eventhandler", func() {
 			instance := eventhandler.EnqueueOwnerHandler{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
-			instance.InitScheme(scheme.Scheme)
+			instance.InjectScheme(scheme.Scheme)
 
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -438,7 +438,7 @@ var _ = Describe("Eventhandler", func() {
 			instance := eventhandler.EnqueueOwnerHandler{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
-			instance.InitScheme(scheme.Scheme)
+			instance.InjectScheme(scheme.Scheme)
 
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -464,7 +464,7 @@ var _ = Describe("Eventhandler", func() {
 				OwnerType:    &appsv1.ReplicaSet{},
 				IsController: t,
 			}
-			instance.InitScheme(scheme.Scheme)
+			instance.InjectScheme(scheme.Scheme)
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{ // Wrong group
 					Name:       "foo1-parent",
@@ -490,7 +490,7 @@ var _ = Describe("Eventhandler", func() {
 			instance := eventhandler.EnqueueOwnerHandler{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
-			instance.InitScheme(scheme.Scheme)
+			instance.InjectScheme(scheme.Scheme)
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
 					Name:       "foo-parent",
@@ -514,7 +514,7 @@ var _ = Describe("Eventhandler", func() {
 			instance := eventhandler.EnqueueOwnerHandler{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
-			instance.InitScheme(scheme.Scheme)
+			instance.InjectScheme(scheme.Scheme)
 			evt := event.CreateEvent{
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
@@ -530,7 +530,7 @@ var _ = Describe("Eventhandler", func() {
 					OwnerType:    &appsv1.ReplicaSet{},
 					IsController: t,
 				}
-				instance.InitScheme(scheme.Scheme)
+				instance.InjectScheme(scheme.Scheme)
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
 						Name:       "foo1-parent",
@@ -576,7 +576,7 @@ var _ = Describe("Eventhandler", func() {
 					OwnerType:    &appsv1.ReplicaSet{},
 					IsController: t,
 				}
-				instance.InitScheme(scheme.Scheme)
+				instance.InjectScheme(scheme.Scheme)
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
 						Name:       "foo1-parent",
@@ -607,7 +607,7 @@ var _ = Describe("Eventhandler", func() {
 					OwnerType:    &appsv1.ReplicaSet{},
 					IsController: t,
 				}
-				instance.InitScheme(scheme.Scheme)
+				instance.InjectScheme(scheme.Scheme)
 				evt := event.CreateEvent{
 					Object: pod,
 					Meta:   pod.GetObjectMeta(),
@@ -622,7 +622,7 @@ var _ = Describe("Eventhandler", func() {
 				instance := eventhandler.EnqueueOwnerHandler{
 					OwnerType: &appsv1.ReplicaSet{},
 				}
-				instance.InitScheme(scheme.Scheme)
+				instance.InjectScheme(scheme.Scheme)
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
 						Name:       "foo1-parent",
@@ -664,7 +664,7 @@ var _ = Describe("Eventhandler", func() {
 				instance := eventhandler.EnqueueOwnerHandler{
 					OwnerType: &appsv1.ReplicaSet{},
 				}
-				instance.InitScheme(scheme.Scheme)
+				instance.InjectScheme(scheme.Scheme)
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
 						Name:       "foo1-parent",
@@ -685,7 +685,7 @@ var _ = Describe("Eventhandler", func() {
 				instance := eventhandler.EnqueueOwnerHandler{
 					OwnerType: &metav1.ListOptions{},
 				}
-				instance.InitScheme(scheme.Scheme)
+				instance.InjectScheme(scheme.Scheme)
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
 						Name:       "foo1-parent",
@@ -706,7 +706,7 @@ var _ = Describe("Eventhandler", func() {
 				instance := eventhandler.EnqueueOwnerHandler{
 					OwnerType: &testing.ErrorType{},
 				}
-				instance.InitScheme(scheme.Scheme)
+				instance.InjectScheme(scheme.Scheme)
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
 						Name:       "foo1-parent",
@@ -726,7 +726,7 @@ var _ = Describe("Eventhandler", func() {
 		Context("with a nil OwnerType", func() {
 			It("should do nothing.", func() {
 				instance := eventhandler.EnqueueOwnerHandler{}
-				instance.InitScheme(scheme.Scheme)
+				instance.InjectScheme(scheme.Scheme)
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
 						Name:       "foo1-parent",
@@ -748,7 +748,7 @@ var _ = Describe("Eventhandler", func() {
 				instance := eventhandler.EnqueueOwnerHandler{
 					OwnerType: &appsv1.ReplicaSet{},
 				}
-				instance.InitScheme(scheme.Scheme)
+				instance.InjectScheme(scheme.Scheme)
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
 						Name:       "foo1-parent",

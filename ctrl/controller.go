@@ -28,7 +28,8 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
-	"k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -54,6 +55,8 @@ type Controller struct {
 	MaxConcurrentReconciles int
 
 	Client client.Interface
+
+	Scheme *runtime.Scheme
 
 	// informers is the set of informers
 	informers informer.Informers
@@ -94,31 +97,40 @@ func (c *Controller) InjectClient(i client.Interface) {
 	c.Client = i
 }
 
+var _ inject.Scheme = &Controller{}
+
+func (c *Controller) InjectScheme(s *runtime.Scheme) {
+	c.Scheme = s
+}
+
 // Watch takes events provided by a Source and uses the EventHandler to enqueue ReconcileRequests in
 // response to the events.
 //
 // Watch may be provided one or more Predicates to filter events before they are given to the EventHandler.
 // Events will be passed to the EventHandler iff all provided Predicates evaluate to true.
-func (c *Controller) Watch(s source.Source, e eventhandler.EventHandler, p ...predicate.Predicate) {
+func (c *Controller) Watch(src source.Source, evthdler eventhandler.EventHandler, prct ...predicate.Predicate) {
 	c.init()
-
-	// TODO: Reconsider variable names
+	if c.informers == nil {
+		log.Error(nil, "Watch called before Controller has been injected by a ControllerManager",
+			"Name", c.Name)
+	}
 
 	// Inject cache into arguments
-	c.injectInto(s)
-	c.injectInto(e)
-	for _, pr := range p {
+	c.injectInto(src)
+	c.injectInto(evthdler)
+	for _, pr := range prct {
 		c.injectInto(pr)
 	}
 
-	log.Info("Starting EventSource", "Controller", c.Name, "Source", s)
-	s.Start(e, c.queue)
+	log.Info("Starting EventSource", "Controller", c.Name, "Source", src)
+	src.Start(evthdler, c.queue)
 }
 
 func (c *Controller) injectInto(i interface{}) {
 	inject.InjectConfig(c.config, i)
 	inject.InjectInformers(c.informers, i)
 	inject.InjectClient(c.Client, i)
+	inject.InjectScheme(c.Scheme, i)
 }
 
 // init defaults field values on c
@@ -145,7 +157,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 	c.once.Do(c.init)
 
 	// TODO)(pwittrock): Reconsider HandleCrash
-	defer runtime.HandleCrash()
+	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
 	// Start the SharedIndexInformer factories to begin populating the SharedIndexInformer caches

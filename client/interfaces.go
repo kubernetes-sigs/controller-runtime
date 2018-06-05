@@ -1,0 +1,144 @@
+package client
+
+import (
+	"context"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/fields"
+)
+
+// ObjectKey identifies a Kubernetes Object.
+type ObjectKey = types.NamespacedName
+
+// ReadInterface knows how to read and list Kubernetes objects.
+type ReadInterface interface {
+	// Get retrieves an obj for the given object key from the Kubernetes Cluster.
+	// obj must be a struct pointer so that obj can be updated with the response
+	// returned by the Server.
+	Get(ctx context.Context, key ObjectKey, obj runtime.Object) error
+
+	// List retrieves list of objects for a given namespace and list options. On a
+	// successful call, Items field in the list will be populated with the
+	// result returned from the server.
+	List(ctx context.Context, opts *ListOptions, list runtime.Object) error
+
+}
+
+// WriteInterface knows how to create, delete, and update Kubernetes objects.
+type WriteInterface interface {
+	// Create saves the object obj in the Kubernetes cluster.
+	Create(ctx context.Context, obj runtime.Object) error
+
+	// Delete deletes the given obj from Kubernetes cluster.
+	Delete(ctx context.Context, obj runtime.Object) error
+
+	// Update updates the given obj in the Kubernetes cluster. obj must be a
+	// struct pointer so that obj can be updated with the content returned by the Server.
+	Update(ctx context.Context, obj runtime.Object) error
+}
+
+
+// Interface knows how to perform CRUD operations on Kubernetes objects.
+type Interface interface {
+	ReadInterface
+	WriteInterface
+}
+
+// ListOptions contains options for limitting or filtering results.
+// It's generally a subset of metav1.ListOptions, with support for
+// pre-parsed selectors (since generally, selectors will be executed
+// against the cache).
+type ListOptions struct {
+	// LabelSelector filters results by label.  Use SetLabelSelector to
+	// set from raw string form.
+	LabelSelector labels.Selector
+	// FieldSelector filters results by a particular field.  In order
+	// to use this with cache-based implementations, restrict usage to
+	// a single field-value pair that's been added to the indexers.
+	FieldSelector fields.Selector
+
+	// Namespace represents the namespace to list for, or empty for
+	// non-namespaced objects, or to list across all namespaces.
+	Namespace string
+
+	// Raw represents raw ListOptions, as passed to the API server.  Note
+	// that these may not be respsected by all implementations of interface,
+	// and the LabelSelector and FieldSelector fields are ignored.
+	Raw *metav1.ListOptions
+}
+
+// SetLabelSelector sets this the label selector of these options
+// from a string form of the selector.
+func (o *ListOptions) SetLabelSelector(selRaw string) error {
+	sel, err := labels.Parse(selRaw)
+	if err != nil {
+		return err
+	}
+	o.LabelSelector = sel
+	return nil
+}
+
+// SetFieldSelector sets this the label selector of these options
+// from a string form of the selector.
+func (o *ListOptions) SetFieldSelector(selRaw string) error {
+	sel, err := fields.ParseSelector(selRaw)
+	if err != nil {
+		return err
+	}
+	o.FieldSelector = sel
+	return nil
+}
+
+// AsListOptions returns these options as a flattened metav1.ListOptions.
+// This may mutate the Raw field.
+func (o *ListOptions) AsListOptions() *metav1.ListOptions {
+	o.Raw.LabelSelector = o.LabelSelector.String()
+	o.Raw.FieldSelector = o.FieldSelector.String()
+	return o.Raw
+}
+
+// MatchingLabels is a convenience function that sets the label selector
+// to match the given labels, and then returns the options.
+// It mutates the list options.
+func (o *ListOptions) MatchingLabels(lbls map[string]string) *ListOptions {
+	sel := labels.SelectorFromSet(lbls)
+	o.LabelSelector = sel
+	return o
+}
+
+// MatchingLabels is a convenience function that sets the field selector
+// to match the given field, and then returns the options.
+// It mutates the list options.
+func (o *ListOptions) MatchingField(name, val string) *ListOptions {
+	sel := fields.SelectorFromSet(fields.Set{name: val})
+	o.FieldSelector = sel
+	return o
+}
+
+// InNamespace is a convenience function that sets the namespace,
+// and then returns the options. It mutates the list options.
+func (o *ListOptions) InNamespace(ns string) *ListOptions {
+	o.Namespace = ns
+	return o
+}
+
+// MatchingLabels is a convenience function that constructs list options
+// to match the given labels.
+func MatchingLabels(lbls map[string]string) *ListOptions {
+	return (&ListOptions{}).MatchingLabels(lbls)
+}
+
+// MatchingLabels is a convenience function that constructs list options
+// to match the given field.
+func MatchingField(name, val string) *ListOptions {
+	return (&ListOptions{}).MatchingField(name, val)
+}
+
+// InNamespace is a convenience function that constructs list
+// options to list in the given namespace.
+func InNamespace(ns string) *ListOptions {
+	return (&ListOptions{}).InNamespace(ns)
+}

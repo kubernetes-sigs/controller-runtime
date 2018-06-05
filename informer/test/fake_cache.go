@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-var _ informer.IndexInformerCache = &FakeIndexCache{}
+var _ informer.Informers = &FakeIndexCache{}
 
 type FakeIndexCache struct {
 	InformersByGVK map[schema.GroupVersionKind]cache.SharedIndexInformer

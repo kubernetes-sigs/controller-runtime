@@ -2,9 +2,9 @@ package informer
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
-	"os"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
@@ -23,9 +23,9 @@ import (
 
 var log = logf.KBLog.WithName("informers")
 
-// IndexInformerCache knows how to create or fetch informers for different group-version-kinds.
+// Informers knows how to create or fetch informers for different group-version-kinds.
 // It's safe to call InformerFor from multiple threads.
-type IndexInformerCache interface {
+type Informers interface {
 	// InformerFor fetches or constructs an informer for the given object that corresponds to a single
 	// API kind and resource.
 	InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error)
@@ -37,24 +37,11 @@ type IndexInformerCache interface {
 	Start(stopCh <-chan struct{}) error
 }
 
-func NewInformerCacheOrDie(config *rest.Config) IndexInformerCache {
-	discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(config)
-	groupResources, err := discovery.GetAPIGroupResources(discoveryClient)
-	if err != nil {
-		// TODO: return an error?
-		log.WithName("setup").Error(err, "Failed to get API Group-Resources")
-		os.Exit(1)
-	}
-	discoMapper := discovery.NewRESTMapper(groupResources, dynamic.VersionInterfaces)
+var _ Informers = &SelfPopulatingInformers{}
 
-	return NewInformerCache(discoMapper, config, scheme.Scheme)
-}
-
-var _ IndexInformerCache = &IndexedCache{}
-
-// IndexedCache lazily creates informers, and then caches them for the next time that informer is
+// SelfPopulatingInformers lazily creates informers, and then caches them for the next time that informer is
 // requested.  It uses a standard parameter codec constructed based on the given generated Scheme.
-type IndexedCache struct {
+type SelfPopulatingInformers struct {
 	Config *rest.Config
 	Scheme *runtime.Scheme
 	mapper meta.RESTMapper
@@ -66,7 +53,7 @@ type IndexedCache struct {
 	paramCodec     runtime.ParameterCodec
 }
 
-func (c *IndexedCache) init() {
+func (c *SelfPopulatingInformers) init() {
 	c.once.Do(func() {
 		// Init a config if none provided
 		if c.Config == nil {
@@ -78,6 +65,7 @@ func (c *IndexedCache) init() {
 			c.Scheme = scheme.Scheme
 		}
 
+		// TODO: Pull this into a Singleton
 		// Get a mapper
 		dc := discovery.NewDiscoveryClientForConfigOrDie(c.Config)
 		gr, err := discovery.GetAPIGroupResources(dc)
@@ -94,11 +82,11 @@ func (c *IndexedCache) init() {
 	})
 }
 
-// NewInformerCache creates a new IndexInformerCache with clients based on the given base config.
+// NewInformerCache creates a new Informers with clients based on the given base config.
 // The RESTMapper is used to convert kinds to resources.  It uses the given Scheme to convert between types
 // and kinds.
-func NewInformerCache(mapper meta.RESTMapper, baseConfig *rest.Config, scheme *runtime.Scheme) IndexInformerCache {
-	return &IndexedCache{
+func NewInformerCache(mapper meta.RESTMapper, baseConfig *rest.Config, scheme *runtime.Scheme) Informers {
+	return &SelfPopulatingInformers{
 		informersByGVK: make(map[schema.GroupVersionKind]cache.SharedIndexInformer),
 		Config:         baseConfig,
 		Scheme:         scheme,
@@ -108,7 +96,7 @@ func NewInformerCache(mapper meta.RESTMapper, baseConfig *rest.Config, scheme *r
 	}
 }
 
-func (c *IndexedCache) InformerForKind(gvk schema.GroupVersionKind) (cache.SharedIndexInformer, error) {
+func (c *SelfPopulatingInformers) InformerForKind(gvk schema.GroupVersionKind) (cache.SharedIndexInformer, error) {
 	c.init()
 	obj, err := c.Scheme.New(gvk)
 	if err != nil {
@@ -117,7 +105,7 @@ func (c *IndexedCache) InformerForKind(gvk schema.GroupVersionKind) (cache.Share
 	return c.informerFor(gvk, obj)
 }
 
-func (c *IndexedCache) InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error) {
+func (c *SelfPopulatingInformers) InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error) {
 	c.init()
 	gvks, isUnversioned, err := c.Scheme.ObjectKinds(obj)
 	if err != nil {
@@ -142,7 +130,7 @@ func (c *IndexedCache) InformerFor(obj runtime.Object) (cache.SharedIndexInforme
 }
 
 // informerFor actually fetches or constructs an informer.
-func (c *IndexedCache) informerFor(gvk schema.GroupVersionKind, obj runtime.Object) (cache.SharedIndexInformer, error) {
+func (c *SelfPopulatingInformers) informerFor(gvk schema.GroupVersionKind, obj runtime.Object) (cache.SharedIndexInformer, error) {
 	c.init()
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -208,7 +196,7 @@ func (c *IndexedCache) informerFor(gvk schema.GroupVersionKind, obj runtime.Obje
 	return res, nil
 }
 
-func (c *IndexedCache) Start(stopCh <-chan struct{}) error {
+func (c *SelfPopulatingInformers) Start(stopCh <-chan struct{}) error {
 	c.init()
 	c.mu.Lock()
 	defer c.mu.Unlock()

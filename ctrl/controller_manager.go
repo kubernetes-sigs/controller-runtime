@@ -30,8 +30,8 @@ import (
 // DefaultControllerManager is the default ControllerManager.
 var DefaultControllerManager = &ControllerManager{}
 
-// ControllerManager initializes and starts Controllers.  ControllerManager should be used if there are multiple
-// Controllers to share caches, stop channels, and other shared dependencies across Controllers.
+// ControllerManager initializes and starts Controllers.  ControllerManager should always be used to
+// setup dependencies such as Informers and Configs, etc and inject them into Controllers.
 type ControllerManager struct {
 	controllers []*Controller
 
@@ -47,13 +47,15 @@ type ControllerManager struct {
 	// once ensures unspecified fields get default values
 	once sync.Once
 
+	// err is set when initializing
 	err error
 
+	// promises is the list of functions to run after initialization
 	promises []func()
 }
 
 // AddController registers a Controller with the ControllerManager.
-// The ControllerManager Stop channel will be set on each Controller when it is registered.
+// Added Controllers will have Config and Informers injected into them at Start time.
 func (cm *ControllerManager) AddController(c *Controller, promise func()) {
 	cm.init()
 	cm.controllers = append(cm.controllers, c)
@@ -64,8 +66,12 @@ func (cm *ControllerManager) AddController(c *Controller, promise func()) {
 
 // Start starts all registered Controllers and blocks until the Stop channel is closed.
 // Returns an error if there is an error starting any Controller.
+// Injects Informers and Config into Controllers before Starting them.
 func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 	cm.init()
+	if cm.err != nil {
+		return cm.err
+	}
 
 	// Inject into each of the controllers
 	for _, c := range cm.controllers {
@@ -100,7 +106,7 @@ func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 	}
 }
 
-// init defaults field values on cm
+// init defaults optional field values on a ControllerManager
 func (cm *ControllerManager) init() {
 	cm.once.Do(func() {
 		if cm.Config == nil {

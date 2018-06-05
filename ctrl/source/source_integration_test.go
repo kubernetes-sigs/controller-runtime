@@ -136,20 +136,14 @@ var _ = Describe("Source", func() {
 				evt := <-c1
 				createEvt, ok := evt.(event.CreateEvent)
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.CreateEvent{}))
-				objMeta, ok := createEvt.Meta.(*metav1.ObjectMeta)
-				Expect(ok).To(BeTrue(), fmt.Sprintf(
-					"expect %T to be %T", createEvt.Meta, &metav1.ObjectMeta{}))
-				Expect(objMeta).To(Equal(&created.ObjectMeta))
+				Expect(createEvt.Meta).To(Equal(created))
 				Expect(createEvt.Object).To(Equal(created))
 
 				// Check second CreateEvent
 				evt = <-c2
 				createEvt, ok = evt.(event.CreateEvent)
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.CreateEvent{}))
-				objMeta, ok = createEvt.Meta.(*metav1.ObjectMeta)
-				Expect(ok).To(BeTrue(), fmt.Sprintf(
-					"expect %T to be %T", createEvt.Meta, &metav1.ObjectMeta{}))
-				Expect(objMeta).To(Equal(&created.ObjectMeta))
+				Expect(createEvt.Meta).To(Equal(created))
 				Expect(createEvt.Object).To(Equal(created))
 
 				By("Updating a Deployment and expecting the UpdateEvent.")
@@ -163,16 +157,10 @@ var _ = Describe("Source", func() {
 				updateEvt, ok := evt.(event.UpdateEvent)
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.UpdateEvent{}))
 
-				objMeta, ok = updateEvt.MetaNew.(*metav1.ObjectMeta)
-				Expect(ok).To(BeTrue(), fmt.Sprintf(
-					"expect %T to be %T", updateEvt.MetaNew, &metav1.ObjectMeta{}))
-				Expect(objMeta).To(Equal(&updated.ObjectMeta))
+				Expect(updateEvt.MetaNew).To(Equal(updated))
 				Expect(updateEvt.ObjectNew).To(Equal(updated))
 
-				objMeta, ok = updateEvt.MetaOld.(*metav1.ObjectMeta)
-				Expect(ok).To(BeTrue(), fmt.Sprintf(
-					"expect %T to be %T", updateEvt.MetaOld, &metav1.ObjectMeta{}))
-				Expect(objMeta).To(Equal(&created.ObjectMeta))
+				Expect(updateEvt.MetaOld).To(Equal(created))
 				Expect(updateEvt.ObjectOld).To(Equal(created))
 
 				// Check second UpdateEvent
@@ -180,16 +168,10 @@ var _ = Describe("Source", func() {
 				updateEvt, ok = evt.(event.UpdateEvent)
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.UpdateEvent{}))
 
-				objMeta, ok = updateEvt.MetaNew.(*metav1.ObjectMeta)
-				Expect(ok).To(BeTrue(), fmt.Sprintf(
-					"expect %T to be %T", updateEvt.MetaNew, &metav1.ObjectMeta{}))
-				Expect(objMeta).To(Equal(&updated.ObjectMeta))
+				Expect(updateEvt.MetaNew).To(Equal(updated))
 				Expect(updateEvt.ObjectNew).To(Equal(updated))
 
-				objMeta, ok = updateEvt.MetaOld.(*metav1.ObjectMeta)
-				Expect(ok).To(BeTrue(), fmt.Sprintf(
-					"expect %T to be %T", updateEvt.MetaOld, &metav1.ObjectMeta{}))
-				Expect(objMeta).To(Equal(&created.ObjectMeta))
+				Expect(updateEvt.MetaOld).To(Equal(created))
 				Expect(updateEvt.ObjectOld).To(Equal(created))
 
 				By("Deleting a Deployment and expecting the Delete.")
@@ -202,20 +184,14 @@ var _ = Describe("Source", func() {
 				deleteEvt, ok := evt.(event.DeleteEvent)
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.DeleteEvent{}))
 				deleteEvt.Meta.SetResourceVersion("")
-				objMeta, ok = deleteEvt.Meta.(*metav1.ObjectMeta)
-				Expect(ok).To(BeTrue(), fmt.Sprintf(
-					"expect %T to be %T", deleteEvt.Meta, &metav1.ObjectMeta{}))
-				Expect(objMeta).To(Equal(&deleted.ObjectMeta))
+				Expect(deleteEvt.Meta).To(Equal(deleted))
 				Expect(deleteEvt.Object).To(Equal(deleted))
 
 				evt = <-c2
 				deleteEvt, ok = evt.(event.DeleteEvent)
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.DeleteEvent{}))
 				deleteEvt.Meta.SetResourceVersion("")
-				objMeta, ok = deleteEvt.Meta.(*metav1.ObjectMeta)
-				Expect(ok).To(BeTrue(), fmt.Sprintf(
-					"expect %T to be %T", deleteEvt.Meta, &metav1.ObjectMeta{}))
-				Expect(objMeta).To(Equal(&deleted.ObjectMeta))
+				Expect(deleteEvt.Meta).To(Equal(deleted))
 				Expect(deleteEvt.Object).To(Equal(deleted))
 
 				close(done)

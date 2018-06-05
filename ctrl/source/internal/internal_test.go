@@ -24,6 +24,7 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source/internal"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
@@ -76,7 +77,9 @@ var _ = Describe("Internal", func() {
 			funcs.CreateFunc = func(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
-				Expect(evt.Meta).To(Equal(pod.GetObjectMeta()))
+				m, err := meta.Accessor(pod)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(evt.Meta).To(Equal(m))
 				Expect(evt.Object).To(Equal(pod))
 			}
 			instance.OnAdd(pod)
@@ -87,9 +90,15 @@ var _ = Describe("Internal", func() {
 			funcs.UpdateFunc = func(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
-				Expect(evt.MetaOld).To(Equal(pod.GetObjectMeta()))
+
+				m, err := meta.Accessor(pod)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(evt.MetaOld).To(Equal(m))
 				Expect(evt.ObjectOld).To(Equal(pod))
-				Expect(evt.MetaNew).To(Equal(newPod.GetObjectMeta()))
+
+				m, err = meta.Accessor(newPod)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(evt.MetaNew).To(Equal(m))
 				Expect(evt.ObjectNew).To(Equal(newPod))
 			}
 			instance.OnUpdate(pod, newPod)
@@ -100,7 +109,10 @@ var _ = Describe("Internal", func() {
 			funcs.DeleteFunc = func(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
-				Expect(evt.Meta).To(Equal(pod.GetObjectMeta()))
+
+				m, err := meta.Accessor(pod)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(evt.Meta).To(Equal(m))
 				Expect(evt.Object).To(Equal(pod))
 			}
 			instance.OnDelete(pod)
@@ -115,7 +127,9 @@ var _ = Describe("Internal", func() {
 			funcs.DeleteFunc = func(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
-				Expect(evt.Meta).To(Equal(pod.GetObjectMeta()))
+				m, err := meta.Accessor(pod)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(evt.Meta).To(Equal(m))
 				Expect(evt.Object).To(Equal(pod))
 			}
 

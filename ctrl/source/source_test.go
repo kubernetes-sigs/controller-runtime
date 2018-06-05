@@ -91,8 +91,7 @@ var _ = Describe("Source", func() {
 					CreateFunc: func(q2 workqueue.RateLimitingInterface, evt event.CreateEvent) {
 						defer GinkgoRecover()
 						Expect(q2).To(Equal(q))
-						m := evt.Meta.(*metav1.ObjectMeta)
-						Expect(m).To(Equal(&p.ObjectMeta))
+						Expect(evt.Meta).To(Equal(p))
 						Expect(evt.Object).To(Equal(p))
 						close(c)
 					},
@@ -137,12 +136,10 @@ var _ = Describe("Source", func() {
 					UpdateFunc: func(q2 workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 						defer GinkgoRecover()
 						Expect(q2).To(Equal(q))
-						m := evt.MetaOld.(*metav1.ObjectMeta)
-						Expect(m).To(Equal(&p.ObjectMeta))
+						Expect(evt.MetaOld).To(Equal(p))
 						Expect(evt.ObjectOld).To(Equal(p))
 
-						m = evt.MetaNew.(*metav1.ObjectMeta)
-						Expect(m).To(Equal(&p2.ObjectMeta))
+						Expect(evt.MetaNew).To(Equal(p2))
 						Expect(evt.ObjectNew).To(Equal(p2))
 
 						close(c)
@@ -193,8 +190,7 @@ var _ = Describe("Source", func() {
 					DeleteFunc: func(q2 workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 						defer GinkgoRecover()
 						Expect(q2).To(Equal(q))
-						m := evt.Meta.(*metav1.ObjectMeta)
-						Expect(m).To(Equal(&p.ObjectMeta))
+						Expect(evt.Meta).To(Equal(p))
 						Expect(evt.Object).To(Equal(p))
 						close(c)
 					},

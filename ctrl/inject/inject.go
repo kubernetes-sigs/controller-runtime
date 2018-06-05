@@ -76,5 +76,3 @@ func InjectScheme(s *runtime.Scheme, i interface{}) bool {
 	}
 	return false
 }
-
-// TODO: Inject Scheme

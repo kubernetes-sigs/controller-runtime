@@ -82,6 +82,7 @@ func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 	for _, c := range cm.controllers {
 		inject.InjectInformers(cm.informers, c)
 		inject.InjectConfig(cm.Config, c)
+		inject.InjectScheme(cm.Scheme, c)
 	}
 
 	// Run the promises that may add Watches to the informers
@@ -89,8 +90,15 @@ func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 		p()
 	}
 
-	// Start the informers now that watches have been added
+	// Inject a Read / Write client into all controllers
+	// TODO: Figure out how to deal with users to allow users to request a client without requesting a watch
+	objCache := client.ObjectCacheFromInformers(cm.informers.KnownInformersByType(), cm.Scheme)
+	cm.client = client.SplitReaderWriter{ReadInterface: objCache}
+	for _, c := range cm.controllers {
+		inject.InjectClient(cm.client, c)
+	}
 
+	// Start the informers now that watches have been added
 	cm.informers.Start(stop)
 
 	// Start the controllers after the promises

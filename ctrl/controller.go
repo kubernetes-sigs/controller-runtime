@@ -18,6 +18,7 @@ package ctrl
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -54,14 +55,17 @@ type Controller struct {
 	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 
+	// Client is injected by the ControllerManager when ControllerManager.Start is called
 	Client client.Interface
 
+	// Scheme is injected by the ControllerManager when ControllerManager.Start is called
 	Scheme *runtime.Scheme
 
-	// informers is the set of informers
+	// informers are injected by the ControllerManager when ControllerManager.Start is called
 	informers informer.Informers
 
 	// objectCache is a Client.ReadInterface that reads from the indexer backing informers
+	// objectCache is injected by the ControllerManager when ControllerManager.Start is called
 	objectCache *client.ObjectCache
 
 	// config is the rest.config used to talk to the apiserver.  Defaults to one of in-cluster, environment variable
@@ -74,6 +78,8 @@ type Controller struct {
 
 	// once ensures unspecified fields get default values
 	once sync.Once
+
+	injectIntoObjects []interface{}
 
 	// TODO(pwittrock): Consider initializing a logger with the Controller name as the tag
 }
@@ -113,6 +119,7 @@ func (c *Controller) Watch(src source.Source, evthdler eventhandler.EventHandler
 	if c.informers == nil {
 		log.Error(nil, "Watch called before Controller has been injected by a ControllerManager",
 			"Name", c.Name)
+		os.Exit(1)
 	}
 
 	// Inject cache into arguments
@@ -124,6 +131,12 @@ func (c *Controller) Watch(src source.Source, evthdler eventhandler.EventHandler
 
 	log.Info("Starting EventSource", "Controller", c.Name, "Source", src)
 	src.Start(evthdler, c.queue)
+
+	c.injectIntoObjects = append(c.injectIntoObjects, src)
+	c.injectIntoObjects = append(c.injectIntoObjects, evthdler)
+	for _, pr := range prct {
+		c.injectIntoObjects = append(c.injectIntoObjects, pr)
+	}
 }
 
 func (c *Controller) injectInto(i interface{}) {
@@ -155,6 +168,10 @@ func (c *Controller) init() {
 // Start starts the Controller.  Start blocks until stop is closed or a Controller has an error starting.
 func (c *Controller) Start(stop <-chan struct{}) error {
 	c.once.Do(c.init)
+
+	for _, i := range c.injectIntoObjects {
+		inject.InjectClient(c.Client, i)
+	}
 
 	// TODO)(pwittrock): Reconsider HandleCrash
 	defer utilruntime.HandleCrash()

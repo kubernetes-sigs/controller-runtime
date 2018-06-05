@@ -21,6 +21,7 @@ import (
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
 
 	. "github.com/onsi/ginkgo"
@@ -33,7 +34,7 @@ import (
 )
 
 var _ = Describe("Source", func() {
-	var instance1, instance2 source.KindSource
+	var instance1, instance2 *source.KindSource
 	var obj runtime.Object
 	var q workqueue.RateLimitingInterface
 	var c1, c2 chan interface{}
@@ -55,11 +56,11 @@ var _ = Describe("Source", func() {
 	})
 
 	JustBeforeEach(func() {
-		instance1 = source.KindSource{Type: obj}
-		instance1.InjectInformerCache(icache)
+		instance1 = &source.KindSource{Type: obj}
+		inject.InjectIndexInformerCache(icache, instance1)
 
-		instance2 = source.KindSource{Type: obj}
-		instance2.InjectInformerCache(icache)
+		instance2 = &source.KindSource{Type: obj}
+		inject.InjectIndexInformerCache(icache, instance2)
 	})
 
 	AfterEach(func() {

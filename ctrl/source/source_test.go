@@ -21,6 +21,7 @@ import (
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer/test"
 	. "github.com/onsi/ginkgo"
@@ -82,10 +83,10 @@ var _ = Describe("Source", func() {
 				}
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := source.KindSource{
+				instance := &source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				instance.InjectInformerCache(ic)
+				inject.InjectIndexInformerCache(ic, instance)
 				err := instance.Start(eventhandler.EventHandlerFuncs{
 					CreateFunc: func(q2 workqueue.RateLimitingInterface, evt event.CreateEvent) {
 						defer GinkgoRecover()
@@ -124,7 +125,7 @@ var _ = Describe("Source", func() {
 
 				ic := &test.FakeIndexCache{}
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := source.KindSource{
+				instance := &source.KindSource{
 					Type: &corev1.Pod{},
 				}
 				instance.InjectIndexInformerCache(ic)
@@ -176,10 +177,10 @@ var _ = Describe("Source", func() {
 				}
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := source.KindSource{
+				instance := &source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				instance.InjectInformerCache(ic)
+				inject.InjectIndexInformerCache(ic, instance)
 				err := instance.Start(eventhandler.EventHandlerFuncs{
 					CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
 						defer GinkgoRecover()
@@ -222,7 +223,7 @@ var _ = Describe("Source", func() {
 				ic.Error = fmt.Errorf("test error")
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 
-				instance := source.KindSource{
+				instance := &source.KindSource{
 					Type: &corev1.Pod{},
 				}
 				instance.InjectIndexInformerCache(ic)

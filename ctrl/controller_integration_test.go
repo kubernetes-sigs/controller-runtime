@@ -97,7 +97,7 @@ var _ = Describe("Controller", func() {
 
 			By("Invoking Reconciling for Create")
 			rec := <-c
-			expected := reconcile.ReconcileRequest{types.NamespacedName{
+			expected := reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
 				Namespace: "default",
 				Name:      "deployment-name",
 			}}

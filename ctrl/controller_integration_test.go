@@ -24,6 +24,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
 	. "github.com/onsi/ginkgo"
@@ -95,14 +96,49 @@ var _ = Describe("Controller", func() {
 			}}
 
 			By("Invoking Reconciling for Create")
-			_, err := clientset.AppsV1().Deployments("default").Create(deployment)
+			deployment, err := clientset.AppsV1().Deployments("default").Create(deployment)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-c).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for Update")
 			newDeployment := deployment.DeepCopy()
 			newDeployment.Labels = map[string]string{"foo": "bar"}
-			_, err = clientset.AppsV1().Deployments("default").Update(newDeployment)
+			newDeployment, err = clientset.AppsV1().Deployments("default").Update(newDeployment)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(<-c).To(Equal(expectedReconcileRequest))
+
+			By("Invoking Reconciling for an OwnedObject when it is created")
+			replicaset := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "rs-name",
+					OwnerReferences: []metav1.OwnerReference{
+						*metav1.NewControllerRef(deployment, schema.GroupVersionKind{
+							Group:   "apps",
+							Version: "v1",
+							Kind:    "Deployment",
+						}),
+					},
+				},
+				Spec: appsv1.ReplicaSetSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					Template: deployment.Spec.Template,
+				},
+			}
+			replicaset, err = clientset.AppsV1().ReplicaSets("default").Create(replicaset)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(<-c).To(Equal(expectedReconcileRequest))
+
+			By("Invoking Reconciling for an OwnedObject when it is updated")
+			newReplicaset := replicaset.DeepCopy()
+			newReplicaset.Labels = map[string]string{"foo": "bar"}
+			newReplicaset, err = clientset.AppsV1().ReplicaSets("default").Update(newReplicaset)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(<-c).To(Equal(expectedReconcileRequest))
+
+			By("Invoking Reconciling for an OwnedObject when it is deleted")
+			err = clientset.AppsV1().ReplicaSets("default").Delete(replicaset.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-c).To(Equal(expectedReconcileRequest))
 

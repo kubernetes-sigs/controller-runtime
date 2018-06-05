@@ -17,6 +17,7 @@ import (
 var _ = Describe("Indexers", func() {
 	three := int64(3)
 	knownPodKey := ObjectKey{Name: "some-pod", Namespace: "some-ns"}
+	knownPod3Key := ObjectKey{Name: "some-pod", Namespace: "some-other-ns"}
 	knownVolumeKey := ObjectKey{Name: "some-vol", Namespace: "some-ns"}
 	knownPod := &kapi.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -40,6 +41,18 @@ var _ = Describe("Indexers", func() {
 			RestartPolicy: kapi.RestartPolicyAlways,
 		},
 	}
+	knownPod3 := &kapi.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: knownPod3Key.Name,
+			Namespace: knownPod3Key.Namespace,
+			Labels: map[string]string{
+				"somelbl": "someval",
+			},
+		},
+		Spec: kapi.PodSpec{
+			RestartPolicy: kapi.RestartPolicyNever,
+		},
+	}
 	knownVolume := &kapi.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: knownVolumeKey.Name,
@@ -61,9 +74,10 @@ var _ = Describe("Indexers", func() {
 		})
 		Expect(podIndexer.Add(knownPod)).NotTo(HaveOccurred())
 		Expect(podIndexer.Add(knownPod2)).NotTo(HaveOccurred())
+		Expect(podIndexer.Add(knownPod3)).NotTo(HaveOccurred())
 		Expect(volumeIndexer.Add(knownVolume)).NotTo(HaveOccurred())
-		multiCache.RegisterCache(&kapi.Pod{}, podIndexer)
-		multiCache.RegisterCache(&kapi.PersistentVolume{}, volumeIndexer)
+		multiCache.RegisterCache(&kapi.Pod{}, kapi.SchemeGroupVersion.WithKind("Pod"), podIndexer)
+		multiCache.RegisterCache(&kapi.PersistentVolume{}, kapi.SchemeGroupVersion.WithKind("PersistentVolume"), volumeIndexer)
 	})
 
 	Describe("Client interface wrapper around an indexer", func() {
@@ -111,9 +125,14 @@ var _ = Describe("Indexers", func() {
 		})
 
 		It("should support filtering by a single field=value specification, if previously indexed", func() {
+			By("listing by field selector in a namespace")
 			out := kapi.PodList{}
 			Expect(singleCache.List(context.TODO(), InNamespace(knownPodKey.Namespace).MatchingField("spec.restartPolicy", "Always"), &out)).NotTo(HaveOccurred())
 			Expect(out.Items).To(ConsistOf(*knownPod2))
+
+			By("listing by field selector across all namespaces")
+			Expect(singleCache.List(context.TODO(), MatchingField("spec.restartPolicy", "Never"), &out)).NotTo(HaveOccurred())
+			Expect(out.Items).To(ConsistOf(*knownPod, *knownPod3))
 		})
 	})
 

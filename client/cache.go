@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/tools/cache"
@@ -33,7 +34,7 @@ func ObjectCacheFromInformers(informers map[schema.GroupVersionKind]cache.Shared
 			log.Error(err, "could not register informer in ObjectCache for GVK", "GroupVersionKind", gvk)
 			continue
 		}
-		res.RegisterCache(obj, informer.GetIndexer())
+		res.RegisterCache(obj, gvk, informer.GetIndexer())
 	}
 	return res
 }
@@ -44,9 +45,12 @@ func NewObjectCache() *ObjectCache {
 	}
 }
 
-func (c *ObjectCache) RegisterCache(obj runtime.Object, store cache.Indexer) {
+func (c *ObjectCache) RegisterCache(obj runtime.Object, gvk schema.GroupVersionKind, store cache.Indexer) {
 	objType := reflect.TypeOf(obj)
-	c.cachesByType[objType] = &SingleObjectCache{store}
+	c.cachesByType[objType] = &SingleObjectCache{
+		Indexer: store,
+		GroupVersionKind: gvk,
+	}
 }
 
 func (c *ObjectCache) CacheFor(obj runtime.Object) (*SingleObjectCache, bool) {
@@ -58,8 +62,7 @@ func (c *ObjectCache) CacheFor(obj runtime.Object) (*SingleObjectCache, bool) {
 func (c *ObjectCache) Get(ctx context.Context, key ObjectKey, out runtime.Object) error {
 	cache, isKnown := c.CacheFor(out)
 	if !isKnown {
-		// TODO: make this error actionable
-		return fmt.Errorf("no cache for objects of type %T", out)
+		return fmt.Errorf("no cache for objects of type %T, must have asked for an watch/informer first", out)
 	}
 	return cache.Get(ctx, key, out)
 }
@@ -86,6 +89,8 @@ var _ ReadInterface = &SingleObjectCache{}
 type SingleObjectCache struct {
 	// Indexer is the underlying indexer wrapped by this cache.
 	Indexer cache.Indexer
+	// GroupVersionKind is the group-version-kind of the resource.
+	GroupVersionKind schema.GroupVersionKind
 }
 
 func (c *SingleObjectCache) Get(_ context.Context, key ObjectKey, out runtime.Object) error {
@@ -95,8 +100,11 @@ func (c *SingleObjectCache) Get(_ context.Context, key ObjectKey, out runtime.Ob
 		return err
 	}
 	if !exists {
-		// TODO: make this an API NotFoundError
-		return fmt.Errorf("no %T named %s existed", out, key)
+		// Resource gets transformed into Kind in the error anyway, so this is fine
+		return errors.NewNotFound(schema.GroupResource{
+			Group: c.GroupVersionKind.Group,
+			Resource: c.GroupVersionKind.Kind,
+		}, key.Name)
 	}
 	if _, isObj := obj.(runtime.Object); !isObj {
 		return fmt.Errorf("cache contained %T, which is not an Object", obj)
@@ -128,7 +136,9 @@ func (c *SingleObjectCache) List(ctx context.Context, opts *ListOptions, out run
 		if !requiresExact {
 			return fmt.Errorf("non-exact field matches are not supported by the cache")
 		}
-		// TODO(directxman12): this will not work for the all-namespaces case, which we really need to handle.
+		// list all objects by the field selector.  If this is namespaced and we have one, ask for the
+		// namespaced index key.  Otherwise, ask for the non-namespaced variant by using the fake "all namespaces"
+		// namespace.
 		objs, err = c.Indexer.ByIndex(fieldIndexName(field), keyToNamespacedKey(opts.Namespace, val))
 	} else if opts != nil && opts.Namespace != "" {
 		objs, err = c.Indexer.ByIndex(cache.NamespaceIndex, opts.Namespace)
@@ -170,6 +180,9 @@ func (c *SingleObjectCache) List(ctx context.Context, opts *ListOptions, out run
 // TODO: Make an interface with this function that has an Informers as an object on the struct
 // that automatically calls InformerFor and passes in the Indexer into IndexByField
 
+// noNamespaceNamespace is used as the "namespace" when we want to list across all namespaces
+const allNamespacesNamespace = "__all_namespaces"
+
 // IndexByField adds an indexer to the underlying cache, using extraction function to get
 // value(s) from the given field.  This index can then be used by passing a field selector
 // to List. For one-to-one compatibility with "normal" field selectors, only return one value.
@@ -188,9 +201,24 @@ func IndexByField(indexer cache.Indexer, field string, extractor func(runtime.Ob
 		}
 		ns := meta.GetNamespace()
 
-		vals := extractor(obj)
-		for i, rawVal := range vals {
+		rawVals := extractor(obj)
+		var vals []string
+		if ns == "" {
+			// if we're not doubling the keys for the namespaced case, just re-use what was returned to us
+			vals = rawVals
+		} else {
+			// if we need to add non-namespaced versions too, double the length
+			vals = make([]string, len(rawVals)*2)
+		}
+		for i, rawVal := range rawVals {
+			// save a namespaced variant, so that we can ask
+			// "what are all the object matching a given index *in a given namespace*"
 			vals[i] = keyToNamespacedKey(ns, rawVal)
+			if ns != "" {
+				// if we have a namespace, also inject a special index key for listing
+				// regardless of the object namespace
+				vals[i+len(rawVals)] = keyToNamespacedKey("", rawVal)
+			}
 		}
 
 		return vals, nil
@@ -214,7 +242,7 @@ func keyToNamespacedKey(ns string, baseKey string) string {
 	if ns != "" {
 		return ns + "/" + baseKey
 	}
-	return baseKey
+	return allNamespacesNamespace + "/" + baseKey
 }
 
 // objectKeyToStorageKey converts an object key to store key.

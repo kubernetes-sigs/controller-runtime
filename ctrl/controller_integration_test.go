@@ -19,10 +19,8 @@ package ctrl_test
 import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,16 +33,11 @@ import (
 var _ = Describe("Controller", func() {
 	var c chan reconcile.ReconcileRequest
 	var stop chan struct{}
-	var informers *informer.IndexedCache
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
 		c = make(chan reconcile.ReconcileRequest)
 		Expect(config).NotTo(BeNil())
-		informers = &informer.IndexedCache{Config: config}
-		informers.InformerFor(&appsv1.Deployment{})
-		informers.InformerFor(&appsv1.ReplicaSet{})
-		informers.Start(stop)
 	})
 
 	AfterEach(func() {
@@ -53,40 +46,32 @@ var _ = Describe("Controller", func() {
 
 	Describe("Controller", func() {
 		It("should Reconcile", func(done Done) {
-			By("Creating the Controller")
-			// In Init function
+			By("Creating the Controller and adding it to the ControllerManager")
 			instance := &ctrl.Controller{
-				Reconcile: reconcile.ReconcileFunc(func(r reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
-					c <- r
-					return reconcile.ReconcileResult{}, nil
-				}),
+				Reconcile: reconcile.ReconcileFunc(
+					func(r reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
+						c <- r
+						return reconcile.ReconcileResult{}, nil
+					}),
 			}
-
-			By("Injecting the Config and Informers")
-			// Controller-Manager this when it is Started
-			inject.InjectConfig(config, instance)
-			inject.InjectIndexInformerCache(informers, instance)
-
-			By("Setting up Watches")
-			// Deferred from the Init function
-			instance.Watch(&source.KindSource{Type: &appsv1.ReplicaSet{}}, &eventhandler.EnqueueOwnerHandler{
-				OwnerType: &appsv1.Deployment{},
+			cm := &ctrl.ControllerManager{
+				Config: config,
+			}
+			cm.AddController(instance, func() {
+				// Deferred from the Init function
+				instance.Watch(&source.KindSource{Type: &appsv1.ReplicaSet{}}, &eventhandler.EnqueueOwnerHandler{
+					OwnerType: &appsv1.Deployment{},
+				})
+				instance.Watch(&source.KindSource{Type: &appsv1.Deployment{}}, &eventhandler.EnqueueHandler{})
 			})
-			instance.Watch(&source.KindSource{Type: &appsv1.Deployment{}}, &eventhandler.EnqueueHandler{})
 
-			// Controller-Manager does this after calling deferred Watch functions
-			By("Starting the Informers")
-			//err := informers.Start(stop)
-			//Expect(err).NotTo(HaveOccurred())
-
-			By("Starting the Controller")
+			By("Starting the ControllerManager")
 			go func() {
 				defer GinkgoRecover()
-				err := instance.Start(stop)
+				err := cm.Start(stop)
 				Expect(err).NotTo(HaveOccurred())
 			}()
 
-			By("Creating a Deployment")
 			deployment := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "deployment-name"},
 				Spec: appsv1.DeploymentSpec{
@@ -106,20 +91,29 @@ var _ = Describe("Controller", func() {
 					},
 				},
 			}
-			_, err := clientset.AppsV1().Deployments("default").Create(deployment)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Invoking Reconciling for Create")
-			rec := <-c
-			expected := reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+			expectedReconcileRequest := reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
 				Namespace: "default",
 				Name:      "deployment-name",
 			}}
-			Expect(rec).To(Equal(expected))
+
+			By("Invoking Reconciling for Create")
+			_, err := clientset.AppsV1().Deployments("default").Create(deployment)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(<-c).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for Update")
+			newDeployment := deployment.DeepCopy()
+			newDeployment.Labels = map[string]string{"foo": "bar"}
+			_, err = clientset.AppsV1().Deployments("default").Update(newDeployment)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(<-c).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for Delete")
+			err = clientset.AppsV1().Deployments("default").
+				Delete("deployment-name", &metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(<-c).To(Equal(expectedReconcileRequest))
+
 			close(done)
 		}, 5)
 	})

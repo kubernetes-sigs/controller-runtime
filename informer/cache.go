@@ -32,6 +32,8 @@ type Informers interface {
 	// InformerForKind is similar to InformerFor, except that it takes a group-version-kind, instead
 	// of the underlying object.
 	InformerForKind(gvk schema.GroupVersionKind) (cache.SharedIndexInformer, error)
+	// KnownInformersByType returns all informers requested.
+	KnownInformersByType() map[schema.GroupVersionKind]cache.SharedIndexInformer
 	// Start runs all the informers known to this cache until the given channel is closed.
 	// It does not block.
 	Start(stopCh <-chan struct{}) error
@@ -94,6 +96,11 @@ func NewInformerCache(mapper meta.RESTMapper, baseConfig *rest.Config, scheme *r
 		paramCodec:     runtime.NewParameterCodec(scheme),
 		mapper:         mapper,
 	}
+}
+
+func (c *SelfPopulatingInformers) KnownInformersByType() map[schema.GroupVersionKind]cache.SharedIndexInformer {
+	c.init()
+	return c.informersByGVK
 }
 
 func (c *SelfPopulatingInformers) InformerForKind(gvk schema.GroupVersionKind) (cache.SharedIndexInformer, error) {

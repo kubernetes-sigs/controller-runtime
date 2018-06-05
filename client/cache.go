@@ -11,13 +11,31 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 )
+
+var log = logf.KBLog.WithName("object-cache")
 
 // ObjectCache is a ReadInterface
 var _ ReadInterface = &ObjectCache{}
 
 type ObjectCache struct {
 	cachesByType map[reflect.Type]*SingleObjectCache
+}
+
+func ObjectCacheFromInformers(informers map[schema.GroupVersionKind]cache.SharedIndexInformer, scheme *runtime.Scheme) *ObjectCache {
+	res := NewObjectCache()
+	for gvk, informer := range informers {
+		obj, err := scheme.New(gvk)
+		if err != nil {
+			log.Error(err, "could not register informer in ObjectCache for GVK", "GroupVersionKind", gvk)
+			continue
+		}
+		res.RegisterCache(obj, informer.GetIndexer())
+	}
+	return res
 }
 
 func NewObjectCache() *ObjectCache {

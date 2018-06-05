@@ -31,7 +31,7 @@ func ExampleKindSource() {
 
 	controller.Watch(
 		&source.KindSource{Type: &v1.Pod{}},
-		eventhandler.EnqueueHandler{},
+		&eventhandler.EnqueueHandler{},
 	)
 }
 
@@ -43,6 +43,6 @@ func ExampleChannelSource() {
 
 	controller.Watch(
 		source.ChannelSource(events),
-		eventhandler.EnqueueHandler{},
+		&eventhandler.EnqueueHandler{},
 	)
 }

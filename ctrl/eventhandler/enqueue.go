@@ -19,17 +19,22 @@ package eventhandler
 import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
+	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 )
 
-var _ EventHandler = EnqueueHandler{}
+var enqueueLog = logf.KBLog.WithName("eventhandler").WithName("EnqueueHandler")
+
+var _ EventHandler = &EnqueueHandler{}
 
 // EnqueueHandler enqueues a ReconcileRequest containing the Name and Namespace of the object in the Event.
 type EnqueueHandler struct{}
 
 // Create implements EventHandler
-func (e EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
+func (e *EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
+	enqueueLog.Info("Enqueue", "CreateEvent", evt)
+
 	if evt.Meta == nil {
 		// TODO: Log an error and increment a metric
 		return
@@ -41,7 +46,7 @@ func (e EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.Crea
 }
 
 // Update implements EventHandler
-func (e EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
+func (e *EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 	if evt.MetaOld != nil {
 		q.AddRateLimited(reconcile.ReconcileRequest{types.NamespacedName{
 			Name:      evt.MetaOld.GetName(),
@@ -62,7 +67,7 @@ func (e EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.Upda
 }
 
 // Delete implements EventHandler
-func (e EnqueueHandler) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
+func (e *EnqueueHandler) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 	if evt.Meta == nil {
 		// TODO: Log an error and increment a metric
 		return
@@ -74,7 +79,7 @@ func (e EnqueueHandler) Delete(q workqueue.RateLimitingInterface, evt event.Dele
 }
 
 // Generic implements EventHandler
-func (e EnqueueHandler) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
+func (e *EnqueueHandler) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
 	if evt.Meta == nil {
 		// TODO: Log an error and increment a metric
 		return

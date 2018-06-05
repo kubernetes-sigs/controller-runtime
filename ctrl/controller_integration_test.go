@@ -38,9 +38,13 @@ var _ = Describe("Controller", func() {
 	var informers *informer.IndexedCache
 
 	BeforeEach(func() {
+		stop = make(chan struct{})
 		c = make(chan reconcile.ReconcileRequest)
 		Expect(config).NotTo(BeNil())
 		informers = &informer.IndexedCache{Config: config}
+		informers.InformerFor(&appsv1.Deployment{})
+		informers.InformerFor(&appsv1.ReplicaSet{})
+		informers.Start(stop)
 	})
 
 	AfterEach(func() {
@@ -49,28 +53,38 @@ var _ = Describe("Controller", func() {
 
 	Describe("Controller", func() {
 		It("should Reconcile", func(done Done) {
+			By("Creating the Controller")
+			// In Init function
 			instance := &ctrl.Controller{
 				Reconcile: reconcile.ReconcileFunc(func(r reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
 					c <- r
 					return reconcile.ReconcileResult{}, nil
 				}),
 			}
+
+			By("Injecting the Config and Informers")
+			// Controller-Manager this when it is Started
 			inject.InjectConfig(config, instance)
 			inject.InjectIndexInformerCache(informers, instance)
 
 			By("Setting up Watches")
-			instance.Watch(&source.KindSource{Type: &appsv1.ReplicaSet{}}, eventhandler.EnqueueOwnerHandler{
+			// Deferred from the Init function
+			instance.Watch(&source.KindSource{Type: &appsv1.ReplicaSet{}}, &eventhandler.EnqueueOwnerHandler{
 				OwnerType: &appsv1.Deployment{},
 			})
-			instance.Watch(&source.KindSource{Type: &appsv1.Deployment{}}, eventhandler.EnqueueHandler{})
+			instance.Watch(&source.KindSource{Type: &appsv1.Deployment{}}, &eventhandler.EnqueueHandler{})
+
+			// Controller-Manager does this after calling deferred Watch functions
+			By("Starting the Informers")
+			//err := informers.Start(stop)
+			//Expect(err).NotTo(HaveOccurred())
 
 			By("Starting the Controller")
-			_, err := instance.Start(stop)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Starting the Informers after the Controller")
-			err = informers.Start(stop)
-			Expect(err).NotTo(HaveOccurred())
+			go func() {
+				defer GinkgoRecover()
+				err := instance.Start(stop)
+				Expect(err).NotTo(HaveOccurred())
+			}()
 
 			By("Creating a Deployment")
 			deployment := &appsv1.Deployment{
@@ -92,7 +106,7 @@ var _ = Describe("Controller", func() {
 					},
 				},
 			}
-			_, err = clientset.AppsV1().Deployments("default").Create(deployment)
+			_, err := clientset.AppsV1().Deployments("default").Create(deployment)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Invoking Reconciling for Create")
@@ -107,6 +121,6 @@ var _ = Describe("Controller", func() {
 
 			By("Invoking Reconciling for Delete")
 			close(done)
-		}, 10)
+		}, 5)
 	})
 })

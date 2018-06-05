@@ -32,7 +32,7 @@ func ExamplePredicateFunc() {
 
 	controller.Watch(
 		&source.KindSource{Type: &appsv1.Deployment{}},
-		eventhandler.EnqueueHandler{},
+		&eventhandler.EnqueueHandler{},
 		predicate.PredicateFuncs{
 			UpdateFunc: func(e event.UpdateEvent) bool {
 				return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()

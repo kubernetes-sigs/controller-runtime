@@ -42,7 +42,7 @@ func ExampleController() {
 		}),
 		MaxConcurrentReconciles: 1,
 	}
-	ctrl.RegisterController(controller)
+	ctrl.AddController(controller, nil)
 }
 
 // This example creates a new Controller named "pod-controller" with a no-op Reconcile function and Starts it.
@@ -57,7 +57,7 @@ func ExampleController_Watch_1() {
 	// c is a ctrl.Controller instance
 	c.Watch(
 		&source.KindSource{Type: &corev1.Pod{}},
-		eventhandler.EnqueueHandler{},
+		&eventhandler.EnqueueHandler{},
 	)
 }
 
@@ -67,7 +67,7 @@ func ExampleController_Watch_2() {
 	// c is a ctrl.Controller instance
 	c.Watch(
 		&source.KindSource{Type: &appsv1.Deployment{}},
-		eventhandler.EnqueueHandler{},
+		&eventhandler.EnqueueHandler{},
 		predicate.PredicateFuncs{
 			UpdateFunc: func(e event.UpdateEvent) bool {
 				return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()

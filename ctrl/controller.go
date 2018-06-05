@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/predicate"
@@ -67,12 +66,8 @@ type Controller struct {
 	// synced is a slice of functions that return whether or not all informers have been synced
 	synced []cache.InformerSynced
 
-	start []func()
-
 	// once ensures unspecified fields get default values
 	once sync.Once
-
-	startInformers bool
 }
 
 func (c *Controller) InjectIndexInformerCache(i informer.IndexInformerCache) {
@@ -89,28 +84,30 @@ func (c *Controller) InjectConfig(i *rest.Config) {
 // Watch may be provided one or more Predicates to filter events before they are given to the EventHandler.
 // Events will be passed to the EventHandler iff all provided Predicates evaluate to true.
 func (c *Controller) Watch(s source.Source, e eventhandler.EventHandler, p ...predicate.Predicate) {
+	c.init()
 
-	// Setup the watch to run when the controller is started
-	c.start = append(c.start, func() {
-		// Inject cache into arguments
-		inject.InjectConfig(c.config, s)
-		inject.InjectIndexInformerCache(c.informers, s)
+	// Inject cache into arguments
+	inject.InjectConfig(c.config, s)
+	inject.InjectIndexInformerCache(c.informers, s)
 
-		inject.InjectConfig(c.config, e)
-		inject.InjectIndexInformerCache(c.informers, e)
+	inject.InjectConfig(c.config, e)
+	inject.InjectIndexInformerCache(c.informers, e)
 
-		for _, pr := range p {
-			inject.InjectIndexInformerCache(c.informers, pr)
-			inject.InjectConfig(c.config, pr)
-		}
+	for _, pr := range p {
+		inject.InjectIndexInformerCache(c.informers, pr)
+		inject.InjectConfig(c.config, pr)
+	}
 
-		log.Info("Starting EventSource", "Controller", c.Name, "Source", s)
-		s.Start(e, c.queue)
-	})
+	log.Info("Starting EventSource", "Controller", c.Name, "Source", s)
+	s.Start(e, c.queue)
 }
 
 // init defaults field values on c
 func (c *Controller) init() {
+	if c.MaxConcurrentReconciles <= 0 {
+		c.MaxConcurrentReconciles = 1
+	}
+
 	if len(c.Name) == 0 {
 		c.Name = "controller-unamed"
 	}
@@ -119,35 +116,11 @@ func (c *Controller) init() {
 	if c.queue == nil {
 		c.queue = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), c.Name)
 	}
-
-	if c.informers == nil {
-		log.Info("Creating new Informers", "Controller", c.Name)
-		c.startInformers = true
-		if c.config == nil {
-			c.config, _ = config.GetConfig()
-		}
-
-		c.informers = &informer.IndexedCache{
-			Config: c.config,
-		}
-	}
 }
 
 // Start starts the Controller.  Start returns once the Controller has started.
-func (c *Controller) Start(stop <-chan struct{}) (chan<- error, error) {
-	done := make(chan<- error)
+func (c *Controller) Start(stop <-chan struct{}) error {
 	c.once.Do(c.init)
-
-	// Start each of the watches.  This must happen before starting the Informers.
-	for _, f := range c.start {
-		f()
-	}
-
-	// Start the informers if we are managing them
-	if c.startInformers {
-		log.Info("Starting Informers from Controller", "Controller", c.Name)
-		c.informers.Start(stop)
-	}
 
 	defer runtime.HandleCrash()
 	defer c.queue.ShutDown()
@@ -158,15 +131,17 @@ func (c *Controller) Start(stop <-chan struct{}) (chan<- error, error) {
 	// TODO: Figure out how to wait for caches to sync for the dynamic cache
 
 	// Wait for the caches to be synced before starting workers
+	// TODO: Make sure this works
 	if ok := cache.WaitForCacheSync(stop, c.synced...); !ok {
 		err := fmt.Errorf("failed to wait for %s caches to sync", c.Name)
 		log.Error(err, "Could not wait for Cache to sync", "Controller", c.Name)
-		return nil, err
+		return err
 	}
 
 	// Launch two workers to process resources
 	log.Info("Starting workers", "Controller", c.Name, "WorkerCount", c.MaxConcurrentReconciles)
 	for i := 0; i < c.MaxConcurrentReconciles; i++ {
+
 		// Continually process work items
 		go wait.Until(func() {
 			for c.processNextWorkItem() {
@@ -174,18 +149,21 @@ func (c *Controller) Start(stop <-chan struct{}) (chan<- error, error) {
 		}, time.Second, stop)
 	}
 
-	go func() {
-		<-stop
-		log.Info("Stopping workers", "Controller", c.Name)
-		close(done)
-	}()
-	return done, nil
+	<-stop
+	log.Info("Stopping workers", "Controller", c.Name)
+	return nil
 }
 
 // processNextWorkItem will read a single work item off the workqueue and
 // attempt to process it, by calling the syncHandler.
 func (c *Controller) processNextWorkItem() bool {
+	log.Info("Waiting for Item")
+
 	obj, shutdown := c.queue.Get()
+	if obj == nil {
+		log.Error(nil, "Encountered nil ReconcileRequest", "Object", obj)
+		c.queue.Forget(obj)
+	}
 
 	if shutdown {
 		return false

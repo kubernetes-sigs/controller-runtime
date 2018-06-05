@@ -36,7 +36,7 @@ func ExampleEnqueueHandler() {
 	// c is a ctrl.Controller
 	c.Watch(
 		&source.KindSource{Type: &corev1.Pod{}},
-		eventhandler.EnqueueHandler{},
+		&eventhandler.EnqueueHandler{},
 	)
 }
 

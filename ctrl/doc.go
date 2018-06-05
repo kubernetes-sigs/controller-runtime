@@ -120,7 +120,7 @@ Usage
 Controllers should live in separate packages from the main program.  A single program may contain multiple
 Controllers that share local caches and clients.
 
-Step 1: Create a main that uses the ControllerManager to start the registered Controllers.
+Step 1: Create a main that uses the ControllerManager to lazyStartWatchFuncs the registered Controllers.
 
 	pkg main
 
@@ -144,7 +144,7 @@ Step 2: Create a Controller in the package init function and register it with th
 
 	func init() {
 	  controller := &ctrl.Controller{Name: "myresource-controller", Reconcile: Reconcile{})}
-	  ctrl.Register(controller)
+	  ctrl.AddController(controller)
 
 	  // Watch for changes to MyKind objects, and enqueues a ReconcileRequest with the Name and Namespace of the object.
 	  controller.Watch(

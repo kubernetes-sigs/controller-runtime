@@ -56,8 +56,12 @@ func (e EventHandler) OnAdd(obj interface{}) {
 	}
 
 	if c.Object == nil || c.Meta == nil {
+		log.Error(nil, "OnAdd missing Object or Meta", "Object", c.Object, "Meta", c.Meta)
+		log.Info("Nil Event", "Object", c.Object, "Meta", c.Meta)
 		return
 	}
+
+	log.Info("Create", "Object", obj)
 
 	// Invoke create handler
 	e.EH.Create(e.Q, c)

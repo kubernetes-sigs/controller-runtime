@@ -38,7 +38,6 @@ var testenv *test.TestEnvironment
 var config *rest.Config
 var clientset *kubernetes.Clientset
 var icache informer.IndexInformerCache
-var stop = make(chan struct{})
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(logf.ZapLogger(true))
@@ -56,6 +55,5 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	close(stop)
 	testenv.Stop()
 })

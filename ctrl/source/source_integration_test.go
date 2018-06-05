@@ -57,10 +57,10 @@ var _ = Describe("Source", func() {
 
 	JustBeforeEach(func() {
 		instance1 = &source.KindSource{Type: obj}
-		inject.InjectIndexInformerCache(icache, instance1)
+		inject.InjectInformers(icache, instance1)
 
 		instance2 = &source.KindSource{Type: obj}
-		inject.InjectIndexInformerCache(icache, instance2)
+		inject.InjectInformers(icache, instance2)
 	})
 
 	AfterEach(func() {

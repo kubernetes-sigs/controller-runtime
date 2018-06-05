@@ -38,7 +38,7 @@ func TestSource(t *testing.T) {
 var testenv *test.TestEnvironment
 var config *rest.Config
 var clientset *kubernetes.Clientset
-var icache informer.IndexInformerCache
+var icache informer.Informers
 var stop = make(chan struct{})
 
 var _ = BeforeSuite(func() {
@@ -55,7 +55,7 @@ var _ = BeforeSuite(func() {
 	clientset, err = kubernetes.NewForConfig(config)
 	Expect(err).NotTo(HaveOccurred())
 
-	icache = &informer.IndexedCache{Config: config}
+	icache = &informer.SelfPopulatingInformers{Config: config}
 	icache.InformerFor(&appsv1.Deployment{})
 	icache.InformerFor(&appsv1.ReplicaSet{})
 	err = icache.Start(stop)

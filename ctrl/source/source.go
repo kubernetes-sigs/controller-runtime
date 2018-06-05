@@ -65,8 +65,8 @@ type KindSource struct {
 	// Type is the type of object to watch
 	Type runtime.Object
 
-	// informerCache is the IndexInformerCache used to watch APIs
-	informerCache informer.IndexInformerCache
+	// informerCache is the Informers used to watch APIs
+	informerCache informer.Informers
 }
 
 // Start implements Source and should only be called by the Controller to start the Source watching events.
@@ -83,7 +83,7 @@ func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.R
 	return nil
 }
 
-func (ks *KindSource) InjectIndexInformerCache(i informer.IndexInformerCache) {
+func (ks *KindSource) InjectIndexInformerCache(i informer.Informers) {
 	if ks.informerCache == nil {
 		ks.informerCache = i
 	}

@@ -86,7 +86,7 @@ var _ = Describe("Source", func() {
 				instance := &source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				inject.InjectIndexInformerCache(ic, instance)
+				inject.InjectInformers(ic, instance)
 				err := instance.Start(eventhandler.EventHandlerFuncs{
 					CreateFunc: func(q2 workqueue.RateLimitingInterface, evt event.CreateEvent) {
 						defer GinkgoRecover()
@@ -180,7 +180,7 @@ var _ = Describe("Source", func() {
 				instance := &source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				inject.InjectIndexInformerCache(ic, instance)
+				inject.InjectInformers(ic, instance)
 				err := instance.Start(eventhandler.EventHandlerFuncs{
 					CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
 						defer GinkgoRecover()

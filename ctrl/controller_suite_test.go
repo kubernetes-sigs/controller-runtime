@@ -37,7 +37,7 @@ func TestSource(t *testing.T) {
 var testenv *test.TestEnvironment
 var config *rest.Config
 var clientset *kubernetes.Clientset
-var icache informer.IndexInformerCache
+var icache informer.Informers
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(logf.ZapLogger(true))

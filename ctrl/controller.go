@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/predicate"
@@ -52,8 +53,11 @@ type Controller struct {
 	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 
-	// informers is the IndexInformerCache
-	informers informer.IndexInformerCache
+	// informers is the set of informers
+	informers informer.Informers
+
+	// objectCache is a client.ReadInterface that reads from the indexer backing informers
+	objectCache *client.ObjectCache
 
 	// config is the rest.config used to talk to the apiserver.  Defaults to one of in-cluster, environment variable
 	// specified, or the ~/.kube/config.
@@ -70,8 +74,9 @@ type Controller struct {
 	once sync.Once
 }
 
-func (c *Controller) InjectIndexInformerCache(i informer.IndexInformerCache) {
+func (c *Controller) InjectIndexInformerCache(i informer.Informers) {
 	c.informers = i
+	c.objectCache = client.NewObjectCache()
 }
 
 func (c *Controller) InjectConfig(i *rest.Config) {
@@ -87,19 +92,19 @@ func (c *Controller) Watch(s source.Source, e eventhandler.EventHandler, p ...pr
 	c.init()
 
 	// Inject cache into arguments
-	inject.InjectConfig(c.config, s)
-	inject.InjectIndexInformerCache(c.informers, s)
-
-	inject.InjectConfig(c.config, e)
-	inject.InjectIndexInformerCache(c.informers, e)
-
+	c.inject(s)
+	c.inject(e)
 	for _, pr := range p {
-		inject.InjectIndexInformerCache(c.informers, pr)
-		inject.InjectConfig(c.config, pr)
+		c.inject(pr)
 	}
 
 	log.Info("Starting EventSource", "Controller", c.Name, "Source", s)
 	s.Start(e, c.queue)
+}
+
+func (c *Controller) inject(i interface{}) {
+	inject.InjectConfig(c.config, i)
+	inject.InjectInformers(c.informers, i)
 }
 
 // init defaults field values on c
@@ -116,6 +121,9 @@ func (c *Controller) init() {
 	if c.queue == nil {
 		c.queue = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), c.Name)
 	}
+
+	// Inject dependencies into the Reconcile object
+	c.inject(c.Reconcile)
 }
 
 // Start starts the Controller.  Start returns once the Controller has started.

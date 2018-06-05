@@ -17,15 +17,16 @@ limitations under the License.
 package inject
 
 import (
+	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
 	"k8s.io/client-go/rest"
 )
 
 type IndexInformerCache interface {
-	InjectIndexInformerCache(informer.IndexInformerCache)
+	InjectIndexInformerCache(informer.Informers)
 }
 
-func InjectIndexInformerCache(c informer.IndexInformerCache, i interface{}) bool {
+func InjectInformers(c informer.Informers, i interface{}) bool {
 	if s, ok := i.(IndexInformerCache); ok {
 		s.InjectIndexInformerCache(c)
 		return true
@@ -38,6 +39,23 @@ type Config interface {
 }
 
 func InjectConfig(c *rest.Config, i interface{}) bool {
+	if s, ok := i.(Config); ok {
+		s.InjectConfig(c)
+		return true
+	}
+	return false
+}
+
+// TODO(pwittrock): Figure out if this is the pattern we want to stick with
+func NewConfig() (*rest.Config, error) {
+	return config.GetConfig()
+}
+
+type Cache interface {
+	InjectCache(*rest.Config)
+}
+
+func InjectCache(c *rest.Config, i interface{}) bool {
 	if s, ok := i.(Config); ok {
 		s.InjectConfig(c)
 		return true

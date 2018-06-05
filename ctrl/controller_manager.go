@@ -41,8 +41,8 @@ type ControllerManager struct {
 
 	Scheme *runtime.Scheme
 
-	// informers is the IndexInformerCache
-	informers informer.IndexInformerCache
+	// informers is the Informers
+	informers informer.Informers
 
 	// once ensures unspecified fields get default values
 	once sync.Once
@@ -69,7 +69,7 @@ func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 
 	// Inject into each of the controllers
 	for _, c := range cm.controllers {
-		inject.InjectIndexInformerCache(cm.informers, c)
+		inject.InjectInformers(cm.informers, c)
 		inject.InjectConfig(cm.Config, c)
 	}
 
@@ -112,7 +112,7 @@ func (cm *ControllerManager) init() {
 		}
 
 		if cm.informers == nil {
-			cm.informers = &informer.IndexedCache{
+			cm.informers = &informer.SelfPopulatingInformers{
 				Config: cm.Config,
 				Scheme: cm.Scheme,
 			}

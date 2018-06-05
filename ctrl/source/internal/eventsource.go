@@ -22,6 +22,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
+	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -29,6 +30,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
+
+var log = logf.KBLog.WithName("source").WithName("EventHandler")
 
 var _ cache.ResourceEventHandler = EventHandler{}
 
@@ -39,6 +42,7 @@ type EventHandler struct {
 }
 
 func (e EventHandler) OnAdd(obj interface{}) {
+	log.Info("Add", "Object", obj)
 	c := event.CreateEvent{}
 
 	// Pull the Meta out of the object
@@ -49,6 +53,10 @@ func (e EventHandler) OnAdd(obj interface{}) {
 	// Pull the runtime.Type out of the object
 	if o, ok := obj.(runtime.Object); ok {
 		c.Object = o
+	}
+
+	if c.Object == nil || c.Meta == nil {
+		return
 	}
 
 	// Invoke create handler
@@ -74,6 +82,10 @@ func (e EventHandler) OnUpdate(oldObj, newObj interface{}) {
 	// Pull the runtime.Type out of the object
 	if o, ok := newObj.(runtime.Object); ok {
 		u.ObjectNew = o
+	}
+
+	if u.ObjectOld == nil || u.MetaOld == nil {
+		return
 	}
 
 	// Invoke update handler

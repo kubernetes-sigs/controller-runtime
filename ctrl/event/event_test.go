@@ -14,22 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package eventhandler_test
+package event_test
 
 import (
-	"testing"
-
-	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/test"
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
-func TestEventhandler(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Eventhandler Suite", []Reporter{test.NewlineReporter{}})
-}
+var _ = Describe("Event", func() {
 
-var _ = BeforeSuite(func() {
-	logf.SetLogger(logf.ZapLogger(true))
 })

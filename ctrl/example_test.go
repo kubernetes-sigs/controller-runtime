@@ -48,7 +48,8 @@ func ExampleController() {
 // This example creates a new Controller named "pod-controller" with a no-op Reconcile function and Starts it.
 func ExampleController_Start() {
 	controller := &ctrl.Controller{Name: "pod-controller"}
-	log.Fatal(controller.Start())
+	stop := make(chan struct{})
+	log.Fatal(controller.Start(stop))
 }
 
 // This example watches Pods and enqueues ReconcileRequests with the changed Pod Name and Namespace.

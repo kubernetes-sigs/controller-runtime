@@ -14,22 +14,33 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package eventhandler_test
+package inject
 
 import (
-	"testing"
-
-	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/test"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
+	"k8s.io/client-go/rest"
 )
 
-func TestEventhandler(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Eventhandler Suite", []Reporter{test.NewlineReporter{}})
+type IndexInformerCache interface {
+	InjectIndexInformerCache(informer.IndexInformerCache)
 }
 
-var _ = BeforeSuite(func() {
-	logf.SetLogger(logf.ZapLogger(true))
-})
+func InjectIndexInformerCache(c informer.IndexInformerCache, i interface{}) bool {
+	if s, ok := i.(IndexInformerCache); ok {
+		s.InjectIndexInformerCache(c)
+		return true
+	}
+	return false
+}
+
+type Config interface {
+	InjectConfig(*rest.Config)
+}
+
+func InjectConfig(c *rest.Config, i interface{}) bool {
+	if s, ok := i.(Config); ok {
+		s.InjectConfig(c)
+		return true
+	}
+	return false
+}

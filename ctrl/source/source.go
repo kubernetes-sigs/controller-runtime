@@ -19,10 +19,13 @@ package source
 import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source/internal"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
+
+	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 )
 
 // Source is a source of events (eh.g. Create, Update, Delete operations on Kubernetes Objects, Webhook callbacks, etc)
@@ -35,7 +38,7 @@ type Source interface {
 	Start(eventhandler.EventHandler, workqueue.RateLimitingInterface) error
 }
 
-// Config provides shared structures required for starting a Source.
+// config provides shared structures required for starting a Source.
 type Config struct{}
 
 var _ Source = ChannelSource(make(chan event.GenericEvent))
@@ -52,22 +55,27 @@ func (ks ChannelSource) Start(
 	return nil
 }
 
+var log = logf.KBLog.WithName("source").WithName("KindSource")
+
 var _ Source = &KindSource{}
+var _ inject.IndexInformerCache = &KindSource{}
 
 // KindSource is used to provide a source of events originating inside the cluster from Watches (eh.g. Pod Create)
 type KindSource struct {
 	// Type is the type of object to watch
 	Type runtime.Object
 
-	// InformerCache is the IndexInformerCache used to watch APIs
-	InformerCache informer.IndexInformerCache
+	// informerCache is the IndexInformerCache used to watch APIs
+	informerCache informer.IndexInformerCache
 }
 
 // Start implements Source and should only be called by the Controller to start the Source watching events.
 func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.RateLimitingInterface) error {
-	// TODO: If the InformerCache cache isn't set, use the default package variable implementation
-	i, err := ks.InformerCache.InformerFor(ks.Type)
+	// TODO: If the informerCache cache isn't set, use the default package variable implementation
+
+	i, err := ks.informerCache.InformerFor(ks.Type)
 	if err != nil {
+		log.Error(err, "Could not get informer for type", "informerCache", ks.informerCache)
 		return err
 	}
 
@@ -75,8 +83,8 @@ func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.R
 	return nil
 }
 
-func (ks *KindSource) InitInformerCache(i informer.IndexInformerCache) {
-	if ks.InformerCache == nil {
-		ks.InformerCache = i
+func (ks *KindSource) InjectIndexInformerCache(i informer.IndexInformerCache) {
+	if ks.informerCache == nil {
+		ks.informerCache = i
 	}
 }

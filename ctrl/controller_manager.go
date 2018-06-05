@@ -22,9 +22,6 @@ var DefaultControllerManager = &ControllerManager{}
 // ControllerManager initializes and starts Controllers.  ControllerManager should be used if there are multiple
 // Controllers to share caches, stop channels, and other shared dependencies across Controllers.
 type ControllerManager struct {
-	// Stop may be closed to shutdown all Controllers.  Defaults to a new channel.
-	Stop <-chan struct{}
-
 	controllers []*Controller
 }
 
@@ -36,21 +33,10 @@ func (cm ControllerManager) Register(c *Controller) {
 
 // Start starts all registered Controllers and blocks until the Stop channel is closed.
 // Returns an error if there is an error starting any Controller.
-func (cm ControllerManager) Start() error {
-	// Default the Stop channel
-	if cm.Stop == nil {
-		cm.Stop = make(<-chan struct{})
-	}
+func (cm ControllerManager) Start(stop <-chan struct{}) error {
+	// TODO: write starting Controllers so we don't block
 
-	// Start each controller
-	for _, c := range cm.controllers {
-		// Default the controller stop channel
-		if c.Stop == nil {
-			c.Stop = cm.Stop
-		}
-		// TODO: write starting Controllers so we don't block
-	}
-	<-cm.Stop
+	<-stop
 	return nil
 }
 
@@ -58,4 +44,4 @@ func (cm ControllerManager) Start() error {
 func RegisterController(c *Controller) { DefaultControllerManager.Register(c) }
 
 // Start starts all Controllers registered with the DefaultControllerManager.
-func Start() error { return DefaultControllerManager.Start() }
+func Start(stop <-chan struct{}) error { return DefaultControllerManager.Start(stop) }

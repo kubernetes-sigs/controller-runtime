@@ -1,3 +1,19 @@
+/*
+Copyright 2018 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package source_test
 
 import (
@@ -69,7 +85,7 @@ var _ = Describe("Source", func() {
 				instance := source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				instance.InitInformerCache(ic)
+				instance.InjectInformerCache(ic)
 				err := instance.Start(eventhandler.EventHandlerFuncs{
 					CreateFunc: func(q2 workqueue.RateLimitingInterface, evt event.CreateEvent) {
 						defer GinkgoRecover()
@@ -111,7 +127,7 @@ var _ = Describe("Source", func() {
 				instance := source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				instance.InitInformerCache(ic)
+				instance.InjectIndexInformerCache(ic)
 				err := instance.Start(eventhandler.EventHandlerFuncs{
 					CreateFunc: func(q2 workqueue.RateLimitingInterface, evt event.CreateEvent) {
 						defer GinkgoRecover()
@@ -163,7 +179,7 @@ var _ = Describe("Source", func() {
 				instance := source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				instance.InitInformerCache(ic)
+				instance.InjectInformerCache(ic)
 				err := instance.Start(eventhandler.EventHandlerFuncs{
 					CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
 						defer GinkgoRecover()
@@ -209,7 +225,7 @@ var _ = Describe("Source", func() {
 				instance := source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				instance.InitInformerCache(ic)
+				instance.InjectIndexInformerCache(ic)
 				err := instance.Start(eventhandler.EventHandlerFuncs{}, q)
 				Expect(err).To(HaveOccurred())
 

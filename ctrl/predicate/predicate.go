@@ -33,16 +33,6 @@ type Predicate interface {
 	Generic(event.GenericEvent) bool
 }
 
-var _ Predicate = EmptyPredicate{}
-
-// EmptyPredicate implements the Predicate interface and returns true for all functions.
-type EmptyPredicate struct{}
-
-func (EmptyPredicate) Create(event.CreateEvent) bool   { return true }
-func (EmptyPredicate) Delete(event.DeleteEvent) bool   { return true }
-func (EmptyPredicate) Update(event.UpdateEvent) bool   { return true }
-func (EmptyPredicate) Generic(event.GenericEvent) bool { return true }
-
 var _ Predicate = PredicateFuncs{}
 
 // PredicateFunc is a function that implements Predicate.

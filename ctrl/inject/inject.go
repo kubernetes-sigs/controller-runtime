@@ -17,18 +17,19 @@ limitations under the License.
 package inject
 
 import (
+	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
 	"k8s.io/client-go/rest"
 )
 
-type IndexInformerCache interface {
-	InjectIndexInformerCache(informer.Informers)
+type Informers interface {
+	InjectInformers(informer.Informers)
 }
 
 func InjectInformers(c informer.Informers, i interface{}) bool {
-	if s, ok := i.(IndexInformerCache); ok {
-		s.InjectIndexInformerCache(c)
+	if s, ok := i.(Informers); ok {
+		s.InjectInformers(c)
 		return true
 	}
 	return false
@@ -51,14 +52,16 @@ func NewConfig() (*rest.Config, error) {
 	return config.GetConfig()
 }
 
-type Cache interface {
-	InjectCache(*rest.Config)
+type Client interface {
+	InjectClient(client.Interface)
 }
 
-func InjectCache(c *rest.Config, i interface{}) bool {
-	if s, ok := i.(Config); ok {
-		s.InjectConfig(c)
+func InjectClient(c client.Interface, i interface{}) bool {
+	if s, ok := i.(Client); ok {
+		s.InjectClient(c)
 		return true
 	}
 	return false
 }
+
+// TODO: Inject Scheme

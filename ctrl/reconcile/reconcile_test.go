@@ -26,12 +26,6 @@ import (
 )
 
 var _ = Describe("Reconcile", func() {
-	Describe("DefaultReconcileFunc", func() {
-		It(" should return a nil error.", func() {
-			reconcile.DefaultReconcileFunc(reconcile.ReconcileRequest{})
-		})
-	})
-
 	Describe("ReconcileFunc", func() {
 		It("should call the function with the request and return a nil error.", func() {
 			request := reconcile.ReconcileRequest{

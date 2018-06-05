@@ -19,6 +19,7 @@ package ctrl
 import (
 	"sync"
 
+	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
@@ -31,7 +32,7 @@ import (
 var DefaultControllerManager = &ControllerManager{}
 
 // ControllerManager initializes and starts Controllers.  ControllerManager should always be used to
-// setup dependencies such as Informers and Configs, etc and inject them into Controllers.
+// setup dependencies such as Informers and Configs, etc and injectInto them into Controllers.
 type ControllerManager struct {
 	controllers []*Controller
 
@@ -39,10 +40,14 @@ type ControllerManager struct {
 	// specified, or the ~/.kube/config.
 	Config *rest.Config
 
+	// TODO: Inject this and make sure it gets injected everywhere
 	Scheme *runtime.Scheme
 
 	// informers is the Informers
 	informers informer.Informers
+
+	// TODO(directxman12): Provide an escape hatch to get individual indexers
+	client client.Interface
 
 	// once ensures unspecified fields get default values
 	once sync.Once
@@ -85,6 +90,7 @@ func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 	}
 
 	// Start the informers now that watches have been added
+
 	cm.informers.Start(stop)
 
 	// Start the controllers after the promises

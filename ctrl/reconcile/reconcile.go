@@ -17,8 +17,6 @@ limitations under the License.
 package reconcile
 
 import (
-	"log"
-
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -90,9 +88,3 @@ type ReconcileFunc func(ReconcileRequest) (ReconcileResult, error)
 var _ Reconcile = ReconcileFunc(nil)
 
 func (r ReconcileFunc) Reconcile(o ReconcileRequest) (ReconcileResult, error) { return r(o) }
-
-// DefaultReconcileFunc provides a no-op Reconcile implementation for development.
-var DefaultReconcileFunc = ReconcileFunc(func(o ReconcileRequest) (ReconcileResult, error) {
-	log.Printf("Reconcile called for %v", o)
-	return ReconcileResult{}, nil
-})

@@ -50,6 +50,7 @@ type EnqueueOwnerHandler struct {
 	kindOk    bool
 }
 
+// TODO: Make sure this gets injected from the Controller
 func (e *EnqueueOwnerHandler) InitScheme(s *runtime.Scheme) {
 	if e.Scheme == nil {
 		e.Scheme = s
@@ -87,7 +88,9 @@ func (e EnqueueOwnerHandler) Generic(q workqueue.RateLimitingInterface, evt even
 	}
 }
 
+// TODO: Add comments
 func (e EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []reconcile.ReconcileRequest {
+	// TODO: Comment this more
 	e.once.Do(func() {
 		kinds, _, err := e.Scheme.ObjectKinds(e.OwnerType)
 		if err != nil {
@@ -103,12 +106,14 @@ func (e EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []re
 		e.kindOk = true
 	})
 	if !e.kindOk {
+		// TODO: Add error logging here
 		return nil
 	}
 
 	reqs := []reconcile.ReconcileRequest{}
 	for _, ref := range e.getOwnersReferences(object) {
 		// Parse the Group and Version from the OwnerReference
+		// TODO: Comment this more
 		refGV, err := schema.ParseGroupVersion(ref.APIVersion)
 		if err != nil {
 			log.Error(err, "Could not parse OwnerReference GroupVersion",
@@ -117,6 +122,7 @@ func (e EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []re
 		}
 
 		// Kind and Group match
+		// TODO: Comment this block more
 		if ref.Kind == e.groupKind.Kind && refGV.Group == e.groupKind.Group {
 			reqs = append(reqs, reconcile.ReconcileRequest{
 				NamespacedName: types.NamespacedName{
@@ -131,6 +137,7 @@ func (e EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []re
 	return reqs
 }
 
+// TODO: Comment this more
 func (e EnqueueOwnerHandler) getOwnersReferences(object metav1.Object) []metav1.OwnerReference {
 	if object == nil {
 		return nil

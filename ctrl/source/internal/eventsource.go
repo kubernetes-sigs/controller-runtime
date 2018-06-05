@@ -19,16 +19,15 @@ package internal
 import (
 	"fmt"
 
-	"github.com/golang/glog"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
 	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
 
 var log = logf.KBLog.WithName("source").WithName("EventHandler")
@@ -37,15 +36,15 @@ var _ cache.ResourceEventHandler = EventHandler{}
 
 // EventHandler adapts a eventhandler.EventHandler interface to a cache.ResourceEventHandler interface
 type EventHandler struct {
-	EH eventhandler.EventHandler
-	Q  workqueue.RateLimitingInterface
+	EventHandler eventhandler.EventHandler
+	Queue        workqueue.RateLimitingInterface
 }
 
 func (e EventHandler) OnAdd(obj interface{}) {
-	log.Info("Add", "Object", obj)
 	c := event.CreateEvent{}
 
 	// Pull the Meta out of the object
+	// TODO: Change this to meta.Accessor
 	if o, ok := obj.(metav1.ObjectMetaAccessor); ok {
 		c.Meta = o.GetObjectMeta()
 	}
@@ -57,43 +56,55 @@ func (e EventHandler) OnAdd(obj interface{}) {
 
 	if c.Object == nil || c.Meta == nil {
 		log.Error(nil, "OnAdd missing Object or Meta", "Object", c.Object, "Meta", c.Meta)
-		log.Info("Nil Event", "Object", c.Object, "Meta", c.Meta)
 		return
 	}
 
-	log.Info("Create", "Object", obj)
-
 	// Invoke create handler
-	e.EH.Create(e.Q, c)
+	e.EventHandler.Create(e.Queue, c)
 }
 
 func (e EventHandler) OnUpdate(oldObj, newObj interface{}) {
 	u := event.UpdateEvent{}
 
 	// Pull the Meta out of the object
-	if o, ok := oldObj.(metav1.ObjectMetaAccessor); ok {
-		u.MetaOld = o.GetObjectMeta()
+	if o, err := meta.Accessor(oldObj); err == nil {
+		u.MetaOld = o
+	} else {
+		log.Error(err, "OnUpdate missing MetaOld",
+			"Object", oldObj, "Type", fmt.Sprintf("%T", oldObj))
+		return
 	}
+
 	// Pull the runtime.Type out of the object
 	if o, ok := oldObj.(runtime.Object); ok {
 		u.ObjectOld = o
+	} else {
+		log.Error(nil, "OnUpdate missing ObjectOld",
+			"Object", oldObj, "Type", fmt.Sprintf("%T", oldObj))
+		return
 	}
 
 	// Pull the Meta out of the object
-	if o, ok := newObj.(metav1.ObjectMetaAccessor); ok {
-		u.MetaNew = o.GetObjectMeta()
-	}
-	// Pull the runtime.Type out of the object
-	if o, ok := newObj.(runtime.Object); ok {
-		u.ObjectNew = o
+	if o, err := meta.Accessor(newObj); err == nil {
+		u.MetaNew = o
+	} else {
+		log.Error(err, "OnUpdate missing MetaNew",
+			"Object", newObj, "Type", fmt.Sprintf("%T", newObj))
+		return
 	}
 
-	if u.ObjectOld == nil || u.MetaOld == nil {
+	// Pull the runtime.Type out of the object
+	// TODO: Add logging for nil stuff here
+	if o, ok := newObj.(runtime.Object); ok {
+		u.ObjectNew = o
+	} else {
+		log.Error(nil, "OnUpdate missing ObjectNew",
+			"Object", oldObj, "Type", fmt.Sprintf("%T", oldObj))
 		return
 	}
 
 	// Invoke update handler
-	e.EH.Update(e.Q, u)
+	e.EventHandler.Update(e.Queue, u)
 }
 
 func (e EventHandler) OnDelete(obj interface{}) {
@@ -101,36 +112,48 @@ func (e EventHandler) OnDelete(obj interface{}) {
 
 	// Deal with tombstone events by pulling the object out.  Tombstone events wrap the object in a
 	// DeleteFinalStateUnknown struct, so the object needs to be pulled out.
-	var object metav1.Object
+	// Copied from sample-controller
+	// This should never happen if we aren't missing events, which we have concluded that we are not
+	// and made decisions off of this belief.  Maybe this shouldn't be here?
 	var ok bool
-	if object, ok = obj.(metav1.Object); !ok {
+	if _, ok = obj.(metav1.Object); !ok {
 		// If the object doesn't have Metadata, assume it is a tombstone object of type DeletedFinalStateUnknown
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
+			log.Error(nil, "Error decoding objects.  Expected cache.DeletedFinalStateUnknown",
+				"Type", fmt.Sprintf("%T", obj),
+				"Object", obj)
 			return
 		}
 
 		// Pull the Meta out of the object
-		object, ok = tombstone.Obj.(metav1.Object)
+		// TODO: Make this an Accessor
+		_, ok = tombstone.Obj.(metav1.Object)
 		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
+			log.Error(nil, "Error decoding object in tombstone.  Expected metav1.Object.",
+				"Type", fmt.Sprintf("%T", tombstone.Obj),
+				"Object", tombstone.Obj)
 			return
 		}
 
 		// Set obj to the tombstone obj
 		obj = tombstone.Obj
-		glog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
 	}
 
+	// TODO: meta.Accessor
 	if o, ok := obj.(metav1.ObjectMetaAccessor); ok {
 		c.Meta = o.GetObjectMeta()
+	} else {
+		//log.Error(err, "OnDelete missing MetaOld",
+		//	"Object", oldObj, "Type", fmt.Sprintf("%T", oldObj))
+		return
 	}
 
 	if o, ok := obj.(runtime.Object); ok {
+		// TODO: Add error for other case
 		c.Object = o
 	}
 
 	// Invoke delete handler
-	e.EH.Delete(e.Q, c)
+	e.EventHandler.Delete(e.Queue, c)
 }

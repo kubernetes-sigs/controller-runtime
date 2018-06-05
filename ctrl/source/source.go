@@ -17,6 +17,8 @@ limitations under the License.
 package source
 
 import (
+	"fmt"
+
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
@@ -58,7 +60,7 @@ func (ks ChannelSource) Start(
 var log = logf.KBLog.WithName("source").WithName("KindSource")
 
 var _ Source = &KindSource{}
-var _ inject.IndexInformerCache = &KindSource{}
+var _ inject.Informers = &KindSource{}
 
 // KindSource is used to provide a source of events originating inside the cluster from Watches (eh.g. Pod Create)
 type KindSource struct {
@@ -71,19 +73,25 @@ type KindSource struct {
 
 // Start implements Source and should only be called by the Controller to start the Source watching events.
 func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.RateLimitingInterface) error {
-	// TODO: If the informerCache cache isn't set, use the default package variable implementation
-
-	i, err := ks.informerCache.InformerFor(ks.Type)
-	if err != nil {
-		log.Error(err, "Could not get informer for type", "informerCache", ks.informerCache)
-		return err
+	if ks.Type == nil {
+		return fmt.Errorf("Must specify KindSource.Type.")
 	}
 
-	i.AddEventHandler(internal.EventHandler{Q: queue, EH: handler})
+	if ks.informerCache == nil {
+		return fmt.Errorf("Must call InjectInformers on KindSource before calling Start.")
+	}
+
+	// Lookup the Informer from the Informers and add an EventHandler which populates the Queue
+	i, err := ks.informerCache.InformerFor(ks.Type)
+	if err != nil {
+		return err
+	}
+	i.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler})
 	return nil
 }
 
-func (ks *KindSource) InjectIndexInformerCache(i informer.Informers) {
+// InjectInformers must be called before Start.
+func (ks *KindSource) InjectInformers(i informer.Informers) {
 	if ks.informerCache == nil {
 		ks.informerCache = i
 	}

@@ -53,10 +53,12 @@ type Controller struct {
 	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 
+	Client client.Interface
+
 	// informers is the set of informers
 	informers informer.Informers
 
-	// objectCache is a client.ReadInterface that reads from the indexer backing informers
+	// objectCache is a Client.ReadInterface that reads from the indexer backing informers
 	objectCache *client.ObjectCache
 
 	// config is the rest.config used to talk to the apiserver.  Defaults to one of in-cluster, environment variable
@@ -67,20 +69,29 @@ type Controller struct {
 	// the queue for processing
 	queue workqueue.RateLimitingInterface
 
-	// synced is a slice of functions that return whether or not all informers have been synced
-	synced []cache.InformerSynced
-
 	// once ensures unspecified fields get default values
 	once sync.Once
+
+	// TODO(pwittrock): Consider initializing a logger with the Controller name as the tag
 }
 
-func (c *Controller) InjectIndexInformerCache(i informer.Informers) {
+var _ inject.Informers = &Controller{}
+
+func (c *Controller) InjectInformers(i informer.Informers) {
 	c.informers = i
 	c.objectCache = client.NewObjectCache()
 }
 
+var _ inject.Config = &Controller{}
+
 func (c *Controller) InjectConfig(i *rest.Config) {
 	c.config = i
+}
+
+var _ inject.Client = &Controller{}
+
+func (c *Controller) InjectClient(i client.Interface) {
+	c.Client = i
 }
 
 // Watch takes events provided by a Source and uses the EventHandler to enqueue ReconcileRequests in
@@ -91,20 +102,23 @@ func (c *Controller) InjectConfig(i *rest.Config) {
 func (c *Controller) Watch(s source.Source, e eventhandler.EventHandler, p ...predicate.Predicate) {
 	c.init()
 
+	// TODO: Reconsider variable names
+
 	// Inject cache into arguments
-	c.inject(s)
-	c.inject(e)
+	c.injectInto(s)
+	c.injectInto(e)
 	for _, pr := range p {
-		c.inject(pr)
+		c.injectInto(pr)
 	}
 
 	log.Info("Starting EventSource", "Controller", c.Name, "Source", s)
 	s.Start(e, c.queue)
 }
 
-func (c *Controller) inject(i interface{}) {
+func (c *Controller) injectInto(i interface{}) {
 	inject.InjectConfig(c.config, i)
 	inject.InjectInformers(c.informers, i)
+	inject.InjectClient(c.Client, i)
 }
 
 // init defaults field values on c
@@ -123,24 +137,27 @@ func (c *Controller) init() {
 	}
 
 	// Inject dependencies into the Reconcile object
-	c.inject(c.Reconcile)
+	c.injectInto(c.Reconcile)
 }
 
-// Start starts the Controller.  Start returns once the Controller has started.
+// Start starts the Controller.  Start blocks until stop is closed or a Controller has an error starting.
 func (c *Controller) Start(stop <-chan struct{}) error {
 	c.once.Do(c.init)
 
+	// TODO)(pwittrock): Reconsider HandleCrash
 	defer runtime.HandleCrash()
 	defer c.queue.ShutDown()
 
 	// Start the SharedIndexInformer factories to begin populating the SharedIndexInformer caches
 	log.Info("Starting Controller", "Controller", c.Name)
 
-	// TODO: Figure out how to wait for caches to sync for the dynamic cache
-
 	// Wait for the caches to be synced before starting workers
-	// TODO: Make sure this works
-	if ok := cache.WaitForCacheSync(stop, c.synced...); !ok {
+	allInformers := c.informers.KnownInformersByType()
+	syncedFuncs := make([]cache.InformerSynced, 0, len(allInformers))
+	for _, informer := range allInformers {
+		syncedFuncs = append(syncedFuncs, informer.HasSynced)
+	}
+	if ok := cache.WaitForCacheSync(stop, syncedFuncs...); !ok {
 		err := fmt.Errorf("failed to wait for %s caches to sync", c.Name)
 		log.Error(err, "Could not wait for Cache to sync", "Controller", c.Name)
 		return err
@@ -152,6 +169,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 
 		// Continually process work items
 		go wait.Until(func() {
+			// TODO(pwittrock): Should we really use wait.Until to continuously restart this if it exits?
 			for c.processNextWorkItem() {
 			}
 		}, time.Second, stop)
@@ -165,7 +183,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 // processNextWorkItem will read a single work item off the workqueue and
 // attempt to process it, by calling the syncHandler.
 func (c *Controller) processNextWorkItem() bool {
-	log.Info("Waiting for Item")
+	// This code copy-pasted from the sample-controller.
 
 	obj, shutdown := c.queue.Get()
 	if obj == nil {
@@ -174,55 +192,53 @@ func (c *Controller) processNextWorkItem() bool {
 	}
 
 	if shutdown {
+		// Return false, take a break before starting again.  But Y tho?
 		return false
 	}
 
-	// We wrap this block in a func so we can defer c.workque   ue.Done.
-	err := func(obj interface{}) error {
-		// We call Done here so the workqueue knows we have finished
-		// processing this item. We also must remember to call Forget if we
-		// do not want this work item being re-queued. For example, we do
-		// not call Forget if a transient error occurs, instead the item is
-		// put back on the workqueue and attempted again after a back-off
-		// period.
-		defer c.queue.Done(obj)
-		var req reconcile.ReconcileRequest
-		var ok bool
-		if req, ok = obj.(reconcile.ReconcileRequest); !ok {
-			// As the item in the workqueue is actually invalid, we call
-			// Forget here else we'd go into a loop of attempting to
-			// process a work item that is invalid.
-			c.queue.Forget(obj)
-			err := fmt.Errorf(
-				"expected reconcile.ReconcileRequest in %s workqueue but got %#v", c.Name, obj)
-			runtime.HandleError(err)
-			log.Error(err, "Non ReconcileRequest in queue", "Controller", c.Name, "Value", obj)
-			return nil
-		}
-
-		// RunInformersAndControllers the syncHandler, passing it the namespace/Name string of the
-		// resource to be synced.
-		if result, err := c.Reconcile.Reconcile(req); err != nil {
-			c.queue.AddRateLimited(req)
-			err := fmt.Errorf("error syncing %s queue '%+v': %s", c.Name, req, err.Error())
-			log.Error(err, "Reconcile error", "Controller", c.Name, "ReconcileRequest", req)
-
-			return err
-		} else if result.Requeue {
-			c.queue.AddRateLimited(req)
-		}
-
-		// Finally, if no error occurs we Forget this item so it does not
-		// get queued again until another change happens.
+	// We call Done here so the workqueue knows we have finished
+	// processing this item. We also must remember to call Forget if we
+	// do not want this work item being re-queued. For example, we do
+	// not call Forget if a transient error occurs, instead the item is
+	// put back on the workqueue and attempted again after a back-off
+	// period.
+	defer c.queue.Done(obj)
+	var req reconcile.ReconcileRequest
+	var ok bool
+	if req, ok = obj.(reconcile.ReconcileRequest); !ok {
+		// As the item in the workqueue is actually invalid, we call
+		// Forget here else we'd go into a loop of attempting to
+		// process a work item that is invalid.
 		c.queue.Forget(obj)
-		log.Info("Successfully Reconciled", "Controller", c.Name, "ReconcileRequest", req)
-		return nil
-	}(obj)
-
-	if err != nil {
-		runtime.HandleError(err)
+		log.Error(nil, "Queue item was not a ReconcileRequest",
+			"Controller", c.Name, "Type", fmt.Sprintf("%T", obj), "Value", obj)
+		// Return true, don't take a break
 		return true
 	}
 
+	// RunInformersAndControllers the syncHandler, passing it the namespace/Name string of the
+	// resource to be synced.
+	if result, err := c.Reconcile.Reconcile(req); err != nil {
+		c.queue.AddRateLimited(req)
+		log.Error(nil, "Reconcile error", "Controller", c.Name, "ReconcileRequest", req)
+
+		// TODO: FTO Returning an error here seems to back things off for a second before restarting the loop
+		// through wait.Util.
+		// Return false, take a break. But y tho?
+		return false
+	} else if result.Requeue {
+		c.queue.AddRateLimited(req)
+		// Return true, don't take a break
+		return true
+	}
+
+	// Finally, if no error occurs we Forget this item so it does not
+	// get queued again until another change happens.
+	c.queue.Forget(obj)
+
+	// TODO: What does 1 mean?
+	log.V(1).Info("Successfully Reconciled", "Controller", c.Name, "ReconcileRequest", req)
+
+	// Return true, don't take a break
 	return true
 }

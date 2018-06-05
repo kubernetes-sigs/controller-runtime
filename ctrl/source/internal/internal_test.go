@@ -54,8 +54,8 @@ var _ = Describe("Internal", func() {
 			},
 		}
 		instance = internal.EventHandler{
-			Q:  Queue{},
-			EH: funcs,
+			Queue:        Queue{},
+			EventHandler: funcs,
 		}
 	})
 
@@ -75,7 +75,7 @@ var _ = Describe("Internal", func() {
 		It("should create a CreateEvent", func(done Done) {
 			funcs.CreateFunc = func(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
 				defer GinkgoRecover()
-				Expect(q).To(Equal(instance.Q))
+				Expect(q).To(Equal(instance.Queue))
 				Expect(evt.Meta).To(Equal(pod.GetObjectMeta()))
 				Expect(evt.Object).To(Equal(pod))
 			}
@@ -86,7 +86,7 @@ var _ = Describe("Internal", func() {
 		It("should create an UpdateEvent", func(done Done) {
 			funcs.UpdateFunc = func(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 				defer GinkgoRecover()
-				Expect(q).To(Equal(instance.Q))
+				Expect(q).To(Equal(instance.Queue))
 				Expect(evt.MetaOld).To(Equal(pod.GetObjectMeta()))
 				Expect(evt.ObjectOld).To(Equal(pod))
 				Expect(evt.MetaNew).To(Equal(newPod.GetObjectMeta()))
@@ -99,7 +99,7 @@ var _ = Describe("Internal", func() {
 		It("should create a DeleteEvent", func(done Done) {
 			funcs.DeleteFunc = func(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 				defer GinkgoRecover()
-				Expect(q).To(Equal(instance.Q))
+				Expect(q).To(Equal(instance.Queue))
 				Expect(evt.Meta).To(Equal(pod.GetObjectMeta()))
 				Expect(evt.Object).To(Equal(pod))
 			}
@@ -114,7 +114,7 @@ var _ = Describe("Internal", func() {
 			}
 			funcs.DeleteFunc = func(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 				defer GinkgoRecover()
-				Expect(q).To(Equal(instance.Q))
+				Expect(q).To(Equal(instance.Queue))
 				Expect(evt.Meta).To(Equal(pod.GetObjectMeta()))
 				Expect(evt.Object).To(Equal(pod))
 			}

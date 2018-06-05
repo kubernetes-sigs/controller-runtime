@@ -54,9 +54,7 @@ var _ = Describe("Controller", func() {
 						return reconcile.ReconcileResult{}, nil
 					}),
 			}
-			cm := &ctrl.ControllerManager{
-				Config: config,
-			}
+			cm := &ctrl.ControllerManager{Config: config}
 			cm.AddController(instance, func() {
 				// Deferred from the Init function
 				instance.Watch(&source.KindSource{Type: &appsv1.ReplicaSet{}}, &eventhandler.EnqueueOwnerHandler{

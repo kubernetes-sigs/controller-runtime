@@ -62,6 +62,10 @@ func (c *FakeIndexCache) InformerFor(obj runtime.Object) (cache.SharedIndexInfor
 	return c.informerFor(gvk, obj)
 }
 
+func (c *FakeIndexCache) KnownInformersByType() map[schema.GroupVersionKind]cache.SharedIndexInformer {
+	return c.InformersByGVK
+}
+
 func (c *FakeIndexCache) FakeInformerFor(obj runtime.Object) (*test.FakeInformer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme

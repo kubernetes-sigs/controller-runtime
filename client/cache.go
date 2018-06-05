@@ -2,16 +2,16 @@ package client
 
 import (
 	"context"
-	"reflect"
 	"fmt"
+	"reflect"
 
-	"k8s.io/client-go/tools/cache"
-	"k8s.io/apimachinery/pkg/runtime"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/client-go/tools/cache"
 
 	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 )
@@ -167,6 +167,9 @@ func (c *SingleObjectCache) List(ctx context.Context, opts *ListOptions, out run
 	return nil
 }
 
+// TODO: Make an interface with this function that has an Informers as an object on the struct
+// that automatically calls InformerFor and passes in the Indexer into IndexByField
+
 // IndexByField adds an indexer to the underlying cache, using extraction function to get
 // value(s) from the given field.  This index can then be used by passing a field selector
 // to List. For one-to-one compatibility with "normal" field selectors, only return one value.
@@ -202,14 +205,14 @@ func IndexByField(indexer cache.Indexer, field string, extractor func(runtime.Ob
 // fieldIndexName constructs the name of the index over the given field,
 // for use with an Indexer.
 func fieldIndexName(field string) string {
-	return "field:"+field
+	return "field:" + field
 }
 
 // keyToNamespacedKey prefixes the given index key with a namespace
 // for use in field selector indexes.
 func keyToNamespacedKey(ns string, baseKey string) string {
 	if ns != "" {
-		return ns+"/"+baseKey
+		return ns + "/" + baseKey
 	}
 	return baseKey
 }
@@ -222,7 +225,7 @@ func objectKeyToStoreKey(k ObjectKey) string {
 	if k.Namespace == "" {
 		return k.Name
 	}
-	return k.Namespace+"/"+k.Name
+	return k.Namespace + "/" + k.Name
 }
 
 // requiresExactMatch checks if the given field selector is of the form `k=v` or `k==v`.

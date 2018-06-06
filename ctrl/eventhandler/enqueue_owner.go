@@ -109,7 +109,7 @@ func (e *EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []r
 		e.kindOk = true
 	})
 	if !e.kindOk {
-		// TODO: Add error logging here
+		log.Error(nil, "Tried to get owner of unknown kind", "OwnerType", e.OwnerType)
 		return nil
 	}
 

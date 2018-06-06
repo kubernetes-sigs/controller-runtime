@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/common"
 	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,8 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	watch "k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -46,13 +45,14 @@ var _ Informers = &SelfPopulatingInformers{}
 type SelfPopulatingInformers struct {
 	Config *rest.Config
 	Scheme *runtime.Scheme
-	mapper meta.RESTMapper
+	Mapper meta.RESTMapper
 
 	once           sync.Once
 	mu             sync.Mutex
 	informersByGVK map[schema.GroupVersionKind]cache.SharedIndexInformer
 	codecs         serializer.CodecFactory
 	paramCodec     runtime.ParameterCodec
+	started        bool
 }
 
 func (c *SelfPopulatingInformers) init() {
@@ -67,35 +67,20 @@ func (c *SelfPopulatingInformers) init() {
 			c.Scheme = scheme.Scheme
 		}
 
-		// TODO: Pull this into a Singleton
-		// Get a mapper
-		dc := discovery.NewDiscoveryClientForConfigOrDie(c.Config)
-		gr, err := discovery.GetAPIGroupResources(dc)
-		if err != nil {
-			log.WithName("setup").Error(err, "Failed to get API Group-Resources")
-			os.Exit(1)
+		if c.Mapper == nil {
+			Mapper, err := common.NewDiscoveryRESTMapper(c.Config)
+			if err != nil {
+				log.WithName("setup").Error(err, "Failed to get API Group-Resources")
+				os.Exit(1)
+			}
+			c.Mapper = Mapper
 		}
-		c.mapper = discovery.NewRESTMapper(gr, dynamic.VersionInterfaces)
 
 		// Setup the codecs
 		c.codecs = serializer.NewCodecFactory(c.Scheme)
 		c.paramCodec = runtime.NewParameterCodec(c.Scheme)
 		c.informersByGVK = make(map[schema.GroupVersionKind]cache.SharedIndexInformer)
 	})
-}
-
-// NewInformerCache creates a new Informers with clients based on the given base config.
-// The RESTMapper is used to convert kinds to resources.  It uses the given Scheme to convert between types
-// and kinds.
-func NewInformerCache(mapper meta.RESTMapper, baseConfig *rest.Config, scheme *runtime.Scheme) Informers {
-	return &SelfPopulatingInformers{
-		informersByGVK: make(map[schema.GroupVersionKind]cache.SharedIndexInformer),
-		Config:         baseConfig,
-		Scheme:         scheme,
-		codecs:         serializer.NewCodecFactory(scheme),
-		paramCodec:     runtime.NewParameterCodec(scheme),
-		mapper:         mapper,
-	}
 }
 
 func (c *SelfPopulatingInformers) KnownInformersByType() map[schema.GroupVersionKind]cache.SharedIndexInformer {
@@ -142,6 +127,10 @@ func (c *SelfPopulatingInformers) informerFor(gvk schema.GroupVersionKind, obj r
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if c.started {
+		return nil, fmt.Errorf("cannot create informers after informers have been started")
+	}
+
 	informer, ok := c.informersByGVK[gvk]
 	if ok {
 		return informer, nil
@@ -165,7 +154,7 @@ func (c *SelfPopulatingInformers) informerFor(gvk schema.GroupVersionKind, obj r
 		return nil, err
 	}
 
-	mapping, err := c.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	mapping, err := c.Mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return nil, err
 	}
@@ -208,10 +197,10 @@ func (c *SelfPopulatingInformers) Start(stopCh <-chan struct{}) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// TODO: Start new informers automatically when they are created if Start has already been called.
 	for _, informer := range c.informersByGVK {
-		//fmt.Printf("Hello world %v\n\n")
 		go informer.Run(stopCh)
 	}
+
+	c.started = true
 	return nil
 }

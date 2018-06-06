@@ -98,8 +98,7 @@ func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 	}
 
 	// Inject a Read / Write client into all controllers
-	// TODO(directxman): Figure out how to deal with users to allow users to request a client without
-	// requesting a watch
+	// TODO(directxman12): Figure out how to allow users to request a client without requesting a watch
 	objCache := client.ObjectCacheFromInformers(cm.Informers.KnownInformersByType(), cm.Scheme)
 	cm.client = client.SplitReaderWriter{ReadInterface: objCache}
 	for _, c := range cm.controllers {

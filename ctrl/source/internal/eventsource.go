@@ -96,7 +96,6 @@ func (e EventHandler) OnUpdate(oldObj, newObj interface{}) {
 	}
 
 	// Pull the runtime.Object out of the object
-	// TODO: Add logging for nil stuff here
 	if o, ok := newObj.(runtime.Object); ok {
 		u.ObjectNew = o
 	} else {
@@ -128,16 +127,6 @@ func (e EventHandler) OnDelete(obj interface{}) {
 			return
 		}
 
-		// Pull the Meta out of the object
-		// TODO: Make this an Accessor
-		_, ok = tombstone.Obj.(metav1.Object)
-		if !ok {
-			log.Error(nil, "Error decoding object in tombstone.  Expected metav1.Object.",
-				"Type", fmt.Sprintf("%T", tombstone.Obj),
-				"Object", tombstone.Obj)
-			return
-		}
-
 		// Set obj to the tombstone obj
 		obj = tombstone.Obj
 	}
@@ -146,7 +135,7 @@ func (e EventHandler) OnDelete(obj interface{}) {
 	if o, err := meta.Accessor(obj); err == nil {
 		c.Meta = o
 	} else {
-		log.Error(err, "OnAdd missing Meta",
+		log.Error(err, "OnDelete missing Meta",
 			"Object", obj, "Type", fmt.Sprintf("%T", obj))
 		return
 	}
@@ -155,7 +144,7 @@ func (e EventHandler) OnDelete(obj interface{}) {
 	if o, ok := obj.(runtime.Object); ok {
 		c.Object = o
 	} else {
-		log.Error(nil, "OnAdd missing runtime.Object",
+		log.Error(nil, "OnDelete missing runtime.Object",
 			"Object", obj, "Type", fmt.Sprintf("%T", obj))
 		return
 	}

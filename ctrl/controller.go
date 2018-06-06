@@ -265,7 +265,7 @@ func (c *Controller) processNextWorkItem() bool {
 	// get queued again until another change happens.
 	c.queue.Forget(obj)
 
-	// TODO: What does 1 mean?
+	// TODO(directxman12): What does 1 mean?  Do we want level constants?  Do we want levels at all?
 	log.V(1).Info("Successfully Reconciled", "Controller", c.Name, "ReconcileRequest", req)
 
 	// Return true, don't take a break

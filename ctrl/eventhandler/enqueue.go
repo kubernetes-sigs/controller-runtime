@@ -36,7 +36,7 @@ func (e *EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.Cre
 	enqueueLog.Info("Enqueue", "CreateEvent", evt)
 
 	if evt.Meta == nil {
-		// TODO: Log an error and increment a metric
+		enqueueLog.Error(nil, "CreateEvent received with no metadata", "CreateEvent", evt)
 		return
 	}
 	q.AddRateLimited(reconcile.ReconcileRequest{types.NamespacedName{
@@ -53,7 +53,7 @@ func (e *EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.Upd
 			Namespace: evt.MetaOld.GetNamespace(),
 		}})
 	} else {
-		// TODO: Log an error and increment a metric
+		enqueueLog.Error(nil, "UpdateEvent received with no old metadata", "UpdateEvent", evt)
 	}
 
 	if evt.MetaNew != nil {
@@ -62,14 +62,14 @@ func (e *EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.Upd
 			Namespace: evt.MetaNew.GetNamespace(),
 		}})
 	} else {
-		// TODO: Log an error and increment a metric
+		enqueueLog.Error(nil, "UpdateEvent received with no new metadata", "UpdateEvent", evt)
 	}
 }
 
 // Delete implements EventHandler
 func (e *EnqueueHandler) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 	if evt.Meta == nil {
-		// TODO: Log an error and increment a metric
+		enqueueLog.Error(nil, "DeleteEvent received with no metadata", "DeleteEvent", evt)
 		return
 	}
 	q.AddRateLimited(reconcile.ReconcileRequest{types.NamespacedName{
@@ -81,7 +81,7 @@ func (e *EnqueueHandler) Delete(q workqueue.RateLimitingInterface, evt event.Del
 // Generic implements EventHandler
 func (e *EnqueueHandler) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
 	if evt.Meta == nil {
-		// TODO: Log an error and increment a metric
+		enqueueLog.Error(nil, "GenericEvent received with no metadata", "GenericEvent", evt)
 		return
 	}
 	q.AddRateLimited(reconcile.ReconcileRequest{types.NamespacedName{

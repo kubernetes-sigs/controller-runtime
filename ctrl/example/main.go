@@ -47,14 +47,15 @@ func main() {
 	// Watch Pods and ReplicaSets
 	cm.AddController(c, func() {
 		c.Watch(
-			&source.KindSource{Type: &appsv1.ReplicaSet{}}, // Watch ReplicaSets
-			&eventhandler.EnqueueHandler{})                 // Enqueue ReplicaSet object key
+			// Watch ReplicaSets
+			&source.KindSource{Type: &appsv1.ReplicaSet{}},
+			// Enqueue ReplicaSet object key
+			&eventhandler.EnqueueHandler{})
 		c.Watch(
-			&source.KindSource{Type: &corev1.Pod{}}, // Watch Pods
-			&eventhandler.EnqueueOwnerHandler{ // Enqueue Owning ReplicaSet object key
-				OwnerType:    &appsv1.ReplicaSet{},
-				IsController: true,
-			})
+			// Watch Pods
+			&source.KindSource{Type: &corev1.Pod{}},
+			// Enqueue Owning ReplicaSet object key
+			&eventhandler.EnqueueOwnerHandler{OwnerType: &appsv1.ReplicaSet{}, IsController: true})
 	})
 
 	// Start the Controllers and block until we get a shutdown signal
@@ -63,13 +64,16 @@ func main() {
 
 // ReconcileReplicaSet reconciles ReplicaSets
 type ReconcileReplicaSet struct {
-	client client.Interface
+	cacheClient client.Interface
+	liveClient  client.Interface
 }
 
 // Implement inject.Client so the Controller can inject a client
 var _ inject.Client = &ReconcileReplicaSet{}
 
-func (r *ReconcileReplicaSet) InjectClient(c client.Interface) { r.client = c }
+func (r *ReconcileReplicaSet) InjectClient(cacheClient client.Interface, liveClient client.Interface) {
+	r.cacheClient = cacheClient
+}
 
 // Implement reconcile.Reconcile so the Controller can reconcile objects
 var _ reconcile.Reconcile = &ReconcileReplicaSet{}
@@ -77,7 +81,7 @@ var _ reconcile.Reconcile = &ReconcileReplicaSet{}
 func (r *ReconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
 	// Fetch the ReplicaSet from the cache
 	rs := &appsv1.ReplicaSet{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, rs)
+	err := r.cacheClient.Get(context.TODO(), request.NamespacedName, rs)
 	if errors.IsNotFound(err) {
 		log.Printf("Could not find ReplicaSet %v.\n", request)
 		return reconcile.ReconcileResult{}, nil
@@ -102,7 +106,7 @@ func (r *ReconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (rec
 
 	// Update the ReplicaSet
 	rs.Labels["hello"] = "world"
-	err = r.client.Update(context.TODO(), rs)
+	err = r.cacheClient.Update(context.TODO(), rs)
 	if err != nil {
 		log.Printf("Could not write ReplicaSet %v\n", err)
 		return reconcile.ReconcileResult{}, err

@@ -55,14 +55,17 @@ type Controller struct {
 	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 
-	// Client is injected by the ControllerManager when ControllerManager.Start is called
-	Client client.Interface
+	// CacheClient is injected by the ControllerManager when ControllerManager.Start is called
+	CacheClient client.Interface
+
+	// LiveClient is injected by the ControllerManager when ControllerManager.Start is called
+	LiveClient client.Interface
 
 	// Scheme is injected by the ControllerManager when ControllerManager.Start is called
 	Scheme *runtime.Scheme
 
 	// FieldIndexes knows how to add field indexes over the Informers used by this controller,
-	// which can later be consumed via field selectors from the injected client.
+	// which can later be consumed via field selectors from the injected cacheClient.
 	FieldIndexes client.FieldIndexer
 
 	// Informers are injected by the ControllerManager when ControllerManager.Start is called
@@ -83,6 +86,7 @@ type Controller struct {
 	// once ensures unspecified fields get default values
 	once sync.Once
 
+	// injectIntoObjects contains objects that need to have a cacheClient injected
 	injectIntoObjects []interface{}
 
 	// TODO(pwittrock): Consider initializing a logger with the Controller name as the tag
@@ -106,8 +110,9 @@ func (c *Controller) InjectConfig(i *rest.Config) {
 
 var _ inject.Client = &Controller{}
 
-func (c *Controller) InjectClient(i client.Interface) {
-	c.Client = i
+func (c *Controller) InjectClient(cacheClient client.Interface, liveClient client.Interface) {
+	c.CacheClient = cacheClient
+	c.LiveClient = liveClient
 }
 
 var _ inject.Scheme = &Controller{}
@@ -139,6 +144,7 @@ func (c *Controller) Watch(src source.Source, evthdler eventhandler.EventHandler
 	log.Info("Starting EventSource", "Controller", c.Name, "Source", src)
 	src.Start(evthdler, c.queue)
 
+	// Inject the cacheClient into the source, eventhandler and predicates after the cacheClient has been initialized
 	c.injectIntoObjects = append(c.injectIntoObjects, src)
 	c.injectIntoObjects = append(c.injectIntoObjects, evthdler)
 	for _, pr := range prct {
@@ -149,7 +155,7 @@ func (c *Controller) Watch(src source.Source, evthdler eventhandler.EventHandler
 func (c *Controller) injectInto(i interface{}) {
 	inject.InjectConfig(c.config, i)
 	inject.InjectInformers(c.informers, i)
-	inject.InjectClient(c.Client, i)
+	inject.InjectClient(c.CacheClient, c.LiveClient, i)
 	inject.InjectScheme(c.Scheme, i)
 }
 
@@ -177,7 +183,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 	c.once.Do(c.init)
 
 	for _, i := range c.injectIntoObjects {
-		inject.InjectClient(c.Client, i)
+		inject.InjectClient(c.CacheClient, c.LiveClient, i)
 	}
 
 	// TODO)(pwittrock): Reconsider HandleCrash

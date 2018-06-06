@@ -48,8 +48,11 @@ type ControllerManager struct {
 	informers informer.Informers
 
 	// TODO(directxman12): Provide an escape hatch to get individual indexers
-	// client is the client injected into Controllers (, and transitively EventHandlers, Sources and Predicates).
-	client client.Interface
+	// cacheClient is the cacheClient injected into Controllers (and EventHandlers, Sources and Predicates).
+	cacheClient client.Interface
+
+	// liveClient is the liveClient injected into Controllers (and EventHandlers, Sources and Predicates).
+	liveClient client.Interface
 
 	// once ensures empty fields have default values set.
 	once sync.Once
@@ -63,6 +66,7 @@ type ControllerManager struct {
 func (cm *ControllerManager) AddController(c *Controller, promise func()) {
 	cm.init()
 	cm.controllers = append(cm.controllers, c)
+	// promises will be run after injecting the Informers, Config, Scheme into the Controller
 	if promise != nil {
 		cm.promises = append(cm.promises, promise)
 	}
@@ -91,8 +95,8 @@ func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 		p()
 	}
 
-	// Inject a Read / Write client into all controllers
-	// TODO(directxman12): Figure out how to allow users to request a client without requesting a watch
+	// Inject a Read / Write cacheClient into all controllers
+	// TODO(directxman12): Figure out how to allow users to request a cacheClient without requesting a watch
 	objCache := client.ObjectCacheFromInformers(cm.informers.KnownInformersByType(), cm.Scheme)
 
 	// TODO: Only do this once
@@ -102,10 +106,12 @@ func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 		os.Exit(1)
 	}
 
+	// Inject the cacheClient after all the watches have been set
 	writeObj := &client.Client{Config: cm.Config, Scheme: cm.Scheme, Mapper: mapper}
-	cm.client = client.SplitReaderWriter{ReadInterface: objCache, WriteInterface: writeObj}
+	cm.cacheClient = client.SplitReaderWriter{ReadInterface: objCache, WriteInterface: writeObj}
+	cm.liveClient = client.SplitReaderWriter{ReadInterface: writeObj, WriteInterface: writeObj}
 	for _, c := range cm.controllers {
-		inject.InjectClient(cm.client, c)
+		inject.InjectClient(cm.cacheClient, cm.liveClient, c)
 	}
 
 	// Start the Informers now that watches have been added
@@ -140,7 +146,7 @@ func (cm *ControllerManager) init() {
 			os.Exit(1)
 		}
 
-		// Use the Kubernetes client-go Scheme if none is specified
+		// Use the Kubernetes cacheClient-go Scheme if none is specified
 		if cm.Scheme == nil {
 			cm.Scheme = scheme.Scheme
 		}

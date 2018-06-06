@@ -38,42 +38,50 @@ func main() {
 
 	// Create the ControllerManager and Controller
 	cm := ctrl.ControllerManager{Config: config.GetConfigOrDie()}
-	c := &ctrl.Controller{Reconcile: &Reconcile{}}
+	c := &ctrl.Controller{Reconcile: &ReconcileReplicaSet{}}
 
 	// Watch Pods and ReplicaSets
 	cm.AddController(c, func() {
 		c.Watch(
-			&source.KindSource{Type: &appsv1.ReplicaSet{}},
-			&eventhandler.EnqueueHandler{})
+			&source.KindSource{Type: &appsv1.ReplicaSet{}}, // Watch ReplicaSets
+			&eventhandler.EnqueueHandler{})                 // Enqueue ReplicaSet object key
 		c.Watch(
-			&source.KindSource{Type: &corev1.Pod{}},
-			&eventhandler.EnqueueOwnerHandler{OwnerType: &appsv1.ReplicaSet{}, IsController: true})
+			&source.KindSource{Type: &corev1.Pod{}}, // Watch Pods
+			&eventhandler.EnqueueOwnerHandler{ // Enqueue Owning ReplicaSet object key
+				OwnerType:    &appsv1.ReplicaSet{},
+				IsController: true,
+			})
 	})
 
-	// Start the Controllers and block
+	// Start the Controllers and block until we get a shutdown signal
 	cm.Start(signals.SetupSignalHandler())
 }
 
-var _ inject.Client = &Reconcile{}
-var _ reconcile.Reconcile = &Reconcile{}
-
-type Reconcile struct {
+// ReconcileReplicaSet reconciles ReplicaSets
+type ReconcileReplicaSet struct {
 	client client.Interface
 }
 
-// InjectClient is used by the Controller to inject a client.Interface
-func (r *Reconcile) InjectClient(c client.Interface) {
-	r.client = c
-}
+// Implement inject.Client so the Controller can inject a client
+var _ inject.Client = &ReconcileReplicaSet{}
 
-func (r *Reconcile) Reconcile(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
-	log.Printf("ReconcileRequest: %+v\n", request)
+func (r *ReconcileReplicaSet) InjectClient(c client.Interface) { r.client = c }
+
+// Implement reconcile.Reconcile so the Controller can reconcile objects
+var _ reconcile.Reconcile = &ReconcileReplicaSet{}
+
+func (r *ReconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
+
+	// Fetch the ReplicaSet from the cache
 	rs := &appsv1.ReplicaSet{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, rs)
 	if err != nil {
+		log.Printf("Could not fetch ReplicaSet %v for %+v\n", err, request)
 		return reconcile.ReconcileResult{}, err
 	}
 
-	log.Printf("ReplicaSet Pod Name: %+v\n", rs.Spec.Template.Spec.Containers[0].Name)
+	// Print the ReplicaSet
+	log.Printf("ReplicaSet Name %s Namespace %s, Pod Name: %s\n",
+		rs.Name, rs.Namespace, rs.Spec.Template.Spec.Containers[0].Name)
 	return reconcile.ReconcileResult{}, nil
 }

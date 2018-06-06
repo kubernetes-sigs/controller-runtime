@@ -251,8 +251,8 @@ func (c *Controller) processNextWorkItem() bool {
 		c.queue.AddRateLimited(req)
 		log.Error(nil, "Reconcile error", "Controller", c.Name, "ReconcileRequest", req)
 
-		// TODO: FTO Returning an error here seems to back things off for a second before restarting the loop
-		// through wait.Util.
+		// TODO(pwittrock): FTO Returning an error here seems to back things off for a second before restarting
+		// the loop through wait.Util.
 		// Return false, take a break. But y tho?
 		return false
 	} else if result.Requeue {

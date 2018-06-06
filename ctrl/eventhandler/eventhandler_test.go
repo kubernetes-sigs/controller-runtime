@@ -680,7 +680,7 @@ var _ = Describe("Eventhandler", func() {
 			})
 		})
 
-		Context("with a nil metadata object", func() {
+		Context("with a multiple matching kinds", func() {
 			It("should do nothing.", func() {
 				instance := eventhandler.EnqueueOwnerHandler{
 					OwnerType: &metav1.ListOptions{},

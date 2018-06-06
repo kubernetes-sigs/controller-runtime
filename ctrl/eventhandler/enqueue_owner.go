@@ -17,6 +17,7 @@ limitations under the License.
 package eventhandler
 
 import (
+	"os"
 	"sync"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
@@ -34,29 +35,41 @@ var _ EventHandler = &EnqueueOwnerHandler{}
 
 var log = logf.KBLog.WithName("eventhandler").WithName("EnqueueOwnerHandler")
 
-// EnqueueOwnerHandler enqueues a ReconcileRequest containing the Name and Namespace of the Owner of the object in
-// the Event.  EnqueueOwnerHandler is used with Reconcile implementations that create objects to trigger a Reconcile
-// for Events on the created objects (by Reconciling the parent).
+// EnqueueOwnerHandler enqueues ReconcileRequests for the Owners of an object.  E.g. an object that created
+// another object.
+//
+// If a ReplicaSet creates Pods, Reconcile the ReplicaSet in response to events on Pods that it created using:
+//
+// - a KindSource with Type Pod.
+//
+// - a EnqueueOwnerHandler with OwnerType ReplicaSet.
 type EnqueueOwnerHandler struct {
-	// OwnerType is the GroupVersionKind of the Owner type
+	// OwnerType is the type of the Owner object to look for in OwnerReferences.  Only Group and Kind are compared.
 	OwnerType runtime.Object
 
-	// IsController determines whether or not to enqueue non-controller Owners.
+	// IsController if set will only look at the first OwnerReference with Controller: true.
 	IsController bool
 
-	Scheme *runtime.Scheme
+	// scheme is injected by a Controller
+	// scheme is used to resolve the Group and Kind for the runtime.Object.
+	scheme *runtime.Scheme
 
-	once      sync.Once
+	// once is used to cache the resolution of OwnerType to a Group and Kind
+	once sync.Once
+
+	// groupKind is the cached Group and Kind from OwnerType
 	groupKind schema.GroupKind
-	kindOk    bool
+
+	// kindOk is true if OwnerType was successfuly parsed
+	kindOk bool
 }
 
 var _ inject.Scheme = &EnqueueOwnerHandler{}
 
-// TODO: Make sure this gets injected from the Controller
+// InjectScheme is called by the Controller to provide a singleton Scheme to the EnqueueOwnerHandler.
 func (e *EnqueueOwnerHandler) InjectScheme(s *runtime.Scheme) {
-	if e.Scheme == nil {
-		e.Scheme = s
+	if e.scheme == nil {
+		e.scheme = s
 	}
 }
 
@@ -91,32 +104,51 @@ func (e *EnqueueOwnerHandler) Generic(q workqueue.RateLimitingInterface, evt eve
 	}
 }
 
-// TODO: Add comments
-func (e *EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []reconcile.ReconcileRequest {
-	// TODO: Comment this more
+// parseOwnerTypeGroupKind parses the OwnerType into a Group and Kind and caches the result.  Returns false
+// if the OwnerType could not be parsed using the Scheme.
+func (e *EnqueueOwnerHandler) parseOwnerTypeGroupKind() bool {
+	// Parse the OwnerType group and kind once the first time an event is handled and cache the result.
 	e.once.Do(func() {
-		kinds, _, err := e.Scheme.ObjectKinds(e.OwnerType)
+		// If the scheme isn't, bail.
+		if e.scheme == nil {
+			log.Error(nil, "Must use inject a Scheme into EnqueueOwnerHandler before using it."+
+				"This is done automatically if using EnqueueOwnerHandler from a Controller Watch function.")
+			os.Exit(1)
+		}
+
+		// Get the kinds of the type
+		kinds, _, err := e.scheme.ObjectKinds(e.OwnerType)
 		if err != nil {
 			log.Error(err, "Could not get ObjectKinds for OwnerType", "OwnerType", e.OwnerType)
 			return
 		}
+		// Expect only 1 kind.  If there is more than one kind this is probably an edge case such as ListOptions.
 		if len(kinds) != 1 {
 			log.Error(nil, "Expected exactly 1 kind for OwnerType",
 				"OwnerType", e.OwnerType, "Kinds", kinds)
 			return
 		}
+		// Cache the Group and Kind for the OwnerType
 		e.groupKind = schema.GroupKind{Group: kinds[0].Group, Kind: kinds[0].Kind}
 		e.kindOk = true
 	})
-	if !e.kindOk {
+	return e.kindOk
+}
+
+// getOwnerReconcileRequest looks at object and returns a slice of reconcile.ReconcileRequest to Reconcile
+// owners of object that match e.OwnerType.
+func (e *EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []reconcile.ReconcileRequest {
+	// If there was an error getting the Group and Kind for the OwnerType do nothing and log an error
+	if !e.parseOwnerTypeGroupKind() {
 		log.Error(nil, "Tried to get owner of unknown kind", "OwnerType", e.OwnerType)
 		return nil
 	}
 
-	reqs := []reconcile.ReconcileRequest{}
+	// Iterate through the OwnerReferences looking for a match on Group and Kind against what was requested
+	// by the user
+	var result []reconcile.ReconcileRequest
 	for _, ref := range e.getOwnersReferences(object) {
-		// Parse the Group and Version from the OwnerReference
-		// TODO: Comment this more
+		// Parse the Group out of the OwnerReference to compare it to what was parsed out of the requested OwnerType
 		refGV, err := schema.ParseGroupVersion(ref.APIVersion)
 		if err != nil {
 			log.Error(err, "Could not parse OwnerReference GroupVersion",
@@ -124,35 +156,39 @@ func (e *EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []r
 			return nil
 		}
 
-		// Kind and Group match
-		// TODO: Comment this block more
+		// Compare the OwnerReference Group and Kind against the OwnerType Group and Kind specified by the user.
+		// If the two match, create a ReconcileRequest for the objected referred to by
+		// the OwnerReference.  Use the Name from the OwnerReference and the Namespace from the
+		// object in the event.
 		if ref.Kind == e.groupKind.Kind && refGV.Group == e.groupKind.Group {
-			reqs = append(reqs, reconcile.ReconcileRequest{
-				NamespacedName: types.NamespacedName{
-					Namespace: object.GetNamespace(),
-					Name:      ref.Name,
-				},
-			})
+			// Match found - add a ReconcileRequest for the object referred to in the OwnerReference
+			result = append(result, reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+				Namespace: object.GetNamespace(),
+				Name:      ref.Name,
+			}})
 		}
 	}
 
-	// No matching owners
-	return reqs
+	// Return the matches
+	return result
 }
 
-// TODO: Comment this more
+// getOwnersReferences returns the OwnerReferences for an object as specified by the EnqueueOwnerHandler
+// - if IsController is true: only take the Controller OwnerReference (if found)
+// - if IsController is false: take all OwnerReferences
 func (e *EnqueueOwnerHandler) getOwnersReferences(object metav1.Object) []metav1.OwnerReference {
 	if object == nil {
 		return nil
 	}
 
+	// If filtered to Controller use all the OwnerReferences
 	if !e.IsController {
 		return object.GetOwnerReferences()
 	}
-
+	// If filtered to a Controller, only take the Controller OwnerReference
 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
 		return []metav1.OwnerReference{*ownerRef}
 	}
-
+	// No Controller OwnerReference found
 	return nil
 }

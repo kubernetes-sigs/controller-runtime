@@ -208,11 +208,6 @@ var _ = Describe("Source", func() {
 				<-c
 				close(done)
 			})
-
-			It("should provide a Pod DeletedEvent for a tombstone", func(done Done) {
-				// TODO: Write this
-				close(done)
-			})
 		})
 		Context("for a Kind not in the cache", func() {
 			It("should return an error when Start is called", func(done Done) {

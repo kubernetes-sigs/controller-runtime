@@ -59,8 +59,8 @@ func ExampleEnqueueMappedHandler() {
 	// c is a ctrl.Controller
 	c.Watch(
 		&source.KindSource{Type: &appsv1.Deployment{}},
-		eventhandler.EnqueueMappedHandler{
-			ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.ToRequestArg) []reconcile.ReconcileRequest {
+		&eventhandler.EnqueueMappedHandler{
+			ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.ReconcileRequest {
 				return []reconcile.ReconcileRequest{
 					{NamespacedName: types.NamespacedName{
 						Name:      a.Meta.GetName() + "-1",

@@ -40,9 +40,6 @@ type Source interface {
 	Start(eventhandler.EventHandler, workqueue.RateLimitingInterface) error
 }
 
-// config provides shared structures required for starting a Source.
-type Config struct{}
-
 var _ Source = ChannelSource(make(chan event.GenericEvent))
 
 // ChannelSource is used to provide a source of events originating outside the cluster
@@ -64,25 +61,28 @@ var _ inject.Informers = &KindSource{}
 
 // KindSource is used to provide a source of events originating inside the cluster from Watches (eh.g. Pod Create)
 type KindSource struct {
-	// Type is the type of object to watch
+	// Type is the type of object to watch.  e.g. &v1.Pod{}
 	Type runtime.Object
 
-	// informerCache is the Informers used to watch APIs
-	informerCache informer.Informers
+	// informers used to watch APIs
+	informers informer.Informers
 }
 
-// Start implements Source and should only be called by the Controller to start the Source watching events.
+// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
+// to enqueue ReconcileRequests.
 func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.RateLimitingInterface) error {
+	// Type should have been specified by the user.
 	if ks.Type == nil {
-		return fmt.Errorf("Must specify KindSource.Type.")
+		return fmt.Errorf("must specify KindSource.Type")
 	}
 
-	if ks.informerCache == nil {
-		return fmt.Errorf("Must call InjectInformers on KindSource before calling Start.")
+	// informers should have been injected before Start was called
+	if ks.informers == nil {
+		return fmt.Errorf("must call InjectInformers on KindSource before calling Start")
 	}
 
 	// Lookup the Informer from the Informers and add an EventHandler which populates the Queue
-	i, err := ks.informerCache.InformerFor(ks.Type)
+	i, err := ks.informers.InformerFor(ks.Type)
 	if err != nil {
 		return err
 	}
@@ -90,9 +90,9 @@ func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.R
 	return nil
 }
 
-// InjectInformers must be called before Start.
+// InjectInformers is internal should be called only by the Controller.  InjectInformers should be called before Start.
 func (ks *KindSource) InjectInformers(i informer.Informers) {
-	if ks.informerCache == nil {
-		ks.informerCache = i
+	if ks.informers == nil {
+		ks.informers = i
 	}
 }

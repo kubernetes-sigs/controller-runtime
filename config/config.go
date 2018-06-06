@@ -72,7 +72,7 @@ func GetConfig() (*rest.Config, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("Could not locate a kubeconfig.")
+	return nil, fmt.Errorf("could not locate a kubeconfig")
 }
 
 // GetConfig creates a *rest.Config for talking to a Kubernetes apiserver.

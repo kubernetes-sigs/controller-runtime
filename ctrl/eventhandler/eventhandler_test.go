@@ -190,7 +190,7 @@ var _ = Describe("Eventhandler", func() {
 		It("should enqueue a ReconcileRequest with the function applied to the CreateEvent.", func() {
 			req := []reconcile.ReconcileRequest{}
 			instance := eventhandler.EnqueueMappedHandler{
-				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.ToRequestArg) []reconcile.ReconcileRequest {
+				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.ReconcileRequest {
 					defer GinkgoRecover()
 					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
 					Expect(a.Object).To(Equal(pod))
@@ -225,7 +225,7 @@ var _ = Describe("Eventhandler", func() {
 		It("should enqueue a ReconcileRequest with the function applied to the DeleteEvent.", func() {
 			req := []reconcile.ReconcileRequest{}
 			instance := eventhandler.EnqueueMappedHandler{
-				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.ToRequestArg) []reconcile.ReconcileRequest {
+				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.ReconcileRequest {
 					defer GinkgoRecover()
 					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
 					Expect(a.Object).To(Equal(pod))
@@ -265,7 +265,7 @@ var _ = Describe("Eventhandler", func() {
 
 				req := []reconcile.ReconcileRequest{}
 				instance := eventhandler.EnqueueMappedHandler{
-					ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.ToRequestArg) []reconcile.ReconcileRequest {
+					ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.ReconcileRequest {
 						defer GinkgoRecover()
 						req = []reconcile.ReconcileRequest{
 							{
@@ -308,7 +308,7 @@ var _ = Describe("Eventhandler", func() {
 		It("should enqueue a ReconcileRequest with the function applied to the GenericEvent.", func() {
 			req := []reconcile.ReconcileRequest{}
 			instance := eventhandler.EnqueueMappedHandler{
-				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.ToRequestArg) []reconcile.ReconcileRequest {
+				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.ReconcileRequest {
 					defer GinkgoRecover()
 					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
 					Expect(a.Object).To(Equal(pod))

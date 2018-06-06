@@ -17,10 +17,10 @@ limitations under the License.
 package ctrl
 
 import (
+	"os"
 	"sync"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,30 +33,30 @@ var DefaultControllerManager = &ControllerManager{}
 
 // ControllerManager initializes and starts Controllers.  ControllerManager should always be used to
 // setup dependencies such as Informers and Configs, etc and injectInto them into Controllers.
+//
+// Must specify the Config.
 type ControllerManager struct {
-	controllers []*Controller
-
-	// Config is the rest.config used to talk to the apiserver.  Defaults to one of in-cluster, environment variable
-	// specified, or the ~/.kube/config.
+	// Config is the rest.config used to talk to the apiserver.  Required.
 	Config *rest.Config
 
-	// Scheme is the scheme injected into Controllers, EventHandlers, Sources and Predicates
+	// Scheme is the scheme injected into Controllers, EventHandlers, Sources and Predicates.  Defaults
+	// to scheme.Scheme.
 	Scheme *runtime.Scheme
 
-	// Informers are the Informers injected into Controllers, EventHandlers, Sources and Predicates
-	Informers informer.Informers
+	// controllers is the set of Controllers that the ControllerManager injects deps into and Starts.
+	controllers []*Controller
+
+	// informers are injected into Controllers (,and transitively EventHandlers, Sources and Predicates).
+	informers informer.Informers
 
 	// TODO(directxman12): Provide an escape hatch to get individual indexers
-	// client is the client injected into Controllers, EventHandlers, Sources and Predicates
+	// client is the client injected into Controllers (, and transitively EventHandlers, Sources and Predicates).
 	client client.Interface
 
-	// once ensures unspecified fields get default values
+	// once ensures empty fields have default values set.
 	once sync.Once
 
-	// err is set when initializing
-	err error
-
-	// promises is the list of functions to run after initialization
+	// promises a list of functions to run init.
 	promises []func()
 }
 
@@ -70,8 +70,9 @@ func (cm *ControllerManager) AddController(c *Controller, promise func()) {
 	}
 }
 
-func (cm *ControllerManager) injectInto(i interface{}) {
-	inject.InjectInformers(cm.Informers, i)
+// injectInto injects dependencies into a Controller
+func (cm *ControllerManager) injectInto(i *Controller) {
+	inject.InjectInformers(cm.informers, i)
 	inject.InjectConfig(cm.Config, i)
 	inject.InjectScheme(cm.Scheme, i)
 }
@@ -81,11 +82,6 @@ func (cm *ControllerManager) injectInto(i interface{}) {
 // Injects Informers and Config into Controllers before Starting them.
 func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 	cm.init()
-
-	// Error initializing the ControllerManager.  Return.
-	if cm.err != nil {
-		return cm.err
-	}
 
 	// Inject dependencies into the controllers
 	for _, c := range cm.controllers {
@@ -99,14 +95,14 @@ func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 
 	// Inject a Read / Write client into all controllers
 	// TODO(directxman12): Figure out how to allow users to request a client without requesting a watch
-	objCache := client.ObjectCacheFromInformers(cm.Informers.KnownInformersByType(), cm.Scheme)
+	objCache := client.ObjectCacheFromInformers(cm.informers.KnownInformersByType(), cm.Scheme)
 	cm.client = client.SplitReaderWriter{ReadInterface: objCache}
 	for _, c := range cm.controllers {
 		inject.InjectClient(cm.client, c)
 	}
 
 	// Start the Informers now that watches have been added
-	cm.Informers.Start(stop)
+	cm.informers.Start(stop)
 
 	// Start the controllers after the promises
 	controllerErrors := make(chan error)
@@ -127,12 +123,14 @@ func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 	}
 }
 
-// init defaults optional field values on a ControllerManager
+// init defaults optional field values on a ControllerManager.  Init will not initialize anything that can fail
+// and instead will exit.
 func (cm *ControllerManager) init() {
 	cm.once.Do(func() {
 		// Initialize a rest.Config if none was specified
 		if cm.Config == nil {
-			cm.Config, cm.err = config.GetConfig()
+			log.Error(nil, "Must specify Config for ControllerManager.", "Config", cm.Config)
+			os.Exit(1)
 		}
 
 		// Use the Kubernetes client-go Scheme if none is specified
@@ -141,8 +139,8 @@ func (cm *ControllerManager) init() {
 		}
 
 		// Create a new set of Informers if none is specified
-		if cm.Informers == nil {
-			cm.Informers = &informer.SelfPopulatingInformers{
+		if cm.informers == nil {
+			cm.informers = &informer.SelfPopulatingInformers{
 				Config: cm.Config,
 				Scheme: cm.Scheme,
 			}

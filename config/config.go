@@ -61,7 +61,7 @@ func GetConfig() (*rest.Config, error) {
 		return clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
 	}
 	// If no explicit location, try the in-cluster config
-	if c, err := rest.InClusterConfig(); err != nil {
+	if c, err := rest.InClusterConfig(); err == nil {
 		return c, nil
 	}
 	// If no in-cluster config, try the default location in the user's home directory

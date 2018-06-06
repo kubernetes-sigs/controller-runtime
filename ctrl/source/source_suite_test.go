@@ -25,7 +25,6 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/test"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -56,9 +55,6 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	icache = &informer.SelfPopulatingInformers{Config: config}
-	icache.InformerFor(&appsv1.Deployment{})
-	icache.InformerFor(&appsv1.ReplicaSet{})
-	err = icache.Start(stop)
 })
 
 var _ = AfterSuite(func() {

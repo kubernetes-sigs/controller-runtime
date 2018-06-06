@@ -127,6 +127,10 @@ var _ = Describe("Source", func() {
 				instance1.Start(handler1, q)
 				instance2.Start(handler2, q)
 
+				// Start the cache
+				err = icache.Start(stop)
+				Expect(err).NotTo(HaveOccurred())
+
 				By("Creating a Deployment and expecting the CreateEvent.")
 				created, err = client.Create(deployment)
 				Expect(err).NotTo(HaveOccurred())

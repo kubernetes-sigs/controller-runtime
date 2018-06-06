@@ -18,8 +18,11 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
+	"os/user"
+	"path/filepath"
 	"time"
 
 	"k8s.io/client-go/informers"
@@ -48,13 +51,28 @@ func init() {
 //
 // Will log.Fatal if KubernetesInformers cannot be created
 func GetConfig() (*rest.Config, error) {
+	// If a flag is specified with the config location, use that
 	if len(kubeconfig) > 0 {
 		return clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
-	} else if len(os.Getenv("KUBECONFIG")) > 0 {
-		return clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
-	} else {
-		return rest.InClusterConfig()
 	}
+
+	// If an env variable is specified with the config locaiton, use that
+	if len(os.Getenv("KUBECONFIG")) > 0 {
+		return clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
+	}
+	// If no explicit location, try the in-cluster config
+	if c, err := rest.InClusterConfig(); err != nil {
+		return c, nil
+	}
+	// If no in-cluster config, try the default location in the user's home directory
+	if usr, err := user.Current(); err == nil {
+		if c, err := clientcmd.BuildConfigFromFlags(
+			"", filepath.Join(usr.HomeDir, ".kube", "config")); err == nil {
+			return c, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Could not locate a kubeconfig.")
 }
 
 // GetConfig creates a *rest.Config for talking to a Kubernetes apiserver.

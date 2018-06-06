@@ -40,13 +40,14 @@ type ControllerManager struct {
 	// specified, or the ~/.kube/config.
 	Config *rest.Config
 
-	// TODO: Inject this and make sure it gets injected everywhere
+	// Scheme is the scheme injected into Controllers, EventHandlers, Sources and Predicates
 	Scheme *runtime.Scheme
 
-	// informers is the Informers
-	informers informer.Informers
+	// Informers are the Informers injected into Controllers, EventHandlers, Sources and Predicates
+	Informers informer.Informers
 
 	// TODO(directxman12): Provide an escape hatch to get individual indexers
+	// client is the client injected into Controllers, EventHandlers, Sources and Predicates
 	client client.Interface
 
 	// once ensures unspecified fields get default values
@@ -69,37 +70,44 @@ func (cm *ControllerManager) AddController(c *Controller, promise func()) {
 	}
 }
 
+func (cm *ControllerManager) injectInto(i interface{}) {
+	inject.InjectInformers(cm.Informers, i)
+	inject.InjectConfig(cm.Config, i)
+	inject.InjectScheme(cm.Scheme, i)
+}
+
 // Start starts all registered Controllers and blocks until the Stop channel is closed.
 // Returns an error if there is an error starting any Controller.
 // Injects Informers and Config into Controllers before Starting them.
 func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 	cm.init()
+
+	// Error initializing the ControllerManager.  Return.
 	if cm.err != nil {
 		return cm.err
 	}
 
-	// Inject into each of the controllers
+	// Inject dependencies into the controllers
 	for _, c := range cm.controllers {
-		inject.InjectInformers(cm.informers, c)
-		inject.InjectConfig(cm.Config, c)
-		inject.InjectScheme(cm.Scheme, c)
+		cm.injectInto(c)
 	}
 
-	// Run the promises that may add Watches to the informers
+	// Run the promises to setup the Controller Watch invocations now that the Informers has been initialized
 	for _, p := range cm.promises {
 		p()
 	}
 
 	// Inject a Read / Write client into all controllers
-	// TODO: Figure out how to deal with users to allow users to request a client without requesting a watch
-	objCache := client.ObjectCacheFromInformers(cm.informers.KnownInformersByType(), cm.Scheme)
+	// TODO(directxman): Figure out how to deal with users to allow users to request a client without
+	// requesting a watch
+	objCache := client.ObjectCacheFromInformers(cm.Informers.KnownInformersByType(), cm.Scheme)
 	cm.client = client.SplitReaderWriter{ReadInterface: objCache}
 	for _, c := range cm.controllers {
 		inject.InjectClient(cm.client, c)
 	}
 
-	// Start the informers now that watches have been added
-	cm.informers.Start(stop)
+	// Start the Informers now that watches have been added
+	cm.Informers.Start(stop)
 
 	// Start the controllers after the promises
 	controllerErrors := make(chan error)
@@ -123,16 +131,19 @@ func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 // init defaults optional field values on a ControllerManager
 func (cm *ControllerManager) init() {
 	cm.once.Do(func() {
+		// Initialize a rest.Config if none was specified
 		if cm.Config == nil {
 			cm.Config, cm.err = config.GetConfig()
 		}
 
+		// Use the Kubernetes client-go Scheme if none is specified
 		if cm.Scheme == nil {
 			cm.Scheme = scheme.Scheme
 		}
 
-		if cm.informers == nil {
-			cm.informers = &informer.SelfPopulatingInformers{
+		// Create a new set of Informers if none is specified
+		if cm.Informers == nil {
+			cm.Informers = &informer.SelfPopulatingInformers{
 				Config: cm.Config,
 				Scheme: cm.Scheme,
 			}

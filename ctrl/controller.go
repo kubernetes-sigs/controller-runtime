@@ -61,10 +61,10 @@ type Controller struct {
 	// Scheme is injected by the ControllerManager when ControllerManager.Start is called
 	Scheme *runtime.Scheme
 
-	// informers are injected by the ControllerManager when ControllerManager.Start is called
+	// Informers are injected by the ControllerManager when ControllerManager.Start is called
 	informers informer.Informers
 
-	// objectCache is a Client.ReadInterface that reads from the indexer backing informers
+	// objectCache is a Client.ReadInterface that reads from the indexer backing Informers
 	// objectCache is injected by the ControllerManager when ControllerManager.Start is called
 	objectCache *client.ObjectCache
 
@@ -72,7 +72,7 @@ type Controller struct {
 	// specified, or the ~/.kube/config.
 	config *rest.Config
 
-	// queue is an listeningQueue that listens for events from informers and adds object keys to
+	// queue is an listeningQueue that listens for events from Informers and adds object keys to
 	// the queue for processing
 	queue workqueue.RateLimitingInterface
 

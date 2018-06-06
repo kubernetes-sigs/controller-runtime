@@ -1,15 +1,15 @@
 package client
 
 import (
+	"context"
 	"reflect"
 	"sync"
-	"context"
 
-	"k8s.io/client-go/rest"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/common"
 )
@@ -23,12 +23,12 @@ type Client struct {
 	Scheme *runtime.Scheme
 	Mapper meta.RESTMapper
 
-	once           sync.Once
-	codecs         serializer.CodecFactory
-	paramCodec     runtime.ParameterCodec
-	clientsByType  map[reflect.Type]rest.Interface
+	once            sync.Once
+	codecs          serializer.CodecFactory
+	paramCodec      runtime.ParameterCodec
+	clientsByType   map[reflect.Type]rest.Interface
 	resourcesByType map[reflect.Type]string
-	mu             sync.RWMutex
+	mu              sync.RWMutex
 }
 
 // TODO: pass discovery info down from controller manager
@@ -44,6 +44,7 @@ func (c *Client) init() {
 		c.codecs = serializer.NewCodecFactory(c.Scheme)
 		c.paramCodec = runtime.NewParameterCodec(c.Scheme)
 		c.clientsByType = make(map[reflect.Type]rest.Interface)
+		c.resourcesByType = make(map[reflect.Type]string)
 	})
 }
 

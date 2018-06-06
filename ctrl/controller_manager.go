@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/common"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -93,7 +94,16 @@ func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 	// Inject a Read / Write client into all controllers
 	// TODO(directxman12): Figure out how to allow users to request a client without requesting a watch
 	objCache := client.ObjectCacheFromInformers(cm.informers.KnownInformersByType(), cm.Scheme)
-	cm.client = client.SplitReaderWriter{ReadInterface: objCache}
+
+	// TODO: Only do this once
+	mapper, err := common.NewDiscoveryRESTMapper(cm.Config)
+	if err != nil {
+		log.WithName("setup").Error(err, "Failed to get API Group-Resources")
+		os.Exit(1)
+	}
+
+	writeObj := &client.Client{Config: cm.Config, Scheme: cm.Scheme, Mapper: mapper}
+	cm.client = client.SplitReaderWriter{ReadInterface: objCache, WriteInterface: writeObj}
 	for _, c := range cm.controllers {
 		inject.InjectClient(cm.client, c)
 	}

@@ -31,10 +31,14 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/signals"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+
+	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 )
 
 func main() {
 	flag.Parse()
+	logf.SetLogger(logf.ZapLogger(false))
 
 	// Create the ControllerManager and Controller
 	cm := ctrl.ControllerManager{Config: config.GetConfigOrDie()}
@@ -71,10 +75,14 @@ func (r *ReconcileReplicaSet) InjectClient(c client.Interface) { r.client = c }
 var _ reconcile.Reconcile = &ReconcileReplicaSet{}
 
 func (r *ReconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
-
 	// Fetch the ReplicaSet from the cache
 	rs := &appsv1.ReplicaSet{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, rs)
+	if errors.IsNotFound(err) {
+		log.Printf("Could not find ReplicaSet %v.\n", request)
+		return reconcile.ReconcileResult{}, nil
+	}
+
 	if err != nil {
 		log.Printf("Could not fetch ReplicaSet %v for %+v\n", err, request)
 		return reconcile.ReconcileResult{}, err
@@ -83,5 +91,22 @@ func (r *ReconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (rec
 	// Print the ReplicaSet
 	log.Printf("ReplicaSet Name %s Namespace %s, Pod Name: %s\n",
 		rs.Name, rs.Namespace, rs.Spec.Template.Spec.Containers[0].Name)
+
+	// Set the label if it is missing
+	if rs.Labels == nil {
+		rs.Labels = map[string]string{}
+	}
+	if rs.Labels["hello"] == "world" {
+		return reconcile.ReconcileResult{}, nil
+	}
+
+	// Update the ReplicaSet
+	rs.Labels["hello"] = "world"
+	err = r.client.Update(context.TODO(), rs)
+	if err != nil {
+		log.Printf("Could not write ReplicaSet %v\n", err)
+		return reconcile.ReconcileResult{}, err
+	}
+
 	return reconcile.ReconcileResult{}, nil
 }

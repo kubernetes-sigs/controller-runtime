@@ -35,7 +35,7 @@ func TestSource(t *testing.T) {
 }
 
 var testenv *test.TestEnvironment
-var config *rest.Config
+var cfg *rest.Config
 var clientset *kubernetes.Clientset
 var icache informer.Informers
 
@@ -45,12 +45,12 @@ var _ = BeforeSuite(func() {
 	testenv = &test.TestEnvironment{}
 
 	var err error
-	config, err = testenv.Start()
+	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
 
 	time.Sleep(1 * time.Second)
 
-	clientset, err = kubernetes.NewForConfig(config)
+	clientset, err = kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())
 })
 

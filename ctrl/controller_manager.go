@@ -28,9 +28,6 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// DefaultControllerManager is the default ControllerManager.
-var DefaultControllerManager = &ControllerManager{}
-
 // ControllerManager initializes and starts Controllers.  ControllerManager should always be used to
 // setup dependencies such as Informers and Configs, etc and injectInto them into Controllers.
 //
@@ -147,9 +144,3 @@ func (cm *ControllerManager) init() {
 		}
 	})
 }
-
-// AddController registers a Controller with the DefaultControllerManager.
-func AddController(c *Controller, promise func()) { DefaultControllerManager.AddController(c, promise) }
-
-// Start starts all Controllers registered with the DefaultControllerManager.
-func Start(stop <-chan struct{}) error { return DefaultControllerManager.Start(stop) }

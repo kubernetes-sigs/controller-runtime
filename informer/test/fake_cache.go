@@ -25,15 +25,15 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-var _ informer.Informers = &FakeIndexCache{}
+var _ informer.Informers = &FakeInformers{}
 
-type FakeIndexCache struct {
+type FakeInformers struct {
 	InformersByGVK map[schema.GroupVersionKind]cache.SharedIndexInformer
 	Scheme         *runtime.Scheme
 	Error          error
 }
 
-func (c *FakeIndexCache) InformerForKind(gvk schema.GroupVersionKind) (cache.SharedIndexInformer, error) {
+func (c *FakeInformers) InformerForKind(gvk schema.GroupVersionKind) (cache.SharedIndexInformer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}
@@ -41,7 +41,7 @@ func (c *FakeIndexCache) InformerForKind(gvk schema.GroupVersionKind) (cache.Sha
 	return c.informerFor(gvk, obj)
 }
 
-func (c *FakeIndexCache) FakeInformerForKind(gvk schema.GroupVersionKind) (*test.FakeInformer, error) {
+func (c *FakeInformers) FakeInformerForKind(gvk schema.GroupVersionKind) (*test.FakeInformer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}
@@ -53,7 +53,7 @@ func (c *FakeIndexCache) FakeInformerForKind(gvk schema.GroupVersionKind) (*test
 	return i.(*test.FakeInformer), nil
 }
 
-func (c *FakeIndexCache) InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error) {
+func (c *FakeInformers) InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}
@@ -62,11 +62,11 @@ func (c *FakeIndexCache) InformerFor(obj runtime.Object) (cache.SharedIndexInfor
 	return c.informerFor(gvk, obj)
 }
 
-func (c *FakeIndexCache) KnownInformersByType() map[schema.GroupVersionKind]cache.SharedIndexInformer {
+func (c *FakeInformers) KnownInformersByType() map[schema.GroupVersionKind]cache.SharedIndexInformer {
 	return c.InformersByGVK
 }
 
-func (c *FakeIndexCache) FakeInformerFor(obj runtime.Object) (*test.FakeInformer, error) {
+func (c *FakeInformers) FakeInformerFor(obj runtime.Object) (*test.FakeInformer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}
@@ -79,7 +79,7 @@ func (c *FakeIndexCache) FakeInformerFor(obj runtime.Object) (*test.FakeInformer
 	return i.(*test.FakeInformer), nil
 }
 
-func (c *FakeIndexCache) informerFor(gvk schema.GroupVersionKind, obj runtime.Object) (cache.SharedIndexInformer, error) {
+func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, obj runtime.Object) (cache.SharedIndexInformer, error) {
 	if c.Error != nil {
 		return nil, c.Error
 	}
@@ -95,6 +95,6 @@ func (c *FakeIndexCache) informerFor(gvk schema.GroupVersionKind, obj runtime.Ob
 	return c.InformersByGVK[gvk], nil
 }
 
-func (c *FakeIndexCache) Start(stopCh <-chan struct{}) error {
+func (c *FakeInformers) Start(stopCh <-chan struct{}) error {
 	return c.Error
 }

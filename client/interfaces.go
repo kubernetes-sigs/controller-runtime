@@ -47,6 +47,21 @@ type Interface interface {
 	WriteInterface
 }
 
+// IndexerFunc knows how to take an object and turn it into a series
+// of (non-namespaced) keys for that object.
+type IndexerFunc func(runtime.Object) []string
+
+// FieldIndexer knows how to index over a particular "field" such that it
+// can later be used by a field selector.
+type FieldIndexer interface {
+	// IndexFields adds an index with the given field name on the given object type
+	// by using the given function to extract the value for that field.  If you want
+	// compatibility with the Kubernetes API server, only return one key, and only use
+	// fields that the API server supports.  Otherwise, you can return multiple keys,
+	// and "equality" in the field selector means that at least one key matches the value.
+	IndexField(obj runtime.Object, field string, extractValue IndexerFunc) error
+}
+
 // ListOptions contains options for limitting or filtering results.
 // It's generally a subset of metav1.ListOptions, with support for
 // pre-parsed selectors (since generally, selectors will be executed

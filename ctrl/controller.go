@@ -61,6 +61,10 @@ type Controller struct {
 	// Scheme is injected by the ControllerManager when ControllerManager.Start is called
 	Scheme *runtime.Scheme
 
+	// FieldIndexes knows how to add field indexes over the Informers used by this controller,
+	// which can later be consumed via field selectors from the injected client.
+	FieldIndexes client.FieldIndexer
+
 	// Informers are injected by the ControllerManager when ControllerManager.Start is called
 	informers informer.Informers
 
@@ -89,6 +93,9 @@ var _ inject.Informers = &Controller{}
 func (c *Controller) InjectInformers(i informer.Informers) {
 	c.informers = i
 	c.objectCache = client.NewObjectCache()
+	c.FieldIndexes = &client.InformerFieldIndexer{
+		Informers: i,
+	}
 }
 
 var _ inject.Config = &Controller{}

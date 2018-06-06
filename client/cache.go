@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
 )
 
 var log = logf.KBLog.WithName("object-cache")
@@ -183,12 +184,24 @@ func (c *SingleObjectCache) List(ctx context.Context, opts *ListOptions, out run
 // noNamespaceNamespace is used as the "namespace" when we want to list across all namespaces
 const allNamespacesNamespace = "__all_namespaces"
 
+type InformerFieldIndexer struct {
+	Informers informer.Informers
+}
+
+func (i *InformerFieldIndexer) IndexField(obj runtime.Object, field string, extractValue IndexerFunc) error {
+	informer, err := i.Informers.InformerFor(obj)
+	if err != nil {
+		return err
+	}
+	return IndexByField(informer.GetIndexer(), field, extractValue)
+}
+
 // IndexByField adds an indexer to the underlying cache, using extraction function to get
 // value(s) from the given field.  This index can then be used by passing a field selector
 // to List. For one-to-one compatibility with "normal" field selectors, only return one value.
 // The values may be anything.  They will automatically be prefixed with the namespace of the
 // given object, if present.  The objects passed are guaranteed to be objects of the correct type.
-func IndexByField(indexer cache.Indexer, field string, extractor func(runtime.Object) []string) error {
+func IndexByField(indexer cache.Indexer, field string, extractor IndexerFunc) error {
 	indexFunc := func(objRaw interface{}) ([]string, error) {
 		// TODO(directxman12): check if this is the correct type?
 		obj, isObj := objRaw.(runtime.Object)

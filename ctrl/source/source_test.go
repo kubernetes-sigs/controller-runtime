@@ -38,10 +38,10 @@ var _ = Describe("Source", func() {
 		var c chan struct{}
 		var p *corev1.Pod
 		var d *appsv1.Deployment
-		var ic *test.FakeIndexCache
+		var ic *test.FakeInformers
 
 		BeforeEach(func() {
-			ic = &test.FakeIndexCache{}
+			ic = &test.FakeInformers{}
 			c = make(chan struct{})
 			p = &corev1.Pod{
 				Spec: corev1.PodSpec{
@@ -122,7 +122,7 @@ var _ = Describe("Source", func() {
 				p2 := p.DeepCopy()
 				p2.SetLabels(map[string]string{"biz": "baz"})
 
-				ic := &test.FakeIndexCache{}
+				ic := &test.FakeInformers{}
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.KindSource{
 					Type: &corev1.Pod{},

@@ -46,6 +46,8 @@ var _ = Describe("Controller", func() {
 	})
 
 	Describe("Controller", func() {
+		// TODO(directxman12): write a whole suite of controller-client interaction tests
+
 		It("should Reconcile", func(done Done) {
 			By("Creating the Controller and adding it to the ControllerManager")
 			instance := &ctrl.Controller{

@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/common"
 	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -57,17 +56,13 @@ type SelfPopulatingInformers struct {
 
 func (c *SelfPopulatingInformers) init() {
 	c.once.Do(func() {
-		// Init a config if none provided
-		if c.Config == nil {
-			c.Config = config.GetConfigOrDie()
-		}
-
 		// Init a scheme if none provided
 		if c.Scheme == nil {
 			c.Scheme = scheme.Scheme
 		}
 
 		if c.Mapper == nil {
+			// TODO: don't initialize things that can fail
 			Mapper, err := common.NewDiscoveryRESTMapper(c.Config)
 			if err != nil {
 				log.WithName("setup").Error(err, "Failed to get API Group-Resources")
@@ -99,25 +94,10 @@ func (c *SelfPopulatingInformers) InformerForKind(gvk schema.GroupVersionKind) (
 
 func (c *SelfPopulatingInformers) InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error) {
 	c.init()
-	gvks, isUnversioned, err := c.Scheme.ObjectKinds(obj)
+	gvk, err := common.GVKForObject(obj, c.Scheme)
 	if err != nil {
 		return nil, err
 	}
-	if isUnversioned {
-		return nil, fmt.Errorf("cannot create a new informer for the unversioned type %T", obj)
-	}
-
-	if len(gvks) < 1 {
-		return nil, fmt.Errorf("no group-version-kinds associated with type %T", obj)
-	}
-	if len(gvks) > 1 {
-		// this should only trigger for things like metav1.XYZ --
-		// normal versioned types should be fine
-		return nil, fmt.Errorf(
-			"multiple group-version-kinds associated with type %T, refusing to guess at one", obj)
-	}
-	gvk := gvks[0]
-
 	return c.informerFor(gvk, obj)
 }
 
@@ -136,20 +116,7 @@ func (c *SelfPopulatingInformers) informerFor(gvk schema.GroupVersionKind, obj r
 		return informer, nil
 	}
 
-	gv := gvk.GroupVersion()
-
-	cfg := rest.CopyConfig(c.Config)
-	cfg.GroupVersion = &gv
-	if gvk.Group == "" {
-		cfg.APIPath = "/api"
-	} else {
-		cfg.APIPath = "/apis"
-	}
-	cfg.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: c.codecs}
-	if cfg.UserAgent == "" {
-		cfg.UserAgent = rest.DefaultKubernetesUserAgent()
-	}
-	client, err := rest.RESTClientFor(cfg)
+	client, err := common.RESTClientForGVK(gvk, c.Config, c.codecs)
 	if err != nil {
 		return nil, err
 	}

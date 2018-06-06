@@ -13,6 +13,8 @@ import (
 // ObjectKey identifies a Kubernetes Object.
 type ObjectKey = types.NamespacedName
 
+// TODO(directxman12): is there a sane way to deal with get/delete options?
+
 // ReadInterface knows how to read and list Kubernetes objects.
 type ReadInterface interface {
 	// Get retrieves an obj for the given object key from the Kubernetes Cluster.
@@ -110,6 +112,9 @@ func (o *ListOptions) SetFieldSelector(selRaw string) error {
 // AsListOptions returns these options as a flattened metav1.ListOptions.
 // This may mutate the Raw field.
 func (o *ListOptions) AsListOptions() *metav1.ListOptions {
+	if o == nil {
+		return nil
+	}
 	o.Raw.LabelSelector = o.LabelSelector.String()
 	o.Raw.FieldSelector = o.FieldSelector.String()
 	return o.Raw

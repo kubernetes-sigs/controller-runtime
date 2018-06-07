@@ -1,0 +1,85 @@
+package log
+
+import (
+	"github.com/thockin/logr"
+)
+
+// loggerPromise knows how to populate a concrete logr.Logger
+// with options, given an actual base logger later on down the line.
+type loggerPromise struct {
+	logger *DelegatingLogger
+	childPromises []*loggerPromise
+
+	name *string
+	tags []interface{}
+}
+
+func (p *loggerPromise) WithName(l *DelegatingLogger, name string) *loggerPromise {
+	res := &loggerPromise{
+		logger: l,
+		name: &name,
+	}
+	p.childPromises = append(p.childPromises, res)
+	return res
+}
+
+func (p *loggerPromise) WithTags(l *DelegatingLogger, tags ...interface{}) *loggerPromise {
+	res := &loggerPromise{
+		logger: l,
+		tags: tags,
+	}
+	p.childPromises = append(p.childPromises, res)
+	return res
+}
+
+func (p *loggerPromise) Fulfill(parentLogger logr.Logger) {
+	var logger logr.Logger = parentLogger
+	if p.name != nil {
+		logger = logger.WithName(*p.name)
+	}
+
+	if p.tags != nil {
+		logger = logger.WithTags(p.tags...)
+	}
+
+	p.logger.Logger = logger
+	p.logger.promise = nil
+
+	for _, childPromise := range p.childPromises {
+		childPromise.Fulfill(logger)
+	}
+}
+
+// delegatingLogger is a logr.Logger that delegates to another logr.Logger.
+// If the underlying promise is not nil, it registers calls to sub-loggers with
+// the logging factory to be populated later, and returns a new delegating
+// logger.  It expects to have *some* logr.Logger set at all times (generally
+// a no-op logger before the promises are fulfilled).
+type DelegatingLogger struct {
+	logr.Logger
+	promise *loggerPromise
+}
+
+func (l *DelegatingLogger) WithName(name string) logr.Logger {
+	if l.promise == nil {
+		return l.Logger.WithName(name)
+	}
+
+	res := &DelegatingLogger{Logger: l.Logger}
+	promise := l.promise.WithName(res, name)
+	res.promise = promise
+
+	return res
+}
+
+func (l *DelegatingLogger) WithTags(tags ...interface{}) logr.Logger {
+	if l.promise == nil {
+		return l.Logger.WithTags(tags)
+	}
+
+	res := &DelegatingLogger{Logger: l.Logger}
+	promise := l.promise.WithTags(res, tags)
+	res.promise = promise
+
+	return res
+}

@@ -96,11 +96,15 @@ type controller struct {
 	once sync.Once
 
 	inject func(i interface{}) error
+	mu     sync.Mutex
 
 	// TODO(pwittrock): Consider initializing a logger with the controller name as the tag
 }
 
 func (c *controller) Watch(src source.Source, evthdler eventhandler.EventHandler, prct ...predicate.Predicate) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	// Inject cache into arguments
 	if err := c.inject(src); err != nil {
 		return err
@@ -121,6 +125,9 @@ func (c *controller) Watch(src source.Source, evthdler eventhandler.EventHandler
 }
 
 func (c *controller) Start(stop <-chan struct{}) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	// TODO)(pwittrock): Reconsider HandleCrash
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()

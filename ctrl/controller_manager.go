@@ -18,6 +18,7 @@ package ctrl
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/common"
@@ -67,11 +68,19 @@ type controllerManager struct {
 	// fieldIndexes knows how to add field indexes over the Informers used by this controller,
 	// which can later be consumed via field selectors from the injected client.
 	fieldIndexes client.FieldIndexer
+
+	mu      sync.Mutex
+	started bool
+	errChan chan error
+	stop    <-chan struct{}
 }
 
 // NewController registers a controller with the controllerManager.
 // Added Controllers will have config and Informers injected into them at Start time.
 func (cm *controllerManager) NewController(ca ControllerArgs, r reconcile.Reconcile) Controller {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
 	if ca.MaxConcurrentReconciles <= 0 {
 		ca.MaxConcurrentReconciles = 1
 	}
@@ -95,6 +104,13 @@ func (cm *controllerManager) NewController(ca ControllerArgs, r reconcile.Reconc
 		inject: cm.injectInto,
 	}
 	cm.controllers = append(cm.controllers, c)
+
+	// If already started, start the controller
+	if cm.started {
+		go func() {
+			cm.errChan <- c.Start(cm.stop)
+		}()
+	}
 	return c
 }
 
@@ -134,23 +150,28 @@ func (cm *controllerManager) GetFieldIndexer() client.FieldIndexer {
 // Returns an error if there is an error starting any controller.
 // Injects Informers and config into Controllers before Starting them.
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
 	// Start the Informers.
+	cm.stop = stop
 	cm.informers.Start(stop)
 
 	// Start the controllers after the promises
-	controllerErrors := make(chan error)
 	for _, c := range cm.controllers {
 		// Controllers block, but we want to return an error if any have an error starting.
 		// Write any Start errors to a channel so we can return them
 		go func() {
-			controllerErrors <- c.Start(stop)
+			cm.errChan <- c.Start(stop)
 		}()
 	}
+
+	cm.started = true
 	select {
 	case <-stop:
 		// We are done
 		return nil
-	case err := <-controllerErrors:
+	case err := <-cm.errChan:
 		// Error starting a controller
 		return err
 	}
@@ -162,7 +183,7 @@ type ControllerManagerArgs struct {
 }
 
 func NewControllerManager(args ControllerManagerArgs) (ControllerManager, error) {
-	cm := &controllerManager{config: args.Config, scheme: args.Scheme}
+	cm := &controllerManager{config: args.Config, scheme: args.Scheme, errChan: make(chan error)}
 
 	// Initialize a rest.config if none was specified
 	if cm.config == nil {

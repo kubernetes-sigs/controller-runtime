@@ -120,30 +120,12 @@ Usage
 The following example shows creating a new Controller program which Reconciles ReplicaSet objects in response
 to Pod or ReplicaSet events.  The Reconcile function simply adds a label to the ReplicaSet.
 
-	import (
-		"context"
-		"flag"
-		"log"
-
-		"github.com/kubernetes-sigs/controller-runtime/pkg/client"
-		"github.com/kubernetes-sigs/controller-runtime/pkg/config"
-		"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl"
-		"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/eventhandler"
-		"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/reconcile"
-		"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/source"
-		logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
-		"github.com/kubernetes-sigs/controller-runtime/pkg/signals"
-		appsv1 "k8s.io/api/apps/v1"
-		corev1 "k8s.io/api/core/v1"
-		"k8s.io/apimachinery/pkg/api/errors"
-	)
-
 	func main() {
 		flag.Parse()
 		logf.SetLogger(logf.ZapLogger(false))
 
 		// Setup a ControllerManager
-		manager, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{Config: config.GetConfigOrDie()})
+		manager, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{})
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -183,6 +165,7 @@ to Pod or ReplicaSet events.  The Reconcile function simply adds a label to the 
 	// Implement reconcile.reconcile so the controller can reconcile objects
 	var _ reconcile.Reconcile = &ReconcileReplicaSet{}
 
+	// Reconcile writes a "hello": "world" annotation to ReplicaSets that don't have one.
 	func (r *ReconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
 		// Fetch the ReplicaSet from the cache
 		rs := &appsv1.ReplicaSet{}
@@ -220,22 +203,21 @@ to Pod or ReplicaSet events.  The Reconcile function simply adds a label to the 
 		return reconcile.ReconcileResult{}, nil
 	}
 
-controller Example - Deployment
+Controller Example
 
-1. Watch Deployment, ReplicaSet, Pod Sources
+1. Watch ReplicaSet and Pods Sources
 
-1.1 Deployments -> eventhandler.EnqueueHandler - enqueue the Deployment object key.
+1.1 ReplicaSet -> eventhandler.EnqueueHandler - enqueue the ReplicaSet Namespace and Name.
 
-1.2 ReplicaSets (created by Deployments) -> eventhandler.EnqueueOwnerHandler - enqueue the Owning Deployment key.
+1.2 Pod (created by ReplicaSet) -> eventhandler.EnqueueOwnerHandler - enqueue the Owning ReplicaSet key.
 
-1.3 Pods (created by ReplicaSets) -> eventhandler.EnqueueOwnerHandler -> enqueue owning Deployment
-key (transitive through ReplicaSet).
+2. reconcile ReplicaSet
 
-2. reconcile Deployment
+2.1 ReplicaSet object created -> Read ReplicaSet, try to read Pods -> if is missing create Pods.
 
-2.1 Deployment object created -> Read Deployment, try to read ReplicaSet, see if is missing create ReplicaSet.
+2.2 reconcile triggered by creation of Pods -> Read ReplicaSet and Pods, do nothing.
 
-2.2 reconcile triggered by creation of ReplicaSet and Pods -> Read Deployment and ReplicaSet, do nothing.
+2.3 reconcile triggered by deletion of Pods -> Read ReplicaSet and Pods, create replacement Pods.
 
 Watching and EventHandling
 
@@ -249,13 +231,11 @@ For example, a Deployment controller might use an EnqueueHandler and EnqueueOwne
 
 * Watch for Deployment Events - enqueue the key of the Deployment.
 
-* Watch for ReplicaSet Events - enqueue the key of the Deployment that created the ReplicaSet (owns directly)
+* Watch for ReplicaSet Events - enqueue the key of the Deployment that created the ReplicaSet (e.g the Owner)
 
-* Watch for Pod Events - enqueue the key of the Deployment that created the Pod (owns transitively through a ReplicaSet).
-
-Note: ReconcileRequests are deduplicated when they are enqueued.  Many Pod Events for the same Deployment
+Note: ReconcileRequests are deduplicated when they are enqueued.  Many Pod Events for the same ReplicaSet
 may trigger only 1 reconcile invocation as each Event results in the Handler trying to enqueue
-the same ReconcileRequest for the Deployment.
+the same ReconcileRequest for the ReplicaSet.
 
 controller Writing Tips
 

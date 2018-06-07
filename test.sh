@@ -41,15 +41,6 @@ fi
 tmp_root=/tmp
 kb_root_dir=$tmp_root/kubebuilder
 
-# fetch the testing binaries - e.g. apiserver and etcd
-fetch_kb_tools
-
-# setup testing env
-setup_envs
-
-go test github.com/kubernetes-sigs/controller-runtime/pkg/...
-go build github.com/kubernetes-sigs/controller-runtime/example
-
 # Skip fetching and untaring the tools by setting the SKIP_FETCH_TOOLS variable
 # in your environment to any value:
 #
@@ -84,3 +75,12 @@ function setup_envs {
   export TEST_ASSET_KUBE_APISERVER=$kb_root_dir/bin/kube-apiserver
   export TEST_ASSET_ETCD=$kb_root_dir/bin/etcd
 }
+
+# fetch the testing binaries - e.g. apiserver and etcd
+fetch_kb_tools
+
+# setup testing env
+setup_envs
+
+go test github.com/kubernetes-sigs/controller-runtime/pkg/...
+go build github.com/kubernetes-sigs/controller-runtime/example

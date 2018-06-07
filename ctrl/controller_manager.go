@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/common"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
@@ -32,21 +33,33 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
+// ControllerManager initializes shared dependencies such as Caches and Clients, and starts Controllers.
+//
+// Dependencies may be retrieved from the ControllerManager using the Get* functions
 type ControllerManager interface {
-	NewController(ControllerArgs, reconcile.Reconcile) Controller
+	// NewController creates a new initialized Controller with the Reconcile function
+	// and registers it with the ControllerManager.
+	NewController(ControllerArgs, reconcile.Reconcile) (Controller, error)
+
+	// Start starts all registered Controllers and blocks until the Stop channel is closed.
+	// Returns an error if there is an error starting any controller.
 	Start(<-chan struct{}) error
+
+	// GetConfig returns an initialized Config
 	GetConfig() *rest.Config
-	GetClient() client.Interface
+
+	// GetScheme returns and initialized Scheme
 	GetScheme() *runtime.Scheme
+
+	// GetClient returns a Client configured with the Config
+	GetClient() client.Interface
+
+	// GetFieldIndexer returns a client.FieldIndexer configured with the Client
 	GetFieldIndexer() client.FieldIndexer
 }
 
 var _ ControllerManager = &controllerManager{}
 
-// controllerManager initializes and starts Controllers.  controllerManager should always be used to
-// setup dependencies such as Informers and Configs, etc and setControllerFields them into Controllers.
-//
-// Must specify the config.
 type controllerManager struct {
 	// config is the rest.config used to talk to the apiserver.  Required.
 	config *rest.Config
@@ -75,17 +88,16 @@ type controllerManager struct {
 	stop    <-chan struct{}
 }
 
-// NewController registers a controller with the controllerManager.
-// Added Controllers will have config and Informers injected into them at Start time.
-func (cm *controllerManager) NewController(ca ControllerArgs, r reconcile.Reconcile) Controller {
+func (cm *controllerManager) NewController(ca ControllerArgs, r reconcile.Reconcile) (Controller, error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
+	if len(ca.Name) == 0 {
+		return nil, fmt.Errorf("Must specify name for Controller.")
+	}
+
 	if ca.MaxConcurrentReconciles <= 0 {
 		ca.MaxConcurrentReconciles = 1
-	}
-	if len(ca.Name) == 0 {
-		ca.Name = "controller-unamed"
 	}
 
 	// Inject dependencies into Reconcile
@@ -111,7 +123,7 @@ func (cm *controllerManager) NewController(ca ControllerArgs, r reconcile.Reconc
 			cm.errChan <- c.Start(cm.stop)
 		}()
 	}
-	return c
+	return c, nil
 }
 
 func (cm *controllerManager) injectInto(i interface{}) error {
@@ -146,9 +158,6 @@ func (cm *controllerManager) GetFieldIndexer() client.FieldIndexer {
 	return cm.fieldIndexes
 }
 
-// Start starts all registered Controllers and blocks until the Stop channel is closed.
-// Returns an error if there is an error starting any controller.
-// Injects Informers and config into Controllers before Starting them.
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -177,19 +186,31 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	}
 }
 
+// ControllerManagerArgs are the arguments for creating a new ControllerManager
 type ControllerManagerArgs struct {
+	// Config is the config used to talk to an apiserver.  Defaults to:
+	// 1. Config specified with the --config flag
+	// 2. Config specified with the KUBECONFIG environment variable
+	// 3. Incluster config (if running in a Pod)
+	// 4. $HOME/.kube/config
 	Config *rest.Config
+
+	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
+	// Defaults to the kubernetes/client-go scheme.Scheme
 	Scheme *runtime.Scheme
 }
 
+// NewControllerManager returns a new fully initialized ControllerManager.
 func NewControllerManager(args ControllerManagerArgs) (ControllerManager, error) {
 	cm := &controllerManager{config: args.Config, scheme: args.Scheme, errChan: make(chan error)}
 
 	// Initialize a rest.config if none was specified
 	if cm.config == nil {
-		err := fmt.Errorf("must specify non-nil config for NewControllerManager")
-		log.Error(err, "", "config", cm.config)
-		return nil, err
+		var err error
+		cm.config, err = config.GetConfig()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Use the Kubernetes client-go scheme if none is specified

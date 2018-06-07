@@ -37,13 +37,16 @@ func ExampleController() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	cm.NewController(
+	_, err = cm.NewController(
 		ctrl.ControllerArgs{Name: "pod-controller", MaxConcurrentReconciles: 1},
 		reconcile.ReconcileFunc(func(o reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
 			// Your business logic to implement the API by creating, updating, deleting objects goes here.
 			return reconcile.ReconcileResult{}, nil
 		}),
 	)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // This example watches Pods and enqueues ReconcileRequests with the changed Pod Name and Namespace.
@@ -52,8 +55,14 @@ func ExampleController_Watch_1() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	c := cm.NewController(ctrl.ControllerArgs{}, nil)
-	c.Watch(&source.KindSource{Type: &corev1.Pod{}}, &eventhandler.EnqueueHandler{})
+	c, err := cm.NewController(ctrl.ControllerArgs{Name: "foo-controller"}, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = c.Watch(&source.KindSource{Type: &corev1.Pod{}}, &eventhandler.EnqueueHandler{})
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // This example watches Deployments and enqueues ReconcileRequests with the change Deployment Name and Namespace
@@ -63,10 +72,16 @@ func ExampleController_Watch_2() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	c := cm.NewController(ctrl.ControllerArgs{}, nil)
-	c.Watch(&source.KindSource{Type: &appsv1.Deployment{}}, &eventhandler.EnqueueHandler{},
+	c, err := cm.NewController(ctrl.ControllerArgs{Name: "foo-controller"}, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = c.Watch(&source.KindSource{Type: &appsv1.Deployment{}}, &eventhandler.EnqueueHandler{},
 		predicate.PredicateFuncs{UpdateFunc: func(e event.UpdateEvent) bool {
 			return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()
 		}},
 	)
+	if err != nil {
+		log.Fatal(err)
+	}
 }

@@ -54,11 +54,12 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
-			instance := cm.NewController(ctrl.ControllerArgs{}, reconcile.ReconcileFunc(
+			instance, err := cm.NewController(ctrl.ControllerArgs{Name: "foo-controller"}, reconcile.ReconcileFunc(
 				func(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
 					reconciled <- request
 					return reconcile.ReconcileResult{}, nil
 				}))
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Watching Resources")
 			err = instance.Watch(&source.KindSource{Type: &appsv1.ReplicaSet{}}, &eventhandler.EnqueueOwnerHandler{

@@ -18,12 +18,13 @@ package inject
 
 import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 )
 
+// Informers is used by the ControllerManager to inject Informers into Sources, EventHandlers, Predicates, and
+// Reconciles
 type Informers interface {
 	InjectInformers(informer.Informers) error
 }
@@ -35,6 +36,8 @@ func InjectInformers(c informer.Informers, i interface{}) (bool, error) {
 	return false, nil
 }
 
+// Config is used by the ControllerManager to inject Config into Sources, EventHandlers, Predicates, and
+// Reconciles
 type Config interface {
 	InjectConfig(*rest.Config) error
 }
@@ -46,11 +49,8 @@ func InjectConfig(c *rest.Config, i interface{}) (bool, error) {
 	return false, nil
 }
 
-// TODO(pwittrock): Figure out if this is the pattern we want to stick with
-func NewConfig() (*rest.Config, error) {
-	return config.GetConfig()
-}
-
+// Client is used by the ControllerManager to inject Client into Sources, EventHandlers, Predicates, and
+// Reconciles
 type Client interface {
 	InjectClient(client.Interface) error
 }
@@ -62,6 +62,8 @@ func InjectClient(cacheClient client.Interface, i interface{}) (bool, error) {
 	return false, nil
 }
 
+// Scheme is used by the ControllerManager to inject Scheme into Sources, EventHandlers, Predicates, and
+// Reconciles
 type Scheme interface {
 	InjectScheme(scheme *runtime.Scheme) error
 }

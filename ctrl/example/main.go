@@ -22,7 +22,6 @@ import (
 	"log"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
@@ -39,16 +38,19 @@ func main() {
 	logf.SetLogger(logf.ZapLogger(false))
 
 	// Setup a ControllerManager
-	manager, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{Config: config.GetConfigOrDie()})
+	manager, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{})
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Setup a new controller to Reconcile ReplicaSets
-	c := manager.NewController(
+	c, err := manager.NewController(
 		ctrl.ControllerArgs{Name: "foo-controller", MaxConcurrentReconciles: 1},
 		&ReconcileReplicaSet{client: manager.GetClient()},
 	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	err = c.Watch(
 		// Watch ReplicaSets

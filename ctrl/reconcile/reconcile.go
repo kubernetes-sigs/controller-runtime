@@ -22,7 +22,7 @@ import (
 
 // ReconcileResult contains the result of a reconcile.
 type ReconcileResult struct {
-	// Requeue tells the Controller to requeue the reconcile key
+	// Requeue tells the Controller to requeue the reconcile key.  Defaults to false.
 	Requeue bool
 }
 
@@ -59,18 +59,12 @@ reconcile may be implemented as either a type:
 		return ctrl.ReconcileResult{}, nil
 	}
 
-	controller := &ctrl.Controller{Name: "pod-controller", reconcile: reconcile{}}
-
-
 Or as a function:
 
-	controller := &ctrl.Controller{
-	  Name: "pod-controller",
-	  reconcile: ctrl.ReconcileFunc(func(o ctrl.ReconcileRequest) (ctrl.ReconcileResult, error) {
+	ctrl.ReconcileFunc(func(o ctrl.ReconcileRequest) (ctrl.ReconcileResult, error) {
 		// Implement business logic of reading and writing objects here
 		return ctrl.ReconcileResult{}, nil
-	  })
-	}
+	})
 
 Reconciliation is level-based, meaning action isn't driven off changes in individual Events, but instead is
 driven by actual cluster state read from the apiserver or a local cache.

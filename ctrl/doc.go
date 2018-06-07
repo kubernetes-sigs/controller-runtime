@@ -98,15 +98,15 @@ PodController Diagram
 
 Source provides event:
 
-* source.KindSource{"core", "v1", "Pod"} -> (Pod foo/bar Create Event)
+* &source.KindSource{"core", "v1", "Pod"} -> (Pod foo/bar Create Event)
 
 EventHandler enqueues ReconcileRequest:
 
-* eventhandler.Enqueue{} -> (ReconcileRequest{"foo", "bar"})
+* &eventhandler.Enqueue{} -> (ReconcileRequest{"foo", "bar"})
 
-reconcile is called with the ReconcileRequest:
+Reconcile is called with the ReconcileRequest:
 
-* reconcile(ReconcileRequest{"foo", "bar"})
+* Reconcile(ReconcileRequest{"foo", "bar"})
 
 
 controllerManager
@@ -117,50 +117,107 @@ anytime multiple Controllers exist within the same program.
 
 Usage
 
-Controllers should live in separate packages from the main program.  A single program may contain multiple
-Controllers that share local caches and clients.
-
-Step 1: Create a main that uses the controllerManager to lazyStartWatchFuncs the registered Controllers.
-
-	pkg main
+The following example shows creating a new Controller program which Reconciles ReplicaSet objects in response
+to Pod or ReplicaSet events.  The Reconcile function simply adds a label to the ReplicaSet.
 
 	import (
-	  "flag"
-	  "log"
+		"context"
+		"flag"
+		"log"
 
-	  "github.com/kubernetes-sigs/kubebuilder/pkg/ctrl"
-
-	  _ "pkg/controller/mycontroller"
+		"github.com/kubernetes-sigs/kubebuilder/pkg/client"
+		"github.com/kubernetes-sigs/kubebuilder/pkg/config"
+		"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl"
+		"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
+		"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
+		"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
+		logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
+		"github.com/kubernetes-sigs/kubebuilder/pkg/signals"
+		appsv1 "k8s.io/api/apps/v1"
+		corev1 "k8s.io/api/core/v1"
+		"k8s.io/apimachinery/pkg/api/errors"
 	)
 
 	func main() {
-	  flag.Parse()
-	  log.Fatal(ctrl.Start())
+		flag.Parse()
+		logf.SetLogger(logf.ZapLogger(false))
+
+		// Setup a ControllerManager
+		manager, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{Config: config.GetConfigOrDie()})
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Setup a new controller to Reconcile ReplicaSets
+		c := manager.NewController(
+			ctrl.ControllerArgs{Name: "my-replicaset-controller", MaxConcurrentReconciles: 1},
+			&ReconcileReplicaSet{client: manager.GetClient()},
+		)
+
+		err = c.Watch(
+			// Watch ReplicaSets
+			&source.KindSource{Type: &appsv1.ReplicaSet{}},
+			// Enqueue ReplicaSet object key
+			&eventhandler.EnqueueHandler{})
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		err = c.Watch(
+			// Watch Pods
+			&source.KindSource{Type: &corev1.Pod{}},
+			// Enqueue Owning ReplicaSet object key
+			&eventhandler.EnqueueOwnerHandler{OwnerType: &appsv1.ReplicaSet{}, IsController: true})
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		log.Fatal(manager.Start(signals.SetupSignalHandler()))
 	}
 
-Step 2: Create a controller in the package init function and register it with the controllerManager.
-
-	pkg mycontroller
-
-	func init() {
-	  controller := &ctrl.controller{name: "myresource-controller", reconcile: reconcile{})}
-	  ctrl.NewController(controller)
-
-	  // Watch for changes to MyKind objects, and enqueues a ReconcileRequest with the name and Namespace of the object.
-	  controller.Watch(
-	    source.KindSource{Group: "mygroup", Version: "myversion", Type: "MyKind"},
-	    eventhandler.Enqueue{},
-	  )
+	// ReconcileReplicaSet reconciles ReplicaSets
+	type ReconcileReplicaSet struct {
+		client client.Interface
 	}
 
-	// MyResourceReconciler implements the MyResource API
-	type MyResourceReconciler struct{}
+	// Implement reconcile.reconcile so the controller can reconcile objects
+	var _ reconcile.Reconcile = &ReconcileReplicaSet{}
 
-	// reconcile handles ReconcileRequests to read MyResource objects and then makes changes in the cluster by
-	// creating, updating and deleting other objects.
-	func (MyResourceReconciler) reconcile(r reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
-	  // Your business logic goes here.
-	  return reconcile.ReconcileResult{}, nil
+	func (r *ReconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
+		// Fetch the ReplicaSet from the cache
+		rs := &appsv1.ReplicaSet{}
+		err := r.client.Get(context.TODO(), request.NamespacedName, rs)
+		if errors.IsNotFound(err) {
+			log.Printf("Could not find ReplicaSet %v.\n", request)
+			return reconcile.ReconcileResult{}, nil
+		}
+
+		if err != nil {
+			log.Printf("Could not fetch ReplicaSet %v for %+v\n", err, request)
+			return reconcile.ReconcileResult{}, err
+		}
+
+		// Print the ReplicaSet
+		log.Printf("ReplicaSet Name %s Namespace %s, Pod Name: %s\n",
+			rs.Name, rs.Namespace, rs.Spec.Template.Spec.Containers[0].Name)
+
+		// Set the label if it is missing
+		if rs.Labels == nil {
+			rs.Labels = map[string]string{}
+		}
+		if rs.Labels["hello"] == "world" {
+			return reconcile.ReconcileResult{}, nil
+		}
+
+		// Update the ReplicaSet
+		rs.Labels["hello"] = "world"
+		err = r.client.Update(context.TODO(), rs)
+		if err != nil {
+			log.Printf("Could not write ReplicaSet %v\n", err)
+			return reconcile.ReconcileResult{}, err
+		}
+
+		return reconcile.ReconcileResult{}, nil
 	}
 
 controller Example - Deployment

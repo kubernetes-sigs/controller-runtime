@@ -39,14 +39,17 @@ import (
 
 var log = logf.KBLog.WithName("controller").WithName("controller")
 
+// ControllerArgs are the arguments for creating a new Controller
 type ControllerArgs struct {
-	// name is used to uniquely identify a controller in tracing, logging and monitoring.  name is required.
+	// Name is used to uniquely identify a controller in tracing, logging and monitoring.  Name is required.
 	Name string
 
 	// maxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 }
 
+// Controllers are work queues that watch for changes to objects (i.e. Create / Update / Delete events) and
+// then reconcile an object (i.e. make changes to ensure the system state matches what is specified in the object).
 type Controller interface {
 	// Watch takes events provided by a Source and uses the EventHandler to enqueue ReconcileRequests in
 	// response to the events.
@@ -61,8 +64,6 @@ type Controller interface {
 
 var _ Controller = &controller{}
 
-// Controllers are work queues that watch for changes to objects (i.e. Create / Update / Delete events) and
-// then reconcile an object (i.e. make changes to ensure the system state matches what is specified in the object).
 type controller struct {
 	// name is used to uniquely identify a controller in tracing, logging and monitoring.  name is required.
 	name string
@@ -81,7 +82,7 @@ type controller struct {
 	// scheme is injected by the controllerManager when controllerManager.Start is called
 	scheme *runtime.Scheme
 
-	// Informers are injected by the controllerManager when controllerManager.Start is called
+	// informers are injected by the controllerManager when controllerManager.Start is called
 	informers informer.Informers
 
 	// config is the rest.config used to talk to the apiserver.  Defaults to one of in-cluster, environment variable
@@ -95,8 +96,11 @@ type controller struct {
 	// once ensures unspecified fields get default values
 	once sync.Once
 
+	// inject is used to inject dependencies into other objects such as Sources, EventHandlers and Predicates
 	inject func(i interface{}) error
-	mu     sync.Mutex
+
+	// mu is used to synchronize controller setup
+	mu sync.Mutex
 
 	// TODO(pwittrock): Consider initializing a logger with the controller name as the tag
 }

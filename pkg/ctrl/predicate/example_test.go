@@ -17,8 +17,8 @@ limitations under the License.
 package predicate_test
 
 import (
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/predicate"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/event"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/predicate"
 )
 
 var p predicate.Predicate

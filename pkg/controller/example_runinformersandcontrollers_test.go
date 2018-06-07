@@ -17,8 +17,8 @@ limitations under the License.
 package controller_test
 
 import (
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/inject/run"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/inject/run"
 )
 
 func ExampleRunInformersAndControllers() {

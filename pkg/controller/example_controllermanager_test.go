@@ -16,7 +16,7 @@ limitations under the License.
 
 package controller_test
 
-import "github.com/kubernetes-sigs/kubebuilder/pkg/controller"
+import "github.com/kubernetes-sigs/controller-runtime/pkg/controller"
 
 func ExampleControllerManager() {
 	// Create a new empty ControllerManager for managing Informers and Controllers

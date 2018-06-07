@@ -17,8 +17,8 @@ limitations under the License.
 package inject
 
 import (
-	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/informer"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 )

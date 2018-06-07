@@ -20,9 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
-	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/test"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/informer"
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/test"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"

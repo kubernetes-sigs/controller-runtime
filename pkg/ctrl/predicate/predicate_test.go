@@ -17,8 +17,8 @@ limitations under the License.
 package predicate_test
 
 import (
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/predicate"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/event"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/predicate"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"

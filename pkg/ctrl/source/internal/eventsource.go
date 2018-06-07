@@ -19,9 +19,9 @@ package internal
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
-	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/event"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/eventhandler"
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"

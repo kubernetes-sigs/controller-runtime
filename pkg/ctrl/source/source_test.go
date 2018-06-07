@@ -19,11 +19,11 @@ package source_test
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/informer/test"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/event"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/inject"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/source"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/informer/test"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/util/workqueue"

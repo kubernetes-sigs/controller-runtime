@@ -19,8 +19,8 @@ package predicate_test
 import (
 	"testing"
 
-	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/test"
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/test"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

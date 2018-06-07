@@ -17,8 +17,8 @@ limitations under the License.
 package test
 
 import (
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/test"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/test"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/informer"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"

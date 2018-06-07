@@ -19,9 +19,9 @@ package internal_test
 import (
 	"time"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source/internal"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/event"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/source/internal"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"

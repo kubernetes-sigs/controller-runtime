@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/types"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/inject/run"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/config"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/types"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/inject/run"
 	"k8s.io/api/core/v1"
 )
 

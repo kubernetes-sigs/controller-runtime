@@ -24,8 +24,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/informers"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/inject/run"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/informers"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/inject/run"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 )

@@ -19,8 +19,8 @@ package controller
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/eventhandlers"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/informers"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandlers"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/informers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"

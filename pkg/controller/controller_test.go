@@ -25,10 +25,10 @@ import (
 
 	"time"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/eventhandlers"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/test"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/types"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/inject/run"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandlers"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/test"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/types"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/inject/run"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

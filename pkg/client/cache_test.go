@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 
-	. "github.com/kubernetes-sigs/kubebuilder/pkg/client"
+	. "github.com/kubernetes-sigs/controller-runtime/pkg/client"
 )
 
 var _ = Describe("Indexers", func() {

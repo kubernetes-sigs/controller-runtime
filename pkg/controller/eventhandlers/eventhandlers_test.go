@@ -20,12 +20,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/eventhandlers"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/types"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandlers"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/types"
 
 	"fmt"
-	//"github.com/kubernetes-sigs/kubebuilder/pkg/controller/predicates"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/predicates"
+	//"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicates"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicates"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

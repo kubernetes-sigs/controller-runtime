@@ -19,8 +19,8 @@ package controller_test
 import (
 	"log"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller/types"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/types"
 	"k8s.io/api/core/v1"
 )
 

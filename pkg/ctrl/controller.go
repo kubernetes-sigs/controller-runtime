@@ -21,12 +21,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/predicate"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/predicate"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/reconcile"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/source"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/informer"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -34,7 +34,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
 )
 
 var log = logf.KBLog.WithName("controller").WithName("controller")

@@ -20,7 +20,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/controller"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers/core/v1"
 )

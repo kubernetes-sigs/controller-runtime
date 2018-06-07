@@ -16,7 +16,7 @@ limitations under the License.
 
 package run_test
 
-import "github.com/kubernetes-sigs/kubebuilder/pkg/inject/run"
+import "github.com/kubernetes-sigs/controller-runtime/pkg/inject/run"
 
 func Example() {
 	// Create arguments for running Controllers

@@ -20,7 +20,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/kubernetes-sigs/kubebuilder/pkg/install"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/install"
 	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/testing_frameworks/integration"

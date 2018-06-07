@@ -17,10 +17,10 @@ limitations under the License.
 package ctrl_test
 
 import (
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/reconcile"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/source"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

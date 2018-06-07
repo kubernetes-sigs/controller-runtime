@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// This example implements a simple no-op Reconcile function that prints the object to be Reconciled.
+// This example implements a simple no-op reconcile function that prints the object to be Reconciled.
 func ExampleReconcileFunc() {
 	r := reconcile.ReconcileFunc(func(o reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
 		// Create your business logic to create, update, delete objects here.
@@ -36,7 +36,7 @@ func ExampleReconcileFunc() {
 	// Output: Name: test, Namespace: default
 }
 
-// This example declares a simple type that implements Reconcile.
+// This example declares a simple type that implements reconcile.
 func ExampleReconcile() {
 	type MyReconcileImplementation struct {
 		reconcile.ReconcileFunc

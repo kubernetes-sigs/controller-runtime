@@ -38,7 +38,7 @@ var log = logf.KBLog.WithName("eventhandler").WithName("EnqueueOwnerHandler")
 // EnqueueOwnerHandler enqueues ReconcileRequests for the Owners of an object.  E.g. an object that created
 // another object.
 //
-// If a ReplicaSet creates Pods, Reconcile the ReplicaSet in response to events on Pods that it created using:
+// If a ReplicaSet creates Pods, reconcile the ReplicaSet in response to events on Pods that it created using:
 //
 // - a KindSource with Type Pod.
 //
@@ -66,7 +66,7 @@ type EnqueueOwnerHandler struct {
 
 var _ inject.Scheme = &EnqueueOwnerHandler{}
 
-// InjectScheme is called by the Controller to provide a singleton Scheme to the EnqueueOwnerHandler.
+// InjectScheme is called by the Controller to provide a singleton scheme to the EnqueueOwnerHandler.
 func (e *EnqueueOwnerHandler) InjectScheme(s *runtime.Scheme) {
 	if e.scheme == nil {
 		e.scheme = s
@@ -105,13 +105,13 @@ func (e *EnqueueOwnerHandler) Generic(q workqueue.RateLimitingInterface, evt eve
 }
 
 // parseOwnerTypeGroupKind parses the OwnerType into a Group and Kind and caches the result.  Returns false
-// if the OwnerType could not be parsed using the Scheme.
+// if the OwnerType could not be parsed using the scheme.
 func (e *EnqueueOwnerHandler) parseOwnerTypeGroupKind() bool {
 	// Parse the OwnerType group and kind once the first time an event is handled and cache the result.
 	e.once.Do(func() {
 		// If the scheme isn't, bail.
 		if e.scheme == nil {
-			log.Error(nil, "Must use inject a Scheme into EnqueueOwnerHandler before using it."+
+			log.Error(nil, "Must use inject a scheme into EnqueueOwnerHandler before using it."+
 				"This is done automatically if using EnqueueOwnerHandler from a Controller Watch function.")
 			os.Exit(1)
 		}
@@ -135,7 +135,7 @@ func (e *EnqueueOwnerHandler) parseOwnerTypeGroupKind() bool {
 	return e.kindOk
 }
 
-// getOwnerReconcileRequest looks at object and returns a slice of reconcile.ReconcileRequest to Reconcile
+// getOwnerReconcileRequest looks at object and returns a slice of reconcile.ReconcileRequest to reconcile
 // owners of object that match e.OwnerType.
 func (e *EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []reconcile.ReconcileRequest {
 	// If there was an error getting the Group and Kind for the OwnerType do nothing and log an error

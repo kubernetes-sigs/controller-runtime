@@ -20,6 +20,6 @@ import (
 	. "github.com/onsi/ginkgo"
 )
 
-var _ = Describe("Controller", func() {
+var _ = Describe("controller", func() {
 
 })

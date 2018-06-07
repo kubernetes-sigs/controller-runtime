@@ -1,7 +1,6 @@
 package informer
 
 import (
-	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -12,8 +11,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
-	watch "k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -39,12 +38,17 @@ type Informers interface {
 
 var _ Informers = &SelfPopulatingInformers{}
 
+type InformerCallback interface {
+	Call(gvk schema.GroupVersionKind, c cache.SharedIndexInformer)
+}
+
 // SelfPopulatingInformers lazily creates informers, and then caches them for the next time that informer is
-// requested.  It uses a standard parameter codec constructed based on the given generated Scheme.
+// requested.  It uses a standard parameter codec constructed based on the given generated scheme.
 type SelfPopulatingInformers struct {
-	Config *rest.Config
-	Scheme *runtime.Scheme
-	Mapper meta.RESTMapper
+	Config    *rest.Config
+	Scheme    *runtime.Scheme
+	Mapper    meta.RESTMapper
+	Callbacks []InformerCallback
 
 	once           sync.Once
 	mu             sync.Mutex
@@ -52,6 +56,7 @@ type SelfPopulatingInformers struct {
 	codecs         serializer.CodecFactory
 	paramCodec     runtime.ParameterCodec
 	started        bool
+	stopCh         <-chan struct{}
 }
 
 func (c *SelfPopulatingInformers) init() {
@@ -107,12 +112,11 @@ func (c *SelfPopulatingInformers) informerFor(gvk schema.GroupVersionKind, obj r
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.started {
-		return nil, fmt.Errorf("cannot create informers after informers have been started")
-	}
-
 	informer, ok := c.informersByGVK[gvk]
 	if ok {
+		for _, callback := range c.Callbacks {
+			callback.Call(gvk, informer)
+		}
 		return informer, nil
 	}
 
@@ -156,6 +160,16 @@ func (c *SelfPopulatingInformers) informerFor(gvk schema.GroupVersionKind, obj r
 	)
 
 	c.informersByGVK[gvk] = res
+
+	// Callback that an informer was added
+	for _, callback := range c.Callbacks {
+		callback.Call(gvk, res)
+	}
+
+	// If we already started the informers, start new ones as they get added
+	if c.started {
+		go res.Run(c.stopCh)
+	}
 	return res, nil
 }
 
@@ -164,6 +178,7 @@ func (c *SelfPopulatingInformers) Start(stopCh <-chan struct{}) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.stopCh = stopCh
 	for _, informer := range c.informersByGVK {
 		go informer.Run(stopCh)
 	}

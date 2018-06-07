@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-var _ = Describe("Reconcile", func() {
+var _ = Describe("reconcile", func() {
 	Describe("ReconcileFunc", func() {
 		It("should call the function with the request and return a nil error.", func() {
 			request := reconcile.ReconcileRequest{

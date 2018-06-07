@@ -95,7 +95,7 @@ func GetInformerProvider(object metav1.Object) informers.InformerProvider {
 	return DefaultManager.GetInformerProvider(object)
 }
 
-// AddController registers a new controller to be run..
+// NewController registers a new controller to be run..
 func (m *ControllerManager) AddController(controller *GenericController) {
 	m.once.Do(m.init)
 	m.controllers = append(m.controllers, controller)
@@ -112,7 +112,7 @@ func (m *ControllerManager) GetController(name string) *GenericController {
 	return nil
 }
 
-// AddController registers a new controller to be run.
+// NewController registers a new controller to be run.
 func AddController(controller *GenericController) {
 	DefaultManager.AddController(controller)
 }

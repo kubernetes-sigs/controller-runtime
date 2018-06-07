@@ -35,7 +35,7 @@ func Example() {
 	}
 
 	// Step 2: Create a new Pod controller to reconcile Pods changes using the default
-	// Reconcile function to print messages on events
+	// reconcile function to print messages on events
 	podController := &controller.GenericController{}
 	if err := podController.Watch(&corev1.Pod{}); err != nil {
 		log.Fatalf("%v", err)

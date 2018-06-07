@@ -24,11 +24,11 @@ import (
 	"k8s.io/api/core/v1"
 )
 
+var controller ctrl.Controller
+
 // This example Watches for Pod Events (e.g. Create / Update / Delete) and enqueues a ReconcileRequest
 // with the Name and Namespace of the Pod.
 func ExampleKindSource() {
-	controller := &ctrl.Controller{Name: "pod-controller"}
-
 	controller.Watch(
 		&source.KindSource{Type: &v1.Pod{}},
 		&eventhandler.EnqueueHandler{},
@@ -38,7 +38,6 @@ func ExampleKindSource() {
 // This example reads GenericEvents from a channel and enqueues a ReconcileRequest containing the Name and Namespace
 // provided by the event.
 func ExampleChannelSource() {
-	controller := &ctrl.Controller{Name: "myresource-controller"}
 	events := make(chan event.GenericEvent)
 
 	controller.Watch(

@@ -54,12 +54,12 @@ func NewConfig() (*rest.Config, error) {
 }
 
 type Client interface {
-	InjectClient(client.Interface, client.Interface)
+	InjectClient(client.Interface)
 }
 
-func InjectClient(cacheClient client.Interface, liveClient client.Interface, i interface{}) bool {
+func InjectClient(cacheClient client.Interface, i interface{}) bool {
 	if s, ok := i.(Client); ok {
-		s.InjectClient(cacheClient, liveClient)
+		s.InjectClient(cacheClient)
 		return true
 	}
 	return false

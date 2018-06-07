@@ -21,7 +21,6 @@ import (
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source/internal"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -57,7 +56,6 @@ func (ks ChannelSource) Start(
 var log = logf.KBLog.WithName("source").WithName("KindSource")
 
 var _ Source = &KindSource{}
-var _ inject.Informers = &KindSource{}
 
 // KindSource is used to provide a source of events originating inside the cluster from Watches (eh.g. Pod Create)
 type KindSource struct {

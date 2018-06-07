@@ -21,34 +21,34 @@ and are central to building Operators, Workload APIs, Configuration APIs, Autosc
 Controllers
 
 Controllers are work queues that enqueue work in response to source.Source events (e.g. Pod Create, Update, Delete)
-and trigger reconcile.Reconcile functions when the work is dequeued.
+and trigger reconcile.reconcile functions when the work is dequeued.
 
 Unlike http handlers, Controllers DO NOT perform work directly in response to events, but instead enqueue
 ReconcileRequests so the work is performed eventually.
 
-* Controllers run reconcile.Reconcile functions against objects (provided as Name / Namespace).
+* Controllers run reconcile.reconcile functions against objects (provided as name / Namespace).
 
 * Controllers enqueue reconcile.ReconcileRequests in response events provided by source.Sources.
 
-Reconcile
+reconcile
 
-reconcile.Reconcile is a function that may be called at anytime with the Name / Namespace of an
+reconcile.reconcile is a function that may be called at anytime with the name / Namespace of an
 object.  When called, it will ensure that the state of the system matches what is specified in the object at the
-time Reconcile is called.
+time reconcile is called.
 
-Example: Reconcile is run against a ReplicationController object.  The ReplicationController specifies 5 replicas.
-3 Pods exist in the system.  Reconcile creates 2 more Pods and sets their OwnerReference to point at the
+Example: reconcile is run against a ReplicationController object.  The ReplicationController specifies 5 replicas.
+3 Pods exist in the system.  reconcile creates 2 more Pods and sets their OwnerReference to point at the
 ReplicationController.
 
-* Reconcile works on a single object type. - e.g. it will only Reconcile ReplicaSets.
+* reconcile works on a single object type. - e.g. it will only reconcile ReplicaSets.
 
-* Reconcile is triggered by a ReconcileRequest containing the Name / Namespace of an object to Reconcile.
+* reconcile is triggered by a ReconcileRequest containing the name / Namespace of an object to reconcile.
 
-* Reconcile does not care about the event contents or event type triggering the ReconcileRequest.
-- e.g. it doesn't matter whether a ReplicaSet was created or updated, Reconcile will check that the correct
+* reconcile does not care about the event contents or event type triggering the ReconcileRequest.
+- e.g. it doesn't matter whether a ReplicaSet was created or updated, reconcile will check that the correct
 Pods exist either way.
 
-* Users MUST implement Reconcile themselves.
+* Users MUST implement reconcile themselves.
 
 Source
 
@@ -73,7 +73,7 @@ EventHandler
 eventhandler.EventHandler transforms and enqueues events from a source.Source into reconcile.ReconcileRequests.
 
 Example: a Pod Create event from a Source is provided to the eventhandler.EnqueueHandler, which enqueues a
-ReconcileRequest containing the Name / Namespace of the Pod.
+ReconcileRequest containing the name / Namespace of the Pod.
 
 * EventHandler takes an event.Event and enqueues ReconcileRequests
 
@@ -104,15 +104,15 @@ EventHandler enqueues ReconcileRequest:
 
 * eventhandler.Enqueue{} -> (ReconcileRequest{"foo", "bar"})
 
-Reconcile is called with the ReconcileRequest:
+reconcile is called with the ReconcileRequest:
 
-* Reconcile(ReconcileRequest{"foo", "bar"})
+* reconcile(ReconcileRequest{"foo", "bar"})
 
 
-ControllerManager
+controllerManager
 
-ControllerManager registers and starts Controllers.  It initializes shared dependencies - such as clients, caches,
-stop channels, etc and provides these to the Controllers that it manages.  ControllerManager should be used
+controllerManager registers and starts Controllers.  It initializes shared dependencies - such as clients, caches,
+stop channels, etc and provides these to the Controllers that it manages.  controllerManager should be used
 anytime multiple Controllers exist within the same program.
 
 Usage
@@ -120,7 +120,7 @@ Usage
 Controllers should live in separate packages from the main program.  A single program may contain multiple
 Controllers that share local caches and clients.
 
-Step 1: Create a main that uses the ControllerManager to lazyStartWatchFuncs the registered Controllers.
+Step 1: Create a main that uses the controllerManager to lazyStartWatchFuncs the registered Controllers.
 
 	pkg main
 
@@ -138,15 +138,15 @@ Step 1: Create a main that uses the ControllerManager to lazyStartWatchFuncs the
 	  log.Fatal(ctrl.Start())
 	}
 
-Step 2: Create a Controller in the package init function and register it with the ControllerManager.
+Step 2: Create a controller in the package init function and register it with the controllerManager.
 
 	pkg mycontroller
 
 	func init() {
-	  controller := &ctrl.Controller{Name: "myresource-controller", Reconcile: Reconcile{})}
-	  ctrl.AddController(controller)
+	  controller := &ctrl.controller{name: "myresource-controller", reconcile: reconcile{})}
+	  ctrl.NewController(controller)
 
-	  // Watch for changes to MyKind objects, and enqueues a ReconcileRequest with the Name and Namespace of the object.
+	  // Watch for changes to MyKind objects, and enqueues a ReconcileRequest with the name and Namespace of the object.
 	  controller.Watch(
 	    source.KindSource{Group: "mygroup", Version: "myversion", Type: "MyKind"},
 	    eventhandler.Enqueue{},
@@ -156,14 +156,14 @@ Step 2: Create a Controller in the package init function and register it with th
 	// MyResourceReconciler implements the MyResource API
 	type MyResourceReconciler struct{}
 
-	// Reconcile handles ReconcileRequests to read MyResource objects and then makes changes in the cluster by
+	// reconcile handles ReconcileRequests to read MyResource objects and then makes changes in the cluster by
 	// creating, updating and deleting other objects.
-	func (MyResourceReconciler) Reconcile(r reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
+	func (MyResourceReconciler) reconcile(r reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
 	  // Your business logic goes here.
 	  return reconcile.ReconcileResult{}, nil
 	}
 
-Controller Example - Deployment
+controller Example - Deployment
 
 1. Watch Deployment, ReplicaSet, Pod Sources
 
@@ -174,21 +174,21 @@ Controller Example - Deployment
 1.3 Pods (created by ReplicaSets) -> eventhandler.EnqueueOwnerHandler -> enqueue owning Deployment
 key (transitive through ReplicaSet).
 
-2. Reconcile Deployment
+2. reconcile Deployment
 
 2.1 Deployment object created -> Read Deployment, try to read ReplicaSet, see if is missing create ReplicaSet.
 
-2.2 Reconcile triggered by creation of ReplicaSet and Pods -> Read Deployment and ReplicaSet, do nothing.
+2.2 reconcile triggered by creation of ReplicaSet and Pods -> Read Deployment and ReplicaSet, do nothing.
 
 Watching and EventHandling
 
 Controllers may Watch multiple Kinds of objects (e.g. Pods, ReplicaSets and Deployments), but they should
 enqueue keys for only a single Type.  When one Type of object must be be updated in response to changes
-in another Type of object, an EnqueueMappedHandler may be used to Reconcile the Type that is being
+in another Type of object, an EnqueueMappedHandler may be used to reconcile the Type that is being
 updated and watch the other Type for Events.  e.g. Respond to a cluster resize
 Event (add / delete Node) by re-reconciling all instances of another Type that cares about the cluster size.
 
-For example, a Deployment Controller might use an EnqueueHandler and EnqueueOwnerHandler to:
+For example, a Deployment controller might use an EnqueueHandler and EnqueueOwnerHandler to:
 
 * Watch for Deployment Events - enqueue the key of the Deployment.
 
@@ -197,27 +197,27 @@ For example, a Deployment Controller might use an EnqueueHandler and EnqueueOwne
 * Watch for Pod Events - enqueue the key of the Deployment that created the Pod (owns transitively through a ReplicaSet).
 
 Note: ReconcileRequests are deduplicated when they are enqueued.  Many Pod Events for the same Deployment
-may trigger only 1 Reconcile invocation as each Event results in the Handler trying to enqueue
+may trigger only 1 reconcile invocation as each Event results in the Handler trying to enqueue
 the same ReconcileRequest for the Deployment.
 
-Controller Writing Tips
+controller Writing Tips
 
-Reconcile Runtime Complexity:
+reconcile Runtime Complexity:
 
-* It is better to write Controllers to perform an O(1) Reconcile N times (e.g. on N different objects) instead of
-performing an O(N) Reconcile 1 time (e.g. on a single object which manages N other objects).
+* It is better to write Controllers to perform an O(1) reconcile N times (e.g. on N different objects) instead of
+performing an O(N) reconcile 1 time (e.g. on a single object which manages N other objects).
 
-* Example: If you need to update all Services in response to a Node being added - Reconcile Services but Watch
-Node events (transformed to Service object Name / Namespaces) instead of Reconciling the Node and updating all
-Services from a single Reconcile.
+* Example: If you need to update all Services in response to a Node being added - reconcile Services but Watch
+Node events (transformed to Service object name / Namespaces) instead of Reconciling the Node and updating all
+Services from a single reconcile.
 
 Event Multiplexing:
 
-* ReconcileRequests for the same Name / Namespace are deduplicated when they are enqueued.  This allows
+* ReconcileRequests for the same name / Namespace are deduplicated when they are enqueued.  This allows
 for Controllers to gracefully handle event storms for a single object.  Multiplexing multiple event Sources to
 a single object type takes advantage of this.
 
-* Example: Pod events for a ReplicaSet are transformed to a ReplicaSet Name / Namespace, so the ReplicaSet
+* Example: Pod events for a ReplicaSet are transformed to a ReplicaSet name / Namespace, so the ReplicaSet
 will be Reconciled only 1 time for multiple Pods.
 */
 package ctrl

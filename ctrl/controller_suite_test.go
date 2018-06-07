@@ -31,7 +31,7 @@ import (
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Controller Suite", []Reporter{test.NewlineReporter{}})
+	RunSpecsWithDefaultAndCustomReporters(t, "controller Suite", []Reporter{test.NewlineReporter{}})
 }
 
 var testenv *test.TestEnvironment

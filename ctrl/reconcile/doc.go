@@ -15,6 +15,6 @@ limitations under the License.
 */
 
 /*
-Package reconcile defines the Reconcile interface used to implement Kubernetes APIs.
+Package reconcile defines the reconcile interface used to implement Kubernetes APIs.
 */
 package reconcile

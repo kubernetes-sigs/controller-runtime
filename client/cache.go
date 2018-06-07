@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"reflect"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/tools/cache"
 
-	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
+	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 )
 
 var log = logf.KBLog.WithName("object-cache")
@@ -25,31 +25,48 @@ var _ ReadInterface = &ObjectCache{}
 
 type ObjectCache struct {
 	cachesByType map[reflect.Type]*SingleObjectCache
+	scheme       *runtime.Scheme
 }
 
 func ObjectCacheFromInformers(informers map[schema.GroupVersionKind]cache.SharedIndexInformer, scheme *runtime.Scheme) *ObjectCache {
-	res := NewObjectCache()
-	for gvk, informer := range informers {
-		obj, err := scheme.New(gvk)
-		if err != nil {
-			log.Error(err, "could not register informer in ObjectCache for GVK", "GroupVersionKind", gvk)
-			continue
-		}
-		res.RegisterCache(obj, gvk, informer.GetIndexer())
-	}
+	res := NewObjectCache(scheme)
+	res.AddInformers(informers)
 	return res
 }
 
-func NewObjectCache() *ObjectCache {
+func (o *ObjectCache) AddInformers(informers map[schema.GroupVersionKind]cache.SharedIndexInformer) {
+	for gvk, informer := range informers {
+		o.AddInformer(gvk, informer)
+	}
+}
+
+func (o *ObjectCache) Call(gvk schema.GroupVersionKind, c cache.SharedIndexInformer) {
+	o.AddInformer(gvk, c)
+}
+
+func (o *ObjectCache) AddInformer(gvk schema.GroupVersionKind, c cache.SharedIndexInformer) {
+	obj, err := o.scheme.New(gvk)
+	if err != nil {
+		log.Error(err, "could not register informer in ObjectCache for GVK", "GroupVersionKind", gvk)
+		return
+	}
+	if _, found := o.CacheFor(obj); found {
+		return
+	}
+	o.RegisterCache(obj, gvk, c.GetIndexer())
+}
+
+func NewObjectCache(scheme *runtime.Scheme) *ObjectCache {
 	return &ObjectCache{
 		cachesByType: make(map[reflect.Type]*SingleObjectCache),
+		scheme:       scheme,
 	}
 }
 
 func (c *ObjectCache) RegisterCache(obj runtime.Object, gvk schema.GroupVersionKind, store cache.Indexer) {
 	objType := reflect.TypeOf(obj)
 	c.cachesByType[objType] = &SingleObjectCache{
-		Indexer: store,
+		Indexer:          store,
 		GroupVersionKind: gvk,
 	}
 }
@@ -103,7 +120,7 @@ func (c *SingleObjectCache) Get(_ context.Context, key ObjectKey, out runtime.Ob
 	if !exists {
 		// Resource gets transformed into Kind in the error anyway, so this is fine
 		return errors.NewNotFound(schema.GroupResource{
-			Group: c.GroupVersionKind.Group,
+			Group:    c.GroupVersionKind.Group,
 			Resource: c.GroupVersionKind.Kind,
 		}, key.Name)
 	}

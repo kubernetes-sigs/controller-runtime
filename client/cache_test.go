@@ -21,17 +21,17 @@ var _ = Describe("Indexers", func() {
 	knownVolumeKey := ObjectKey{Name: "some-vol", Namespace: "some-ns"}
 	knownPod := &kapi.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: knownPodKey.Name,
+			Name:      knownPodKey.Name,
 			Namespace: knownPodKey.Namespace,
 		},
 		Spec: kapi.PodSpec{
-			RestartPolicy: kapi.RestartPolicyNever,
+			RestartPolicy:         kapi.RestartPolicyNever,
 			ActiveDeadlineSeconds: &three,
 		},
 	}
 	knownPod2 := &kapi.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: knownVolumeKey.Name,
+			Name:      knownVolumeKey.Name,
 			Namespace: knownVolumeKey.Namespace,
 			Labels: map[string]string{
 				"somelbl": "someval",
@@ -43,7 +43,7 @@ var _ = Describe("Indexers", func() {
 	}
 	knownPod3 := &kapi.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: knownPod3Key.Name,
+			Name:      knownPod3Key.Name,
 			Namespace: knownPod3Key.Namespace,
 			Labels: map[string]string{
 				"somelbl": "someval",
@@ -55,7 +55,7 @@ var _ = Describe("Indexers", func() {
 	}
 	knownVolume := &kapi.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: knownVolumeKey.Name,
+			Name:      knownVolumeKey.Name,
 			Namespace: knownVolumeKey.Namespace,
 		},
 	}
@@ -80,7 +80,7 @@ var _ = Describe("Indexers", func() {
 		multiCache.RegisterCache(&kapi.PersistentVolume{}, kapi.SchemeGroupVersion.WithKind("PersistentVolume"), volumeIndexer)
 	})
 
-	Describe("Client interface wrapper around an indexer", func() {
+	Describe("client interface wrapper around an indexer", func() {
 		var singleCache ReadInterface
 
 		BeforeEach(func() {
@@ -136,7 +136,7 @@ var _ = Describe("Indexers", func() {
 		})
 	})
 
-	Describe("Client interface wrapper around multiple indexers", func() {
+	Describe("client interface wrapper around multiple indexers", func() {
 		It("should be able to fetch any known object by key and type", func() {
 			outPod := kapi.Pod{}
 			Expect(multiCache.Get(context.TODO(), knownPodKey, &outPod)).NotTo(HaveOccurred())
@@ -160,11 +160,11 @@ var _ = Describe("Indexers", func() {
 			Expect(*out.Spec.ActiveDeadlineSeconds).NotTo(Equal(*knownPod.Spec.ActiveDeadlineSeconds))
 		})
 
-		It("should be able to fetch single caches for known types", func () {
+		It("should be able to fetch single caches for known types", func() {
 			indexer, ok := multiCache.CacheFor(&kapi.Pod{})
 			Expect(ok).To(BeTrue())
 			Expect(indexer).NotTo(BeNil())
-			
+
 			_, ok2 := multiCache.CacheFor(&kapi.PersistentVolumeClaim{})
 			Expect(ok2).To(BeFalse())
 		})

@@ -17,104 +17,106 @@ limitations under the License.
 package ctrl
 
 import (
-	"os"
-	"sync"
+	"fmt"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/common"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
+	"k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/workqueue"
 )
 
-// ControllerManager initializes and starts Controllers.  ControllerManager should always be used to
-// setup dependencies such as Informers and Configs, etc and injectInto them into Controllers.
+type ControllerManager interface {
+	NewController(ControllerArgs, reconcile.Reconcile) Controller
+	Start(<-chan struct{}) error
+	GetConfig() *rest.Config
+	GetClient() client.Interface
+	GetScheme() *runtime.Scheme
+}
+
+var _ ControllerManager = &controllerManager{}
+
+// controllerManager initializes and starts Controllers.  controllerManager should always be used to
+// setup dependencies such as Informers and Configs, etc and setControllerFields them into Controllers.
 //
-// Must specify the Config.
-type ControllerManager struct {
-	// Config is the rest.config used to talk to the apiserver.  Required.
-	Config *rest.Config
+// Must specify the config.
+type controllerManager struct {
+	// config is the rest.config used to talk to the apiserver.  Required.
+	config *rest.Config
 
-	// Scheme is the scheme injected into Controllers, EventHandlers, Sources and Predicates.  Defaults
-	// to scheme.Scheme.
-	Scheme *runtime.Scheme
+	// scheme is the scheme injected into Controllers, EventHandlers, Sources and Predicates.  Defaults
+	// to scheme.scheme.
+	scheme *runtime.Scheme
 
-	// controllers is the set of Controllers that the ControllerManager injects deps into and Starts.
-	controllers []*Controller
+	// controllers is the set of Controllers that the controllerManager injects deps into and Starts.
+	controllers []*controller
 
 	// informers are injected into Controllers (,and transitively EventHandlers, Sources and Predicates).
 	informers informer.Informers
 
 	// TODO(directxman12): Provide an escape hatch to get individual indexers
-	// cacheClient is the cacheClient injected into Controllers (and EventHandlers, Sources and Predicates).
-	cacheClient client.Interface
-
-	// liveClient is the liveClient injected into Controllers (and EventHandlers, Sources and Predicates).
-	liveClient client.Interface
-
-	// once ensures empty fields have default values set.
-	once sync.Once
-
-	// promises a list of functions to run init.
-	promises []func()
+	// client is the client injected into Controllers (and EventHandlers, Sources and Predicates).
+	client client.Interface
 }
 
-// AddController registers a Controller with the ControllerManager.
-// Added Controllers will have Config and Informers injected into them at Start time.
-func (cm *ControllerManager) AddController(c *Controller, promise func()) {
-	cm.init()
-	cm.controllers = append(cm.controllers, c)
-	// promises will be run after injecting the Informers, Config, Scheme into the Controller
-	if promise != nil {
-		cm.promises = append(cm.promises, promise)
+// NewController registers a controller with the controllerManager.
+// Added Controllers will have config and Informers injected into them at Start time.
+func (cm *controllerManager) NewController(ca ControllerArgs, r reconcile.Reconcile) Controller {
+	if ca.MaxConcurrentReconciles <= 0 {
+		ca.MaxConcurrentReconciles = 1
 	}
+	if len(ca.Name) == 0 {
+		ca.Name = "controller-unamed"
+	}
+
+	// Inject dependencies into Reconcile
+	cm.injectInto(r)
+
+	// Create controller with dependencies set
+	c := &controller{
+		reconcile: r,
+		informers: cm.informers,
+		config:    cm.config,
+		scheme:    cm.scheme,
+		client:    cm.client,
+		queue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), ca.Name),
+		maxConcurrentReconciles: ca.MaxConcurrentReconciles,
+		name:   ca.Name,
+		inject: cm.injectInto,
+	}
+	cm.controllers = append(cm.controllers, c)
+	return c
 }
 
-// injectInto injects dependencies into a Controller
-func (cm *ControllerManager) injectInto(i *Controller) {
+func (cm *controllerManager) injectInto(i interface{}) {
+	inject.InjectConfig(cm.config, i)
+	inject.InjectClient(cm.client, i)
+	inject.InjectScheme(cm.scheme, i)
 	inject.InjectInformers(cm.informers, i)
-	inject.InjectConfig(cm.Config, i)
-	inject.InjectScheme(cm.Scheme, i)
+}
+
+func (cm *controllerManager) GetConfig() *rest.Config {
+	return cm.config
+}
+
+func (cm *controllerManager) GetClient() client.Interface {
+	return cm.client
+}
+
+func (cm *controllerManager) GetScheme() *runtime.Scheme {
+	return cm.scheme
 }
 
 // Start starts all registered Controllers and blocks until the Stop channel is closed.
-// Returns an error if there is an error starting any Controller.
-// Injects Informers and Config into Controllers before Starting them.
-func (cm *ControllerManager) Start(stop <-chan struct{}) error {
-	cm.init()
-
-	// Inject dependencies into the controllers
-	for _, c := range cm.controllers {
-		cm.injectInto(c)
-	}
-
-	// Run the promises to setup the Controller Watch invocations now that the Informers has been initialized
-	for _, p := range cm.promises {
-		p()
-	}
-
-	// Inject a Read / Write cacheClient into all controllers
-	// TODO(directxman12): Figure out how to allow users to request a cacheClient without requesting a watch
-	objCache := client.ObjectCacheFromInformers(cm.informers.KnownInformersByType(), cm.Scheme)
-
-	// TODO: Only do this once
-	mapper, err := common.NewDiscoveryRESTMapper(cm.Config)
-	if err != nil {
-		log.WithName("setup").Error(err, "Failed to get API Group-Resources")
-		os.Exit(1)
-	}
-
-	// Inject the cacheClient after all the watches have been set
-	writeObj := &client.Client{Config: cm.Config, Scheme: cm.Scheme, Mapper: mapper}
-	cm.cacheClient = client.SplitReaderWriter{ReadInterface: objCache, WriteInterface: writeObj}
-	cm.liveClient = client.SplitReaderWriter{ReadInterface: writeObj, WriteInterface: writeObj}
-	for _, c := range cm.controllers {
-		inject.InjectClient(cm.cacheClient, cm.liveClient, c)
-	}
-
-	// Start the Informers now that watches have been added
+// Returns an error if there is an error starting any controller.
+// Injects Informers and config into Controllers before Starting them.
+func (cm *controllerManager) Start(stop <-chan struct{}) error {
+	// Start the Informers.
 	cm.informers.Start(stop)
 
 	// Start the controllers after the promises
@@ -136,27 +138,46 @@ func (cm *ControllerManager) Start(stop <-chan struct{}) error {
 	}
 }
 
-// init defaults optional field values on a ControllerManager.  Init will not initialize anything that can fail
-// and instead will exit.
-func (cm *ControllerManager) init() {
-	cm.once.Do(func() {
-		// Initialize a rest.Config if none was specified
-		if cm.Config == nil {
-			log.Error(nil, "Must specify Config for ControllerManager.", "Config", cm.Config)
-			os.Exit(1)
-		}
+type ControllerManagerArgs struct {
+	Config *rest.Config
+	Scheme *runtime.Scheme
+}
 
-		// Use the Kubernetes cacheClient-go Scheme if none is specified
-		if cm.Scheme == nil {
-			cm.Scheme = scheme.Scheme
-		}
+func NewControllerManager(args ControllerManagerArgs) (ControllerManager, error) {
+	cm := &controllerManager{config: args.Config, scheme: args.Scheme}
 
-		// Create a new set of Informers if none is specified
-		if cm.informers == nil {
-			cm.informers = &informer.SelfPopulatingInformers{
-				Config: cm.Config,
-				Scheme: cm.Scheme,
-			}
-		}
-	})
+	// Initialize a rest.config if none was specified
+	if cm.config == nil {
+		err := fmt.Errorf("must specify non-nil config for NewControllerManager")
+		log.Error(err, "", "config", cm.config)
+		return nil, err
+	}
+
+	// Use the Kubernetes client-go scheme if none is specified
+	if cm.scheme == nil {
+		cm.scheme = scheme.Scheme
+	}
+
+	spi := &informer.SelfPopulatingInformers{
+		Config: cm.config,
+		Scheme: cm.scheme,
+	}
+	cm.informers = spi
+	cm.informers.InformerFor(&v1.Deployment{})
+
+	// Inject a Read / Write client into all controllers
+	// TODO(directxman12): Figure out how to allow users to request a client without requesting a watch
+	objCache := client.ObjectCacheFromInformers(spi.KnownInformersByType(), cm.scheme)
+	spi.Callbacks = append(spi.Callbacks, objCache)
+
+	mapper, err := common.NewDiscoveryRESTMapper(cm.config)
+	if err != nil {
+		log.Error(err, "Failed to get API Group-Resources")
+		return nil, err
+	}
+
+	// Inject the client after all the watches have been set
+	writeObj := &client.Client{Config: cm.config, Scheme: cm.scheme, Mapper: mapper}
+	cm.client = client.SplitReaderWriter{ReadInterface: objCache, WriteInterface: writeObj}
+	return cm, nil
 }

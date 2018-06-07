@@ -17,26 +17,17 @@ limitations under the License.
 package predicate_test
 
 import (
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/predicate"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
-	appsv1 "k8s.io/api/apps/v1"
 )
 
-// This example filters Deployment events using a Predicate that drops Update Events where the Deployment
-// Generation has not changed.
-func ExamplePredicateFunc() {
-	controller := &ctrl.Controller{Name: "deployment-controller"}
+var p predicate.Predicate
 
-	controller.Watch(
-		&source.KindSource{Type: &appsv1.Deployment{}},
-		&eventhandler.EnqueueHandler{},
-		predicate.PredicateFuncs{
-			UpdateFunc: func(e event.UpdateEvent) bool {
-				return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()
-			},
+// This example creates a new Predicate to drop Update Events where the Generation has not changed.
+func ExamplePredicateFunc() {
+	p = predicate.PredicateFuncs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()
 		},
-	)
+	}
 }

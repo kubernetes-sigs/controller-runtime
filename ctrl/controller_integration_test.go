@@ -31,13 +31,13 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Controller", func() {
-	var c chan reconcile.ReconcileRequest
+var _ = Describe("controller", func() {
+	var reconciled chan reconcile.ReconcileRequest
 	var stop chan struct{}
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
-		c = make(chan reconcile.ReconcileRequest)
+		reconciled = make(chan reconcile.ReconcileRequest)
 		Expect(cfg).NotTo(BeNil())
 	})
 
@@ -45,33 +45,35 @@ var _ = Describe("Controller", func() {
 		close(stop)
 	})
 
-	Describe("Controller", func() {
+	Describe("controller", func() {
 		// TODO(directxman12): write a whole suite of controller-client interaction tests
 
-		It("should Reconcile", func(done Done) {
-			By("Creating the Controller and adding it to the ControllerManager")
-			instance := &ctrl.Controller{
-				Reconcile: reconcile.ReconcileFunc(
-					func(r reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
-						c <- r
-						return reconcile.ReconcileResult{}, nil
-					}),
-			}
-			cm := &ctrl.ControllerManager{Config: cfg}
-			cm.AddController(instance, func() {
-				// Deferred from the Init function
-				instance.Watch(&source.KindSource{Type: &appsv1.ReplicaSet{}}, &eventhandler.EnqueueOwnerHandler{
-					OwnerType: &appsv1.Deployment{},
-				})
-				instance.Watch(&source.KindSource{Type: &appsv1.Deployment{}}, &eventhandler.EnqueueHandler{})
-			})
+		It("should reconcile", func(done Done) {
+			By("Creating the ControllerManager")
+			cm, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{Config: cfg})
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting the ControllerManager")
 			go func() {
 				defer GinkgoRecover()
-				err := cm.Start(stop)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(cm.Start(stop)).NotTo(HaveOccurred())
 			}()
+
+			By("Creating the Controller")
+			instance := cm.NewController(ctrl.ControllerArgs{}, reconcile.ReconcileFunc(
+				func(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
+					reconciled <- request
+					return reconcile.ReconcileResult{}, nil
+				}))
+
+			By("Watching Resources")
+			err = instance.Watch(&source.KindSource{Type: &appsv1.ReplicaSet{}}, &eventhandler.EnqueueOwnerHandler{
+				OwnerType: &appsv1.Deployment{},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = instance.Watch(&source.KindSource{Type: &appsv1.Deployment{}}, &eventhandler.EnqueueHandler{})
+			Expect(err).NotTo(HaveOccurred())
 
 			deployment := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "deployment-name"},
@@ -98,16 +100,16 @@ var _ = Describe("Controller", func() {
 			}}
 
 			By("Invoking Reconciling for Create")
-			deployment, err := clientset.AppsV1().Deployments("default").Create(deployment)
+			deployment, err = clientset.AppsV1().Deployments("default").Create(deployment)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(<-c).To(Equal(expectedReconcileRequest))
+			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for Update")
 			newDeployment := deployment.DeepCopy()
 			newDeployment.Labels = map[string]string{"foo": "bar"}
 			newDeployment, err = clientset.AppsV1().Deployments("default").Update(newDeployment)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(<-c).To(Equal(expectedReconcileRequest))
+			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for an OwnedObject when it is created")
 			replicaset := &appsv1.ReplicaSet{
@@ -130,25 +132,25 @@ var _ = Describe("Controller", func() {
 			}
 			replicaset, err = clientset.AppsV1().ReplicaSets("default").Create(replicaset)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(<-c).To(Equal(expectedReconcileRequest))
+			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for an OwnedObject when it is updated")
 			newReplicaset := replicaset.DeepCopy()
 			newReplicaset.Labels = map[string]string{"foo": "bar"}
 			newReplicaset, err = clientset.AppsV1().ReplicaSets("default").Update(newReplicaset)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(<-c).To(Equal(expectedReconcileRequest))
+			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for an OwnedObject when it is deleted")
 			err = clientset.AppsV1().ReplicaSets("default").Delete(replicaset.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(<-c).To(Equal(expectedReconcileRequest))
+			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for Delete")
 			err = clientset.AppsV1().Deployments("default").
 				Delete("deployment-name", &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(<-c).To(Equal(expectedReconcileRequest))
+			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			close(done)
 		}, 5)

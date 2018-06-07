@@ -26,7 +26,7 @@ import (
 
 var _ runtime.Object = &ErrorType{}
 
-// ErrorType implements runtime.Object but isn't registered in any Scheme and should cause errors in tests as a result.
+// ErrorType implements runtime.Object but isn't registered in any scheme and should cause errors in tests as a result.
 type ErrorType struct{}
 
 func (ErrorType) GetObjectKind() schema.ObjectKind { return nil }

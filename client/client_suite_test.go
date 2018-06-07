@@ -9,6 +9,5 @@ import (
 
 func TestEventhandler(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Client tests")
+	RunSpecs(t, "client tests")
 }
-

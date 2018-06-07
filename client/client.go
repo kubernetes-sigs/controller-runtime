@@ -16,7 +16,7 @@ import (
 
 var _ Interface = &Client{}
 
-// Client is an Interface that works by reading and writing
+// client is an Interface that works by reading and writing
 // directly from/to an API server.
 type Client struct {
 	Config *rest.Config

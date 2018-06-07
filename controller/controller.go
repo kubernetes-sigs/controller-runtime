@@ -40,7 +40,7 @@ import (
 )
 
 var (
-	// DefaultReconcileFn is used by GenericController if Reconcile is not set
+	// DefaultReconcileFn is used by GenericController if reconcile is not set
 	DefaultReconcileFn = func(k types.ReconcileKey) error {
 		log.Printf("No ReconcileFn defined - skipping %+v", k)
 		return nil
@@ -52,12 +52,12 @@ var (
 // Code originally copied from kubernetes/sample-controller at
 // https://github.com/kubernetes/sample-controller/blob/994cb3621c790e286ab11fb74b3719b20bb55ca7/controller.go
 
-// GenericController watches event sources and invokes a Reconcile function
+// GenericController watches event sources and invokes a reconcile function
 type GenericController struct {
 	// Name is the name of the controller
 	Name string
 
-	// Reconcile implements the controller business logic.
+	// reconcile implements the controller business logic.
 	Reconcile types.ReconcileFn
 
 	// informerProvider contains the registry of shared informers to use.

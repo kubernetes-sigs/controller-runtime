@@ -38,7 +38,7 @@ func Example_second() {
 	}
 
 	// Step 2: Create a new Pod controller to reconcile Pods changes using the default
-	// Reconcile function to print messages on events
+	// reconcile function to print messages on events
 	podController := &Controller{
 		podlister: controller.GetInformerProvider(&corev1.Pod{}).(corev1informer.PodInformer).Lister(),
 	}
@@ -65,6 +65,6 @@ func (c *Controller) Reconcile(key types.ReconcileKey) error {
 		log.Printf("Failed to reconcile Pod %+v\n", err)
 		return err
 	}
-	log.Printf("Reconcile Pod %+v\n", pod)
+	log.Printf("reconcile Pod %+v\n", pod)
 	return nil
 }

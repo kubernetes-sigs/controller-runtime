@@ -25,63 +25,64 @@ import (
 	"github.com/kubernetes-sigs/kubebuilder/pkg/config"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
+	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/signals"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-
-	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 )
 
 func main() {
 	flag.Parse()
 	logf.SetLogger(logf.ZapLogger(false))
 
-	// Create the ControllerManager and Controller
-	cm := ctrl.ControllerManager{Config: config.GetConfigOrDie()}
-	c := &ctrl.Controller{Reconcile: &ReconcileReplicaSet{}}
+	// Setup a ControllerManager
+	manager, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{Config: config.GetConfigOrDie()})
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// Watch Pods and ReplicaSets
-	cm.AddController(c, func() {
-		c.Watch(
-			// Watch ReplicaSets
-			&source.KindSource{Type: &appsv1.ReplicaSet{}},
-			// Enqueue ReplicaSet object key
-			&eventhandler.EnqueueHandler{})
-		c.Watch(
-			// Watch Pods
-			&source.KindSource{Type: &corev1.Pod{}},
-			// Enqueue Owning ReplicaSet object key
-			&eventhandler.EnqueueOwnerHandler{OwnerType: &appsv1.ReplicaSet{}, IsController: true})
-	})
+	// Setup a new controller to Reconcile ReplicaSets
+	c := manager.NewController(
+		ctrl.ControllerArgs{Name: "foo-controller", MaxConcurrentReconciles: 1},
+		&ReconcileReplicaSet{client: manager.GetClient()},
+	)
 
-	// Start the Controllers and block until we get a shutdown signal
-	cm.Start(signals.SetupSignalHandler())
+	err = c.Watch(
+		// Watch ReplicaSets
+		&source.KindSource{Type: &appsv1.ReplicaSet{}},
+		// Enqueue ReplicaSet object key
+		&eventhandler.EnqueueHandler{})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = c.Watch(
+		// Watch Pods
+		&source.KindSource{Type: &corev1.Pod{}},
+		// Enqueue Owning ReplicaSet object key
+		&eventhandler.EnqueueOwnerHandler{OwnerType: &appsv1.ReplicaSet{}, IsController: true})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Fatal(manager.Start(signals.SetupSignalHandler()))
 }
 
 // ReconcileReplicaSet reconciles ReplicaSets
 type ReconcileReplicaSet struct {
-	cacheClient client.Interface
-	liveClient  client.Interface
+	client client.Interface
 }
 
-// Implement inject.Client so the Controller can inject a client
-var _ inject.Client = &ReconcileReplicaSet{}
-
-func (r *ReconcileReplicaSet) InjectClient(cacheClient client.Interface, liveClient client.Interface) {
-	r.cacheClient = cacheClient
-}
-
-// Implement reconcile.Reconcile so the Controller can reconcile objects
+// Implement reconcile.reconcile so the controller can reconcile objects
 var _ reconcile.Reconcile = &ReconcileReplicaSet{}
 
 func (r *ReconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
 	// Fetch the ReplicaSet from the cache
 	rs := &appsv1.ReplicaSet{}
-	err := r.cacheClient.Get(context.TODO(), request.NamespacedName, rs)
+	err := r.client.Get(context.TODO(), request.NamespacedName, rs)
 	if errors.IsNotFound(err) {
 		log.Printf("Could not find ReplicaSet %v.\n", request)
 		return reconcile.ReconcileResult{}, nil
@@ -106,7 +107,7 @@ func (r *ReconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (rec
 
 	// Update the ReplicaSet
 	rs.Labels["hello"] = "world"
-	err = r.cacheClient.Update(context.TODO(), rs)
+	err = r.client.Update(context.TODO(), rs)
 	if err != nil {
 		log.Printf("Could not write ReplicaSet %v\n", err)
 		return reconcile.ReconcileResult{}, err

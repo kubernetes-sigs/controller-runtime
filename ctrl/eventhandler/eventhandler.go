@@ -23,17 +23,17 @@ import (
 
 // EventHandler enqueues ReconcileRequests in response to events (e.g. Pod Create).  EventHandlers map an Event
 // for one object to trigger Reconciles for either the same object or different objects - e.g. if there is an
-// Event for object with type Foo (using source.KindSource) then Reconcile one or more object(s) with type Bar.
+// Event for object with type Foo (using source.KindSource) then reconcile one or more object(s) with type Bar.
 //
-// Identical ReconcileRequests will be batched together through the queuing mechanism before Reconcile is called.
+// Identical ReconcileRequests will be batched together through the queuing mechanism before reconcile is called.
 //
-// * Use EnqueueHandler to Reconcile the object the event is for
+// * Use EnqueueHandler to reconcile the object the event is for
 // - do this for events for the type the Controller Reconciles. (e.g. Deployment for a Deployment Controller)
 //
-// * Use EnqueueOwnerHandler to Reconcile the owner of the object the event is for
+// * Use EnqueueOwnerHandler to reconcile the owner of the object the event is for
 // - do this for events for the types the Controller creates.  (e.g. ReplicaSets created by a Deployment Controller)
 //
-// * Use EnqueueMappendHandler to transform an event for an object to a Reconcile of an object
+// * Use EnqueueMappendHandler to transform an event for an object to a reconcile of an object
 // of a different type - do this for events for types the Controller may be interested in, but doesn't create.
 // (e.g. If Foo responds to cluster size events, map Node events to Foo objects.)
 //
@@ -50,7 +50,7 @@ type EventHandler interface {
 	Delete(workqueue.RateLimitingInterface, event.DeleteEvent)
 
 	// Generic is called in response to an event of an unknown type or a synthetic event triggered as a cron or
-	// external trigger request - e.g. Reconcile Autoscaling, or a Webhook.
+	// external trigger request - e.g. reconcile Autoscaling, or a Webhook.
 	Generic(workqueue.RateLimitingInterface, event.GenericEvent)
 }
 

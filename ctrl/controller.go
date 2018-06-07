@@ -18,13 +18,11 @@ package ctrl
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/client"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
-	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/predicate"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/reconcile"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source"
@@ -39,41 +37,56 @@ import (
 	logf "github.com/kubernetes-sigs/kubebuilder/pkg/log"
 )
 
-var log = logf.KBLog.WithName("controller").WithName("Controller")
+var log = logf.KBLog.WithName("controller").WithName("controller")
 
-// Controllers are work queues that watch for changes to objects (i.e. Create / Update / Delete events) and
-// then Reconcile an object (i.e. make changes to ensure the system state matches what is specified in the object).
-type Controller struct {
-	// Name is used to uniquely identify a Controller in tracing, logging and monitoring.  Name is required.
+type ControllerArgs struct {
+	// name is used to uniquely identify a controller in tracing, logging and monitoring.  name is required.
 	Name string
 
-	// Reconcile is a function that can be called at any time with the Name / Namespace of an object and
+	// maxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
+	MaxConcurrentReconciles int
+}
+
+type Controller interface {
+	// Watch takes events provided by a Source and uses the EventHandler to enqueue ReconcileRequests in
+	// response to the events.
+	//
+	// Watch may be provided one or more Predicates to filter events before they are given to the EventHandler.
+	// Events will be passed to the EventHandler iff all provided Predicates evaluate to true.
+	Watch(src source.Source, evthdler eventhandler.EventHandler, prct ...predicate.Predicate) error
+
+	// Start starts the controller.  Start blocks until stop is closed or a controller has an error starting.
+	Start(stop <-chan struct{}) error
+}
+
+var _ Controller = &controller{}
+
+// Controllers are work queues that watch for changes to objects (i.e. Create / Update / Delete events) and
+// then reconcile an object (i.e. make changes to ensure the system state matches what is specified in the object).
+type controller struct {
+	// name is used to uniquely identify a controller in tracing, logging and monitoring.  name is required.
+	name string
+
+	// maxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
+	maxConcurrentReconciles int
+
+	// reconcile is a function that can be called at any time with the name / Namespace of an object and
 	// ensures that the state of the system matches the state specified in the object.
 	// Defaults to the DefaultReconcileFunc.
-	Reconcile reconcile.Reconcile
+	reconcile reconcile.Reconcile
 
-	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
-	MaxConcurrentReconciles int
+	// client is a lazily initialized client.  The controllerManager will initialize this when Start is called.
+	client client.Interface
 
-	// CacheClient is injected by the ControllerManager when ControllerManager.Start is called
-	CacheClient client.Interface
+	// scheme is injected by the controllerManager when controllerManager.Start is called
+	scheme *runtime.Scheme
 
-	// LiveClient is injected by the ControllerManager when ControllerManager.Start is called
-	LiveClient client.Interface
+	// fieldIndexes knows how to add field indexes over the Informers used by this controller,
+	// which can later be consumed via field selectors from the injected client.
+	fieldIndexes client.FieldIndexer
 
-	// Scheme is injected by the ControllerManager when ControllerManager.Start is called
-	Scheme *runtime.Scheme
-
-	// FieldIndexes knows how to add field indexes over the Informers used by this controller,
-	// which can later be consumed via field selectors from the injected cacheClient.
-	FieldIndexes client.FieldIndexer
-
-	// Informers are injected by the ControllerManager when ControllerManager.Start is called
+	// Informers are injected by the controllerManager when controllerManager.Start is called
 	informers informer.Informers
-
-	// objectCache is a Client.ReadInterface that reads from the indexer backing Informers
-	// objectCache is injected by the ControllerManager when ControllerManager.Start is called
-	objectCache *client.ObjectCache
 
 	// config is the rest.config used to talk to the apiserver.  Defaults to one of in-cluster, environment variable
 	// specified, or the ~/.kube/config.
@@ -86,112 +99,32 @@ type Controller struct {
 	// once ensures unspecified fields get default values
 	once sync.Once
 
-	// injectIntoObjects contains objects that need to have a cacheClient injected
-	injectIntoObjects []interface{}
+	inject func(i interface{})
 
-	// TODO(pwittrock): Consider initializing a logger with the Controller name as the tag
+	// TODO(pwittrock): Consider initializing a logger with the controller name as the tag
 }
 
-var _ inject.Informers = &Controller{}
-
-func (c *Controller) InjectInformers(i informer.Informers) {
-	c.informers = i
-	c.objectCache = client.NewObjectCache()
-	c.FieldIndexes = &client.InformerFieldIndexer{
-		Informers: i,
-	}
-}
-
-var _ inject.Config = &Controller{}
-
-func (c *Controller) InjectConfig(i *rest.Config) {
-	c.config = i
-}
-
-var _ inject.Client = &Controller{}
-
-func (c *Controller) InjectClient(cacheClient client.Interface, liveClient client.Interface) {
-	c.CacheClient = cacheClient
-	c.LiveClient = liveClient
-}
-
-var _ inject.Scheme = &Controller{}
-
-func (c *Controller) InjectScheme(s *runtime.Scheme) {
-	c.Scheme = s
-}
-
-// Watch takes events provided by a Source and uses the EventHandler to enqueue ReconcileRequests in
-// response to the events.
-//
-// Watch may be provided one or more Predicates to filter events before they are given to the EventHandler.
-// Events will be passed to the EventHandler iff all provided Predicates evaluate to true.
-func (c *Controller) Watch(src source.Source, evthdler eventhandler.EventHandler, prct ...predicate.Predicate) {
-	c.init()
-	if c.informers == nil {
-		log.Error(nil, "Watch called before Controller has been injected by a ControllerManager",
-			"Name", c.Name)
-		os.Exit(1)
-	}
-
+func (c *controller) Watch(src source.Source, evthdler eventhandler.EventHandler, prct ...predicate.Predicate) error {
 	// Inject cache into arguments
-	c.injectInto(src)
-	c.injectInto(evthdler)
+	c.inject(src)
+	c.inject(evthdler)
 	for _, pr := range prct {
-		c.injectInto(pr)
+		c.inject(pr)
 	}
 
-	log.Info("Starting EventSource", "Controller", c.Name, "Source", src)
-	src.Start(evthdler, c.queue)
+	// TODO(pwittrock): wire in predicates
 
-	// Inject the cacheClient into the source, eventhandler and predicates after the cacheClient has been initialized
-	c.injectIntoObjects = append(c.injectIntoObjects, src)
-	c.injectIntoObjects = append(c.injectIntoObjects, evthdler)
-	for _, pr := range prct {
-		c.injectIntoObjects = append(c.injectIntoObjects, pr)
-	}
+	log.Info("Starting EventSource", "controller", c.name, "Source", src)
+	return src.Start(evthdler, c.queue)
 }
 
-func (c *Controller) injectInto(i interface{}) {
-	inject.InjectConfig(c.config, i)
-	inject.InjectInformers(c.informers, i)
-	inject.InjectClient(c.CacheClient, c.LiveClient, i)
-	inject.InjectScheme(c.Scheme, i)
-}
-
-// init defaults field values on c
-func (c *Controller) init() {
-	if c.MaxConcurrentReconciles <= 0 {
-		c.MaxConcurrentReconciles = 1
-	}
-
-	if len(c.Name) == 0 {
-		c.Name = "controller-unamed"
-	}
-
-	// Default the RateLimitingInterface to a NamedRateLimitingQueue
-	if c.queue == nil {
-		c.queue = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), c.Name)
-	}
-
-	// Inject dependencies into the Reconcile object
-	c.injectInto(c.Reconcile)
-}
-
-// Start starts the Controller.  Start blocks until stop is closed or a Controller has an error starting.
-func (c *Controller) Start(stop <-chan struct{}) error {
-	c.once.Do(c.init)
-
-	for _, i := range c.injectIntoObjects {
-		inject.InjectClient(c.CacheClient, c.LiveClient, i)
-	}
-
+func (c *controller) Start(stop <-chan struct{}) error {
 	// TODO)(pwittrock): Reconsider HandleCrash
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
 	// Start the SharedIndexInformer factories to begin populating the SharedIndexInformer caches
-	log.Info("Starting Controller", "Controller", c.Name)
+	log.Info("Starting controller", "controller", c.name)
 
 	// Wait for the caches to be synced before starting workers
 	allInformers := c.informers.KnownInformersByType()
@@ -200,15 +133,14 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 		syncedFuncs = append(syncedFuncs, informer.HasSynced)
 	}
 	if ok := cache.WaitForCacheSync(stop, syncedFuncs...); !ok {
-		err := fmt.Errorf("failed to wait for %s caches to sync", c.Name)
-		log.Error(err, "Could not wait for Cache to sync", "Controller", c.Name)
+		err := fmt.Errorf("failed to wait for %s caches to sync", c.name)
+		log.Error(err, "Could not wait for Cache to sync", "controller", c.name)
 		return err
 	}
 
 	// Launch two workers to process resources
-	log.Info("Starting workers", "Controller", c.Name, "WorkerCount", c.MaxConcurrentReconciles)
-	for i := 0; i < c.MaxConcurrentReconciles; i++ {
-
+	log.Info("Starting workers", "controller", c.name, "WorkerCount", c.maxConcurrentReconciles)
+	for i := 0; i < c.maxConcurrentReconciles; i++ {
 		// Continually process work items
 		go wait.Until(func() {
 			// TODO(pwittrock): Should we really use wait.Until to continuously restart this if it exits?
@@ -218,13 +150,13 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 	}
 
 	<-stop
-	log.Info("Stopping workers", "Controller", c.Name)
+	log.Info("Stopping workers", "controller", c.name)
 	return nil
 }
 
 // processNextWorkItem will read a single work item off the workqueue and
 // attempt to process it, by calling the syncHandler.
-func (c *Controller) processNextWorkItem() bool {
+func (c *controller) processNextWorkItem() bool {
 	// This code copy-pasted from the sample-controller.
 
 	obj, shutdown := c.queue.Get()
@@ -253,16 +185,16 @@ func (c *Controller) processNextWorkItem() bool {
 		// process a work item that is invalid.
 		c.queue.Forget(obj)
 		log.Error(nil, "Queue item was not a ReconcileRequest",
-			"Controller", c.Name, "Type", fmt.Sprintf("%T", obj), "Value", obj)
+			"controller", c.name, "Type", fmt.Sprintf("%T", obj), "Value", obj)
 		// Return true, don't take a break
 		return true
 	}
 
-	// RunInformersAndControllers the syncHandler, passing it the namespace/Name string of the
+	// RunInformersAndControllers the syncHandler, passing it the namespace/name string of the
 	// resource to be synced.
-	if result, err := c.Reconcile.Reconcile(req); err != nil {
+	if result, err := c.reconcile.Reconcile(req); err != nil {
 		c.queue.AddRateLimited(req)
-		log.Error(nil, "Reconcile error", "Controller", c.Name, "ReconcileRequest", req)
+		log.Error(nil, "reconcile error", "controller", c.name, "ReconcileRequest", req)
 
 		// TODO(pwittrock): FTO Returning an error here seems to back things off for a second before restarting
 		// the loop through wait.Util.
@@ -279,7 +211,7 @@ func (c *Controller) processNextWorkItem() bool {
 	c.queue.Forget(obj)
 
 	// TODO(directxman12): What does 1 mean?  Do we want level constants?  Do we want levels at all?
-	log.V(1).Info("Successfully Reconciled", "Controller", c.Name, "ReconcileRequest", req)
+	log.V(1).Info("Successfully Reconciled", "controller", c.name, "ReconcileRequest", req)
 
 	// Return true, don't take a break
 	return true

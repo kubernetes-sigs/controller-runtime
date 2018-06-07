@@ -11,7 +11,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/common"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/common"
 )
 
 var _ Interface = &Client{}

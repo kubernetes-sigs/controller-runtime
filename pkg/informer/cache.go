@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/ctrl/common"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/common"
 	logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

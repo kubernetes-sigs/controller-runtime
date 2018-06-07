@@ -14,325 +14,218 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package ctrl
 
 import (
 	"fmt"
-	"log"
-	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/golang/glog"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandlers"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/informers"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/metrics"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicates"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/types"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/inject/run"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/util/sets"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/informer"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
 )
 
-var (
-	// DefaultReconcileFn is used by GenericController if reconcile is not set
-	DefaultReconcileFn = func(k types.ReconcileKey) error {
-		log.Printf("No ReconcileFn defined - skipping %+v", k)
-		return nil
-	}
+var log = logf.KBLog.WithName("controller").WithName("controller")
 
-	counter uint64
-)
-
-// Code originally copied from kubernetes/sample-controller at
-// https://github.com/kubernetes/sample-controller/blob/994cb3621c790e286ab11fb74b3719b20bb55ca7/controller.go
-
-// GenericController watches event sources and invokes a reconcile function
-type GenericController struct {
-	// Name is the name of the controller
+// ControllerArgs are the arguments for creating a new Controller
+type ControllerArgs struct {
+	// Name is used to uniquely identify a controller in tracing, logging and monitoring.  Name is required.
 	Name string
 
-	// reconcile implements the controller business logic.
-	Reconcile types.ReconcileFn
+	// maxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
+	MaxConcurrentReconciles int
+}
 
-	// informerProvider contains the registry of shared informers to use.
-	InformerRegistry informers.InformerGetter
+// Controllers are work queues that watch for changes to objects (i.e. Create / Update / Delete events) and
+// then reconcile an object (i.e. make changes to ensure the system state matches what is specified in the object).
+type Controller interface {
+	// Watch takes events provided by a Source and uses the EventHandler to enqueue ReconcileRequests in
+	// response to the events.
+	//
+	// Watch may be provided one or more Predicates to filter events before they are given to the EventHandler.
+	// Events will be passed to the EventHandler iff all provided Predicates evaluate to true.
+	Watch(src source.Source, evthdler eventhandler.EventHandler, prct ...predicate.Predicate) error
 
-	BeforeReconcile func(key types.ReconcileKey)
-	AfterReconcile  func(key types.ReconcileKey, err error)
+	// Start starts the controller.  Start blocks until stop is closed or a controller has an error starting.
+	Start(stop <-chan struct{}) error
+}
 
-	// listeningQueue is an listeningQueue that listens for events from informers and adds object keys to
+var _ Controller = &controller{}
+
+type controller struct {
+	// name is used to uniquely identify a controller in tracing, logging and monitoring.  name is required.
+	name string
+
+	// maxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
+	maxConcurrentReconciles int
+
+	// reconcile is a function that can be called at any time with the name / Namespace of an object and
+	// ensures that the state of the system matches the state specified in the object.
+	// Defaults to the DefaultReconcileFunc.
+	reconcile reconcile.Reconcile
+
+	// client is a lazily initialized client.  The controllerManager will initialize this when Start is called.
+	client client.Interface
+
+	// scheme is injected by the controllerManager when controllerManager.Start is called
+	scheme *runtime.Scheme
+
+	// informers are injected by the controllerManager when controllerManager.Start is called
+	informers informer.Informers
+
+	// config is the rest.config used to talk to the apiserver.  Defaults to one of in-cluster, environment variable
+	// specified, or the ~/.kube/config.
+	config *rest.Config
+
+	// queue is an listeningQueue that listens for events from Informers and adds object keys to
 	// the queue for processing
-	queue listeningQueue
-
-	// syncTs contains the start times of each currently running reconcile loop
-	syncTs sets.Int64
+	queue workqueue.RateLimitingInterface
 
 	// once ensures unspecified fields get default values
 	once sync.Once
+
+	// inject is used to inject dependencies into other objects such as Sources, EventHandlers and Predicates
+	inject func(i interface{}) error
+
+	// mu is used to synchronize controller setup
+	mu sync.Mutex
+
+	// TODO(pwittrock): Consider initializing a logger with the controller name as the tag
 }
 
-// GetMetrics returns metrics about the queue processing
-func (gc *GenericController) GetMetrics() metrics.Metrics {
-	// Get the current timestamps and sort them
-	ts := gc.syncTs.List()
-	sort.Slice(ts, func(i, j int) bool { return ts[i] < ts[j] })
-	return metrics.Metrics{
-		UncompletedReconcileTs: ts,
-		QueueLength:            gc.queue.Len(),
+func (c *controller) Watch(src source.Source, evthdler eventhandler.EventHandler, prct ...predicate.Predicate) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Inject cache into arguments
+	if err := c.inject(src); err != nil {
+		return err
 	}
+	if err := c.inject(evthdler); err != nil {
+		return err
+	}
+	for _, pr := range prct {
+		if err := c.inject(pr); err != nil {
+			return err
+		}
+	}
+
+	// TODO(pwittrock): wire in predicates
+
+	log.Info("Starting EventSource", "controller", c.name, "Source", src)
+	return src.Start(evthdler, c.queue)
 }
 
-// Watch watches objects matching obj's type and enqueues their keys to be reconcild.
-func (gc *GenericController) Watch(obj metav1.Object, p ...predicates.Predicate) error {
-	gc.once.Do(gc.init)
-	return gc.queue.addEventHandler(obj,
-		eventhandlers.MapAndEnqueue{Map: eventhandlers.MapToSelf, Predicates: p})
-}
+func (c *controller) Start(stop <-chan struct{}) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-// WatchControllerOf reconciles the controller of the object type being watched.  e.g. If the
-// controller created a Pod, watch the Pod for events and invoke the controller reconcile function.
-// Uses path to lookup the ancestors.  Will lookup each ancestor in the path until it gets to the
-// root and then reconcile this key.
-//
-// Example: Deployment controller creates a ReplicaSet.  ReplicaSet controller creates a Pod.  Deployment
-// controller wants to have its reconcile method called for Pod events for any Pods it created (transitively).
-// - Pod event occurs - find owners references
-// - Lookup the Pod parent ReplicaSet by using the first path element (compare UID to ref)
-// - Lookup the ReplicaSet parent Deployment by using the second path element (compare UID to ref)
-// - Enqueue reconcile for Deployment namespace/name
-//
-// This could be implemented as:
-// WatchControllerOf(&corev1.Pod, eventhandlers.Path{FnToLookupReplicaSetByNamespaceName, FnToLookupDeploymentByNamespaceName })
-func (gc *GenericController) WatchControllerOf(obj metav1.Object, path eventhandlers.Path,
-	p ...predicates.Predicate) error {
-	gc.once.Do(gc.init)
-	return gc.queue.addEventHandler(obj,
-		eventhandlers.MapAndEnqueue{Map: eventhandlers.MapToController{Path: path}.Map, Predicates: p})
-}
-
-// WatchTransformationOf watches objects matching obj's type and enqueues the key returned by mapFn.
-func (gc *GenericController) WatchTransformationOf(obj metav1.Object, mapFn eventhandlers.ObjToKey,
-	p ...predicates.Predicate) error {
-	gc.once.Do(gc.init)
-	return gc.queue.addEventHandler(obj,
-		eventhandlers.MapAndEnqueue{Map: mapFn, Predicates: p})
-}
-
-// WatchTransformationsOf watches objects matching obj's type and enqueues the keys returned by mapFn.
-func (gc *GenericController) WatchTransformationsOf(obj metav1.Object, mapFn eventhandlers.ObjToKeys,
-	p ...predicates.Predicate) error {
-	gc.once.Do(gc.init)
-	return gc.queue.addEventHandler(obj,
-		eventhandlers.MapAndEnqueue{MultiMap: func(i interface{}) []types.ReconcileKey {
-			result := []types.ReconcileKey{}
-			for _, k := range mapFn(i) {
-				if namespace, name, err := cache.SplitMetaNamespaceKey(k); err == nil {
-					result = append(result, types.ReconcileKey{namespace, name})
-				}
-			}
-			return result
-		}, Predicates: p})
-}
-
-// WatchTransformationKeyOf watches objects matching obj's type and enqueues the key returned by mapFn.
-func (gc *GenericController) WatchTransformationKeyOf(obj metav1.Object, mapFn eventhandlers.ObjToReconcileKey,
-	p ...predicates.Predicate) error {
-	gc.once.Do(gc.init)
-	return gc.queue.addEventHandler(obj,
-		eventhandlers.MapAndEnqueue{MultiMap: func(i interface{}) []types.ReconcileKey {
-			if k := mapFn(i); len(k.Name) > 0 {
-				return []types.ReconcileKey{k}
-			} else {
-				return []types.ReconcileKey{}
-			}
-		}, Predicates: p})
-}
-
-// WatchTransformationKeysOf watches objects matching obj's type and enqueues the keys returned by mapFn.
-func (gc *GenericController) WatchTransformationKeysOf(obj metav1.Object, mapFn eventhandlers.ObjToReconcileKeys,
-	p ...predicates.Predicate) error {
-	gc.once.Do(gc.init)
-	return gc.queue.addEventHandler(obj,
-		eventhandlers.MapAndEnqueue{MultiMap: mapFn, Predicates: p})
-}
-
-// WatchEvents watches objects matching obj's type and uses the functions from provider to handle events.
-func (gc *GenericController) WatchEvents(obj metav1.Object, provider types.HandleFnProvider) error {
-	gc.once.Do(gc.init)
-	return gc.queue.addEventHandler(obj, fnToInterfaceAdapter{provider})
-}
-
-// WatchChannel enqueues object keys read from the channel.
-func (gc *GenericController) WatchChannel(source <-chan string) error {
-	gc.once.Do(gc.init)
-	return gc.queue.watchChannel(source)
-}
-
-// fnToInterfaceAdapter adapts a function to an interface
-type fnToInterfaceAdapter struct {
-	val func(workqueue.RateLimitingInterface) cache.ResourceEventHandler
-}
-
-func (f fnToInterfaceAdapter) Get(q workqueue.RateLimitingInterface) cache.ResourceEventHandler {
-	return f.val(q)
-}
-
-// RunInformersAndControllers will set up the event handlers for types we are interested in, as well
-// as syncing SharedIndexInformer caches and starting workers. It will block until stopCh
-// is closed, at which point it will shutdown the workqueue and wait for
-// workers to finish processing their current work items.
-func (gc *GenericController) run(options run.RunArguments) error {
-	gc.once.Do(gc.init)
-	defer runtime.HandleCrash()
-	defer gc.queue.ShutDown()
+	// TODO)(pwittrock): Reconsider HandleCrash
+	defer utilruntime.HandleCrash()
+	defer c.queue.ShutDown()
 
 	// Start the SharedIndexInformer factories to begin populating the SharedIndexInformer caches
-	glog.Infof("Starting %s controller", gc.Name)
+	log.Info("Starting controller", "controller", c.name)
 
 	// Wait for the caches to be synced before starting workers
-	glog.Infof("Waiting for %s SharedIndexInformer caches to sync", gc.Name)
-	if ok := cache.WaitForCacheSync(options.Stop, gc.queue.synced...); !ok {
-		return fmt.Errorf("failed to wait for %s caches to sync", gc.Name)
+	allInformers := c.informers.KnownInformersByType()
+	syncedFuncs := make([]cache.InformerSynced, 0, len(allInformers))
+	for _, informer := range allInformers {
+		syncedFuncs = append(syncedFuncs, informer.HasSynced)
+	}
+	if ok := cache.WaitForCacheSync(stop, syncedFuncs...); !ok {
+		err := fmt.Errorf("failed to wait for %s caches to sync", c.name)
+		log.Error(err, "Could not wait for Cache to sync", "controller", c.name)
+		return err
 	}
 
-	glog.Infof("Starting %s workers", gc.Name)
 	// Launch two workers to process resources
-	for i := 0; i < options.ControllerParallelism; i++ {
-		go wait.Until(gc.runWorker, time.Second, options.Stop)
+	log.Info("Starting workers", "controller", c.name, "WorkerCount", c.maxConcurrentReconciles)
+	for i := 0; i < c.maxConcurrentReconciles; i++ {
+		// Continually process work items
+		go wait.Until(func() {
+			// TODO(pwittrock): Should we really use wait.Until to continuously restart this if it exits?
+			for c.processNextWorkItem() {
+			}
+		}, time.Second, stop)
 	}
 
-	glog.Infof("Started %s workers", gc.Name)
-	<-options.Stop
-	glog.Infof("Shutting %s down workers", gc.Name)
-
+	<-stop
+	log.Info("Stopping workers", "controller", c.name)
 	return nil
-}
-
-func defaultWorkQueueProvider(name string) workqueue.RateLimitingInterface {
-	return workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), name)
-}
-
-// init defaults field values on c
-func (gc *GenericController) init() {
-	if gc.syncTs == nil {
-		gc.syncTs = sets.Int64{}
-	}
-
-	if gc.InformerRegistry == nil {
-		gc.InformerRegistry = DefaultManager
-	}
-
-	// Set the default reconcile fn to just print messages
-	if gc.Reconcile == nil {
-		gc.Reconcile = DefaultReconcileFn
-	}
-
-	if len(gc.Name) == 0 {
-		gc.Name = fmt.Sprintf("controller-%d", atomic.AddUint64(&counter, 1))
-	}
-
-	// Default the queue name to match the controller name
-	if len(gc.queue.Name) == 0 {
-		gc.queue.Name = gc.Name
-	}
-
-	// Default the RateLimitingInterface to a NamedRateLimitingQueue
-	if gc.queue.RateLimitingInterface == nil {
-		gc.queue.RateLimitingInterface = defaultWorkQueueProvider(gc.Name)
-	}
-
-	// Set the InformerRegistry on the queue
-	gc.queue.informerProvider = gc.InformerRegistry
-}
-
-// runWorker is a long-running function that will continually call the
-// processNextWorkItem function in order to read and process a message on the
-// workqueue.
-func (gc *GenericController) runWorker() {
-	for gc.processNextWorkItem() {
-	}
 }
 
 // processNextWorkItem will read a single work item off the workqueue and
 // attempt to process it, by calling the syncHandler.
-func (gc *GenericController) processNextWorkItem() bool {
-	obj, shutdown := gc.queue.Get()
+func (c *controller) processNextWorkItem() bool {
+	// This code copy-pasted from the sample-controller.
 
-	start := time.Now().Unix()
-	gc.syncTs.Insert(start)
-	defer gc.syncTs.Delete(start)
+	obj, shutdown := c.queue.Get()
+	if obj == nil {
+		log.Error(nil, "Encountered nil ReconcileRequest", "Object", obj)
+		c.queue.Forget(obj)
+	}
 
 	if shutdown {
+		// Return false, take a break before starting again.  But Y tho?
 		return false
 	}
 
-	// We wrap this block in a func so we can defer c.workque   ue.Done.
-	err := func(obj interface{}) error {
-		// We call Done here so the workqueue knows we have finished
-		// processing this item. We also must remember to call Forget if we
-		// do not want this work item being re-queued. For example, we do
-		// not call Forget if a transient error occurs, instead the item is
-		// put back on the workqueue and attempted again after a back-off
-		// period.
-		defer gc.queue.Done(obj)
-		var key string
-		var ok bool
-		// We expect strings to come off the workqueue. These are of the
-		// form namespace/Name. We do this as the delayed nature of the
-		// workqueue means the items in the SharedIndexInformer cache may actually be
-		// more up to date that when the item was initially put onto the
-		// workqueue.
-		if key, ok = obj.(string); !ok {
-			// As the item in the workqueue is actually invalid, we call
-			// Forget here else we'd go into a loop of attempting to
-			// process a work item that is invalid.
-			gc.queue.Forget(obj)
-			runtime.HandleError(fmt.Errorf("expected string in %s workqueue but got %#v", gc.Name, obj))
-			return nil
-		}
-		namespace, name, err := cache.SplitMetaNamespaceKey(key)
-		if err != nil {
-			runtime.HandleError(fmt.Errorf("invalid resource key in %s queue: %s", gc.Name, key))
-			return nil
-		}
-
-		rk := types.ReconcileKey{
-			Name:      name,
-			Namespace: namespace,
-		}
-		if gc.BeforeReconcile != nil {
-			gc.BeforeReconcile(rk)
-		}
-		// RunInformersAndControllers the syncHandler, passing it the namespace/Name string of the
-		// resource to be synced.
-		if err = gc.Reconcile(rk); err != nil {
-			if gc.AfterReconcile != nil {
-				gc.AfterReconcile(rk, err)
-			}
-			gc.queue.AddRateLimited(key)
-			return fmt.Errorf("error syncing %s queue '%s': %s", gc.Name, key, err.Error())
-		}
-		if gc.AfterReconcile != nil {
-			gc.AfterReconcile(rk, err)
-		}
-
-		// Finally, if no error occurs we Forget this item so it does not
-		// get queued again until another change happens.
-		gc.queue.Forget(obj)
-		glog.Infof("Successfully synced %s queue '%s'", gc.Name, key)
-		return nil
-	}(obj)
-
-	if err != nil {
-		runtime.HandleError(err)
+	// We call Done here so the workqueue knows we have finished
+	// processing this item. We also must remember to call Forget if we
+	// do not want this work item being re-queued. For example, we do
+	// not call Forget if a transient error occurs, instead the item is
+	// put back on the workqueue and attempted again after a back-off
+	// period.
+	defer c.queue.Done(obj)
+	var req reconcile.ReconcileRequest
+	var ok bool
+	if req, ok = obj.(reconcile.ReconcileRequest); !ok {
+		// As the item in the workqueue is actually invalid, we call
+		// Forget here else we'd go into a loop of attempting to
+		// process a work item that is invalid.
+		c.queue.Forget(obj)
+		log.Error(nil, "Queue item was not a ReconcileRequest",
+			"controller", c.name, "Type", fmt.Sprintf("%T", obj), "Value", obj)
+		// Return true, don't take a break
 		return true
 	}
 
+	// RunInformersAndControllers the syncHandler, passing it the namespace/name string of the
+	// resource to be synced.
+	if result, err := c.reconcile.Reconcile(req); err != nil {
+		c.queue.AddRateLimited(req)
+		log.Error(nil, "reconcile error", "controller", c.name, "ReconcileRequest", req)
+
+		// TODO(pwittrock): FTO Returning an error here seems to back things off for a second before restarting
+		// the loop through wait.Util.
+		// Return false, take a break. But y tho?
+		return false
+	} else if result.Requeue {
+		c.queue.AddRateLimited(req)
+		// Return true, don't take a break
+		return true
+	}
+
+	// Finally, if no error occurs we Forget this item so it does not
+	// get queued again until another change happens.
+	c.queue.Forget(obj)
+
+	// TODO(directxman12): What does 1 mean?  Do we want level constants?  Do we want levels at all?
+	log.V(1).Info("Successfully Reconciled", "controller", c.name, "ReconcileRequest", req)
+
+	// Return true, don't take a break
 	return true
 }

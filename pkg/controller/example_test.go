@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,34 +14,74 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller_test
+package ctrl_test
 
 import (
-	"flag"
 	"log"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/config"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/inject/run"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
-func Example() {
-	// Step 1: Register informers to Watch for Pod events
-	flag.Parse()
-	informerFactory := config.GetKubernetesInformersOrDie()
-	if err := controller.AddInformerProvider(&corev1.Pod{}, informerFactory.Core().V1().Pods()); err != nil {
-		log.Fatalf("Could not set informer %v", err)
+// This example creates a new controller named "pod-controller" with a no-op reconcile function and registers
+// it with the DefaultControllerManager.
+func ExampleController() {
+	cm, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{Config: config.GetConfigOrDie()})
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	// Step 2: Create a new Pod controller to reconcile Pods changes using the default
-	// reconcile function to print messages on events
-	podController := &controller.GenericController{}
-	if err := podController.Watch(&corev1.Pod{}); err != nil {
-		log.Fatalf("%v", err)
+	_, err = cm.NewController(
+		ctrl.ControllerArgs{Name: "pod-controller", MaxConcurrentReconciles: 1},
+		reconcile.ReconcileFunc(func(o reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
+			// Your business logic to implement the API by creating, updating, deleting objects goes here.
+			return reconcile.ReconcileResult{}, nil
+		}),
+	)
+	if err != nil {
+		log.Fatal(err)
 	}
-	controller.AddController(podController)
+}
 
-	// Step 3: RunInformersAndControllers all informers and controllers
-	controller.RunInformersAndControllers(run.CreateRunArguments())
+// This example watches Pods and enqueues ReconcileRequests with the changed Pod Name and Namespace.
+func ExampleController_Watch_1() {
+	cm, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{Config: config.GetConfigOrDie()})
+	if err != nil {
+		log.Fatal(err)
+	}
+	c, err := cm.NewController(ctrl.ControllerArgs{Name: "foo-controller"}, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = c.Watch(&source.KindSource{Type: &corev1.Pod{}}, &eventhandler.EnqueueHandler{})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// This example watches Deployments and enqueues ReconcileRequests with the change Deployment Name and Namespace
+// iff 1. the Event is not Update or 2. the Generation of the Deployment object changed in the Update.
+func ExampleController_Watch_2() {
+	cm, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{Config: config.GetConfigOrDie()})
+	if err != nil {
+		log.Fatal(err)
+	}
+	c, err := cm.NewController(ctrl.ControllerArgs{Name: "foo-controller"}, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = c.Watch(&source.KindSource{Type: &appsv1.Deployment{}}, &eventhandler.EnqueueHandler{},
+		predicate.PredicateFuncs{UpdateFunc: func(e event.UpdateEvent) bool {
+			return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()
+		}},
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 }

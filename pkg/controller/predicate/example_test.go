@@ -14,12 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package ctrl_test
+package predicate_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
 )
 
-var _ = Describe("controller", func() {
+var p predicate.Predicate
 
-})
+// This example creates a new Predicate to drop Update Events where the Generation has not changed.
+func ExamplePredicateFunc() {
+	p = predicate.PredicateFuncs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()
+		},
+	}
+}

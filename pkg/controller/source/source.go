@@ -21,9 +21,9 @@ import (
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source/internal"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
 

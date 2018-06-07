@@ -22,10 +22,10 @@ import (
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client/config"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/apiutil"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/apiutil"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"

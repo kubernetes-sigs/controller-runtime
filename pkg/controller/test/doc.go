@@ -14,5 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// The install package contains strategies for installing controllers and admission webhooks into Kubernetes clusters.
-package install
+// The test package contains fake informers for testing controllers
+package test

@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/informer"
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/test"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

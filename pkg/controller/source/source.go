@@ -21,13 +21,13 @@ import (
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/inject"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source/internal"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/informer"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
 
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 )
 
 // Source is a source of events (eh.g. Create, Update, Delete operations on Kubernetes Objects, Webhook callbacks, etc)

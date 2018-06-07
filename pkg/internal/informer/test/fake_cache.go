@@ -18,7 +18,7 @@ package test
 
 import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/test"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/informer"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"

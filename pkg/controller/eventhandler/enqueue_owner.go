@@ -20,9 +20,9 @@ import (
 	"fmt"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/inject"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"

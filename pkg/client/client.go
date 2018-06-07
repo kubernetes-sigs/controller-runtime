@@ -11,7 +11,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/common"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/apiutil"
 )
 
 var _ Interface = &Client{}
@@ -49,11 +49,11 @@ func (c *Client) init() {
 }
 
 func (c *Client) makeClient(obj runtime.Object) (rest.Interface, string, error) {
-	gvk, err := common.GVKForObject(obj, c.Scheme)
+	gvk, err := apiutil.GVKForObject(obj, c.Scheme)
 	if err != nil {
 		return nil, "", err
 	}
-	client, err := common.RESTClientForGVK(gvk, c.Config, c.codecs)
+	client, err := apiutil.RESTClientForGVK(gvk, c.Config, c.codecs)
 	if err != nil {
 		return nil, "", err
 	}

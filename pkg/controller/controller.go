@@ -26,7 +26,7 @@ import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/informer"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -34,7 +34,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 )
 
 var log = logf.KBLog.WithName("controller").WithName("controller")

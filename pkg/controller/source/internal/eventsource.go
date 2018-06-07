@@ -21,7 +21,7 @@ import (
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"

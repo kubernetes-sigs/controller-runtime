@@ -19,7 +19,7 @@ package internal_test
 import (
 	"testing"
 
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/test"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

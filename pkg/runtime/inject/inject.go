@@ -18,7 +18,7 @@ package inject
 
 import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/informer"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 )

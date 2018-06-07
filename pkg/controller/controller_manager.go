@@ -21,11 +21,11 @@ import (
 	"sync"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/config"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/common"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/inject"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/client/config"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/apiutil"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/informer"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	"k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -230,7 +230,7 @@ func NewControllerManager(args ControllerManagerArgs) (ControllerManager, error)
 	objCache := client.ObjectCacheFromInformers(spi.KnownInformersByType(), cm.scheme)
 	spi.Callbacks = append(spi.Callbacks, objCache)
 
-	mapper, err := common.NewDiscoveryRESTMapper(cm.config)
+	mapper, err := apiutil.NewDiscoveryRESTMapper(cm.config)
 	if err != nil {
 		log.Error(err, "Failed to get API Group-Resources")
 		return nil, err

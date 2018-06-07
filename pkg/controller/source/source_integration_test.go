@@ -21,7 +21,7 @@ import (
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/inject"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
 
 	. "github.com/onsi/ginkgo"

@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/common"
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/log"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/apiutil"
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -68,7 +68,7 @@ func (c *SelfPopulatingInformers) init() {
 
 		if c.Mapper == nil {
 			// TODO: don't initialize things that can fail
-			Mapper, err := common.NewDiscoveryRESTMapper(c.Config)
+			Mapper, err := apiutil.NewDiscoveryRESTMapper(c.Config)
 			if err != nil {
 				log.WithName("setup").Error(err, "Failed to get API Group-Resources")
 				os.Exit(1)
@@ -99,7 +99,7 @@ func (c *SelfPopulatingInformers) InformerForKind(gvk schema.GroupVersionKind) (
 
 func (c *SelfPopulatingInformers) InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error) {
 	c.init()
-	gvk, err := common.GVKForObject(obj, c.Scheme)
+	gvk, err := apiutil.GVKForObject(obj, c.Scheme)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (c *SelfPopulatingInformers) informerFor(gvk schema.GroupVersionKind, obj r
 		return informer, nil
 	}
 
-	client, err := common.RESTClientForGVK(gvk, c.Config, c.codecs)
+	client, err := apiutil.RESTClientForGVK(gvk, c.Config, c.codecs)
 	if err != nil {
 		return nil, err
 	}

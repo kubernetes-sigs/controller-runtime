@@ -19,7 +19,7 @@ package ctrl_test
 import (
 	"log"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/config"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/client/config"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"

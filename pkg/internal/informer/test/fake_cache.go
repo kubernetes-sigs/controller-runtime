@@ -17,7 +17,7 @@ limitations under the License.
 package test
 
 import (
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/test"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/controllertest"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -41,7 +41,7 @@ func (c *FakeInformers) InformerForKind(gvk schema.GroupVersionKind) (cache.Shar
 	return c.informerFor(gvk, obj)
 }
 
-func (c *FakeInformers) FakeInformerForKind(gvk schema.GroupVersionKind) (*test.FakeInformer, error) {
+func (c *FakeInformers) FakeInformerForKind(gvk schema.GroupVersionKind) (*controllertest.FakeInformer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}
@@ -50,7 +50,7 @@ func (c *FakeInformers) FakeInformerForKind(gvk schema.GroupVersionKind) (*test.
 	if err != nil {
 		return nil, err
 	}
-	return i.(*test.FakeInformer), nil
+	return i.(*controllertest.FakeInformer), nil
 }
 
 func (c *FakeInformers) InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error) {
@@ -66,7 +66,7 @@ func (c *FakeInformers) KnownInformersByType() map[schema.GroupVersionKind]cache
 	return c.InformersByGVK
 }
 
-func (c *FakeInformers) FakeInformerFor(obj runtime.Object) (*test.FakeInformer, error) {
+func (c *FakeInformers) FakeInformerFor(obj runtime.Object) (*controllertest.FakeInformer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}
@@ -76,7 +76,7 @@ func (c *FakeInformers) FakeInformerFor(obj runtime.Object) (*test.FakeInformer,
 	if err != nil {
 		return nil, err
 	}
-	return i.(*test.FakeInformer), nil
+	return i.(*controllertest.FakeInformer), nil
 }
 
 func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, obj runtime.Object) (cache.SharedIndexInformer, error) {
@@ -91,7 +91,7 @@ func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, obj runtime.Obj
 		return informer, nil
 	}
 
-	c.InformersByGVK[gvk] = &test.FakeInformer{}
+	c.InformersByGVK[gvk] = &controllertest.FakeInformer{}
 	return c.InformersByGVK[gvk], nil
 }
 

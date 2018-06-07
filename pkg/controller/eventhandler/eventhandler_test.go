@@ -20,7 +20,7 @@ import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/testing"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/controllertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -37,7 +37,7 @@ var _ = Describe("Eventhandler", func() {
 	var pod *corev1.Pod
 	t := true
 	BeforeEach(func() {
-		q = testing.Queue{workqueue.New()}
+		q = controllertest.Queue{workqueue.New()}
 		instance = eventhandler.EnqueueHandler{}
 		pod = &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "biz", Name: "baz"},
@@ -704,7 +704,7 @@ var _ = Describe("Eventhandler", func() {
 		Context("with an OwnerType that cannot be resolved", func() {
 			It("should do nothing.", func() {
 				instance := eventhandler.EnqueueOwnerHandler{
-					OwnerType: &testing.ErrorType{},
+					OwnerType: &controllertest.ErrorType{},
 				}
 				instance.InjectScheme(scheme.Scheme)
 				pod.OwnerReferences = []metav1.OwnerReference{

@@ -15,4 +15,4 @@ limitations under the License.
 */
 
 // The test package contains fake informers for testing controllers
-package test
+package controllertest

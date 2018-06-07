@@ -41,6 +41,10 @@ fi
 tmp_root=/tmp
 kb_root_dir=$tmp_root/kubebuilder
 
+function header_text {
+  echo "$header$*$reset"
+}
+
 # Skip fetching and untaring the tools by setting the SKIP_FETCH_TOOLS variable
 # in your environment to any value:
 #

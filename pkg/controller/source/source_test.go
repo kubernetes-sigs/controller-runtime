@@ -23,7 +23,7 @@ import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer/test"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer/informertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/util/workqueue"
@@ -38,10 +38,10 @@ var _ = Describe("Source", func() {
 		var c chan struct{}
 		var p *corev1.Pod
 		var d *appsv1.Deployment
-		var ic *test.FakeInformers
+		var ic *informertest.FakeInformers
 
 		BeforeEach(func() {
-			ic = &test.FakeInformers{}
+			ic = &informertest.FakeInformers{}
 			c = make(chan struct{})
 			p = &corev1.Pod{
 				Spec: corev1.PodSpec{
@@ -122,7 +122,7 @@ var _ = Describe("Source", func() {
 				p2 := p.DeepCopy()
 				p2.SetLabels(map[string]string{"biz": "baz"})
 
-				ic := &test.FakeInformers{}
+				ic := &informertest.FakeInformers{}
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.KindSource{
 					Type: &corev1.Pod{},

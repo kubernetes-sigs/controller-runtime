@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	. "github.com/kubernetes-sigs/controller-runtime/pkg/client"
+	"k8s.io/client-go/kubernetes/scheme"
 )
 
 var _ = Describe("Indexers", func() {
@@ -62,7 +63,7 @@ var _ = Describe("Indexers", func() {
 	var multiCache *ObjectCache
 
 	BeforeEach(func() {
-		multiCache = NewObjectCache()
+		multiCache = NewObjectCache(scheme.Scheme)
 		podIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
 			cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 		})

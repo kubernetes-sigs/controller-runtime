@@ -1,5 +1,5 @@
-[![Build Status](https://travis-ci.org/kubernetes-sigs/kubebuilder.svg?branch=master)](https://travis-ci.org/kubernetes-sigs/kubebuilder "Travis")
-[![Go Report Card](https://goreportcard.com/badge/github.com/kubernetes-sigs/kubebuilder)](https://goreportcard.com/report/github.com/kubernetes-sigs/kubebuilder)
+[![Build Status](https://travis-ci.org/kubernetes-sigs/controller-runtime.svg?branch=master)](https://travis-ci.org/kubernetes-sigs/controller-runtime "Travis")
+[![Go Report Card](https://goreportcard.com/badge/github.com/kubernetes-sigs/controller-runtime)](https://goreportcard.com/report/github.com/kubernetes-sigs/controller-runtime)
 
 # Kubernetes controller-runtime Project
 

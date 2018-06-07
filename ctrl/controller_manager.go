@@ -98,11 +98,20 @@ func (cm *controllerManager) NewController(ca ControllerArgs, r reconcile.Reconc
 	return c
 }
 
-func (cm *controllerManager) injectInto(i interface{}) {
-	inject.InjectConfig(cm.config, i)
-	inject.InjectClient(cm.client, i)
-	inject.InjectScheme(cm.scheme, i)
-	inject.InjectInformers(cm.informers, i)
+func (cm *controllerManager) injectInto(i interface{}) error {
+	if _, err := inject.InjectConfig(cm.config, i); err != nil {
+		return err
+	}
+	if _, err := inject.InjectClient(cm.client, i); err != nil {
+		return err
+	}
+	if _, err := inject.InjectScheme(cm.scheme, i); err != nil {
+		return err
+	}
+	if _, err := inject.InjectInformers(cm.informers, i); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (cm *controllerManager) GetConfig() *rest.Config {

@@ -25,27 +25,25 @@ import (
 )
 
 type Informers interface {
-	InjectInformers(informer.Informers)
+	InjectInformers(informer.Informers) error
 }
 
-func InjectInformers(c informer.Informers, i interface{}) bool {
+func InjectInformers(c informer.Informers, i interface{}) (bool, error) {
 	if s, ok := i.(Informers); ok {
-		s.InjectInformers(c)
-		return true
+		return true, s.InjectInformers(c)
 	}
-	return false
+	return false, nil
 }
 
 type Config interface {
-	InjectConfig(*rest.Config)
+	InjectConfig(*rest.Config) error
 }
 
-func InjectConfig(c *rest.Config, i interface{}) bool {
+func InjectConfig(c *rest.Config, i interface{}) (bool, error) {
 	if s, ok := i.(Config); ok {
-		s.InjectConfig(c)
-		return true
+		return true, s.InjectConfig(c)
 	}
-	return false
+	return false, nil
 }
 
 // TODO(pwittrock): Figure out if this is the pattern we want to stick with
@@ -54,25 +52,23 @@ func NewConfig() (*rest.Config, error) {
 }
 
 type Client interface {
-	InjectClient(client.Interface)
+	InjectClient(client.Interface) error
 }
 
-func InjectClient(cacheClient client.Interface, i interface{}) bool {
+func InjectClient(cacheClient client.Interface, i interface{}) (bool, error) {
 	if s, ok := i.(Client); ok {
-		s.InjectClient(cacheClient)
-		return true
+		return true, s.InjectClient(cacheClient)
 	}
-	return false
+	return false, nil
 }
 
 type Scheme interface {
-	InjectScheme(scheme *runtime.Scheme)
+	InjectScheme(scheme *runtime.Scheme) error
 }
 
-func InjectScheme(s *runtime.Scheme, i interface{}) bool {
+func InjectScheme(s *runtime.Scheme, i interface{}) (bool, error) {
 	if is, ok := i.(Scheme); ok {
-		is.InjectScheme(s)
-		return true
+		return true, is.InjectScheme(s)
 	}
-	return false
+	return false, nil
 }

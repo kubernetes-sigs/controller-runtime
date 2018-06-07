@@ -17,8 +17,7 @@ limitations under the License.
 package eventhandler
 
 import (
-	"os"
-	"sync"
+	"fmt"
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
@@ -50,13 +49,6 @@ type EnqueueOwnerHandler struct {
 	// IsController if set will only look at the first OwnerReference with Controller: true.
 	IsController bool
 
-	// scheme is injected by a Controller
-	// scheme is used to resolve the Group and Kind for the runtime.Object.
-	scheme *runtime.Scheme
-
-	// once is used to cache the resolution of OwnerType to a Group and Kind
-	once sync.Once
-
 	// groupKind is the cached Group and Kind from OwnerType
 	groupKind schema.GroupKind
 
@@ -67,10 +59,8 @@ type EnqueueOwnerHandler struct {
 var _ inject.Scheme = &EnqueueOwnerHandler{}
 
 // InjectScheme is called by the Controller to provide a singleton scheme to the EnqueueOwnerHandler.
-func (e *EnqueueOwnerHandler) InjectScheme(s *runtime.Scheme) {
-	if e.scheme == nil {
-		e.scheme = s
-	}
+func (e *EnqueueOwnerHandler) InjectScheme(s *runtime.Scheme) error {
+	return e.parseOwnerTypeGroupKind(s)
 }
 
 // Create implements EventHandler
@@ -106,44 +96,28 @@ func (e *EnqueueOwnerHandler) Generic(q workqueue.RateLimitingInterface, evt eve
 
 // parseOwnerTypeGroupKind parses the OwnerType into a Group and Kind and caches the result.  Returns false
 // if the OwnerType could not be parsed using the scheme.
-func (e *EnqueueOwnerHandler) parseOwnerTypeGroupKind() bool {
-	// Parse the OwnerType group and kind once the first time an event is handled and cache the result.
-	e.once.Do(func() {
-		// If the scheme isn't, bail.
-		if e.scheme == nil {
-			log.Error(nil, "Must use inject a scheme into EnqueueOwnerHandler before using it."+
-				"This is done automatically if using EnqueueOwnerHandler from a Controller Watch function.")
-			os.Exit(1)
-		}
+func (e *EnqueueOwnerHandler) parseOwnerTypeGroupKind(scheme *runtime.Scheme) error {
+	// Get the kinds of the type
+	kinds, _, err := scheme.ObjectKinds(e.OwnerType)
+	if err != nil {
+		log.Error(err, "Could not get ObjectKinds for OwnerType", "OwnerType", e.OwnerType)
+		return err
+	}
+	// Expect only 1 kind.  If there is more than one kind this is probably an edge case such as ListOptions.
+	if len(kinds) != 1 {
+		err := fmt.Errorf("Expected exactly 1 kind for OwnerType")
+		log.Error(err, "", "OwnerType", e.OwnerType, "Kinds", kinds)
+		return err
 
-		// Get the kinds of the type
-		kinds, _, err := e.scheme.ObjectKinds(e.OwnerType)
-		if err != nil {
-			log.Error(err, "Could not get ObjectKinds for OwnerType", "OwnerType", e.OwnerType)
-			return
-		}
-		// Expect only 1 kind.  If there is more than one kind this is probably an edge case such as ListOptions.
-		if len(kinds) != 1 {
-			log.Error(nil, "Expected exactly 1 kind for OwnerType",
-				"OwnerType", e.OwnerType, "Kinds", kinds)
-			return
-		}
-		// Cache the Group and Kind for the OwnerType
-		e.groupKind = schema.GroupKind{Group: kinds[0].Group, Kind: kinds[0].Kind}
-		e.kindOk = true
-	})
-	return e.kindOk
+	}
+	// Cache the Group and Kind for the OwnerType
+	e.groupKind = schema.GroupKind{Group: kinds[0].Group, Kind: kinds[0].Kind}
+	return nil
 }
 
 // getOwnerReconcileRequest looks at object and returns a slice of reconcile.ReconcileRequest to reconcile
 // owners of object that match e.OwnerType.
 func (e *EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []reconcile.ReconcileRequest {
-	// If there was an error getting the Group and Kind for the OwnerType do nothing and log an error
-	if !e.parseOwnerTypeGroupKind() {
-		log.Error(nil, "Tried to get owner of unknown kind", "OwnerType", e.OwnerType)
-		return nil
-	}
-
 	// Iterate through the OwnerReferences looking for a match on Group and Kind against what was requested
 	// by the user
 	var result []reconcile.ReconcileRequest

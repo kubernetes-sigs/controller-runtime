@@ -21,6 +21,7 @@ import (
 
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/event"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/eventhandler"
+	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/inject"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/ctrl/source/internal"
 	"github.com/kubernetes-sigs/kubebuilder/pkg/informer"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -57,6 +58,8 @@ var log = logf.KBLog.WithName("source").WithName("KindSource")
 
 var _ Source = &KindSource{}
 
+var _ inject.Informers = &KindSource{}
+
 // KindSource is used to provide a source of events originating inside the cluster from Watches (eh.g. Pod Create)
 type KindSource struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
@@ -89,8 +92,9 @@ func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.R
 }
 
 // InjectInformers is internal should be called only by the Controller.  InjectInformers should be called before Start.
-func (ks *KindSource) InjectInformers(i informer.Informers) {
+func (ks *KindSource) InjectInformers(i informer.Informers) error {
 	if ks.informers == nil {
 		ks.informers = i
 	}
+	return nil
 }

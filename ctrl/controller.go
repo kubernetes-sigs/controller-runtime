@@ -95,17 +95,23 @@ type controller struct {
 	// once ensures unspecified fields get default values
 	once sync.Once
 
-	inject func(i interface{})
+	inject func(i interface{}) error
 
 	// TODO(pwittrock): Consider initializing a logger with the controller name as the tag
 }
 
 func (c *controller) Watch(src source.Source, evthdler eventhandler.EventHandler, prct ...predicate.Predicate) error {
 	// Inject cache into arguments
-	c.inject(src)
-	c.inject(evthdler)
+	if err := c.inject(src); err != nil {
+		return err
+	}
+	if err := c.inject(evthdler); err != nil {
+		return err
+	}
 	for _, pr := range prct {
-		c.inject(pr)
+		if err := c.inject(pr); err != nil {
+			return err
+		}
 	}
 
 	// TODO(pwittrock): wire in predicates

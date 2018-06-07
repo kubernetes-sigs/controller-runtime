@@ -40,12 +40,12 @@ type Source interface {
 	Start(eventhandler.EventHandler, workqueue.RateLimitingInterface) error
 }
 
-var _ Source = ChannelSource(make(chan event.GenericEvent))
-
 // ChannelSource is used to provide a source of events originating outside the cluster
 // (eh.g. GitHub Webhook callback).  ChannelSource requires the user to wire the external
 // source (eh.g. http handler) to write GenericEvents to the underlying channel.
 type ChannelSource chan event.GenericEvent
+
+var _ Source = ChannelSource(make(chan event.GenericEvent))
 
 // Start implements Source and should only be called by the Controller.
 func (ks ChannelSource) Start(
@@ -56,10 +56,6 @@ func (ks ChannelSource) Start(
 
 var log = logf.KBLog.WithName("source").WithName("KindSource")
 
-var _ Source = &KindSource{}
-
-var _ inject.Informers = &KindSource{}
-
 // KindSource is used to provide a source of events originating inside the cluster from Watches (eh.g. Pod Create)
 type KindSource struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
@@ -68,6 +64,8 @@ type KindSource struct {
 	// informers used to watch APIs
 	informers informer.Informers
 }
+
+var _ Source = &KindSource{}
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue ReconcileRequests.
@@ -90,6 +88,8 @@ func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.R
 	i.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler})
 	return nil
 }
+
+var _ inject.Informers = &KindSource{}
 
 // InjectInformers is internal should be called only by the Controller.  InjectInformers should be called before Start.
 func (ks *KindSource) InjectInformers(i informer.Informers) error {

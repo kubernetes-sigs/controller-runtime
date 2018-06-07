@@ -2,15 +2,15 @@ package common
 
 import (
 	"fmt"
-	
-	"k8s.io/client-go/rest"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
-)	
+	"k8s.io/client-go/rest"
+)
 
 // NewDiscoveryRESTMapper constructs a new RESTMapper based on discovery
 // information fetched by a new client with the given config.

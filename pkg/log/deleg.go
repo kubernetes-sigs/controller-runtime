@@ -7,7 +7,7 @@ import (
 // loggerPromise knows how to populate a concrete logr.Logger
 // with options, given an actual base logger later on down the line.
 type loggerPromise struct {
-	logger *DelegatingLogger
+	logger        *DelegatingLogger
 	childPromises []*loggerPromise
 
 	name *string
@@ -17,7 +17,7 @@ type loggerPromise struct {
 func (p *loggerPromise) WithName(l *DelegatingLogger, name string) *loggerPromise {
 	res := &loggerPromise{
 		logger: l,
-		name: &name,
+		name:   &name,
 	}
 	p.childPromises = append(p.childPromises, res)
 	return res
@@ -26,7 +26,7 @@ func (p *loggerPromise) WithName(l *DelegatingLogger, name string) *loggerPromis
 func (p *loggerPromise) WithTags(l *DelegatingLogger, tags ...interface{}) *loggerPromise {
 	res := &loggerPromise{
 		logger: l,
-		tags: tags,
+		tags:   tags,
 	}
 	p.childPromises = append(p.childPromises, res)
 	return res

@@ -37,6 +37,7 @@ type ControllerManager interface {
 	GetConfig() *rest.Config
 	GetClient() client.Interface
 	GetScheme() *runtime.Scheme
+	GetFieldIndexer() client.FieldIndexer
 }
 
 var _ ControllerManager = &controllerManager{}
@@ -62,6 +63,10 @@ type controllerManager struct {
 	// TODO(directxman12): Provide an escape hatch to get individual indexers
 	// client is the client injected into Controllers (and EventHandlers, Sources and Predicates).
 	client client.Interface
+
+	// fieldIndexes knows how to add field indexes over the Informers used by this controller,
+	// which can later be consumed via field selectors from the injected client.
+	fieldIndexes client.FieldIndexer
 }
 
 // NewController registers a controller with the controllerManager.
@@ -110,6 +115,10 @@ func (cm *controllerManager) GetClient() client.Interface {
 
 func (cm *controllerManager) GetScheme() *runtime.Scheme {
 	return cm.scheme
+}
+
+func (cm *controllerManager) GetFieldIndexer() client.FieldIndexer {
+	return cm.fieldIndexes
 }
 
 // Start starts all registered Controllers and blocks until the Stop channel is closed.
@@ -175,6 +184,8 @@ func NewControllerManager(args ControllerManagerArgs) (ControllerManager, error)
 		log.Error(err, "Failed to get API Group-Resources")
 		return nil, err
 	}
+
+	cm.fieldIndexes = &client.InformerFieldIndexer{Informers: spi}
 
 	// Inject the client after all the watches have been set
 	writeObj := &client.Client{Config: cm.config, Scheme: cm.scheme, Mapper: mapper}

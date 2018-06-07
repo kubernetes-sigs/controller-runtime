@@ -53,12 +53,6 @@ var _ = Describe("controller", func() {
 			cm, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{Config: cfg})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Starting the ControllerManager")
-			go func() {
-				defer GinkgoRecover()
-				Expect(cm.Start(stop)).NotTo(HaveOccurred())
-			}()
-
 			By("Creating the Controller")
 			instance := cm.NewController(ctrl.ControllerArgs{}, reconcile.ReconcileFunc(
 				func(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
@@ -74,6 +68,12 @@ var _ = Describe("controller", func() {
 
 			err = instance.Watch(&source.KindSource{Type: &appsv1.Deployment{}}, &eventhandler.EnqueueHandler{})
 			Expect(err).NotTo(HaveOccurred())
+
+			By("Starting the ControllerManager")
+			go func() {
+				defer GinkgoRecover()
+				Expect(cm.Start(stop)).NotTo(HaveOccurred())
+			}()
 
 			deployment := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "deployment-name"},

@@ -81,10 +81,6 @@ type controller struct {
 	// scheme is injected by the controllerManager when controllerManager.Start is called
 	scheme *runtime.Scheme
 
-	// fieldIndexes knows how to add field indexes over the Informers used by this controller,
-	// which can later be consumed via field selectors from the injected client.
-	fieldIndexes client.FieldIndexer
-
 	// Informers are injected by the controllerManager when controllerManager.Start is called
 	informers informer.Informers
 

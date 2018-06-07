@@ -38,6 +38,21 @@ else
   reset=''
 fi
 
+k8s_version=1.10.1
+goarch=amd64
+goos="unknown"
+
+if [[ "$OSTYPE" == "linux-gnu" ]]; then
+  goos="linux"
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+  goos="darwin"
+fi
+
+if [[ "$goos" == "unknown" ]]; then
+  echo "OS '$OSTYPE' not supported. Aborting." >&2
+  exit 1
+fi
+
 tmp_root=/tmp
 kb_root_dir=$tmp_root/kubebuilder
 

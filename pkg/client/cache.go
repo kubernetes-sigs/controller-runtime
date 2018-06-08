@@ -20,98 +20,115 @@ import (
 
 var log = logf.KBLog.WithName("object-cache")
 
-// ObjectCache is a ReadInterface
-var _ ReadInterface = &ObjectCache{}
+// objectCache is a ReadInterface
+var _ ReadInterface = &objectCache{}
 
-type ObjectCache struct {
-	cachesByType map[reflect.Type]*SingleObjectCache
+// objectCache is a Kubernetes Object cache populated from Informers
+type objectCache struct {
+	cachesByType map[reflect.Type]*singleObjectCache
 	scheme       *runtime.Scheme
 }
 
-func ObjectCacheFromInformers(informers map[schema.GroupVersionKind]cache.SharedIndexInformer, scheme *runtime.Scheme) *ObjectCache {
-	res := NewObjectCache(scheme)
+var _ Cache = &objectCache{}
+
+// Cache implements ReadInterface by reading objects from a cache populated by Informers
+type Cache interface {
+	ReadInterface
+	informer.Callback
+}
+
+// NewObjectCache returns a new objectCache populated from informers
+func NewObjectCache(
+	informers map[schema.GroupVersionKind]cache.SharedIndexInformer,
+	scheme *runtime.Scheme) Cache {
+	res := &objectCache{
+		cachesByType: make(map[reflect.Type]*singleObjectCache),
+		scheme:       scheme,
+	}
 	res.AddInformers(informers)
 	return res
 }
 
-func (o *ObjectCache) AddInformers(informers map[schema.GroupVersionKind]cache.SharedIndexInformer) {
+// AddInformers adds new informers to the objectCache
+func (o *objectCache) AddInformers(informers map[schema.GroupVersionKind]cache.SharedIndexInformer) {
+	if informers == nil {
+		return
+	}
 	for gvk, informer := range informers {
 		o.AddInformer(gvk, informer)
 	}
 }
 
-func (o *ObjectCache) Call(gvk schema.GroupVersionKind, c cache.SharedIndexInformer) {
+// Call implements the informer callback
+func (o *objectCache) Call(gvk schema.GroupVersionKind, c cache.SharedIndexInformer) {
 	o.AddInformer(gvk, c)
 }
 
-func (o *ObjectCache) AddInformer(gvk schema.GroupVersionKind, c cache.SharedIndexInformer) {
+// AddInformer adds an informer to the objectCache
+func (o *objectCache) AddInformer(gvk schema.GroupVersionKind, c cache.SharedIndexInformer) {
 	obj, err := o.scheme.New(gvk)
 	if err != nil {
-		log.Error(err, "could not register informer in ObjectCache for GVK", "GroupVersionKind", gvk)
+		log.Error(err, "could not register informer in objectCache for GVK", "GroupVersionKind", gvk)
 		return
 	}
-	if _, found := o.CacheFor(obj); found {
+	if _, found := o.cacheFor(obj); found {
 		return
 	}
-	o.RegisterCache(obj, gvk, c.GetIndexer())
+	o.registerCache(obj, gvk, c.GetIndexer())
 }
 
-func NewObjectCache(scheme *runtime.Scheme) *ObjectCache {
-	return &ObjectCache{
-		cachesByType: make(map[reflect.Type]*SingleObjectCache),
-		scheme:       scheme,
-	}
-}
-
-func (c *ObjectCache) RegisterCache(obj runtime.Object, gvk schema.GroupVersionKind, store cache.Indexer) {
+func (o *objectCache) registerCache(obj runtime.Object, gvk schema.GroupVersionKind, store cache.Indexer) {
 	objType := reflect.TypeOf(obj)
-	c.cachesByType[objType] = &SingleObjectCache{
+	o.cachesByType[objType] = &singleObjectCache{
 		Indexer:          store,
 		GroupVersionKind: gvk,
 	}
 }
 
-func (c *ObjectCache) CacheFor(obj runtime.Object) (*SingleObjectCache, bool) {
+func (o *objectCache) cacheFor(obj runtime.Object) (*singleObjectCache, bool) {
 	objType := reflect.TypeOf(obj)
-	cache, isKnown := c.cachesByType[objType]
+	cache, isKnown := o.cachesByType[objType]
 	return cache, isKnown
 }
 
-func (c *ObjectCache) Get(ctx context.Context, key ObjectKey, out runtime.Object) error {
-	cache, isKnown := c.CacheFor(out)
+// Get implements client.Interface
+func (o *objectCache) Get(ctx context.Context, key ObjectKey, out runtime.Object) error {
+	cache, isKnown := o.cacheFor(out)
 	if !isKnown {
 		return fmt.Errorf("no cache for objects of type %T, must have asked for an watch/informer first", out)
 	}
 	return cache.Get(ctx, key, out)
 }
 
-func (c *ObjectCache) List(ctx context.Context, opts *ListOptions, out runtime.Object) error {
+// List implements client.Interface
+func (o *objectCache) List(ctx context.Context, opts *ListOptions, out runtime.Object) error {
 	itemsPtr, err := apimeta.GetItemsPtr(out)
 	if err != nil {
 		return nil
 	}
 	// http://knowyourmeme.com/memes/this-is-fine
 	outType := reflect.Indirect(reflect.ValueOf(itemsPtr)).Type().Elem()
-	cache, isKnown := c.cachesByType[outType]
+	cache, isKnown := o.cachesByType[outType]
 	if !isKnown {
 		return fmt.Errorf("no cache for objects of type %T", out)
 	}
 	return cache.List(ctx, opts, out)
 }
 
-// SingleObjectCache is a ReadInterface
-var _ ReadInterface = &SingleObjectCache{}
+// singleObjectCache is a ReadInterface
+var _ ReadInterface = &singleObjectCache{}
 
-// SingleObjectCache is a ReadInterface that retrieves objects
+// singleObjectCache is a ReadInterface that retrieves objects
 // from a single local cache populated by a watch.
-type SingleObjectCache struct {
+type singleObjectCache struct {
 	// Indexer is the underlying indexer wrapped by this cache.
 	Indexer cache.Indexer
 	// GroupVersionKind is the group-version-kind of the resource.
 	GroupVersionKind schema.GroupVersionKind
 }
 
-func (c *SingleObjectCache) Get(_ context.Context, key ObjectKey, out runtime.Object) error {
+// Get implements client.Interface
+func (c *singleObjectCache) Get(_ context.Context, key ObjectKey, out runtime.Object) error {
 	storeKey := objectKeyToStoreKey(key)
 	obj, exists, err := c.Indexer.GetByKey(storeKey)
 	if err != nil {
@@ -143,7 +160,8 @@ func (c *SingleObjectCache) Get(_ context.Context, key ObjectKey, out runtime.Ob
 	return nil
 }
 
-func (c *SingleObjectCache) List(ctx context.Context, opts *ListOptions, out runtime.Object) error {
+// List implements client.Interface
+func (c *singleObjectCache) List(ctx context.Context, opts *ListOptions, out runtime.Object) error {
 	var objs []interface{}
 	var err error
 
@@ -196,29 +214,30 @@ func (c *SingleObjectCache) List(ctx context.Context, opts *ListOptions, out run
 }
 
 // TODO: Make an interface with this function that has an Informers as an object on the struct
-// that automatically calls InformerFor and passes in the Indexer into IndexByField
+// that automatically calls InformerFor and passes in the Indexer into indexByField
 
 // noNamespaceNamespace is used as the "namespace" when we want to list across all namespaces
 const allNamespacesNamespace = "__all_namespaces"
 
+// InformerFieldIndexer provides an in-memory index of Object fields
 type InformerFieldIndexer struct {
 	Informers informer.Informers
 }
 
+// IndexField adds an indexer to the underlying cache, using extraction function to get
+// value(s) from the given field.  This index can then be used by passing a field selector
+// to List. For one-to-one compatibility with "normal" field selectors, only return one value.
+// The values may be anything.  They will automatically be prefixed with the namespace of the
+// given object, if present.  The objects passed are guaranteed to be objects of the correct type.
 func (i *InformerFieldIndexer) IndexField(obj runtime.Object, field string, extractValue IndexerFunc) error {
 	informer, err := i.Informers.InformerFor(obj)
 	if err != nil {
 		return err
 	}
-	return IndexByField(informer.GetIndexer(), field, extractValue)
+	return indexByField(informer.GetIndexer(), field, extractValue)
 }
 
-// IndexByField adds an indexer to the underlying cache, using extraction function to get
-// value(s) from the given field.  This index can then be used by passing a field selector
-// to List. For one-to-one compatibility with "normal" field selectors, only return one value.
-// The values may be anything.  They will automatically be prefixed with the namespace of the
-// given object, if present.  The objects passed are guaranteed to be objects of the correct type.
-func IndexByField(indexer cache.Indexer, field string, extractor IndexerFunc) error {
+func indexByField(indexer cache.Indexer, field string, extractor IndexerFunc) error {
 	indexFunc := func(objRaw interface{}) ([]string, error) {
 		// TODO(directxman12): check if this is the correct type?
 		obj, isObj := objRaw.(runtime.Object)

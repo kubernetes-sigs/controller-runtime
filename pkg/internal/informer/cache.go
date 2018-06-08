@@ -38,7 +38,7 @@ type Informers interface {
 
 var _ Informers = &SelfPopulatingInformers{}
 
-type InformerCallback interface {
+type Callback interface {
 	Call(gvk schema.GroupVersionKind, c cache.SharedIndexInformer)
 }
 
@@ -48,7 +48,7 @@ type SelfPopulatingInformers struct {
 	Config    *rest.Config
 	Scheme    *runtime.Scheme
 	Mapper    meta.RESTMapper
-	Callbacks []InformerCallback
+	Callbacks []Callback
 
 	once           sync.Once
 	mu             sync.Mutex

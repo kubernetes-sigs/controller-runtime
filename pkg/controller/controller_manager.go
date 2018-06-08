@@ -228,7 +228,7 @@ func NewControllerManager(args ControllerManagerArgs) (ControllerManager, error)
 
 	// Inject a Read / Write client into all controllers
 	// TODO(directxman12): Figure out how to allow users to request a client without requesting a watch
-	objCache := client.ObjectCacheFromInformers(spi.KnownInformersByType(), cm.scheme)
+	objCache := client.NewObjectCache(spi.KnownInformersByType(), cm.scheme)
 	spi.Callbacks = append(spi.Callbacks, objCache)
 
 	mapper, err := apiutil.NewDiscoveryRESTMapper(cm.config)

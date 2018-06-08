@@ -1,4 +1,4 @@
-package client_test
+package client
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 
-	. "github.com/kubernetes-sigs/controller-runtime/pkg/client"
 	"k8s.io/client-go/kubernetes/scheme"
+	"reflect"
 )
 
 var _ = Describe("Indexers", func() {
@@ -60,25 +60,28 @@ var _ = Describe("Indexers", func() {
 			Namespace: knownVolumeKey.Namespace,
 		},
 	}
-	var multiCache *ObjectCache
+	var multiCache *objectCache
 
 	BeforeEach(func() {
-		multiCache = NewObjectCache(scheme.Scheme)
+		multiCache = &objectCache{
+			cachesByType: make(map[reflect.Type]*singleObjectCache),
+			scheme:       scheme.Scheme,
+		}
 		podIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
 			cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 		})
 		volumeIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
 			cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 		})
-		IndexByField(podIndexer, "spec.restartPolicy", func(obj runtime.Object) []string {
+		indexByField(podIndexer, "spec.restartPolicy", func(obj runtime.Object) []string {
 			return []string{string(obj.(*kapi.Pod).Spec.RestartPolicy)}
 		})
 		Expect(podIndexer.Add(knownPod)).NotTo(HaveOccurred())
 		Expect(podIndexer.Add(knownPod2)).NotTo(HaveOccurred())
 		Expect(podIndexer.Add(knownPod3)).NotTo(HaveOccurred())
 		Expect(volumeIndexer.Add(knownVolume)).NotTo(HaveOccurred())
-		multiCache.RegisterCache(&kapi.Pod{}, kapi.SchemeGroupVersion.WithKind("Pod"), podIndexer)
-		multiCache.RegisterCache(&kapi.PersistentVolume{}, kapi.SchemeGroupVersion.WithKind("PersistentVolume"), volumeIndexer)
+		multiCache.registerCache(&kapi.Pod{}, kapi.SchemeGroupVersion.WithKind("Pod"), podIndexer)
+		multiCache.registerCache(&kapi.PersistentVolume{}, kapi.SchemeGroupVersion.WithKind("PersistentVolume"), volumeIndexer)
 	})
 
 	Describe("client interface wrapper around an indexer", func() {
@@ -86,7 +89,7 @@ var _ = Describe("Indexers", func() {
 
 		BeforeEach(func() {
 			var ok bool
-			singleCache, ok = multiCache.CacheFor(&kapi.Pod{})
+			singleCache, ok = multiCache.cacheFor(&kapi.Pod{})
 			Expect(ok).To(BeTrue())
 		})
 
@@ -162,11 +165,11 @@ var _ = Describe("Indexers", func() {
 		})
 
 		It("should be able to fetch single caches for known types", func() {
-			indexer, ok := multiCache.CacheFor(&kapi.Pod{})
+			indexer, ok := multiCache.cacheFor(&kapi.Pod{})
 			Expect(ok).To(BeTrue())
 			Expect(indexer).NotTo(BeNil())
 
-			_, ok2 := multiCache.CacheFor(&kapi.PersistentVolumeClaim{})
+			_, ok2 := multiCache.cacheFor(&kapi.PersistentVolumeClaim{})
 			Expect(ok2).To(BeFalse())
 		})
 	})

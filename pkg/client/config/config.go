@@ -75,7 +75,7 @@ func GetConfig() (*rest.Config, error) {
 	return nil, fmt.Errorf("could not locate a kubeconfig")
 }
 
-// GetConfig creates a *rest.Config for talking to a Kubernetes apiserver.
+// GetConfigOrDie creates a *rest.Config for talking to a Kubernetes apiserver.
 // If --kubeconfig is set, will use the kubeconfig file at that location.  Otherwise will assume running
 // in cluster and use the cluster provided kubeconfig.
 func GetConfigOrDie() *rest.Config {
@@ -125,7 +125,7 @@ func GetKubernetesInformers() (informers.SharedInformerFactory, error) {
 	return informers.NewSharedInformerFactory(i, time.Minute*5), nil
 }
 
-// GetKubernetesInformers creates a informers.SharedInformerFactory for talking to a Kubernetes apiserver.
+// GetKubernetesInformersOrDie creates a informers.SharedInformerFactory for talking to a Kubernetes apiserver.
 // If --kubeconfig is set, will use the kubeconfig file at that location.  Otherwise will assume running
 // in cluster and use the cluster provided kubeconfig.
 //

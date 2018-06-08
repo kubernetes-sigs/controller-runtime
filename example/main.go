@@ -38,14 +38,14 @@ func main() {
 	logf.SetLogger(logf.ZapLogger(false))
 
 	// Setup a ControllerManager
-	manager, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{})
+	manager, err := controller.NewControllerManager(ctrl.ControllerManagerArgs{})
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Setup a new controller to Reconcile ReplicaSets
 	c, err := manager.NewController(
-		ctrl.ControllerArgs{Name: "foo-controller", MaxConcurrentReconciles: 1},
+		controller.ControllerArgs{Name: "foo-controller", MaxConcurrentReconciles: 1},
 		&ReconcileReplicaSet{client: manager.GetClient()},
 	)
 	if err != nil {

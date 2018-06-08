@@ -41,7 +41,7 @@ func ExampleHandleFunc() {
 	})
 }
 
-func ExampleAdmissionManager_HandleFunc() {
+func ExampleManager_HandleFunc() {
 	resourceType := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
 	ah := admission.Manager{}
 	ah.HandleFunc("/pod", resourceType, func(review v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {

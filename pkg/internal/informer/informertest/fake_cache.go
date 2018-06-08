@@ -27,12 +27,14 @@ import (
 
 var _ informer.Informers = &FakeInformers{}
 
+// FakeInformers is a fake implementation of Informers
 type FakeInformers struct {
 	InformersByGVK map[schema.GroupVersionKind]cache.SharedIndexInformer
 	Scheme         *runtime.Scheme
 	Error          error
 }
 
+// InformerForKind implements Informers
 func (c *FakeInformers) InformerForKind(gvk schema.GroupVersionKind) (cache.SharedIndexInformer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
@@ -41,6 +43,7 @@ func (c *FakeInformers) InformerForKind(gvk schema.GroupVersionKind) (cache.Shar
 	return c.informerFor(gvk, obj)
 }
 
+// FakeInformerForKind implements Informers
 func (c *FakeInformers) FakeInformerForKind(gvk schema.GroupVersionKind) (*controllertest.FakeInformer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
@@ -53,6 +56,7 @@ func (c *FakeInformers) FakeInformerForKind(gvk schema.GroupVersionKind) (*contr
 	return i.(*controllertest.FakeInformer), nil
 }
 
+// InformerFor implements Informers
 func (c *FakeInformers) InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
@@ -62,10 +66,12 @@ func (c *FakeInformers) InformerFor(obj runtime.Object) (cache.SharedIndexInform
 	return c.informerFor(gvk, obj)
 }
 
+// KnownInformersByType implements Informers
 func (c *FakeInformers) KnownInformersByType() map[schema.GroupVersionKind]cache.SharedIndexInformer {
 	return c.InformersByGVK
 }
 
+// FakeInformerFor implements Informers
 func (c *FakeInformers) FakeInformerFor(obj runtime.Object) (*controllertest.FakeInformer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
@@ -95,6 +101,7 @@ func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, obj runtime.Obj
 	return c.InformersByGVK[gvk], nil
 }
 
+// Start implements Informers
 func (c *FakeInformers) Start(stopCh <-chan struct{}) error {
 	return c.Error
 }

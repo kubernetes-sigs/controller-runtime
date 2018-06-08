@@ -50,12 +50,15 @@ type PredicateFuncs struct {
 	GenericFunc func(event.GenericEvent) bool
 }
 
+// Create implements Predicate
 func (p PredicateFuncs) Create(e event.CreateEvent) bool {
 	if p.CreateFunc != nil {
 		return p.CreateFunc(e)
 	}
 	return true
 }
+
+// Delete implements Predicate
 func (p PredicateFuncs) Delete(e event.DeleteEvent) bool {
 	if p.DeleteFunc != nil {
 		return p.DeleteFunc(e)
@@ -63,6 +66,7 @@ func (p PredicateFuncs) Delete(e event.DeleteEvent) bool {
 	return true
 }
 
+// Update implements Predicate
 func (p PredicateFuncs) Update(e event.UpdateEvent) bool {
 	if p.UpdateFunc != nil {
 		return p.UpdateFunc(e)
@@ -70,6 +74,7 @@ func (p PredicateFuncs) Update(e event.UpdateEvent) bool {
 	return true
 }
 
+// Generic implements Predicate
 func (p PredicateFuncs) Generic(e event.GenericEvent) bool {
 	if p.GenericFunc != nil {
 		return p.GenericFunc(e)

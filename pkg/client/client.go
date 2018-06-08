@@ -16,7 +16,7 @@ import (
 
 var _ Interface = &Client{}
 
-// client is an Interface that works by reading and writing
+// Client is an Interface that works by reading and writing
 // directly from/to an API server.
 type Client struct {
 	Config *rest.Config
@@ -91,6 +91,7 @@ func (c *Client) clientFor(obj runtime.Object) (rest.Interface, string, error) {
 	return client, resource, nil
 }
 
+// Create implements Interface
 func (c *Client) Create(ctx context.Context, obj runtime.Object) error {
 	client, resource, err := c.clientFor(obj)
 	if err != nil {
@@ -108,6 +109,7 @@ func (c *Client) Create(ctx context.Context, obj runtime.Object) error {
 		Into(obj)
 }
 
+// Update implements Interface
 func (c *Client) Update(ctx context.Context, obj runtime.Object) error {
 	client, resource, err := c.clientFor(obj)
 	if err != nil {
@@ -126,6 +128,7 @@ func (c *Client) Update(ctx context.Context, obj runtime.Object) error {
 		Into(obj)
 }
 
+// Update implements Interface
 func (c *Client) Delete(ctx context.Context, obj runtime.Object) error {
 	client, resource, err := c.clientFor(obj)
 	if err != nil {
@@ -143,6 +146,7 @@ func (c *Client) Delete(ctx context.Context, obj runtime.Object) error {
 		Error()
 }
 
+// Update implements Interface
 func (c *Client) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
 	client, resource, err := c.clientFor(obj)
 	if err != nil {
@@ -156,6 +160,7 @@ func (c *Client) Get(ctx context.Context, key ObjectKey, obj runtime.Object) err
 		Into(obj)
 }
 
+// Update implements Interface
 func (c *Client) List(ctx context.Context, opts *ListOptions, obj runtime.Object) error {
 	client, resource, err := c.clientFor(obj)
 	if err != nil {

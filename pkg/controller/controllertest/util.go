@@ -36,14 +36,17 @@ type FakeInformer struct {
 	handlers []cache.ResourceEventHandler
 }
 
+// AddIndexers does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) AddIndexers(indexers cache.Indexers) error {
 	return nil
 }
 
+// GetIndexer does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) GetIndexer() cache.Indexer {
 	return nil
 }
 
+// Informer returns the fake Informer.
 func (f *FakeInformer) Informer() cache.SharedIndexInformer {
 	return f
 }
@@ -53,7 +56,7 @@ func (f *FakeInformer) HasSynced() bool {
 	return f.Synced
 }
 
-// AddEventHandler implements the Informer interface.
+// AddEventHandler implements the Informer interface.  Adds an EventHandler to the fake Informers.
 func (f *FakeInformer) AddEventHandler(handler cache.ResourceEventHandler) {
 	f.handlers = append(f.handlers, handler)
 }
@@ -84,18 +87,22 @@ func (f *FakeInformer) Delete(obj metav1.Object) {
 	}
 }
 
+// AddEventHandlerWithResyncPeriod does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) AddEventHandlerWithResyncPeriod(handler cache.ResourceEventHandler, resyncPeriod time.Duration) {
 
 }
 
+// GetStore does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) GetStore() cache.Store {
 	return nil
 }
 
+// GetController does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) GetController() cache.Controller {
 	return nil
 }
 
+// LastSyncResourceVersion does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) LastSyncResourceVersion() string {
 	return ""
 }

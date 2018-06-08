@@ -31,6 +31,7 @@ var _ EventHandler = &EnqueueHandler{}
 // EnqueueHandler enqueues a ReconcileRequest containing the Name and Namespace of the object for each event.
 type EnqueueHandler struct{}
 
+// Create implements EventHandler
 func (e *EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
 	if evt.Meta == nil {
 		enqueueLog.Error(nil, "CreateEvent received with no metadata", "CreateEvent", evt)
@@ -42,6 +43,7 @@ func (e *EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.Cre
 	}})
 }
 
+// Update implements EventHandler
 func (e *EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 	if evt.MetaOld != nil {
 		q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
@@ -62,6 +64,7 @@ func (e *EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.Upd
 	}
 }
 
+// Delete implements EventHandler
 func (e *EnqueueHandler) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 	if evt.Meta == nil {
 		enqueueLog.Error(nil, "DeleteEvent received with no metadata", "DeleteEvent", evt)
@@ -73,6 +76,7 @@ func (e *EnqueueHandler) Delete(q workqueue.RateLimitingInterface, evt event.Del
 	}})
 }
 
+// Generic implements EventHandler
 func (e *EnqueueHandler) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
 	if evt.Meta == nil {
 		enqueueLog.Error(nil, "GenericEvent received with no metadata", "GenericEvent", evt)

@@ -14,5 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// The signals package contains libraries for handling signals to shutdown the system.
+// Package signals contains libraries for handling signals to shutdown the system.
 package signals

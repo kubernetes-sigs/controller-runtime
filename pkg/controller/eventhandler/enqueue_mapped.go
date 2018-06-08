@@ -35,19 +35,23 @@ type EnqueueMappedHandler struct {
 	ToRequests Mapper
 }
 
+// Create implements EventHandler
 func (e *EnqueueMappedHandler) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
 	e.mapAndEnqueue(q, MapObject{Meta: evt.Meta, Object: evt.Object})
 }
 
+// Update implements EventHandler
 func (e *EnqueueMappedHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 	e.mapAndEnqueue(q, MapObject{Meta: evt.MetaOld, Object: evt.ObjectOld})
 	e.mapAndEnqueue(q, MapObject{Meta: evt.MetaNew, Object: evt.ObjectNew})
 }
 
+// Delete implements EventHandler
 func (e *EnqueueMappedHandler) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 	e.mapAndEnqueue(q, MapObject{Meta: evt.Meta, Object: evt.Object})
 }
 
+// Generic implements EventHandler
 func (e *EnqueueMappedHandler) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
 	e.mapAndEnqueue(q, MapObject{Meta: evt.Meta, Object: evt.Object})
 }

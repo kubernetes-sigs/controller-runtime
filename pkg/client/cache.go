@@ -59,7 +59,7 @@ func (o *objectCache) AddInformers(informers map[schema.GroupVersionKind]cache.S
 	}
 }
 
-// Call implements the informer callback
+// Call implements the informer.Callback so that the cache can be populate with new Informers as they are added
 func (o *objectCache) Call(gvk schema.GroupVersionKind, c cache.SharedIndexInformer) {
 	o.AddInformer(gvk, c)
 }
@@ -91,7 +91,7 @@ func (o *objectCache) cacheFor(obj runtime.Object) (*singleObjectCache, bool) {
 	return cache, isKnown
 }
 
-// Get implements client.Interface
+// Get implements client.ReadInterface
 func (o *objectCache) Get(ctx context.Context, key ObjectKey, out runtime.Object) error {
 	cache, isKnown := o.cacheFor(out)
 	if !isKnown {
@@ -100,7 +100,7 @@ func (o *objectCache) Get(ctx context.Context, key ObjectKey, out runtime.Object
 	return cache.Get(ctx, key, out)
 }
 
-// List implements client.Interface
+// List implements client.ReadInterface
 func (o *objectCache) List(ctx context.Context, opts *ListOptions, out runtime.Object) error {
 	itemsPtr, err := apimeta.GetItemsPtr(out)
 	if err != nil {

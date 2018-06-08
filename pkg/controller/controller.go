@@ -109,6 +109,9 @@ type controller struct {
 	// defaults to cache.WaitForCacheSync
 	waitForCache func(stopCh <-chan struct{}, cacheSyncs ...cache.InformerSynced) bool
 
+	// started is true if the Controller has been started
+	started bool
+
 	// TODO(pwittrock): Consider initializing a logger with the controller name as the tag
 }
 
@@ -177,6 +180,8 @@ func (c *controller) Start(stop <-chan struct{}) error {
 			}
 		}, c.jitterPeriod, stop)
 	}
+
+	c.started = true
 
 	<-stop
 	log.Info("Stopping workers", "controller", c.name)

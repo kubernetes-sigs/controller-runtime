@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/test"
@@ -46,6 +47,7 @@ var _ = BeforeSuite(func() {
 
 	var err error
 	cfg, err = testenv.Start()
+	controller.TestConfig = cfg
 	Expect(err).NotTo(HaveOccurred())
 
 	time.Sleep(1 * time.Second)

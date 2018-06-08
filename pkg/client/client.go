@@ -16,8 +16,7 @@ import (
 
 var _ Interface = &Client{}
 
-// Client is an Interface that works by reading and writing
-// directly from/to an API server.
+// Client is an Interface that works by reading and writing directly from/to an API server.
 type Client struct {
 	Config *rest.Config
 	Scheme *runtime.Scheme
@@ -64,7 +63,7 @@ func (c *Client) makeClient(obj runtime.Object) (rest.Interface, string, error) 
 	return client, mapping.Resource, nil
 }
 
-// ClientFor returns a raw rest.Interface for the given object type.
+// clientFor returns a raw rest.Interface for the given object type.
 func (c *Client) clientFor(obj runtime.Object) (rest.Interface, string, error) {
 	c.init()
 	typ := reflect.TypeOf(obj)
@@ -128,7 +127,7 @@ func (c *Client) Update(ctx context.Context, obj runtime.Object) error {
 		Into(obj)
 }
 
-// Update implements Interface
+// Delete implements Interface
 func (c *Client) Delete(ctx context.Context, obj runtime.Object) error {
 	client, resource, err := c.clientFor(obj)
 	if err != nil {
@@ -146,7 +145,7 @@ func (c *Client) Delete(ctx context.Context, obj runtime.Object) error {
 		Error()
 }
 
-// Update implements Interface
+// Get implements Interface
 func (c *Client) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
 	client, resource, err := c.clientFor(obj)
 	if err != nil {
@@ -160,7 +159,7 @@ func (c *Client) Get(ctx context.Context, key ObjectKey, obj runtime.Object) err
 		Into(obj)
 }
 
-// Update implements Interface
+// List implements Interface
 func (c *Client) List(ctx context.Context, opts *ListOptions, obj runtime.Object) error {
 	client, resource, err := c.clientFor(obj)
 	if err != nil {

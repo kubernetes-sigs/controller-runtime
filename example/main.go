@@ -46,7 +46,7 @@ func main() {
 	// Setup a new controller to Reconcile ReplicaSets
 	c, err := manager.NewController(
 		controller.ControllerArgs{Name: "foo-controller", MaxConcurrentReconciles: 1},
-		&ReconcileReplicaSet{client: manager.GetClient()},
+		&reconcileReplicaSet{client: manager.GetClient()},
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -73,15 +73,15 @@ func main() {
 	log.Fatal(manager.Start(signals.SetupSignalHandler()))
 }
 
-// ReconcileReplicaSet reconciles ReplicaSets
-type ReconcileReplicaSet struct {
+// reconcileReplicaSet reconciles ReplicaSets
+type reconcileReplicaSet struct {
 	client client.Interface
 }
 
 // Implement reconcile.reconcile so the controller can reconcile objects
-var _ reconcile.Reconcile = &ReconcileReplicaSet{}
+var _ reconcile.Reconcile = &reconcileReplicaSet{}
 
-func (r *ReconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
+func (r *reconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
 	// Fetch the ReplicaSet from the cache
 	rs := &appsv1.ReplicaSet{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, rs)

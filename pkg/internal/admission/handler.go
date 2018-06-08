@@ -61,6 +61,7 @@ func HandleFunc(path string, gvr metav1.GroupVersionResource, fn AdmissionFunc) 
 	DefaultAdmissionFns.HandleFunc(path, gvr, fn)
 }
 
+// ListenAndServeTLS starts the admission HttpServer.
 func ListenAndServeTLS(addr string) error {
 	server := &http.Server{
 		Addr:      addr,

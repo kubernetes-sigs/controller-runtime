@@ -21,21 +21,29 @@ import (
 
 	. "github.com/onsi/ginkgo/config"
 	. "github.com/onsi/ginkgo/types"
+	"github.com/onsi/ginkgo"
 )
+
+var _ ginkgo.Reporter = NewlineReporter{}
 
 // Print a newline after the default Reporter output so that the results are correctly parsed
 // by test automation.
 // See issue https://github.com/jstemmer/go-junit-report/issues/31
 type NewlineReporter struct{}
 
+// SpecSuiteWillBegin implements ginkgo.Reporter
 func (NewlineReporter) SpecSuiteWillBegin(config GinkgoConfigType, summary *SuiteSummary) {}
 
+// BeforeSuiteDidRun implements ginkgo.Reporter
 func (NewlineReporter) BeforeSuiteDidRun(setupSummary *SetupSummary) {}
 
+// AfterSuiteDidRun implements ginkgo.Reporter
 func (NewlineReporter) AfterSuiteDidRun(setupSummary *SetupSummary) {}
 
+// SpecWillRun implements ginkgo.Reporter
 func (NewlineReporter) SpecWillRun(specSummary *SpecSummary) {}
 
+// SpecDidComplete implements ginkgo.Reporter
 func (NewlineReporter) SpecDidComplete(specSummary *SpecSummary) {}
 
 // SpecSuiteDidEnd Prints a newline between "35 Passed | 0 Failed | 0 Pending | 0 Skipped" and "--- PASS:"

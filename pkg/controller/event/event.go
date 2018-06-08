@@ -26,6 +26,7 @@ type CreateEvent struct {
 	// Meta is the ObjectMeta of the Kubernetes Type that was created
 	Meta v1.Object
 
+	// Object is the object from the event
 	Object runtime.Object
 }
 
@@ -34,11 +35,13 @@ type UpdateEvent struct {
 	// MetaOld is the ObjectMeta of the Kubernetes Type that was updated (before the update)
 	MetaOld v1.Object
 
+	// ObjectOld is the object from the event
 	ObjectOld runtime.Object
 
 	// MetaNew is the ObjectMeta of the Kubernetes Type that was updated (after the update)
 	MetaNew v1.Object
 
+	// ObjectNew is the object from the event
 	ObjectNew runtime.Object
 }
 
@@ -47,8 +50,11 @@ type DeleteEvent struct {
 	// Meta is the ObjectMeta of the Kubernetes Type that was deleted
 	Meta v1.Object
 
+	// Object is the object from the event
 	Object runtime.Object
 
+	// DeleteStateUnknown is true if the Delete event was missed but we identified the object
+	// as having been deleted.
 	DeleteStateUnknown bool
 }
 
@@ -57,5 +63,6 @@ type GenericEvent struct {
 	// Meta is the ObjectMeta of a Kubernetes Type this event is for
 	Meta v1.Object
 
+	// Object is the object from the event
 	Object runtime.Object
 }

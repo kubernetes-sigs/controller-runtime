@@ -46,7 +46,7 @@ func GVKForObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersi
 	return gvks[0], nil
 }
 
-// RESTClientForObject constructs a new rest.Interface capable of accessing the resource associated
+// RESTClientForGVK constructs a new rest.Interface capable of accessing the resource associated
 // with the given GroupVersionKind.
 func RESTClientForGVK(gvk schema.GroupVersionKind, baseConfig *rest.Config, codecs serializer.CodecFactory) (rest.Interface, error) {
 	gv := gvk.GroupVersion()

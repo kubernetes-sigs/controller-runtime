@@ -35,7 +35,7 @@ type ReconcileRequest struct {
 }
 
 /*
-reconcile implements a Kubernetes API for a specific Resource by Creating, Updating or Deleting Kubernetes
+Reconcile implements a Kubernetes API for a specific Resource by Creating, Updating or Deleting Kubernetes
 objects, or by making changes to systems external to the cluster (e.g. cloudproviders, github, etc).
 
 reconcile implementations compare the state specified in an object by a user against the actual cluster state,
@@ -81,4 +81,5 @@ type ReconcileFunc func(ReconcileRequest) (ReconcileResult, error)
 
 var _ Reconcile = ReconcileFunc(nil)
 
+// Reconcile implements Reconcile.
 func (r ReconcileFunc) Reconcile(o ReconcileRequest) (ReconcileResult, error) { return r(o) }

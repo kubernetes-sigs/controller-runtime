@@ -61,7 +61,7 @@ func (f *FakeInformer) AddEventHandler(handler cache.ResourceEventHandler) {
 	f.handlers = append(f.handlers, handler)
 }
 
-// RunInformersAndControllers implements the Informer interface.  Increments f.RunCount
+// Run implements the Informer interface.  Increments f.RunCount
 func (f *FakeInformer) Run(<-chan struct{}) {
 	f.RunCount++
 }
@@ -73,14 +73,14 @@ func (f *FakeInformer) Add(obj metav1.Object) {
 	}
 }
 
-// Add fakes an Update event for obj
+// handlers fakes an Update event for obj
 func (f *FakeInformer) Update(oldObj, newObj metav1.Object) {
 	for _, h := range f.handlers {
 		h.OnUpdate(oldObj, newObj)
 	}
 }
 
-// Add fakes an Delete event for obj
+// Delete fakes an Delete event for obj
 func (f *FakeInformer) Delete(obj metav1.Object) {
 	for _, h := range f.handlers {
 		h.OnDelete(obj)

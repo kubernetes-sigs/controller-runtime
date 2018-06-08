@@ -24,7 +24,7 @@ import (
 var p predicate.Predicate
 
 // This example creates a new Predicate to drop Update Events where the Generation has not changed.
-func ExamplePredicateFuncs() {
+func ExampleFuncs() {
 	p = predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()

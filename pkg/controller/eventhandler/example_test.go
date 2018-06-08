@@ -76,7 +76,7 @@ func ExampleEnqueueMappedHandler() {
 }
 
 // This example implements eventhandler.EnqueueHandler.
-func ExampleEventHandlerFuncs() {
+func ExampleFuncs() {
 	// controller is a controller.controller
 	c.Watch(
 		&source.KindSource{Type: &corev1.Pod{}},

@@ -20,10 +20,12 @@ before_install:
 # we don't need to fetch them.
 install:
   - go get -u golang.org/x/lint/golint
+  - go get -u gopkg.in/alecthomas/gometalinter.v2 && gometalinter.v2 --install
 
 script:
 - go vet ./pkg/...
 - golint -set_exit_status ./pkg/...
+- gometalinter.v2 --disable-all --enable=misspell
 - TRACE=1 ./test.sh
 
 

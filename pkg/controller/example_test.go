@@ -46,7 +46,7 @@ func ExampleController() {
 	}
 }
 
-// This example watches Pods and enqueues ReconcileRequests with the changed Pod Name and Namespace.
+// This example watches Pods and enqueues reconcile.Requests with the changed Pod Name and Namespace.
 func ExampleController_Watch() {
 	cm, err := controller.NewManager(controller.ManagerArgs{Config: config.GetConfigOrDie()})
 	if err != nil {

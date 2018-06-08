@@ -51,7 +51,7 @@ type Args struct {
 // Controller is a work queue that watches for changes to objects (i.e. Create / Update / Delete events) and
 // then reconciles an object (i.e. make changes to ensure the system state matches what is specified in the object).
 type Controller interface {
-	// Watch takes events provided by a Source and uses the EventHandler to enqueue ReconcileRequests in
+	// Watch takes events provided by a Source and uses the EventHandler to enqueue reconcile.Requests in
 	// response to the events.
 	//
 	// Watch may be provided one or more Predicates to filter events before they are given to the EventHandler.
@@ -125,7 +125,7 @@ func (c *controller) Watch(src source.Source, evthdler eventhandler.EventHandler
 	// TODO(pwittrock): wire in predicates
 
 	log.Info("Starting EventSource", "controller", c.name, "Source", src)
-	return src.Start(evthdler, c.queue)
+	return src.Start(evthdler, c.queue, prct...)
 }
 
 func (c *controller) Start(stop <-chan struct{}) error {
@@ -179,7 +179,8 @@ func (c *controller) processNextWorkItem() bool {
 	}
 
 	if shutdown {
-		// Return false, take a break before starting again.  But Y tho?
+		// Return false, this will cause the controller to back off for a second before trying again.
+		// TODO(community): This was copied from the sample-controller.  Figure out why / if we need this.
 		return false
 	}
 
@@ -209,13 +210,11 @@ func (c *controller) processNextWorkItem() bool {
 		c.queue.AddRateLimited(req)
 		log.Error(nil, "reconcile error", "controller", c.name, "Request", req)
 
-		// TODO(pwittrock): FTO Returning an error here seems to back things off for a second before restarting
-		// the loop through wait.Util.
-		// Return false, take a break. But y tho?
+		// Return false, this will cause the controller to back off for a second before trying again.
+		// TODO(community): This was copied from the sample-controller.  Figure out why / if we need this.
 		return false
 	} else if result.Requeue {
 		c.queue.AddRateLimited(req)
-		// Return true, don't take a break
 		return true
 	}
 

@@ -26,10 +26,10 @@ import (
 
 var _ EventHandler = &EnqueueMappedHandler{}
 
-// EnqueueMappedHandler enqueues ReconcileRequests by running a transformation function on each Event.
+// EnqueueMappedHandler enqueues Requests by running a transformation function on each Event.
 //
 // For UpdateEvents which contain both a new and old object, the transformation function is run on both
-// objects and both sets of ReconcileRequests are enqueue.
+// objects and both sets of Requests are enqueue.
 type EnqueueMappedHandler struct {
 	// Mapper transforms the argument into a slice of keys to be reconciled
 	ToRequests Mapper

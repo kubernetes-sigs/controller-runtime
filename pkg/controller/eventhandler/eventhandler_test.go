@@ -524,7 +524,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		Context("with the Controller field set to true", func() {
-			It("should enqueue ReconcileRequests for only the first the Controller if there are "+
+			It("should enqueue reconcile.Requests for only the first the Controller if there are "+
 				"multiple Controller owners.", func() {
 				instance := eventhandler.EnqueueOwnerHandler{
 					OwnerType:    &appsv1.ReplicaSet{},
@@ -571,7 +571,7 @@ var _ = Describe("Eventhandler", func() {
 					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo2-parent"}}))
 			})
 
-			It("should not enqueue ReconcileRequests if there are no Controller owners.", func() {
+			It("should not enqueue reconcile.Requests if there are no Controller owners.", func() {
 				instance := eventhandler.EnqueueOwnerHandler{
 					OwnerType:    &appsv1.ReplicaSet{},
 					IsController: t,
@@ -602,7 +602,7 @@ var _ = Describe("Eventhandler", func() {
 				Expect(q.Len()).To(Equal(0))
 			})
 
-			It("should not enqueue ReconcileRequests if there are no owners.", func() {
+			It("should not enqueue reconcile.Requests if there are no owners.", func() {
 				instance := eventhandler.EnqueueOwnerHandler{
 					OwnerType:    &appsv1.ReplicaSet{},
 					IsController: t,
@@ -618,7 +618,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		Context("with the Controller field set to false", func() {
-			It("should enqueue a ReconcileRequests for all owners.", func() {
+			It("should enqueue a reconcile.Requests for all owners.", func() {
 				instance := eventhandler.EnqueueOwnerHandler{
 					OwnerType: &appsv1.ReplicaSet{},
 				}

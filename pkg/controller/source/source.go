@@ -27,17 +27,23 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
 	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 )
 
 // Source is a source of events (eh.g. Create, Update, Delete operations on Kubernetes Objects, Webhook callbacks, etc)
-// which should be processed by event.EventHandlers to enqueue ReconcileRequests.
+// which should be processed by event.EventHandlers to enqueue reconcile.Requests.
 //
 // * Use KindSource for events originating in the cluster (eh.g. Pod Create, Pod Update, Deployment Update).
 //
 // * Use ChannelSource for events originating outside the cluster (eh.g. GitHub Webhook callback, Polling external urls).
+//
+// Users may build their own Source implementations.  If their implementations implement any of the inject package
+// interfaces, the dependencies will be injected by the Controller when Watch is called.
 type Source interface {
-	Start(eventhandler.EventHandler, workqueue.RateLimitingInterface) error
+	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
+	// to enqueue reconcile.Requests.
+	Start(eventhandler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
 }
 
 // ChannelSource is used to provide a source of events originating outside the cluster
@@ -50,7 +56,8 @@ var _ Source = ChannelSource(make(chan event.GenericEvent))
 // Start implements Source and should only be called by the Controller.
 func (ks ChannelSource) Start(
 	handler eventhandler.EventHandler,
-	queue workqueue.RateLimitingInterface) error {
+	queue workqueue.RateLimitingInterface,
+	prct ...predicate.Predicate) error {
 	return nil
 }
 
@@ -68,8 +75,10 @@ type KindSource struct {
 var _ Source = &KindSource{}
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
-// to enqueue ReconcileRequests.
-func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.RateLimitingInterface) error {
+// to enqueue reconcile.Requests.
+func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.RateLimitingInterface,
+	prct ...predicate.Predicate) error {
+
 	// Type should have been specified by the user.
 	if ks.Type == nil {
 		return fmt.Errorf("must specify KindSource.Type")
@@ -85,13 +94,14 @@ func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.R
 	if err != nil {
 		return err
 	}
-	i.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler})
+	i.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
 	return nil
 }
 
 var _ inject.Informers = &KindSource{}
 
-// InjectInformers is internal should be called only by the Controller.  DoInformers should be called before Start.
+// InjectInformers is internal should be called only by the Controller.  InjectInformers is used to inject
+// the Informers dependency initialized by the ControllerManager.
 func (ks *KindSource) InjectInformers(i informer.Informers) error {
 	if ks.informers == nil {
 		ks.informers = i

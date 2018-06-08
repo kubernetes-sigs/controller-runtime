@@ -21,11 +21,11 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-// EventHandler enqueues ReconcileRequests in response to events (e.g. Pod Create).  EventHandlers map an Event
+// EventHandler enqueues reconcile.Requests in response to events (e.g. Pod Create).  EventHandlers map an Event
 // for one object to trigger Reconciles for either the same object or different objects - e.g. if there is an
 // Event for object with type Foo (using source.KindSource) then reconcile one or more object(s) with type Bar.
 //
-// Identical ReconcileRequests will be batched together through the queuing mechanism before reconcile is called.
+// Identical reconcile.Requests will be batched together through the queuing mechanism before reconcile is called.
 //
 // * Use EnqueueHandler to reconcile the object the event is for
 // - do this for events for the type the Controller Reconciles. (e.g. Deployment for a Deployment Controller)
@@ -59,19 +59,19 @@ var _ EventHandler = Funcs{}
 // Funcs allows specifying a subset of EventHandler functions are fields.
 type Funcs struct {
 	// Create is called in response to an add event.  Defaults to no-op.
-	// RateLimitingInterface is used to enqueue reconcile.ReconcileRequests.
+	// RateLimitingInterface is used to enqueue reconcile.Requests.
 	CreateFunc func(workqueue.RateLimitingInterface, event.CreateEvent)
 
 	// Update is called in response to an update event.  Defaults to no-op.
-	// RateLimitingInterface is used to enqueue reconcile.ReconcileRequests.
+	// RateLimitingInterface is used to enqueue reconcile.Requests.
 	UpdateFunc func(workqueue.RateLimitingInterface, event.UpdateEvent)
 
 	// Delete is called in response to a delete event.  Defaults to no-op.
-	// RateLimitingInterface is used to enqueue reconcile.ReconcileRequests.
+	// RateLimitingInterface is used to enqueue reconcile.Requests.
 	DeleteFunc func(workqueue.RateLimitingInterface, event.DeleteEvent)
 
 	// GenericFunc is called in response to a generic event.  Defaults to no-op.
-	// RateLimitingInterface is used to enqueue reconcile.ReconcileRequests.
+	// RateLimitingInterface is used to enqueue reconcile.Requests.
 	GenericFunc func(workqueue.RateLimitingInterface, event.GenericEvent)
 }
 

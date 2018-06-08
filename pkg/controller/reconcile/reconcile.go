@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// Result contains the result of a reconcile.
+// Result contains the result of a Reconcile invocation.
 type Result struct {
 	// Requeue tells the Controller to requeue the reconcile key.  Defaults to false.
 	Requeue bool

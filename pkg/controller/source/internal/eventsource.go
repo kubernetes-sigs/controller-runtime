@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -38,6 +39,7 @@ var _ cache.ResourceEventHandler = EventHandler{}
 type EventHandler struct {
 	EventHandler eventhandler.EventHandler
 	Queue        workqueue.RateLimitingInterface
+	Predicates   []predicate.Predicate
 }
 
 // OnAdd creates and CreateEvent and calls Create on EventHandler
@@ -60,6 +62,12 @@ func (e EventHandler) OnAdd(obj interface{}) {
 		log.Error(nil, "OnAdd missing runtime.Object",
 			"Object", obj, "Type", fmt.Sprintf("%T", obj))
 		return
+	}
+
+	for _, p := range e.Predicates {
+		if !p.Create(c) {
+			return
+		}
 	}
 
 	// Invoke create handler
@@ -106,13 +114,19 @@ func (e EventHandler) OnUpdate(oldObj, newObj interface{}) {
 		return
 	}
 
+	for _, p := range e.Predicates {
+		if !p.Update(u) {
+			return
+		}
+	}
+
 	// Invoke update handler
 	e.EventHandler.Update(e.Queue, u)
 }
 
 // OnDelete creates and DeleteEvent and calls Delete on EventHandler
 func (e EventHandler) OnDelete(obj interface{}) {
-	c := event.DeleteEvent{}
+	d := event.DeleteEvent{}
 
 	// Deal with tombstone events by pulling the object out.  Tombstone events wrap the object in a
 	// DeleteFinalStateUnknown struct, so the object needs to be pulled out.
@@ -136,7 +150,7 @@ func (e EventHandler) OnDelete(obj interface{}) {
 
 	// Pull metav1.Object out of the object
 	if o, err := meta.Accessor(obj); err == nil {
-		c.Meta = o
+		d.Meta = o
 	} else {
 		log.Error(err, "OnDelete missing Meta",
 			"Object", obj, "Type", fmt.Sprintf("%T", obj))
@@ -145,13 +159,19 @@ func (e EventHandler) OnDelete(obj interface{}) {
 
 	// Pull the runtime.Object out of the object
 	if o, ok := obj.(runtime.Object); ok {
-		c.Object = o
+		d.Object = o
 	} else {
 		log.Error(nil, "OnDelete missing runtime.Object",
 			"Object", obj, "Type", fmt.Sprintf("%T", obj))
 		return
 	}
 
+	for _, p := range e.Predicates {
+		if !p.Delete(d) {
+			return
+		}
+	}
+
 	// Invoke delete handler
-	e.EventHandler.Delete(e.Queue, c)
+	e.EventHandler.Delete(e.Queue, d)
 }

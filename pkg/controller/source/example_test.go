@@ -26,7 +26,7 @@ import (
 
 var ctrl controller.Controller
 
-// This example Watches for Pod Events (e.g. Create / Update / Delete) and enqueues a ReconcileRequest
+// This example Watches for Pod Events (e.g. Create / Update / Delete) and enqueues a reconcile.Request
 // with the Name and Namespace of the Pod.
 func ExampleKindSource() {
 	ctrl.Watch(
@@ -35,7 +35,7 @@ func ExampleKindSource() {
 	)
 }
 
-// This example reads GenericEvents from a channel and enqueues a ReconcileRequest containing the Name and Namespace
+// This example reads GenericEvents from a channel and enqueues a reconcile.Request containing the Name and Namespace
 // provided by the event.
 func ExampleChannelSource() {
 	events := make(chan event.GenericEvent)

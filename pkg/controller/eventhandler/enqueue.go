@@ -36,7 +36,7 @@ func (e *EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.Cre
 		enqueueLog.Error(nil, "CreateEvent received with no metadata", "CreateEvent", evt)
 		return
 	}
-	q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName:types.NamespacedName{
+	q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
 		Name:      evt.Meta.GetName(),
 		Namespace: evt.Meta.GetNamespace(),
 	}})
@@ -44,7 +44,7 @@ func (e *EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.Cre
 
 func (e *EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 	if evt.MetaOld != nil {
-		q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName:types.NamespacedName{
+		q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
 			Name:      evt.MetaOld.GetName(),
 			Namespace: evt.MetaOld.GetNamespace(),
 		}})
@@ -53,7 +53,7 @@ func (e *EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.Upd
 	}
 
 	if evt.MetaNew != nil {
-		q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName:types.NamespacedName{
+		q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
 			Name:      evt.MetaNew.GetName(),
 			Namespace: evt.MetaNew.GetNamespace(),
 		}})
@@ -67,7 +67,7 @@ func (e *EnqueueHandler) Delete(q workqueue.RateLimitingInterface, evt event.Del
 		enqueueLog.Error(nil, "DeleteEvent received with no metadata", "DeleteEvent", evt)
 		return
 	}
-	q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName:types.NamespacedName{
+	q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
 		Name:      evt.Meta.GetName(),
 		Namespace: evt.Meta.GetNamespace(),
 	}})
@@ -78,7 +78,7 @@ func (e *EnqueueHandler) Generic(q workqueue.RateLimitingInterface, evt event.Ge
 		enqueueLog.Error(nil, "GenericEvent received with no metadata", "GenericEvent", evt)
 		return
 	}
-	q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName:types.NamespacedName{
+	q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
 		Name:      evt.Meta.GetName(),
 		Namespace: evt.Meta.GetNamespace(),
 	}})

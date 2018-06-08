@@ -80,11 +80,3 @@ func (te *TestEnvironment) Start() (*rest.Config, error) {
 
 	return te.Config, err
 }
-
-type InstallStrategy struct {
-	crds []*extensionsv1beta1.CustomResourceDefinition
-}
-
-func (s *InstallStrategy) GetCRDs() []*extensionsv1beta1.CustomResourceDefinition {
-	return s.crds
-}

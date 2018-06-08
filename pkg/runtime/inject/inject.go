@@ -29,9 +29,11 @@ type Informers interface {
 	InjectInformers(informer.Informers) error
 }
 
-func InjectInformers(c informer.Informers, i interface{}) (bool, error) {
+// InjectInformers will set informers on i and return the result if it implements Informers.  Returns
+//// false if i does not implement Informers.
+func InjectInformers(informers informer.Informers, i interface{}) (bool, error) {
 	if s, ok := i.(Informers); ok {
-		return true, s.InjectInformers(c)
+		return true, s.InjectInformers(informers)
 	}
 	return false, nil
 }
@@ -42,9 +44,11 @@ type Config interface {
 	InjectConfig(*rest.Config) error
 }
 
-func InjectConfig(c *rest.Config, i interface{}) (bool, error) {
+// InjectConfig will set config on i and return the result if it implements Config.  Returns
+//// false if i does not implement Config.
+func InjectConfig(config *rest.Config, i interface{}) (bool, error) {
 	if s, ok := i.(Config); ok {
-		return true, s.InjectConfig(c)
+		return true, s.InjectConfig(config)
 	}
 	return false, nil
 }
@@ -55,9 +59,11 @@ type Client interface {
 	InjectClient(client.Interface) error
 }
 
-func InjectClient(cacheClient client.Interface, i interface{}) (bool, error) {
+// InjectClient will set client on i and return the result if it implements Client.  Returns
+//// false if i does not implement Client.
+func InjectClient(client client.Interface, i interface{}) (bool, error) {
 	if s, ok := i.(Client); ok {
-		return true, s.InjectClient(cacheClient)
+		return true, s.InjectClient(client)
 	}
 	return false, nil
 }
@@ -68,9 +74,11 @@ type Scheme interface {
 	InjectScheme(scheme *runtime.Scheme) error
 }
 
-func InjectScheme(s *runtime.Scheme, i interface{}) (bool, error) {
+// InjectScheme will set client and return the result on i if it implements Scheme.  Returns
+// false if i does not implement Scheme.
+func InjectScheme(scheme *runtime.Scheme, i interface{}) (bool, error) {
 	if is, ok := i.(Scheme); ok {
-		return true, is.InjectScheme(s)
+		return true, is.InjectScheme(scheme)
 	}
 	return false, nil
 }

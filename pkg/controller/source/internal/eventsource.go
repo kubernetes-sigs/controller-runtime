@@ -40,6 +40,7 @@ type EventHandler struct {
 	Queue        workqueue.RateLimitingInterface
 }
 
+// OnAdd creates and CreateEvent and calls Create on EventHandler
 func (e EventHandler) OnAdd(obj interface{}) {
 	c := event.CreateEvent{}
 
@@ -65,6 +66,7 @@ func (e EventHandler) OnAdd(obj interface{}) {
 	e.EventHandler.Create(e.Queue, c)
 }
 
+// OnUpdate creates and UpdateEvent and calls Update on EventHandler
 func (e EventHandler) OnUpdate(oldObj, newObj interface{}) {
 	u := event.UpdateEvent{}
 
@@ -108,6 +110,7 @@ func (e EventHandler) OnUpdate(oldObj, newObj interface{}) {
 	e.EventHandler.Update(e.Queue, u)
 }
 
+// OnDelete creates and DeleteEvent and calls Delete on EventHandler
 func (e EventHandler) OnDelete(obj interface{}) {
 	c := event.DeleteEvent{}
 

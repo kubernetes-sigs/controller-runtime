@@ -14,6 +14,7 @@ type loggerPromise struct {
 	tags []interface{}
 }
 
+// WithName provides a new Logger with the name appended
 func (p *loggerPromise) WithName(l *DelegatingLogger, name string) *loggerPromise {
 	res := &loggerPromise{
 		logger: l,
@@ -23,6 +24,7 @@ func (p *loggerPromise) WithName(l *DelegatingLogger, name string) *loggerPromis
 	return res
 }
 
+// WithTags provides a new Logger with the tags appended
 func (p *loggerPromise) WithTags(l *DelegatingLogger, tags ...interface{}) *loggerPromise {
 	res := &loggerPromise{
 		logger: l,
@@ -32,8 +34,9 @@ func (p *loggerPromise) WithTags(l *DelegatingLogger, tags ...interface{}) *logg
 	return res
 }
 
+// Fulfill instantiates the Logger with the provided logger
 func (p *loggerPromise) Fulfill(parentLogger logr.Logger) {
-	var logger logr.Logger = parentLogger
+	var logger = parentLogger
 	if p.name != nil {
 		logger = logger.WithName(*p.name)
 	}
@@ -50,7 +53,7 @@ func (p *loggerPromise) Fulfill(parentLogger logr.Logger) {
 	}
 }
 
-// delegatingLogger is a logr.Logger that delegates to another logr.Logger.
+// DelegatingLogger is a logr.Logger that delegates to another logr.Logger.
 // If the underlying promise is not nil, it registers calls to sub-loggers with
 // the logging factory to be populated later, and returns a new delegating
 // logger.  It expects to have *some* logr.Logger set at all times (generally
@@ -60,6 +63,7 @@ type DelegatingLogger struct {
 	promise *loggerPromise
 }
 
+// WithName provides a new Logger with the name appended
 func (l *DelegatingLogger) WithName(name string) logr.Logger {
 	if l.promise == nil {
 		return l.Logger.WithName(name)
@@ -72,6 +76,7 @@ func (l *DelegatingLogger) WithName(name string) logr.Logger {
 	return res
 }
 
+// WithTags provides a new Logger with the tags appended
 func (l *DelegatingLogger) WithTags(tags ...interface{}) logr.Logger {
 	if l.promise == nil {
 		return l.Logger.WithTags(tags)

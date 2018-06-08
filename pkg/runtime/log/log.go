@@ -11,6 +11,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// ZapLogger is a Logger implementation.
+// if development is true stack traces will be printed for errors
 func ZapLogger(development bool) logr.Logger {
 	var zapLog *zap.Logger
 	var err error
@@ -28,6 +30,7 @@ func ZapLogger(development bool) logr.Logger {
 	return zaplogr.NewLogger(zapLog)
 }
 
+// SetLogger sets a concrete logging implementation for all deferred Loggers.
 func SetLogger(l logr.Logger) {
 	Log.promise.Fulfill(l)
 }
@@ -40,6 +43,7 @@ var Log = &DelegatingLogger{
 	promise: &loggerPromise{},
 }
 
+// KBLog is a base parent logger.
 var KBLog logr.Logger
 
 func init() {

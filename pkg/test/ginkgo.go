@@ -19,8 +19,8 @@ package test
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo/config"
-	. "github.com/onsi/ginkgo/types"
+	"github.com/onsi/ginkgo/config"
+	"github.com/onsi/ginkgo/types"
 	"github.com/onsi/ginkgo"
 )
 
@@ -32,19 +32,19 @@ var _ ginkgo.Reporter = NewlineReporter{}
 type NewlineReporter struct{}
 
 // SpecSuiteWillBegin implements ginkgo.Reporter
-func (NewlineReporter) SpecSuiteWillBegin(config GinkgoConfigType, summary *SuiteSummary) {}
+func (NewlineReporter) SpecSuiteWillBegin(config config.GinkgoConfigType, summary *types.SuiteSummary) {}
 
 // BeforeSuiteDidRun implements ginkgo.Reporter
-func (NewlineReporter) BeforeSuiteDidRun(setupSummary *SetupSummary) {}
+func (NewlineReporter) BeforeSuiteDidRun(setupSummary *types.SetupSummary) {}
 
 // AfterSuiteDidRun implements ginkgo.Reporter
-func (NewlineReporter) AfterSuiteDidRun(setupSummary *SetupSummary) {}
+func (NewlineReporter) AfterSuiteDidRun(setupSummary *types.SetupSummary) {}
 
 // SpecWillRun implements ginkgo.Reporter
-func (NewlineReporter) SpecWillRun(specSummary *SpecSummary) {}
+func (NewlineReporter) SpecWillRun(specSummary *types.SpecSummary) {}
 
 // SpecDidComplete implements ginkgo.Reporter
-func (NewlineReporter) SpecDidComplete(specSummary *SpecSummary) {}
+func (NewlineReporter) SpecDidComplete(specSummary *types.SpecSummary) {}
 
 // SpecSuiteDidEnd Prints a newline between "35 Passed | 0 Failed | 0 Pending | 0 Skipped" and "--- PASS:"
-func (NewlineReporter) SpecSuiteDidEnd(summary *SuiteSummary) { fmt.Printf("\n") }
+func (NewlineReporter) SpecSuiteDidEnd(summary *types.SuiteSummary) { fmt.Printf("\n") }

@@ -31,7 +31,7 @@ import (
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "controller Suite", []Reporter{test.NewlineReporter{}})
+	RunSpecsWithDefaultAndCustomReporters(t, "Controller Integration Suite", []Reporter{test.NewlineReporter{}})
 }
 
 var testenv *test.Environment
@@ -40,7 +40,7 @@ var clientset *kubernetes.Clientset
 var icache informer.Informers
 
 var _ = BeforeSuite(func() {
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(logf.ZapLogger(false))
 
 	testenv = &test.Environment{}
 

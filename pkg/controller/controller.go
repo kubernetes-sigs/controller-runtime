@@ -102,6 +102,13 @@ type controller struct {
 	// mu is used to synchronize controller setup
 	mu sync.Mutex
 
+	// jitterPeriod allows tests to reduce the jitterPeriod so they complete faster
+	jitterPeriod time.Duration
+
+	// waitForCache allows tests to mock out the waitForCache function to return an error
+	// defaults to cache.WaitForCacheSync
+	waitForCache func(stopCh <-chan struct{}, cacheSyncs ...cache.InformerSynced) bool
+
 	// TODO(pwittrock): Consider initializing a logger with the controller name as the tag
 }
 
@@ -145,21 +152,30 @@ func (c *controller) Start(stop <-chan struct{}) error {
 	for _, informer := range allInformers {
 		syncedFuncs = append(syncedFuncs, informer.HasSynced)
 	}
-	if ok := cache.WaitForCacheSync(stop, syncedFuncs...); !ok {
+
+	if c.waitForCache == nil {
+		c.waitForCache = cache.WaitForCacheSync
+	}
+	if ok := c.waitForCache(stop, syncedFuncs...); !ok {
+		// This code is unreachable right now since WaitForCacheSync will never return an error
+		// Leaving it here because that could happen in the future
 		err := fmt.Errorf("failed to wait for %s caches to sync", c.name)
 		log.Error(err, "Could not wait for Cache to sync", "controller", c.name)
 		return err
 	}
 
+	if c.jitterPeriod == 0 {
+		c.jitterPeriod = time.Second
+	}
+
 	// Launch two workers to process resources
 	log.Info("Starting workers", "controller", c.name, "WorkerCount", c.maxConcurrentReconciles)
 	for i := 0; i < c.maxConcurrentReconciles; i++ {
-		// Continually process work items
+		// Process work items
 		go wait.Until(func() {
-			// TODO(pwittrock): Should we really use wait.Until to continuously restart this if it exits?
 			for c.processNextWorkItem() {
 			}
-		}, time.Second, stop)
+		}, c.jitterPeriod, stop)
 	}
 
 	<-stop
@@ -174,13 +190,12 @@ func (c *controller) processNextWorkItem() bool {
 
 	obj, shutdown := c.queue.Get()
 	if obj == nil {
-		log.Error(nil, "Encountered nil Request", "Object", obj)
+		// Sometimes the queue gives us nil items when it starts up
 		c.queue.Forget(obj)
 	}
 
 	if shutdown {
-		// Return false, this will cause the controller to back off for a second before trying again.
-		// TODO(community): This was copied from the sample-controller.  Figure out why / if we need this.
+		// Stop working
 		return false
 	}
 
@@ -210,8 +225,6 @@ func (c *controller) processNextWorkItem() bool {
 		c.queue.AddRateLimited(req)
 		log.Error(nil, "reconcile error", "controller", c.name, "Request", req)
 
-		// Return false, this will cause the controller to back off for a second before trying again.
-		// TODO(community): This was copied from the sample-controller.  Figure out why / if we need this.
 		return false
 	} else if result.Requeue {
 		c.queue.AddRateLimited(req)

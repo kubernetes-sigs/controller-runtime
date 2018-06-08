@@ -31,5 +31,5 @@ func TestPredicate(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(logf.ZapLogger(false))
 })

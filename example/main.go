@@ -38,7 +38,7 @@ func main() {
 	logf.SetLogger(logf.ZapLogger(false))
 
 	// Setup a ControllerManager
-	manager, err := controller.NewControllerManager(ctrl.ControllerManagerArgs{})
+	manager, err := controller.NewControllerManager(controller.ControllerManagerArgs{})
 	if err != nil {
 		log.Fatal(err)
 	}

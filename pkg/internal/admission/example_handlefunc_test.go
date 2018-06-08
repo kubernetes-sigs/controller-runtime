@@ -43,7 +43,7 @@ func ExampleHandleFunc() {
 
 func ExampleAdmissionManager_HandleFunc() {
 	resourceType := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
-	ah := admission.AdmissionManager{}
+	ah := admission.Manager{}
 	ah.HandleFunc("/pod", resourceType, func(review v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
 		pod := corev1.Pod{}
 		if errResp := admission.Decode(review, &pod, resourceType); errResp != nil {

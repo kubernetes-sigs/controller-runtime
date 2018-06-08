@@ -22,13 +22,13 @@ import (
 	"net/http"
 )
 
-// AdmissionFunc implements an AdmissionReview operation for a GroupVersionResource
-type AdmissionFunc func(review v1beta1.AdmissionReview) *v1beta1.AdmissionResponse
+// Func implements an AdmissionReview operation for a GroupVersionResource
+type Func func(review v1beta1.AdmissionReview) *v1beta1.AdmissionResponse
 
 // HandleEntry
 type admissionHandler struct {
 	GVR metav1.GroupVersionResource
-	Fn  AdmissionFunc
+	Fn  Func
 }
 
 // handle handles an admission request and returns a result
@@ -36,19 +36,19 @@ func (ah admissionHandler) handle(review v1beta1.AdmissionReview) *v1beta1.Admis
 	return ah.handle(review)
 }
 
-// AdmissionManager manages admission controllers
-type AdmissionManager struct {
+// Manager manages admission controllers
+type Manager struct {
 	Entries map[string]admissionHandler
 	SMux    *http.ServeMux
 }
 
 // DefaultAdmissionFns is the default admission control functions registry
-var DefaultAdmissionFns = &AdmissionManager{
+var DefaultAdmissionFns = &Manager{
 	SMux: http.DefaultServeMux,
 }
 
 // HandleFunc registers fn as an admission control webhook callback for the group,version,resources specified
-func (e *AdmissionManager) HandleFunc(path string, gvr metav1.GroupVersionResource, fn AdmissionFunc) {
+func (e *Manager) HandleFunc(path string, gvr metav1.GroupVersionResource, fn Func) {
 	// Register the entry so a Webhook config is created
 	e.Entries[path] = admissionHandler{gvr, fn}
 
@@ -57,7 +57,7 @@ func (e *AdmissionManager) HandleFunc(path string, gvr metav1.GroupVersionResour
 }
 
 // HandleFunc registers fn as an admission control webhook callback for the group,version,resources specified
-func HandleFunc(path string, gvr metav1.GroupVersionResource, fn AdmissionFunc) {
+func HandleFunc(path string, gvr metav1.GroupVersionResource, fn Func) {
 	DefaultAdmissionFns.HandleFunc(path, gvr, fn)
 }
 

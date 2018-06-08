@@ -19,9 +19,9 @@ package test
 import (
 	"fmt"
 
+	"github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	"github.com/onsi/ginkgo/types"
-	"github.com/onsi/ginkgo"
 )
 
 var _ ginkgo.Reporter = NewlineReporter{}
@@ -32,7 +32,8 @@ var _ ginkgo.Reporter = NewlineReporter{}
 type NewlineReporter struct{}
 
 // SpecSuiteWillBegin implements ginkgo.Reporter
-func (NewlineReporter) SpecSuiteWillBegin(config config.GinkgoConfigType, summary *types.SuiteSummary) {}
+func (NewlineReporter) SpecSuiteWillBegin(config config.GinkgoConfigType, summary *types.SuiteSummary) {
+}
 
 // BeforeSuiteDidRun implements ginkgo.Reporter
 func (NewlineReporter) BeforeSuiteDidRun(setupSummary *types.SetupSummary) {}

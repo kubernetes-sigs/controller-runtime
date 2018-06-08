@@ -32,8 +32,8 @@ type ErrorType struct{}
 // GetObjectKind implements runtime.Object
 func (ErrorType) GetObjectKind() schema.ObjectKind { return nil }
 
-// DeepCopyObjectimplements runtime.Object
-func (ErrorType) DeepCopyObject() runtime.Object   { return nil }
+// DeepCopyObject implements runtime.Object
+func (ErrorType) DeepCopyObject() runtime.Object { return nil }
 
 var _ workqueue.RateLimitingInterface = Queue{}
 

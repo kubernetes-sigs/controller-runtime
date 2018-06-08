@@ -14,5 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// The admission package provides libraries for creating admission webhooks.
+// Package admission provides libraries for creating admission webhooks.
 package admission

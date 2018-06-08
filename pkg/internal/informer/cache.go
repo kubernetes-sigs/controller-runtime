@@ -100,7 +100,7 @@ func (c *SelfPopulatingInformers) InformerForKind(gvk schema.GroupVersionKind) (
 	return c.informerFor(gvk, obj)
 }
 
-// InformerForKind returns the informer for an Object
+// InformerFor returns the informer for an Object
 func (c *SelfPopulatingInformers) InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error) {
 	c.init()
 	gvk, err := apiutil.GVKForObject(obj, c.Scheme)

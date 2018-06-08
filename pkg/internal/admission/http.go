@@ -69,5 +69,5 @@ func (h httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type httpHandler struct {
-	admit AdmissionFunc
+	admit Func
 }

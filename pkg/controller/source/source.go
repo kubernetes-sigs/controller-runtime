@@ -108,3 +108,12 @@ func (ks *KindSource) InjectInformers(i informer.Informers) error {
 	}
 	return nil
 }
+
+// Func is a function that implements Source
+type Func func(eventhandler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+
+// Start implements Source
+func (f Func) Start(evt eventhandler.EventHandler, queue workqueue.RateLimitingInterface,
+	pr ...predicate.Predicate) error {
+	return f(evt, queue, pr...)
+}

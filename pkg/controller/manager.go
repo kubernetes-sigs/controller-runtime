@@ -159,9 +159,6 @@ func (cm *controllerManager) GetFieldIndexer() client.FieldIndexer {
 }
 
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
 	// Start the Informers.
 	cm.stop = stop
 	cm.informers.Start(stop)

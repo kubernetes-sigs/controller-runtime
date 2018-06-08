@@ -28,13 +28,13 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-var controller controller.Controller
+var c controller.Controller
 
 // This example watches Pods and enqueues ReconcileRequests with the Name and Namespace of the Pod from
 // the Event (i.e. change caused by a Create, Update, Delete).
 func ExampleEnqueueHandler() {
 	// controller is a controller.controller
-	controller.Watch(
+	c.Watch(
 		&source.KindSource{Type: &corev1.Pod{}},
 		&eventhandler.EnqueueHandler{},
 	)
@@ -44,7 +44,7 @@ func ExampleEnqueueHandler() {
 // owning (direct) Deployment responsible for the creation of the ReplicaSet.
 func ExampleEnqueueOwnerHandler() {
 	// controller is a controller.controller
-	controller.Watch(
+	c.Watch(
 		&source.KindSource{Type: &appsv1.ReplicaSet{}},
 		&eventhandler.EnqueueOwnerHandler{
 			OwnerType:    &appsv1.Deployment{},
@@ -57,7 +57,7 @@ func ExampleEnqueueOwnerHandler() {
 // objects (of Type: MyKind) using a mapping function defined by the user.
 func ExampleEnqueueMappedHandler() {
 	// controller is a controller.controller
-	controller.Watch(
+	c.Watch(
 		&source.KindSource{Type: &appsv1.Deployment{}},
 		&eventhandler.EnqueueMappedHandler{
 			ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.ReconcileRequest {
@@ -76,9 +76,9 @@ func ExampleEnqueueMappedHandler() {
 }
 
 // This example implements eventhandler.EnqueueHandler.
-func ExampleEventHandlerFunc() {
+func ExampleEventHandlerFuncs() {
 	// controller is a controller.controller
-	controller.Watch(
+	c.Watch(
 		&source.KindSource{Type: &corev1.Pod{}},
 		eventhandler.EventHandlerFuncs{
 			CreateFunc: func(q workqueue.RateLimitingInterface, e event.CreateEvent) {

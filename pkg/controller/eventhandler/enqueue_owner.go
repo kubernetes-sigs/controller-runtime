@@ -34,7 +34,7 @@ var _ EventHandler = &EnqueueOwnerHandler{}
 
 var log = logf.KBLog.WithName("eventhandler").WithName("EnqueueOwnerHandler")
 
-// EnqueueOwnerHandler enqueues ReconcileRequests for the Owners of an object.  E.g. an object that created
+// EnqueueOwnerHandler enqueues Requests for the Owners of an object.  E.g. an object that created
 // another object.
 //
 // If a ReplicaSet creates Pods, reconcile the ReplicaSet in response to events on Pods that it created using:

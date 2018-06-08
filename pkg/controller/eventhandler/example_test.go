@@ -30,7 +30,7 @@ import (
 
 var c controller.Controller
 
-// This example watches Pods and enqueues ReconcileRequests with the Name and Namespace of the Pod from
+// This example watches Pods and enqueues Requests with the Name and Namespace of the Pod from
 // the Event (i.e. change caused by a Create, Update, Delete).
 func ExampleEnqueueHandler() {
 	// controller is a controller.controller

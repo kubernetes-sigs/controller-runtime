@@ -78,7 +78,7 @@ type reconcileReplicaSet struct {
 	client client.Interface
 }
 
-// Implement reconcile.reconcile so the controller can reconcile objects
+// Implement reconcile.Reconcile so the controller can reconcile objects
 var _ reconcile.Reconcile = &reconcileReplicaSet{}
 
 func (r *reconcileReplicaSet) Reconcile(request reconcile.Request) (reconcile.Result, error) {

@@ -100,3 +100,6 @@ fetch_kb_tools
 
 # setup testing env
 setup_envs
+
+go test github.com/kubernetes-sigs/controller-runtime/pkg/...
+go install github.com/kubernetes-sigs/controller-runtime/example

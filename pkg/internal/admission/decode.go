@@ -29,7 +29,7 @@ var (
 	codecs = serializer.NewCodecFactory(scheme)
 )
 
-// Decode reads the Raw data from review and deserializes it into object returning a non-nil reponse if there was an
+// Decode reads the Raw data from review and deserializes it into object returning a non-nil response if there was an
 // error
 func Decode(review v1beta1.AdmissionReview, object runtime.Object,
 	resourceType metav1.GroupVersionResource) *v1beta1.AdmissionResponse {

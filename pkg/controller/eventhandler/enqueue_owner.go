@@ -52,7 +52,7 @@ type EnqueueOwnerHandler struct {
 	// groupKind is the cached Group and Kind from OwnerType
 	groupKind schema.GroupKind
 
-	// kindOk is true if OwnerType was successfuly parsed
+	// kindOk is true if OwnerType was successfully parsed
 	kindOk bool
 }
 

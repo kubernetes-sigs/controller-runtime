@@ -97,7 +97,7 @@ var _ = Describe("Indexers", func() {
 		})
 
 		It("should error out for missing objects", func() {
-			Expect(singleCache.Get(context.TODO(), ObjectKey{Name: "unkown-pod"}, &kapi.Pod{})).To(HaveOccurred())
+			Expect(singleCache.Get(context.TODO(), ObjectKey{Name: "unknown-pod"}, &kapi.Pod{})).To(HaveOccurred())
 		})
 
 		It("should be able to list objects by namespace", func() {

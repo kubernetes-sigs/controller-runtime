@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package ctrl
+package controller
 
 import (
 	"fmt"
@@ -170,8 +170,9 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	for _, c := range cm.controllers {
 		// Controllers block, but we want to return an error if any have an error starting.
 		// Write any Start errors to a channel so we can return them
+		ctrl := c
 		go func() {
-			cm.errChan <- c.Start(stop)
+			cm.errChan <- ctrl.Start(stop)
 		}()
 	}
 

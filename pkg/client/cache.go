@@ -276,7 +276,7 @@ func keyToNamespacedKey(ns string, baseKey string) string {
 }
 
 // objectKeyToStorageKey converts an object key to store key.
-// It's akin to MetaNamespaceKeyFunc.  It's seperate from
+// It's akin to MetaNamespaceKeyFunc.  It's separate from
 // String to allow keeping the key format easily in sync with
 // MetaNamespaceKeyFunc.
 func objectKeyToStoreKey(k ObjectKey) string {

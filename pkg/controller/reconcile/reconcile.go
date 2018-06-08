@@ -54,16 +54,16 @@ reconcile may be implemented as either a type:
 
 	type reconcile struct {}
 
-	func (reconcile) reconcile(ctrl.ReconcileRequest) (ctrl.ReconcileResult, error) {
+	func (reconcile) reconcile(controller.ReconcileRequest) (controller.ReconcileResult, error) {
 		// Implement business logic of reading and writing objects here
-		return ctrl.ReconcileResult{}, nil
+		return controller.ReconcileResult{}, nil
 	}
 
 Or as a function:
 
-	ctrl.ReconcileFunc(func(o ctrl.ReconcileRequest) (ctrl.ReconcileResult, error) {
+	controller.ReconcileFunc(func(o controller.ReconcileRequest) (controller.ReconcileResult, error) {
 		// Implement business logic of reading and writing objects here
-		return ctrl.ReconcileResult{}, nil
+		return controller.ReconcileResult{}, nil
 	})
 
 Reconciliation is level-based, meaning action isn't driven off changes in individual Events, but instead is

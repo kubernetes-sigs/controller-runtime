@@ -28,12 +28,12 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-var controller ctrl.Controller
+var controller controller.Controller
 
 // This example watches Pods and enqueues ReconcileRequests with the Name and Namespace of the Pod from
 // the Event (i.e. change caused by a Create, Update, Delete).
 func ExampleEnqueueHandler() {
-	// controller is a ctrl.controller
+	// controller is a controller.controller
 	controller.Watch(
 		&source.KindSource{Type: &corev1.Pod{}},
 		&eventhandler.EnqueueHandler{},
@@ -42,8 +42,8 @@ func ExampleEnqueueHandler() {
 
 // This example watches ReplicaSets and enqueues a ReconcileRequest containing the Name and Namespace of the
 // owning (direct) Deployment responsible for the creation of the ReplicaSet.
-func ExampleEnqueueOwnerHandler_1() {
-	// controller is a ctrl.controller
+func ExampleEnqueueOwnerHandler() {
+	// controller is a controller.controller
 	controller.Watch(
 		&source.KindSource{Type: &appsv1.ReplicaSet{}},
 		&eventhandler.EnqueueOwnerHandler{
@@ -56,7 +56,7 @@ func ExampleEnqueueOwnerHandler_1() {
 // This example watches Deployments and enqueues a ReconcileRequest contain the Name and Namespace of different
 // objects (of Type: MyKind) using a mapping function defined by the user.
 func ExampleEnqueueMappedHandler() {
-	// controller is a ctrl.controller
+	// controller is a controller.controller
 	controller.Watch(
 		&source.KindSource{Type: &appsv1.Deployment{}},
 		&eventhandler.EnqueueMappedHandler{
@@ -77,7 +77,7 @@ func ExampleEnqueueMappedHandler() {
 
 // This example implements eventhandler.EnqueueHandler.
 func ExampleEventHandlerFunc() {
-	// controller is a ctrl.controller
+	// controller is a controller.controller
 	controller.Watch(
 		&source.KindSource{Type: &corev1.Pod{}},
 		eventhandler.EventHandlerFuncs{

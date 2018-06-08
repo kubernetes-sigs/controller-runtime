@@ -43,7 +43,7 @@ var _ = Describe("Source", func() {
 
 	BeforeEach(func() {
 		// Create the namespace for the test
-		ns = fmt.Sprintf("ctrl-source-kindsource-%v", count)
+		ns = fmt.Sprintf("controller-source-kindsource-%v", count)
 		count++
 		_, err := clientset.CoreV1().Namespaces().Create(&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: ns},

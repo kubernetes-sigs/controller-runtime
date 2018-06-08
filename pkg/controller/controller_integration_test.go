@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package ctrl_test
+package controller_test
 
 import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
@@ -50,11 +50,11 @@ var _ = Describe("controller", func() {
 
 		It("should reconcile", func(done Done) {
 			By("Creating the ControllerManager")
-			cm, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{Config: cfg})
+			cm, err := controller.NewControllerManager(controller.ControllerManagerArgs{Config: cfg})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
-			instance, err := cm.NewController(ctrl.ControllerArgs{Name: "foo-controller"}, reconcile.ReconcileFunc(
+			instance, err := cm.NewController(controller.ControllerArgs{Name: "foo-controller"}, reconcile.ReconcileFunc(
 				func(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
 					reconciled <- request
 					return reconcile.ReconcileResult{}, nil

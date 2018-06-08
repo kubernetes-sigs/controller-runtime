@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 /*
-Package ctrl provides libraries for building Controllers.  Controllers implement Kubernetes APIs
+Package controller provides libraries for building Controllers.  Controllers implement Kubernetes APIs
 and are central to building Operators, Workload APIs, Configuration APIs, Autoscalers, and more.
 
 Controllers
@@ -125,14 +125,14 @@ to Pod or ReplicaSet events.  The Reconcile function simply adds a label to the 
 		logf.SetLogger(logf.ZapLogger(false))
 
 		// Setup a ControllerManager
-		manager, err := ctrl.NewControllerManager(ctrl.ControllerManagerArgs{})
+		manager, err := controller.NewControllerManager(controller.ControllerManagerArgs{})
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		// Setup a new controller to Reconcile ReplicaSets
 		c := manager.NewController(
-			ctrl.ControllerArgs{Name: "my-replicaset-controller", MaxConcurrentReconciles: 1},
+			controller.ControllerArgs{Name: "my-replicaset-controller", MaxConcurrentReconciles: 1},
 			&ReconcileReplicaSet{client: manager.GetClient()},
 		)
 
@@ -257,4 +257,4 @@ a single object type takes advantage of this.
 * Example: Pod events for a ReplicaSet are transformed to a ReplicaSet name / Namespace, so the ReplicaSet
 will be Reconciled only 1 time for multiple Pods.
 */
-package ctrl
+package controller

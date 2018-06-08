@@ -24,7 +24,7 @@ import (
 	"k8s.io/api/core/v1"
 )
 
-var controller ctrl.Controller
+var controller controller.Controller
 
 // This example Watches for Pod Events (e.g. Create / Update / Delete) and enqueues a ReconcileRequest
 // with the Name and Namespace of the Pod.

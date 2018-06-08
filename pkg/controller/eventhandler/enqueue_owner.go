@@ -115,12 +115,12 @@ func (e *EnqueueOwnerHandler) parseOwnerTypeGroupKind(scheme *runtime.Scheme) er
 	return nil
 }
 
-// getOwnerReconcileRequest looks at object and returns a slice of reconcile.ReconcileRequest to reconcile
+// getOwnerReconcileRequest looks at object and returns a slice of reconcile.Request to reconcile
 // owners of object that match e.OwnerType.
-func (e *EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []reconcile.ReconcileRequest {
+func (e *EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []reconcile.Request {
 	// Iterate through the OwnerReferences looking for a match on Group and Kind against what was requested
 	// by the user
-	var result []reconcile.ReconcileRequest
+	var result []reconcile.Request
 	for _, ref := range e.getOwnersReferences(object) {
 		// Parse the Group out of the OwnerReference to compare it to what was parsed out of the requested OwnerType
 		refGV, err := schema.ParseGroupVersion(ref.APIVersion)
@@ -131,12 +131,12 @@ func (e *EnqueueOwnerHandler) getOwnerReconcileRequest(object metav1.Object) []r
 		}
 
 		// Compare the OwnerReference Group and Kind against the OwnerType Group and Kind specified by the user.
-		// If the two match, create a ReconcileRequest for the objected referred to by
+		// If the two match, create a Request for the objected referred to by
 		// the OwnerReference.  Use the Name from the OwnerReference and the Namespace from the
 		// object in the event.
 		if ref.Kind == e.groupKind.Kind && refGV.Group == e.groupKind.Group {
-			// Match found - add a ReconcileRequest for the object referred to in the OwnerReference
-			result = append(result, reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+			// Match found - add a Request for the object referred to in the OwnerReference
+			result = append(result, reconcile.Request{NamespacedName: types.NamespacedName{
 				Namespace: object.GetNamespace(),
 				Name:      ref.Name,
 			}})

@@ -65,10 +65,10 @@ func (e *EnqueueMappedHandler) mapAndEnqueue(q workqueue.RateLimitingInterface, 
 // Mapper maps an object to a collection of keys to be enqueued
 type Mapper interface {
 	// Map maps an object
-	Map(MapObject) []reconcile.ReconcileRequest
+	Map(MapObject) []reconcile.Request
 }
 
-// MapObject contains information from an event to be transformed into a ReconcileRequest.
+// MapObject contains information from an event to be transformed into a Request.
 type MapObject struct {
 	// Meta is the meta data for an object from an event.
 	Meta metav1.Object
@@ -80,9 +80,9 @@ type MapObject struct {
 var _ Mapper = ToRequestsFunc(nil)
 
 // ToRequestsFunc implements Mapper using a function.
-type ToRequestsFunc func(MapObject) []reconcile.ReconcileRequest
+type ToRequestsFunc func(MapObject) []reconcile.Request
 
 // Map implements Mapper
-func (m ToRequestsFunc) Map(i MapObject) []reconcile.ReconcileRequest {
+func (m ToRequestsFunc) Map(i MapObject) []reconcile.Request {
 	return m(i)
 }

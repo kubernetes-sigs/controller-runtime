@@ -29,9 +29,9 @@ type Informers interface {
 	InjectInformers(informer.Informers) error
 }
 
-// InjectInformers will set informers on i and return the result if it implements Informers.  Returns
+// DoInformers will set informers on i and return the result if it implements Informers.  Returns
 //// false if i does not implement Informers.
-func InjectInformers(informers informer.Informers, i interface{}) (bool, error) {
+func DoInformers(informers informer.Informers, i interface{}) (bool, error) {
 	if s, ok := i.(Informers); ok {
 		return true, s.InjectInformers(informers)
 	}
@@ -44,9 +44,9 @@ type Config interface {
 	InjectConfig(*rest.Config) error
 }
 
-// InjectConfig will set config on i and return the result if it implements Config.  Returns
+// DoConfig will set config on i and return the result if it implements Config.  Returns
 //// false if i does not implement Config.
-func InjectConfig(config *rest.Config, i interface{}) (bool, error) {
+func DoConfig(config *rest.Config, i interface{}) (bool, error) {
 	if s, ok := i.(Config); ok {
 		return true, s.InjectConfig(config)
 	}
@@ -59,9 +59,9 @@ type Client interface {
 	InjectClient(client.Interface) error
 }
 
-// InjectClient will set client on i and return the result if it implements Client.  Returns
+// DoClient will set client on i and return the result if it implements Client.  Returns
 //// false if i does not implement Client.
-func InjectClient(client client.Interface, i interface{}) (bool, error) {
+func DoClient(client client.Interface, i interface{}) (bool, error) {
 	if s, ok := i.(Client); ok {
 		return true, s.InjectClient(client)
 	}
@@ -74,9 +74,9 @@ type Scheme interface {
 	InjectScheme(scheme *runtime.Scheme) error
 }
 
-// InjectScheme will set client and return the result on i if it implements Scheme.  Returns
+// DoScheme will set client and return the result on i if it implements Scheme.  Returns
 // false if i does not implement Scheme.
-func InjectScheme(scheme *runtime.Scheme, i interface{}) (bool, error) {
+func DoScheme(scheme *runtime.Scheme, i interface{}) (bool, error) {
 	if is, ok := i.(Scheme); ok {
 		return true, is.InjectScheme(scheme)
 	}

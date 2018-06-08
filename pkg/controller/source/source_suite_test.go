@@ -34,7 +34,7 @@ func TestSource(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, "Source Suite", []Reporter{test.NewlineReporter{}})
 }
 
-var testenv *test.TestEnvironment
+var testenv *test.Environment
 var config *rest.Config
 var clientset *kubernetes.Clientset
 var icache informer.Informers
@@ -43,7 +43,7 @@ var stop = make(chan struct{})
 var _ = BeforeSuite(func() {
 	logf.SetLogger(logf.ZapLogger(true))
 
-	testenv = &test.TestEnvironment{}
+	testenv = &test.Environment{}
 
 	var err error
 	config, err = testenv.Start()

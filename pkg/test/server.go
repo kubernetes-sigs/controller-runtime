@@ -33,21 +33,21 @@ const (
 	defaultEtcdBin          = "/usr/local/kubebuilder/bin/etcd"
 )
 
-// TestEnvironment creates a Kubernetes test environment that will start / stop the Kubernetes control plane and
+// Environment creates a Kubernetes test environment that will start / stop the Kubernetes control plane and
 // install extension APIs
-type TestEnvironment struct {
+type Environment struct {
 	ControlPlane integration.ControlPlane
 	Config       *rest.Config
 	CRDs         []*extensionsv1beta1.CustomResourceDefinition
 }
 
 // Stop stops a running server
-func (te *TestEnvironment) Stop() {
+func (te *Environment) Stop() {
 	te.ControlPlane.Stop()
 }
 
 // Start starts a local Kubernetes server and updates te.ApiserverPort with the port it is listening on
-func (te *TestEnvironment) Start() (*rest.Config, error) {
+func (te *Environment) Start() (*rest.Config, error) {
 	te.ControlPlane = integration.ControlPlane{}
 	if os.Getenv(envKubeAPIServerBin) == "" {
 		te.ControlPlane.APIServer = &integration.APIServer{Path: defaultKubeAPIServerBin}

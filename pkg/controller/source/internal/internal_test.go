@@ -34,9 +34,9 @@ import (
 var _ = Describe("Internal", func() {
 
 	var instance internal.EventHandler
-	var funcs *eventhandler.EventHandlerFuncs
+	var funcs *eventhandler.Funcs
 	BeforeEach(func() {
-		funcs = &eventhandler.EventHandlerFuncs{
+		funcs = &eventhandler.Funcs{
 			CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
 				defer GinkgoRecover()
 				Fail("Did not expect CreateEvent to be called.")

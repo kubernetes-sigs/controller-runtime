@@ -45,7 +45,7 @@ var _ = Describe("Eventhandler", func() {
 	})
 
 	Describe("EnqueueHandler", func() {
-		It("should enqueue a ReconcileRequest with the Name / Namespace of the object in the CreateEvent.", func(done Done) {
+		It("should enqueue a Request with the Name / Namespace of the object in the CreateEvent.", func(done Done) {
 			evt := event.CreateEvent{
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
@@ -55,14 +55,14 @@ var _ = Describe("Eventhandler", func() {
 
 			i, _ := q.Get()
 			Expect(i).NotTo(BeNil())
-			req, ok := i.(reconcile.ReconcileRequest)
+			req, ok := i.(reconcile.Request)
 			Expect(ok).To(BeTrue())
 			Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
 
 			close(done)
 		})
 
-		It("should enqueue a ReconcileRequest with the Name / Namespace of the object in the DeleteEvent.", func(done Done) {
+		It("should enqueue a Request with the Name / Namespace of the object in the DeleteEvent.", func(done Done) {
 			evt := event.DeleteEvent{
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
@@ -72,14 +72,14 @@ var _ = Describe("Eventhandler", func() {
 
 			i, _ := q.Get()
 			Expect(i).NotTo(BeNil())
-			req, ok := i.(reconcile.ReconcileRequest)
+			req, ok := i.(reconcile.Request)
 			Expect(ok).To(BeTrue())
 			Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
 
 			close(done)
 		})
 
-		It("should enqueue a ReconcileRequest with the Name / Namespace of both objects in the UpdateEvent.",
+		It("should enqueue a Request with the Name / Namespace of both objects in the UpdateEvent.",
 			func(done Done) {
 				newPod := pod.DeepCopy()
 				newPod.Name = "baz2"
@@ -96,20 +96,20 @@ var _ = Describe("Eventhandler", func() {
 
 				i, _ := q.Get()
 				Expect(i).NotTo(BeNil())
-				req, ok := i.(reconcile.ReconcileRequest)
+				req, ok := i.(reconcile.Request)
 				Expect(ok).To(BeTrue())
 				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
 
 				i, _ = q.Get()
 				Expect(i).NotTo(BeNil())
-				req, ok = i.(reconcile.ReconcileRequest)
+				req, ok = i.(reconcile.Request)
 				Expect(ok).To(BeTrue())
 				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz2", Name: "baz2"}))
 
 				close(done)
 			})
 
-		It("should enqueue a ReconcileRequest with the Name / Namespace of the object in the GenericEvent.", func(done Done) {
+		It("should enqueue a Request with the Name / Namespace of the object in the GenericEvent.", func(done Done) {
 			evt := event.GenericEvent{
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
@@ -118,7 +118,7 @@ var _ = Describe("Eventhandler", func() {
 			Expect(q.Len()).To(Equal(1))
 			i, _ := q.Get()
 			Expect(i).NotTo(BeNil())
-			req, ok := i.(reconcile.ReconcileRequest)
+			req, ok := i.(reconcile.Request)
 			Expect(ok).To(BeTrue())
 			Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
 
@@ -149,7 +149,7 @@ var _ = Describe("Eventhandler", func() {
 				Expect(q.Len()).To(Equal(1))
 				i, _ := q.Get()
 				Expect(i).NotTo(BeNil())
-				req, ok := i.(reconcile.ReconcileRequest)
+				req, ok := i.(reconcile.Request)
 				Expect(ok).To(BeTrue())
 				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz2", Name: "baz2"}))
 
@@ -159,7 +159,7 @@ var _ = Describe("Eventhandler", func() {
 				Expect(q.Len()).To(Equal(1))
 				i, _ = q.Get()
 				Expect(i).NotTo(BeNil())
-				req, ok = i.(reconcile.ReconcileRequest)
+				req, ok = i.(reconcile.Request)
 				Expect(ok).To(BeTrue())
 				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
 
@@ -187,14 +187,14 @@ var _ = Describe("Eventhandler", func() {
 	})
 
 	Describe("EnqueueMappedHandler", func() {
-		It("should enqueue a ReconcileRequest with the function applied to the CreateEvent.", func() {
-			req := []reconcile.ReconcileRequest{}
+		It("should enqueue a Request with the function applied to the CreateEvent.", func() {
+			req := []reconcile.Request{}
 			instance := eventhandler.EnqueueMappedHandler{
-				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.ReconcileRequest {
+				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.Request {
 					defer GinkgoRecover()
 					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
 					Expect(a.Object).To(Equal(pod))
-					req = []reconcile.ReconcileRequest{
+					req = []reconcile.Request{
 						{
 							NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
 						},
@@ -214,22 +214,22 @@ var _ = Describe("Eventhandler", func() {
 			Expect(q.Len()).To(Equal(2))
 
 			i, _ := q.Get()
-			Expect(i).To(Equal(reconcile.ReconcileRequest{
+			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}}))
 
 			i, _ = q.Get()
-			Expect(i).To(Equal(reconcile.ReconcileRequest{
+			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"}}))
 		})
 
-		It("should enqueue a ReconcileRequest with the function applied to the DeleteEvent.", func() {
-			req := []reconcile.ReconcileRequest{}
+		It("should enqueue a Request with the function applied to the DeleteEvent.", func() {
+			req := []reconcile.Request{}
 			instance := eventhandler.EnqueueMappedHandler{
-				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.ReconcileRequest {
+				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.Request {
 					defer GinkgoRecover()
 					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
 					Expect(a.Object).To(Equal(pod))
-					req = []reconcile.ReconcileRequest{
+					req = []reconcile.Request{
 						{
 							NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
 						},
@@ -249,25 +249,25 @@ var _ = Describe("Eventhandler", func() {
 			Expect(q.Len()).To(Equal(2))
 
 			i, _ := q.Get()
-			Expect(i).To(Equal(reconcile.ReconcileRequest{
+			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}}))
 
 			i, _ = q.Get()
-			Expect(i).To(Equal(reconcile.ReconcileRequest{
+			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"}}))
 		})
 
-		It("should enqueue a ReconcileRequest with the function applied to both objects in the UpdateEvent.",
+		It("should enqueue a Request with the function applied to both objects in the UpdateEvent.",
 			func() {
 				newPod := pod.DeepCopy()
 				newPod.Name = pod.Name + "2"
 				newPod.Namespace = pod.Namespace + "2"
 
-				req := []reconcile.ReconcileRequest{}
+				req := []reconcile.Request{}
 				instance := eventhandler.EnqueueMappedHandler{
-					ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.ReconcileRequest {
+					ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.Request {
 						defer GinkgoRecover()
-						req = []reconcile.ReconcileRequest{
+						req = []reconcile.Request{
 							{
 								NamespacedName: types.NamespacedName{Namespace: "foo", Name: a.Meta.GetName() + "-bar"},
 							},
@@ -289,30 +289,30 @@ var _ = Describe("Eventhandler", func() {
 				Expect(q.Len()).To(Equal(4))
 
 				i, _ := q.Get()
-				Expect(i).To(Equal(reconcile.ReconcileRequest{
+				Expect(i).To(Equal(reconcile.Request{
 					NamespacedName: types.NamespacedName{Namespace: "foo", Name: "baz-bar"}}))
 
 				i, _ = q.Get()
-				Expect(i).To(Equal(reconcile.ReconcileRequest{
+				Expect(i).To(Equal(reconcile.Request{
 					NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz-baz"}}))
 
 				i, _ = q.Get()
-				Expect(i).To(Equal(reconcile.ReconcileRequest{
+				Expect(i).To(Equal(reconcile.Request{
 					NamespacedName: types.NamespacedName{Namespace: "foo", Name: "baz2-bar"}}))
 
 				i, _ = q.Get()
-				Expect(i).To(Equal(reconcile.ReconcileRequest{
+				Expect(i).To(Equal(reconcile.Request{
 					NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz2-baz"}}))
 			})
 
-		It("should enqueue a ReconcileRequest with the function applied to the GenericEvent.", func() {
-			req := []reconcile.ReconcileRequest{}
+		It("should enqueue a Request with the function applied to the GenericEvent.", func() {
+			req := []reconcile.Request{}
 			instance := eventhandler.EnqueueMappedHandler{
-				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.ReconcileRequest {
+				ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.Request {
 					defer GinkgoRecover()
 					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
 					Expect(a.Object).To(Equal(pod))
-					req = []reconcile.ReconcileRequest{
+					req = []reconcile.Request{
 						{
 							NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
 						},
@@ -332,17 +332,17 @@ var _ = Describe("Eventhandler", func() {
 			Expect(q.Len()).To(Equal(2))
 
 			i, _ := q.Get()
-			Expect(i).To(Equal(reconcile.ReconcileRequest{
+			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}}))
 
 			i, _ = q.Get()
-			Expect(i).To(Equal(reconcile.ReconcileRequest{
+			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"}}))
 		})
 	})
 
 	Describe("EnqueueOwnerHandler", func() {
-		It("should enqueue a ReconcileRequest with the Owner of the object in the CreateEvent.", func() {
+		It("should enqueue a Request with the Owner of the object in the CreateEvent.", func() {
 			instance := eventhandler.EnqueueOwnerHandler{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
@@ -363,11 +363,11 @@ var _ = Describe("Eventhandler", func() {
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
-			Expect(i).To(Equal(reconcile.ReconcileRequest{
+			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
 		})
 
-		It("should enqueue a ReconcileRequest with the Owner of the object in the DeleteEvent.", func() {
+		It("should enqueue a Request with the Owner of the object in the DeleteEvent.", func() {
 			instance := eventhandler.EnqueueOwnerHandler{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
@@ -388,11 +388,11 @@ var _ = Describe("Eventhandler", func() {
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
-			Expect(i).To(Equal(reconcile.ReconcileRequest{
+			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
 		})
 
-		It("should enqueue a ReconcileRequest with the Owners of both objects in the UpdateEvent.", func() {
+		It("should enqueue a Request with the Owners of both objects in the UpdateEvent.", func() {
 			newPod := pod.DeepCopy()
 			newPod.Name = pod.Name + "2"
 			newPod.Namespace = pod.Namespace + "2"
@@ -426,15 +426,15 @@ var _ = Describe("Eventhandler", func() {
 			Expect(q.Len()).To(Equal(2))
 
 			i, _ := q.Get()
-			Expect(i).To(Equal(reconcile.ReconcileRequest{
+			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo1-parent"}}))
 
 			i, _ = q.Get()
-			Expect(i).To(Equal(reconcile.ReconcileRequest{
+			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: newPod.GetNamespace(), Name: "foo2-parent"}}))
 		})
 
-		It("should enqueue a ReconcileRequest with the Owner of the object in the GenericEvent.", func() {
+		It("should enqueue a Request with the Owner of the object in the GenericEvent.", func() {
 			instance := eventhandler.EnqueueOwnerHandler{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
@@ -455,11 +455,11 @@ var _ = Describe("Eventhandler", func() {
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
-			Expect(i).To(Equal(reconcile.ReconcileRequest{
+			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
 		})
 
-		It("should not enqueue a ReconcileRequest if there are no owners matching Group and Kind.", func() {
+		It("should not enqueue a Request if there are no owners matching Group and Kind.", func() {
 			instance := eventhandler.EnqueueOwnerHandler{
 				OwnerType:    &appsv1.ReplicaSet{},
 				IsController: t,
@@ -485,7 +485,7 @@ var _ = Describe("Eventhandler", func() {
 			Expect(q.Len()).To(Equal(0))
 		})
 
-		It("should enqueue a ReconcileRequest if there are owners matching Group "+
+		It("should enqueue a Request if there are owners matching Group "+
 			"and Kind with a different version.", func() {
 			instance := eventhandler.EnqueueOwnerHandler{
 				OwnerType: &appsv1.ReplicaSet{},
@@ -506,11 +506,11 @@ var _ = Describe("Eventhandler", func() {
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
-			Expect(i).To(Equal(reconcile.ReconcileRequest{
+			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
 		})
 
-		It("should not enqueue a ReconcileRequest if there are no owners.", func() {
+		It("should not enqueue a Request if there are no owners.", func() {
 			instance := eventhandler.EnqueueOwnerHandler{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
@@ -567,7 +567,7 @@ var _ = Describe("Eventhandler", func() {
 				instance.Create(q, evt)
 				Expect(q.Len()).To(Equal(1))
 				i, _ := q.Get()
-				Expect(i).To(Equal(reconcile.ReconcileRequest{
+				Expect(i).To(Equal(reconcile.Request{
 					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo2-parent"}}))
 			})
 
@@ -648,13 +648,13 @@ var _ = Describe("Eventhandler", func() {
 				Expect(q.Len()).To(Equal(3))
 
 				i, _ := q.Get()
-				Expect(i).To(Equal(reconcile.ReconcileRequest{
+				Expect(i).To(Equal(reconcile.Request{
 					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo1-parent"}}))
 				i, _ = q.Get()
-				Expect(i).To(Equal(reconcile.ReconcileRequest{
+				Expect(i).To(Equal(reconcile.Request{
 					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo2-parent"}}))
 				i, _ = q.Get()
-				Expect(i).To(Equal(reconcile.ReconcileRequest{
+				Expect(i).To(Equal(reconcile.Request{
 					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo3-parent"}}))
 			})
 		})
@@ -766,8 +766,8 @@ var _ = Describe("Eventhandler", func() {
 		})
 	})
 
-	Describe("EventHandlerFuncs", func() {
-		failingFuncs := eventhandler.EventHandlerFuncs{
+	Describe("Funcs", func() {
+		failingFuncs := eventhandler.Funcs{
 			CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
 				defer GinkgoRecover()
 				Fail("Did not expect CreateEvent to be called.")

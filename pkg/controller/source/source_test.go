@@ -64,8 +64,8 @@ var _ = Describe("Source", func() {
 				instance := &source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				inject.InjectInformers(ic, instance)
-				err := instance.Start(eventhandler.EventHandlerFuncs{
+				inject.DoInformers(ic, instance)
+				err := instance.Start(eventhandler.Funcs{
 					CreateFunc: func(q2 workqueue.RateLimitingInterface, evt event.CreateEvent) {
 						defer GinkgoRecover()
 						Expect(q2).To(Equal(q))
@@ -106,7 +106,7 @@ var _ = Describe("Source", func() {
 					Type: &corev1.Pod{},
 				}
 				instance.InjectInformers(ic)
-				err := instance.Start(eventhandler.EventHandlerFuncs{
+				err := instance.Start(eventhandler.Funcs{
 					CreateFunc: func(q2 workqueue.RateLimitingInterface, evt event.CreateEvent) {
 						defer GinkgoRecover()
 						Fail("Unexpected CreateEvent")
@@ -155,8 +155,8 @@ var _ = Describe("Source", func() {
 				instance := &source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				inject.InjectInformers(ic, instance)
-				err := instance.Start(eventhandler.EventHandlerFuncs{
+				inject.DoInformers(ic, instance)
+				err := instance.Start(eventhandler.Funcs{
 					CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
 						defer GinkgoRecover()
 						Fail("Unexpected DeleteEvent")
@@ -196,7 +196,7 @@ var _ = Describe("Source", func() {
 					Type: &corev1.Pod{},
 				}
 				instance.InjectInformers(ic)
-				err := instance.Start(eventhandler.EventHandlerFuncs{}, q)
+				err := instance.Start(eventhandler.Funcs{}, q)
 				Expect(err).To(HaveOccurred())
 
 				close(done)

@@ -19,10 +19,13 @@ before_install:
 # The dependencies have already been vendored by `dep` so
 # we don't need to fetch them.
 install:
-  -
+  - go get -u golang.org/x/lint/golint
 
 script:
+- go vet ./pkg/...
+- golint -set_exit_status ./pkg/...
 - TRACE=1 ./test.sh
+
 
 # TBD. Suppressing for now.
 notifications:

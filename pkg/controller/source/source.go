@@ -77,7 +77,7 @@ func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.R
 
 	// informers should have been injected before Start was called
 	if ks.informers == nil {
-		return fmt.Errorf("must call InjectInformers on KindSource before calling Start")
+		return fmt.Errorf("must call DoInformers on KindSource before calling Start")
 	}
 
 	// Lookup the Informer from the Informers and add an EventHandler which populates the Queue
@@ -91,7 +91,7 @@ func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.R
 
 var _ inject.Informers = &KindSource{}
 
-// InjectInformers is internal should be called only by the Controller.  InjectInformers should be called before Start.
+// InjectInformers is internal should be called only by the Controller.  DoInformers should be called before Start.
 func (ks *KindSource) InjectInformers(i informer.Informers) error {
 	if ks.informers == nil {
 		ks.informers = i

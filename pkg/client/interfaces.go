@@ -127,7 +127,7 @@ func (o *ListOptions) MatchingLabels(lbls map[string]string) *ListOptions {
 	return o
 }
 
-// MatchingLabels is a convenience function that sets the field selector
+// MatchingField is a convenience function that sets the field selector
 // to match the given field, and then returns the options.
 // It mutates the list options.
 func (o *ListOptions) MatchingField(name, val string) *ListOptions {
@@ -149,7 +149,7 @@ func MatchingLabels(lbls map[string]string) *ListOptions {
 	return (&ListOptions{}).MatchingLabels(lbls)
 }
 
-// MatchingLabels is a convenience function that constructs list options
+// MatchingField is a convenience function that constructs list options
 // to match the given field.
 func MatchingField(name, val string) *ListOptions {
 	return (&ListOptions{}).MatchingField(name, val)

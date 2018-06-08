@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// Update is an event where a Kubernetes object was created.
+// CreateEvent is an event where a Kubernetes object was created.
 type CreateEvent struct {
 	// Meta is the ObjectMeta of the Kubernetes Type that was created
 	Meta v1.Object
@@ -30,7 +30,7 @@ type CreateEvent struct {
 	Object runtime.Object
 }
 
-// Update is an event where a Kubernetes object was updated.
+// UpdateEvent is an event where a Kubernetes object was updated.
 type UpdateEvent struct {
 	// MetaOld is the ObjectMeta of the Kubernetes Type that was updated (before the update)
 	MetaOld v1.Object
@@ -45,7 +45,7 @@ type UpdateEvent struct {
 	ObjectNew runtime.Object
 }
 
-// Update is an event where a Kubernetes object was deleted.
+// DeleteEvent is an event where a Kubernetes object was deleted.
 type DeleteEvent struct {
 	// Meta is the ObjectMeta of the Kubernetes Type that was deleted
 	Meta v1.Object

@@ -26,8 +26,8 @@ import (
 
 var _ ginkgo.Reporter = NewlineReporter{}
 
-// Print a newline after the default Reporter output so that the results are correctly parsed
-// by test automation.
+// NewlineReporter is Reporter that Prints a newline after the default Reporter output so that the results
+// are correctly parsed by test automation.
 // See issue https://github.com/jstemmer/go-junit-report/issues/31
 type NewlineReporter struct{}
 

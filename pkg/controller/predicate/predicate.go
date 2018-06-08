@@ -35,7 +35,7 @@ type Predicate interface {
 
 var _ Predicate = PredicateFuncs{}
 
-// PredicateFunc is a function that implements Predicate.
+// PredicateFuncs is a function that implements Predicate.
 type PredicateFuncs struct {
 	// Create returns true if the Create event should be processed
 	CreateFunc func(event.CreateEvent) bool

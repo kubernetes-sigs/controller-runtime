@@ -38,6 +38,7 @@ type Informers interface {
 
 var _ Informers = &SelfPopulatingInformers{}
 
+// Callback is used for other components to be notified when new Informers are added.
 type Callback interface {
 	Call(gvk schema.GroupVersionKind, c cache.SharedIndexInformer)
 }
@@ -83,11 +84,13 @@ func (c *SelfPopulatingInformers) init() {
 	})
 }
 
+// KnownInformersByType returns all the registered informers keyed by the type.
 func (c *SelfPopulatingInformers) KnownInformersByType() map[schema.GroupVersionKind]cache.SharedIndexInformer {
 	c.init()
 	return c.informersByGVK
 }
 
+// InformerForKind returns the informer for a GroupVersionKind
 func (c *SelfPopulatingInformers) InformerForKind(gvk schema.GroupVersionKind) (cache.SharedIndexInformer, error) {
 	c.init()
 	obj, err := c.Scheme.New(gvk)
@@ -97,6 +100,7 @@ func (c *SelfPopulatingInformers) InformerForKind(gvk schema.GroupVersionKind) (
 	return c.informerFor(gvk, obj)
 }
 
+// InformerForKind returns the informer for an Object
 func (c *SelfPopulatingInformers) InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error) {
 	c.init()
 	gvk, err := apiutil.GVKForObject(obj, c.Scheme)
@@ -173,6 +177,7 @@ func (c *SelfPopulatingInformers) informerFor(gvk schema.GroupVersionKind, obj r
 	return res, nil
 }
 
+// Start starts the informers.
 func (c *SelfPopulatingInformers) Start(stopCh <-chan struct{}) error {
 	c.init()
 	c.mu.Lock()

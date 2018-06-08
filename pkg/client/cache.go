@@ -207,10 +207,7 @@ func (c *singleObjectCache) List(ctx context.Context, opts *ListOptions, out run
 		}
 		outItems = append(outItems, obj.DeepCopyObject())
 	}
-	if err := apimeta.SetList(out, outItems); err != nil {
-		return err
-	}
-	return nil
+	return apimeta.SetList(out, outItems)
 }
 
 // TODO: Make an interface with this function that has an Informers as an object on the struct
@@ -273,10 +270,7 @@ func indexByField(indexer cache.Indexer, field string, extractor IndexerFunc) er
 		return vals, nil
 	}
 
-	if err := indexer.AddIndexers(cache.Indexers{fieldIndexName(field): indexFunc}); err != nil {
-		return err
-	}
-	return nil
+	return indexer.AddIndexers(cache.Indexers{fieldIndexName(field): indexFunc})
 }
 
 // fieldIndexName constructs the name of the index over the given field,

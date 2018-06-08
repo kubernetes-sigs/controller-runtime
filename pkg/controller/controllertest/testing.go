@@ -29,7 +29,10 @@ var _ runtime.Object = &ErrorType{}
 // ErrorType implements runtime.Object but isn't registered in any scheme and should cause errors in tests as a result.
 type ErrorType struct{}
 
+// GetObjectKind implements runtime.Object
 func (ErrorType) GetObjectKind() schema.ObjectKind { return nil }
+
+// DeepCopyObjectimplements runtime.Object
 func (ErrorType) DeepCopyObject() runtime.Object   { return nil }
 
 var _ workqueue.RateLimitingInterface = Queue{}
@@ -40,16 +43,20 @@ type Queue struct {
 	workqueue.Interface
 }
 
+// AddAfter implements RateLimitingInterface.
 func (q Queue) AddAfter(item interface{}, duration time.Duration) {
 	q.Add(item)
 }
 
+// AddRateLimited implements RateLimitingInterface.  TODO(community): Implement this.
 func (q Queue) AddRateLimited(item interface{}) {
 	q.Add(item)
 }
 
+// Forget implements RateLimitingInterface.  TODO(community): Implement this.
 func (q Queue) Forget(item interface{}) {}
 
+// NumRequeues implements RateLimitingInterface.  TODO(community): Implement this.
 func (q Queue) NumRequeues(item interface{}) int {
 	return 0
 }

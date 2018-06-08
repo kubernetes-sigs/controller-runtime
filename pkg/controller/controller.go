@@ -48,8 +48,8 @@ type ControllerArgs struct {
 	MaxConcurrentReconciles int
 }
 
-// Controllers are work queues that watch for changes to objects (i.e. Create / Update / Delete events) and
-// then reconcile an object (i.e. make changes to ensure the system state matches what is specified in the object).
+// Controller is a work queue that watches for changes to objects (i.e. Create / Update / Delete events) and
+// then reconciles an object (i.e. make changes to ensure the system state matches what is specified in the object).
 type Controller interface {
 	// Watch takes events provided by a Source and uses the EventHandler to enqueue ReconcileRequests in
 	// response to the events.

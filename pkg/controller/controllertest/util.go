@@ -73,7 +73,7 @@ func (f *FakeInformer) Add(obj metav1.Object) {
 	}
 }
 
-// handlers fakes an Update event for obj
+// Update fakes an Update event for obj
 func (f *FakeInformer) Update(oldObj, newObj metav1.Object) {
 	for _, h := range f.handlers {
 		h.OnUpdate(oldObj, newObj)

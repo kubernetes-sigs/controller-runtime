@@ -82,6 +82,7 @@ var _ Mapper = ToRequestsFunc(nil)
 // ToRequestsFunc implements Mapper using a function.
 type ToRequestsFunc func(MapObject) []reconcile.ReconcileRequest
 
+// Map implements Mapper
 func (m ToRequestsFunc) Map(i MapObject) []reconcile.ReconcileRequest {
 	return m(i)
 }

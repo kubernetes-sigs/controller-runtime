@@ -33,13 +33,13 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-// ControllerManager initializes shared dependencies such as Caches and Clients, and starts Controllers.
+// Manager initializes shared dependencies such as Caches and Clients, and starts Controllers.
 //
-// Dependencies may be retrieved from the ControllerManager using the Get* functions
-type ControllerManager interface {
+// Dependencies may be retrieved from the Manager using the Get* functions
+type Manager interface {
 	// NewController creates a new initialized Controller with the Reconcile function
-	// and registers it with the ControllerManager.
-	NewController(ControllerArgs, reconcile.Reconcile) (Controller, error)
+	// and registers it with the Manager.
+	NewController(Args, reconcile.Reconcile) (Controller, error)
 
 	// Start starts all registered Controllers and blocks until the Stop channel is closed.
 	// Returns an error if there is an error starting any controller.
@@ -58,7 +58,7 @@ type ControllerManager interface {
 	GetFieldIndexer() client.FieldIndexer
 }
 
-var _ ControllerManager = &controllerManager{}
+var _ Manager = &controllerManager{}
 
 type controllerManager struct {
 	// config is the rest.config used to talk to the apiserver.  Required.
@@ -88,12 +88,12 @@ type controllerManager struct {
 	stop    <-chan struct{}
 }
 
-func (cm *controllerManager) NewController(ca ControllerArgs, r reconcile.Reconcile) (Controller, error) {
+func (cm *controllerManager) NewController(ca Args, r reconcile.Reconcile) (Controller, error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
 	if len(ca.Name) == 0 {
-		return nil, fmt.Errorf("Must specify name for Controller.")
+		return nil, fmt.Errorf("must specify name for Controller")
 	}
 
 	if ca.MaxConcurrentReconciles <= 0 {
@@ -127,16 +127,16 @@ func (cm *controllerManager) NewController(ca ControllerArgs, r reconcile.Reconc
 }
 
 func (cm *controllerManager) injectInto(i interface{}) error {
-	if _, err := inject.InjectConfig(cm.config, i); err != nil {
+	if _, err := inject.DoConfig(cm.config, i); err != nil {
 		return err
 	}
-	if _, err := inject.InjectClient(cm.client, i); err != nil {
+	if _, err := inject.DoClient(cm.client, i); err != nil {
 		return err
 	}
-	if _, err := inject.InjectScheme(cm.scheme, i); err != nil {
+	if _, err := inject.DoScheme(cm.scheme, i); err != nil {
 		return err
 	}
-	if _, err := inject.InjectInformers(cm.informers, i); err != nil {
+	if _, err := inject.DoInformers(cm.informers, i); err != nil {
 		return err
 	}
 	return nil
@@ -187,8 +187,8 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	}
 }
 
-// ControllerManagerArgs are the arguments for creating a new ControllerManager
-type ControllerManagerArgs struct {
+// ManagerArgs are the arguments for creating a new Manager
+type ManagerArgs struct {
 	// Config is the config used to talk to an apiserver.  Defaults to:
 	// 1. Config specified with the --config flag
 	// 2. Config specified with the KUBECONFIG environment variable
@@ -201,8 +201,8 @@ type ControllerManagerArgs struct {
 	Scheme *runtime.Scheme
 }
 
-// NewControllerManager returns a new fully initialized ControllerManager.
-func NewControllerManager(args ControllerManagerArgs) (ControllerManager, error) {
+// NewManager returns a new fully initialized Manager.
+func NewManager(args ManagerArgs) (Manager, error) {
 	cm := &controllerManager{config: args.Config, scheme: args.Scheme, errChan: make(chan error)}
 
 	// Initialize a rest.config if none was specified

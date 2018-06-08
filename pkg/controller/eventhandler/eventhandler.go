@@ -54,10 +54,10 @@ type EventHandler interface {
 	Generic(workqueue.RateLimitingInterface, event.GenericEvent)
 }
 
-var _ EventHandler = EventHandlerFuncs{}
+var _ EventHandler = Funcs{}
 
-// EventHandlerFuncs allows specifying a subset of EventHandler functions are fields.
-type EventHandlerFuncs struct {
+// Funcs allows specifying a subset of EventHandler functions are fields.
+type Funcs struct {
 	// Create is called in response to an add event.  Defaults to no-op.
 	// RateLimitingInterface is used to enqueue reconcile.ReconcileRequests.
 	CreateFunc func(workqueue.RateLimitingInterface, event.CreateEvent)
@@ -76,28 +76,28 @@ type EventHandlerFuncs struct {
 }
 
 // Create implements EventHandler
-func (h EventHandlerFuncs) Create(q workqueue.RateLimitingInterface, e event.CreateEvent) {
+func (h Funcs) Create(q workqueue.RateLimitingInterface, e event.CreateEvent) {
 	if h.CreateFunc != nil {
 		h.CreateFunc(q, e)
 	}
 }
 
 // Delete implements EventHandler
-func (h EventHandlerFuncs) Delete(q workqueue.RateLimitingInterface, e event.DeleteEvent) {
+func (h Funcs) Delete(q workqueue.RateLimitingInterface, e event.DeleteEvent) {
 	if h.DeleteFunc != nil {
 		h.DeleteFunc(q, e)
 	}
 }
 
 // Update implements EventHandler
-func (h EventHandlerFuncs) Update(q workqueue.RateLimitingInterface, e event.UpdateEvent) {
+func (h Funcs) Update(q workqueue.RateLimitingInterface, e event.UpdateEvent) {
 	if h.UpdateFunc != nil {
 		h.UpdateFunc(q, e)
 	}
 }
 
 // Generic implements EventHandler
-func (h EventHandlerFuncs) Generic(q workqueue.RateLimitingInterface, e event.GenericEvent) {
+func (h Funcs) Generic(q workqueue.RateLimitingInterface, e event.GenericEvent) {
 	if h.GenericFunc != nil {
 		h.GenericFunc(q, e)
 	}

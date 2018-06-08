@@ -32,12 +32,12 @@ import (
 )
 
 var _ = Describe("controller", func() {
-	var reconciled chan reconcile.ReconcileRequest
+	var reconciled chan reconcile.Request
 	var stop chan struct{}
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
-		reconciled = make(chan reconcile.ReconcileRequest)
+		reconciled = make(chan reconcile.Request)
 		Expect(cfg).NotTo(BeNil())
 	})
 
@@ -49,15 +49,15 @@ var _ = Describe("controller", func() {
 		// TODO(directxman12): write a whole suite of controller-client interaction tests
 
 		It("should reconcile", func(done Done) {
-			By("Creating the ControllerManager")
-			cm, err := controller.NewControllerManager(controller.ControllerManagerArgs{Config: cfg})
+			By("Creating the Manager")
+			cm, err := controller.NewManager(controller.ManagerArgs{Config: cfg})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
-			instance, err := cm.NewController(controller.ControllerArgs{Name: "foo-controller"}, reconcile.ReconcileFunc(
-				func(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
+			instance, err := cm.NewController(controller.Args{Name: "foo-controller"}, reconcile.Func(
+				func(request reconcile.Request) (reconcile.Result, error) {
 					reconciled <- request
-					return reconcile.ReconcileResult{}, nil
+					return reconcile.Result{}, nil
 				}))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -70,7 +70,7 @@ var _ = Describe("controller", func() {
 			err = instance.Watch(&source.KindSource{Type: &appsv1.Deployment{}}, &eventhandler.EnqueueHandler{})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Starting the ControllerManager")
+			By("Starting the Manager")
 			go func() {
 				defer GinkgoRecover()
 				Expect(cm.Start(stop)).NotTo(HaveOccurred())
@@ -95,7 +95,7 @@ var _ = Describe("controller", func() {
 					},
 				},
 			}
-			expectedReconcileRequest := reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+			expectedReconcileRequest := reconcile.Request{NamespacedName: types.NamespacedName{
 				Namespace: "default",
 				Name:      "deployment-name",
 			}}

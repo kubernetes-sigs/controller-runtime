@@ -39,8 +39,8 @@ import (
 
 var log = logf.KBLog.WithName("controller").WithName("controller")
 
-// ControllerArgs are the arguments for creating a new Controller
-type ControllerArgs struct {
+// Args are the arguments for creating a new Controller
+type Args struct {
 	// Name is used to uniquely identify a controller in tracing, logging and monitoring.  Name is required.
 	Name string
 
@@ -174,7 +174,7 @@ func (c *controller) processNextWorkItem() bool {
 
 	obj, shutdown := c.queue.Get()
 	if obj == nil {
-		log.Error(nil, "Encountered nil ReconcileRequest", "Object", obj)
+		log.Error(nil, "Encountered nil Request", "Object", obj)
 		c.queue.Forget(obj)
 	}
 
@@ -190,14 +190,14 @@ func (c *controller) processNextWorkItem() bool {
 	// put back on the workqueue and attempted again after a back-off
 	// period.
 	defer c.queue.Done(obj)
-	var req reconcile.ReconcileRequest
+	var req reconcile.Request
 	var ok bool
-	if req, ok = obj.(reconcile.ReconcileRequest); !ok {
+	if req, ok = obj.(reconcile.Request); !ok {
 		// As the item in the workqueue is actually invalid, we call
 		// Forget here else we'd go into a loop of attempting to
 		// process a work item that is invalid.
 		c.queue.Forget(obj)
-		log.Error(nil, "Queue item was not a ReconcileRequest",
+		log.Error(nil, "Queue item was not a Request",
 			"controller", c.name, "Type", fmt.Sprintf("%T", obj), "Value", obj)
 		// Return true, don't take a break
 		return true
@@ -207,7 +207,7 @@ func (c *controller) processNextWorkItem() bool {
 	// resource to be synced.
 	if result, err := c.reconcile.Reconcile(req); err != nil {
 		c.queue.AddRateLimited(req)
-		log.Error(nil, "reconcile error", "controller", c.name, "ReconcileRequest", req)
+		log.Error(nil, "reconcile error", "controller", c.name, "Request", req)
 
 		// TODO(pwittrock): FTO Returning an error here seems to back things off for a second before restarting
 		// the loop through wait.Util.
@@ -224,7 +224,7 @@ func (c *controller) processNextWorkItem() bool {
 	c.queue.Forget(obj)
 
 	// TODO(directxman12): What does 1 mean?  Do we want level constants?  Do we want levels at all?
-	log.V(1).Info("Successfully Reconciled", "controller", c.name, "ReconcileRequest", req)
+	log.V(1).Info("Successfully Reconciled", "controller", c.name, "Request", req)
 
 	// Return true, don't take a break
 	return true

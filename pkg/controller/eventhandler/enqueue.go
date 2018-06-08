@@ -28,7 +28,7 @@ var enqueueLog = logf.KBLog.WithName("eventhandler").WithName("EnqueueHandler")
 
 var _ EventHandler = &EnqueueHandler{}
 
-// EnqueueHandler enqueues a ReconcileRequest containing the Name and Namespace of the object for each event.
+// EnqueueHandler enqueues a Request containing the Name and Namespace of the object for each event.
 type EnqueueHandler struct{}
 
 // Create implements EventHandler
@@ -37,7 +37,7 @@ func (e *EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.Cre
 		enqueueLog.Error(nil, "CreateEvent received with no metadata", "CreateEvent", evt)
 		return
 	}
-	q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+	q.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
 		Name:      evt.Meta.GetName(),
 		Namespace: evt.Meta.GetNamespace(),
 	}})
@@ -46,7 +46,7 @@ func (e *EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.Cre
 // Update implements EventHandler
 func (e *EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 	if evt.MetaOld != nil {
-		q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+		q.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
 			Name:      evt.MetaOld.GetName(),
 			Namespace: evt.MetaOld.GetNamespace(),
 		}})
@@ -55,7 +55,7 @@ func (e *EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.Upd
 	}
 
 	if evt.MetaNew != nil {
-		q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+		q.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
 			Name:      evt.MetaNew.GetName(),
 			Namespace: evt.MetaNew.GetNamespace(),
 		}})
@@ -70,7 +70,7 @@ func (e *EnqueueHandler) Delete(q workqueue.RateLimitingInterface, evt event.Del
 		enqueueLog.Error(nil, "DeleteEvent received with no metadata", "DeleteEvent", evt)
 		return
 	}
-	q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+	q.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
 		Name:      evt.Meta.GetName(),
 		Namespace: evt.Meta.GetNamespace(),
 	}})
@@ -82,7 +82,7 @@ func (e *EnqueueHandler) Generic(q workqueue.RateLimitingInterface, evt event.Ge
 		enqueueLog.Error(nil, "GenericEvent received with no metadata", "GenericEvent", evt)
 		return
 	}
-	q.AddRateLimited(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+	q.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
 		Name:      evt.Meta.GetName(),
 		Namespace: evt.Meta.GetNamespace(),
 	}})

@@ -26,16 +26,16 @@ import (
 )
 
 var _ = Describe("reconcile", func() {
-	Describe("ReconcileFunc", func() {
+	Describe("Func", func() {
 		It("should call the function with the request and return a nil error.", func() {
-			request := reconcile.ReconcileRequest{
+			request := reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: "foo", Namespace: "bar"},
 			}
-			result := reconcile.ReconcileResult{
+			result := reconcile.Result{
 				Requeue: true,
 			}
 
-			instance := reconcile.ReconcileFunc(func(r reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
+			instance := reconcile.Func(func(r reconcile.Request) (reconcile.Result, error) {
 				defer GinkgoRecover()
 				Expect(r).To(Equal(request))
 
@@ -47,15 +47,15 @@ var _ = Describe("reconcile", func() {
 		})
 
 		It("should call the function with the request and return an error.", func() {
-			request := reconcile.ReconcileRequest{
+			request := reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: "foo", Namespace: "bar"},
 			}
-			result := reconcile.ReconcileResult{
+			result := reconcile.Result{
 				Requeue: false,
 			}
 			err := fmt.Errorf("hello world")
 
-			instance := reconcile.ReconcileFunc(func(r reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
+			instance := reconcile.Func(func(r reconcile.Request) (reconcile.Result, error) {
 				defer GinkgoRecover()
 				Expect(r).To(Equal(request))
 

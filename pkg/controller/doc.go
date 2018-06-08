@@ -124,15 +124,15 @@ to Pod or ReplicaSet events.  The Reconcile function simply adds a label to the 
 		flag.Parse()
 		logf.SetLogger(logf.ZapLogger(false))
 
-		// Setup a ControllerManager
-		manager, err := controller.NewControllerManager(controller.ControllerManagerArgs{})
+		// Setup a Manager
+		manager, err := controller.NewManager(controller.ManagerArgs{})
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		// Setup a new controller to Reconcile ReplicaSets
 		c := manager.NewController(
-			controller.ControllerArgs{Name: "my-replicaset-controller", MaxConcurrentReconciles: 1},
+			controller.Args{Name: "my-replicaset-controller", MaxConcurrentReconciles: 1},
 			&ReconcileReplicaSet{client: manager.GetClient()},
 		)
 

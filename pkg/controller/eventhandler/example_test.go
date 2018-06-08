@@ -40,7 +40,7 @@ func ExampleEnqueueHandler() {
 	)
 }
 
-// This example watches ReplicaSets and enqueues a ReconcileRequest containing the Name and Namespace of the
+// This example watches ReplicaSets and enqueues a Request containing the Name and Namespace of the
 // owning (direct) Deployment responsible for the creation of the ReplicaSet.
 func ExampleEnqueueOwnerHandler() {
 	// controller is a controller.controller
@@ -53,15 +53,15 @@ func ExampleEnqueueOwnerHandler() {
 	)
 }
 
-// This example watches Deployments and enqueues a ReconcileRequest contain the Name and Namespace of different
+// This example watches Deployments and enqueues a Request contain the Name and Namespace of different
 // objects (of Type: MyKind) using a mapping function defined by the user.
 func ExampleEnqueueMappedHandler() {
 	// controller is a controller.controller
 	c.Watch(
 		&source.KindSource{Type: &appsv1.Deployment{}},
 		&eventhandler.EnqueueMappedHandler{
-			ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.ReconcileRequest {
-				return []reconcile.ReconcileRequest{
+			ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.Request {
+				return []reconcile.Request{
 					{NamespacedName: types.NamespacedName{
 						Name:      a.Meta.GetName() + "-1",
 						Namespace: a.Meta.GetNamespace(),
@@ -80,27 +80,27 @@ func ExampleEventHandlerFuncs() {
 	// controller is a controller.controller
 	c.Watch(
 		&source.KindSource{Type: &corev1.Pod{}},
-		eventhandler.EventHandlerFuncs{
+		eventhandler.Funcs{
 			CreateFunc: func(q workqueue.RateLimitingInterface, e event.CreateEvent) {
-				q.Add(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.Meta.GetName(),
 					Namespace: e.Meta.GetNamespace(),
 				}})
 			},
 			UpdateFunc: func(q workqueue.RateLimitingInterface, e event.UpdateEvent) {
-				q.Add(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.MetaNew.GetName(),
 					Namespace: e.MetaNew.GetNamespace(),
 				}})
 			},
 			DeleteFunc: func(q workqueue.RateLimitingInterface, e event.DeleteEvent) {
-				q.Add(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.Meta.GetName(),
 					Namespace: e.Meta.GetNamespace(),
 				}})
 			},
 			GenericFunc: func(q workqueue.RateLimitingInterface, e event.GenericEvent) {
-				q.Add(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{
+				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.Meta.GetName(),
 					Namespace: e.Meta.GetNamespace(),
 				}})

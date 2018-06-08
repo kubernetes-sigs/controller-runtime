@@ -33,8 +33,8 @@ var _ = Describe("Predicate", func() {
 		}
 	})
 
-	Describe("PredicateFuncs", func() {
-		failingFuncs := predicate.PredicateFuncs{
+	Describe("Funcs", func() {
+		failingFuncs := predicate.Funcs{
 			CreateFunc: func(event.CreateEvent) bool {
 				defer GinkgoRecover()
 				Fail("Did not expect CreateFunc to be called.")

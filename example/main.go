@@ -37,15 +37,15 @@ func main() {
 	flag.Parse()
 	logf.SetLogger(logf.ZapLogger(false))
 
-	// Setup a ControllerManager
-	manager, err := controller.NewControllerManager(controller.ControllerManagerArgs{})
+	// Setup a Manager
+	manager, err := controller.NewManager(controller.ManagerArgs{})
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Setup a new controller to Reconcile ReplicaSets
 	c, err := manager.NewController(
-		controller.ControllerArgs{Name: "foo-controller", MaxConcurrentReconciles: 1},
+		controller.Args{Name: "foo-controller", MaxConcurrentReconciles: 1},
 		&reconcileReplicaSet{client: manager.GetClient()},
 	)
 	if err != nil {
@@ -81,18 +81,18 @@ type reconcileReplicaSet struct {
 // Implement reconcile.reconcile so the controller can reconcile objects
 var _ reconcile.Reconcile = &reconcileReplicaSet{}
 
-func (r *reconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
+func (r *reconcileReplicaSet) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the ReplicaSet from the cache
 	rs := &appsv1.ReplicaSet{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, rs)
 	if errors.IsNotFound(err) {
 		log.Printf("Could not find ReplicaSet %v.\n", request)
-		return reconcile.ReconcileResult{}, nil
+		return reconcile.Result{}, nil
 	}
 
 	if err != nil {
 		log.Printf("Could not fetch ReplicaSet %v for %+v\n", err, request)
-		return reconcile.ReconcileResult{}, err
+		return reconcile.Result{}, err
 	}
 
 	// Print the ReplicaSet
@@ -104,7 +104,7 @@ func (r *reconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (rec
 		rs.Labels = map[string]string{}
 	}
 	if rs.Labels["hello"] == "world" {
-		return reconcile.ReconcileResult{}, nil
+		return reconcile.Result{}, nil
 	}
 
 	// Update the ReplicaSet
@@ -112,8 +112,8 @@ func (r *reconcileReplicaSet) Reconcile(request reconcile.ReconcileRequest) (rec
 	err = r.client.Update(context.TODO(), rs)
 	if err != nil {
 		log.Printf("Could not write ReplicaSet %v\n", err)
-		return reconcile.ReconcileResult{}, err
+		return reconcile.Result{}, err
 	}
 
-	return reconcile.ReconcileResult{}, nil
+	return reconcile.Result{}, nil
 }

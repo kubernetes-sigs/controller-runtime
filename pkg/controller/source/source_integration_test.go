@@ -57,10 +57,10 @@ var _ = Describe("Source", func() {
 
 	JustBeforeEach(func() {
 		instance1 = &source.KindSource{Type: obj}
-		inject.InjectInformers(icache, instance1)
+		inject.DoInformers(icache, instance1)
 
 		instance2 = &source.KindSource{Type: obj}
-		inject.InjectInformers(icache, instance2)
+		inject.DoInformers(icache, instance2)
 	})
 
 	AfterEach(func() {
@@ -101,8 +101,8 @@ var _ = Describe("Source", func() {
 				}
 
 				// Create an event handler to verify the events
-				newHandler := func(c chan interface{}) eventhandler.EventHandlerFuncs {
-					return eventhandler.EventHandlerFuncs{
+				newHandler := func(c chan interface{}) eventhandler.Funcs {
+					return eventhandler.Funcs{
 						CreateFunc: func(rli workqueue.RateLimitingInterface, evt event.CreateEvent) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))

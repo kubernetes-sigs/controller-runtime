@@ -30,15 +30,15 @@ import (
 // This example creates a new controller named "pod-controller" with a no-op reconcile function and registers
 // it with the DefaultControllerManager.
 func ExampleController() {
-	cm, err := controller.NewControllerManager(controller.ControllerManagerArgs{Config: config.GetConfigOrDie()})
+	cm, err := controller.NewManager(controller.ManagerArgs{Config: config.GetConfigOrDie()})
 	if err != nil {
 		log.Fatal(err)
 	}
 	_, err = cm.NewController(
-		controller.ControllerArgs{Name: "pod-controller", MaxConcurrentReconciles: 1},
-		reconcile.ReconcileFunc(func(o reconcile.ReconcileRequest) (reconcile.ReconcileResult, error) {
+		controller.Args{Name: "pod-controller", MaxConcurrentReconciles: 1},
+		reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
 			// Your business logic to implement the API by creating, updating, deleting objects goes here.
-			return reconcile.ReconcileResult{}, nil
+			return reconcile.Result{}, nil
 		}),
 	)
 	if err != nil {
@@ -48,11 +48,11 @@ func ExampleController() {
 
 // This example watches Pods and enqueues ReconcileRequests with the changed Pod Name and Namespace.
 func ExampleController_Watch() {
-	cm, err := controller.NewControllerManager(controller.ControllerManagerArgs{Config: config.GetConfigOrDie()})
+	cm, err := controller.NewManager(controller.ManagerArgs{Config: config.GetConfigOrDie()})
 	if err != nil {
 		log.Fatal(err)
 	}
-	c, err := cm.NewController(controller.ControllerArgs{Name: "foo-controller"}, nil)
+	c, err := cm.NewController(controller.Args{Name: "foo-controller"}, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

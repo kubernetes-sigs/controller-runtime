@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
 	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 )
 
@@ -42,7 +43,7 @@ import (
 type Source interface {
 	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 	// to enqueue reconcile.Requests.
-	Start(eventhandler.EventHandler, workqueue.RateLimitingInterface) error
+	Start(eventhandler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
 }
 
 // ChannelSource is used to provide a source of events originating outside the cluster
@@ -55,7 +56,8 @@ var _ Source = ChannelSource(make(chan event.GenericEvent))
 // Start implements Source and should only be called by the Controller.
 func (ks ChannelSource) Start(
 	handler eventhandler.EventHandler,
-	queue workqueue.RateLimitingInterface) error {
+	queue workqueue.RateLimitingInterface,
+	prct ...predicate.Predicate) error {
 	return nil
 }
 
@@ -74,7 +76,9 @@ var _ Source = &KindSource{}
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.RateLimitingInterface) error {
+func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.RateLimitingInterface,
+	prct ...predicate.Predicate) error {
+
 	// Type should have been specified by the user.
 	if ks.Type == nil {
 		return fmt.Errorf("must specify KindSource.Type")
@@ -90,7 +94,7 @@ func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.R
 	if err != nil {
 		return err
 	}
-	i.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler})
+	i.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
 	return nil
 }
 

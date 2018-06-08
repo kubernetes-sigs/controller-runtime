@@ -27,8 +27,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var log = logf.KBLog.WithName("source").WithName("EventHandler")
@@ -39,7 +39,7 @@ var _ cache.ResourceEventHandler = EventHandler{}
 type EventHandler struct {
 	EventHandler eventhandler.EventHandler
 	Queue        workqueue.RateLimitingInterface
-	Predicates []predicate.Predicate
+	Predicates   []predicate.Predicate
 }
 
 // OnAdd creates and CreateEvent and calls Create on EventHandler

@@ -125,7 +125,7 @@ func (c *controller) Watch(src source.Source, evthdler eventhandler.EventHandler
 	// TODO(pwittrock): wire in predicates
 
 	log.Info("Starting EventSource", "controller", c.name, "Source", src)
-	return src.Start(evthdler, c.queue)
+	return src.Start(evthdler, c.queue, prct...)
 }
 
 func (c *controller) Start(stop <-chan struct{}) error {

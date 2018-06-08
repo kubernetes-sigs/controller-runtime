@@ -31,7 +31,7 @@ func ExampleReconcileFunc() {
 		return reconcile.ReconcileResult{}, nil
 	})
 
-	r.Reconcile(reconcile.ReconcileRequest{types.NamespacedName{Namespace: "default", Name: "test"}})
+	r.Reconcile(reconcile.ReconcileRequest{NamespacedName: types.NamespacedName{Namespace: "default", Name: "test"}})
 
 	// Output: Name: test, Namespace: default
 }

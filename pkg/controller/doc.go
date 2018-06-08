@@ -106,7 +106,7 @@ EventHandler enqueues Request:
 
 Reconcile is called with the Request:
 
-* Reconcile(Request{"foo", "bar"})
+* Reconcile(reconcile.Request{"foo", "bar"})
 
 
 controllerManager
@@ -120,88 +120,7 @@ Usage
 The following example shows creating a new Controller program which Reconciles ReplicaSet objects in response
 to Pod or ReplicaSet events.  The Reconcile function simply adds a label to the ReplicaSet.
 
-	func main() {
-		flag.Parse()
-		logf.SetLogger(logf.ZapLogger(false))
-
-		// Setup a Manager
-		manager, err := controller.NewManager(controller.ManagerArgs{})
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Setup a new controller to Reconcile ReplicaSets
-		c := manager.NewController(
-			controller.Args{Name: "my-replicaset-controller", MaxConcurrentReconciles: 1},
-			&ReconcileReplicaSet{client: manager.GetClient()},
-		)
-
-		err = c.Watch(
-			// Watch ReplicaSets
-			&source.KindSource{Type: &appsv1.ReplicaSet{}},
-			// Enqueue ReplicaSet object key
-			&eventhandler.EnqueueHandler{})
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		err = c.Watch(
-			// Watch Pods
-			&source.KindSource{Type: &corev1.Pod{}},
-			// Enqueue Owning ReplicaSet object key
-			&eventhandler.EnqueueOwnerHandler{OwnerType: &appsv1.ReplicaSet{}, IsController: true})
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		log.Fatal(manager.Start(signals.SetupSignalHandler()))
-	}
-
-	// ReconcileReplicaSet reconciles ReplicaSets
-	type ReconcileReplicaSet struct {
-		client client.Interface
-	}
-
-	// Implement reconcile.Reconcile so the controller can reconcile objects
-	var _ reconcile.Reconcile = &ReconcileReplicaSet{}
-
-	// Reconcile writes a "hello": "world" annotation to ReplicaSets that don't have one.
-	func (r *ReconcileReplicaSet) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-		// Fetch the ReplicaSet from the cache
-		rs := &appsv1.ReplicaSet{}
-		err := r.client.Get(context.TODO(), request.NamespacedName, rs)
-		if errors.IsNotFound(err) {
-			log.Printf("Could not find ReplicaSet %v.\n", request)
-			return reconcile.Result{}, nil
-		}
-
-		if err != nil {
-			log.Printf("Could not fetch ReplicaSet %v for %+v\n", err, request)
-			return reconcile.Result{}, err
-		}
-
-		// Print the ReplicaSet
-		log.Printf("ReplicaSet Name %s Namespace %s, Pod Name: %s\n",
-			rs.Name, rs.Namespace, rs.Spec.Template.Spec.Containers[0].Name)
-
-		// Set the label if it is missing
-		if rs.Labels == nil {
-			rs.Labels = map[string]string{}
-		}
-		if rs.Labels["hello"] == "world" {
-			return reconcile.Result{}, nil
-		}
-
-		// Update the ReplicaSet
-		rs.Labels["hello"] = "world"
-		err = r.client.Update(context.TODO(), rs)
-		if err != nil {
-			log.Printf("Could not write ReplicaSet %v\n", err)
-			return reconcile.Result{}, err
-		}
-
-		return reconcile.Result{}, nil
-	}
+See the example/main.go for a usage example.
 
 Controller Example
 

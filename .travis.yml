@@ -25,7 +25,27 @@ install:
 script:
 - go vet ./pkg/...
 - golint -set_exit_status ./pkg/...
-- gometalinter.v2 --disable-all --enable=misspell
+- gometalinter.v2 --disable-all --enable=misspell \
+    --enable=misspell \
+    --enable=structcheck \
+    --enable=maligned \
+    --enable=nakedret \
+    --enable=deadcode \
+    --enable=gocyclo \
+    --enable=ineffassign \
+    --enable=dupl \
+    --enable=golint \
+    --enable=goimports \
+    --enable=errcheck \
+    --enable=varcheck \
+    --enable=interfacer \
+    --enable=goconst \
+    --enable=unparam \
+    --enable=misspell \
+    --enable=lll \
+    --enable=gas \
+    --enable=safesql \
+    --enable=megacheck ./pkg/...
 - TRACE=1 ./test.sh
 
 

@@ -111,7 +111,7 @@ golint -set_exit_status ./pkg/...
 
 header_text "running gometalinter.v2"
 
-gometalinter.v2 --disable-all --enable=misspell \
+gometalinter.v2 --disable-all \
     --enable=misspell \
     --enable=structcheck \
     --enable=golint \

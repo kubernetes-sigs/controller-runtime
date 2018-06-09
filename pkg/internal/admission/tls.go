@@ -16,32 +16,27 @@ limitations under the License.
 
 package admission
 
-import (
-	"crypto/tls"
-	"crypto/x509"
-)
+//type certs struct {
+//	Cert   []byte
+//	Key    []byte
+//	CACert []byte
+//}
 
-type certs struct {
-	Cert   []byte
-	Key    []byte
-	CACert []byte
-}
-
-// MakeTLSConfig makes a TLS configuration suitable for use with the server
-func makeTLSConfig(certs certs) (*tls.Config, error) {
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(certs.CACert)
-	//cert, err := tls.X509KeyPair(certs.Cert, certs.Key)
-	//if err != nil {
-	//	return nil, err
-	//}
-	return &tls.Config{
-		//Certificates: []tls.Certificate{cert},
-		ClientCAs:  caCertPool,
-		ClientAuth: tls.NoClientCert,
-		// Note on GKE there apparently is no client cert sent, so this
-		// does not work on GKE.
-		// TODO: make this into a configuration option.
-		//		ClientAuth:   tls.RequireAndVerifyClientCert,
-	}, nil
-}
+//// MakeTLSConfig makes a TLS configuration suitable for use with the server
+//func makeTLSConfig(certs certs) (*tls.Config, error) {
+//	caCertPool := x509.NewCertPool()
+//	caCertPool.AppendCertsFromPEM(certs.CACert)
+//	//cert, err := tls.X509KeyPair(certs.Cert, certs.Key)
+//	//if err != nil {
+//	//	return nil, err
+//	//}
+//	return &tls.Config{
+//		//Certificates: []tls.Certificate{cert},
+//		ClientCAs:  caCertPool,
+//		ClientAuth: tls.NoClientCert,
+//		// Note on GKE there apparently is no client cert sent, so this
+//		// does not work on GKE.
+//		// TODO: make this into a configuration option.
+//		//		ClientAuth:   tls.RequireAndVerifyClientCert,
+//	}, nil
+//}

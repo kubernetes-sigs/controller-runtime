@@ -93,9 +93,6 @@ type controller struct {
 	// the queue for processing
 	queue workqueue.RateLimitingInterface
 
-	// once ensures unspecified fields get default values
-	once sync.Once
-
 	// inject is used to inject dependencies into other objects such as Sources, EventHandlers and Predicates
 	inject func(i interface{}) error
 

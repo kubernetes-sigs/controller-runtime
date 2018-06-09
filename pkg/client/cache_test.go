@@ -11,8 +11,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 
-	"k8s.io/client-go/kubernetes/scheme"
 	"reflect"
+
+	"k8s.io/client-go/kubernetes/scheme"
 )
 
 var _ = Describe("Indexers", func() {

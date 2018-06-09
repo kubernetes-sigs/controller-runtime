@@ -17,9 +17,10 @@ limitations under the License.
 package admission
 
 import (
+	"net/http"
+
 	"k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"net/http"
 )
 
 // Func implements an AdmissionReview operation for a GroupVersionResource

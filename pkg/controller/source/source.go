@@ -28,7 +28,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 )
 
 // Source is a source of events (eh.g. Create, Update, Delete operations on Kubernetes Objects, Webhook callbacks, etc)
@@ -60,8 +59,6 @@ func (ks ChannelSource) Start(
 	prct ...predicate.Predicate) error {
 	return nil
 }
-
-var log = logf.KBLog.WithName("source").WithName("KindSource")
 
 // KindSource is used to provide a source of events originating inside the cluster from Watches (eh.g. Pod Create)
 type KindSource struct {

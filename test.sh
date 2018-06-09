@@ -126,9 +126,9 @@ gometalinter.v2 --disable-all --enable=misspell \
     --enable=nakedret \
     --enable=interfacer \
     --enable=misspell \
+    --enable=gocyclo \
     ./pkg/...
 # TODO: Enable these as we fix them to make them pass
-#    --enable=gocyclo \
 #    --enable=maligned \
 #    --enable=dupl \
 #    --enable=safesql \

@@ -125,12 +125,12 @@ gometalinter.v2 --disable-all --enable=misspell \
     --enable=ineffassign \
     --enable=nakedret \
     --enable=interfacer \
+    --enable=misspell \
     ./pkg/...
 # TODO: Enable these as we fix them to make them pass
 #    --enable=gocyclo \
 #    --enable=maligned \
 #    --enable=dupl \
-#    --enable=misspell \
 #    --enable=safesql \
 
 header_text "running go test"

@@ -25,7 +25,6 @@ import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/apiutil"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
-	"k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -105,7 +104,9 @@ func (cm *controllerManager) NewController(ca Args, r reconcile.Reconcile) (Cont
 	}
 
 	// Inject dependencies into Reconcile
-	cm.injectInto(r)
+	if err := cm.injectInto(r); err != nil {
+		return nil, err
+	}
 
 	// Create controller with dependencies set
 	c := &controller{
@@ -165,7 +166,9 @@ func (cm *controllerManager) GetFieldIndexer() client.FieldIndexer {
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	// Start the Informers.
 	cm.stop = stop
-	cm.informers.Start(stop)
+	if err := cm.informers.Start(stop); err != nil {
+		return err
+	}
 
 	// Start the controllers after the promises
 	for _, c := range cm.controllers {
@@ -224,7 +227,6 @@ func NewManager(args ManagerArgs) (Manager, error) {
 		Scheme: cm.scheme,
 	}
 	cm.informers = spi
-	cm.informers.InformerFor(&v1.Deployment{})
 
 	// Inject a Read / Write client into all controllers
 	// TODO(directxman12): Figure out how to allow users to request a client without requesting a watch

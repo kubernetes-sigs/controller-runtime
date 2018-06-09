@@ -42,8 +42,8 @@ type Environment struct {
 }
 
 // Stop stops a running server
-func (te *Environment) Stop() {
-	te.ControlPlane.Stop()
+func (te *Environment) Stop() error {
+	return te.ControlPlane.Stop()
 }
 
 // Start starts a local Kubernetes server and updates te.ApiserverPort with the port it is listening on

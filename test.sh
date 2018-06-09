@@ -117,10 +117,10 @@ gometalinter.v2 --disable-all --enable=misspell \
     --enable=golint \
     --enable=deadcode \
     --enable=goimports \
+    --enable=errcheck \
     ./pkg/...
 # TODO: Enable these as we fix them to make them pass
 #    --enable=gocyclo \
-#    --enable=errcheck \
 #    --enable=varcheck \
 #    --enable=gas \
 #    --enable=interfacer \

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/test"
 	. "github.com/onsi/ginkgo"
@@ -38,7 +37,6 @@ func TestSource(t *testing.T) {
 var testenv *test.Environment
 var cfg *rest.Config
 var clientset *kubernetes.Clientset
-var icache informer.Informers
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(logf.ZapLogger(false))

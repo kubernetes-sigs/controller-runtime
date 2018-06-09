@@ -86,7 +86,7 @@ func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.R
 
 	// informers should have been injected before Start was called
 	if ks.informers == nil {
-		return fmt.Errorf("must call DoInformers on KindSource before calling Start")
+		return fmt.Errorf("must call InjectInformers on KindSource before calling Start")
 	}
 
 	// Lookup the Informer from the Informers and add an EventHandler which populates the Queue

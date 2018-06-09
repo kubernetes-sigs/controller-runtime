@@ -119,16 +119,16 @@ gometalinter.v2 --disable-all --enable=misspell \
     --enable=goimports \
     --enable=errcheck \
     --enable=varcheck \
+    --enable=goconst \
+    --enable=gas \
+    --enable=unparam \
     ./pkg/...
 # TODO: Enable these as we fix them to make them pass
 #    --enable=gocyclo \
-#    --enable=gas \
 #    --enable=interfacer \
 #    --enable=maligned \
 #    --enable=ineffassign \
 #    --enable=nakedret \
-#    --enable=goconst \
-#    --enable=unparam \
 #    --enable=dupl \
 #    --enable=misspell \
 #    --enable=safesql \

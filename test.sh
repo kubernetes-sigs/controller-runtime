@@ -122,12 +122,12 @@ gometalinter.v2 --disable-all --enable=misspell \
     --enable=goconst \
     --enable=gas \
     --enable=unparam \
+    --enable=ineffassign \
     ./pkg/...
 # TODO: Enable these as we fix them to make them pass
 #    --enable=gocyclo \
 #    --enable=interfacer \
 #    --enable=maligned \
-#    --enable=ineffassign \
 #    --enable=nakedret \
 #    --enable=dupl \
 #    --enable=misspell \

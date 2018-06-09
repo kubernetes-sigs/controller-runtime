@@ -124,10 +124,10 @@ gometalinter.v2 --disable-all --enable=misspell \
     --enable=unparam \
     --enable=ineffassign \
     --enable=nakedret \
+    --enable=interfacer \
     ./pkg/...
 # TODO: Enable these as we fix them to make them pass
 #    --enable=gocyclo \
-#    --enable=interfacer \
 #    --enable=maligned \
 #    --enable=dupl \
 #    --enable=misspell \

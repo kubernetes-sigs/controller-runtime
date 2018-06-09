@@ -112,6 +112,7 @@ golint -set_exit_status ./pkg/...
 header_text "running gometalinter.v2"
 
 gometalinter.v2 --disable-all \
+    --deadline 5m \
     --enable=misspell \
     --enable=structcheck \
     --enable=golint \
@@ -127,10 +128,13 @@ gometalinter.v2 --disable-all \
     --enable=interfacer \
     --enable=misspell \
     --enable=gocyclo \
+    --line-length=170 \
+    --enable=lll \
+    --dupl-threshold=250 \
+    --enable=dupl \
     ./pkg/...
 # TODO: Enable these as we fix them to make them pass
 #    --enable=maligned \
-#    --enable=dupl \
 #    --enable=safesql \
 
 header_text "running go test"

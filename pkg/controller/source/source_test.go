@@ -28,6 +28,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -187,6 +188,26 @@ var _ = Describe("Source", func() {
 				close(done)
 			})
 		})
+
+		It("should return an error from Start if informers were not injected", func(done Done) {
+			instance := source.KindSource{Type: &corev1.Pod{}}
+			err := instance.Start(nil, nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("must call InjectInformers on KindSource before calling Start"))
+
+			close(done)
+		})
+
+		It("should return an error from Start if a type was not provided", func(done Done) {
+			instance := source.KindSource{}
+			instance.InjectInformers(&informertest.FakeInformers{})
+			err := instance.Start(nil, nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("must specify KindSource.Type"))
+
+			close(done)
+		})
+
 		Context("for a Kind not in the cache", func() {
 			It("should return an error when Start is called", func(done Done) {
 				ic.Error = fmt.Errorf("test error")
@@ -201,6 +222,39 @@ var _ = Describe("Source", func() {
 
 				close(done)
 			})
+		})
+	})
+
+	Describe("Func", func() {
+		It("should be called from Start", func(done Done) {
+			run := false
+			instance := source.Func(func(
+				eventhandler.EventHandler,
+				workqueue.RateLimitingInterface, ...predicate.Predicate) error {
+				run = true
+				return nil
+			})
+			Expect(instance.Start(nil, nil)).NotTo(HaveOccurred())
+			Expect(run).To(BeTrue())
+
+			expected := fmt.Errorf("expected error: Func")
+			instance = source.Func(func(
+				eventhandler.EventHandler,
+				workqueue.RateLimitingInterface, ...predicate.Predicate) error {
+				return expected
+			})
+			Expect(instance.Start(nil, nil)).To(Equal(expected))
+
+			close(done)
+		})
+	})
+
+	Describe("ChannelSource", func() {
+		It("TODO(community): implement this", func(done Done) {
+			instance := source.ChannelSource(make(chan event.GenericEvent))
+			instance.Start(nil, nil)
+
+			close(done)
 		})
 	})
 })

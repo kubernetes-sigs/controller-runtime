@@ -17,8 +17,6 @@ limitations under the License.
 package internal_test
 
 import (
-	"time"
-
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source/internal"
@@ -28,13 +26,19 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/controllertest"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 var _ = Describe("Internal", func() {
 
 	var instance internal.EventHandler
-	var funcs *eventhandler.Funcs
+	var funcs, setfuncs *eventhandler.Funcs
+	var set bool
 	BeforeEach(func() {
 		funcs = &eventhandler.Funcs{
 			CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
@@ -54,8 +58,23 @@ var _ = Describe("Internal", func() {
 				Fail("Did not expect GenericEvent to be called.")
 			},
 		}
+
+		setfuncs = &eventhandler.Funcs{
+			CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
+				set = true
+			},
+			DeleteFunc: func(q workqueue.RateLimitingInterface, e event.DeleteEvent) {
+				set = true
+			},
+			UpdateFunc: func(workqueue.RateLimitingInterface, event.UpdateEvent) {
+				set = true
+			},
+			GenericFunc: func(workqueue.RateLimitingInterface, event.GenericEvent) {
+				set = true
+			},
+		}
 		instance = internal.EventHandler{
-			Queue:        Queue{},
+			Queue:        controllertest.Queue{},
 			EventHandler: funcs,
 		}
 	})
@@ -86,6 +105,63 @@ var _ = Describe("Internal", func() {
 			close(done)
 		})
 
+		It("should used Predicates to filter CreateEvents", func(done Done) {
+			instance = internal.EventHandler{
+				Queue:        controllertest.Queue{},
+				EventHandler: setfuncs,
+			}
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
+			}
+			instance.OnAdd(pod)
+			Expect(set).To(BeFalse())
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+			}
+			instance.OnAdd(pod)
+			Expect(set).To(BeTrue())
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
+			}
+			instance.OnAdd(pod)
+			Expect(set).To(BeFalse())
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+			}
+			instance.OnAdd(pod)
+			Expect(set).To(BeFalse())
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+			}
+			instance.OnAdd(pod)
+			Expect(set).To(BeTrue())
+
+			close(done)
+		})
+
+		It("should not call Create EventHandler if the object is not a runtime.Object", func(done Done) {
+			instance.OnAdd(&metav1.ObjectMeta{})
+			close(done)
+		})
+
+		It("should not call Create EventHandler if the object does not have metadata", func(done Done) {
+			instance.OnAdd(FooRuntimeObject{})
+			close(done)
+		})
+
 		It("should create an UpdateEvent", func(done Done) {
 			funcs.UpdateFunc = func(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 				defer GinkgoRecover()
@@ -105,6 +181,65 @@ var _ = Describe("Internal", func() {
 			close(done)
 		})
 
+		It("should used Predicates to filter UpdateEvents", func(done Done) {
+			instance = internal.EventHandler{
+				Queue:        controllertest.Queue{},
+				EventHandler: setfuncs,
+			}
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{UpdateFunc: func(updateEvent event.UpdateEvent) bool { return false }},
+			}
+			instance.OnUpdate(pod, newPod)
+			Expect(set).To(BeFalse())
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
+			}
+			instance.OnUpdate(pod, newPod)
+			Expect(set).To(BeTrue())
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
+				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return false }},
+			}
+			instance.OnUpdate(pod, newPod)
+			Expect(set).To(BeFalse())
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return false }},
+				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
+			}
+			instance.OnUpdate(pod, newPod)
+			Expect(set).To(BeFalse())
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+			}
+			instance.OnUpdate(pod, newPod)
+			Expect(set).To(BeTrue())
+
+			close(done)
+		})
+
+		It("should not call Update EventHandler if the object is not a runtime.Object", func(done Done) {
+			instance.OnUpdate(&metav1.ObjectMeta{}, &corev1.Pod{})
+			instance.OnUpdate(&corev1.Pod{}, &metav1.ObjectMeta{})
+			close(done)
+		})
+
+		It("should not call Update EventHandler if the object does not have metadata", func(done Done) {
+			instance.OnUpdate(FooRuntimeObject{}, &corev1.Pod{})
+			instance.OnUpdate(&corev1.Pod{}, FooRuntimeObject{})
+			close(done)
+		})
+
 		It("should create a DeleteEvent", func(done Done) {
 			funcs.DeleteFunc = func(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 				defer GinkgoRecover()
@@ -116,6 +251,63 @@ var _ = Describe("Internal", func() {
 				Expect(evt.Object).To(Equal(pod))
 			}
 			instance.OnDelete(pod)
+			close(done)
+		})
+
+		It("should used Predicates to filter DeleteEvents", func(done Done) {
+			instance = internal.EventHandler{
+				Queue:        controllertest.Queue{},
+				EventHandler: setfuncs,
+			}
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
+			}
+			instance.OnDelete(pod)
+			Expect(set).To(BeFalse())
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
+			}
+			instance.OnDelete(pod)
+			Expect(set).To(BeTrue())
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
+			}
+			instance.OnDelete(pod)
+			Expect(set).To(BeFalse())
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
+			}
+			instance.OnDelete(pod)
+			Expect(set).To(BeFalse())
+
+			set = false
+			instance.Predicates = []predicate.Predicate{
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
+			}
+			instance.OnDelete(pod)
+			Expect(set).To(BeTrue())
+
+			close(done)
+		})
+
+		It("should not call Delete EventHandler if the object is not a runtime.Object", func(done Done) {
+			instance.OnDelete(&metav1.ObjectMeta{})
+			close(done)
+		})
+
+		It("should not call Delete EventHandler if the object does not have metadata", func(done Done) {
+			instance.OnDelete(FooRuntimeObject{})
 			close(done)
 		})
 
@@ -153,25 +345,9 @@ var _ = Describe("Internal", func() {
 
 type Foo struct{}
 
-var _ workqueue.RateLimitingInterface = Queue{}
+var _ runtime.Object = FooRuntimeObject{}
 
-type Queue struct {
-	workqueue.Interface
-}
+type FooRuntimeObject struct{}
 
-// AddAfter adds an item to the workqueue after the indicated duration has passed
-func (q Queue) AddAfter(item interface{}, duration time.Duration) {
-	q.Add(item)
-}
-
-func (q Queue) AddRateLimited(item interface{}) {
-	q.Add(item)
-}
-
-func (q Queue) Forget(item interface{}) {
-	// Do nothing
-}
-
-func (q Queue) NumRequeues(item interface{}) int {
-	return 0
-}
+func (FooRuntimeObject) GetObjectKind() schema.ObjectKind { return nil }
+func (FooRuntimeObject) DeepCopyObject() runtime.Object   { return nil }

@@ -25,7 +25,7 @@ import (
 func TestProvisionServingCert(t *testing.T) {
 	cn := "mysvc.myns.svc"
 	cp := SelfSignedCertProvisioner{CommonName: cn}
-	certs, err := cp.ProvisionServingCert()
+	certs, _ := cp.ProvisionServingCert()
 
 	// First, create the set of root certificates. For this example we only
 	// have one. It's also possible to omit this in order to use the

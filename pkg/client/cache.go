@@ -189,15 +189,23 @@ func (c *singleObjectCache) List(ctx context.Context, opts *ListOptions, out run
 		labelSel = opts.LabelSelector
 	}
 
+	outItems, err := c.getListItems(objs, labelSel)
+	if err != nil {
+		return err
+	}
+	return apimeta.SetList(out, outItems)
+}
+
+func (c *singleObjectCache) getListItems(objs []interface{}, labelSel labels.Selector) ([]runtime.Object, error) {
 	outItems := make([]runtime.Object, 0, len(objs))
 	for _, item := range objs {
 		obj, isObj := item.(runtime.Object)
 		if !isObj {
-			return fmt.Errorf("cache contained %T, which is not an Object", obj)
+			return nil, fmt.Errorf("cache contained %T, which is not an Object", obj)
 		}
 		meta, err := apimeta.Accessor(obj)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if labelSel != nil {
 			lbls := labels.Set(meta.GetLabels())
@@ -207,7 +215,7 @@ func (c *singleObjectCache) List(ctx context.Context, opts *ListOptions, out run
 		}
 		outItems = append(outItems, obj.DeepCopyObject())
 	}
-	return apimeta.SetList(out, outItems)
+	return outItems, nil
 }
 
 // TODO: Make an interface with this function that has an Informers as an object on the struct

@@ -85,7 +85,7 @@ func (c *FakeInformers) FakeInformerFor(obj runtime.Object) (*controllertest.Fak
 	return i.(*controllertest.FakeInformer), nil
 }
 
-func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, obj runtime.Object) (cache.SharedIndexInformer, error) {
+func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, _ runtime.Object) (cache.SharedIndexInformer, error) {
 	if c.Error != nil {
 		return nil, c.Error
 	}

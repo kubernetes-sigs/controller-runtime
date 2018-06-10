@@ -18,11 +18,12 @@ package admission
 
 import (
 	"encoding/json"
-	"github.com/golang/glog"
 	"io/ioutil"
+	"net/http"
+
+	"github.com/golang/glog"
 	"k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"net/http"
 )
 
 func (h httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

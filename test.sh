@@ -101,5 +101,46 @@ fetch_kb_tools
 # setup testing env
 setup_envs
 
-go test github.com/kubernetes-sigs/controller-runtime/pkg/...
-go install github.com/kubernetes-sigs/controller-runtime/example
+header_text "running go vet"
+
+go vet ./pkg/...
+
+header_text "running golint"
+
+golint -set_exit_status ./pkg/...
+
+header_text "running gometalinter.v2"
+
+gometalinter.v2 --disable-all \
+    --deadline 5m \
+    --enable=misspell \
+    --enable=structcheck \
+    --enable=golint \
+    --enable=deadcode \
+    --enable=goimports \
+    --enable=errcheck \
+    --enable=varcheck \
+    --enable=goconst \
+    --enable=gas \
+    --enable=unparam \
+    --enable=ineffassign \
+    --enable=nakedret \
+    --enable=interfacer \
+    --enable=misspell \
+    --enable=gocyclo \
+    --line-length=170 \
+    --enable=lll \
+    --dupl-threshold=400 \
+    --enable=dupl \
+    ./pkg/...
+# TODO: Enable these as we fix them to make them pass
+#    --enable=maligned \
+#    --enable=safesql \
+
+header_text "running go test"
+
+go test ./pkg/...
+
+header_text "running go install"
+
+go install ./example

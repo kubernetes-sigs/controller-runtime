@@ -1,4 +1,4 @@
-package client
+package cache
 
 import (
 	"context"
@@ -13,14 +13,15 @@ import (
 
 	"reflect"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
 var _ = Describe("Indexers", func() {
 	three := int64(3)
-	knownPodKey := ObjectKey{Name: "some-pod", Namespace: "some-ns"}
-	knownPod3Key := ObjectKey{Name: "some-pod", Namespace: "some-other-ns"}
-	knownVolumeKey := ObjectKey{Name: "some-vol", Namespace: "some-ns"}
+	knownPodKey := client.ObjectKey{Name: "some-pod", Namespace: "some-ns"}
+	knownPod3Key := client.ObjectKey{Name: "some-pod", Namespace: "some-other-ns"}
+	knownVolumeKey := client.ObjectKey{Name: "some-vol", Namespace: "some-ns"}
 	knownPod := &kapi.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      knownPodKey.Name,
@@ -85,8 +86,8 @@ var _ = Describe("Indexers", func() {
 		multiCache.registerCache(&kapi.PersistentVolume{}, kapi.SchemeGroupVersion.WithKind("PersistentVolume"), volumeIndexer)
 	})
 
-	Describe("client interface wrapper around an indexer", func() {
-		var singleCache ReadInterface
+	Describe("populatingClient interface wrapper around an indexer", func() {
+		var singleCache client.ReadInterface
 
 		BeforeEach(func() {
 			var ok bool
@@ -101,12 +102,12 @@ var _ = Describe("Indexers", func() {
 		})
 
 		It("should error out for missing objects", func() {
-			Expect(singleCache.Get(context.TODO(), ObjectKey{Name: "unknown-pod"}, &kapi.Pod{})).To(HaveOccurred())
+			Expect(singleCache.Get(context.TODO(), client.ObjectKey{Name: "unknown-pod"}, &kapi.Pod{})).To(HaveOccurred())
 		})
 
 		It("should be able to list objects by namespace", func() {
 			out := kapi.PodList{}
-			Expect(singleCache.List(context.TODO(), InNamespace(knownPodKey.Namespace), &out)).NotTo(HaveOccurred())
+			Expect(singleCache.List(context.TODO(), client.InNamespace(knownPodKey.Namespace), &out)).NotTo(HaveOccurred())
 			Expect(out.Items).To(ConsistOf(*knownPod, *knownPod2))
 		})
 
@@ -125,23 +126,23 @@ var _ = Describe("Indexers", func() {
 
 		It("should support filtering by labels", func() {
 			out := kapi.PodList{}
-			Expect(singleCache.List(context.TODO(), InNamespace(knownPodKey.Namespace).MatchingLabels(map[string]string{"somelbl": "someval"}), &out)).NotTo(HaveOccurred())
+			Expect(singleCache.List(context.TODO(), client.InNamespace(knownPodKey.Namespace).MatchingLabels(map[string]string{"somelbl": "someval"}), &out)).NotTo(HaveOccurred())
 			Expect(out.Items).To(ConsistOf(*knownPod2))
 		})
 
 		It("should support filtering by a single field=value specification, if previously indexed", func() {
 			By("listing by field selector in a namespace")
 			out := kapi.PodList{}
-			Expect(singleCache.List(context.TODO(), InNamespace(knownPodKey.Namespace).MatchingField("spec.restartPolicy", "Always"), &out)).NotTo(HaveOccurred())
+			Expect(singleCache.List(context.TODO(), client.InNamespace(knownPodKey.Namespace).MatchingField("spec.restartPolicy", "Always"), &out)).NotTo(HaveOccurred())
 			Expect(out.Items).To(ConsistOf(*knownPod2))
 
 			By("listing by field selector across all namespaces")
-			Expect(singleCache.List(context.TODO(), MatchingField("spec.restartPolicy", "Never"), &out)).NotTo(HaveOccurred())
+			Expect(singleCache.List(context.TODO(), client.MatchingField("spec.restartPolicy", "Never"), &out)).NotTo(HaveOccurred())
 			Expect(out.Items).To(ConsistOf(*knownPod, *knownPod3))
 		})
 	})
 
-	Describe("client interface wrapper around multiple indexers", func() {
+	Describe("populatingClient interface wrapper around multiple indexers", func() {
 		It("should be able to fetch any known object by key and type", func() {
 			outPod := kapi.Pod{}
 			Expect(multiCache.Get(context.TODO(), knownPodKey, &outPod)).NotTo(HaveOccurred())

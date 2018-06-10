@@ -45,7 +45,7 @@ func main() {
 
 	// Setup a new controller to Reconcile ReplicaSets
 	c, err := manager.NewController(
-		controller.Args{Name: "foo-controller", MaxConcurrentReconciles: 1},
+		controller.Options{Name: "foo-controller", MaxConcurrentReconciles: 1},
 		&reconcileReplicaSet{client: manager.GetClient()},
 	)
 	if err != nil {
@@ -75,7 +75,7 @@ func main() {
 
 // reconcileReplicaSet reconciles ReplicaSets
 type reconcileReplicaSet struct {
-	client client.Interface
+	client client.Client
 }
 
 // Implement reconcile.Reconcile so the controller can reconcile objects

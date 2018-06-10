@@ -18,9 +18,10 @@ package source_test
 
 import (
 	"testing"
+
 	"time"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
 	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/test"
 	. "github.com/onsi/ginkgo"
@@ -37,10 +38,10 @@ func TestSource(t *testing.T) {
 var testenv *test.Environment
 var config *rest.Config
 var clientset *kubernetes.Clientset
-var icache informer.Informers
+var icache cache.Cache
 var stop = make(chan struct{})
 
-var _ = BeforeSuite(func() {
+var _ = BeforeSuite(func(done Done) {
 	logf.SetLogger(logf.ZapLogger(false))
 
 	testenv = &test.Environment{}
@@ -54,10 +55,20 @@ var _ = BeforeSuite(func() {
 	clientset, err = kubernetes.NewForConfig(config)
 	Expect(err).NotTo(HaveOccurred())
 
-	icache = &informer.SelfPopulatingInformers{Config: config}
-})
+	icache, err = cache.New(config, cache.Options{})
+	Expect(err).NotTo(HaveOccurred())
 
-var _ = AfterSuite(func() {
+	go func() {
+		defer GinkgoRecover()
+		Expect(icache.Start(stop)).NotTo(HaveOccurred())
+	}()
+
+	close(done)
+}, 60)
+
+var _ = AfterSuite(func(done Done) {
 	close(stop)
 	testenv.Stop()
-})
+
+	close(done)
+}, 5)

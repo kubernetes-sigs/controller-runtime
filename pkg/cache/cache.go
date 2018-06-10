@@ -1,4 +1,20 @@
-package client
+/*
+Copyright 2018 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cache
 
 import (
 	"context"
@@ -14,14 +30,14 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
 	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 )
 
 var log = logf.KBLog.WithName("object-cache")
 
 // objectCache is a ReadInterface
-var _ ReadInterface = &objectCache{}
+var _ client.ReadInterface = &objectCache{}
 
 // objectCache is a Kubernetes Object cache populated from Informers
 type objectCache struct {
@@ -29,43 +45,10 @@ type objectCache struct {
 	scheme       *runtime.Scheme
 }
 
-var _ Cache = &objectCache{}
+var _ client.ReadInterface = &objectCache{}
 
-// Cache implements ReadInterface by reading objects from a cache populated by Informers
-type Cache interface {
-	ReadInterface
-	informer.Callback
-}
-
-// NewObjectCache returns a new objectCache populated from informers
-func NewObjectCache(
-	informers map[schema.GroupVersionKind]cache.SharedIndexInformer,
-	scheme *runtime.Scheme) Cache {
-	res := &objectCache{
-		cachesByType: make(map[reflect.Type]*singleObjectCache),
-		scheme:       scheme,
-	}
-	res.AddInformers(informers)
-	return res
-}
-
-// AddInformers adds new informers to the objectCache
-func (o *objectCache) AddInformers(informers map[schema.GroupVersionKind]cache.SharedIndexInformer) {
-	if informers == nil {
-		return
-	}
-	for gvk, informer := range informers {
-		o.AddInformer(gvk, informer)
-	}
-}
-
-// Call implements the informer.Callback so that the cache can be populate with new Informers as they are added
-func (o *objectCache) Call(gvk schema.GroupVersionKind, c cache.SharedIndexInformer) {
-	o.AddInformer(gvk, c)
-}
-
-// AddInformer adds an informer to the objectCache
-func (o *objectCache) AddInformer(gvk schema.GroupVersionKind, c cache.SharedIndexInformer) {
+// addInformer adds an informer to the objectCache
+func (o *objectCache) addInformer(gvk schema.GroupVersionKind, c cache.SharedIndexInformer) {
 	obj, err := o.scheme.New(gvk)
 	if err != nil {
 		log.Error(err, "could not register informer in objectCache for GVK", "GroupVersionKind", gvk)
@@ -91,8 +74,8 @@ func (o *objectCache) cacheFor(obj runtime.Object) (*singleObjectCache, bool) {
 	return cache, isKnown
 }
 
-// Get implements client.ReadInterface
-func (o *objectCache) Get(ctx context.Context, key ObjectKey, out runtime.Object) error {
+// Get implements populatingClient.ReadInterface
+func (o *objectCache) Get(ctx context.Context, key client.ObjectKey, out runtime.Object) error {
 	cache, isKnown := o.cacheFor(out)
 	if !isKnown {
 		return fmt.Errorf("no cache for objects of type %T, must have asked for an watch/informer first", out)
@@ -100,8 +83,8 @@ func (o *objectCache) Get(ctx context.Context, key ObjectKey, out runtime.Object
 	return cache.Get(ctx, key, out)
 }
 
-// List implements client.ReadInterface
-func (o *objectCache) List(ctx context.Context, opts *ListOptions, out runtime.Object) error {
+// List implements populatingClient.ReadInterface
+func (o *objectCache) List(ctx context.Context, opts *client.ListOptions, out runtime.Object) error {
 	itemsPtr, err := apimeta.GetItemsPtr(out)
 	if err != nil {
 		return nil
@@ -116,7 +99,7 @@ func (o *objectCache) List(ctx context.Context, opts *ListOptions, out runtime.O
 }
 
 // singleObjectCache is a ReadInterface
-var _ ReadInterface = &singleObjectCache{}
+var _ client.ReadInterface = &singleObjectCache{}
 
 // singleObjectCache is a ReadInterface that retrieves objects
 // from a single local cache populated by a watch.
@@ -127,8 +110,8 @@ type singleObjectCache struct {
 	GroupVersionKind schema.GroupVersionKind
 }
 
-// Get implements client.Interface
-func (c *singleObjectCache) Get(_ context.Context, key ObjectKey, out runtime.Object) error {
+// Get implements populatingClient.Client
+func (c *singleObjectCache) Get(_ context.Context, key client.ObjectKey, out runtime.Object) error {
 	storeKey := objectKeyToStoreKey(key)
 	obj, exists, err := c.Indexer.GetByKey(storeKey)
 	if err != nil {
@@ -160,8 +143,8 @@ func (c *singleObjectCache) Get(_ context.Context, key ObjectKey, out runtime.Ob
 	return nil
 }
 
-// List implements client.Interface
-func (c *singleObjectCache) List(ctx context.Context, opts *ListOptions, out runtime.Object) error {
+// List implements populatingClient.Client
+func (c *singleObjectCache) List(ctx context.Context, opts *client.ListOptions, out runtime.Object) error {
 	var objs []interface{}
 	var err error
 
@@ -219,30 +202,25 @@ func (c *singleObjectCache) getListItems(objs []interface{}, labelSel labels.Sel
 }
 
 // TODO: Make an interface with this function that has an Informers as an object on the struct
-// that automatically calls InformerFor and passes in the Indexer into indexByField
+// that automatically calls GetInformer and passes in the Indexer into indexByField
 
 // noNamespaceNamespace is used as the "namespace" when we want to list across all namespaces
 const allNamespacesNamespace = "__all_namespaces"
-
-// InformerFieldIndexer provides an in-memory index of Object fields
-type InformerFieldIndexer struct {
-	Informers informer.Informers
-}
 
 // IndexField adds an indexer to the underlying cache, using extraction function to get
 // value(s) from the given field.  This index can then be used by passing a field selector
 // to List. For one-to-one compatibility with "normal" field selectors, only return one value.
 // The values may be anything.  They will automatically be prefixed with the namespace of the
 // given object, if present.  The objects passed are guaranteed to be objects of the correct type.
-func (i *InformerFieldIndexer) IndexField(obj runtime.Object, field string, extractValue IndexerFunc) error {
-	informer, err := i.Informers.InformerFor(obj)
+func (i *informers) IndexField(obj runtime.Object, field string, extractValue client.IndexerFunc) error {
+	informer, err := i.GetInformer(obj)
 	if err != nil {
 		return err
 	}
 	return indexByField(informer.GetIndexer(), field, extractValue)
 }
 
-func indexByField(indexer cache.Indexer, field string, extractor IndexerFunc) error {
+func indexByField(indexer cache.Indexer, field string, extractor client.IndexerFunc) error {
 	indexFunc := func(objRaw interface{}) ([]string, error) {
 		// TODO(directxman12): check if this is the correct type?
 		obj, isObj := objRaw.(runtime.Object)
@@ -300,7 +278,7 @@ func keyToNamespacedKey(ns string, baseKey string) string {
 // It's akin to MetaNamespaceKeyFunc.  It's separate from
 // String to allow keeping the key format easily in sync with
 // MetaNamespaceKeyFunc.
-func objectKeyToStoreKey(k ObjectKey) string {
+func objectKeyToStoreKey(k client.ObjectKey) string {
 	if k.Namespace == "" {
 		return k.Name
 	}
@@ -318,12 +296,4 @@ func requiresExactMatch(sel fields.Selector) (field, val string, required bool) 
 		return "", "", false
 	}
 	return req.Field, req.Value, true
-}
-
-// SplitReaderWriter forms an interface Interface by composing separate
-// read and write interfaces.  This way, you can have an Interface that
-// reads from a cache and writes to the API server.
-type SplitReaderWriter struct {
-	ReadInterface
-	WriteInterface
 }

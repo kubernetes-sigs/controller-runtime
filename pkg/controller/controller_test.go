@@ -21,13 +21,13 @@ import (
 
 	"time"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/cache/informertest"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/controllertest"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile/reconciletest"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer/informertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -61,7 +61,7 @@ var _ = Describe("controller", func() {
 			maxConcurrentReconciles: 1,
 			reconcile:               fakeReconcile,
 			queue:                   queue,
-			informers:               informers,
+			cache:                   informers,
 			inject:                  func(interface{}) error { return nil },
 		}
 	})
@@ -73,7 +73,7 @@ var _ = Describe("controller", func() {
 	Describe("Calling Watch on a Controller", func() {
 		It("should inject dependencies into the Source", func() {
 			src := &source.KindSource{Type: &corev1.Pod{}}
-			src.InjectInformers(ctrl.informers)
+			src.InjectCache(ctrl.cache)
 			evthdl := &eventhandler.EnqueueHandler{}
 			found := false
 			ctrl.inject = func(i interface{}) error {
@@ -89,7 +89,7 @@ var _ = Describe("controller", func() {
 
 		It("should return an error if there is an error injecting into the Source", func() {
 			src := &source.KindSource{Type: &corev1.Pod{}}
-			src.InjectInformers(ctrl.informers)
+			src.InjectCache(ctrl.cache)
 			evthdl := &eventhandler.EnqueueHandler{}
 			expected := fmt.Errorf("expect fail source")
 			ctrl.inject = func(i interface{}) error {
@@ -104,7 +104,7 @@ var _ = Describe("controller", func() {
 
 		It("should inject dependencies into the EventHandler", func() {
 			src := &source.KindSource{Type: &corev1.Pod{}}
-			src.InjectInformers(ctrl.informers)
+			src.InjectCache(ctrl.cache)
 			evthdl := &eventhandler.EnqueueHandler{}
 			found := false
 			ctrl.inject = func(i interface{}) error {
@@ -132,9 +132,15 @@ var _ = Describe("controller", func() {
 			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
 		})
 
+		It("should inject dependencies into the Reconcile", func() {
+		})
+
+		It("should return an error if there is an error injecting into the Reconcile", func() {
+		})
+
 		It("should inject dependencies into all of the Predicates", func() {
 			src := &source.KindSource{Type: &corev1.Pod{}}
-			src.InjectInformers(ctrl.informers)
+			src.InjectCache(ctrl.cache)
 			evthdl := &eventhandler.EnqueueHandler{}
 			pr1 := &predicate.Funcs{}
 			pr2 := &predicate.Funcs{}
@@ -157,7 +163,7 @@ var _ = Describe("controller", func() {
 
 		It("should return an error if there is an error injecting into any of the Predicates", func() {
 			src := &source.KindSource{Type: &corev1.Pod{}}
-			src.InjectInformers(ctrl.informers)
+			src.InjectCache(ctrl.cache)
 			evthdl := &eventhandler.EnqueueHandler{}
 			pr1 := &predicate.Funcs{}
 			pr2 := &predicate.Funcs{}

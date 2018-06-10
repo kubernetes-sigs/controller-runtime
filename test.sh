@@ -130,7 +130,7 @@ gometalinter.v2 --disable-all \
     --enable=gocyclo \
     --line-length=170 \
     --enable=lll \
-    --dupl-threshold=250 \
+    --dupl-threshold=400 \
     --enable=dupl \
     ./pkg/...
 # TODO: Enable these as we fix them to make them pass

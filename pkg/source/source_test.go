@@ -21,7 +21,7 @@ import (
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/cache/informertest"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
 	. "github.com/onsi/ginkgo"
@@ -33,7 +33,7 @@ import (
 )
 
 var _ = Describe("Source", func() {
-	Describe("KindSource", func() {
+	Describe("Kind", func() {
 		var c chan struct{}
 		var p *corev1.Pod
 		var ic *informertest.FakeInformers
@@ -63,11 +63,11 @@ var _ = Describe("Source", func() {
 				}
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.KindSource{
+				instance := &source.Kind{
 					Type: &corev1.Pod{},
 				}
 				inject.CacheInto(ic, instance)
-				err := instance.Start(eventhandler.Funcs{
+				err := instance.Start(handler.Funcs{
 					CreateFunc: func(q2 workqueue.RateLimitingInterface, evt event.CreateEvent) {
 						defer GinkgoRecover()
 						Expect(q2).To(Equal(q))
@@ -104,11 +104,11 @@ var _ = Describe("Source", func() {
 
 				ic := &informertest.FakeInformers{}
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.KindSource{
+				instance := &source.Kind{
 					Type: &corev1.Pod{},
 				}
 				instance.InjectCache(ic)
-				err := instance.Start(eventhandler.Funcs{
+				err := instance.Start(handler.Funcs{
 					CreateFunc: func(q2 workqueue.RateLimitingInterface, evt event.CreateEvent) {
 						defer GinkgoRecover()
 						Fail("Unexpected CreateEvent")
@@ -154,11 +154,11 @@ var _ = Describe("Source", func() {
 				}
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.KindSource{
+				instance := &source.Kind{
 					Type: &corev1.Pod{},
 				}
 				inject.CacheInto(ic, instance)
-				err := instance.Start(eventhandler.Funcs{
+				err := instance.Start(handler.Funcs{
 					CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
 						defer GinkgoRecover()
 						Fail("Unexpected DeleteEvent")
@@ -191,20 +191,20 @@ var _ = Describe("Source", func() {
 		})
 
 		It("should return an error from Start if informers were not injected", func(done Done) {
-			instance := source.KindSource{Type: &corev1.Pod{}}
+			instance := source.Kind{Type: &corev1.Pod{}}
 			err := instance.Start(nil, nil)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must call CacheInto on KindSource before calling Start"))
+			Expect(err.Error()).To(ContainSubstring("must call CacheInto on Kind before calling Start"))
 
 			close(done)
 		})
 
 		It("should return an error from Start if a type was not provided", func(done Done) {
-			instance := source.KindSource{}
+			instance := source.Kind{}
 			instance.InjectCache(&informertest.FakeInformers{})
 			err := instance.Start(nil, nil)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must specify KindSource.Type"))
+			Expect(err.Error()).To(ContainSubstring("must specify Kind.Type"))
 
 			close(done)
 		})
@@ -214,11 +214,11 @@ var _ = Describe("Source", func() {
 				ic.Error = fmt.Errorf("test error")
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 
-				instance := &source.KindSource{
+				instance := &source.Kind{
 					Type: &corev1.Pod{},
 				}
 				instance.InjectCache(ic)
-				err := instance.Start(eventhandler.Funcs{}, q)
+				err := instance.Start(handler.Funcs{}, q)
 				Expect(err).To(HaveOccurred())
 
 				close(done)
@@ -230,7 +230,7 @@ var _ = Describe("Source", func() {
 		It("should be called from Start", func(done Done) {
 			run := false
 			instance := source.Func(func(
-				eventhandler.EventHandler,
+				handler.EventHandler,
 				workqueue.RateLimitingInterface, ...predicate.Predicate) error {
 				run = true
 				return nil
@@ -240,7 +240,7 @@ var _ = Describe("Source", func() {
 
 			expected := fmt.Errorf("expected error: Func")
 			instance = source.Func(func(
-				eventhandler.EventHandler,
+				handler.EventHandler,
 				workqueue.RateLimitingInterface, ...predicate.Predicate) error {
 				return expected
 			})
@@ -250,9 +250,9 @@ var _ = Describe("Source", func() {
 		})
 	})
 
-	Describe("ChannelSource", func() {
+	Describe("Channel", func() {
 		It("TODO(community): implement this", func(done Done) {
-			instance := source.ChannelSource(make(chan event.GenericEvent))
+			instance := source.Channel(make(chan event.GenericEvent))
 			instance.Start(nil, nil)
 
 			close(done)

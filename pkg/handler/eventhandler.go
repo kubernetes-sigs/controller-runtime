@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package eventhandler
+package handler
 
 import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
@@ -27,10 +27,10 @@ import (
 //
 // Identical reconcile.Requests will be batched together through the queuing mechanism before reconcile is called.
 //
-// * Use EnqueueHandler to reconcile the object the event is for
+// * Use Enqueue to reconcile the object the event is for
 // - do this for events for the type the Controller Reconciles. (e.g. Deployment for a Deployment Controller)
 //
-// * Use EnqueueOwnerHandler to reconcile the owner of the object the event is for
+// * Use EnqueueOwner to reconcile the owner of the object the event is for
 // - do this for events for the types the Controller creates.  (e.g. ReplicaSets created by a Deployment Controller)
 //
 // * Use EnqueueMappendHandler to transform an event for an object to a reconcile of an object

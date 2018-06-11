@@ -14,12 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package eventhandler_test
+package handler_test
 
 import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
 	appsv1 "k8s.io/api/apps/v1"
@@ -32,21 +32,21 @@ var c controller.Controller
 
 // This example watches Pods and enqueues Requests with the Name and Namespace of the Pod from
 // the Event (i.e. change caused by a Create, Update, Delete).
-func ExampleEnqueueHandler() {
+func ExampleEnqueue() {
 	// controller is a controller.controller
 	c.Watch(
-		&source.KindSource{Type: &corev1.Pod{}},
-		&eventhandler.EnqueueHandler{},
+		&source.Kind{Type: &corev1.Pod{}},
+		&handler.Enqueue{},
 	)
 }
 
 // This example watches ReplicaSets and enqueues a Request containing the Name and Namespace of the
 // owning (direct) Deployment responsible for the creation of the ReplicaSet.
-func ExampleEnqueueOwnerHandler() {
+func ExampleEnqueueOwner() {
 	// controller is a controller.controller
 	c.Watch(
-		&source.KindSource{Type: &appsv1.ReplicaSet{}},
-		&eventhandler.EnqueueOwnerHandler{
+		&source.Kind{Type: &appsv1.ReplicaSet{}},
+		&handler.EnqueueOwner{
 			OwnerType:    &appsv1.Deployment{},
 			IsController: true,
 		},
@@ -55,12 +55,12 @@ func ExampleEnqueueOwnerHandler() {
 
 // This example watches Deployments and enqueues a Request contain the Name and Namespace of different
 // objects (of Type: MyKind) using a mapping function defined by the user.
-func ExampleEnqueueMappedHandler() {
+func ExampleEnqueueMapped() {
 	// controller is a controller.controller
 	c.Watch(
-		&source.KindSource{Type: &appsv1.Deployment{}},
-		&eventhandler.EnqueueMappedHandler{
-			ToRequests: eventhandler.ToRequestsFunc(func(a eventhandler.MapObject) []reconcile.Request {
+		&source.Kind{Type: &appsv1.Deployment{}},
+		&handler.EnqueueMapped{
+			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 				return []reconcile.Request{
 					{NamespacedName: types.NamespacedName{
 						Name:      a.Meta.GetName() + "-1",
@@ -75,12 +75,12 @@ func ExampleEnqueueMappedHandler() {
 		})
 }
 
-// This example implements eventhandler.EnqueueHandler.
+// This example implements handler.Enqueue.
 func ExampleFuncs() {
 	// controller is a controller.controller
 	c.Watch(
-		&source.KindSource{Type: &corev1.Pod{}},
-		eventhandler.Funcs{
+		&source.Kind{Type: &corev1.Pod{}},
+		handler.Funcs{
 			CreateFunc: func(q workqueue.RateLimitingInterface, e event.CreateEvent) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.Meta.GetName(),

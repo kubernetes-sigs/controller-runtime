@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
 	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -37,7 +37,7 @@ var _ cache.ResourceEventHandler = EventHandler{}
 
 // EventHandler adapts a eventhandler.EventHandler interface to a cache.ResourceEventHandler interface
 type EventHandler struct {
-	EventHandler eventhandler.EventHandler
+	EventHandler handler.EventHandler
 	Queue        workqueue.RateLimitingInterface
 	Predicates   []predicate.Predicate
 }

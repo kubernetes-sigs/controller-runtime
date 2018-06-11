@@ -18,7 +18,7 @@ package controller_test
 
 import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
 	appsv1 "k8s.io/api/apps/v1"
@@ -65,12 +65,12 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Watching Resources")
-			err = instance.Watch(&source.KindSource{Type: &appsv1.ReplicaSet{}}, &eventhandler.EnqueueOwnerHandler{
+			err = instance.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueOwner{
 				OwnerType: &appsv1.Deployment{},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			err = instance.Watch(&source.KindSource{Type: &appsv1.Deployment{}}, &eventhandler.EnqueueHandler{})
+			err = instance.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.Enqueue{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting the Manager")

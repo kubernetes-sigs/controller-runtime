@@ -19,7 +19,7 @@ package controller
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/controller"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/manager"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/predicate"
@@ -48,7 +48,7 @@ type Controller interface {
 	//
 	// Watch may be provided one or more Predicates to filter events before they are given to the EventHandler.
 	// Events will be passed to the EventHandler iff all provided Predicates evaluate to true.
-	Watch(src source.Source, evthdler eventhandler.EventHandler, prct ...predicate.Predicate) error
+	Watch(src source.Source, evthdler handler.EventHandler, prct ...predicate.Predicate) error
 
 	// Start starts the controller.  Start blocks until stop is closed or a controller has an error starting.
 	Start(stop <-chan struct{}) error

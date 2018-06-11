@@ -20,7 +20,7 @@ import (
 	"log"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/manager"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/signals"
@@ -57,7 +57,7 @@ func ExampleController_Watch() {
 		log.Fatal(err)
 	}
 
-	err = c.Watch(&source.KindSource{Type: &v1.Pod{}}, &eventhandler.EnqueueHandler{})
+	err = c.Watch(&source.Kind{Type: &v1.Pod{}}, &handler.Enqueue{})
 	if err != nil {
 		log.Fatal(err)
 	}

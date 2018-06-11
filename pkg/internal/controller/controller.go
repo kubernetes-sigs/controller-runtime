@@ -23,7 +23,7 @@ import (
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/predicate"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
@@ -89,7 +89,7 @@ type Controller struct {
 	// TODO(community): Consider initializing a logger with the Controller Name as the tag
 }
 
-func (c *Controller) Watch(src source.Source, evthdler eventhandler.EventHandler, prct ...predicate.Predicate) error {
+func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prct ...predicate.Predicate) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

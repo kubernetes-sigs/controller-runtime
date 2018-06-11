@@ -20,11 +20,11 @@ observed from Watching Kubernetes APIs.
 
 EventHandlers
 
-EnqueueHandler - Enqueues a reconcile.equest containing the Name and Namespace of the object in the Event.
+Enqueue - Enqueues a reconcile.Request containing the Name and Namespace of the object in the Event.
 
-EnqueueOwnerHandler - Enqueues a reconcile.Request containing the Name and Namespace of the Owner of the object in the Event.
+EnqueueOwner - Enqueues a reconcile.Request containing the Name and Namespace of the Owner of the object in the Event.
 
-EnqueueMappedHander - Enqueues Rreconcile.Requests resulting from a user provided transformation function run against the
+EnqueueMapped - Enqueues Reconcile.Requests resulting from a user provided transformation function run against the
 object in the Event.
 */
-package eventhandler
+package handler

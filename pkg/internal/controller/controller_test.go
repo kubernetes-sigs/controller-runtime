@@ -24,7 +24,7 @@ import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/cache/informertest"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/controllertest"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/predicate"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile/reconciletest"
@@ -107,9 +107,9 @@ var _ = Describe("controller", func() {
 
 	Describe("Calling Watch on a Controller", func() {
 		It("should inject dependencies into the Source", func() {
-			src := &source.KindSource{Type: &corev1.Pod{}}
+			src := &source.Kind{Type: &corev1.Pod{}}
 			src.InjectCache(ctrl.Cache)
-			evthdl := &eventhandler.EnqueueHandler{}
+			evthdl := &handler.Enqueue{}
 			found := false
 			ctrl.SetFields = func(i interface{}) error {
 				defer GinkgoRecover()
@@ -123,9 +123,9 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should return an error if there is an error injecting into the Source", func() {
-			src := &source.KindSource{Type: &corev1.Pod{}}
+			src := &source.Kind{Type: &corev1.Pod{}}
 			src.InjectCache(ctrl.Cache)
-			evthdl := &eventhandler.EnqueueHandler{}
+			evthdl := &handler.Enqueue{}
 			expected := fmt.Errorf("expect fail source")
 			ctrl.SetFields = func(i interface{}) error {
 				defer GinkgoRecover()
@@ -138,9 +138,9 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should inject dependencies into the EventHandler", func() {
-			src := &source.KindSource{Type: &corev1.Pod{}}
+			src := &source.Kind{Type: &corev1.Pod{}}
 			src.InjectCache(ctrl.Cache)
-			evthdl := &eventhandler.EnqueueHandler{}
+			evthdl := &handler.Enqueue{}
 			found := false
 			ctrl.SetFields = func(i interface{}) error {
 				defer GinkgoRecover()
@@ -154,8 +154,8 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should return an error if there is an error injecting into the EventHandler", func() {
-			src := &source.KindSource{Type: &corev1.Pod{}}
-			evthdl := &eventhandler.EnqueueHandler{}
+			src := &source.Kind{Type: &corev1.Pod{}}
+			evthdl := &handler.Enqueue{}
 			expected := fmt.Errorf("expect fail eventhandler")
 			ctrl.SetFields = func(i interface{}) error {
 				defer GinkgoRecover()
@@ -176,9 +176,9 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should inject dependencies into all of the Predicates", func() {
-			src := &source.KindSource{Type: &corev1.Pod{}}
+			src := &source.Kind{Type: &corev1.Pod{}}
 			src.InjectCache(ctrl.Cache)
-			evthdl := &eventhandler.EnqueueHandler{}
+			evthdl := &handler.Enqueue{}
 			pr1 := &predicate.Funcs{}
 			pr2 := &predicate.Funcs{}
 			found1 := false
@@ -199,9 +199,9 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should return an error if there is an error injecting into any of the Predicates", func() {
-			src := &source.KindSource{Type: &corev1.Pod{}}
+			src := &source.Kind{Type: &corev1.Pod{}}
 			src.InjectCache(ctrl.Cache)
-			evthdl := &eventhandler.EnqueueHandler{}
+			evthdl := &handler.Enqueue{}
 			pr1 := &predicate.Funcs{}
 			pr2 := &predicate.Funcs{}
 			expected := fmt.Errorf("expect fail predicate")
@@ -227,8 +227,8 @@ var _ = Describe("controller", func() {
 		It("should call Start the Source with the EventHandler, Queue, and Predicates", func() {
 			pr1 := &predicate.Funcs{}
 			pr2 := &predicate.Funcs{}
-			evthdl := &eventhandler.EnqueueHandler{}
-			src := source.Func(func(e eventhandler.EventHandler, q workqueue.RateLimitingInterface, p ...predicate.Predicate) error {
+			evthdl := &handler.Enqueue{}
+			src := source.Func(func(e handler.EventHandler, q workqueue.RateLimitingInterface, p ...predicate.Predicate) error {
 				defer GinkgoRecover()
 				Expect(e).To(Equal(evthdl))
 				Expect(q).To(Equal(ctrl.Queue))
@@ -241,13 +241,13 @@ var _ = Describe("controller", func() {
 
 		It("should return an error if there is an error starting the Source", func() {
 			err := fmt.Errorf("Expected Error: could not start source")
-			src := source.Func(func(eventhandler.EventHandler,
+			src := source.Func(func(handler.EventHandler,
 				workqueue.RateLimitingInterface,
 				...predicate.Predicate) error {
 				defer GinkgoRecover()
 				return err
 			})
-			Expect(ctrl.Watch(src, &eventhandler.EnqueueHandler{})).To(Equal(err))
+			Expect(ctrl.Watch(src, &handler.Enqueue{})).To(Equal(err))
 		})
 	})
 

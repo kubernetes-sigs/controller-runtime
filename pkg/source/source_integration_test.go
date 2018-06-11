@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
 
@@ -34,7 +34,7 @@ import (
 )
 
 var _ = Describe("Source", func() {
-	var instance1, instance2 *source.KindSource
+	var instance1, instance2 *source.Kind
 	var obj runtime.Object
 	var q workqueue.RateLimitingInterface
 	var c1, c2 chan interface{}
@@ -58,10 +58,10 @@ var _ = Describe("Source", func() {
 	})
 
 	JustBeforeEach(func() {
-		instance1 = &source.KindSource{Type: obj}
+		instance1 = &source.Kind{Type: obj}
 		inject.CacheInto(icache, instance1)
 
-		instance2 = &source.KindSource{Type: obj}
+		instance2 = &source.Kind{Type: obj}
 		inject.CacheInto(icache, instance2)
 	})
 
@@ -74,7 +74,7 @@ var _ = Describe("Source", func() {
 		close(done)
 	})
 
-	Describe("KindSource", func() {
+	Describe("Kind", func() {
 		Context("for a Deployment resource", func() {
 			obj = &appsv1.Deployment{}
 
@@ -105,8 +105,8 @@ var _ = Describe("Source", func() {
 				}
 
 				// Create an event handler to verify the events
-				newHandler := func(c chan interface{}) eventhandler.Funcs {
-					return eventhandler.Funcs{
+				newHandler := func(c chan interface{}) handler.Funcs {
+					return handler.Funcs{
 						CreateFunc: func(rli workqueue.RateLimitingInterface, evt event.CreateEvent) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))

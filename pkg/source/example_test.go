@@ -19,7 +19,7 @@ package source_test
 import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
 	"k8s.io/api/core/v1"
 )
@@ -28,20 +28,13 @@ var ctrl controller.Controller
 
 // This example Watches for Pod Events (e.g. Create / Update / Delete) and enqueues a reconcile.Request
 // with the Name and Namespace of the Pod.
-func ExampleKindSource() {
-	ctrl.Watch(
-		&source.KindSource{Type: &v1.Pod{}},
-		&eventhandler.EnqueueHandler{},
-	)
+func ExampleKind() {
+	ctrl.Watch(&source.Kind{Type: &v1.Pod{}}, &handler.Enqueue{})
 }
 
 // This example reads GenericEvents from a channel and enqueues a reconcile.Request containing the Name and Namespace
 // provided by the event.
-func ExampleChannelSource() {
+func ExampleChannel() {
 	events := make(chan event.GenericEvent)
-
-	ctrl.Watch(
-		source.ChannelSource(events),
-		&eventhandler.EnqueueHandler{},
-	)
+	ctrl.Watch(source.Channel(events), &handler.Enqueue{})
 }

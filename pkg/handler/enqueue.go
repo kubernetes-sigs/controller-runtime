@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package eventhandler
+package handler
 
 import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
@@ -24,15 +24,15 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-var enqueueLog = logf.KBLog.WithName("eventhandler").WithName("EnqueueHandler")
+var enqueueLog = logf.KBLog.WithName("eventhandler").WithName("Enqueue")
 
-var _ EventHandler = &EnqueueHandler{}
+var _ EventHandler = &Enqueue{}
 
-// EnqueueHandler enqueues a Request containing the Name and Namespace of the object for each event.
-type EnqueueHandler struct{}
+// Enqueue enqueues a Request containing the Name and Namespace of the object for each event.
+type Enqueue struct{}
 
 // Create implements EventHandler
-func (e *EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
+func (e *Enqueue) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
 	if evt.Meta == nil {
 		enqueueLog.Error(nil, "CreateEvent received with no metadata", "CreateEvent", evt)
 		return
@@ -44,7 +44,7 @@ func (e *EnqueueHandler) Create(q workqueue.RateLimitingInterface, evt event.Cre
 }
 
 // Update implements EventHandler
-func (e *EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
+func (e *Enqueue) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
 	if evt.MetaOld != nil {
 		q.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
 			Name:      evt.MetaOld.GetName(),
@@ -65,7 +65,7 @@ func (e *EnqueueHandler) Update(q workqueue.RateLimitingInterface, evt event.Upd
 }
 
 // Delete implements EventHandler
-func (e *EnqueueHandler) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
+func (e *Enqueue) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
 	if evt.Meta == nil {
 		enqueueLog.Error(nil, "DeleteEvent received with no metadata", "DeleteEvent", evt)
 		return
@@ -77,7 +77,7 @@ func (e *EnqueueHandler) Delete(q workqueue.RateLimitingInterface, evt event.Del
 }
 
 // Generic implements EventHandler
-func (e *EnqueueHandler) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
+func (e *Enqueue) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
 	if evt.Meta == nil {
 		enqueueLog.Error(nil, "GenericEvent received with no metadata", "GenericEvent", evt)
 		return

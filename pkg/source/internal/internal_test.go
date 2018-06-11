@@ -18,7 +18,7 @@ package internal_test
 
 import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/source/internal"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -37,10 +37,10 @@ import (
 var _ = Describe("Internal", func() {
 
 	var instance internal.EventHandler
-	var funcs, setfuncs *eventhandler.Funcs
+	var funcs, setfuncs *handler.Funcs
 	var set bool
 	BeforeEach(func() {
-		funcs = &eventhandler.Funcs{
+		funcs = &handler.Funcs{
 			CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
 				defer GinkgoRecover()
 				Fail("Did not expect CreateEvent to be called.")
@@ -59,7 +59,7 @@ var _ = Describe("Internal", func() {
 			},
 		}
 
-		setfuncs = &eventhandler.Funcs{
+		setfuncs = &handler.Funcs{
 			CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
 				set = true
 			},

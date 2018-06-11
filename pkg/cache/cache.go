@@ -89,14 +89,14 @@ func (o *objectCache) init(obj runtime.Object) error {
 
 func (o *objectCache) cacheFor(obj runtime.Object) (*singleObjectCache, error) {
 	if !o.informers.started {
-		return nil, fmt.Errorf("Must start Cache before calling Get or List %s %s",
+		return nil, fmt.Errorf("must start Cache before calling Get or List %s %s",
 			"Object", fmt.Sprintf("%T", obj))
 	}
 	objType := reflect.TypeOf(obj)
 
 	cache, isKnown := o.cachesByType[objType]
 	if !isKnown {
-		return nil, fmt.Errorf("No Cache found for %T.  Must call GetInformer.", obj)
+		return nil, fmt.Errorf("no Cache found for %T - must call GetInformer", obj)
 	}
 	return cache, nil
 }

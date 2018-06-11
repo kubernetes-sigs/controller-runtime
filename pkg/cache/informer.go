@@ -92,6 +92,7 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 		informersByGVK: make(map[schema.GroupVersionKind]cache.SharedIndexInformer),
 		resync:         *opts.Resync,
 	}
+	i.objectCache.informers = i
 
 	return i, nil
 }

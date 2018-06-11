@@ -43,7 +43,7 @@ var stop chan struct{}
 
 var _ = BeforeSuite(func(done Done) {
 	stop = make(chan struct{})
-	logf.SetLogger(logf.ZapLogger(false))
+	logf.SetLogger(logf.ZapLogger(true))
 
 	testenv = &test.Environment{}
 

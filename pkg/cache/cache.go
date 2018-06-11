@@ -32,6 +32,7 @@ import (
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
 	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
+	toolscache "k8s.io/client-go/tools/cache"
 )
 
 var log = logf.KBLog.WithName("object-cache")
@@ -43,6 +44,7 @@ var _ client.ReadInterface = &objectCache{}
 type objectCache struct {
 	cachesByType map[reflect.Type]*singleObjectCache
 	scheme       *runtime.Scheme
+	informers    *informers
 }
 
 var _ client.ReadInterface = &objectCache{}
@@ -54,7 +56,7 @@ func (o *objectCache) addInformer(gvk schema.GroupVersionKind, c cache.SharedInd
 		log.Error(err, "could not register informer in objectCache for GVK", "GroupVersionKind", gvk)
 		return
 	}
-	if _, found := o.cacheFor(obj); found {
+	if o.has(obj) {
 		return
 	}
 	o.registerCache(obj, gvk, c.GetIndexer())
@@ -68,18 +70,52 @@ func (o *objectCache) registerCache(obj runtime.Object, gvk schema.GroupVersionK
 	}
 }
 
-func (o *objectCache) cacheFor(obj runtime.Object) (*singleObjectCache, bool) {
+func (o *objectCache) has(obj runtime.Object) bool {
 	objType := reflect.TypeOf(obj)
+	_, found := o.cachesByType[objType]
+	return found
+}
+
+func (o *objectCache) init(obj runtime.Object) error {
+	i, err := o.informers.GetInformer(obj)
+	if err != nil {
+		return err
+	}
+	log.Info("Waiting to sync cache for type.", "Type", fmt.Sprintf("%T", obj))
+	toolscache.WaitForCacheSync(o.informers.stop, i.HasSynced)
+	log.Info("Finished to syncing cache for type.", "Type", fmt.Sprintf("%T", obj))
+	return nil
+}
+
+func (o *objectCache) cacheFor(obj runtime.Object) (*singleObjectCache, error) {
+	if !o.informers.started {
+		return nil, fmt.Errorf("Must start Cache before calling Get or List %s %s",
+			"Object", fmt.Sprintf("%T", obj))
+	}
+	objType := reflect.TypeOf(obj)
+
 	cache, isKnown := o.cachesByType[objType]
-	return cache, isKnown
+	if !isKnown {
+		return nil, fmt.Errorf("No Cache found for %T.  Must call GetInformer.", obj)
+	}
+	return cache, nil
 }
 
 // Get implements populatingClient.ReadInterface
 func (o *objectCache) Get(ctx context.Context, key client.ObjectKey, out runtime.Object) error {
-	cache, isKnown := o.cacheFor(out)
-	if !isKnown {
-		return fmt.Errorf("no cache for objects of type %T, must have asked for an watch/informer first", out)
+	// Make sure there is a Cache for this type
+	if !o.has(out) {
+		err := o.init(out)
+		if err != nil {
+			return err
+		}
 	}
+
+	cache, err := o.cacheFor(out)
+	if err != nil {
+		return err
+	}
+
 	return cache.Get(ctx, key, out)
 }
 
@@ -89,6 +125,15 @@ func (o *objectCache) List(ctx context.Context, opts *client.ListOptions, out ru
 	if err != nil {
 		return nil
 	}
+
+	ro, ok := itemsPtr.(runtime.Object)
+	if ok && !o.has(ro) {
+		err = o.init(ro)
+		if err != nil {
+			return err
+		}
+	}
+
 	// http://knowyourmeme.com/memes/this-is-fine
 	outType := reflect.Indirect(reflect.ValueOf(itemsPtr)).Type().Elem()
 	cache, isKnown := o.cachesByType[outType]

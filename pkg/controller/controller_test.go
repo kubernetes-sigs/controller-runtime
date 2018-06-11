@@ -28,7 +28,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("controller", func() {
+var _ = Describe("controller.Controller", func() {
 	var stop chan struct{}
 
 	rec := reconcile.Func(func(reconcile.Request) (reconcile.Result, error) {

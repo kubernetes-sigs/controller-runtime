@@ -52,7 +52,7 @@ type Controller struct {
 	// Reconcile is a function that can be called at any time with the Name / Namespace of an object and
 	// ensures that the state of the system matches the state specified in the object.
 	// Defaults to the DefaultReconcileFunc.
-	Reconcile reconcile.Reconcile
+	Do reconcile.Reconcile
 
 	// Client is a lazily initialized Client.  The controllerManager will initialize this when Start is called.
 	Client client.Client
@@ -88,6 +88,11 @@ type Controller struct {
 	Started bool
 
 	// TODO(community): Consider initializing a logger with the Controller Name as the tag
+}
+
+// Reconcile implements reconcile.Reconcile
+func (c *Controller) Reconcile(r reconcile.Request) (reconcile.Result, error) {
+	return c.Do.Reconcile(r)
 }
 
 // Watch implements controller.Controller
@@ -203,7 +208,7 @@ func (c *Controller) processNextWorkItem() bool {
 
 	// RunInformersAndControllers the syncHandler, passing it the namespace/Name string of the
 	// resource to be synced.
-	if result, err := c.Reconcile.Reconcile(req); err != nil {
+	if result, err := c.Do.Reconcile(req); err != nil {
 		c.Queue.AddRateLimited(req)
 		log.Error(nil, "Reconcile error", "Controller", c.Name, "Request", req)
 

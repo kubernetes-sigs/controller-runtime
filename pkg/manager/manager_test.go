@@ -31,7 +31,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-var _ = Describe("controller", func() {
+var _ = Describe("manger.Manager", func() {
 	var stop chan struct{}
 
 	BeforeEach(func() {
@@ -43,7 +43,6 @@ var _ = Describe("controller", func() {
 	})
 
 	Describe("New", func() {
-
 		It("should return an error if there is no Config", func() {
 			m, err := New(nil, Options{})
 			Expect(m).To(BeNil())
@@ -86,10 +85,42 @@ var _ = Describe("controller", func() {
 		})
 	})
 
-	Describe("Staring a Manager", func() {
+	Describe("Start", func() {
+		It("should Start each Component", func(done Done) {
+			m, err := New(cfg, Options{})
+			Expect(err).NotTo(HaveOccurred())
+			c1 := make(chan struct{})
+			m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				defer close(c1)
+				defer GinkgoRecover()
+				return nil
+			}))
 
-		It("should Start each Controller", func() {
-			// TODO(community): write this
+			c2 := make(chan struct{})
+			m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				defer close(c2)
+				defer GinkgoRecover()
+				return nil
+			}))
+
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(stop)).NotTo(HaveOccurred())
+			}()
+			<-c1
+			<-c2
+
+			close(done)
+		})
+
+		It("should stop when stop is called", func(done Done) {
+			m, err := New(cfg, Options{})
+			Expect(err).NotTo(HaveOccurred())
+			s := make(chan struct{})
+			close(s)
+			Expect(m.Start(s)).NotTo(HaveOccurred())
+
+			close(done)
 		})
 
 		It("should return an error if it can't start the cache", func(done Done) {
@@ -106,81 +137,107 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should return an error if any Components fail to Start", func(done Done) {
-			//m, err := New(cfg, Options{})
-			//Expect(err).NotTo(HaveOccurred())
-			//c, err := controller.New("foo", m, controller.Options{})
-			//Expect(err).NotTo(HaveOccurred())
-			//ctrl, ok := c.(*internalcontroller.Controller)
-			//Expect(ok).To(BeTrue())
-			//
-			//// Make Controller startup fail
-			//ctrl.WaitForCache = func(stopCh <-chan struct{}, cacheSyncs ...toolscache.InformerSynced) bool { return false }
-			//err = m.Start(stop)
-			//Expect(err).To(HaveOccurred())
-			//Expect(err.Error()).To(ContainSubstring("caches to sync"))
+			m, err := New(cfg, Options{})
+			Expect(err).NotTo(HaveOccurred())
+			c1 := make(chan struct{})
+			m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				defer GinkgoRecover()
+				defer close(c1)
+				return nil
+			}))
+
+			c2 := make(chan struct{})
+			m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				defer GinkgoRecover()
+				defer close(c2)
+				return fmt.Errorf("expected error")
+			}))
+
+			c3 := make(chan struct{})
+			m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				defer GinkgoRecover()
+				defer close(c3)
+				return nil
+			}))
+
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(stop)).NotTo(HaveOccurred())
+				close(done)
+			}()
+			<-c1
+			<-c2
+			<-c3
+		})
+	})
+
+	Describe("Add", func() {
+		It("should fai if there is an erorr in SetFields", func() {
+		})
+
+		It("should immediately start the Component if the Manager has already Started another Component",
+			func(done Done) {
+				m, err := New(cfg, Options{})
+				Expect(err).NotTo(HaveOccurred())
+				mrg, ok := m.(*controllerManager)
+				Expect(ok).To(BeTrue())
+
+				// Add one component before starting
+				c1 := make(chan struct{})
+				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					defer close(c1)
+					defer GinkgoRecover()
+					return nil
+				}))
+
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(stop)).NotTo(HaveOccurred())
+				}()
+
+				// Wait for the Manager to start
+				Eventually(func() bool { return mrg.started }).Should(BeTrue())
+
+				// Add another component after starting
+				c2 := make(chan struct{})
+				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					defer close(c2)
+					defer GinkgoRecover()
+					return nil
+				}))
+				<-c1
+				<-c2
+
+				close(done)
+			})
+
+		It("should immediately start the Component if the Manager has already Started", func(done Done) {
+			m, err := New(cfg, Options{})
+			Expect(err).NotTo(HaveOccurred())
+			mrg, ok := m.(*controllerManager)
+			Expect(ok).To(BeTrue())
+
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(stop)).NotTo(HaveOccurred())
+			}()
+
+			// Wait for the Manager to start
+			Eventually(func() bool { return mrg.started }).Should(BeTrue())
+
+			c1 := make(chan struct{})
+			m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				defer close(c1)
+				defer GinkgoRecover()
+				return nil
+			}))
+			<-c1
 
 			close(done)
 		})
 	})
-
-	Describe("Manager", func() {
-		It("should provide a function to get the Config", func() {
-			m, err := New(cfg, Options{})
-			Expect(err).NotTo(HaveOccurred())
-			mrg, ok := m.(*controllerManager)
-			Expect(ok).To(BeTrue())
-			Expect(m.GetConfig()).To(Equal(mrg.config))
-		})
-
-		It("should provide a function to get the Client", func() {
-			m, err := New(cfg, Options{})
-			Expect(err).NotTo(HaveOccurred())
-			mrg, ok := m.(*controllerManager)
-			Expect(ok).To(BeTrue())
-			Expect(m.GetClient()).To(Equal(mrg.client))
-		})
-
-		It("should provide a function to get the Scheme", func() {
-			m, err := New(cfg, Options{})
-			Expect(err).NotTo(HaveOccurred())
-			mrg, ok := m.(*controllerManager)
-			Expect(ok).To(BeTrue())
-			Expect(m.GetScheme()).To(Equal(mrg.scheme))
-		})
-
-		It("should provide a function to get the FieldIndexer", func() {
-			m, err := New(cfg, Options{})
-			Expect(err).NotTo(HaveOccurred())
-			mrg, ok := m.(*controllerManager)
-			Expect(ok).To(BeTrue())
-			Expect(m.GetFieldIndexer()).To(Equal(mrg.fieldIndexes))
-		})
-	})
-
-	Describe("Adding a Component", func() {
-		It("should immediately start the Component if the ControllerManager has already Started", func() {
-			//m, err := manager.New(cfg, manager.Options{})
-			//Expect(err).NotTo(HaveOccurred())
-			//mrg, ok := m.(*controllerManager)
-			//Expect(ok).To(BeTrue())
-			//
-			//// Make Controller startup fail
-			//go func() {
-			//	defer GinkgoRecover()
-			//	Expect(m.Start(stop)).NotTo(HaveOccurred())
-			//}()
-			//Eventually(func() bool { return mrg.started }).Should(BeTrue())
-			//
-			//c, err := controller.New("foo", m, controller.manager.Options{Reconcile: rec})
-			//Expect(err).NotTo(HaveOccurred())
-			//ctrl, ok := c.(*internalcontroller.Controller)
-			//Expect(ok).To(BeTrue())
-			//
-			//// Wait for Controller to start
-			//Eventually(func() bool { return ctrl.Started }).Should(BeTrue())
-		})
-
-		It("should set Fields", func(done Done) {
+	Describe("SetFields", func() {
+		It("should inject field values", func(done Done) {
 			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
@@ -257,6 +314,38 @@ var _ = Describe("controller", func() {
 			Expect(err).To(Equal(expected))
 			close(done)
 		})
+	})
+
+	It("should provide a function to get the Config", func() {
+		m, err := New(cfg, Options{})
+		Expect(err).NotTo(HaveOccurred())
+		mrg, ok := m.(*controllerManager)
+		Expect(ok).To(BeTrue())
+		Expect(m.GetConfig()).To(Equal(mrg.config))
+	})
+
+	It("should provide a function to get the Client", func() {
+		m, err := New(cfg, Options{})
+		Expect(err).NotTo(HaveOccurred())
+		mrg, ok := m.(*controllerManager)
+		Expect(ok).To(BeTrue())
+		Expect(m.GetClient()).To(Equal(mrg.client))
+	})
+
+	It("should provide a function to get the Scheme", func() {
+		m, err := New(cfg, Options{})
+		Expect(err).NotTo(HaveOccurred())
+		mrg, ok := m.(*controllerManager)
+		Expect(ok).To(BeTrue())
+		Expect(m.GetScheme()).To(Equal(mrg.scheme))
+	})
+
+	It("should provide a function to get the FieldIndexer", func() {
+		m, err := New(cfg, Options{})
+		Expect(err).NotTo(HaveOccurred())
+		mrg, ok := m.(*controllerManager)
+		Expect(ok).To(BeTrue())
+		Expect(m.GetFieldIndexer()).To(Equal(mrg.fieldIndexes))
 	})
 })
 

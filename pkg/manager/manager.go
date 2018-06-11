@@ -78,6 +78,14 @@ type Runnable interface {
 	Start(<-chan struct{}) error
 }
 
+// RunnableFunc implements Runnable
+type RunnableFunc func(<-chan struct{}) error
+
+// Start implements Runnable
+func (r RunnableFunc) Start(s <-chan struct{}) error {
+	return r(s)
+}
+
 // New returns a new Manager
 func New(config *rest.Config, options Options) (Manager, error) {
 	cm := &controllerManager{config: config, scheme: options.Scheme, errChan: make(chan error)}

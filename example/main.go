@@ -25,6 +25,7 @@ import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client/config"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/manager"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
 	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/signals"
@@ -40,16 +41,16 @@ func main() {
 	logf.SetLogger(logf.ZapLogger(false))
 
 	// Setup a Manager
-	manager, err := controller.NewManager(config.GetConfigOrDie(), controller.ManagerArgs{})
+	mrg, err := manager.New(config.GetConfigOrDie(), manager.Options{})
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Setup a new controller to Reconcile ReplicaSets
-	c, err := manager.NewController(
+	c, err := controller.New(
 		"foo-controller",
-		&reconcileReplicaSet{client: manager.GetClient()},
-		controller.Options{})
+		mrg,
+		controller.Options{Reconcile: &reconcileReplicaSet{client: mrg.GetClient()}})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -72,7 +73,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Fatal(manager.Start(signals.SetupSignalHandler()))
+	log.Fatal(mrg.Start(signals.SetupSignalHandler()))
 }
 
 // reconcileReplicaSet reconciles ReplicaSets

@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/manager"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -50,15 +51,17 @@ var _ = Describe("controller", func() {
 
 		It("should reconcile", func(done Done) {
 			By("Creating the Manager")
-			cm, err := controller.NewManager(cfg, controller.ManagerArgs{})
+			cm, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
-			instance, err := cm.NewController("foo-controller", reconcile.Func(
-				func(request reconcile.Request) (reconcile.Result, error) {
-					reconciled <- request
-					return reconcile.Result{}, nil
-				}), controller.Options{})
+			instance, err := controller.New("foo-controller", cm, controller.Options{
+				Reconcile: reconcile.Func(
+					func(request reconcile.Request) (reconcile.Result, error) {
+						reconciled <- request
+						return reconcile.Result{}, nil
+					}),
+			})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Watching Resources")

@@ -82,3 +82,17 @@ func SchemeInto(scheme *runtime.Scheme, i interface{}) (bool, error) {
 	}
 	return false, nil
 }
+
+// Func injects dependencies into i.
+type Func func(i interface{}) error
+
+type Injector interface {
+	InjectFunc(f Func) error
+}
+
+func InjectInjector(f Func, i interface{}) (bool, error) {
+	if ii, ok := i.(Injector); ok {
+		return true, ii.InjectFunc(f)
+	}
+	return false, nil
+}

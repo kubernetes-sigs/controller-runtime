@@ -18,31 +18,26 @@ package controller
 
 import (
 	"fmt"
-	"sync"
-	"time"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/controller"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/manager"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/predicate"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/rest"
-	toolscache "k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/workqueue"
-
 	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
+	"k8s.io/client-go/util/workqueue"
 )
 
-var log = logf.KBLog.WithName("controller").WithName("controller")
+var log = logf.KBLog.WithName("controller")
 
 // Options are the arguments for creating a new Controller
 type Options struct {
-	// maxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
+	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
+
+	// Reconcile reconciles an object
+	Reconcile reconcile.Reconcile
 }
 
 // Controller is a work queue that watches for changes to objects (i.e. Create / Update / Delete events) and
@@ -59,184 +54,37 @@ type Controller interface {
 	Start(stop <-chan struct{}) error
 }
 
-var _ Controller = &controller{}
-
-type controller struct {
-	// name is used to uniquely identify a controller in tracing, logging and monitoring.  name is required.
-	name string
-
-	// maxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
-	maxConcurrentReconciles int
-
-	// reconcile is a function that can be called at any time with the name / Namespace of an object and
-	// ensures that the state of the system matches the state specified in the object.
-	// Defaults to the DefaultReconcileFunc.
-	reconcile reconcile.Reconcile
-
-	// client is a lazily initialized client.  The controllerManager will initialize this when Start is called.
-	client client.Client
-
-	// scheme is injected by the controllerManager when controllerManager.Start is called
-	scheme *runtime.Scheme
-
-	// informers are injected by the controllerManager when controllerManager.Start is called
-	cache cache.Cache
-
-	// config is the rest.config used to talk to the apiserver.  Defaults to one of in-cluster, environment variable
-	// specified, or the ~/.kube/config.
-	config *rest.Config
-
-	// queue is an listeningQueue that listens for events from Informers and adds object keys to
-	// the queue for processing
-	queue workqueue.RateLimitingInterface
-
-	// inject is used to inject dependencies into other objects such as Sources, EventHandlers and Predicates
-	inject func(i interface{}) error
-
-	// mu is used to synchronize controller setup
-	mu sync.Mutex
-
-	// jitterPeriod allows tests to reduce the jitterPeriod so they complete faster
-	jitterPeriod time.Duration
-
-	// waitForCache allows tests to mock out the waitForCache function to return an error
-	// defaults to cache.WaitForCacheSync
-	waitForCache func(stopCh <-chan struct{}, cacheSyncs ...toolscache.InformerSynced) bool
-
-	// started is true if the Controller has been started
-	started bool
-
-	// TODO(pwittrock): Consider initializing a logger with the controller name as the tag
-}
-
-func (c *controller) Watch(src source.Source, evthdler eventhandler.EventHandler, prct ...predicate.Predicate) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Inject cache into arguments
-	if err := c.inject(src); err != nil {
-		return err
-	}
-	if err := c.inject(evthdler); err != nil {
-		return err
-	}
-	for _, pr := range prct {
-		if err := c.inject(pr); err != nil {
-			return err
-		}
+func New(name string, mrg manager.Manager, options Options) (Controller, error) {
+	if options.Reconcile == nil {
+		return nil, fmt.Errorf("must specify Reconcile")
 	}
 
-	// TODO(pwittrock): wire in predicates
-
-	log.Info("Starting EventSource", "controller", c.name, "Source", src)
-	return src.Start(evthdler, c.queue, prct...)
-}
-
-func (c *controller) Start(stop <-chan struct{}) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// TODO)(pwittrock): Reconsider HandleCrash
-	defer utilruntime.HandleCrash()
-	defer c.queue.ShutDown()
-
-	// Start the SharedIndexInformer factories to begin populating the SharedIndexInformer caches
-	log.Info("Starting controller", "controller", c.name)
-
-	// Wait for the caches to be synced before starting workers
-	allInformers := c.cache.KnownInformersByType()
-	syncedFuncs := make([]toolscache.InformerSynced, 0, len(allInformers))
-	for _, informer := range allInformers {
-		syncedFuncs = append(syncedFuncs, informer.HasSynced)
+	if len(name) == 0 {
+		return nil, fmt.Errorf("must specify Name for Controller")
 	}
 
-	if c.waitForCache == nil {
-		c.waitForCache = toolscache.WaitForCacheSync
-	}
-	if ok := c.waitForCache(stop, syncedFuncs...); !ok {
-		// This code is unreachable right now since WaitForCacheSync will never return an error
-		// Leaving it here because that could happen in the future
-		err := fmt.Errorf("failed to wait for %s caches to sync", c.name)
-		log.Error(err, "Could not wait for Cache to sync", "controller", c.name)
-		return err
+	if options.MaxConcurrentReconciles <= 0 {
+		options.MaxConcurrentReconciles = 1
 	}
 
-	if c.jitterPeriod == 0 {
-		c.jitterPeriod = time.Second
+	// Inject dependencies into Reconcile
+	if err := mrg.SetFields(options.Reconcile); err != nil {
+		return nil, err
 	}
 
-	// Launch two workers to process resources
-	log.Info("Starting workers", "controller", c.name, "WorkerCount", c.maxConcurrentReconciles)
-	for i := 0; i < c.maxConcurrentReconciles; i++ {
-		// Process work items
-		go wait.Until(func() {
-			for c.processNextWorkItem() {
-			}
-		}, c.jitterPeriod, stop)
+	// Create controller with dependencies set
+	c := &controller.Controller{
+		Reconcile: options.Reconcile,
+		Cache:     mrg.GetCache(),
+		Config:    mrg.GetConfig(),
+		Scheme:    mrg.GetScheme(),
+		Client:    mrg.GetClient(),
+		Queue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), name),
+		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
+		Name: name,
 	}
 
-	c.started = true
-
-	<-stop
-	log.Info("Stopping workers", "controller", c.name)
-	return nil
-}
-
-// processNextWorkItem will read a single work item off the workqueue and
-// attempt to process it, by calling the syncHandler.
-func (c *controller) processNextWorkItem() bool {
-	// This code copy-pasted from the sample-controller.
-
-	obj, shutdown := c.queue.Get()
-	if obj == nil {
-		// Sometimes the queue gives us nil items when it starts up
-		c.queue.Forget(obj)
-	}
-
-	if shutdown {
-		// Stop working
-		return false
-	}
-
-	// We call Done here so the workqueue knows we have finished
-	// processing this item. We also must remember to call Forget if we
-	// do not want this work item being re-queued. For example, we do
-	// not call Forget if a transient error occurs, instead the item is
-	// put back on the workqueue and attempted again after a back-off
-	// period.
-	defer c.queue.Done(obj)
-	var req reconcile.Request
-	var ok bool
-	if req, ok = obj.(reconcile.Request); !ok {
-		// As the item in the workqueue is actually invalid, we call
-		// Forget here else we'd go into a loop of attempting to
-		// process a work item that is invalid.
-		c.queue.Forget(obj)
-		log.Error(nil, "Queue item was not a Request",
-			"controller", c.name, "Type", fmt.Sprintf("%T", obj), "Value", obj)
-		// Return true, don't take a break
-		return true
-	}
-
-	// RunInformersAndControllers the syncHandler, passing it the namespace/name string of the
-	// resource to be synced.
-	if result, err := c.reconcile.Reconcile(req); err != nil {
-		c.queue.AddRateLimited(req)
-		log.Error(nil, "reconcile error", "controller", c.name, "Request", req)
-
-		return false
-	} else if result.Requeue {
-		c.queue.AddRateLimited(req)
-		return true
-	}
-
-	// Finally, if no error occurs we Forget this item so it does not
-	// get queued again until another change happens.
-	c.queue.Forget(obj)
-
-	// TODO(directxman12): What does 1 mean?  Do we want level constants?  Do we want levels at all?
-	log.V(1).Info("Successfully Reconciled", "controller", c.name, "Request", req)
-
-	// Return true, don't take a break
-	return true
+	// Add the controller as a Manager componentsw
+	mrg.Add(c)
+	return c, nil
 }

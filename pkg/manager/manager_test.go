@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package manager
 
 import (
 	"fmt"
@@ -29,17 +29,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
-	toolscache "k8s.io/client-go/tools/cache"
 )
-
-var TestConfig *rest.Config
 
 var _ = Describe("controller", func() {
 	var stop chan struct{}
 
-	rec := reconcile.Func(func(reconcile.Request) (reconcile.Result, error) {
-		return reconcile.Result{}, nil
-	})
 	BeforeEach(func() {
 		stop = make(chan struct{})
 	})
@@ -48,10 +42,10 @@ var _ = Describe("controller", func() {
 		close(stop)
 	})
 
-	Describe("Creating a Manager", func() {
+	Describe("New", func() {
 
 		It("should return an error if there is no Config", func() {
-			m, err := NewManager(nil, ManagerArgs{})
+			m, err := New(nil, Options{})
 			Expect(m).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Config"))
 
@@ -59,7 +53,7 @@ var _ = Describe("controller", func() {
 
 		It("should return an error if it can't create a RestMapper", func() {
 			expected := fmt.Errorf("expected error: RestMapper")
-			m, err := NewManager(TestConfig, ManagerArgs{
+			m, err := New(cfg, Options{
 				MapperProvider: func(c *rest.Config) (meta.RESTMapper, error) { return nil, expected },
 			})
 			Expect(m).To(BeNil())
@@ -68,7 +62,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should return an error it can't create a client.Client", func(done Done) {
-			m, err := NewManager(TestConfig, ManagerArgs{
+			m, err := New(cfg, Options{
 				newClient: func(config *rest.Config, options client.Options) (client.Client, error) {
 					return nil, fmt.Errorf("expected error")
 				}})
@@ -80,7 +74,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should return an error it can't create a cache.Cache", func(done Done) {
-			m, err := NewManager(TestConfig, ManagerArgs{
+			m, err := New(cfg, Options{
 				newCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 					return nil, fmt.Errorf("expected error")
 				}})
@@ -99,7 +93,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should return an error if it can't start the cache", func(done Done) {
-			m, err := NewManager(TestConfig, ManagerArgs{})
+			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -111,19 +105,19 @@ var _ = Describe("controller", func() {
 			close(done)
 		})
 
-		It("should return an error if any Controllers fail to stop", func(done Done) {
-			m, err := NewManager(TestConfig, ManagerArgs{})
-			Expect(err).NotTo(HaveOccurred())
-			c, err := m.NewController("foo", rec, Options{})
-			Expect(err).NotTo(HaveOccurred())
-			ctrl, ok := c.(*controller)
-			Expect(ok).To(BeTrue())
-
-			// Make Controller startup fail
-			ctrl.waitForCache = func(stopCh <-chan struct{}, cacheSyncs ...toolscache.InformerSynced) bool { return false }
-			err = m.Start(stop)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("caches to sync"))
+		It("should return an error if any Components fail to Start", func(done Done) {
+			//m, err := New(cfg, Options{})
+			//Expect(err).NotTo(HaveOccurred())
+			//c, err := controller.New("foo", m, controller.Options{})
+			//Expect(err).NotTo(HaveOccurred())
+			//ctrl, ok := c.(*internalcontroller.Controller)
+			//Expect(ok).To(BeTrue())
+			//
+			//// Make Controller startup fail
+			//ctrl.WaitForCache = func(stopCh <-chan struct{}, cacheSyncs ...toolscache.InformerSynced) bool { return false }
+			//err = m.Start(stop)
+			//Expect(err).To(HaveOccurred())
+			//Expect(err.Error()).To(ContainSubstring("caches to sync"))
 
 			close(done)
 		})
@@ -131,7 +125,7 @@ var _ = Describe("controller", func() {
 
 	Describe("Manager", func() {
 		It("should provide a function to get the Config", func() {
-			m, err := NewManager(TestConfig, ManagerArgs{})
+			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -139,7 +133,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should provide a function to get the Client", func() {
-			m, err := NewManager(TestConfig, ManagerArgs{})
+			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -147,7 +141,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should provide a function to get the Scheme", func() {
-			m, err := NewManager(TestConfig, ManagerArgs{})
+			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -155,7 +149,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should provide a function to get the FieldIndexer", func() {
-			m, err := NewManager(TestConfig, ManagerArgs{})
+			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -163,91 +157,62 @@ var _ = Describe("controller", func() {
 		})
 	})
 
-	Describe("Creating a Controller", func() {
-		It("should return an error if Name is not Specified", func() {
-			m, err := NewManager(TestConfig, ManagerArgs{})
-			Expect(err).NotTo(HaveOccurred())
-			c, err := m.NewController("", rec, Options{})
-			Expect(c).To(BeNil())
-			Expect(err.Error()).To(ContainSubstring("must specify Name for Controller"))
+	Describe("Adding a Component", func() {
+		It("should immediately start the Component if the ControllerManager has already Started", func() {
+			//m, err := manager.New(cfg, manager.Options{})
+			//Expect(err).NotTo(HaveOccurred())
+			//mrg, ok := m.(*controllerManager)
+			//Expect(ok).To(BeTrue())
+			//
+			//// Make Controller startup fail
+			//go func() {
+			//	defer GinkgoRecover()
+			//	Expect(m.Start(stop)).NotTo(HaveOccurred())
+			//}()
+			//Eventually(func() bool { return mrg.started }).Should(BeTrue())
+			//
+			//c, err := controller.New("foo", m, controller.manager.Options{Reconcile: rec})
+			//Expect(err).NotTo(HaveOccurred())
+			//ctrl, ok := c.(*internalcontroller.Controller)
+			//Expect(ok).To(BeTrue())
+			//
+			//// Wait for Controller to start
+			//Eventually(func() bool { return ctrl.Started }).Should(BeTrue())
 		})
 
-		It("should return an error if Reconcile is not Specified", func() {
-			m, err := NewManager(TestConfig, ManagerArgs{})
-			Expect(err).NotTo(HaveOccurred())
-			c, err := m.NewController("foo", nil, Options{})
-			Expect(c).To(BeNil())
-			Expect(err.Error()).To(ContainSubstring("must specify Reconcile"))
-
-		})
-
-		It("should immediately start the Controller if the ControllerManager has already Started", func() {
-			m, err := NewManager(TestConfig, ManagerArgs{})
-			Expect(err).NotTo(HaveOccurred())
-			mrg, ok := m.(*controllerManager)
-			Expect(ok).To(BeTrue())
-
-			// Make Controller startup fail
-			go func() {
-				defer GinkgoRecover()
-				Expect(m.Start(stop)).NotTo(HaveOccurred())
-			}()
-			Eventually(func() bool { return mrg.started }).Should(BeTrue())
-
-			c, err := m.NewController("foo", rec, Options{})
-			Expect(err).NotTo(HaveOccurred())
-			ctrl, ok := c.(*controller)
-			Expect(ok).To(BeTrue())
-
-			// Wait for Controller to start
-			Eventually(func() bool { return ctrl.started }).Should(BeTrue())
-		})
-
-		It("NewController should return an error if injecting Reconcile fails", func(done Done) {
-			m, err := NewManager(TestConfig, ManagerArgs{})
-			Expect(err).NotTo(HaveOccurred())
-
-			c, err := m.NewController("foo", &failRec{}, Options{})
-			Expect(c).To(BeNil())
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("expected error"))
-
-			close(done)
-		})
-
-		It("should provide an inject function for providing dependencies", func(done Done) {
-			m, err := NewManager(TestConfig, ManagerArgs{})
+		It("should set Fields", func(done Done) {
+			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
 
 			mrg.cache = &informertest.FakeInformers{}
 
-			c, err := m.NewController("foo", rec, Options{})
-			Expect(err).NotTo(HaveOccurred())
-			ctrl, ok := c.(*controller)
-			Expect(ok).To(BeTrue())
-
 			By("Injecting the dependencies")
-			err = ctrl.inject(&injectable{
+			err = m.SetFields(&injectable{
 				scheme: func(scheme *runtime.Scheme) error {
 					defer GinkgoRecover()
-					Expect(scheme).To(Equal(mrg.scheme))
+					Expect(scheme).To(Equal(m.GetScheme()))
 					return nil
 				},
 				config: func(config *rest.Config) error {
 					defer GinkgoRecover()
-					Expect(config).To(Equal(mrg.config))
+					Expect(config).To(Equal(m.GetConfig()))
 					return nil
 				},
 				client: func(client client.Client) error {
 					defer GinkgoRecover()
-					Expect(client).To(Equal(mrg.client))
+					Expect(client).To(Equal(m.GetClient()))
 					return nil
 				},
 				cache: func(c cache.Cache) error {
 					defer GinkgoRecover()
-					Expect(c).To(Equal(mrg.cache))
+					Expect(c).To(Equal(m.GetCache()))
+					return nil
+				},
+				f: func(f inject.Func) error {
+					defer GinkgoRecover()
+					Expect(f).NotTo(BeNil())
 					return nil
 				},
 			})
@@ -256,34 +221,40 @@ var _ = Describe("controller", func() {
 			By("Returning an error if dependency injection fails")
 
 			expected := fmt.Errorf("expected error")
-			err = ctrl.inject(&injectable{
+			err = m.SetFields(&injectable{
 				client: func(client client.Client) error {
 					return expected
 				},
 			})
 			Expect(err).To(Equal(expected))
 
-			err = ctrl.inject(&injectable{
+			err = m.SetFields(&injectable{
 				scheme: func(scheme *runtime.Scheme) error {
 					return expected
 				},
 			})
 			Expect(err).To(Equal(expected))
 
-			err = ctrl.inject(&injectable{
+			err = m.SetFields(&injectable{
 				config: func(config *rest.Config) error {
 					return expected
 				},
 			})
 			Expect(err).To(Equal(expected))
 
-			err = ctrl.inject(&injectable{
+			err = m.SetFields(&injectable{
 				cache: func(c cache.Cache) error {
 					return expected
 				},
 			})
 			Expect(err).To(Equal(expected))
 
+			err = m.SetFields(&injectable{
+				f: func(c inject.Func) error {
+					return expected
+				},
+			})
+			Expect(err).To(Equal(expected))
 			close(done)
 		})
 	})
@@ -302,11 +273,18 @@ func (*failRec) InjectClient(client.Client) error {
 	return fmt.Errorf("expected error")
 }
 
+var _ inject.Injector = &injectable{}
+var _ inject.Cache = &injectable{}
+var _ inject.Client = &injectable{}
+var _ inject.Scheme = &injectable{}
+var _ inject.Config = &injectable{}
+
 type injectable struct {
 	scheme func(scheme *runtime.Scheme) error
 	client func(client.Client) error
 	config func(config *rest.Config) error
 	cache  func(cache.Cache) error
+	f      func(inject.Func) error
 }
 
 func (i *injectable) InjectCache(c cache.Cache) error {
@@ -335,4 +313,15 @@ func (i *injectable) InjectScheme(scheme *runtime.Scheme) error {
 		return nil
 	}
 	return i.scheme(scheme)
+}
+
+func (i *injectable) InjectFunc(f inject.Func) error {
+	if i.f == nil {
+		return nil
+	}
+	return i.f(f)
+}
+
+func (i *injectable) Start(<-chan struct{}) error {
+	return nil
 }

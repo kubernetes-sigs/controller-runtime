@@ -18,15 +18,16 @@ package controller_test
 
 import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/manager"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -50,24 +51,26 @@ var _ = Describe("controller", func() {
 
 		It("should reconcile", func(done Done) {
 			By("Creating the Manager")
-			cm, err := controller.NewManager(controller.ManagerArgs{Config: cfg})
+			cm, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
-			instance, err := cm.NewController(controller.Options{Name: "foo-controller"}, reconcile.Func(
-				func(request reconcile.Request) (reconcile.Result, error) {
-					reconciled <- request
-					return reconcile.Result{}, nil
-				}))
+			instance, err := controller.New("foo-controller", cm, controller.Options{
+				Reconcile: reconcile.Func(
+					func(request reconcile.Request) (reconcile.Result, error) {
+						reconciled <- request
+						return reconcile.Result{}, nil
+					}),
+			})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Watching Resources")
-			err = instance.Watch(&source.KindSource{Type: &appsv1.ReplicaSet{}}, &eventhandler.EnqueueOwnerHandler{
+			err = instance.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueOwner{
 				OwnerType: &appsv1.Deployment{},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			err = instance.Watch(&source.KindSource{Type: &appsv1.Deployment{}}, &eventhandler.EnqueueHandler{})
+			err = instance.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.Enqueue{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting the Manager")

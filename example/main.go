@@ -22,15 +22,18 @@ import (
 	"log"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/client/config"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/manager"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
 	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/signals"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
 
 func main() {
@@ -38,39 +41,31 @@ func main() {
 	logf.SetLogger(logf.ZapLogger(false))
 
 	// Setup a Manager
-	manager, err := controller.NewManager(controller.ManagerArgs{})
+	mrg, err := manager.New(config.GetConfigOrDie(), manager.Options{})
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Setup a new controller to Reconcile ReplicaSets
-	c, err := manager.NewController(
-		controller.Options{Name: "foo-controller", MaxConcurrentReconciles: 1},
-		&reconcileReplicaSet{client: manager.GetClient()},
-	)
+	c, err := controller.New("foo-controller", mrg, controller.Options{
+		Reconcile: &reconcileReplicaSet{client: mrg.GetClient()},
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = c.Watch(
-		// Watch ReplicaSets
-		&source.KindSource{Type: &appsv1.ReplicaSet{}},
-		// Enqueue ReplicaSet object key
-		&eventhandler.EnqueueHandler{})
-	if err != nil {
+	// Watch ReplicaSets and enqueue ReplicaSet object key
+	if err := c.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.Enqueue{}); err != nil {
 		log.Fatal(err)
 	}
 
-	err = c.Watch(
-		// Watch Pods
-		&source.KindSource{Type: &corev1.Pod{}},
-		// Enqueue Owning ReplicaSet object key
-		&eventhandler.EnqueueOwnerHandler{OwnerType: &appsv1.ReplicaSet{}, IsController: true})
-	if err != nil {
+	// Watch Pods and enqueue owning ReplicaSet key
+	if err := c.Watch(&source.Kind{Type: &corev1.Pod{}},
+		&handler.EnqueueOwner{OwnerType: &appsv1.ReplicaSet{}, IsController: true}); err != nil {
 		log.Fatal(err)
 	}
 
-	log.Fatal(manager.Start(signals.SetupSignalHandler()))
+	log.Fatal(mrg.Start(signals.SetupSignalHandler()))
 }
 
 // reconcileReplicaSet reconciles ReplicaSets

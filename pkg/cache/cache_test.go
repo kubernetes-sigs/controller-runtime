@@ -90,9 +90,9 @@ var _ = Describe("Indexers", func() {
 		var singleCache client.ReadInterface
 
 		BeforeEach(func() {
-			var ok bool
-			singleCache, ok = multiCache.cacheFor(&kapi.Pod{})
-			Expect(ok).To(BeTrue())
+			var err error
+			singleCache, err = multiCache.cacheFor(&kapi.Pod{})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should be able to fetch a particular object by key", func() {

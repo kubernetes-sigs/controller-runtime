@@ -19,45 +19,49 @@ package controller_test
 import (
 	"log"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/client/config"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
-	corev1 "k8s.io/api/core/v1"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/manager"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/signals"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
+	"k8s.io/api/core/v1"
 )
+
+var mrg manager.Manager
 
 // This example creates a new controller named "pod-controller" with a no-op reconcile function and registers
 // it with the DefaultControllerManager.
 func ExampleController() {
-	cm, err := controller.NewManager(controller.ManagerArgs{Config: config.GetConfigOrDie()})
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = cm.NewController(
-		controller.Options{Name: "pod-controller", MaxConcurrentReconciles: 1},
-		reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
+	_, err := controller.New("pod-controller", mrg, controller.Options{
+		Reconcile: reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
 			// Your business logic to implement the API by creating, updating, deleting objects goes here.
 			return reconcile.Result{}, nil
 		}),
-	)
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
+	mrg.Start(signals.SetupSignalHandler())
 }
 
 // This example watches Pods and enqueues reconcile.Requests with the changed Pod Name and Namespace.
 func ExampleController_Watch() {
-	cm, err := controller.NewManager(controller.ManagerArgs{Config: config.GetConfigOrDie()})
+	c, err := controller.New("pod-controller", mrg, controller.Options{
+		Reconcile: reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
+			// Your business logic to implement the API by creating, updating, deleting objects goes here.
+			return reconcile.Result{}, nil
+		}),
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	c, err := cm.NewController(controller.Options{Name: "foo-controller"}, nil)
+
+	err = c.Watch(&source.Kind{Type: &v1.Pod{}}, &handler.Enqueue{})
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = c.Watch(&source.KindSource{Type: &corev1.Pod{}}, &eventhandler.EnqueueHandler{})
-	if err != nil {
-		log.Fatal(err)
-	}
+
+	mrg.Start(signals.SetupSignalHandler())
+
 }

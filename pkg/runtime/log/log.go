@@ -32,7 +32,9 @@ func ZapLogger(development bool) logr.Logger {
 
 // SetLogger sets a concrete logging implementation for all deferred Loggers.
 func SetLogger(l logr.Logger) {
-	Log.promise.Fulfill(l)
+	if Log.promise != nil {
+		Log.promise.Fulfill(l)
+	}
 }
 
 // Log is the base logger used by kubebuilder.  It delegates

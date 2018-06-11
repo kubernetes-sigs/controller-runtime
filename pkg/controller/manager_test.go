@@ -51,7 +51,7 @@ var _ = Describe("controller", func() {
 	Describe("Creating a Manager", func() {
 
 		It("should return an error if there is no Config", func() {
-			m, err := NewManager(ManagerArgs{})
+			m, err := NewManager(nil, ManagerArgs{})
 			Expect(m).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Config"))
 
@@ -59,8 +59,7 @@ var _ = Describe("controller", func() {
 
 		It("should return an error if it can't create a RestMapper", func() {
 			expected := fmt.Errorf("expected error: RestMapper")
-			m, err := NewManager(ManagerArgs{
-				Config:         TestConfig,
+			m, err := NewManager(TestConfig, ManagerArgs{
 				MapperProvider: func(c *rest.Config) (meta.RESTMapper, error) { return nil, expected },
 			})
 			Expect(m).To(BeNil())
@@ -69,7 +68,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should return an error it can't create a client.Client", func(done Done) {
-			m, err := NewManager(ManagerArgs{Config: TestConfig,
+			m, err := NewManager(TestConfig, ManagerArgs{
 				newClient: func(config *rest.Config, options client.Options) (client.Client, error) {
 					return nil, fmt.Errorf("expected error")
 				}})
@@ -81,7 +80,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should return an error it can't create a cache.Cache", func(done Done) {
-			m, err := NewManager(ManagerArgs{Config: TestConfig,
+			m, err := NewManager(TestConfig, ManagerArgs{
 				newCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 					return nil, fmt.Errorf("expected error")
 				}})
@@ -100,7 +99,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should return an error if it can't start the cache", func(done Done) {
-			m, err := NewManager(ManagerArgs{Config: TestConfig})
+			m, err := NewManager(TestConfig, ManagerArgs{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -113,9 +112,9 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should return an error if any Controllers fail to stop", func(done Done) {
-			m, err := NewManager(ManagerArgs{Config: TestConfig})
+			m, err := NewManager(TestConfig, ManagerArgs{})
 			Expect(err).NotTo(HaveOccurred())
-			c, err := m.NewController(Options{Name: "foo"}, rec)
+			c, err := m.NewController("foo", rec, Options{})
 			Expect(err).NotTo(HaveOccurred())
 			ctrl, ok := c.(*controller)
 			Expect(ok).To(BeTrue())
@@ -132,7 +131,7 @@ var _ = Describe("controller", func() {
 
 	Describe("Manager", func() {
 		It("should provide a function to get the Config", func() {
-			m, err := NewManager(ManagerArgs{Config: TestConfig})
+			m, err := NewManager(TestConfig, ManagerArgs{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -140,7 +139,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should provide a function to get the Client", func() {
-			m, err := NewManager(ManagerArgs{Config: TestConfig})
+			m, err := NewManager(TestConfig, ManagerArgs{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -148,7 +147,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should provide a function to get the Scheme", func() {
-			m, err := NewManager(ManagerArgs{Config: TestConfig})
+			m, err := NewManager(TestConfig, ManagerArgs{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -156,7 +155,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should provide a function to get the FieldIndexer", func() {
-			m, err := NewManager(ManagerArgs{Config: TestConfig})
+			m, err := NewManager(TestConfig, ManagerArgs{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -166,24 +165,24 @@ var _ = Describe("controller", func() {
 
 	Describe("Creating a Controller", func() {
 		It("should return an error if Name is not Specified", func() {
-			m, err := NewManager(ManagerArgs{Config: TestConfig})
+			m, err := NewManager(TestConfig, ManagerArgs{})
 			Expect(err).NotTo(HaveOccurred())
-			c, err := m.NewController(Options{}, rec)
+			c, err := m.NewController("", rec, Options{})
 			Expect(c).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Name for Controller"))
 		})
 
 		It("should return an error if Reconcile is not Specified", func() {
-			m, err := NewManager(ManagerArgs{Config: TestConfig})
+			m, err := NewManager(TestConfig, ManagerArgs{})
 			Expect(err).NotTo(HaveOccurred())
-			c, err := m.NewController(Options{Name: "foo"}, nil)
+			c, err := m.NewController("foo", nil, Options{})
 			Expect(c).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Reconcile"))
 
 		})
 
 		It("should immediately start the Controller if the ControllerManager has already Started", func() {
-			m, err := NewManager(ManagerArgs{Config: TestConfig})
+			m, err := NewManager(TestConfig, ManagerArgs{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -195,7 +194,7 @@ var _ = Describe("controller", func() {
 			}()
 			Eventually(func() bool { return mrg.started }).Should(BeTrue())
 
-			c, err := m.NewController(Options{Name: "Foo"}, rec)
+			c, err := m.NewController("foo", rec, Options{})
 			Expect(err).NotTo(HaveOccurred())
 			ctrl, ok := c.(*controller)
 			Expect(ok).To(BeTrue())
@@ -205,10 +204,10 @@ var _ = Describe("controller", func() {
 		})
 
 		It("NewController should return an error if injecting Reconcile fails", func(done Done) {
-			m, err := NewManager(ManagerArgs{Config: TestConfig})
+			m, err := NewManager(TestConfig, ManagerArgs{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := m.NewController(Options{Name: "foo"}, &failRec{})
+			c, err := m.NewController("foo", &failRec{}, Options{})
 			Expect(c).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
@@ -217,14 +216,14 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should provide an inject function for providing dependencies", func(done Done) {
-			m, err := NewManager(ManagerArgs{Config: TestConfig})
+			m, err := NewManager(TestConfig, ManagerArgs{})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
 
 			mrg.cache = &informertest.FakeInformers{}
 
-			c, err := m.NewController(Options{Name: "foo"}, rec)
+			c, err := m.NewController("foo", rec, Options{})
 			Expect(err).NotTo(HaveOccurred())
 			ctrl, ok := c.(*controller)
 			Expect(ok).To(BeTrue())

@@ -39,9 +39,10 @@ var testenv *test.Environment
 var config *rest.Config
 var clientset *kubernetes.Clientset
 var icache cache.Cache
-var stop = make(chan struct{})
+var stop chan struct{}
 
 var _ = BeforeSuite(func(done Done) {
+	stop = make(chan struct{})
 	logf.SetLogger(logf.ZapLogger(false))
 
 	testenv = &test.Environment{}

@@ -41,9 +41,6 @@ var log = logf.KBLog.WithName("controller").WithName("controller")
 
 // Options are the arguments for creating a new Controller
 type Options struct {
-	// Name is used to uniquely identify a controller in tracing, logging and monitoring.  Name is required.
-	Name string
-
 	// maxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 }

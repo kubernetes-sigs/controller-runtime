@@ -39,7 +39,9 @@ import (
 type Manager interface {
 	// NewController creates a new initialized Controller with the Reconcile function
 	// and registers it with the Manager.
-	NewController(Options, reconcile.Reconcile) (Controller, error)
+	// name is used to uniquely identify a controller in tracing, logging and monitoring.
+	// reconcile is called to reconcile an object.
+	NewController(name string, r reconcile.Reconcile, o Options) (Controller, error)
 
 	// Start starts all registered Controllers and blocks until the Stop channel is closed.
 	// Returns an error if there is an error starting any controller.
@@ -89,7 +91,7 @@ type controllerManager struct {
 	startCache func(stop <-chan struct{}) error
 }
 
-func (cm *controllerManager) NewController(ca Options, r reconcile.Reconcile) (Controller, error) {
+func (cm *controllerManager) NewController(name string, r reconcile.Reconcile, ca Options) (Controller, error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -97,7 +99,7 @@ func (cm *controllerManager) NewController(ca Options, r reconcile.Reconcile) (C
 		return nil, fmt.Errorf("must specify Reconcile")
 	}
 
-	if len(ca.Name) == 0 {
+	if len(name) == 0 {
 		return nil, fmt.Errorf("must specify Name for Controller")
 	}
 
@@ -117,9 +119,9 @@ func (cm *controllerManager) NewController(ca Options, r reconcile.Reconcile) (C
 		config:    cm.config,
 		scheme:    cm.scheme,
 		client:    cm.client,
-		queue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), ca.Name),
+		queue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), name),
 		maxConcurrentReconciles: ca.MaxConcurrentReconciles,
-		name:   ca.Name,
+		name:   name,
 		inject: cm.injectInto,
 	}
 	cm.controllers = append(cm.controllers, c)
@@ -208,13 +210,6 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 
 // ManagerArgs are the arguments for creating a new Manager
 type ManagerArgs struct {
-	// Config is the config used to talk to an apiserver.  Defaults to:
-	// 1. Config specified with the --config flag
-	// 2. Config specified with the KUBECONFIG environment variable
-	// 3. Incluster config (if running in a Pod)
-	// 4. $HOME/.kube/config
-	Config *rest.Config
-
 	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
 	// Defaults to the kubernetes/client-go scheme.Scheme
 	Scheme *runtime.Scheme
@@ -228,8 +223,8 @@ type ManagerArgs struct {
 }
 
 // NewManager returns a new fully initialized Manager.
-func NewManager(args ManagerArgs) (Manager, error) {
-	cm := &controllerManager{config: args.Config, scheme: args.Scheme, errChan: make(chan error)}
+func NewManager(config *rest.Config, args ManagerArgs) (Manager, error) {
+	cm := &controllerManager{config: config, scheme: args.Scheme, errChan: make(chan error)}
 
 	// Initialize a rest.config if none was specified
 	if cm.config == nil {

@@ -50,15 +50,15 @@ var _ = Describe("controller", func() {
 
 		It("should reconcile", func(done Done) {
 			By("Creating the Manager")
-			cm, err := controller.NewManager(controller.ManagerArgs{Config: cfg})
+			cm, err := controller.NewManager(cfg, controller.ManagerArgs{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
-			instance, err := cm.NewController(controller.Options{Name: "foo-controller"}, reconcile.Func(
+			instance, err := cm.NewController("foo-controller", reconcile.Func(
 				func(request reconcile.Request) (reconcile.Result, error) {
 					reconciled <- request
 					return reconcile.Result{}, nil
-				}))
+				}), controller.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Watching Resources")

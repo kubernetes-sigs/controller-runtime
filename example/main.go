@@ -22,6 +22,7 @@ import (
 	"log"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/client/config"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
@@ -31,6 +32,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
 
 func main() {
@@ -38,16 +40,16 @@ func main() {
 	logf.SetLogger(logf.ZapLogger(false))
 
 	// Setup a Manager
-	manager, err := controller.NewManager(controller.ManagerArgs{})
+	manager, err := controller.NewManager(config.GetConfigOrDie(), controller.ManagerArgs{})
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Setup a new controller to Reconcile ReplicaSets
 	c, err := manager.NewController(
-		controller.Options{Name: "foo-controller", MaxConcurrentReconciles: 1},
+		"foo-controller",
 		&reconcileReplicaSet{client: manager.GetClient()},
-	)
+		controller.Options{})
 	if err != nil {
 		log.Fatal(err)
 	}

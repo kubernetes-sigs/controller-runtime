@@ -19,7 +19,6 @@ package controller_test
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/manager"
@@ -27,11 +26,9 @@ import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/rest"
 )
 
-var _ = Describe("controller", func() {
+var _ = Describe("controller.Controller", func() {
 	var stop chan struct{}
 
 	rec := reconcile.Func(func(reconcile.Request) (reconcile.Result, error) {
@@ -92,39 +89,4 @@ func (*failRec) Reconcile(reconcile.Request) (reconcile.Result, error) {
 
 func (*failRec) InjectClient(client.Client) error {
 	return fmt.Errorf("expected error")
-}
-
-type injectable struct {
-	scheme func(scheme *runtime.Scheme) error
-	client func(client.Client) error
-	config func(config *rest.Config) error
-	cache  func(cache.Cache) error
-}
-
-func (i *injectable) InjectCache(c cache.Cache) error {
-	if i.cache == nil {
-		return nil
-	}
-	return i.cache(c)
-}
-
-func (i *injectable) InjectConfig(config *rest.Config) error {
-	if i.config == nil {
-		return nil
-	}
-	return i.config(config)
-}
-
-func (i *injectable) InjectClient(c client.Client) error {
-	if i.client == nil {
-		return nil
-	}
-	return i.client(c)
-}
-
-func (i *injectable) InjectScheme(scheme *runtime.Scheme) error {
-	if i.scheme == nil {
-		return nil
-	}
-	return i.scheme(scheme)
 }

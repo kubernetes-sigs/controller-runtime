@@ -24,12 +24,9 @@ import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/manager"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/predicate"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
 	"k8s.io/client-go/util/workqueue"
 )
-
-var log = logf.KBLog.WithName("controller")
 
 // Options are the arguments for creating a new Controller
 type Options struct {
@@ -43,6 +40,9 @@ type Options struct {
 // Controller is a work queue that watches for changes to objects (i.e. Create / Update / Delete events) and
 // then reconciles an object (i.e. make changes to ensure the system state matches what is specified in the object).
 type Controller interface {
+	// Reconcile is called to Reconcile an object by Namespace/Name
+	reconcile.Reconcile
+
 	// Watch takes events provided by a Source and uses the EventHandler to enqueue reconcile.Requests in
 	// response to the events.
 	//
@@ -68,14 +68,6 @@ func New(name string, mrg manager.Manager, options Options) (Controller, error) 
 		options.MaxConcurrentReconciles = 1
 	}
 
-	if options.Reconcile == nil {
-		options.Reconcile = reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
-			log.Error(nil, "Reconcile function not implemented", "Controller", name)
-			fmt.Printf("Received Reconcile request on Controller %s for %s/%s", name, o.Namespace, o.Name)
-			return reconcile.Result{}, nil
-		})
-	}
-
 	// Inject dependencies into Reconcile
 	if err := mrg.SetFields(options.Reconcile); err != nil {
 		return nil, err
@@ -83,12 +75,12 @@ func New(name string, mrg manager.Manager, options Options) (Controller, error) 
 
 	// Create controller with dependencies set
 	c := &controller.Controller{
-		Reconcile: options.Reconcile,
-		Cache:     mrg.GetCache(),
-		Config:    mrg.GetConfig(),
-		Scheme:    mrg.GetScheme(),
-		Client:    mrg.GetClient(),
-		Queue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), name),
+		Do:     options.Reconcile,
+		Cache:  mrg.GetCache(),
+		Config: mrg.GetConfig(),
+		Scheme: mrg.GetScheme(),
+		Client: mrg.GetClient(),
+		Queue:  workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), name),
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
 		Name: name,
 	}

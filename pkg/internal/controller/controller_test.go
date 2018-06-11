@@ -61,9 +61,9 @@ var _ = Describe("controller", func() {
 		informers = &informertest.FakeInformers{}
 		ctrl = &Controller{
 			MaxConcurrentReconciles: 1,
-			Reconcile:               fakeReconcile,
-			Queue:                   queue,
-			Cache:                   informers,
+			Do:    fakeReconcile,
+			Queue: queue,
+			Cache: informers,
 		}
 		ctrl.InjectFunc(func(interface{}) error { return nil })
 	})
@@ -72,7 +72,19 @@ var _ = Describe("controller", func() {
 		close(stop)
 	})
 
-	Describe("Starting a Controller", func() {
+	Describe("Reconcile", func() {
+		It("should call the Reconcile function", func() {
+			ctrl.Do = reconcile.Func(func(reconcile.Request) (reconcile.Result, error) {
+				return reconcile.Result{Requeue: true}, nil
+			})
+			result, err := ctrl.Reconcile(
+				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(reconcile.Result{Requeue: true}))
+		})
+	})
+
+	Describe("Start", func() {
 		It("should return an error if there is an error waiting for the informers", func(done Done) {
 			ctrl.WaitForCache = func(<-chan struct{}, ...toolscache.InformerSynced) bool { return false }
 			ctrl.Name = "foo"
@@ -105,7 +117,7 @@ var _ = Describe("controller", func() {
 		})
 	})
 
-	Describe("Calling Watch on a Controller", func() {
+	Describe("Watch", func() {
 		It("should inject dependencies into the Source", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
 			src.InjectCache(ctrl.Cache)
@@ -270,7 +282,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should continue to process additional queue items after the first", func(done Done) {
-			ctrl.Reconcile = reconcile.Func(func(reconcile.Request) (reconcile.Result, error) {
+			ctrl.Do = reconcile.Func(func(reconcile.Request) (reconcile.Result, error) {
 				defer GinkgoRecover()
 				Fail("Reconcile should not have been called")
 				return reconcile.Result{}, nil

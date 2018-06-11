@@ -81,9 +81,14 @@ func (o *objectCache) init(obj runtime.Object) error {
 	if err != nil {
 		return err
 	}
-	log.Info("Waiting to sync cache for type.", "Type", fmt.Sprintf("%T", obj))
-	toolscache.WaitForCacheSync(o.informers.stop, i.HasSynced)
-	log.Info("Finished to syncing cache for type.", "Type", fmt.Sprintf("%T", obj))
+	if o.informers.started {
+		log.Info("Waiting to sync cache for type.", "Type", fmt.Sprintf("%T", obj))
+		toolscache.WaitForCacheSync(o.informers.stop, i.HasSynced)
+		log.Info("Finished to syncing cache for type.", "Type", fmt.Sprintf("%T", obj))
+	} else {
+		return fmt.Errorf("must start Cache before calling Get or List %s %s",
+			"Object", fmt.Sprintf("%T", obj))
+	}
 	return nil
 }
 

@@ -18,9 +18,9 @@ package source_test
 
 import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
 	"k8s.io/api/core/v1"
 )
 

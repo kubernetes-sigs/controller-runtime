@@ -16,7 +16,7 @@ limitations under the License.
 
 package reconciletest
 
-import "github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
+import "github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
 
 var _ reconcile.Reconcile = &FakeReconcile{}
 

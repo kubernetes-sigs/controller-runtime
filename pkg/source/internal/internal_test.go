@@ -17,9 +17,9 @@ limitations under the License.
 package internal_test
 
 import (
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source/internal"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/source/internal"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/controllertest"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/predicate"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"

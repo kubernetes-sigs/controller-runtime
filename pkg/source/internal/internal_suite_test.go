@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package predicate_test
+package internal
 
 import (
 	"testing"
@@ -25,11 +25,11 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestPredicate(t *testing.T) {
+func TestInternal(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Predicate Suite", []Reporter{test.NewlineReporter{}})
+	RunSpecsWithDefaultAndCustomReporters(t, "Internal Suite", []Reporter{test.NewlineReporter{}})
 }
 
 var _ = BeforeSuite(func() {
-	logf.SetLogger(logf.ZapLogger(false))
+	logf.SetLogger(logf.ZapLogger(true))
 })

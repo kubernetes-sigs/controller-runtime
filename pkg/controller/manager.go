@@ -24,7 +24,7 @@ import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client/apiutil"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"

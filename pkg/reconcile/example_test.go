@@ -19,7 +19,7 @@ package reconcile_test
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
 	"k8s.io/apimachinery/pkg/types"
 )
 

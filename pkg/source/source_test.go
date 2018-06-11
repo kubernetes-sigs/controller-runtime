@@ -20,15 +20,15 @@ import (
 	"fmt"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/cache/informertest"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/predicate"
 	corev1 "k8s.io/api/core/v1"
 )
 

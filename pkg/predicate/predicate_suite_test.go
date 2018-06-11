@@ -14,20 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package predicate_test
+package predicate
 
 import (
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
+	"testing"
+
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/test"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
-var p predicate.Predicate
-
-// This example creates a new Predicate to drop Update Events where the Generation has not changed.
-func ExampleFuncs() {
-	p = predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()
-		},
-	}
+func TestPredicate(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecsWithDefaultAndCustomReporters(t, "Predicate Suite", []Reporter{test.NewlineReporter{}})
 }
+
+var _ = BeforeSuite(func() {
+	logf.SetLogger(logf.ZapLogger(false))
+})

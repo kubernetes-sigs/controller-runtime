@@ -19,15 +19,15 @@ package source
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source/internal"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/source/internal"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/predicate"
 )
 
 // Source is a source of events (eh.g. Create, Update, Delete operations on Kubernetes Objects, Webhook callbacks, etc)

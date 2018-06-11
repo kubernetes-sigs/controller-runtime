@@ -14,22 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package internal_test
+package event
 
 import (
-	"testing"
-
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/test"
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
-func TestInternal(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Internal Suite", []Reporter{test.NewlineReporter{}})
-}
+var _ = Describe("Event", func() {
 
-var _ = BeforeSuite(func() {
-	logf.SetLogger(logf.ZapLogger(true))
 })

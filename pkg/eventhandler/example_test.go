@@ -18,10 +18,10 @@ package eventhandler_test
 
 import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/eventhandler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"

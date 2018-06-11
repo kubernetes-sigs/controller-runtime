@@ -16,7 +16,7 @@ limitations under the License.
 
 package predicate
 
-import "github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
+import "github.com/kubernetes-sigs/controller-runtime/pkg/event"
 
 // Predicate filters events before enqueuing the keys.
 type Predicate interface {

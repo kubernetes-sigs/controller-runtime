@@ -35,7 +35,7 @@ func ExampleController() {
 		log.Fatal(err)
 	}
 	_, err = cm.NewController(
-		controller.Args{Name: "pod-controller", MaxConcurrentReconciles: 1},
+		controller.Options{Name: "pod-controller", MaxConcurrentReconciles: 1},
 		reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
 			// Your business logic to implement the API by creating, updating, deleting objects goes here.
 			return reconcile.Result{}, nil
@@ -52,7 +52,7 @@ func ExampleController_Watch() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	c, err := cm.NewController(controller.Args{Name: "foo-controller"}, nil)
+	c, err := cm.NewController(controller.Options{Name: "foo-controller"}, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -19,16 +19,17 @@ package controller
 import (
 	"fmt"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/cache/informertest"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer/informertest"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
+	toolscache "k8s.io/client-go/tools/cache"
 )
 
 var TestConfig *rest.Config
@@ -66,6 +67,30 @@ var _ = Describe("controller", func() {
 			Expect(err).To(Equal(expected))
 
 		})
+
+		It("should return an error it can't create a client.Client", func(done Done) {
+			m, err := NewManager(ManagerArgs{Config: TestConfig,
+				newClient: func(config *rest.Config, options client.Options) (client.Client, error) {
+					return nil, fmt.Errorf("expected error")
+				}})
+			Expect(m).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("expected error"))
+
+			close(done)
+		})
+
+		It("should return an error it can't create a cache.Cache", func(done Done) {
+			m, err := NewManager(ManagerArgs{Config: TestConfig,
+				newCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
+					return nil, fmt.Errorf("expected error")
+				}})
+			Expect(m).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("expected error"))
+
+			close(done)
+		})
 	})
 
 	Describe("Staring a Manager", func() {
@@ -74,16 +99,29 @@ var _ = Describe("controller", func() {
 			// TODO(community): write this
 		})
 
+		It("should return an error if it can't start the cache", func(done Done) {
+			m, err := NewManager(ManagerArgs{Config: TestConfig})
+			Expect(err).NotTo(HaveOccurred())
+			mrg, ok := m.(*controllerManager)
+			Expect(ok).To(BeTrue())
+			mrg.startCache = func(stop <-chan struct{}) error {
+				return fmt.Errorf("expected error")
+			}
+			Expect(m.Start(stop).Error()).To(ContainSubstring("expected error"))
+
+			close(done)
+		})
+
 		It("should return an error if any Controllers fail to stop", func(done Done) {
 			m, err := NewManager(ManagerArgs{Config: TestConfig})
 			Expect(err).NotTo(HaveOccurred())
-			c, err := m.NewController(Args{Name: "foo"}, rec)
+			c, err := m.NewController(Options{Name: "foo"}, rec)
 			Expect(err).NotTo(HaveOccurred())
 			ctrl, ok := c.(*controller)
 			Expect(ok).To(BeTrue())
 
 			// Make Controller startup fail
-			ctrl.waitForCache = func(stopCh <-chan struct{}, cacheSyncs ...cache.InformerSynced) bool { return false }
+			ctrl.waitForCache = func(stopCh <-chan struct{}, cacheSyncs ...toolscache.InformerSynced) bool { return false }
 			err = m.Start(stop)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("caches to sync"))
@@ -130,7 +168,7 @@ var _ = Describe("controller", func() {
 		It("should return an error if Name is not Specified", func() {
 			m, err := NewManager(ManagerArgs{Config: TestConfig})
 			Expect(err).NotTo(HaveOccurred())
-			c, err := m.NewController(Args{}, rec)
+			c, err := m.NewController(Options{}, rec)
 			Expect(c).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Name for Controller"))
 		})
@@ -138,7 +176,7 @@ var _ = Describe("controller", func() {
 		It("should return an error if Reconcile is not Specified", func() {
 			m, err := NewManager(ManagerArgs{Config: TestConfig})
 			Expect(err).NotTo(HaveOccurred())
-			c, err := m.NewController(Args{Name: "foo"}, nil)
+			c, err := m.NewController(Options{Name: "foo"}, nil)
 			Expect(c).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Reconcile"))
 
@@ -157,7 +195,7 @@ var _ = Describe("controller", func() {
 			}()
 			Eventually(func() bool { return mrg.started }).Should(BeTrue())
 
-			c, err := m.NewController(Args{Name: "Foo"}, rec)
+			c, err := m.NewController(Options{Name: "Foo"}, rec)
 			Expect(err).NotTo(HaveOccurred())
 			ctrl, ok := c.(*controller)
 			Expect(ok).To(BeTrue())
@@ -166,15 +204,27 @@ var _ = Describe("controller", func() {
 			Eventually(func() bool { return ctrl.started }).Should(BeTrue())
 		})
 
+		It("NewController should return an error if injecting Reconcile fails", func(done Done) {
+			m, err := NewManager(ManagerArgs{Config: TestConfig})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := m.NewController(Options{Name: "foo"}, &failRec{})
+			Expect(c).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("expected error"))
+
+			close(done)
+		})
+
 		It("should provide an inject function for providing dependencies", func(done Done) {
 			m, err := NewManager(ManagerArgs{Config: TestConfig})
 			Expect(err).NotTo(HaveOccurred())
 			mrg, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
 
-			mrg.informers = &informertest.FakeInformers{}
+			mrg.cache = &informertest.FakeInformers{}
 
-			c, err := m.NewController(Args{Name: "foo"}, rec)
+			c, err := m.NewController(Options{Name: "foo"}, rec)
 			Expect(err).NotTo(HaveOccurred())
 			ctrl, ok := c.(*controller)
 			Expect(ok).To(BeTrue())
@@ -191,14 +241,14 @@ var _ = Describe("controller", func() {
 					Expect(config).To(Equal(mrg.config))
 					return nil
 				},
-				client: func(client client.Interface) error {
+				client: func(client client.Client) error {
 					defer GinkgoRecover()
 					Expect(client).To(Equal(mrg.client))
 					return nil
 				},
-				informers: func(informers informer.Informers) error {
+				cache: func(c cache.Cache) error {
 					defer GinkgoRecover()
-					Expect(informers).To(Equal(mrg.informers))
+					Expect(c).To(Equal(mrg.cache))
 					return nil
 				},
 			})
@@ -208,7 +258,7 @@ var _ = Describe("controller", func() {
 
 			expected := fmt.Errorf("expected error")
 			err = ctrl.inject(&injectable{
-				client: func(client client.Interface) error {
+				client: func(client client.Client) error {
 					return expected
 				},
 			})
@@ -229,7 +279,7 @@ var _ = Describe("controller", func() {
 			Expect(err).To(Equal(expected))
 
 			err = ctrl.inject(&injectable{
-				informers: func(informers informer.Informers) error {
+				cache: func(c cache.Cache) error {
 					return expected
 				},
 			})
@@ -240,18 +290,31 @@ var _ = Describe("controller", func() {
 	})
 })
 
-type injectable struct {
-	scheme    func(scheme *runtime.Scheme) error
-	client    func(client.Interface) error
-	config    func(config *rest.Config) error
-	informers func(informer.Informers) error
+var _ reconcile.Reconcile = &failRec{}
+var _ inject.Client = &failRec{}
+
+type failRec struct{}
+
+func (*failRec) Reconcile(reconcile.Request) (reconcile.Result, error) {
+	return reconcile.Result{}, nil
 }
 
-func (i *injectable) InjectInformers(informers informer.Informers) error {
-	if i.informers == nil {
+func (*failRec) InjectClient(client.Client) error {
+	return fmt.Errorf("expected error")
+}
+
+type injectable struct {
+	scheme func(scheme *runtime.Scheme) error
+	client func(client.Client) error
+	config func(config *rest.Config) error
+	cache  func(cache.Cache) error
+}
+
+func (i *injectable) InjectCache(c cache.Cache) error {
+	if i.cache == nil {
 		return nil
 	}
-	return i.informers(informers)
+	return i.cache(c)
 }
 
 func (i *injectable) InjectConfig(config *rest.Config) error {
@@ -261,7 +324,7 @@ func (i *injectable) InjectConfig(config *rest.Config) error {
 	return i.config(config)
 }
 
-func (i *injectable) InjectClient(c client.Interface) error {
+func (i *injectable) InjectClient(c client.Client) error {
 	if i.client == nil {
 		return nil
 	}

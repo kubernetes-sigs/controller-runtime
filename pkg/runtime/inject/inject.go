@@ -17,23 +17,23 @@ limitations under the License.
 package inject
 
 import (
+	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 )
 
-// Informers is used by the ControllerManager to inject Informers into Sources, EventHandlers, Predicates, and
+// Cache is used by the ControllerManager to inject Cache into Sources, EventHandlers, Predicates, and
 // Reconciles
-type Informers interface {
-	InjectInformers(informer.Informers) error
+type Cache interface {
+	InjectCache(cache cache.Cache) error
 }
 
-// DoInformers will set informers on i and return the result if it implements Informers.  Returns
-//// false if i does not implement Informers.
-func DoInformers(informers informer.Informers, i interface{}) (bool, error) {
-	if s, ok := i.(Informers); ok {
-		return true, s.InjectInformers(informers)
+// CacheInto will set informers on i and return the result if it implements Cache.  Returns
+//// false if i does not implement Cache.
+func CacheInto(c cache.Cache, i interface{}) (bool, error) {
+	if s, ok := i.(Cache); ok {
+		return true, s.InjectCache(c)
 	}
 	return false, nil
 }
@@ -44,24 +44,24 @@ type Config interface {
 	InjectConfig(*rest.Config) error
 }
 
-// DoConfig will set config on i and return the result if it implements Config.  Returns
+// ConfigInto will set config on i and return the result if it implements Config.  Returns
 //// false if i does not implement Config.
-func DoConfig(config *rest.Config, i interface{}) (bool, error) {
+func ConfigInto(config *rest.Config, i interface{}) (bool, error) {
 	if s, ok := i.(Config); ok {
 		return true, s.InjectConfig(config)
 	}
 	return false, nil
 }
 
-// Client is used by the ControllerManager to inject Client into Sources, EventHandlers, Predicates, and
+// Client is used by the ControllerManager to inject client into Sources, EventHandlers, Predicates, and
 // Reconciles
 type Client interface {
-	InjectClient(client.Interface) error
+	InjectClient(client.Client) error
 }
 
-// DoClient will set client on i and return the result if it implements Client.  Returns
-//// false if i does not implement Client.
-func DoClient(client client.Interface, i interface{}) (bool, error) {
+// ClientInto will set client on i and return the result if it implements client.  Returns
+//// false if i does not implement client.
+func ClientInto(client client.Client, i interface{}) (bool, error) {
 	if s, ok := i.(Client); ok {
 		return true, s.InjectClient(client)
 	}
@@ -74,9 +74,9 @@ type Scheme interface {
 	InjectScheme(scheme *runtime.Scheme) error
 }
 
-// DoScheme will set client and return the result on i if it implements Scheme.  Returns
+// SchemeInto will set client and return the result on i if it implements Scheme.  Returns
 // false if i does not implement Scheme.
-func DoScheme(scheme *runtime.Scheme, i interface{}) (bool, error) {
+func SchemeInto(scheme *runtime.Scheme, i interface{}) (bool, error) {
 	if is, ok := i.(Scheme); ok {
 		return true, is.InjectScheme(scheme)
 	}

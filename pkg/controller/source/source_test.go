@@ -19,10 +19,10 @@ package source_test
 import (
 	"fmt"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/cache/informertest"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer/informertest"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -38,7 +38,7 @@ var _ = Describe("Source", func() {
 		var p *corev1.Pod
 		var ic *informertest.FakeInformers
 
-		BeforeEach(func() {
+		BeforeEach(func(done Done) {
 			ic = &informertest.FakeInformers{}
 			c = make(chan struct{})
 			p = &corev1.Pod{
@@ -48,6 +48,7 @@ var _ = Describe("Source", func() {
 					},
 				},
 			}
+			close(done)
 		})
 
 		Context("for a Pod resource", func() {
@@ -65,7 +66,7 @@ var _ = Describe("Source", func() {
 				instance := &source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				inject.DoInformers(ic, instance)
+				inject.CacheInto(ic, instance)
 				err := instance.Start(eventhandler.Funcs{
 					CreateFunc: func(q2 workqueue.RateLimitingInterface, evt event.CreateEvent) {
 						defer GinkgoRecover()
@@ -106,7 +107,7 @@ var _ = Describe("Source", func() {
 				instance := &source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				instance.InjectInformers(ic)
+				instance.InjectCache(ic)
 				err := instance.Start(eventhandler.Funcs{
 					CreateFunc: func(q2 workqueue.RateLimitingInterface, evt event.CreateEvent) {
 						defer GinkgoRecover()
@@ -156,7 +157,7 @@ var _ = Describe("Source", func() {
 				instance := &source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				inject.DoInformers(ic, instance)
+				inject.CacheInto(ic, instance)
 				err := instance.Start(eventhandler.Funcs{
 					CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
 						defer GinkgoRecover()
@@ -193,14 +194,14 @@ var _ = Describe("Source", func() {
 			instance := source.KindSource{Type: &corev1.Pod{}}
 			err := instance.Start(nil, nil)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must call InjectInformers on KindSource before calling Start"))
+			Expect(err.Error()).To(ContainSubstring("must call CacheInto on KindSource before calling Start"))
 
 			close(done)
 		})
 
 		It("should return an error from Start if a type was not provided", func(done Done) {
 			instance := source.KindSource{}
-			instance.InjectInformers(&informertest.FakeInformers{})
+			instance.InjectCache(&informertest.FakeInformers{})
 			err := instance.Start(nil, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("must specify KindSource.Type"))
@@ -216,7 +217,7 @@ var _ = Describe("Source", func() {
 				instance := &source.KindSource{
 					Type: &corev1.Pod{},
 				}
-				instance.InjectInformers(ic)
+				instance.InjectCache(ic)
 				err := instance.Start(eventhandler.Funcs{}, q)
 				Expect(err).To(HaveOccurred())
 

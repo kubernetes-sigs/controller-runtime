@@ -22,11 +22,11 @@ import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/event"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source/internal"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
 )
 
@@ -65,8 +65,8 @@ type KindSource struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
 	Type runtime.Object
 
-	// informers used to watch APIs
-	informers informer.Informers
+	// cache used to watch APIs
+	cache cache.Cache
 }
 
 var _ Source = &KindSource{}
@@ -81,13 +81,13 @@ func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.R
 		return fmt.Errorf("must specify KindSource.Type")
 	}
 
-	// informers should have been injected before Start was called
-	if ks.informers == nil {
-		return fmt.Errorf("must call InjectInformers on KindSource before calling Start")
+	// cache should have been injected before Start was called
+	if ks.cache == nil {
+		return fmt.Errorf("must call CacheInto on KindSource before calling Start")
 	}
 
-	// Lookup the Informer from the Informers and add an EventHandler which populates the Queue
-	i, err := ks.informers.InformerFor(ks.Type)
+	// Lookup the Informer from the Cache and add an EventHandler which populates the Queue
+	i, err := ks.cache.GetInformer(ks.Type)
 	if err != nil {
 		return err
 	}
@@ -95,13 +95,13 @@ func (ks *KindSource) Start(handler eventhandler.EventHandler, queue workqueue.R
 	return nil
 }
 
-var _ inject.Informers = &KindSource{}
+var _ inject.Cache = &KindSource{}
 
-// InjectInformers is internal should be called only by the Controller.  InjectInformers is used to inject
-// the Informers dependency initialized by the ControllerManager.
-func (ks *KindSource) InjectInformers(i informer.Informers) error {
-	if ks.informers == nil {
-		ks.informers = i
+// InjectCache is internal should be called only by the Controller.  InjectCache is used to inject
+// the Cache dependency initialized by the ControllerManager.
+func (ks *KindSource) InjectCache(c cache.Cache) error {
+	if ks.cache == nil {
+		ks.cache = c
 	}
 	return nil
 }

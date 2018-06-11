@@ -18,12 +18,13 @@ package controller
 
 import (
 	"fmt"
+
 	"sync"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/client/apiutil"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/apiutil"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,7 +39,7 @@ import (
 type Manager interface {
 	// NewController creates a new initialized Controller with the Reconcile function
 	// and registers it with the Manager.
-	NewController(Args, reconcile.Reconcile) (Controller, error)
+	NewController(Options, reconcile.Reconcile) (Controller, error)
 
 	// Start starts all registered Controllers and blocks until the Stop channel is closed.
 	// Returns an error if there is an error starting any controller.
@@ -50,10 +51,10 @@ type Manager interface {
 	// GetScheme returns and initialized Scheme
 	GetScheme() *runtime.Scheme
 
-	// GetClient returns a Client configured with the Config
-	GetClient() client.Interface
+	// GetClient returns a client configured with the Config
+	GetClient() client.Client
 
-	// GetFieldIndexer returns a client.FieldIndexer configured with the Client
+	// GetFieldIndexer returns a client.FieldIndexer configured with the client
 	GetFieldIndexer() client.FieldIndexer
 }
 
@@ -70,14 +71,13 @@ type controllerManager struct {
 	// controllers is the set of Controllers that the controllerManager injects deps into and Starts.
 	controllers []*controller
 
-	// informers are injected into Controllers (,and transitively EventHandlers, Sources and Predicates).
-	informers informer.Informers
+	cache cache.Cache
 
 	// TODO(directxman12): Provide an escape hatch to get individual indexers
 	// client is the client injected into Controllers (and EventHandlers, Sources and Predicates).
-	client client.Interface
+	client client.Client
 
-	// fieldIndexes knows how to add field indexes over the Informers used by this controller,
+	// fieldIndexes knows how to add field indexes over the Cache used by this controller,
 	// which can later be consumed via field selectors from the injected client.
 	fieldIndexes client.FieldIndexer
 
@@ -85,9 +85,11 @@ type controllerManager struct {
 	started bool
 	errChan chan error
 	stop    <-chan struct{}
+
+	startCache func(stop <-chan struct{}) error
 }
 
-func (cm *controllerManager) NewController(ca Args, r reconcile.Reconcile) (Controller, error) {
+func (cm *controllerManager) NewController(ca Options, r reconcile.Reconcile) (Controller, error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -111,7 +113,7 @@ func (cm *controllerManager) NewController(ca Args, r reconcile.Reconcile) (Cont
 	// Create controller with dependencies set
 	c := &controller{
 		reconcile: r,
-		informers: cm.informers,
+		cache:     cm.cache,
 		config:    cm.config,
 		scheme:    cm.scheme,
 		client:    cm.client,
@@ -132,16 +134,16 @@ func (cm *controllerManager) NewController(ca Args, r reconcile.Reconcile) (Cont
 }
 
 func (cm *controllerManager) injectInto(i interface{}) error {
-	if _, err := inject.DoConfig(cm.config, i); err != nil {
+	if _, err := inject.ConfigInto(cm.config, i); err != nil {
 		return err
 	}
-	if _, err := inject.DoClient(cm.client, i); err != nil {
+	if _, err := inject.ClientInto(cm.client, i); err != nil {
 		return err
 	}
-	if _, err := inject.DoScheme(cm.scheme, i); err != nil {
+	if _, err := inject.SchemeInto(cm.scheme, i); err != nil {
 		return err
 	}
-	if _, err := inject.DoInformers(cm.informers, i); err != nil {
+	if _, err := inject.CacheInto(cm.cache, i); err != nil {
 		return err
 	}
 	return nil
@@ -151,7 +153,7 @@ func (cm *controllerManager) GetConfig() *rest.Config {
 	return cm.config
 }
 
-func (cm *controllerManager) GetClient() client.Interface {
+func (cm *controllerManager) GetClient() client.Client {
 	return cm.client
 }
 
@@ -164,23 +166,36 @@ func (cm *controllerManager) GetFieldIndexer() client.FieldIndexer {
 }
 
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
-	// Start the Informers.
-	cm.stop = stop
-	if err := cm.informers.Start(stop); err != nil {
-		return err
-	}
+	func() {
+		cm.mu.Lock()
+		defer cm.mu.Unlock()
 
-	// Start the controllers after the promises
-	for _, c := range cm.controllers {
-		// Controllers block, but we want to return an error if any have an error starting.
-		// Write any Start errors to a channel so we can return them
-		ctrl := c
+		// Start the Cache.
+		cm.stop = stop
+
+		// Allow the function to start the cache to be mocked out for testing
+		if cm.startCache == nil {
+			cm.startCache = cm.cache.Start
+		}
 		go func() {
-			cm.errChan <- ctrl.Start(stop)
+			if err := cm.startCache(stop); err != nil {
+				cm.errChan <- err
+			}
 		}()
-	}
 
-	cm.started = true
+		// Start the controllers after the promises
+		for _, c := range cm.controllers {
+			// Controllers block, but we want to return an error if any have an error starting.
+			// Write any Start errors to a channel so we can return them
+			ctrl := c
+			go func() {
+				cm.errChan <- ctrl.Start(stop)
+			}()
+		}
+
+		cm.started = true
+	}()
+
 	select {
 	case <-stop:
 		// We are done
@@ -206,6 +221,10 @@ type ManagerArgs struct {
 
 	// Mapper is the rest mapper used to map go types to Kubernetes APIs
 	MapperProvider func(c *rest.Config) (meta.RESTMapper, error)
+
+	// Dependency injection for testing
+	newCache  func(config *rest.Config, opts cache.Options) (cache.Cache, error)
+	newClient func(config *rest.Config, options client.Options) (client.Client, error)
 }
 
 // NewManager returns a new fully initialized Manager.
@@ -222,17 +241,7 @@ func NewManager(args ManagerArgs) (Manager, error) {
 		cm.scheme = scheme.Scheme
 	}
 
-	spi := &informer.SelfPopulatingInformers{
-		Config: cm.config,
-		Scheme: cm.scheme,
-	}
-	cm.informers = spi
-
-	// Inject a Read / Write client into all controllers
-	// TODO(directxman12): Figure out how to allow users to request a client without requesting a watch
-	objCache := client.NewObjectCache(spi.KnownInformersByType(), cm.scheme)
-	spi.Callbacks = append(spi.Callbacks, objCache)
-
+	// Create a new RESTMapper for mapping GroupVersionKinds to Resources
 	if args.MapperProvider == nil {
 		args.MapperProvider = apiutil.NewDiscoveryRESTMapper
 	}
@@ -242,10 +251,26 @@ func NewManager(args ManagerArgs) (Manager, error) {
 		return nil, err
 	}
 
-	cm.fieldIndexes = &client.InformerFieldIndexer{Informers: spi}
+	// Allow newClient to be mocked
+	if args.newClient == nil {
+		args.newClient = client.New
+	}
+	// Create the Client for Write operations.
+	writeObj, err := args.newClient(cm.config, client.Options{Scheme: cm.scheme, Mapper: mapper})
+	if err != nil {
+		return nil, err
+	}
 
-	// Inject the client after all the watches have been set
-	writeObj := &client.Client{Config: cm.config, Scheme: cm.scheme, Mapper: mapper}
-	cm.client = client.SplitReaderWriter{ReadInterface: objCache, WriteInterface: writeObj}
+	// TODO(directxman12): Figure out how to allow users to request a client without requesting a watch
+	if args.newCache == nil {
+		args.newCache = cache.New
+	}
+	cm.cache, err = args.newCache(cm.config, cache.Options{Scheme: cm.scheme, Mapper: mapper})
+	if err != nil {
+		return nil, err
+	}
+
+	cm.fieldIndexes = cm.cache
+	cm.client = client.DelegatingClient{ReadInterface: cm.cache, WriteInterface: writeObj}
 	return cm, nil
 }

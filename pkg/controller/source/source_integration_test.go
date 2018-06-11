@@ -41,7 +41,7 @@ var _ = Describe("Source", func() {
 	var ns string
 	count := 0
 
-	BeforeEach(func() {
+	BeforeEach(func(done Done) {
 		// Create the namespace for the test
 		ns = fmt.Sprintf("controller-source-kindsource-%v", count)
 		count++
@@ -53,21 +53,25 @@ var _ = Describe("Source", func() {
 		q = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 		c1 = make(chan interface{})
 		c2 = make(chan interface{})
+
+		close(done)
 	})
 
 	JustBeforeEach(func() {
 		instance1 = &source.KindSource{Type: obj}
-		inject.DoInformers(icache, instance1)
+		inject.CacheInto(icache, instance1)
 
 		instance2 = &source.KindSource{Type: obj}
-		inject.DoInformers(icache, instance2)
+		inject.CacheInto(icache, instance2)
 	})
 
-	AfterEach(func() {
+	AfterEach(func(done Done) {
 		err := clientset.CoreV1().Namespaces().Delete(ns, &metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		close(c1)
 		close(c2)
+
+		close(done)
 	})
 
 	Describe("KindSource", func() {
@@ -126,10 +130,6 @@ var _ = Describe("Source", func() {
 				// Create 2 instances
 				instance1.Start(handler1, q)
 				instance2.Start(handler2, q)
-
-				// Start the cache
-				err = icache.Start(stop)
-				Expect(err).NotTo(HaveOccurred())
 
 				By("Creating a Deployment and expecting the CreateEvent.")
 				created, err = client.Create(deployment)

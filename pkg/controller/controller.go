@@ -21,17 +21,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/eventhandler"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/predicate"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/reconcile"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/source"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
+	toolscache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
 	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
@@ -39,8 +39,8 @@ import (
 
 var log = logf.KBLog.WithName("controller").WithName("controller")
 
-// Args are the arguments for creating a new Controller
-type Args struct {
+// Options are the arguments for creating a new Controller
+type Options struct {
 	// Name is used to uniquely identify a controller in tracing, logging and monitoring.  Name is required.
 	Name string
 
@@ -77,13 +77,13 @@ type controller struct {
 	reconcile reconcile.Reconcile
 
 	// client is a lazily initialized client.  The controllerManager will initialize this when Start is called.
-	client client.Interface
+	client client.Client
 
 	// scheme is injected by the controllerManager when controllerManager.Start is called
 	scheme *runtime.Scheme
 
 	// informers are injected by the controllerManager when controllerManager.Start is called
-	informers informer.Informers
+	cache cache.Cache
 
 	// config is the rest.config used to talk to the apiserver.  Defaults to one of in-cluster, environment variable
 	// specified, or the ~/.kube/config.
@@ -104,7 +104,7 @@ type controller struct {
 
 	// waitForCache allows tests to mock out the waitForCache function to return an error
 	// defaults to cache.WaitForCacheSync
-	waitForCache func(stopCh <-chan struct{}, cacheSyncs ...cache.InformerSynced) bool
+	waitForCache func(stopCh <-chan struct{}, cacheSyncs ...toolscache.InformerSynced) bool
 
 	// started is true if the Controller has been started
 	started bool
@@ -147,14 +147,14 @@ func (c *controller) Start(stop <-chan struct{}) error {
 	log.Info("Starting controller", "controller", c.name)
 
 	// Wait for the caches to be synced before starting workers
-	allInformers := c.informers.KnownInformersByType()
-	syncedFuncs := make([]cache.InformerSynced, 0, len(allInformers))
+	allInformers := c.cache.KnownInformersByType()
+	syncedFuncs := make([]toolscache.InformerSynced, 0, len(allInformers))
 	for _, informer := range allInformers {
 		syncedFuncs = append(syncedFuncs, informer.HasSynced)
 	}
 
 	if c.waitForCache == nil {
-		c.waitForCache = cache.WaitForCacheSync
+		c.waitForCache = toolscache.WaitForCacheSync
 	}
 	if ok := c.waitForCache(stop, syncedFuncs...); !ok {
 		// This code is unreachable right now since WaitForCacheSync will never return an error

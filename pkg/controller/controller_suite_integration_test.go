@@ -38,7 +38,7 @@ var testenv *test.Environment
 var cfg *rest.Config
 var clientset *kubernetes.Clientset
 
-var _ = BeforeSuite(func() {
+var _ = BeforeSuite(func(done Done) {
 	logf.SetLogger(logf.ZapLogger(false))
 
 	testenv = &test.Environment{}
@@ -52,7 +52,9 @@ var _ = BeforeSuite(func() {
 
 	clientset, err = kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())
-})
+
+	close(done)
+}, 60)
 
 var _ = AfterSuite(func() {
 	testenv.Stop()

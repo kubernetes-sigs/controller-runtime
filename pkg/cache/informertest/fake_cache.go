@@ -17,25 +17,28 @@ limitations under the License.
 package informertest
 
 import (
+	"context"
+
+	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/controller/controllertest"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/informer"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/cache"
+	toolscache "k8s.io/client-go/tools/cache"
 )
 
-var _ informer.Informers = &FakeInformers{}
+var _ cache.Cache = &FakeInformers{}
 
 // FakeInformers is a fake implementation of Informers
 type FakeInformers struct {
-	InformersByGVK map[schema.GroupVersionKind]cache.SharedIndexInformer
+	InformersByGVK map[schema.GroupVersionKind]toolscache.SharedIndexInformer
 	Scheme         *runtime.Scheme
 	Error          error
 }
 
-// InformerForKind implements Informers
-func (c *FakeInformers) InformerForKind(gvk schema.GroupVersionKind) (cache.SharedIndexInformer, error) {
+// GetInformerForKind implements Informers
+func (c *FakeInformers) GetInformerForKind(gvk schema.GroupVersionKind) (toolscache.SharedIndexInformer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}
@@ -56,8 +59,8 @@ func (c *FakeInformers) FakeInformerForKind(gvk schema.GroupVersionKind) (*contr
 	return i.(*controllertest.FakeInformer), nil
 }
 
-// InformerFor implements Informers
-func (c *FakeInformers) InformerFor(obj runtime.Object) (cache.SharedIndexInformer, error) {
+// GetInformer implements Informers
+func (c *FakeInformers) GetInformer(obj runtime.Object) (toolscache.SharedIndexInformer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}
@@ -67,7 +70,7 @@ func (c *FakeInformers) InformerFor(obj runtime.Object) (cache.SharedIndexInform
 }
 
 // KnownInformersByType implements Informers
-func (c *FakeInformers) KnownInformersByType() map[schema.GroupVersionKind]cache.SharedIndexInformer {
+func (c *FakeInformers) KnownInformersByType() map[schema.GroupVersionKind]toolscache.SharedIndexInformer {
 	return c.InformersByGVK
 }
 
@@ -85,12 +88,12 @@ func (c *FakeInformers) FakeInformerFor(obj runtime.Object) (*controllertest.Fak
 	return i.(*controllertest.FakeInformer), nil
 }
 
-func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, _ runtime.Object) (cache.SharedIndexInformer, error) {
+func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, _ runtime.Object) (toolscache.SharedIndexInformer, error) {
 	if c.Error != nil {
 		return nil, c.Error
 	}
 	if c.InformersByGVK == nil {
-		c.InformersByGVK = map[schema.GroupVersionKind]cache.SharedIndexInformer{}
+		c.InformersByGVK = map[schema.GroupVersionKind]toolscache.SharedIndexInformer{}
 	}
 	informer, ok := c.InformersByGVK[gvk]
 	if ok {
@@ -104,4 +107,19 @@ func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, _ runtime.Objec
 // Start implements Informers
 func (c *FakeInformers) Start(stopCh <-chan struct{}) error {
 	return c.Error
+}
+
+// IndexField implements Cache
+func (c *FakeInformers) IndexField(obj runtime.Object, field string, extractValue client.IndexerFunc) error {
+	return nil
+}
+
+// Get implements Cache
+func (c *FakeInformers) Get(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+	return nil
+}
+
+// List implements Cache
+func (c *FakeInformers) List(ctx context.Context, opts *client.ListOptions, list runtime.Object) error {
+	return nil
 }

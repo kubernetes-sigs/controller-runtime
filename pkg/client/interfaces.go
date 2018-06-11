@@ -41,8 +41,8 @@ type WriteInterface interface {
 	Update(ctx context.Context, obj runtime.Object) error
 }
 
-// Interface knows how to perform CRUD operations on Kubernetes objects.
-type Interface interface {
+// Client knows how to perform CRUD operations on Kubernetes objects.
+type Client interface {
 	ReadInterface
 	WriteInterface
 }

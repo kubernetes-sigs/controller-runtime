@@ -93,7 +93,7 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 	if _, err := inject.CacheInto(cm.cache, i); err != nil {
 		return err
 	}
-	if _, err := inject.InjectInjector(cm.SetFields, i); err != nil {
+	if _, err := inject.InjectorInto(cm.SetFields, i); err != nil {
 		return err
 	}
 	return nil

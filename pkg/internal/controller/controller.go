@@ -41,6 +41,7 @@ var log = logf.KBLog.WithName("controller")
 
 var _ inject.Injector = &Controller{}
 
+// Controller implements controller.Controller
 type Controller struct {
 	// Name is used to uniquely identify a Controller in tracing, logging and monitoring.  Name is required.
 	Name string
@@ -89,6 +90,7 @@ type Controller struct {
 	// TODO(community): Consider initializing a logger with the Controller Name as the tag
 }
 
+// Watch implements controller.Controller
 func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prct ...predicate.Predicate) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -112,6 +114,7 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	return src.Start(evthdler, c.Queue, prct...)
 }
 
+// Start implements controller.Controller
 func (c *Controller) Start(stop <-chan struct{}) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

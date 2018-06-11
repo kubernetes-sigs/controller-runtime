@@ -74,7 +74,7 @@ type Scheme interface {
 	InjectScheme(scheme *runtime.Scheme) error
 }
 
-// SchemeInto will set client and return the result on i if it implements Scheme.  Returns
+// SchemeInto will set scheme and return the result on i if it implements Scheme.  Returns
 // false if i does not implement Scheme.
 func SchemeInto(scheme *runtime.Scheme, i interface{}) (bool, error) {
 	if is, ok := i.(Scheme); ok {
@@ -86,11 +86,14 @@ func SchemeInto(scheme *runtime.Scheme, i interface{}) (bool, error) {
 // Func injects dependencies into i.
 type Func func(i interface{}) error
 
+// Injector is used by the ControllerManager to inject Func into Controllers
 type Injector interface {
 	InjectFunc(f Func) error
 }
 
-func InjectInjector(f Func, i interface{}) (bool, error) {
+// InjectorInto will set f and return the result on i if it implements Injector.  Returns
+// false if i does not implement Injector.
+func InjectorInto(f Func, i interface{}) (bool, error) {
 	if ii, ok := i.(Injector); ok {
 		return true, ii.InjectFunc(f)
 	}

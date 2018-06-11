@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 /*
-Package eventhandler defines EventHandlers that enqueue reconcile.Requests in response to Create, Update, Deletion Events
+Package handler defines EventHandlers that enqueue reconcile.Requests in response to Create, Update, Deletion Events
 observed from Watching Kubernetes APIs.
 
 EventHandlers

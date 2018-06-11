@@ -54,6 +54,7 @@ type Controller interface {
 	Start(stop <-chan struct{}) error
 }
 
+// New returns a new Controller registered with mrg.
 func New(name string, mrg manager.Manager, options Options) (Controller, error) {
 	if options.Reconcile == nil {
 		return nil, fmt.Errorf("must specify Reconcile")
@@ -65,6 +66,14 @@ func New(name string, mrg manager.Manager, options Options) (Controller, error) 
 
 	if options.MaxConcurrentReconciles <= 0 {
 		options.MaxConcurrentReconciles = 1
+	}
+
+	if options.Reconcile == nil {
+		options.Reconcile = reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
+			log.Error(nil, "Reconcile function not implemented", "Controller", name)
+			fmt.Printf("Received Reconcile request on Controller %s for %s/%s", name, o.Namespace, o.Name)
+			return reconcile.Result{}, nil
+		})
 	}
 
 	// Inject dependencies into Reconcile
@@ -84,7 +93,6 @@ func New(name string, mrg manager.Manager, options Options) (Controller, error) 
 		Name: name,
 	}
 
-	// Add the controller as a Manager componentsw
-	mrg.Add(c)
-	return c, nil
+	// Add the controller as a Manager components
+	return c, mrg.Add(c)
 }

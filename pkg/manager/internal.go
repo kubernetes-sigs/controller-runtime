@@ -96,6 +96,9 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 	if _, err := inject.InjectorInto(cm.SetFields, i); err != nil {
 		return err
 	}
+	if _, err := inject.StopChannelInto(cm.stop, i); err != nil {
+		return err
+	}
 	return nil
 }
 

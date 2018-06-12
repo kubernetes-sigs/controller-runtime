@@ -83,6 +83,21 @@ func SchemeInto(scheme *runtime.Scheme, i interface{}) (bool, error) {
 	return false, nil
 }
 
+// Stoppable is used by the ControllerManager to inject stop channel into Sources,
+// EventHandlers, Predicates, and Reconciles.
+type Stoppable interface {
+	InjectStopChannel(<-chan struct{}) error
+}
+
+// StopChannelInto will set stop channel on i and return the result if it implements Stoppable.
+// Returns false if i does not implement Stoppable.
+func StopChannelInto(stop <-chan struct{}, i interface{}) (bool, error) {
+	if s, ok := i.(Stoppable); ok {
+		return true, s.InjectStopChannel(stop)
+	}
+	return false, nil
+}
+
 // Func injects dependencies into i.
 type Func func(i interface{}) error
 

@@ -36,5 +36,9 @@ func ExampleKind() {
 // provided by the event.
 func ExampleChannel() {
 	events := make(chan event.GenericEvent)
-	ctrl.Watch(source.Channel(events), &handler.Enqueue{})
+
+	ctrl.Watch(
+		&source.Channel{Source: events},
+		&handler.Enqueue{},
+	)
 }

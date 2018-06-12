@@ -18,6 +18,7 @@ package source
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
@@ -28,6 +29,11 @@ import (
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/predicate"
+)
+
+const (
+	// defaultBufferSize is the default number of event notifications that can be buffered.
+	defaultBufferSize = 1024
 )
 
 // Source is a source of events (eh.g. Create, Update, Delete operations on Kubernetes Objects, Webhook callbacks, etc)
@@ -45,19 +51,128 @@ type Source interface {
 	Start(handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
 }
 
+var _ Source = &Channel{}
+
 // Channel is used to provide a source of events originating outside the cluster
 // (eh.g. GitHub Webhook callback).  Channel requires the user to wire the external
 // source (eh.g. http handler) to write GenericEvents to the underlying channel.
-type Channel chan event.GenericEvent
+type Channel struct {
+	// once ensures the event distribution goroutine will be performed only once
+	once sync.Once
 
-var _ Source = Channel(make(chan event.GenericEvent))
+	// Source is the source channel to fetch GenericEvents
+	Source <-chan event.GenericEvent
+
+	// stop is to end ongoing goroutine, and close the channels
+	stop <-chan struct{}
+
+	// dest is the destination channels of the added event handlers
+	dest []chan event.GenericEvent
+
+	// DestBufferSize is the specified buffer size of dest channels.
+	// Default to 1024 if not specified.
+	DestBufferSize int
+
+	// destLock is to ensure the destination channels are safely added/removed
+	destLock sync.Mutex
+}
+
+var _ inject.Stoppable = &Channel{}
+
+// InjectStopChannel is internal should be called only by the Controller.
+// It is used to inject the stop channel initialized by the ControllerManager.
+func (cs *Channel) InjectStopChannel(stop <-chan struct{}) error {
+	if cs.stop == nil {
+		cs.stop = stop
+	}
+
+	return nil
+}
 
 // Start implements Source and should only be called by the Controller.
-func (ks Channel) Start(
+func (cs *Channel) Start(
 	handler handler.EventHandler,
 	queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
+	// Source should have been specified by the user.
+	if cs.Source == nil {
+		return fmt.Errorf("must specify Channel.Source")
+	}
+
+	// stop should have been injected before Start was called
+	if cs.stop == nil {
+		return fmt.Errorf("must call InjectStop on Channel before calling Start")
+	}
+
+	// use default value if DestBufferSize not specified
+	if cs.DestBufferSize == 0 {
+		cs.DestBufferSize = defaultBufferSize
+	}
+
+	cs.once.Do(func() {
+		// Distribute GenericEvents to all EventHandler / Queue pairs Watching this source
+		go cs.syncLoop()
+	})
+
+	dst := make(chan event.GenericEvent, cs.DestBufferSize)
+	go func() {
+		for evt := range dst {
+			shouldHandle := true
+			for _, p := range prct {
+				if !p.Generic(evt) {
+					shouldHandle = false
+					break
+				}
+			}
+
+			if shouldHandle {
+				handler.Generic(queue, evt)
+			}
+		}
+	}()
+
+	cs.destLock.Lock()
+	defer cs.destLock.Unlock()
+
+	cs.dest = append(cs.dest, dst)
+
 	return nil
+}
+
+func (cs *Channel) doStop() {
+	cs.destLock.Lock()
+	defer cs.destLock.Unlock()
+
+	for _, dst := range cs.dest {
+		close(dst)
+	}
+}
+
+func (cs *Channel) distribute(evt event.GenericEvent) {
+	cs.destLock.Lock()
+	defer cs.destLock.Unlock()
+
+	for _, dst := range cs.dest {
+		// We cannot make it under goroutine here, or we'll meet the
+		// race condition of writing message to closed channels.
+		// To avoid blocking, the dest channels are expected to be of
+		// proper buffer size. If we still see it blocked, then
+		// the controller is thought to be in an abnormal state.
+		dst <- evt
+	}
+}
+
+func (cs *Channel) syncLoop() {
+	for {
+		select {
+		case <-cs.stop:
+			// Close destination channels
+			cs.doStop()
+			return
+		case evt := <-cs.Source:
+			cs.distribute(evt)
+		}
+	}
 }
 
 // Kind is used to provide a source of events originating inside the cluster from Watches (eh.g. Pod Create)

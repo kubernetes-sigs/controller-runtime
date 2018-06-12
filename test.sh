@@ -139,8 +139,20 @@ gometalinter.v2 --disable-all \
 
 header_text "running go test"
 
-go test ./pkg/...
+go test ./pkg/... -parallel 4
 
 header_text "running go install"
 
 go install ./example
+
+header_text "running coverage"
+
+# Verify no coverage regressions have been introduced.  Remove the exception list from here
+# once the coverage has been brought back up
+if [[ ! $(go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "100" | grep -v "no test files" | grep -v "github.com/kubernetes-sigs/controller-runtime/pkg/admission/certprovisioner" | grep -v "github.com/kubernetes-sigs/controller-runtime/pkg/internal/admission" | grep -v "github.com/kubernetes-sigs/controller-runtime/pkg/cache" | grep -v "github.com/kubernetes-sigs/controller-runtime/pkg/client" | grep -v "github.com/kubernetes-sigs/controller-runtime/pkg/event") ]]; then
+echo "ok"
+else
+echo "missing test coverage"
+exit 1
+fi
+

@@ -149,7 +149,7 @@ header_text "running coverage"
 
 # Verify no coverage regressions have been introduced.  Remove the exception list from here
 # once the coverage has been brought back up
-if [[ ! $(go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "100" | grep -v "no test files" | grep -v "github.com/kubernetes-sigs/controller-runtime/pkg/admission/certprovisioner" | grep -v "github.com/kubernetes-sigs/controller-runtime/pkg/internal/admission" | grep -v "github.com/kubernetes-sigs/controller-runtime/pkg/cache" | grep -v "github.com/kubernetes-sigs/controller-runtime/pkg/client" | grep -v "github.com/kubernetes-sigs/controller-runtime/pkg/event") ]]; then
+if [[ ! $(go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements"  | grep -v "pkg/admission/certprovisioner\|pkg/internal/admission\|pkg/cache\|pkg/client\|pkg/event\|pkg/client/config\|pkg/controller/controllertest\|pkg/reconcile/reconciletest\|\|pkg/runtime/inject\|pkg/runtime/log\|\|pkg/runtime/signals\|pkg/test\|pkg/runtime/inject\|pkg/runtime/signals") ]]; then
 echo "ok"
 else
 echo "missing test coverage"

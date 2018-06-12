@@ -43,7 +43,10 @@ func (c *FakeInformers) GetInformerForKind(gvk schema.GroupVersionKind) (toolsca
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}
-	obj, _ := c.Scheme.New(gvk)
+	obj, err := c.Scheme.New(gvk)
+	if err != nil {
+		return nil, err
+	}
 	return c.informerFor(gvk, obj)
 }
 
@@ -52,7 +55,10 @@ func (c *FakeInformers) FakeInformerForKind(gvk schema.GroupVersionKind) (*contr
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}
-	obj, _ := c.Scheme.New(gvk)
+	obj, err := c.Scheme.New(gvk)
+	if err != nil {
+		return nil, err
+	}
 	i, err := c.informerFor(gvk, obj)
 	if err != nil {
 		return nil, err
@@ -65,7 +71,10 @@ func (c *FakeInformers) GetInformer(obj runtime.Object) (toolscache.SharedIndexI
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}
-	gvks, _, _ := c.Scheme.ObjectKinds(obj)
+	gvks, _, err := c.Scheme.ObjectKinds(obj)
+	if err != nil {
+		return nil, err
+	}
 	gvk := gvks[0]
 	return c.informerFor(gvk, obj)
 }
@@ -83,7 +92,10 @@ func (c *FakeInformers) FakeInformerFor(obj runtime.Object) (*controllertest.Fak
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}
-	gvks, _, _ := c.Scheme.ObjectKinds(obj)
+	gvks, _, err := c.Scheme.ObjectKinds(obj)
+	if err != nil {
+		return nil, err
+	}
 	gvk := gvks[0]
 	i, err := c.informerFor(gvk, obj)
 	if err != nil {

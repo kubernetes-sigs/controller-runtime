@@ -14,12 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package manager
+package log
 
-// func SetCacheForTest(options *Options, c func(config *rest.Config, opts cache.Options) (cache.Cache, error)) {
-// 	options.newCache = c
-// }
+import (
+	"testing"
 
-// func SetClientForTest(options *Options, c func(config *rest.Config, options client.Options) (client.Client, error)) {
-// 	options.newClient = c
-// }
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/test"
+)
+
+func TestSource(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecsWithDefaultAndCustomReporters(t, "Runtime Log Suite", []Reporter{test.NewlineReporter{}})
+}

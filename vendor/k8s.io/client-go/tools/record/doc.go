@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,12 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package manager
-
-// func SetCacheForTest(options *Options, c func(config *rest.Config, opts cache.Options) (cache.Cache, error)) {
-// 	options.newCache = c
-// }
-
-// func SetClientForTest(options *Options, c func(config *rest.Config, options client.Options) (client.Client, error)) {
-// 	options.newClient = c
-// }
+// Package record has all client logic for recording and reporting events.
+package record // import "k8s.io/client-go/tools/record"

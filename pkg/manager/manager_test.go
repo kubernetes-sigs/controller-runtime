@@ -172,9 +172,6 @@ var _ = Describe("manger.Manager", func() {
 	})
 
 	Describe("Add", func() {
-		It("should fai if there is an erorr in SetFields", func() {
-		})
-
 		It("should immediately start the Component if the Manager has already Started another Component",
 			func(done Done) {
 				m, err := New(cfg, Options{})
@@ -234,6 +231,12 @@ var _ = Describe("manger.Manager", func() {
 			<-c1
 
 			close(done)
+		})
+
+		It("should fail if SetFields fails", func() {
+			m, err := New(cfg, Options{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(m.Add(&failRec{})).To(HaveOccurred())
 		})
 	})
 	Describe("SetFields", func() {
@@ -356,6 +359,10 @@ type failRec struct{}
 
 func (*failRec) Reconcile(reconcile.Request) (reconcile.Result, error) {
 	return reconcile.Result{}, nil
+}
+
+func (*failRec) Start(<-chan struct{}) error {
+	return nil
 }
 
 func (*failRec) InjectClient(client.Client) error {

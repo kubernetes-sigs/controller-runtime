@@ -90,7 +90,7 @@ var _ = Describe("Indexers", func() {
 	//})
 	//
 	//Describe("populatingClient interface wrapper around an indexer", func() {
-	//	var singleCache client.ReadInterface
+	//	var singleCache client.Reader
 	//
 	//	BeforeEach(func() {
 	//		var err error

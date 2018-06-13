@@ -35,9 +35,9 @@ import (
 
 var log = logf.KBLog.WithName("object-cache")
 
-// Cache implements ReadInterface by reading objects from a cache populated by InformersMap
+// Cache implements Reader by reading objects from a cache populated by InformersMap
 type Cache interface {
-	// Cache implements the client ReadInterface
+	// Cache implements the client Reader
 	client.Reader
 
 	// Cache implements InformersMap
@@ -91,7 +91,7 @@ type informerCache struct {
 	*internal.InformersMap
 }
 
-func Default(config *rest.Config, opts Options) (Options, error) {
+func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 	// Use the default Kubernetes Scheme if unset
 	if opts.Scheme == nil {
 		opts.Scheme = scheme.Scheme
@@ -117,7 +117,7 @@ func Default(config *rest.Config, opts Options) (Options, error) {
 
 // New initializes and returns a new Cache
 func New(config *rest.Config, opts Options) (Cache, error) {
-	opts, err := Default(config, opts)
+	opts, err := defaultOpts(config, opts)
 	if err != nil {
 		return nil, err
 	}

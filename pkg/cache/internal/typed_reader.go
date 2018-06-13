@@ -33,7 +33,7 @@ import (
 )
 
 // Reader is a Reader
-var _ client.ReadInterface = &Reader{}
+var _ client.Reader = &Reader{}
 
 // Reader wraps a cache.Index to implement the client.Reader interface for a single type
 type Reader struct {

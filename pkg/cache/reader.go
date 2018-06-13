@@ -27,9 +27,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-var _ client.ReadInterface = &informerCache{}
+var _ client.Reader = &informerCache{}
 
-// Get implements ReadInterface
+// Get implements Reader
 func (ip *informerCache) Get(ctx context.Context, key client.ObjectKey, out runtime.Object) error {
 	gvk, err := apiutil.GVKForObject(out, ip.Scheme)
 	if err != nil {
@@ -43,7 +43,7 @@ func (ip *informerCache) Get(ctx context.Context, key client.ObjectKey, out runt
 	return cache.Reader.Get(ctx, key, out)
 }
 
-// List implements ReadInterface
+// List implements Reader
 func (ip *informerCache) List(ctx context.Context, opts *client.ListOptions, out runtime.Object) error {
 	itemsPtr, err := apimeta.GetItemsPtr(out)
 	if err != nil {

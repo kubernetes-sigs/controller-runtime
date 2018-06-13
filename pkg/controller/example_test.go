@@ -30,7 +30,21 @@ import (
 
 var mrg manager.Manager
 
-// This example creates a new controller named "pod-controller" with a no-op reconcile function and registers
+// This example creates a new Controller named "pod-controller" with a no-op reconcile function.  The
+// manager.Manager will be used to Start the Controller, and will provide it a shared Cache and Client.
+func ExampleNew() {
+	_, err := controller.New("pod-controller", mrg, controller.Options{
+		Reconcile: reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
+			// Your business logic to implement the API by creating, updating, deleting objects goes here.
+			return reconcile.Result{}, nil
+		}),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// This example creates a new Controller named "pod-controller" with a no-op reconcile function and registers
 // it with the DefaultControllerManager.
 func ExampleController() {
 	_, err := controller.New("pod-controller", mrg, controller.Options{

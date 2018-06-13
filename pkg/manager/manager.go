@@ -31,10 +31,12 @@ import (
 // Manager initializes shared dependencies such as Caches and Clients, and provides them to runnables.
 type Manager interface {
 	// Add will set reqeusted dependencies on the component, and cause the component to be
-	// started when Start is called
+	// started when Start is called.  Add will inject any dependencies for which the argument
+	// implements the inject interface - e.g. inject.Client
 	Add(Runnable) error
 
-	// SetFields will set dependencies on an object.
+	// SetFields will set any dependencies on an object for which the object has implemented the inject
+	// interface - e.g. inject.Client.
 	SetFields(interface{}) error
 
 	// Start starts all registered Controllers and blocks until the Stop channel is closed.

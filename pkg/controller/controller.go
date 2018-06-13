@@ -54,7 +54,8 @@ type Controller interface {
 	Start(stop <-chan struct{}) error
 }
 
-// New returns a new Controller registered with mrg.
+// New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have
+// been synced before the Controller is Started.
 func New(name string, mrg manager.Manager, options Options) (Controller, error) {
 	if options.Reconcile == nil {
 		return nil, fmt.Errorf("must specify Reconcile")

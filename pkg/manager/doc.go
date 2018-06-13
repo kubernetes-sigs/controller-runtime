@@ -15,12 +15,7 @@ limitations under the License.
 */
 
 /*
-Package controller provides types and functions for building Controllers.
-
-Creation
-
-To create a new Controller, first create a manager.Manager and provide it to New.  The Manager will
-take care of Starting / Stopping the Controller, as well as provide shared Caches and Clients to the
-Sources, EventHandlers, Predicates, and Reconcile.
+Package manager is used to manage Runnable components by providing shared state.  Components such as
+Controllers should be registered with a Manager and started through calling Start on the Manager.
 */
-package controller
+package manager

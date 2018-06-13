@@ -37,8 +37,8 @@ import (
 
 var log = logf.KBLog.WithName("object-cache")
 
-// objectCache is a ReadInterface
-var _ client.ReadInterface = &objectCache{}
+// objectCache is a Reader
+var _ client.Reader = &objectCache{}
 
 // objectCache is a Kubernetes Object cache populated from Informers
 type objectCache struct {
@@ -47,7 +47,7 @@ type objectCache struct {
 	informers    *informers
 }
 
-var _ client.ReadInterface = &objectCache{}
+var _ client.Reader = &objectCache{}
 
 // addInformer adds an informer to the objectCache
 func (o *objectCache) addInformer(gvk schema.GroupVersionKind, c cache.SharedIndexInformer) {
@@ -106,7 +106,7 @@ func (o *objectCache) cacheFor(obj runtime.Object) (*singleObjectCache, error) {
 	return cache, nil
 }
 
-// Get implements populatingClient.ReadInterface
+// Get implements populatingClient.Reader
 func (o *objectCache) Get(ctx context.Context, key client.ObjectKey, out runtime.Object) error {
 	// Make sure there is a Cache for this type
 	if !o.has(out) {
@@ -124,7 +124,7 @@ func (o *objectCache) Get(ctx context.Context, key client.ObjectKey, out runtime
 	return cache.Get(ctx, key, out)
 }
 
-// List implements populatingClient.ReadInterface
+// List implements populatingClient.Reader
 func (o *objectCache) List(ctx context.Context, opts *client.ListOptions, out runtime.Object) error {
 	itemsPtr, err := apimeta.GetItemsPtr(out)
 	if err != nil {
@@ -148,10 +148,10 @@ func (o *objectCache) List(ctx context.Context, opts *client.ListOptions, out ru
 	return cache.List(ctx, opts, out)
 }
 
-// singleObjectCache is a ReadInterface
-var _ client.ReadInterface = &singleObjectCache{}
+// singleObjectCache is a Reader
+var _ client.Reader = &singleObjectCache{}
 
-// singleObjectCache is a ReadInterface that retrieves objects
+// singleObjectCache is a Reader that retrieves objects
 // from a single local cache populated by a watch.
 type singleObjectCache struct {
 	// Indexer is the underlying indexer wrapped by this cache.

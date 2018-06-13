@@ -23,10 +23,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"time"
 
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -49,13 +46,20 @@ func init() {
 // If --kubeconfig is set, will use the kubeconfig file at that location.  Otherwise will assume running
 // in cluster and use the cluster provided kubeconfig.
 //
-// Will log.Fatal if KubernetesInformers cannot be created
+// Config precedence
+//
+// * --kubeconfig flag pointing at a file
+//
+// * KUBECONFIG environment variable pointing at a file
+//
+// * In-cluster config if running in cluster
+//
+// * $HOME/.kube/config if exists
 func GetConfig() (*rest.Config, error) {
 	// If a flag is specified with the config location, use that
 	if len(kubeconfig) > 0 {
 		return clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
 	}
-
 	// If an env variable is specified with the config locaiton, use that
 	if len(os.Getenv("KUBECONFIG")) > 0 {
 		return clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
@@ -78,62 +82,12 @@ func GetConfig() (*rest.Config, error) {
 // GetConfigOrDie creates a *rest.Config for talking to a Kubernetes apiserver.
 // If --kubeconfig is set, will use the kubeconfig file at that location.  Otherwise will assume running
 // in cluster and use the cluster provided kubeconfig.
+//
+// Will log.Fatal if there is an error creating the rest.Config.
 func GetConfigOrDie() *rest.Config {
 	config, err := GetConfig()
 	if err != nil {
-		log.Fatalf("%v", err)
+		log.Fatal(err)
 	}
 	return config
-}
-
-// GetKubernetesClientSet creates a *kubernetes.ClientSet for talking to a Kubernetes apiserver.
-// If --kubeconfig is set, will use the kubeconfig file at that location.  Otherwise will assume running
-// in cluster and use the cluster provided kubeconfig.
-func GetKubernetesClientSet() (*kubernetes.Clientset, error) {
-	config, err := GetConfig()
-	if err != nil {
-		return nil, err
-	}
-	return kubernetes.NewForConfig(config)
-}
-
-// GetKubernetesClientSetOrDie creates a *kubernetes.ClientSet for talking to a Kubernetes apiserver.
-// If --kubeconfig is set, will use the kubeconfig file at that location.  Otherwise will assume running
-// in cluster and use the cluster provided kubeconfig.
-//
-// Will log.Fatal if KubernetesInformers cannot be created
-func GetKubernetesClientSetOrDie() (*kubernetes.Clientset, error) {
-	cs, err := GetKubernetesClientSet()
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-	return cs, nil
-}
-
-// GetKubernetesInformers creates a informers.SharedInformerFactory for talking to a Kubernetes apiserver.
-// If --kubeconfig is set, will use the kubeconfig file at that location.  Otherwise will assume running
-// in cluster and use the cluster provided kubeconfig.
-func GetKubernetesInformers() (informers.SharedInformerFactory, error) {
-	config, err := GetConfig()
-	if err != nil {
-		return nil, err
-	}
-	i, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-	return informers.NewSharedInformerFactory(i, time.Minute*5), nil
-}
-
-// GetKubernetesInformersOrDie creates a informers.SharedInformerFactory for talking to a Kubernetes apiserver.
-// If --kubeconfig is set, will use the kubeconfig file at that location.  Otherwise will assume running
-// in cluster and use the cluster provided kubeconfig.
-//
-// Will log.Fatal if KubernetesInformers cannot be created
-func GetKubernetesInformersOrDie() informers.SharedInformerFactory {
-	i, err := GetKubernetesInformers()
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-	return i
 }

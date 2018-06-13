@@ -20,6 +20,6 @@ package client
 // read and write interfaces.  This way, you can have an Client that
 // reads from a cache and writes to the API server.
 type DelegatingClient struct {
-	ReadInterface
-	WriteInterface
+	Reader
+	Writer
 }

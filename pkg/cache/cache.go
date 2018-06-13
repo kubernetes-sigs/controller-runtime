@@ -19,6 +19,8 @@ package cache
 import (
 	"time"
 
+	"fmt"
+
 	"github.com/kubernetes-sigs/controller-runtime/pkg/cache/internal"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client/apiutil"
@@ -60,7 +62,11 @@ type Informers interface {
 	// WaitForCacheSync waits for all the caches to sync.  Returns false if it could not sync a cache.
 	WaitForCacheSync(stop <-chan struct{}) bool
 
-	// IndexField adds an index to a field.
+	// IndexField adds an index with the given field name on the given object type
+	// by using the given function to extract the value for that field.  If you want
+	// compatibility with the Kubernetes API server, only return one key, and only use
+	// fields that the API server supports.  Otherwise, you can return multiple keys,
+	// and "equality" in the field selector means that at least one key matches the value.
 	IndexField(obj runtime.Object, field string, extractValue client.IndexerFunc) error
 }
 
@@ -85,8 +91,7 @@ type informerCache struct {
 	*internal.InformersMap
 }
 
-// New initializes and returns a new Cache
-func New(config *rest.Config, opts Options) (Cache, error) {
+func Default(config *rest.Config, opts Options) (Options, error) {
 	// Use the default Kubernetes Scheme if unset
 	if opts.Scheme == nil {
 		opts.Scheme = scheme.Scheme
@@ -98,7 +103,7 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 		opts.Mapper, err = apiutil.NewDiscoveryRESTMapper(config)
 		if err != nil {
 			log.WithName("setup").Error(err, "Failed to get API Group-Resources")
-			return nil, err
+			return opts, fmt.Errorf("could not create RESTMapper from config")
 		}
 	}
 
@@ -107,7 +112,15 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 		r := 10 * time.Hour
 		opts.Resync = &r
 	}
+	return opts, nil
+}
 
+// New initializes and returns a new Cache
+func New(config *rest.Config, opts Options) (Cache, error) {
+	opts, err := Default(config, opts)
+	if err != nil {
+		return nil, err
+	}
 	im := internal.NewInformersMap(config, opts.Scheme, opts.Mapper, *opts.Resync)
 	return &informerCache{InformersMap: im}, nil
 }

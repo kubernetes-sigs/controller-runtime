@@ -86,7 +86,7 @@ type InformersMap struct {
 	resync time.Duration
 
 	// mu guards access to the map
-	mu sync.Mutex
+	mu sync.RWMutex
 
 	// start is true if the informers have been started
 	started bool
@@ -125,6 +125,17 @@ func (ip *InformersMap) WaitForCacheSync(stop <-chan struct{}) bool {
 // Get will create a new Informer and added it to the map of InformersMap if none exists.  Returns
 // the Informer from the map.
 func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*MapEntry, error) {
+	// Return the informer if it is found
+	i, ok := func() (*MapEntry, bool) {
+		ip.mu.RLock()
+		defer ip.mu.RUnlock()
+		i, ok := ip.informersByGVK[gvk]
+		return i, ok
+	}()
+	if ok {
+		return i, nil
+	}
+
 	// Do the mutex part in its own function so we can use defer without blocking pieces that don't
 	// to be locked
 	var sync bool
@@ -133,6 +144,8 @@ func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*M
 		defer ip.mu.Unlock()
 
 		// Check the cache to see if we already have an Informer.  If we do, return the Informer.
+		// This is for the case where 2 routines tried to get the informer when it wasn't in the map
+		// so neither returned early, but the first one created it.
 		var ok bool
 		i, ok := ip.informersByGVK[gvk]
 		if ok {
@@ -152,6 +165,8 @@ func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*M
 		ip.informersByGVK[gvk] = i
 
 		// Start the Informer if need by
+		// TODO(seans): write thorough tests and document what happens here - can you add indexers?
+		// can you add eventhandlers?
 		if ip.started {
 			sync = true
 			go i.Informer.Run(ip.stop)

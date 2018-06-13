@@ -12,15 +12,10 @@ git:
 
 go_import_path: github.com/kubernetes-sigs/controller-runtime
 
-before_install:
-- go get -u github.com/golang/dep/cmd/dep
-
-# Install must be set to prevent default `go get` to run.
-# The dependencies have already been vendored by `dep` so
-# we don't need to fetch them.
 install:
-  - go get -u golang.org/x/lint/golint
-  - go get -u gopkg.in/alecthomas/gometalinter.v2 && gometalinter.v2 --install
+- go get -u github.com/golang/dep/cmd/dep
+#- go get -u golang.org/x/lint/golint
+- go get -u gopkg.in/alecthomas/gometalinter.v2 && gometalinter.v2 --install
 
 script:
 - TRACE=1 ./test.sh

@@ -95,6 +95,10 @@ function setup_envs {
   export TEST_ASSET_ETCD=$kb_root_dir/bin/etcd
 }
 
+header_text "using tools"
+
+which gometalinter.v2
+
 # fetch the testing binaries - e.g. apiserver and etcd
 fetch_kb_tools
 
@@ -105,9 +109,10 @@ header_text "running go vet"
 
 go vet ./pkg/...
 
-header_text "running golint"
-
-golint -set_exit_status ./pkg/...
+# go get is broken for golint.  re-enable this once it is fixed.
+#header_text "running golint"
+#
+#golint -set_exit_status ./pkg/...
 
 header_text "running gometalinter.v2"
 

@@ -270,6 +270,12 @@ var _ = Describe("manger.Manager", func() {
 					Expect(c).To(Equal(m.GetCache()))
 					return nil
 				},
+				stop: func(stop <-chan struct{}) error {
+					defer GinkgoRecover()
+					// Manager stop chan has not been initialized.
+					Expect(stop).To(BeNil())
+					return nil
+				},
 				f: func(f inject.Func) error {
 					defer GinkgoRecover()
 					Expect(f).NotTo(BeNil())
@@ -311,6 +317,12 @@ var _ = Describe("manger.Manager", func() {
 
 			err = m.SetFields(&injectable{
 				f: func(c inject.Func) error {
+					return expected
+				},
+			})
+			Expect(err).To(Equal(expected))
+			err = m.SetFields(&injectable{
+				stop: func(<-chan struct{}) error {
 					return expected
 				},
 			})
@@ -374,6 +386,7 @@ var _ inject.Cache = &injectable{}
 var _ inject.Client = &injectable{}
 var _ inject.Scheme = &injectable{}
 var _ inject.Config = &injectable{}
+var _ inject.Stoppable = &injectable{}
 
 type injectable struct {
 	scheme func(scheme *runtime.Scheme) error
@@ -381,6 +394,7 @@ type injectable struct {
 	config func(config *rest.Config) error
 	cache  func(cache.Cache) error
 	f      func(inject.Func) error
+	stop   func(<-chan struct{}) error
 }
 
 func (i *injectable) InjectCache(c cache.Cache) error {
@@ -416,6 +430,13 @@ func (i *injectable) InjectFunc(f inject.Func) error {
 		return nil
 	}
 	return i.f(f)
+}
+
+func (i *injectable) InjectStopChannel(stop <-chan struct{}) error {
+	if i.stop == nil {
+		return nil
+	}
+	return i.stop(stop)
 }
 
 func (i *injectable) Start(<-chan struct{}) error {

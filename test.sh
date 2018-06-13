@@ -152,6 +152,7 @@ header_text "running coverage"
 if [[ ! $(go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements"  | grep -v "pkg/admission/certprovisioner\|pkg/internal/admission\|pkg/cache\|pkg/client\|pkg/event\|pkg/client/config\|pkg/controller/controllertest\|pkg/reconcile/reconciletest\|pkg/runtime/inject\|pkg/runtime/log\|pkg/runtime/signals\|pkg/test\|pkg/runtime/inject\|pkg/runtime/signals\|pkg/manager\|pkg/source") ]]; then
 echo "ok"
 else
+go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements"  | grep -v "pkg/admission/certprovisioner\|pkg/internal/admission\|pkg/cache\|pkg/client\|pkg/event\|pkg/client/config\|pkg/controller/controllertest\|pkg/reconcile/reconciletest\|pkg/runtime/inject\|pkg/runtime/log\|pkg/runtime/signals\|pkg/test\|pkg/runtime/inject\|pkg/runtime/signals\|pkg/manager\|pkg/source"
 echo "missing test coverage"
 exit 1
 fi

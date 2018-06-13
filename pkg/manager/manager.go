@@ -132,6 +132,6 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}
 
 	cm.fieldIndexes = cm.cache
-	cm.client = client.DelegatingClient{ReadInterface: cm.cache, WriteInterface: writeObj}
+	cm.client = client.DelegatingClient{Reader: cm.cache, Writer: writeObj}
 	return cm, nil
 }

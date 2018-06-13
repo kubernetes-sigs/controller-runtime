@@ -1,18 +1,32 @@
+/*
+Copyright 2018 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package client
 
 import (
 	"context"
+	"fmt"
 	"reflect"
-	"sync"
-
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/runtime"
-	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client/apiutil"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 )
 
 // Options are creation options for a Client
@@ -26,6 +40,10 @@ type Options struct {
 
 // New returns a new Client using the provided config and Options.
 func New(config *rest.Config, options Options) (Client, error) {
+	if config == nil {
+		return nil, fmt.Errorf("must provide non-nil rest.Config to client.New")
+	}
+
 	// Init a scheme if none provided
 	if options.Scheme == nil {
 		options.Scheme = scheme.Scheme
@@ -40,161 +58,93 @@ func New(config *rest.Config, options Options) (Client, error) {
 		}
 	}
 
-	c := &populatingClient{
-		config:          config,
-		scheme:          options.Scheme,
-		mapper:          options.Mapper,
-		codecs:          serializer.NewCodecFactory(options.Scheme),
-		paramCodec:      runtime.NewParameterCodec(options.Scheme),
-		clientsByType:   make(map[reflect.Type]rest.Interface),
-		resourcesByType: make(map[reflect.Type]string),
+	c := &client{
+		cache: clientCache{
+			config:         config,
+			scheme:         options.Scheme,
+			mapper:         options.Mapper,
+			codecs:         serializer.NewCodecFactory(options.Scheme),
+			resourceByType: make(map[reflect.Type]*resourceMeta),
+		},
+		paramCodec: runtime.NewParameterCodec(options.Scheme),
 	}
 
 	return c, nil
 }
 
-var _ Client = &populatingClient{}
+var _ Client = &client{}
 
-// populatingClient is an Client that reads and writes directly from/to an API server.  It lazily initialized
-// new clients when they are used.
-type populatingClient struct {
-	config *rest.Config
-	scheme *runtime.Scheme
-	mapper meta.RESTMapper
-
-	codecs          serializer.CodecFactory
-	paramCodec      runtime.ParameterCodec
-	clientsByType   map[reflect.Type]rest.Interface
-	resourcesByType map[reflect.Type]string
-	mu              sync.RWMutex
+// client is a client.Client that reads and writes directly from/to an API server.  It lazily initializes
+// new clients at the time they are used, and caches the client.
+type client struct {
+	cache      clientCache
+	paramCodec runtime.ParameterCodec
 }
 
-// makeClient maps obj to a Kubernetes Resource and constructs a populatingClient for that Resource.
-func (c *populatingClient) makeClient(obj runtime.Object) (rest.Interface, string, error) {
-	gvk, err := apiutil.GVKForObject(obj, c.scheme)
-	if err != nil {
-		return nil, "", err
-	}
-	client, err := apiutil.RESTClientForGVK(gvk, c.config, c.codecs)
-	if err != nil {
-		return nil, "", err
-	}
-	mapping, err := c.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-	if err != nil {
-		return nil, "", err
-	}
-	return client, mapping.Resource, nil
-}
-
-// clientFor returns a raw rest.Client for the given object type.
-func (c *populatingClient) clientFor(obj runtime.Object) (rest.Interface, string, error) {
-	typ := reflect.TypeOf(obj)
-
-	// It's better to do creation work twice than to not let multiple
-	// people make requests at once
-	c.mu.RLock()
-	client, known := c.clientsByType[typ]
-	resource, _ := c.resourcesByType[typ]
-	c.mu.RUnlock()
-
-	// Initialize a new Client
-	if !known {
-		var err error
-		client, resource, err = c.makeClient(obj)
-		if err != nil {
-			return nil, "", err
-		}
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		c.clientsByType[typ] = client
-		c.resourcesByType[typ] = resource
-	}
-
-	return client, resource, nil
-}
-
-func (c *populatingClient) metaAndClientFor(obj runtime.Object) (v1.Object, rest.Interface, string, error) {
-	client, resource, err := c.clientFor(obj)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	meta, err := meta.Accessor(obj)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	return meta, client, resource, err
-}
-
-// Create implements Client
-func (c *populatingClient) Create(ctx context.Context, obj runtime.Object) error {
-	meta, client, resource, err := c.metaAndClientFor(obj)
+// Create implements client.Client
+func (c *client) Create(ctx context.Context, obj runtime.Object) error {
+	o, err := c.cache.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
-	return client.Post().
-		Namespace(meta.GetNamespace()).
-		Resource(resource).
+	return o.Post().
+		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
+		Resource(o.resource()).
 		Body(obj).
 		Do().
 		Into(obj)
 }
 
-// Update implements Client
-func (c *populatingClient) Update(ctx context.Context, obj runtime.Object) error {
-	meta, client, resource, err := c.metaAndClientFor(obj)
+// Update implements client.Client
+func (c *client) Update(ctx context.Context, obj runtime.Object) error {
+	o, err := c.cache.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
-	return client.Put().
-		Namespace(meta.GetNamespace()).
-		Resource(resource).
-		Name(meta.GetName()).
+	return o.Put().
+		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
+		Resource(o.resource()).
+		Name(o.GetName()).
 		Body(obj).
 		Do().
 		Into(obj)
 }
 
-// Delete implements Client
-func (c *populatingClient) Delete(ctx context.Context, obj runtime.Object) error {
-	meta, client, resource, err := c.metaAndClientFor(obj)
+// Delete implements client.Client
+func (c *client) Delete(ctx context.Context, obj runtime.Object) error {
+	o, err := c.cache.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
-	return client.Delete().
-		Namespace(meta.GetNamespace()).
-		Resource(resource).
-		Name(meta.GetName()).
+	return o.Delete().
+		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
+		Resource(o.resource()).
+		Name(o.GetName()).
 		Do().
 		Error()
 }
 
-// Get implements Client
-func (c *populatingClient) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
-	client, resource, err := c.clientFor(obj)
+// Get implements client.Client
+func (c *client) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
+	r, err := c.cache.getResource(obj)
 	if err != nil {
 		return err
 	}
-	return client.Get().
-		Namespace(key.Namespace).
-		Resource(resource).
-		Name(key.Name).
-		Do().
-		Into(obj)
+	return r.Get().
+		NamespaceIfScoped(key.Namespace, r.isNamespaced()).
+		Resource(r.resource()).
+		Name(key.Name).Do().Into(obj)
 }
 
-// List implements Client
-func (c *populatingClient) List(ctx context.Context, opts *ListOptions, obj runtime.Object) error {
-	client, resource, err := c.clientFor(obj)
+// List implements client.Client
+func (c *client) List(ctx context.Context, opts *ListOptions, obj runtime.Object) error {
+	r, err := c.cache.getResource(obj)
 	if err != nil {
 		return err
 	}
-	ns := ""
-	if opts != nil {
-		ns = opts.Namespace
-	}
-	return client.Get().
-		Namespace(ns).
-		Resource(resource).
+	return r.Get().
+		NamespaceIfScoped(opts.Namespace, r.isNamespaced()).
+		Resource(r.resource()).
 		Body(obj).
 		VersionedParams(opts.AsListOptions(), c.paramCodec).
 		Do().

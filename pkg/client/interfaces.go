@@ -1,3 +1,19 @@
+/*
+Copyright 2018 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package client
 
 import (
@@ -15,8 +31,8 @@ type ObjectKey = types.NamespacedName
 
 // TODO(directxman12): is there a sane way to deal with get/delete options?
 
-// ReadInterface knows how to read and list Kubernetes objects.
-type ReadInterface interface {
+// Reader knows how to read and list Kubernetes objects.
+type Reader interface {
 	// Get retrieves an obj for the given object key from the Kubernetes Cluster.
 	// obj must be a struct pointer so that obj can be updated with the response
 	// returned by the Server.
@@ -28,8 +44,8 @@ type ReadInterface interface {
 	List(ctx context.Context, opts *ListOptions, list runtime.Object) error
 }
 
-// WriteInterface knows how to create, delete, and update Kubernetes objects.
-type WriteInterface interface {
+// Writer knows how to create, delete, and update Kubernetes objects.
+type Writer interface {
 	// Create saves the object obj in the Kubernetes cluster.
 	Create(ctx context.Context, obj runtime.Object) error
 
@@ -43,8 +59,8 @@ type WriteInterface interface {
 
 // Client knows how to perform CRUD operations on Kubernetes objects.
 type Client interface {
-	ReadInterface
-	WriteInterface
+	Reader
+	Writer
 }
 
 // IndexerFunc knows how to take an object and turn it into a series

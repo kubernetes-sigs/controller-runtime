@@ -19,9 +19,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// Cache implements ReadInterface by reading objects from a cache populated by Informers
+// Cache implements Reader by reading objects from a cache populated by Informers
 type Cache interface {
-	client.ReadInterface
+	client.Reader
 	Informers
 	IndexField(obj runtime.Object, field string, extractValue client.IndexerFunc) error
 }

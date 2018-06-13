@@ -35,6 +35,7 @@ type FakeInformers struct {
 	InformersByGVK map[schema.GroupVersionKind]toolscache.SharedIndexInformer
 	Scheme         *runtime.Scheme
 	Error          error
+	Synced         *bool
 }
 
 // GetInformerForKind implements Informers
@@ -70,8 +71,11 @@ func (c *FakeInformers) GetInformer(obj runtime.Object) (toolscache.SharedIndexI
 }
 
 // KnownInformersByType implements Informers
-func (c *FakeInformers) KnownInformersByType() map[schema.GroupVersionKind]toolscache.SharedIndexInformer {
-	return c.InformersByGVK
+func (c *FakeInformers) WaitForCacheSync(stop <-chan struct{}) bool {
+	if c.Synced == nil {
+		return true
+	}
+	return *c.Synced
 }
 
 // FakeInformerFor implements Informers

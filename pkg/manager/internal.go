@@ -140,6 +140,10 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 			}
 		}()
 
+		// Wait for the caches to sync.
+		// TODO(community): Check the return value and write a test
+		cm.cache.WaitForCacheSync(stop)
+
 		// Start the runnables after the promises
 		for _, c := range cm.runnables {
 			// Controllers block, but we want to return an error if any have an error starting.

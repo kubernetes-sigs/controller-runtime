@@ -70,7 +70,7 @@ func (c *FakeInformers) GetInformer(obj runtime.Object) (toolscache.SharedIndexI
 	return c.informerFor(gvk, obj)
 }
 
-// KnownInformersByType implements Informers
+// WaitForCacheSync implements Informers
 func (c *FakeInformers) WaitForCacheSync(stop <-chan struct{}) bool {
 	if c.Synced == nil {
 		return true

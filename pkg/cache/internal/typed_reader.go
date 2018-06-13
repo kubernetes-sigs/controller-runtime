@@ -32,11 +32,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// ObjectCache is a Reader
-var _ client.ReadInterface = &ObjectCache{}
+// Reader is a Reader
+var _ client.ReadInterface = &Reader{}
 
-// ObjectCache wraps a cache.Index to implement the client.Reader interface
-type ObjectCache struct {
+// Reader wraps a cache.Index to implement the client.Reader interface for a single type
+type Reader struct {
 	// indexer is the underlying indexer wrapped by this cache.
 	indexer cache.Indexer
 
@@ -45,7 +45,7 @@ type ObjectCache struct {
 }
 
 // Get checks the indexer for the object and writes a copy of it if found
-func (c *ObjectCache) Get(_ context.Context, key client.ObjectKey, out runtime.Object) error {
+func (c *Reader) Get(_ context.Context, key client.ObjectKey, out runtime.Object) error {
 	storeKey := objectKeyToStoreKey(key)
 
 	// Lookup the object from the indexer cache
@@ -86,7 +86,7 @@ func (c *ObjectCache) Get(_ context.Context, key client.ObjectKey, out runtime.O
 }
 
 // List lists items out of the indexer and writes them to out
-func (c *ObjectCache) List(ctx context.Context, opts *client.ListOptions, out runtime.Object) error {
+func (c *Reader) List(ctx context.Context, opts *client.ListOptions, out runtime.Object) error {
 	var objs []interface{}
 	var err error
 
@@ -100,7 +100,7 @@ func (c *ObjectCache) List(ctx context.Context, opts *client.ListOptions, out ru
 		// list all objects by the field selector.  If this is namespaced and we have one, ask for the
 		// namespaced index key.  Otherwise, ask for the non-namespaced variant by using the fake "all namespaces"
 		// namespace.
-		objs, err = c.indexer.ByIndex(fieldIndexName(field), keyToNamespacedKey(opts.Namespace, val))
+		objs, err = c.indexer.ByIndex(FieldIndexName(field), KeyToNamespacedKey(opts.Namespace, val))
 	} else if opts != nil && opts.Namespace != "" {
 		objs, err = c.indexer.ByIndex(cache.NamespaceIndex, opts.Namespace)
 	} else {
@@ -121,7 +121,7 @@ func (c *ObjectCache) List(ctx context.Context, opts *client.ListOptions, out ru
 	return apimeta.SetList(out, outItems)
 }
 
-func (c *ObjectCache) getListItems(objs []interface{}, labelSel labels.Selector) ([]runtime.Object, error) {
+func (c *Reader) getListItems(objs []interface{}, labelSel labels.Selector) ([]runtime.Object, error) {
 	outItems := make([]runtime.Object, 0, len(objs))
 	for _, item := range objs {
 		obj, isObj := item.(runtime.Object)
@@ -167,18 +167,18 @@ func requiresExactMatch(sel fields.Selector) (field, val string, required bool) 
 	return req.Field, req.Value, true
 }
 
-// fieldIndexName constructs the name of the index over the given field,
+// FieldIndexName constructs the name of the index over the given field,
 // for use with an indexer.
-func fieldIndexName(field string) string {
+func FieldIndexName(field string) string {
 	return "field:" + field
 }
 
 // noNamespaceNamespace is used as the "namespace" when we want to list across all namespaces
 const allNamespacesNamespace = "__all_namespaces"
 
-// keyToNamespacedKey prefixes the given index key with a namespace
+// KeyToNamespacedKey prefixes the given index key with a namespace
 // for use in field selector indexes.
-func keyToNamespacedKey(ns string, baseKey string) string {
+func KeyToNamespacedKey(ns string, baseKey string) string {
 	if ns != "" {
 		return ns + "/" + baseKey
 	}

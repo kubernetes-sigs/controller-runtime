@@ -33,12 +33,12 @@ import (
 
 var log = logf.KBLog.WithName("object-cache")
 
-// Cache implements ReadInterface by reading objects from a cache populated by Informers
+// Cache implements ReadInterface by reading objects from a cache populated by InformersMap
 type Cache interface {
 	// Cache implements the client ReadInterface
 	client.Reader
 
-	// Cache implements Informers
+	// Cache implements InformersMap
 	Informers
 }
 
@@ -64,7 +64,7 @@ type Informers interface {
 	IndexField(obj runtime.Object, field string, extractValue client.IndexerFunc) error
 }
 
-// Options are the optional arguments for creating a new Informers object
+// Options are the optional arguments for creating a new InformersMap object
 type Options struct {
 	// Scheme is the scheme to use for mapping objects to GroupVersionKinds
 	Scheme *runtime.Scheme
@@ -76,14 +76,13 @@ type Options struct {
 	Resync *time.Duration
 }
 
-var _ Informers = &cache{}
-var _ client.Reader = &cache{}
-var _ Cache = &cache{}
+var _ Informers = &informerCache{}
+var _ client.Reader = &informerCache{}
+var _ Cache = &informerCache{}
 
-// cache is a Kubernetes Object cache populated from Informers.  cache wraps a CacheProvider and InformerProvider.
-type cache struct {
-	*internal.CacheProvider
-	*internal.InformerProvider
+// cache is a Kubernetes Object cache populated from InformersMap.  cache wraps a CacheProvider and InformersMap.
+type informerCache struct {
+	*internal.InformersMap
 }
 
 // New initializes and returns a new Cache
@@ -109,9 +108,6 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 		opts.Resync = &r
 	}
 
-	cp := internal.NewCacheProvider()
-	ip := internal.NewInformerProvider(config, opts.Scheme, opts.Mapper, *opts.Resync, cp)
-	cp.SetInformerProvider(ip)
-	c := &cache{InformerProvider: ip, CacheProvider: cp}
-	return c, nil
+	im := internal.NewInformersMap(config, opts.Scheme, opts.Mapper, *opts.Resync)
+	return &informerCache{InformersMap: im}, nil
 }

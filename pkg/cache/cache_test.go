@@ -129,7 +129,8 @@ var _ = Describe("Indexers", func() {
 	//
 	//	It("should support filtering by labels", func() {
 	//		out := kapi.PodList{}
-	//		Expect(singleCache.List(context.TODO(), client.InNamespace(knownPodKey.Namespace).MatchingLabels(map[string]string{"somelbl": "someval"}), &out)).NotTo(HaveOccurred())
+	//		Expect(singleCache.List(context.TODO(), client.InNamespace(knownPodKey.Namespace).
+	// 			MatchingLabels(map[string]string{"somelbl": "someval"}), &out)).NotTo(HaveOccurred())
 	//		Expect(out.Items).To(ConsistOf(*knownPod2))
 	//	})
 	//

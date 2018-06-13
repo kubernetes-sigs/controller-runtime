@@ -22,12 +22,12 @@ import (
 	"github.com/kubernetes-sigs/controller-runtime/pkg/cache/informertest"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/predicate"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/predicate"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/workqueue"
@@ -276,6 +276,15 @@ var _ = Describe("Source", func() {
 					Object: p,
 					Meta:   p,
 				}
+				// Event that should be filtered out by predicates
+				invalidEvt := event.GenericEvent{}
+
+				// Predicate to filter out empty event
+				prct := predicate.Funcs{
+					GenericFunc: func(e event.GenericEvent) bool {
+						return e.Object != nil && e.Meta != nil
+					},
+				}
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{Source: ch}
@@ -295,14 +304,17 @@ var _ = Describe("Source", func() {
 					},
 					GenericFunc: func(q2 workqueue.RateLimitingInterface, evt event.GenericEvent) {
 						defer GinkgoRecover()
+						// The empty event should have been filtered out by the predicates,
+						// and will not be passed to the handler.
 						Expect(q2).To(Equal(q))
 						Expect(evt.Meta).To(Equal(p))
 						Expect(evt.Object).To(Equal(p))
 						close(c)
 					},
-				}, q)
+				}, q, prct)
 				Expect(err).NotTo(HaveOccurred())
 
+				ch <- invalidEvt
 				ch <- evt
 				<-c
 				close(done)

@@ -95,6 +95,10 @@ function setup_envs {
   export TEST_ASSET_ETCD=$kb_root_dir/bin/etcd
 }
 
+header_text "using tools"
+
+which gometalinter.v2
+
 # fetch the testing binaries - e.g. apiserver and etcd
 fetch_kb_tools
 
@@ -105,9 +109,10 @@ header_text "running go vet"
 
 go vet ./pkg/...
 
-header_text "running golint"
-
-golint -set_exit_status ./pkg/...
+# go get is broken for golint.  re-enable this once it is fixed.
+#header_text "running golint"
+#
+#golint -set_exit_status ./pkg/...
 
 header_text "running gometalinter.v2"
 
@@ -149,10 +154,10 @@ header_text "running coverage"
 
 # Verify no coverage regressions have been introduced.  Remove the exception list from here
 # once the coverage has been brought back up
-if [[ ! $(go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements"  | grep -v "controller-runtime/pkg\|pkg/admission/certprovisioner\|pkg/internal/admission\|pkg/cache\|pkg/client\|pkg/event\|pkg/client/config\|pkg/controller/controllertest\|pkg/reconcile/reconciletest\|pkg/runtime/inject\|pkg/runtime/log\|pkg/runtime/signals\|pkg/test\|pkg/runtime/inject\|pkg/runtime/signals\|pkg/manager\|pkg/source") ]]; then
+if [[ ! $(go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements"  | grep -v "controller-runtime/pkg\|pkg/admission/certprovisioner\|pkg/internal/admission\|pkg/cache\|pkg/client\|pkg/event\|pkg/client/config\|pkg/controller/controllertest\|pkg/reconcile/reconciletest\|pkg/runtime/inject\|pkg/runtime/log\|pkg/runtime/signals\|pkg/test\|pkg/runtime/inject\|pkg/runtime/signals") ]]; then
 echo "ok"
 else
-go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements"  | grep -v "controller-runtime/pkg\|pkg/admission/certprovisioner\|pkg/internal/admission\|pkg/cache\|pkg/client\|pkg/event\|pkg/client/config\|pkg/controller/controllertest\|pkg/reconcile/reconciletest\|pkg/runtime/inject\|pkg/runtime/log\|pkg/runtime/signals\|pkg/test\|pkg/runtime/inject\|pkg/runtime/signals\|pkg/manager\|pkg/source"
+go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements"  | grep -v "controller-runtime/pkg\|pkg/admission/certprovisioner\|pkg/internal/admission\|pkg/cache\|pkg/client\|pkg/event\|pkg/client/config\|pkg/controller/controllertest\|pkg/reconcile/reconciletest\|pkg/runtime/inject\|pkg/runtime/log\|pkg/runtime/signals\|pkg/test\|pkg/runtime/inject\|pkg/runtime/signals"
 echo "missing test coverage"
 exit 1
 fi

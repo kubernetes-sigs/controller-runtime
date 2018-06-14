@@ -158,7 +158,9 @@ func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*M
 		if err != nil {
 			return nil, err
 		}
-		ni := cache.NewSharedIndexInformer(lw, obj, ip.resync, cache.Indexers{})
+		ni := cache.NewSharedIndexInformer(lw, obj, ip.resync, cache.Indexers{
+			cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
+		})
 		i = &MapEntry{
 			Informer: ni,
 			Reader:   CacheReader{indexer: ni.GetIndexer(), groupVersionKind: gvk}}

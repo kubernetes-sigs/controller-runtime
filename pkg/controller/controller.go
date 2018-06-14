@@ -19,13 +19,13 @@ package controller
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/controller"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/manager"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/predicate"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/internal/controller"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // Options are the arguments for creating a new Controller

@@ -19,10 +19,10 @@ package admission_test
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/admission"
 	"k8s.io/api/admission/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/internal/admission"
 )
 
 func ExampleDecode() {

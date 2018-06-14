@@ -19,10 +19,10 @@ package reconcile_test
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 var _ = Describe("reconcile", func() {

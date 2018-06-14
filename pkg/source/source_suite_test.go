@@ -21,13 +21,13 @@ import (
 
 	"time"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/test"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	"sigs.k8s.io/controller-runtime/pkg/test"
 )
 
 func TestSource(t *testing.T) {

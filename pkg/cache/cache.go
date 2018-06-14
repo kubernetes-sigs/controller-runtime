@@ -17,333 +17,110 @@ limitations under the License.
 package cache
 
 import (
-	"context"
-	"fmt"
-	"reflect"
+	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/labels"
+	"fmt"
+
+	"github.com/kubernetes-sigs/controller-runtime/pkg/cache/internal"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/client/apiutil"
+	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/selection"
-	"k8s.io/client-go/tools/cache"
-
-	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	toolscache "k8s.io/client-go/tools/cache"
 )
 
 var log = logf.KBLog.WithName("object-cache")
 
-// objectCache is a Reader
-var _ client.Reader = &objectCache{}
+// Cache implements Reader by reading objects from a cache populated by InformersMap
+type Cache interface {
+	// Cache implements the client Reader
+	client.Reader
 
-// objectCache is a Kubernetes Object cache populated from Informers
-type objectCache struct {
-	cachesByType map[reflect.Type]*singleObjectCache
-	scheme       *runtime.Scheme
-	informers    *informers
+	// Cache implements InformersMap
+	Informers
 }
 
-var _ client.Reader = &objectCache{}
+// Informers knows how to create or fetch informers for different group-version-kinds.
+// It's safe to call GetInformer from multiple threads.
+type Informers interface {
+	// GetInformer fetches or constructs an informer for the given object that corresponds to a single
+	// API kind and resource.
+	GetInformer(obj runtime.Object) (toolscache.SharedIndexInformer, error)
 
-// addInformer adds an informer to the objectCache
-func (o *objectCache) addInformer(gvk schema.GroupVersionKind, c cache.SharedIndexInformer) {
-	obj, err := o.scheme.New(gvk)
-	if err != nil {
-		log.Error(err, "could not register informer in objectCache for GVK", "GroupVersionKind", gvk)
-		return
-	}
-	if o.has(obj) {
-		return
-	}
-	o.registerCache(obj, gvk, c.GetIndexer())
+	// GetInformerForKind is similar to GetInformer, except that it takes a group-version-kind, instead
+	// of the underlying object.
+	GetInformerForKind(gvk schema.GroupVersionKind) (toolscache.SharedIndexInformer, error)
+
+	// Start runs all the informers known to this cache until the given channel is closed.
+	// It does not block.
+	Start(stopCh <-chan struct{}) error
+
+	// WaitForCacheSync waits for all the caches to sync.  Returns false if it could not sync a cache.
+	WaitForCacheSync(stop <-chan struct{}) bool
+
+	// IndexField adds an index with the given field name on the given object type
+	// by using the given function to extract the value for that field.  If you want
+	// compatibility with the Kubernetes API server, only return one key, and only use
+	// fields that the API server supports.  Otherwise, you can return multiple keys,
+	// and "equality" in the field selector means that at least one key matches the value.
+	IndexField(obj runtime.Object, field string, extractValue client.IndexerFunc) error
 }
 
-func (o *objectCache) registerCache(obj runtime.Object, gvk schema.GroupVersionKind, store cache.Indexer) {
-	objType := reflect.TypeOf(obj)
-	o.cachesByType[objType] = &singleObjectCache{
-		Indexer:          store,
-		GroupVersionKind: gvk,
-	}
+// Options are the optional arguments for creating a new InformersMap object
+type Options struct {
+	// Scheme is the scheme to use for mapping objects to GroupVersionKinds
+	Scheme *runtime.Scheme
+
+	// Mapper is the RESTMapper to use for mapping GroupVersionKinds to Resources
+	Mapper meta.RESTMapper
+
+	// Resync is the resync period
+	Resync *time.Duration
 }
 
-func (o *objectCache) has(obj runtime.Object) bool {
-	objType := reflect.TypeOf(obj)
-	_, found := o.cachesByType[objType]
-	return found
+var _ Informers = &informerCache{}
+var _ client.Reader = &informerCache{}
+var _ Cache = &informerCache{}
+
+// cache is a Kubernetes Object cache populated from InformersMap.  cache wraps a CacheProvider and InformersMap.
+type informerCache struct {
+	*internal.InformersMap
 }
 
-func (o *objectCache) init(obj runtime.Object) error {
-	i, err := o.informers.GetInformer(obj)
-	if err != nil {
-		return err
+func defaultOpts(config *rest.Config, opts Options) (Options, error) {
+	// Use the default Kubernetes Scheme if unset
+	if opts.Scheme == nil {
+		opts.Scheme = scheme.Scheme
 	}
-	if o.informers.started {
-		log.Info("Waiting to sync cache for type.", "Type", fmt.Sprintf("%T", obj))
-		toolscache.WaitForCacheSync(o.informers.stop, i.HasSynced)
-		log.Info("Finished to syncing cache for type.", "Type", fmt.Sprintf("%T", obj))
-	} else {
-		return fmt.Errorf("must start Cache before calling Get or List %s %s",
-			"Object", fmt.Sprintf("%T", obj))
-	}
-	return nil
-}
 
-func (o *objectCache) cacheFor(obj runtime.Object) (*singleObjectCache, error) {
-	if !o.informers.started {
-		return nil, fmt.Errorf("must start Cache before calling Get or List %s %s",
-			"Object", fmt.Sprintf("%T", obj))
-	}
-	objType := reflect.TypeOf(obj)
-
-	cache, isKnown := o.cachesByType[objType]
-	if !isKnown {
-		return nil, fmt.Errorf("no Cache found for %T - must call GetInformer", obj)
-	}
-	return cache, nil
-}
-
-// Get implements populatingClient.Reader
-func (o *objectCache) Get(ctx context.Context, key client.ObjectKey, out runtime.Object) error {
-	// Make sure there is a Cache for this type
-	if !o.has(out) {
-		err := o.init(out)
+	// Construct a new Mapper if unset
+	if opts.Mapper == nil {
+		var err error
+		opts.Mapper, err = apiutil.NewDiscoveryRESTMapper(config)
 		if err != nil {
-			return err
+			log.WithName("setup").Error(err, "Failed to get API Group-Resources")
+			return opts, fmt.Errorf("could not create RESTMapper from config")
 		}
 	}
 
-	cache, err := o.cacheFor(out)
+	// Default the resync period to 10 hours if unset
+	if opts.Resync == nil {
+		r := 10 * time.Hour
+		opts.Resync = &r
+	}
+	return opts, nil
+}
+
+// New initializes and returns a new Cache
+func New(config *rest.Config, opts Options) (Cache, error) {
+	opts, err := defaultOpts(config, opts)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	return cache.Get(ctx, key, out)
-}
-
-// List implements populatingClient.Reader
-func (o *objectCache) List(ctx context.Context, opts *client.ListOptions, out runtime.Object) error {
-	itemsPtr, err := apimeta.GetItemsPtr(out)
-	if err != nil {
-		return nil
-	}
-
-	ro, ok := itemsPtr.(runtime.Object)
-	if ok && !o.has(ro) {
-		err = o.init(ro)
-		if err != nil {
-			return err
-		}
-	}
-
-	// http://knowyourmeme.com/memes/this-is-fine
-	outType := reflect.Indirect(reflect.ValueOf(itemsPtr)).Type().Elem()
-	cache, isKnown := o.cachesByType[outType]
-	if !isKnown {
-		return fmt.Errorf("no cache for objects of type %T", out)
-	}
-	return cache.List(ctx, opts, out)
-}
-
-// singleObjectCache is a Reader
-var _ client.Reader = &singleObjectCache{}
-
-// singleObjectCache is a Reader that retrieves objects
-// from a single local cache populated by a watch.
-type singleObjectCache struct {
-	// Indexer is the underlying indexer wrapped by this cache.
-	Indexer cache.Indexer
-	// GroupVersionKind is the group-version-kind of the resource.
-	GroupVersionKind schema.GroupVersionKind
-}
-
-// Get implements populatingClient.Client
-func (c *singleObjectCache) Get(_ context.Context, key client.ObjectKey, out runtime.Object) error {
-	storeKey := objectKeyToStoreKey(key)
-	obj, exists, err := c.Indexer.GetByKey(storeKey)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		// Resource gets transformed into Kind in the error anyway, so this is fine
-		return errors.NewNotFound(schema.GroupResource{
-			Group:    c.GroupVersionKind.Group,
-			Resource: c.GroupVersionKind.Kind,
-		}, key.Name)
-	}
-	if _, isObj := obj.(runtime.Object); !isObj {
-		return fmt.Errorf("cache contained %T, which is not an Object", obj)
-	}
-
-	// deep copy to avoid mutating cache
-	// TODO(directxman12): revisit the decision to always deepcopy
-	obj = obj.(runtime.Object).DeepCopyObject()
-
-	// TODO(directxman12): this is a terrible hack, pls fix
-	// (we should have deepcopyinto)
-	outVal := reflect.ValueOf(out)
-	objVal := reflect.ValueOf(obj)
-	if !objVal.Type().AssignableTo(outVal.Type()) {
-		return fmt.Errorf("cache had type %s, but %s was asked for", objVal.Type(), outVal.Type())
-	}
-	reflect.Indirect(outVal).Set(reflect.Indirect(objVal))
-	return nil
-}
-
-// List implements populatingClient.Client
-func (c *singleObjectCache) List(ctx context.Context, opts *client.ListOptions, out runtime.Object) error {
-	var objs []interface{}
-	var err error
-
-	if opts != nil && opts.FieldSelector != nil {
-		// TODO(directxman12): support more complicated field selectors by
-		// combining multiple indicies, GetIndexers, etc
-		field, val, requiresExact := requiresExactMatch(opts.FieldSelector)
-		if !requiresExact {
-			return fmt.Errorf("non-exact field matches are not supported by the cache")
-		}
-		// list all objects by the field selector.  If this is namespaced and we have one, ask for the
-		// namespaced index key.  Otherwise, ask for the non-namespaced variant by using the fake "all namespaces"
-		// namespace.
-		objs, err = c.Indexer.ByIndex(fieldIndexName(field), keyToNamespacedKey(opts.Namespace, val))
-	} else if opts != nil && opts.Namespace != "" {
-		objs, err = c.Indexer.ByIndex(cache.NamespaceIndex, opts.Namespace)
-	} else {
-		objs = c.Indexer.List()
-	}
-	if err != nil {
-		return err
-	}
-	var labelSel labels.Selector
-	if opts != nil && opts.LabelSelector != nil {
-		labelSel = opts.LabelSelector
-	}
-
-	outItems, err := c.getListItems(objs, labelSel)
-	if err != nil {
-		return err
-	}
-	return apimeta.SetList(out, outItems)
-}
-
-func (c *singleObjectCache) getListItems(objs []interface{}, labelSel labels.Selector) ([]runtime.Object, error) {
-	outItems := make([]runtime.Object, 0, len(objs))
-	for _, item := range objs {
-		obj, isObj := item.(runtime.Object)
-		if !isObj {
-			return nil, fmt.Errorf("cache contained %T, which is not an Object", obj)
-		}
-		meta, err := apimeta.Accessor(obj)
-		if err != nil {
-			return nil, err
-		}
-		if labelSel != nil {
-			lbls := labels.Set(meta.GetLabels())
-			if !labelSel.Matches(lbls) {
-				continue
-			}
-		}
-		outItems = append(outItems, obj.DeepCopyObject())
-	}
-	return outItems, nil
-}
-
-// TODO: Make an interface with this function that has an Informers as an object on the struct
-// that automatically calls GetInformer and passes in the Indexer into indexByField
-
-// noNamespaceNamespace is used as the "namespace" when we want to list across all namespaces
-const allNamespacesNamespace = "__all_namespaces"
-
-// IndexField adds an indexer to the underlying cache, using extraction function to get
-// value(s) from the given field.  This index can then be used by passing a field selector
-// to List. For one-to-one compatibility with "normal" field selectors, only return one value.
-// The values may be anything.  They will automatically be prefixed with the namespace of the
-// given object, if present.  The objects passed are guaranteed to be objects of the correct type.
-func (i *informers) IndexField(obj runtime.Object, field string, extractValue client.IndexerFunc) error {
-	informer, err := i.GetInformer(obj)
-	if err != nil {
-		return err
-	}
-	return indexByField(informer.GetIndexer(), field, extractValue)
-}
-
-func indexByField(indexer cache.Indexer, field string, extractor client.IndexerFunc) error {
-	indexFunc := func(objRaw interface{}) ([]string, error) {
-		// TODO(directxman12): check if this is the correct type?
-		obj, isObj := objRaw.(runtime.Object)
-		if !isObj {
-			return nil, fmt.Errorf("object of type %T is not an Object", objRaw)
-		}
-		meta, err := apimeta.Accessor(obj)
-		if err != nil {
-			return nil, err
-		}
-		ns := meta.GetNamespace()
-
-		rawVals := extractor(obj)
-		var vals []string
-		if ns == "" {
-			// if we're not doubling the keys for the namespaced case, just re-use what was returned to us
-			vals = rawVals
-		} else {
-			// if we need to add non-namespaced versions too, double the length
-			vals = make([]string, len(rawVals)*2)
-		}
-		for i, rawVal := range rawVals {
-			// save a namespaced variant, so that we can ask
-			// "what are all the object matching a given index *in a given namespace*"
-			vals[i] = keyToNamespacedKey(ns, rawVal)
-			if ns != "" {
-				// if we have a namespace, also inject a special index key for listing
-				// regardless of the object namespace
-				vals[i+len(rawVals)] = keyToNamespacedKey("", rawVal)
-			}
-		}
-
-		return vals, nil
-	}
-
-	return indexer.AddIndexers(cache.Indexers{fieldIndexName(field): indexFunc})
-}
-
-// fieldIndexName constructs the name of the index over the given field,
-// for use with an Indexer.
-func fieldIndexName(field string) string {
-	return "field:" + field
-}
-
-// keyToNamespacedKey prefixes the given index key with a namespace
-// for use in field selector indexes.
-func keyToNamespacedKey(ns string, baseKey string) string {
-	if ns != "" {
-		return ns + "/" + baseKey
-	}
-	return allNamespacesNamespace + "/" + baseKey
-}
-
-// objectKeyToStorageKey converts an object key to store key.
-// It's akin to MetaNamespaceKeyFunc.  It's separate from
-// String to allow keeping the key format easily in sync with
-// MetaNamespaceKeyFunc.
-func objectKeyToStoreKey(k client.ObjectKey) string {
-	if k.Namespace == "" {
-		return k.Name
-	}
-	return k.Namespace + "/" + k.Name
-}
-
-// requiresExactMatch checks if the given field selector is of the form `k=v` or `k==v`.
-func requiresExactMatch(sel fields.Selector) (field, val string, required bool) {
-	reqs := sel.Requirements()
-	if len(reqs) != 1 {
-		return "", "", false
-	}
-	req := reqs[0]
-	if req.Operator != selection.Equals && req.Operator != selection.DoubleEquals {
-		return "", "", false
-	}
-	return req.Field, req.Value, true
+	im := internal.NewInformersMap(config, opts.Scheme, opts.Mapper, *opts.Resync)
+	return &informerCache{InformersMap: im}, nil
 }

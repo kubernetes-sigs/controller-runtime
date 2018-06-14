@@ -33,7 +33,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
-	toolscache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -80,9 +79,9 @@ type Controller struct {
 	// JitterPeriod allows tests to reduce the JitterPeriod so they complete faster
 	JitterPeriod time.Duration
 
-	// WaitForCache allows tests to mock out the WaitForCache function to return an error
+	// WaitForCacheSync allows tests to mock out the WaitForCacheSync function to return an error
 	// defaults to Cache.WaitForCacheSync
-	WaitForCache func(stopCh <-chan struct{}, cacheSyncs ...toolscache.InformerSynced) bool
+	WaitForCacheSync func(stopCh <-chan struct{}) bool
 
 	// Started is true if the Controller has been Started
 	Started bool
@@ -113,8 +112,6 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 		}
 	}
 
-	// TODO(pwittrock): wire in predicates
-
 	log.Info("Starting EventSource", "Controller", c.Name, "Source", src)
 	return src.Start(evthdler, c.Queue, prct...)
 }
@@ -132,16 +129,10 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 	log.Info("Starting Controller", "Controller", c.Name)
 
 	// Wait for the caches to be synced before starting workers
-	allInformers := c.Cache.KnownInformersByType()
-	syncedFuncs := make([]toolscache.InformerSynced, 0, len(allInformers))
-	for _, informer := range allInformers {
-		syncedFuncs = append(syncedFuncs, informer.HasSynced)
+	if c.WaitForCacheSync == nil {
+		c.WaitForCacheSync = c.Cache.WaitForCacheSync
 	}
-
-	if c.WaitForCache == nil {
-		c.WaitForCache = toolscache.WaitForCacheSync
-	}
-	if ok := c.WaitForCache(stop, syncedFuncs...); !ok {
+	if ok := c.WaitForCacheSync(stop); !ok {
 		// This code is unreachable right now since WaitForCacheSync will never return an error
 		// Leaving it here because that could happen in the future
 		err := fmt.Errorf("failed to wait for %s caches to sync", c.Name)

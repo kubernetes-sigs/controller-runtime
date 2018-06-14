@@ -34,7 +34,6 @@ import (
 	"k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	toolscache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -86,7 +85,7 @@ var _ = Describe("controller", func() {
 
 	Describe("Start", func() {
 		It("should return an error if there is an error waiting for the informers", func(done Done) {
-			ctrl.WaitForCache = func(<-chan struct{}, ...toolscache.InformerSynced) bool { return false }
+			ctrl.WaitForCacheSync = func(<-chan struct{}) bool { return false }
 			ctrl.Name = "foo"
 			err := ctrl.Start(stop)
 			Expect(err).To(HaveOccurred())
@@ -105,11 +104,7 @@ var _ = Describe("controller", func() {
 			c.GetInformer(&v1.Deployment{})
 			c.GetInformer(&v1.ReplicaSet{})
 			ctrl.Cache = c
-			ctrl.WaitForCache = func(_ <-chan struct{}, s ...toolscache.InformerSynced) bool {
-				defer GinkgoRecover()
-				Expect(s).To(HaveLen(2))
-				return true
-			}
+			ctrl.WaitForCacheSync = func(<-chan struct{}) bool { return true }
 
 			Expect(ctrl.Start(stopped)).NotTo(HaveOccurred())
 

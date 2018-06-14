@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/client/apiutil"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // NewInformersMap returns a new InformersMap

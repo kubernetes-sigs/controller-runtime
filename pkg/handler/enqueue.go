@@ -17,11 +17,11 @@ limitations under the License.
 package handler
 
 import (
-	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
 var enqueueLog = logf.KBLog.WithName("eventhandler").WithName("Enqueue")

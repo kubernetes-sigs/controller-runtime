@@ -17,11 +17,11 @@ limitations under the License.
 package handler
 
 import (
-	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 var _ EventHandler = &EnqueueMapped{}

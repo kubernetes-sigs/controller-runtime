@@ -19,13 +19,13 @@ package manager
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/client/apiutil"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // Manager initializes shared dependencies such as Caches and Clients, and provides them to runnables.

@@ -17,10 +17,10 @@ limitations under the License.
 package inject
 
 import (
-	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Cache is used by the ControllerManager to inject Cache into Sources, EventHandlers, Predicates, and

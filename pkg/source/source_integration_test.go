@@ -19,10 +19,10 @@ package source_test
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/handler"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/source"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

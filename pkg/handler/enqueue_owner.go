@@ -19,15 +19,15 @@ package handler
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/event"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
-	logf "github.com/kubernetes-sigs/controller-runtime/pkg/runtime/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
 var _ EventHandler = &EnqueueOwner{}

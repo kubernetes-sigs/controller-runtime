@@ -19,16 +19,16 @@ package manager
 import (
 	"fmt"
 
-	"github.com/kubernetes-sigs/controller-runtime/pkg/cache"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/cache/informertest"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/reconcile"
-	"github.com/kubernetes-sigs/controller-runtime/pkg/runtime/inject"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 var _ = Describe("manger.Manager", func() {

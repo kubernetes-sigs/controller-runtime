@@ -32,11 +32,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// Reader is a Reader
-var _ client.Reader = &Reader{}
+// CacheReader is a CacheReader
+var _ client.Reader = &CacheReader{}
 
-// Reader wraps a cache.Index to implement the client.Reader interface for a single type
-type Reader struct {
+// CacheReader wraps a cache.Index to implement the client.CacheReader interface for a single type
+type CacheReader struct {
 	// indexer is the underlying indexer wrapped by this cache.
 	indexer cache.Indexer
 
@@ -45,7 +45,7 @@ type Reader struct {
 }
 
 // Get checks the indexer for the object and writes a copy of it if found
-func (c *Reader) Get(_ context.Context, key client.ObjectKey, out runtime.Object) error {
+func (c *CacheReader) Get(_ context.Context, key client.ObjectKey, out runtime.Object) error {
 	storeKey := objectKeyToStoreKey(key)
 
 	// Lookup the object from the indexer cache
@@ -86,7 +86,7 @@ func (c *Reader) Get(_ context.Context, key client.ObjectKey, out runtime.Object
 }
 
 // List lists items out of the indexer and writes them to out
-func (c *Reader) List(ctx context.Context, opts *client.ListOptions, out runtime.Object) error {
+func (c *CacheReader) List(ctx context.Context, opts *client.ListOptions, out runtime.Object) error {
 	var objs []interface{}
 	var err error
 
@@ -121,7 +121,7 @@ func (c *Reader) List(ctx context.Context, opts *client.ListOptions, out runtime
 	return apimeta.SetList(out, outItems)
 }
 
-func (c *Reader) getListItems(objs []interface{}, labelSel labels.Selector) ([]runtime.Object, error) {
+func (c *CacheReader) getListItems(objs []interface{}, labelSel labels.Selector) ([]runtime.Object, error) {
 	outItems := make([]runtime.Object, 0, len(objs))
 	for _, item := range objs {
 		obj, isObj := item.(runtime.Object)

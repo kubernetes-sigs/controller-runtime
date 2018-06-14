@@ -54,8 +54,8 @@ type MapEntry struct {
 	// Informer is the cached informer
 	Informer cache.SharedIndexInformer
 
-	// Reader wraps Informer and implements the Reader interface for a single type
-	Reader Reader
+	// CacheReader wraps Informer and implements the CacheReader interface for a single type
+	Reader CacheReader
 }
 
 // InformersMap create and caches Informers for (runtime.Object, schema.GroupVersionKind) pairs.
@@ -122,7 +122,7 @@ func (ip *InformersMap) WaitForCacheSync(stop <-chan struct{}) bool {
 	return cache.WaitForCacheSync(stop, syncedFuncs...)
 }
 
-// Get will create a new Informer and added it to the map of InformersMap if none exists.  Returns
+// Get will create a new Informer and add it to the map of InformersMap if none exists.  Returns
 // the Informer from the map.
 func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*MapEntry, error) {
 	// Return the informer if it is found
@@ -137,7 +137,7 @@ func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*M
 	}
 
 	// Do the mutex part in its own function so we can use defer without blocking pieces that don't
-	// to be locked
+	// need to be locked
 	var sync bool
 	i, err := func() (*MapEntry, error) {
 		ip.mu.Lock()
@@ -161,7 +161,7 @@ func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*M
 		ni := cache.NewSharedIndexInformer(lw, obj, ip.resync, cache.Indexers{})
 		i = &MapEntry{
 			Informer: ni,
-			Reader:   Reader{indexer: ni.GetIndexer(), groupVersionKind: gvk}}
+			Reader:   CacheReader{indexer: ni.GetIndexer(), groupVersionKind: gvk}}
 		ip.informersByGVK[gvk] = i
 
 		// Start the Informer if need by

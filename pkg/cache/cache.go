@@ -17,9 +17,8 @@ limitations under the License.
 package cache
 
 import (
-	"time"
-
 	"fmt"
+	"time"
 
 	"github.com/kubernetes-sigs/controller-runtime/pkg/cache/internal"
 	"github.com/kubernetes-sigs/controller-runtime/pkg/client"
@@ -35,9 +34,9 @@ import (
 
 var log = logf.KBLog.WithName("object-cache")
 
-// Cache implements Reader by reading objects from a cache populated by InformersMap
+// Cache implements CacheReader by reading objects from a cache populated by InformersMap
 type Cache interface {
-	// Cache implements the client Reader
+	// Cache implements the client CacheReader
 	client.Reader
 
 	// Cache implements InformersMap
@@ -82,13 +81,16 @@ type Options struct {
 	Resync *time.Duration
 }
 
-var _ Informers = &informerCache{}
-var _ client.Reader = &informerCache{}
-var _ Cache = &informerCache{}
+var defaultResyncTime = 10 * time.Hour
 
-// cache is a Kubernetes Object cache populated from InformersMap.  cache wraps a CacheProvider and InformersMap.
-type informerCache struct {
-	*internal.InformersMap
+// New initializes and returns a new Cache
+func New(config *rest.Config, opts Options) (Cache, error) {
+	opts, err := defaultOpts(config, opts)
+	if err != nil {
+		return nil, err
+	}
+	im := internal.NewInformersMap(config, opts.Scheme, opts.Mapper, *opts.Resync)
+	return &informerCache{InformersMap: im}, nil
 }
 
 func defaultOpts(config *rest.Config, opts Options) (Options, error) {
@@ -109,18 +111,7 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 
 	// Default the resync period to 10 hours if unset
 	if opts.Resync == nil {
-		r := 10 * time.Hour
-		opts.Resync = &r
+		opts.Resync = &defaultResyncTime
 	}
 	return opts, nil
-}
-
-// New initializes and returns a new Cache
-func New(config *rest.Config, opts Options) (Cache, error) {
-	opts, err := defaultOpts(config, opts)
-	if err != nil {
-		return nil, err
-	}
-	im := internal.NewInformersMap(config, opts.Scheme, opts.Mapper, *opts.Resync)
-	return &informerCache{InformersMap: im}, nil
 }

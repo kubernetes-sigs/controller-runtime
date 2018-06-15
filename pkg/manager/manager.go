@@ -23,9 +23,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	internalrecorder "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
+	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
 
 // Manager initializes shared dependencies such as Caches and Clients, and provides them to runnables.
@@ -57,6 +60,9 @@ type Manager interface {
 
 	// GetCache returns a cache.Cache
 	GetCache() cache.Cache
+
+	// GetRecorder returns a new EventRecorder for the provided name
+	GetRecorder(name string) record.EventRecorder
 }
 
 // Options are the arguments for creating a new Manager
@@ -69,8 +75,9 @@ type Options struct {
 	MapperProvider func(c *rest.Config) (meta.RESTMapper, error)
 
 	// Dependency injection for testing
-	newCache  func(config *rest.Config, opts cache.Options) (cache.Cache, error)
-	newClient func(config *rest.Config, options client.Options) (client.Client, error)
+	newCache            func(config *rest.Config, opts cache.Options) (cache.Cache, error)
+	newClient           func(config *rest.Config, options client.Options) (client.Client, error)
+	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme) (recorder.Provider, error)
 }
 
 // Runnable allows a component to be started.
@@ -102,30 +109,21 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		cm.scheme = scheme.Scheme
 	}
 
-	// Create a new RESTMapper for mapping GroupVersionKinds to Resources
-	if options.MapperProvider == nil {
-		options.MapperProvider = apiutil.NewDiscoveryRESTMapper
-	}
+	// Set default values for options fields
+	options = setOptionsDefaults(options)
+
 	mapper, err := options.MapperProvider(cm.config)
 	if err != nil {
 		log.Error(err, "Failed to get API Group-Resources")
 		return nil, err
 	}
 
-	// Allow newClient to be mocked
-	if options.newClient == nil {
-		options.newClient = client.New
-	}
 	// Create the Client for Write operations.
 	writeObj, err := options.newClient(cm.config, client.Options{Scheme: cm.scheme, Mapper: mapper})
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO(directxman12): Figure out how to allow users to request a client without requesting a watch
-	if options.newCache == nil {
-		options.newCache = cache.New
-	}
 	cm.cache, err = options.newCache(cm.config, cache.Options{Scheme: cm.scheme, Mapper: mapper})
 	if err != nil {
 		return nil, err
@@ -133,5 +131,37 @@ func New(config *rest.Config, options Options) (Manager, error) {
 
 	cm.fieldIndexes = cm.cache
 	cm.client = client.DelegatingClient{Reader: cm.cache, Writer: writeObj}
+
+	// Create the recorder provider to inject event recorders for the components.
+	cm.recorderProvider, err = options.newRecorderProvider(cm.config, cm.scheme)
+	if err != nil {
+		return nil, err
+	}
+
 	return cm, nil
+}
+
+// setOptionsDefaults set default values for Options fields
+func setOptionsDefaults(options Options) Options {
+	if options.MapperProvider == nil {
+		options.MapperProvider = apiutil.NewDiscoveryRESTMapper
+	}
+
+	// Allow newClient to be mocked
+	if options.newClient == nil {
+		options.newClient = client.New
+	}
+
+	// Allow newCache to be mocked
+	// TODO(directxman12): Figure out how to allow users to request a client without requesting a watch
+	if options.newCache == nil {
+		options.newCache = cache.New
+	}
+
+	// Allow newRecorderProvider to be mocked
+	if options.newRecorderProvider == nil {
+		options.newRecorderProvider = internalrecorder.NewProvider
+	}
+
+	return options
 }

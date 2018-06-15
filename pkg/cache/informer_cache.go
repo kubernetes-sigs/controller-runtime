@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,9 +31,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
-var _ Informers = &informerCache{}
-var _ client.Reader = &informerCache{}
-var _ Cache = &informerCache{}
+var (
+	_ Informers     = &informerCache{}
+	_ client.Reader = &informerCache{}
+	_ Cache         = &informerCache{}
+)
 
 // informerCache is a Kubernetes Object cache populated from InformersMap.  cache wraps an InformersMap.
 type informerCache struct {
@@ -60,19 +63,26 @@ func (ip *informerCache) List(ctx context.Context, opts *client.ListOptions, out
 		return nil
 	}
 
-	// http://knowyourmeme.com/memes/this-is-fine
-	outType := reflect.Indirect(reflect.ValueOf(itemsPtr)).Type().Elem()
-	cacheType, ok := outType.(runtime.Object)
-	if !ok {
-		return fmt.Errorf("cannot get cache for %T, its element is not a runtime.Object", out)
-	}
-
 	gvk, err := apiutil.GVKForObject(out, ip.Scheme)
 	if err != nil {
 		return err
 	}
 
-	cache, err := ip.InformersMap.Get(gvk, cacheType)
+	if !strings.HasSuffix(gvk.Kind, "List") {
+		return fmt.Errorf("non-list type %T (kind %q) passed as output", out, gvk)
+	}
+	// we need the non-list GVK, so chop off the "List" from the end of the kind
+	gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
+
+	// http://knowyourmeme.com/memes/this-is-fine
+	elemType := reflect.Indirect(reflect.ValueOf(itemsPtr)).Type().Elem()
+	cacheTypeValue := reflect.Zero(reflect.PtrTo(elemType))
+	cacheTypeObj, ok := cacheTypeValue.Interface().(runtime.Object)
+	if !ok {
+		return fmt.Errorf("cannot get cache for %T, its element %T is not a runtime.Object", out, cacheTypeValue.Interface())
+	}
+
+	cache, err := ip.InformersMap.Get(gvk, cacheTypeObj)
 	if err != nil {
 		return err
 	}

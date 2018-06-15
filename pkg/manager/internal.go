@@ -21,8 +21,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
@@ -49,6 +51,10 @@ type controllerManager struct {
 	// fieldIndexes knows how to add field indexes over the Cache used by this controller,
 	// which can later be consumed via field selectors from the injected client.
 	fieldIndexes client.FieldIndexer
+
+	// recorderProvider is used to generate event recorders that will be injected into Controllers
+	// (and EventHandlers, Sources and Predicates).
+	recorderProvider recorder.Provider
 
 	mu      sync.Mutex
 	started bool
@@ -120,6 +126,10 @@ func (cm *controllerManager) GetFieldIndexer() client.FieldIndexer {
 
 func (cm *controllerManager) GetCache() cache.Cache {
 	return cm.cache
+}
+
+func (cm *controllerManager) GetRecorder(name string) record.EventRecorder {
+	return cm.recorderProvider.GetEventRecorderFor(name)
 }
 
 func (cm *controllerManager) Start(stop <-chan struct{}) error {

@@ -25,6 +25,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -85,6 +86,10 @@ type Controller struct {
 
 	// Started is true if the Controller has been Started
 	Started bool
+
+	// Recorder is an event recorder for recording Event resources to the
+	// Kubernetes API.
+	Recorder record.EventRecorder
 
 	// TODO(community): Consider initializing a logger with the Controller Name as the tag
 }

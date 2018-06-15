@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
@@ -75,6 +76,17 @@ var _ = Describe("manger.Manager", func() {
 		It("should return an error it can't create a cache.Cache", func(done Done) {
 			m, err := New(cfg, Options{
 				newCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
+					return nil, fmt.Errorf("expected error")
+				}})
+			Expect(m).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("expected error"))
+
+			close(done)
+		})
+		It("should return an error it can't create a recorder.Provider", func(done Done) {
+			m, err := New(cfg, Options{
+				newRecorderProvider: func(config *rest.Config, scheme *runtime.Scheme) (recorder.Provider, error) {
 					return nil, fmt.Errorf("expected error")
 				}})
 			Expect(m).To(BeNil())
@@ -361,6 +373,12 @@ var _ = Describe("manger.Manager", func() {
 		mrg, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
 		Expect(m.GetFieldIndexer()).To(Equal(mrg.fieldIndexes))
+	})
+
+	It("should provide a function to get the EventRecorder", func() {
+		m, err := New(cfg, Options{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetRecorder("test")).NotTo(BeNil())
 	})
 })
 

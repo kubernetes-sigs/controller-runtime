@@ -154,11 +154,13 @@ header_text "running coverage"
 
 # Verify no coverage regressions have been introduced.  Remove the exception list from here
 # once the coverage has been brought back up
-if [[ ! $(go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements"  | grep -v "controller-runtime/pkg\|pkg/admission/certprovisioner\|pkg/internal/admission\|pkg/cache\|pkg/client\|pkg/event\|pkg/client/config\|pkg/controller/controllertest\|pkg/reconcile/reconciletest\|pkg/runtime/inject\|pkg/runtime/log\|pkg/runtime/signals\|pkg/test\|pkg/runtime/inject\|pkg/runtime/signals") ]]; then
+if [[ ! $(go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements" | grep "controller-runtime/pkg " | grep -v "controller-runtime/pkg \|controller-runtime/pkg/recorder \|pkg/admission/certprovisioner \|pkg/internal/admission \|pkg/cache\|pkg/client \|pkg/event \|pkg/client/config \|pkg/controller/controllertest \|pkg/reconcile/reconciletest \|pkg/test ") ]]; then
 echo "ok"
 else
-go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements"  | grep -v "controller-runtime/pkg\|pkg/admission/certprovisioner\|pkg/internal/admission\|pkg/cache\|pkg/client\|pkg/event\|pkg/client/config\|pkg/controller/controllertest\|pkg/reconcile/reconciletest\|pkg/runtime/inject\|pkg/runtime/log\|pkg/runtime/signals\|pkg/test\|pkg/runtime/inject\|pkg/runtime/signals"
+go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements" | grep "controller-runtime/pkg " | grep -v "controller-runtime/pkg \|controller-runtime/pkg/recorder \|pkg/admission/certprovisioner \|pkg/internal/admission \|pkg/cache\|pkg/client \|pkg/event \|pkg/client/config \|pkg/controller/controllertest \|pkg/reconcile/reconciletest \|pkg/test "
 echo "missing test coverage"
 exit 1
 fi
 
+echo "passed"
+exit 0

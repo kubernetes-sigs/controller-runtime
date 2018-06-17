@@ -52,6 +52,9 @@ type Controller interface {
 
 	// Start starts the controller.  Start blocks until stop is closed or a controller has an error starting.
 	Start(stop <-chan struct{}) error
+
+	// SetReconcile sets the Reconcile function on a Controller
+	SetReconcile(reconcile.Reconcile)
 }
 
 // New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have

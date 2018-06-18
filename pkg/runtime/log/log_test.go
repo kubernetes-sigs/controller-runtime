@@ -17,6 +17,8 @@ limitations under the License.
 package log
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	tlogr "github.com/thockin/logr/testing"
@@ -58,7 +60,26 @@ var _ = Describe("runtime log", func() {
 			Log.WithTags(tags)
 			Expect(Log.Logger).To(Equal(test))
 		})
+	})
 
+	Describe("fataliferr", func() {
+		It("should not call the fn if there is not an error", func() {
+			called := false
+			fn := func(format string, v ...interface{}) {
+				called = true
+			}
+			fatalIfErr(nil, fn)
+			Expect(called).To(BeFalse())
+		})
+
+		It("should call the fn if there is an error", func() {
+			called := false
+			fn := func(format string, v ...interface{}) {
+				called = true
+			}
+			fatalIfErr(fmt.Errorf("error"), fn)
+			Expect(called).To(BeTrue())
+		})
 	})
 
 })

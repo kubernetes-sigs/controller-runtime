@@ -23,11 +23,15 @@ func ZapLogger(development bool) logr.Logger {
 		zapLogCfg := zap.NewProductionConfig()
 		zapLog, err = zapLogCfg.Build(zap.AddCallerSkip(1))
 	}
-	if err != nil {
-		// who watches the watchmen?
-		log.Fatalf("unable to construct the logger: %v", err)
-	}
+	// who watches the watchmen?
+	fatalIfErr(err, log.Fatalf)
 	return zaplogr.NewLogger(zapLog)
+}
+
+func fatalIfErr(err error, f func(format string, v ...interface{})) {
+	if err != nil {
+		f("unable to construct the logger: %v", err)
+	}
 }
 
 // SetLogger sets a concrete logging implementation for all deferred Loggers.

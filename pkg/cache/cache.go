@@ -55,7 +55,7 @@ type Informers interface {
 	GetInformerForKind(gvk schema.GroupVersionKind) (toolscache.SharedIndexInformer, error)
 
 	// Start runs all the informers known to this cache until the given channel is closed.
-	// It does not block.
+	// It blocks.
 	Start(stopCh <-chan struct{}) error
 
 	// WaitForCacheSync waits for all the caches to sync.  Returns false if it could not sync a cache.

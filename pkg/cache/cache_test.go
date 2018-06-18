@@ -14,11 +14,82 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cache
+package cache_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	kcorev1 "k8s.io/api/core/v1"
+
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+var _ = Describe("Informer Cache", func() {
+	var stop chan struct{}
+
+	BeforeEach(func() {
+		stop = make(chan struct{})
+		Expect(cfg).NotTo(BeNil())
+	})
+	AfterEach(func() {
+		close(stop)
+	})
+
+	Describe("as a Reader", func() {
+		It("should be able to list objects that haven't been watched previously", func() {
+			By("Creating the cache")
+			reader, err := cache.New(cfg, cache.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("running the cache and waiting for it to sync")
+			go func() {
+				defer GinkgoRecover()
+				Expect(reader.Start(stop)).ToNot(HaveOccurred())
+			}()
+			Expect(reader.WaitForCacheSync(stop)).NotTo(BeFalse())
+
+			By("Listing all services in the cluster")
+			listObj := &kcorev1.ServiceList{}
+			Expect(reader.List(context.Background(), nil, listObj)).NotTo(HaveOccurred())
+
+			By("Verifying that the returned list contains the Kubernetes service")
+			// NB: there has to be at least the kubernetes service in the cluster
+			Expect(listObj.Items).NotTo(BeEmpty())
+			hasKubeService := false
+			for _, svc := range listObj.Items {
+				if svc.Namespace == "default" && svc.Name == "kubernetes" {
+					hasKubeService = true
+					break
+				}
+			}
+			Expect(hasKubeService).To(BeTrue())
+		})
+
+		It("should be able to get objects that haven't been watched previously", func() {
+			By("Creating the cache")
+			reader, err := cache.New(cfg, cache.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("running the cache and waiting for it to sync")
+			go func() {
+				defer GinkgoRecover()
+				Expect(reader.Start(stop)).ToNot(HaveOccurred())
+			}()
+			Expect(reader.WaitForCacheSync(stop)).NotTo(BeFalse())
+
+			By("Getting the Kubernetes service")
+			svc := &kcorev1.Service{}
+			Expect(reader.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "kubernetes"}, svc)).NotTo(HaveOccurred())
+
+			By("Verifying that the returned service looks reasonable")
+			Expect(svc.Name).To(Equal("kubernetes"))
+			Expect(svc.Namespace).To(Equal("default"))
+		})
+	})
+})
 
 var _ = Describe("Indexers", func() {
 	//three := int64(3)

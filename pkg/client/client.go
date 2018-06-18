@@ -142,8 +142,12 @@ func (c *client) List(ctx context.Context, opts *ListOptions, obj runtime.Object
 	if err != nil {
 		return err
 	}
+	namespace := ""
+	if opts != nil {
+		namespace = opts.Namespace
+	}
 	return r.Get().
-		NamespaceIfScoped(opts.Namespace, r.isNamespaced()).
+		NamespaceIfScoped(namespace, r.isNamespaced()).
 		Resource(r.resource()).
 		Body(obj).
 		VersionedParams(opts.AsListOptions(), c.paramCodec).

@@ -127,10 +127,14 @@ func (o *ListOptions) SetFieldSelector(selRaw string) error {
 // This may mutate the Raw field.
 func (o *ListOptions) AsListOptions() *metav1.ListOptions {
 	if o == nil {
-		return nil
+		return &metav1.ListOptions{}
 	}
-	o.Raw.LabelSelector = o.LabelSelector.String()
-	o.Raw.FieldSelector = o.FieldSelector.String()
+	if o.LabelSelector != nil {
+		o.Raw.LabelSelector = o.LabelSelector.String()
+	}
+	if o.FieldSelector != nil {
+		o.Raw.FieldSelector = o.FieldSelector.String()
+	}
 	return o.Raw
 }
 

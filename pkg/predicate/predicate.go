@@ -16,7 +16,12 @@ limitations under the License.
 
 package predicate
 
-import "sigs.k8s.io/controller-runtime/pkg/event"
+import (
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+)
+
+var log = logf.KBLog.WithName("predicate").WithName("eventFilters")
 
 // Predicate filters events before enqueuing the keys.
 type Predicate interface {
@@ -34,6 +39,7 @@ type Predicate interface {
 }
 
 var _ Predicate = Funcs{}
+var _ Predicate = ResourceVersionChangedPredicate{}
 
 // Funcs is a function that implements Predicate.
 type Funcs struct {
@@ -78,6 +84,35 @@ func (p Funcs) Update(e event.UpdateEvent) bool {
 func (p Funcs) Generic(e event.GenericEvent) bool {
 	if p.GenericFunc != nil {
 		return p.GenericFunc(e)
+	}
+	return true
+}
+
+// ResourceVersionChangedPredicate implements a default update predicate function on resource version change
+type ResourceVersionChangedPredicate struct {
+	Funcs
+}
+
+// Update implements default UpdateEvent filter for validating resource version change
+func (ResourceVersionChangedPredicate) Update(e event.UpdateEvent) bool {
+	if e.MetaOld == nil {
+		log.Error(nil, "UpdateEvent has no old metadata", "UpdateEvent", e)
+		return false
+	}
+	if e.ObjectOld == nil {
+		log.Error(nil, "GenericEvent has no old runtime object to update", "GenericEvent", e)
+		return false
+	}
+	if e.ObjectNew == nil {
+		log.Error(nil, "GenericEvent has no new runtime object for update", "GenericEvent", e)
+		return false
+	}
+	if e.MetaNew == nil {
+		log.Error(nil, "UpdateEvent has no new metadata", "UpdateEvent", e)
+		return false
+	}
+	if e.MetaNew.GetResourceVersion() == e.MetaOld.GetResourceVersion() {
+		return false
 	}
 	return true
 }

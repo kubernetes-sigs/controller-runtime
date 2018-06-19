@@ -175,4 +175,137 @@ var _ = Describe("Predicate", func() {
 			close(done)
 		})
 	})
+
+	Describe("When checking a ResourceVersionChangedPredicate", func() {
+		instance := predicate.ResourceVersionChangedPredicate{}
+
+		Context("Where the old object doesn't have a ResourceVersion or metadata", func() {
+			It("should return false", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "baz",
+						Namespace:       "biz",
+						ResourceVersion: "1",
+					}}
+
+				failEvnt := event.UpdateEvent{
+					MetaNew:   new.GetObjectMeta(),
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).Should(BeTrue())
+				Expect(instance.Update(failEvnt)).Should(BeFalse())
+			})
+		})
+
+		Context("Where the new object doesn't have a ResourceVersion or metadata", func() {
+			It("should return false", func() {
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "baz",
+						Namespace:       "biz",
+						ResourceVersion: "1",
+					}}
+
+				failEvnt := event.UpdateEvent{
+					MetaOld:   old.GetObjectMeta(),
+					ObjectOld: old,
+				}
+				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).Should(BeTrue())
+				Expect(instance.Update(failEvnt)).Should(BeFalse())
+				Expect(instance.Update(failEvnt)).Should(BeFalse())
+			})
+		})
+
+		Context("Where the ResourceVersion hasn't changed", func() {
+			It("should return false", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "baz",
+						Namespace:       "biz",
+						ResourceVersion: "v1",
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "baz",
+						Namespace:       "biz",
+						ResourceVersion: "v1",
+					}}
+
+				failEvnt := event.UpdateEvent{
+					MetaOld:   old.GetObjectMeta(),
+					ObjectOld: old,
+					MetaNew:   new.GetObjectMeta(),
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).Should(BeTrue())
+				Expect(instance.Update(failEvnt)).Should(BeFalse())
+				Expect(instance.Update(failEvnt)).Should(BeFalse())
+			})
+		})
+
+		Context("Where the ResourceVersion has changed", func() {
+			It("should return true", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "baz",
+						Namespace:       "biz",
+						ResourceVersion: "v1",
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "baz",
+						Namespace:       "biz",
+						ResourceVersion: "v2",
+					}}
+				passEvt := event.UpdateEvent{
+					MetaOld:   old.GetObjectMeta(),
+					ObjectOld: old,
+					MetaNew:   new.GetObjectMeta(),
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).Should(BeTrue())
+				Expect(instance.Update(passEvt)).Should(BeTrue())
+			})
+		})
+
+		Context("Where the objects or metadata are missing", func() {
+
+			It("should return false", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "baz",
+						Namespace:       "biz",
+						ResourceVersion: "v1",
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "baz",
+						Namespace:       "biz",
+						ResourceVersion: "v1",
+					}}
+
+				failEvt1 := event.UpdateEvent{MetaOld: old.GetObjectMeta(), ObjectOld: old, MetaNew: new.GetObjectMeta()}
+				failEvt2 := event.UpdateEvent{MetaOld: old.GetObjectMeta(), MetaNew: new.GetObjectMeta(), ObjectNew: new}
+				failEvt3 := event.UpdateEvent{MetaOld: old.GetObjectMeta(), ObjectOld: old, ObjectNew: new}
+				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).Should(BeTrue())
+				Expect(instance.Update(failEvt1)).Should(BeFalse())
+				Expect(instance.Update(failEvt2)).Should(BeFalse())
+				Expect(instance.Update(failEvt3)).Should(BeFalse())
+			})
+		})
+
+	})
 })

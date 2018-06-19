@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package certprovisioner
+package certgenerator
 
 import (
 	"crypto/x509"
@@ -24,8 +24,8 @@ import (
 
 func TestProvisionServingCert(t *testing.T) {
 	cn := "mysvc.myns.svc"
-	cp := SelfSignedCertProvisioner{CommonName: cn}
-	certs, _ := cp.ProvisionServingCert()
+	cp := SelfSignedCertGenerator{}
+	certs, _ := cp.Generate(cn)
 
 	// First, create the set of root certificates. For this example we only
 	// have one. It's also possible to omit this in order to use the

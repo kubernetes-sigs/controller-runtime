@@ -14,22 +14,34 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package reconcile_test
+package envtest
 
 import (
 	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
-func TestReconcile(t *testing.T) {
+func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "reconcile Suite", []Reporter{envtest.NewlineReporter{}})
+	RunSpecsWithDefaultAndCustomReporters(t, "EnvTest Suite", []Reporter{NewlineReporter{}})
 }
 
-var _ = BeforeSuite(func() {
+var env *Environment
+
+var _ = BeforeSuite(func(done Done) {
 	logf.SetLogger(logf.ZapLogger(false))
-})
+	env = &Environment{}
+	_, err := env.Start()
+	Expect(err).NotTo(HaveOccurred())
+
+	close(done)
+}, StartTimeout)
+
+var _ = AfterSuite(func(done Done) {
+	Expect(env.Stop()).NotTo(HaveOccurred())
+
+	close(done)
+}, StopTimeout)

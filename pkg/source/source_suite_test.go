@@ -19,23 +19,21 @@ package source_test
 import (
 	"testing"
 
-	"time"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-	"sigs.k8s.io/controller-runtime/pkg/test"
 )
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Source Suite", []Reporter{test.NewlineReporter{}})
+	RunSpecsWithDefaultAndCustomReporters(t, "Source Suite", []Reporter{envtest.NewlineReporter{}})
 }
 
-var testenv *test.Environment
+var testenv *envtest.Environment
 var config *rest.Config
 var clientset *kubernetes.Clientset
 var icache cache.Cache
@@ -45,13 +43,11 @@ var _ = BeforeSuite(func(done Done) {
 	stop = make(chan struct{})
 	logf.SetLogger(logf.ZapLogger(true))
 
-	testenv = &test.Environment{}
+	testenv = &envtest.Environment{}
 
 	var err error
 	config, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
-
-	time.Sleep(1 * time.Second)
 
 	clientset, err = kubernetes.NewForConfig(config)
 	Expect(err).NotTo(HaveOccurred())

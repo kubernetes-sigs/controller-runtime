@@ -35,7 +35,7 @@ var (
 func init() {
 	// TODO: Fix this to allow double vendoring this library but still register flags on behalf of users
 	flag.StringVar(&kubeconfig, "kubeconfig", "",
-		"Path to a kubeconfig. Only required if out-of-cluster.")
+		"Paths to a kubeconfig. Only required if out-of-cluster.")
 
 	flag.StringVar(&masterURL, "master", "",
 		"The address of the Kubernetes API server. Overrides any value in kubeconfig. "+

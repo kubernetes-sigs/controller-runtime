@@ -14,13 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package test
+package envtest
 
 import (
 	"os"
-	"time"
 
-	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/testing_frameworks/integration"
 )
@@ -31,14 +30,24 @@ const (
 	envEtcdBin              = "TEST_ASSET_ETCD"
 	defaultKubeAPIServerBin = "/usr/local/kubebuilder/bin/kube-apiserver"
 	defaultEtcdBin          = "/usr/local/kubebuilder/bin/etcd"
+	StartTimeout            = 60
+	StopTimeout             = 60
 )
 
 // Environment creates a Kubernetes test environment that will start / stop the Kubernetes control plane and
 // install extension APIs
 type Environment struct {
+	// ControlPlane is the ControlPlane including the apiserver and etcd
 	ControlPlane integration.ControlPlane
-	Config       *rest.Config
-	CRDs         []*extensionsv1beta1.CustomResourceDefinition
+
+	// Config can be used to talk to the apiserver
+	Config *rest.Config
+
+	// CRDs is a list of CRDs to install
+	CRDs []*apiextensionsv1beta1.CustomResourceDefinition
+
+	// CRDDirectoryPaths is a list of paths containing CRD yaml or json configs.
+	CRDDirectoryPaths []string
 }
 
 // Stop stops a running server
@@ -57,15 +66,7 @@ func (te *Environment) Start() (*rest.Config, error) {
 	}
 
 	// Start the control plane - retry if it fails
-	var err error
-	for i := 0; i < 5; i++ {
-		err = te.ControlPlane.Start()
-		if err == nil {
-			break
-		}
-	}
-	// Give up trying to start the control plane
-	if err != nil {
+	if err := te.ControlPlane.Start(); err != nil {
 		return nil, err
 	}
 
@@ -74,9 +75,9 @@ func (te *Environment) Start() (*rest.Config, error) {
 		Host: te.ControlPlane.APIURL().Host,
 	}
 
-	// Wait for discovery service to register CRDs
-	// TODO: Poll for this or find a better way of ensuring CRDs are registered in discovery
-	time.Sleep(time.Second * 1)
-
+	_, err := InstallCRDs(te.Config, CRDInstallOptions{
+		Paths: te.CRDDirectoryPaths,
+		CRDs:  te.CRDs,
+	})
 	return te.Config, err
 }

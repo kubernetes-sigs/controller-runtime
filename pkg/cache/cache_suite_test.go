@@ -18,35 +18,32 @@ package cache_test
 
 import (
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-	"sigs.k8s.io/controller-runtime/pkg/test"
 )
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Cache Suite", []Reporter{test.NewlineReporter{}})
+	RunSpecsWithDefaultAndCustomReporters(t, "Cache Suite", []Reporter{envtest.NewlineReporter{}})
 }
 
-var testenv *test.Environment
+var testenv *envtest.Environment
 var cfg *rest.Config
 var clientset *kubernetes.Clientset
 
 var _ = BeforeSuite(func(done Done) {
 	logf.SetLogger(logf.ZapLogger(false))
 
-	testenv = &test.Environment{}
+	testenv = &envtest.Environment{}
 
 	var err error
 	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
-
-	time.Sleep(1 * time.Second)
 
 	clientset, err = kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())

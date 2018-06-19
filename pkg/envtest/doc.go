@@ -14,5 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package test provides libaries for integration testing by starting a local control plane
-package test
+// Package envtest provides libraries for integration testing by starting a local control plane
+package envtest

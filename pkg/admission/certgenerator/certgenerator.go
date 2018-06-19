@@ -14,19 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*
-Package certprovisioner provides an interface and implementation to provision certificates.
+package certgenerator
 
-Create a implementation instance of certprovisioner.
+// CertArtifacts hosts a private key, its corresponding serving certificate and
+// the CA certificate that signs the serving certificate.
+type CertArtifacts struct {
+	Key    []byte
+	Cert   []byte
+	CACert []byte
+}
 
-	cp := SelfSignedCertProvisioner{
-		CommonName: "foo.bar.com"
-	}
-
-Provision the certificates.
-	certs, err := cp.ProvisionServingCert()
-	if err != nil {
-		// handle error
-	}
-*/
-package certprovisioner
+// CertGenerator is an interface to provision the serving certificate.
+type CertGenerator interface {
+	// Generate returns a CertArtifacts struct.
+	Generate(CommonName string) (*CertArtifacts, error)
+}

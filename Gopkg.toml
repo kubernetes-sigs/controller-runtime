@@ -19,6 +19,7 @@ required = ["sigs.k8s.io/testing_frameworks/integration",
             "github.com/emicklei/go-restful",
             "github.com/go-openapi/spec",
             "k8s.io/kube-openapi/pkg/common",
+            "k8s.io/apiextensions-apiserver",
             ]
 
 [[constraint]]
@@ -56,4 +57,3 @@ required = ["sigs.k8s.io/testing_frameworks/integration",
 
 [prune]
   go-tests = true
-  unused-packages = true

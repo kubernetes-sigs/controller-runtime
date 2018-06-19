@@ -18,9 +18,7 @@ package client_test
 
 import (
 	"context"
-
 	"fmt"
-
 	"sync/atomic"
 
 	. "github.com/onsi/ginkgo"
@@ -353,7 +351,26 @@ var _ = Describe("Client", func() {
 
 	Describe("List", func() {
 		It("should fetch collection of objects", func() {
+			By("creating an initial object")
+			dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+			Expect(err).NotTo(HaveOccurred())
 
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("listing all objects of that type in the cluster")
+			deps := &appsv1.DeploymentList{}
+			Expect(cl.List(context.Background(), nil, deps)).NotTo(HaveOccurred())
+
+			Expect(deps.Items).NotTo(BeEmpty())
+			hasDep := false
+			for _, item := range deps.Items {
+				if item.Name == dep.Name && item.Namespace == dep.Namespace {
+					hasDep = true
+					break
+				}
+			}
+			Expect(hasDep).To(BeTrue())
 		})
 
 		It("should return an empty list if there are no matching objects", func() {

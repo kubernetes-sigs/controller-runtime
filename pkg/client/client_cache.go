@@ -18,6 +18,7 @@ package client
 
 import (
 	"reflect"
+	"strings"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -49,11 +50,18 @@ type clientCache struct {
 }
 
 // newResource maps obj to a Kubernetes Resource and constructs a client for that Resource.
+// If the object is a list, the resource represents the item's type instead.
 func (c *clientCache) newResource(obj runtime.Object) (*resourceMeta, error) {
 	gvk, err := apiutil.GVKForObject(obj, c.scheme)
 	if err != nil {
 		return nil, err
 	}
+
+	if strings.HasSuffix(gvk.Kind, "List") && meta.IsListType(obj) {
+		// if this was a list, treat it as a request for the item's resource
+		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
+	}
+
 	client, err := apiutil.RESTClientForGVK(gvk, c.config, c.codecs)
 	if err != nil {
 		return nil, err
@@ -65,7 +73,8 @@ func (c *clientCache) newResource(obj runtime.Object) (*resourceMeta, error) {
 	return &resourceMeta{Interface: client, mapping: mapping, gvk: gvk}, nil
 }
 
-// getResource returns a raw rest.Client for the given object type.
+// getResource returns the resource meta information for the given type of object.
+// If the object is a list, the resource represents the item's type instead.
 func (c *clientCache) getResource(obj runtime.Object) (*resourceMeta, error) {
 	typ := reflect.TypeOf(obj)
 

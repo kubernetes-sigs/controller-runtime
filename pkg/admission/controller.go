@@ -24,8 +24,8 @@ import (
 
 	"fmt"
 
-	"sigs.k8s.io/controller-runtime/pkg/admission/certgenerator"
-	"sigs.k8s.io/controller-runtime/pkg/admission/certwriter"
+	"sigs.k8s.io/controller-runtime/pkg/admission/cert/generator"
+	"sigs.k8s.io/controller-runtime/pkg/admission/cert/writer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
@@ -36,22 +36,22 @@ import (
 type CertProvisioner struct {
 	Client client.Client
 	// CertGenerator generates certificate for a given common name.
-	CertGenerator      certgenerator.CertGenerator
-	CertWriterProvider certwriter.CertWriterProvider
+	CertGenerator generator.CertGenerator
+	CertWriter    writer.CertWriter
 
 	once *sync.Once
 }
 
 // Sync takes a runtime.Object which is expected to be either a MutatingWebhookConfiguration or
 // a ValidatingWebhookConfiguration.
-// It provisions the certs for each webhook in the webhookConfiguration, ensures the cert and CA are valid and
-// update the CABundle in the webhook configuration if necessary.
+// It provisions certificate for each webhook in the webhookConfiguration, ensures the cert and CA are valid,
+// and not expiring. It updates the CABundle in the webhook configuration if necessary.
 func (cp *CertProvisioner) Sync(webhookConfiguration runtime.Object) error {
 	var err error
 	// Do the initialization for CertInput only once.
 	cp.once.Do(func() {
 		if cp.CertGenerator == nil {
-			cp.CertGenerator = &certgenerator.SelfSignedCertGenerator{}
+			cp.CertGenerator = &generator.SelfSignedCertGenerator{}
 		}
 		if cp.Client == nil {
 			cp.Client, err = client.New(config.GetConfigOrDie(), client.Options{})
@@ -59,9 +59,9 @@ func (cp *CertProvisioner) Sync(webhookConfiguration runtime.Object) error {
 				return
 			}
 		}
-		if cp.CertWriterProvider == nil {
-			cp.CertWriterProvider, err = certwriter.NewProvider(
-				certwriter.Options{
+		if cp.CertWriter == nil {
+			cp.CertWriter, err = writer.NewCertWriter(
+				writer.Options{
 					Client:        cp.Client,
 					CertGenerator: cp.CertGenerator,
 				})
@@ -74,17 +74,16 @@ func (cp *CertProvisioner) Sync(webhookConfiguration runtime.Object) error {
 		return fmt.Errorf("failed to default the CertProvision: %v", err)
 	}
 
+	// Deepcopy the webhook configuration object before invoking EnsureCerts,
+	// since EnsureCerts will modify the provided object.
 	cloned := webhookConfiguration.DeepCopyObject()
-
-	writer, err := cp.CertWriterProvider.Provide(cloned)
+	err = cp.CertWriter.EnsureCerts(cloned)
 	if err != nil {
 		return err
 	}
 
-	if err := writer.EnsureCert(); err != nil {
-		return err
-	}
-
+	// If some fields have been changed, we will update the object.
+	// Mostly this is because of the CABundle field has been updated.
 	if reflect.DeepEqual(webhookConfiguration, cloned) {
 		return nil
 	}

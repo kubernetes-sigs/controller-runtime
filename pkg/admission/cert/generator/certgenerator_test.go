@@ -14,18 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package certgenerator
+package generator
 
-// CertArtifacts hosts a private key, its corresponding serving certificate and
-// the CA certificate that signs the serving certificate.
-type CertArtifacts struct {
-	Key    []byte
-	Cert   []byte
-	CACert []byte
-}
+import "fmt"
 
-// CertGenerator is an interface to provision the serving certificate.
-type CertGenerator interface {
-	// Generate returns a CertArtifacts struct.
-	Generate(CommonName string) (*CertArtifacts, error)
+func ExampleServiceToCommonName() {
+	fmt.Println(ServiceToCommonName("myservicenamespace", "myservicename"))
+	// Output: myservicename.myservicenamespace.svc
 }

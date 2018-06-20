@@ -14,25 +14,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fake
+package writer
 
 import (
-	"fmt"
+	"testing"
 
-	"sigs.k8s.io/controller-runtime/pkg/admission/certgenerator"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
-// FakeCertGenerator is a CertGenerator for testing.
-type FakeCertGenerator struct {
-	DnsNameToCertArtifacts map[string]*certgenerator.CertArtifacts
+func TestSource(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecsWithDefaultAndCustomReporters(t, "Admission Webhook Test Suite", []Reporter{envtest.NewlineReporter{}})
 }
 
-var _ certgenerator.CertGenerator = &FakeCertGenerator{}
-
-func (cp *FakeCertGenerator) Generate(commonName string) (*certgenerator.CertArtifacts, error) {
-	certs, found := cp.DnsNameToCertArtifacts[commonName]
-	if !found {
-		return nil, fmt.Errorf("failed to find common name %q in the FakeCertGenerator", commonName)
-	}
-	return certs, nil
-}
+var _ = BeforeSuite(func(done Done) {
+	logf.SetLogger(logf.ZapLogger(false))
+	close(done)
+}, 60)

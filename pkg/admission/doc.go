@@ -15,14 +15,13 @@ limitations under the License.
 */
 
 /*
-Package admission provides methods to ensure the webhooks can have
-proper CA and certificate to work correctly.
+Package admission provides functions to manage webhooks certificates.
 
 There are 3 typical ways to use this library:
 
-* Deploying as a controller. Sync method can easily wrapped as a Reconcile method.
+* The sync function can be used as a Reconcile function.
 
-* Invoking it as a library in the webhook server before starting to serve the traffic.
+* Invoking it directly fromt eh webhook server at startup.
 
 * Deploying it as an init container along with the webhook server.
 
@@ -73,12 +72,18 @@ The following is an example MutatingWebhookConfiguration in yaml.
 
 Build the CertProvisioner
 
-You can choose to provide your own CertGenerator and CertWriterProvider.
+You can choose to provide your own CertGenerator and CertWriter.
 An easier way is to use an empty Options the package will default it with reasonable values.
 The package will write self-signed certificates to secrets.
 
+	// Build a client. You can also create a client with your own config.Config.
+	cl, err := client.New(config.GetConfigOrDie(), client.Options)
+	if err != nil {
+		// handle error
+	}
+
 	// Build a CertProvisioner with unspecified CertGenerator and CertWriter.
-	cp := &CertProvisioner{client: getClientOrDie()}
+	cp := &CertProvisioner{client: cl}
 
 Provision certificates
 
@@ -89,8 +94,8 @@ Provision certificates for webhook configuration objects' by calling Sync method
 		// handler error
 	}
 
-If the above MutatingWebhookConfiguration is processed, the cert provisioner will provision
-the certificate and create an secret named "secret-foo" in namespace "namespace-bar" for webhook "webhook-1".
+When the above MutatingWebhookConfiguration is processed, the cert provisioner will create
+the certificate and create a secret named "secret-foo" in namespace "namespace-bar" for webhook "webhook-1".
 Similarly, it will create an secret named "secret-baz" in namespace "default" for webhook "webhook-2".
 And it will also write the CA back to the WebhookConfiguration.
 */

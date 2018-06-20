@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package certgenerator
+package generator
 
 import (
 	"crypto/x509"
@@ -39,7 +39,7 @@ var _ CertGenerator = &SelfSignedCertGenerator{}
 // to establish trust for clients, CA certificate is used by the
 // client to verify the server authentication chain.
 // The cert will be valid for 365 days.
-func (cp *SelfSignedCertGenerator) Generate(commonName string) (*CertArtifacts, error) {
+func (cp *SelfSignedCertGenerator) Generate(commonName string) (*Artifacts, error) {
 	signingKey, err := cert.NewPrivateKey()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the CA private key: %v", err)
@@ -62,7 +62,7 @@ func (cp *SelfSignedCertGenerator) Generate(commonName string) (*CertArtifacts, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the cert: %v", err)
 	}
-	return &CertArtifacts{
+	return &Artifacts{
 		Key:    cert.EncodePrivateKeyPEM(key),
 		Cert:   cert.EncodeCertPEM(signedCert),
 		CACert: cert.EncodeCertPEM(signingCert),

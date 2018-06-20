@@ -14,17 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*
-Package certgenerator provides an interface and implementation to provision certificates.
+package generator
 
-Create an instance of CertGenerator.
+// Artifacts hosts a private key, its corresponding serving certificate and
+// the CA certificate that signs the serving certificate.
+type Artifacts struct {
+	Key    []byte
+	Cert   []byte
+	CACert []byte
+}
 
-	cg := SelfSignedCertGenerator{}
-
-Generate the certificates.
-	certs, err := cp.Generate("foo.bar.com")
-	if err != nil {
-		// handle error
-	}
-*/
-package certgenerator
+// CertGenerator is an interface to provision the serving certificate.
+type CertGenerator interface {
+	// Generate returns a Artifacts struct.
+	Generate(CommonName string) (*Artifacts, error)
+}

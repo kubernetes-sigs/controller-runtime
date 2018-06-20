@@ -14,20 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package certwriter
+package writer
 
 import (
 	"bytes"
+	"crypto/tls"
+	"errors"
 	"fmt"
+	"log"
 	"net/url"
 
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-
-	"crypto/tls"
-
-	"sigs.k8s.io/controller-runtime/pkg/admission/certgenerator"
+	"sigs.k8s.io/controller-runtime/pkg/admission/cert/generator"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -41,31 +42,60 @@ const (
 
 // CertWriter provides method to handle webhooks.
 type CertWriter interface {
-	// EnsureCert ensures that the webhooks it manages have the right certificates.
-	EnsureCert() error
+	// EnsureCert ensures that the webhooks have proper certificates.
+	EnsureCerts(runtime.Object) error
 }
 
+// Options are options for configuring a CertWriter.
+type Options struct {
+	Client        client.Client
+	CertGenerator generator.CertGenerator
+}
+
+// NewCertWriter builds a new CertWriter using the provided options.
+// By default, it builds a MultiCertWriter that is composed of a SecretCertWriter and a FSCertWriter.
+func NewCertWriter(ops Options) (CertWriter, error) {
+	if ops.CertGenerator == nil {
+		ops.CertGenerator = &generator.SelfSignedCertGenerator{}
+	}
+	if ops.Client == nil {
+		// TODO: default the client if possible
+		return nil, errors.New("Options.Client is required")
+	}
+	s := &SecretCertWriter{
+		Client:        ops.Client,
+		CertGenerator: ops.CertGenerator,
+	}
+	//f := &FSCertWriter{
+	//	CertGenerator: ops.CertGenerator,
+	//}
+	return &MultiCertWriter{
+		CertWriters: []CertWriter{
+			s,
+			//f,
+		},
+	}, nil
+}
+
+// handleCommon ensures the given webhook has a proper certificate.
+// It uses the given certReadWriter to read and (or) write the certificate.
 func handleCommon(webhook *admissionregistrationv1beta1.Webhook, ch certReadWriter) error {
-	webhookName := webhook.Name
-	certs, err := ch.read(webhookName)
-	if apierrors.IsNotFound(err) {
-		certs, err = ch.write(webhookName)
-		switch {
-		case apierrors.IsAlreadyExists(err):
-			certs, err = ch.read(webhookName)
-			if err != nil {
-				return err
-			}
-		case err != nil:
-			return err
-		}
-	} else if err != nil {
+	if webhook == nil {
+		return nil
+	}
+	if ch == nil {
+		return errors.New("certReaderWriter should not be nil")
+	}
+
+	certs, err := createIfNotExists(webhook.Name, ch)
+	if err != nil {
 		return err
 	}
 
 	// Recreate the cert if it's invalid.
 	if !validCert(certs) {
-		certs, err = ch.overwrite(webhookName)
+		log.Printf("cert is invalid or expiring, regenerating a new one")
+		certs, err = ch.overwrite(webhook.Name)
 		if err != nil {
 			return err
 		}
@@ -80,17 +110,39 @@ func handleCommon(webhook *admissionregistrationv1beta1.Webhook, ch certReadWrit
 	return nil
 }
 
-// certReadWriter provides methods for handling certificates for webhook.
-type certReadWriter interface {
-	// read reads a wehbook name and returns the certs for it.
-	read(webhookName string) (*certgenerator.CertArtifacts, error)
-	// write writes the certs and return the certs it wrote.
-	write(webhookName string) (*certgenerator.CertArtifacts, error)
-	// overwrite overwrites the existing certs and return the certs it wrote.
-	overwrite(webhookName string) (*certgenerator.CertArtifacts, error)
+func createIfNotExists(webhookName string, ch certReadWriter) (*generator.Artifacts, error) {
+	// Try to read first
+	certs, err := ch.read(webhookName)
+	if apierrors.IsNotFound(err) {
+		// Create if not exists
+		certs, err = ch.write(webhookName)
+		switch {
+		// This may happen if there is another racer.
+		case apierrors.IsAlreadyExists(err):
+			certs, err = ch.read(webhookName)
+			if err != nil {
+				return certs, err
+			}
+		case err != nil:
+			return certs, err
+		}
+	} else if err != nil {
+		return certs, err
+	}
+	return certs, nil
 }
 
-func validCert(certs *certgenerator.CertArtifacts) bool {
+// certReadWriter provides methods for reading and writing certificates.
+type certReadWriter interface {
+	// read reads a wehbook name and returns the certs for it.
+	read(webhookName string) (*generator.Artifacts, error)
+	// write writes the certs and return the certs it wrote.
+	write(webhookName string) (*generator.Artifacts, error)
+	// overwrite overwrites the existing certs and return the certs it wrote.
+	overwrite(webhookName string) (*generator.Artifacts, error)
+}
+
+func validCert(certs *generator.Artifacts) bool {
 	// TODO:
 	// 1) validate the key and the cert are valid pair e.g. call crypto/tls.X509KeyPair()
 	// 2) validate the cert with the CA cert
@@ -118,7 +170,7 @@ func getWebhooksFromObject(obj runtime.Object) ([]admissionregistrationv1beta1.W
 	}
 }
 
-func webhookClientConfigToCommonName(config *admissionregistrationv1beta1.WebhookClientConfig) (string, error) {
+func dnsNameForWebhook(config *admissionregistrationv1beta1.WebhookClientConfig) (string, error) {
 	if config.Service != nil && config.URL != nil {
 		return "", fmt.Errorf("service and URL can't be set at the same time in a webhook: %v", config)
 	}
@@ -126,11 +178,10 @@ func webhookClientConfigToCommonName(config *admissionregistrationv1beta1.Webhoo
 		return "", fmt.Errorf("one of service and URL need to be set in a webhook: %v", config)
 	}
 	if config.Service != nil {
-		return certgenerator.ServiceToCommonName(config.Service.Namespace, config.Service.Name), nil
+		return generator.ServiceToCommonName(config.Service.Namespace, config.Service.Name), nil
 	}
-	if config.URL != nil {
-		u, err := url.Parse(*config.URL)
-		return u.Host, err
-	}
-	return "", nil
+	// config.URL != nil
+	u, err := url.Parse(*config.URL)
+	return u.Host, err
+
 }

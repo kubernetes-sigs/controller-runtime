@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package certwriter
+package writer
 
 import (
 	"errors"
@@ -29,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	apitypes "k8s.io/apimachinery/pkg/types"
 
-	"sigs.k8s.io/controller-runtime/pkg/admission/certgenerator"
+	"sigs.k8s.io/controller-runtime/pkg/admission/cert/generator"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -41,39 +41,32 @@ const (
 	SecretCertProvisionAnnotationKeyPrefix = "secret.certprovisioner.kubernetes.io/"
 )
 
-// SecretCertWriterProvider deals with writing to the k8s secrets.
-type SecretCertWriterProvider struct {
+// SecretCertWriter provisions the certificate by reading and writing to the k8s secrets.
+type SecretCertWriter struct {
 	Client        client.Client
-	CertGenerator certgenerator.CertGenerator
+	CertGenerator generator.CertGenerator
 }
 
-var _ CertWriterProvider = &SecretCertWriterProvider{}
+var _ CertWriter = &SecretCertWriter{}
 
-// Provide creates a new CertWriter and initialized with the passed-in webhookConfig
-func (s *SecretCertWriterProvider) Provide(webhookConfig runtime.Object) (CertWriter, error) {
+// EnsureCerts provisions certificates for a webhook configuration by writing them in k8s secrets.
+func (s *SecretCertWriter) EnsureCerts(webhookConfig runtime.Object) error {
 	if webhookConfig == nil {
-		return nil, errors.New("unexpected nil webhook configuration object")
+		return errors.New("unexpected nil webhook configuration object")
 	}
-	secretWebhookMap := map[string]*webhookAndSecret{}
 
+	secretWebhookMap := map[string]*webhookAndSecret{}
 	accessor, err := meta.Accessor(webhookConfig)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	annotations := accessor.GetAnnotations()
 	// Parse the annotations to extract info
-	for k, v := range annotations {
-		if strings.HasPrefix(k, SecretCertProvisionAnnotationKeyPrefix) {
-			webhookName := strings.TrimPrefix(k, SecretCertProvisionAnnotationKeyPrefix)
-			secretWebhookMap[webhookName] = &webhookAndSecret{
-				secret: types.NewNamespacedNameFromString(v),
-			}
-		}
-	}
+	s.parseAnnotations(annotations, secretWebhookMap)
 
 	webhooks, err := getWebhooksFromObject(webhookConfig)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for i, webhook := range webhooks {
 		if s, found := secretWebhookMap[webhook.Name]; found {
@@ -84,46 +77,38 @@ func (s *SecretCertWriterProvider) Provide(webhookConfig runtime.Object) (CertWr
 	// validation
 	for k, v := range secretWebhookMap {
 		if v.webhook == nil {
-			return nil, fmt.Errorf("expecting a webhook named %q", k)
+			return fmt.Errorf("expecting a webhook named %q", k)
 		}
 	}
 
-	generator := s.CertGenerator
+	certGenerator := s.CertGenerator
 	if s.CertGenerator == nil {
-		generator = &certgenerator.SelfSignedCertGenerator{}
+		certGenerator = &generator.SelfSignedCertGenerator{}
 	}
 
-	return &secretCertWriter{
+	srw := &secretReadWriter{
 		client:        s.Client,
-		certGenerator: generator,
+		certGenerator: certGenerator,
 		webhookConfig: webhookConfig,
 		webhookMap:    secretWebhookMap,
-	}, nil
+	}
+	return srw.ensureCert()
 }
 
-// secretCertWriter deals with writing to the k8s secrets.
-type secretCertWriter struct {
-	client        client.Client
-	certGenerator certgenerator.CertGenerator
-
-	webhookConfig runtime.Object
-	webhookMap    map[string]*webhookAndSecret
+func (s *SecretCertWriter) parseAnnotations(annotations map[string]string, secretWebhookMap map[string]*webhookAndSecret) {
+	for k, v := range annotations {
+		if strings.HasPrefix(k, SecretCertProvisionAnnotationKeyPrefix) {
+			webhookName := strings.TrimPrefix(k, SecretCertProvisionAnnotationKeyPrefix)
+			secretWebhookMap[webhookName] = &webhookAndSecret{
+				secret: types.NewNamespacedNameFromString(v),
+			}
+		}
+	}
 }
 
-var _ CertWriter = &secretCertWriter{}
-
-type webhookAndSecret struct {
-	webhook *admissionregistrationv1beta1.Webhook
-	secret  apitypes.NamespacedName
-}
-
-// EnsureCert processes the webhooks managed by this CertWriter.
-// It provisions the certificate and update the CA in the webhook.
-// It will write the certificate to the secret.
-func (s *secretCertWriter) EnsureCert() error {
-	var err error
+func (s *secretReadWriter) ensureCert() error {
 	for _, v := range s.webhookMap {
-		err = handleCommon(v.webhook, s)
+		err := handleCommon(v.webhook, s)
 		if err != nil {
 			return err
 		}
@@ -131,14 +116,28 @@ func (s *secretCertWriter) EnsureCert() error {
 	return nil
 }
 
-var _ certReadWriter = &secretCertWriter{}
+// secretReadWriter deals with writing to the k8s secrets.
+type secretReadWriter struct {
+	client        client.Client
+	certGenerator generator.CertGenerator
 
-func (s *secretCertWriter) write(webhookName string) (
-	*certgenerator.CertArtifacts, error) {
+	webhookConfig runtime.Object
+	webhookMap    map[string]*webhookAndSecret
+}
+
+type webhookAndSecret struct {
+	webhook *admissionregistrationv1beta1.Webhook
+	secret  apitypes.NamespacedName
+}
+
+var _ certReadWriter = &secretReadWriter{}
+
+func (s *secretReadWriter) write(webhookName string) (
+	*generator.Artifacts, error) {
 	v := s.webhookMap[webhookName]
 
 	webhook := v.webhook
-	commonName, err := webhookClientConfigToCommonName(&webhook.ClientConfig)
+	commonName, err := dnsNameForWebhook(&webhook.ClientConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -156,12 +155,12 @@ func (s *secretCertWriter) write(webhookName string) (
 	return certs, err
 }
 
-func (s *secretCertWriter) overwrite(webhookName string) (
-	*certgenerator.CertArtifacts, error) {
+func (s *secretReadWriter) overwrite(webhookName string) (
+	*generator.Artifacts, error) {
 	v := s.webhookMap[webhookName]
 
 	webhook := v.webhook
-	commonName, err := webhookClientConfigToCommonName(&webhook.ClientConfig)
+	commonName, err := dnsNameForWebhook(&webhook.ClientConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -172,21 +171,21 @@ func (s *secretCertWriter) overwrite(webhookName string) (
 	secret := certsToSecret(certs, v.secret)
 	// TODO: fix it: see the TODO in the method
 	err = setOwnerRef(secret, s.webhookConfig)
+	if err != nil {
+		return nil, err
+	}
 	err = s.client.Update(nil, secret)
 	return certs, err
 }
 
-func (s *secretCertWriter) read(webhookName string) (*certgenerator.CertArtifacts, error) {
+func (s *secretReadWriter) read(webhookName string) (*generator.Artifacts, error) {
 	v := s.webhookMap[webhookName]
 	secret := &corev1.Secret{}
 	err := s.client.Get(nil, v.secret, secret)
-	if err != nil {
-		return nil, err
-	}
-	return secretToCerts(secret), nil
+	return secretToCerts(secret), err
 }
 
-// Mark the webhook as the owner of the secret by setting the ownerReference in the secret.
+// setOwnerRef marks the webhook as the owner of the secret by setting the ownerReference in the secret.
 func setOwnerRef(secret, webhookConfig runtime.Object) error {
 	accessor, err := meta.Accessor(webhookConfig)
 	if err != nil {
@@ -217,18 +216,18 @@ func setOwnerRef(secret, webhookConfig runtime.Object) error {
 	return nil
 }
 
-func secretToCerts(secret *corev1.Secret) *certgenerator.CertArtifacts {
+func secretToCerts(secret *corev1.Secret) *generator.Artifacts {
 	if secret.Data == nil {
 		return nil
 	}
-	return &certgenerator.CertArtifacts{
+	return &generator.Artifacts{
 		CACert: secret.Data[CACertName],
 		Cert:   secret.Data[ServerCertName],
 		Key:    secret.Data[ServerKeyName],
 	}
 }
 
-func certsToSecret(certs *certgenerator.CertArtifacts, sec apitypes.NamespacedName) *corev1.Secret {
+func certsToSecret(certs *generator.Artifacts, sec apitypes.NamespacedName) *corev1.Secret {
 	return &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",

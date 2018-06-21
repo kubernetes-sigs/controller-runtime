@@ -83,6 +83,21 @@ var _ = Describe("controller", func() {
 		})
 	})
 
+	Describe("SetReconcile", func() {
+		It("should set the Reconcile function", func(done Done) {
+			called := make(chan struct{})
+			fn := reconcile.Func(func(reconcile.Request) (reconcile.Result, error) {
+				close(called)
+				return reconcile.Result{}, nil
+			})
+			ctrl.SetReconcile(fn)
+			ctrl.Reconcile(reconcile.Request{})
+			Expect(called).To(BeClosed())
+
+			close(done)
+		})
+	})
+
 	Describe("Start", func() {
 		It("should return an error if there is an error waiting for the informers", func(done Done) {
 			ctrl.WaitForCacheSync = func(<-chan struct{}) bool { return false }

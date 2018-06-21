@@ -121,6 +121,11 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	return src.Start(evthdler, c.Queue, prct...)
 }
 
+// SetReconcile sets Reconcile on a Controller
+func (c *Controller) SetReconcile(r reconcile.Reconcile) {
+	c.Do = r
+}
+
 // Start implements controller.Controller
 func (c *Controller) Start(stop <-chan struct{}) error {
 	c.mu.Lock()

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package certprovisioner
+package generator
 
 import (
 	"crypto/x509"
@@ -28,21 +28,18 @@ func ServiceToCommonName(serviceNamespace, serviceName string) string {
 	return fmt.Sprintf("%s.%s.svc", serviceName, serviceNamespace)
 }
 
-// SelfSignedCertProvisioner implements the CertProvisioner interface.
+// SelfSignedCertGenerator implements the CertGenerator interface.
 // It provisions self-signed certificates.
-type SelfSignedCertProvisioner struct {
-	// Required Common Name
-	CommonName string
-}
+type SelfSignedCertGenerator struct{}
 
-var _ CertProvisioner = &SelfSignedCertProvisioner{}
+var _ CertGenerator = &SelfSignedCertGenerator{}
 
-// ProvisionServingCert creates and returns a CA certificate, certificate and
+// Generate creates and returns a CA certificate, certificate and
 // key for the server. serverKey and serverCert are used by the server
 // to establish trust for clients, CA certificate is used by the
 // client to verify the server authentication chain.
 // The cert will be valid for 365 days.
-func (cp *SelfSignedCertProvisioner) ProvisionServingCert() (*Certs, error) {
+func (cp *SelfSignedCertGenerator) Generate(commonName string) (*Artifacts, error) {
 	signingKey, err := cert.NewPrivateKey()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the CA private key: %v", err)
@@ -57,7 +54,7 @@ func (cp *SelfSignedCertProvisioner) ProvisionServingCert() (*Certs, error) {
 	}
 	signedCert, err := cert.NewSignedCert(
 		cert.Config{
-			CommonName: cp.CommonName,
+			CommonName: commonName,
 			Usages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		},
 		key, signingCert, signingKey,
@@ -65,7 +62,7 @@ func (cp *SelfSignedCertProvisioner) ProvisionServingCert() (*Certs, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the cert: %v", err)
 	}
-	return &Certs{
+	return &Artifacts{
 		Key:    cert.EncodePrivateKeyPEM(key),
 		Cert:   cert.EncodeCertPEM(signedCert),
 		CACert: cert.EncodeCertPEM(signingCert),

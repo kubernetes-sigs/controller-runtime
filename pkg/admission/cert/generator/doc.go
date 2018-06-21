@@ -14,11 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package certprovisioner
+/*
+Package generator provides an interface and implementation to provision certificates.
 
-import "fmt"
+Create an instance of CertGenerator.
 
-func ExampleServiceToCommonName() {
-	fmt.Println(ServiceToCommonName("myservicenamespace", "myservicename"))
-	// Output: myservicename.myservicenamespace.svc
-}
+	cg := SelfSignedCertGenerator{}
+
+Generate the certificates.
+	certs, err := cg.Generate("foo.bar.com")
+	if err != nil {
+		// handle error
+	}
+*/
+package generator

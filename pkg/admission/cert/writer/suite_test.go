@@ -14,18 +14,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package certprovisioner
+package writer
 
-// Certs hosts a private key, its corresponding serving certificate and
-// the CA certificate that signs the serving certificate.
-type Certs struct {
-	Key    []byte
-	Cert   []byte
-	CACert []byte
+import (
+	"testing"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+)
+
+func TestSource(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecsWithDefaultAndCustomReporters(t, "Admission Webhook Test Suite", []Reporter{envtest.NewlineReporter{}})
 }
 
-// CertProvisioner is an interface to provision the serving certificate.
-type CertProvisioner interface {
-	// ProvisionServingCert returns a Certs struct.
-	ProvisionServingCert() (*Certs, error)
-}
+var _ = BeforeSuite(func(done Done) {
+	logf.SetLogger(logf.ZapLogger(false))
+	close(done)
+}, 60)

@@ -28,9 +28,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	apitypes "k8s.io/apimachinery/pkg/types"
-
+	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/admission/cert/generator"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
@@ -132,22 +133,25 @@ type webhookAndSecret struct {
 
 var _ certReadWriter = &secretReadWriter{}
 
-func (s *secretReadWriter) write(webhookName string) (
-	*generator.Artifacts, error) {
+func (s *secretReadWriter) buildSecret(webhookName string) (*corev1.Secret, *generator.Artifacts, error) {
 	v := s.webhookMap[webhookName]
 
 	webhook := v.webhook
 	commonName, err := dnsNameForWebhook(&webhook.ClientConfig)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	certs, err := s.certGenerator.Generate(commonName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	secret := certsToSecret(certs, v.secret)
-	// TODO: fix it: see the TODO in the method
-	err = setOwnerRef(secret, s.webhookConfig)
+	err = controllerutil.SetControllerReference(s.webhookConfig.(metav1.Object), secret, scheme.Scheme)
+	return secret, certs, err
+}
+
+func (s *secretReadWriter) write(webhookName string) (*generator.Artifacts, error) {
+	secret, certs, err := s.buildSecret(webhookName)
 	if err != nil {
 		return nil, err
 	}
@@ -157,20 +161,7 @@ func (s *secretReadWriter) write(webhookName string) (
 
 func (s *secretReadWriter) overwrite(webhookName string) (
 	*generator.Artifacts, error) {
-	v := s.webhookMap[webhookName]
-
-	webhook := v.webhook
-	commonName, err := dnsNameForWebhook(&webhook.ClientConfig)
-	if err != nil {
-		return nil, err
-	}
-	certs, err := s.certGenerator.Generate(commonName)
-	if err != nil {
-		return nil, err
-	}
-	secret := certsToSecret(certs, v.secret)
-	// TODO: fix it: see the TODO in the method
-	err = setOwnerRef(secret, s.webhookConfig)
+	secret, certs, err := s.buildSecret(webhookName)
 	if err != nil {
 		return nil, err
 	}
@@ -183,37 +174,6 @@ func (s *secretReadWriter) read(webhookName string) (*generator.Artifacts, error
 	secret := &corev1.Secret{}
 	err := s.client.Get(nil, v.secret, secret)
 	return secretToCerts(secret), err
-}
-
-// setOwnerRef marks the webhook as the owner of the secret by setting the ownerReference in the secret.
-func setOwnerRef(secret, webhookConfig runtime.Object) error {
-	accessor, err := meta.Accessor(webhookConfig)
-	if err != nil {
-		return err
-	}
-	// TODO: typeAccessor.GetAPIVersion() and typeAccessor.GetKind() returns empty apiVersion and Kind, fix it.
-	typeAccessor, err := meta.TypeAccessor(webhookConfig)
-	if err != nil {
-		return err
-	}
-	blockOwnerDeletion := false
-	// Due to
-	// https://github.com/kubernetes/kubernetes/blob/5da925ad4fd070e687dc5255c177d5e7d542edd7/staging/src/k8s.io/apimachinery/pkg/apis/meta/v1/controller_ref.go#L35
-	isController := true
-	ownerRef := metav1.OwnerReference{
-		APIVersion:         typeAccessor.GetAPIVersion(),
-		Kind:               typeAccessor.GetKind(),
-		Name:               accessor.GetName(),
-		UID:                accessor.GetUID(),
-		BlockOwnerDeletion: &blockOwnerDeletion,
-		Controller:         &isController,
-	}
-	secretAccessor, err := meta.Accessor(secret)
-	if err != nil {
-		return err
-	}
-	secretAccessor.SetOwnerReferences([]metav1.OwnerReference{ownerRef})
-	return nil
 }
 
 func secretToCerts(secret *corev1.Secret) *generator.Artifacts {
@@ -229,10 +189,6 @@ func secretToCerts(secret *corev1.Secret) *generator.Artifacts {
 
 func certsToSecret(certs *generator.Artifacts, sec apitypes.NamespacedName) *corev1.Secret {
 	return &corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Secret",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: sec.Namespace,
 			Name:      sec.Name,

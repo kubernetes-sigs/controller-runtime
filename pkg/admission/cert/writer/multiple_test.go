@@ -41,7 +41,7 @@ func (f *fakeCertWriter) EnsureCerts(webhookConfig runtime.Object) error {
 	return nil
 }
 
-var _ = Describe("MultipleCertWriterProvider", func() {
+var _ = Describe("MultipleCertWriter", func() {
 	It("should invoke Provide method of each Provider", func() {
 		webhookConfig := &admissionregistration.MutatingWebhookConfiguration{}
 		f := &fakeCertWriter{}
@@ -53,7 +53,7 @@ var _ = Describe("MultipleCertWriterProvider", func() {
 		Expect(f.hasInvokedEnsureCerts).To(BeTrue())
 	})
 
-	It("should return the error from each Provider", func() {
+	It("should return the error from each CertWriter", func() {
 		webhookConfig := &admissionregistration.MutatingWebhookConfiguration{}
 		e := errors.New("this is an error")
 		f := &fakeCertWriter{err: e}
@@ -65,26 +65,3 @@ var _ = Describe("MultipleCertWriterProvider", func() {
 		Expect(f.hasInvokedEnsureCerts).To(BeTrue())
 	})
 })
-
-//var _ = Describe("multipleCertWriter", func() {
-//	It("should invoke EnsureCert method of each Provider", func() {
-//		f := &fakeCertWriter{}
-//		m := &multiCertWriter{
-//			certWriters: []CertWriter{f},
-//		}
-//		err := m.EnsureCert()
-//		Expect(err).NotTo(HaveOccurred())
-//		Expect(f.hasInvokedEnsureCert).To(BeTrue())
-//	})
-//
-//	It("should return error from each Provider", func() {
-//		e := errors.New("this is an error")
-//		f := &fakeCertWriter{err: e}
-//		m := &multiCertWriter{
-//			certWriters: []CertWriter{f},
-//		}
-//		err := m.EnsureCert()
-//		Expect(f.hasInvokedEnsureCert).To(BeTrue())
-//		Expect(err).To(MatchError(e))
-//	})
-//})

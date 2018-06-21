@@ -48,7 +48,7 @@ var _ = Describe("SecretCertProvider", func() {
 		url = "https://example.com/admission"
 		mwc = &admissionregistration.MutatingWebhookConfiguration{
 			TypeMeta: metav1.TypeMeta{
-				APIVersion: "admissionregistration/v1beta1",
+				APIVersion: "admissionregistration.k8s.io/v1beta1",
 				Kind:       "MutatingWebhookConfiguration",
 			},
 			ObjectMeta: metav1.ObjectMeta{
@@ -72,7 +72,7 @@ var _ = Describe("SecretCertProvider", func() {
 		}
 		vwc = &admissionregistration.ValidatingWebhookConfiguration{
 			TypeMeta: metav1.TypeMeta{
-				APIVersion: "admissionregistration/v1beta1",
+				APIVersion: "admissionregistration.k8s.io/v1beta1",
 				Kind:       "MutatingWebhookConfiguration",
 			},
 			ObjectMeta: metav1.ObjectMeta{
@@ -166,21 +166,17 @@ var _ = Describe("SecretCertProvider", func() {
 				certWriter = secretCertWriter
 
 				isController := true
-				blockOwnerDeletion := false
+				blockOwnerDeletion := true
 				secret = &corev1.Secret{
-					TypeMeta: metav1.TypeMeta{
-						APIVersion: "v1",
-						Kind:       "Secret",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "namespace-bar",
 						Name:      "secret-foo",
 						OwnerReferences: []metav1.OwnerReference{
 							{
-								APIVersion:         "admissionregistration/v1beta1",
+								APIVersion:         "admissionregistration.k8s.io/v1beta1",
 								Kind:               "MutatingWebhookConfiguration",
 								Name:               "test-mwc",
-								UID:                types.UID("123456"),
+								UID:                "123456",
 								BlockOwnerDeletion: &blockOwnerDeletion,
 								Controller:         &isController,
 							},

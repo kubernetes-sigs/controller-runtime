@@ -19,8 +19,11 @@ package generator
 // Artifacts hosts a private key, its corresponding serving certificate and
 // the CA certificate that signs the serving certificate.
 type Artifacts struct {
-	Key    []byte
-	Cert   []byte
+	// PEM encoded private key
+	Key []byte
+	// PEM encoded serving certificate
+	Cert []byte
+	// PEM encoded CA certificate
 	CACert []byte
 }
 

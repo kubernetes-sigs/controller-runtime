@@ -96,7 +96,7 @@ type ListOptions struct {
 	Namespace string
 
 	// Raw represents raw ListOptions, as passed to the API server.  Note
-	// that these may not be respsected by all implementations of interface,
+	// that these may not be respected by all implementations of interface,
 	// and the LabelSelector and FieldSelector fields are ignored.
 	Raw *metav1.ListOptions
 }
@@ -128,6 +128,9 @@ func (o *ListOptions) SetFieldSelector(selRaw string) error {
 func (o *ListOptions) AsListOptions() *metav1.ListOptions {
 	if o == nil {
 		return &metav1.ListOptions{}
+	}
+	if o.Raw == nil {
+		o.Raw = &metav1.ListOptions{}
 	}
 	if o.LabelSelector != nil {
 		o.Raw.LabelSelector = o.LabelSelector.String()

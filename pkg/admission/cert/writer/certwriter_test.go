@@ -57,7 +57,7 @@ var _ = Describe("NewProvider", func() {
 						Client:        cl,
 						CertGenerator: &generator.SelfSignedCertGenerator{},
 					},
-					//&FSCertWriterProvider{
+					//&FSCertWriter{
 					//	CertGenerator: &certgenerator.SelfSignedCertGenerator{},
 					//},
 				},

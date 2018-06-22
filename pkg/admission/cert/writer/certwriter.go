@@ -25,7 +25,6 @@ import (
 	"net/url"
 
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/admission/cert/generator"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -66,13 +65,13 @@ func NewCertWriter(ops Options) (CertWriter, error) {
 		Client:        ops.Client,
 		CertGenerator: ops.CertGenerator,
 	}
-	//f := &FSCertWriter{
-	//	CertGenerator: ops.CertGenerator,
-	//}
+	f := &FSCertWriter{
+		CertGenerator: ops.CertGenerator,
+	}
 	return &MultiCertWriter{
 		CertWriters: []CertWriter{
 			s,
-			//f,
+			f,
 		},
 	}, nil
 }
@@ -113,12 +112,12 @@ func handleCommon(webhook *admissionregistrationv1beta1.Webhook, ch certReadWrit
 func createIfNotExists(webhookName string, ch certReadWriter) (*generator.Artifacts, error) {
 	// Try to read first
 	certs, err := ch.read(webhookName)
-	if apierrors.IsNotFound(err) {
+	if isNotFound(err) {
 		// Create if not exists
 		certs, err = ch.write(webhookName)
 		switch {
 		// This may happen if there is another racer.
-		case apierrors.IsAlreadyExists(err):
+		case isAlreadyExists(err):
 			certs, err = ch.read(webhookName)
 			if err != nil {
 				return certs, err

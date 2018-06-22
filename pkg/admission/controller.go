@@ -17,13 +17,11 @@ limitations under the License.
 package admission
 
 import (
+	"fmt"
 	"reflect"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime"
-
-	"fmt"
-
 	"sigs.k8s.io/controller-runtime/pkg/admission/cert/generator"
 	"sigs.k8s.io/controller-runtime/pkg/admission/cert/writer"
 	"sigs.k8s.io/controller-runtime/pkg/client"

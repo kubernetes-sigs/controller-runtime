@@ -70,7 +70,8 @@ Create a SecretCertWriter
 		// handler error
 	}
 
-Provision the certificates using the CertWriter.
+Provision the certificates using the CertWriter. The certificate will be available in the desired secrets or
+the desired path.
 
 	// writer can be either one of the CertWriters created above
 	err = writer.EnsureCerts(webhookConfiguration) // webhookConfiguration is an existing runtime.Object

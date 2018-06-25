@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// Result contains the result of a Reconcile invocation.
+// Result contains the result of a Reconciler invocation.
 type Result struct {
 	// Requeue tells the Controller to requeue the reconcile key.  Defaults to false.
 	Requeue bool
@@ -35,7 +35,7 @@ type Request struct {
 }
 
 /*
-Reconcile implements a Kubernetes API for a specific Resource by Creating, Updating or Deleting Kubernetes
+Reconciler implements a Kubernetes API for a specific Resource by Creating, Updating or Deleting Kubernetes
 objects, or by making changes to systems external to the cluster (e.g. cloudproviders, github, etc).
 
 reconcile implementations compare the state specified in an object by a user against the actual cluster state,
@@ -71,15 +71,17 @@ driven by actual cluster state read from the apiserver or a local cache.
 For example if responding to a Pod Delete Event, the Request won't contain that a Pod was deleted,
 instead the reconcile function observes this when reading the cluster state and seeing the Pod as missing.
 */
-type Reconcile interface {
-	// reconcile performs a full reconciliation for the object referred to by the Request.
+type Reconciler interface {
+	// Reconciler performs a full reconciliation for the object referred to by the Request.
+	// The Controller will requeue the Request to be processed again if an error is non-nil or
+	// Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 	Reconcile(Request) (Result, error)
 }
 
 // Func is a function that implements the reconcile interface.
 type Func func(Request) (Result, error)
 
-var _ Reconcile = Func(nil)
+var _ Reconciler = Func(nil)
 
-// Reconcile implements Reconcile.
+// Reconcile implements Reconciler.
 func (r Func) Reconcile(o Request) (Result, error) { return r(o) }

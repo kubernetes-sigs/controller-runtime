@@ -41,7 +41,7 @@ var _ = Describe("reconcile", func() {
 
 				return result, nil
 			})
-			actualResult, actualErr := instance(request)
+			actualResult, actualErr := instance.Reconcile(request)
 			Expect(actualResult).To(Equal(result))
 			Expect(actualErr).NotTo(HaveOccurred())
 		})
@@ -61,7 +61,7 @@ var _ = Describe("reconcile", func() {
 
 				return result, err
 			})
-			actualResult, actualErr := instance(request)
+			actualResult, actualErr := instance.Reconcile(request)
 			Expect(actualResult).To(Equal(result))
 			Expect(actualErr).To(Equal(err))
 		})

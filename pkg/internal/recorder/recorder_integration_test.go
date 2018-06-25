@@ -54,7 +54,7 @@ var _ = Describe("recorder", func() {
 			By("Creating the Controller")
 			recorder := cm.GetRecorder("test-recorder")
 			instance, err := controller.New("foo-controller", cm, controller.Options{
-				Reconcile: reconcile.Func(
+				Reconciler: reconcile.Func(
 					func(request reconcile.Request) (reconcile.Result, error) {
 						dp, err := clientset.AppsV1().Deployments(request.Namespace).Get(request.Name, metav1.GetOptions{})
 						Expect(err).NotTo(HaveOccurred())
@@ -65,7 +65,7 @@ var _ = Describe("recorder", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Watching Resources")
-			err = instance.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.Enqueue{})
+			err = instance.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForObject{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting the Manager")

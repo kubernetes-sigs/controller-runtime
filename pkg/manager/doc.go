@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 /*
-Package manager is used to manage Runnable components by providing shared state.  Components such as
-Controllers should be registered with a Manager and started through calling Start on the Manager.
+Package manager is required to create Controllers and provides shared dependencies such as clients, caches, schemes,
+etc.  Controllers must be started by calling Manager.Start.
 */
 package manager

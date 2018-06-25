@@ -34,7 +34,7 @@ var mrg manager.Manager
 // manager.Manager will be used to Start the Controller, and will provide it a shared Cache and Client.
 func ExampleNew() {
 	_, err := controller.New("pod-controller", mrg, controller.Options{
-		Reconcile: reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
+		Reconciler: reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
 			// Your business logic to implement the API by creating, updating, deleting objects goes here.
 			return reconcile.Result{}, nil
 		}),
@@ -48,7 +48,7 @@ func ExampleNew() {
 // it with the DefaultControllerManager.
 func ExampleController() {
 	_, err := controller.New("pod-controller", mrg, controller.Options{
-		Reconcile: reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
+		Reconciler: reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
 			// Your business logic to implement the API by creating, updating, deleting objects goes here.
 			return reconcile.Result{}, nil
 		}),
@@ -62,7 +62,7 @@ func ExampleController() {
 // This example watches Pods and enqueues reconcile.Requests with the changed Pod Name and Namespace.
 func ExampleController_Watch() {
 	c, err := controller.New("pod-controller", mrg, controller.Options{
-		Reconcile: reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
+		Reconciler: reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
 			// Your business logic to implement the API by creating, updating, deleting objects goes here.
 			return reconcile.Result{}, nil
 		}),
@@ -71,7 +71,7 @@ func ExampleController_Watch() {
 		log.Fatal(err)
 	}
 
-	err = c.Watch(&source.Kind{Type: &v1.Pod{}}, &handler.Enqueue{})
+	err = c.Watch(&source.Kind{Type: &v1.Pod{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		log.Fatal(err)
 	}

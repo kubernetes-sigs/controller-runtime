@@ -25,6 +25,8 @@ import (
 
 // This example implements a simple no-op reconcile function that prints the object to be Reconciled.
 func ExampleFunc() {
+	type Reconciler struct{}
+
 	r := reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
 		// Create your business logic to create, update, delete objects here.
 		fmt.Printf("Name: %s, Namespace: %s", o.Name, o.Namespace)
@@ -34,11 +36,4 @@ func ExampleFunc() {
 	r.Reconcile(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: "test"}})
 
 	// Output: Name: test, Namespace: default
-}
-
-// This example declares a simple type that implements reconcile.
-func ExampleReconcile() {
-	type MyReconcileImplementation struct {
-		reconcile.Func
-	}
 }

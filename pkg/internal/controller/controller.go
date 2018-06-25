@@ -49,10 +49,10 @@ type Controller struct {
 	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 
-	// Reconcile is a function that can be called at any time with the Name / Namespace of an object and
+	// Reconciler is a function that can be called at any time with the Name / Namespace of an object and
 	// ensures that the state of the system matches the state specified in the object.
 	// Defaults to the DefaultReconcileFunc.
-	Do reconcile.Reconcile
+	Do reconcile.Reconciler
 
 	// Client is a lazily initialized Client.  The controllerManager will initialize this when Start is called.
 	Client client.Client
@@ -94,7 +94,7 @@ type Controller struct {
 	// TODO(community): Consider initializing a logger with the Controller Name as the tag
 }
 
-// Reconcile implements reconcile.Reconcile
+// Reconcile implements reconcile.Reconciler
 func (c *Controller) Reconcile(r reconcile.Request) (reconcile.Result, error) {
 	return c.Do.Reconcile(r)
 }
@@ -206,7 +206,7 @@ func (c *Controller) processNextWorkItem() bool {
 	// resource to be synced.
 	if result, err := c.Do.Reconcile(req); err != nil {
 		c.Queue.AddRateLimited(req)
-		log.Error(nil, "Reconcile error", "Controller", c.Name, "Request", req)
+		log.Error(nil, "Reconciler error", "Controller", c.Name, "Request", req)
 
 		return false
 	} else if result.Requeue {

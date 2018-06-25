@@ -29,7 +29,7 @@ var ctrl controller.Controller
 // This example Watches for Pod Events (e.g. Create / Update / Delete) and enqueues a reconcile.Request
 // with the Name and Namespace of the Pod.
 func ExampleKind() {
-	ctrl.Watch(&source.Kind{Type: &v1.Pod{}}, &handler.Enqueue{})
+	ctrl.Watch(&source.Kind{Type: &v1.Pod{}}, &handler.EnqueueRequestForObject{})
 }
 
 // This example reads GenericEvents from a channel and enqueues a reconcile.Request containing the Name and Namespace
@@ -39,6 +39,6 @@ func ExampleChannel() {
 
 	ctrl.Watch(
 		&source.Channel{Source: events},
-		&handler.Enqueue{},
+		&handler.EnqueueRequestForObject{},
 	)
 }

@@ -30,19 +30,19 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
-var _ EventHandler = &EnqueueOwner{}
+var _ EventHandler = &EnqueueRequestForOwner{}
 
-var log = logf.KBLog.WithName("eventhandler").WithName("EnqueueOwner")
+var log = logf.KBLog.WithName("eventhandler").WithName("EnqueueRequestForOwner")
 
-// EnqueueOwner enqueues Requests for the Owners of an object.  E.g. an object that created
-// another object.
+// EnqueueRequestForOwner enqueues Requests for the Owners of an object.  E.g. the object that created
+// the object that was the source of the Event.
 //
-// If a ReplicaSet creates Pods, reconcile the ReplicaSet in response to events on Pods that it created using:
+// If a ReplicaSet creates Pods, users may reconcile the ReplicaSet in response to Pod Events using:
 //
-// - a KindSource with Type Pod.
+// - a source.Kind Source with Type of Pod.
 //
-// - a EnqueueOwner with OwnerType ReplicaSet.
-type EnqueueOwner struct {
+// - a handler.EnqueueRequestForOwner EventHandler with an OwnerType of ReplicaSet and IsController set to true.
+type EnqueueRequestForOwner struct {
 	// OwnerType is the type of the Owner object to look for in OwnerReferences.  Only Group and Kind are compared.
 	OwnerType runtime.Object
 
@@ -53,22 +53,15 @@ type EnqueueOwner struct {
 	groupKind schema.GroupKind
 }
 
-var _ inject.Scheme = &EnqueueOwner{}
-
-// InjectScheme is called by the Controller to provide a singleton scheme to the EnqueueOwner.
-func (e *EnqueueOwner) InjectScheme(s *runtime.Scheme) error {
-	return e.parseOwnerTypeGroupKind(s)
-}
-
 // Create implements EventHandler
-func (e *EnqueueOwner) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
+func (e *EnqueueRequestForOwner) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
 	for _, req := range e.getOwnerReconcileRequest(evt.Meta) {
 		q.AddRateLimited(req)
 	}
 }
 
 // Update implements EventHandler
-func (e *EnqueueOwner) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
+func (e *EnqueueRequestForOwner) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 	for _, req := range e.getOwnerReconcileRequest(evt.MetaOld) {
 		q.AddRateLimited(req)
 	}
@@ -78,14 +71,14 @@ func (e *EnqueueOwner) Update(q workqueue.RateLimitingInterface, evt event.Updat
 }
 
 // Delete implements EventHandler
-func (e *EnqueueOwner) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
+func (e *EnqueueRequestForOwner) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 	for _, req := range e.getOwnerReconcileRequest(evt.Meta) {
 		q.AddRateLimited(req)
 	}
 }
 
 // Generic implements EventHandler
-func (e *EnqueueOwner) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
+func (e *EnqueueRequestForOwner) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
 	for _, req := range e.getOwnerReconcileRequest(evt.Meta) {
 		q.AddRateLimited(req)
 	}
@@ -93,7 +86,7 @@ func (e *EnqueueOwner) Generic(q workqueue.RateLimitingInterface, evt event.Gene
 
 // parseOwnerTypeGroupKind parses the OwnerType into a Group and Kind and caches the result.  Returns false
 // if the OwnerType could not be parsed using the scheme.
-func (e *EnqueueOwner) parseOwnerTypeGroupKind(scheme *runtime.Scheme) error {
+func (e *EnqueueRequestForOwner) parseOwnerTypeGroupKind(scheme *runtime.Scheme) error {
 	// Get the kinds of the type
 	kinds, _, err := scheme.ObjectKinds(e.OwnerType)
 	if err != nil {
@@ -114,7 +107,7 @@ func (e *EnqueueOwner) parseOwnerTypeGroupKind(scheme *runtime.Scheme) error {
 
 // getOwnerReconcileRequest looks at object and returns a slice of reconcile.Request to reconcile
 // owners of object that match e.OwnerType.
-func (e *EnqueueOwner) getOwnerReconcileRequest(object metav1.Object) []reconcile.Request {
+func (e *EnqueueRequestForOwner) getOwnerReconcileRequest(object metav1.Object) []reconcile.Request {
 	// Iterate through the OwnerReferences looking for a match on Group and Kind against what was requested
 	// by the user
 	var result []reconcile.Request
@@ -144,15 +137,15 @@ func (e *EnqueueOwner) getOwnerReconcileRequest(object metav1.Object) []reconcil
 	return result
 }
 
-// getOwnersReferences returns the OwnerReferences for an object as specified by the EnqueueOwner
+// getOwnersReferences returns the OwnerReferences for an object as specified by the EnqueueRequestForOwner
 // - if IsController is true: only take the Controller OwnerReference (if found)
 // - if IsController is false: take all OwnerReferences
-func (e *EnqueueOwner) getOwnersReferences(object metav1.Object) []metav1.OwnerReference {
+func (e *EnqueueRequestForOwner) getOwnersReferences(object metav1.Object) []metav1.OwnerReference {
 	if object == nil {
 		return nil
 	}
 
-	// If filtered to Controller use all the OwnerReferences
+	// If not filtered as Controller only, then use all the OwnerReferences
 	if !e.IsController {
 		return object.GetOwnerReferences()
 	}
@@ -162,4 +155,11 @@ func (e *EnqueueOwner) getOwnersReferences(object metav1.Object) []metav1.OwnerR
 	}
 	// No Controller OwnerReference found
 	return nil
+}
+
+var _ inject.Scheme = &EnqueueRequestForOwner{}
+
+// InjectScheme is called by the Controller to provide a singleton scheme to the EnqueueRequestForOwner.
+func (e *EnqueueRequestForOwner) InjectScheme(s *runtime.Scheme) error {
+	return e.parseOwnerTypeGroupKind(s)
 }

@@ -382,7 +382,7 @@ var _ = Describe("manger.Manager", func() {
 	})
 })
 
-var _ reconcile.Reconcile = &failRec{}
+var _ reconcile.Reconciler = &failRec{}
 var _ inject.Client = &failRec{}
 
 type failRec struct{}

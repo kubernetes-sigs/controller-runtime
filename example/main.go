@@ -21,6 +21,10 @@ import (
 	"flag"
 	"log"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -30,10 +34,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
 
 func main() {
@@ -46,22 +46,22 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Setup a new controller to Reconcile ReplicaSets
+	// Setup a new controller to Reconciler ReplicaSets
 	c, err := controller.New("foo-controller", mrg, controller.Options{
-		Reconcile: &reconcileReplicaSet{client: mrg.GetClient()},
+		Reconciler: &reconcileReplicaSet{client: mrg.GetClient()},
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Watch ReplicaSets and enqueue ReplicaSet object key
-	if err := c.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.Enqueue{}); err != nil {
+	if err := c.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueRequestForObject{}); err != nil {
 		log.Fatal(err)
 	}
 
 	// Watch Pods and enqueue owning ReplicaSet key
 	if err := c.Watch(&source.Kind{Type: &corev1.Pod{}},
-		&handler.EnqueueOwner{OwnerType: &appsv1.ReplicaSet{}, IsController: true}); err != nil {
+		&handler.EnqueueRequestForOwner{OwnerType: &appsv1.ReplicaSet{}, IsController: true}); err != nil {
 		log.Fatal(err)
 	}
 
@@ -73,8 +73,8 @@ type reconcileReplicaSet struct {
 	client client.Client
 }
 
-// Implement reconcile.Reconcile so the controller can reconcile objects
-var _ reconcile.Reconcile = &reconcileReplicaSet{}
+// Implement reconcile.Reconciler so the controller can reconcile objects
+var _ reconcile.Reconciler = &reconcileReplicaSet{}
 
 func (r *reconcileReplicaSet) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the ReplicaSet from the cache

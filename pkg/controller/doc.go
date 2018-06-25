@@ -15,12 +15,11 @@ limitations under the License.
 */
 
 /*
-Package controller provides types and functions for building Controllers.
+Package controller provides types and functions for building Controllers.  Controllers implement Kubernetes APIs.
 
 Creation
 
-To create a new Controller, first create a manager.Manager and provide it to New.  The Manager will
-take care of Starting / Stopping the Controller, as well as provide shared Caches and Clients to the
-Sources, EventHandlers, Predicates, and Reconcile.
+To create a new Controller, first create a manager.Manager and pass it to the controller.New function.
+The Controller MUST be started by calling Manager.Start.
 */
 package controller

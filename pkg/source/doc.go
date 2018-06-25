@@ -15,6 +15,8 @@ limitations under the License.
 */
 
 /*
-Package source provides Event streams that Controllers use to trigger Reconciles.
+Package source provides event streams provided to Controllers through Controller.Watch.  Events are
+used with handler.EventHandlers to enqueue reconcile.Requests and trigger Reconciles for Kubernetes
+objects.
 */
 package source

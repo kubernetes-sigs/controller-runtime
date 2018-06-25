@@ -31,7 +31,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
 
-// Manager initializes shared dependencies such as Caches and Clients, and provides them to runnables.
+// Manager initializes shared dependencies such as Caches and Clients, and provides them to Runnables.
+// A Manager is required to create Controllers.
 type Manager interface {
 	// Add will set reqeusted dependencies on the component, and cause the component to be
 	// started when Start is called.  Add will inject any dependencies for which the argument
@@ -95,7 +96,7 @@ func (r RunnableFunc) Start(s <-chan struct{}) error {
 	return r(s)
 }
 
-// New returns a new Manager
+// New returns a new Manager for creating Controllers.
 func New(config *rest.Config, options Options) (Manager, error) {
 	cm := &controllerManager{config: config, scheme: options.Scheme, errChan: make(chan error)}
 

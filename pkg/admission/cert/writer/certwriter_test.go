@@ -57,9 +57,9 @@ var _ = Describe("NewProvider", func() {
 						Client:        cl,
 						CertGenerator: &generator.SelfSignedCertGenerator{},
 					},
-					//&FSCertWriter{
-					//	CertGenerator: &certgenerator.SelfSignedCertGenerator{},
-					//},
+					&FSCertWriter{
+						CertGenerator: &generator.SelfSignedCertGenerator{},
+					},
 				},
 			}
 			close(done)
@@ -188,7 +188,7 @@ var _ = Describe("handleCommon", func() {
 			certrw := &fakeCertReadWriter{
 				readCertAndErr: []certAndErr{
 					{
-						err:  errors.NewNotFound(schema.GroupResource{}, "foo"),
+						err:  notFoundError{errors.NewNotFound(schema.GroupResource{}, "foo")},
 						cert: cert,
 					},
 				},
@@ -204,7 +204,7 @@ var _ = Describe("handleCommon", func() {
 			certrw := &fakeCertReadWriter{
 				readCertAndErr: []certAndErr{
 					{
-						err: errors.NewNotFound(schema.GroupResource{}, "foo"),
+						err: notFoundError{errors.NewNotFound(schema.GroupResource{}, "foo")},
 					},
 				},
 				writeCertAndErr: []certAndErr{
@@ -318,7 +318,7 @@ var _ = Describe("handleCommon", func() {
 			certrw := &fakeCertReadWriter{
 				readCertAndErr: []certAndErr{
 					{
-						err: errors.NewNotFound(schema.GroupResource{}, "foo"),
+						err: notFoundError{errors.NewNotFound(schema.GroupResource{}, "foo")},
 					},
 					{
 						cert: cert,
@@ -326,7 +326,7 @@ var _ = Describe("handleCommon", func() {
 				},
 				writeCertAndErr: []certAndErr{
 					{
-						err: errors.NewAlreadyExists(schema.GroupResource{}, "foo"),
+						err: alreadyExistError{errors.NewAlreadyExists(schema.GroupResource{}, "foo")},
 					},
 				},
 			}
@@ -341,7 +341,7 @@ var _ = Describe("handleCommon", func() {
 			certrw := &fakeCertReadWriter{
 				readCertAndErr: []certAndErr{
 					{
-						err: errors.NewNotFound(schema.GroupResource{}, "foo"),
+						err: notFoundError{errors.NewNotFound(schema.GroupResource{}, "foo")},
 					},
 					{
 						err: goerrors.New("failed to read"),
@@ -349,7 +349,7 @@ var _ = Describe("handleCommon", func() {
 				},
 				writeCertAndErr: []certAndErr{
 					{
-						err: errors.NewAlreadyExists(schema.GroupResource{}, "foo"),
+						err: alreadyExistError{errors.NewAlreadyExists(schema.GroupResource{}, "foo")},
 					},
 				},
 			}

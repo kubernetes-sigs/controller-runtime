@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-var _ = Describe("SecretCertProvider", func() {
+var _ = Describe("SecretCertWriter", func() {
 	var mwc *admissionregistration.MutatingWebhookConfiguration
 	var vwc *admissionregistration.ValidatingWebhookConfiguration
 	var url string

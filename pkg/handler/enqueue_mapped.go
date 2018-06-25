@@ -24,39 +24,45 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var _ EventHandler = &EnqueueMapped{}
+var _ EventHandler = &EnqueueRequestsFromMapFunc{}
 
-// EnqueueMapped enqueues Requests by running a transformation function on each Event.
+// EnqueueRequestsFromMapFunc enqueues Requests by running a transformation function that outputs a collection
+// of reconcile.Requests on each Event.  The reconcile.Requests may be for an arbitrary set of objects
+// defined by some user specified transformation of the source Event.  (e.g. trigger Reconciler for a set of objects
+// in response to a cluster resize event caused by adding or deleting a Node)
+//
+// EnqueueRequestsFromMapFunc is frequently used to fan-out updates from one object to one or more other
+// objects of a differing type.
 //
 // For UpdateEvents which contain both a new and old object, the transformation function is run on both
 // objects and both sets of Requests are enqueue.
-type EnqueueMapped struct {
+type EnqueueRequestsFromMapFunc struct {
 	// Mapper transforms the argument into a slice of keys to be reconciled
 	ToRequests Mapper
 }
 
 // Create implements EventHandler
-func (e *EnqueueMapped) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
+func (e *EnqueueRequestsFromMapFunc) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
 	e.mapAndEnqueue(q, MapObject{Meta: evt.Meta, Object: evt.Object})
 }
 
 // Update implements EventHandler
-func (e *EnqueueMapped) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
+func (e *EnqueueRequestsFromMapFunc) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 	e.mapAndEnqueue(q, MapObject{Meta: evt.MetaOld, Object: evt.ObjectOld})
 	e.mapAndEnqueue(q, MapObject{Meta: evt.MetaNew, Object: evt.ObjectNew})
 }
 
 // Delete implements EventHandler
-func (e *EnqueueMapped) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
+func (e *EnqueueRequestsFromMapFunc) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 	e.mapAndEnqueue(q, MapObject{Meta: evt.Meta, Object: evt.Object})
 }
 
 // Generic implements EventHandler
-func (e *EnqueueMapped) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
+func (e *EnqueueRequestsFromMapFunc) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
 	e.mapAndEnqueue(q, MapObject{Meta: evt.Meta, Object: evt.Object})
 }
 
-func (e *EnqueueMapped) mapAndEnqueue(q workqueue.RateLimitingInterface, object MapObject) {
+func (e *EnqueueRequestsFromMapFunc) mapAndEnqueue(q workqueue.RateLimitingInterface, object MapObject) {
 	for _, req := range e.ToRequests.Map(object) {
 		q.AddRateLimited(req)
 	}

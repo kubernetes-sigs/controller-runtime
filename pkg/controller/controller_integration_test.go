@@ -56,7 +56,7 @@ var _ = Describe("controller", func() {
 
 			By("Creating the Controller")
 			instance, err := controller.New("foo-controller", cm, controller.Options{
-				Reconcile: reconcile.Func(
+				Reconciler: reconcile.Func(
 					func(request reconcile.Request) (reconcile.Result, error) {
 						reconciled <- request
 						return reconcile.Result{}, nil
@@ -65,12 +65,12 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Watching Resources")
-			err = instance.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueOwner{
+			err = instance.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueRequestForOwner{
 				OwnerType: &appsv1.Deployment{},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			err = instance.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.Enqueue{})
+			err = instance.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForObject{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting the Manager")

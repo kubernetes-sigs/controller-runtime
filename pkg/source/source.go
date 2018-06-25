@@ -51,6 +51,52 @@ type Source interface {
 	Start(handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
 }
 
+// Kind is used to provide a source of events originating inside the cluster from Watches (eh.g. Pod Create)
+type Kind struct {
+	// Type is the type of object to watch.  e.g. &v1.Pod{}
+	Type runtime.Object
+
+	// cache used to watch APIs
+	cache cache.Cache
+}
+
+var _ Source = &Kind{}
+
+// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
+// to enqueue reconcile.Requests.
+func (ks *Kind) Start(handler handler.EventHandler, queue workqueue.RateLimitingInterface,
+	prct ...predicate.Predicate) error {
+
+	// Type should have been specified by the user.
+	if ks.Type == nil {
+		return fmt.Errorf("must specify Kind.Type")
+	}
+
+	// cache should have been injected before Start was called
+	if ks.cache == nil {
+		return fmt.Errorf("must call CacheInto on Kind before calling Start")
+	}
+
+	// Lookup the Informer from the Cache and add an EventHandler which populates the Queue
+	i, err := ks.cache.GetInformer(ks.Type)
+	if err != nil {
+		return err
+	}
+	i.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
+	return nil
+}
+
+var _ inject.Cache = &Kind{}
+
+// InjectCache is internal should be called only by the Controller.  InjectCache is used to inject
+// the Cache dependency initialized by the ControllerManager.
+func (ks *Kind) InjectCache(c cache.Cache) error {
+	if ks.cache == nil {
+		ks.cache = c
+	}
+	return nil
+}
+
 var _ Source = &Channel{}
 
 // Channel is used to provide a source of events originating outside the cluster
@@ -126,7 +172,7 @@ func (cs *Channel) Start(
 			}
 
 			if shouldHandle {
-				handler.Generic(queue, evt)
+				handler.Generic(evt, queue)
 			}
 		}
 	}()
@@ -173,52 +219,6 @@ func (cs *Channel) syncLoop() {
 			cs.distribute(evt)
 		}
 	}
-}
-
-// Kind is used to provide a source of events originating inside the cluster from Watches (eh.g. Pod Create)
-type Kind struct {
-	// Type is the type of object to watch.  e.g. &v1.Pod{}
-	Type runtime.Object
-
-	// cache used to watch APIs
-	cache cache.Cache
-}
-
-var _ Source = &Kind{}
-
-// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
-// to enqueue reconcile.Requests.
-func (ks *Kind) Start(handler handler.EventHandler, queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
-
-	// Type should have been specified by the user.
-	if ks.Type == nil {
-		return fmt.Errorf("must specify Kind.Type")
-	}
-
-	// cache should have been injected before Start was called
-	if ks.cache == nil {
-		return fmt.Errorf("must call CacheInto on Kind before calling Start")
-	}
-
-	// Lookup the Informer from the Cache and add an EventHandler which populates the Queue
-	i, err := ks.cache.GetInformer(ks.Type)
-	if err != nil {
-		return err
-	}
-	i.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
-	return nil
-}
-
-var _ inject.Cache = &Kind{}
-
-// InjectCache is internal should be called only by the Controller.  InjectCache is used to inject
-// the Cache dependency initialized by the ControllerManager.
-func (ks *Kind) InjectCache(c cache.Cache) error {
-	if ks.cache == nil {
-		ks.cache = c
-	}
-	return nil
 }
 
 // Func is a function that implements Source

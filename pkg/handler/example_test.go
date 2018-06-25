@@ -32,21 +32,21 @@ var c controller.Controller
 
 // This example watches Pods and enqueues Requests with the Name and Namespace of the Pod from
 // the Event (i.e. change caused by a Create, Update, Delete).
-func ExampleEnqueue() {
+func ExampleEnqueueRequestForObject() {
 	// controller is a controller.controller
 	c.Watch(
 		&source.Kind{Type: &corev1.Pod{}},
-		&handler.Enqueue{},
+		&handler.EnqueueRequestForObject{},
 	)
 }
 
 // This example watches ReplicaSets and enqueues a Request containing the Name and Namespace of the
 // owning (direct) Deployment responsible for the creation of the ReplicaSet.
-func ExampleEnqueueOwner() {
+func ExampleEnqueueRequestForOwner() {
 	// controller is a controller.controller
 	c.Watch(
 		&source.Kind{Type: &appsv1.ReplicaSet{}},
-		&handler.EnqueueOwner{
+		&handler.EnqueueRequestForOwner{
 			OwnerType:    &appsv1.Deployment{},
 			IsController: true,
 		},
@@ -55,11 +55,11 @@ func ExampleEnqueueOwner() {
 
 // This example watches Deployments and enqueues a Request contain the Name and Namespace of different
 // objects (of Type: MyKind) using a mapping function defined by the user.
-func ExampleEnqueueMapped() {
+func ExampleEnqueueRequestsFromMapFunc() {
 	// controller is a controller.controller
 	c.Watch(
 		&source.Kind{Type: &appsv1.Deployment{}},
-		&handler.EnqueueMapped{
+		&handler.EnqueueRequestsFromMapFunc{
 			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 				return []reconcile.Request{
 					{NamespacedName: types.NamespacedName{
@@ -75,31 +75,31 @@ func ExampleEnqueueMapped() {
 		})
 }
 
-// This example implements handler.Enqueue.
+// This example implements handler.EnqueueRequestForObject.
 func ExampleFuncs() {
 	// controller is a controller.controller
 	c.Watch(
 		&source.Kind{Type: &corev1.Pod{}},
 		handler.Funcs{
-			CreateFunc: func(q workqueue.RateLimitingInterface, e event.CreateEvent) {
+			CreateFunc: func(e event.CreateEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.Meta.GetName(),
 					Namespace: e.Meta.GetNamespace(),
 				}})
 			},
-			UpdateFunc: func(q workqueue.RateLimitingInterface, e event.UpdateEvent) {
+			UpdateFunc: func(e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.MetaNew.GetName(),
 					Namespace: e.MetaNew.GetNamespace(),
 				}})
 			},
-			DeleteFunc: func(q workqueue.RateLimitingInterface, e event.DeleteEvent) {
+			DeleteFunc: func(e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.Meta.GetName(),
 					Namespace: e.Meta.GetNamespace(),
 				}})
 			},
-			GenericFunc: func(q workqueue.RateLimitingInterface, e event.GenericEvent) {
+			GenericFunc: func(e event.GenericEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.Meta.GetName(),
 					Namespace: e.Meta.GetNamespace(),

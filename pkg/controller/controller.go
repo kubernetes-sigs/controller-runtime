@@ -33,15 +33,17 @@ type Options struct {
 	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 
-	// Reconcile reconciles an object
-	Reconcile reconcile.Reconcile
+	// Reconciler reconciles an object
+	Reconciler reconcile.Reconciler
 }
 
-// Controller is a work queue that watches for changes to objects (i.e. Create / Update / Delete events) and
-// then reconciles an object (i.e. make changes to ensure the system state matches what is specified in the object).
+// Controller implements a Kubernetes API.  A Controller manages a work queue fed reconcile.Requests
+// from source.Sources.  Work is performed through the reconcile.Reconciler for each enqueued item.
+// Work typically is reads and writes Kubernetes objects to make the system state match the state specified
+// in the object Spec.
 type Controller interface {
-	// Reconcile is called to Reconcile an object by Namespace/Name
-	reconcile.Reconcile
+	// Reconciler is called to Reconciler an object by Namespace/Name
+	reconcile.Reconciler
 
 	// Watch takes events provided by a Source and uses the EventHandler to enqueue reconcile.Requests in
 	// response to the events.
@@ -57,8 +59,8 @@ type Controller interface {
 // New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have
 // been synced before the Controller is Started.
 func New(name string, mrg manager.Manager, options Options) (Controller, error) {
-	if options.Reconcile == nil {
-		return nil, fmt.Errorf("must specify Reconcile")
+	if options.Reconciler == nil {
+		return nil, fmt.Errorf("must specify Reconciler")
 	}
 
 	if len(name) == 0 {
@@ -69,14 +71,14 @@ func New(name string, mrg manager.Manager, options Options) (Controller, error) 
 		options.MaxConcurrentReconciles = 1
 	}
 
-	// Inject dependencies into Reconcile
-	if err := mrg.SetFields(options.Reconcile); err != nil {
+	// Inject dependencies into Reconciler
+	if err := mrg.SetFields(options.Reconciler); err != nil {
 		return nil, err
 	}
 
 	// Create controller with dependencies set
 	c := &controller.Controller{
-		Do:       options.Reconcile,
+		Do:       options.Reconciler,
 		Cache:    mrg.GetCache(),
 		Config:   mrg.GetConfig(),
 		Scheme:   mrg.GetScheme(),

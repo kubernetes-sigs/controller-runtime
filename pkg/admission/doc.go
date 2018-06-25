@@ -19,7 +19,7 @@ Package admission provides functions to manage webhooks certificates.
 
 There are 3 typical ways to use this library:
 
-* The sync function can be used as a Reconcile function.
+* The sync function can be used as a Reconciler function.
 
 * Invoking it directly fromt eh webhook server at startup.
 

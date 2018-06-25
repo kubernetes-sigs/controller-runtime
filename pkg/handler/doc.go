@@ -16,15 +16,21 @@ limitations under the License.
 
 /*
 Package handler defines EventHandlers that enqueue reconcile.Requests in response to Create, Update, Deletion Events
-observed from Watching Kubernetes APIs.
+observed from Watching Kubernetes APIs.  Users should provide a source.Source and handler.EventHandler to
+Controller.Watch in order to generate and enqueue reconcile.Request work items.
 
 EventHandlers
 
-Enqueue - Enqueues a reconcile.Request containing the Name and Namespace of the object in the Event.
+EnqueueRequestForObject - Enqueues a reconcile.Request containing the Name and Namespace of the object in the Event.  This will
+cause the object that was the source of the Event (e.g. the created / deleted / updated object) to be
+reconciled.
 
-EnqueueOwner - Enqueues a reconcile.Request containing the Name and Namespace of the Owner of the object in the Event.
+EnqueueRequestForOwner - Enqueues a reconcile.Request containing the Name and Namespace of the Owner of the object in the Event.
+This will cause owner of the object that was the source of the Event (e.g. the owner object that created the object)
+to be reconciled.
 
-EnqueueMapped - Enqueues Reconcile.Requests resulting from a user provided transformation function run against the
-object in the Event.
+EnqueueRequestsFromMapFunc - Enqueues Reconciler.Requests resulting from a user provided transformation function run against the
+object in the Event.  This will cause an arbitrary collection of objects (defined from a transformation of the
+source object) to be reconciled.
 */
 package handler

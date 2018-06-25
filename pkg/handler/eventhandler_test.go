@@ -33,24 +33,24 @@ import (
 
 var _ = Describe("Eventhandler", func() {
 	var q workqueue.RateLimitingInterface
-	var instance handler.Enqueue
+	var instance handler.EnqueueRequestForObject
 	var pod *corev1.Pod
 	t := true
 	BeforeEach(func() {
 		q = controllertest.Queue{Interface: workqueue.New()}
-		instance = handler.Enqueue{}
+		instance = handler.EnqueueRequestForObject{}
 		pod = &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "biz", Name: "baz"},
 		}
 	})
 
-	Describe("Enqueue", func() {
+	Describe("EnqueueRequestForObject", func() {
 		It("should enqueue a Request with the Name / Namespace of the object in the CreateEvent.", func(done Done) {
 			evt := event.CreateEvent{
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Create(q, evt)
+			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
@@ -67,7 +67,7 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Delete(q, evt)
+			instance.Delete(evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
@@ -91,7 +91,7 @@ var _ = Describe("Eventhandler", func() {
 					ObjectNew: newPod,
 					MetaNew:   newPod.GetObjectMeta(),
 				}
-				instance.Update(q, evt)
+				instance.Update(evt, q)
 				Expect(q.Len()).To(Equal(2))
 
 				i, _ := q.Get()
@@ -114,7 +114,7 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Generic(q, evt)
+			instance.Generic(evt, q)
 			Expect(q.Len()).To(Equal(1))
 			i, _ := q.Get()
 			Expect(i).NotTo(BeNil())
@@ -130,7 +130,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.CreateEvent{
 					Object: pod,
 				}
-				instance.Create(q, evt)
+				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
 				close(done)
 			})
@@ -145,7 +145,7 @@ var _ = Describe("Eventhandler", func() {
 					MetaNew:   newPod.GetObjectMeta(),
 					ObjectOld: pod,
 				}
-				instance.Update(q, evt)
+				instance.Update(evt, q)
 				Expect(q.Len()).To(Equal(1))
 				i, _ := q.Get()
 				Expect(i).NotTo(BeNil())
@@ -155,7 +155,7 @@ var _ = Describe("Eventhandler", func() {
 
 				evt.MetaNew = nil
 				evt.MetaOld = pod.GetObjectMeta()
-				instance.Update(q, evt)
+				instance.Update(evt, q)
 				Expect(q.Len()).To(Equal(1))
 				i, _ = q.Get()
 				Expect(i).NotTo(BeNil())
@@ -170,7 +170,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.DeleteEvent{
 					Object: pod,
 				}
-				instance.Delete(q, evt)
+				instance.Delete(evt, q)
 				Expect(q.Len()).To(Equal(0))
 				close(done)
 			})
@@ -179,17 +179,17 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.GenericEvent{
 					Object: pod,
 				}
-				instance.Generic(q, evt)
+				instance.Generic(evt, q)
 				Expect(q.Len()).To(Equal(0))
 				close(done)
 			})
 		})
 	})
 
-	Describe("EnqueueMapped", func() {
+	Describe("EnqueueRequestsFromMapFunc", func() {
 		It("should enqueue a Request with the function applied to the CreateEvent.", func() {
 			req := []reconcile.Request{}
-			instance := handler.EnqueueMapped{
+			instance := handler.EnqueueRequestsFromMapFunc{
 				ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 					defer GinkgoRecover()
 					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
@@ -210,7 +210,7 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Create(q, evt)
+			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(2))
 
 			i, _ := q.Get()
@@ -224,7 +224,7 @@ var _ = Describe("Eventhandler", func() {
 
 		It("should enqueue a Request with the function applied to the DeleteEvent.", func() {
 			req := []reconcile.Request{}
-			instance := handler.EnqueueMapped{
+			instance := handler.EnqueueRequestsFromMapFunc{
 				ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 					defer GinkgoRecover()
 					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
@@ -245,7 +245,7 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Delete(q, evt)
+			instance.Delete(evt, q)
 			Expect(q.Len()).To(Equal(2))
 
 			i, _ := q.Get()
@@ -264,7 +264,7 @@ var _ = Describe("Eventhandler", func() {
 				newPod.Namespace = pod.Namespace + "2"
 
 				req := []reconcile.Request{}
-				instance := handler.EnqueueMapped{
+				instance := handler.EnqueueRequestsFromMapFunc{
 					ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 						defer GinkgoRecover()
 						req = []reconcile.Request{
@@ -285,7 +285,7 @@ var _ = Describe("Eventhandler", func() {
 					ObjectNew: newPod,
 					MetaNew:   newPod.GetObjectMeta(),
 				}
-				instance.Update(q, evt)
+				instance.Update(evt, q)
 				Expect(q.Len()).To(Equal(4))
 
 				i, _ := q.Get()
@@ -307,7 +307,7 @@ var _ = Describe("Eventhandler", func() {
 
 		It("should enqueue a Request with the function applied to the GenericEvent.", func() {
 			req := []reconcile.Request{}
-			instance := handler.EnqueueMapped{
+			instance := handler.EnqueueRequestsFromMapFunc{
 				ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 					defer GinkgoRecover()
 					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
@@ -328,7 +328,7 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Generic(q, evt)
+			instance.Generic(evt, q)
 			Expect(q.Len()).To(Equal(2))
 
 			i, _ := q.Get()
@@ -341,9 +341,9 @@ var _ = Describe("Eventhandler", func() {
 		})
 	})
 
-	Describe("EnqueueOwner", func() {
+	Describe("EnqueueRequestForOwner", func() {
 		It("should enqueue a Request with the Owner of the object in the CreateEvent.", func() {
-			instance := handler.EnqueueOwner{
+			instance := handler.EnqueueRequestForOwner{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
 			instance.InjectScheme(scheme.Scheme)
@@ -359,7 +359,7 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Create(q, evt)
+			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
@@ -368,7 +368,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		It("should enqueue a Request with the Owner of the object in the DeleteEvent.", func() {
-			instance := handler.EnqueueOwner{
+			instance := handler.EnqueueRequestForOwner{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
 			instance.InjectScheme(scheme.Scheme)
@@ -384,7 +384,7 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Delete(q, evt)
+			instance.Delete(evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
@@ -397,7 +397,7 @@ var _ = Describe("Eventhandler", func() {
 			newPod.Name = pod.Name + "2"
 			newPod.Namespace = pod.Namespace + "2"
 
-			instance := handler.EnqueueOwner{
+			instance := handler.EnqueueRequestForOwner{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
 			instance.InjectScheme(scheme.Scheme)
@@ -422,7 +422,7 @@ var _ = Describe("Eventhandler", func() {
 				ObjectNew: newPod,
 				MetaNew:   newPod.GetObjectMeta(),
 			}
-			instance.Update(q, evt)
+			instance.Update(evt, q)
 			Expect(q.Len()).To(Equal(2))
 
 			i, _ := q.Get()
@@ -435,7 +435,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		It("should enqueue a Request with the Owner of the object in the GenericEvent.", func() {
-			instance := handler.EnqueueOwner{
+			instance := handler.EnqueueRequestForOwner{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
 			instance.InjectScheme(scheme.Scheme)
@@ -451,7 +451,7 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Generic(q, evt)
+			instance.Generic(evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
@@ -460,7 +460,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		It("should not enqueue a Request if there are no owners matching Group and Kind.", func() {
-			instance := handler.EnqueueOwner{
+			instance := handler.EnqueueRequestForOwner{
 				OwnerType:    &appsv1.ReplicaSet{},
 				IsController: t,
 			}
@@ -481,13 +481,13 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Create(q, evt)
+			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(0))
 		})
 
 		It("should enqueue a Request if there are owners matching Group "+
 			"and Kind with a different version.", func() {
-			instance := handler.EnqueueOwner{
+			instance := handler.EnqueueRequestForOwner{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
 			instance.InjectScheme(scheme.Scheme)
@@ -502,7 +502,7 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Create(q, evt)
+			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
@@ -511,7 +511,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		It("should not enqueue a Request if there are no owners.", func() {
-			instance := handler.EnqueueOwner{
+			instance := handler.EnqueueRequestForOwner{
 				OwnerType: &appsv1.ReplicaSet{},
 			}
 			instance.InjectScheme(scheme.Scheme)
@@ -519,14 +519,14 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Create(q, evt)
+			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(0))
 		})
 
 		Context("with the Controller field set to true", func() {
 			It("should enqueue reconcile.Requests for only the first the Controller if there are "+
 				"multiple Controller owners.", func() {
-				instance := handler.EnqueueOwner{
+				instance := handler.EnqueueRequestForOwner{
 					OwnerType:    &appsv1.ReplicaSet{},
 					IsController: t,
 				}
@@ -564,7 +564,7 @@ var _ = Describe("Eventhandler", func() {
 					Object: pod,
 					Meta:   pod.GetObjectMeta(),
 				}
-				instance.Create(q, evt)
+				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(1))
 				i, _ := q.Get()
 				Expect(i).To(Equal(reconcile.Request{
@@ -572,7 +572,7 @@ var _ = Describe("Eventhandler", func() {
 			})
 
 			It("should not enqueue reconcile.Requests if there are no Controller owners.", func() {
-				instance := handler.EnqueueOwner{
+				instance := handler.EnqueueRequestForOwner{
 					OwnerType:    &appsv1.ReplicaSet{},
 					IsController: t,
 				}
@@ -598,12 +598,12 @@ var _ = Describe("Eventhandler", func() {
 					Object: pod,
 					Meta:   pod.GetObjectMeta(),
 				}
-				instance.Create(q, evt)
+				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 
 			It("should not enqueue reconcile.Requests if there are no owners.", func() {
-				instance := handler.EnqueueOwner{
+				instance := handler.EnqueueRequestForOwner{
 					OwnerType:    &appsv1.ReplicaSet{},
 					IsController: t,
 				}
@@ -612,14 +612,14 @@ var _ = Describe("Eventhandler", func() {
 					Object: pod,
 					Meta:   pod.GetObjectMeta(),
 				}
-				instance.Create(q, evt)
+				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 		})
 
 		Context("with the Controller field set to false", func() {
 			It("should enqueue a reconcile.Requests for all owners.", func() {
-				instance := handler.EnqueueOwner{
+				instance := handler.EnqueueRequestForOwner{
 					OwnerType: &appsv1.ReplicaSet{},
 				}
 				instance.InjectScheme(scheme.Scheme)
@@ -644,7 +644,7 @@ var _ = Describe("Eventhandler", func() {
 					Object: pod,
 					Meta:   pod.GetObjectMeta(),
 				}
-				instance.Create(q, evt)
+				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(3))
 
 				i, _ := q.Get()
@@ -661,7 +661,7 @@ var _ = Describe("Eventhandler", func() {
 
 		Context("with a nil metadata object", func() {
 			It("should do nothing.", func() {
-				instance := handler.EnqueueOwner{
+				instance := handler.EnqueueRequestForOwner{
 					OwnerType: &appsv1.ReplicaSet{},
 				}
 				instance.InjectScheme(scheme.Scheme)
@@ -675,14 +675,14 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.CreateEvent{
 					Object: pod,
 				}
-				instance.Create(q, evt)
+				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 		})
 
 		Context("with a multiple matching kinds", func() {
 			It("should do nothing.", func() {
-				instance := handler.EnqueueOwner{
+				instance := handler.EnqueueRequestForOwner{
 					OwnerType: &metav1.ListOptions{},
 				}
 				instance.InjectScheme(scheme.Scheme)
@@ -697,13 +697,13 @@ var _ = Describe("Eventhandler", func() {
 					Object: pod,
 					Meta:   pod.GetObjectMeta(),
 				}
-				instance.Create(q, evt)
+				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 		})
 		Context("with an OwnerType that cannot be resolved", func() {
 			It("should do nothing.", func() {
-				instance := handler.EnqueueOwner{
+				instance := handler.EnqueueRequestForOwner{
 					OwnerType: &controllertest.ErrorType{},
 				}
 				instance.InjectScheme(scheme.Scheme)
@@ -718,14 +718,14 @@ var _ = Describe("Eventhandler", func() {
 					Object: pod,
 					Meta:   pod.GetObjectMeta(),
 				}
-				instance.Create(q, evt)
+				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 		})
 
 		Context("with a nil OwnerType", func() {
 			It("should do nothing.", func() {
-				instance := handler.EnqueueOwner{}
+				instance := handler.EnqueueRequestForOwner{}
 				instance.InjectScheme(scheme.Scheme)
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
@@ -738,14 +738,14 @@ var _ = Describe("Eventhandler", func() {
 					Object: pod,
 					Meta:   pod.GetObjectMeta(),
 				}
-				instance.Create(q, evt)
+				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 		})
 
 		Context("with an invalid APIVersion in the OwnerReference", func() {
 			It("should do nothing.", func() {
-				instance := handler.EnqueueOwner{
+				instance := handler.EnqueueRequestForOwner{
 					OwnerType: &appsv1.ReplicaSet{},
 				}
 				instance.InjectScheme(scheme.Scheme)
@@ -760,7 +760,7 @@ var _ = Describe("Eventhandler", func() {
 					Object: pod,
 					Meta:   pod.GetObjectMeta(),
 				}
-				instance.Create(q, evt)
+				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 		})
@@ -768,19 +768,19 @@ var _ = Describe("Eventhandler", func() {
 
 	Describe("Funcs", func() {
 		failingFuncs := handler.Funcs{
-			CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
+			CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect CreateEvent to be called.")
 			},
-			DeleteFunc: func(q workqueue.RateLimitingInterface, e event.DeleteEvent) {
+			DeleteFunc: func(event.DeleteEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect DeleteEvent to be called.")
 			},
-			UpdateFunc: func(workqueue.RateLimitingInterface, event.UpdateEvent) {
+			UpdateFunc: func(event.UpdateEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect UpdateEvent to be called.")
 			},
-			GenericFunc: func(workqueue.RateLimitingInterface, event.GenericEvent) {
+			GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect GenericEvent to be called.")
 			},
@@ -792,12 +792,12 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.CreateFunc = func(q2 workqueue.RateLimitingInterface, evt2 event.CreateEvent) {
+			instance.CreateFunc = func(evt2 event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q2).To(Equal(q))
 				Expect(evt2).To(Equal(evt))
 			}
-			instance.Create(q, evt)
+			instance.Create(evt, q)
 			close(done)
 		})
 
@@ -808,7 +808,7 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Create(q, evt)
+			instance.Create(evt, q)
 			close(done)
 		})
 
@@ -824,13 +824,13 @@ var _ = Describe("Eventhandler", func() {
 			}
 
 			instance := failingFuncs
-			instance.UpdateFunc = func(q2 workqueue.RateLimitingInterface, evt2 event.UpdateEvent) {
+			instance.UpdateFunc = func(evt2 event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q2).To(Equal(q))
 				Expect(evt2).To(Equal(evt))
 			}
 
-			instance.Update(q, evt)
+			instance.Update(evt, q)
 			close(done)
 		})
 
@@ -844,7 +844,7 @@ var _ = Describe("Eventhandler", func() {
 				ObjectNew: newPod,
 				MetaNew:   newPod.GetObjectMeta(),
 			}
-			instance.Update(q, evt)
+			instance.Update(evt, q)
 			close(done)
 		})
 
@@ -854,12 +854,12 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.DeleteFunc = func(q2 workqueue.RateLimitingInterface, evt2 event.DeleteEvent) {
+			instance.DeleteFunc = func(evt2 event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q2).To(Equal(q))
 				Expect(evt2).To(Equal(evt))
 			}
-			instance.Delete(q, evt)
+			instance.Delete(evt, q)
 			close(done)
 		})
 
@@ -870,7 +870,7 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Delete(q, evt)
+			instance.Delete(evt, q)
 			close(done)
 		})
 
@@ -880,12 +880,12 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.GenericFunc = func(q2 workqueue.RateLimitingInterface, evt2 event.GenericEvent) {
+			instance.GenericFunc = func(evt2 event.GenericEvent, q2 workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q2).To(Equal(q))
 				Expect(evt2).To(Equal(evt))
 			}
-			instance.Generic(q, evt)
+			instance.Generic(evt, q)
 			close(done)
 		})
 
@@ -896,7 +896,7 @@ var _ = Describe("Eventhandler", func() {
 				Object: pod,
 				Meta:   pod.GetObjectMeta(),
 			}
-			instance.Generic(q, evt)
+			instance.Generic(evt, q)
 			close(done)
 		})
 	})

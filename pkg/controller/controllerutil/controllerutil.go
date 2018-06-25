@@ -27,7 +27,7 @@ import (
 
 // SetControllerReference sets owner as a Controller OwnerReference on owned.
 // This is used for garbage collection of the owned object and for
-// reconciling the owner object on changes to owned (with a Watch + EnqueueOwner).
+// reconciling the owner object on changes to owned (with a Watch + EnqueueRequestForOwner).
 func SetControllerReference(owner, object v1.Object, scheme *runtime.Scheme) error {
 	ro, ok := owner.(runtime.Object)
 	if !ok {

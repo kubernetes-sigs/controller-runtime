@@ -15,8 +15,11 @@ limitations under the License.
 */
 
 /*
-Package inject defines interfaces and functions for propagating dependencies from a ControllerManager to
-the components registered with it.  Dependencies are propagated to Reconciler, Source, EventHandler and Predicate
-objects which implement the Injectable interfaces.
+Package event contains the definitions for the Event types produced by source.Sources and transformed into
+reconcile.Requests by handler.EventHandler.
+
+The details of how events are produced and transformed into reconcile.Requests are not something most
+users should need to use or understand.  Instead of working with Events, users should use
+source.Sources and handler.EventHandlers with Controller.Watch.
 */
-package inject
+package event

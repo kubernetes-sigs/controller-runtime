@@ -27,13 +27,13 @@ import (
 //
 // Identical reconcile.Requests will be batched together through the queuing mechanism before reconcile is called.
 //
-// * Use Enqueue to reconcile the object the event is for
+// * Use EnqueueRequestForObject to reconcile the object the event is for
 // - do this for events for the type the Controller Reconciles. (e.g. Deployment for a Deployment Controller)
 //
-// * Use EnqueueOwner to reconcile the owner of the object the event is for
+// * Use EnqueueRequestForOwner to reconcile the owner of the object the event is for
 // - do this for events for the types the Controller creates.  (e.g. ReplicaSets created by a Deployment Controller)
 //
-// * Use EnqueueMappendHandler to transform an event for an object to a reconcile of an object
+// * Use EnqueueRequestFromMapFunc to transform an event for an object to a reconcile of an object
 // of a different type - do this for events for types the Controller may be interested in, but doesn't create.
 // (e.g. If Foo responds to cluster size events, map Node events to Foo objects.)
 //
@@ -41,64 +41,64 @@ import (
 // Most users shouldn't need to implement their own EventHandler.
 type EventHandler interface {
 	// Create is called in response to an create event - e.g. Pod Creation.
-	Create(workqueue.RateLimitingInterface, event.CreateEvent)
+	Create(event.CreateEvent, workqueue.RateLimitingInterface)
 
 	// Update is called in response to an update event -  e.g. Pod Updated.
-	Update(workqueue.RateLimitingInterface, event.UpdateEvent)
+	Update(event.UpdateEvent, workqueue.RateLimitingInterface)
 
 	// Delete is called in response to a delete event - e.g. Pod Deleted.
-	Delete(workqueue.RateLimitingInterface, event.DeleteEvent)
+	Delete(event.DeleteEvent, workqueue.RateLimitingInterface)
 
 	// Generic is called in response to an event of an unknown type or a synthetic event triggered as a cron or
 	// external trigger request - e.g. reconcile Autoscaling, or a Webhook.
-	Generic(workqueue.RateLimitingInterface, event.GenericEvent)
+	Generic(event.GenericEvent, workqueue.RateLimitingInterface)
 }
 
 var _ EventHandler = Funcs{}
 
-// Funcs allows specifying a subset of EventHandler functions are fields.
+// Funcs implements EventHandler.
 type Funcs struct {
 	// Create is called in response to an add event.  Defaults to no-op.
 	// RateLimitingInterface is used to enqueue reconcile.Requests.
-	CreateFunc func(workqueue.RateLimitingInterface, event.CreateEvent)
+	CreateFunc func(event.CreateEvent, workqueue.RateLimitingInterface)
 
 	// Update is called in response to an update event.  Defaults to no-op.
 	// RateLimitingInterface is used to enqueue reconcile.Requests.
-	UpdateFunc func(workqueue.RateLimitingInterface, event.UpdateEvent)
+	UpdateFunc func(event.UpdateEvent, workqueue.RateLimitingInterface)
 
 	// Delete is called in response to a delete event.  Defaults to no-op.
 	// RateLimitingInterface is used to enqueue reconcile.Requests.
-	DeleteFunc func(workqueue.RateLimitingInterface, event.DeleteEvent)
+	DeleteFunc func(event.DeleteEvent, workqueue.RateLimitingInterface)
 
 	// GenericFunc is called in response to a generic event.  Defaults to no-op.
 	// RateLimitingInterface is used to enqueue reconcile.Requests.
-	GenericFunc func(workqueue.RateLimitingInterface, event.GenericEvent)
+	GenericFunc func(event.GenericEvent, workqueue.RateLimitingInterface)
 }
 
 // Create implements EventHandler
-func (h Funcs) Create(q workqueue.RateLimitingInterface, e event.CreateEvent) {
+func (h Funcs) Create(e event.CreateEvent, q workqueue.RateLimitingInterface) {
 	if h.CreateFunc != nil {
-		h.CreateFunc(q, e)
+		h.CreateFunc(e, q)
 	}
 }
 
 // Delete implements EventHandler
-func (h Funcs) Delete(q workqueue.RateLimitingInterface, e event.DeleteEvent) {
+func (h Funcs) Delete(e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 	if h.DeleteFunc != nil {
-		h.DeleteFunc(q, e)
+		h.DeleteFunc(e, q)
 	}
 }
 
 // Update implements EventHandler
-func (h Funcs) Update(q workqueue.RateLimitingInterface, e event.UpdateEvent) {
+func (h Funcs) Update(e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 	if h.UpdateFunc != nil {
-		h.UpdateFunc(q, e)
+		h.UpdateFunc(e, q)
 	}
 }
 
 // Generic implements EventHandler
-func (h Funcs) Generic(q workqueue.RateLimitingInterface, e event.GenericEvent) {
+func (h Funcs) Generic(e event.GenericEvent, q workqueue.RateLimitingInterface) {
 	if h.GenericFunc != nil {
-		h.GenericFunc(q, e)
+		h.GenericFunc(e, q)
 	}
 }

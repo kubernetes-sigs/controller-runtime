@@ -71,7 +71,7 @@ func (e EventHandler) OnAdd(obj interface{}) {
 	}
 
 	// Invoke create handler
-	e.EventHandler.Create(e.Queue, c)
+	e.EventHandler.Create(c, e.Queue)
 }
 
 // OnUpdate creates and UpdateEvent and calls Update on EventHandler
@@ -121,7 +121,7 @@ func (e EventHandler) OnUpdate(oldObj, newObj interface{}) {
 	}
 
 	// Invoke update handler
-	e.EventHandler.Update(e.Queue, u)
+	e.EventHandler.Update(u, e.Queue)
 }
 
 // OnDelete creates and DeleteEvent and calls Delete on EventHandler
@@ -173,5 +173,5 @@ func (e EventHandler) OnDelete(obj interface{}) {
 	}
 
 	// Invoke delete handler
-	e.EventHandler.Delete(e.Queue, d)
+	e.EventHandler.Delete(d, e.Queue)
 }

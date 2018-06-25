@@ -71,8 +71,8 @@ var _ = Describe("controller", func() {
 		close(stop)
 	})
 
-	Describe("Reconcile", func() {
-		It("should call the Reconcile function", func() {
+	Describe("Reconciler", func() {
+		It("should call the Reconciler function", func() {
 			ctrl.Do = reconcile.Func(func(reconcile.Request) (reconcile.Result, error) {
 				return reconcile.Result{Requeue: true}, nil
 			})
@@ -116,7 +116,7 @@ var _ = Describe("controller", func() {
 		It("should inject dependencies into the Source", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
 			src.InjectCache(ctrl.Cache)
-			evthdl := &handler.Enqueue{}
+			evthdl := &handler.EnqueueRequestForObject{}
 			found := false
 			ctrl.SetFields = func(i interface{}) error {
 				defer GinkgoRecover()
@@ -132,7 +132,7 @@ var _ = Describe("controller", func() {
 		It("should return an error if there is an error injecting into the Source", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
 			src.InjectCache(ctrl.Cache)
-			evthdl := &handler.Enqueue{}
+			evthdl := &handler.EnqueueRequestForObject{}
 			expected := fmt.Errorf("expect fail source")
 			ctrl.SetFields = func(i interface{}) error {
 				defer GinkgoRecover()
@@ -147,7 +147,7 @@ var _ = Describe("controller", func() {
 		It("should inject dependencies into the EventHandler", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
 			src.InjectCache(ctrl.Cache)
-			evthdl := &handler.Enqueue{}
+			evthdl := &handler.EnqueueRequestForObject{}
 			found := false
 			ctrl.SetFields = func(i interface{}) error {
 				defer GinkgoRecover()
@@ -162,7 +162,7 @@ var _ = Describe("controller", func() {
 
 		It("should return an error if there is an error injecting into the EventHandler", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
-			evthdl := &handler.Enqueue{}
+			evthdl := &handler.EnqueueRequestForObject{}
 			expected := fmt.Errorf("expect fail eventhandler")
 			ctrl.SetFields = func(i interface{}) error {
 				defer GinkgoRecover()
@@ -174,18 +174,18 @@ var _ = Describe("controller", func() {
 			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
 		})
 
-		It("should inject dependencies into the Reconcile", func() {
+		It("should inject dependencies into the Reconciler", func() {
 			// TODO(community): Write this
 		})
 
-		It("should return an error if there is an error injecting into the Reconcile", func() {
+		It("should return an error if there is an error injecting into the Reconciler", func() {
 			// TODO(community): Write this
 		})
 
 		It("should inject dependencies into all of the Predicates", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
 			src.InjectCache(ctrl.Cache)
-			evthdl := &handler.Enqueue{}
+			evthdl := &handler.EnqueueRequestForObject{}
 			pr1 := &predicate.Funcs{}
 			pr2 := &predicate.Funcs{}
 			found1 := false
@@ -208,7 +208,7 @@ var _ = Describe("controller", func() {
 		It("should return an error if there is an error injecting into any of the Predicates", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
 			src.InjectCache(ctrl.Cache)
-			evthdl := &handler.Enqueue{}
+			evthdl := &handler.EnqueueRequestForObject{}
 			pr1 := &predicate.Funcs{}
 			pr2 := &predicate.Funcs{}
 			expected := fmt.Errorf("expect fail predicate")
@@ -234,7 +234,7 @@ var _ = Describe("controller", func() {
 		It("should call Start the Source with the EventHandler, Queue, and Predicates", func() {
 			pr1 := &predicate.Funcs{}
 			pr2 := &predicate.Funcs{}
-			evthdl := &handler.Enqueue{}
+			evthdl := &handler.EnqueueRequestForObject{}
 			src := source.Func(func(e handler.EventHandler, q workqueue.RateLimitingInterface, p ...predicate.Predicate) error {
 				defer GinkgoRecover()
 				Expect(e).To(Equal(evthdl))
@@ -254,19 +254,19 @@ var _ = Describe("controller", func() {
 				defer GinkgoRecover()
 				return err
 			})
-			Expect(ctrl.Watch(src, &handler.Enqueue{})).To(Equal(err))
+			Expect(ctrl.Watch(src, &handler.EnqueueRequestForObject{})).To(Equal(err))
 		})
 	})
 
 	Describe("Processing queue items from a Controller", func() {
-		It("should call Reconcile if an item is enqueued", func(done Done) {
+		It("should call Reconciler if an item is enqueued", func(done Done) {
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 			}()
 			ctrl.Queue.Add(request)
 
-			By("Invoking Reconcile")
+			By("Invoking Reconciler")
 			Expect(<-reconciled).To(Equal(request))
 
 			By("Removing the item from the queue")
@@ -279,7 +279,7 @@ var _ = Describe("controller", func() {
 		It("should continue to process additional queue items after the first", func(done Done) {
 			ctrl.Do = reconcile.Func(func(reconcile.Request) (reconcile.Result, error) {
 				defer GinkgoRecover()
-				Fail("Reconcile should not have been called")
+				Fail("Reconciler should not have been called")
 				return reconcile.Result{}, nil
 			})
 			go func() {
@@ -312,10 +312,10 @@ var _ = Describe("controller", func() {
 			// Reduce the jitterperiod so we don't have to wait a second before the reconcile function is rerun.
 			ctrl.JitterPeriod = time.Millisecond
 
-			By("Invoking Reconcile which will give an error")
+			By("Invoking Reconciler which will give an error")
 			Expect(<-reconciled).To(Equal(request))
 
-			By("Invoking Reconcile a second time without error")
+			By("Invoking Reconciler a second time without error")
 			fakeReconcile.Err = nil
 			Expect(<-reconciled).To(Equal(request))
 
@@ -334,10 +334,10 @@ var _ = Describe("controller", func() {
 			}()
 			ctrl.Queue.Add(request)
 
-			By("Invoking Reconcile which will ask for requeue")
+			By("Invoking Reconciler which will ask for requeue")
 			Expect(<-reconciled).To(Equal(request))
 
-			By("Invoking Reconcile a second time without asking for requeue")
+			By("Invoking Reconciler a second time without asking for requeue")
 			fakeReconcile.Result.Requeue = false
 			Expect(<-reconciled).To(Equal(request))
 
@@ -346,7 +346,7 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
 		})
 
-		It("should forget the Request if Reconcile is successful", func() {
+		It("should forget the Request if Reconciler is successful", func() {
 			// TODO(community): write this test
 		})
 

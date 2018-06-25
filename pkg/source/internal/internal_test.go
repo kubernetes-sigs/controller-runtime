@@ -41,35 +41,35 @@ var _ = Describe("Internal", func() {
 	var set bool
 	BeforeEach(func() {
 		funcs = &handler.Funcs{
-			CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
+			CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect CreateEvent to be called.")
 			},
-			DeleteFunc: func(q workqueue.RateLimitingInterface, e event.DeleteEvent) {
+			DeleteFunc: func(e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect DeleteEvent to be called.")
 			},
-			UpdateFunc: func(workqueue.RateLimitingInterface, event.UpdateEvent) {
+			UpdateFunc: func(event.UpdateEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect UpdateEvent to be called.")
 			},
-			GenericFunc: func(workqueue.RateLimitingInterface, event.GenericEvent) {
+			GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect GenericEvent to be called.")
 			},
 		}
 
 		setfuncs = &handler.Funcs{
-			CreateFunc: func(workqueue.RateLimitingInterface, event.CreateEvent) {
+			CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 				set = true
 			},
-			DeleteFunc: func(q workqueue.RateLimitingInterface, e event.DeleteEvent) {
+			DeleteFunc: func(e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				set = true
 			},
-			UpdateFunc: func(workqueue.RateLimitingInterface, event.UpdateEvent) {
+			UpdateFunc: func(event.UpdateEvent, workqueue.RateLimitingInterface) {
 				set = true
 			},
-			GenericFunc: func(workqueue.RateLimitingInterface, event.GenericEvent) {
+			GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {
 				set = true
 			},
 		}
@@ -93,7 +93,7 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should create a CreateEvent", func(done Done) {
-			funcs.CreateFunc = func(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
+			funcs.CreateFunc = func(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
 				m, err := meta.Accessor(pod)
@@ -163,7 +163,7 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should create an UpdateEvent", func(done Done) {
-			funcs.UpdateFunc = func(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
+			funcs.UpdateFunc = func(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
 
@@ -241,7 +241,7 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should create a DeleteEvent", func(done Done) {
-			funcs.DeleteFunc = func(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
+			funcs.DeleteFunc = func(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
 
@@ -316,7 +316,7 @@ var _ = Describe("Internal", func() {
 			tombstone := cache.DeletedFinalStateUnknown{
 				Obj: pod,
 			}
-			funcs.DeleteFunc = func(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
+			funcs.DeleteFunc = func(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
 				m, err := meta.Accessor(pod)

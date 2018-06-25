@@ -107,17 +107,17 @@ var _ = Describe("Source", func() {
 				// Create an event handler to verify the events
 				newHandler := func(c chan interface{}) handler.Funcs {
 					return handler.Funcs{
-						CreateFunc: func(rli workqueue.RateLimitingInterface, evt event.CreateEvent) {
+						CreateFunc: func(evt event.CreateEvent, rli workqueue.RateLimitingInterface) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))
 							c <- evt
 						},
-						UpdateFunc: func(rli workqueue.RateLimitingInterface, evt event.UpdateEvent) {
+						UpdateFunc: func(evt event.UpdateEvent, rli workqueue.RateLimitingInterface) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))
 							c <- evt
 						},
-						DeleteFunc: func(rli workqueue.RateLimitingInterface, evt event.DeleteEvent) {
+						DeleteFunc: func(evt event.DeleteEvent, rli workqueue.RateLimitingInterface) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))
 							c <- evt

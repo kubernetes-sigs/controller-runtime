@@ -16,116 +16,122 @@ limitations under the License.
 
 /*
 Package pkg provides libraries for building Controllers.  Controllers implement Kubernetes APIs
-and are central to building Operators, Workload APIs, Configuration APIs, Autoscalers, and more.
+and are foundational to building Operators, Workload APIs, Configuration APIs, Autoscalers, and more.
 
 Client
 
-Client provides a Read / Write client for reading and writing objects to an apiserver.
+Client provides a Read + Write client for reading and writing Kubernetes objects.
 
 Cache
 
-Cache provides a Read client for reading objects from an apiserver that are stored in a local cache.
-Cache supports registering handlers to respond to events that update the cache.
+Cache provides a Read client for reading objects from a local cache.
+A cache may register handlers to respond to events that update the cache.
 
 Manager
 
-Manager provides a mechanism for Starting components and provides shared Caches and Clients to the components.
+Manager is required for creating a Controller and provides the Controller shared dependencies such as
+clients, caches, schemes, etc.  Controllers should be Started through the Manager by calling Manager.Start.
 
 Controller
 
-Controller is a work queue that enqueues work in response to source.Source events (e.g. Pod Create, Update, Delete)
-and triggers reconcile.Reconcile functions when the work is dequeued.
+Controller implements a Kubernetes API by responding to events (object Create, Update, Delete) and ensuring that
+the state specified in the Spec of the object matches the state of the system.  This is called a Reconciler.
+If they do not match, the Controller will create / update / delete objects as needed to make them match.
 
-Unlike http handlers, Controllers DO NOT perform work directly in response to events, but instead enqueue
-reconcile.Requests so the work is performed eventually.
+Controllers are implemented as worker queues that process reconcile.Requests (requests to Reconciler the
+state for a specific object).
 
-* Controllers run reconcile.Reconcile functions against objects (provided as name / Namespace).
+Unlike http handlers, Controllers DO NOT handle events directly, but enqueue Requests to eventually Reconciler
+the object.  This means the handling of multiple events may be batched together and the full state of the
+system must be read for each Reconciler.
 
-* Controllers enqueue reconcile.Requests in response events provided by source.Sources.
+* Controllers require a Reconciler to be provided to perform the work pulled from the work queue.
 
-Reconcile
+* Controller require Watches to be configured to enqueue reconcile.Requests in response to events.
 
-reconcile.Reconcile is a function that may be called at anytime with the Name and Namespace of an
-object.  When called, it will ensure that the state of the system matches what is specified in the object at the
-time Reconcile is called.
+Reconciler
 
-Example: Reconcile is run against a ReplicationController object.  The ReplicationController specifies 5 replicas.
-3 Pods exist in the system.  Reconcile creates 2 more Pods and sets their OwnerReference to point at the
-ReplicationController.
+Reconciler is a function provided to a Controller that may be called at anytime with the Name and Namespace of an object.
+When called, Reconciler will ensure that the state of the system matches what is specified in the object at the
+time Reconciler is called.
 
-* reconcile works on a single object type. - e.g. it will only reconcile ReplicaSets.
+Example: Reconciler invoked for a ReplicaSet object.  The ReplicaSet specifies 5 replicas but only
+3 Pods exist in the system.  Reconciler creates 2 more Pods and sets their OwnerReference to point at the
+ReplicaSet with controller=true.
 
-* reconcile is triggered by a reconcile.Request containing the name / Namespace of an object to reconcile.
+* Reconciler contains all of the business logic of a Controller.
 
-* reconcile does not care about the event contents or event type triggering the reconcile.Request.
-- e.g. it doesn't matter whether a ReplicaSet was created or updated, reconcile will check that the correct
-Pods exist either way.
+* Reconciler typically works on a single object type. - e.g. it will only reconcile ReplicaSets.  For separate
+types use separate Controllers.
 
-* Users MUST implement Reconcile for Controllers.
+* Reconciler is provided the Name / Namespace of the object to reconcile.
+
+* Reconciler does not care about the event contents or event type responsible for triggering the Reconciler.
+- e.g. it doesn't matter whether a ReplicaSet was created or updated, Reconciler will always compare the number of
+Pods in the system against what is specified in the object at the time it is called.
 
 Source
 
-resource.Source provides a stream of events.  Events may be internal events from watching Kubernetes
-APIs (e.g. Pod Create, Update, Delete), or may be synthetic Generic events triggered by cron or WebHooks
-(e.g. through a Slackbot or GitHub callback).
+resource.Source is an argument to Controller.Watch that provides a stream of events.
+Events typically come from watching Kubernetes APIs (e.g. Pod Create, Update, Delete).
 
-Example 1: source.Kind uses the Kubernetes API Watch endpoint for a GroupVersionKind to provide
+Example: source.Kind uses the Kubernetes API Watch endpoint for a GroupVersionKind to provide
 Create, Update, Delete events.
 
-Example 2: source.Channel reads Generic events from a channel fed by a WebHook called from a Slackbot.
+* Source provides a stream of events (e.g. object Create, Update, Delete) for Kubernetes objects typically
+through the Watch API.
 
-* source provides a stream of events for EventHandlers to handle.
-
-* source may provide either events from Watches (e.g. object Create, Update, Delete) or Generic triggered
-from another source (e.g. WebHook callback).
-
-* Users SHOULD use the provided Source implementations instead of implementing their own for nearly all cases.
+* Users SHOULD only use the provided Source implementations instead of implementing their own for nearly all cases.
 
 EventHandler
 
-eventhandler.EventHandler maps from a source.Source into reconcile.Requests which are enqueued as work for the
-Controller.
+handler.EventHandler is a argument to Controller.Watch that enqueues reconcile.Requests in response to events.
 
 Example: a Pod Create event from a Source is provided to the eventhandler.EnqueueHandler, which enqueues a
 reconcile.Request containing the name / Namespace of the Pod.
 
-* EventHandler takes an event.Event and enqueues reconcile.Requests
+* EventHandlers handle events by enqueueing reconcile.Requests for one or more objects.
 
-* EventHandlers MAY map an event for an object of one type to a reconcile.Request for an object of another type.
+* EventHandlers MAY map an event for an object to a reconcile.Request for an object of the same type.
 
-* EventHandlers MAY map an event for an object to multiple reconcile.Requests for different objects.
+* EventHandlers MAY map an event for an object to a reconcile.Request for an object of a different type - e.g.
+map a Pod event to a reconcile.Request for the owning ReplicaSet.
 
-* Users SHOULD use the provided EventHandler implementations instead of implementing their own for almost all cases.
+* EventHandlers MAY map an event for an object to multiple reconcile.Requests for objects of the same or a different
+type - e.g. map a Node event to objects that respond to cluster resize events.
+
+* Users SHOULD only use the provided EventHandler implementations instead of implementing their own for almost
+all cases.
 
 Predicate
 
-predicate.Predicate allows events to be filtered before they are given to EventHandlers.  This allows common
-filters to be reused and composed together with EventHandlers.
+predicate.Predicate is an optional argument to Controller.Watch that filters events.  This allows common filters to be
+reused and composed.
 
-* Predicate takes and event.Event and returns a bool (true to enqueue)
+* Predicate takes and event and returns a bool (true to enqueue)
 
-* Predicates are optional
+* Predicates are optional arguments
 
-* Users SHOULD use the provided Predicate implementations, but MAY implement their own Predicates as needed.
+* Users SHOULD use the provided Predicate implementations, but MAY implement additional Predicates.
 
 PodController Diagram
 
 Source provides event:
 
-* &source.KindSource{"core", "v1", "Pod"} -> (Pod foo/bar Create Event)
+* &source.KindSource{&v1.Pod{}} -> (Pod foo/bar Create Event)
 
 EventHandler enqueues Request:
 
-* &eventhandler.Enqueue{} -> (reconcile.Request{"foo", "bar"})
+* &handler.EnqueueRequestForObject{} -> (reconcile.Request{types.NamespaceName{Name: "foo", Namespace: "bar"}})
 
-Reconcile is called with the Request:
+Reconciler is called with the Request:
 
-* Reconcile(reconcile.Request{"foo", "bar"})
+* Reconciler(reconcile.Request{types.NamespaceName{Name: "foo", Namespace: "bar"}})
 
 Usage
 
 The following example shows creating a new Controller program which Reconciles ReplicaSet objects in response
-to Pod or ReplicaSet events.  The Reconcile function simply adds a label to the ReplicaSet.
+to Pod or ReplicaSet events.  The Reconciler function simply adds a label to the ReplicaSet.
 
 See the example/main.go for a usage example.
 
@@ -133,31 +139,32 @@ Controller Example
 
 1. Watch ReplicaSet and Pods Sources
 
-1.1 ReplicaSet -> eventhandler.EnqueueHandler - enqueue the ReplicaSet Namespace and Name.
+1.1 ReplicaSet -> handler.EnqueueRequestForObject - enqueue a Request with the ReplicaSet Namespace and Name.
 
-1.2 Pod (created by ReplicaSet) -> eventhandler.EnqueueOwnerHandler - enqueue the Owning ReplicaSet key.
+1.2 Pod (created by ReplicaSet) -> handler.EnqueueRequestForOwnerHandler - enqueue a Request with the
+Owning ReplicaSet Namespace and Name.
 
-2. Reconcile ReplicaSet
+2. Reconciler ReplicaSet in response to an event
 
 2.1 ReplicaSet object created -> Read ReplicaSet, try to read Pods -> if is missing create Pods.
 
-2.2 reconcile triggered by creation of Pods -> Read ReplicaSet and Pods, do nothing.
+2.2 Reconciler triggered by creation of Pods -> Read ReplicaSet and Pods, do nothing.
 
-2.3 reconcile triggered by deletion of Pods -> Read ReplicaSet and Pods, create replacement Pods.
+2.3 Reconciler triggered by deletion of Pods from some other actor -> Read ReplicaSet and Pods, create replacement Pods.
 
 Watching and EventHandling
 
-Controllers may Watch multiple Kinds of objects (e.g. Pods, ReplicaSets and Deployments), but they should
-enqueue keys for only a single Type.  When one Type of object must be be updated in response to changes
-in another Type of object, an EnqueueMappedHandler may be used to reconcile the Type that is being
-updated and watch the other Type for Events.  e.g. Respond to a cluster resize
-Event (add / delete Node) by re-reconciling all instances of another Type that cares about the cluster size.
+Controllers may Watch multiple Kinds of objects (e.g. Pods, ReplicaSets and Deployments), but they Reconciler
+only a single Type.  When one Type of object must be be updated in response to changes in another Type of object,
+an EnqueueRequestFromMapFunc may be used to map events from one type to another.  e.g. Respond to a cluster resize
+event (add / delete Node) by re-reconciling all instances of some API.
 
-For example, a Deployment controller might use an EnqueueHandler and EnqueueOwnerHandler to:
+A Deployment Controller might use an EnqueueRequestForObject and EnqueueRequestForOwner to:
 
-* Watch for Deployment Events - enqueue the key of the Deployment.
+* Watch for Deployment Events - enqueue the Namespace and Name of the Deployment.
 
-* Watch for ReplicaSet Events - enqueue the key of the Deployment that created the ReplicaSet (e.g the Owner)
+* Watch for ReplicaSet Events - enqueue the Namespace and Name of the Deployment that created the ReplicaSet
+(e.g the Owner)
 
 Note: reconcile.Requests are deduplicated when they are enqueued.  Many Pod Events for the same ReplicaSet
 may trigger only 1 reconcile invocation as each Event results in the Handler trying to enqueue
@@ -165,22 +172,21 @@ the same reconcile.Request for the ReplicaSet.
 
 Controller Writing Tips
 
-Reconcile Runtime Complexity:
+Reconciler Runtime Complexity:
 
-* It is better to write Controllers to perform an O(1) reconcile N times (e.g. on N different objects) instead of
-performing an O(N) reconcile 1 time (e.g. on a single object which manages N other objects).
+* It is better to write Controllers to perform an O(1) Reconciler N times (e.g. on N different objects) instead of
+performing an O(N) Reconciler 1 time (e.g. on a single object which manages N other objects).
 
-* Example: If you need to update all Services in response to a Node being added - reconcile Services but Watch
-Node events (transformed to Service object name / Namespaces) instead of Reconciling the Node and updating all
-Services from a single reconcile.
+* Example: If you need to update all Services in response to a Node being added - Reconciler Services but Watch
+Nodes (transformed to Service object name / Namespaces) instead of Reconciling Nodes and updating Services
 
 Event Multiplexing:
 
-* reconcile.Requests for the same name / Namespace are deduplicated when they are enqueued.  This allows
-for Controllers to gracefully handle event storms for a single object.  Multiplexing multiple event Sources to
-a single object type takes advantage of this.
+* reconcile.Requests for the same Name / Namespace are batched and deduplicated when they are enqueued.  This allows
+Controllers to gracefully handle a high volume of events for a single object.  Multiplexing multiple event Sources to
+a single object Type will batch requests across events for different object types.
 
-* Example: Pod events for a ReplicaSet are transformed to a ReplicaSet name / Namespace, so the ReplicaSet
-will be Reconciled only 1 time for multiple Pods.
+* Example: Pod events for a ReplicaSet are transformed to a ReplicaSet Name / Namespace, so the ReplicaSet
+will be Reconciled only 1 time for multiple events from multiple Pods.
 */
 package pkg

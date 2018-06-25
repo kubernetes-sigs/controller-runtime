@@ -24,15 +24,17 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
-var enqueueLog = logf.KBLog.WithName("eventhandler").WithName("Enqueue")
+var enqueueLog = logf.KBLog.WithName("eventhandler").WithName("EnqueueRequestForObject")
 
-var _ EventHandler = &Enqueue{}
+var _ EventHandler = &EnqueueRequestForObject{}
 
-// Enqueue enqueues a Request containing the Name and Namespace of the object for each event.
-type Enqueue struct{}
+// EnqueueRequestForObject enqueues a Request containing the Name and Namespace of the object that is the source of the Event.
+// (e.g. the created / deleted / updated objects Name and Namespace).  handler.EnqueueRequestForObject is used by almost all
+// Controllers that have associated Resources (e.g. CRDs) to reconcile the associated Resource.
+type EnqueueRequestForObject struct{}
 
 // Create implements EventHandler
-func (e *Enqueue) Create(q workqueue.RateLimitingInterface, evt event.CreateEvent) {
+func (e *EnqueueRequestForObject) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
 	if evt.Meta == nil {
 		enqueueLog.Error(nil, "CreateEvent received with no metadata", "CreateEvent", evt)
 		return
@@ -44,7 +46,7 @@ func (e *Enqueue) Create(q workqueue.RateLimitingInterface, evt event.CreateEven
 }
 
 // Update implements EventHandler
-func (e *Enqueue) Update(q workqueue.RateLimitingInterface, evt event.UpdateEvent) {
+func (e *EnqueueRequestForObject) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 	if evt.MetaOld != nil {
 		q.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
 			Name:      evt.MetaOld.GetName(),
@@ -65,7 +67,7 @@ func (e *Enqueue) Update(q workqueue.RateLimitingInterface, evt event.UpdateEven
 }
 
 // Delete implements EventHandler
-func (e *Enqueue) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEvent) {
+func (e *EnqueueRequestForObject) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 	if evt.Meta == nil {
 		enqueueLog.Error(nil, "DeleteEvent received with no metadata", "DeleteEvent", evt)
 		return
@@ -77,7 +79,7 @@ func (e *Enqueue) Delete(q workqueue.RateLimitingInterface, evt event.DeleteEven
 }
 
 // Generic implements EventHandler
-func (e *Enqueue) Generic(q workqueue.RateLimitingInterface, evt event.GenericEvent) {
+func (e *EnqueueRequestForObject) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
 	if evt.Meta == nil {
 		enqueueLog.Error(nil, "GenericEvent received with no metadata", "GenericEvent", evt)
 		return

@@ -18,21 +18,21 @@ package reconciletest
 
 import "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-var _ reconcile.Reconcile = &FakeReconcile{}
+var _ reconcile.Reconciler = &FakeReconcile{}
 
-// FakeReconcile implements reconcile.Reconcile by always returning Result and Err
+// FakeReconcile implements reconcile.Reconciler by always returning Result and Err
 type FakeReconcile struct {
-	// Result is the result that will be returned by Reconcile
+	// Result is the result that will be returned by Reconciler
 	Result reconcile.Result
 
-	// Err is the error that will be returned by Reconcile
+	// Err is the error that will be returned by Reconciler
 	Err error
 
-	// If specified, Reconcile will write Requests to Chan
+	// If specified, Reconciler will write Requests to Chan
 	Chan chan reconcile.Request
 }
 
-// Reconcile implements reconcile.Reconcile
+// Reconcile implements reconcile.Reconciler
 func (f *FakeReconcile) Reconcile(r reconcile.Request) (reconcile.Result, error) {
 	if f.Chan != nil {
 		f.Chan <- r

@@ -46,29 +46,29 @@ var _ = Describe("controller.Controller", func() {
 		It("should return an error if Name is not Specified", func(done Done) {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
-			c, err := controller.New("", m, controller.Options{Reconcile: rec})
+			c, err := controller.New("", m, controller.Options{Reconciler: rec})
 			Expect(c).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Name for Controller"))
 
 			close(done)
 		})
 
-		It("should return an error if Reconcile is not Specified", func(done Done) {
+		It("should return an error if Reconciler is not Specified", func(done Done) {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("foo", m, controller.Options{})
 			Expect(c).To(BeNil())
-			Expect(err.Error()).To(ContainSubstring("must specify Reconcile"))
+			Expect(err.Error()).To(ContainSubstring("must specify Reconciler"))
 
 			close(done)
 		})
 
-		It("NewController should return an error if injecting Reconcile fails", func(done Done) {
+		It("NewController should return an error if injecting Reconciler fails", func(done Done) {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("foo", m, controller.Options{Reconcile: &failRec{}})
+			c, err := controller.New("foo", m, controller.Options{Reconciler: &failRec{}})
 			Expect(c).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
@@ -78,7 +78,7 @@ var _ = Describe("controller.Controller", func() {
 	})
 })
 
-var _ reconcile.Reconcile = &failRec{}
+var _ reconcile.Reconciler = &failRec{}
 var _ inject.Client = &failRec{}
 
 type failRec struct{}

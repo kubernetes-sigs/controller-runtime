@@ -191,10 +191,20 @@ var _ = Describe("Informer Cache", func() {
 
 	Describe("as an Informer", func() {
 		It("should be able to get informer for the object", func(done Done) {
-			By("getting an shared index informer for a pod")
+			By("getting a shared index informer for a pod")
 			pod := &kcorev1.Pod{
-				ObjectMeta: kmetav1.ObjectMeta{Name: "informer-obj", Namespace: "default"},
-				Spec:       kcorev1.PodSpec{Containers: []kcorev1.Container{{Name: "nginx", Image: "nginx"}}},
+				ObjectMeta: kmetav1.ObjectMeta{
+					Name:      "informer-obj",
+					Namespace: "default",
+				},
+				Spec: kcorev1.PodSpec{
+					Containers: []kcorev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx",
+						},
+					},
+				},
 			}
 			sii, err := informerCache.GetInformer(pod)
 			Expect(err).NotTo(HaveOccurred())
@@ -203,9 +213,10 @@ var _ = Describe("Informer Cache", func() {
 
 			By("adding an event handler listening for object creation which sends the object to a channel")
 			out := make(chan interface{})
-			sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: func(obj interface{}) {
+			addFunc := func(obj interface{}) {
 				out <- obj
-			}})
+			}
+			sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
 
 			By("adding an object")
 			cl, err := client.New(cfg, client.Options{})
@@ -227,16 +238,27 @@ var _ = Describe("Informer Cache", func() {
 
 			By("adding an event handler listening for object creation which sends the object to a channel")
 			out := make(chan interface{})
-			sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: func(obj interface{}) {
+			addFunc := func(obj interface{}) {
 				out <- obj
-			}})
+			}
+			sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
 
 			By("adding an object")
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			pod := &kcorev1.Pod{
-				ObjectMeta: kmetav1.ObjectMeta{Name: "informer-gvk", Namespace: "default"},
-				Spec:       kcorev1.PodSpec{Containers: []kcorev1.Container{{Name: "nginx", Image: "nginx"}}},
+				ObjectMeta: kmetav1.ObjectMeta{
+					Name:      "informer-gvk",
+					Namespace: "default",
+				},
+				Spec: kcorev1.PodSpec{
+					Containers: []kcorev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx",
+						},
+					},
+				},
 			}
 			Expect(cl.Create(context.TODO(), pod)).To(Succeed())
 

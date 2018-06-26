@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	kcorev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -102,8 +103,8 @@ var _ = Describe("Informer Cache", func() {
 		close(stop)
 	})
 
-	Describe("Cache as a Reader", func() {
-		It("should be able to list objects that haven't been watched previously", func(done Done) {
+	Describe("as a Reader", func() {
+		It("should be able to list objects that haven't been watched previously", func() {
 			By("listing all services in the cluster")
 			listObj := &kcorev1.ServiceList{}
 			Expect(informerCache.List(context.Background(), nil, listObj)).NotTo(HaveOccurred())
@@ -119,10 +120,9 @@ var _ = Describe("Informer Cache", func() {
 				}
 			}
 			Expect(hasKubeService).To(BeTrue())
-			close(done)
 		})
 
-		It("should be able to get objects that haven't been watched previously", func(done Done) {
+		It("should be able to get objects that haven't been watched previously", func() {
 			By("getting the Kubernetes service")
 			svc := &kcorev1.Service{}
 			svcKey := client.ObjectKey{Namespace: "default", Name: "kubernetes"}
@@ -131,10 +131,9 @@ var _ = Describe("Informer Cache", func() {
 			By("verifying that the returned service looks reasonable")
 			Expect(svc.Name).To(Equal("kubernetes"))
 			Expect(svc.Namespace).To(Equal("default"))
-			close(done)
 		})
 
-		It("should support filtering by labels", func(done Done) {
+		It("should support filtering by labels", func() {
 			By("listing pods with a particular label")
 			// NB: each pod has a "test-label" equal to the pod name
 			out := kcorev1.PodList{}
@@ -146,10 +145,9 @@ var _ = Describe("Informer Cache", func() {
 			Expect(len(out.Items)).To(Equal(1))
 			actual := out.Items[0]
 			Expect(actual.Labels["test-label"]).To(Equal("test-pod-2"))
-			close(done)
 		})
 
-		It("should be able to list objects by namespace", func(done Done) {
+		It("should be able to list objects by namespace", func() {
 			By("listing pods in test-namespace-1")
 			listObj := &kcorev1.PodList{}
 			Expect(informerCache.List(context.Background(),
@@ -161,10 +159,9 @@ var _ = Describe("Informer Cache", func() {
 			Expect(len(listObj.Items)).To(Equal(1))
 			actual := listObj.Items[0]
 			Expect(actual.Namespace).To(Equal(testNamespaceOne))
-			close(done)
 		})
 
-		It("should deep copy the object unless told otherwise", func(done Done) {
+		It("should deep copy the object unless told otherwise", func() {
 			By("retrieving a specific pod from the cache")
 			out := &kcorev1.Pod{}
 			podKey := client.ObjectKey{Name: "test-pod-2", Namespace: testNamespaceTwo}
@@ -178,21 +175,21 @@ var _ = Describe("Informer Cache", func() {
 
 			By("verifying the pods are no longer equal")
 			Expect(out).NotTo(Equal(knownPod2))
-			close(done)
 		})
 
-		It("should error out for missing objects", func(done Done) {
+		It("should error out for missing objects", func() {
 			By("getting a service that does not exists")
 			svc := &kcorev1.Service{}
 			svcKey := client.ObjectKey{Namespace: "unknown", Name: "unknown"}
 
 			By("verifying that an error is returned")
-			Expect(informerCache.Get(context.Background(), svcKey, svc)).To(HaveOccurred())
-			close(done)
+			err := informerCache.Get(context.Background(), svcKey, svc)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.IsNotFound(err)).To(Equal(true))
 		})
 	})
 
-	Describe("Cache as an Informer", func() {
+	Describe("as an Informer", func() {
 		It("should be able to get informer for the object", func(done Done) {
 			By("getting an shared index informer for a pod")
 			pod := &kcorev1.Pod{
@@ -248,7 +245,7 @@ var _ = Describe("Informer Cache", func() {
 			close(done)
 		})
 
-		It("should be able to index an object field then retrieve objects by that field", func(done Done) {
+		It("should be able to index an object field then retrieve objects by that field", func() {
 			By("creating the cache")
 			informer, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
@@ -277,7 +274,6 @@ var _ = Describe("Informer Cache", func() {
 			Expect(len(listObj.Items)).To(Equal(1))
 			actual := listObj.Items[0]
 			Expect(actual.Name).To(Equal("test-pod-3"))
-			close(done)
 		})
 	})
 })

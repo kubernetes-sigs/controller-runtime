@@ -34,6 +34,17 @@ const (
 	StopTimeout             = 60
 )
 
+// APIServerDefaultArgs are flags necessary to bring up apiserver.
+// TODO: create test framework interface to append flag to default flags.
+var defaultKubeAPIServerFlags = []string{
+	"--etcd-servers={{ if .EtcdURL }}{{ .EtcdURL.String }}{{ end }}",
+	"--cert-dir={{ .CertDir }}",
+	"--insecure-port={{ if .URL }}{{ .URL.Port }}{{ end }}",
+	"--insecure-bind-address={{ if .URL }}{{ .URL.Hostname }}{{ end }}",
+	"--secure-port=0",
+	"--admission-control=AlwaysAdmit",
+}
+
 // Environment creates a Kubernetes test environment that will start / stop the Kubernetes control plane and
 // install extension APIs
 type Environment struct {
@@ -58,8 +69,9 @@ func (te *Environment) Stop() error {
 // Start starts a local Kubernetes server and updates te.ApiserverPort with the port it is listening on
 func (te *Environment) Start() (*rest.Config, error) {
 	te.ControlPlane = integration.ControlPlane{}
+	te.ControlPlane.APIServer = &integration.APIServer{Args: defaultKubeAPIServerFlags}
 	if os.Getenv(envKubeAPIServerBin) == "" {
-		te.ControlPlane.APIServer = &integration.APIServer{Path: defaultKubeAPIServerBin}
+		te.ControlPlane.APIServer.Path = defaultKubeAPIServerBin
 	}
 	if os.Getenv(envEtcdBin) == "" {
 		te.ControlPlane.Etcd = &integration.Etcd{Path: defaultEtcdBin}

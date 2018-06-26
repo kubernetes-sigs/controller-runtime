@@ -31,6 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const testNamespaceOne = "test-namespace-1"
+const testNamespaceTwo = "test-namespace-2"
+
 var informerCache cache.Cache
 var stop chan struct{}
 var knownPod1 runtime.Object
@@ -74,9 +77,9 @@ var _ = Describe("Informer Cache", func() {
 		Expect(cfg).NotTo(BeNil())
 
 		By("creating three pods")
-		knownPod1 = createPod("test-pod-1", "test-namespace-1", kcorev1.RestartPolicyNever)
-		knownPod2 = createPod("test-pod-2", "test-namespace-2", kcorev1.RestartPolicyAlways)
-		knownPod3 = createPod("test-pod-3", "test-namespace-2", kcorev1.RestartPolicyOnFailure)
+		knownPod1 = createPod("test-pod-1", testNamespaceOne, kcorev1.RestartPolicyNever)
+		knownPod2 = createPod("test-pod-2", testNamespaceTwo, kcorev1.RestartPolicyAlways)
+		knownPod3 = createPod("test-pod-3", testNamespaceTwo, kcorev1.RestartPolicyOnFailure)
 
 		By("creating the informer cache")
 		var err error
@@ -135,7 +138,7 @@ var _ = Describe("Informer Cache", func() {
 			By("listing pods with a particular label")
 			// NB: each pod has a "test-label" equal to the pod name
 			out := kcorev1.PodList{}
-			Expect(informerCache.List(context.TODO(), client.InNamespace("test-namespace-2").
+			Expect(informerCache.List(context.TODO(), client.InNamespace(testNamespaceTwo).
 				MatchingLabels(map[string]string{"test-label": "test-pod-2"}), &out)).NotTo(HaveOccurred())
 
 			By("verifying the returned pods have the correct label")
@@ -150,21 +153,21 @@ var _ = Describe("Informer Cache", func() {
 			By("listing pods in test-namespace-1")
 			listObj := &kcorev1.PodList{}
 			Expect(informerCache.List(context.Background(),
-				client.InNamespace("test-namespace-1"),
+				client.InNamespace(testNamespaceOne),
 				listObj)).NotTo(HaveOccurred())
 
 			By("verifying that the returned pods are in test-namespace-1")
 			Expect(listObj.Items).NotTo(BeEmpty())
 			Expect(len(listObj.Items)).To(Equal(1))
 			actual := listObj.Items[0]
-			Expect(actual.Namespace).To(Equal("test-namespace-1"))
+			Expect(actual.Namespace).To(Equal(testNamespaceOne))
 			close(done)
 		})
 
 		It("should deep copy the object unless told otherwise", func(done Done) {
 			By("retrieving a specific pod from the cache")
 			out := &kcorev1.Pod{}
-			podKey := client.ObjectKey{Name: "test-pod-2", Namespace: "test-namespace-2"}
+			podKey := client.ObjectKey{Name: "test-pod-2", Namespace: testNamespaceTwo}
 			Expect(informerCache.Get(context.Background(), podKey, out)).NotTo(HaveOccurred())
 
 			By("verifying the retrieved pod is equal to a known pod")

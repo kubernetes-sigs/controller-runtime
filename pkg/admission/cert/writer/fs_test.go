@@ -70,7 +70,7 @@ var _ = Describe("FSCertWriter", func() {
 		vwc = &admissionregistration.ValidatingWebhookConfiguration{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "admissionregistration.k8s.io/v1beta1",
-				Kind:       "MutatingWebhookConfiguration",
+				Kind:       "ValidatingWebhookConfiguration",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        "test-vwc",

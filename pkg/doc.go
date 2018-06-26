@@ -62,7 +62,8 @@ ReplicaSet with controller=true.
 * Reconciler contains all of the business logic of a Controller.
 
 * Reconciler typically works on a single object type. - e.g. it will only reconcile ReplicaSets.  For separate
-types use separate Controllers.
+types use separate Controllers. If you wish to trigger reconciles from other objects, you can provide
+a mapping (e.g. owner references) that maps the object that triggers the reconcile to the object being reconciled.
 
 * Reconciler is provided the Name / Namespace of the object to reconcile.
 
@@ -108,11 +109,12 @@ Predicate
 predicate.Predicate is an optional argument to Controller.Watch that filters events.  This allows common filters to be
 reused and composed.
 
-* Predicate takes and event and returns a bool (true to enqueue)
+* Predicate takes an event and returns a bool (true to enqueue)
 
 * Predicates are optional arguments
 
-* Users SHOULD use the provided Predicate implementations, but MAY implement additional Predicates.
+* Users SHOULD use the provided Predicate implementations, but MAY implement additional
+Predicates e.g. generation changed, label selectors changed etc.
 
 PodController Diagram
 

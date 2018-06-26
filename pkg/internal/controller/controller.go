@@ -71,7 +71,7 @@ type Controller struct {
 	// the Queue for processing
 	Queue workqueue.RateLimitingInterface
 
-	// SetFields is used to SetFields dependencies into other objects such as Sources, EventHandlers and Predicates
+	// SetFields is used to inject dependencies into other objects such as Sources, EventHandlers and Predicates
 	SetFields func(i interface{}) error
 
 	// mu is used to synchronize Controller setup
@@ -126,7 +126,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// TODO)(pwittrock): Reconsider HandleCrash
+	// TODO(pwittrock): Reconsider HandleCrash
 	defer utilruntime.HandleCrash()
 	defer c.Queue.ShutDown()
 
@@ -146,10 +146,10 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 	}
 
 	if c.JitterPeriod == 0 {
-		c.JitterPeriod = time.Second
+		c.JitterPeriod = 1 * time.Second
 	}
 
-	// Launch two workers to process resources
+	// Launch workers to process resources
 	log.Info("Starting workers", "Controller", c.Name, "WorkerCount", c.MaxConcurrentReconciles)
 	for i := 0; i < c.MaxConcurrentReconciles; i++ {
 		// Process work items

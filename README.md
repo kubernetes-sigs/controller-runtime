@@ -15,7 +15,7 @@ in sig apimachinery.
 
 You can reach the maintainers of this project at:
 
-- Slack channel: [#kubeuilder](http://slack.k8s.io/#kubebuilder)
+- Slack channel: [#kubebuilder](http://slack.k8s.io/#kubebuilder)
 - Google Group: [kubebuilder@googlegroups.com](https://groups.google.com/forum/#!forum/kubebuilder)
 
 ### Code of conduct

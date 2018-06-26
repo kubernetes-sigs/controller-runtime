@@ -274,9 +274,10 @@ var _ = Describe("Informer Cache", func() {
 
 			By("indexing the restartPolicy field of the Pod object before starting")
 			pod := &kcorev1.Pod{}
-			Expect(informer.IndexField(pod, "spec.restartPolicy", func(obj runtime.Object) []string {
+			indexFunc := func(obj runtime.Object) []string {
 				return []string{string(obj.(*kcorev1.Pod).Spec.RestartPolicy)}
-			})).ToNot(HaveOccurred())
+			}
+			Expect(informer.IndexField(pod, "spec.restartPolicy", indexFunc)).ToNot(HaveOccurred())
 
 			By("running the cache and waiting for it to sync")
 			go func() {

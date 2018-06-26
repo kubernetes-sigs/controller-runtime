@@ -137,10 +137,9 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 		cm.mu.Lock()
 		defer cm.mu.Unlock()
 
-		// Start the Cache.
 		cm.stop = stop
 
-		// Allow the function to start the cache to be mocked out for testing
+		// Start the Cache. Allow the function to start the cache to be mocked out for testing
 		if cm.startCache == nil {
 			cm.startCache = cm.cache.Start
 		}
@@ -154,7 +153,7 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 		// TODO(community): Check the return value and write a test
 		cm.cache.WaitForCacheSync(stop)
 
-		// Start the runnables after the promises
+		// Start the runnables after the cache has synced
 		for _, c := range cm.runnables {
 			// Controllers block, but we want to return an error if any have an error starting.
 			// Write any Start errors to a channel so we can return them

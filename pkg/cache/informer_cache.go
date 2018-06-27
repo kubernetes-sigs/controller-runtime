@@ -37,7 +37,7 @@ var (
 	_ Cache         = &informerCache{}
 )
 
-// informerCache is a Kubernetes Object cache populated from InformersMap.  cache wraps an InformersMap.
+// informerCache is a Kubernetes Object cache populated from InformersMap.  informerCache wraps an InformersMap.
 type informerCache struct {
 	*internal.InformersMap
 }

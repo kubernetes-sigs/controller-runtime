@@ -22,41 +22,101 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	kcorev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	kcache "k8s.io/client-go/tools/cache"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const testNamespaceOne = "test-namespace-1"
+const testNamespaceTwo = "test-namespace-2"
+
+// TODO(community): Pull these helper functions into testenv.
+// Restart policy is included to allow indexing on that field.
+func createPod(name, namespace string, restartPolicy kcorev1.RestartPolicy) runtime.Object {
+	three := int64(3)
+	pod := &kcorev1.Pod{
+		ObjectMeta: kmetav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"test-label": name,
+			},
+		},
+		Spec: kcorev1.PodSpec{
+			Containers:            []kcorev1.Container{{Name: "nginx", Image: "nginx"}},
+			RestartPolicy:         restartPolicy,
+			ActiveDeadlineSeconds: &three,
+		},
+	}
+	cl, err := client.New(cfg, client.Options{})
+	Expect(err).NotTo(HaveOccurred())
+	err = cl.Create(context.Background(), pod)
+	Expect(err).NotTo(HaveOccurred())
+	return pod
+}
+
+func deletePod(pod runtime.Object) {
+	cl, err := client.New(cfg, client.Options{})
+	Expect(err).NotTo(HaveOccurred())
+	err = cl.Delete(context.Background(), pod)
+	Expect(err).NotTo(HaveOccurred())
+}
+
 var _ = Describe("Informer Cache", func() {
-	var stop chan struct{}
+
+	var (
+		informerCache cache.Cache
+		stop          chan struct{}
+		knownPod1     runtime.Object
+		knownPod2     runtime.Object
+		knownPod3     runtime.Object
+	)
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
 		Expect(cfg).NotTo(BeNil())
+
+		By("creating three pods")
+		// Includes restart policy since these objects are indexed on this field.
+		knownPod1 = createPod("test-pod-1", testNamespaceOne, kcorev1.RestartPolicyNever)
+		knownPod2 = createPod("test-pod-2", testNamespaceTwo, kcorev1.RestartPolicyAlways)
+		knownPod3 = createPod("test-pod-3", testNamespaceTwo, kcorev1.RestartPolicyOnFailure)
+
+		By("creating the informer cache")
+		var err error
+		informerCache, err = cache.New(cfg, cache.Options{})
+		Expect(err).NotTo(HaveOccurred())
+		By("running the cache and waiting for it to sync")
+		go func() {
+			defer GinkgoRecover()
+			Expect(informerCache.Start(stop)).To(Succeed())
+		}()
+		Expect(informerCache.WaitForCacheSync(stop)).To(BeTrue())
 	})
+
 	AfterEach(func() {
+		By("cleaning up created pods")
+		deletePod(knownPod1)
+		deletePod(knownPod2)
+		deletePod(knownPod3)
+
 		close(stop)
 	})
 
 	Describe("as a Reader", func() {
+
 		It("should be able to list objects that haven't been watched previously", func() {
-			By("Creating the cache")
-			reader, err := cache.New(cfg, cache.Options{})
-			Expect(err).NotTo(HaveOccurred())
-
-			By("running the cache and waiting for it to sync")
-			go func() {
-				defer GinkgoRecover()
-				Expect(reader.Start(stop)).ToNot(HaveOccurred())
-			}()
-			Expect(reader.WaitForCacheSync(stop)).NotTo(BeFalse())
-
-			By("Listing all services in the cluster")
+			By("listing all services in the cluster")
 			listObj := &kcorev1.ServiceList{}
-			Expect(reader.List(context.Background(), nil, listObj)).NotTo(HaveOccurred())
+			Expect(informerCache.List(context.Background(), nil, listObj)).To(Succeed())
 
-			By("Verifying that the returned list contains the Kubernetes service")
-			// NB: there has to be at least the kubernetes service in the cluster
+			By("verifying that the returned list contains the Kubernetes service")
+			// NB: kubernetes default service is automatically created in testenv.
 			Expect(listObj.Items).NotTo(BeEmpty())
 			hasKubeService := false
 			for _, svc := range listObj.Items {
@@ -69,185 +129,203 @@ var _ = Describe("Informer Cache", func() {
 		})
 
 		It("should be able to get objects that haven't been watched previously", func() {
-			By("Creating the cache")
-			reader, err := cache.New(cfg, cache.Options{})
+			By("getting the Kubernetes service")
+			svc := &kcorev1.Service{}
+			svcKey := client.ObjectKey{Namespace: "default", Name: "kubernetes"}
+			Expect(informerCache.Get(context.Background(), svcKey, svc)).To(Succeed())
+
+			By("verifying that the returned service looks reasonable")
+			Expect(svc.Name).To(Equal("kubernetes"))
+			Expect(svc.Namespace).To(Equal("default"))
+		})
+
+		It("should support filtering by labels in a single namespace", func() {
+			By("listing pods with a particular label")
+			// NB: each pod has a "test-label": <pod-name>
+			out := kcorev1.PodList{}
+			Expect(informerCache.List(context.Background(), client.InNamespace(testNamespaceTwo).
+				MatchingLabels(map[string]string{"test-label": "test-pod-2"}), &out)).To(Succeed())
+
+			By("verifying the returned pods have the correct label")
+			Expect(out.Items).NotTo(BeEmpty())
+			Expect(out.Items).Should(HaveLen(1))
+			actual := out.Items[0]
+			Expect(actual.Labels["test-label"]).To(Equal("test-pod-2"))
+		})
+
+		It("should support filtering by labels from multiple namespaces", func() {
+			By("creating another pod with the same label but different namespace")
+			anotherPod := createPod("test-pod-2", testNamespaceOne, kcorev1.RestartPolicyAlways)
+
+			By("listing pods with a particular label")
+			// NB: each pod has a "test-label": <pod-name>
+			out := kcorev1.PodList{}
+			labels := map[string]string{"test-label": "test-pod-2"}
+			Expect(informerCache.List(context.Background(),
+				client.MatchingLabels(labels), &out)).To(Succeed())
+
+			By("verifying multiple pods with the same label in different namespaces are returned")
+			Expect(out.Items).NotTo(BeEmpty())
+			Expect(out.Items).Should(HaveLen(2))
+			for _, actual := range out.Items {
+				Expect(actual.Labels["test-label"]).To(Equal("test-pod-2"))
+			}
+
+			deletePod(anotherPod)
+		})
+
+		It("should be able to list objects by namespace", func() {
+			By("listing pods in test-namespace-1")
+			listObj := &kcorev1.PodList{}
+			Expect(informerCache.List(context.Background(),
+				client.InNamespace(testNamespaceOne),
+				listObj)).To(Succeed())
+
+			By("verifying that the returned pods are in test-namespace-1")
+			Expect(listObj.Items).NotTo(BeEmpty())
+			Expect(listObj.Items).Should(HaveLen(1))
+			actual := listObj.Items[0]
+			Expect(actual.Namespace).To(Equal(testNamespaceOne))
+		})
+
+		It("should deep copy the object unless told otherwise", func() {
+			By("retrieving a specific pod from the cache")
+			out := &kcorev1.Pod{}
+			podKey := client.ObjectKey{Name: "test-pod-2", Namespace: testNamespaceTwo}
+			Expect(informerCache.Get(context.Background(), podKey, out)).To(Succeed())
+
+			By("verifying the retrieved pod is equal to a known pod")
+			Expect(out).To(Equal(knownPod2))
+
+			By("altering a field in the retrieved pod")
+			*out.Spec.ActiveDeadlineSeconds = 4
+
+			By("verifying the pods are no longer equal")
+			Expect(out).NotTo(Equal(knownPod2))
+		})
+
+		It("should return an error if the object is not found", func() {
+			By("getting a service that does not exists")
+			svc := &kcorev1.Service{}
+			svcKey := client.ObjectKey{Namespace: "unknown", Name: "unknown"}
+
+			By("verifying that an error is returned")
+			err := informerCache.Get(context.Background(), svcKey, svc)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+		})
+	})
+
+	Describe("as an Informer", func() {
+
+		It("should be able to get informer for the object", func(done Done) {
+			By("getting a shared index informer for a pod")
+			pod := &kcorev1.Pod{
+				ObjectMeta: kmetav1.ObjectMeta{
+					Name:      "informer-obj",
+					Namespace: "default",
+				},
+				Spec: kcorev1.PodSpec{
+					Containers: []kcorev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx",
+						},
+					},
+				},
+			}
+			sii, err := informerCache.GetInformer(pod)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(sii).NotTo(BeNil())
+			Expect(sii.HasSynced()).To(BeTrue())
+
+			By("adding an event handler listening for object creation which sends the object to a channel")
+			out := make(chan interface{})
+			addFunc := func(obj interface{}) {
+				out <- obj
+			}
+			sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+
+			By("adding an object")
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl.Create(context.Background(), pod)).To(Succeed())
+
+			By("verifying the object is received on the channel")
+			Eventually(out).Should(Receive(Equal(pod)))
+			close(done)
+		})
+
+		// TODO: Add a test for when GVK is not in Scheme. Does code support informer for unstructured object?
+		It("should be able to get an informer by group/version/kind", func(done Done) {
+			By("getting an shared index informer for gvk = core/v1/pod")
+			gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
+			sii, err := informerCache.GetInformerForKind(gvk)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(sii).NotTo(BeNil())
+			Expect(sii.HasSynced()).To(BeTrue())
+
+			By("adding an event handler listening for object creation which sends the object to a channel")
+			out := make(chan interface{})
+			addFunc := func(obj interface{}) {
+				out <- obj
+			}
+			sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+
+			By("adding an object")
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			pod := &kcorev1.Pod{
+				ObjectMeta: kmetav1.ObjectMeta{
+					Name:      "informer-gvk",
+					Namespace: "default",
+				},
+				Spec: kcorev1.PodSpec{
+					Containers: []kcorev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx",
+						},
+					},
+				},
+			}
+			Expect(cl.Create(context.Background(), pod)).To(Succeed())
+
+			By("verifying the object is received on the channel")
+			Eventually(out).Should(Receive(Equal(pod)))
+			close(done)
+		})
+
+		It("should be able to index an object field then retrieve objects by that field", func() {
+			By("creating the cache")
+			informer, err := cache.New(cfg, cache.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("indexing the restartPolicy field of the Pod object before starting")
+			pod := &kcorev1.Pod{}
+			indexFunc := func(obj runtime.Object) []string {
+				return []string{string(obj.(*kcorev1.Pod).Spec.RestartPolicy)}
+			}
+			Expect(informer.IndexField(pod, "spec.restartPolicy", indexFunc)).To(Succeed())
 
 			By("running the cache and waiting for it to sync")
 			go func() {
 				defer GinkgoRecover()
-				Expect(reader.Start(stop)).ToNot(HaveOccurred())
+				Expect(informer.Start(stop)).To(Succeed())
 			}()
-			Expect(reader.WaitForCacheSync(stop)).NotTo(BeFalse())
+			Expect(informer.WaitForCacheSync(stop)).NotTo(BeFalse())
 
-			By("Getting the Kubernetes service")
-			svc := &kcorev1.Service{}
-			Expect(reader.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "kubernetes"}, svc)).NotTo(HaveOccurred())
+			By("listing Pods with restartPolicyOnFailure")
+			listObj := &kcorev1.PodList{}
+			Expect(informer.List(context.Background(),
+				client.MatchingField("spec.restartPolicy", "OnFailure"),
+				listObj)).To(Succeed())
 
-			By("Verifying that the returned service looks reasonable")
-			Expect(svc.Name).To(Equal("kubernetes"))
-			Expect(svc.Namespace).To(Equal("default"))
+			By("verifying that the returned pods have correct restart policy")
+			Expect(listObj.Items).NotTo(BeEmpty())
+			Expect(listObj.Items).Should(HaveLen(1))
+			actual := listObj.Items[0]
+			Expect(actual.Name).To(Equal("test-pod-3"))
 		})
 	})
-})
-
-var _ = Describe("Indexers", func() {
-	//three := int64(3)
-	//knownPodKey := client.ObjectKey{Name: "some-pod", Namespace: "some-ns"}
-	//knownPod3Key := client.ObjectKey{Name: "some-pod", Namespace: "some-other-ns"}
-	//knownVolumeKey := client.ObjectKey{Name: "some-vol", Namespace: "some-ns"}
-	//knownPod := &kapi.Pod{
-	//	ObjectMeta: metav1.ObjectMeta{
-	//		Name:      knownPodKey.Name,
-	//		Namespace: knownPodKey.Namespace,
-	//	},
-	//	Spec: kapi.PodSpec{
-	//		RestartPolicy:         kapi.RestartPolicyNever,
-	//		ActiveDeadlineSeconds: &three,
-	//	},
-	//}
-	//knownPod2 := &kapi.Pod{
-	//	ObjectMeta: metav1.ObjectMeta{
-	//		Name:      knownVolumeKey.Name,
-	//		Namespace: knownVolumeKey.Namespace,
-	//		Labels: map[string]string{
-	//			"somelbl": "someval",
-	//		},
-	//	},
-	//	Spec: kapi.PodSpec{
-	//		RestartPolicy: kapi.RestartPolicyAlways,
-	//	},
-	//}
-	//knownPod3 := &kapi.Pod{
-	//	ObjectMeta: metav1.ObjectMeta{
-	//		Name:      knownPod3Key.Name,
-	//		Namespace: knownPod3Key.Namespace,
-	//		Labels: map[string]string{
-	//			"somelbl": "someval",
-	//		},
-	//	},
-	//	Spec: kapi.PodSpec{
-	//		RestartPolicy: kapi.RestartPolicyNever,
-	//	},
-	//}
-	//knownVolume := &kapi.PersistentVolume{
-	//	ObjectMeta: metav1.ObjectMeta{
-	//		Name:      knownVolumeKey.Name,
-	//		Namespace: knownVolumeKey.Namespace,
-	//	},
-	//}
-	//var multiCache *cache
-	//
-	//BeforeEach(func() {
-	//	multiCache = &cache{
-	//		cachesByType: make(map[reflect.Type]*singleObjectCache),
-	//		scheme:       scheme.Scheme,
-	//	}
-	//	podIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
-	//		cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
-	//	})
-	//	volumeIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
-	//		cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
-	//	})
-	//	indexByField(podIndexer, "spec.restartPolicy", func(obj runtime.Object) []string {
-	//		return []string{string(obj.(*kapi.Pod).Spec.RestartPolicy)}
-	//	})
-	//	Expect(podIndexer.Add(knownPod)).NotTo(HaveOccurred())
-	//	Expect(podIndexer.Add(knownPod2)).NotTo(HaveOccurred())
-	//	Expect(podIndexer.Add(knownPod3)).NotTo(HaveOccurred())
-	//	Expect(volumeIndexer.Add(knownVolume)).NotTo(HaveOccurred())
-	//	multiCache.registerCache(&kapi.Pod{}, kapi.SchemeGroupVersion.WithKind("Pod"), podIndexer)
-	//	multiCache.registerCache(&kapi.PersistentVolume{}, kapi.SchemeGroupVersion.WithKind("PersistentVolume"), volumeIndexer)
-	//})
-	//
-	//Describe("populatingClient interface wrapper around an indexer", func() {
-	//	var singleCache client.Reader
-	//
-	//	BeforeEach(func() {
-	//		var err error
-	//		singleCache, err = multiCache.cacheFor(&kapi.Pod{})
-	//		Expect(err).NotTo(HaveOccurred())
-	//	})
-	//
-	//	It("should be able to fetch a particular object by key", func() {
-	//		out := kapi.Pod{}
-	//		Expect(singleCache.Get(context.TODO(), knownPodKey, &out)).NotTo(HaveOccurred())
-	//		Expect(&out).To(Equal(knownPod))
-	//	})
-	//
-	//	It("should error out for missing objects", func() {
-	//		Expect(singleCache.Get(context.TODO(), client.ObjectKey{Name: "unknown-pod"}, &kapi.Pod{})).To(HaveOccurred())
-	//	})
-	//
-	//	It("should be able to list objects by namespace", func() {
-	//		out := kapi.PodList{}
-	//		Expect(singleCache.List(context.TODO(), client.InNamespace(knownPodKey.Namespace), &out)).NotTo(HaveOccurred())
-	//		Expect(out.Items).To(ConsistOf(*knownPod, *knownPod2))
-	//	})
-	//
-	//	It("should error out if the incorrect object type is passed for this indexer", func() {
-	//		Expect(singleCache.Get(context.TODO(), knownPodKey, &kapi.PersistentVolume{})).To(HaveOccurred())
-	//	})
-	//
-	//	It("should deep copy the object unless told otherwise", func() {
-	//		out := kapi.Pod{}
-	//		Expect(singleCache.Get(context.TODO(), knownPodKey, &out)).NotTo(HaveOccurred())
-	//		Expect(&out).To(Equal(knownPod))
-	//
-	//		*out.Spec.ActiveDeadlineSeconds = 4
-	//		Expect(*out.Spec.ActiveDeadlineSeconds).NotTo(Equal(*knownPod.Spec.ActiveDeadlineSeconds))
-	//	})
-	//
-	//	It("should support filtering by labels", func() {
-	//		out := kapi.PodList{}
-	//		Expect(singleCache.List(context.TODO(), client.InNamespace(knownPodKey.Namespace).
-	// 			MatchingLabels(map[string]string{"somelbl": "someval"}), &out)).NotTo(HaveOccurred())
-	//		Expect(out.Items).To(ConsistOf(*knownPod2))
-	//	})
-	//
-	//	It("should support filtering by a single field=value specification, if previously indexed", func() {
-	//		By("listing by field selector in a namespace")
-	//		out := kapi.PodList{}
-	//		Expect(singleCache.List(context.TODO(), client.InNamespace(knownPodKey.Namespace).MatchingField("spec.restartPolicy", "Always"), &out)).NotTo(HaveOccurred())
-	//		Expect(out.Items).To(ConsistOf(*knownPod2))
-	//
-	//		By("listing by field selector across all namespaces")
-	//		Expect(singleCache.List(context.TODO(), client.MatchingField("spec.restartPolicy", "Never"), &out)).NotTo(HaveOccurred())
-	//		Expect(out.Items).To(ConsistOf(*knownPod, *knownPod3))
-	//	})
-	//})
-	//
-	//Describe("populatingClient interface wrapper around multiple indexers", func() {
-	//	It("should be able to fetch any known object by key and type", func() {
-	//		outPod := kapi.Pod{}
-	//		Expect(multiCache.Get(context.TODO(), knownPodKey, &outPod)).NotTo(HaveOccurred())
-	//		Expect(&outPod).To(Equal(knownPod))
-	//
-	//		outVol := kapi.PersistentVolume{}
-	//		Expect(multiCache.Get(context.TODO(), knownVolumeKey, &outVol)).NotTo(HaveOccurred())
-	//		Expect(&outVol).To(Equal(knownVolume))
-	//	})
-	//
-	//	It("should error out if the object type is unknown", func() {
-	//		Expect(multiCache.Get(context.TODO(), knownPodKey, &kapi.PersistentVolumeClaim{})).To(HaveOccurred())
-	//	})
-	//
-	//	It("should deep copy the object unless told otherwise", func() {
-	//		out := kapi.Pod{}
-	//		Expect(multiCache.Get(context.TODO(), knownPodKey, &out)).NotTo(HaveOccurred())
-	//		Expect(&out).To(Equal(knownPod))
-	//
-	//		*out.Spec.ActiveDeadlineSeconds = 4
-	//		Expect(*out.Spec.ActiveDeadlineSeconds).NotTo(Equal(*knownPod.Spec.ActiveDeadlineSeconds))
-	//	})
-	//
-	//	It("should be able to fetch single caches for known types", func() {
-	//		indexer, ok := multiCache.cacheFor(&kapi.Pod{})
-	//		Expect(ok).To(BeTrue())
-	//		Expect(indexer).NotTo(BeNil())
-	//
-	//		_, ok2 := multiCache.cacheFor(&kapi.PersistentVolumeClaim{})
-	//		Expect(ok2).To(BeFalse())
-	//	})
-	//})
 })

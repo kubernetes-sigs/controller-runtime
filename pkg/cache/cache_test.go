@@ -109,6 +109,7 @@ var _ = Describe("Informer Cache", func() {
 	})
 
 	Describe("as a Reader", func() {
+
 		It("should be able to list objects that haven't been watched previously", func() {
 			By("listing all services in the cluster")
 			listObj := &kcorev1.ServiceList{}
@@ -138,9 +139,9 @@ var _ = Describe("Informer Cache", func() {
 			Expect(svc.Namespace).To(Equal("default"))
 		})
 
-		It("should support filtering by labels", func() {
+		It("should support filtering by labels in a single namespace", func() {
 			By("listing pods with a particular label")
-			// NB: each pod has a "test-label" equal to the pod name
+			// NB: each pod has a "test-label": <pod-name>
 			out := kcorev1.PodList{}
 			Expect(informerCache.List(context.Background(), client.InNamespace(testNamespaceTwo).
 				MatchingLabels(map[string]string{"test-label": "test-pod-2"}), &out)).To(Succeed())
@@ -150,6 +151,27 @@ var _ = Describe("Informer Cache", func() {
 			Expect(out.Items).Should(HaveLen(1))
 			actual := out.Items[0]
 			Expect(actual.Labels["test-label"]).To(Equal("test-pod-2"))
+		})
+
+		It("should support filtering by labels from multiple namespaces", func() {
+			By("creating another pod with the same label but different namespace")
+			anotherPod := createPod("test-pod-2", testNamespaceOne, kcorev1.RestartPolicyAlways)
+
+			By("listing pods with a particular label")
+			// NB: each pod has a "test-label": <pod-name>
+			out := kcorev1.PodList{}
+			labels := map[string]string{"test-label": "test-pod-2"}
+			Expect(informerCache.List(context.Background(),
+				client.MatchingLabels(labels), &out)).To(Succeed())
+
+			By("verifying multiple pods with the same label in different namespaces are returned")
+			Expect(out.Items).NotTo(BeEmpty())
+			Expect(out.Items).Should(HaveLen(2))
+			for _, actual := range out.Items {
+				Expect(actual.Labels["test-label"]).To(Equal("test-pod-2"))
+			}
+
+			deletePod(anotherPod)
 		})
 
 		It("should be able to list objects by namespace", func() {
@@ -195,6 +217,7 @@ var _ = Describe("Informer Cache", func() {
 	})
 
 	Describe("as an Informer", func() {
+
 		It("should be able to get informer for the object", func(done Done) {
 			By("getting a shared index informer for a pod")
 			pod := &kcorev1.Pod{

@@ -95,7 +95,7 @@ func (e *EnqueueRequestForOwner) parseOwnerTypeGroupKind(scheme *runtime.Scheme)
 	}
 	// Expect only 1 kind.  If there is more than one kind this is probably an edge case such as ListOptions.
 	if len(kinds) != 1 {
-		err := fmt.Errorf("Expected exactly 1 kind for OwnerType")
+		err := fmt.Errorf("Expected exactly 1 kind for OwnerType %T, but found %s kinds", e.OwnerType, kinds)
 		log.Error(err, "", "OwnerType", e.OwnerType, "Kinds", kinds)
 		return err
 

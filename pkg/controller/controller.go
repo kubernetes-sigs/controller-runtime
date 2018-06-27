@@ -50,7 +50,7 @@ type Controller interface {
 	//
 	// Watch may be provided one or more Predicates to filter events before they are given to the EventHandler.
 	// Events will be passed to the EventHandler iff all provided Predicates evaluate to true.
-	Watch(src source.Source, evthdler handler.EventHandler, prct ...predicate.Predicate) error
+	Watch(src source.Source, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error
 
 	// Start starts the controller.  Start blocks until stop is closed or a controller has an error starting.
 	Start(stop <-chan struct{}) error
@@ -58,7 +58,7 @@ type Controller interface {
 
 // New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have
 // been synced before the Controller is Started.
-func New(name string, mrg manager.Manager, options Options) (Controller, error) {
+func New(name string, mgr manager.Manager, options Options) (Controller, error) {
 	if options.Reconciler == nil {
 		return nil, fmt.Errorf("must specify Reconciler")
 	}
@@ -72,23 +72,23 @@ func New(name string, mrg manager.Manager, options Options) (Controller, error) 
 	}
 
 	// Inject dependencies into Reconciler
-	if err := mrg.SetFields(options.Reconciler); err != nil {
+	if err := mgr.SetFields(options.Reconciler); err != nil {
 		return nil, err
 	}
 
 	// Create controller with dependencies set
 	c := &controller.Controller{
 		Do:       options.Reconciler,
-		Cache:    mrg.GetCache(),
-		Config:   mrg.GetConfig(),
-		Scheme:   mrg.GetScheme(),
-		Client:   mrg.GetClient(),
-		Recorder: mrg.GetRecorder(name),
+		Cache:    mgr.GetCache(),
+		Config:   mgr.GetConfig(),
+		Scheme:   mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Recorder: mgr.GetRecorder(name),
 		Queue:    workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), name),
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
 		Name: name,
 	}
 
 	// Add the controller as a Manager components
-	return c, mrg.Add(c)
+	return c, mgr.Add(c)
 }

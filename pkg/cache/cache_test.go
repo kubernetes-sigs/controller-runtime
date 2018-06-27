@@ -35,6 +35,8 @@ import (
 const testNamespaceOne = "test-namespace-1"
 const testNamespaceTwo = "test-namespace-2"
 
+// TODO(community): Pull these helper functions into testenv.
+// Restart policy is included to allow indexing on that field.
 func createPod(name, namespace string, restartPolicy kcorev1.RestartPolicy) runtime.Object {
 	three := int64(3)
 	pod := &kcorev1.Pod{
@@ -80,6 +82,7 @@ var _ = Describe("Informer Cache", func() {
 		Expect(cfg).NotTo(BeNil())
 
 		By("creating three pods")
+		// Includes restart policy since these objects are indexed on this field.
 		knownPod1 = createPod("test-pod-1", testNamespaceOne, kcorev1.RestartPolicyNever)
 		knownPod2 = createPod("test-pod-2", testNamespaceTwo, kcorev1.RestartPolicyAlways)
 		knownPod3 = createPod("test-pod-3", testNamespaceTwo, kcorev1.RestartPolicyOnFailure)
@@ -91,9 +94,9 @@ var _ = Describe("Informer Cache", func() {
 		By("running the cache and waiting for it to sync")
 		go func() {
 			defer GinkgoRecover()
-			Expect(informerCache.Start(stop)).ToNot(HaveOccurred())
+			Expect(informerCache.Start(stop)).To(Succeed())
 		}()
-		Expect(informerCache.WaitForCacheSync(stop)).NotTo(BeFalse())
+		Expect(informerCache.WaitForCacheSync(stop)).To(BeTrue())
 	})
 
 	AfterEach(func() {
@@ -109,10 +112,10 @@ var _ = Describe("Informer Cache", func() {
 		It("should be able to list objects that haven't been watched previously", func() {
 			By("listing all services in the cluster")
 			listObj := &kcorev1.ServiceList{}
-			Expect(informerCache.List(context.Background(), nil, listObj)).NotTo(HaveOccurred())
+			Expect(informerCache.List(context.Background(), nil, listObj)).To(Succeed())
 
 			By("verifying that the returned list contains the Kubernetes service")
-			// NB: there has to be at least the kubernetes service in the cluster
+			// NB: kubernetes default service is automatically created in testenv.
 			Expect(listObj.Items).NotTo(BeEmpty())
 			hasKubeService := false
 			for _, svc := range listObj.Items {
@@ -128,7 +131,7 @@ var _ = Describe("Informer Cache", func() {
 			By("getting the Kubernetes service")
 			svc := &kcorev1.Service{}
 			svcKey := client.ObjectKey{Namespace: "default", Name: "kubernetes"}
-			Expect(informerCache.Get(context.Background(), svcKey, svc)).NotTo(HaveOccurred())
+			Expect(informerCache.Get(context.Background(), svcKey, svc)).To(Succeed())
 
 			By("verifying that the returned service looks reasonable")
 			Expect(svc.Name).To(Equal("kubernetes"))
@@ -140,7 +143,7 @@ var _ = Describe("Informer Cache", func() {
 			// NB: each pod has a "test-label" equal to the pod name
 			out := kcorev1.PodList{}
 			Expect(informerCache.List(context.Background(), client.InNamespace(testNamespaceTwo).
-				MatchingLabels(map[string]string{"test-label": "test-pod-2"}), &out)).NotTo(HaveOccurred())
+				MatchingLabels(map[string]string{"test-label": "test-pod-2"}), &out)).To(Succeed())
 
 			By("verifying the returned pods have the correct label")
 			Expect(out.Items).NotTo(BeEmpty())
@@ -154,7 +157,7 @@ var _ = Describe("Informer Cache", func() {
 			listObj := &kcorev1.PodList{}
 			Expect(informerCache.List(context.Background(),
 				client.InNamespace(testNamespaceOne),
-				listObj)).NotTo(HaveOccurred())
+				listObj)).To(Succeed())
 
 			By("verifying that the returned pods are in test-namespace-1")
 			Expect(listObj.Items).NotTo(BeEmpty())
@@ -167,7 +170,7 @@ var _ = Describe("Informer Cache", func() {
 			By("retrieving a specific pod from the cache")
 			out := &kcorev1.Pod{}
 			podKey := client.ObjectKey{Name: "test-pod-2", Namespace: testNamespaceTwo}
-			Expect(informerCache.Get(context.Background(), podKey, out)).NotTo(HaveOccurred())
+			Expect(informerCache.Get(context.Background(), podKey, out)).To(Succeed())
 
 			By("verifying the retrieved pod is equal to a known pod")
 			Expect(out).To(Equal(knownPod2))
@@ -179,7 +182,7 @@ var _ = Describe("Informer Cache", func() {
 			Expect(out).NotTo(Equal(knownPod2))
 		})
 
-		It("should error out for missing objects", func() {
+		It("should return an error if the object is not found", func() {
 			By("getting a service that does not exists")
 			svc := &kcorev1.Service{}
 			svcKey := client.ObjectKey{Namespace: "unknown", Name: "unknown"}
@@ -230,6 +233,7 @@ var _ = Describe("Informer Cache", func() {
 			close(done)
 		})
 
+		// TODO: Add a test for when GVK is not in Scheme. Does code support informer for unstructured object?
 		It("should be able to get an informer by group/version/kind", func(done Done) {
 			By("getting an shared index informer for gvk = core/v1/pod")
 			gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
@@ -279,12 +283,12 @@ var _ = Describe("Informer Cache", func() {
 			indexFunc := func(obj runtime.Object) []string {
 				return []string{string(obj.(*kcorev1.Pod).Spec.RestartPolicy)}
 			}
-			Expect(informer.IndexField(pod, "spec.restartPolicy", indexFunc)).ToNot(HaveOccurred())
+			Expect(informer.IndexField(pod, "spec.restartPolicy", indexFunc)).To(Succeed())
 
 			By("running the cache and waiting for it to sync")
 			go func() {
 				defer GinkgoRecover()
-				Expect(informer.Start(stop)).ToNot(HaveOccurred())
+				Expect(informer.Start(stop)).To(Succeed())
 			}()
 			Expect(informer.WaitForCacheSync(stop)).NotTo(BeFalse())
 
@@ -292,7 +296,7 @@ var _ = Describe("Informer Cache", func() {
 			listObj := &kcorev1.PodList{}
 			Expect(informer.List(context.Background(),
 				client.MatchingField("spec.restartPolicy", "OnFailure"),
-				listObj)).NotTo(HaveOccurred())
+				listObj)).To(Succeed())
 
 			By("verifying that the returned pods have correct restart policy")
 			Expect(listObj.Items).NotTo(BeEmpty())

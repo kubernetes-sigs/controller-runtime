@@ -35,12 +35,6 @@ import (
 const testNamespaceOne = "test-namespace-1"
 const testNamespaceTwo = "test-namespace-2"
 
-var informerCache cache.Cache
-var stop chan struct{}
-var knownPod1 runtime.Object
-var knownPod2 runtime.Object
-var knownPod3 runtime.Object
-
 func createPod(name, namespace string, restartPolicy kcorev1.RestartPolicy) runtime.Object {
 	three := int64(3)
 	pod := &kcorev1.Pod{
@@ -59,7 +53,7 @@ func createPod(name, namespace string, restartPolicy kcorev1.RestartPolicy) runt
 	}
 	cl, err := client.New(cfg, client.Options{})
 	Expect(err).NotTo(HaveOccurred())
-	err = cl.Create(context.TODO(), pod)
+	err = cl.Create(context.Background(), pod)
 	Expect(err).NotTo(HaveOccurred())
 	return pod
 }
@@ -67,11 +61,19 @@ func createPod(name, namespace string, restartPolicy kcorev1.RestartPolicy) runt
 func deletePod(pod runtime.Object) {
 	cl, err := client.New(cfg, client.Options{})
 	Expect(err).NotTo(HaveOccurred())
-	err = cl.Delete(context.TODO(), pod)
+	err = cl.Delete(context.Background(), pod)
 	Expect(err).NotTo(HaveOccurred())
 }
 
 var _ = Describe("Informer Cache", func() {
+
+	var (
+		informerCache cache.Cache
+		stop          chan struct{}
+		knownPod1     runtime.Object
+		knownPod2     runtime.Object
+		knownPod3     runtime.Object
+	)
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
@@ -137,12 +139,12 @@ var _ = Describe("Informer Cache", func() {
 			By("listing pods with a particular label")
 			// NB: each pod has a "test-label" equal to the pod name
 			out := kcorev1.PodList{}
-			Expect(informerCache.List(context.TODO(), client.InNamespace(testNamespaceTwo).
+			Expect(informerCache.List(context.Background(), client.InNamespace(testNamespaceTwo).
 				MatchingLabels(map[string]string{"test-label": "test-pod-2"}), &out)).NotTo(HaveOccurred())
 
 			By("verifying the returned pods have the correct label")
 			Expect(out.Items).NotTo(BeEmpty())
-			Expect(len(out.Items)).To(Equal(1))
+			Expect(out.Items).Should(HaveLen(1))
 			actual := out.Items[0]
 			Expect(actual.Labels["test-label"]).To(Equal("test-pod-2"))
 		})
@@ -156,7 +158,7 @@ var _ = Describe("Informer Cache", func() {
 
 			By("verifying that the returned pods are in test-namespace-1")
 			Expect(listObj.Items).NotTo(BeEmpty())
-			Expect(len(listObj.Items)).To(Equal(1))
+			Expect(listObj.Items).Should(HaveLen(1))
 			actual := listObj.Items[0]
 			Expect(actual.Namespace).To(Equal(testNamespaceOne))
 		})
@@ -185,7 +187,7 @@ var _ = Describe("Informer Cache", func() {
 			By("verifying that an error is returned")
 			err := informerCache.Get(context.Background(), svcKey, svc)
 			Expect(err).To(HaveOccurred())
-			Expect(errors.IsNotFound(err)).To(Equal(true))
+			Expect(errors.IsNotFound(err)).To(BeTrue())
 		})
 	})
 
@@ -209,7 +211,7 @@ var _ = Describe("Informer Cache", func() {
 			sii, err := informerCache.GetInformer(pod)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(sii).NotTo(BeNil())
-			Expect(sii.HasSynced()).To(Equal(true))
+			Expect(sii.HasSynced()).To(BeTrue())
 
 			By("adding an event handler listening for object creation which sends the object to a channel")
 			out := make(chan interface{})
@@ -221,7 +223,7 @@ var _ = Describe("Informer Cache", func() {
 			By("adding an object")
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cl.Create(context.TODO(), pod)).To(Succeed())
+			Expect(cl.Create(context.Background(), pod)).To(Succeed())
 
 			By("verifying the object is received on the channel")
 			Eventually(out).Should(Receive(Equal(pod)))
@@ -234,7 +236,7 @@ var _ = Describe("Informer Cache", func() {
 			sii, err := informerCache.GetInformerForKind(gvk)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(sii).NotTo(BeNil())
-			Expect(sii.HasSynced()).To(Equal(true))
+			Expect(sii.HasSynced()).To(BeTrue())
 
 			By("adding an event handler listening for object creation which sends the object to a channel")
 			out := make(chan interface{})
@@ -260,7 +262,7 @@ var _ = Describe("Informer Cache", func() {
 					},
 				},
 			}
-			Expect(cl.Create(context.TODO(), pod)).To(Succeed())
+			Expect(cl.Create(context.Background(), pod)).To(Succeed())
 
 			By("verifying the object is received on the channel")
 			Eventually(out).Should(Receive(Equal(pod)))
@@ -294,7 +296,7 @@ var _ = Describe("Informer Cache", func() {
 
 			By("verifying that the returned pods have correct restart policy")
 			Expect(listObj.Items).NotTo(BeEmpty())
-			Expect(len(listObj.Items)).To(Equal(1))
+			Expect(listObj.Items).Should(HaveLen(1))
 			actual := listObj.Items[0]
 			Expect(actual.Name).To(Equal("test-pod-3"))
 		})

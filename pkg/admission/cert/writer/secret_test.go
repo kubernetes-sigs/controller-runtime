@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-var _ = Describe("SecretCertProvider", func() {
+var _ = Describe("SecretCertWriter", func() {
 	var mwc *admissionregistration.MutatingWebhookConfiguration
 	var vwc *admissionregistration.ValidatingWebhookConfiguration
 	var url string
@@ -73,7 +73,7 @@ var _ = Describe("SecretCertProvider", func() {
 		vwc = &admissionregistration.ValidatingWebhookConfiguration{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "admissionregistration.k8s.io/v1beta1",
-				Kind:       "MutatingWebhookConfiguration",
+				Kind:       "ValidatingWebhookConfiguration",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        "test-vwc",

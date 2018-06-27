@@ -64,7 +64,7 @@ func (e *EnqueueRequestsFromMapFunc) Generic(evt event.GenericEvent, q workqueue
 
 func (e *EnqueueRequestsFromMapFunc) mapAndEnqueue(q workqueue.RateLimitingInterface, object MapObject) {
 	for _, req := range e.ToRequests.Map(object) {
-		q.AddRateLimited(req)
+		q.Add(req)
 	}
 }
 

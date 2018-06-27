@@ -39,7 +39,7 @@ func (e *EnqueueRequestForObject) Create(evt event.CreateEvent, q workqueue.Rate
 		enqueueLog.Error(nil, "CreateEvent received with no metadata", "CreateEvent", evt)
 		return
 	}
-	q.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
+	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 		Name:      evt.Meta.GetName(),
 		Namespace: evt.Meta.GetNamespace(),
 	}})
@@ -48,7 +48,7 @@ func (e *EnqueueRequestForObject) Create(evt event.CreateEvent, q workqueue.Rate
 // Update implements EventHandler
 func (e *EnqueueRequestForObject) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 	if evt.MetaOld != nil {
-		q.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
+		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 			Name:      evt.MetaOld.GetName(),
 			Namespace: evt.MetaOld.GetNamespace(),
 		}})
@@ -57,7 +57,7 @@ func (e *EnqueueRequestForObject) Update(evt event.UpdateEvent, q workqueue.Rate
 	}
 
 	if evt.MetaNew != nil {
-		q.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
+		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 			Name:      evt.MetaNew.GetName(),
 			Namespace: evt.MetaNew.GetNamespace(),
 		}})
@@ -72,7 +72,7 @@ func (e *EnqueueRequestForObject) Delete(evt event.DeleteEvent, q workqueue.Rate
 		enqueueLog.Error(nil, "DeleteEvent received with no metadata", "DeleteEvent", evt)
 		return
 	}
-	q.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
+	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 		Name:      evt.Meta.GetName(),
 		Namespace: evt.Meta.GetNamespace(),
 	}})
@@ -84,7 +84,7 @@ func (e *EnqueueRequestForObject) Generic(evt event.GenericEvent, q workqueue.Ra
 		enqueueLog.Error(nil, "GenericEvent received with no metadata", "GenericEvent", evt)
 		return
 	}
-	q.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
+	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 		Name:      evt.Meta.GetName(),
 		Namespace: evt.Meta.GetNamespace(),
 	}})

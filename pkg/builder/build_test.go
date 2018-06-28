@@ -1,4 +1,4 @@
-package application
+package builder
 
 import (
 	"context"
@@ -38,28 +38,40 @@ var _ = Describe("application", func() {
 
 	Describe("New", func() {
 		It("should return success if given valid objects", func() {
-			instance, err := BuilderFor(&appsv1.ReplicaSet{}).Owns(&appsv1.ReplicaSet{}).WithReconciler(noop).Build()
+			instance, err := SimpleController().
+				ForType(&appsv1.ReplicaSet{}).
+				Owns(&appsv1.ReplicaSet{}).
+				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())
 		})
 
 		It("should return an error if the Config is invalid", func() {
 			getConfig = func() (*rest.Config, error) { return cfg, fmt.Errorf("expected error") }
-			instance, err := BuilderFor(&appsv1.ReplicaSet{}).Owns(&appsv1.ReplicaSet{}).WithReconciler(noop).Build()
+			instance, err := SimpleController().
+				ForType(&appsv1.ReplicaSet{}).
+				Owns(&appsv1.ReplicaSet{}).
+				Build(noop)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
 			Expect(instance).To(BeNil())
 		})
 
 		It("should return an error if there is no GVK for an object", func() {
-			instance, err := BuilderFor(fakeType("")).Owns(&appsv1.ReplicaSet{}).WithReconciler(noop).Build()
+			instance, err := SimpleController().
+				ForType(&fakeType{}).
+				Owns(&appsv1.ReplicaSet{}).
+				Build(noop)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("expected pointer, but got application.fakeType"))
+			Expect(err.Error()).To(ContainSubstring("no kind is registered for the type builder.fakeType"))
 			Expect(instance).To(BeNil())
 
-			instance, err = BuilderFor(&appsv1.ReplicaSet{}).Owns(fakeType("")).WithReconciler(noop).Build()
+			instance, err = SimpleController().
+				ForType(&appsv1.ReplicaSet{}).
+				Owns(&fakeType{}).
+				Build(noop)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("expected pointer, but got application.fakeType"))
+			Expect(err.Error()).To(ContainSubstring("no kind is registered for the type builder.fakeType"))
 			Expect(instance).To(BeNil())
 		})
 
@@ -67,7 +79,10 @@ var _ = Describe("application", func() {
 			newManager = func(config *rest.Config, options manager.Options) (manager.Manager, error) {
 				return nil, fmt.Errorf("expected error")
 			}
-			instance, err := BuilderFor(&appsv1.ReplicaSet{}).Owns(&appsv1.ReplicaSet{}).WithReconciler(noop).Build()
+			instance, err := SimpleController().
+				ForType(&appsv1.ReplicaSet{}).
+				Owns(&appsv1.ReplicaSet{}).
+				Build(noop)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
 			Expect(instance).To(BeNil())
@@ -78,33 +93,13 @@ var _ = Describe("application", func() {
 				controller.Controller, error) {
 				return nil, fmt.Errorf("expected error")
 			}
-			instance, err := BuilderFor(&appsv1.ReplicaSet{}).Owns(&appsv1.ReplicaSet{}).WithReconciler(noop).Build()
+			instance, err := SimpleController().
+				ForType(&appsv1.ReplicaSet{}).
+				Owns(&appsv1.ReplicaSet{}).
+				Build(noop)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
 			Expect(instance).To(BeNil())
-		})
-
-		It("should return an error if there is no Reconciler", func() {
-			// Prevent getGVK from failing so watch fails
-			getGvk = func(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
-				return schema.GroupVersionKind{Kind: "foo"}, nil
-			}
-			instance, err := BuilderFor(&appsv1.ReplicaSet{}).Owns(&appsv1.ReplicaSet{}).Build()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must call WithReconciler to set Reconciler"))
-			Expect(instance).To(BeNil())
-		})
-
-		It("should use the provide config", func() {
-
-		})
-
-		It("should use the provide manager", func() {
-
-		})
-
-		It("should use the provide filters", func() {
-
 		})
 	})
 
@@ -118,11 +113,10 @@ var _ = Describe("application", func() {
 				return reconcile.Result{}, nil
 			})
 
-			instance, err := BuilderFor(&appsv1.Deployment{}).
+			instance, err := SimpleController().ForType(&appsv1.Deployment{}).
 				WithConfig(cfg).
 				Owns(&appsv1.ReplicaSet{}).
-				WithReconciler(fn).
-				Build()
+				Build(fn)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting the application")
@@ -198,9 +192,9 @@ var _ = Describe("application", func() {
 	})
 })
 
-var _ runtime.Object = fakeType("")
+var _ runtime.Object = &fakeType{}
 
-type fakeType string
+type fakeType struct{}
 
-func (fakeType) GetObjectKind() schema.ObjectKind { return nil }
-func (fakeType) DeepCopyObject() runtime.Object   { return nil }
+func (*fakeType) GetObjectKind() schema.ObjectKind { return nil }
+func (*fakeType) DeepCopyObject() runtime.Object   { return nil }

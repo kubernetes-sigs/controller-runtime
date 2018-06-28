@@ -84,8 +84,15 @@ var _ = Describe("Test", func() {
 			close(done)
 		}, 5)
 
-		It("should return an error if the directory doesn't exist", func(done Done) {
+		It("should not return an not error if the directory doesn't exist", func(done Done) {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{Paths: []string{"fake"}})
+			Expect(err).NotTo(HaveOccurred())
+
+			close(done)
+		}, 5)
+
+		It("should return an error if the directory doesn't exist", func(done Done) {
+			crds, err = InstallCRDs(env.Config, CRDInstallOptions{Paths: []string{"fake"}, ErrorIfPathMissing: true})
 			Expect(err).To(HaveOccurred())
 
 			close(done)

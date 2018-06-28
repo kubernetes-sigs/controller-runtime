@@ -39,6 +39,9 @@ type CRDInstallOptions struct {
 	// CRDs is a list of CRDs to install
 	CRDs []*apiextensionsv1beta1.CustomResourceDefinition
 
+	// ErrorIfPathMissing will cause an error if a Path does not exist
+	ErrorIfPathMissing bool
+
 	// maxTime is the max time to wait
 	maxTime time.Duration
 
@@ -75,6 +78,9 @@ func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]*apiextensio
 func readCRDFiles(options *CRDInstallOptions) error {
 	if len(options.Paths) > 0 {
 		for _, path := range options.Paths {
+			if _, err := os.Stat(path); !options.ErrorIfPathMissing && os.IsNotExist(err) {
+				continue
+			}
 			new, err := readCRDs(path)
 			if err != nil {
 				return err

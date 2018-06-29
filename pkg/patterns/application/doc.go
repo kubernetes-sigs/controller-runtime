@@ -14,16 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package application provides high-level porcelain wrapping the controller and manager libraries for
-// building Kubernetes APIs for simple applications (operators).
+// Package application documents patterns for building Controllers to manage specific applications.
 //
-// Note: Application is an alpha library and make have backwards compatibility breaking changes.
 //
-// Projects built with an application can trivially be rebased on top of the underlying Controller and Manager
-// packages if the project requires more customized behavior in the future.
+// An application is a Controller and Resource that together implement the operational logic for an application.
+// They are often used to take off-the-shelf OSS applications, and make them Kubernetes native.
 //
-// Application
+// A typical application Controller may use a new builder.SimpleController() to create a Controller
+// for a single API type that manages other objects it creates.
 //
-// An application is a Controller that implements the operational logic for an application.  It is often used
-// to take off-the-shelf OSS applications, and make them Kubernetes native.
+// Application Controllers are most useful for stateful applications such as Cassandra, Etcd and MySQL
+// which contain operation logic for sharding, backup and restore, upgrade / downgrade, etc.
 package application

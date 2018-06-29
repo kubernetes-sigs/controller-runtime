@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package application_test
+package builder_test
 
 import (
 	"context"
@@ -23,8 +23,8 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/patterns/application"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 )
@@ -32,24 +32,23 @@ import (
 // This example creates a simple application Controller that is configured for ReplicaSets and Pods.
 //
 // * Create a new application for ReplicaSets that manages Pods owned by the ReplicaSet and calls into
-// ReplicaSetController.
+// ReplicaSetReconciler.
 //
 // * Start the application.
 func ExampleBuilder() {
-	a, err := application.
-		BuilderFor(&appsv1.ReplicaSet{}).        // ReplicaSet is the Application API
-		Owns(&corev1.Pod{}).                     // ReplicaSet owns Pods created by it
-		WithReconciler(&ReplicaSetController{}). // ReplicaSet and Pod events (create/update/del) trigger the handler
-		Build()                                  // Build
+	rs, err := builder.SimpleController().
+		ForType(&appsv1.ReplicaSet{}). // ReplicaSet is the Application API
+		Owns(&corev1.Pod{}).           // ReplicaSet owns Pods created by it
+		Build(&ReplicaSetReconciler{}) // Build
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Fatal(a.Start(signals.SetupSignalHandler()))
+	log.Fatal(rs.Start(signals.SetupSignalHandler()))
 }
 
-// ReplicaSetController is a simple Controller example implementation.
-type ReplicaSetController struct {
+// ReplicaSetReconciler is a simple Controller example implementation.
+type ReplicaSetReconciler struct {
 	client.Client
 }
 
@@ -60,7 +59,7 @@ type ReplicaSetController struct {
 // * Read the ReplicaSet
 // * Read the Pods
 // * Set a Label on the ReplicaSet with the Pod count
-func (a *ReplicaSetController) Reconcile(req reconcile.Request) (reconcile.Result, error) {
+func (a *ReplicaSetReconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
 	// Read the ReplicaSet
 	rs := &appsv1.ReplicaSet{}
 	err := a.Get(context.TODO(), req.NamespacedName, rs)
@@ -85,7 +84,7 @@ func (a *ReplicaSetController) Reconcile(req reconcile.Request) (reconcile.Resul
 	return reconcile.Result{}, nil
 }
 
-func (a *ReplicaSetController) InjectClient(c client.Client) error {
+func (a *ReplicaSetReconciler) InjectClient(c client.Client) error {
 	a.Client = c
 	return nil
 }

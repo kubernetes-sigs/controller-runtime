@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package application
+package builder
 
 import (
 	"fmt"
@@ -52,13 +52,18 @@ type Builder struct {
 	predicates     []predicate.Predicate
 	managedObjects []runtime.Object
 	config         *rest.Config
-	reconcile      reconcile.Reconciler
 	ctrl           controller.Controller
 }
 
-// BuilderFor returns a new Builder for and BuilderFor
-func BuilderFor(apiType runtime.Object) *Builder {
-	return &Builder{apiType: apiType}
+// SimpleController returns a new Builder
+func SimpleController() *Builder {
+	return &Builder{}
+}
+
+// ForType sets the ForType that generates other types
+func (b *Builder) ForType(apiType runtime.Object) *Builder {
+	b.apiType = apiType
+	return b
 }
 
 // Owns configures the Application Controller to respond to create / delete / update events for objects it managedObjects
@@ -88,16 +93,9 @@ func (b *Builder) WithEventFilter(p predicate.Predicate) *Builder {
 	return b
 }
 
-// WithReconciler sets the Reconcile called in response to create / update / delete events for the
-// BuilderFor type or Created object types.
-func (b *Builder) WithReconciler(r reconcile.Reconciler) *Builder {
-	b.reconcile = r
-	return b
-}
-
 // Build builds the Application Controller and returns the Manager used to start it.
-func (b *Builder) Build() (manager.Manager, error) {
-	if b.reconcile == nil {
+func (b *Builder) Build(r reconcile.Reconciler) (manager.Manager, error) {
+	if r == nil {
 		return nil, fmt.Errorf("must call WithReconciler to set Reconciler")
 	}
 
@@ -112,7 +110,7 @@ func (b *Builder) Build() (manager.Manager, error) {
 	}
 
 	// Set the Controller
-	if err := b.doController(); err != nil {
+	if err := b.doController(r); err != nil {
 		return nil, err
 	}
 
@@ -168,11 +166,11 @@ func (b *Builder) getControllerName() (string, error) {
 	return name, nil
 }
 
-func (b *Builder) doController() error {
+func (b *Builder) doController(r reconcile.Reconciler) error {
 	name, err := b.getControllerName()
 	if err != nil {
 		return err
 	}
-	b.ctrl, err = newController(name, b.mgr, controller.Options{Reconciler: b.reconcile})
+	b.ctrl, err = newController(name, b.mgr, controller.Options{Reconciler: r})
 	return err
 }

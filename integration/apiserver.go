@@ -110,3 +110,7 @@ func (s *APIServer) Start() error {
 func (s *APIServer) Stop() error {
 	return s.processState.Stop()
 }
+
+// APIServerDefaultArgs exposes the default args for the APIServer so that you
+// can use those to append your own additional arguments.
+var APIServerDefaultArgs = internal.APIServerDefaultArgs

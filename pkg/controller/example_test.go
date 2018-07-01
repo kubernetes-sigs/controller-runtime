@@ -44,23 +44,12 @@ func ExampleNew() {
 	}
 }
 
-// This example creates a new Controller named "pod-controller" with a no-op reconcile function and registers
-// it with the DefaultControllerManager.
+// This example starts a new Controller named "pod-controller" to Watch Pods and call a no-op Reconciler.
 func ExampleController() {
-	_, err := controller.New("pod-controller", mrg, controller.Options{
-		Reconciler: reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
-			// Your business logic to implement the API by creating, updating, deleting objects goes here.
-			return reconcile.Result{}, nil
-		}),
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	mrg.Start(signals.SetupSignalHandler())
-}
+	// mrg is a manager.Manager
 
-// This example watches Pods and enqueues reconcile.Requests with the changed Pod Name and Namespace.
-func ExampleController_Watch() {
+	// Create a new Controller that will call the provided Reconciler function in response
+	// to events.
 	c, err := controller.New("pod-controller", mrg, controller.Options{
 		Reconciler: reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
 			// Your business logic to implement the API by creating, updating, deleting objects goes here.
@@ -71,11 +60,15 @@ func ExampleController_Watch() {
 		log.Fatal(err)
 	}
 
+	// Watch for Pod create / update / delete events and call Reconcile
 	err = c.Watch(&source.Kind{Type: &v1.Pod{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		log.Fatal(err)
 	}
+	if err != nil {
+		log.Fatal(err)
+	}
 
+	// Start the Controller through the manager.
 	mrg.Start(signals.SetupSignalHandler())
-
 }

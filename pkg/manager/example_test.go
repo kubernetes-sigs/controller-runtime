@@ -28,7 +28,12 @@ var mrg manager.Manager
 
 // This example creates a new Manager that can be used with controller.New to create Controllers.
 func ExampleNew() {
-	mrg, err := manager.New(config.GetConfigOrDie(), manager.Options{})
+	cfg, err := config.GetConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	mrg, err := manager.New(cfg, manager.Options{})
 	if err != nil {
 		log.Fatal(err)
 	}

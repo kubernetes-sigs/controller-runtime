@@ -6,6 +6,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"sigs.k8s.io/testing_frameworks/integration"
 	. "sigs.k8s.io/testing_frameworks/integration/internal"
 )
 
@@ -79,5 +80,16 @@ var _ = Describe("Arguments", func() {
 		Expect(err).To(MatchError(
 			ContainSubstring("can't evaluate field"),
 		))
+	})
+
+	Context("When overriding external default args", func() {
+		It("does not change the internal default args for APIServer", func() {
+			integration.APIServerDefaultArgs[0] = "oh no!"
+			Expect(APIServerDefaultArgs).NotTo(BeEquivalentTo(integration.APIServerDefaultArgs))
+		})
+		It("does not change the internal default args for Etcd", func() {
+			integration.EtcdDefaultArgs[0] = "oh no!"
+			Expect(EtcdDefaultArgs).NotTo(BeEquivalentTo(integration.EtcdDefaultArgs))
+		})
 	})
 })

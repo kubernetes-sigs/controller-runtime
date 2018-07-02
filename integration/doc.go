@@ -88,7 +88,7 @@ arguments needed for the binary to start successfully.
 
 However, the default arguments for APIServer and Etcd are exported as
 `APIServerDefaultArgs` and `EtcdDefaultArgs` from this package. Treat those
-variables as read-only constants. Internally we have a use a set of default
+variables as read-only constants. Internally we have a set of default
 arguments for defaulting, the `APIServerDefaultArgs` and `EtcdDefaultArgs` are
 just copies of those. So when you override them you loose access to the actual
 internal default arguments, but your override won't affect the defaulting.

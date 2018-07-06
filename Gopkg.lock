@@ -132,6 +132,21 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/go-logr/logr"
+  packages = [
+    ".",
+    "testing"
+  ]
+  revision = "9fb12b3b21c5415d16ac18dc5cd42c1cfdd40c4e"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/go-logr/zapr"
+  packages = ["."]
+  revision = "7719b12d150e27231f2c113e7d40901f35e92287"
+
+[[projects]]
+  branch = "master"
   name = "github.com/go-openapi/analysis"
   packages = ["."]
   revision = "5957818e100395077187fb7ef3b8a28227af06c6"
@@ -418,17 +433,6 @@
   packages = ["."]
   revision = "583c0c0531f06d5278b7d917446061adc344b5cd"
   version = "v1.0.1"
-
-[[projects]]
-  branch = "features/structed"
-  name = "github.com/thockin/logr"
-  packages = [
-    ".",
-    "impls/zaplogr",
-    "testing"
-  ]
-  revision = "087cf386d618a79ac96d86ba65fa7d0c44fce2a3"
-  source = "https://github.com/directxman12/logr.git"
 
 [[projects]]
   name = "github.com/ugorji/go"
@@ -996,6 +1000,7 @@
     "util/integer",
     "util/jsonpath",
     "util/retry",
+    "util/testing",
     "util/workqueue"
   ]
   revision = "989be4278f353e42f26c416c53757d16fcff77db"
@@ -1024,6 +1029,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ca2506b092014b867f027c9bca198c67e11f4e2cff012d436f4840787505e36d"
+  inputs-digest = "532455cf0d6075dda831c9eb6f6f306ffa0d995c80694c42cbfff01f5553c46a"
   solver-name = "gps-cdcl"
   solver-version = 1

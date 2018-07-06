@@ -1,7 +1,7 @@
 package log
 
 import (
-	"github.com/thockin/logr"
+	"github.com/go-logr/logr"
 )
 
 // loggerPromise knows how to populate a concrete logr.Logger
@@ -24,8 +24,8 @@ func (p *loggerPromise) WithName(l *DelegatingLogger, name string) *loggerPromis
 	return res
 }
 
-// WithTags provides a new Logger with the tags appended
-func (p *loggerPromise) WithTags(l *DelegatingLogger, tags ...interface{}) *loggerPromise {
+// WithValues provides a new Logger with the tags appended
+func (p *loggerPromise) WithValues(l *DelegatingLogger, tags ...interface{}) *loggerPromise {
 	res := &loggerPromise{
 		logger: l,
 		tags:   tags,
@@ -42,7 +42,7 @@ func (p *loggerPromise) Fulfill(parentLogger logr.Logger) {
 	}
 
 	if p.tags != nil {
-		logger = logger.WithTags(p.tags...)
+		logger = logger.WithValues(p.tags...)
 	}
 
 	p.logger.Logger = logger
@@ -76,14 +76,14 @@ func (l *DelegatingLogger) WithName(name string) logr.Logger {
 	return res
 }
 
-// WithTags provides a new Logger with the tags appended
-func (l *DelegatingLogger) WithTags(tags ...interface{}) logr.Logger {
+// WithValues provides a new Logger with the tags appended
+func (l *DelegatingLogger) WithValues(tags ...interface{}) logr.Logger {
 	if l.promise == nil {
-		return l.Logger.WithTags(tags)
+		return l.Logger.WithValues(tags)
 	}
 
 	res := &DelegatingLogger{Logger: l.Logger}
-	promise := l.promise.WithTags(res, tags)
+	promise := l.promise.WithValues(res, tags)
 	res.promise = promise
 
 	return res

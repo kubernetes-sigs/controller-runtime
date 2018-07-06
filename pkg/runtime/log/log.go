@@ -5,9 +5,9 @@ package log
 import (
 	"log"
 
-	"github.com/thockin/logr"
-	"github.com/thockin/logr/impls/zaplogr"
-	tlogr "github.com/thockin/logr/testing"
+	"github.com/go-logr/logr"
+	tlogr "github.com/go-logr/logr/testing"
+	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
 )
 

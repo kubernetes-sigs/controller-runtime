@@ -26,6 +26,10 @@
 
 
 [[constraint]]
+  branch = "master"
+  name = "github.com/go-logr/logr"
+
+[[constraint]]
   name = "go.uber.org/zap"
   version = "1.8.0"
 

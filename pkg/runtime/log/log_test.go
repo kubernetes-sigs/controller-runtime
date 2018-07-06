@@ -19,9 +19,9 @@ package log
 import (
 	"fmt"
 
+	tlogr "github.com/go-logr/logr/testing"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	tlogr "github.com/thockin/logr/testing"
 )
 
 var _ = Describe("runtime log", func() {
@@ -30,9 +30,9 @@ var _ = Describe("runtime log", func() {
 		It("shoud set and fulfill with logger", func() {
 			logger := ZapLogger(false)
 			Expect(logger).NotTo(BeNil())
-			Log.WithName("runtimeLog").WithTags("newtag", "newvalue")
+			Log.WithName("runtimeLog").WithValues("newtag", "newvalue")
 			SetLogger(logger)
-			logger.WithName("runtimeLog").WithTags("newtag", "newvalue")
+			logger.WithName("runtimeLog").WithValues("newtag", "newvalue")
 			Expect(Log.promise).To(BeNil())
 			Expect(Log.Logger).To(Equal(logger))
 			devLogger := ZapLogger(true)
@@ -53,11 +53,11 @@ var _ = Describe("runtime log", func() {
 		It("should delegate with tags", func() {
 			tags := []interface{}{"new", "tags"}
 			test := tlogr.NullLogger{}
-			test.WithTags(tags)
+			test.WithValues(tags)
 			Log = &DelegatingLogger{
 				Logger: tlogr.NullLogger{},
 			}
-			Log.WithTags(tags)
+			Log.WithValues(tags)
 			Expect(Log.Logger).To(Equal(test))
 		})
 	})

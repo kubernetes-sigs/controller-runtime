@@ -50,10 +50,5 @@ required = ["sigs.k8s.io/testing_frameworks/integration",
   name = "k8s.io/kube-aggregator"
   version = "kubernetes-1.10.1"
 
-[[constraint]]
-  name = "github.com/thockin/logr"
-  source = "https://github.com/directxman12/logr.git"
-  branch = "features/structed"
-
 [prune]
   go-tests = true

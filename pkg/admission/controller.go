@@ -37,7 +37,7 @@ type CertProvisioner struct {
 	CertGenerator generator.CertGenerator
 	CertWriter    writer.CertWriter
 
-	once *sync.Once
+	once sync.Once
 }
 
 // Sync takes a runtime.Object which is expected to be either a MutatingWebhookConfiguration or

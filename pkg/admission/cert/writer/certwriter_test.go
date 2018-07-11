@@ -31,6 +31,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+var certs1, certs2 *generator.Artifacts
+
+func init() {
+	cn1 := "example.com"
+	cn2 := "test-service.test-svc-namespace.svc"
+	cp := generator.SelfSignedCertGenerator{}
+	certs1, _ = cp.Generate(cn1)
+	certs2, _ = cp.Generate(cn2)
+}
+
 var _ = Describe("NewProvider", func() {
 	var cl client.Client
 	var ops Options
@@ -72,33 +82,6 @@ var _ = Describe("NewProvider", func() {
 	})
 
 })
-
-var certPEM = `-----BEGIN CERTIFICATE-----
-MIICRzCCAfGgAwIBAgIJALMb7ecMIk3MMA0GCSqGSIb3DQEBCwUAMH4xCzAJBgNV
-BAYTAkdCMQ8wDQYDVQQIDAZMb25kb24xDzANBgNVBAcMBkxvbmRvbjEYMBYGA1UE
-CgwPR2xvYmFsIFNlY3VyaXR5MRYwFAYDVQQLDA1JVCBEZXBhcnRtZW50MRswGQYD
-VQQDDBJ0ZXN0LWNlcnRpZmljYXRlLTAwIBcNMTcwNDI2MjMyNjUyWhgPMjExNzA0
-MDIyMzI2NTJaMH4xCzAJBgNVBAYTAkdCMQ8wDQYDVQQIDAZMb25kb24xDzANBgNV
-BAcMBkxvbmRvbjEYMBYGA1UECgwPR2xvYmFsIFNlY3VyaXR5MRYwFAYDVQQLDA1J
-VCBEZXBhcnRtZW50MRswGQYDVQQDDBJ0ZXN0LWNlcnRpZmljYXRlLTAwXDANBgkq
-hkiG9w0BAQEFAANLADBIAkEAtBMa7NWpv3BVlKTCPGO/LEsguKqWHBtKzweMY2CV
-tAL1rQm913huhxF9w+ai76KQ3MHK5IVnLJjYYA5MzP2H5QIDAQABo1AwTjAdBgNV
-HQ4EFgQU22iy8aWkNSxv0nBxFxerfsvnZVMwHwYDVR0jBBgwFoAU22iy8aWkNSxv
-0nBxFxerfsvnZVMwDAYDVR0TBAUwAwEB/zANBgkqhkiG9w0BAQsFAANBAEOefGbV
-NcHxklaW06w6OBYJPwpIhCVozC1qdxGX1dg8VkEKzjOzjgqVD30m59OFmSlBmHsl
-nkVA6wyOSDYBf3o=
------END CERTIFICATE-----`
-
-var keyPEM = `-----BEGIN RSA PRIVATE KEY-----
-MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAtBMa7NWpv3BVlKTC
-PGO/LEsguKqWHBtKzweMY2CVtAL1rQm913huhxF9w+ai76KQ3MHK5IVnLJjYYA5M
-zP2H5QIDAQABAkAS9BfXab3OKpK3bIgNNyp+DQJKrZnTJ4Q+OjsqkpXvNltPJosf
-G8GsiKu/vAt4HGqI3eU77NvRI+mL4MnHRmXBAiEA3qM4FAtKSRBbcJzPxxLEUSwg
-XSCcosCktbkXvpYrS30CIQDPDxgqlwDEJQ0uKuHkZI38/SPWWqfUmkecwlbpXABK
-iQIgZX08DA8VfvcA5/Xj1Zjdey9FVY6POLXen6RPiabE97UCICp6eUW7ht+2jjar
-e35EltCRCjoejRHTuN9TC0uCoVipAiAXaJIx/Q47vGwiw6Y8KXsNU6y54gTbOSxX
-54LzHNk/+Q==
------END RSA PRIVATE KEY-----`
 
 type fakeCertReadWriter struct {
 	numReadCalled  int
@@ -154,11 +137,16 @@ var _ = Describe("handleCommon", func() {
 	var invalidCert *generator.Artifacts
 
 	BeforeEach(func(done Done) {
-		webhook = &admissionregistration.Webhook{}
+		url := "https://example.com/admission"
+		webhook = &admissionregistration.Webhook{
+			ClientConfig: admissionregistration.WebhookClientConfig{
+				URL: &url,
+			},
+		}
 		cert = &generator.Artifacts{
-			CACert: []byte(`CACertBytes`),
-			Cert:   []byte(certPEM),
-			Key:    []byte(keyPEM),
+			CACert: []byte(certs1.CACert),
+			Cert:   []byte(certs1.Cert),
+			Key:    []byte(certs1.Key),
 		}
 		invalidCert = &generator.Artifacts{
 			CACert: []byte(`CACertBytes`),
@@ -188,7 +176,11 @@ var _ = Describe("handleCommon", func() {
 			certrw := &fakeCertReadWriter{
 				readCertAndErr: []certAndErr{
 					{
-						err:  notFoundError{errors.NewNotFound(schema.GroupResource{}, "foo")},
+						err: notFoundError{errors.NewNotFound(schema.GroupResource{}, "foo")},
+					},
+				},
+				writeCertAndErr: []certAndErr{
+					{
 						cert: cert,
 					},
 				},
@@ -198,6 +190,7 @@ var _ = Describe("handleCommon", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(1))
+			Expect(certrw.numOverwriteCalled).To(Equal(0))
 		})
 
 		It("should return the error on failed write", func() {
@@ -218,6 +211,7 @@ var _ = Describe("handleCommon", func() {
 			Expect(err).To(MatchError(goerrors.New("failed to write")))
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(1))
+			Expect(certrw.numOverwriteCalled).To(Equal(0))
 		})
 	})
 
@@ -234,6 +228,8 @@ var _ = Describe("handleCommon", func() {
 			err := handleCommon(webhook, certrw)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certrw.numReadCalled).To(Equal(1))
+			Expect(certrw.numWriteCalled).To(Equal(0))
+			Expect(certrw.numOverwriteCalled).To(Equal(0))
 		})
 
 		It("should return the error on failed read", func() {
@@ -248,6 +244,8 @@ var _ = Describe("handleCommon", func() {
 			err := handleCommon(webhook, certrw)
 			Expect(err).To(MatchError(goerrors.New("failed to read")))
 			Expect(certrw.numReadCalled).To(Equal(1))
+			Expect(certrw.numWriteCalled).To(Equal(0))
+			Expect(certrw.numOverwriteCalled).To(Equal(0))
 		})
 	})
 
@@ -269,6 +267,7 @@ var _ = Describe("handleCommon", func() {
 			err := handleCommon(webhook, certrw)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certrw.numReadCalled).To(Equal(1))
+			Expect(certrw.numWriteCalled).To(Equal(0))
 			Expect(certrw.numOverwriteCalled).To(Equal(1))
 		})
 
@@ -289,6 +288,7 @@ var _ = Describe("handleCommon", func() {
 			err := handleCommon(webhook, certrw)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certrw.numReadCalled).To(Equal(1))
+			Expect(certrw.numWriteCalled).To(Equal(0))
 			Expect(certrw.numOverwriteCalled).To(Equal(1))
 		})
 
@@ -410,6 +410,44 @@ var _ = Describe("dnsNameForWebhook", func() {
 			cn, err := dnsNameForWebhook(webhookClientConfig)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cn).To(Equal("foo.bar.com"))
+		})
+	})
+})
+
+var _ = Describe("validate cert", func() {
+	Context("invalid pair", func() {
+		It("should detect it", func() {
+			certs := generator.Artifacts{
+				CACert: certs1.CACert,
+				Cert:   certs1.Cert,
+				Key:    certs2.Key,
+			}
+			valid := validCert(&certs, "example.com")
+			Expect(valid).To(BeFalse())
+		})
+	})
+
+	Context("CA not matching", func() {
+		It("should detect it", func() {
+			certs := generator.Artifacts{
+				CACert: certs2.CACert,
+				Cert:   certs1.Cert,
+				Key:    certs1.Key,
+			}
+			valid := validCert(&certs, "example.com")
+			Expect(valid).To(BeFalse())
+		})
+	})
+
+	Context("DNS name not matching", func() {
+		It("should detect it", func() {
+			certs := generator.Artifacts{
+				CACert: certs1.CACert,
+				Cert:   certs1.Cert,
+				Key:    certs1.Key,
+			}
+			valid := validCert(&certs, "foo.com")
+			Expect(valid).To(BeFalse())
 		})
 	})
 })

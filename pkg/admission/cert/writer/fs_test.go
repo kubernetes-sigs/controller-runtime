@@ -152,9 +152,9 @@ var _ = Describe("FSCertWriter", func() {
 					CertGenerator: &fakegenerator.CertGenerator{
 						DNSNameToCertArtifacts: map[string]*generator.Artifacts{
 							"test-service.test-svc-namespace.svc": {
-								CACert: []byte(`CACertBytes`),
-								Cert:   []byte(certPEM),
-								Key:    []byte(keyPEM),
+								CACert: []byte(certs2.CACert),
+								Cert:   []byte(certs2.Cert),
+								Key:    []byte(certs2.Key),
 							},
 						},
 					},
@@ -187,13 +187,13 @@ var _ = Describe("FSCertWriter", func() {
 					Expect(err).NotTo(HaveOccurred())
 					caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 					Expect(err).NotTo(HaveOccurred())
-					Expect(caBytes).To(Equal([]byte(`CACertBytes`)))
+					Expect(caBytes).To(Equal([]byte(certs2.CACert)))
 					certBytes, err := ioutil.ReadFile(path.Join(testingDir, ServerCertName))
 					Expect(err).NotTo(HaveOccurred())
-					Expect(certBytes).To(Equal([]byte(certPEM)))
+					Expect(certBytes).To(Equal([]byte(certs2.Cert)))
 					keyBytes, err := ioutil.ReadFile(path.Join(testingDir, ServerKeyName))
 					Expect(err).NotTo(HaveOccurred())
-					Expect(keyBytes).To(Equal([]byte(keyPEM)))
+					Expect(keyBytes).To(Equal([]byte(certs2.Key)))
 				})
 			})
 
@@ -212,13 +212,13 @@ var _ = Describe("FSCertWriter", func() {
 								Expect(err).NotTo(HaveOccurred())
 								caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 								Expect(err).NotTo(HaveOccurred())
-								Expect(caBytes).To(Equal([]byte(`CACertBytes`)))
+								Expect(caBytes).To(Equal([]byte(certs2.CACert)))
 								certBytes, err := ioutil.ReadFile(path.Join(testingDir, ServerCertName))
 								Expect(err).NotTo(HaveOccurred())
-								Expect(certBytes).To(Equal([]byte(certPEM)))
+								Expect(certBytes).To(Equal([]byte(certs2.Cert)))
 								keyBytes, err := ioutil.ReadFile(path.Join(testingDir, ServerKeyName))
 								Expect(err).NotTo(HaveOccurred())
-								Expect(keyBytes).To(Equal([]byte(keyPEM)))
+								Expect(keyBytes).To(Equal([]byte(certs2.Key)))
 							})
 						})
 
@@ -241,13 +241,13 @@ var _ = Describe("FSCertWriter", func() {
 								Expect(err).NotTo(HaveOccurred())
 								caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 								Expect(err).NotTo(HaveOccurred())
-								Expect(caBytes).To(Equal([]byte(`CACertBytes`)))
+								Expect(caBytes).To(Equal([]byte(certs2.CACert)))
 								certBytes, err := ioutil.ReadFile(path.Join(testingDir, ServerCertName))
 								Expect(err).NotTo(HaveOccurred())
-								Expect(certBytes).To(Equal([]byte(certPEM)))
+								Expect(certBytes).To(Equal([]byte(certs2.Cert)))
 								keyBytes, err := ioutil.ReadFile(path.Join(testingDir, ServerKeyName))
 								Expect(err).NotTo(HaveOccurred())
-								Expect(keyBytes).To(Equal([]byte(keyPEM)))
+								Expect(keyBytes).To(Equal([]byte(certs2.Key)))
 							})
 						})
 					})
@@ -266,13 +266,13 @@ var _ = Describe("FSCertWriter", func() {
 								Expect(err).NotTo(HaveOccurred())
 								caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 								Expect(err).NotTo(HaveOccurred())
-								Expect(caBytes).To(Equal([]byte(`CACertBytes`)))
+								Expect(caBytes).To(Equal([]byte(certs2.CACert)))
 								certBytes, err := ioutil.ReadFile(path.Join(testingDir, ServerCertName))
 								Expect(err).NotTo(HaveOccurred())
-								Expect(certBytes).To(Equal([]byte(certPEM)))
+								Expect(certBytes).To(Equal([]byte(certs2.Cert)))
 								keyBytes, err := ioutil.ReadFile(path.Join(testingDir, ServerKeyName))
 								Expect(err).NotTo(HaveOccurred())
-								Expect(keyBytes).To(Equal([]byte(keyPEM)))
+								Expect(keyBytes).To(Equal([]byte(certs2.Key)))
 							})
 						})
 
@@ -301,13 +301,13 @@ var _ = Describe("FSCertWriter", func() {
 								Expect(err).NotTo(HaveOccurred())
 								caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 								Expect(err).NotTo(HaveOccurred())
-								Expect(caBytes).To(Equal([]byte(`CACertBytes`)))
+								Expect(caBytes).To(Equal([]byte(certs2.CACert)))
 								certBytes, err := ioutil.ReadFile(path.Join(testingDir, ServerCertName))
 								Expect(err).NotTo(HaveOccurred())
-								Expect(certBytes).To(Equal([]byte(certPEM)))
+								Expect(certBytes).To(Equal([]byte(certs2.Cert)))
 								keyBytes, err := ioutil.ReadFile(path.Join(testingDir, ServerKeyName))
 								Expect(err).NotTo(HaveOccurred())
-								Expect(keyBytes).To(Equal([]byte(keyPEM)))
+								Expect(keyBytes).To(Equal([]byte(certs2.Key)))
 							})
 						})
 					})
@@ -317,11 +317,11 @@ var _ = Describe("FSCertWriter", func() {
 			Context("cert is valid", func() {
 				Context("when not expiring", func() {
 					BeforeEach(func(done Done) {
-						err := ioutil.WriteFile(path.Join(testingDir, CACertName), []byte(`oldCACertBytes`), 0600)
+						err := ioutil.WriteFile(path.Join(testingDir, CACertName), []byte(certs2.CACert), 0600)
 						Expect(err).NotTo(HaveOccurred())
-						err = ioutil.WriteFile(path.Join(testingDir, ServerCertName), []byte(certPEM), 0600)
+						err = ioutil.WriteFile(path.Join(testingDir, ServerCertName), []byte(certs2.Cert), 0600)
 						Expect(err).NotTo(HaveOccurred())
-						err = ioutil.WriteFile(path.Join(testingDir, ServerKeyName), []byte(keyPEM), 0600)
+						err = ioutil.WriteFile(path.Join(testingDir, ServerKeyName), []byte(certs2.Key), 0600)
 						Expect(err).NotTo(HaveOccurred())
 						close(done)
 					})
@@ -330,13 +330,13 @@ var _ = Describe("FSCertWriter", func() {
 						Expect(err).NotTo(HaveOccurred())
 						caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 						Expect(err).NotTo(HaveOccurred())
-						Expect(caBytes).To(Equal([]byte(`oldCACertBytes`)))
+						Expect(caBytes).To(Equal([]byte(certs2.CACert)))
 						certBytes, err := ioutil.ReadFile(path.Join(testingDir, ServerCertName))
 						Expect(err).NotTo(HaveOccurred())
-						Expect(certBytes).To(Equal([]byte(certPEM)))
+						Expect(certBytes).To(Equal([]byte(certs2.Cert)))
 						keyBytes, err := ioutil.ReadFile(path.Join(testingDir, ServerKeyName))
 						Expect(err).NotTo(HaveOccurred())
-						Expect(keyBytes).To(Equal([]byte(keyPEM)))
+						Expect(keyBytes).To(Equal([]byte(certs2.Key)))
 					})
 				})
 

@@ -19,10 +19,13 @@ package writer
 import (
 	"bytes"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"log"
 	"net/url"
+	"time"
 
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -91,8 +94,13 @@ func handleCommon(webhook *admissionregistrationv1beta1.Webhook, ch certReadWrit
 		return err
 	}
 
+	dnsName, err := dnsNameForWebhook(&webhook.ClientConfig)
+	if err != nil {
+		return err
+	}
 	// Recreate the cert if it's invalid.
-	if !validCert(certs) {
+	valid := validCert(certs, dnsName)
+	if !valid {
 		log.Printf("cert is invalid or expiring, regenerating a new one")
 		certs, err = ch.overwrite(webhook.Name)
 		if err != nil {
@@ -141,18 +149,36 @@ type certReadWriter interface {
 	overwrite(webhookName string) (*generator.Artifacts, error)
 }
 
-func validCert(certs *generator.Artifacts) bool {
-	// TODO:
-	// 1) validate the key and the cert are valid pair e.g. call crypto/tls.X509KeyPair()
-	// 2) validate the cert with the CA cert
-	// 3) validate the cert is for a certain DNSName
-	// e.g.
-	// c, err := tls.X509KeyPair(cert, key)
-	// err := c.Verify(options)
+func validCert(certs *generator.Artifacts, dnsName string) bool {
 	if certs == nil {
 		return false
 	}
+
+	// Verify key and cert are valid pair
 	_, err := tls.X509KeyPair(certs.Cert, certs.Key)
+	if err != nil {
+		return false
+	}
+
+	// Verify cert is good for desired DNS name and signed by CA and will be valid for desired period of time.
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(certs.CACert) {
+		return false
+	}
+	block, _ := pem.Decode([]byte(certs.Cert))
+	if block == nil {
+		return false
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return false
+	}
+	ops := x509.VerifyOptions{
+		DNSName:     dnsName,
+		Roots:       pool,
+		CurrentTime: time.Now().AddDate(0, 6, 0),
+	}
+	_, err = cert.Verify(ops)
 	return err == nil
 }
 

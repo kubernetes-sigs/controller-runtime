@@ -316,9 +316,9 @@ var _ = Describe("SecretCertWriter", func() {
 				Context("cert is valid", func() {
 					BeforeEach(func(done Done) {
 						oldSecret.Data = map[string][]byte{
-							CACertName:     []byte(`oldCACertBytes`),
-							ServerKeyName:  []byte(keyPEM),
-							ServerCertName: []byte(certPEM),
+							CACertName:     []byte(certs2.CACert),
+							ServerKeyName:  []byte(certs2.Key),
+							ServerCertName: []byte(certs2.Cert),
 						}
 						j, _ := json.Marshal(oldSecret)
 						expectedSecret = runtime.RawExtension{Raw: j}
@@ -331,9 +331,9 @@ var _ = Describe("SecretCertWriter", func() {
 						BeforeEach(func(done Done) {
 							oldSecret = secret.DeepCopy()
 							oldSecret.Data = map[string][]byte{
-								CACertName:     []byte(`oldCACertBytes`),
-								ServerKeyName:  []byte(keyPEM),
-								ServerCertName: []byte(certPEM),
+								CACertName:     []byte(certs2.CACert),
+								ServerKeyName:  []byte(certs2.Key),
+								ServerCertName: []byte(certs2.Cert),
 							}
 							j, _ := json.Marshal(oldSecret)
 							expectedSecret = runtime.RawExtension{Raw: j}

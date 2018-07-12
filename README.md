@@ -7,12 +7,11 @@ The Kubernetes controller-runtime Project is a set of go libraries for building 
 
 Documentation:
 
-- Package overview [link](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg)
-- Basic controller using builder [link](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/builder#example-Builder)
-- Creating a manager [link](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/manager#example-New)
-- Creating a controller[link](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/controller#example-New)
-
-Example: [main](https://github.com/kubernetes-sigs/controller-runtime/blob/master/example/main.go)
+- [Package overview](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg)
+- [Basic controller using builder](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/builder#example-Builder)
+- [Creating a manager](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/manager#example-New)
+- [Creating a controller](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/controller#example-New)
+- [Example `main.go`](https://github.com/kubernetes-sigs/controller-runtime/blob/master/example/main.go)
 
 ## Community, discussion, contribution, and support
 

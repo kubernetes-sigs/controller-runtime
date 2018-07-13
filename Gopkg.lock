@@ -143,7 +143,7 @@
   branch = "master"
   name = "github.com/go-logr/zapr"
   packages = ["."]
-  revision = "7719b12d150e27231f2c113e7d40901f35e92287"
+  revision = "7536572e8d55209135cd5e7ccf7fce43dca217ab"
 
 [[projects]]
   branch = "master"

@@ -25,7 +25,7 @@ func ZapLogger(development bool) logr.Logger {
 	}
 	// who watches the watchmen?
 	fatalIfErr(err, log.Fatalf)
-	return zaplogr.NewLogger(zapLog)
+	return zapr.NewLogger(zapLog)
 }
 
 func fatalIfErr(err error, f func(format string, v ...interface{})) {

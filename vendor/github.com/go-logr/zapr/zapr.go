@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// package zaplogr defines an implementation of the github.com/go-logr/logr
+// package zapr defines an implementation of the github.com/go-logr/logr
 // interfaces built on top of Zap (go.uber.org/zap).
 //
 // Usage
@@ -20,7 +20,7 @@
 // A new logr.Logger can be constructed from an existing zap.Logger using
 // the NewLogger function:
 //
-//  log := zaplogr.NewLogger(someZapLogger)
+//  log := zapr.NewLogger(someZapLogger)
 //
 // Implementation Details
 //
@@ -35,7 +35,7 @@
 // in logr is represents by its inverse in zap (`zapLevel = -1*logrLevel`).
 // For example V(2) is equivalent to log level -2 in Zap, while V(1) is
 // equivalent to Zap's DebugLevel.
-package zaplogr
+package zapr
 
 import (
 	"github.com/go-logr/logr"

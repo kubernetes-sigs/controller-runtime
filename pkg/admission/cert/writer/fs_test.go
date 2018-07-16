@@ -113,14 +113,14 @@ var _ = Describe("FSCertWriter", func() {
 
 			Describe("nil object", func() {
 				It("should return error", func() {
-					err := certWriter.EnsureCerts(nil)
+					_, err := certWriter.EnsureCerts(nil)
 					Expect(err).To(MatchError("unexpected nil webhook configuration object"))
 				})
 			})
 
 			Describe("non-webhook configuration object", func() {
 				It("should return error", func() {
-					err := certWriter.EnsureCerts(&corev1.Pod{})
+					_, err := certWriter.EnsureCerts(&corev1.Pod{})
 					Expect(err).To(MatchError(fmt.Errorf("unsupported type: %T, only support v1beta1.MutatingWebhookConfiguration and v1beta1.ValidatingWebhookConfiguration",
 						&corev1.Pod{})))
 				})
@@ -133,9 +133,9 @@ var _ = Describe("FSCertWriter", func() {
 					close(done)
 				})
 				It("should return error", func() {
-					err := certWriter.EnsureCerts(mwc)
+					_, err := certWriter.EnsureCerts(mwc)
 					Expect(err).To(MatchError(fmt.Errorf("expecting a webhook named %q", "webhook-does-not-exist")))
-					err = certWriter.EnsureCerts(vwc)
+					_, err = certWriter.EnsureCerts(vwc)
 					Expect(err).To(MatchError(fmt.Errorf("expecting a webhook named %q", "webhook-does-not-exist")))
 				})
 			})
@@ -175,16 +175,17 @@ var _ = Describe("FSCertWriter", func() {
 				})
 
 				It("should default it and return no error", func() {
-					err := certWriter.EnsureCerts(mwc)
+					updated, err := certWriter.EnsureCerts(mwc)
 					Expect(err).NotTo(HaveOccurred())
-
+					Expect(updated).To(BeTrue())
 				})
 			})
 
 			Context("no existing secret", func() {
 				It("should create new secrets with certs", func() {
-					err := certWriter.EnsureCerts(mwc)
+					updated, err := certWriter.EnsureCerts(mwc)
 					Expect(err).NotTo(HaveOccurred())
+					Expect(updated).To(BeTrue())
 					caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 					Expect(err).NotTo(HaveOccurred())
 					Expect(caBytes).To(Equal([]byte(certs2.CACert)))
@@ -208,8 +209,9 @@ var _ = Describe("FSCertWriter", func() {
 							})
 
 							It("should replace with new certs", func() {
-								err := certWriter.EnsureCerts(mwc)
+								updated, err := certWriter.EnsureCerts(mwc)
 								Expect(err).NotTo(HaveOccurred())
+								Expect(updated).To(BeTrue())
 								caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 								Expect(err).NotTo(HaveOccurred())
 								Expect(caBytes).To(Equal([]byte(certs2.CACert)))
@@ -237,8 +239,9 @@ var _ = Describe("FSCertWriter", func() {
 							})
 
 							It("should replace with new certs", func() {
-								err := certWriter.EnsureCerts(mwc)
+								updated, err := certWriter.EnsureCerts(mwc)
 								Expect(err).NotTo(HaveOccurred())
+								Expect(updated).To(BeTrue())
 								caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 								Expect(err).NotTo(HaveOccurred())
 								Expect(caBytes).To(Equal([]byte(certs2.CACert)))
@@ -262,8 +265,9 @@ var _ = Describe("FSCertWriter", func() {
 							})
 
 							It("should replace with new certs", func() {
-								err := certWriter.EnsureCerts(mwc)
+								updated, err := certWriter.EnsureCerts(mwc)
 								Expect(err).NotTo(HaveOccurred())
+								Expect(updated).To(BeTrue())
 								caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 								Expect(err).NotTo(HaveOccurred())
 								Expect(caBytes).To(Equal([]byte(certs2.CACert)))
@@ -297,8 +301,9 @@ var _ = Describe("FSCertWriter", func() {
 							})
 
 							It("should replace with new certs", func() {
-								err := certWriter.EnsureCerts(mwc)
+								updated, err := certWriter.EnsureCerts(mwc)
 								Expect(err).NotTo(HaveOccurred())
+								Expect(updated).To(BeTrue())
 								caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 								Expect(err).NotTo(HaveOccurred())
 								Expect(caBytes).To(Equal([]byte(certs2.CACert)))
@@ -326,8 +331,9 @@ var _ = Describe("FSCertWriter", func() {
 						close(done)
 					})
 					It("should keep the secret", func() {
-						err := certWriter.EnsureCerts(mwc)
+						updated, err := certWriter.EnsureCerts(mwc)
 						Expect(err).NotTo(HaveOccurred())
+						Expect(updated).To(BeFalse())
 						caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 						Expect(err).NotTo(HaveOccurred())
 						Expect(caBytes).To(Equal([]byte(certs2.CACert)))

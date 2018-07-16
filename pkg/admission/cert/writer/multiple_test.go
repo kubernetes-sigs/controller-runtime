@@ -33,12 +33,12 @@ type fakeCertWriter struct {
 
 var _ CertWriter = &fakeCertWriter{}
 
-func (f *fakeCertWriter) EnsureCerts(webhookConfig runtime.Object) error {
+func (f *fakeCertWriter) EnsureCerts(webhookConfig runtime.Object) (bool, error) {
 	f.hasInvokedEnsureCerts = true
 	if f.err != nil {
-		return f.err
+		return false, f.err
 	}
-	return nil
+	return true, nil
 }
 
 var _ = Describe("MultipleCertWriter", func() {
@@ -48,7 +48,7 @@ var _ = Describe("MultipleCertWriter", func() {
 		m := &MultiCertWriter{
 			CertWriters: []CertWriter{f},
 		}
-		err := m.EnsureCerts(webhookConfig)
+		_, err := m.EnsureCerts(webhookConfig)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(f.hasInvokedEnsureCerts).To(BeTrue())
 	})
@@ -60,7 +60,7 @@ var _ = Describe("MultipleCertWriter", func() {
 		m := &MultiCertWriter{
 			CertWriters: []CertWriter{f},
 		}
-		err := m.EnsureCerts(webhookConfig)
+		_, err := m.EnsureCerts(webhookConfig)
 		Expect(err).To(MatchError(e))
 		Expect(f.hasInvokedEnsureCerts).To(BeTrue())
 	})

@@ -41,10 +41,10 @@ type CertProvisioner struct {
 }
 
 // Sync takes a runtime.Object which is expected to be either a MutatingWebhookConfiguration or
-// a ValidatingWebhookConfiguration.
+// a ValidatingWebhookConfiguration. It returns if the certs have been updated and a potential error.
 // It provisions certificate for each webhook in the webhookConfiguration, ensures the cert and CA are valid,
 // and not expiring. It updates the CABundle in the webhook configuration if necessary.
-func (cp *CertProvisioner) Sync(webhookConfiguration runtime.Object) error {
+func (cp *CertProvisioner) Sync(webhookConfiguration runtime.Object) (bool, error) {
 	var err error
 	// Do the initialization for CertInput only once.
 	cp.once.Do(func() {
@@ -69,21 +69,21 @@ func (cp *CertProvisioner) Sync(webhookConfiguration runtime.Object) error {
 		}
 	})
 	if err != nil {
-		return fmt.Errorf("failed to default the CertProvision: %v", err)
+		return false, fmt.Errorf("failed to default the CertProvision: %v", err)
 	}
 
 	// Deepcopy the webhook configuration object before invoking EnsureCerts,
 	// since EnsureCerts will modify the provided object.
 	cloned := webhookConfiguration.DeepCopyObject()
-	err = cp.CertWriter.EnsureCerts(cloned)
+	updated, err := cp.CertWriter.EnsureCerts(cloned)
 	if err != nil {
-		return err
+		return updated, err
 	}
 
 	// If some fields have been changed, we will update the object.
 	// Mostly this is because of the CABundle field has been updated.
 	if reflect.DeepEqual(webhookConfiguration, cloned) {
-		return nil
+		return updated, nil
 	}
-	return cp.Client.Update(nil, cloned)
+	return updated, cp.Client.Update(nil, cloned)
 }

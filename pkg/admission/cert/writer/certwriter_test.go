@@ -159,14 +159,15 @@ var _ = Describe("handleCommon", func() {
 	Context("when webhook is nil", func() {
 		It("should return no error", func() {
 			certrw := &fakeCertReadWriter{}
-			err := handleCommon(nil, certrw)
+			updated, err := handleCommon(nil, certrw)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(updated).To(BeFalse())
 		})
 	})
 
 	Context("when certReadWriter is nil", func() {
 		It("should return an error", func() {
-			err := handleCommon(webhook, nil)
+			_, err := handleCommon(webhook, nil)
 			Expect(err).To(MatchError(goerrors.New("certReaderWriter should not be nil")))
 		})
 	})
@@ -186,8 +187,9 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			updated, err := handleCommon(webhook, certrw)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(updated).To(BeTrue())
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(1))
 			Expect(certrw.numOverwriteCalled).To(Equal(0))
@@ -207,7 +209,7 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			_, err := handleCommon(webhook, certrw)
 			Expect(err).To(MatchError(goerrors.New("failed to write")))
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(1))
@@ -225,8 +227,9 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			updated, err := handleCommon(webhook, certrw)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(updated).To(BeFalse())
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(0))
 			Expect(certrw.numOverwriteCalled).To(Equal(0))
@@ -241,7 +244,7 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			_, err := handleCommon(webhook, certrw)
 			Expect(err).To(MatchError(goerrors.New("failed to read")))
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(0))
@@ -264,8 +267,9 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			updated, err := handleCommon(webhook, certrw)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(updated).To(BeTrue())
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(0))
 			Expect(certrw.numOverwriteCalled).To(Equal(1))
@@ -285,8 +289,9 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			updated, err := handleCommon(webhook, certrw)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(updated).To(BeTrue())
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(0))
 			Expect(certrw.numOverwriteCalled).To(Equal(1))
@@ -306,7 +311,7 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			_, err := handleCommon(webhook, certrw)
 			Expect(err).To(MatchError(goerrors.New("failed to overwrite")))
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numOverwriteCalled).To(Equal(1))
@@ -331,7 +336,8 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			updated, err := handleCommon(webhook, certrw)
+			Expect(updated).To(BeTrue())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certrw.numReadCalled).To(Equal(2))
 			Expect(certrw.numWriteCalled).To(Equal(1))
@@ -354,7 +360,7 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			_, err := handleCommon(webhook, certrw)
 			Expect(err).To(MatchError(goerrors.New("failed to read")))
 			Expect(certrw.numReadCalled).To(Equal(2))
 			Expect(certrw.numWriteCalled).To(Equal(1))

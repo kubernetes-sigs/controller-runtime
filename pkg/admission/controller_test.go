@@ -13,7 +13,7 @@ func TestCertProvisionerInit(t *testing.T) {
 	}
 	config := &v1beta1.MutatingWebhookConfiguration{}
 
-	err := p.Sync(config)
+	_, err := p.Sync(config)
 	if err != nil {
 		t.Fatalf("expect nil; got %q", err)
 	}

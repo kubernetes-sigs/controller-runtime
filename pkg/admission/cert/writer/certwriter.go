@@ -45,7 +45,11 @@ const (
 // CertWriter provides method to handle webhooks.
 type CertWriter interface {
 	// EnsureCert ensures that the webhooks have proper certificates.
-	EnsureCerts(runtime.Object) error
+	// It takes a runtime.Object that the underlying type should be
+	// either MutatingWebhookConfiguration or ValidatingWebhookConfiguration.
+	// It returns a boolean indicating if the certificate has been updated.
+	// This is helpful to signal the server to reload with the new certificate.
+	EnsureCerts(runtime.Object) (bool, error)
 }
 
 // Options are options for configuring a CertWriter.
@@ -81,22 +85,23 @@ func NewCertWriter(ops Options) (CertWriter, error) {
 
 // handleCommon ensures the given webhook has a proper certificate.
 // It uses the given certReadWriter to read and (or) write the certificate.
-func handleCommon(webhook *admissionregistrationv1beta1.Webhook, ch certReadWriter) error {
+// It returns if the certificate has been updated by the certReadWriter and a potential error.
+func handleCommon(webhook *admissionregistrationv1beta1.Webhook, ch certReadWriter) (bool, error) {
 	if webhook == nil {
-		return nil
+		return false, nil
 	}
 	if ch == nil {
-		return errors.New("certReaderWriter should not be nil")
+		return false, errors.New("certReaderWriter should not be nil")
 	}
 
-	certs, err := createIfNotExists(webhook.Name, ch)
+	certs, changed, err := createIfNotExists(webhook.Name, ch)
 	if err != nil {
-		return err
+		return changed, err
 	}
 
 	dnsName, err := dnsNameForWebhook(&webhook.ClientConfig)
 	if err != nil {
-		return err
+		return changed, err
 	}
 	// Recreate the cert if it's invalid.
 	valid := validCert(certs, dnsName)
@@ -104,8 +109,9 @@ func handleCommon(webhook *admissionregistrationv1beta1.Webhook, ch certReadWrit
 		log.Printf("cert is invalid or expiring, regenerating a new one")
 		certs, err = ch.overwrite(webhook.Name)
 		if err != nil {
-			return err
+			return changed, err
 		}
+		changed = true
 	}
 
 	// Ensure the CA bundle in the webhook configuration has the signing CA.
@@ -114,10 +120,11 @@ func handleCommon(webhook *admissionregistrationv1beta1.Webhook, ch certReadWrit
 	if !bytes.Contains(caBundle, caCert) {
 		webhook.ClientConfig.CABundle = append(caBundle, caCert...)
 	}
-	return nil
+	return changed, nil
 }
 
-func createIfNotExists(webhookName string, ch certReadWriter) (*generator.Artifacts, error) {
+// The returning boolean indicates if the certificate has been updated by either this thread or another racing thread.
+func createIfNotExists(webhookName string, ch certReadWriter) (*generator.Artifacts, bool, error) {
 	// Try to read first
 	certs, err := ch.read(webhookName)
 	if isNotFound(err) {
@@ -127,16 +134,18 @@ func createIfNotExists(webhookName string, ch certReadWriter) (*generator.Artifa
 		// This may happen if there is another racer.
 		case isAlreadyExists(err):
 			certs, err = ch.read(webhookName)
-			if err != nil {
-				return certs, err
-			}
+			// return true here, since we want to signal the caller when there is a change
+			// even it is not changed by the current thread.
+			return certs, true, err
 		case err != nil:
-			return certs, err
+			return certs, false, err
+		default:
+			return certs, true, err
 		}
 	} else if err != nil {
-		return certs, err
+		return certs, false, err
 	}
-	return certs, nil
+	return certs, false, nil
 }
 
 // certReadWriter provides methods for reading and writing certificates.

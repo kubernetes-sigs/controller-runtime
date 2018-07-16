@@ -29,13 +29,15 @@ type MultiCertWriter struct {
 var _ CertWriter = &MultiCertWriter{}
 
 // EnsureCerts provisions certificates for a webhook configuration by invoking each CertWrite.
-func (s *MultiCertWriter) EnsureCerts(webhookConfig runtime.Object) error {
-	var err error
+// It returns if the certificate has been updated by the certReadWriter and a potential error.
+func (s *MultiCertWriter) EnsureCerts(webhookConfig runtime.Object) (bool, error) {
+	anyChanged := false
 	for _, certWriter := range s.CertWriters {
-		err = certWriter.EnsureCerts(webhookConfig)
+		changed, err := certWriter.EnsureCerts(webhookConfig)
+		anyChanged = anyChanged || changed
 		if err != nil {
-			return err
+			return anyChanged, err
 		}
 	}
-	return nil
+	return anyChanged, nil
 }

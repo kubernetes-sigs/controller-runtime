@@ -51,15 +51,16 @@ type SecretCertWriter struct {
 var _ CertWriter = &SecretCertWriter{}
 
 // EnsureCerts provisions certificates for a webhook configuration by writing them in k8s secrets.
-func (s *SecretCertWriter) EnsureCerts(webhookConfig runtime.Object) error {
+// It returns if the certificate has been updated by the certReadWriter and a potential error.
+func (s *SecretCertWriter) EnsureCerts(webhookConfig runtime.Object) (bool, error) {
 	if webhookConfig == nil {
-		return errors.New("unexpected nil webhook configuration object")
+		return false, errors.New("unexpected nil webhook configuration object")
 	}
 
 	secretWebhookMap := map[string]*webhookAndSecret{}
 	accessor, err := meta.Accessor(webhookConfig)
 	if err != nil {
-		return err
+		return false, err
 	}
 	annotations := accessor.GetAnnotations()
 	// Parse the annotations to extract info
@@ -67,7 +68,7 @@ func (s *SecretCertWriter) EnsureCerts(webhookConfig runtime.Object) error {
 
 	webhooks, err := getWebhooksFromObject(webhookConfig)
 	if err != nil {
-		return err
+		return false, err
 	}
 	for i, webhook := range webhooks {
 		if s, found := secretWebhookMap[webhook.Name]; found {
@@ -78,7 +79,7 @@ func (s *SecretCertWriter) EnsureCerts(webhookConfig runtime.Object) error {
 	// validation
 	for k, v := range secretWebhookMap {
 		if v.webhook == nil {
-			return fmt.Errorf("expecting a webhook named %q", k)
+			return false, fmt.Errorf("expecting a webhook named %q", k)
 		}
 	}
 
@@ -107,14 +108,16 @@ func (s *SecretCertWriter) parseAnnotations(annotations map[string]string, secre
 	}
 }
 
-func (s *secretReadWriter) ensureCert() error {
+func (s *secretReadWriter) ensureCert() (bool, error) {
+	anyChanged := false
 	for _, v := range s.webhookMap {
-		err := handleCommon(v.webhook, s)
+		changed, err := handleCommon(v.webhook, s)
+		anyChanged = anyChanged || changed
 		if err != nil {
-			return err
+			return anyChanged, err
 		}
 	}
-	return nil
+	return anyChanged, nil
 }
 
 // secretReadWriter deals with writing to the k8s secrets.

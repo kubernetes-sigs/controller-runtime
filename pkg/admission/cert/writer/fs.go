@@ -49,15 +49,16 @@ type FSCertWriter struct {
 var _ CertWriter = &FSCertWriter{}
 
 // EnsureCerts provisions certificates for a webhook configuration by writing them in the filesystem.
-func (f *FSCertWriter) EnsureCerts(webhookConfig runtime.Object) error {
+// It returns if the certificate has been updated by the certReadWriter and a potential error.
+func (f *FSCertWriter) EnsureCerts(webhookConfig runtime.Object) (bool, error) {
 	if webhookConfig == nil {
-		return errors.New("unexpected nil webhook configuration object")
+		return false, errors.New("unexpected nil webhook configuration object")
 	}
 
 	fsWebhookMap := map[string]*webhookAndPath{}
 	accessor, err := meta.Accessor(webhookConfig)
 	if err != nil {
-		return err
+		return false, err
 	}
 	annotations := accessor.GetAnnotations()
 	// Parse the annotations to extract info
@@ -65,7 +66,7 @@ func (f *FSCertWriter) EnsureCerts(webhookConfig runtime.Object) error {
 
 	webhooks, err := getWebhooksFromObject(webhookConfig)
 	if err != nil {
-		return err
+		return false, err
 	}
 	for i, webhook := range webhooks {
 		if p, found := fsWebhookMap[webhook.Name]; found {
@@ -76,7 +77,7 @@ func (f *FSCertWriter) EnsureCerts(webhookConfig runtime.Object) error {
 	// validation
 	for k, v := range fsWebhookMap {
 		if v.webhook == nil {
-			return fmt.Errorf("expecting a webhook named %q", k)
+			return false, fmt.Errorf("expecting a webhook named %q", k)
 		}
 	}
 
@@ -119,15 +120,16 @@ type webhookAndPath struct {
 
 var _ certReadWriter = &fsCertWriter{}
 
-func (f *fsCertWriter) ensureCert() error {
-	var err error
+func (f *fsCertWriter) ensureCert() (bool, error) {
+	anyChanged := false
 	for _, v := range f.webhookMap {
-		err = handleCommon(v.webhook, f)
+		changed, err := handleCommon(v.webhook, f)
+		anyChanged = anyChanged || changed
 		if err != nil {
-			return err
+			return anyChanged, err
 		}
 	}
-	return nil
+	return anyChanged, nil
 }
 
 func (f *fsCertWriter) write(webhookName string) (*certgenerator.Artifacts, error) {

@@ -1,4 +1,4 @@
-package controllerutil
+package controllerutil_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 var _ = Describe("Controllerutil", func() {
@@ -18,7 +19,7 @@ var _ = Describe("Controllerutil", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
 			}
 
-			Expect(SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
+			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
 			t := true
 			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
 				Name:               "foo",
@@ -35,12 +36,12 @@ var _ = Describe("Controllerutil", func() {
 			dep := &extensionsv1beta1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 			}
-			Expect(SetControllerReference(dep, rs, runtime.NewScheme())).To(HaveOccurred())
+			Expect(controllerutil.SetControllerReference(dep, rs, runtime.NewScheme())).To(HaveOccurred())
 		})
 
 		It("should return an error if the owner isn't a runtime.Object", func() {
 			rs := &appsv1.ReplicaSet{}
-			Expect(SetControllerReference(&errMetaObj{}, rs, scheme.Scheme)).To(HaveOccurred())
+			Expect(controllerutil.SetControllerReference(&errMetaObj{}, rs, scheme.Scheme)).To(HaveOccurred())
 		})
 	})
 })

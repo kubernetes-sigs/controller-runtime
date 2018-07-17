@@ -28,7 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/admission/cert/generator"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -129,7 +128,7 @@ type secretReadWriter struct {
 
 type webhookAndSecret struct {
 	webhook *admissionregistrationv1beta1.Webhook
-	secret  apitypes.NamespacedName
+	secret  types.NamespacedName
 }
 
 var _ certReadWriter = &secretReadWriter{}
@@ -194,7 +193,7 @@ func secretToCerts(secret *corev1.Secret) *generator.Artifacts {
 	}
 }
 
-func certsToSecret(certs *generator.Artifacts, sec apitypes.NamespacedName) *corev1.Secret {
+func certsToSecret(certs *generator.Artifacts, sec types.NamespacedName) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: sec.Namespace,

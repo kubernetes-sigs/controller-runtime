@@ -19,7 +19,7 @@ package fake
 import (
 	"fmt"
 
-	"sigs.k8s.io/controller-runtime/pkg/admission/cert/generator"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/cert/generator"
 )
 
 // CertGenerator is a CertGenerator for testing.

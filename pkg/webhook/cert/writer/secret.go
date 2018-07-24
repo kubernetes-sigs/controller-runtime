@@ -28,10 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/admission/cert/generator"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/cert/generator"
 )
 
 const (
@@ -146,7 +144,9 @@ func (s *secretReadWriter) buildSecret(webhookName string) (*corev1.Secret, *gen
 		return nil, nil, err
 	}
 	secret := certsToSecret(certs, v.secret)
-	err = controllerutil.SetControllerReference(s.webhookConfig.(metav1.Object), secret, scheme.Scheme)
+	// TODO(mengqiy): fix this by figuring out a way to get the UID
+	// Skip setting the ownerRef for now.
+	//err = controllerutil.SetControllerReference(s.webhookConfig.(metav1.Object), secret, scheme.Scheme)
 	return secret, certs, err
 }
 

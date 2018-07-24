@@ -15,13 +15,13 @@ limitations under the License.
 */
 
 /*
-Package admission provides functions to manage webhooks certificates.
+Package cert provides functions to manage webhooks certificates.
 
 There are 3 typical ways to use this library:
 
-* The sync function can be used as a Reconciler function.
+* Using the Sync function as a Reconciler function.
 
-* Invoking it directly fromt eh webhook server at startup.
+* Invoking it directly from the webhook server at startup.
 
 * Deploying it as an init container along with the webhook server.
 
@@ -70,7 +70,7 @@ The following is an example MutatingWebhookConfiguration in yaml.
 		  path: "/mutating-deployment"
 		caBundle: [] # CA bundle here
 
-Build the CertProvisioner
+Build the Provisioner
 
 You can choose to provide your own CertGenerator and CertWriter.
 An easier way is to use an empty Options the package will default it with reasonable values.
@@ -82,8 +82,8 @@ The package will write self-signed certificates to secrets.
 		// handle error
 	}
 
-	// Build a CertProvisioner with unspecified CertGenerator and CertWriter.
-	cp := &CertProvisioner{client: cl}
+	// Build a Provisioner with unspecified CertGenerator and CertWriter.
+	cp := &Provisioner{client: cl}
 
 Provision certificates
 
@@ -99,4 +99,4 @@ the certificate and create a secret named "secret-foo" in namespace "namespace-b
 Similarly, it will create an secret named "secret-baz" in namespace "default" for webhook "webhook-2".
 And it will also write the CA back to the WebhookConfiguration.
 */
-package admission
+package cert

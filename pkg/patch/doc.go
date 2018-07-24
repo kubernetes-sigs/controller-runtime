@@ -14,23 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package admission
+/*
+Package patch provides method to calculate JSON patch between 2 k8s objects.
 
-import (
-	"testing"
+Calculate JSON patch
 
-	"k8s.io/api/admissionregistration/v1beta1"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-)
-
-func TestCertProvisionerInit(t *testing.T) {
-	p := &CertProvisioner{
-		Client: fake.NewFakeClient(),
+	oldDeployment := appsv1.Deployment{
+		// some fields
 	}
-	config := &v1beta1.MutatingWebhookConfiguration{}
-
-	err := p.Sync(config)
+	newDeployment := appsv1.Deployment{
+		// some different fields
+	}
+	patch, err := NewJSONPatch(oldDeployment, newDeployment)
 	if err != nil {
-		t.Fatalf("expect nil; got %q", err)
+		// handle error
 	}
-}
+*/
+package patch

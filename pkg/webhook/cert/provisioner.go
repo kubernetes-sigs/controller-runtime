@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package admission
+package cert
 
 import (
 	"fmt"
@@ -22,20 +22,21 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/admission/cert/generator"
-	"sigs.k8s.io/controller-runtime/pkg/admission/cert/writer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/cert/generator"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/cert/writer"
 )
 
-// CertProvisioner provisions certificates for webhook configurations and writes them to an output
-// destination - such as a Secret or local file. CertProvisioner can update the CA field of
+// Provisioner provisions certificates for webhook configurations and writes them to an output
+// destination - such as a Secret or local file. Provisioner can update the CA field of
 // certain resources with the CA of the certs.
-type CertProvisioner struct {
+type Provisioner struct {
 	Client client.Client
 	// CertGenerator generates certificate for a given common name.
 	CertGenerator generator.CertGenerator
-	CertWriter    writer.CertWriter
+	// CertWriter knows how to persist the certificate.
+	CertWriter writer.CertWriter
 
 	once sync.Once
 }
@@ -44,7 +45,7 @@ type CertProvisioner struct {
 // a ValidatingWebhookConfiguration.
 // It provisions certificate for each webhook in the webhookConfiguration, ensures the cert and CA are valid,
 // and not expiring. It updates the CABundle in the webhook configuration if necessary.
-func (cp *CertProvisioner) Sync(webhookConfiguration runtime.Object) error {
+func (cp *Provisioner) Sync(webhookConfiguration runtime.Object) error {
 	var err error
 	// Do the initialization for CertInput only once.
 	cp.once.Do(func() {
@@ -75,7 +76,7 @@ func (cp *CertProvisioner) Sync(webhookConfiguration runtime.Object) error {
 	// Deepcopy the webhook configuration object before invoking EnsureCerts,
 	// since EnsureCerts will modify the provided object.
 	cloned := webhookConfiguration.DeepCopyObject()
-	err = cp.CertWriter.EnsureCerts(cloned)
+	err = cp.CertWriter.EnsureCerts(webhookConfiguration)
 	if err != nil {
 		return err
 	}
@@ -85,5 +86,8 @@ func (cp *CertProvisioner) Sync(webhookConfiguration runtime.Object) error {
 	if reflect.DeepEqual(webhookConfiguration, cloned) {
 		return nil
 	}
-	return cp.Client.Update(nil, cloned)
+	return nil
+	// TODO: figure what we want to do with this.
+	// Disable the auto-updating in this function.
+	//return cp.Client.Update(context.Background(), cloned)
 }

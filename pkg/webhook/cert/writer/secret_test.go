@@ -28,10 +28,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/admission/cert/generator"
-	fakegenerator "sigs.k8s.io/controller-runtime/pkg/admission/cert/generator/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/cert/generator"
+	fakegenerator "sigs.k8s.io/controller-runtime/pkg/webhook/cert/generator/fake"
 )
 
 var _ = Describe("SecretCertWriter", func() {
@@ -165,22 +165,22 @@ var _ = Describe("SecretCertWriter", func() {
 				}
 				certWriter = secretCertWriter
 
-				isController := true
-				blockOwnerDeletion := true
+				//isController := true
+				//blockOwnerDeletion := true
 				secret = &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "namespace-bar",
 						Name:      "secret-foo",
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								APIVersion:         "admissionregistration.k8s.io/v1beta1",
-								Kind:               "MutatingWebhookConfiguration",
-								Name:               "test-mwc",
-								UID:                "123456",
-								BlockOwnerDeletion: &blockOwnerDeletion,
-								Controller:         &isController,
-							},
-						},
+						//OwnerReferences: []metav1.OwnerReference{
+						//	{
+						//		APIVersion:         "admissionregistration.k8s.io/v1beta1",
+						//		Kind:               "MutatingWebhookConfiguration",
+						//		Name:               "test-mwc",
+						//		UID:                "123456",
+						//		BlockOwnerDeletion: &blockOwnerDeletion,
+						//		Controller:         &isController,
+						//	},
+						//},
 					},
 					Data: map[string][]byte{
 						CACertName:     []byte(`CACertBytes`),

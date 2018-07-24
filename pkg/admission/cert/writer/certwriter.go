@@ -23,7 +23,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log"
 	"net/url"
 	"time"
 
@@ -101,7 +100,7 @@ func handleCommon(webhook *admissionregistrationv1beta1.Webhook, ch certReadWrit
 	// Recreate the cert if it's invalid.
 	valid := validCert(certs, dnsName)
 	if !valid {
-		log.Printf("cert is invalid or expiring, regenerating a new one")
+		log.Info("cert is invalid or expiring, regenerating a new one")
 		certs, err = ch.overwrite(webhook.Name)
 		if err != nil {
 			return err

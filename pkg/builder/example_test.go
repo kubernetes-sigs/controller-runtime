@@ -19,15 +19,19 @@ package builder_test
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 )
+
+// NB: don't call SetLogger in init(), or else you'll mess up logging in the main suite.
+var log = logf.Log.WithName("builder-examples")
 
 // This example creates a simple application Controller that is configured for ReplicaSets and Pods.
 //
@@ -41,10 +45,14 @@ func ExampleBuilder() {
 		Owns(&corev1.Pod{}).           // ReplicaSet owns Pods created by it
 		Build(&ReplicaSetReconciler{}) // Build
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err, "Unable to build controller")
+		os.Exit(1)
 	}
 
-	log.Fatal(rs.Start(signals.SetupSignalHandler()))
+	if err := rs.Start(signals.SetupSignalHandler()); err != nil {
+		log.Error(err, "Unable to run controller")
+		os.Exit(1)
+	}
 }
 
 // ReplicaSetReconciler is a simple Controller example implementation.

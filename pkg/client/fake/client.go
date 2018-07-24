@@ -19,7 +19,7 @@ package fake
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"os"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,6 +29,11 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+)
+
+var (
+	log = logf.KBLog.WithName("fake-client")
 )
 
 type fakeClient struct {
@@ -44,7 +49,8 @@ func NewFakeClient(initObjs ...runtime.Object) client.Client {
 	for _, obj := range initObjs {
 		err := tracker.Add(obj)
 		if err != nil {
-			log.Fatalf("failed to add object: %#v, error: %v", obj, err)
+			log.Error(err, "failed to add object", "object", obj)
+			os.Exit(1)
 			return nil
 		}
 	}

@@ -17,18 +17,23 @@ limitations under the License.
 package controller_test
 
 import (
-	"log"
+	"os"
 
 	"k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var mgr manager.Manager
+var (
+	mgr manager.Manager
+	// NB: don't call SetLogger in init(), or else you'll mess up logging in the main suite.
+	log = logf.Log.WithName("controller-examples")
+)
 
 // This example creates a new Controller named "pod-controller" with a no-op reconcile function.  The
 // manager.Manager will be used to Start the Controller, and will provide it a shared Cache and Client.
@@ -40,7 +45,8 @@ func ExampleNew() {
 		}),
 	})
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err, "unable to create pod-controller")
+		os.Exit(1)
 	}
 }
 
@@ -57,16 +63,15 @@ func ExampleController() {
 		}),
 	})
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err, "unable to create pod-controller")
+		os.Exit(1)
 	}
 
 	// Watch for Pod create / update / delete events and call Reconcile
 	err = c.Watch(&source.Kind{Type: &v1.Pod{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
-		log.Fatal(err)
-	}
-	if err != nil {
-		log.Fatal(err)
+		log.Error(err, "unable to watch pods")
+		os.Exit(1)
 	}
 
 	// Start the Controller through the manager.

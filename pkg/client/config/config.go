@@ -62,7 +62,7 @@ func GetConfig() (*rest.Config, error) {
 	}
 	// If an env variable is specified with the config locaiton, use that
 	if len(os.Getenv("KUBECONFIG")) > 0 {
-		return clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
+		return clientcmd.BuildConfigFromFlags(masterURL, os.Getenv("KUBECONFIG"))
 	}
 	// If no explicit location, try the in-cluster config
 	if c, err := rest.InClusterConfig(); err == nil {

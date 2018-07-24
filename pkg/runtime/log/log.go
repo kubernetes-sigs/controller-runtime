@@ -6,7 +6,6 @@ import (
 	"log"
 
 	"github.com/go-logr/logr"
-	tlogr "github.com/go-logr/logr/testing"
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
 )
@@ -45,7 +44,7 @@ func SetLogger(l logr.Logger) {
 // to another logr.Logger.  You *must* call SetLogger to
 // get any actual logging.
 var Log = &DelegatingLogger{
-	Logger:  tlogr.NullLogger{},
+	Logger:  NullLogger{},
 	promise: &loggerPromise{},
 }
 

@@ -19,6 +19,7 @@ package client
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -28,6 +29,15 @@ import (
 
 // ObjectKey identifies a Kubernetes Object.
 type ObjectKey = types.NamespacedName
+
+// ObjectKeyFromObject returns the ObjectKey given a runtime.Object
+func ObjectKeyFromObject(obj runtime.Object) (ObjectKey, error) {
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
+		return ObjectKey{}, err
+	}
+	return ObjectKey{Namespace: accessor.GetNamespace(), Name: accessor.GetName()}, nil
+}
 
 // TODO(directxman12): is there a sane way to deal with get/delete options?
 

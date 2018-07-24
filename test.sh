@@ -90,9 +90,7 @@ function setup_envs {
   header_text "setting up env vars"
 
   # Setup env vars
-  export TEST_ASSET_KUBECTL=$kb_root_dir/bin/kubectl
-  export TEST_ASSET_KUBE_APISERVER=$kb_root_dir/bin/kube-apiserver
-  export TEST_ASSET_ETCD=$kb_root_dir/bin/etcd
+  export KUBEBUILDER_ASSETS=$kb_root_dir/bin
 }
 
 header_text "using tools"

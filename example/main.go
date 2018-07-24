@@ -47,15 +47,15 @@ func main() {
 	entryLog := log.WithName("entrypoint")
 
 	// Setup a Manager
-	mrg, err := manager.New(config.GetConfigOrDie(), manager.Options{})
+	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
 	if err != nil {
 		entryLog.Error(err, "unable to set up overall controller manager")
 		os.Exit(1)
 	}
 
 	// Setup a new controller to Reconciler ReplicaSets
-	c, err := controller.New("foo-controller", mrg, controller.Options{
-		Reconciler: &reconcileReplicaSet{client: mrg.GetClient(), log: log.WithName("reconciler")},
+	c, err := controller.New("foo-controller", mgr, controller.Options{
+		Reconciler: &reconcileReplicaSet{client: mgr.GetClient(), log: log.WithName("reconciler")},
 	})
 	if err != nil {
 		entryLog.Error(err, "unable to set up individual controller")
@@ -75,7 +75,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := mrg.Start(signals.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
 		entryLog.Error(err, "unable to run manager")
 		os.Exit(1)
 	}

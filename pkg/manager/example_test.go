@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 )
 
-var mrg manager.Manager
+var mgr manager.Manager
 
 // This example creates a new Manager that can be used with controller.New to create Controllers.
 func ExampleNew() {
@@ -33,16 +33,16 @@ func ExampleNew() {
 		log.Fatal(err)
 	}
 
-	mrg, err := manager.New(cfg, manager.Options{})
+	mgr, err := manager.New(cfg, manager.Options{})
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Print(mrg)
+	log.Print(mgr)
 }
 
 // This example adds a Runnable for the Manager to Start.
 func ExampleManager_Add() {
-	err := mrg.Add(manager.RunnableFunc(func(<-chan struct{}) error {
+	err := mgr.Add(manager.RunnableFunc(func(<-chan struct{}) error {
 		// Do something
 		return nil
 	}))
@@ -53,7 +53,7 @@ func ExampleManager_Add() {
 
 // This example starts a Manager that has had Runnables added.
 func ExampleManager_Start() {
-	err := mrg.Start(signals.SetupSignalHandler())
+	err := mgr.Start(signals.SetupSignalHandler())
 	if err != nil {
 		log.Fatal(err)
 	}

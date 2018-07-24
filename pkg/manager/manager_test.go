@@ -138,9 +138,9 @@ var _ = Describe("manger.Manager", func() {
 		It("should return an error if it can't start the cache", func(done Done) {
 			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
-			mrg, ok := m.(*controllerManager)
+			mgr, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
-			mrg.startCache = func(stop <-chan struct{}) error {
+			mgr.startCache = func(stop <-chan struct{}) error {
 				return fmt.Errorf("expected error")
 			}
 			Expect(m.Start(stop).Error()).To(ContainSubstring("expected error"))
@@ -188,7 +188,7 @@ var _ = Describe("manger.Manager", func() {
 			func(done Done) {
 				m, err := New(cfg, Options{})
 				Expect(err).NotTo(HaveOccurred())
-				mrg, ok := m.(*controllerManager)
+				mgr, ok := m.(*controllerManager)
 				Expect(ok).To(BeTrue())
 
 				// Add one component before starting
@@ -205,7 +205,7 @@ var _ = Describe("manger.Manager", func() {
 				}()
 
 				// Wait for the Manager to start
-				Eventually(func() bool { return mrg.started }).Should(BeTrue())
+				Eventually(func() bool { return mgr.started }).Should(BeTrue())
 
 				// Add another component after starting
 				c2 := make(chan struct{})
@@ -223,7 +223,7 @@ var _ = Describe("manger.Manager", func() {
 		It("should immediately start the Component if the Manager has already Started", func(done Done) {
 			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
-			mrg, ok := m.(*controllerManager)
+			mgr, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
 
 			go func() {
@@ -232,7 +232,7 @@ var _ = Describe("manger.Manager", func() {
 			}()
 
 			// Wait for the Manager to start
-			Eventually(func() bool { return mrg.started }).Should(BeTrue())
+			Eventually(func() bool { return mgr.started }).Should(BeTrue())
 
 			c1 := make(chan struct{})
 			m.Add(RunnableFunc(func(s <-chan struct{}) error {
@@ -255,10 +255,10 @@ var _ = Describe("manger.Manager", func() {
 		It("should inject field values", func(done Done) {
 			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
-			mrg, ok := m.(*controllerManager)
+			mgr, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
 
-			mrg.cache = &informertest.FakeInformers{}
+			mgr.cache = &informertest.FakeInformers{}
 
 			By("Injecting the dependencies")
 			err = m.SetFields(&injectable{
@@ -346,33 +346,33 @@ var _ = Describe("manger.Manager", func() {
 	It("should provide a function to get the Config", func() {
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
-		mrg, ok := m.(*controllerManager)
+		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetConfig()).To(Equal(mrg.config))
+		Expect(m.GetConfig()).To(Equal(mgr.config))
 	})
 
 	It("should provide a function to get the Client", func() {
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
-		mrg, ok := m.(*controllerManager)
+		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetClient()).To(Equal(mrg.client))
+		Expect(m.GetClient()).To(Equal(mgr.client))
 	})
 
 	It("should provide a function to get the Scheme", func() {
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
-		mrg, ok := m.(*controllerManager)
+		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetScheme()).To(Equal(mrg.scheme))
+		Expect(m.GetScheme()).To(Equal(mgr.scheme))
 	})
 
 	It("should provide a function to get the FieldIndexer", func() {
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
-		mrg, ok := m.(*controllerManager)
+		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetFieldIndexer()).To(Equal(mrg.fieldIndexes))
+		Expect(m.GetFieldIndexer()).To(Equal(mgr.fieldIndexes))
 	})
 
 	It("should provide a function to get the EventRecorder", func() {

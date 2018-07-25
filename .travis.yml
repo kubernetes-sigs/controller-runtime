@@ -18,7 +18,7 @@ install:
 - go get -u gopkg.in/alecthomas/gometalinter.v2 && gometalinter.v2 --install
 
 script:
-- TRACE=1 ./test.sh
+- TRACE=1 ./hack/check-everything.sh
 
 
 # TBD. Suppressing for now.

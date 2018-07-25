@@ -37,12 +37,8 @@ func ZapLogger(development bool) logr.Logger {
 // ZapLogger.
 func ZapLoggerTo(destWriter io.Writer, development bool) logr.Logger {
 	// this basically mimics New<type>Config, but with a custom sink
-	var sink zapcore.WriteSyncer
-	if asSyncer, isSyncer := destWriter.(zapcore.WriteSyncer); isSyncer {
-		sink = asSyncer
-	} else {
-		sink = zapcore.AddSync(destWriter)
-	}
+	sink := zapcore.AddSync(destWriter)
+
 	var enc zapcore.Encoder
 	var lvl zap.AtomicLevel
 	var opts []zap.Option
@@ -74,23 +70,17 @@ func fatalIfErr(err error, f func(format string, v ...interface{})) {
 
 // SetLogger sets a concrete logging implementation for all deferred Loggers.
 func SetLogger(l logr.Logger) {
-	if Log.promise != nil {
-		Log.promise.Fulfill(l)
-	}
+	Log.Fulfill(l)
 }
 
 // Log is the base logger used by kubebuilder.  It delegates
 // to another logr.Logger.  You *must* call SetLogger to
 // get any actual logging.
-var Log = &DelegatingLogger{
-	Logger:  NullLogger{},
-	promise: &loggerPromise{},
-}
+var Log = NewDelegatingLogger(NullLogger{})
 
 // KBLog is a base parent logger.
 var KBLog logr.Logger
 
 func init() {
-	Log.promise.logger = Log
 	KBLog = Log.WithName("kubebuilder")
 }

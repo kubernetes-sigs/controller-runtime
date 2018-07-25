@@ -3,15 +3,20 @@
 package log
 
 import (
+	"io"
 	"log"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // ZapLogger is a Logger implementation.
-// if development is true stack traces will be printed for errors
+// If development is true, a Zap development config will be used
+// (stacktraces on warnings, no sampling), otherwise a Zap production
+// config will be used (stacktraces on errors, sampling).
 func ZapLogger(development bool) logr.Logger {
 	var zapLog *zap.Logger
 	var err error
@@ -25,6 +30,40 @@ func ZapLogger(development bool) logr.Logger {
 	// who watches the watchmen?
 	fatalIfErr(err, log.Fatalf)
 	return zapr.NewLogger(zapLog)
+}
+
+// ZapLoggerTo returns a new Logger implementation using Zap which logs
+// to the given destination, instead of stderr.  It otherise behaves like
+// ZapLogger.
+func ZapLoggerTo(destWriter io.Writer, development bool) logr.Logger {
+	// this basically mimics New<type>Config, but with a custom sink
+	var sink zapcore.WriteSyncer
+	if asSyncer, isSyncer := destWriter.(zapcore.WriteSyncer); isSyncer {
+		sink = asSyncer
+	} else {
+		sink = zapcore.AddSync(destWriter)
+	}
+	var enc zapcore.Encoder
+	var lvl zap.AtomicLevel
+	var opts []zap.Option
+	if development {
+		encCfg := zap.NewDevelopmentEncoderConfig()
+		enc = zapcore.NewConsoleEncoder(encCfg)
+		lvl = zap.NewAtomicLevelAt(zap.DebugLevel)
+		opts = append(opts, zap.Development(), zap.AddStacktrace(zap.ErrorLevel))
+	} else {
+		encCfg := zap.NewProductionEncoderConfig()
+		enc = zapcore.NewJSONEncoder(encCfg)
+		lvl = zap.NewAtomicLevelAt(zap.InfoLevel)
+		opts = append(opts, zap.AddStacktrace(zap.WarnLevel),
+			zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+				return zapcore.NewSampler(core, time.Second, 100, 100)
+			}))
+	}
+	opts = append(opts, zap.AddCallerSkip(1), zap.ErrorOutput(sink))
+	log := zap.New(zapcore.NewCore(enc, sink, lvl))
+	log = log.WithOptions(opts...)
+	return zapr.NewLogger(log)
 }
 
 func fatalIfErr(err error, f func(format string, v ...interface{})) {

@@ -77,7 +77,7 @@ type Options struct {
 	// Mapper is the RESTMapper to use for mapping GroupVersionKinds to Resources
 	Mapper meta.RESTMapper
 
-	// Resync is the resync period
+	// Resync is the resync period. Defaults to defaultResyncTime.
 	Resync *time.Duration
 }
 

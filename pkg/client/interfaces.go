@@ -50,7 +50,7 @@ type Writer interface {
 	Create(ctx context.Context, obj runtime.Object) error
 
 	// Delete deletes the given obj from Kubernetes cluster.
-	Delete(ctx context.Context, obj runtime.Object) error
+	Delete(ctx context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error
 
 	// Update updates the given obj in the Kubernetes cluster. obj must be a
 	// struct pointer so that obj can be updated with the content returned by the Server.
@@ -91,6 +91,88 @@ type FieldIndexer interface {
 	// fields that the API server supports.  Otherwise, you can return multiple keys,
 	// and "equality" in the field selector means that at least one key matches the value.
 	IndexField(obj runtime.Object, field string, extractValue IndexerFunc) error
+}
+
+// DeleteOptions contains options for delete requests. It's generally a subset
+// of metav1.DeleteOptions.
+type DeleteOptions struct {
+	// GracePeriodSeconds is the duration in seconds before the object should be
+	// deleted. Value must be non-negative integer. The value zero indicates
+	// delete immediately. If this value is nil, the default grace period for the
+	// specified type will be used.
+	GracePeriodSeconds *int64
+
+	// Preconditions must be fulfilled before a deletion is carried out. If not
+	// possible, a 409 Conflict status will be returned.
+	Preconditions *metav1.Preconditions
+
+	// PropagationPolicy determined whether and how garbage collection will be
+	// performed. Either this field or OrphanDependents may be set, but not both.
+	// The default policy is decided by the existing finalizer set in the
+	// metadata.finalizers and the resource-specific default policy.
+	// Acceptable values are: 'Orphan' - orphan the dependents; 'Background' -
+	// allow the garbage collector to delete the dependents in the background;
+	// 'Foreground' - a cascading policy that deletes all dependents in the
+	// foreground.
+	PropagationPolicy *metav1.DeletionPropagation
+
+	// Raw represents raw DeleteOptions, as passed to the API server.
+	Raw *metav1.DeleteOptions
+}
+
+// AsDeleteOptions returns these options as a metav1.DeleteOptions.
+// This may mutate the Raw field.
+func (o *DeleteOptions) AsDeleteOptions() *metav1.DeleteOptions {
+
+	if o == nil {
+		return &metav1.DeleteOptions{}
+	}
+	if o.Raw == nil {
+		o.Raw = &metav1.DeleteOptions{}
+	}
+
+	o.Raw.GracePeriodSeconds = o.GracePeriodSeconds
+	o.Raw.Preconditions = o.Preconditions
+	o.Raw.PropagationPolicy = o.PropagationPolicy
+	return o.Raw
+}
+
+// ApplyOptions executes the given DeleteOptionFuncs and returns the mutated
+// DeleteOptions.
+func (o *DeleteOptions) ApplyOptions(optFuncs []DeleteOptionFunc) *DeleteOptions {
+	for _, optFunc := range optFuncs {
+		optFunc(o)
+	}
+	return o
+}
+
+// DeleteOptionFunc is a function that mutates a DeleteOptions struct. It implements
+// the functional options pattern. See
+// https://github.com/tmrts/go-patterns/blob/master/idiom/functional-options.md.
+type DeleteOptionFunc func(*DeleteOptions)
+
+// GracePeriodSeconds is a functional option that sets the GracePeriodSeconds
+// field of a DeleteOptions struct.
+func GracePeriodSeconds(gp int64) DeleteOptionFunc {
+	return func(opts *DeleteOptions) {
+		opts.GracePeriodSeconds = &gp
+	}
+}
+
+// Preconditions is a functional option that sets the Preconditions field of a
+// DeleteOptions struct.
+func Preconditions(p *metav1.Preconditions) DeleteOptionFunc {
+	return func(opts *DeleteOptions) {
+		opts.Preconditions = p
+	}
+}
+
+// PropagationPolicy is a functional option that sets the PropagationPolicy
+// field of a DeleteOptions struct.
+func PropagationPolicy(p metav1.DeletionPropagation) DeleteOptionFunc {
+	return func(opts *DeleteOptions) {
+		opts.PropagationPolicy = &p
+	}
 }
 
 // ListOptions contains options for limitting or filtering results.

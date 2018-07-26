@@ -111,15 +111,18 @@ func (c *client) Update(ctx context.Context, obj runtime.Object) error {
 }
 
 // Delete implements client.Client
-func (c *client) Delete(ctx context.Context, obj runtime.Object) error {
+func (c *client) Delete(ctx context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error {
 	o, err := c.cache.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
+
+	deleteOpts := DeleteOptions{}
 	return o.Delete().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
+		Body(deleteOpts.ApplyOptions(opts).AsDeleteOptions()).
 		Do().
 		Error()
 }

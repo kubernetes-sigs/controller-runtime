@@ -46,9 +46,5 @@ required = ["sigs.k8s.io/testing_frameworks/integration",
   name = "k8s.io/client-go"
   version = "kubernetes-1.10.1"
 
-[[constraint]]
-  name = "k8s.io/kube-aggregator"
-  version = "kubernetes-1.10.1"
-
 [prune]
   go-tests = true

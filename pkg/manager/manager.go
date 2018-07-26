@@ -18,6 +18,7 @@ package manager
 
 import (
 	"fmt"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -75,6 +76,14 @@ type Options struct {
 	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs
 	MapperProvider func(c *rest.Config) (meta.RESTMapper, error)
 
+	// SyncPeriod determines the minimum frequency at which watched objects are
+	// reconciled. A lower period will correct entropy more quickly but reduce
+	// responsiveness to change. Choose a low value if reconciles are fast and/or
+	// there are few objects to reconcile. Choose a high value if reconciles are
+	// slow and/or there are many object to reconcile. Defaults to 10 hours if
+	// unset.
+	SyncPeriod *time.Duration
+
 	// Dependency injection for testing
 	newCache            func(config *rest.Config, opts cache.Options) (cache.Cache, error)
 	newClient           func(config *rest.Config, options client.Options) (client.Client, error)
@@ -120,7 +129,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}
 
 	// Create the cache for the cached read client and registering informers
-	cache, err := options.newCache(config, cache.Options{Scheme: options.Scheme, Mapper: mapper})
+	cache, err := options.newCache(config, cache.Options{Scheme: options.Scheme, Mapper: mapper, Resync: options.SyncPeriod})
 	if err != nil {
 		return nil, err
 

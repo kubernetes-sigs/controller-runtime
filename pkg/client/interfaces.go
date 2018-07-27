@@ -55,6 +55,10 @@ type Writer interface {
 	// Update updates the given obj in the Kubernetes cluster. obj must be a
 	// struct pointer so that obj can be updated with the content returned by the Server.
 	Update(ctx context.Context, obj runtime.Object) error
+
+	// Patch patches the given obj in the Kubernetes cluster. obj must be a
+	// struct pointer so that obj can be updated with the content returned by the Server.
+	Patch(ctx context.Context, pt types.PatchType, data []byte, obj runtime.Object, subresources ...string) error
 }
 
 // Client knows how to perform CRUD operations on Kubernetes objects.

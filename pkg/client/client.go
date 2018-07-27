@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -122,6 +123,22 @@ func (c *client) Delete(ctx context.Context, obj runtime.Object) error {
 		Name(o.GetName()).
 		Do().
 		Error()
+}
+
+// Patch implements client.Client
+func (c *client) Patch(ctx context.Context, pt types.PatchType, data []byte, obj runtime.Object, subresources ...string) error {
+	o, err := c.cache.getObjMeta(obj)
+	if err != nil {
+		return err
+	}
+	return o.Patch(pt).
+		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
+		Resource(o.resource()).
+		SubResource(subresources...).
+		Name(o.GetName()).
+		Body(data).
+		Do().
+		Into(obj)
 }
 
 // Get implements client.Client

@@ -18,6 +18,7 @@ package client_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync/atomic"
 
@@ -28,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	kscheme "k8s.io/client-go/kubernetes/scheme"
@@ -488,6 +490,164 @@ var _ = Describe("Client", func() {
 
 			By("deleting the Deployment fails")
 			err = cl.Delete(context.TODO(), dep)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no kind is registered for the type"))
+
+			close(done)
+		})
+
+		It("should fail if the GVK cannot be mapped to a Resource", func() {
+
+		})
+	})
+
+	Describe("Patch", func() {
+		It("should patch an existing object from a go struct", func(done Done) {
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			By("initially creating a Deployment")
+			dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("patching the Deployment")
+			mergePatch, err := json.Marshal(map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"annotations": map[string]interface{}{
+						"foo": "bar",
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = cl.Patch(context.TODO(), types.MergePatchType, mergePatch, dep)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("validating patched Deployment has new annotation")
+			actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).NotTo(BeNil())
+			Expect(actual.Annotations["foo"]).To(Equal("bar"))
+
+			close(done)
+		})
+
+		It("should patch an existing new object from an unstructured object", func(done Done) {
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			By("initially creating a Deployment")
+			dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("updating and encoding the Deployment as unstructured")
+			var u runtime.Unstructured = &unstructured.Unstructured{}
+			dep.Annotations = map[string]string{"foo": "bar"}
+			scheme.Convert(dep, u, nil)
+
+			By("patching the Deployment")
+			mergePatch, err := json.Marshal(map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"annotations": map[string]interface{}{
+						"foo": "bar",
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = cl.Patch(context.TODO(), types.MergePatchType, mergePatch, u)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("fetching newly created unstructured Deployment has new annotation")
+			actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).NotTo(BeNil())
+			Expect(actual.Annotations["foo"]).To(Equal("bar"))
+
+			close(done)
+		})
+
+		It("should patch an existing object non-namespace object from a go struct", func(done Done) {
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			node, err := clientset.CoreV1().Nodes().Create(node)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("patching the object")
+			mergePatch, err := json.Marshal(map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"annotations": map[string]interface{}{
+						"foo": "bar",
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = cl.Patch(context.TODO(), types.MergePatchType, mergePatch, node)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("validate patched Node had new annotation")
+			actual, err := clientset.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).NotTo(BeNil())
+			Expect(actual.Annotations["foo"]).To(Equal("bar"))
+
+			close(done)
+		})
+
+		It("should fail if the object does not exist", func(done Done) {
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			By("patching non-existent object")
+			mergePatch, err := json.Marshal(map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"annotations": map[string]interface{}{
+						"foo": "bar",
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			err = cl.Patch(context.TODO(), types.MergePatchType, mergePatch, dep)
+			Expect(err).To(HaveOccurred())
+
+			close(done)
+		})
+
+		It("should fail if the object does not pass server-side validation", func() {
+
+		})
+
+		It("should fail if the object doesn't have meta", func() {
+
+		})
+
+		It("should fail if the object cannot be mapped to a GVK", func(done Done) {
+			By("creating client with empty Scheme")
+			emptyScheme := runtime.NewScheme()
+			cl, err := client.New(cfg, client.Options{Scheme: emptyScheme})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			By("initially creating a Deployment")
+			dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("patching the Deployment")
+			mergePatch, err := json.Marshal(map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"annotations": map[string]interface{}{
+						"foo": "bar",
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			err = cl.Patch(context.TODO(), types.MergePatchType, mergePatch, dep)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no kind is registered for the type"))
 

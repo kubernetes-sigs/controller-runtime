@@ -17,9 +17,10 @@ limitations under the License.
 package client
 
 // DelegatingClient forms an interface Client by composing separate
-// read and write interfaces.  This way, you can have an Client that
+// reader, writer and statusclient interfaces.  This way, you can have an Client that
 // reads from a cache and writes to the API server.
 type DelegatingClient struct {
 	Reader
 	Writer
+	StatusClient
 }

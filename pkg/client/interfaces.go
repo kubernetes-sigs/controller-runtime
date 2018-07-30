@@ -57,10 +57,25 @@ type Writer interface {
 	Update(ctx context.Context, obj runtime.Object) error
 }
 
+// StatusClient knows how to create a client which can update status subresource
+// for kubernetes objects.
+type StatusClient interface {
+	Status() StatusWriter
+}
+
+// StatusWriter knows how to update status subresource of a Kubernetes object.
+type StatusWriter interface {
+	// Update updates the fields corresponding to the status subresource for the
+	// given obj. obj must be a struct pointer so that obj can be updated
+	// with the content returned by the Server.
+	Update(ctx context.Context, obj runtime.Object) error
+}
+
 // Client knows how to perform CRUD operations on Kubernetes objects.
 type Client interface {
 	Reader
 	Writer
+	StatusClient
 }
 
 // IndexerFunc knows how to take an object and turn it into a series

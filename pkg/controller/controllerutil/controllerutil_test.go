@@ -43,6 +43,54 @@ var _ = Describe("Controllerutil", func() {
 			rs := &appsv1.ReplicaSet{}
 			Expect(controllerutil.SetControllerReference(&errMetaObj{}, rs, scheme.Scheme)).To(HaveOccurred())
 		})
+
+		It("should return an error if object is already owned by another controller", func() {
+			t := true
+			rsOwners := []metav1.OwnerReference{
+				metav1.OwnerReference{
+					Name:               "bar",
+					Kind:               "Deployment",
+					APIVersion:         "extensions/v1beta1",
+					UID:                "bar-uid",
+					Controller:         &t,
+					BlockOwnerDeletion: &t,
+				},
+			}
+			rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", OwnerReferences: rsOwners}}
+			dep := &extensionsv1beta1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", UID: "foo-uid"}}
+
+			err := controllerutil.SetControllerReference(dep, rs, scheme.Scheme)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(&controllerutil.AlreadyOwnedError{}))
+		})
+
+		It("should not duplicate existing owner reference", func() {
+			f := false
+			t := true
+			rsOwners := []metav1.OwnerReference{
+				metav1.OwnerReference{
+					Name:               "foo",
+					Kind:               "Deployment",
+					APIVersion:         "extensions/v1beta1",
+					UID:                "foo-uid",
+					Controller:         &f,
+					BlockOwnerDeletion: &t,
+				},
+			}
+			rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", OwnerReferences: rsOwners}}
+			dep := &extensionsv1beta1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", UID: "foo-uid"}}
+
+			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
+			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+				Name:               "foo",
+				Kind:               "Deployment",
+				APIVersion:         "extensions/v1beta1",
+				UID:                "foo-uid",
+				Controller:         &t,
+				BlockOwnerDeletion: &t,
+			}))
+		})
 	})
 })
 

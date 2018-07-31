@@ -23,6 +23,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -46,7 +47,10 @@ type clientCache struct {
 
 	// resourceByType caches type metadata
 	resourceByType map[reflect.Type]*resourceMeta
-	mu             sync.RWMutex
+	// resourceByGVK caches type metadata for unstructured
+	unstructuredResourceByGVK map[schema.GroupVersionKind]*resourceMeta
+	muByType                  sync.RWMutex
+	muByGVK                   sync.RWMutex
 }
 
 // newResource maps obj to a Kubernetes Resource and constructs a client for that Resource.
@@ -73,30 +77,60 @@ func (c *clientCache) newResource(obj runtime.Object) (*resourceMeta, error) {
 	return &resourceMeta{Interface: client, mapping: mapping, gvk: gvk}, nil
 }
 
-// getResource returns the resource meta information for the given type of object.
-// If the object is a list, the resource represents the item's type instead.
-func (c *clientCache) getResource(obj runtime.Object) (*resourceMeta, error) {
-	typ := reflect.TypeOf(obj)
-
+func (c *clientCache) getUnstructuredResourceByGVK(obj runtime.Object) (*resourceMeta, error) {
 	// It's better to do creation work twice than to not let multiple
 	// people make requests at once
-	c.mu.RLock()
-	r, known := c.resourceByType[typ]
-	c.mu.RUnlock()
+	c.muByGVK.RLock()
+	r, known := c.unstructuredResourceByGVK[obj.GetObjectKind().GroupVersionKind()]
+	c.muByGVK.RUnlock()
 
 	if known {
 		return r, nil
 	}
 
 	// Initialize a new Client
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.muByGVK.Lock()
+	defer c.muByGVK.Unlock()
+	r, err := c.newResource(obj)
+	if err != nil {
+		return nil, err
+	}
+	c.unstructuredResourceByGVK[obj.GetObjectKind().GroupVersionKind()] = r
+	return r, err
+}
+
+func (c *clientCache) getResourceByType(obj runtime.Object) (*resourceMeta, error) {
+	typ := reflect.TypeOf(obj)
+
+	// It's better to do creation work twice than to not let multiple
+	// people make requests at once
+	c.muByType.RLock()
+	r, known := c.resourceByType[typ]
+	c.muByType.RUnlock()
+
+	if known {
+		return r, nil
+	}
+
+	// Initialize a new Client
+	c.muByType.Lock()
+	defer c.muByType.Unlock()
 	r, err := c.newResource(obj)
 	if err != nil {
 		return nil, err
 	}
 	c.resourceByType[typ] = r
 	return r, err
+}
+
+// getResource returns the resource meta information for the given type of object.
+// If the object is a list, the resource represents the item's type instead.
+func (c *clientCache) getResource(obj runtime.Object) (*resourceMeta, error) {
+	_, isUnstructured := obj.(*unstructured.Unstructured)
+	if isUnstructured {
+		return c.getUnstructuredResourceByGVK(obj)
+	}
+	return c.getResourceByType(obj)
 }
 
 // getObjMeta returns objMeta containing both type and object metadata and state

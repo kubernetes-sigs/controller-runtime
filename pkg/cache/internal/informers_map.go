@@ -23,6 +23,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -38,13 +39,14 @@ func NewInformersMap(config *rest.Config,
 	mapper meta.RESTMapper,
 	resync time.Duration) *InformersMap {
 	ip := &InformersMap{
-		config:         config,
-		Scheme:         scheme,
-		mapper:         mapper,
-		informersByGVK: make(map[schema.GroupVersionKind]*MapEntry),
-		codecs:         serializer.NewCodecFactory(scheme),
-		paramCodec:     runtime.NewParameterCodec(scheme),
-		resync:         resync,
+		config:                    config,
+		Scheme:                    scheme,
+		mapper:                    mapper,
+		informersByGVK:            make(map[schema.GroupVersionKind]*MapEntry),
+		unstructuredInformerByGVK: make(map[schema.GroupVersionKind]*MapEntry),
+		codecs:     serializer.NewCodecFactory(scheme),
+		paramCodec: runtime.NewParameterCodec(scheme),
+		resync:     resync,
 	}
 	return ip
 }
@@ -73,6 +75,10 @@ type InformersMap struct {
 	// informersByGVK is the cache of informers keyed by groupVersionKind
 	informersByGVK map[schema.GroupVersionKind]*MapEntry
 
+	// unstructuredInformerByGVK is a cache of informers for unstructured types
+	// keyed by groupVersionKind
+	unstructuredInformerByGVK map[schema.GroupVersionKind]*MapEntry
+
 	// codecs is used to create a new REST client
 	codecs serializer.CodecFactory
 
@@ -87,6 +93,8 @@ type InformersMap struct {
 
 	// mu guards access to the map
 	mu sync.RWMutex
+	// mu guards access to the unstructured map
+	unstructuredMu sync.RWMutex
 
 	// start is true if the informers have been started
 	started bool
@@ -96,13 +104,20 @@ type InformersMap struct {
 func (ip *InformersMap) Start(stop <-chan struct{}) error {
 	func() {
 		ip.mu.Lock()
+		ip.unstructuredMu.Lock()
 		defer ip.mu.Unlock()
+		defer ip.unstructuredMu.Unlock()
 
 		// Set the stop channel so it can be passed to informers that are added later
 		ip.stop = stop
 
 		// Start each informer
 		for _, informer := range ip.informersByGVK {
+			go informer.Informer.Run(stop)
+		}
+
+		// Start each unstructured informer
+		for _, informer := range ip.unstructuredInformerByGVK {
 			go informer.Informer.Run(stop)
 		}
 
@@ -115,23 +130,36 @@ func (ip *InformersMap) Start(stop <-chan struct{}) error {
 
 // WaitForCacheSync waits until all the caches have been synced
 func (ip *InformersMap) WaitForCacheSync(stop <-chan struct{}) bool {
-	syncedFuncs := make([]cache.InformerSynced, 0, len(ip.informersByGVK))
+	syncedFuncs := make([]cache.InformerSynced, 0, len(ip.informersByGVK)+len(ip.unstructuredInformerByGVK))
 	for _, informer := range ip.informersByGVK {
+		syncedFuncs = append(syncedFuncs, informer.Informer.HasSynced)
+	}
+	for _, informer := range ip.unstructuredInformerByGVK {
 		syncedFuncs = append(syncedFuncs, informer.Informer.HasSynced)
 	}
 	return cache.WaitForCacheSync(stop, syncedFuncs...)
 }
 
+func (ip *InformersMap) getMapEntry(gvk schema.GroupVersionKind, isUnstructured bool) (*MapEntry, bool) {
+	if isUnstructured {
+		ip.unstructuredMu.RLock()
+		defer ip.unstructuredMu.RUnlock()
+		i, ok := ip.unstructuredInformerByGVK[gvk]
+		return i, ok
+	}
+	ip.mu.RLock()
+	defer ip.mu.RUnlock()
+	i, ok := ip.informersByGVK[gvk]
+	return i, ok
+
+}
+
 // Get will create a new Informer and add it to the map of InformersMap if none exists.  Returns
 // the Informer from the map.
 func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*MapEntry, error) {
+	_, isUnstructured := obj.(*unstructured.Unstructured)
 	// Return the informer if it is found
-	i, ok := func() (*MapEntry, bool) {
-		ip.mu.RLock()
-		defer ip.mu.RUnlock()
-		i, ok := ip.informersByGVK[gvk]
-		return i, ok
-	}()
+	i, ok := ip.getMapEntry(gvk, isUnstructured)
 	if ok {
 		return i, nil
 	}
@@ -140,21 +168,27 @@ func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*M
 	// need to be locked
 	var sync bool
 	i, err := func() (*MapEntry, error) {
-		ip.mu.Lock()
-		defer ip.mu.Unlock()
-
-		// Check the cache to see if we already have an Informer.  If we do, return the Informer.
+		var ok bool
+		var i *MapEntry
+		// Check the caches to see if we already have an Informer.  If we do, return the Informer.
 		// This is for the case where 2 routines tried to get the informer when it wasn't in the map
 		// so neither returned early, but the first one created it.
-		var ok bool
-		i, ok := ip.informersByGVK[gvk]
+		if isUnstructured {
+			ip.unstructuredMu.Lock()
+			defer ip.unstructuredMu.Unlock()
+			i, ok = ip.unstructuredInformerByGVK[gvk]
+		} else {
+			ip.mu.Lock()
+			defer ip.mu.Unlock()
+			i, ok = ip.informersByGVK[gvk]
+		}
 		if ok {
 			return i, nil
 		}
 
 		// Create a NewSharedIndexInformer and add it to the map.
 		var lw *cache.ListWatch
-		lw, err := ip.newListWatch(gvk)
+		lw, err := ip.newListWatch(gvk, isUnstructured)
 		if err != nil {
 			return nil, err
 		}
@@ -191,14 +225,7 @@ func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*M
 }
 
 // newListWatch returns a new ListWatch object that can be used to create a SharedIndexInformer.
-func (ip *InformersMap) newListWatch(gvk schema.GroupVersionKind) (*cache.ListWatch, error) {
-	// Construct a RESTClient for the groupVersionKind that we will use to
-	// talk to the apiserver.
-	client, err := apiutil.RESTClientForGVK(gvk, ip.config, ip.codecs)
-	if err != nil {
-		return nil, err
-	}
-
+func (ip *InformersMap) newListWatch(gvk schema.GroupVersionKind, isUnstructured bool) (*cache.ListWatch, error) {
 	// Kubernetes APIs work against Resources, not GroupVersionKinds.  Map the
 	// groupVersionKind to the Resource API we will use.
 	mapping, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
@@ -206,11 +233,26 @@ func (ip *InformersMap) newListWatch(gvk schema.GroupVersionKind) (*cache.ListWa
 		return nil, err
 	}
 
-	// Get a listObject for listing that the ListWatch can DeepCopy
-	listGVK := gvk.GroupVersion().WithKind(gvk.Kind + "List")
-	listObj, err := ip.Scheme.New(listGVK)
-	if err != nil {
-		return nil, err
+	// Construct a RESTClient for the groupVersionKind that we will use to
+	// talk to the apiserver.
+	var client rest.Interface
+	var listObj runtime.Object
+	if isUnstructured {
+		listObj = &unstructured.UnstructuredList{}
+		client, err = apiutil.RESTUnstructuredClientForGVK(gvk, ip.config)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		client, err = apiutil.RESTClientForGVK(gvk, ip.config, ip.codecs)
+		if err != nil {
+			return nil, err
+		}
+		listGVK := gvk.GroupVersion().WithKind(gvk.Kind + "List")
+		listObj, err = ip.Scheme.New(listGVK)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Create a new ListWatch for the obj

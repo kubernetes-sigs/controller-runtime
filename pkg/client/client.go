@@ -23,6 +23,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -60,11 +61,12 @@ func New(config *rest.Config, options Options) (Client, error) {
 
 	c := &client{
 		cache: clientCache{
-			config:         config,
-			scheme:         options.Scheme,
-			mapper:         options.Mapper,
-			codecs:         serializer.NewCodecFactory(options.Scheme),
-			resourceByType: make(map[reflect.Type]*resourceMeta),
+			config:                    config,
+			scheme:                    options.Scheme,
+			mapper:                    options.Mapper,
+			codecs:                    serializer.NewCodecFactory(options.Scheme),
+			resourceByType:            make(map[reflect.Type]*resourceMeta),
+			unstructuredResourceByGVK: make(map[schema.GroupVersionKind]*resourceMeta),
 		},
 		paramCodec: runtime.NewParameterCodec(options.Scheme),
 	}

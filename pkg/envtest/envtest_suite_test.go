@@ -32,7 +32,7 @@ func TestSource(t *testing.T) {
 var env *Environment
 
 var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(logf.ZapLogger(false))
+	logf.SetLogger(logf.ZapLoggerTo(GinkgoWriter, true))
 	env = &Environment{}
 	_, err := env.Start()
 	Expect(err).NotTo(HaveOccurred())

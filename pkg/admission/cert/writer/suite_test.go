@@ -32,6 +32,6 @@ func TestSource(t *testing.T) {
 }
 
 var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(logf.ZapLogger(false))
+	logf.SetLogger(logf.ZapLoggerTo(GinkgoWriter, true))
 	close(done)
 }, 60)

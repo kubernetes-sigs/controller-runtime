@@ -19,7 +19,7 @@ var testenv *envtest.Environment
 var cfg *rest.Config
 
 var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(logf.ZapLogger(false))
+	logf.SetLogger(logf.ZapLoggerTo(GinkgoWriter, true))
 
 	testenv = &envtest.Environment{}
 

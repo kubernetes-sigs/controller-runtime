@@ -79,12 +79,32 @@ func (l *DelegatingLogger) WithName(name string) logr.Logger {
 // WithValues provides a new Logger with the tags appended
 func (l *DelegatingLogger) WithValues(tags ...interface{}) logr.Logger {
 	if l.promise == nil {
-		return l.Logger.WithValues(tags)
+		return l.Logger.WithValues(tags...)
 	}
 
 	res := &DelegatingLogger{Logger: l.Logger}
-	promise := l.promise.WithValues(res, tags)
+	promise := l.promise.WithValues(res, tags...)
 	res.promise = promise
 
 	return res
+}
+
+// Fulfill switches the logger over to use the actual logger
+// provided, instead of the temporary initial one, if this method
+// has not been previously called.
+func (l *DelegatingLogger) Fulfill(actual logr.Logger) {
+	if l.promise != nil {
+		l.promise.Fulfill(actual)
+	}
+}
+
+// NewDelegatingLogger constructs a new DelegatingLogger which uses
+// the given logger before it's promise is fulfilled.
+func NewDelegatingLogger(initial logr.Logger) *DelegatingLogger {
+	l := &DelegatingLogger{
+		Logger:  initial,
+		promise: &loggerPromise{},
+	}
+	l.promise.logger = l
+	return l
 }

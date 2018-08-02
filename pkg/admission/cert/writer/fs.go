@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"strings"
@@ -148,7 +147,7 @@ func (f *fsCertWriter) doWrite(webhookName string) (*certgenerator.Artifacts, er
 	if err != nil {
 		return nil, err
 	}
-	aw, err := atomic.NewAtomicWriter(v.path, fmt.Sprintf("processing webhook %q", webhookName))
+	aw, err := atomic.NewAtomicWriter(v.path, log.WithName("atomic-writer").WithValues("task", "processing webhook", "webhook", webhookName))
 	if err != nil {
 		return nil, err
 	}
@@ -168,14 +167,14 @@ func prepareToWrite(dir string) {
 		if os.IsNotExist(err) {
 			continue
 		} else if err != nil {
-			log.Printf("error stat file %v: %v", abspath, err)
+			log.Error(err, "unable to stat file", "file", abspath)
 		}
 		_, err = os.Readlink(abspath)
 		// if it's not a symbolic link
 		if err != nil {
 			err = os.Remove(abspath)
 			if err != nil {
-				log.Printf("failed to remove old file: %v", abspath)
+				log.Error(err, "unable to remove old file", "file", abspath)
 			}
 		}
 	}

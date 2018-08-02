@@ -17,44 +17,53 @@ limitations under the License.
 package manager_test
 
 import (
-	"log"
+	"os"
 
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 )
 
-var mrg manager.Manager
+var (
+	mgr manager.Manager
+	// NB: don't call SetLogger in init(), or else you'll mess up logging in the main suite.
+	log = logf.Log.WithName("manager-examples")
+)
 
 // This example creates a new Manager that can be used with controller.New to create Controllers.
 func ExampleNew() {
 	cfg, err := config.GetConfig()
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err, "unable to get kubeconfig")
+		os.Exit(1)
 	}
 
-	mrg, err := manager.New(cfg, manager.Options{})
+	mgr, err := manager.New(cfg, manager.Options{})
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err, "unable to set up manager")
+		os.Exit(1)
 	}
-	log.Print(mrg)
+	log.Info("created manager", "manager", mgr)
 }
 
 // This example adds a Runnable for the Manager to Start.
 func ExampleManager_Add() {
-	err := mrg.Add(manager.RunnableFunc(func(<-chan struct{}) error {
+	err := mgr.Add(manager.RunnableFunc(func(<-chan struct{}) error {
 		// Do something
 		return nil
 	}))
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err, "unable add a runnable to the manager")
+		os.Exit(1)
 	}
 }
 
 // This example starts a Manager that has had Runnables added.
 func ExampleManager_Start() {
-	err := mrg.Start(signals.SetupSignalHandler())
+	err := mgr.Start(signals.SetupSignalHandler())
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err, "unable start the manager")
+		os.Exit(1)
 	}
 }

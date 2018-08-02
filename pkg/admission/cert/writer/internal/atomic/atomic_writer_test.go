@@ -30,6 +30,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	utiltesting "k8s.io/client-go/util/testing"
+	log "github.com/go-logr/logr/testing"
 )
 
 func TestNewAtomicWriter(t *testing.T) {
@@ -39,7 +40,7 @@ func TestNewAtomicWriter(t *testing.T) {
 	}
 	defer os.RemoveAll(targetDir)
 
-	_, err = NewAtomicWriter(targetDir, "-test-")
+	_, err = NewAtomicWriter(targetDir, log.TestLogger{T: t})
 	if err != nil {
 		t.Fatalf("unexpected error creating writer for existing target dir: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestNewAtomicWriter(t *testing.T) {
 		t.Fatalf("unexpected error ensuring dir %v does not exist: %v", nonExistentDir, err)
 	}
 
-	_, err = NewAtomicWriter(nonExistentDir, "-test-")
+	_, err = NewAtomicWriter(nonExistentDir, log.TestLogger{T: t})
 	if err == nil {
 		t.Fatalf("unexpected success creating writer for nonexistent target dir: %v", err)
 	}
@@ -228,7 +229,7 @@ func TestPathsToRemove(t *testing.T) {
 		}
 		defer os.RemoveAll(targetDir)
 
-		writer := &AtomicWriter{targetDir: targetDir, logContext: "-test-"}
+		writer := &AtomicWriter{targetDir: targetDir, log: log.TestLogger{T: t}}
 		err = writer.Write(tc.payload1)
 		if err != nil {
 			t.Errorf("%v: unexpected error writing: %v", tc.name, err)
@@ -396,7 +397,7 @@ IAAAAAAAsDyZDwU=`
 		}
 		defer os.RemoveAll(targetDir)
 
-		writer := &AtomicWriter{targetDir: targetDir, logContext: "-test-"}
+		writer := &AtomicWriter{targetDir: targetDir, log: log.TestLogger{T: t}}
 		err = writer.Write(tc.payload)
 		if err != nil && tc.success {
 			t.Errorf("%v: unexpected error writing payload: %v", tc.name, err)
@@ -572,7 +573,7 @@ func TestUpdate(t *testing.T) {
 		}
 		defer os.RemoveAll(targetDir)
 
-		writer := &AtomicWriter{targetDir: targetDir, logContext: "-test-"}
+		writer := &AtomicWriter{targetDir: targetDir, log: log.TestLogger{T: t}}
 
 		err = writer.Write(tc.first)
 		if err != nil {
@@ -740,7 +741,7 @@ func TestMultipleUpdates(t *testing.T) {
 		}
 		defer os.RemoveAll(targetDir)
 
-		writer := &AtomicWriter{targetDir: targetDir, logContext: "-test-"}
+		writer := &AtomicWriter{targetDir: targetDir, log: log.TestLogger{T: t}}
 
 		for _, payload := range tc.payloads {
 			writer.Write(payload)
@@ -959,7 +960,7 @@ func TestCreateUserVisibleFiles(t *testing.T) {
 			t.Fatalf("%v: unexpected error creating data path: %v", tc.name, err)
 		}
 
-		writer := &AtomicWriter{targetDir: targetDir, logContext: "-test-"}
+		writer := &AtomicWriter{targetDir: targetDir, log: log.TestLogger{T: t}}
 		payload, err := validatePayload(tc.payload)
 		if err != nil {
 			t.Fatalf("%v: unexpected error validating payload: %v", tc.name, err)

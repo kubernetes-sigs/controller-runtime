@@ -35,7 +35,7 @@ import (
 // Manager initializes shared dependencies such as Caches and Clients, and provides them to Runnables.
 // A Manager is required to create Controllers.
 type Manager interface {
-	// Add will set reqeusted dependencies on the component, and cause the component to be
+	// Add will set requested dependencies on the component, and cause the component to be
 	// started when Start is called.  Add will inject any dependencies for which the argument
 	// implements the inject interface - e.g. inject.Client
 	Add(Runnable) error
@@ -48,32 +48,32 @@ type Manager interface {
 	// Returns an error if there is an error starting any controller.
 	Start(<-chan struct{}) error
 
-	// GetConfig returns an initialized Config
+	// GetConfig returns an initialized Config.
 	GetConfig() *rest.Config
 
-	// GetScheme returns and initialized Scheme
+	// GetScheme returns an initialized Scheme.
 	GetScheme() *runtime.Scheme
 
-	// GetClient returns a client configured with the Config
+	// GetClient returns a client configured with the Config.
 	GetClient() client.Client
 
-	// GetFieldIndexer returns a client.FieldIndexer configured with the client
+	// GetFieldIndexer returns a client.FieldIndexer configured with the client.
 	GetFieldIndexer() client.FieldIndexer
 
-	// GetCache returns a cache.Cache
+	// GetCache returns a cache.Cache.
 	GetCache() cache.Cache
 
-	// GetRecorder returns a new EventRecorder for the provided name
+	// GetRecorder returns a new EventRecorder for the provided name.
 	GetRecorder(name string) record.EventRecorder
 }
 
 // Options are the arguments for creating a new Manager
 type Options struct {
 	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
-	// Defaults to the kubernetes/client-go scheme.Scheme
+	// Defaults to the kubernetes/client-go scheme.Scheme.
 	Scheme *runtime.Scheme
 
-	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs
+	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs.
 	MapperProvider func(c *rest.Config) (meta.RESTMapper, error)
 
 	// SyncPeriod determines the minimum frequency at which watched objects are

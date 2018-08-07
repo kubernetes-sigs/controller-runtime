@@ -31,7 +31,9 @@ import (
 
 // Options are creation options for a Client
 type Options struct {
-	// Scheme, if provided, will be used to map go structs to GroupVersionKinds
+	// Scheme, if provided, will be used to map go structs to GroupVersionKinds.
+	// The Scheme must be initialized with the GroupVersionKinds that will be
+	// used with the client.
 	Scheme *runtime.Scheme
 
 	// Mapper, if provided, will be used to map GroupVersionKinds to Resources

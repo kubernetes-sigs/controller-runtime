@@ -33,8 +33,8 @@ type Options struct {
 	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 
-	// Reconciler reconciles an object
-	Reconciler reconcile.Reconciler
+	// Reconcile is the reconciler for the type the controller manages.
+	Reconcile reconcile.Reconcile
 }
 
 // Controller implements a Kubernetes API.  A Controller manages a work queue fed reconcile.Requests

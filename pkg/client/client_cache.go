@@ -66,7 +66,13 @@ func (c *clientCache) newResource(obj runtime.Object) (*resourceMeta, error) {
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 	}
 
-	client, err := apiutil.RESTClientForGVK(gvk, c.config, c.codecs)
+	_, isUnstructured := obj.(*unstructured.Unstructured)
+	var client rest.Interface
+	if isUnstructured {
+		client, err = apiutil.RESTUnstructuredClientForGVK(gvk, c.config)
+	} else {
+		client, err = apiutil.RESTClientForGVK(gvk, c.config, c.codecs)
+	}
 	if err != nil {
 		return nil, err
 	}

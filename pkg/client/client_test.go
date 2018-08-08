@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	kscheme "k8s.io/client-go/kubernetes/scheme"
@@ -642,23 +643,28 @@ var _ = Describe("Client", func() {
 			dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("encoding the Deployment as unstructured")
-			var u runtime.Unstructured = &unstructured.Unstructured{}
-			scheme.Convert(dep, u, nil)
-
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
 
+			By("encoding the Deployment as unstructured")
+			var u runtime.Unstructured = &unstructured.Unstructured{}
+			scheme.Convert(dep, u, nil)
+
 			By("fetching the created Deployment")
-			var actual appsv1.Deployment
+			var actual unstructured.Unstructured
+			actual.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "apps",
+				Kind:    "Deployment",
+				Version: "v1",
+			})
 			key := client.ObjectKey{Namespace: ns, Name: dep.Name}
 			err = cl.Get(context.TODO(), key, &actual)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(actual).NotTo(BeNil())
 
 			By("validating the fetched Deployment equals the created one")
-			Expect(dep).To(Equal(&actual))
+			Expect(u).To(Equal(&actual))
 
 			close(done)
 		})
@@ -698,14 +704,19 @@ var _ = Describe("Client", func() {
 			Expect(cl).NotTo(BeNil())
 
 			By("fetching the created Node")
-			var actual corev1.Node
+			var actual unstructured.Unstructured
+			actual.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "",
+				Kind:    "Node",
+				Version: "v1",
+			})
 			key := client.ObjectKey{Namespace: ns, Name: node.Name}
 			err = cl.Get(context.TODO(), key, &actual)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(actual).NotTo(BeNil())
 
 			By("validating the fetched Node equals the created one")
-			Expect(node).To(Equal(&actual))
+			Expect(u).To(Equal(&actual))
 
 			close(done)
 		})
@@ -775,6 +786,38 @@ var _ = Describe("Client", func() {
 			}
 			Expect(hasDep).To(BeTrue())
 
+			close(done)
+		}, serverSideTimeoutSeconds)
+
+		It("should fetch unstructured collection of objects", func(done Done) {
+			By("create an initial object")
+			_, err := clientset.AppsV1().Deployments(ns).Create(dep)
+			Expect(err).NotTo(HaveOccurred())
+
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("listing all objects of that type in the cluster")
+			deps := &unstructured.UnstructuredList{}
+			deps.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "apps",
+				Kind:    "DeploymentList",
+				Version: "v1",
+			})
+			err = cl.List(context.Background(), nil, deps)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(deps.Items).NotTo(BeEmpty())
+			hasDep := false
+			for _, item := range deps.Items {
+				if item.GetName() == dep.Name && item.GetNamespace() == dep.Namespace {
+					fmt.Printf("HERE!!!!!!!! ITEM: %v\n\n", item)
+					hasDep = true
+					fmt.Printf("HERE hasDep: %v\n\n", hasDep)
+					break
+				}
+			}
+			Expect(hasDep).To(BeTrue())
 			close(done)
 		}, serverSideTimeoutSeconds)
 

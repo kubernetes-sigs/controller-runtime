@@ -158,6 +158,7 @@ func (c *client) List(ctx context.Context, opts *ListOptions, obj runtime.Object
 		VersionedParams(opts.AsListOptions(), c.paramCodec).
 		Do().
 		Into(obj)
+	return err
 }
 
 // Status implements client.StatusClient

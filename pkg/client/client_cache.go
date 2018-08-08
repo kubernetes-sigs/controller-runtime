@@ -133,7 +133,8 @@ func (c *clientCache) getResourceByType(obj runtime.Object) (*resourceMeta, erro
 // If the object is a list, the resource represents the item's type instead.
 func (c *clientCache) getResource(obj runtime.Object) (*resourceMeta, error) {
 	_, isUnstructured := obj.(*unstructured.Unstructured)
-	if isUnstructured {
+	_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
+	if isUnstructured || isUnstructuredList {
 		return c.getUnstructuredResourceByGVK(obj)
 	}
 	return c.getResourceByType(obj)

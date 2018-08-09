@@ -17,7 +17,12 @@ limitations under the License.
 package apiutil
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"strings"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -82,7 +87,7 @@ func RESTUnstructuredClientForGVK(gvk schema.GroupVersionKind, baseConfig *rest.
 			break
 		}
 	}
-	jsonInfo.Serializer = unstructured.UnstructuredJSONScheme
+	jsonInfo.Serializer = dynamicCodec{}
 	cfg.NegotiatedSerializer = serializer.NegotiatedSerializerWrapper(jsonInfo)
 
 	return rest.RESTClientFor(cfg)
@@ -104,4 +109,31 @@ func createRestConfig(gvk schema.GroupVersionKind, baseConfig *rest.Config) *res
 	}
 	return cfg
 
+}
+
+//Copied from deprecated-dynamic/bad_debt.go
+// dynamicCodec is a codec that wraps the standard unstructured codec
+// with special handling for Status objects.
+// Deprecated only used by test code and its wrong
+type dynamicCodec struct{}
+
+func (dynamicCodec) Decode(data []byte, gvk *schema.GroupVersionKind, obj runtime.Object) (runtime.Object, *schema.GroupVersionKind, error) {
+	obj, gvk, err := unstructured.UnstructuredJSONScheme.Decode(data, gvk, obj)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if _, ok := obj.(*metav1.Status); !ok && strings.ToLower(gvk.Kind) == "status" {
+		obj = &metav1.Status{}
+		err := json.Unmarshal(data, obj)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return obj, gvk, nil
+}
+
+func (dynamicCodec) Encode(obj runtime.Object, w io.Writer) error {
+	return unstructured.UnstructuredJSONScheme.Encode(obj, w)
 }

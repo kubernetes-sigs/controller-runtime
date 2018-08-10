@@ -158,6 +158,8 @@ func (ip *InformersMap) getMapEntry(gvk schema.GroupVersionKind, isUnstructured 
 // the Informer from the map.
 func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*MapEntry, error) {
 	_, isUnstructured := obj.(*unstructured.Unstructured)
+	_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
+	isUnstructured = isUnstructured || isUnstructuredList
 	// Return the informer if it is found
 	i, ok := ip.getMapEntry(gvk, isUnstructured)
 	if ok {
@@ -199,7 +201,7 @@ func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*M
 			Informer: ni,
 			Reader:   CacheReader{indexer: ni.GetIndexer(), groupVersionKind: gvk},
 		}
-		ip.informersByGVK[gvk] = i
+		ip.setMap(i, gvk, isUnstructured)
 
 		// Start the Informer if need by
 		// TODO(seans): write thorough tests and document what happens here - can you add indexers?
@@ -222,6 +224,16 @@ func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*M
 	}
 
 	return i, err
+}
+
+// setMap - helper function to decide which map to add to.
+func (ip *InformersMap) setMap(i *MapEntry, gvk schema.GroupVersionKind, isUnstructured bool) {
+	if isUnstructured {
+		ip.unstructuredInformerByGVK[gvk] = i
+	} else {
+
+		ip.informersByGVK[gvk] = i
+	}
 }
 
 // newListWatch returns a new ListWatch object that can be used to create a SharedIndexInformer.

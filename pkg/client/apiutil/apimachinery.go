@@ -8,7 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/rest"
 )
 
@@ -17,11 +17,11 @@ import (
 func NewDiscoveryRESTMapper(c *rest.Config) (meta.RESTMapper, error) {
 	// Get a mapper
 	dc := discovery.NewDiscoveryClientForConfigOrDie(c)
-	gr, err := discovery.GetAPIGroupResources(dc)
+	gr, err := restmapper.GetAPIGroupResources(dc)
 	if err != nil {
 		return nil, err
 	}
-	return discovery.NewRESTMapper(gr, dynamic.VersionInterfaces), nil
+	return restmapper.NewDiscoveryRESTMapper(gr), nil
 }
 
 // GVKForObject finds the GroupVersionKind associated with the given object, if there is only a single such GVK.

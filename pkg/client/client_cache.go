@@ -132,7 +132,7 @@ func (r *resourceMeta) isNamespaced() bool {
 
 // resource returns the resource name of the type
 func (r *resourceMeta) resource() string {
-	return r.mapping.Resource
+	return r.mapping.Resource.Resource
 }
 
 // objMeta stores type and object information about a Kubernetes type

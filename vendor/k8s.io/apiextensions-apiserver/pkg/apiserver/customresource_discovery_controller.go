@@ -18,7 +18,6 @@ package apiserver
 
 import (
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/golang/glog"
@@ -29,8 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apiserver/pkg/endpoints/discovery"
+	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
@@ -42,6 +41,7 @@ import (
 type DiscoveryController struct {
 	versionHandler *versionDiscoveryHandler
 	groupHandler   *groupDiscoveryHandler
+	contextMapper  request.RequestContextMapper
 
 	crdLister  listers.CustomResourceDefinitionLister
 	crdsSynced cache.InformerSynced
@@ -52,12 +52,13 @@ type DiscoveryController struct {
 	queue workqueue.RateLimitingInterface
 }
 
-func NewDiscoveryController(crdInformer informers.CustomResourceDefinitionInformer, versionHandler *versionDiscoveryHandler, groupHandler *groupDiscoveryHandler) *DiscoveryController {
+func NewDiscoveryController(crdInformer informers.CustomResourceDefinitionInformer, versionHandler *versionDiscoveryHandler, groupHandler *groupDiscoveryHandler, contextMapper request.RequestContextMapper) *DiscoveryController {
 	c := &DiscoveryController{
 		versionHandler: versionHandler,
 		groupHandler:   groupHandler,
 		crdLister:      crdInformer.Lister(),
 		crdsSynced:     crdInformer.Informer().HasSynced,
+		contextMapper:  contextMapper,
 
 		queue: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "DiscoveryController"),
 	}
@@ -77,7 +78,6 @@ func (c *DiscoveryController) sync(version schema.GroupVersion) error {
 
 	apiVersionsForDiscovery := []metav1.GroupVersionForDiscovery{}
 	apiResourcesForDiscovery := []metav1.APIResource{}
-	versionsForDiscoveryMap := map[metav1.GroupVersion]bool{}
 
 	crds, err := c.crdLister.List(labels.Everything())
 	if err != nil {
@@ -93,29 +93,13 @@ func (c *DiscoveryController) sync(version schema.GroupVersion) error {
 		if crd.Spec.Group != version.Group {
 			continue
 		}
+		foundGroup = true
+		apiVersionsForDiscovery = append(apiVersionsForDiscovery, metav1.GroupVersionForDiscovery{
+			GroupVersion: crd.Spec.Group + "/" + crd.Spec.Version,
+			Version:      crd.Spec.Version,
+		})
 
-		foundThisVersion := false
-		for _, v := range crd.Spec.Versions {
-			if !v.Served {
-				continue
-			}
-			// If there is any Served version, that means the group should show up in discovery
-			foundGroup = true
-
-			gv := metav1.GroupVersion{Group: crd.Spec.Group, Version: v.Name}
-			if !versionsForDiscoveryMap[gv] {
-				versionsForDiscoveryMap[gv] = true
-				apiVersionsForDiscovery = append(apiVersionsForDiscovery, metav1.GroupVersionForDiscovery{
-					GroupVersion: crd.Spec.Group + "/" + v.Name,
-					Version:      v.Name,
-				})
-			}
-			if v.Name == version.Version {
-				foundThisVersion = true
-			}
-		}
-
-		if !foundThisVersion {
+		if crd.Spec.Version != version.Version {
 			continue
 		}
 		foundVersion = true
@@ -163,16 +147,13 @@ func (c *DiscoveryController) sync(version schema.GroupVersion) error {
 		return nil
 	}
 
-	sortGroupDiscoveryByKubeAwareVersion(apiVersionsForDiscovery)
-
 	apiGroup := metav1.APIGroup{
 		Name:     version.Group,
 		Versions: apiVersionsForDiscovery,
-		// the preferred versions for a group is the first item in
-		// apiVersionsForDiscovery after it put in the right ordered
+		// the preferred versions for a group is arbitrary since there cannot be duplicate resources
 		PreferredVersion: apiVersionsForDiscovery[0],
 	}
-	c.groupHandler.setDiscovery(version.Group, discovery.NewAPIGroupHandler(Codecs, apiGroup))
+	c.groupHandler.setDiscovery(version.Group, discovery.NewAPIGroupHandler(Codecs, apiGroup, c.contextMapper))
 
 	if !foundVersion {
 		c.versionHandler.unsetDiscovery(version)
@@ -180,15 +161,9 @@ func (c *DiscoveryController) sync(version schema.GroupVersion) error {
 	}
 	c.versionHandler.setDiscovery(version, discovery.NewAPIVersionHandler(Codecs, version, discovery.APIResourceListerFunc(func() []metav1.APIResource {
 		return apiResourcesForDiscovery
-	})))
+	}), c.contextMapper))
 
 	return nil
-}
-
-func sortGroupDiscoveryByKubeAwareVersion(gd []metav1.GroupVersionForDiscovery) {
-	sort.Slice(gd, func(i, j int) bool {
-		return version.CompareKubeAwareVersionStrings(gd[i].Version, gd[j].Version) > 0
-	})
 }
 
 func (c *DiscoveryController) Run(stopCh <-chan struct{}) {
@@ -235,9 +210,7 @@ func (c *DiscoveryController) processNextWorkItem() bool {
 }
 
 func (c *DiscoveryController) enqueue(obj *apiextensions.CustomResourceDefinition) {
-	for _, v := range obj.Spec.Versions {
-		c.queue.Add(schema.GroupVersion{Group: obj.Spec.Group, Version: v.Name})
-	}
+	c.queue.Add(schema.GroupVersion{Group: obj.Spec.Group, Version: obj.Spec.Version})
 }
 
 func (c *DiscoveryController) addCustomResourceDefinition(obj interface{}) {
@@ -246,14 +219,10 @@ func (c *DiscoveryController) addCustomResourceDefinition(obj interface{}) {
 	c.enqueue(castObj)
 }
 
-func (c *DiscoveryController) updateCustomResourceDefinition(oldObj, newObj interface{}) {
-	castNewObj := newObj.(*apiextensions.CustomResourceDefinition)
-	castOldObj := oldObj.(*apiextensions.CustomResourceDefinition)
-	glog.V(4).Infof("Updating customresourcedefinition %s", castOldObj.Name)
-	// Enqueue both old and new object to make sure we remove and add appropriate Versions.
-	// The working queue will resolve any duplicates and only changes will stay in the queue.
-	c.enqueue(castNewObj)
-	c.enqueue(castOldObj)
+func (c *DiscoveryController) updateCustomResourceDefinition(obj, _ interface{}) {
+	castObj := obj.(*apiextensions.CustomResourceDefinition)
+	glog.V(4).Infof("Updating customresourcedefinition %s", castObj.Name)
+	c.enqueue(castObj)
 }
 
 func (c *DiscoveryController) deleteCustomResourceDefinition(obj interface{}) {

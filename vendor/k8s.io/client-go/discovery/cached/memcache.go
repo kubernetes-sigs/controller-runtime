@@ -96,12 +96,18 @@ func (d *memCacheClient) RESTClient() restclient.Interface {
 	return d.delegate.RESTClient()
 }
 
+// TODO: Should this also be cached? The results seem more likely to be
+// inconsistent with ServerGroups and ServerResources given the requirement to
+// actively Invalidate.
 func (d *memCacheClient) ServerPreferredResources() ([]*metav1.APIResourceList, error) {
-	return discovery.ServerPreferredResources(d)
+	return d.delegate.ServerPreferredResources()
 }
 
+// TODO: Should this also be cached? The results seem more likely to be
+// inconsistent with ServerGroups and ServerResources given the requirement to
+// actively Invalidate.
 func (d *memCacheClient) ServerPreferredNamespacedResources() ([]*metav1.APIResourceList, error) {
-	return discovery.ServerPreferredNamespacedResources(d)
+	return d.delegate.ServerPreferredNamespacedResources()
 }
 
 func (d *memCacheClient) ServerVersion() (*version.Info, error) {

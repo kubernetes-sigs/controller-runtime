@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"os"
+	"runtime"
 
 	"github.com/golang/glog"
 
@@ -30,6 +31,10 @@ import (
 func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
+
+	if len(os.Getenv("GOMAXPROCS")) == 0 {
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
 
 	stopCh := genericapiserver.SetupSignalHandler()
 	cmd := server.NewCommandStartCustomResourceDefinitionsServer(os.Stdout, os.Stderr, stopCh)

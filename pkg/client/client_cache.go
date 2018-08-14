@@ -45,17 +45,18 @@ type clientCache struct {
 	// codecs are used to create a REST client for a gvk
 	codecs serializer.CodecFactory
 
+	muByType sync.RWMutex
 	// resourceByType caches type metadata
 	resourceByType map[reflect.Type]*resourceMeta
+
+	muByGVK sync.RWMutex
 	// resourceByGVK caches type metadata for unstructured
 	unstructuredResourceByGVK map[schema.GroupVersionKind]*resourceMeta
-	muByType                  sync.RWMutex
-	muByGVK                   sync.RWMutex
 }
 
 // newResource maps obj to a Kubernetes Resource and constructs a client for that Resource.
 // If the object is a list, the resource represents the item's type instead.
-func (c *clientCache) newResource(obj runtime.Object) (*resourceMeta, error) {
+func (c *clientCache) newResource(obj runtime.Object, isUnstructured bool) (*resourceMeta, error) {
 	gvk, err := apiutil.GVKForObject(obj, c.scheme)
 	if err != nil {
 		return nil, err
@@ -66,7 +67,6 @@ func (c *clientCache) newResource(obj runtime.Object) (*resourceMeta, error) {
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 	}
 
-	_, isUnstructured := obj.(*unstructured.Unstructured)
 	var client rest.Interface
 	if isUnstructured {
 		client, err = apiutil.RESTUnstructuredClientForGVK(gvk, c.config)
@@ -97,7 +97,7 @@ func (c *clientCache) getUnstructuredResourceByGVK(obj runtime.Object) (*resourc
 	// Initialize a new Client
 	c.muByGVK.Lock()
 	defer c.muByGVK.Unlock()
-	r, err := c.newResource(obj)
+	r, err := c.newResource(obj, true)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func (c *clientCache) getResourceByType(obj runtime.Object) (*resourceMeta, erro
 	// Initialize a new Client
 	c.muByType.Lock()
 	defer c.muByType.Unlock()
-	r, err := c.newResource(obj)
+	r, err := c.newResource(obj, false)
 	if err != nil {
 		return nil, err
 	}

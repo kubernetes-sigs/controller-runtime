@@ -1457,64 +1457,67 @@ var _ = Describe("Client", func() {
 				close(done)
 			}, serverSideTimeoutSeconds)
 
-			/*
-				It("should filter results by field selector", func(done Done) {
-					By("creating a Deployment with name deployment-frontend")
-					depFrontend := &appsv1.Deployment{
-						ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: ns},
-						Spec: appsv1.DeploymentSpec{
-							Selector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{"app": "frontend"},
-							},
-							Template: corev1.PodTemplateSpec{
-								ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "frontend"}},
-								Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
-							},
+			It("should filter results by field selector", func(done Done) {
+				By("creating a Deployment with name deployment-frontend")
+				depFrontend := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: ns},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "frontend"},
 						},
-					}
-					depFrontend, err := clientset.AppsV1().Deployments(ns).Create(depFrontend)
-					Expect(err).NotTo(HaveOccurred())
-
-					By("creating a Deployment with name deployment-backend")
-					depBackend := &appsv1.Deployment{
-						ObjectMeta: metav1.ObjectMeta{Name: "deployment-backend", Namespace: ns},
-						Spec: appsv1.DeploymentSpec{
-							Selector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{"app": "backend"},
-							},
-							Template: corev1.PodTemplateSpec{
-								ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "backend"}},
-								Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
-							},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "frontend"}},
+							Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
 						},
-					}
-					depBackend, err = clientset.AppsV1().Deployments(ns).Create(depBackend)
-					Expect(err).NotTo(HaveOccurred())
+					},
+				}
+				depFrontend, err := clientset.AppsV1().Deployments(ns).Create(depFrontend)
+				Expect(err).NotTo(HaveOccurred())
 
-					cl, err := client.New(cfg, client.Options{})
-					Expect(err).NotTo(HaveOccurred())
+				By("creating a Deployment with name deployment-backend")
+				depBackend := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "deployment-backend", Namespace: ns},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "backend"},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "backend"}},
+							Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+						},
+					},
+				}
+				depBackend, err = clientset.AppsV1().Deployments(ns).Create(depBackend)
+				Expect(err).NotTo(HaveOccurred())
 
-					By("listing all Deployments with field metadata.name=deployment-backend")
-					deps := &appsv1.DeploymentList{}
-					lo := client.MatchingField("metadata.name", "deployment-backend")
-					Expect(cl.List(context.Background(), lo, deps)).NotTo(HaveOccurred())
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
 
-					By("only the Deployment with the backend field is returned")
-					Expect(deps.Items).NotTo(BeEmpty())
-					Expect(1).To(Equal(len(deps.Items)))
-					actual := deps.Items[0]
-					Expect(actual.Name).To(Equal("deployment-backend"))
-
-					deleteDeployment(depFrontend, ns)
-					deleteDeployment(depBackend, ns)
-
-					close(done)
-				}, serverSideTimeoutSeconds)
-
-				It("should fail if the object doesn't have meta", func() {
-
+				By("listing all Deployments with field metadata.name=deployment-backend")
+				deps := &unstructured.UnstructuredList{}
+				deps.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Kind:    "DeploymentList",
+					Version: "v1",
 				})
-			*/
+				lo := client.MatchingField("metadata.name", "deployment-backend")
+				Expect(cl.List(context.Background(), lo, deps)).NotTo(HaveOccurred())
+
+				By("only the Deployment with the backend field is returned")
+				Expect(deps.Items).NotTo(BeEmpty())
+				Expect(1).To(Equal(len(deps.Items)))
+				actual := deps.Items[0]
+				Expect(actual.GetName()).To(Equal("deployment-backend"))
+
+				deleteDeployment(depFrontend, ns)
+				deleteDeployment(depBackend, ns)
+
+				close(done)
+			}, serverSideTimeoutSeconds)
+
+			PIt("should fail if the object doesn't have meta", func() {
+
+			})
 		})
 	})
 

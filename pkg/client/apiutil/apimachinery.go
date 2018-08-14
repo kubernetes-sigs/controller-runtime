@@ -17,20 +17,13 @@ limitations under the License.
 package apiutil
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"strings"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 )
@@ -77,22 +70,6 @@ func RESTClientForGVK(gvk schema.GroupVersionKind, baseConfig *rest.Config, code
 	return rest.RESTClientFor(cfg)
 }
 
-// RESTUnstructuredClientForGVK constructs a new rest.Interface for accessing unstructured resources.
-func RESTUnstructuredClientForGVK(gvk schema.GroupVersionKind, baseConfig *rest.Config) (rest.Interface, error) {
-	cfg := createRestConfig(gvk, baseConfig)
-	var jsonInfo runtime.SerializerInfo
-	for _, info := range scheme.Codecs.SupportedMediaTypes() {
-		if info.MediaType == runtime.ContentTypeJSON {
-			jsonInfo = info
-			break
-		}
-	}
-	jsonInfo.Serializer = dynamicCodec{}
-	cfg.NegotiatedSerializer = serializer.NegotiatedSerializerWrapper(jsonInfo)
-
-	return rest.RESTClientFor(cfg)
-}
-
 //createRestConfig copies the base config and updates needed fields for a new rest config
 func createRestConfig(gvk schema.GroupVersionKind, baseConfig *rest.Config) *rest.Config {
 	gv := gvk.GroupVersion()
@@ -108,32 +85,4 @@ func createRestConfig(gvk schema.GroupVersionKind, baseConfig *rest.Config) *res
 		cfg.UserAgent = rest.DefaultKubernetesUserAgent()
 	}
 	return cfg
-
-}
-
-//Copied from deprecated-dynamic/bad_debt.go
-// dynamicCodec is a codec that wraps the standard unstructured codec
-// with special handling for Status objects.
-// Deprecated only used by test code and its wrong
-type dynamicCodec struct{}
-
-func (dynamicCodec) Decode(data []byte, gvk *schema.GroupVersionKind, obj runtime.Object) (runtime.Object, *schema.GroupVersionKind, error) {
-	obj, gvk, err := unstructured.UnstructuredJSONScheme.Decode(data, gvk, obj)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if _, ok := obj.(*metav1.Status); !ok && strings.ToLower(gvk.Kind) == "status" {
-		obj = &metav1.Status{}
-		err := json.Unmarshal(data, obj)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	return obj, gvk, nil
-}
-
-func (dynamicCodec) Encode(obj runtime.Object, w io.Writer) error {
-	return unstructured.UnstructuredJSONScheme.Encode(obj, w)
 }

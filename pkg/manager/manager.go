@@ -130,7 +130,6 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	cache, err := options.newCache(config, cache.Options{Scheme: options.Scheme, Mapper: mapper, Resync: options.SyncPeriod})
 	if err != nil {
 		return nil, err
-
 	}
 	// Create the recorder provider to inject event recorders for the components.
 	recorderProvider, err := options.newRecorderProvider(config, options.Scheme)
@@ -144,7 +143,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		errChan:          make(chan error),
 		cache:            cache,
 		fieldIndexes:     cache,
-		client:           client.DelegatingClient{Reader: cache, Writer: writeObj},
+		client:           client.DelegatingClient{Reader: cache, Writer: writeObj, StatusClient: writeObj},
 		recorderProvider: recorderProvider,
 	}, nil
 }

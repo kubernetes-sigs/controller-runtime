@@ -58,6 +58,7 @@ var _ = Describe("Client", func() {
 	var pod *corev1.Pod
 	var node *corev1.Node
 	var count uint64 = 0
+	var replicaCount int32 = 2
 	var ns = "default"
 
 	BeforeEach(func(done Done) {
@@ -65,6 +66,7 @@ var _ = Describe("Client", func() {
 		dep = &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("deployment-name-%v", count), Namespace: ns},
 			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicaCount,
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"foo": "bar"},
 				},
@@ -143,7 +145,7 @@ var _ = Describe("Client", func() {
 			close(done)
 		})
 
-		It("should use the provided Mapper if provided", func() {
+		PIt("should use the provided Mapper if provided", func() {
 
 		})
 
@@ -267,7 +269,7 @@ var _ = Describe("Client", func() {
 			Expect(err.Error()).To(ContainSubstring("no kind is registered for the type"))
 		})
 
-		It("should fail if the GVK cannot be mapped to a Resource", func() {
+		PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 			// TODO(seans3): implement these
 			// Example: ListOptions
 		})
@@ -358,11 +360,11 @@ var _ = Describe("Client", func() {
 			close(done)
 		})
 
-		It("should fail if the object does not pass server-side validation", func() {
+		PIt("should fail if the object does not pass server-side validation", func() {
 
 		})
 
-		It("should fail if the object doesn't have meta", func() {
+		PIt("should fail if the object doesn't have meta", func() {
 
 		})
 
@@ -386,7 +388,120 @@ var _ = Describe("Client", func() {
 			close(done)
 		})
 
-		It("should fail if the GVK cannot be mapped to a Resource", func() {
+		PIt("should fail if the GVK cannot be mapped to a Resource", func() {
+
+		})
+	})
+
+	Describe("StatusClient", func() {
+		It("should update status of an existing object", func(done Done) {
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			By("initially creating a Deployment")
+			dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("updating the status of Deployment")
+			dep.Status.Replicas = 1
+			err = cl.Status().Update(context.TODO(), dep)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("validating updated Deployment has new status")
+			actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).NotTo(BeNil())
+			Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
+
+			close(done)
+		})
+
+		It("should not update spec of an existing object", func(done Done) {
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			By("initially creating a Deployment")
+			dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("updating the spec and status of Deployment")
+			var rc int32 = 1
+			dep.Status.Replicas = 1
+			dep.Spec.Replicas = &rc
+			err = cl.Status().Update(context.TODO(), dep)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("validating updated Deployment has new status and unchanged spec")
+			actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).NotTo(BeNil())
+			Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
+			Expect(*actual.Spec.Replicas).To(BeEquivalentTo(replicaCount))
+
+			close(done)
+		})
+
+		It("should update an existing object non-namespace object", func(done Done) {
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			node, err := clientset.CoreV1().Nodes().Create(node)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("updating status of the object")
+			node.Status.Phase = corev1.NodeRunning
+			err = cl.Status().Update(context.TODO(), node)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("validate updated Node had new annotation")
+			actual, err := clientset.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).NotTo(BeNil())
+			Expect(actual.Status.Phase).To(Equal(corev1.NodeRunning))
+
+			close(done)
+		})
+
+		It("should fail if the object does not exists", func(done Done) {
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			By("updating status of a non-existent object")
+			err = cl.Status().Update(context.TODO(), dep)
+			Expect(err).To(HaveOccurred())
+
+			close(done)
+		})
+
+		It("should fail if the object cannot be mapped to a GVK", func(done Done) {
+			By("creating client with empty Scheme")
+			emptyScheme := runtime.NewScheme()
+			cl, err := client.New(cfg, client.Options{Scheme: emptyScheme})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			By("initially creating a Deployment")
+			dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("updating status of the Deployment")
+			dep.Status.Replicas = 1
+			err = cl.Status().Update(context.TODO(), dep)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no kind is registered for the type"))
+
+			close(done)
+		})
+
+		PIt("should fail if the GVK cannot be mapped to a Resource", func() {
+
+		})
+
+		PIt("should fail if an API does not implement Status subresource", func() {
 
 		})
 	})
@@ -471,7 +586,7 @@ var _ = Describe("Client", func() {
 			close(done)
 		})
 
-		It("should fail if the object doesn't have meta", func() {
+		PIt("should fail if the object doesn't have meta", func() {
 
 		})
 
@@ -494,7 +609,7 @@ var _ = Describe("Client", func() {
 			close(done)
 		})
 
-		It("should fail if the GVK cannot be mapped to a Resource", func() {
+		PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 		})
 	})
@@ -609,7 +724,7 @@ var _ = Describe("Client", func() {
 			close(done)
 		})
 
-		It("should fail if the object doesn't have meta", func() {
+		PIt("should fail if the object doesn't have meta", func() {
 
 		})
 
@@ -632,7 +747,7 @@ var _ = Describe("Client", func() {
 			Expect(err.Error()).To(ContainSubstring("no kind is registered for the type"))
 		})
 
-		It("should fail if the GVK cannot be mapped to a Resource", func() {
+		PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 		})
 	})
@@ -846,19 +961,19 @@ var _ = Describe("Client", func() {
 			close(done)
 		}, serverSideTimeoutSeconds)
 
-		It("should fail if it cannot get a client", func() {
+		PIt("should fail if it cannot get a client", func() {
 
 		})
 
-		It("should fail if the object doesn't have meta", func() {
+		PIt("should fail if the object doesn't have meta", func() {
 
 		})
 
-		It("should fail if the object cannot be mapped to a GVK", func() {
+		PIt("should fail if the object cannot be mapped to a GVK", func() {
 
 		})
 
-		It("should fail if the GVK cannot be mapped to a Resource", func() {
+		PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 		})
 	})

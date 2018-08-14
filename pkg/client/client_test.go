@@ -145,7 +145,7 @@ var _ = Describe("Client", func() {
 			close(done)
 		})
 
-		It("should use the provided Mapper if provided", func() {
+		PIt("should use the provided Mapper if provided", func() {
 
 		})
 
@@ -269,7 +269,7 @@ var _ = Describe("Client", func() {
 			Expect(err.Error()).To(ContainSubstring("no kind is registered for the type"))
 		})
 
-		It("should fail if the GVK cannot be mapped to a Resource", func() {
+		PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 			// TODO(seans3): implement these
 			// Example: ListOptions
 		})
@@ -360,11 +360,11 @@ var _ = Describe("Client", func() {
 			close(done)
 		})
 
-		It("should fail if the object does not pass server-side validation", func() {
+		PIt("should fail if the object does not pass server-side validation", func() {
 
 		})
 
-		It("should fail if the object doesn't have meta", func() {
+		PIt("should fail if the object doesn't have meta", func() {
 
 		})
 
@@ -388,7 +388,7 @@ var _ = Describe("Client", func() {
 			close(done)
 		})
 
-		It("should fail if the GVK cannot be mapped to a Resource", func() {
+		PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 		})
 	})
@@ -497,11 +497,11 @@ var _ = Describe("Client", func() {
 			close(done)
 		})
 
-		It("should fail if the GVK cannot be mapped to a Resource", func() {
+		PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 		})
 
-		It("should fail if an API does not implement Status subresource", func() {
+		PIt("should fail if an API does not implement Status subresource", func() {
 
 		})
 	})
@@ -586,7 +586,7 @@ var _ = Describe("Client", func() {
 			close(done)
 		})
 
-		It("should fail if the object doesn't have meta", func() {
+		PIt("should fail if the object doesn't have meta", func() {
 
 		})
 
@@ -609,7 +609,7 @@ var _ = Describe("Client", func() {
 			close(done)
 		})
 
-		It("should fail if the GVK cannot be mapped to a Resource", func() {
+		PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 		})
 	})
@@ -724,7 +724,7 @@ var _ = Describe("Client", func() {
 			close(done)
 		})
 
-		It("should fail if the object doesn't have meta", func() {
+		PIt("should fail if the object doesn't have meta", func() {
 
 		})
 
@@ -747,7 +747,7 @@ var _ = Describe("Client", func() {
 			Expect(err.Error()).To(ContainSubstring("no kind is registered for the type"))
 		})
 
-		It("should fail if the GVK cannot be mapped to a Resource", func() {
+		PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 		})
 	})
@@ -961,19 +961,19 @@ var _ = Describe("Client", func() {
 			close(done)
 		}, serverSideTimeoutSeconds)
 
-		It("should fail if it cannot get a client", func() {
+		PIt("should fail if it cannot get a client", func() {
 
 		})
 
-		It("should fail if the object doesn't have meta", func() {
+		PIt("should fail if the object doesn't have meta", func() {
 
 		})
 
-		It("should fail if the object cannot be mapped to a GVK", func() {
+		PIt("should fail if the object cannot be mapped to a GVK", func() {
 
 		})
 
-		It("should fail if the GVK cannot be mapped to a Resource", func() {
+		PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 		})
 	})

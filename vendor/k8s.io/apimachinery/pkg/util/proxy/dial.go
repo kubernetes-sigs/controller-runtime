@@ -17,7 +17,6 @@ limitations under the License.
 package proxy
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -30,7 +29,7 @@ import (
 	"k8s.io/apimachinery/third_party/forked/golang/netutil"
 )
 
-func DialURL(ctx context.Context, url *url.URL, transport http.RoundTripper) (net.Conn, error) {
+func DialURL(url *url.URL, transport http.RoundTripper) (net.Conn, error) {
 	dialAddr := netutil.CanonicalAddr(url)
 
 	dialer, err := utilnet.DialerFor(transport)
@@ -41,10 +40,9 @@ func DialURL(ctx context.Context, url *url.URL, transport http.RoundTripper) (ne
 	switch url.Scheme {
 	case "http":
 		if dialer != nil {
-			return dialer(ctx, "tcp", dialAddr)
+			return dialer("tcp", dialAddr)
 		}
-		var d net.Dialer
-		return d.DialContext(ctx, "tcp", dialAddr)
+		return net.Dial("tcp", dialAddr)
 	case "https":
 		// Get the tls config from the transport if we recognize it
 		var tlsConfig *tls.Config
@@ -58,7 +56,7 @@ func DialURL(ctx context.Context, url *url.URL, transport http.RoundTripper) (ne
 		if dialer != nil {
 			// We have a dialer; use it to open the connection, then
 			// create a tls client using the connection.
-			netConn, err := dialer(ctx, "tcp", dialAddr)
+			netConn, err := dialer("tcp", dialAddr)
 			if err != nil {
 				return nil, err
 			}
@@ -88,7 +86,7 @@ func DialURL(ctx context.Context, url *url.URL, transport http.RoundTripper) (ne
 			}
 
 		} else {
-			// Dial. This Dial method does not allow to pass a context unfortunately
+			// Dial
 			tlsConn, err = tls.Dial("tcp", dialAddr, tlsConfig)
 			if err != nil {
 				return nil, err

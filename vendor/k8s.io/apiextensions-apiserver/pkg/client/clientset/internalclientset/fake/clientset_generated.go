@@ -1,5 +1,5 @@
 /*
-Copyright The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,10 +41,9 @@ func NewSimpleClientset(objects ...runtime.Object) *Clientset {
 		}
 	}
 
-	cs := &Clientset{}
-	cs.discovery = &fakediscovery.FakeDiscovery{Fake: &cs.Fake}
-	cs.AddReactor("*", "*", testing.ObjectReaction(o))
-	cs.AddWatchReactor("*", func(action testing.Action) (handled bool, ret watch.Interface, err error) {
+	fakePtr := testing.Fake{}
+	fakePtr.AddReactor("*", "*", testing.ObjectReaction(o))
+	fakePtr.AddWatchReactor("*", func(action testing.Action) (handled bool, ret watch.Interface, err error) {
 		gvr := action.GetResource()
 		ns := action.GetNamespace()
 		watch, err := o.Watch(gvr, ns)
@@ -54,7 +53,7 @@ func NewSimpleClientset(objects ...runtime.Object) *Clientset {
 		return true, watch, nil
 	})
 
-	return cs
+	return &Clientset{fakePtr, &fakediscovery.FakeDiscovery{Fake: &fakePtr}}
 }
 
 // Clientset implements clientset.Interface. Meant to be embedded into a

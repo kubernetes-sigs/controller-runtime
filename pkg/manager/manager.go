@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	internalrecorder "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // Manager initializes shared dependencies such as Caches and Clients, and provides them to Runnables.
@@ -54,6 +55,9 @@ type Manager interface {
 	// GetScheme returns and initialized Scheme
 	GetScheme() *runtime.Scheme
 
+	// GetAdmissionDecoder returns the runtime.Decoder based on the scheme.
+	GetAdmissionDecoder() admission.Decoder
+
 	// GetClient returns a client configured with the Config
 	GetClient() client.Client
 
@@ -65,6 +69,9 @@ type Manager interface {
 
 	// GetRecorder returns a new EventRecorder for the provided name
 	GetRecorder(name string) record.EventRecorder
+
+	// GetRESTMapper returns a RESTMapper
+	GetRESTMapper() meta.RESTMapper
 }
 
 // Options are the arguments for creating a new Manager
@@ -88,6 +95,7 @@ type Options struct {
 	newCache            func(config *rest.Config, opts cache.Options) (cache.Cache, error)
 	newClient           func(config *rest.Config, options client.Options) (client.Client, error)
 	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme) (recorder.Provider, error)
+	newAdmissionDecoder func(scheme *runtime.Scheme) (admission.Decoder, error)
 }
 
 // Runnable allows a component to be started.
@@ -140,14 +148,21 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
+	admissionDecoder, err := options.newAdmissionDecoder(options.Scheme)
+	if err != nil {
+		return nil, err
+	}
+
 	return &controllerManager{
 		config:           config,
 		scheme:           options.Scheme,
+		admissionDecoder: admissionDecoder,
 		errChan:          make(chan error),
 		cache:            cache,
 		fieldIndexes:     cache,
 		client:           client.DelegatingClient{Reader: cache, Writer: writeObj},
 		recorderProvider: recorderProvider,
+		mapper:           mapper,
 	}, nil
 }
 
@@ -175,6 +190,10 @@ func setOptionsDefaults(options Options) Options {
 	// Allow newRecorderProvider to be mocked
 	if options.newRecorderProvider == nil {
 		options.newRecorderProvider = internalrecorder.NewProvider
+	}
+
+	if options.newAdmissionDecoder == nil {
+		options.newAdmissionDecoder = admission.NewDecoder
 	}
 
 	return options

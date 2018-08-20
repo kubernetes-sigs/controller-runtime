@@ -18,13 +18,13 @@ package writer
 
 import (
 	"errors"
-	"fmt"
-	"strings"
+	"io"
+	"os"
 
-	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
+	"github.com/ghodss/yaml"
+
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,150 +32,123 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/generator"
 )
 
-const (
-	// SecretCertProvisionAnnotationKeyPrefix should be used in an annotation in the following format:
-	// secret.certprovisioner.kubernetes.io/<webhook-name>: <secret-namespace>/<secret-name>
-	// the webhook cert manager library will provision the certificate for the webhook by
-	// storing it in the specified secret.
-	SecretCertProvisionAnnotationKeyPrefix = "secret.certprovisioner.kubernetes.io/"
-)
+// secretCertWriter provisions the certificate by reading and writing to the k8s secrets.
+type secretCertWriter struct {
+	*SecretCertWriterOptions
 
-// SecretCertWriter provisions the certificate by reading and writing to the k8s secrets.
-type SecretCertWriter struct {
-	Client        client.Client
+	// dnsName is the DNS name that the certificate is for.
+	dnsName string
+	// dryrun indicates sending the create/update request to the server or output to the writer in yaml format.
+	dryrun bool
+}
+
+// SecretCertWriterOptions is options for constructing a secretCertWriter.
+type SecretCertWriterOptions struct {
+	// client talks to a kubernetes cluster for creating the secret.
+	Client client.Client
+	// certGenerator generates the certificates.
 	CertGenerator generator.CertGenerator
+	// secret points the secret that contains certificates that written by the CertWriter.
+	Secret *types.NamespacedName
+	// Writer is used in dryrun mode for writing the objects in yaml format.
+	Writer io.Writer
 }
 
-var _ CertWriter = &SecretCertWriter{}
+var _ CertWriter = &secretCertWriter{}
 
-// EnsureCerts provisions certificates for a webhook configuration by writing them in k8s secrets.
-func (s *SecretCertWriter) EnsureCerts(webhookConfig runtime.Object) error {
-	if webhookConfig == nil {
-		return errors.New("unexpected nil webhook configuration object")
+func (ops *SecretCertWriterOptions) setDefaults() {
+	if ops.CertGenerator == nil {
+		ops.CertGenerator = &generator.SelfSignedCertGenerator{}
 	}
-
-	secretWebhookMap := map[string]*webhookAndSecret{}
-	accessor, err := meta.Accessor(webhookConfig)
-	if err != nil {
-		return err
-	}
-	annotations := accessor.GetAnnotations()
-	// Parse the annotations to extract info
-	s.parseAnnotations(annotations, secretWebhookMap)
-
-	webhooks, err := getWebhooksFromObject(webhookConfig)
-	if err != nil {
-		return err
-	}
-	for i, webhook := range webhooks {
-		if s, found := secretWebhookMap[webhook.Name]; found {
-			s.webhook = &webhooks[i]
-		}
-	}
-
-	// validation
-	for k, v := range secretWebhookMap {
-		if v.webhook == nil {
-			return fmt.Errorf("expecting a webhook named %q", k)
-		}
-	}
-
-	certGenerator := s.CertGenerator
-	if s.CertGenerator == nil {
-		certGenerator = &generator.SelfSignedCertGenerator{}
-	}
-
-	srw := &secretReadWriter{
-		client:        s.Client,
-		certGenerator: certGenerator,
-		webhookConfig: webhookConfig,
-		webhookMap:    secretWebhookMap,
-	}
-	return srw.ensureCert()
-}
-
-func (s *SecretCertWriter) parseAnnotations(annotations map[string]string, secretWebhookMap map[string]*webhookAndSecret) {
-	for k, v := range annotations {
-		if strings.HasPrefix(k, SecretCertProvisionAnnotationKeyPrefix) {
-			webhookName := strings.TrimPrefix(k, SecretCertProvisionAnnotationKeyPrefix)
-			secretWebhookMap[webhookName] = &webhookAndSecret{
-				secret: types.NewNamespacedNameFromString(v),
-			}
-		}
+	if ops.Writer == nil {
+		ops.Writer = os.Stdout
 	}
 }
 
-func (s *secretReadWriter) ensureCert() error {
-	for _, v := range s.webhookMap {
-		err := handleCommon(v.webhook, s)
-		if err != nil {
-			return err
-		}
+func (ops *SecretCertWriterOptions) validate() error {
+	if ops.Client == nil {
+		return errors.New("client must be set in SecretCertWriterOptions")
+	}
+	if ops.Secret == nil {
+		return errors.New("secret must be set in SecretCertWriterOptions")
 	}
 	return nil
 }
 
-// secretReadWriter deals with writing to the k8s secrets.
-type secretReadWriter struct {
-	client        client.Client
-	certGenerator generator.CertGenerator
-
-	webhookConfig runtime.Object
-	webhookMap    map[string]*webhookAndSecret
-}
-
-type webhookAndSecret struct {
-	webhook *admissionregistrationv1beta1.Webhook
-	secret  types.NamespacedName
-}
-
-var _ certReadWriter = &secretReadWriter{}
-
-func (s *secretReadWriter) buildSecret(webhookName string) (*corev1.Secret, *generator.Artifacts, error) {
-	v := s.webhookMap[webhookName]
-
-	webhook := v.webhook
-	commonName, err := dnsNameForWebhook(&webhook.ClientConfig)
-	if err != nil {
-		return nil, nil, err
-	}
-	certs, err := s.certGenerator.Generate(commonName)
-	if err != nil {
-		return nil, nil, err
-	}
-	secret := certsToSecret(certs, v.secret)
-	// TODO(mengqiy): fix this by figuring out a way to get the UID
-	// Skip setting the ownerRef for now.
-	//err = controllerutil.SetControllerReference(s.webhookConfig.(metav1.Object), secret, scheme.Scheme)
-	return secret, certs, err
-}
-
-func (s *secretReadWriter) write(webhookName string) (*generator.Artifacts, error) {
-	secret, certs, err := s.buildSecret(webhookName)
+// NewSecretCertWriter constructs a CertWriter that persists the certificate in a k8s secret.
+func NewSecretCertWriter(ops SecretCertWriterOptions) (CertWriter, error) {
+	ops.setDefaults()
+	err := ops.validate()
 	if err != nil {
 		return nil, err
 	}
-	err = s.client.Create(nil, secret)
+	return &secretCertWriter{
+		SecretCertWriterOptions: &ops,
+	}, nil
+}
+
+// EnsureCert provisions certificates for a webhookClientConfig by writing the certificates to a k8s secret.
+func (s *secretCertWriter) EnsureCert(dnsName string, dryrun bool) (*generator.Artifacts, bool, error) {
+	// Create or refresh the certs based on clientConfig
+	s.dryrun = dryrun
+	s.dnsName = dnsName
+	return handleCommon(s.dnsName, s)
+}
+
+var _ certReadWriter = &secretCertWriter{}
+
+func (s *secretCertWriter) buildSecret() (*corev1.Secret, *generator.Artifacts, error) {
+	certs, err := s.CertGenerator.Generate(s.dnsName)
+	if err != nil {
+		return nil, nil, err
+	}
+	secret := certsToSecret(certs, *s.Secret)
+	return secret, certs, err
+}
+
+func (s *secretCertWriter) write() (*generator.Artifacts, error) {
+	secret, certs, err := s.buildSecret()
+	if err != nil {
+		return nil, err
+	}
+	if s.dryrun {
+		return certs, s.dryrunWrite(secret)
+	}
+	err = s.Client.Create(nil, secret)
 	if apierrors.IsAlreadyExists(err) {
 		return nil, alreadyExistError{err}
 	}
 	return certs, err
 }
 
-func (s *secretReadWriter) overwrite(webhookName string) (
+func (s *secretCertWriter) overwrite() (
 	*generator.Artifacts, error) {
-	secret, certs, err := s.buildSecret(webhookName)
+	secret, certs, err := s.buildSecret()
 	if err != nil {
 		return nil, err
 	}
-	err = s.client.Update(nil, secret)
+	if s.dryrun {
+		return certs, s.dryrunWrite(secret)
+	}
+	err = s.Client.Update(nil, secret)
 	return certs, err
 }
 
-func (s *secretReadWriter) read(webhookName string) (*generator.Artifacts, error) {
-	v := s.webhookMap[webhookName]
+func (s *secretCertWriter) dryrunWrite(secret *corev1.Secret) error {
+	sec, err := yaml.Marshal(secret)
+	if err != nil {
+		return err
+	}
+	_, err = s.Writer.Write(sec)
+	return err
+}
+
+func (s *secretCertWriter) read() (*generator.Artifacts, error) {
+	if s.dryrun {
+		return nil, notFoundError{}
+	}
 	secret := &corev1.Secret{}
-	err := s.client.Get(nil, v.secret, secret)
+	err := s.Client.Get(nil, *s.Secret, secret)
 	if apierrors.IsNotFound(err) {
 		return nil, notFoundError{err}
 	}
@@ -205,4 +178,21 @@ func certsToSecret(certs *generator.Artifacts, sec types.NamespacedName) *corev1
 			ServerCertName: certs.Cert,
 		},
 	}
+}
+
+// Inject sets the ownerReference in the secret.
+func (s *secretCertWriter) Inject(objs ...runtime.Object) error {
+	// TODO: figure out how to get the UID
+	//for i := range objs {
+	//	accessor, err := meta.Accessor(objs[i])
+	//	if err != nil {
+	//		return err
+	//	}
+	//	err = controllerutil.SetControllerReference(accessor, s.sec, scheme.Scheme)
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
+	//return s.client.Update(context.Background(), s.sec)
+	return nil
 }

@@ -64,7 +64,6 @@ Start the server by starting the manager
 	if err != nil {
 		// handle error
 	}
-
 */
 package webhook
 

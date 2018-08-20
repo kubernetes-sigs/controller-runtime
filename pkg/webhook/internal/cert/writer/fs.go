@@ -18,147 +18,93 @@ package writer
 
 import (
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 
-	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	certgenerator "sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/generator"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/generator"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/writer/atomic"
 )
 
-const (
-	// FSCertProvisionAnnotationKeyPrefix should be used in an annotation in the following format:
-	// fs.certprovisioner.kubernetes.io/<webhook-name>: path/to/certs/
-	// the webhook cert manager library will provision the certificate for the webhook by
-	// storing it under the specified path.
-	// format: fs.certprovisioner.kubernetes.io/webhookName: path/to/certs/
-	FSCertProvisionAnnotationKeyPrefix = "fs.certprovisioner.kubernetes.io/"
-)
-
-// FSCertWriter provisions the certificate by reading and writing to the filesystem.
-type FSCertWriter struct {
-	CertGenerator certgenerator.CertGenerator
-}
-
-var _ CertWriter = &FSCertWriter{}
-
-// EnsureCerts provisions certificates for a webhook configuration by writing them in the filesystem.
-func (f *FSCertWriter) EnsureCerts(webhookConfig runtime.Object) error {
-	if webhookConfig == nil {
-		return errors.New("unexpected nil webhook configuration object")
-	}
-
-	fsWebhookMap := map[string]*webhookAndPath{}
-	accessor, err := meta.Accessor(webhookConfig)
-	if err != nil {
-		return err
-	}
-	annotations := accessor.GetAnnotations()
-	// Parse the annotations to extract info
-	f.parseAnnotations(annotations, fsWebhookMap)
-
-	webhooks, err := getWebhooksFromObject(webhookConfig)
-	if err != nil {
-		return err
-	}
-	for i, webhook := range webhooks {
-		if p, found := fsWebhookMap[webhook.Name]; found {
-			p.webhook = &webhooks[i]
-		}
-	}
-
-	// validation
-	for k, v := range fsWebhookMap {
-		if v.webhook == nil {
-			return fmt.Errorf("expecting a webhook named %q", k)
-		}
-	}
-
-	generator := f.CertGenerator
-	if f.CertGenerator == nil {
-		generator = &certgenerator.SelfSignedCertGenerator{}
-	}
-
-	cw := &fsCertWriter{
-		certGenerator: generator,
-		webhookConfig: webhookConfig,
-		webhookMap:    fsWebhookMap,
-	}
-	return cw.ensureCert()
-}
-
-func (f *FSCertWriter) parseAnnotations(annotations map[string]string, fsWebhookMap map[string]*webhookAndPath) {
-	for k, v := range annotations {
-		if strings.HasPrefix(k, FSCertProvisionAnnotationKeyPrefix) {
-			webhookName := strings.TrimPrefix(k, FSCertProvisionAnnotationKeyPrefix)
-			fsWebhookMap[webhookName] = &webhookAndPath{
-				path: v,
-			}
-		}
-	}
-}
-
-// fsCertWriter deals with writing to the local filesystem.
+// fsCertWriter provisions the certificate by reading and writing to the filesystem.
 type fsCertWriter struct {
-	certGenerator certgenerator.CertGenerator
+	// dnsName is the DNS name that the certificate is for.
+	dnsName string
 
-	webhookConfig runtime.Object
-	webhookMap    map[string]*webhookAndPath
+	*FSCertWriterOptions
 }
 
-type webhookAndPath struct {
-	webhook *admissionregistrationv1beta1.Webhook
-	path    string
+// FSCertWriterOptions are options for constructing a FSCertWriter.
+type FSCertWriterOptions struct {
+	// certGenerator generates the certificates.
+	CertGenerator generator.CertGenerator
+	// path is the directory that the certificate and private key and CA certificate will be written.
+	Path string
 }
 
-var _ certReadWriter = &fsCertWriter{}
+var _ CertWriter = &fsCertWriter{}
 
-func (f *fsCertWriter) ensureCert() error {
-	var err error
-	for _, v := range f.webhookMap {
-		err = handleCommon(v.webhook, f)
-		if err != nil {
-			return err
-		}
+func (ops *FSCertWriterOptions) setDefaults() {
+	if ops.CertGenerator == nil {
+		ops.CertGenerator = &generator.SelfSignedCertGenerator{}
+	}
+}
+
+func (ops *FSCertWriterOptions) validate() error {
+	if len(ops.Path) == 0 {
+		return errors.New("path must be set in FSCertWriterOptions")
 	}
 	return nil
 }
 
-func (f *fsCertWriter) write(webhookName string) (*certgenerator.Artifacts, error) {
-	return f.doWrite(webhookName)
-}
-
-func (f *fsCertWriter) overwrite(webhookName string) (*certgenerator.Artifacts, error) {
-	return f.doWrite(webhookName)
-}
-
-func (f *fsCertWriter) doWrite(webhookName string) (*certgenerator.Artifacts, error) {
-	v := f.webhookMap[webhookName]
-	commonName, err := dnsNameForWebhook(&v.webhook.ClientConfig)
+// NewFSCertWriter constructs a CertWriter that persists the certificate on filesystem.
+func NewFSCertWriter(ops FSCertWriterOptions) (CertWriter, error) {
+	ops.setDefaults()
+	err := ops.validate()
 	if err != nil {
 		return nil, err
 	}
-	certs, err := f.certGenerator.Generate(commonName)
+	return &fsCertWriter{
+		FSCertWriterOptions: &ops,
+	}, nil
+}
+
+// EnsureCert provisions certificates for a webhookClientConfig by writing the certificates in the filesystem.
+// fsCertWriter doesn't support dryrun.
+func (f *fsCertWriter) EnsureCert(dnsName string, _ bool) (*generator.Artifacts, bool, error) {
+	// create or refresh cert and write it to fs
+	f.dnsName = dnsName
+	return handleCommon(f.dnsName, f)
+}
+
+func (f *fsCertWriter) write() (*generator.Artifacts, error) {
+	return f.doWrite()
+}
+
+func (f *fsCertWriter) overwrite() (*generator.Artifacts, error) {
+	return f.doWrite()
+}
+
+func (f *fsCertWriter) doWrite() (*generator.Artifacts, error) {
+	certs, err := f.CertGenerator.Generate(f.dnsName)
 	if err != nil {
 		return nil, err
 	}
-	aw, err := atomic.NewAtomicWriter(v.path, log.WithName("atomic-writer").WithValues("task", "processing webhook", "webhook", webhookName))
+	aw, err := atomic.NewAtomicWriter(f.Path, log.WithName("atomic-writer").
+		WithValues("task", "processing webhook"))
 	if err != nil {
 		return nil, err
 	}
 	// AtomicWriter's algorithm only manages files using symbolic link.
 	// If a file is not a symbolic link, will ignore the update for it.
 	// We want to cleanup for AtomicWriter by removing old files that are not symbolic links.
-	prepareToWrite(v.path)
+	prepareToWrite(f.Path)
 	err = aw.Write(certToProjectionMap(certs))
 	return certs, err
 }
 
+// prepareToWrite ensures it directory is compatible with the atomic.Writer library.
 func prepareToWrite(dir string) {
 	filenames := []string{CACertName, ServerCertName, ServerKeyName}
 	for _, f := range filenames {
@@ -180,24 +126,23 @@ func prepareToWrite(dir string) {
 	}
 }
 
-func (f *fsCertWriter) read(webhookName string) (*certgenerator.Artifacts, error) {
-	dir := f.webhookMap[webhookName].path
-	if err := ensureExist(dir); err != nil {
+func (f *fsCertWriter) read() (*generator.Artifacts, error) {
+	if err := ensureExist(f.Path); err != nil {
 		return nil, err
 	}
-	caBytes, err := ioutil.ReadFile(path.Join(dir, CACertName))
+	caBytes, err := ioutil.ReadFile(path.Join(f.Path, CACertName))
 	if err != nil {
 		return nil, err
 	}
-	certBytes, err := ioutil.ReadFile(path.Join(dir, ServerCertName))
+	certBytes, err := ioutil.ReadFile(path.Join(f.Path, ServerCertName))
 	if err != nil {
 		return nil, err
 	}
-	keyBytes, err := ioutil.ReadFile(path.Join(dir, ServerKeyName))
+	keyBytes, err := ioutil.ReadFile(path.Join(f.Path, ServerKeyName))
 	if err != nil {
 		return nil, err
 	}
-	return &certgenerator.Artifacts{
+	return &generator.Artifacts{
 		CACert: caBytes,
 		Cert:   certBytes,
 		Key:    keyBytes,
@@ -220,7 +165,7 @@ func ensureExist(dir string) error {
 	return nil
 }
 
-func certToProjectionMap(cert *certgenerator.Artifacts) map[string]atomic.FileProjection {
+func certToProjectionMap(cert *generator.Artifacts) map[string]atomic.FileProjection {
 	// TODO: figure out if we can reduce the permission. (Now it's 0666)
 	return map[string]atomic.FileProjection{
 		CACertName: {
@@ -236,4 +181,8 @@ func certToProjectionMap(cert *certgenerator.Artifacts) map[string]atomic.FilePr
 			Mode: 0666,
 		},
 	}
+}
+
+func (f *fsCertWriter) Inject(objs ...runtime.Object) error {
+	return nil
 }

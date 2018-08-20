@@ -103,8 +103,7 @@ func main() {
 	as, err := webhook.NewServer("foo-admission-server", mgr, webhook.ServerOptions{
 		Port:    443,
 		CertDir: "/tmp/cert",
-		//Client:  mgr.GetClient(),
-		KVMap: map[string]interface{}{"foo": "bar"},
+		KVMap:   map[string]interface{}{"foo": "bar"},
 		BootstrapOptions: &webhook.BootstrapOptions{
 			Secret: &apitypes.NamespacedName{
 				Namespace: "default",

@@ -680,9 +680,6 @@ func inHeadIM(p *parser) bool {
 				return true
 			}
 			p.generateAllImpliedEndTags()
-			if n := p.oe.top(); n.DataAtom != a.Template {
-				return true
-			}
 			p.popUntil(defaultScope, a.Template)
 			p.clearActiveFormattingElements()
 			p.templateStack.pop()
@@ -860,9 +857,13 @@ func inBodyIM(p *parser) bool {
 			// The newline, if any, will be dealt with by the TextToken case.
 			p.framesetOK = false
 		case a.Form:
-			if p.oe.contains(a.Template) || p.form == nil {
-				p.popUntil(buttonScope, a.P)
-				p.addElement()
+			if p.form != nil && !p.oe.contains(a.Template) {
+				// Ignore the token
+				return true
+			}
+			p.popUntil(buttonScope, a.P)
+			p.addElement()
+			if !p.oe.contains(a.Template) {
 				p.form = p.top()
 			}
 		case a.Li:
@@ -1070,13 +1071,7 @@ func inBodyIM(p *parser) bool {
 				p.acknowledgeSelfClosingTag()
 			}
 			return true
-		case a.Frame:
-			// TODO: remove this divergence from the HTML5 spec.
-			if p.oe.contains(a.Template) {
-				p.addElement()
-				return true
-			}
-		case a.Caption, a.Col, a.Colgroup, a.Head, a.Tbody, a.Td, a.Tfoot, a.Th, a.Thead, a.Tr:
+		case a.Caption, a.Col, a.Colgroup, a.Frame, a.Head, a.Tbody, a.Td, a.Tfoot, a.Th, a.Thead, a.Tr:
 			// Ignore the token.
 		default:
 			p.reconstructActiveFormattingElements()
@@ -1098,12 +1093,13 @@ func inBodyIM(p *parser) bool {
 			p.popUntil(defaultScope, p.tok.DataAtom)
 		case a.Form:
 			if p.oe.contains(a.Template) {
-				if !p.oe.contains(a.Form) {
+				i := p.indexOfElementInScope(defaultScope, a.Form)
+				if i == -1 {
 					// Ignore the token.
 					return true
 				}
 				p.generateImpliedEndTags()
-				if p.tok.DataAtom == a.Form {
+				if p.oe[i].DataAtom != a.Form {
 					// Ignore the token.
 					return true
 				}
@@ -1923,11 +1919,6 @@ func inFramesetIM(p *parser) bool {
 			p.acknowledgeSelfClosingTag()
 		case a.Noframes:
 			return inHeadIM(p)
-		case a.Template:
-			// TODO: remove this divergence from the HTML5 spec.
-			//
-			// See https://bugs.chromium.org/p/chromium/issues/detail?id=829668
-			return inTemplateIM(p)
 		}
 	case EndTagToken:
 		switch p.tok.DataAtom {

@@ -24,7 +24,9 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/validation"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/admission"
@@ -32,6 +34,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/handlers/negotiation"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
+	"k8s.io/apiserver/pkg/util/dryrun"
 	utiltrace "k8s.io/apiserver/pkg/util/trace"
 )
 
@@ -80,6 +83,19 @@ func createHandler(r rest.NamedCreater, scope RequestScope, admit admission.Inte
 			return
 		}
 
+		options := &metav1.CreateOptions{}
+		values := req.URL.Query()
+		if err := metainternalversion.ParameterCodec.DecodeParameters(values, scope.MetaGroupVersion, options); err != nil {
+			err = errors.NewBadRequest(err.Error())
+			scope.err(err, w, req)
+			return
+		}
+		if errs := validation.ValidateCreateOptions(options); len(errs) > 0 {
+			err := errors.NewInvalid(schema.GroupKind{Group: metav1.GroupName, Kind: "CreateOptions"}, "", errs)
+			scope.err(err, w, req)
+			return
+		}
+
 		defaultGVK := scope.Kind
 		original := r.New()
 		trace.Step("About to convert to expected version")
@@ -101,7 +117,7 @@ func createHandler(r rest.NamedCreater, scope RequestScope, admit admission.Inte
 		audit.LogRequestObject(ae, obj, scope.Resource, scope.Subresource, scope.Serializer)
 
 		userInfo, _ := request.UserFrom(ctx)
-		admissionAttributes := admission.NewAttributesRecord(obj, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Create, userInfo)
+		admissionAttributes := admission.NewAttributesRecord(obj, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Create, dryrun.IsDryRun(options.DryRun), userInfo)
 		if mutatingAdmission, ok := admit.(admission.MutationInterface); ok && mutatingAdmission.Handles(admission.Create) {
 			err = mutatingAdmission.Admit(admissionAttributes)
 			if err != nil {
@@ -110,9 +126,6 @@ func createHandler(r rest.NamedCreater, scope RequestScope, admit admission.Inte
 			}
 		}
 
-		// TODO: replace with content type negotiation?
-		includeUninitialized := req.URL.Query().Get("includeUninitialized") == "1"
-
 		trace.Step("About to store object in database")
 		result, err := finishRequest(timeout, func() (runtime.Object, error) {
 			return r.Create(
@@ -120,7 +133,7 @@ func createHandler(r rest.NamedCreater, scope RequestScope, admit admission.Inte
 				name,
 				obj,
 				rest.AdmissionToValidateObjectFunc(admit, admissionAttributes),
-				includeUninitialized,
+				options,
 			)
 		})
 		if err != nil {
@@ -170,6 +183,6 @@ type namedCreaterAdapter struct {
 	rest.Creater
 }
 
-func (c *namedCreaterAdapter) Create(ctx context.Context, name string, obj runtime.Object, createValidatingAdmission rest.ValidateObjectFunc, includeUninitialized bool) (runtime.Object, error) {
-	return c.Creater.Create(ctx, obj, createValidatingAdmission, includeUninitialized)
+func (c *namedCreaterAdapter) Create(ctx context.Context, name string, obj runtime.Object, createValidatingAdmission rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
+	return c.Creater.Create(ctx, obj, createValidatingAdmission, options)
 }

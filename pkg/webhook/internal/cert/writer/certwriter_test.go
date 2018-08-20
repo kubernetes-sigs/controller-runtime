@@ -18,17 +18,13 @@ package writer
 
 import (
 	goerrors "errors"
-	"fmt"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/generator"
 
-	admissionregistration "k8s.io/api/admissionregistration/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/generator"
 )
 
 var certs1, certs2 *generator.Artifacts
@@ -40,48 +36,6 @@ func init() {
 	certs1, _ = cp.Generate(cn1)
 	certs2, _ = cp.Generate(cn2)
 }
-
-var _ = Describe("NewProvider", func() {
-	var cl client.Client
-	var ops Options
-	var expectedProvider CertWriter
-	BeforeEach(func(done Done) {
-		ops = Options{}
-		close(done)
-	})
-
-	Describe("required client is missing", func() {
-		It("should return an error", func() {
-			_, err := NewCertWriter(ops)
-			Expect(err).To(MatchError("Options.Client is required"))
-		})
-	})
-
-	Describe("succeed", func() {
-		BeforeEach(func(done Done) {
-			cl = fake.NewFakeClient()
-			ops.Client = cl
-			expectedProvider = &MultiCertWriter{
-				CertWriters: []CertWriter{
-					&SecretCertWriter{
-						Client:        cl,
-						CertGenerator: &generator.SelfSignedCertGenerator{},
-					},
-					&FSCertWriter{
-						CertGenerator: &generator.SelfSignedCertGenerator{},
-					},
-				},
-			}
-			close(done)
-		})
-		It("should successfully return a Provider", func() {
-			provider, err := NewCertWriter(ops)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(provider).To(Equal(expectedProvider))
-		})
-	})
-
-})
 
 type fakeCertReadWriter struct {
 	numReadCalled  int
@@ -101,7 +55,7 @@ type certAndErr struct {
 
 var _ certReadWriter = &fakeCertReadWriter{}
 
-func (f *fakeCertReadWriter) read(webhookName string) (*generator.Artifacts, error) {
+func (f *fakeCertReadWriter) read() (*generator.Artifacts, error) {
 	defer func() { f.numReadCalled++ }()
 
 	if len(f.readCertAndErr) <= f.numReadCalled {
@@ -111,7 +65,7 @@ func (f *fakeCertReadWriter) read(webhookName string) (*generator.Artifacts, err
 	return certAndErr.cert, certAndErr.err
 }
 
-func (f *fakeCertReadWriter) write(webhookName string) (*generator.Artifacts, error) {
+func (f *fakeCertReadWriter) write() (*generator.Artifacts, error) {
 	defer func() { f.numWriteCalled++ }()
 
 	if len(f.writeCertAndErr) <= f.numWriteCalled {
@@ -121,7 +75,7 @@ func (f *fakeCertReadWriter) write(webhookName string) (*generator.Artifacts, er
 	return certAndErr.cert, certAndErr.err
 }
 
-func (f *fakeCertReadWriter) overwrite(webhookName string) (*generator.Artifacts, error) {
+func (f *fakeCertReadWriter) overwrite() (*generator.Artifacts, error) {
 	defer func() { f.numOverwriteCalled++ }()
 
 	if len(f.overwriteCertAndErr) <= f.numOverwriteCalled {
@@ -132,17 +86,11 @@ func (f *fakeCertReadWriter) overwrite(webhookName string) (*generator.Artifacts
 }
 
 var _ = Describe("handleCommon", func() {
-	var webhook *admissionregistration.Webhook
 	var cert *generator.Artifacts
 	var invalidCert *generator.Artifacts
+	dnsName := "example.com"
 
 	BeforeEach(func(done Done) {
-		url := "https://example.com/admission"
-		webhook = &admissionregistration.Webhook{
-			ClientConfig: admissionregistration.WebhookClientConfig{
-				URL: &url,
-			},
-		}
 		cert = &generator.Artifacts{
 			CACert: []byte(certs1.CACert),
 			Cert:   []byte(certs1.Cert),
@@ -156,18 +104,18 @@ var _ = Describe("handleCommon", func() {
 		close(done)
 	})
 
-	Context("when webhook is nil", func() {
-		It("should return no error", func() {
+	Context("when DNS name is empty", func() {
+		It("should return an error", func() {
 			certrw := &fakeCertReadWriter{}
-			err := handleCommon(nil, certrw)
-			Expect(err).NotTo(HaveOccurred())
+			_, _, err := handleCommon("", certrw)
+			Expect(err).To(MatchError("dnsName should not be empty"))
 		})
 	})
 
 	Context("when certReadWriter is nil", func() {
 		It("should return an error", func() {
-			err := handleCommon(webhook, nil)
-			Expect(err).To(MatchError(goerrors.New("certReaderWriter should not be nil")))
+			_, _, err := handleCommon(dnsName, nil)
+			Expect(err).To(MatchError("certReaderWriter should not be nil"))
 		})
 	})
 
@@ -186,11 +134,13 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			certs, changed, err := handleCommon(dnsName, certrw)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(1))
 			Expect(certrw.numOverwriteCalled).To(Equal(0))
+			Expect(changed).To(BeTrue())
+			Expect(certs).To(Equal(cert))
 		})
 
 		It("should return the error on failed write", func() {
@@ -207,8 +157,8 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
-			Expect(err).To(MatchError(goerrors.New("failed to write")))
+			_, _, err := handleCommon(dnsName, certrw)
+			Expect(err).To(MatchError("failed to write"))
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(1))
 			Expect(certrw.numOverwriteCalled).To(Equal(0))
@@ -225,11 +175,13 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			certs, changed, err := handleCommon(dnsName, certrw)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(0))
 			Expect(certrw.numOverwriteCalled).To(Equal(0))
+			Expect(changed).To(BeFalse())
+			Expect(certs).To(Equal(cert))
 		})
 
 		It("should return the error on failed read", func() {
@@ -241,8 +193,8 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
-			Expect(err).To(MatchError(goerrors.New("failed to read")))
+			_, _, err := handleCommon(dnsName, certrw)
+			Expect(err).To(MatchError("failed to read"))
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(0))
 			Expect(certrw.numOverwriteCalled).To(Equal(0))
@@ -264,11 +216,13 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			certs, changed, err := handleCommon(dnsName, certrw)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(0))
 			Expect(certrw.numOverwriteCalled).To(Equal(1))
+			Expect(changed).To(BeTrue())
+			Expect(certs).To(Equal(cert))
 		})
 
 		It("should return no error on successful overwrite", func() {
@@ -285,11 +239,13 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			certs, changed, err := handleCommon(dnsName, certrw)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numWriteCalled).To(Equal(0))
 			Expect(certrw.numOverwriteCalled).To(Equal(1))
+			Expect(changed).To(BeTrue())
+			Expect(certs).To(Equal(cert))
 		})
 
 		It("should return the error on failed overwrite", func() {
@@ -306,8 +262,8 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
-			Expect(err).To(MatchError(goerrors.New("failed to overwrite")))
+			_, _, err := handleCommon(dnsName, certrw)
+			Expect(err).To(MatchError("failed to overwrite"))
 			Expect(certrw.numReadCalled).To(Equal(1))
 			Expect(certrw.numOverwriteCalled).To(Equal(1))
 		})
@@ -331,10 +287,12 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
+			certs, changed, err := handleCommon(dnsName, certrw)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certrw.numReadCalled).To(Equal(2))
 			Expect(certrw.numWriteCalled).To(Equal(1))
+			Expect(changed).To(BeTrue())
+			Expect(certs).To(Equal(cert))
 		})
 
 		It("should return the error if failed to read the cert created by the racing one", func() {
@@ -354,62 +312,10 @@ var _ = Describe("handleCommon", func() {
 				},
 			}
 
-			err := handleCommon(webhook, certrw)
-			Expect(err).To(MatchError(goerrors.New("failed to read")))
+			_, _, err := handleCommon(dnsName, certrw)
+			Expect(err).To(MatchError("failed to read"))
 			Expect(certrw.numReadCalled).To(Equal(2))
 			Expect(certrw.numWriteCalled).To(Equal(1))
-		})
-	})
-})
-
-var _ = Describe("dnsNameForWebhook", func() {
-	var webhookClientConfig *admissionregistration.WebhookClientConfig
-	Context("when both service and URL are set", func() {
-		It("should return an error", func() {
-			url := "https://foo.bar.com/blah"
-			webhookClientConfig = &admissionregistration.WebhookClientConfig{
-				Service: &admissionregistration.ServiceReference{
-					Namespace: "test-ns",
-					Name:      "test-service",
-				},
-				URL: &url,
-			}
-			_, err := dnsNameForWebhook(webhookClientConfig)
-			Expect(err).To(MatchError(fmt.Errorf("service and URL can't be set at the same time in a webhook: %v", webhookClientConfig)))
-		})
-	})
-
-	Context("when neither service nor URL is set", func() {
-		It("should return an error", func() {
-			webhookClientConfig = &admissionregistration.WebhookClientConfig{}
-			_, err := dnsNameForWebhook(webhookClientConfig)
-			Expect(err).To(MatchError(fmt.Errorf("one of service and URL need to be set in a webhook: %v", webhookClientConfig)))
-		})
-	})
-
-	Context("when only service is set", func() {
-		It("should return the common name and no error", func() {
-			webhookClientConfig = &admissionregistration.WebhookClientConfig{
-				Service: &admissionregistration.ServiceReference{
-					Namespace: "test-ns",
-					Name:      "test-service",
-				},
-			}
-			cn, err := dnsNameForWebhook(webhookClientConfig)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cn).To(Equal("test-service.test-ns.svc"))
-		})
-	})
-
-	Context("when only URL is set", func() {
-		It("should return the common name and no error", func() {
-			url := "https://foo.bar.com/blah"
-			webhookClientConfig = &admissionregistration.WebhookClientConfig{
-				URL: &url,
-			}
-			cn, err := dnsNameForWebhook(webhookClientConfig)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cn).To(Equal("foo.bar.com"))
 		})
 	})
 })

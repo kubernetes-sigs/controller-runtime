@@ -22,7 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/generator"
 )
 
-// CertGenerator is a CertGenerator for testing.
+// CertGenerator is a certGenerator for testing.
 type CertGenerator struct {
 	DNSNameToCertArtifacts map[string]*generator.Artifacts
 }
@@ -33,7 +33,7 @@ var _ generator.CertGenerator = &CertGenerator{}
 func (cp *CertGenerator) Generate(commonName string) (*generator.Artifacts, error) {
 	certs, found := cp.DNSNameToCertArtifacts[commonName]
 	if !found {
-		return nil, fmt.Errorf("failed to find common name %q in the CertGenerator", commonName)
+		return nil, fmt.Errorf("failed to find common name %q in the certGenerator", commonName)
 	}
 	return certs, nil
 }

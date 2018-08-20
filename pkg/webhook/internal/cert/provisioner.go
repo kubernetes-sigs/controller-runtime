@@ -17,13 +17,13 @@ limitations under the License.
 package cert
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
-	"reflect"
-	"sync"
+	"net/url"
 
+	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/generator"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/writer"
 )
@@ -32,62 +32,100 @@ import (
 // destination - such as a Secret or local file. Provisioner can update the CA field of
 // certain resources with the CA of the certs.
 type Provisioner struct {
-	Client client.Client
-	// CertGenerator generates certificate for a given common name.
-	CertGenerator generator.CertGenerator
 	// CertWriter knows how to persist the certificate.
 	CertWriter writer.CertWriter
-
-	once sync.Once
 }
 
-// Sync takes a runtime.Object which is expected to be either a MutatingWebhookConfiguration or
-// a ValidatingWebhookConfiguration.
-// It provisions certificate for each webhook in the webhookConfiguration, ensures the cert and CA are valid,
-// and not expiring. It updates the CABundle in the webhook configuration if necessary.
-func (cp *Provisioner) Sync(webhookConfiguration runtime.Object) error {
-	var err error
-	// Do the initialization for CertInput only once.
-	cp.once.Do(func() {
-		if cp.CertGenerator == nil {
-			cp.CertGenerator = &generator.SelfSignedCertGenerator{}
-		}
-		if cp.Client == nil {
-			cp.Client, err = client.New(config.GetConfigOrDie(), client.Options{})
-			if err != nil {
-				return
-			}
-		}
-		if cp.CertWriter == nil {
-			cp.CertWriter, err = writer.NewCertWriter(
-				writer.Options{
-					Client:        cp.Client,
-					CertGenerator: cp.CertGenerator,
-				})
-			if err != nil {
-				return
-			}
-		}
-	})
-	if err != nil {
-		return fmt.Errorf("failed to default the CertProvision: %v", err)
+// Options are options for provisioning the certificate.
+type Options struct {
+	// ClientConfig is the WebhookClientCert that contains the information to generate
+	// the certificate. The CA Certificate will be updated in the ClientConfig.
+	// The updated ClientConfig will be used to inject into other runtime.Objects,
+	// e.g. MutatingWebhookConfiguration and ValidatingWebhookConfiguration.
+	ClientConfig *admissionregistrationv1beta1.WebhookClientConfig
+	// Objects are the objects that will use the ClientConfig above.
+	Objects []runtime.Object
+	// Dryrun controls if the objects are sent to the API server or write to io.Writer
+	Dryrun bool
+}
+
+// Provision provisions certificates for for the WebhookClientConfig.
+// It ensures the cert and CA are valid and not expiring.
+// It updates the CABundle in the webhookClientConfig if necessary.
+// It inject the WebhookClientConfig into options.Objects.
+func (cp *Provisioner) Provision(options Options) (bool, error) {
+	if cp.CertWriter == nil {
+		return false, errors.New("CertWriter need to be set")
+	}
+	// If the objects need to be updated, just be lazy and return.
+	if len(options.Objects) == 0 {
+		return false, nil
 	}
 
-	// Deepcopy the webhook configuration object before invoking EnsureCerts,
-	// since EnsureCerts will modify the provided object.
-	cloned := webhookConfiguration.DeepCopyObject()
-	err = cp.CertWriter.EnsureCerts(webhookConfiguration)
+	dnsName, err := dnsNameFromClientConfig(options.ClientConfig)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	// If some fields have been changed, we will update the object.
-	// Mostly this is because of the CABundle field has been updated.
-	if reflect.DeepEqual(webhookConfiguration, cloned) {
+	certs, changed, err := cp.CertWriter.EnsureCert(dnsName, options.Dryrun)
+	if err != nil {
+		return false, err
+	}
+
+	caBundle := options.ClientConfig.CABundle
+	caCert := certs.CACert
+	// TODO(mengqiy): limit the size of the CABundle by GC the old CA certificate
+	// this is important since the max record size in etcd is 1MB (latest version is 1.5MB).
+	if !bytes.Contains(caBundle, caCert) {
+		// Ensure the CA bundle in the webhook configuration has the signing CA.
+		options.ClientConfig.CABundle = append(caBundle, caCert...)
+		changed = true
+	}
+	return changed, cp.inject(options.ClientConfig, options.Objects)
+}
+
+// Inject the ClientConfig to the objects.
+// It supports MutatingWebhookConfiguration and ValidatingWebhookConfiguration.
+func (cp *Provisioner) inject(cc *admissionregistrationv1beta1.WebhookClientConfig, objs []runtime.Object) error {
+	if cc == nil {
 		return nil
 	}
-	return nil
-	// TODO: figure what we want to do with this.
-	// Disable the auto-updating in this function.
-	//return cp.Client.Update(context.Background(), cloned)
+	for i := range objs {
+		switch typed := objs[i].(type) {
+		case *admissionregistrationv1beta1.MutatingWebhookConfiguration:
+			injectForEachWebhook(cc, typed.Webhooks)
+		case *admissionregistrationv1beta1.ValidatingWebhookConfiguration:
+			injectForEachWebhook(cc, typed.Webhooks)
+		default:
+			return fmt.Errorf("%#v is not supported for injecting a webhookClientConfig",
+				objs[i].GetObjectKind().GroupVersionKind())
+		}
+	}
+	return cp.CertWriter.Inject(objs...)
+}
+
+func injectForEachWebhook(
+	cc *admissionregistrationv1beta1.WebhookClientConfig,
+	webhooks []admissionregistrationv1beta1.Webhook) {
+	for i := range webhooks {
+		// only replacing the CA bundle to preserve the path in the WebhookClientConfig
+		webhooks[i].ClientConfig.CABundle = cc.CABundle
+	}
+}
+
+func dnsNameFromClientConfig(config *admissionregistrationv1beta1.WebhookClientConfig) (string, error) {
+	if config == nil {
+		return "", errors.New("clientConfig should not be empty")
+	}
+	if config.Service != nil && config.URL != nil {
+		return "", fmt.Errorf("service and URL can't be set at the same time in a webhook: %v", config)
+	}
+	if config.Service == nil && config.URL == nil {
+		return "", fmt.Errorf("one of service and URL need to be set in a webhook: %v", config)
+	}
+	if config.Service != nil {
+		return generator.ServiceToCommonName(config.Service.Namespace, config.Service.Name), nil
+	}
+	u, err := url.Parse(*config.URL)
+	return u.Host, err
 }

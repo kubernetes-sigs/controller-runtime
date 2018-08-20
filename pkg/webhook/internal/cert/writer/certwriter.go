@@ -17,18 +17,13 @@ limitations under the License.
 package writer
 
 import (
-	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"fmt"
-	"net/url"
 	"time"
 
-	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/generator"
 )
 
@@ -43,109 +38,67 @@ const (
 
 // CertWriter provides method to handle webhooks.
 type CertWriter interface {
-	// EnsureCert ensures that the webhooks have proper certificates.
-	EnsureCerts(runtime.Object) error
-}
-
-// Options are options for configuring a CertWriter.
-type Options struct {
-	Client        client.Client
-	CertGenerator generator.CertGenerator
-}
-
-// NewCertWriter builds a new CertWriter using the provided options.
-// By default, it builds a MultiCertWriter that is composed of a SecretCertWriter and a FSCertWriter.
-func NewCertWriter(ops Options) (CertWriter, error) {
-	if ops.CertGenerator == nil {
-		ops.CertGenerator = &generator.SelfSignedCertGenerator{}
-	}
-	if ops.Client == nil {
-		// TODO: default the client if possible
-		return nil, errors.New("Options.Client is required")
-	}
-	s := &SecretCertWriter{
-		Client:        ops.Client,
-		CertGenerator: ops.CertGenerator,
-	}
-	f := &FSCertWriter{
-		CertGenerator: ops.CertGenerator,
-	}
-	return &MultiCertWriter{
-		CertWriters: []CertWriter{
-			s,
-			f,
-		},
-	}, nil
+	// EnsureCert provisions the cert for the webhookClientConfig.
+	EnsureCert(dnsName string, dryrun bool) (*generator.Artifacts, bool, error)
+	// Inject injects the necessary information given the objects.
+	// It supports MutatingWebhookConfiguration and ValidatingWebhookConfiguration.
+	Inject(objs ...runtime.Object) error
 }
 
 // handleCommon ensures the given webhook has a proper certificate.
 // It uses the given certReadWriter to read and (or) write the certificate.
-func handleCommon(webhook *admissionregistrationv1beta1.Webhook, ch certReadWriter) error {
-	if webhook == nil {
-		return nil
+func handleCommon(dnsName string, ch certReadWriter) (*generator.Artifacts, bool, error) {
+	if len(dnsName) == 0 {
+		return nil, false, errors.New("dnsName should not be empty")
 	}
 	if ch == nil {
-		return errors.New("certReaderWriter should not be nil")
+		return nil, false, errors.New("certReaderWriter should not be nil")
 	}
 
-	certs, err := createIfNotExists(webhook.Name, ch)
+	certs, changed, err := createIfNotExists(ch)
 	if err != nil {
-		return err
+		return nil, changed, err
 	}
 
-	dnsName, err := dnsNameForWebhook(&webhook.ClientConfig)
-	if err != nil {
-		return err
-	}
 	// Recreate the cert if it's invalid.
 	valid := validCert(certs, dnsName)
 	if !valid {
 		log.Info("cert is invalid or expiring, regenerating a new one")
-		certs, err = ch.overwrite(webhook.Name)
+		certs, err = ch.overwrite()
 		if err != nil {
-			return err
+			return nil, false, err
 		}
+		changed = true
 	}
-
-	// Ensure the CA bundle in the webhook configuration has the signing CA.
-	caBundle := webhook.ClientConfig.CABundle
-	caCert := certs.CACert
-	if !bytes.Contains(caBundle, caCert) {
-		webhook.ClientConfig.CABundle = append(caBundle, caCert...)
-	}
-	return nil
+	return certs, changed, nil
 }
 
-func createIfNotExists(webhookName string, ch certReadWriter) (*generator.Artifacts, error) {
+func createIfNotExists(ch certReadWriter) (*generator.Artifacts, bool, error) {
 	// Try to read first
-	certs, err := ch.read(webhookName)
+	certs, err := ch.read()
 	if isNotFound(err) {
 		// Create if not exists
-		certs, err = ch.write(webhookName)
+		certs, err = ch.write()
 		switch {
 		// This may happen if there is another racer.
 		case isAlreadyExists(err):
-			certs, err = ch.read(webhookName)
-			if err != nil {
-				return certs, err
-			}
-		case err != nil:
-			return certs, err
+			certs, err = ch.read()
+			return certs, true, err
+		default:
+			return certs, true, err
 		}
-	} else if err != nil {
-		return certs, err
 	}
-	return certs, nil
+	return certs, false, err
 }
 
 // certReadWriter provides methods for reading and writing certificates.
 type certReadWriter interface {
 	// read reads a wehbook name and returns the certs for it.
-	read(webhookName string) (*generator.Artifacts, error)
+	read() (*generator.Artifacts, error)
 	// write writes the certs and return the certs it wrote.
-	write(webhookName string) (*generator.Artifacts, error)
+	write() (*generator.Artifacts, error)
 	// overwrite overwrites the existing certs and return the certs it wrote.
-	overwrite(webhookName string) (*generator.Artifacts, error)
+	overwrite() (*generator.Artifacts, error)
 }
 
 func validCert(certs *generator.Artifacts, dnsName string) bool {
@@ -179,33 +132,4 @@ func validCert(certs *generator.Artifacts, dnsName string) bool {
 	}
 	_, err = cert.Verify(ops)
 	return err == nil
-}
-
-func getWebhooksFromObject(obj runtime.Object) ([]admissionregistrationv1beta1.Webhook, error) {
-	switch typed := obj.(type) {
-	case *admissionregistrationv1beta1.MutatingWebhookConfiguration:
-		return typed.Webhooks, nil
-	case *admissionregistrationv1beta1.ValidatingWebhookConfiguration:
-		return typed.Webhooks, nil
-	//case *unstructured.Unstructured:
-	// TODO: implement this if needed
-	default:
-		return nil, fmt.Errorf("unsupported type: %T, only support v1beta1.MutatingWebhookConfiguration and v1beta1.ValidatingWebhookConfiguration", typed)
-	}
-}
-
-func dnsNameForWebhook(config *admissionregistrationv1beta1.WebhookClientConfig) (string, error) {
-	if config.Service != nil && config.URL != nil {
-		return "", fmt.Errorf("service and URL can't be set at the same time in a webhook: %v", config)
-	}
-	if config.Service == nil && config.URL == nil {
-		return "", fmt.Errorf("one of service and URL need to be set in a webhook: %v", config)
-	}
-	if config.Service != nil {
-		return generator.ServiceToCommonName(config.Service.Namespace, config.Service.Name), nil
-	}
-	// config.URL != nil
-	u, err := url.Parse(*config.URL)
-	return u.Host, err
-
 }

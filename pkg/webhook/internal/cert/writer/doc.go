@@ -15,70 +15,45 @@ limitations under the License.
 */
 
 /*
-Package writer provides method to ensure each webhook has a working certificate and private key in the right
-place for consuming.
+Package writer provides method to provision and persist the certificates.
 
 It will create the certificates if they don't exist.
 It will ensure the certificates are valid and not expiring. If not, it will recreate them.
 
-Example Webhook Configuration
+Create a CertWriter that can write the certificate to secret
 
-There is an example annotation to get the webhook managed by the SecretCertWriter.
-SecretCertProvisionAnnotationKeyPrefix is the prefix of the annotation key.
-
-	secret.certprovisioner.kubernetes.io/webhook-1: namespace-bar/secret-foo
-
-The following is an example MutatingWebhookConfiguration in yaml.
-
-	apiVersion: admissionregistration.k8s.io/v1beta1
-	kind: MutatingWebhookConfiguration
-	metadata:
-	  name: myMutatingWebhookConfiguration
-	  annotations:
-	    secret.certprovisioner.kubernetes.io/webhook-1: namespace-bar/secret-foo
-	webhooks:
-	- name: webhook-1
-	  rules:
-	  - apiGroups:
-		- ""
-		apiVersions:
-		- v1
-		operations:
-		- "*"
-		resources:
-		- pods
-	  clientConfig:
-		service:
-		  namespace: service-ns-1
-		  name: service-foo
-		  path: "/mutating-pods"
-		caBundle: [] # CA bundle here
-
-Create a default CertWriter
-
-	writer, err := NewCertWriter(Options{client: client}))
+	writer, err := NewSecretCertWriter(SecretCertWriterOptions{
+		Secret: types.NamespacedName{Namespace: "foo", Name: "bar"},
+		Client: client,
+	})
 	if err != nil {
 		// handler error
 	}
 
-Create a SecretCertWriter
+Create a CertWriter that can write the certificate to the filesystem.
 
-	writer, err := &SecretCertWriter{
-		Client: client
-	}
+	writer, err := NewFSCertWriter(FSCertWriterOptions{
+		Path: "path/to/cert/",
+	})
 	if err != nil {
 		// handler error
 	}
 
-Provision the certificates using the CertWriter. The certificate will be available in the desired secrets or
+Provision the certificates using the CertWriter. The certificate will be available in the desired secret or
 the desired path.
 
 	// writer can be either one of the CertWriters created above
-	err = writer.EnsureCerts(webhookConfiguration) // webhookConfiguration is an existing runtime.Object
+	certs, changed, err := writer.EnsureCerts("admissionwebhook.k8s.io", false)
 	if err != nil {
 		// handler error
 	}
 
+Inject necessary information given the objects.
+
+	err = writer.Inject(objs...)
+	if err != nil {
+		// handler error
+	}
 */
 package writer
 

@@ -17,11 +17,11 @@ limitations under the License.
 package webhook
 
 import (
-	"bytes"
-	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 
 	"github.com/ghodss/yaml"
@@ -29,10 +29,10 @@ import (
 	"k8s.io/api/admissionregistration/v1beta1"
 	admissionregistration "k8s.io/api/admissionregistration/v1beta1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/writer"
@@ -41,8 +41,14 @@ import (
 
 // setDefault does defaulting for the Server.
 func (s *Server) setDefault() {
+	s.setServerDefault()
+	s.setBootstrappingDefault()
+}
+
+// setServerDefault does defaulting for the ServerOptions.
+func (s *Server) setServerDefault() {
 	if len(s.Name) == 0 {
-		s.Name = "default-admission-server"
+		s.Name = "default-k8s-webhook-server"
 	}
 	if s.registry == nil {
 		s.registry = map[string]Webhook{}
@@ -54,12 +60,27 @@ func (s *Server) setDefault() {
 		s.Port = 443
 	}
 	if len(s.CertDir) == 0 {
-		s.CertDir = path.Join("admission-server", "cert")
+		s.CertDir = path.Join("k8s-webhook-server", "cert")
 	}
-	s.setBootstrappingDefault()
+	if s.KVMap == nil {
+		s.KVMap = map[string]interface{}{}
+	}
+
+	if s.Client == nil {
+		cfg, err := config.GetConfig()
+		if err != nil {
+			s.err = err
+			return
+		}
+		s.Client, err = client.New(cfg, client.Options{})
+		if err != nil {
+			s.err = err
+			return
+		}
+	}
 }
 
-// setBootstrappingDefault does defaulting for the Server  bootstrapping.
+// setBootstrappingDefault does defaulting for the Server bootstrapping.
 func (s *Server) setBootstrappingDefault() {
 	if len(s.MutatingWebhookConfigName) == 0 {
 		s.MutatingWebhookConfigName = "mutating-webhook-configuration"
@@ -76,166 +97,99 @@ func (s *Server) setBootstrappingDefault() {
 	if s.Service != nil && s.Port != 443 {
 		s.Port = 443
 	}
-	if s.CertProvisioner == nil {
-		s.CertProvisioner = &cert.Provisioner{
-			Client: s.Client,
-		}
+
+	var certWriter writer.CertWriter
+	var err error
+	if s.Secret != nil {
+		certWriter, err = writer.NewSecretCertWriter(
+			writer.SecretCertWriterOptions{
+				Secret: s.Secret,
+				Client: s.Client,
+			})
+	} else {
+		certWriter, err = writer.NewFSCertWriter(
+			writer.FSCertWriterOptions{
+				Path: s.CertDir,
+			})
+	}
+	if err != nil {
+		s.err = err
+		return
+	}
+	s.certProvisioner = &cert.Provisioner{
+		CertWriter: certWriter,
+	}
+	if s.Writer == nil {
+		s.Writer = os.Stdout
 	}
 }
 
-// bootstrap returns the configuration of admissionWebhookConfiguration in yaml format if dryrun is true.
+// installWebhookConfig writes the configuration of admissionWebhookConfiguration in yaml format if dryrun is true.
 // Otherwise, it creates the the admissionWebhookConfiguration objects and service if any.
-// It also provisions the certificate for your admission server.
-func (s *Server) bootstrap(dryrun bool) ([]byte, error) {
+// It also provisions the certificate for the admission server.
+func (s *Server) installWebhookConfig() error {
+	// do defaulting if necessary
 	s.once.Do(s.setDefault)
+	if s.err != nil {
+		return s.err
+	}
 
 	var err error
-	s.mutatingWebhookConfig, err = s.mutatingWHConfigs()
+	s.webhookConfigurations, err = s.whConfigs()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	err = s.CertProvisioner.Sync(s.mutatingWebhookConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	s.validatingWebhookConfig, err = s.validatingWHConfigs()
-	if err != nil {
-		return nil, err
-	}
-	err = s.CertProvisioner.Sync(s.validatingWebhookConfig)
-	if err != nil {
-		return nil, err
-	}
-
 	svc := s.service()
+	objects := append(s.webhookConfigurations, svc)
 
-	// if dryrun, return the AdmissionWebhookConfiguration in yaml format.
-	if dryrun {
-		return s.genYamlConfig([]runtime.Object{s.mutatingWebhookConfig, s.validatingWebhookConfig, svc})
+	cc, err := s.getClientConfig()
+	if err != nil {
+		return err
 	}
-
-	if s.Client == nil {
-		return nil, errors.New("client needs to be set for bootstrapping")
-	}
-
-	err = createOrReplace(s.Client, svc, func(current, desired runtime.Object) error {
-		typedC := current.(*corev1.Service)
-		typedD := desired.(*corev1.Service)
-		typedC.Spec.Selector = typedD.Spec.Selector
-		return nil
+	// Provision the cert by creating new one or refreshing existing one.
+	_, err = s.certProvisioner.Provision(cert.Options{
+		ClientConfig: cc,
+		Objects:      s.webhookConfigurations,
+		Dryrun:       s.Dryrun,
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = createOrReplace(s.Client, s.mutatingWebhookConfig, func(current, desired runtime.Object) error {
-		typedC := current.(*admissionregistration.MutatingWebhookConfiguration)
-		typedD := desired.(*admissionregistration.MutatingWebhookConfiguration)
-		typedC.Webhooks = typedD.Webhooks
-		return nil
-	})
-	if err != nil {
-		return nil, err
+	if s.Dryrun {
+		// TODO: print here
+		// if dryrun, return the AdmissionWebhookConfiguration in yaml format.
+		return s.genYamlConfig(objects)
 	}
 
-	err = createOrReplace(s.Client, s.validatingWebhookConfig, func(current, desired runtime.Object) error {
-		typedC := current.(*admissionregistration.ValidatingWebhookConfiguration)
-		typedD := desired.(*admissionregistration.ValidatingWebhookConfiguration)
-		typedC.Webhooks = typedD.Webhooks
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return nil, nil
+	return batchCreateOrReplace(s.Client, objects...)
 }
 
-type mutateFn func(current, desired runtime.Object) error
-
-// createOrReplace creates the object if it doesn't exist;
-// otherwise, it will replace it.
-// When replacing, fn knows how to preserve existing fields in the object GET from the APIServer.
-// TODO: use the helper in #98 when it merges.
-func createOrReplace(c client.Client, obj runtime.Object, fn mutateFn) error {
-	if obj == nil {
-		return nil
-	}
-	err := c.Create(context.Background(), obj)
-	if apierrors.IsAlreadyExists(err) {
-		// TODO: retry mutiple times with backoff if necessary.
-		existing := obj.DeepCopyObject()
-		objectKey, err := client.ObjectKeyFromObject(obj)
+// genYamlConfig generates yaml config for admissionWebhookConfiguration
+func (s *Server) genYamlConfig(objs []runtime.Object) error {
+	for _, obj := range objs {
+		_, err := s.Writer.Write([]byte("---"))
 		if err != nil {
 			return err
 		}
-		err = c.Get(context.Background(), objectKey, existing)
+		b, err := yaml.Marshal(obj)
 		if err != nil {
 			return err
 		}
-		err = fn(existing, obj)
+		_, err = s.Writer.Write(b)
 		if err != nil {
 			return err
 		}
-		return c.Update(context.Background(), existing)
 	}
-	return err
+	return nil
 }
 
-// genYamlConfig generates yaml config for runtime.Object
-func (s *Server) genYamlConfig(objs []runtime.Object) ([]byte, error) {
-	var buf bytes.Buffer
-	firstObject := true
-	for _, awc := range objs {
-		if !firstObject {
-			_, err := buf.WriteString("---")
-			if err != nil {
-				return nil, err
-			}
-		}
-		firstObject = false
-		b, err := yaml.Marshal(awc)
-		if err != nil {
-			return nil, err
-		}
-		_, err = buf.Write(b)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return buf.Bytes(), nil
-}
-
-func (s *Server) annotations(t types.WebhookType) map[string]string {
-	anno := map[string]string{}
-	for _, webhook := range s.registry {
-		if webhook.GetType() != t {
-			continue
-		}
-		if s.Secret != nil {
-			key := writer.SecretCertProvisionAnnotationKeyPrefix + webhook.GetName()
-			anno[key] = s.Secret.String()
-		} else {
-			key := writer.FSCertProvisionAnnotationKeyPrefix + webhook.GetName()
-			anno[key] = s.CertDir
-		}
-	}
-	return anno
-}
-
-type webhookClientConfig struct {
-	*admissionregistration.WebhookClientConfig
-}
-
-func (s *Server) clientConfig() (*webhookClientConfig, error) {
+func (s *Server) getClientConfig() (*admissionregistration.WebhookClientConfig, error) {
 	if s.Host != nil && s.Service != nil {
 		return nil, errors.New("URL and Service can't be set at the same time")
 	}
-	cc := &webhookClientConfig{
-		WebhookClientConfig: &admissionregistration.WebhookClientConfig{
-			CABundle: []byte{},
-		},
+	cc := &admissionregistration.WebhookClientConfig{
+		CABundle: []byte{},
 	}
 	if s.Host != nil {
 		u := url.URL{
@@ -255,24 +209,54 @@ func (s *Server) clientConfig() (*webhookClientConfig, error) {
 	return cc, nil
 }
 
-func (w *webhookClientConfig) withPath(path string) error {
-	if w.URL != nil {
-		u, err := url.Parse(*w.URL)
+// getClientConfigWithPath constructs a WebhookClientConfig based on the server options.
+// It will use path to the set the path in WebhookClientConfig.
+func (s *Server) getClientConfigWithPath(path string) (*admissionregistration.WebhookClientConfig, error) {
+	cc, err := s.getClientConfig()
+	if err != nil {
+		return nil, err
+	}
+	return cc, setPath(cc, path)
+}
+
+// setPath sets the path in the WebhookClientConfig.
+func setPath(cc *admissionregistration.WebhookClientConfig, path string) error {
+	if cc.URL != nil {
+		u, err := url.Parse(*cc.URL)
 		if err != nil {
 			return err
 		}
 		u.Path = path
 		urlString := u.String()
-		w.URL = &urlString
+		cc.URL = &urlString
 	}
-	if w.Service != nil {
-		w.Service.Path = &path
+	if cc.Service != nil {
+		cc.Service.Path = &path
 	}
 	return nil
 }
 
 // whConfigs creates a mutatingWebhookConfiguration and(or) a validatingWebhookConfiguration based on registry.
 // For the same type of webhook configuration, it generates a webhook entry per endpoint.
+func (s *Server) whConfigs() ([]runtime.Object, error) {
+	objs := []runtime.Object{}
+	mutatingWH, err := s.mutatingWHConfigs()
+	if err != nil {
+		return nil, err
+	}
+	if mutatingWH != nil {
+		objs = append(objs, mutatingWH)
+	}
+	validatingWH, err := s.validatingWHConfigs()
+	if err != nil {
+		return nil, err
+	}
+	if validatingWH != nil {
+		objs = append(objs, validatingWH)
+	}
+	return objs, nil
+}
+
 func (s *Server) mutatingWHConfigs() (runtime.Object, error) {
 	mutatingWebhooks := []v1beta1.Webhook{}
 	for path, webhook := range s.registry {
@@ -286,18 +270,16 @@ func (s *Server) mutatingWHConfigs() (runtime.Object, error) {
 			return nil, err
 		}
 		mutatingWebhooks = append(mutatingWebhooks, *wh)
-
 	}
 
 	if len(mutatingWebhooks) > 0 {
 		return &admissionregistration.MutatingWebhookConfiguration{
 			TypeMeta: metav1.TypeMeta{
-				APIVersion: "admissionregistration.k8s.io/v1beta1",
+				APIVersion: fmt.Sprintf("%s/%s", admissionregistration.GroupName, "v1beta1"),
 				Kind:       "MutatingWebhookConfiguration",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:        s.MutatingWebhookConfigName,
-				Annotations: s.annotations(types.WebhookTypeMutating),
+				Name: s.MutatingWebhookConfigName,
 			},
 			Webhooks: mutatingWebhooks,
 		}, nil
@@ -324,12 +306,11 @@ func (s *Server) validatingWHConfigs() (runtime.Object, error) {
 	if len(validatingWebhooks) > 0 {
 		return &admissionregistration.ValidatingWebhookConfiguration{
 			TypeMeta: metav1.TypeMeta{
-				APIVersion: "admissionregistration.k8s.io/v1beta1",
+				APIVersion: fmt.Sprintf("%s/%s", admissionregistration.GroupName, "v1beta1"),
 				Kind:       "ValidatingWebhookConfiguration",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:        s.ValidatingWebhookConfigName,
-				Annotations: s.annotations(types.WebhookTypeValidating),
+				Name: s.ValidatingWebhookConfigName,
 			},
 			Webhooks: validatingWebhooks,
 		}, nil
@@ -349,15 +330,11 @@ func (s *Server) admissionWebhook(path string, wh *admission.Webhook) (*admissio
 			CABundle: []byte{},
 		},
 	}
-	cc, err := s.clientConfig()
+	cc, err := s.getClientConfigWithPath(path)
 	if err != nil {
 		return nil, err
 	}
-	err = cc.withPath(path)
-	if err != nil {
-		return nil, err
-	}
-	webhook.ClientConfig = *cc.WebhookClientConfig
+	webhook.ClientConfig = *cc
 	return webhook, nil
 }
 

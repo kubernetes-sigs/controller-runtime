@@ -28,7 +28,7 @@ func ServiceToCommonName(serviceNamespace, serviceName string) string {
 	return fmt.Sprintf("%s.%s.svc", serviceName, serviceNamespace)
 }
 
-// SelfSignedCertGenerator implements the CertGenerator interface.
+// SelfSignedCertGenerator implements the certGenerator interface.
 // It provisions self-signed certificates.
 type SelfSignedCertGenerator struct{}
 

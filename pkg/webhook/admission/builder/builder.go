@@ -195,7 +195,7 @@ func (b *WebhookBuilder) Build(handlers ...admission.Handler) (*admission.Webhoo
 			Rule: admissionregistrationv1beta1.Rule{
 				APIGroups:   []string{gvk.Group},
 				APIVersions: []string{gvk.Version},
-				Resources:   []string{mapping.Resource},
+				Resources:   []string{mapping.Resource.Resource},
 			},
 		},
 	}

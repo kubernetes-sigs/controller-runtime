@@ -19,6 +19,7 @@ package webhook
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"path"
 	"sync"
@@ -57,6 +58,11 @@ type ServerOptions struct {
 	// Client will be injected by the manager if not set.
 	Client client.Client
 
+	// Dryrun controls if the server will install the webhookConfiguration.
+	// If true, it will print the objects in yaml format.
+	// If false, it will install the objects in the cluster.
+	Dryrun bool
+
 	// BootstrapOptions contains the options for bootstrapping the admission server.
 	*BootstrapOptions
 }
@@ -67,26 +73,31 @@ type BootstrapOptions struct {
 	MutatingWebhookConfigName string
 	// ValidatingWebhookConfigName is the name that used for creating the ValidatingWebhookConfiguration object.
 	ValidatingWebhookConfigName string
+
 	// Secret is the location for storing the certificate for the admission server.
 	// The server should have permission to create a secret in the namespace.
 	// This is optional. If unspecified, it will write to the filesystem.
 	// It the secret already exists and is different from the desired, it will be replaced.
 	Secret *apitypes.NamespacedName
+	// Writer is used in dryrun mode for writing the objects in yaml format.
+	Writer io.Writer
 
 	// Service is k8s service fronting the webhook server pod(s).
 	// This field is optional. But one and only one of Service and Host need to be set.
-	// This maps to field .webhooks.clientConfig.service
+	// This maps to field .webhooks.getClientConfig.service
 	// https://github.com/kubernetes/api/blob/183f3326a9353bd6d41430fc80f96259331d029c/admissionregistration/v1beta1/types.go#L260
 	Service *Service
-	// Host is the host name of .webhooks.clientConfig.url
+	// Host is the host name of .webhooks.getClientConfig.url
 	// https://github.com/kubernetes/api/blob/183f3326a9353bd6d41430fc80f96259331d029c/admissionregistration/v1beta1/types.go#L250
 	// This field is optional. But one and only one of Service and Host need to be set.
 	// If neither Service nor Host is unspecified, Host will be defaulted to "localhost".
 	Host *string
 
-	// Provisioner provisions certificates for the admission webhook server.
-	// This is optional. If unspecified, it will be defaulted to use a self-signed certificate.
-	CertProvisioner *cert.Provisioner
+	// certProvisioner is constructed using certGenerator and certWriter
+	certProvisioner *cert.Provisioner
+
+	// err will be non-nil if there is an error occur during initialization.
+	err error
 }
 
 // Service contains information for creating a service
@@ -115,8 +126,7 @@ type Server struct {
 
 	// mutatingWebhookConfiguration and validatingWebhookConfiguration are populated during server bootstrapping.
 	// They can be nil, if there is no webhook registered under it.
-	mutatingWebhookConfig   runtime.Object
-	validatingWebhookConfig runtime.Object
+	webhookConfigurations []runtime.Object
 
 	once sync.Once
 }
@@ -140,12 +150,12 @@ type Webhook interface {
 }
 
 // NewServer creates a new admission webhook server.
-func NewServer(name string, mgr manager.Manager, ops ServerOptions) (*Server, error) {
+func NewServer(name string, mgr manager.Manager, options ServerOptions) (*Server, error) {
 	as := &Server{
 		Name:          name,
-		ServerOptions: ops,
 		sMux:          http.NewServeMux(),
 		registry:      map[string]Webhook{},
+		ServerOptions: options,
 	}
 
 	return as, mgr.Add(as)
@@ -172,10 +182,12 @@ func (s *Server) Register(webhooks ...Webhook) error {
 
 var _ manager.Runnable = &Server{}
 
-// Start runs the server.
+// Start runs the server if s.Dryrun is false.
+// Otherwise, it will print the objects in yaml format.
 func (s *Server) Start(stop <-chan struct{}) error {
-	_, err := s.bootstrap(false)
-	if err != nil {
+	err := s.installWebhookConfig()
+	// if encounter an error or it's in dryrun mode, return.
+	if err != nil || s.Dryrun {
 		return err
 	}
 
@@ -185,27 +197,31 @@ func (s *Server) Start(stop <-chan struct{}) error {
 	}
 	errCh := make(chan error)
 	serveFn := func() {
-		err := srv.ListenAndServeTLS(path.Join(s.CertDir, writer.ServerCertName), path.Join(s.CertDir, writer.ServerKeyName))
-		errCh <- err
+		errCh <- srv.ListenAndServeTLS(path.Join(s.CertDir, writer.ServerCertName), path.Join(s.CertDir, writer.ServerKeyName))
 	}
 
+	go serveFn()
 	for {
 		// TODO(mengqiy): add jitter to the timer
 		// Could use https://godoc.org/k8s.io/apimachinery/pkg/util/wait#Jitter
 		timer := time.Tick(6 * 30 * 24 * time.Hour)
-		go serveFn()
 		select {
 		case <-timer:
+			changed, err := s.RefreshCert()
+			if err != nil {
+				log.Error(err, "encountering error when refreshing the certificate")
+				return err
+			}
+			if !changed {
+				continue
+			}
+			log.Info("server is shutting down to reload the certificates.")
 			err = srv.Shutdown(context.Background())
 			if err != nil {
 				log.Error(err, "encountering error when shutting down")
 				return err
 			}
-			err = s.RefreshCert()
-			if err != nil {
-				log.Error(err, "encountering error when refreshing the certificate")
-				return err
-			}
+			go serveFn()
 		case <-stop:
 			return nil
 		case e := <-errCh:
@@ -214,36 +230,21 @@ func (s *Server) Start(stop <-chan struct{}) error {
 	}
 }
 
-// DryRun outputs k8s AdmissionWebhookConfiguration in yaml format instead of installing them to the APIServer.
-func (s *Server) DryRun() ([]byte, error) {
-	return s.bootstrap(true)
-}
-
 // RefreshCert refreshes the certificate using Server's Provisioner if the certificate is expiring.
-func (s *Server) RefreshCert() error {
-	objs := []runtime.Object{s.mutatingWebhookConfig, s.validatingWebhookConfig}
-	for i := range objs {
-		if objs[i] == nil {
-			continue
-		}
-		objKey, err := client.ObjectKeyFromObject(objs[i])
-		if err != nil {
-			return err
-		}
-		err = s.Client.Get(context.Background(), objKey, objs[i])
-		if err != nil {
-			return err
-		}
-		err = s.CertProvisioner.Sync(objs[i])
-		if err != nil {
-			return err
-		}
-		err = s.Client.Update(context.Background(), objs[i])
-		if err != nil {
-			return err
-		}
+func (s *Server) RefreshCert() (bool, error) {
+	cc, err := s.getClientConfig()
+	if err != nil {
+		return false, err
 	}
-	return nil
+	changed, err := s.certProvisioner.Provision(cert.Options{
+		ClientConfig: cc,
+		Objects:      s.webhookConfigurations,
+	})
+	if err != nil {
+		return false, err
+	}
+
+	return changed, batchCreateOrReplace(s.Client, s.webhookConfigurations...)
 }
 
 var _ inject.Client = &Server{}

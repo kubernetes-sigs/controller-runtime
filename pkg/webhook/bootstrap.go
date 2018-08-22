@@ -34,8 +34,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/cert"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/cert/writer"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/writer"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
 )
 

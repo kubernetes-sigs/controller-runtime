@@ -27,8 +27,8 @@ import (
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	certgenerator "sigs.k8s.io/controller-runtime/pkg/webhook/cert/generator"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/cert/writer/internal/atomic"
+	certgenerator "sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/generator"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/writer/atomic"
 )
 
 const (

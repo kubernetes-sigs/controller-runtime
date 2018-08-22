@@ -29,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/cert/generator"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/generator"
 )
 
 const (

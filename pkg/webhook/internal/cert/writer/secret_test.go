@@ -30,8 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/cert/generator"
-	fakegenerator "sigs.k8s.io/controller-runtime/pkg/webhook/cert/generator/fake"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/generator"
+	fakegenerator "sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/generator/fake"
 )
 
 var _ = Describe("SecretCertWriter", func() {

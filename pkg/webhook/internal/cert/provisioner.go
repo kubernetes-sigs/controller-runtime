@@ -24,8 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/cert/generator"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/cert/writer"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/generator"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/writer"
 )
 
 // Provisioner provisions certificates for webhook configurations and writes them to an output

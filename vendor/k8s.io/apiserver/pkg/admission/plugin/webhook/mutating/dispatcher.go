@@ -74,11 +74,19 @@ func (a *mutatingDispatcher) Dispatch(ctx context.Context, attr *generic.Version
 	}
 
 	// convert attr.VersionedObject to the internal version in the underlying admission.Attributes
-	return a.plugin.scheme.Convert(attr.VersionedObject, attr.Attributes.GetObject(), nil)
+	if attr.VersionedObject != nil {
+		return a.plugin.scheme.Convert(attr.VersionedObject, attr.Attributes.GetObject(), nil)
+	}
+	return nil
 }
 
 // note that callAttrMutatingHook updates attr
 func (a *mutatingDispatcher) callAttrMutatingHook(ctx context.Context, h *v1beta1.Webhook, attr *generic.VersionedAttributes) error {
+	if attr.IsDryRun() {
+		// TODO: support this
+		return webhookerrors.NewDryRunUnsupportedErr(h.Name)
+	}
+
 	// Make the webhook request
 	request := request.CreateAdmissionReview(attr)
 	client, err := a.cm.HookClient(h)
@@ -106,6 +114,15 @@ func (a *mutatingDispatcher) callAttrMutatingHook(ctx context.Context, h *v1beta
 	if err != nil {
 		return apierrors.NewInternalError(err)
 	}
+	if len(patchObj) == 0 {
+		return nil
+	}
+
+	// if a non-empty patch was provided, and we have no object we can apply it to (e.g. a DELETE admission operation), error
+	if attr.VersionedObject == nil {
+		return apierrors.NewInternalError(fmt.Errorf("admission webhook %q attempted to modify the object, which is not supported for this operation", h.Name))
+	}
+
 	objJS, err := runtime.Encode(a.plugin.jsonSerializer, attr.VersionedObject)
 	if err != nil {
 		return apierrors.NewInternalError(err)

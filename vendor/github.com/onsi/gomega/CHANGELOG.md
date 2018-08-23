@@ -1,4 +1,13 @@
-## HEAD
+## 1.4.1
+
+### Fixes:
+
+- Update documentation formatting and examples (#289) [9be8410]
+- allow 'Receive' matcher to be used with concrete types (#286) [41673fd]
+- Fix data race in ghttp server (#283) [7ac6b01]
+- Travis badge should only show master [cc102ab]
+
+## 1.4.0
 
 ### Features
 - Make string pretty diff user configurable (#273) [eb112ce, 649b44d]

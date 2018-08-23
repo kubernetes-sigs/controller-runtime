@@ -24,7 +24,7 @@ import (
 	"github.com/onsi/gomega/types"
 )
 
-const GOMEGA_VERSION = "1.4.0"
+const GOMEGA_VERSION = "1.4.1"
 
 const nilFailHandlerPanic = `You are trying to make an assertion, but Gomega's fail handler is nil.
 If you're using Ginkgo then you probably forgot to put your assertion in an It().
@@ -52,12 +52,12 @@ func RegisterFailHandler(handler types.GomegaFailHandler) {
 //
 //You'll need to call this at the top of each XUnit style test:
 //
-// func TestFarmHasCow(t *testing.T) {
-//     RegisterTestingT(t)
+//    func TestFarmHasCow(t *testing.T) {
+//        RegisterTestingT(t)
 //
-//	   f := farm.New([]string{"Cow", "Horse"})
-//     Expect(f.HasCow()).To(BeTrue(), "Farm should have cow")
-// }
+//        f := farm.New([]string{"Cow", "Horse"})
+//        Expect(f.HasCow()).To(BeTrue(), "Farm should have cow")
+//    }
 //
 // Note that this *testing.T is registered *globally* by Gomega (this is why you don't have to
 // pass `t` down to the matcher itself).  This means that you cannot run the XUnit style tests
@@ -91,7 +91,7 @@ func InterceptGomegaFailures(f func()) []string {
 }
 
 //Ω wraps an actual value allowing assertions to be made on it:
-//	Ω("foo").Should(Equal("foo"))
+//    Ω("foo").Should(Equal("foo"))
 //
 //If Ω is passed more than one argument it will pass the *first* argument to the matcher.
 //All subsequent arguments will be required to be nil/zero.
@@ -112,7 +112,7 @@ func Ω(actual interface{}, extra ...interface{}) GomegaAssertion {
 }
 
 //Expect wraps an actual value allowing assertions to be made on it:
-//	Expect("foo").To(Equal("foo"))
+//    Expect("foo").To(Equal("foo"))
 //
 //If Expect is passed more than one argument it will pass the *first* argument to the matcher.
 //All subsequent arguments will be required to be nil/zero.
@@ -326,12 +326,12 @@ type GomegaWithT struct {
 //NewGomegaWithT takes a *testing.T and returngs a `GomegaWithT` allowing you to use `Expect`, `Eventually`, and `Consistently` along with
 //Gomega's rich ecosystem of matchers in standard `testing` test suits.
 //
-// func TestFarmHasCow(t *testing.T) {
-//     g := GomegaWithT(t)
+//    func TestFarmHasCow(t *testing.T) {
+//        g := GomegaWithT(t)
 //
-//	   f := farm.New([]string{"Cow", "Horse"})
-//     g.Expect(f.HasCow()).To(BeTrue(), "Farm should have cow")
-// }
+//        f := farm.New([]string{"Cow", "Horse"})
+//        g.Expect(f.HasCow()).To(BeTrue(), "Farm should have cow")
+//     }
 func NewGomegaWithT(t types.GomegaTestingT) *GomegaWithT {
 	return &GomegaWithT{
 		t: t,

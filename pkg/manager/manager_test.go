@@ -96,6 +96,21 @@ var _ = Describe("manger.Manager", func() {
 
 			close(done)
 		})
+		Context("with leader election enabled", func() {
+			It("should return an error if ID not set", func() {
+				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionNamespace: "default"})
+				Expect(m).To(BeNil())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("if leader election is enabled, both LeaderElectionID and LeaderElectionNamespace must be set"))
+			})
+
+			It("should return an error if namespace not set", func() {
+				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime"})
+				Expect(m).To(BeNil())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("if leader election is enabled, both LeaderElectionID and LeaderElectionNamespace must be set"))
+			})
+		})
 	})
 
 	Describe("Start", func() {

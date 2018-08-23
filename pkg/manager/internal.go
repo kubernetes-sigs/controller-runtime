@@ -17,10 +17,14 @@ limitations under the License.
 package manager
 
 import (
+	"fmt"
 	"sync"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,6 +59,9 @@ type controllerManager struct {
 	// recorderProvider is used to generate event recorders that will be injected into Controllers
 	// (and EventHandlers, Sources and Predicates).
 	recorderProvider recorder.Provider
+
+	// resourceLock
+	resourceLock resourcelock.Interface
 
 	mu      sync.Mutex
 	started bool
@@ -133,6 +140,52 @@ func (cm *controllerManager) GetRecorder(name string) record.EventRecorder {
 }
 
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
+	if cm.resourceLock == nil {
+		go cm.start(stop)
+		select {
+		case <-stop:
+			// we are done
+			return nil
+		case err := <-cm.errChan:
+			// Error starting a controller
+			return err
+		}
+	}
+
+	l, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
+		Lock: cm.resourceLock,
+		// Values taken from: https://github.com/kubernetes/apiserver/blob/master/pkg/apis/config/v1alpha1/defaults.go
+		// TODO(joelspeed): These timings should be configurable
+		LeaseDuration: 15 * time.Second,
+		RenewDeadline: 10 * time.Second,
+		RetryPeriod:   2 * time.Second,
+		Callbacks: leaderelection.LeaderCallbacks{
+			OnStartedLeading: cm.start,
+			OnStoppedLeading: func() {
+				// Most implementations of leader election log.Fatal() here.
+				// Since Start is wrapped in log.Fatal when called, we can just return
+				// an error here which will cause the program to exit.
+				cm.errChan <- fmt.Errorf("leader election lost")
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	go l.Run()
+
+	select {
+	case <-stop:
+		// We are done
+		return nil
+	case err := <-cm.errChan:
+		// Error starting a controller
+		return err
+	}
+}
+
+func (cm *controllerManager) start(stop <-chan struct{}) {
 	func() {
 		cm.mu.Lock()
 		defer cm.mu.Unlock()
@@ -169,9 +222,6 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	select {
 	case <-stop:
 		// We are done
-		return nil
-	case err := <-cm.errChan:
-		// Error starting a controller
-		return err
+		return
 	}
 }

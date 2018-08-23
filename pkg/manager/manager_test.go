@@ -19,6 +19,7 @@ package manager
 import (
 	"fmt"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -86,7 +87,7 @@ var _ = Describe("manger.Manager", func() {
 		})
 		It("should return an error it can't create a recorder.Provider", func(done Done) {
 			m, err := New(cfg, Options{
-				newRecorderProvider: func(config *rest.Config, scheme *runtime.Scheme) (recorder.Provider, error) {
+				newRecorderProvider: func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error) {
 					return nil, fmt.Errorf("expected error")
 				}})
 			Expect(m).To(BeNil())

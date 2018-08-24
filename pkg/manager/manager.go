@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -85,7 +86,7 @@ type Options struct {
 	// Dependency injection for testing
 	newCache            func(config *rest.Config, opts cache.Options) (cache.Cache, error)
 	newClient           func(config *rest.Config, options client.Options) (client.Client, error)
-	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme) (recorder.Provider, error)
+	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error)
 }
 
 // Runnable allows a component to be started.
@@ -132,7 +133,9 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 	// Create the recorder provider to inject event recorders for the components.
-	recorderProvider, err := options.newRecorderProvider(config, options.Scheme)
+	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
+	// to the particular controller that it's being injected into, rather than a generic one like is here.
+	recorderProvider, err := options.newRecorderProvider(config, options.Scheme, log.WithName("events"))
 	if err != nil {
 		return nil, err
 	}

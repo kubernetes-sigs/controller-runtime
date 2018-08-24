@@ -199,7 +199,6 @@
   version = "v1.0.0"
 
 [[projects]]
-  branch = "master"
   digest = "1:99f994f4c2f71aeea1810d6061f3b52f3d2ee0084cfcb1ebbf40e00a0d0666f6"
   name = "github.com/go-logr/logr"
   packages = [
@@ -210,7 +209,6 @@
   revision = "9fb12b3b21c5415d16ac18dc5cd42c1cfdd40c4e"
 
 [[projects]]
-  branch = "master"
   digest = "1:ce43ad4015e7cdad3f0e8f2c8339439dd4470859a828d2a6988b0f713699e94a"
   name = "github.com/go-logr/zapr"
   packages = ["."]
@@ -314,6 +312,7 @@
   version = "v1.1.1"
 
 [[projects]]
+  branch = "master"
   digest = "1:1ba1d79f2810270045c328ae5d674321db34e3aae468eb4233883b473c5c0467"
   name = "github.com/golang/glog"
   packages = ["."]
@@ -376,7 +375,7 @@
     "pagination",
   ]
   pruneopts = "UT"
-  revision = "2dd96958cf6e3270a81ddfa54004bf4fd01f2b8b"
+  revision = "199db9a3a2bfa55802ab074ab8fed67fce2a2791"
 
 [[projects]]
   digest = "1:9b7a07ac7577787a8ecc1334cb9f34df1c76ed82a917d556c5713d3ab84fbc43"
@@ -453,7 +452,7 @@
     "jwriter",
   ]
   pruneopts = "UT"
-  revision = "03f2033d19d5860aef995fe360ac7d395cd8ce65"
+  revision = "60711f1a8329503b04e1c88535f419d0bb440bff"
 
 [[projects]]
   digest = "1:ff5ebae34cfbf047d505ee150de27e60570e8c394b3b8fdbb720ff6ac71985fc"
@@ -464,12 +463,12 @@
   version = "v1.0.1"
 
 [[projects]]
-  branch = "master"
-  digest = "1:5ab79470a1d0fb19b041a624415612f8236b3c06070161a910562f2b2d064355"
+  digest = "1:645110e089152bd0f4a011a2648fbb0e4df5977be73ca605781157ac297f50c4"
   name = "github.com/mitchellh/mapstructure"
   packages = ["."]
   pruneopts = "UT"
-  revision = "f15292f7a699fcc1a38a80977f80a046874ba8ac"
+  revision = "fa473d140ef3c6adf42d6b391fe76707f1f243c8"
+  version = "v1.0.0"
 
 [[projects]]
   digest = "1:33422d238f147d247752996a26574ac48dcf472976eda7f5134015f06bf16563"
@@ -686,14 +685,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:48774faa158e9eaee1ba45aad66434bb0345927b43756a24d4fe4c44ad79e307"
+  digest = "1:7710ea76bd73d3154e86eaf2db8b36a6dffbd6114e4e37b516f1d232c03ddd8d"
   name = "golang.org/x/sys"
   packages = [
     "unix",
     "windows",
   ]
   pruneopts = "UT"
-  revision = "3b58ed4ad3395d483fc92d5d14123ce2c3581fec"
+  revision = "11551d06cbcc94edc80a0facaccbda56473c19c1"
 
 [[projects]]
   digest = "1:bb8277a2ca2bcad6ff7f413b939375924099be908cedd1314baa21ecd08df477"
@@ -995,7 +994,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:97cb842cd0b5ee37ca5dd760b2f9cb2f2afdbd5817f91b923ee4f9a76fa3156b"
+  digest = "1:b94c27d44b3a4d82d50920b88c967bb55cedc9bea7c9870e7e10cef7d67432d3"
   name = "k8s.io/apiserver"
   packages = [
     "pkg/admission",
@@ -1091,7 +1090,7 @@
     "plugin/pkg/authorizer/webhook",
   ]
   pruneopts = "UT"
-  revision = "b71f7555c571202d91f3846615f4fce425664bbb"
+  revision = "c106140daf37a5d2b7a513726091a5eb8107e8b9"
 
 [[projects]]
   digest = "1:949e892a56c87e0ae854731126ba0a786c46514beddd2124e321fcbe466b978b"
@@ -1273,7 +1272,6 @@
     "github.com/go-logr/logr/testing",
     "github.com/go-logr/zapr",
     "github.com/go-openapi/spec",
-    "github.com/golang/glog",
     "github.com/onsi/ginkgo",
     "github.com/onsi/ginkgo/config",
     "github.com/onsi/ginkgo/types",

@@ -17,6 +17,7 @@ limitations under the License.
 package recorder_test
 
 import (
+	tlog "github.com/go-logr/logr/testing"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -26,7 +27,7 @@ import (
 var _ = Describe("recorder.Provider", func() {
 	Describe("NewProvider", func() {
 		It("should return a provider instance and a nil error.", func() {
-			provider, err := recorder.NewProvider(cfg, scheme.Scheme)
+			provider, err := recorder.NewProvider(cfg, scheme.Scheme, tlog.NullLogger{})
 			Expect(provider).NotTo(BeNil())
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -35,13 +36,13 @@ var _ = Describe("recorder.Provider", func() {
 			// Invalid the config
 			cfg1 := *cfg
 			cfg1.ContentType = "invalid-type"
-			_, err := recorder.NewProvider(&cfg1, scheme.Scheme)
+			_, err := recorder.NewProvider(&cfg1, scheme.Scheme, tlog.NullLogger{})
 			Expect(err.Error()).To(ContainSubstring("failed to init clientSet"))
 		})
 	})
 	Describe("GetEventRecorder", func() {
 		It("should return a recorder instance.", func() {
-			provider, err := recorder.NewProvider(cfg, scheme.Scheme)
+			provider, err := recorder.NewProvider(cfg, scheme.Scheme, tlog.NullLogger{})
 			Expect(err).NotTo(HaveOccurred())
 
 			recorder := provider.GetEventRecorderFor("test")

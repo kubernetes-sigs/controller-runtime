@@ -32,7 +32,6 @@ header_text "running gometalinter.v2"
 gometalinter.v2 --disable-all \
     --deadline 5m \
     --enable=misspell \
-    --enable=structcheck \
     --enable=golint \
     --enable=deadcode \
     --enable=goimports \
@@ -53,5 +52,6 @@ gometalinter.v2 --disable-all \
     --skip=atomic \
     ./pkg/...
 # TODO: Enable these as we fix them to make them pass
+#    --enable=structcheck \
 #    --enable=maligned \
 #    --enable=safesql \

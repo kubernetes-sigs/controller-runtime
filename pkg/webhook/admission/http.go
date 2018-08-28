@@ -50,6 +50,9 @@ func addToScheme(scheme *runtime.Scheme) {
 
 var _ http.Handler = &Webhook{}
 
+// ContextKey is a type alias of string and is used as the key in context.
+type ContextKey string
+
 func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var body []byte
 	var err error
@@ -89,13 +92,11 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: add panic-recovery for Handle
-	type contextKey string
 	ctx := context.Background()
 	for k := range wh.KVMap {
-		ctx = context.WithValue(ctx, contextKey(k), wh.KVMap[k])
+		ctx = context.WithValue(ctx, ContextKey(k), wh.KVMap[k])
 	}
 	reviewResponse = wh.Handle(ctx, Request{AdmissionRequest: ar.Request})
-	reviewResponse.Response.UID = ar.Request.UID
 	writeResponse(w, reviewResponse)
 }
 

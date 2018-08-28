@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 
 	"github.com/mattbaird/jsonpatch"
 	. "github.com/onsi/ginkgo"
@@ -34,10 +35,16 @@ import (
 )
 
 var _ = Describe("admission webhook", func() {
+	var w *httptest.ResponseRecorder
+	BeforeEach(func(done Done) {
+		w = &httptest.ResponseRecorder{
+			Body: bytes.NewBuffer(nil),
+		}
+		close(done)
+	})
 	Describe("validating webhook", func() {
 		var alwaysAllow, alwaysDeny *fakeHandler
 		var req *http.Request
-		var w *fakeResponseWriter
 		var wh *Webhook
 		BeforeEach(func(done Done) {
 			alwaysAllow = &fakeHandler{
@@ -62,8 +69,6 @@ var _ = Describe("admission webhook", func() {
 				Header: http.Header{"Content-Type": []string{"application/json"}},
 				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
 			}
-
-			w = &fakeResponseWriter{}
 			close(done)
 		})
 
@@ -81,8 +86,7 @@ var _ = Describe("admission webhook", func() {
 				expected := []byte(`{"response":{"uid":"","allowed":false}}
 `)
 				wh.ServeHTTP(w, req)
-				Expect(w.response).NotTo(BeNil())
-				Expect(w.response).To(Equal(expected))
+				Expect(w.Body.Bytes()).To(Equal(expected))
 				Expect(alwaysAllow.invoked).To(BeTrue())
 				Expect(alwaysDeny.invoked).To(BeTrue())
 				Expect(alwaysAllow.valueFromContext).To(Equal("bar"))
@@ -104,8 +108,7 @@ var _ = Describe("admission webhook", func() {
 				expected := []byte(`{"response":{"uid":"","allowed":false}}
 `)
 				wh.ServeHTTP(w, req)
-				Expect(w.response).NotTo(BeNil())
-				Expect(w.response).To(Equal(expected))
+				Expect(w.Body.Bytes()).To(Equal(expected))
 				Expect(alwaysDeny.invoked).To(BeTrue())
 				Expect(alwaysDeny.valueFromContext).To(Equal("bar"))
 				Expect(alwaysAllow.invoked).To(BeFalse())
@@ -114,46 +117,6 @@ var _ = Describe("admission webhook", func() {
 	})
 
 	Describe("mutating webhook", func() {
-		Context("patch handler not returning the right patch type", func() {
-			req := &http.Request{
-				Header: http.Header{"Content-Type": []string{"application/json"}},
-				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
-			}
-			errPatcher := &fakeHandler{
-				fn: func(ctx context.Context, req Request) Response {
-					return Response{
-						Patches: []jsonpatch.JsonPatchOperation{
-							{
-								Operation: "add",
-								Path:      "/metadata/annotation/new-key",
-								Value:     "new-value",
-							},
-						},
-						Response: &admissionv1beta1.AdmissionResponse{
-							Allowed: true,
-						},
-					}
-				},
-			}
-			wh := &Webhook{
-				Type:     types.WebhookTypeMutating,
-				Handlers: []Handler{errPatcher},
-				KVMap:    map[string]interface{}{"foo": "bar"},
-			}
-			w := &fakeResponseWriter{}
-			expected := []byte(
-				`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"unexpected patch type ` +
-					`returned by the handler: \u003cnil\u003e, only allow: JSONPatch","code":500}}}
-`)
-			It("should return a response with error", func() {
-				wh.ServeHTTP(w, req)
-				Expect(w.response).NotTo(BeNil())
-				Expect(w.response).To(Equal(expected))
-				Expect(errPatcher.invoked).To(BeTrue())
-				Expect(errPatcher.valueFromContext).To(Equal("bar"))
-			})
-		})
-
 		Context("multiple patch handlers", func() {
 			req := &http.Request{
 				Header: http.Header{"Content-Type": []string{"application/json"}},
@@ -203,11 +166,11 @@ var _ = Describe("admission webhook", func() {
 				Handlers: []Handler{patcher1, patcher2},
 				KVMap:    map[string]interface{}{"foo": "bar"},
 			}
-			w := &fakeResponseWriter{}
 			expected := []byte(
-				`{"response":{"uid":"","allowed":false,"patch":` +
-					`"W3sib3AiOiJhZGQiLCJwYXRoIjoiL21ldGFkYXRhL2Fubm90YXRpb24vbmV3LWtleSIsInZhbHVlIjoibmV3LXZhbHVlIn0` +
-					`seyJvcCI6InJlcGxhY2UiLCJwYXRoIjoiL3NwZWMvcmVwbGljYXMiLCJ2YWx1ZSI6IjIifSx7Im9wIjoiYWRkIiwicGF0aCI6Ii9tZXRhZGF0YS9hbm5vdGF0aW9uL2hlbGxvIiwidmFsdWUiOiJ3b3JsZCJ9XQ=="}}
+				`{"response":{"uid":"","allowed":true,"patch":"W3sib3AiOiJhZGQiLCJwYXRoIjoiL21ldGFkYXRhL2Fubm90YXRpb2` +
+					`4vbmV3LWtleSIsInZhbHVlIjoibmV3LXZhbHVlIn0seyJvcCI6InJlcGxhY2UiLCJwYXRoIjoiL3NwZWMvcmVwbGljYXMiLC` +
+					`J2YWx1ZSI6IjIifSx7Im9wIjoiYWRkIiwicGF0aCI6Ii9tZXRhZGF0YS9hbm5vdGF0aW9uL2hlbGxvIiwidmFsdWUiOiJ3b3JsZCJ9XQ==",` +
+					`"patchType":"JSONPatch"}}
 `)
 			patches := []jsonpatch.JsonPatchOperation{
 				{
@@ -230,19 +193,16 @@ var _ = Describe("admission webhook", func() {
 			base64encoded := base64.StdEncoding.EncodeToString(j)
 			It("should aggregates patches from multiple handlers", func() {
 				wh.ServeHTTP(w, req)
-				Expect(w.response).NotTo(BeNil())
-				Expect(w.response).To(Equal(expected))
-				Expect(string(w.response)).To(ContainSubstring(base64encoded))
+				Expect(w.Body.Bytes()).To(Equal(expected))
+				Expect(w.Body.String()).To(ContainSubstring(base64encoded))
 				Expect(patcher1.invoked).To(BeTrue())
 				Expect(patcher2.invoked).To(BeTrue())
 				Expect(patcher1.valueFromContext).To(Equal("bar"))
 				Expect(patcher2.valueFromContext).To(Equal("bar"))
 			})
 		})
-	})
 
-	Describe("webhook defaulting", func() {
-		Context("patch handler not returning the right patch type", func() {
+		Context("patch handler denies the request", func() {
 			req := &http.Request{
 				Header: http.Header{"Content-Type": []string{"application/json"}},
 				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
@@ -250,15 +210,8 @@ var _ = Describe("admission webhook", func() {
 			errPatcher := &fakeHandler{
 				fn: func(ctx context.Context, req Request) Response {
 					return Response{
-						Patches: []jsonpatch.JsonPatchOperation{
-							{
-								Operation: "add",
-								Path:      "/metadata/annotation/new-key",
-								Value:     "new-value",
-							},
-						},
 						Response: &admissionv1beta1.AdmissionResponse{
-							Allowed: true,
+							Allowed: false,
 						},
 					}
 				},
@@ -268,15 +221,11 @@ var _ = Describe("admission webhook", func() {
 				Handlers: []Handler{errPatcher},
 				KVMap:    map[string]interface{}{"foo": "bar"},
 			}
-			w := &fakeResponseWriter{}
-			expected := []byte(
-				`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"unexpected patch type ` +
-					`returned by the handler: \u003cnil\u003e, only allow: JSONPatch","code":500}}}
+			expected := []byte(`{"response":{"uid":"","allowed":false}}
 `)
-			It("should return a response with error", func() {
+			It("should deny the request", func() {
 				wh.ServeHTTP(w, req)
-				Expect(w.response).NotTo(BeNil())
-				Expect(w.response).To(Equal(expected))
+				Expect(w.Body.Bytes()).To(Equal(expected))
 				Expect(errPatcher.invoked).To(BeTrue())
 				Expect(errPatcher.valueFromContext).To(Equal("bar"))
 			})

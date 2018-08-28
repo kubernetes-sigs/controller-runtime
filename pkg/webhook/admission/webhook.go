@@ -72,6 +72,9 @@ type Webhook struct {
 	KVMap map[string]interface{}
 	// Handlers contains a list of handlers. Each handler may only contains the business logic for its own feature.
 	// For example, feature foo and bar can be in the same webhook if all the other configurations are the same.
+	// The handler will be invoked sequentially as the order in the list.
+	// Note: if you are using mutating webhook with multiple handlers, it's your responsibility to
+	// ensure the handlers are not generating conflicting JSON patches.
 	Handlers []Handler
 
 	once sync.Once
@@ -117,7 +120,7 @@ func (w *Webhook) Handle(ctx context.Context, req Request) Response {
 	case types.WebhookTypeValidating:
 		resp = w.handleValidating(ctx, req)
 	default:
-		return ErrorResponse(http.StatusBadRequest, errors.New("you must specify your webhook type"))
+		return ErrorResponse(http.StatusInternalServerError, errors.New("you must specify your webhook type"))
 	}
 	resp.Response.UID = req.AdmissionRequest.UID
 	return resp
@@ -135,16 +138,13 @@ func (w *Webhook) kvMapToContext(ctx context.Context) (context.Context, error) {
 }
 
 func (w *Webhook) handleMutating(ctx context.Context, req Request) Response {
-	r := Response{
-		Response: &admissionv1beta1.AdmissionResponse{},
-	}
 	patches := []jsonpatch.JsonPatchOperation{}
 	for _, handler := range w.Handlers {
 		resp := handler.Handle(ctx, req)
 		if !resp.Response.Allowed {
 			return resp
 		}
-		if resp.Response.PatchType == nil || *resp.Response.PatchType != admissionv1beta1.PatchTypeJSONPatch {
+		if resp.Response.PatchType != nil && *resp.Response.PatchType != admissionv1beta1.PatchTypeJSONPatch {
 			return ErrorResponse(http.StatusInternalServerError,
 				fmt.Errorf("unexpected patch type returned by the handler: %v, only allow: %v",
 					resp.Response.PatchType, admissionv1beta1.PatchTypeJSONPatch))
@@ -152,27 +152,31 @@ func (w *Webhook) handleMutating(ctx context.Context, req Request) Response {
 		patches = append(patches, resp.Patches...)
 	}
 	var err error
-	r.Response.Patch, err = json.Marshal(patches)
+	marshaledPatch, err := json.Marshal(patches)
 	if err != nil {
 		return ErrorResponse(http.StatusBadRequest, fmt.Errorf("error when marshaling the patch: %v", err))
 	}
-	return r
+	return Response{
+		Response: &admissionv1beta1.AdmissionResponse{
+			Allowed:   true,
+			Patch:     marshaledPatch,
+			PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
+		},
+	}
 }
 
 func (w *Webhook) handleValidating(ctx context.Context, req Request) Response {
-	r := Response{
+	for _, handler := range w.Handlers {
+		resp := handler.Handle(ctx, req)
+		if !resp.Response.Allowed {
+			return resp
+		}
+	}
+	return Response{
 		Response: &admissionv1beta1.AdmissionResponse{
 			Allowed: true,
 		},
 	}
-	for _, handler := range w.Handlers {
-		resp := handler.Handle(ctx, req)
-		if !resp.Response.Allowed {
-			r.Response.Allowed = false
-			break
-		}
-	}
-	return r
 }
 
 // GetName returns the name of the webhook.

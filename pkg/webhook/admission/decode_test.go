@@ -27,6 +27,15 @@ import (
 )
 
 var _ = Describe("admission webhook decoder", func() {
+	var decoder Decoder
+	BeforeEach(func(done Done) {
+		var err error
+		decoder, err = NewDecoder(scheme.Scheme)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(decoder).NotTo(BeNil())
+		close(done)
+	})
+
 	Describe("NewDecoder", func() {
 		It("should return a decoder without an error", func() {
 			decoder, err := NewDecoder(scheme.Scheme)
@@ -36,7 +45,6 @@ var _ = Describe("admission webhook decoder", func() {
 	})
 
 	Describe("Decode", func() {
-		var decoder Decoder
 		req := Request{
 			AdmissionRequest: &admissionv1beta1.AdmissionRequest{
 				Object: runtime.RawExtension{
@@ -59,13 +67,6 @@ var _ = Describe("admission webhook decoder", func() {
 				},
 			},
 		}
-		BeforeEach(func(done Done) {
-			var err error
-			decoder, err = NewDecoder(scheme.Scheme)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(decoder).NotTo(BeNil())
-			close(done)
-		})
 
 		It("should be able to decode", func() {
 			err := decoder.Decode(req, &corev1.Pod{})

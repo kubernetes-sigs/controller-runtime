@@ -21,6 +21,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/http/httptest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -30,18 +31,25 @@ import (
 )
 
 var _ = Describe("admission webhook http handler", func() {
+	var w *httptest.ResponseRecorder
+	BeforeEach(func(done Done) {
+		w = &httptest.ResponseRecorder{
+			Body: bytes.NewBuffer(nil),
+		}
+		close(done)
+	})
+
 	Describe("empty request body", func() {
 		req := &http.Request{Body: nil}
 		wh := &Webhook{
 			Handlers: []Handler{},
 		}
-		w := &fakeResponseWriter{}
+
 		expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"request body is empty","code":400}}}
 `)
-		It("should return a response with an error", func() {
+		It("should return an error with bad-request status code", func() {
 			wh.ServeHTTP(w, req)
-			Expect(w.response).NotTo(BeNil())
-			Expect(w.response).To(Equal(expected))
+			Expect(w.Body.Bytes()).To(Equal(expected))
 		})
 	})
 
@@ -53,13 +61,12 @@ var _ = Describe("admission webhook http handler", func() {
 		wh := &Webhook{
 			Handlers: []Handler{},
 		}
-		w := &fakeResponseWriter{}
 		expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"contentType=application/foo, expect application/json","code":400}}}
 `)
-		It("should return a response with an error", func() {
+		It("should return an error with bad-request status code", func() {
 			wh.ServeHTTP(w, req)
-			Expect(w.response).NotTo(BeNil())
-			Expect(w.response).To(Equal(expected))
+			Expect(w.Body.Bytes()).To(Equal(expected))
+
 		})
 	})
 
@@ -72,14 +79,13 @@ var _ = Describe("admission webhook http handler", func() {
 			Type:     types.WebhookTypeMutating,
 			Handlers: []Handler{},
 		}
-		w := &fakeResponseWriter{}
 		expected := []byte(
 			`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"couldn't get version/kind; json parse error: unexpected end of JSON input","code":400}}}
 `)
-		It("should return a response with an error", func() {
+		It("should return an error with bad-request status code", func() {
 			wh.ServeHTTP(w, req)
-			Expect(w.response).NotTo(BeNil())
-			Expect(w.response).To(Equal(expected))
+			Expect(w.Body.Bytes()).To(Equal(expected))
+
 		})
 	})
 
@@ -92,13 +98,11 @@ var _ = Describe("admission webhook http handler", func() {
 			Type:     types.WebhookTypeMutating,
 			Handlers: []Handler{},
 		}
-		w := &fakeResponseWriter{}
 		expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"got an empty AdmissionRequest","code":400}}}
 `)
-		It("should return a response with an error", func() {
+		It("should return an error with bad-request status code", func() {
 			wh.ServeHTTP(w, req)
-			Expect(w.response).NotTo(BeNil())
-			Expect(w.response).To(Equal(expected))
+			Expect(w.Body.Bytes()).To(Equal(expected))
 		})
 	})
 
@@ -110,13 +114,12 @@ var _ = Describe("admission webhook http handler", func() {
 		wh := &Webhook{
 			Handlers: []Handler{},
 		}
-		w := &fakeResponseWriter{}
-		expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"you must specify your webhook type","code":400}}}
+		expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"you must specify your webhook type","code":500}}}
 `)
-		It("should return a response with an error", func() {
+		It("should return an error with internal-error status code", func() {
 			wh.ServeHTTP(w, req)
-			Expect(w.response).NotTo(BeNil())
-			Expect(w.response).To(Equal(expected))
+			Expect(w.Body.Bytes()).To(Equal(expected))
+
 		})
 	})
 
@@ -131,35 +134,16 @@ var _ = Describe("admission webhook http handler", func() {
 			Handlers: []Handler{h},
 			KVMap:    map[string]interface{}{"foo": "bar"},
 		}
-		w := &fakeResponseWriter{}
 		expected := []byte(`{"response":{"uid":"","allowed":true}}
 `)
 		It("should return a response successfully", func() {
 			wh.ServeHTTP(w, req)
-			Expect(w.response).NotTo(BeNil())
-			Expect(w.response).To(Equal(expected))
+			Expect(w.Body.Bytes()).To(Equal(expected))
 			Expect(h.invoked).To(BeTrue())
 			Expect(h.valueFromContext).To(Equal("bar"))
 		})
 	})
 })
-
-type fakeResponseWriter struct {
-	response []byte
-}
-
-var _ http.ResponseWriter = &fakeResponseWriter{}
-
-func (w *fakeResponseWriter) Header() http.Header {
-	return nil
-}
-
-func (w *fakeResponseWriter) Write(resp []byte) (int, error) {
-	w.response = append(w.response, resp...)
-	return len(resp), nil
-}
-
-func (w *fakeResponseWriter) WriteHeader(statusCode int) {}
 
 type nopCloser struct {
 	io.Reader

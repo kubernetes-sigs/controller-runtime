@@ -26,7 +26,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
-func TestSource(t *testing.T) {
+func TestAdmissionWebhook(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecsWithDefaultAndCustomReporters(t, "application Suite", []Reporter{envtest.NewlineReporter{}})
 }

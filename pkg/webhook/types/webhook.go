@@ -20,6 +20,7 @@ package types
 type WebhookType int
 
 const (
+	_ = iota
 	// WebhookTypeMutating represents mutating type webhook
 	WebhookTypeMutating WebhookType = iota
 	// WebhookTypeValidating represents validating type webhook

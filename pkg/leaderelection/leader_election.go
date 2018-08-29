@@ -18,6 +18,7 @@ package leaderelection
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 
 	"k8s.io/apimachinery/pkg/util/uuid"
@@ -26,6 +27,8 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
+
+const inClusterNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 
 // Options provides the required configuration to create a new resource lock
 type Options struct {
@@ -49,8 +52,18 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 		return nil, nil
 	}
 
-	if options.LeaderElectionID == "" || options.LeaderElectionNamespace == "" {
-		return nil, fmt.Errorf("if leader election is enabled, both LeaderElectionID and LeaderElectionNamespace must be set")
+	// Default the LeaderElectionID
+	if options.LeaderElectionID == "" {
+		options.LeaderElectionID = "controller-leader-election-helper"
+	}
+
+	// Default the namespace (if running in cluster)
+	if options.LeaderElectionNamespace == "" {
+		var err error
+		options.LeaderElectionNamespace, err = getInClusterNamespace()
+		if err != nil {
+			return nil, fmt.Errorf("unable to find leader election namespace: %v", err)
+		}
 	}
 
 	// Leader id, needs to be unique
@@ -75,4 +88,22 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 			Identity:      id,
 			EventRecorder: recorderProvider.GetEventRecorderFor(id),
 		})
+}
+
+func getInClusterNamespace() (string, error) {
+	// Check whether the namespace file exists.
+	// If not, we are not running in cluster so can't guess the namespace.
+	_, err := os.Stat(inClusterNamespacePath)
+	if os.IsNotExist(err) {
+		return "", fmt.Errorf("not running in-cluster, please specify LeaderElectionNamespace")
+	} else if err != nil {
+		return "", fmt.Errorf("error checking namespace file: %v", err)
+	}
+
+	// Load the namespace file and return itss content
+	namespace, err := ioutil.ReadFile(inClusterNamespacePath)
+	if err != nil {
+		return "", fmt.Errorf("error reading namespace file: %v", err)
+	}
+	return string(namespace), nil
 }

@@ -25,9 +25,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
@@ -98,18 +100,27 @@ var _ = Describe("manger.Manager", func() {
 			close(done)
 		})
 		Context("with leader election enabled", func() {
-			It("should return an error if ID not set", func() {
-				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionNamespace: "default"})
-				Expect(m).To(BeNil())
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("if leader election is enabled, both LeaderElectionID and LeaderElectionNamespace must be set"))
+			It("should default ID to controller-runtime if ID is not set", func() {
+				var rl resourcelock.Interface
+				m, err := New(cfg, Options{
+					LeaderElection:          true,
+					LeaderElectionNamespace: "default",
+					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+						var err error
+						rl, err = leaderelection.NewResourceLock(config, recorderProvider, options)
+						return rl, err
+					},
+				})
+				Expect(m).ToNot(BeNil())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rl.Describe()).To(Equal("default/controller-leader-election-helper"))
 			})
 
-			It("should return an error if namespace not set", func() {
+			It("should return an error if namespace not set and not running in cluster", func() {
 				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime"})
 				Expect(m).To(BeNil())
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("if leader election is enabled, both LeaderElectionID and LeaderElectionNamespace must be set"))
+				Expect(err.Error()).To(ContainSubstring("unable to find leader election namespace: not running in-cluster, please specify LeaderElectionNamespace"))
 			})
 		})
 	})

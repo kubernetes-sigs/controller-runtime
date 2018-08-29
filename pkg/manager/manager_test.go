@@ -18,11 +18,14 @@ package manager
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
+	"net/http"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -263,6 +266,132 @@ var _ = Describe("manger.Manager", func() {
 				LeaderElectionID:        "controller-runtime",
 				LeaderElectionNamespace: "default",
 				newResourceLock:         fakeleaderelection.NewResourceLock,
+			})
+		})
+
+		Context("should start serving metrics", func() {
+			var listener net.Listener
+			var opts Options
+
+			BeforeEach(func() {
+				listener = nil
+				opts = Options{
+					newMetricsListener: func(addr string) (net.Listener, error) {
+						var err error
+						listener, err = metrics.NewListener(addr)
+						return listener, err
+					},
+				}
+			})
+
+			AfterEach(func() {
+				if listener != nil {
+					listener.Close()
+				}
+			})
+
+			It("should stop serving metrics when stop is called", func(done Done) {
+				opts.MetricsBindAddress = ":0"
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				s := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(s)).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				// Check the metrics started
+				endpoint := fmt.Sprintf("http://%s", listener.Addr().String())
+				_, err = http.Get(endpoint)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Shutdown the server
+				close(s)
+
+				// Expect the metrics server to shutdown
+				Eventually(func() error {
+					_, err = http.Get(endpoint)
+					return err
+				}).ShouldNot(Succeed())
+			})
+
+			It("should serve metrics endpoint", func(done Done) {
+				opts.MetricsBindAddress = ":0"
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				s := make(chan struct{})
+				defer close(s)
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(s)).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
+				resp, err := http.Get(metricsEndpoint)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).To(Equal(200))
+			})
+
+			It("should not serve anything other than metrics endpoint", func(done Done) {
+				opts.MetricsBindAddress = ":0"
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				s := make(chan struct{})
+				defer close(s)
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(s)).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				endpoint := fmt.Sprintf("http://%s/should-not-exist", listener.Addr().String())
+				resp, err := http.Get(endpoint)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).To(Equal(404))
+			})
+
+			It("should serve metrics in its registry", func(done Done) {
+				one := prometheus.NewCounter(prometheus.CounterOpts{
+					Name: "test_one",
+					Help: "test metric for testing",
+				})
+				one.Set(1)
+				err := metrics.Registry.Register(one)
+				Expect(err).NotTo(HaveOccurred())
+
+				opts.MetricsBindAddress = ":0"
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				s := make(chan struct{})
+				defer close(s)
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(s)).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
+				resp, err := http.Get(metricsEndpoint)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).To(Equal(200))
+
+				data, err := ioutil.ReadAll(resp.Body)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(data)).To(ContainSubstring("%s\n%s\n%s\n",
+					`# HELP test_one test metric for testing`,
+					`# TYPE test_one counter`,
+					`test_one 1`,
+				))
+
+				// Unregister will return false if the metric was never registered
+				ok := metrics.Registry.Unregister(one)
+				Expect(ok).To(BeTrue())
 			})
 		})
 	})

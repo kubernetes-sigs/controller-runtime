@@ -17,11 +17,14 @@ limitations under the License.
 package manager
 
 import (
+	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -30,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
@@ -161,6 +165,32 @@ func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
 	return cm.mapper
 }
 
+func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
+	handler := promhttp.HandlerFor(metrics.Registry, promhttp.HandlerOpts{
+		ErrorHandling: promhttp.HTTPErrorOnError,
+	})
+	// TODO(JoelSpeed): Use existing Kubernetes machinery for serving metrics
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", handler)
+	server := http.Server{
+		Handler: mux,
+	}
+	// Run the server
+	go func() {
+		if err := server.Serve(cm.metricsListener); err != nil {
+			cm.errChan <- err
+		}
+	}()
+
+	// Shutdown the server when stop is closed
+	select {
+	case <-stop:
+		if err := server.Shutdown(context.Background()); err != nil {
+			cm.errChan <- err
+		}
+	}
+}
+
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	if cm.resourceLock != nil {
 		err := cm.startLeaderElection(stop)
@@ -196,6 +226,11 @@ func (cm *controllerManager) start(stop <-chan struct{}) {
 			cm.errChan <- err
 		}
 	}()
+
+	// Start the metrics server
+	if cm.metricsListener != nil {
+		go cm.serveMetrics(stop)
+	}
 
 	// Wait for the caches to sync.
 	// TODO(community): Check the return value and write a test

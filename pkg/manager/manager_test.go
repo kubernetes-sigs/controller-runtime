@@ -18,6 +18,7 @@ package manager
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
@@ -31,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -69,7 +71,8 @@ var _ = Describe("manger.Manager", func() {
 			m, err := New(cfg, Options{
 				newClient: func(config *rest.Config, options client.Options) (client.Client, error) {
 					return nil, fmt.Errorf("expected error")
-				}})
+				},
+			})
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
@@ -81,7 +84,8 @@ var _ = Describe("manger.Manager", func() {
 			m, err := New(cfg, Options{
 				newCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 					return nil, fmt.Errorf("expected error")
-				}})
+				},
+			})
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
@@ -92,7 +96,8 @@ var _ = Describe("manger.Manager", func() {
 			m, err := New(cfg, Options{
 				newRecorderProvider: func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error) {
 					return nil, fmt.Errorf("expected error")
-				}})
+				},
+			})
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
@@ -122,6 +127,42 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unable to find leader election namespace: not running in-cluster, please specify LeaderElectionNamespace"))
 			})
+		})
+
+		It("should create a listener for the metrics if a valid address is provided", func() {
+			var listener net.Listener
+			m, err := New(cfg, Options{
+				MetricsBindAddress: ":0",
+				newMetricsListener: func(addr string) (net.Listener, error) {
+					var err error
+					listener, err = metrics.NewListener(addr)
+					return listener, err
+				},
+			})
+			Expect(m).ToNot(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(listener).ToNot(BeNil())
+			Expect(listener.Close()).ToNot(HaveOccurred())
+		})
+
+		It("should return an error if the metrics bind address is already in use", func() {
+			ln, err := metrics.NewListener(":0")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			var listener net.Listener
+			m, err := New(cfg, Options{
+				MetricsBindAddress: ln.Addr().String(),
+				newMetricsListener: func(addr string) (net.Listener, error) {
+					var err error
+					listener, err = metrics.NewListener(addr)
+					return listener, err
+				},
+			})
+			Expect(m).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(listener).To(BeNil())
+
+			Expect(ln.Close()).ToNot(HaveOccurred())
 		})
 	})
 

@@ -18,6 +18,7 @@ package manager
 
 import (
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -69,6 +70,9 @@ type controllerManager struct {
 
 	// mapper is used to map resources to kind, and map kind and version.
 	mapper meta.RESTMapper
+
+	// metricsListener is used to serve prometheus metrics
+	metricsListener net.Listener
 
 	mu      sync.Mutex
 	started bool

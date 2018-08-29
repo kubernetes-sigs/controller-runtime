@@ -101,7 +101,7 @@ func (s *SecretCertWriter) parseAnnotations(annotations map[string]string, secre
 		if strings.HasPrefix(k, SecretCertProvisionAnnotationKeyPrefix) {
 			webhookName := strings.TrimPrefix(k, SecretCertProvisionAnnotationKeyPrefix)
 			secretWebhookMap[webhookName] = &webhookAndSecret{
-				secret: types.NewNamespacedNameFromString(v),
+				secret: newNamespacedNameFromString(v),
 			}
 		}
 	}
@@ -180,6 +180,24 @@ func (s *secretReadWriter) read(webhookName string) (*generator.Artifacts, error
 		return nil, notFoundError{err}
 	}
 	return secretToCerts(secret), err
+}
+
+// newNamespacedNameFromString parses the provided string and returns a NamespacedName.
+// The expected format is as per String() above.
+// If the input string is invalid, the returned NamespacedName has all empty string field values.
+// This allows a single-value return from this function, while still allowing error checks in the caller.
+// Note that an input string which does not include exactly one Separator is not a valid input (as it could never
+// have neem returned by String() )
+// NOTE: https://github.com/kubernetes/apimachinery/commit/2b167bb262168a225efe64d1fdc40ea97870ca9e removed this from
+// "k8s.io/apimachinery/pkg/types". Code copied here.
+func newNamespacedNameFromString(s string) types.NamespacedName {
+	nn := types.NamespacedName{}
+	result := strings.Split(s, string(types.Separator))
+	if len(result) == 2 {
+		nn.Namespace = result[0]
+		nn.Name = result[1]
+	}
+	return nn
 }
 
 func secretToCerts(secret *corev1.Secret) *generator.Artifacts {

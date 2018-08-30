@@ -17,7 +17,7 @@ limitations under the License.
 /*
 Package generator provides an interface and implementation to provision certificates.
 
-Create an instance of CertGenerator.
+Create an instance of certGenerator.
 
 	cg := SelfSignedCertGenerator{}
 

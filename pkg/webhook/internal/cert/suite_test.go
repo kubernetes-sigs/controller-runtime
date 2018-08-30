@@ -14,23 +14,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*
-Package cert provides functions to manage certificates for webhookClientConfiguration.
-
-Create a Provisioner with a CertWriter.
-
-	provisioner := Provisioner{
-		CertWriter: admission.NewSecretCertWriter(admission.SecretCertWriterOptions{...}),
-	}
-
-Provision the certificates for the webhookClientConfig
-
-	err := provisioner.Provision(Options{
-		ClientConfig: webhookClientConfig,
-		Objects: []runtime.Object{mutatingWebhookConfiguration, validatingWebhookConfiguration}
-	})
-	if err != nil {
-		// handle error
-	}
-*/
 package cert
+
+import (
+	"testing"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+)
+
+func TestSource(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecsWithDefaultAndCustomReporters(t, "Cert Provisioner Test Suite", []Reporter{envtest.NewlineReporter{}})
+}
+
+var _ = BeforeSuite(func(done Done) {
+	logf.SetLogger(logf.ZapLoggerTo(GinkgoWriter, true))
+	close(done)
+}, 60)

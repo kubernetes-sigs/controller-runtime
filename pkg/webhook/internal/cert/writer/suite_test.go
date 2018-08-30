@@ -28,7 +28,7 @@ import (
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Admission Webhook Test Suite", []Reporter{envtest.NewlineReporter{}})
+	RunSpecsWithDefaultAndCustomReporters(t, "Cert Writer Test Suite", []Reporter{envtest.NewlineReporter{}})
 }
 
 var _ = BeforeSuite(func(done Done) {

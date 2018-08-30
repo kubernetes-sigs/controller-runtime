@@ -94,10 +94,10 @@ type BootstrapOptions struct {
 	Host *string
 
 	// certProvisioner is constructed using certGenerator and certWriter
-	certProvisioner *cert.Provisioner
+	certProvisioner *cert.Provisioner // nolint: structcheck
 
 	// err will be non-nil if there is an error occur during initialization.
-	err error
+	err error // nolint: structcheck
 }
 
 // Service contains information for creating a service

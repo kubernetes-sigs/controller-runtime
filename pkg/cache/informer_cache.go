@@ -59,11 +59,6 @@ func (ip *informerCache) Get(ctx context.Context, key client.ObjectKey, out runt
 
 // List implements Reader
 func (ip *informerCache) List(ctx context.Context, opts *client.ListOptions, out runtime.Object) error {
-	itemsPtr, err := apimeta.GetItemsPtr(out)
-	if err != nil {
-		return nil
-	}
-
 	gvk, err := apiutil.GVKForObject(out, ip.Scheme)
 	if err != nil {
 		return err

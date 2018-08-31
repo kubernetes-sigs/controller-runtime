@@ -117,7 +117,7 @@ var _ = Describe("Informer Cache", func() {
 			It("should be able to list objects that haven't been watched previously", func() {
 				By("listing all services in the cluster")
 				listObj := &kcorev1.ServiceList{}
-				Expect(informerCache.List(context.Background(), listObj)).To(Succeed())
+				Expect(informerCache.List(context.Background(), nil, listObj)).To(Succeed())
 
 				By("verifying that the returned list contains the Kubernetes service")
 				// NB: kubernetes default service is automatically created in testenv.
@@ -147,10 +147,10 @@ var _ = Describe("Informer Cache", func() {
 				By("listing pods with a particular label")
 				// NB: each pod has a "test-label": <pod-name>
 				out := kcorev1.PodList{}
-				Expect(informerCache.List(context.Background(), &out,
-					client.InNamespace(testNamespaceTwo),
-					client.MatchingLabels(map[string]string{"test-label": "test-pod-2"}),
-				)).To(Succeed())
+				lo := &client.ListOptions{}
+				lo.InNamespace(testNamespaceTwo)
+				lo.MatchingLabels(map[string]string{"test-label": "test-pod-2"})
+				Expect(informerCache.List(context.Background(), lo, &out)).To(Succeed())
 
 				By("verifying the returned pods have the correct label")
 				Expect(out.Items).NotTo(BeEmpty())
@@ -167,9 +167,9 @@ var _ = Describe("Informer Cache", func() {
 				// NB: each pod has a "test-label": <pod-name>
 				out := kcorev1.PodList{}
 				labels := map[string]string{"test-label": "test-pod-2"}
-				Expect(informerCache.List(context.Background(), &out,
-					client.MatchingLabels(labels),
-				)).To(Succeed())
+				lo := &client.ListOptions{}
+				lo.MatchingLabels(labels)
+				Expect(informerCache.List(context.Background(), lo, &out)).To(Succeed())
 
 				By("verifying multiple pods with the same label in different namespaces are returned")
 				Expect(out.Items).NotTo(BeEmpty())
@@ -184,9 +184,9 @@ var _ = Describe("Informer Cache", func() {
 			It("should be able to list objects by namespace", func() {
 				By("listing pods in test-namespace-1")
 				listObj := &kcorev1.PodList{}
-				Expect(informerCache.List(context.Background(),
-					client.InNamespace(testNamespaceOne),
-					listObj)).To(Succeed())
+				lo := &client.ListOptions{}
+				lo.InNamespace(testNamespaceOne)
+				Expect(informerCache.List(context.Background(), lo, listObj)).To(Succeed())
 
 				By("verifying that the returned pods are in test-namespace-1")
 				Expect(listObj.Items).NotTo(BeEmpty())
@@ -231,7 +231,8 @@ var _ = Describe("Informer Cache", func() {
 					Version: "v1",
 					Kind:    "ServiceList",
 				})
-				Expect(informerCache.List(context.Background(), nil, listObj)).To(Succeed())
+				err := informerCache.List(context.Background(), nil, listObj)
+				Expect(err).To(Succeed())
 
 				By("verifying that the returned list contains the Kubernetes service")
 				// NB: kubernetes default service is automatically created in testenv.
@@ -271,8 +272,11 @@ var _ = Describe("Informer Cache", func() {
 					Version: "v1",
 					Kind:    "PodList",
 				})
-				Expect(informerCache.List(context.Background(), client.InNamespace(testNamespaceTwo).
-					MatchingLabels(map[string]string{"test-label": "test-pod-2"}), &out)).To(Succeed())
+				lo := &client.ListOptions{}
+				lo.InNamespace(testNamespaceTwo)
+				lo.MatchingLabels(map[string]string{"test-label": "test-pod-2"})
+				err := informerCache.List(context.Background(), lo, &out)
+				Expect(err).To(Succeed())
 
 				By("verifying the returned pods have the correct label")
 				Expect(out.Items).NotTo(BeEmpty())
@@ -294,8 +298,10 @@ var _ = Describe("Informer Cache", func() {
 					Kind:    "PodList",
 				})
 				labels := map[string]string{"test-label": "test-pod-2"}
-				Expect(informerCache.List(context.Background(),
-					client.MatchingLabels(labels), &out)).To(Succeed())
+				lo := &client.ListOptions{}
+				lo.MatchingLabels(labels)
+				err := informerCache.List(context.Background(), lo, &out)
+				Expect(err).To(Succeed())
 
 				By("verifying multiple pods with the same label in different namespaces are returned")
 				Expect(out.Items).NotTo(BeEmpty())
@@ -315,9 +321,10 @@ var _ = Describe("Informer Cache", func() {
 					Version: "v1",
 					Kind:    "PodList",
 				})
-				Expect(informerCache.List(context.Background(),
-					client.InNamespace(testNamespaceOne),
-					listObj)).To(Succeed())
+				lo := &client.ListOptions{}
+				lo.InNamespace(testNamespaceOne)
+				err := informerCache.List(context.Background(), lo, listObj)
+				Expect(err).To(Succeed())
 
 				By("verifying that the returned pods are in test-namespace-1")
 				Expect(listObj.Items).NotTo(BeEmpty())
@@ -470,9 +477,9 @@ var _ = Describe("Informer Cache", func() {
 
 				By("listing Pods with restartPolicyOnFailure")
 				listObj := &kcorev1.PodList{}
-				Expect(informer.List(context.Background(), listObj,
-					client.MatchingField("spec.restartPolicy", "OnFailure"),
-				)).To(Succeed())
+				lo := &client.ListOptions{}
+				lo.MatchingField("spec.restartPolicy", "OnFailure")
+				Expect(informer.List(context.Background(), lo, listObj)).To(Succeed())
 
 				By("verifying that the returned pods have correct restart policy")
 				Expect(listObj.Items).NotTo(BeEmpty())
@@ -524,7 +531,7 @@ var _ = Describe("Informer Cache", func() {
 				By("verifying the object is received on the channel")
 				Eventually(out).Should(Receive(Equal(pod)))
 				close(done)
-			})
+			}, 3)
 
 			It("should be able to index an object field then retrieve objects by that field", func() {
 				By("creating the cache")
@@ -565,16 +572,17 @@ var _ = Describe("Informer Cache", func() {
 					Version: "v1",
 					Kind:    "PodList",
 				})
-				Expect(informer.List(context.Background(),
-					client.MatchingField("spec.restartPolicy", "OnFailure"),
-					listObj)).To(Succeed())
+				lo := &client.ListOptions{}
+				lo.MatchingField("spec.restartPolicy", "OnFailure")
+				err = informer.List(context.Background(), lo, listObj)
+				Expect(err).To(Succeed())
 
 				By("verifying that the returned pods have correct restart policy")
 				Expect(listObj.Items).NotTo(BeEmpty())
 				Expect(listObj.Items).Should(HaveLen(1))
 				actual := listObj.Items[0]
 				Expect(actual.GetName()).To(Equal("test-pod-3"))
-			})
+			}, 3)
 		})
 	})
 })

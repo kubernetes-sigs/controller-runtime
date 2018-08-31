@@ -23,7 +23,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -45,18 +44,14 @@ type clientCache struct {
 	// codecs are used to create a REST client for a gvk
 	codecs serializer.CodecFactory
 
-	muByType sync.RWMutex
 	// resourceByType caches type metadata
 	resourceByType map[reflect.Type]*resourceMeta
-
-	muByGVK sync.RWMutex
-	// resourceByGVK caches type metadata for unstructured
-	unstructuredResourceByGVK map[schema.GroupVersionKind]*resourceMeta
+	mu             sync.RWMutex
 }
 
 // newResource maps obj to a Kubernetes Resource and constructs a client for that Resource.
 // If the object is a list, the resource represents the item's type instead.
-func (c *clientCache) newResource(obj runtime.Object, isUnstructured bool) (*resourceMeta, error) {
+func (c *clientCache) newResource(obj runtime.Object) (*resourceMeta, error) {
 	gvk, err := apiutil.GVKForObject(obj, c.scheme)
 	if err != nil {
 		return nil, err
@@ -67,12 +62,7 @@ func (c *clientCache) newResource(obj runtime.Object, isUnstructured bool) (*res
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 	}
 
-	var client rest.Interface
-	if isUnstructured {
-		client, err = apiutil.RESTUnstructuredClientForGVK(gvk, c.config)
-	} else {
-		client, err = apiutil.RESTClientForGVK(gvk, c.config, c.codecs)
-	}
+	client, err := apiutil.RESTClientForGVK(gvk, c.config, c.codecs)
 	if err != nil {
 		return nil, err
 	}
@@ -83,61 +73,30 @@ func (c *clientCache) newResource(obj runtime.Object, isUnstructured bool) (*res
 	return &resourceMeta{Interface: client, mapping: mapping, gvk: gvk}, nil
 }
 
-func (c *clientCache) getUnstructuredResourceByGVK(obj runtime.Object) (*resourceMeta, error) {
-	// It's better to do creation work twice than to not let multiple
-	// people make requests at once
-	c.muByGVK.RLock()
-	r, known := c.unstructuredResourceByGVK[obj.GetObjectKind().GroupVersionKind()]
-	c.muByGVK.RUnlock()
-
-	if known {
-		return r, nil
-	}
-
-	// Initialize a new Client
-	c.muByGVK.Lock()
-	defer c.muByGVK.Unlock()
-	r, err := c.newResource(obj, true)
-	if err != nil {
-		return nil, err
-	}
-	c.unstructuredResourceByGVK[obj.GetObjectKind().GroupVersionKind()] = r
-	return r, err
-}
-
-func (c *clientCache) getResourceByType(obj runtime.Object) (*resourceMeta, error) {
+// getResource returns the resource meta information for the given type of object.
+// If the object is a list, the resource represents the item's type instead.
+func (c *clientCache) getResource(obj runtime.Object) (*resourceMeta, error) {
 	typ := reflect.TypeOf(obj)
 
 	// It's better to do creation work twice than to not let multiple
 	// people make requests at once
-	c.muByType.RLock()
+	c.mu.RLock()
 	r, known := c.resourceByType[typ]
-	c.muByType.RUnlock()
+	c.mu.RUnlock()
 
 	if known {
 		return r, nil
 	}
 
 	// Initialize a new Client
-	c.muByType.Lock()
-	defer c.muByType.Unlock()
-	r, err := c.newResource(obj, false)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	r, err := c.newResource(obj)
 	if err != nil {
 		return nil, err
 	}
 	c.resourceByType[typ] = r
 	return r, err
-}
-
-// getResource returns the resource meta information for the given type of object.
-// If the object is a list, the resource represents the item's type instead.
-func (c *clientCache) getResource(obj runtime.Object) (*resourceMeta, error) {
-	_, isUnstructured := obj.(*unstructured.Unstructured)
-	_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
-	if isUnstructured || isUnstructuredList {
-		return c.getUnstructuredResourceByGVK(obj)
-	}
-	return c.getResourceByType(obj)
 }
 
 // getObjMeta returns objMeta containing both type and object metadata and state

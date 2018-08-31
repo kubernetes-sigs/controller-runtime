@@ -20,16 +20,20 @@ import (
 	"fmt"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source/internal"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
+
+var log = logf.KBLog.WithName("source")
 
 const (
 	// defaultBufferSize is the default number of event notifications that can be buffered.
@@ -80,6 +84,10 @@ func (ks *Kind) Start(handler handler.EventHandler, queue workqueue.RateLimiting
 	// Lookup the Informer from the Cache and add an EventHandler which populates the Queue
 	i, err := ks.cache.GetInformer(ks.Type)
 	if err != nil {
+		if kindMatchErr, ok := err.(*meta.NoKindMatchError); ok {
+			log.Error(err, "if %s is a CRD, should install it before calling Start",
+				kindMatchErr.GroupKind)
+		}
 		return err
 	}
 	i.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})

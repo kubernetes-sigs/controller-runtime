@@ -209,6 +209,9 @@ func (c *Controller) processNextWorkItem() bool {
 		log.Error(err, "Reconciler error", "Controller", c.Name, "Request", req)
 
 		return false
+	} else if result.RequeueAfter > 0 {
+		c.Queue.AddAfter(req, result.RequeueAfter)
+		return true
 	} else if result.Requeue {
 		c.Queue.AddRateLimited(req)
 		return true

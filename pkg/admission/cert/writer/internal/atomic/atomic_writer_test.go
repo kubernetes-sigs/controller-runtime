@@ -28,9 +28,9 @@ import (
 	"strings"
 	"testing"
 
+	log "github.com/go-logr/logr/testing"
 	"k8s.io/apimachinery/pkg/util/sets"
 	utiltesting "k8s.io/client-go/util/testing"
-	log "github.com/go-logr/logr/testing"
 )
 
 func TestNewAtomicWriter(t *testing.T) {

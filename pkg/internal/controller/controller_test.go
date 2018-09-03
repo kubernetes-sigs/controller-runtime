@@ -414,6 +414,10 @@ var _ = Describe("controller", func() {
 					Name: "controller_runtime_reconcile_queue_length",
 					Help: "Length of reconcile queue per controller",
 				}, []string{"controller"})
+				ctrlmetrics.ReconcileErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+					Name: "controller_runtime_reconcile_errors_total",
+					Help: "Total number of reconcile errors per controller",
+				}, []string{"controller"})
 
 				fakeReconcile.Err = fmt.Errorf("expected error: reconcile")
 				go func() {
@@ -427,10 +431,17 @@ var _ = Describe("controller", func() {
 
 				By("Invoking Reconciler which will give an error")
 				Expect(<-reconciled).To(Equal(request))
-				var queueLength dto.Metric
+				var queueLength, reconcileErrs dto.Metric
 				Eventually(func() error {
 					ctrlmetrics.QueueLength.WithLabelValues(ctrl.Name).Write(&queueLength)
 					if queueLength.GetGauge().GetValue() != 1.0 {
+						return fmt.Errorf("metrics not updated")
+					}
+					return nil
+				}, 2.0).Should(Succeed())
+				Eventually(func() error {
+					ctrlmetrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)
+					if reconcileErrs.GetCounter().GetValue() != 1.0 {
 						return fmt.Errorf("metrics not updated")
 					}
 					return nil

@@ -28,8 +28,16 @@ var (
 		Name: "controller_runtime_reconcile_queue_length",
 		Help: "Length of reconcile queue per controller",
 	}, []string{"controller"})
+
+	// ReconcileErrors is a prometheus counter metrics which holds the total
+	// number of errors from the Reconciler
+	ReconcileErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "controller_runtime_reconcile_errors_total",
+		Help: "Total number of reconcile errors per controller",
+	}, []string{"controller"})
 )
 
 func init() {
 	metrics.Registry.MustRegister(QueueLength)
+	metrics.Registry.MustRegister(ReconcileErrors)
 }

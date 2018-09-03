@@ -173,7 +173,8 @@ func (c *Controller) processNextWorkItem() bool {
 	// This code copy-pasted from the sample-Controller.
 
 	// Update metrics after processing each item
-	defer c.updateMetrics()
+	reconcileStartTS := time.Now()
+	defer c.updateMetrics(time.Now().Sub(reconcileStartTS))
 
 	obj, shutdown := c.Queue.Get()
 	if obj == nil {
@@ -240,6 +241,7 @@ func (c *Controller) InjectFunc(f inject.Func) error {
 }
 
 // updateMetrics updates prometheus metrics within the controller
-func (c *Controller) updateMetrics() {
+func (c *Controller) updateMetrics(reconcileTime time.Duration) {
 	ctrlmetrics.QueueLength.WithLabelValues(c.Name).Set(float64(c.Queue.Len()))
+	ctrlmetrics.ReconcileTime.WithLabelValues(c.Name).Observe(reconcileTime.Seconds())
 }

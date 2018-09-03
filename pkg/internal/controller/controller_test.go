@@ -457,6 +457,37 @@ var _ = Describe("controller", func() {
 
 				close(done)
 			}, 2.0)
+
+			It("should add a reconcile time to the reconcile time histogram", func(done Done) {
+				ctrlmetrics.ReconcileTime = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+					Name: "controller_runtime_reconcile_time_second",
+					Help: "Length of time per reconcile per controller",
+				}, []string{"controller"})
+
+				go func() {
+					defer GinkgoRecover()
+					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+				}()
+				ctrl.Queue.Add(request)
+
+				By("Invoking Reconciler")
+				Expect(<-reconciled).To(Equal(request))
+
+				By("Removing the item from the queue")
+				Eventually(ctrl.Queue.Len).Should(Equal(0))
+				Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+
+				var reconcileTime dto.Metric
+				Eventually(func() error {
+					ctrlmetrics.ReconcileTime.WithLabelValues(ctrl.Name).Write(&reconcileTime)
+					if reconcileTime.GetHistogram().GetSampleCount() != uint64(1) {
+						return fmt.Errorf("metrics not updated")
+					}
+					return nil
+				}, 2.0).Should(Succeed())
+
+				close(done)
+			}, 4.0)
 		})
 	})
 })

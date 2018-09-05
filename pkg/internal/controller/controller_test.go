@@ -332,14 +332,57 @@ var _ = Describe("controller", func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 			}()
+			dq := &DelegatingQueue{RateLimitingInterface: ctrl.Queue}
+			ctrl.Queue = dq
 			ctrl.Queue.Add(request)
+			Expect(dq.countAdd).To(Equal(1))
+			Expect(dq.countAddAfter).To(Equal(0))
+			Expect(dq.countAddRateLimited).To(Equal(0))
 
 			By("Invoking Reconciler which will ask for requeue")
 			Expect(<-reconciled).To(Equal(request))
+			Expect(dq.countAdd).To(Equal(1))
+			Expect(dq.countAddAfter).To(Equal(0))
+			Expect(dq.countAddRateLimited).To(Equal(1))
 
 			By("Invoking Reconciler a second time without asking for requeue")
 			fakeReconcile.Result.Requeue = false
 			Expect(<-reconciled).To(Equal(request))
+			Expect(dq.countAdd).To(Equal(1))
+			Expect(dq.countAddAfter).To(Equal(0))
+			Expect(dq.countAddRateLimited).To(Equal(1))
+
+			By("Removing the item from the queue")
+			Eventually(ctrl.Queue.Len).Should(Equal(0))
+			Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+		})
+
+		It("should requeue a Request after a duration if the Result sets Requeue:true and "+
+			"RequeueAfter is set", func() {
+			fakeReconcile.Result.RequeueAfter = time.Millisecond * 100
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+			}()
+			dq := &DelegatingQueue{RateLimitingInterface: ctrl.Queue}
+			ctrl.Queue = dq
+			ctrl.Queue.Add(request)
+			Expect(dq.countAdd).To(Equal(1))
+			Expect(dq.countAddAfter).To(Equal(0))
+			Expect(dq.countAddRateLimited).To(Equal(0))
+
+			By("Invoking Reconciler which will ask for requeue")
+			Expect(<-reconciled).To(Equal(request))
+			Expect(dq.countAdd).To(Equal(1))
+			Expect(dq.countAddAfter).To(Equal(1))
+			Expect(dq.countAddRateLimited).To(Equal(0))
+
+			By("Invoking Reconciler a second time without asking for requeue")
+			fakeReconcile.Result.Requeue = false
+			Expect(<-reconciled).To(Equal(request))
+			Expect(dq.countAdd).To(Equal(1))
+			Expect(dq.countAddAfter).To(Equal(1))
+			Expect(dq.countAddRateLimited).To(Equal(0))
 
 			By("Removing the item from the queue")
 			Eventually(ctrl.Queue.Len).Should(Equal(0))
@@ -363,3 +406,26 @@ var _ = Describe("controller", func() {
 		})
 	})
 })
+
+type DelegatingQueue struct {
+	workqueue.RateLimitingInterface
+
+	countAddRateLimited int
+	countAdd            int
+	countAddAfter       int
+}
+
+func (q *DelegatingQueue) AddRateLimited(item interface{}) {
+	q.countAddRateLimited++
+	q.RateLimitingInterface.AddRateLimited(item)
+}
+
+func (q *DelegatingQueue) AddAfter(item interface{}, d time.Duration) {
+	q.countAddAfter++
+	q.RateLimitingInterface.AddAfter(item, d)
+}
+
+func (q *DelegatingQueue) Add(item interface{}) {
+	q.countAdd++
+	q.RateLimitingInterface.Add(item)
+}

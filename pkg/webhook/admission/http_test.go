@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
+	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
 )
 
@@ -154,10 +155,10 @@ func (nopCloser) Close() error { return nil }
 type fakeHandler struct {
 	invoked          bool
 	valueFromContext string
-	fn               func(context.Context, Request) Response
+	fn               func(context.Context, atypes.Request) atypes.Response
 }
 
-func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {
+func (h *fakeHandler) Handle(ctx context.Context, req atypes.Request) atypes.Response {
 	v := ctx.Value(ContextKey("foo"))
 	if v != nil {
 		typed, ok := v.(string)
@@ -169,7 +170,7 @@ func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {
 	if h.fn != nil {
 		return h.fn(ctx, req)
 	}
-	return Response{Response: &admissionv1beta1.AdmissionResponse{
+	return atypes.Response{Response: &admissionv1beta1.AdmissionResponse{
 		Allowed: true,
 	}}
 }

@@ -81,7 +81,8 @@ func main() {
 		Operations(admissionregistrationv1beta1.Create, admissionregistrationv1beta1.Update).
 		WithManager(mgr).
 		ForType(&corev1.Pod{}).
-		Build(&podAnnotator{client: mgr.GetClient(), decoder: mgr.GetAdmissionDecoder()})
+		Handlers(&podAnnotator{}).
+		Build()
 	if err != nil {
 		entryLog.Error(err, "unable to setup mutating webhook")
 		os.Exit(1)
@@ -94,7 +95,8 @@ func main() {
 		Operations(admissionregistrationv1beta1.Create, admissionregistrationv1beta1.Update).
 		WithManager(mgr).
 		ForType(&corev1.Pod{}).
-		Build(&podValidator{client: mgr.GetClient(), decoder: mgr.GetAdmissionDecoder()})
+		Handlers(&podValidator{}).
+		Build()
 	if err != nil {
 		entryLog.Error(err, "unable to setup validating webhook")
 		os.Exit(1)

@@ -24,10 +24,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 var _ = Describe("admission webhook decoder", func() {
-	var decoder Decoder
+	var decoder types.Decoder
 	BeforeEach(func(done Done) {
 		var err error
 		decoder, err = NewDecoder(scheme.Scheme)
@@ -45,7 +46,7 @@ var _ = Describe("admission webhook decoder", func() {
 	})
 
 	Describe("Decode", func() {
-		req := Request{
+		req := types.Request{
 			AdmissionRequest: &admissionv1beta1.AdmissionRequest{
 				Object: runtime.RawExtension{
 					Raw: []byte(`{

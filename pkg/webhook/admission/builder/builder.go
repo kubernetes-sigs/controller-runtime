@@ -31,14 +31,17 @@ import (
 
 // WebhookBuilder builds a webhook based on the provided options.
 type WebhookBuilder struct {
-	// Name specifies the Name of the webhook. It must be unique in the http
+	// name specifies the Name of the webhook. It must be unique in the http
 	// server that serves all the webhooks.
 	name string
 
-	// Path is the URL Path to register this webhook. e.g. "/feature-foo-mutating-pods".
+	// path is the URL Path to register this webhook. e.g. "/feature-foo-mutating-pods".
 	path string
 
-	// Type specifies the type of the webhook
+	// handlers are handlers for handling admission request.
+	handlers []admission.Handler
+
+	// t specifies the type of the webhook
 	t *types.WebhookType
 	// only one of operations and Rules can be set.
 	operations []admissionregistrationv1beta1.OperationType
@@ -128,6 +131,12 @@ func (b *WebhookBuilder) WithManager(mgr manager.Manager) *WebhookBuilder {
 	return b
 }
 
+// Handlers sets the handlers of the webhook.
+func (b *WebhookBuilder) Handlers(handlers ...admission.Handler) *WebhookBuilder {
+	b.handlers = handlers
+	return b
+}
+
 func (b *WebhookBuilder) validate() error {
 	if b.t == nil {
 		return errors.New("webhook type cannot be nil")
@@ -142,7 +151,7 @@ func (b *WebhookBuilder) validate() error {
 }
 
 // Build creates the Webhook based on the options provided.
-func (b *WebhookBuilder) Build(handlers ...admission.Handler) (*admission.Webhook, error) {
+func (b *WebhookBuilder) Build() (*admission.Webhook, error) {
 	err := b.validate()
 	if err != nil {
 		return nil, err
@@ -153,7 +162,7 @@ func (b *WebhookBuilder) Build(handlers ...admission.Handler) (*admission.Webhoo
 		Type:              *b.t,
 		FailurePolicy:     b.failurePolicy,
 		NamespaceSelector: b.namespaceSelector,
-		Handlers:          handlers,
+		Handlers:          b.handlers,
 	}
 
 	if len(b.path) == 0 {

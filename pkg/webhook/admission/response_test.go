@@ -27,13 +27,14 @@ import (
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 var _ = Describe("admission webhook response", func() {
 	Describe("ErrorResponse", func() {
 		It("should return the response with an error", func() {
 			err := errors.New("this is an error")
-			expected := Response{
+			expected := types.Response{
 				Response: &admissionv1beta1.AdmissionResponse{
 					Allowed: false,
 					Result: &metav1.Status{
@@ -49,7 +50,7 @@ var _ = Describe("admission webhook response", func() {
 
 	Describe("ValidationResponse", func() {
 		It("should return the response with an admission decision", func() {
-			expected := Response{
+			expected := types.Response{
 				Response: &admissionv1beta1.AdmissionResponse{
 					Allowed: true,
 					Result: &metav1.Status{
@@ -64,7 +65,7 @@ var _ = Describe("admission webhook response", func() {
 
 	Describe("PatchResponse", func() {
 		It("should return the response with patches", func() {
-			expected := Response{
+			expected := types.Response{
 				Patches: []jsonpatch.JsonPatchOperation{},
 				Response: &admissionv1beta1.AdmissionResponse{
 					Allowed:   true,

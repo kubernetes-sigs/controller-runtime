@@ -24,19 +24,20 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 // podValidator validates Pods
 type podValidator struct {
 	client  client.Client
-	decoder admission.Decoder
+	decoder types.Decoder
 }
 
 // Implement admission.Handler so the controller can handle admission request.
 var _ admission.Handler = &podValidator{}
 
 // podValidator admits a pod iff a specific annotation exists.
-func (v *podValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+func (v *podValidator) Handle(ctx context.Context, req types.Request) types.Response {
 	pod := &corev1.Pod{}
 
 	err := v.decoder.Decode(req, pod)

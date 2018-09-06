@@ -31,6 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -91,11 +92,6 @@ func (s *Server) setBootstrappingDefault() {
 	if s.Host == nil && s.Service == nil {
 		varString := "localhost"
 		s.Host = &varString
-	}
-	// Override the user's setting to use port 443 until
-	// https://github.com/kubernetes/kubernetes/issues/67468 is resolved.
-	if s.Service != nil && s.Port != 443 {
-		s.Port = 443
 	}
 
 	var certWriter writer.CertWriter
@@ -356,7 +352,9 @@ func (s *Server) service() *corev1.Service {
 			Selector: s.Service.Selectors,
 			Ports: []corev1.ServicePort{
 				{
-					Port: s.Port,
+					// When using service, kube-apiserver will send admission request to port 443.
+					Port:       443,
+					TargetPort: intstr.IntOrString{Type: intstr.Int, IntVal: s.Port},
 				},
 			},
 		},

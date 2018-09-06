@@ -24,19 +24,20 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 // podAnnotator annotates Pods
 type podAnnotator struct {
 	client  client.Client
-	decoder admission.Decoder
+	decoder types.Decoder
 }
 
 // Implement admission.Handler so the controller can handle admission request.
 var _ admission.Handler = &podAnnotator{}
 
 // podAnnotator adds an annotation to every incoming pods.
-func (a *podAnnotator) Handle(ctx context.Context, req admission.Request) admission.Response {
+func (a *podAnnotator) Handle(ctx context.Context, req types.Request) types.Response {
 	pod := &corev1.Pod{}
 
 	err := a.decoder.Decode(req, pod)

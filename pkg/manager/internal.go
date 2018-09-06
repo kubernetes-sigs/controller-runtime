@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 var log = logf.KBLog.WithName("manager")
@@ -41,7 +41,7 @@ type controllerManager struct {
 	// to scheme.scheme.
 	scheme *runtime.Scheme
 	// admissionDecoder is used to decode an admission.Request.
-	admissionDecoder admission.Decoder
+	admissionDecoder types.Decoder
 
 	// runnables is the set of Controllers that the controllerManager injects deps into and Starts.
 	runnables []Runnable
@@ -112,6 +112,9 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 	if _, err := inject.StopChannelInto(cm.stop, i); err != nil {
 		return err
 	}
+	if _, err := inject.DecoderInto(cm.admissionDecoder, i); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -127,7 +130,7 @@ func (cm *controllerManager) GetScheme() *runtime.Scheme {
 	return cm.scheme
 }
 
-func (cm *controllerManager) GetAdmissionDecoder() admission.Decoder {
+func (cm *controllerManager) GetAdmissionDecoder() types.Decoder {
 	return cm.admissionDecoder
 }
 

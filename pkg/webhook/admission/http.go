@@ -29,6 +29,7 @@ import (
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 var admissionv1beta1scheme = runtime.NewScheme()
@@ -57,7 +58,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var body []byte
 	var err error
 
-	var reviewResponse Response
+	var reviewResponse types.Response
 	if r.Body != nil {
 		if body, err = ioutil.ReadAll(r.Body); err != nil {
 			log.Error(err, "unable to read the body from the incoming request")
@@ -96,11 +97,11 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for k := range wh.KVMap {
 		ctx = context.WithValue(ctx, ContextKey(k), wh.KVMap[k])
 	}
-	reviewResponse = wh.Handle(ctx, Request{AdmissionRequest: ar.Request})
+	reviewResponse = wh.Handle(ctx, types.Request{AdmissionRequest: ar.Request})
 	writeResponse(w, reviewResponse)
 }
 
-func writeResponse(w io.Writer, response Response) {
+func writeResponse(w io.Writer, response types.Response) {
 	encoder := json.NewEncoder(w)
 	responseAdmissionReview := v1beta1.AdmissionReview{
 		Response: response.Response,

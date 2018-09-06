@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -32,6 +33,7 @@ import (
 	internalrecorder "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 // Manager initializes shared dependencies such as Caches and Clients, and provides them to Runnables.
@@ -57,7 +59,7 @@ type Manager interface {
 	GetScheme() *runtime.Scheme
 
 	// GetAdmissionDecoder returns the runtime.Decoder based on the scheme.
-	GetAdmissionDecoder() admission.Decoder
+	GetAdmissionDecoder() types.Decoder
 
 	// GetClient returns a client configured with the Config
 	GetClient() client.Client
@@ -94,7 +96,7 @@ type Options struct {
 	newCache            func(config *rest.Config, opts cache.Options) (cache.Cache, error)
 	newClient           func(config *rest.Config, options client.Options) (client.Client, error)
 	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error)
-	newAdmissionDecoder func(scheme *runtime.Scheme) (admission.Decoder, error)
+	newAdmissionDecoder func(scheme *runtime.Scheme) (types.Decoder, error)
 }
 
 // Runnable allows a component to be started.

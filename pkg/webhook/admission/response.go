@@ -19,26 +19,16 @@ package admission
 import (
 	"net/http"
 
-	"github.com/mattbaird/jsonpatch"
-
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/patch"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
-// Response is the output of admission.Handler
-type Response struct {
-	// Patches are the JSON patches for mutating webhooks.
-	// Using this instead of setting Response.Patch to minimize the overhead of serialization and deserialization.
-	Patches []jsonpatch.JsonPatchOperation
-	// Response is the admission response. Don't set the Patch field in it.
-	Response *admissionv1beta1.AdmissionResponse
-}
-
 // ErrorResponse creates a new Response for an error handling the request
-func ErrorResponse(code int32, err error) Response {
-	return Response{
+func ErrorResponse(code int32, err error) types.Response {
+	return types.Response{
 		Response: &admissionv1beta1.AdmissionResponse{
 			Allowed: false,
 			Result: &metav1.Status{
@@ -50,8 +40,8 @@ func ErrorResponse(code int32, err error) Response {
 }
 
 // ValidationResponse returns a response for admitting a request
-func ValidationResponse(allowed bool, reason string) Response {
-	resp := Response{
+func ValidationResponse(allowed bool, reason string) types.Response {
+	resp := types.Response{
 		Response: &admissionv1beta1.AdmissionResponse{
 			Allowed: allowed,
 		},
@@ -65,12 +55,12 @@ func ValidationResponse(allowed bool, reason string) Response {
 }
 
 // PatchResponse returns a new response with json patch
-func PatchResponse(original, current runtime.Object) Response {
+func PatchResponse(original, current runtime.Object) types.Response {
 	patches, err := patch.NewJSONPatch(original, current)
 	if err != nil {
 		return ErrorResponse(http.StatusInternalServerError, err)
 	}
-	return Response{
+	return types.Response{
 		Patches: patches,
 		Response: &admissionv1beta1.AdmissionResponse{
 			Allowed:   true,

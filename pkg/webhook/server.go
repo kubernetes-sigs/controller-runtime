@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/writer"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
@@ -128,6 +129,8 @@ type Server struct {
 	// They can be nil, if there is no webhook registered under it.
 	webhookConfigurations []runtime.Object
 
+	manager manager.Manager
+
 	once sync.Once
 }
 
@@ -156,9 +159,10 @@ func NewServer(name string, mgr manager.Manager, options ServerOptions) (*Server
 		sMux:          http.NewServeMux(),
 		registry:      map[string]Webhook{},
 		ServerOptions: options,
+		manager:       mgr,
 	}
 
-	return as, mgr.Add(as)
+	return as, nil
 }
 
 // Register registers webhook(s) in the server
@@ -177,7 +181,10 @@ func (s *Server) Register(webhooks ...Webhook) error {
 		s.registry[webhook.GetPath()] = webhooks[i]
 		s.sMux.Handle(webhook.GetPath(), webhook.Handler())
 	}
-	return nil
+
+	// Lazily add Server to manager.
+	// Because the all webhook handlers to be in place, so we can inject the things they need.
+	return s.manager.Add(s)
 }
 
 var _ manager.Runnable = &Server{}
@@ -252,5 +259,22 @@ var _ inject.Client = &Server{}
 // InjectClient injects the client into the server
 func (s *Server) InjectClient(c client.Client) error {
 	s.Client = c
+	for _, wh := range s.registry {
+		if _, err := inject.ClientInto(c, wh.Handler()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+var _ inject.Decoder = &Server{}
+
+// InjectDecoder injects the client into the server
+func (s *Server) InjectDecoder(d atypes.Decoder) error {
+	for _, wh := range s.registry {
+		if _, err := inject.DecoderInto(d, wh.Handler()); err != nil {
+			return err
+		}
+	}
 	return nil
 }

@@ -14,17 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package admission
+package types
 
 import (
-	admissionv1beta1 "k8s.io/api/admission/v1beta1"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/client-go/kubernetes/scheme"
-)
+	"github.com/mattbaird/jsonpatch"
 
-var codecs = serializer.NewCodecFactory(scheme.Scheme)
+	admissionv1beta1 "k8s.io/api/admission/v1beta1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
 
 // Request is the input of Handler
 type Request struct {
 	AdmissionRequest *admissionv1beta1.AdmissionRequest
+}
+
+// Response is the output of admission.Handler
+type Response struct {
+	// Patches are the JSON patches for mutating webhooks.
+	// Using this instead of setting Response.Patch to minimize the overhead of serialization and deserialization.
+	Patches []jsonpatch.JsonPatchOperation
+	// Response is the admission response. Don't set the Patch field in it.
+	Response *admissionv1beta1.AdmissionResponse
+}
+
+// Decoder is used to decode AdmissionRequest.
+type Decoder interface {
+	// Decode decodes the raw byte object from the AdmissionRequest to the passed-in runtime.Object.
+	Decode(Request, runtime.Object) error
 }

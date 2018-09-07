@@ -31,6 +31,7 @@ import (
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
+	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
 )
 
@@ -48,8 +49,8 @@ var _ = Describe("admission webhook", func() {
 		var wh *Webhook
 		BeforeEach(func(done Done) {
 			alwaysAllow = &fakeHandler{
-				fn: func(ctx context.Context, req Request) Response {
-					return Response{
+				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
+					return atypes.Response{
 						Response: &admissionv1beta1.AdmissionResponse{
 							Allowed: true,
 						},
@@ -57,8 +58,8 @@ var _ = Describe("admission webhook", func() {
 				},
 			}
 			alwaysDeny = &fakeHandler{
-				fn: func(ctx context.Context, req Request) Response {
-					return Response{
+				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
+					return atypes.Response{
 						Response: &admissionv1beta1.AdmissionResponse{
 							Allowed: false,
 						},
@@ -123,8 +124,8 @@ var _ = Describe("admission webhook", func() {
 				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
 			}
 			patcher1 := &fakeHandler{
-				fn: func(ctx context.Context, req Request) Response {
-					return Response{
+				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
+					return atypes.Response{
 						Patches: []jsonpatch.JsonPatchOperation{
 							{
 								Operation: "add",
@@ -145,8 +146,8 @@ var _ = Describe("admission webhook", func() {
 				},
 			}
 			patcher2 := &fakeHandler{
-				fn: func(ctx context.Context, req Request) Response {
-					return Response{
+				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
+					return atypes.Response{
 						Patches: []jsonpatch.JsonPatchOperation{
 							{
 								Operation: "add",
@@ -208,8 +209,8 @@ var _ = Describe("admission webhook", func() {
 				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
 			}
 			errPatcher := &fakeHandler{
-				fn: func(ctx context.Context, req Request) Response {
-					return Response{
+				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
+					return atypes.Response{
 						Response: &admissionv1beta1.AdmissionResponse{
 							Allowed: false,
 						},

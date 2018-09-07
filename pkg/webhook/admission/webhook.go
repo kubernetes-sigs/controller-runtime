@@ -29,6 +29,9 @@ import (
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
 )
 
@@ -37,16 +40,16 @@ type StringKey string
 
 // Handler can handle an AdmissionRequest.
 type Handler interface {
-	Handle(context.Context, Request) Response
+	Handle(context.Context, atypes.Request) atypes.Response
 }
 
 // HandlerFunc implements Handler interface using a single function.
-type HandlerFunc func(context.Context, Request) Response
+type HandlerFunc func(context.Context, atypes.Request) atypes.Response
 
 var _ Handler = HandlerFunc(nil)
 
 // Handle process the AdmissionRequest by invoking the underlying function.
-func (f HandlerFunc) Handle(ctx context.Context, req Request) Response {
+func (f HandlerFunc) Handle(ctx context.Context, req atypes.Request) atypes.Response {
 	return f(ctx, req)
 }
 
@@ -104,11 +107,11 @@ var _ Handler = &Webhook{}
 // If the webhook is mutating type, it delegates the AdmissionRequest to each handler and merge the patches.
 // If the webhook is validating type, it delegates the AdmissionRequest to each handler and
 // deny the request if anyone denies.
-func (w *Webhook) Handle(ctx context.Context, req Request) Response {
+func (w *Webhook) Handle(ctx context.Context, req atypes.Request) atypes.Response {
 	if req.AdmissionRequest == nil {
 		return ErrorResponse(http.StatusBadRequest, errors.New("got an empty AdmissionRequest"))
 	}
-	var resp Response
+	var resp atypes.Response
 	var err error
 	ctx, err = w.kvMapToContext(ctx)
 	if err != nil {
@@ -137,7 +140,7 @@ func (w *Webhook) kvMapToContext(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
 
-func (w *Webhook) handleMutating(ctx context.Context, req Request) Response {
+func (w *Webhook) handleMutating(ctx context.Context, req atypes.Request) atypes.Response {
 	patches := []jsonpatch.JsonPatchOperation{}
 	for _, handler := range w.Handlers {
 		resp := handler.Handle(ctx, req)
@@ -156,7 +159,7 @@ func (w *Webhook) handleMutating(ctx context.Context, req Request) Response {
 	if err != nil {
 		return ErrorResponse(http.StatusBadRequest, fmt.Errorf("error when marshaling the patch: %v", err))
 	}
-	return Response{
+	return atypes.Response{
 		Response: &admissionv1beta1.AdmissionResponse{
 			Allowed:   true,
 			Patch:     marshaledPatch,
@@ -165,14 +168,14 @@ func (w *Webhook) handleMutating(ctx context.Context, req Request) Response {
 	}
 }
 
-func (w *Webhook) handleValidating(ctx context.Context, req Request) Response {
+func (w *Webhook) handleValidating(ctx context.Context, req atypes.Request) atypes.Response {
 	for _, handler := range w.Handlers {
 		resp := handler.Handle(ctx, req)
 		if !resp.Response.Allowed {
 			return resp
 		}
 	}
-	return Response{
+	return atypes.Response{
 		Response: &admissionv1beta1.AdmissionResponse{
 			Allowed: true,
 		},
@@ -225,6 +228,30 @@ func (w *Webhook) Validate() error {
 	}
 	if len(w.Handlers) == 0 {
 		return errors.New("field Handler should not be empty")
+	}
+	return nil
+}
+
+var _ inject.Client = &Webhook{}
+
+// InjectClient injects the client into the handlers
+func (w *Webhook) InjectClient(c client.Client) error {
+	for _, handler := range w.Handlers {
+		if _, err := inject.ClientInto(c, handler); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+var _ inject.Decoder = &Webhook{}
+
+// InjectDecoder injects the decoder into the handlers
+func (w *Webhook) InjectDecoder(d atypes.Decoder) error {
+	for _, handler := range w.Handlers {
+		if _, err := inject.DecoderInto(d, handler); err != nil {
+			return err
+		}
 	}
 	return nil
 }

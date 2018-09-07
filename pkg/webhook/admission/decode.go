@@ -19,21 +19,16 @@ package admission
 import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
-// Decoder is used to decode AdmissionRequest.
-type Decoder interface {
-	// Decode decodes the raw byte object from the AdmissionRequest to the passed-in runtime.Object.
-	Decode(Request, runtime.Object) error
-}
-
 // DecodeFunc is a function that implements the Decoder interface.
-type DecodeFunc func(Request, runtime.Object) error
+type DecodeFunc func(types.Request, runtime.Object) error
 
-var _ Decoder = DecodeFunc(nil)
+var _ types.Decoder = DecodeFunc(nil)
 
 // Decode implements the Decoder interface.
-func (f DecodeFunc) Decode(req Request, obj runtime.Object) error {
+func (f DecodeFunc) Decode(req types.Request, obj runtime.Object) error {
 	return f(req, obj)
 }
 
@@ -42,12 +37,12 @@ type decoder struct {
 }
 
 // NewDecoder creates a Decoder given the runtime.Scheme
-func NewDecoder(scheme *runtime.Scheme) (Decoder, error) {
+func NewDecoder(scheme *runtime.Scheme) (types.Decoder, error) {
 	return decoder{codecs: serializer.NewCodecFactory(scheme)}, nil
 }
 
 // Decode decodes the inlined object in the AdmissionRequest into the passed-in runtime.Object.
-func (d decoder) Decode(req Request, into runtime.Object) error {
+func (d decoder) Decode(req types.Request, into runtime.Object) error {
 	deserializer := d.codecs.UniversalDeserializer()
 	return runtime.DecodeInto(deserializer, req.AdmissionRequest.Object.Raw, into)
 }

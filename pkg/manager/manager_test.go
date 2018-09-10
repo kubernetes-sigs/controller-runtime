@@ -25,9 +25,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
+	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -96,91 +99,130 @@ var _ = Describe("manger.Manager", func() {
 
 			close(done)
 		})
+		Context("with leader election enabled", func() {
+			It("should default ID to controller-runtime if ID is not set", func() {
+				var rl resourcelock.Interface
+				m, err := New(cfg, Options{
+					LeaderElection:          true,
+					LeaderElectionNamespace: "default",
+					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+						var err error
+						rl, err = leaderelection.NewResourceLock(config, recorderProvider, options)
+						return rl, err
+					},
+				})
+				Expect(m).ToNot(BeNil())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rl.Describe()).To(Equal("default/controller-leader-election-helper"))
+			})
+
+			It("should return an error if namespace not set and not running in cluster", func() {
+				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime"})
+				Expect(m).To(BeNil())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unable to find leader election namespace: not running in-cluster, please specify LeaderElectionNamespace"))
+			})
+		})
 	})
 
 	Describe("Start", func() {
-		It("should Start each Component", func(done Done) {
-			m, err := New(cfg, Options{})
-			Expect(err).NotTo(HaveOccurred())
-			c1 := make(chan struct{})
-			m.Add(RunnableFunc(func(s <-chan struct{}) error {
-				defer close(c1)
-				defer GinkgoRecover()
-				return nil
-			}))
+		var startSuite = func(options Options) {
+			It("should Start each Component", func(done Done) {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				c1 := make(chan struct{})
+				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					defer close(c1)
+					defer GinkgoRecover()
+					return nil
+				}))
 
-			c2 := make(chan struct{})
-			m.Add(RunnableFunc(func(s <-chan struct{}) error {
-				defer close(c2)
-				defer GinkgoRecover()
-				return nil
-			}))
+				c2 := make(chan struct{})
+				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					defer close(c2)
+					defer GinkgoRecover()
+					return nil
+				}))
 
-			go func() {
-				defer GinkgoRecover()
-				Expect(m.Start(stop)).NotTo(HaveOccurred())
-			}()
-			<-c1
-			<-c2
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(stop)).NotTo(HaveOccurred())
+				}()
+				<-c1
+				<-c2
 
-			close(done)
-		})
-
-		It("should stop when stop is called", func(done Done) {
-			m, err := New(cfg, Options{})
-			Expect(err).NotTo(HaveOccurred())
-			s := make(chan struct{})
-			close(s)
-			Expect(m.Start(s)).NotTo(HaveOccurred())
-
-			close(done)
-		})
-
-		It("should return an error if it can't start the cache", func(done Done) {
-			m, err := New(cfg, Options{})
-			Expect(err).NotTo(HaveOccurred())
-			mgr, ok := m.(*controllerManager)
-			Expect(ok).To(BeTrue())
-			mgr.startCache = func(stop <-chan struct{}) error {
-				return fmt.Errorf("expected error")
-			}
-			Expect(m.Start(stop).Error()).To(ContainSubstring("expected error"))
-
-			close(done)
-		})
-
-		It("should return an error if any Components fail to Start", func(done Done) {
-			m, err := New(cfg, Options{})
-			Expect(err).NotTo(HaveOccurred())
-			c1 := make(chan struct{})
-			m.Add(RunnableFunc(func(s <-chan struct{}) error {
-				defer GinkgoRecover()
-				defer close(c1)
-				return nil
-			}))
-
-			c2 := make(chan struct{})
-			m.Add(RunnableFunc(func(s <-chan struct{}) error {
-				defer GinkgoRecover()
-				defer close(c2)
-				return fmt.Errorf("expected error")
-			}))
-
-			c3 := make(chan struct{})
-			m.Add(RunnableFunc(func(s <-chan struct{}) error {
-				defer GinkgoRecover()
-				defer close(c3)
-				return nil
-			}))
-
-			go func() {
-				defer GinkgoRecover()
-				Expect(m.Start(stop)).NotTo(HaveOccurred())
 				close(done)
-			}()
-			<-c1
-			<-c2
-			<-c3
+			})
+
+			It("should stop when stop is called", func(done Done) {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				s := make(chan struct{})
+				close(s)
+				Expect(m.Start(s)).NotTo(HaveOccurred())
+
+				close(done)
+			})
+
+			It("should return an error if it can't start the cache", func(done Done) {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				mgr, ok := m.(*controllerManager)
+				Expect(ok).To(BeTrue())
+				mgr.startCache = func(stop <-chan struct{}) error {
+					return fmt.Errorf("expected error")
+				}
+				Expect(m.Start(stop).Error()).To(ContainSubstring("expected error"))
+
+				close(done)
+			})
+
+			It("should return an error if any Components fail to Start", func(done Done) {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				c1 := make(chan struct{})
+				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					defer GinkgoRecover()
+					defer close(c1)
+					return nil
+				}))
+
+				c2 := make(chan struct{})
+				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					defer GinkgoRecover()
+					defer close(c2)
+					return fmt.Errorf("expected error")
+				}))
+
+				c3 := make(chan struct{})
+				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					defer GinkgoRecover()
+					defer close(c3)
+					return nil
+				}))
+
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(stop)).NotTo(HaveOccurred())
+					close(done)
+				}()
+				<-c1
+				<-c2
+				<-c3
+			})
+		}
+
+		Context("with defaults", func() {
+			startSuite(Options{})
+		})
+
+		Context("with leaderelection enabled", func() {
+			startSuite(Options{
+				LeaderElection:          true,
+				LeaderElectionID:        "controller-runtime",
+				LeaderElectionNamespace: "default",
+				newResourceLock:         fakeleaderelection.NewResourceLock,
+			})
 		})
 	})
 

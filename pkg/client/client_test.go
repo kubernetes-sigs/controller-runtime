@@ -978,6 +978,52 @@ var _ = Describe("Client", func() {
 		})
 	})
 
+	Describe("DeleteOptions", func() {
+		It("should allow setting GracePeriodSeconds", func() {
+			do := &client.DeleteOptions{}
+			client.GracePeriodSeconds(1)(do)
+			gp := int64(1)
+			Expect(do.AsDeleteOptions().GracePeriodSeconds).To(Equal(&gp))
+		})
+
+		It("should allow setting Precondition", func() {
+			do := &client.DeleteOptions{}
+			pc := metav1.NewUIDPreconditions("uid")
+			client.Preconditions(pc)(do)
+			Expect(do.AsDeleteOptions().Preconditions).To(Equal(pc))
+			Expect(do.Preconditions).To(Equal(pc))
+		})
+
+		It("should allow setting PropagationPolicy", func() {
+			do := &client.DeleteOptions{}
+			client.PropagationPolicy(metav1.DeletePropagationForeground)(do)
+			dp := metav1.DeletePropagationForeground
+			Expect(do.AsDeleteOptions().PropagationPolicy).To(Equal(&dp))
+		})
+
+		It("should produce empty metav1.DeleteOptions if nil", func() {
+			var do *client.DeleteOptions
+			Expect(do.AsDeleteOptions()).To(Equal(&metav1.DeleteOptions{}))
+			do = &client.DeleteOptions{}
+			Expect(do.AsDeleteOptions()).To(Equal(&metav1.DeleteOptions{}))
+		})
+
+		It("should merge multiple options together", func() {
+			gp := int64(1)
+			pc := metav1.NewUIDPreconditions("uid")
+			dp := metav1.DeletePropagationForeground
+			do := &client.DeleteOptions{}
+			do.ApplyOptions([]client.DeleteOptionFunc{
+				client.GracePeriodSeconds(gp),
+				client.Preconditions(pc),
+				client.PropagationPolicy(dp),
+			})
+			Expect(do.GracePeriodSeconds).To(Equal(&gp))
+			Expect(do.Preconditions).To(Equal(pc))
+			Expect(do.PropagationPolicy).To(Equal(&dp))
+		})
+	})
+
 	Describe("ListOptions", func() {
 		It("should be able to set a LabelSelector", func() {
 			lo := &client.ListOptions{}

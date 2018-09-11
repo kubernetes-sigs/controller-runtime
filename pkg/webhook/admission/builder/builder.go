@@ -73,10 +73,19 @@ func (b *WebhookBuilder) Name(name string) *WebhookBuilder {
 	return b
 }
 
-// Type sets the type of the admission webhook
-// This is required
-func (b *WebhookBuilder) Type(t types.WebhookType) *WebhookBuilder {
-	b.t = &t
+// Mutating sets the type to mutating admission webhook
+// Only one of Mutating and Validating can be invoked.
+func (b *WebhookBuilder) Mutating() *WebhookBuilder {
+	m := types.WebhookTypeMutating
+	b.t = &m
+	return b
+}
+
+// Validating sets the type to validating admission webhook
+// Only one of Mutating and Validating can be invoked.
+func (b *WebhookBuilder) Validating() *WebhookBuilder {
+	m := types.WebhookTypeValidating
+	b.t = &m
 	return b
 }
 
@@ -165,48 +174,48 @@ func (b *WebhookBuilder) Build() (*admission.Webhook, error) {
 		Handlers:          b.handlers,
 	}
 
+	if b.rules != nil {
+		w.Rules = b.rules
+	} else {
+		if b.manager == nil {
+			return nil, errors.New("manager should be set using WithManager")
+		}
+		gvk, err := apiutil.GVKForObject(b.apiType, b.manager.GetScheme())
+		if err != nil {
+			return nil, err
+		}
+		mapper := b.manager.GetRESTMapper()
+		mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+		if err != nil {
+			return nil, err
+		}
+
+		if b.operations == nil {
+			b.operations = []admissionregistrationv1beta1.OperationType{
+				admissionregistrationv1beta1.Create,
+				admissionregistrationv1beta1.Update,
+			}
+		}
+		w.Rules = []admissionregistrationv1beta1.RuleWithOperations{
+			{
+				Operations: b.operations,
+				Rule: admissionregistrationv1beta1.Rule{
+					APIGroups:   []string{gvk.Group},
+					APIVersions: []string{gvk.Version},
+					Resources:   []string{mapping.Resource.Resource},
+				},
+			},
+		}
+	}
+
 	if len(b.path) == 0 {
 		if *b.t == types.WebhookTypeMutating {
-			b.path = "/mutatingwebhook"
+			b.path = "/mutate-" + w.Rules[0].Resources[0]
 		} else if *b.t == types.WebhookTypeValidating {
-			b.path = "/validatingwebhook"
+			b.path = "/validate-" + w.Rules[0].Resources[0]
 		}
 	}
 	w.Path = b.path
 
-	if b.rules != nil {
-		w.Rules = b.rules
-		return w, nil
-	}
-
-	if b.manager == nil {
-		return nil, errors.New("manager should be set using WithManager")
-	}
-	gvk, err := apiutil.GVKForObject(b.apiType, b.manager.GetScheme())
-	if err != nil {
-		return nil, err
-	}
-	mapper := b.manager.GetRESTMapper()
-	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-	if err != nil {
-		return nil, err
-	}
-
-	if b.operations == nil {
-		b.operations = []admissionregistrationv1beta1.OperationType{
-			admissionregistrationv1beta1.Create,
-			admissionregistrationv1beta1.Update,
-		}
-	}
-	w.Rules = []admissionregistrationv1beta1.RuleWithOperations{
-		{
-			Operations: b.operations,
-			Rule: admissionregistrationv1beta1.Rule{
-				APIGroups:   []string{gvk.Group},
-				APIVersions: []string{gvk.Version},
-				Resources:   []string{mapping.Resource.Resource},
-			},
-		},
-	}
 	return w, nil
 }

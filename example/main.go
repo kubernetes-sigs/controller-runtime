@@ -34,7 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/builder"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
 )
 
 var log = logf.Log.WithName("example-controller")
@@ -76,8 +75,7 @@ func main() {
 	// Setup webhooks
 	mutatingWebhook, err := builder.NewWebhookBuilder().
 		Name("mutating.k8s.io").
-		Type(types.WebhookTypeMutating).
-		Path("/mutating-pods").
+		Mutating().
 		Operations(admissionregistrationv1beta1.Create, admissionregistrationv1beta1.Update).
 		WithManager(mgr).
 		ForType(&corev1.Pod{}).
@@ -90,8 +88,7 @@ func main() {
 
 	validatingWebhook, err := builder.NewWebhookBuilder().
 		Name("validating.k8s.io").
-		Type(types.WebhookTypeValidating).
-		Path("/validating-pods").
+		Validating().
 		Operations(admissionregistrationv1beta1.Create, admissionregistrationv1beta1.Update).
 		WithManager(mgr).
 		ForType(&corev1.Pod{}).
@@ -103,7 +100,7 @@ func main() {
 	}
 
 	as, err := webhook.NewServer("foo-admission-server", mgr, webhook.ServerOptions{
-		Port:    443,
+		Port:    9876,
 		CertDir: "/tmp/cert",
 		KVMap:   map[string]interface{}{"foo": "bar"},
 		BootstrapOptions: &webhook.BootstrapOptions{

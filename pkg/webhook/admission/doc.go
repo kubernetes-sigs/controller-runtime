@@ -21,8 +21,7 @@ Build webhooks
 
 	webhook1, err := NewWebhookBuilder().
 		Name("foo.k8s.io").
-		Type(WebhookTypeMutating).
-		Path("/mutating-pods").
+		Mutating().
 		Operations(admissionregistrationv1beta1.Create).
 		ForType(&corev1.Pod{}).
 		WithManager(mgr).
@@ -33,8 +32,7 @@ Build webhooks
 
 	webhook2, err := NewWebhookBuilder().
 		Name("bar.k8s.io").
-		Type(WebhookTypeValidating).
-		Path("/validating-deployment").
+		Validating().
 		Operations(admissionregistrationv1beta1.Create, admissionregistrationv1beta1.Update).
 		ForType(&appsv1.Deployment{}).
 		WithManager(mgr).

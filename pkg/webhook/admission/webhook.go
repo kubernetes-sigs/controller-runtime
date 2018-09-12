@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/mattbaird/jsonpatch"
@@ -34,9 +36,6 @@ import (
 	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
 )
-
-// StringKey is the type used as key in the KVMap
-type StringKey string
 
 // Handler can handle an AdmissionRequest.
 type Handler interface {
@@ -54,7 +53,6 @@ func (f HandlerFunc) Handle(ctx context.Context, req atypes.Request) atypes.Resp
 }
 
 // Webhook represents each individual webhook.
-// Webhook implements Handler interface.
 type Webhook struct {
 	// Name is the name of the webhook
 	Name string
@@ -65,14 +63,12 @@ type Webhook struct {
 	// Rules maps to the Rules field in admissionregistrationv1beta1.Webhook
 	Rules []admissionregistrationv1beta1.RuleWithOperations
 	// FailurePolicy maps to the FailurePolicy field in admissionregistrationv1beta1.Webhook
-	// This optional. If not set, will be defaulted to Ignore (fail-open).
+	// This optional. If not set, will be defaulted to Ignore (fail-open) by the server.
 	// More details: https://github.com/kubernetes/api/blob/f5c295feaba2cbc946f0bbb8b535fc5f6a0345ee/admissionregistration/v1beta1/types.go#L144-L147
 	FailurePolicy *admissionregistrationv1beta1.FailurePolicyType
 	// NamespaceSelector maps to the NamespaceSelector field in admissionregistrationv1beta1.Webhook
 	// This optional.
 	NamespaceSelector *metav1.LabelSelector
-	// KVMap contains key-value pairs that will be passed to the handler for processing the Request.
-	KVMap map[string]interface{}
 	// Handlers contains a list of handlers. Each handler may only contains the business logic for its own feature.
 	// For example, feature foo and bar can be in the same webhook if all the other configurations are the same.
 	// The handler will be invoked sequentially as the order in the list.
@@ -84,15 +80,21 @@ type Webhook struct {
 }
 
 func (w *Webhook) setDefaults() {
-	if len(w.Name) == 0 {
-		w.Name = "admissionwebhook.k8s.io"
-	}
 	if len(w.Path) == 0 {
-		if w.Type == types.WebhookTypeMutating {
-			w.Path = "/mutatingwebhook"
-		} else if w.Type == types.WebhookTypeValidating {
-			w.Path = "/validatingwebhook"
+		if len(w.Rules) == 0 || len(w.Rules[0].Resources) == 0 {
+			// can't do defaulting, skip it.
+			return
 		}
+		if w.Type == types.WebhookTypeMutating {
+			w.Path = "/mutate-" + w.Rules[0].Resources[0]
+		} else if w.Type == types.WebhookTypeValidating {
+			w.Path = "/validate-" + w.Rules[0].Resources[0]
+		}
+	}
+	if len(w.Name) == 0 {
+		reg := regexp.MustCompile("[^a-zA-Z0-9]+")
+		processedPath := strings.ToLower(reg.ReplaceAllString(w.Path, ""))
+		w.Name = processedPath + ".example.com"
 	}
 }
 
@@ -101,6 +103,7 @@ func (w *Webhook) Add(handlers ...Handler) {
 	w.Handlers = append(w.Handlers, handlers...)
 }
 
+// Webhook implements Handler interface.
 var _ Handler = &Webhook{}
 
 // Handle processes AdmissionRequest.
@@ -112,11 +115,6 @@ func (w *Webhook) Handle(ctx context.Context, req atypes.Request) atypes.Respons
 		return ErrorResponse(http.StatusBadRequest, errors.New("got an empty AdmissionRequest"))
 	}
 	var resp atypes.Response
-	var err error
-	ctx, err = w.kvMapToContext(ctx)
-	if err != nil {
-		return ErrorResponse(http.StatusInternalServerError, fmt.Errorf("error when preparing the context: %v", err))
-	}
 	switch w.Type {
 	case types.WebhookTypeMutating:
 		resp = w.handleMutating(ctx, req)
@@ -127,17 +125,6 @@ func (w *Webhook) Handle(ctx context.Context, req atypes.Request) atypes.Respons
 	}
 	resp.Response.UID = req.AdmissionRequest.UID
 	return resp
-}
-
-// kvMapToContext passes the key value pair from the KVMap to the context for processing the request.
-func (w *Webhook) kvMapToContext(ctx context.Context) (context.Context, error) {
-	for k, v := range w.KVMap {
-		if existing := ctx.Value(k); existing != nil && existing != v {
-			return nil, fmt.Errorf("key %v already exists in the context, the value is %v", k, existing)
-		}
-		ctx = context.WithValue(ctx, StringKey(k), v)
-	}
-	return ctx, nil
 }
 
 func (w *Webhook) handleMutating(ctx context.Context, req atypes.Request) atypes.Response {
@@ -206,14 +193,12 @@ func (w *Webhook) Handler() http.Handler {
 	return w
 }
 
-// SetKVMap sets the KVMap of the webhook.
-func (w *Webhook) SetKVMap(m map[string]interface{}) {
-	w.KVMap = m
-}
-
 // Validate validates if the webhook is valid.
 func (w *Webhook) Validate() error {
 	w.once.Do(w.setDefaults)
+	if len(w.Rules) == 0 {
+		return errors.New("field Rules should not be empty")
+	}
 	if len(w.Name) == 0 {
 		return errors.New("field Name should not be empty")
 	}
@@ -222,9 +207,6 @@ func (w *Webhook) Validate() error {
 	}
 	if len(w.Path) == 0 {
 		return errors.New("field Path should not be empty")
-	}
-	if len(w.Rules) == 0 {
-		return errors.New("field Rules should not be empty")
 	}
 	if len(w.Handlers) == 0 {
 		return errors.New("field Handler should not be empty")

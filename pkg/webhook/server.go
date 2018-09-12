@@ -38,11 +38,6 @@ import (
 
 // ServerOptions are options for configuring an admission webhook server.
 type ServerOptions struct {
-	// KVMap contains key-value pairs that will be converted to values in Context of admission.Request.
-	// The key-value can be any arbitrary information that the admission.Handler needs.
-	// e.g. the information can come from command line flag.
-	KVMap map[string]interface{}
-
 	// Port is the port number that the server will serve.
 	// It will be defaulted to 443 if unspecified.
 	Port int32
@@ -59,7 +54,7 @@ type ServerOptions struct {
 	// Client will be injected by the manager if not set.
 	Client client.Client
 
-	// Dryrun controls if the server will install the webhookConfiguration.
+	// Dryrun controls if the server will install the webhookConfiguration and service if any.
 	// If true, it will print the objects in yaml format.
 	// If false, it will install the objects in the cluster.
 	Dryrun bool
@@ -88,7 +83,7 @@ type BootstrapOptions struct {
 	// This maps to field .webhooks.getClientConfig.service
 	// https://github.com/kubernetes/api/blob/183f3326a9353bd6d41430fc80f96259331d029c/admissionregistration/v1beta1/types.go#L260
 	Service *Service
-	// Host is the host name of .webhooks.getClientConfig.url
+	// Host is the host name of .webhooks.clientConfig.url
 	// https://github.com/kubernetes/api/blob/183f3326a9353bd6d41430fc80f96259331d029c/admissionregistration/v1beta1/types.go#L250
 	// This field is optional. But one and only one of Service and Host need to be set.
 	// If neither Service nor Host is unspecified, Host will be defaulted to "localhost".
@@ -129,6 +124,7 @@ type Server struct {
 	// They can be nil, if there is no webhook registered under it.
 	webhookConfigurations []runtime.Object
 
+	// manager is the manager that this webhook server will be registered.
 	manager manager.Manager
 
 	once sync.Once
@@ -145,10 +141,8 @@ type Webhook interface {
 	GetType() types.WebhookType
 	// Handler returns a http.Handler for the webhook.
 	Handler() http.Handler
-	// SetKVMap sets the KVMap.
-	SetKVMap(map[string]interface{})
 	// Validate validates if the webhook itself is valid.
-	// The returned error will be non-nil, if it is invalid.
+	// If invalid, a non-nil error will be returned.
 	Validate() error
 }
 
@@ -165,7 +159,7 @@ func NewServer(name string, mgr manager.Manager, options ServerOptions) (*Server
 	return as, nil
 }
 
-// Register registers webhook(s) in the server
+// Register validates and registers webhook(s) in the server
 func (s *Server) Register(webhooks ...Webhook) error {
 	for i, webhook := range webhooks {
 		// validate the webhook before registering it.
@@ -177,7 +171,6 @@ func (s *Server) Register(webhooks ...Webhook) error {
 		if found {
 			return fmt.Errorf("can't register duplicate path: %v", webhook.GetPath())
 		}
-		webhook.SetKVMap(s.KVMap)
 		s.registry[webhook.GetPath()] = webhooks[i]
 		s.sMux.Handle(webhook.GetPath(), webhook.Handler())
 	}

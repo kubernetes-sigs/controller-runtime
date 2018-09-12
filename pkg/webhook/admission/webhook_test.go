@@ -78,7 +78,6 @@ var _ = Describe("admission webhook", func() {
 				wh = &Webhook{
 					Type:     types.WebhookTypeValidating,
 					Handlers: []Handler{alwaysAllow, alwaysDeny},
-					KVMap:    map[string]interface{}{"foo": "bar"},
 				}
 				close(done)
 			})
@@ -90,8 +89,6 @@ var _ = Describe("admission webhook", func() {
 				Expect(w.Body.Bytes()).To(Equal(expected))
 				Expect(alwaysAllow.invoked).To(BeTrue())
 				Expect(alwaysDeny.invoked).To(BeTrue())
-				Expect(alwaysAllow.valueFromContext).To(Equal("bar"))
-				Expect(alwaysDeny.valueFromContext).To(Equal("bar"))
 			})
 		})
 
@@ -100,7 +97,6 @@ var _ = Describe("admission webhook", func() {
 				wh = &Webhook{
 					Type:     types.WebhookTypeValidating,
 					Handlers: []Handler{alwaysDeny, alwaysAllow},
-					KVMap:    map[string]interface{}{"foo": "bar"},
 				}
 				close(done)
 			})
@@ -111,7 +107,6 @@ var _ = Describe("admission webhook", func() {
 				wh.ServeHTTP(w, req)
 				Expect(w.Body.Bytes()).To(Equal(expected))
 				Expect(alwaysDeny.invoked).To(BeTrue())
-				Expect(alwaysDeny.valueFromContext).To(Equal("bar"))
 				Expect(alwaysAllow.invoked).To(BeFalse())
 			})
 		})
@@ -165,7 +160,6 @@ var _ = Describe("admission webhook", func() {
 			wh := &Webhook{
 				Type:     types.WebhookTypeMutating,
 				Handlers: []Handler{patcher1, patcher2},
-				KVMap:    map[string]interface{}{"foo": "bar"},
 			}
 			expected := []byte(
 				`{"response":{"uid":"","allowed":true,"patch":"W3sib3AiOiJhZGQiLCJwYXRoIjoiL21ldGFkYXRhL2Fubm90YXRpb2` +
@@ -198,8 +192,6 @@ var _ = Describe("admission webhook", func() {
 				Expect(w.Body.String()).To(ContainSubstring(base64encoded))
 				Expect(patcher1.invoked).To(BeTrue())
 				Expect(patcher2.invoked).To(BeTrue())
-				Expect(patcher1.valueFromContext).To(Equal("bar"))
-				Expect(patcher2.valueFromContext).To(Equal("bar"))
 			})
 		})
 
@@ -220,7 +212,6 @@ var _ = Describe("admission webhook", func() {
 			wh := &Webhook{
 				Type:     types.WebhookTypeMutating,
 				Handlers: []Handler{errPatcher},
-				KVMap:    map[string]interface{}{"foo": "bar"},
 			}
 			expected := []byte(`{"response":{"uid":"","allowed":false}}
 `)
@@ -228,7 +219,6 @@ var _ = Describe("admission webhook", func() {
 				wh.ServeHTTP(w, req)
 				Expect(w.Body.Bytes()).To(Equal(expected))
 				Expect(errPatcher.invoked).To(BeTrue())
-				Expect(errPatcher.valueFromContext).To(Equal("bar"))
 			})
 		})
 	})
@@ -251,6 +241,8 @@ var _ = Describe("admission webhook", func() {
 			It("should pass validation", func() {
 				err := wh.Validate()
 				Expect(err).NotTo(HaveOccurred())
+				Expect(wh.Name).To(Equal("mutatedeployments.example.com"))
+				Expect(wh.Path).To(Equal("/mutate-deployments"))
 			})
 		})
 
@@ -271,6 +263,8 @@ var _ = Describe("admission webhook", func() {
 			It("should pass validation", func() {
 				err := wh.Validate()
 				Expect(err).NotTo(HaveOccurred())
+				Expect(wh.Name).To(Equal("validatedeployments.example.com"))
+				Expect(wh.Path).To(Equal("/validate-deployments"))
 			})
 		})
 

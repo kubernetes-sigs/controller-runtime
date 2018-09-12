@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
-// ErrorResponse creates a new Response for an error handling the request
+// ErrorResponse creates a new Response for error-handling a request.
 func ErrorResponse(code int32, err error) types.Response {
 	return types.Response{
 		Response: &admissionv1beta1.AdmissionResponse{
@@ -39,7 +39,7 @@ func ErrorResponse(code int32, err error) types.Response {
 	}
 }
 
-// ValidationResponse returns a response for admitting a request
+// ValidationResponse returns a response for admitting a request.
 func ValidationResponse(allowed bool, reason string) types.Response {
 	resp := types.Response{
 		Response: &admissionv1beta1.AdmissionResponse{
@@ -54,7 +54,7 @@ func ValidationResponse(allowed bool, reason string) types.Response {
 	return resp
 }
 
-// PatchResponse returns a new response with json patch
+// PatchResponse returns a new response with json patch.
 func PatchResponse(original, current runtime.Object) types.Response {
 	patches, err := patch.NewJSONPatch(original, current)
 	if err != nil {

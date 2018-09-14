@@ -29,6 +29,7 @@ import (
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
@@ -40,19 +41,10 @@ func init() {
 }
 
 func addToScheme(scheme *runtime.Scheme) {
-	err := admissionv1beta1.AddToScheme(scheme)
-	// TODO: switch to use Must in
-	// https://github.com/kubernetes/kubernetes/blob/fbb2dfcc6ad345b0ca3fe09cb4bc2a23ec0781d5/staging/src/k8s.io/apimachinery/pkg/util/runtime/runtime.go#L164-L169
-	// after the apimachinery repo in vendor has been updated to 1.11 or later.
-	if err != nil {
-		panic(err)
-	}
+	utilruntime.Must(admissionv1beta1.AddToScheme(scheme))
 }
 
 var _ http.Handler = &Webhook{}
-
-// ContextKey is a type alias of string and is used as the key in context.
-type ContextKey string
 
 func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var body []byte
@@ -93,11 +85,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: add panic-recovery for Handle
-	ctx := context.Background()
-	for k := range wh.KVMap {
-		ctx = context.WithValue(ctx, ContextKey(k), wh.KVMap[k])
-	}
-	reviewResponse = wh.Handle(ctx, types.Request{AdmissionRequest: ar.Request})
+	reviewResponse = wh.Handle(context.Background(), types.Request{AdmissionRequest: ar.Request})
 	writeResponse(w, reviewResponse)
 }
 

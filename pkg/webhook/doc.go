@@ -22,24 +22,26 @@ Build webhooks
 	// mgr is the manager that runs the server.
 	webhook1, err := NewWebhookBuilder().
 		Name("foo.k8s.io").
-		Type(WebhookTypeMutating).
+		Mutating().
 		Path("/mutating-pods").
 		Operations(admissionregistrationv1beta1.Create).
 		ForType(&corev1.Pod{}).
 		WithManager(mgr).
-		Build(mutatingHandler1, mutatingHandler2)
+		Handlers(mutatingHandler1, mutatingHandler2).
+		Build()
 	if err != nil {
 		// handle error
 	}
 
 	webhook2, err := NewWebhookBuilder().
 		Name("bar.k8s.io").
-		Type(WebhookTypeValidating).
+		Validating().
 		Path("/validating-deployment").
 		Operations(admissionregistrationv1beta1.Create, admissionregistrationv1beta1.Update).
 		ForType(&appsv1.Deployment{}).
 		WithManager(mgr).
-		Build(validatingHandler1)
+		Handlers(validatingHandler1).
+		Build()
 	if err != nil {
 		// handle error
 	}

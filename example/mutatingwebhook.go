@@ -18,11 +18,11 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
@@ -46,7 +46,7 @@ func (a *podAnnotator) Handle(ctx context.Context, req types.Request) types.Resp
 	}
 	copy := pod.DeepCopy()
 
-	err = mutatePodsFn(ctx, copy)
+	err = a.mutatePodsFn(ctx, copy)
 	if err != nil {
 		return admission.ErrorResponse(http.StatusInternalServerError, err)
 	}
@@ -54,16 +54,30 @@ func (a *podAnnotator) Handle(ctx context.Context, req types.Request) types.Resp
 }
 
 // mutatePodsFn add an annotation to the given pod
-func mutatePodsFn(ctx context.Context, pod *corev1.Pod) error {
-	v, ok := ctx.Value(admission.StringKey("foo")).(string)
-	if !ok {
-		return fmt.Errorf("the value associated with %v is expected to be a string", "foo")
+func (a *podAnnotator) mutatePodsFn(ctx context.Context, pod *corev1.Pod) error {
+	if pod.Annotations == nil {
+		pod.Annotations = map[string]string{}
 	}
-	anno := pod.Annotations
-	if anno == nil {
-		anno = map[string]string{}
-	}
-	anno["example-mutating-admission-webhook"] = v
-	pod.Annotations = anno
+	pod.Annotations["example-mutating-admission-webhook"] = "foo"
+	return nil
+}
+
+// podValidator implements inject.Client.
+// A client will be automatically injected.
+var _ inject.Client = &podValidator{}
+
+// InjectClient injects the client.
+func (v *podAnnotator) InjectClient(c client.Client) error {
+	v.client = c
+	return nil
+}
+
+// podValidator implements inject.Decoder.
+// A decoder will be automatically injected.
+var _ inject.Decoder = &podValidator{}
+
+// InjectDecoder injects the decoder.
+func (v *podAnnotator) InjectDecoder(d types.Decoder) error {
+	v.decoder = d
 	return nil
 }

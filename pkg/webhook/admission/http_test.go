@@ -133,7 +133,6 @@ var _ = Describe("admission webhook http handler", func() {
 		wh := &Webhook{
 			Type:     types.WebhookTypeValidating,
 			Handlers: []Handler{h},
-			KVMap:    map[string]interface{}{"foo": "bar"},
 		}
 		expected := []byte(`{"response":{"uid":"","allowed":true}}
 `)
@@ -141,7 +140,6 @@ var _ = Describe("admission webhook http handler", func() {
 			wh.ServeHTTP(w, req)
 			Expect(w.Body.Bytes()).To(Equal(expected))
 			Expect(h.invoked).To(BeTrue())
-			Expect(h.valueFromContext).To(Equal("bar"))
 		})
 	})
 })
@@ -153,19 +151,11 @@ type nopCloser struct {
 func (nopCloser) Close() error { return nil }
 
 type fakeHandler struct {
-	invoked          bool
-	valueFromContext string
-	fn               func(context.Context, atypes.Request) atypes.Response
+	invoked bool
+	fn      func(context.Context, atypes.Request) atypes.Response
 }
 
 func (h *fakeHandler) Handle(ctx context.Context, req atypes.Request) atypes.Response {
-	v := ctx.Value(ContextKey("foo"))
-	if v != nil {
-		typed, ok := v.(string)
-		if ok {
-			h.valueFromContext = typed
-		}
-	}
 	h.invoked = true
 	if h.fn != nil {
 		return h.fn(ctx, req)

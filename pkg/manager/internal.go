@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
@@ -31,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 var log = logf.KBLog.WithName("manager")
@@ -42,6 +44,8 @@ type controllerManager struct {
 	// scheme is the scheme injected into Controllers, EventHandlers, Sources and Predicates.  Defaults
 	// to scheme.scheme.
 	scheme *runtime.Scheme
+	// admissionDecoder is used to decode an admission.Request.
+	admissionDecoder types.Decoder
 
 	// runnables is the set of Controllers that the controllerManager injects deps into and Starts.
 	runnables []Runnable
@@ -62,6 +66,9 @@ type controllerManager struct {
 
 	// resourceLock
 	resourceLock resourcelock.Interface
+
+	// mapper is used to map resources to kind, and map kind and version.
+	mapper meta.RESTMapper
 
 	mu      sync.Mutex
 	started bool
@@ -112,6 +119,9 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 	if _, err := inject.StopChannelInto(cm.stop, i); err != nil {
 		return err
 	}
+	if _, err := inject.DecoderInto(cm.admissionDecoder, i); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -127,6 +137,10 @@ func (cm *controllerManager) GetScheme() *runtime.Scheme {
 	return cm.scheme
 }
 
+func (cm *controllerManager) GetAdmissionDecoder() types.Decoder {
+	return cm.admissionDecoder
+}
+
 func (cm *controllerManager) GetFieldIndexer() client.FieldIndexer {
 	return cm.fieldIndexes
 }
@@ -137,6 +151,10 @@ func (cm *controllerManager) GetCache() cache.Cache {
 
 func (cm *controllerManager) GetRecorder(name string) record.EventRecorder {
 	return cm.recorderProvider.GetEventRecorderFor(name)
+}
+
+func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
+	return cm.mapper
 }
 
 func (cm *controllerManager) Start(stop <-chan struct{}) error {

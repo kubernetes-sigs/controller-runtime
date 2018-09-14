@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -33,6 +34,8 @@ import (
 	internalrecorder "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 // Manager initializes shared dependencies such as Caches and Clients, and provides them to Runnables.
@@ -57,6 +60,9 @@ type Manager interface {
 	// GetScheme returns and initialized Scheme
 	GetScheme() *runtime.Scheme
 
+	// GetAdmissionDecoder returns the runtime.Decoder based on the scheme.
+	GetAdmissionDecoder() types.Decoder
+
 	// GetClient returns a client configured with the Config
 	GetClient() client.Client
 
@@ -68,6 +74,9 @@ type Manager interface {
 
 	// GetRecorder returns a new EventRecorder for the provided name
 	GetRecorder(name string) record.EventRecorder
+
+	// GetRESTMapper returns a RESTMapper
+	GetRESTMapper() meta.RESTMapper
 }
 
 // Options are the arguments for creating a new Manager
@@ -101,6 +110,7 @@ type Options struct {
 	newCache            func(config *rest.Config, opts cache.Options) (cache.Cache, error)
 	newClient           func(config *rest.Config, options client.Options) (client.Client, error)
 	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error)
+	newAdmissionDecoder func(scheme *runtime.Scheme) (types.Decoder, error)
 	newResourceLock     func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
 }
 
@@ -155,6 +165,12 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
+
+	admissionDecoder, err := options.newAdmissionDecoder(options.Scheme)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create the resource lock to enable leader election)
 	resourceLock, err := options.newResourceLock(config, recorderProvider, leaderelection.Options{
 		LeaderElection:          options.LeaderElection,
@@ -168,11 +184,13 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	return &controllerManager{
 		config:           config,
 		scheme:           options.Scheme,
+		admissionDecoder: admissionDecoder,
 		errChan:          make(chan error),
 		cache:            cache,
 		fieldIndexes:     cache,
 		client:           client.DelegatingClient{Reader: cache, Writer: writeObj, StatusClient: writeObj},
 		recorderProvider: recorderProvider,
+		mapper:           mapper,
 		resourceLock:     resourceLock,
 	}, nil
 }
@@ -202,6 +220,9 @@ func setOptionsDefaults(options Options) Options {
 	if options.newRecorderProvider == nil {
 		options.newRecorderProvider = internalrecorder.NewProvider
 	}
+
+	if options.newAdmissionDecoder == nil {
+		options.newAdmissionDecoder = admission.NewDecoder
 
 	// Allow newResourceLock to be mocked
 	if options.newResourceLock == nil {

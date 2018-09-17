@@ -23,6 +23,8 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile/reconciletest"
@@ -403,6 +406,46 @@ var _ = Describe("controller", func() {
 
 		It("should create a new go routine for MaxConcurrentReconciles", func() {
 			// TODO(community): write this test
+		})
+
+		Context("should update prometheus metrics", func() {
+			It("should requeue a Request if there is an error and continue processing items", func(done Done) {
+				ctrlmetrics.QueueLength = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+					Name: "controller_runtime_reconcile_queue_length",
+					Help: "Length of reconcile queue per controller",
+				}, []string{"controller"})
+
+				fakeReconcile.Err = fmt.Errorf("expected error: reconcile")
+				go func() {
+					defer GinkgoRecover()
+					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+				}()
+				ctrl.Queue.Add(request)
+
+				// Reduce the jitterperiod so we don't have to wait a second before the reconcile function is rerun.
+				ctrl.JitterPeriod = time.Millisecond
+
+				By("Invoking Reconciler which will give an error")
+				Expect(<-reconciled).To(Equal(request))
+				var queueLength dto.Metric
+				Eventually(func() error {
+					ctrlmetrics.QueueLength.WithLabelValues(ctrl.Name).Write(&queueLength)
+					if queueLength.GetGauge().GetValue() != 1.0 {
+						return fmt.Errorf("metrics not updated")
+					}
+					return nil
+				}, 2.0).Should(Succeed())
+
+				By("Invoking Reconciler a second time without error")
+				fakeReconcile.Err = nil
+				Expect(<-reconciled).To(Equal(request))
+
+				By("Removing the item from the queue")
+				Eventually(ctrl.Queue.Len).Should(Equal(0))
+				Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+
+				close(done)
+			}, 2.0)
 		})
 	})
 })

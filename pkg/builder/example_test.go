@@ -77,7 +77,7 @@ func (a *ReplicaSetReconciler) Reconcile(req reconcile.Request) (reconcile.Resul
 
 	// List the Pods matching the PodTemplate Labels
 	pods := &corev1.PodList{}
-	err = a.List(context.TODO(), pods, client.InNamespace(req.Namespace), client.MatchingLabels(rs.Spec.Template.Labels))
+	err = a.List(context.TODO(), client.InNamespace(req.Namespace).MatchingLabels(rs.Spec.Template.Labels), pods)
 	if err != nil {
 		return reconcile.Result{}, err
 	}

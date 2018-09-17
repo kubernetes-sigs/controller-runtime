@@ -177,7 +177,7 @@ func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
 	}
 	// Run the server
 	go func() {
-		if err := server.Serve(cm.metricsListener); err != nil {
+		if err := server.Serve(cm.metricsListener); err != nil && err != http.ErrServerClosed {
 			cm.errChan <- err
 		}
 	}()

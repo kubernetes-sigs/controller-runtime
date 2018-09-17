@@ -19,10 +19,12 @@ package webhook
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 
 	"github.com/ghodss/yaml"
 
@@ -187,7 +189,7 @@ func (s *Server) getClientConfig() (*admissionregistration.WebhookClientConfig, 
 	if s.Host != nil {
 		u := url.URL{
 			Scheme: "https",
-			Host:   *s.Host,
+			Host:   net.JoinHostPort(*s.Host, strconv.Itoa(int(s.Port))),
 		}
 		urlString := u.String()
 		cc.URL = &urlString
@@ -332,7 +334,7 @@ func (s *Server) admissionWebhook(path string, wh *admission.Webhook) (*admissio
 }
 
 // service creates a corev1.service object fronting the admission server.
-func (s *Server) service() *corev1.Service {
+func (s *Server) service() runtime.Object {
 	if s.Service == nil {
 		return nil
 	}

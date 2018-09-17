@@ -18,6 +18,7 @@ package writer
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -91,21 +92,39 @@ func (f *fsCertWriter) doWrite() (*generator.Artifacts, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// AtomicWriter's algorithm only manages files using symbolic link.
+	// If a file is not a symbolic link, will ignore the update for it.
+	// We want to cleanup for AtomicWriter by removing old files that are not symbolic links.
+	err = prepareToWrite(f.Path)
+	if err != nil {
+		return nil, err
+	}
+
 	aw, err := atomic.NewAtomicWriter(f.Path, log.WithName("atomic-writer").
 		WithValues("task", "processing webhook"))
 	if err != nil {
 		return nil, err
 	}
-	// AtomicWriter's algorithm only manages files using symbolic link.
-	// If a file is not a symbolic link, will ignore the update for it.
-	// We want to cleanup for AtomicWriter by removing old files that are not symbolic links.
-	prepareToWrite(f.Path)
 	err = aw.Write(certToProjectionMap(certs))
 	return certs, err
 }
 
 // prepareToWrite ensures it directory is compatible with the atomic.Writer library.
-func prepareToWrite(dir string) {
+func prepareToWrite(dir string) error {
+	_, err := os.Stat(dir)
+	switch {
+	case os.IsNotExist(err):
+		log.Info(fmt.Sprintf("cert directory %v doesn't exist, creating", dir))
+		// TODO: figure out if we can reduce the permission. (Now it's 0777)
+		err = os.MkdirAll(dir, 0777)
+		if err != nil {
+			return fmt.Errorf("can't create dir: %v", dir)
+		}
+	case err != nil:
+		return err
+	}
+
 	filenames := []string{CACertName, ServerCertName, ServerKeyName}
 	for _, f := range filenames {
 		abspath := path.Join(dir, f)
@@ -124,6 +143,7 @@ func prepareToWrite(dir string) {
 			}
 		}
 	}
+	return nil
 }
 
 func (f *fsCertWriter) read() (*generator.Artifacts, error) {

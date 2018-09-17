@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
@@ -127,5 +128,12 @@ func dnsNameFromClientConfig(config *admissionregistrationv1beta1.WebhookClientC
 		return generator.ServiceToCommonName(config.Service.Namespace, config.Service.Name), nil
 	}
 	u, err := url.Parse(*config.URL)
-	return u.Host, err
+	if err != nil {
+		return "", err
+	}
+	host, _, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		return u.Host, nil
+	}
+	return host, err
 }

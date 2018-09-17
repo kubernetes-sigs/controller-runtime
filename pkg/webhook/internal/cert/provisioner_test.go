@@ -191,6 +191,16 @@ var _ = Describe("dnsNameFromClientConfig", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dnsName).To(Equal("foo.example.com"))
 		})
+
+		It("should return a DNS name w/o port", func() {
+			urlStr := "https://foo.example.com:9876/webhookendpoint"
+			cc := &admissionregistrationv1beta1.WebhookClientConfig{
+				URL: &urlStr,
+			}
+			dnsName, err := dnsNameFromClientConfig(cc)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dnsName).To(Equal("foo.example.com"))
+		})
 	})
 })
 

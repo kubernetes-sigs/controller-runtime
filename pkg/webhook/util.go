@@ -84,6 +84,9 @@ func createOrReplaceHelper(c client.Client, obj runtime.Object, fn mutateFn) err
 // When replacing, it knows how to preserve existing fields in the object GET from the APIServer.
 // It currently only support MutatingWebhookConfiguration, ValidatingWebhookConfiguration and Service.
 func createOrReplace(c client.Client, obj runtime.Object) error {
+	if obj == nil {
+		return nil
+	}
 	switch obj.(type) {
 	case *admissionregistration.MutatingWebhookConfiguration:
 		return createOrReplaceHelper(c, obj, mutatingWebhookConfigFn)

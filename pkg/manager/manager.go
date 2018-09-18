@@ -191,6 +191,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		recorderProvider: recorderProvider,
 		resourceLock:     resourceLock,
 		mapper:           mapper,
+		stop:             make(<-chan struct{}),
 	}, nil
 }
 

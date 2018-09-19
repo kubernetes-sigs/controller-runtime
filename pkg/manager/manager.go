@@ -200,6 +200,8 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
+	stop := make(chan struct{})
+
 	return &controllerManager{
 		config:           config,
 		scheme:           options.Scheme,
@@ -219,6 +221,8 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		resourceLock:     resourceLock,
 		mapper:           mapper,
 		metricsListener:  metricsListener,
+		stop:             stop,
+		stopper:          stop,
 	}, nil
 }
 

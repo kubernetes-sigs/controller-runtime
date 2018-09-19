@@ -497,8 +497,7 @@ var _ = Describe("manger.Manager", func() {
 				},
 				stop: func(stop <-chan struct{}) error {
 					defer GinkgoRecover()
-					// Manager stop chan has not been initialized.
-					Expect(stop).To(BeNil())
+					Expect(stop).NotTo(BeNil())
 					return nil
 				},
 				f: func(f inject.Func) error {

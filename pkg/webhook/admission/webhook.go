@@ -42,6 +42,13 @@ type Handler interface {
 	Handle(context.Context, atypes.Request) atypes.Response
 }
 
+// NameGetter gets the name of the Handler
+type NameGetter interface {
+	// Name returns the name of the Handler.
+	// The name should be a feature name that can be the identifier for the handler.
+	Name() string
+}
+
 // HandlerFunc implements Handler interface using a single function.
 type HandlerFunc func(context.Context, atypes.Request) atypes.Response
 

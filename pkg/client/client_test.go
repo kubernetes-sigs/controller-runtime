@@ -541,114 +541,218 @@ var _ = Describe("Client", func() {
 	})
 
 	Describe("StatusClient", func() {
-		It("should update status of an existing object", func(done Done) {
-			cl, err := client.New(cfg, client.Options{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cl).NotTo(BeNil())
+		Context("with structured objects", func() {
+			It("should update status of an existing object", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
 
-			By("initially creating a Deployment")
-			dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
-			Expect(err).NotTo(HaveOccurred())
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
 
-			By("updating the status of Deployment")
-			dep.Status.Replicas = 1
-			err = cl.Status().Update(context.TODO(), dep)
-			Expect(err).NotTo(HaveOccurred())
+				By("updating the status of Deployment")
+				dep.Status.Replicas = 1
+				err = cl.Status().Update(context.TODO(), dep)
+				Expect(err).NotTo(HaveOccurred())
 
-			By("validating updated Deployment has new status")
-			actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(actual).NotTo(BeNil())
-			Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
+				By("validating updated Deployment has new status")
+				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
 
-			close(done)
+				close(done)
+			})
+
+			It("should not update spec of an existing object", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("updating the spec and status of Deployment")
+				var rc int32 = 1
+				dep.Status.Replicas = 1
+				dep.Spec.Replicas = &rc
+				err = cl.Status().Update(context.TODO(), dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating updated Deployment has new status and unchanged spec")
+				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
+				Expect(*actual.Spec.Replicas).To(BeEquivalentTo(replicaCount))
+
+				close(done)
+			})
+
+			It("should update an existing object non-namespace object", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				node, err := clientset.CoreV1().Nodes().Create(node)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("updating status of the object")
+				node.Status.Phase = corev1.NodeRunning
+				err = cl.Status().Update(context.TODO(), node)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validate updated Node had new annotation")
+				actual, err := clientset.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Status.Phase).To(Equal(corev1.NodeRunning))
+
+				close(done)
+			})
+
+			It("should fail if the object does not exists", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("updating status of a non-existent object")
+				err = cl.Status().Update(context.TODO(), dep)
+				Expect(err).To(HaveOccurred())
+
+				close(done)
+			})
+
+			It("should fail if the object cannot be mapped to a GVK", func(done Done) {
+				By("creating client with empty Scheme")
+				emptyScheme := runtime.NewScheme()
+				cl, err := client.New(cfg, client.Options{Scheme: emptyScheme})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("updating status of the Deployment")
+				dep.Status.Replicas = 1
+				err = cl.Status().Update(context.TODO(), dep)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("no kind is registered for the type"))
+
+				close(done)
+			})
+
+			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
+
+			})
+
+			PIt("should fail if an API does not implement Status subresource", func() {
+
+			})
 		})
 
-		It("should not update spec of an existing object", func(done Done) {
-			cl, err := client.New(cfg, client.Options{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cl).NotTo(BeNil())
+		Context("with unstructured objects", func() {
+			It("should update status of an existing object", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
 
-			By("initially creating a Deployment")
-			dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
-			Expect(err).NotTo(HaveOccurred())
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
 
-			By("updating the spec and status of Deployment")
-			var rc int32 = 1
-			dep.Status.Replicas = 1
-			dep.Spec.Replicas = &rc
-			err = cl.Status().Update(context.TODO(), dep)
-			Expect(err).NotTo(HaveOccurred())
+				By("updating the status of Deployment")
+				u := &unstructured.Unstructured{}
+				dep.Status.Replicas = 1
+				scheme.Convert(dep, u, nil)
+				err = cl.Status().Update(context.TODO(), u)
+				Expect(err).NotTo(HaveOccurred())
 
-			By("validating updated Deployment has new status and unchanged spec")
-			actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(actual).NotTo(BeNil())
-			Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
-			Expect(*actual.Spec.Replicas).To(BeEquivalentTo(replicaCount))
+				By("validating updated Deployment has new status")
+				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
 
-			close(done)
-		})
+				close(done)
+			})
 
-		It("should update an existing object non-namespace object", func(done Done) {
-			cl, err := client.New(cfg, client.Options{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cl).NotTo(BeNil())
+			It("should not update spec of an existing object", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
 
-			node, err := clientset.CoreV1().Nodes().Create(node)
-			Expect(err).NotTo(HaveOccurred())
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
 
-			By("updating status of the object")
-			node.Status.Phase = corev1.NodeRunning
-			err = cl.Status().Update(context.TODO(), node)
-			Expect(err).NotTo(HaveOccurred())
+				By("updating the spec and status of Deployment")
+				u := &unstructured.Unstructured{}
+				var rc int32 = 1
+				dep.Status.Replicas = 1
+				dep.Spec.Replicas = &rc
+				scheme.Convert(dep, u, nil)
+				err = cl.Status().Update(context.TODO(), u)
+				Expect(err).NotTo(HaveOccurred())
 
-			By("validate updated Node had new annotation")
-			actual, err := clientset.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(actual).NotTo(BeNil())
-			Expect(actual.Status.Phase).To(Equal(corev1.NodeRunning))
+				By("validating updated Deployment has new status and unchanged spec")
+				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
+				Expect(*actual.Spec.Replicas).To(BeEquivalentTo(replicaCount))
 
-			close(done)
-		})
+				close(done)
+			})
 
-		It("should fail if the object does not exists", func(done Done) {
-			cl, err := client.New(cfg, client.Options{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cl).NotTo(BeNil())
+			It("should update an existing object non-namespace object", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
 
-			By("updating status of a non-existent object")
-			err = cl.Status().Update(context.TODO(), dep)
-			Expect(err).To(HaveOccurred())
+				node, err := clientset.CoreV1().Nodes().Create(node)
+				Expect(err).NotTo(HaveOccurred())
 
-			close(done)
-		})
+				By("updating status of the object")
+				u := &unstructured.Unstructured{}
+				node.Status.Phase = corev1.NodeRunning
+				scheme.Convert(node, u, nil)
+				err = cl.Status().Update(context.TODO(), u)
+				Expect(err).NotTo(HaveOccurred())
 
-		It("should fail if the object cannot be mapped to a GVK", func(done Done) {
-			By("creating client with empty Scheme")
-			emptyScheme := runtime.NewScheme()
-			cl, err := client.New(cfg, client.Options{Scheme: emptyScheme})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cl).NotTo(BeNil())
+				By("validate updated Node had new annotation")
+				actual, err := clientset.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Status.Phase).To(Equal(corev1.NodeRunning))
 
-			By("initially creating a Deployment")
-			dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
-			Expect(err).NotTo(HaveOccurred())
+				close(done)
+			})
 
-			By("updating status of the Deployment")
-			dep.Status.Replicas = 1
-			err = cl.Status().Update(context.TODO(), dep)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no kind is registered for the type"))
+			It("should fail if the object does not exists", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
 
-			close(done)
-		})
+				By("updating status of a non-existent object")
+				u := &unstructured.Unstructured{}
+				scheme.Convert(dep, u, nil)
+				err = cl.Status().Update(context.TODO(), u)
+				Expect(err).To(HaveOccurred())
 
-		PIt("should fail if the GVK cannot be mapped to a Resource", func() {
+				close(done)
+			})
 
-		})
+			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
-		PIt("should fail if an API does not implement Status subresource", func() {
+			})
+
+			PIt("should fail if an API does not implement Status subresource", func() {
+
+			})
 
 		})
 	})

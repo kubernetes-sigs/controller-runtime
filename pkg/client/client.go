@@ -153,21 +153,10 @@ type statusWriter struct {
 var _ StatusWriter = &statusWriter{}
 
 // Update implements client.StatusWriter
-func (sw *statusWriter) Update(_ context.Context, obj runtime.Object) error {
-	o, err := sw.client.typedClient.cache.getObjMeta(obj)
-	if err != nil {
-		return err
+func (sw *statusWriter) Update(ctx context.Context, obj runtime.Object) error {
+	_, ok := obj.(*unstructured.Unstructured)
+	if ok {
+		return sw.client.unstructuredClient.UpdateStatus(ctx, obj)
 	}
-	// TODO(droot): examine the returned error and check if it error needs to be
-	// wrapped to improve the UX ?
-	// It will be nice to receive an error saying the object doesn't implement
-	// status subresource and check CRD definition
-	return o.Put().
-		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
-		Resource(o.resource()).
-		Name(o.GetName()).
-		SubResource("status").
-		Body(obj).
-		Do().
-		Into(obj)
+	return sw.client.typedClient.UpdateStatus(ctx, obj)
 }

@@ -30,7 +30,7 @@ type typedClient struct {
 }
 
 // Create implements client.Client
-func (c *typedClient) Create(ctx context.Context, obj runtime.Object) error {
+func (c *typedClient) Create(_ context.Context, obj runtime.Object) error {
 	o, err := c.cache.getObjMeta(obj)
 	if err != nil {
 		return err
@@ -44,7 +44,7 @@ func (c *typedClient) Create(ctx context.Context, obj runtime.Object) error {
 }
 
 // Update implements client.Client
-func (c *typedClient) Update(ctx context.Context, obj runtime.Object) error {
+func (c *typedClient) Update(_ context.Context, obj runtime.Object) error {
 	o, err := c.cache.getObjMeta(obj)
 	if err != nil {
 		return err
@@ -59,7 +59,7 @@ func (c *typedClient) Update(ctx context.Context, obj runtime.Object) error {
 }
 
 // Delete implements client.Client
-func (c *typedClient) Delete(ctx context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error {
+func (c *typedClient) Delete(_ context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error {
 	o, err := c.cache.getObjMeta(obj)
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func (c *typedClient) Delete(ctx context.Context, obj runtime.Object, opts ...De
 }
 
 // Get implements client.Client
-func (c *typedClient) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
+func (c *typedClient) Get(_ context.Context, key ObjectKey, obj runtime.Object) error {
 	r, err := c.cache.getResource(obj)
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func (c *typedClient) Get(ctx context.Context, key ObjectKey, obj runtime.Object
 }
 
 // List implements client.Client
-func (c *typedClient) List(ctx context.Context, opts *ListOptions, obj runtime.Object) error {
+func (c *typedClient) List(_ context.Context, opts *ListOptions, obj runtime.Object) error {
 	r, err := c.cache.getResource(obj)
 	if err != nil {
 		return err
@@ -102,6 +102,26 @@ func (c *typedClient) List(ctx context.Context, opts *ListOptions, obj runtime.O
 		Resource(r.resource()).
 		Body(obj).
 		VersionedParams(opts.AsListOptions(), c.paramCodec).
+		Do().
+		Into(obj)
+}
+
+// UpdateStatus used by StatusWriter to write status.
+func (c *typedClient) UpdateStatus(_ context.Context, obj runtime.Object) error {
+	o, err := c.cache.getObjMeta(obj)
+	if err != nil {
+		return err
+	}
+	// TODO(droot): examine the returned error and check if it error needs to be
+	// wrapped to improve the UX ?
+	// It will be nice to receive an error saying the object doesn't implement
+	// status subresource and check CRD definition
+	return o.Put().
+		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
+		Resource(o.resource()).
+		Name(o.GetName()).
+		SubResource("status").
+		Body(obj).
 		Do().
 		Into(obj)
 }

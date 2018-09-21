@@ -28,6 +28,8 @@ import (
 )
 
 const (
+	// CAKeyName is the name of the CA private key
+	CAKeyName = "ca-key.pem"
 	// CACertName is the name of the CA certificate
 	CACertName = "ca-cert.pem"
 	// ServerKeyName is the name of the server private key

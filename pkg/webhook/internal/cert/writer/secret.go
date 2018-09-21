@@ -152,7 +152,12 @@ func (s *secretCertWriter) read() (*generator.Artifacts, error) {
 	if apierrors.IsNotFound(err) {
 		return nil, notFoundError{err}
 	}
-	return secretToCerts(secret), err
+	certs := secretToCerts(secret)
+	if certs != nil {
+		// Store the CA for next usage.
+		s.CertGenerator.SetCA(certs.CAKey, certs.CACert)
+	}
+	return certs, nil
 }
 
 func secretToCerts(secret *corev1.Secret) *generator.Artifacts {
@@ -160,6 +165,7 @@ func secretToCerts(secret *corev1.Secret) *generator.Artifacts {
 		return nil
 	}
 	return &generator.Artifacts{
+		CAKey:  secret.Data[CAKeyName],
 		CACert: secret.Data[CACertName],
 		Cert:   secret.Data[ServerCertName],
 		Key:    secret.Data[ServerKeyName],
@@ -173,6 +179,7 @@ func certsToSecret(certs *generator.Artifacts, sec types.NamespacedName) *corev1
 			Name:      sec.Name,
 		},
 		Data: map[string][]byte{
+			CAKeyName:      certs.CAKey,
 			CACertName:     certs.CACert,
 			ServerKeyName:  certs.Key,
 			ServerCertName: certs.Cert,

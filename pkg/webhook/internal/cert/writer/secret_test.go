@@ -51,6 +51,7 @@ var _ = Describe("secretCertWriter", func() {
 			CertGenerator: &fakegenerator.CertGenerator{
 				DNSNameToCertArtifacts: map[string]*generator.Artifacts{
 					dnsName: {
+						CAKey:  []byte(`CAKeyBytes`),
 						CACert: []byte(`CACertBytes`),
 						Cert:   []byte(`CertBytes`),
 						Key:    []byte(`KeyBytes`),
@@ -93,6 +94,7 @@ var _ = Describe("secretCertWriter", func() {
 					//},
 				},
 				Data: map[string][]byte{
+					CAKeyName:      []byte(`CAKeyBytes`),
 					CACertName:     []byte(`CACertBytes`),
 					ServerKeyName:  []byte(`KeyBytes`),
 					ServerCertName: []byte(`CertBytes`),
@@ -189,7 +191,8 @@ var _ = Describe("secretCertWriter", func() {
 					BeforeEach(func(done Done) {
 						oldSecret = secret.DeepCopy()
 						oldSecret.Data = map[string][]byte{
-							CACertName:     []byte(`oldCACertBytes`),
+							CAKeyName:      []byte(`invalidCAKeyBytes`),
+							CACertName:     []byte(`invalidCACertBytes`),
 							ServerKeyName:  []byte(`oldKeyBytes`),
 							ServerCertName: []byte(`oldCertBytes`),
 						}
@@ -221,6 +224,7 @@ var _ = Describe("secretCertWriter", func() {
 			Context("cert is valid", func() {
 				BeforeEach(func(done Done) {
 					oldSecret.Data = map[string][]byte{
+						CAKeyName:      []byte(certs2.CAKey),
 						CACertName:     []byte(certs2.CACert),
 						ServerKeyName:  []byte(certs2.Key),
 						ServerCertName: []byte(certs2.Cert),
@@ -235,6 +239,7 @@ var _ = Describe("secretCertWriter", func() {
 					BeforeEach(func(done Done) {
 						oldSecret = secret.DeepCopy()
 						oldSecret.Data = map[string][]byte{
+							CAKeyName:      []byte(certs2.CAKey),
 							CACertName:     []byte(certs2.CACert),
 							ServerKeyName:  []byte(certs2.Key),
 							ServerCertName: []byte(certs2.Cert),
@@ -270,6 +275,7 @@ var _ = Describe("secretCertWriter", func() {
 					BeforeEach(func(done Done) {
 						oldSecret = secret.DeepCopy()
 						oldSecret.Data = map[string][]byte{
+							CAKeyName:  []byte(`oldCAKeyBytes`),
 							CACertName: []byte(`oldCACertBytes`),
 							//ServerKeyName:  []byte(expiringKeyPEM),
 							//ServerCertName: []byte(expiringCertPEM),

@@ -72,8 +72,7 @@ func NewFSCertWriter(ops FSCertWriterOptions) (CertWriter, error) {
 }
 
 // EnsureCert provisions certificates for a webhookClientConfig by writing the certificates in the filesystem.
-// fsCertWriter doesn't support dryrun.
-func (f *fsCertWriter) EnsureCert(dnsName string, _ bool) (*generator.Artifacts, bool, error) {
+func (f *fsCertWriter) EnsureCert(dnsName string) (*generator.Artifacts, bool, error) {
 	// create or refresh cert and write it to fs
 	f.dnsName = dnsName
 	return handleCommon(f.dnsName, f)

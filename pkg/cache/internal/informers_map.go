@@ -127,6 +127,8 @@ func (ip *specificInformersMap) Start(stop <-chan struct{}) {
 
 // HasSyncedFuncs returns all the HasSynced functions for the informers in this map.
 func (ip *specificInformersMap) HasSyncedFuncs() []cache.InformerSynced {
+	ip.mu.RLock()
+	defer ip.mu.RUnlock()
 	syncedFuncs := make([]cache.InformerSynced, 0, len(ip.informersByGVK))
 	for _, informer := range ip.informersByGVK {
 		syncedFuncs = append(syncedFuncs, informer.Informer.HasSynced)

@@ -195,6 +195,35 @@ var _ = Describe("Informer Cache", func() {
 				Expect(actual.Namespace).To(Equal(testNamespaceOne))
 			})
 
+			It("should be able to restrict cache to a namespace", func() {
+				By("creating a namespaced cache")
+				namespacedCache, err := cache.New(cfg, cache.Options{Namespace: testNamespaceOne})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("running the cache and waiting for it to sync")
+				go func() {
+					defer GinkgoRecover()
+					Expect(namespacedCache.Start(stop)).To(Succeed())
+				}()
+				Expect(namespacedCache.WaitForCacheSync(stop)).NotTo(BeFalse())
+
+				By("listing pods in all namespaces")
+				out := &kcorev1.PodList{}
+				Expect(namespacedCache.List(context.Background(), nil, out)).To(Succeed())
+
+				By("verifying the returned pod is from the watched namespace")
+				Expect(out.Items).NotTo(BeEmpty())
+				Expect(out.Items).Should(HaveLen(1))
+				Expect(out.Items[0].Namespace).To(Equal(testNamespaceOne))
+
+				By("listing all namespaces - should still be able to get a cluster-scoped resource")
+				namespaceList := &kcorev1.NamespaceList{}
+				Expect(namespacedCache.List(context.Background(), nil, namespaceList)).To(Succeed())
+
+				By("verifying the namespace list is not empty")
+				Expect(namespaceList.Items).NotTo(BeEmpty())
+			})
+
 			It("should deep copy the object unless told otherwise", func() {
 				By("retrieving a specific pod from the cache")
 				out := &kcorev1.Pod{}
@@ -331,6 +360,45 @@ var _ = Describe("Informer Cache", func() {
 				Expect(listObj.Items).Should(HaveLen(1))
 				actual := listObj.Items[0]
 				Expect(actual.GetNamespace()).To(Equal(testNamespaceOne))
+			})
+
+			It("should be able to restrict cache to a namespace", func() {
+				By("creating a namespaced cache")
+				namespacedCache, err := cache.New(cfg, cache.Options{Namespace: testNamespaceOne})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("running the cache and waiting for it to sync")
+				go func() {
+					defer GinkgoRecover()
+					Expect(namespacedCache.Start(stop)).To(Succeed())
+				}()
+				Expect(namespacedCache.WaitForCacheSync(stop)).NotTo(BeFalse())
+
+				By("listing pods in all namespaces")
+				out := &unstructured.UnstructuredList{}
+				out.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "",
+					Version: "v1",
+					Kind:    "PodList",
+				})
+				Expect(namespacedCache.List(context.Background(), nil, out)).To(Succeed())
+
+				By("verifying the returned pod is from the watched namespace")
+				Expect(out.Items).NotTo(BeEmpty())
+				Expect(out.Items).Should(HaveLen(1))
+				Expect(out.Items[0].GetNamespace()).To(Equal(testNamespaceOne))
+
+				By("listing all namespaces - should still be able to get a cluster-scoped resource")
+				namespaceList := &unstructured.UnstructuredList{}
+				namespaceList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "",
+					Version: "v1",
+					Kind:    "NamespaceList",
+				})
+				Expect(namespacedCache.List(context.Background(), nil, namespaceList)).To(Succeed())
+
+				By("verifying the namespace list is not empty")
+				Expect(namespaceList.Items).NotTo(BeEmpty())
 			})
 
 			It("should deep copy the object unless told otherwise", func() {

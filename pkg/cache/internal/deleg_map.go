@@ -44,11 +44,12 @@ type InformersMap struct {
 func NewInformersMap(config *rest.Config,
 	scheme *runtime.Scheme,
 	mapper meta.RESTMapper,
-	resync time.Duration) *InformersMap {
+	resync time.Duration,
+	namespace string) *InformersMap {
 
 	return &InformersMap{
-		structured:   newStructuredInformersMap(config, scheme, mapper, resync),
-		unstructured: newUnstructuredInformersMap(config, scheme, mapper, resync),
+		structured:   newStructuredInformersMap(config, scheme, mapper, resync, namespace),
+		unstructured: newUnstructuredInformersMap(config, scheme, mapper, resync, namespace),
 
 		Scheme: scheme,
 	}
@@ -85,11 +86,11 @@ func (m *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*Ma
 }
 
 // newStructuredInformersMap creates a new InformersMap for structured objects.
-func newStructuredInformersMap(config *rest.Config, scheme *runtime.Scheme, mapper meta.RESTMapper, resync time.Duration) *specificInformersMap {
-	return newSpecificInformersMap(config, scheme, mapper, resync, createStructuredListWatch)
+func newStructuredInformersMap(config *rest.Config, scheme *runtime.Scheme, mapper meta.RESTMapper, resync time.Duration, namespace string) *specificInformersMap {
+	return newSpecificInformersMap(config, scheme, mapper, resync, namespace, createStructuredListWatch)
 }
 
 // newUnstructuredInformersMap creates a new InformersMap for unstructured objects.
-func newUnstructuredInformersMap(config *rest.Config, scheme *runtime.Scheme, mapper meta.RESTMapper, resync time.Duration) *specificInformersMap {
-	return newSpecificInformersMap(config, scheme, mapper, resync, createUnstructuredListWatch)
+func newUnstructuredInformersMap(config *rest.Config, scheme *runtime.Scheme, mapper meta.RESTMapper, resync time.Duration, namespace string) *specificInformersMap {
+	return newSpecificInformersMap(config, scheme, mapper, resync, namespace, createUnstructuredListWatch)
 }

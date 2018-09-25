@@ -135,3 +135,6 @@ func validCert(certs *generator.Artifacts, dnsName string) bool {
 	_, err = cert.Verify(ops)
 	return err == nil
 }
+
+//return generator.ValidCACert(certs.Key, certs.Cert, certs.CACert, dnsName,
+//	time.Now().AddDate(0, 6, 0))

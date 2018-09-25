@@ -67,8 +67,8 @@ var _ = Describe("Cert Generator", func() {
 				certs, err = cp.Generate(cn)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(certs.CAKey).To(Equal(cp.CAKey))
-				Expect(certs.CACert).To(Equal(cp.CACert))
+				Expect(certs.CAKey).To(Equal(cp.caKey))
+				Expect(certs.CACert).To(Equal(cp.caCert))
 
 				// First, create the set of root certificates. For this example we only
 				// have one. It's also possible to omit this in order to use the
@@ -105,8 +105,8 @@ var _ = Describe("Cert Generator", func() {
 				certs, err = cp.Generate(cn)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(certs.CAKey).NotTo(Equal(cp.CAKey))
-				Expect(certs.CACert).NotTo(Equal(cp.CACert))
+				Expect(certs.CAKey).NotTo(Equal(cp.caKey))
+				Expect(certs.CACert).NotTo(Equal(cp.caCert))
 
 				// First, create the set of root certificates. For this example we only
 				// have one. It's also possible to omit this in order to use the

@@ -18,9 +18,9 @@ package generator
 
 import (
 	"crypto/rsa"
-	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"time"
 
 	"k8s.io/client-go/util/cert"
 )
@@ -33,16 +33,16 @@ func ServiceToCommonName(serviceNamespace, serviceName string) string {
 // SelfSignedCertGenerator implements the certGenerator interface.
 // It provisions self-signed certificates.
 type SelfSignedCertGenerator struct {
-	CAKey  []byte
-	CACert []byte
+	caKey  []byte
+	caCert []byte
 }
 
 var _ CertGenerator = &SelfSignedCertGenerator{}
 
 // SetCA sets the PEM-encoded CA private key and CA cert for signing the generated serving cert.
 func (cp *SelfSignedCertGenerator) SetCA(caKey, caCert []byte) {
-	cp.CAKey = caKey
-	cp.CACert = caCert
+	cp.caKey = caKey
+	cp.caCert = caCert
 }
 
 // Generate creates and returns a CA certificate, certificate and
@@ -91,17 +91,13 @@ func (cp *SelfSignedCertGenerator) Generate(commonName string) (*Artifacts, erro
 }
 
 func (cp *SelfSignedCertGenerator) validCACert() (bool, *rsa.PrivateKey, *x509.Certificate) {
-	if len(cp.CAKey) == 0 || len(cp.CACert) == 0 {
-		return false, nil, nil
-	}
-	// Verify key and cert are valid pair
-	_, err := tls.X509KeyPair(cp.CACert, cp.CAKey)
-	if err != nil {
+	if !ValidCACert(cp.caKey, cp.caCert, cp.caCert, "",
+		time.Now().AddDate(1, 0, 0)) {
 		return false, nil, nil
 	}
 
 	var ok bool
-	key, err := cert.ParsePrivateKeyPEM(cp.CAKey)
+	key, err := cert.ParsePrivateKeyPEM(cp.caKey)
 	if err != nil {
 		return false, nil, nil
 	}
@@ -110,7 +106,7 @@ func (cp *SelfSignedCertGenerator) validCACert() (bool, *rsa.PrivateKey, *x509.C
 		return false, nil, nil
 	}
 
-	certs, err := cert.ParseCertsPEM(cp.CACert)
+	certs, err := cert.ParseCertsPEM(cp.caCert)
 	if err != nil {
 		return false, nil, nil
 	}

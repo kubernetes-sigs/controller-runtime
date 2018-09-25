@@ -40,7 +40,7 @@ var log = logf.Log.WithName("example-controller")
 
 func main() {
 	var genManifests, disableInstaller bool
-	flag.BoolVar(&genManifests, "generate-manifests", false,
+	flag.BoolVar(&genManifests, "generate-webhook-manifests", false,
 		"generate manifests for webhook related resources")
 	flag.BoolVar(&disableInstaller, "disable-installer", false,
 		"disable the installer in the webhook server, so it won't install webhook related resources during bootstrapping")
@@ -57,27 +57,29 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup a new controller to Reconciler ReplicaSets
-	entryLog.Info("Setting up controller")
-	c, err := controller.New("foo-controller", mgr, controller.Options{
-		Reconciler: &reconcileReplicaSet{client: mgr.GetClient(), log: log.WithName("reconciler")},
-	})
-	if err != nil {
-		entryLog.Error(err, "unable to set up individual controller")
-		os.Exit(1)
-	}
+	if !genManifests {
+		// Setup a new controller to Reconciler ReplicaSets
+		entryLog.Info("Setting up controller")
+		c, err := controller.New("foo-controller", mgr, controller.Options{
+			Reconciler: &reconcileReplicaSet{client: mgr.GetClient(), log: log.WithName("reconciler")},
+		})
+		if err != nil {
+			entryLog.Error(err, "unable to set up individual controller")
+			os.Exit(1)
+		}
 
-	// Watch ReplicaSets and enqueue ReplicaSet object key
-	if err := c.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueRequestForObject{}); err != nil {
-		entryLog.Error(err, "unable to watch ReplicaSets")
-		os.Exit(1)
-	}
+		// Watch ReplicaSets and enqueue ReplicaSet object key
+		if err := c.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueRequestForObject{}); err != nil {
+			entryLog.Error(err, "unable to watch ReplicaSets")
+			os.Exit(1)
+		}
 
-	// Watch Pods and enqueue owning ReplicaSet key
-	if err := c.Watch(&source.Kind{Type: &corev1.Pod{}},
-		&handler.EnqueueRequestForOwner{OwnerType: &appsv1.ReplicaSet{}, IsController: true}); err != nil {
-		entryLog.Error(err, "unable to watch Pods")
-		os.Exit(1)
+		// Watch Pods and enqueue owning ReplicaSet key
+		if err := c.Watch(&source.Kind{Type: &corev1.Pod{}},
+			&handler.EnqueueRequestForOwner{OwnerType: &appsv1.ReplicaSet{}, IsController: true}); err != nil {
+			entryLog.Error(err, "unable to watch Pods")
+			os.Exit(1)
+		}
 	}
 
 	// Setup webhooks

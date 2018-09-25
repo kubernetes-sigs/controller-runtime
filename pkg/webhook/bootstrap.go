@@ -136,7 +136,7 @@ func (s *Server) installWebhookConfig() error {
 	}
 
 	if !s.GenerateManifests && s.DisableInstaller {
-		log.Info("webhook installer is disabled")
+		log.Info("generating webhook manifests is disabled and webhook installer is also disabled")
 		return nil
 	}
 	if s.GenerateManifests {

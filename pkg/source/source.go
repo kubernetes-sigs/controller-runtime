@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source/internal"
 
+	toolscache "k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -39,7 +40,7 @@ const (
 // Source is a source of events (eh.g. Create, Update, Delete operations on Kubernetes Objects, Webhook callbacks, etc)
 // which should be processed by event.EventHandlers to enqueue reconcile.Requests.
 //
-// * Use Kind for events originating in the cluster (eh.g. Pod Create, Pod Update, Deployment Update).
+// * Use Kind for events originating in the cluster (e.g. Pod Create, Pod Update, Deployment Update).
 //
 // * Use Channel for events originating outside the cluster (eh.g. GitHub Webhook callback, Polling external urls).
 //
@@ -51,7 +52,7 @@ type Source interface {
 	Start(handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
 }
 
-// Kind is used to provide a source of events originating inside the cluster from Watches (eh.g. Pod Create)
+// Kind is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create)
 type Kind struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
 	Type runtime.Object
@@ -100,7 +101,7 @@ func (ks *Kind) InjectCache(c cache.Cache) error {
 var _ Source = &Channel{}
 
 // Channel is used to provide a source of events originating outside the cluster
-// (eh.g. GitHub Webhook callback).  Channel requires the user to wire the external
+// (e.g. GitHub Webhook callback).  Channel requires the user to wire the external
 // source (eh.g. http handler) to write GenericEvents to the underlying channel.
 type Channel struct {
 	// once ensures the event distribution goroutine will be performed only once
@@ -219,6 +220,28 @@ func (cs *Channel) syncLoop() {
 			cs.distribute(evt)
 		}
 	}
+}
+
+// Informer is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create)
+type Informer struct {
+	// Informer is the generated client-go Informer
+	Informer toolscache.SharedIndexInformer
+}
+
+var _ Source = &Informer{}
+
+// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
+// to enqueue reconcile.Requests.
+func (ks *Informer) Start(handler handler.EventHandler, queue workqueue.RateLimitingInterface,
+	prct ...predicate.Predicate) error {
+
+	// Informer should have been specified by the user.
+	if ks.Informer == nil {
+		return fmt.Errorf("must specify Informer.Informer")
+	}
+
+	ks.Informer.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
+	return nil
 }
 
 // Func is a function that implements Source

@@ -116,7 +116,7 @@ var _ = Describe("Source", func() {
 					},
 					UpdateFunc: func(evt event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
-						Expect(q2).To(Equal(q))
+						Expect(q2).To(BeIdenticalTo(q))
 						Expect(evt.MetaOld).To(Equal(p))
 						Expect(evt.ObjectOld).To(Equal(p))
 
@@ -170,7 +170,7 @@ var _ = Describe("Source", func() {
 					},
 					DeleteFunc: func(evt event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
-						Expect(q2).To(Equal(q))
+						Expect(q2).To(BeIdenticalTo(q))
 						Expect(evt.Meta).To(Equal(p))
 						Expect(evt.Object).To(Equal(p))
 						close(c)
@@ -306,7 +306,7 @@ var _ = Describe("Source", func() {
 						defer GinkgoRecover()
 						// The empty event should have been filtered out by the predicates,
 						// and will not be passed to the handler.
-						Expect(q2).To(Equal(q))
+						Expect(q2).To(BeIdenticalTo(q))
 						Expect(evt.Meta).To(Equal(p))
 						Expect(evt.Object).To(Equal(p))
 						close(c)
@@ -429,7 +429,7 @@ var _ = Describe("Source", func() {
 					},
 					GenericFunc: func(evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
-						Expect(q2).To(Equal(q))
+						Expect(q2).To(BeIdenticalTo(q))
 						Expect(evt.Meta).To(Equal(p))
 						Expect(evt.Object).To(Equal(p))
 						resEvent1 = evt
@@ -453,7 +453,7 @@ var _ = Describe("Source", func() {
 					},
 					GenericFunc: func(evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
-						Expect(q2).To(Equal(q))
+						Expect(q2).To(BeIdenticalTo(q))
 						Expect(evt.Meta).To(Equal(p))
 						Expect(evt.Object).To(Equal(p))
 						resEvent2 = evt

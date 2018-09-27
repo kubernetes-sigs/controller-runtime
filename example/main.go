@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -128,7 +129,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-signals.SetupSignalHandler()
+		cancel()
+	}()
+
+	if err := mgr.Start(ctx); err != nil {
 		entryLog.Error(err, "unable to run manager")
 		os.Exit(1)
 	}

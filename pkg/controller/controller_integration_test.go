@@ -17,6 +17,8 @@ limitations under the License.
 package controller_test
 
 import (
+	"context"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,9 +37,11 @@ import (
 var _ = Describe("controller", func() {
 	var reconciled chan reconcile.Request
 	var stop chan struct{}
+	var ctx context.Context
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
+		ctx = context.Background()
 		reconciled = make(chan reconcile.Request)
 		Expect(cfg).NotTo(BeNil())
 	})
@@ -76,7 +80,7 @@ var _ = Describe("controller", func() {
 			By("Starting the Manager")
 			go func() {
 				defer GinkgoRecover()
-				Expect(cm.Start(stop)).NotTo(HaveOccurred())
+				Expect(cm.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
 			deployment := &appsv1.Deployment{

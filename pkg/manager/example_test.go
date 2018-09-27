@@ -17,12 +17,12 @@ limitations under the License.
 package manager_test
 
 import (
+	"context"
 	"os"
 
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 )
 
 var (
@@ -61,7 +61,7 @@ func ExampleManager_Add() {
 
 // This example starts a Manager that has had Runnables added.
 func ExampleManager_Start() {
-	err := mgr.Start(signals.SetupSignalHandler())
+	err := mgr.Start(context.TODO())
 	if err != nil {
 		log.Error(err, "unable start the manager")
 		os.Exit(1)

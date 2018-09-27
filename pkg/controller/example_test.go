@@ -17,6 +17,7 @@ limitations under the License.
 package controller_test
 
 import (
+	"context"
 	"os"
 
 	"k8s.io/api/core/v1"
@@ -25,7 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -75,5 +75,5 @@ func ExampleController() {
 	}
 
 	// Start the Controller through the manager.
-	mgr.Start(signals.SetupSignalHandler())
+	mgr.Start(context.TODO())
 }

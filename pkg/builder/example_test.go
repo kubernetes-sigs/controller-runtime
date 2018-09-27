@@ -27,7 +27,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 )
 
 // NB: don't call SetLogger in init(), or else you'll mess up logging in the main suite.
@@ -49,7 +48,7 @@ func ExampleBuilder() {
 		os.Exit(1)
 	}
 
-	if err := rs.Start(signals.SetupSignalHandler()); err != nil {
+	if err := rs.Start(context.TODO()); err != nil {
 		log.Error(err, "Unable to run controller")
 		os.Exit(1)
 	}

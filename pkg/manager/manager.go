@@ -17,6 +17,7 @@ limitations under the License.
 package manager
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -52,7 +53,7 @@ type Manager interface {
 
 	// Start starts all registered Controllers and blocks until the Stop channel is closed.
 	// Returns an error if there is an error starting any controller.
-	Start(<-chan struct{}) error
+	Start(context.Context) error
 
 	// GetConfig returns an initialized Config
 	GetConfig() *rest.Config
@@ -204,6 +205,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		recorderProvider: recorderProvider,
 		resourceLock:     resourceLock,
 		mapper:           mapper,
+		stop:             make(chan struct{}),
 	}, nil
 }
 

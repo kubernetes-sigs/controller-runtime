@@ -37,9 +37,11 @@ import (
 
 var _ = Describe("application", func() {
 	var stop chan struct{}
+	var ctx context.Context
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
+		ctx = context.Background()
 		getConfig = func() (*rest.Config, error) { return cfg, nil }
 		newController = controller.New
 		newManager = manager.New
@@ -138,7 +140,7 @@ var _ = Describe("application", func() {
 			By("Starting the application")
 			go func() {
 				defer GinkgoRecover()
-				Expect(instance.Start(stop)).NotTo(HaveOccurred())
+				Expect(instance.Start(ctx)).NotTo(HaveOccurred())
 				By("Stopping the application")
 			}()
 

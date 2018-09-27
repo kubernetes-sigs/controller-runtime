@@ -17,6 +17,7 @@ limitations under the License.
 package manager
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -73,7 +74,7 @@ type controllerManager struct {
 	mu      sync.Mutex
 	started bool
 	errChan chan error
-	stop    <-chan struct{}
+	stop    chan struct{}
 
 	startCache func(stop <-chan struct{}) error
 }
@@ -157,11 +158,15 @@ func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
 	return cm.mapper
 }
 
-func (cm *controllerManager) Start(stop <-chan struct{}) error {
+func (cm *controllerManager) Start(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	defer close(cm.stop)
+
 	if cm.resourceLock == nil {
-		go cm.start(stop)
+		go cm.start(ctx)
 		select {
-		case <-stop:
+		case <-ctx.Done():
 			// we are done
 			return nil
 		case err := <-cm.errChan:
@@ -178,7 +183,16 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 		RenewDeadline: 10 * time.Second,
 		RetryPeriod:   2 * time.Second,
 		Callbacks: leaderelection.LeaderCallbacks{
-			OnStartedLeading: cm.start,
+			// Ignore the passed-in stop channel from leaderelection. The next
+			// thing it does anyway after closing its stop channel is call
+			// OnStoppedLeading.
+			// With the 1.12 release, this will accept a Context, which is a
+			// descendant of the same context that will be passed into
+			// `l.Run(ctx)` below. Then it will be safe to pass the context
+			// through to cm.start here.
+			OnStartedLeading: func(_ <-chan struct{}) {
+				cm.start(ctx)
+			},
 			OnStoppedLeading: func() {
 				// Most implementations of leader election log.Fatal() here.
 				// Since Start is wrapped in log.Fatal when called, we can just return
@@ -194,7 +208,7 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	go l.Run()
 
 	select {
-	case <-stop:
+	case <-ctx.Done():
 		// We are done
 		return nil
 	case err := <-cm.errChan:
@@ -203,26 +217,24 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	}
 }
 
-func (cm *controllerManager) start(stop <-chan struct{}) {
+func (cm *controllerManager) start(ctx context.Context) {
 	func() {
 		cm.mu.Lock()
 		defer cm.mu.Unlock()
-
-		cm.stop = stop
 
 		// Start the Cache. Allow the function to start the cache to be mocked out for testing
 		if cm.startCache == nil {
 			cm.startCache = cm.cache.Start
 		}
 		go func() {
-			if err := cm.startCache(stop); err != nil {
+			if err := cm.startCache(ctx.Done()); err != nil {
 				cm.errChan <- err
 			}
 		}()
 
 		// Wait for the caches to sync.
 		// TODO(community): Check the return value and write a test
-		cm.cache.WaitForCacheSync(stop)
+		cm.cache.WaitForCacheSync(ctx.Done())
 
 		// Start the runnables after the cache has synced
 		for _, c := range cm.runnables {
@@ -230,16 +242,12 @@ func (cm *controllerManager) start(stop <-chan struct{}) {
 			// Write any Start errors to a channel so we can return them
 			ctrl := c
 			go func() {
-				cm.errChan <- ctrl.Start(stop)
+				// Because a controller can be added and started at any time, we always
+				// give them cm.stop.
+				cm.errChan <- ctrl.Start(cm.stop)
 			}()
 		}
 
 		cm.started = true
 	}()
-
-	select {
-	case <-stop:
-		// We are done
-		return
-	}
 }

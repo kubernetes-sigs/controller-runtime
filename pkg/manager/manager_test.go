@@ -17,6 +17,7 @@ limitations under the License.
 package manager
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/go-logr/logr"
@@ -38,9 +39,11 @@ import (
 
 var _ = Describe("manger.Manager", func() {
 	var stop chan struct{}
+	var ctx context.Context
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
+		ctx = context.Background()
 	})
 
 	AfterEach(func() {
@@ -146,7 +149,7 @@ var _ = Describe("manger.Manager", func() {
 
 				go func() {
 					defer GinkgoRecover()
-					Expect(m.Start(stop)).NotTo(HaveOccurred())
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				<-c1
 				<-c2
@@ -157,9 +160,9 @@ var _ = Describe("manger.Manager", func() {
 			It("should stop when stop is called", func(done Done) {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
-				s := make(chan struct{})
-				close(s)
-				Expect(m.Start(s)).NotTo(HaveOccurred())
+				ctx, cancel := context.WithCancel(ctx)
+				cancel()
+				Expect(m.Start(ctx)).NotTo(HaveOccurred())
 
 				close(done)
 			})
@@ -172,7 +175,7 @@ var _ = Describe("manger.Manager", func() {
 				mgr.startCache = func(stop <-chan struct{}) error {
 					return fmt.Errorf("expected error")
 				}
-				Expect(m.Start(stop).Error()).To(ContainSubstring("expected error"))
+				Expect(m.Start(ctx).Error()).To(ContainSubstring("expected error"))
 
 				close(done)
 			})
@@ -203,7 +206,7 @@ var _ = Describe("manger.Manager", func() {
 
 				go func() {
 					defer GinkgoRecover()
-					Expect(m.Start(stop)).NotTo(HaveOccurred())
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 					close(done)
 				}()
 				<-c1
@@ -244,7 +247,7 @@ var _ = Describe("manger.Manager", func() {
 
 				go func() {
 					defer GinkgoRecover()
-					Expect(m.Start(stop)).NotTo(HaveOccurred())
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
 
 				// Wait for the Manager to start
@@ -271,7 +274,7 @@ var _ = Describe("manger.Manager", func() {
 
 			go func() {
 				defer GinkgoRecover()
-				Expect(m.Start(stop)).NotTo(HaveOccurred())
+				Expect(m.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
 			// Wait for the Manager to start
@@ -327,8 +330,7 @@ var _ = Describe("manger.Manager", func() {
 				},
 				stop: func(stop <-chan struct{}) error {
 					defer GinkgoRecover()
-					// Manager stop chan has not been initialized.
-					Expect(stop).To(BeNil())
+					Expect(stop).NotTo(BeNil())
 					return nil
 				},
 				f: func(f inject.Func) error {

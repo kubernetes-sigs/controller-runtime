@@ -204,42 +204,34 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 }
 
 func (cm *controllerManager) start(stop <-chan struct{}) {
-	func() {
-		cm.mu.Lock()
-		defer cm.mu.Unlock()
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
 
-		cm.stop = stop
+	cm.stop = stop
 
-		// Start the Cache. Allow the function to start the cache to be mocked out for testing
-		if cm.startCache == nil {
-			cm.startCache = cm.cache.Start
+	// Start the Cache. Allow the function to start the cache to be mocked out for testing
+	if cm.startCache == nil {
+		cm.startCache = cm.cache.Start
+	}
+	go func() {
+		if err := cm.startCache(stop); err != nil {
+			cm.errChan <- err
 		}
-		go func() {
-			if err := cm.startCache(stop); err != nil {
-				cm.errChan <- err
-			}
-		}()
-
-		// Wait for the caches to sync.
-		// TODO(community): Check the return value and write a test
-		cm.cache.WaitForCacheSync(stop)
-
-		// Start the runnables after the cache has synced
-		for _, c := range cm.runnables {
-			// Controllers block, but we want to return an error if any have an error starting.
-			// Write any Start errors to a channel so we can return them
-			ctrl := c
-			go func() {
-				cm.errChan <- ctrl.Start(stop)
-			}()
-		}
-
-		cm.started = true
 	}()
 
-	select {
-	case <-stop:
-		// We are done
-		return
+	// Wait for the caches to sync.
+	// TODO(community): Check the return value and write a test
+	cm.cache.WaitForCacheSync(stop)
+
+	// Start the runnables after the cache has synced
+	for _, c := range cm.runnables {
+		// Controllers block, but we want to return an error if any have an error starting.
+		// Write any Start errors to a channel so we can return them
+		ctrl := c
+		go func() {
+			cm.errChan <- ctrl.Start(stop)
+		}()
 	}
+
+	cm.started = true
 }

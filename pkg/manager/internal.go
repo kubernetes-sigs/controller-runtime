@@ -161,16 +161,14 @@ func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
 }
 
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
-	if cm.resourceLock == nil {
-		// join the passed-in stop channel as an upstream feeding into cm.stopper
-		go func() {
-			<-stop
-			close(cm.stopper)
-		}()
+	defer close(cm.stopper)
 
+	if cm.resourceLock == nil {
 		go cm.start()
 		select {
-		case <-cm.stop:
+		// Only this function should receive from stop, and everything else
+		// should receive from cm.stop.
+		case <-stop:
 			// we are done
 			return nil
 		case err := <-cm.errChan:
@@ -188,16 +186,10 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 		RetryPeriod:   2 * time.Second,
 		Callbacks: leaderelection.LeaderCallbacks{
 			// This type changes in k8s 1.12 to func(context.Context)
-			OnStartedLeading: func(stopleading <-chan struct{}) {
-				// join both stop and stopleading so they feed into cm.stopper
-				go func() {
-					select {
-					case <-stop:
-						close(cm.stopper)
-					case <-stopleading:
-						close(cm.stopper)
-					}
-				}()
+			// Ignore the passed-in stop channel from leaderelection. The next
+			// thing it does anyway after closing its stop channel is call
+			// OnStoppedLeading.
+			OnStartedLeading: func(_ <-chan struct{}) {
 				cm.start()
 			},
 			OnStoppedLeading: func() {
@@ -215,7 +207,7 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	go l.Run()
 
 	select {
-	case <-cm.stop:
+	case <-stop:
 		// We are done
 		return nil
 	case err := <-cm.errChan:

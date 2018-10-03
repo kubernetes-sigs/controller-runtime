@@ -47,6 +47,119 @@ var _ = Describe("manger.Manager", func() {
 		close(stop)
 	})
 
+	Describe("PreStart", func() {
+		It("should call the function on each Component", func(done Done) {
+			// Init the manager
+			m, err := New(cfg, Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create the first runnable to have PreStart called first
+			runnable1Started := make(chan struct{})
+			runnable1 := &runnable{fn: func() { close(runnable1Started) }}
+			m.Add(runnable1)
+
+			// Create a second runnable to have PreStart called second
+			runnable2Started := make(chan struct{})
+			runnable2 := &runnable{fn: func() { close(runnable2Started) }}
+			m.Add(runnable2)
+
+			// Add the first preStart hook
+			preStart1Done := make(chan struct{})
+			preStart1Count := 0
+			m.PreStart(func(r Runnable) error {
+				// If this is the second time prestart1 is called, then mark
+				// prestart1 as complete after completing the fn
+				if preStart1Count == 1 {
+					defer close(preStart1Done)
+				}
+				defer GinkgoRecover()
+
+				switch preStart1Count {
+				case 0:
+					// First call should be for the first runnable
+					preStart1Count++
+					Expect(r).To(Equal(runnable1))
+				case 1:
+					// Second call should be for the second runnable
+					preStart1Count++
+					Expect(r).To(Equal(runnable2))
+				}
+				return nil
+			})
+
+			// Add the second preStart hook - should be called *after* the first preStart hook
+			preStart2Done := make(chan struct{})
+			preStart2Count := 0
+			m.PreStart(func(r Runnable) error {
+				// If this is the second time prestart2 is called, then mark
+				// prestart2 as complete after completing the fn
+				if preStart2Count == 1 {
+					defer close(preStart2Done)
+				}
+				defer GinkgoRecover()
+
+				switch preStart2Count {
+				case 0:
+					// First call should be for the first runnable
+					preStart2Count++
+					Expect(r).To(Equal(runnable1))
+				case 1:
+					// Second call should be for the second runnable
+					preStart2Count++
+					Expect(r).To(Equal(runnable2))
+				}
+				return nil
+			})
+
+			// Start the Manager - should call PreStart hooks and then Start the Runnables
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(stop)).To(Succeed())
+			}()
+
+			By("calling the first prestart hook on all runnables")
+			<-preStart1Done
+
+			By("calling the second prestart hook on all runnables")
+			<-preStart2Done
+
+			By("starting the first runnable")
+			<-runnable1Started
+
+			By("starting the second runnable")
+			<-runnable2Started
+
+			close(done)
+		})
+
+		It("should fail Start if the PreStart fails", func(done Done) {
+			m, err := New(cfg, Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Runnable should never be started if the PreStart fails
+			m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				Fail("runnables should not have started")
+				return nil
+			}))
+
+			// Encounter an error in the first PreStart
+			m.PreStart(func(r Runnable) error {
+				return fmt.Errorf("fail")
+			})
+
+			// Second PreStart should never be called
+			m.PreStart(func(r Runnable) error {
+				Fail("second prestart should not have been called")
+				return nil
+			})
+
+			// Expect Starting the manager to fail synchronously
+			Expect(m.Start(stop)).NotTo(Succeed())
+
+			close(done)
+		})
+	})
+
 	Describe("New", func() {
 		It("should return an error if there is no Config", func() {
 			m, err := New(nil, Options{})
@@ -501,5 +614,16 @@ func (i *injectable) InjectStopChannel(stop <-chan struct{}) error {
 }
 
 func (i *injectable) Start(<-chan struct{}) error {
+	return nil
+}
+
+var _ Runnable = &runnable{}
+
+type runnable struct {
+	fn func()
+}
+
+func (r *runnable) Start(<-chan struct{}) error {
+	r.fn()
 	return nil
 }

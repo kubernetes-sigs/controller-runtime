@@ -76,6 +76,8 @@ type controllerManager struct {
 	stop    <-chan struct{}
 
 	startCache func(stop <-chan struct{}) error
+
+	preStart []func(Runnable) error
 }
 
 // Add sets dependencies on i, and adds it to the list of runnables to start.
@@ -141,6 +143,11 @@ func (cm *controllerManager) GetAdmissionDecoder() types.Decoder {
 	return cm.admissionDecoder
 }
 
+// PreStart call the function for each Runnable before starting any.
+func (cm *controllerManager) PreStart(fn func(Runnable) error) {
+	cm.preStart = append(cm.preStart, fn)
+}
+
 func (cm *controllerManager) GetFieldIndexer() client.FieldIndexer {
 	return cm.fieldIndexes
 }
@@ -158,6 +165,14 @@ func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
 }
 
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
+	for _, fn := range cm.preStart {
+		for _, r := range cm.runnables {
+			if err := fn(r); err != nil {
+				return err
+			}
+		}
+	}
+
 	if cm.resourceLock == nil {
 		go cm.start(stop)
 		select {

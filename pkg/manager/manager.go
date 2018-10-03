@@ -54,6 +54,9 @@ type Manager interface {
 	// Returns an error if there is an error starting any controller.
 	Start(<-chan struct{}) error
 
+	// PreStart calls the function for each Runnable before starting any of them.
+	PreStart(func(Runnable) error)
+
 	// GetConfig returns an initialized Config
 	GetConfig() *rest.Config
 

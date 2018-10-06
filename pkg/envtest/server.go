@@ -17,8 +17,10 @@ limitations under the License.
 package envtest
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/client-go/rest"
@@ -32,6 +34,8 @@ const (
 	envEtcdBin             = "TEST_ASSET_ETCD"
 	envKubectlBin          = "TEST_ASSET_KUBECTL"
 	envKubebuilderPath     = "KUBEBUILDER_ASSETS"
+	envStartTimeout        = "KUBEBUILDER_CONTROLPLANE_START_TIMEOUT"
+	envStopTimeout         = "KUBEBUILDER_CONTROLPLANE_STOP_TIMEOUT"
 	defaultKubebuilderPath = "/usr/local/kubebuilder/bin"
 	StartTimeout           = 60
 	StopTimeout            = 60
@@ -76,6 +80,16 @@ type Environment struct {
 	// existing kubeconfig, instead of trying to stand up a new control plane.
 	// This is useful in cases that need aggregated API servers and the like.
 	UseExistingCluster bool
+
+	// ControlPlaneStartTimeout is the the maximum duration each controlplane component
+	// may take to start. It defaults to the KUBEBUILDER_CONTROLPLANE_START_TIMEOUT
+	// environment variable or 20 seconds if unspecified
+	ControlPlaneStartTimeout time.Duration
+
+	// ControlPlaneStopTimeout is the the maximum duration each controlplane component
+	// may take to stop. It defaults to the KUBEBUILDER_CONTROLPLANE_STOP_TIMEOUT
+	// environment variable or 20 seconds if unspecified
+	ControlPlaneStopTimeout time.Duration
 }
 
 // Stop stops a running server
@@ -102,6 +116,7 @@ func (te *Environment) Start() (*rest.Config, error) {
 	} else {
 		te.ControlPlane = integration.ControlPlane{}
 		te.ControlPlane.APIServer = &integration.APIServer{Args: defaultKubeAPIServerFlags}
+
 		if os.Getenv(envKubeAPIServerBin) == "" {
 			te.ControlPlane.APIServer.Path = defaultAssetPath("kube-apiserver")
 		}
@@ -114,6 +129,14 @@ func (te *Environment) Start() (*rest.Config, error) {
 				return nil, err
 			}
 		}
+
+		if err := te.defaultTimeouts(); err != nil {
+			return nil, fmt.Errorf("failed to default controlplane timeouts: %v", err)
+		}
+		te.ControlPlane.Etcd.StartTimeout = te.ControlPlaneStartTimeout
+		te.ControlPlane.Etcd.StopTimeout = te.ControlPlaneStopTimeout
+		te.ControlPlane.APIServer.StartTimeout = te.ControlPlaneStartTimeout
+		te.ControlPlane.APIServer.StopTimeout = te.ControlPlaneStopTimeout
 
 		// Start the control plane - retry if it fails
 		if err := te.ControlPlane.Start(); err != nil {
@@ -131,4 +154,26 @@ func (te *Environment) Start() (*rest.Config, error) {
 		CRDs:  te.CRDs,
 	})
 	return te.Config, err
+}
+
+func (te *Environment) defaultTimeouts() error {
+	var err error
+	if te.ControlPlaneStartTimeout == 0 {
+		if envVal := os.Getenv(envStartTimeout); envVal != "" {
+			te.ControlPlaneStartTimeout, err = time.ParseDuration(envVal)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if te.ControlPlaneStopTimeout == 0 {
+		if envVal := os.Getenv(envStopTimeout); envVal != "" {
+			te.ControlPlaneStopTimeout, err = time.ParseDuration(envVal)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

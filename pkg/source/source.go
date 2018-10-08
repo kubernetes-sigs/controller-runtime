@@ -95,6 +95,13 @@ func (ks *Kind) Start(handler handler.EventHandler, queue workqueue.RateLimiting
 	return nil
 }
 
+func (ks *Kind) String() string {
+	if ks.Type != nil && ks.Type.GetObjectKind() != nil {
+		return fmt.Sprintf("kind source: %v", ks.Type.GetObjectKind().GroupVersionKind().String())
+	}
+	return fmt.Sprintf("kind source: unknown GVK")
+}
+
 var _ inject.Cache = &Kind{}
 
 // InjectCache is internal should be called only by the Controller.  InjectCache is used to inject
@@ -130,6 +137,10 @@ type Channel struct {
 
 	// destLock is to ensure the destination channels are safely added/removed
 	destLock sync.Mutex
+}
+
+func (cs *Channel) String() string {
+	return fmt.Sprintf("channel source: %p", cs)
 }
 
 var _ inject.Stoppable = &Channel{}
@@ -240,16 +251,20 @@ var _ Source = &Informer{}
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (ks *Informer) Start(handler handler.EventHandler, queue workqueue.RateLimitingInterface,
+func (is *Informer) Start(handler handler.EventHandler, queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
 
 	// Informer should have been specified by the user.
-	if ks.Informer == nil {
+	if is.Informer == nil {
 		return fmt.Errorf("must specify Informer.Informer")
 	}
 
-	ks.Informer.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
+	is.Informer.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
 	return nil
+}
+
+func (is *Informer) String() string {
+	return fmt.Sprintf("informer source: %p", is.Informer)
 }
 
 // Func is a function that implements Source
@@ -259,4 +274,8 @@ type Func func(handler.EventHandler, workqueue.RateLimitingInterface, ...predica
 func (f Func) Start(evt handler.EventHandler, queue workqueue.RateLimitingInterface,
 	pr ...predicate.Predicate) error {
 	return f(evt, queue, pr...)
+}
+
+func (f Func) String() string {
+	return fmt.Sprintf("func source: %p", f)
 }

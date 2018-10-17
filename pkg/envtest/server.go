@@ -18,8 +18,10 @@ package envtest
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -138,8 +140,7 @@ func (te *Environment) Start() (*rest.Config, error) {
 		te.ControlPlane.APIServer.StartTimeout = te.ControlPlaneStartTimeout
 		te.ControlPlane.APIServer.StopTimeout = te.ControlPlaneStopTimeout
 
-		// Start the control plane - retry if it fails
-		if err := te.ControlPlane.Start(); err != nil {
+		if err := te.startControlPlane(); err != nil {
 			return nil, err
 		}
 
@@ -154,6 +155,32 @@ func (te *Environment) Start() (*rest.Config, error) {
 		CRDs:  te.CRDs,
 	})
 	return te.Config, err
+}
+
+func (te *Environment) startControlPlane() error {
+	numTries, maxRetries := 0, 5
+	for ; numTries < maxRetries; numTries++ {
+		// Start the control plane - retry if it fails
+		err := te.ControlPlane.Start()
+		if err == nil {
+			break
+		}
+		// code snippet copied from following answer on stackoverflow
+		// https://stackoverflow.com/questions/51151973/catching-bind-address-already-in-use-in-golang
+		if opErr, ok := err.(*net.OpError); ok {
+			if opErr.Op == "listen" && strings.Contains(opErr.Error(), "address already in use") {
+				if stopErr := te.ControlPlane.Stop(); stopErr != nil {
+					return fmt.Errorf("failed to stop controlplane in response to bind error 'address already in use'")
+				}
+			}
+		} else {
+			return err
+		}
+	}
+	if numTries == maxRetries {
+		return fmt.Errorf("failed to start the controlplane. retried %d times", numTries)
+	}
+	return nil
 }
 
 func (te *Environment) defaultTimeouts() error {

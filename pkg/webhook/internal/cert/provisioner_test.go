@@ -211,7 +211,7 @@ type fakeCertWriter struct {
 
 var _ writer.CertWriter = &fakeCertWriter{}
 
-func (f *fakeCertWriter) EnsureCert(dnsName string, dryrun bool) (*generator.Artifacts, bool, error) {
+func (f *fakeCertWriter) EnsureCert(dnsName string) (*generator.Artifacts, bool, error) {
 	f.invokedEnsureCert = true
 	return &generator.Artifacts{}, true, nil
 }

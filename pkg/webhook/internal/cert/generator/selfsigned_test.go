@@ -19,38 +19,116 @@ package generator
 import (
 	"crypto/x509"
 	"encoding/pem"
-	"testing"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
-func TestProvisionServingCert(t *testing.T) {
+var _ = Describe("Cert Generator", func() {
 	cn := "mysvc.myns.svc"
-	cp := SelfSignedCertGenerator{}
-	certs, _ := cp.Generate(cn)
+	Describe("CA doesn't exist", func() {
+		It("should generate CA", func() {
+			cp := SelfSignedCertGenerator{}
+			certs, err := cp.Generate(cn)
+			Expect(err).NotTo(HaveOccurred())
 
-	// First, create the set of root certificates. For this example we only
-	// have one. It's also possible to omit this in order to use the
-	// default root set of the current operating system.
-	roots := x509.NewCertPool()
-	ok := roots.AppendCertsFromPEM(certs.CACert)
-	if !ok {
-		t.Fatalf("failed to parse root certificate: %s", certs.CACert)
-	}
+			// First, create the set of root certificates. For this example we only
+			// have one. It's also possible to omit this in order to use the
+			// default root set of the current operating system.
+			roots := x509.NewCertPool()
+			ok := roots.AppendCertsFromPEM(certs.CACert)
+			Expect(ok).To(BeTrue())
 
-	block, _ := pem.Decode(certs.Cert)
-	if block == nil {
-		t.Fatalf("failed to parse certificate PEM: %s", certs.Cert)
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		t.Fatalf("failed to parse certificate: %v", err)
-	}
+			block, _ := pem.Decode(certs.Cert)
+			Expect(block).NotTo(BeNil())
 
-	opts := x509.VerifyOptions{
-		DNSName: cn,
-		Roots:   roots,
-	}
+			cert, err := x509.ParseCertificate(block.Bytes)
+			Expect(err).NotTo(HaveOccurred())
 
-	if _, err := cert.Verify(opts); err != nil {
-		t.Fatalf("failed to verify certificate: %v", err)
-	}
-}
+			opts := x509.VerifyOptions{
+				DNSName: cn,
+				Roots:   roots,
+			}
+
+			_, err = cert.Verify(opts)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("CA doesn't exist", func() {
+		Context("CA is valid", func() {
+			It("should reuse existing CA", func() {
+				cp := SelfSignedCertGenerator{}
+				certs, err := cp.Generate("foo.example.com")
+				Expect(err).NotTo(HaveOccurred())
+
+				cp = SelfSignedCertGenerator{}
+				cp.SetCA(certs.CAKey, certs.CACert)
+				certs, err = cp.Generate(cn)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(certs.CAKey).To(Equal(cp.caKey))
+				Expect(certs.CACert).To(Equal(cp.caCert))
+
+				// First, create the set of root certificates. For this example we only
+				// have one. It's also possible to omit this in order to use the
+				// default root set of the current operating system.
+				roots := x509.NewCertPool()
+				ok := roots.AppendCertsFromPEM(certs.CACert)
+				Expect(ok).To(BeTrue())
+
+				block, _ := pem.Decode(certs.Cert)
+				Expect(block).NotTo(BeNil())
+
+				cert, err := x509.ParseCertificate(block.Bytes)
+				Expect(err).NotTo(HaveOccurred())
+
+				opts := x509.VerifyOptions{
+					DNSName: cn,
+					Roots:   roots,
+				}
+
+				_, err = cert.Verify(opts)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Context("CA is invalid", func() {
+			It("should reuse existing CA", func() {
+				cp := SelfSignedCertGenerator{}
+				certs, err := cp.Generate("foo.example.com")
+				Expect(err).NotTo(HaveOccurred())
+
+				cp = SelfSignedCertGenerator{}
+				cp.SetCA([]byte("invalidCAKey"), []byte("invalidCACert"))
+
+				certs, err = cp.Generate(cn)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(certs.CAKey).NotTo(Equal(cp.caKey))
+				Expect(certs.CACert).NotTo(Equal(cp.caCert))
+
+				// First, create the set of root certificates. For this example we only
+				// have one. It's also possible to omit this in order to use the
+				// default root set of the current operating system.
+				roots := x509.NewCertPool()
+				ok := roots.AppendCertsFromPEM(certs.CACert)
+				Expect(ok).To(BeTrue())
+
+				block, _ := pem.Decode(certs.Cert)
+				Expect(block).NotTo(BeNil())
+
+				cert, err := x509.ParseCertificate(block.Bytes)
+				Expect(err).NotTo(HaveOccurred())
+
+				opts := x509.VerifyOptions{
+					DNSName: cn,
+					Roots:   roots,
+				}
+
+				_, err = cert.Verify(opts)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+	})
+})

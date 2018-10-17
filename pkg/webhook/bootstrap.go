@@ -26,10 +26,9 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/ghodss/yaml"
-
 	"k8s.io/api/admissionregistration/v1beta1"
 	admissionregistration "k8s.io/api/admissionregistration/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -93,6 +92,15 @@ func (s *Server) setBootstrappingDefault() {
 		s.Host = &varString
 	}
 
+	if s.Writer == nil {
+		s.Writer = os.Stdout
+	}
+	if s.GenerateManifests {
+		s.Client = &writerClient{
+			writer: s.Writer,
+		}
+	}
+
 	var certWriter writer.CertWriter
 	var err error
 	if s.Secret != nil {
@@ -114,12 +122,10 @@ func (s *Server) setBootstrappingDefault() {
 	s.certProvisioner = &cert.Provisioner{
 		CertWriter: certWriter,
 	}
-	if s.Writer == nil {
-		s.Writer = os.Stdout
-	}
 }
 
-// installWebhookConfig writes the configuration of admissionWebhookConfiguration in yaml format if dryrun is true.
+// installWebhookConfig writes the configuration of admissionWebhookConfiguration in yaml format
+// if GenerateManifests is true.
 // Otherwise, it creates the the admissionWebhookConfiguration objects and service if any.
 // It also provisions the certificate for the admission server.
 func (s *Server) installWebhookConfig() error {
@@ -127,6 +133,14 @@ func (s *Server) installWebhookConfig() error {
 	s.once.Do(s.setDefault)
 	if s.err != nil {
 		return s.err
+	}
+
+	if !s.GenerateManifests && s.DisableInstaller {
+		log.Info("generating webhook manifests is disabled and webhook installer is also disabled")
+		return nil
+	}
+	if s.GenerateManifests {
+		log.Info("generating webhook related manifests")
 	}
 
 	var err error
@@ -145,38 +159,16 @@ func (s *Server) installWebhookConfig() error {
 	_, err = s.certProvisioner.Provision(cert.Options{
 		ClientConfig: cc,
 		Objects:      s.webhookConfigurations,
-		Dryrun:       s.Dryrun,
 	})
 	if err != nil {
 		return err
 	}
 
-	if s.Dryrun {
-		// TODO: print here
-		// if dryrun, return the AdmissionWebhookConfiguration in yaml format.
-		return s.genYamlConfig(objects)
+	if s.GenerateManifests {
+		objects = append(objects, s.deployment())
 	}
 
 	return batchCreateOrReplace(s.Client, objects...)
-}
-
-// genYamlConfig generates yaml config for admissionWebhookConfiguration
-func (s *Server) genYamlConfig(objs []runtime.Object) error {
-	for _, obj := range objs {
-		_, err := s.Writer.Write([]byte("---"))
-		if err != nil {
-			return err
-		}
-		b, err := yaml.Marshal(obj)
-		if err != nil {
-			return err
-		}
-		_, err = s.Writer.Write(b)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (s *Server) getClientConfig() (*admissionregistration.WebhookClientConfig, error) {
@@ -359,4 +351,101 @@ func (s *Server) service() runtime.Object {
 		},
 	}
 	return svc
+}
+
+func (s *Server) deployment() runtime.Object {
+	namespace := "default"
+	if s.Secret != nil {
+		namespace = s.Secret.Namespace
+	}
+
+	labels := map[string]string{
+		"app": "webhook-server",
+	}
+	if s.Service != nil {
+		for k, v := range s.Service.Selectors {
+			labels[k] = v
+		}
+	}
+
+	image := "webhook-server:latest"
+	if len(os.Getenv("IMG")) != 0 {
+		image = os.Getenv("IMG")
+	}
+
+	readOnly := false
+	if s.Service != nil {
+		readOnly = true
+	}
+
+	var volumeSource corev1.VolumeSource
+	if s.Secret != nil {
+		var mode int32 = 420
+		volumeSource = corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				DefaultMode: &mode,
+				SecretName:  s.Secret.Name,
+			},
+		}
+	} else {
+		volumeSource = corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		}
+	}
+
+	return &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "webhook-server",
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:            "webhook-server-container",
+							Image:           image,
+							ImagePullPolicy: corev1.PullAlways,
+							Command: []string{
+								"/bin/sh",
+								"-c",
+								"exec ./manager --disable-installer",
+							},
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          "webhook-server",
+									Protocol:      corev1.ProtocolTCP,
+									ContainerPort: s.Port,
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "cert",
+									MountPath: s.CertDir,
+									ReadOnly:  readOnly,
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name:         "cert",
+							VolumeSource: volumeSource,
+						},
+					},
+				},
+			},
+		},
+	}
 }

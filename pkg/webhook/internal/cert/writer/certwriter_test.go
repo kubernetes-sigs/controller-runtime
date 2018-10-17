@@ -32,9 +32,10 @@ var certs1, certs2 *generator.Artifacts
 func init() {
 	cn1 := "example.com"
 	cn2 := "test-service.test-svc-namespace.svc"
-	cp := generator.SelfSignedCertGenerator{}
-	certs1, _ = cp.Generate(cn1)
-	certs2, _ = cp.Generate(cn2)
+	cp1 := generator.SelfSignedCertGenerator{}
+	cp2 := generator.SelfSignedCertGenerator{}
+	certs1, _ = cp1.Generate(cn1)
+	certs2, _ = cp2.Generate(cn2)
 }
 
 type fakeCertReadWriter struct {

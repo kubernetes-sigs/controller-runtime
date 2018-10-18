@@ -82,6 +82,9 @@ func (s *Server) setServerDefault() {
 
 // setBootstrappingDefault does defaulting for the Server bootstrapping.
 func (s *Server) setBootstrappingDefault() {
+	if s.BootstrapOptions == nil {
+		s.BootstrapOptions = &BootstrapOptions{}
+	}
 	if len(s.MutatingWebhookConfigName) == 0 {
 		s.MutatingWebhookConfigName = "mutating-webhook-configuration"
 	}

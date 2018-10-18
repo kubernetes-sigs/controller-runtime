@@ -60,7 +60,7 @@ var _ = Describe("fsCertWriter", func() {
 	Context("Failed to EnsureCert", func() {
 		Describe("empty DNS name", func() {
 			It("should return error", func() {
-				_, _, err := certWriter.EnsureCert("", false)
+				_, _, err := certWriter.EnsureCert("")
 				Expect(err).To(MatchError("dnsName should not be empty"))
 			})
 		})
@@ -69,7 +69,7 @@ var _ = Describe("fsCertWriter", func() {
 	Context("Succeeded to EnsureCert", func() {
 		Context("CertGenerator is not set", func() {
 			It("should default it and return no error", func() {
-				_, _, err := certWriter.EnsureCert(dnsName, false)
+				_, _, err := certWriter.EnsureCert(dnsName)
 				Expect(err).NotTo(HaveOccurred())
 
 			})
@@ -77,7 +77,7 @@ var _ = Describe("fsCertWriter", func() {
 
 		Context("no existing certificate files", func() {
 			It("should create new certificate files", func() {
-				_, _, err := certWriter.EnsureCert(dnsName, false)
+				_, _, err := certWriter.EnsureCert(dnsName)
 				Expect(err).NotTo(HaveOccurred())
 				caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 				Expect(err).NotTo(HaveOccurred())
@@ -102,7 +102,7 @@ var _ = Describe("fsCertWriter", func() {
 						})
 
 						It("should replace with new certs", func() {
-							_, _, err := certWriter.EnsureCert(dnsName, false)
+							_, _, err := certWriter.EnsureCert(dnsName)
 							Expect(err).NotTo(HaveOccurred())
 							caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 							Expect(err).NotTo(HaveOccurred())
@@ -131,7 +131,7 @@ var _ = Describe("fsCertWriter", func() {
 						})
 
 						It("should replace with new certs", func() {
-							_, _, err := certWriter.EnsureCert(dnsName, false)
+							_, _, err := certWriter.EnsureCert(dnsName)
 							Expect(err).NotTo(HaveOccurred())
 							caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 							Expect(err).NotTo(HaveOccurred())
@@ -156,7 +156,7 @@ var _ = Describe("fsCertWriter", func() {
 						})
 
 						It("should replace with new certs", func() {
-							_, _, err := certWriter.EnsureCert(dnsName, false)
+							_, _, err := certWriter.EnsureCert(dnsName)
 							Expect(err).NotTo(HaveOccurred())
 							caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 							Expect(err).NotTo(HaveOccurred())
@@ -191,7 +191,7 @@ var _ = Describe("fsCertWriter", func() {
 						})
 
 						It("should replace with new certs", func() {
-							_, _, err := certWriter.EnsureCert(dnsName, false)
+							_, _, err := certWriter.EnsureCert(dnsName)
 							Expect(err).NotTo(HaveOccurred())
 							caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 							Expect(err).NotTo(HaveOccurred())
@@ -220,7 +220,7 @@ var _ = Describe("fsCertWriter", func() {
 					close(done)
 				})
 				It("should keep the secret", func() {
-					_, _, err := certWriter.EnsureCert(dnsName, false)
+					_, _, err := certWriter.EnsureCert(dnsName)
 					Expect(err).NotTo(HaveOccurred())
 					caBytes, err := ioutil.ReadFile(path.Join(testingDir, CACertName))
 					Expect(err).NotTo(HaveOccurred())

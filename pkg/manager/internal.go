@@ -158,40 +158,14 @@ func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
 }
 
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
-	if cm.resourceLock == nil {
-		go cm.start(stop)
-		select {
-		case <-stop:
-			// we are done
-			return nil
-		case err := <-cm.errChan:
-			// Error starting a controller
+	if cm.resourceLock != nil {
+		err := cm.startLeaderElection(stop)
+		if err != nil {
 			return err
 		}
+	} else {
+		go cm.start(stop)
 	}
-
-	l, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
-		Lock: cm.resourceLock,
-		// Values taken from: https://github.com/kubernetes/apiserver/blob/master/pkg/apis/config/v1alpha1/defaults.go
-		// TODO(joelspeed): These timings should be configurable
-		LeaseDuration: 15 * time.Second,
-		RenewDeadline: 10 * time.Second,
-		RetryPeriod:   2 * time.Second,
-		Callbacks: leaderelection.LeaderCallbacks{
-			OnStartedLeading: cm.start,
-			OnStoppedLeading: func() {
-				// Most implementations of leader election log.Fatal() here.
-				// Since Start is wrapped in log.Fatal when called, we can just return
-				// an error here which will cause the program to exit.
-				cm.errChan <- fmt.Errorf("leader election lost")
-			},
-		},
-	})
-	if err != nil {
-		return err
-	}
-
-	go l.Run()
 
 	select {
 	case <-stop:
@@ -242,4 +216,33 @@ func (cm *controllerManager) start(stop <-chan struct{}) {
 		// We are done
 		return
 	}
+}
+
+func (cm *controllerManager) startLeaderElection(stop <-chan struct{}) (err error) {
+	l, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
+		Lock: cm.resourceLock,
+		// Values taken from: https://github.com/kubernetes/apiserver/blob/master/pkg/apis/config/v1alpha1/defaults.go
+		// TODO(joelspeed): These timings should be configurable
+		LeaseDuration: 15 * time.Second,
+		RenewDeadline: 10 * time.Second,
+		RetryPeriod:   2 * time.Second,
+		Callbacks: leaderelection.LeaderCallbacks{
+			OnStartedLeading: func(_ <-chan struct{}) {
+				cm.start(stop)
+			},
+			OnStoppedLeading: func() {
+				// Most implementations of leader election log.Fatal() here.
+				// Since Start is wrapped in log.Fatal when called, we can just return
+				// an error here which will cause the program to exit.
+				cm.errChan <- fmt.Errorf("leader election lost")
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Start the leader elector process
+	go l.Run()
+	return nil
 }

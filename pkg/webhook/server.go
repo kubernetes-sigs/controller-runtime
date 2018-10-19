@@ -54,10 +54,9 @@ type ServerOptions struct {
 	// Client will be injected by the manager if not set.
 	Client client.Client
 
-	// Dryrun controls if the server will install the webhookConfiguration and service if any.
-	// If true, it will print the objects in yaml format.
-	// If false, it will install the objects in the cluster.
-	Dryrun bool
+	// InstallWebhookConfig controls if the server will automatically create webhook related objects
+	// during bootstrapping. e.g. webhookConfiguration, service and secret.
+	InstallWebhookConfig bool
 
 	// BootstrapOptions contains the options for bootstrapping the admission server.
 	*BootstrapOptions
@@ -75,7 +74,8 @@ type BootstrapOptions struct {
 	// This is optional. If unspecified, it will write to the filesystem.
 	// It the secret already exists and is different from the desired, it will be replaced.
 	Secret *apitypes.NamespacedName
-	// Writer is used in dryrun mode for writing the objects in yaml format.
+
+	// Deprecated: Writer will not be used anywhere.
 	Writer io.Writer
 
 	// Service is k8s service fronting the webhook server pod(s).
@@ -187,13 +187,17 @@ func (s *Server) Handle(pattern string, handler http.Handler) {
 
 var _ manager.Runnable = &Server{}
 
-// Start runs the server if s.Dryrun is false.
-// Otherwise, it will print the objects in yaml format.
+// Start runs the server.
+// It will install the webhook related resources depend on the server configuration.
 func (s *Server) Start(stop <-chan struct{}) error {
-	err := s.installWebhookConfig()
-	// if encounter an error or it's in dryrun mode, return.
-	if err != nil || s.Dryrun {
-		return err
+	if s.InstallWebhookConfig {
+		log.Info("installing webhook configuration in cluster")
+		err := s.InstallWebhookManifests()
+		if err != nil {
+			return err
+		}
+	} else {
+		log.Info("webhook installer is disabled")
 	}
 
 	srv := &http.Server{

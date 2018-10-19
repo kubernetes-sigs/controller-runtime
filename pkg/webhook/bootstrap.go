@@ -22,11 +22,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"strconv"
-
-	"github.com/ghodss/yaml"
 
 	"k8s.io/api/admissionregistration/v1beta1"
 	admissionregistration "k8s.io/api/admissionregistration/v1beta1"
@@ -117,15 +114,11 @@ func (s *Server) setBootstrappingDefault() {
 	s.certProvisioner = &cert.Provisioner{
 		CertWriter: certWriter,
 	}
-	if s.Writer == nil {
-		s.Writer = os.Stdout
-	}
 }
 
-// installWebhookConfig writes the configuration of admissionWebhookConfiguration in yaml format if dryrun is true.
-// Otherwise, it creates the the admissionWebhookConfiguration objects and service if any.
+// InstallWebhookManifests creates the admissionWebhookConfiguration objects and service if any.
 // It also provisions the certificate for the admission server.
-func (s *Server) installWebhookConfig() error {
+func (s *Server) InstallWebhookManifests() error {
 	// do defaulting if necessary
 	s.once.Do(s.setDefault)
 	if s.err != nil {
@@ -148,38 +141,12 @@ func (s *Server) installWebhookConfig() error {
 	_, err = s.certProvisioner.Provision(cert.Options{
 		ClientConfig: cc,
 		Objects:      s.webhookConfigurations,
-		Dryrun:       s.Dryrun,
 	})
 	if err != nil {
 		return err
 	}
 
-	if s.Dryrun {
-		// TODO: print here
-		// if dryrun, return the AdmissionWebhookConfiguration in yaml format.
-		return s.genYamlConfig(objects)
-	}
-
 	return batchCreateOrReplace(s.Client, objects...)
-}
-
-// genYamlConfig generates yaml config for admissionWebhookConfiguration
-func (s *Server) genYamlConfig(objs []runtime.Object) error {
-	for _, obj := range objs {
-		_, err := s.Writer.Write([]byte("---"))
-		if err != nil {
-			return err
-		}
-		b, err := yaml.Marshal(obj)
-		if err != nil {
-			return err
-		}
-		_, err = s.Writer.Write(b)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (s *Server) getClientConfig() (*admissionregistration.WebhookClientConfig, error) {

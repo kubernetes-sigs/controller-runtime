@@ -117,7 +117,12 @@ func (s *secretCertWriter) overwrite() (
 }
 
 func (s *secretCertWriter) read() (*generator.Artifacts, error) {
-	secret := &corev1.Secret{}
+	secret := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Secret",
+		},
+	}
 	err := s.Client.Get(nil, *s.Secret, secret)
 	if apierrors.IsNotFound(err) {
 		return nil, notFoundError{err}

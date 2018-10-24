@@ -369,4 +369,186 @@ var _ = Describe("Source", func() {
 			})
 		})
 	})
+
+	Describe("InformerProvider", func() {
+		var c chan struct{}
+		var rs *appsv1.ReplicaSet
+		var informerFactory kubeinformers.SharedInformerFactory
+		var stopTest chan struct{}
+
+		BeforeEach(func(done Done) {
+			stopTest = make(chan struct{})
+			informerFactory = kubeinformers.NewSharedInformerFactory(clientset, time.Second*30)
+			i := informerFactory.Apps().V1().ReplicaSets().Informer()
+			informerFactory.Start(stopTest)
+			Eventually(i.HasSynced).Should(BeTrue())
+
+			c = make(chan struct{})
+			rs = &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{Name: "informer-rs-name"},
+				Spec: appsv1.ReplicaSetSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx",
+								},
+							},
+						},
+					},
+				},
+			}
+			close(done)
+		})
+
+		AfterEach(func(done Done) {
+			close(stopTest)
+			close(done)
+		})
+
+		It("should error if both Informer and InformerProvider are given", func() {
+			q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
+			rsi := informerFactory.Apps().V1().ReplicaSets()
+			instance := &source.Informer{InformerProvider: rsi, Informer: rsi.Informer()}
+			err := instance.Start(handler.Funcs{
+				CreateFunc:  func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {},
+				UpdateFunc:  func(event.UpdateEvent, workqueue.RateLimitingInterface) {},
+				DeleteFunc:  func(event.DeleteEvent, workqueue.RateLimitingInterface) {},
+				GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {},
+			}, q)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should error if neither Informer and InformerProvider are given", func() {
+			q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
+			instance := &source.Informer{}
+			err := instance.Start(handler.Funcs{
+				CreateFunc:  func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {},
+				UpdateFunc:  func(event.UpdateEvent, workqueue.RateLimitingInterface) {},
+				DeleteFunc:  func(event.DeleteEvent, workqueue.RateLimitingInterface) {},
+				GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {},
+			}, q)
+			Expect(err).To(HaveOccurred())
+		})
+
+		Context("for a ReplicaSet resource", func() {
+
+			It("should provide a ReplicaSet CreateEvent", func(done Done) {
+				c := make(chan struct{})
+
+				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
+				instance := &source.Informer{InformerProvider: informerFactory.Apps().V1().ReplicaSets()}
+				err := instance.Start(handler.Funcs{
+					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						var err error
+						rs, err = clientset.AppsV1().ReplicaSets("default").Get(rs.Name, metav1.GetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(q2).To(BeIdenticalTo(q))
+						Expect(evt.Meta).To(Equal(rs))
+						Expect(evt.Object).To(Equal(rs))
+						close(c)
+					},
+					UpdateFunc: func(event.UpdateEvent, workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						Fail("Unexpected UpdateEvent")
+					},
+					DeleteFunc: func(event.DeleteEvent, workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						Fail("Unexpected DeleteEvent")
+					},
+					GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						Fail("Unexpected GenericEvent")
+					},
+				}, q)
+				Expect(err).NotTo(HaveOccurred())
+
+				rs, err = clientset.AppsV1().ReplicaSets("default").Create(rs)
+				Expect(err).NotTo(HaveOccurred())
+				<-c
+				close(done)
+			}, 30)
+
+			It("should provide a ReplicaSet UpdateEvent", func(done Done) {
+				var err error
+				rs, err = clientset.AppsV1().ReplicaSets("default").Get(rs.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				rs2 := rs.DeepCopy()
+				rs2.SetLabels(map[string]string{"biz": "baz"})
+
+				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
+				instance := &source.Informer{InformerProvider: informerFactory.Apps().V1().ReplicaSets()}
+				err = instance.Start(handler.Funcs{
+					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
+					},
+					UpdateFunc: func(evt event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						var err error
+						rs2, err = clientset.AppsV1().ReplicaSets("default").Get(rs.Name, metav1.GetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(q2).To(Equal(q))
+						Expect(evt.MetaOld).To(Equal(rs))
+						Expect(evt.ObjectOld).To(Equal(rs))
+
+						Expect(evt.MetaNew).To(Equal(rs2))
+						Expect(evt.ObjectNew).To(Equal(rs2))
+
+						close(c)
+					},
+					DeleteFunc: func(event.DeleteEvent, workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						Fail("Unexpected DeleteEvent")
+					},
+					GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						Fail("Unexpected GenericEvent")
+					},
+				}, q)
+				Expect(err).NotTo(HaveOccurred())
+
+				rs2, err = clientset.AppsV1().ReplicaSets("default").Update(rs2)
+				Expect(err).NotTo(HaveOccurred())
+				<-c
+				close(done)
+			})
+
+			It("should provide a ReplicaSet DeletedEvent", func(done Done) {
+				c := make(chan struct{})
+
+				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
+				instance := &source.Informer{InformerProvider: informerFactory.Apps().V1().ReplicaSets()}
+				err := instance.Start(handler.Funcs{
+					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
+					},
+					UpdateFunc: func(event.UpdateEvent, workqueue.RateLimitingInterface) {
+					},
+					DeleteFunc: func(evt event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						Expect(q2).To(Equal(q))
+						Expect(evt.Meta.GetName()).To(Equal(rs.Name))
+						close(c)
+					},
+					GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						Fail("Unexpected GenericEvent")
+					},
+				}, q)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = clientset.AppsV1().ReplicaSets("default").Delete(rs.Name, &metav1.DeleteOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				<-c
+				close(done)
+			})
+		})
+	})
 })

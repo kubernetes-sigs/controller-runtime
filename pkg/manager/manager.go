@@ -135,6 +135,14 @@ func (r RunnableFunc) Start(s <-chan struct{}) error {
 	return r(s)
 }
 
+// StartAdapter wraps a Start function to make it implement Runnable
+func StartAdapter(s func(<-chan struct{})) Runnable {
+	return RunnableFunc(func(c <-chan struct{}) error {
+		s(c)
+		return nil
+	})
+}
+
 // New returns a new Manager for creating Controllers.
 func New(config *rest.Config, options Options) (Manager, error) {
 	// Initialize a rest.config if none was specified

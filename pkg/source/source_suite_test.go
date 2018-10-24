@@ -34,7 +34,7 @@ func TestSource(t *testing.T) {
 }
 
 var testenv *envtest.Environment
-var config *rest.Config
+var cfg *rest.Config
 var clientset *kubernetes.Clientset
 var icache cache.Cache
 var stop chan struct{}
@@ -46,13 +46,13 @@ var _ = BeforeSuite(func(done Done) {
 	testenv = &envtest.Environment{}
 
 	var err error
-	config, err = testenv.Start()
+	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
 
-	clientset, err = kubernetes.NewForConfig(config)
+	clientset, err = kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())
 
-	icache, err = cache.New(config, cache.Options{})
+	icache, err = cache.New(cfg, cache.Options{})
 	Expect(err).NotTo(HaveOccurred())
 
 	go func() {

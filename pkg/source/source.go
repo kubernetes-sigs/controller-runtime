@@ -241,10 +241,18 @@ func (cs *Channel) syncLoop() {
 	}
 }
 
+// InformerProvider provides an Informer
+type InformerProvider interface {
+	Informer() toolscache.SharedIndexInformer
+}
+
 // Informer is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create)
 type Informer struct {
-	// Informer is the generated client-go Informer
+	// Informer is the generated client-go Informer.  Mutually exclusive with InformerProvider.
 	Informer toolscache.SharedIndexInformer
+
+	// InformerProvider provides a generated client-go Informer.  Mutually exclusive with Informer.
+	InformerProvider InformerProvider
 }
 
 var _ Source = &Informer{}
@@ -255,11 +263,23 @@ func (is *Informer) Start(handler handler.EventHandler, queue workqueue.RateLimi
 	prct ...predicate.Predicate) error {
 
 	// Informer should have been specified by the user.
-	if is.Informer == nil {
-		return fmt.Errorf("must specify Informer.Informer")
+	if is.Informer == nil && is.InformerProvider == nil {
+		return fmt.Errorf("must specify Informer.Informer or Informer.InformerProvider")
 	}
 
-	is.Informer.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
+	if is.Informer != nil && is.InformerProvider != nil {
+		return fmt.Errorf("must specify only one of Informer.Informer and Informer.InformerProvider")
+	}
+
+	if is.Informer != nil {
+		is.Informer.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
+	}
+
+	if is.InformerProvider != nil {
+		is.InformerProvider.Informer().AddEventHandler(
+			internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
+	}
+
 	return nil
 }
 

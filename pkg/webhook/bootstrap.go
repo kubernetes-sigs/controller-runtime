@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sort"
 	"strconv"
 
 	"k8s.io/api/admissionregistration/v1beta1"
@@ -237,6 +238,10 @@ func (s *Server) mutatingWHConfigs() (runtime.Object, error) {
 		mutatingWebhooks = append(mutatingWebhooks, *wh)
 	}
 
+	sort.Slice(mutatingWebhooks, func(i, j int) bool {
+		return mutatingWebhooks[i].Name < mutatingWebhooks[j].Name
+	})
+
 	if len(mutatingWebhooks) > 0 {
 		return &admissionregistration.MutatingWebhookConfiguration{
 			TypeMeta: metav1.TypeMeta{
@@ -267,6 +272,10 @@ func (s *Server) validatingWHConfigs() (runtime.Object, error) {
 		}
 		validatingWebhooks = append(validatingWebhooks, *wh)
 	}
+
+	sort.Slice(validatingWebhooks, func(i, j int) bool {
+		return validatingWebhooks[i].Name < validatingWebhooks[j].Name
+	})
 
 	if len(validatingWebhooks) > 0 {
 		return &admissionregistration.ValidatingWebhookConfiguration{

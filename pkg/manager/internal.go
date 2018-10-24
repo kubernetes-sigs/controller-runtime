@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	pkginjector "sigs.k8s.io/controller-runtime/pkg/inject"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -93,6 +94,8 @@ type controllerManager struct {
 	internalStopper chan<- struct{}
 
 	startCache func(stop <-chan struct{}) error
+
+	injector pkginjector.Injector
 }
 
 // Add sets dependencies on i, and adds it to the list of runnables to start.
@@ -139,7 +142,20 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 	if _, err := inject.DecoderInto(cm.admissionDecoder, i); err != nil {
 		return err
 	}
+
+	// Inject user specified deps
+	if err := cm.injector.Inject(i); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (cm *controllerManager) AddProvider(p interface{}) error {
+	return cm.injector.AddProvider(p)
+}
+
+func (cm *controllerManager) AddDependency(p interface{}) error {
+	return cm.injector.AddDependency(p)
 }
 
 func (cm *controllerManager) GetConfig() *rest.Config {

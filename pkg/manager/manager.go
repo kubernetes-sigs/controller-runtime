@@ -79,6 +79,12 @@ type Manager interface {
 
 	// GetRESTMapper returns a RESTMapper
 	GetRESTMapper() meta.RESTMapper
+
+	// AddDependency adds a dependency to the manager.
+	AddDependency(d interface{}) error
+
+	// AddProvider adds a dependency provider to the manager.
+	AddProvider(p interface{}) error
 }
 
 // Options are the arguments for creating a new Manager

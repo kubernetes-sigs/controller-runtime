@@ -41,6 +41,9 @@ const (
 	defaultKubebuilderPath = "/usr/local/kubebuilder/bin"
 	StartTimeout           = 60
 	StopTimeout            = 60
+
+	defaultKubebuilderControlPlaneStartTimeout = 20 * time.Second
+	defaultKubebuilderControlPlaneStopTimeout  = 20 * time.Second
 )
 
 func defaultAssetPath(binary string) string {
@@ -118,12 +121,13 @@ func (te *Environment) Start() (*rest.Config, error) {
 	} else {
 		te.ControlPlane = integration.ControlPlane{}
 		te.ControlPlane.APIServer = &integration.APIServer{Args: defaultKubeAPIServerFlags}
+		te.ControlPlane.Etcd = &integration.Etcd{}
 
 		if os.Getenv(envKubeAPIServerBin) == "" {
 			te.ControlPlane.APIServer.Path = defaultAssetPath("kube-apiserver")
 		}
 		if os.Getenv(envEtcdBin) == "" {
-			te.ControlPlane.Etcd = &integration.Etcd{Path: defaultAssetPath("etcd")}
+			te.ControlPlane.Etcd.Path = defaultAssetPath("etcd")
 		}
 		if os.Getenv(envKubectlBin) == "" {
 			// we can't just set the path manually (it's behind a function), so set the environment variable instead
@@ -191,6 +195,8 @@ func (te *Environment) defaultTimeouts() error {
 			if err != nil {
 				return err
 			}
+		} else {
+			te.ControlPlaneStartTimeout = defaultKubebuilderControlPlaneStartTimeout
 		}
 	}
 
@@ -200,6 +206,8 @@ func (te *Environment) defaultTimeouts() error {
 			if err != nil {
 				return err
 			}
+		} else {
+			te.ControlPlaneStopTimeout = defaultKubebuilderControlPlaneStopTimeout
 		}
 	}
 	return nil

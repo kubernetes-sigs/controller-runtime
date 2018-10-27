@@ -54,9 +54,10 @@ type ServerOptions struct {
 	// Client will be injected by the manager if not set.
 	Client client.Client
 
-	// InstallWebhookConfig controls if the server will automatically create webhook related objects
+	// DisableWebhookConfigInstaller controls if the server will automatically create webhook related objects
 	// during bootstrapping. e.g. webhookConfiguration, service and secret.
-	InstallWebhookConfig bool
+	// If false, the server will install the webhook config objects. It is defaulted to false.
+	DisableWebhookConfigInstaller *bool
 
 	// BootstrapOptions contains the options for bootstrapping the admission server.
 	*BootstrapOptions
@@ -190,7 +191,12 @@ var _ manager.Runnable = &Server{}
 // Start runs the server.
 // It will install the webhook related resources depend on the server configuration.
 func (s *Server) Start(stop <-chan struct{}) error {
-	if s.InstallWebhookConfig {
+	s.once.Do(s.setDefault)
+	if s.err != nil {
+		return s.err
+	}
+
+	if s.DisableWebhookConfigInstaller != nil && !*s.DisableWebhookConfigInstaller {
 		log.Info("installing webhook configuration in cluster")
 		err := s.InstallWebhookManifests()
 		if err != nil {
@@ -200,6 +206,10 @@ func (s *Server) Start(stop <-chan struct{}) error {
 		log.Info("webhook installer is disabled")
 	}
 
+	return s.run(stop)
+}
+
+func (s *Server) run(stop <-chan struct{}) error {
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%v", s.Port),
 		Handler: s.sMux,

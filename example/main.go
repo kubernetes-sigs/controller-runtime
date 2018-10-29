@@ -39,9 +39,9 @@ import (
 var log = logf.Log.WithName("example-controller")
 
 func main() {
-	var installWebhookConfig bool
-	flag.BoolVar(&installWebhookConfig, "install-webhook-config", false,
-		"enable the installer in the webhook server, so it will install webhook related resources during bootstrapping")
+	var disableWebhookConfigInstaller bool
+	flag.BoolVar(&disableWebhookConfigInstaller, "disable-webhook-config-installer", false,
+		"disable the installer in the webhook server, so it won't install webhook configuration resources during bootstrapping")
 
 	flag.Parse()
 	logf.SetLogger(logf.ZapLogger(false))
@@ -108,9 +108,9 @@ func main() {
 
 	entryLog.Info("setting up webhook server")
 	as, err := webhook.NewServer("foo-admission-server", mgr, webhook.ServerOptions{
-		Port:                 9876,
-		CertDir:              "/tmp/cert",
-		InstallWebhookConfig: installWebhookConfig,
+		Port:    9876,
+		CertDir: "/tmp/cert",
+		DisableWebhookConfigInstaller: &disableWebhookConfigInstaller,
 		BootstrapOptions: &webhook.BootstrapOptions{
 			Secret: &apitypes.NamespacedName{
 				Namespace: "default",

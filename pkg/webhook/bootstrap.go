@@ -63,6 +63,10 @@ func (s *Server) setServerDefault() {
 	if len(s.CertDir) == 0 {
 		s.CertDir = path.Join("k8s-webhook-server", "cert")
 	}
+	if s.DisableWebhookConfigInstaller == nil {
+		diwc := false
+		s.DisableWebhookConfigInstaller = &diwc
+	}
 
 	if s.Client == nil {
 		cfg, err := config.GetConfig()

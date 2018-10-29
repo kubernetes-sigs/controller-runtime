@@ -20,6 +20,8 @@ import (
 	"os"
 
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -69,6 +71,40 @@ func ExampleController() {
 
 	// Watch for Pod create / update / delete events and call Reconcile
 	err = c.Watch(&source.Kind{Type: &v1.Pod{}}, &handler.EnqueueRequestForObject{})
+	if err != nil {
+		log.Error(err, "unable to watch pods")
+		os.Exit(1)
+	}
+
+	// Start the Controller through the manager.
+	mgr.Start(signals.SetupSignalHandler())
+}
+
+// This example starts a new Controller named "pod-controller" to Watch Pods with the unstructured object and call a no-op Reconciler.
+func ExampleController_unstructured() {
+	// mgr is a manager.Manager
+
+	// Create a new Controller that will call the provided Reconciler function in response
+	// to events.
+	c, err := controller.New("pod-controller", mgr, controller.Options{
+		Reconciler: reconcile.Func(func(o reconcile.Request) (reconcile.Result, error) {
+			// Your business logic to implement the API by creating, updating, deleting objects goes here.
+			return reconcile.Result{}, nil
+		}),
+	})
+	if err != nil {
+		log.Error(err, "unable to create pod-controller")
+		os.Exit(1)
+	}
+
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(schema.GroupVersionKind{
+		Kind:    "Pod",
+		Group:   "",
+		Version: "v1",
+	})
+	// Watch for Pod create / update / delete events and call Reconcile
+	err = c.Watch(&source.Kind{Type: u}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		log.Error(err, "unable to watch pods")
 		os.Exit(1)

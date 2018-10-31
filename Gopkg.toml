@@ -20,6 +20,7 @@ required = ["sigs.k8s.io/testing_frameworks/integration",
             "github.com/go-openapi/spec",
             "k8s.io/kube-openapi/pkg/common",
             "k8s.io/apiextensions-apiserver",
+            "github.com/prometheus/client_golang/prometheus",
             ]
 
 [[constraint]]
@@ -53,6 +54,10 @@ required = ["sigs.k8s.io/testing_frameworks/integration",
 [[constraint]]
   name = "go.uber.org/zap"
   version = "1.8.0"
+
+[[constraint]]
+  name = "github.com/prometheus/client_golang"
+  version = "0.9.0"
 
 # these are not listed explicitly until we get version tags,
 # since dep doesn't like bare revision dependencies

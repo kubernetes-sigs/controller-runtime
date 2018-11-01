@@ -18,10 +18,8 @@ package envtest
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -168,17 +166,6 @@ func (te *Environment) startControlPlane() error {
 		err := te.ControlPlane.Start()
 		if err == nil {
 			break
-		}
-		// code snippet copied from following answer on stackoverflow
-		// https://stackoverflow.com/questions/51151973/catching-bind-address-already-in-use-in-golang
-		if opErr, ok := err.(*net.OpError); ok {
-			if opErr.Op == "listen" && strings.Contains(opErr.Error(), "address already in use") {
-				if stopErr := te.ControlPlane.Stop(); stopErr != nil {
-					return fmt.Errorf("failed to stop controlplane in response to bind error 'address already in use'")
-				}
-			}
-		} else {
-			return err
 		}
 	}
 	if numTries == maxRetries {

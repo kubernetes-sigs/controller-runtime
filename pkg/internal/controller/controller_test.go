@@ -479,7 +479,9 @@ var _ = Describe("controller", func() {
 
 				var reconcileTime dto.Metric
 				Eventually(func() error {
-					ctrlmetrics.ReconcileTime.WithLabelValues(ctrl.Name).Write(&reconcileTime)
+					histObserver := ctrlmetrics.ReconcileTime.WithLabelValues(ctrl.Name)
+					hist := histObserver.(prometheus.Histogram)
+					hist.Write(&reconcileTime)
 					if reconcileTime.GetHistogram().GetSampleCount() != uint64(1) {
 						return fmt.Errorf("metrics not updated")
 					}

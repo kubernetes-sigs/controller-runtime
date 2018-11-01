@@ -360,7 +360,7 @@ var _ = Describe("manger.Manager", func() {
 					Name: "test_one",
 					Help: "test metric for testing",
 				})
-				one.Set(1)
+				one.Inc()
 				err := metrics.Registry.Register(one)
 				Expect(err).NotTo(HaveOccurred())
 

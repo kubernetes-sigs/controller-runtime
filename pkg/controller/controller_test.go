@@ -75,6 +75,21 @@ var _ = Describe("controller.Controller", func() {
 
 			close(done)
 		})
+
+		It("should not return an error if two controllers are registered with different names", func(done Done) {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c1, err := controller.New("c1", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c1).ToNot(BeNil())
+
+			c2, err := controller.New("c2", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c2).ToNot(BeNil())
+
+			close(done)
+		})
 	})
 })
 

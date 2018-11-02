@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
@@ -43,9 +44,15 @@ var _ = BeforeSuite(func(done Done) {
 	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
 
+	// Prevent the metrics listener being created
+	metrics.DefaultBindAddress = "0"
+
 	close(done)
 }, 60)
 
 var _ = AfterSuite(func() {
 	testenv.Stop()
+
+	// Put the DefaultBindAddress back
+	metrics.DefaultBindAddress = ":8080"
 })

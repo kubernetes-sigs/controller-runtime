@@ -18,10 +18,14 @@ package manager
 
 import (
 	"fmt"
+	"io/ioutil"
+	"net"
+	"net/http"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -31,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -69,7 +74,8 @@ var _ = Describe("manger.Manager", func() {
 			m, err := New(cfg, Options{
 				newClient: func(config *rest.Config, options client.Options) (client.Client, error) {
 					return nil, fmt.Errorf("expected error")
-				}})
+				},
+			})
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
@@ -81,7 +87,8 @@ var _ = Describe("manger.Manager", func() {
 			m, err := New(cfg, Options{
 				newCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 					return nil, fmt.Errorf("expected error")
-				}})
+				},
+			})
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
@@ -92,7 +99,8 @@ var _ = Describe("manger.Manager", func() {
 			m, err := New(cfg, Options{
 				newRecorderProvider: func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error) {
 					return nil, fmt.Errorf("expected error")
-				}})
+				},
+			})
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
@@ -122,6 +130,42 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unable to find leader election namespace: not running in-cluster, please specify LeaderElectionNamespace"))
 			})
+		})
+
+		It("should create a listener for the metrics if a valid address is provided", func() {
+			var listener net.Listener
+			m, err := New(cfg, Options{
+				MetricsBindAddress: ":0",
+				newMetricsListener: func(addr string) (net.Listener, error) {
+					var err error
+					listener, err = metrics.NewListener(addr)
+					return listener, err
+				},
+			})
+			Expect(m).ToNot(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(listener).ToNot(BeNil())
+			Expect(listener.Close()).ToNot(HaveOccurred())
+		})
+
+		It("should return an error if the metrics bind address is already in use", func() {
+			ln, err := metrics.NewListener(":0")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			var listener net.Listener
+			m, err := New(cfg, Options{
+				MetricsBindAddress: ln.Addr().String(),
+				newMetricsListener: func(addr string) (net.Listener, error) {
+					var err error
+					listener, err = metrics.NewListener(addr)
+					return listener, err
+				},
+			})
+			Expect(m).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(listener).To(BeNil())
+
+			Expect(ln.Close()).ToNot(HaveOccurred())
 		})
 	})
 
@@ -222,6 +266,132 @@ var _ = Describe("manger.Manager", func() {
 				LeaderElectionID:        "controller-runtime",
 				LeaderElectionNamespace: "default",
 				newResourceLock:         fakeleaderelection.NewResourceLock,
+			})
+		})
+
+		Context("should start serving metrics", func() {
+			var listener net.Listener
+			var opts Options
+
+			BeforeEach(func() {
+				listener = nil
+				opts = Options{
+					newMetricsListener: func(addr string) (net.Listener, error) {
+						var err error
+						listener, err = metrics.NewListener(addr)
+						return listener, err
+					},
+				}
+			})
+
+			AfterEach(func() {
+				if listener != nil {
+					listener.Close()
+				}
+			})
+
+			It("should stop serving metrics when stop is called", func(done Done) {
+				opts.MetricsBindAddress = ":0"
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				s := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(s)).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				// Check the metrics started
+				endpoint := fmt.Sprintf("http://%s", listener.Addr().String())
+				_, err = http.Get(endpoint)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Shutdown the server
+				close(s)
+
+				// Expect the metrics server to shutdown
+				Eventually(func() error {
+					_, err = http.Get(endpoint)
+					return err
+				}).ShouldNot(Succeed())
+			})
+
+			It("should serve metrics endpoint", func(done Done) {
+				opts.MetricsBindAddress = ":0"
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				s := make(chan struct{})
+				defer close(s)
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(s)).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
+				resp, err := http.Get(metricsEndpoint)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).To(Equal(200))
+			})
+
+			It("should not serve anything other than metrics endpoint", func(done Done) {
+				opts.MetricsBindAddress = ":0"
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				s := make(chan struct{})
+				defer close(s)
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(s)).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				endpoint := fmt.Sprintf("http://%s/should-not-exist", listener.Addr().String())
+				resp, err := http.Get(endpoint)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).To(Equal(404))
+			})
+
+			It("should serve metrics in its registry", func(done Done) {
+				one := prometheus.NewCounter(prometheus.CounterOpts{
+					Name: "test_one",
+					Help: "test metric for testing",
+				})
+				one.Inc()
+				err := metrics.Registry.Register(one)
+				Expect(err).NotTo(HaveOccurred())
+
+				opts.MetricsBindAddress = ":0"
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				s := make(chan struct{})
+				defer close(s)
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(s)).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
+				resp, err := http.Get(metricsEndpoint)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).To(Equal(200))
+
+				data, err := ioutil.ReadAll(resp.Body)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(data)).To(ContainSubstring("%s\n%s\n%s\n",
+					`# HELP test_one test metric for testing`,
+					`# TYPE test_one counter`,
+					`test_one 1`,
+				))
+
+				// Unregister will return false if the metric was never registered
+				ok := metrics.Registry.Unregister(one)
+				Expect(ok).To(BeTrue())
 			})
 		})
 	})

@@ -581,12 +581,16 @@
   version = "v2.0.1"
 
 [[projects]]
-  digest = "1:b6221ec0f8903b556e127c449e7106b63e6867170c2d10a7c058623d086f2081"
+  digest = "1:20a8a18488bdef471795af0413d9a3c9c35dc24ca93342329b884ba3c15cbaab"
   name = "github.com/prometheus/client_golang"
-  packages = ["prometheus"]
+  packages = [
+    "prometheus",
+    "prometheus/internal",
+    "prometheus/promhttp",
+  ]
   pruneopts = "UT"
-  revision = "c5b7fccd204277076155f10851dad72b76a49317"
-  version = "v0.8.0"
+  revision = "1cafe34db7fdec6022e17e00e1c1ea501022f3e4"
+  version = "v0.9.0"
 
 [[projects]]
   branch = "master"
@@ -1321,6 +1325,9 @@
     "github.com/onsi/ginkgo/config",
     "github.com/onsi/ginkgo/types",
     "github.com/onsi/gomega",
+    "github.com/prometheus/client_golang/prometheus",
+    "github.com/prometheus/client_golang/prometheus/promhttp",
+    "github.com/prometheus/client_model/go",
     "github.com/spf13/pflag",
     "go.uber.org/zap",
     "go.uber.org/zap/zapcore",
@@ -1351,6 +1358,7 @@
     "k8s.io/apimachinery/pkg/watch",
     "k8s.io/client-go/discovery",
     "k8s.io/client-go/dynamic",
+    "k8s.io/client-go/informers",
     "k8s.io/client-go/kubernetes",
     "k8s.io/client-go/kubernetes/scheme",
     "k8s.io/client-go/kubernetes/typed/core/v1",

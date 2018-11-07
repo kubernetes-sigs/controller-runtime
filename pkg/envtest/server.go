@@ -53,9 +53,8 @@ func defaultAssetPath(binary string) string {
 
 }
 
-// APIServerDefaultArgs are flags necessary to bring up apiserver.
-// TODO: create test framework interface to append flag to default flags.
-var defaultKubeAPIServerFlags = []string{
+// DefaultKubeAPIServerFlags are default flags necessary to bring up apiserver.
+var DefaultKubeAPIServerFlags = []string{
 	"--etcd-servers={{ if .EtcdURL }}{{ .EtcdURL.String }}{{ end }}",
 	"--cert-dir={{ .CertDir }}",
 	"--insecure-port={{ if .URL }}{{ .URL.Port }}{{ end }}",
@@ -93,6 +92,9 @@ type Environment struct {
 	// may take to stop. It defaults to the KUBEBUILDER_CONTROLPLANE_STOP_TIMEOUT
 	// environment variable or 20 seconds if unspecified
 	ControlPlaneStopTimeout time.Duration
+
+	// KubeAPIServerFlags is the set of flags passed while starting the api server.
+	KubeAPIServerFlags []string
 }
 
 // Stop stops a running server
@@ -101,6 +103,15 @@ func (te *Environment) Stop() error {
 		return nil
 	}
 	return te.ControlPlane.Stop()
+}
+
+// getAPIServerFlags returns flags to be used with the Kubernetes API server.
+func (te Environment) getAPIServerFlags() []string {
+	// Set default API server flags if not set.
+	if len(te.KubeAPIServerFlags) == 0 {
+		return DefaultKubeAPIServerFlags
+	}
+	return te.KubeAPIServerFlags
 }
 
 // Start starts a local Kubernetes server and updates te.ApiserverPort with the port it is listening on
@@ -118,7 +129,7 @@ func (te *Environment) Start() (*rest.Config, error) {
 		}
 	} else {
 		te.ControlPlane = integration.ControlPlane{}
-		te.ControlPlane.APIServer = &integration.APIServer{Args: defaultKubeAPIServerFlags}
+		te.ControlPlane.APIServer = &integration.APIServer{Args: te.getAPIServerFlags()}
 		te.ControlPlane.Etcd = &integration.Etcd{}
 
 		if os.Getenv(envKubeAPIServerBin) == "" {

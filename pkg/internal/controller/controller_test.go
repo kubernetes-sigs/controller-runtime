@@ -410,14 +410,24 @@ var _ = Describe("controller", func() {
 
 		Context("should update prometheus metrics", func() {
 			It("should requeue a Request if there is an error and continue processing items", func(done Done) {
-				ctrlmetrics.QueueLength = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-					Name: "controller_runtime_reconcile_queue_length",
-					Help: "Length of reconcile queue per controller",
-				}, []string{"controller"})
-				ctrlmetrics.ReconcileErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
-					Name: "controller_runtime_reconcile_errors_total",
-					Help: "Total number of reconcile errors per controller",
-				}, []string{"controller"})
+				var queueLength, reconcileErrs dto.Metric
+				ctrlmetrics.QueueLength.Reset()
+				Expect(func() error {
+					ctrlmetrics.QueueLength.WithLabelValues(ctrl.Name).Write(&queueLength)
+					if queueLength.GetGauge().GetValue() != 0.0 {
+						return fmt.Errorf("metrics not reset")
+					}
+					return nil
+				}()).Should(Succeed())
+
+				ctrlmetrics.ReconcileErrors.Reset()
+				Expect(func() error {
+					ctrlmetrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)
+					if reconcileErrs.GetCounter().GetValue() != 0.0 {
+						return fmt.Errorf("metrics not reset")
+					}
+					return nil
+				}()).Should(Succeed())
 
 				fakeReconcile.Err = fmt.Errorf("expected error: reconcile")
 				go func() {
@@ -431,7 +441,6 @@ var _ = Describe("controller", func() {
 
 				By("Invoking Reconciler which will give an error")
 				Expect(<-reconciled).To(Equal(request))
-				var queueLength, reconcileErrs dto.Metric
 				Eventually(func() error {
 					ctrlmetrics.QueueLength.WithLabelValues(ctrl.Name).Write(&queueLength)
 					if queueLength.GetGauge().GetValue() != 1.0 {
@@ -459,10 +468,18 @@ var _ = Describe("controller", func() {
 			}, 2.0)
 
 			It("should add a reconcile time to the reconcile time histogram", func(done Done) {
-				ctrlmetrics.ReconcileTime = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-					Name: "controller_runtime_reconcile_time_second",
-					Help: "Length of time per reconcile per controller",
-				}, []string{"controller"})
+				var reconcileTime dto.Metric
+				ctrlmetrics.ReconcileTime.Reset()
+
+				Expect(func() error {
+					histObserver := ctrlmetrics.ReconcileTime.WithLabelValues(ctrl.Name)
+					hist := histObserver.(prometheus.Histogram)
+					hist.Write(&reconcileTime)
+					if reconcileTime.GetHistogram().GetSampleCount() != uint64(0) {
+						return fmt.Errorf("metrics not reset")
+					}
+					return nil
+				}()).Should(Succeed())
 
 				go func() {
 					defer GinkgoRecover()
@@ -477,12 +494,11 @@ var _ = Describe("controller", func() {
 				Eventually(ctrl.Queue.Len).Should(Equal(0))
 				Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
 
-				var reconcileTime dto.Metric
 				Eventually(func() error {
 					histObserver := ctrlmetrics.ReconcileTime.WithLabelValues(ctrl.Name)
 					hist := histObserver.(prometheus.Histogram)
 					hist.Write(&reconcileTime)
-					if reconcileTime.GetHistogram().GetSampleCount() != uint64(1) {
+					if reconcileTime.GetHistogram().GetSampleCount() == uint64(0) {
 						return fmt.Errorf("metrics not updated")
 					}
 					return nil

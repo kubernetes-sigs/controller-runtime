@@ -70,18 +70,41 @@ func (c *CacheReader) Get(_ context.Context, key client.ObjectKey, out runtime.O
 	}
 
 	// deep copy to avoid mutating cache
-	// TODO(directxman12): revisit the decision to always deepcopy
 	obj = obj.(runtime.Object).DeepCopyObject()
 
-	// Copy the value of the item in the cache to the returned value
-	// TODO(directxman12): this is a terrible hack, pls fix (we should have deepcopyinto)
-	outVal := reflect.ValueOf(out)
-	objVal := reflect.ValueOf(obj)
-	if !objVal.Type().AssignableTo(outVal.Type()) {
-		return fmt.Errorf("cache had type %s, but %s was asked for", objVal.Type(), outVal.Type())
+	// TODO: Add DeepCopyInto(runtime.Object) to the code generator.
+	// Create an interface for this and don't use reflection here.
+	oType := reflect.TypeOf(obj)
+	_, ok := oType.MethodByName("DeepCopyInto")
+	if ok {
+		err = deepCopyInto(obj, out)
+	} else {
+		err = copyTheValues(obj, out)
 	}
-	reflect.Indirect(outVal).Set(reflect.Indirect(objVal))
+	if err != nil {
+		return err
+	}
+	out.GetObjectKind().SetGroupVersionKind(c.groupVersionKind)
 
+	return nil
+}
+
+func deepCopyInto(in interface{}, out runtime.Object) error {
+	values := reflect.ValueOf(in).MethodByName("DeepCopyInto").Call([]reflect.Value{reflect.ValueOf(out)})
+	if len(values) > 0 {
+		return fmt.Errorf("could not deep copy the obj, unknown return values")
+	}
+	return nil
+}
+
+func copyTheValues(in interface{}, out runtime.Object) error {
+	// Copy the value of the item in the cache to the returned value
+	outVal := reflect.ValueOf(out)
+	inVal := reflect.ValueOf(in)
+	if !inVal.Type().AssignableTo(outVal.Type()) {
+		return fmt.Errorf("cache had type %s, but %s was asked for", inVal.Type(), outVal.Type())
+	}
+	reflect.Indirect(outVal).Set(reflect.Indirect(inVal))
 	return nil
 }
 

@@ -221,8 +221,8 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		resourceLock:     resourceLock,
 		mapper:           mapper,
 		metricsListener:  metricsListener,
-		stop:             stop,
-		stopper:          stop,
+		internalStop:     stop,
+		internalStopper:  stop,
 	}, nil
 }
 

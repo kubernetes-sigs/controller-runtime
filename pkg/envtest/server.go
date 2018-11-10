@@ -83,12 +83,12 @@ type Environment struct {
 	// This is useful in cases that need aggregated API servers and the like.
 	UseExistingCluster bool
 
-	// ControlPlaneStartTimeout is the the maximum duration each controlplane component
+	// ControlPlaneStartTimeout is the maximum duration each controlplane component
 	// may take to start. It defaults to the KUBEBUILDER_CONTROLPLANE_START_TIMEOUT
 	// environment variable or 20 seconds if unspecified
 	ControlPlaneStartTimeout time.Duration
 
-	// ControlPlaneStopTimeout is the the maximum duration each controlplane component
+	// ControlPlaneStopTimeout is the maximum duration each controlplane component
 	// may take to stop. It defaults to the KUBEBUILDER_CONTROLPLANE_STOP_TIMEOUT
 	// environment variable or 20 seconds if unspecified
 	ControlPlaneStopTimeout time.Duration

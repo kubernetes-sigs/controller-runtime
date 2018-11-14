@@ -89,6 +89,13 @@ var _ = Describe("Informer Cache", func() {
 		knownPod1 = createPod("test-pod-1", testNamespaceOne, kcorev1.RestartPolicyNever)
 		knownPod2 = createPod("test-pod-2", testNamespaceTwo, kcorev1.RestartPolicyAlways)
 		knownPod3 = createPod("test-pod-3", testNamespaceTwo, kcorev1.RestartPolicyOnFailure)
+		podGVK := schema.GroupVersionKind{
+			Kind:    "Pod",
+			Version: "v1",
+		}
+		knownPod1.GetObjectKind().SetGroupVersionKind(podGVK)
+		knownPod2.GetObjectKind().SetGroupVersionKind(podGVK)
+		knownPod3.GetObjectKind().SetGroupVersionKind(podGVK)
 
 		By("creating the informer cache")
 		var err error

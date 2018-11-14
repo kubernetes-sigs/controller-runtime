@@ -81,6 +81,7 @@ func (c *CacheReader) Get(_ context.Context, key client.ObjectKey, out runtime.O
 		return fmt.Errorf("cache had type %s, but %s was asked for", objVal.Type(), outVal.Type())
 	}
 	reflect.Indirect(outVal).Set(reflect.Indirect(objVal))
+	out.GetObjectKind().SetGroupVersionKind(c.groupVersionKind)
 
 	return nil
 }

@@ -17,8 +17,6 @@ limitations under the License.
 package fake
 
 import (
-	"encoding/json"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -68,22 +66,13 @@ var _ = Describe("Fake client", func() {
 
 		It("should be able to List", func() {
 			By("Listing all deployments in a namespace")
-			list := &metav1.List{}
+			list := &appsv1.DeploymentList{}
 			err := cl.List(nil, &client.ListOptions{
 				Namespace: "ns1",
-				Raw: &metav1.ListOptions{
-					TypeMeta: metav1.TypeMeta{
-						APIVersion: "apps/v1",
-						Kind:       "Deployment",
-					},
-				},
 			}, list)
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(HaveLen(1))
-			j, err := json.Marshal(dep)
-			Expect(err).To(BeNil())
-			expectedDep := runtime.RawExtension{Raw: j}
-			Expect(list.Items).To(ConsistOf(expectedDep))
+			Expect(list.Items).To(ConsistOf(*dep))
 		})
 
 		It("should be able to Create", func() {
@@ -139,15 +128,9 @@ var _ = Describe("Fake client", func() {
 			Expect(err).To(BeNil())
 
 			By("Listing all deployments in the namespace")
-			list := &metav1.List{}
+			list := &appsv1.DeploymentList{}
 			err = cl.List(nil, &client.ListOptions{
 				Namespace: "ns1",
-				Raw: &metav1.ListOptions{
-					TypeMeta: metav1.TypeMeta{
-						APIVersion: "apps/v1",
-						Kind:       "Deployment",
-					},
-				},
 			}, list)
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(HaveLen(0))

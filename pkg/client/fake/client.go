@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
@@ -78,8 +80,21 @@ func (c *fakeClient) Get(ctx context.Context, key client.ObjectKey, obj runtime.
 }
 
 func (c *fakeClient) List(ctx context.Context, opts *client.ListOptions, list runtime.Object) error {
-	gvk := opts.Raw.TypeMeta.GroupVersionKind()
+	var gvk schema.GroupVersionKind
+	if opts.Raw != nil && opts.Raw.TypeMeta != (metav1.TypeMeta{}) {
+		gvk = opts.Raw.TypeMeta.GroupVersionKind()
+	} else {
+		var err error
+		gvk, err = apiutil.GVKForObject(list, scheme.Scheme)
+		if err != nil {
+			return err
+		}
+		if strings.HasSuffix(gvk.Kind, "List") {
+			gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
+		}
+	}
 	gvr, _ := meta.UnsafeGuessKindToResource(gvk)
+
 	o, err := c.tracker.List(gvr, gvk, opts.Namespace)
 	if err != nil {
 		return err

@@ -169,6 +169,10 @@ func getGVKFromList(list runtime.Object, scheme *runtime.Scheme) (schema.GroupVe
 		return schema.GroupVersionKind{}, err
 	}
 
+	if gvk.Kind == "List" {
+		return schema.GroupVersionKind{}, fmt.Errorf("cannot derive GVK for generic List type %T (kind %q)", list, gvk)
+	}
+
 	if !strings.HasSuffix(gvk.Kind, "List") {
 		return schema.GroupVersionKind{}, fmt.Errorf("non-list type %T (kind %q) passed as output", list, gvk)
 	}

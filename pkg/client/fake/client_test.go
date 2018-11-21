@@ -17,8 +17,6 @@ limitations under the License.
 package fake
 
 import (
-	"encoding/json"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -35,7 +33,7 @@ var _ = Describe("Fake client", func() {
 	var cm *corev1.ConfigMap
 	var cl client.Client
 
-	BeforeEach(func(done Done) {
+	BeforeEach(func() {
 		dep = &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-deployment",
@@ -51,106 +49,110 @@ var _ = Describe("Fake client", func() {
 				"test-key": "test-value",
 			},
 		}
-		cl = NewFakeClient(dep, cm)
-		close(done)
 	})
 
-	It("should be able to Get", func() {
-		By("Getting a deployment")
-		namespacedName := types.NamespacedName{
-			Name:      "test-deployment",
-			Namespace: "ns1",
-		}
-		obj := &appsv1.Deployment{}
-		err := cl.Get(nil, namespacedName, obj)
-		Expect(err).To(BeNil())
-		Expect(obj).To(Equal(dep))
-	})
+	AssertClientBehavior := func() {
+		It("should be able to Get", func() {
+			By("Getting a deployment")
+			namespacedName := types.NamespacedName{
+				Name:      "test-deployment",
+				Namespace: "ns1",
+			}
+			obj := &appsv1.Deployment{}
+			err := cl.Get(nil, namespacedName, obj)
+			Expect(err).To(BeNil())
+			Expect(obj).To(Equal(dep))
+		})
 
-	It("should be able to List", func() {
-		By("Listing all deployments in a namespace")
-		list := &metav1.List{}
-		err := cl.List(nil, &client.ListOptions{
-			Namespace: "ns1",
-			Raw: &metav1.ListOptions{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "Deployment",
+		It("should be able to List", func() {
+			By("Listing all deployments in a namespace")
+			list := &appsv1.DeploymentList{}
+			err := cl.List(nil, &client.ListOptions{
+				Namespace: "ns1",
+			}, list)
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(1))
+			Expect(list.Items).To(ConsistOf(*dep))
+		})
+
+		It("should be able to Create", func() {
+			By("Creating a new configmap")
+			newcm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "new-test-cm",
+					Namespace: "ns2",
 				},
-			},
-		}, list)
-		Expect(err).To(BeNil())
-		Expect(list.Items).To(HaveLen(1))
-		j, err := json.Marshal(dep)
-		Expect(err).To(BeNil())
-		expectedDep := runtime.RawExtension{Raw: j}
-		Expect(list.Items).To(ConsistOf(expectedDep))
-	})
+			}
+			err := cl.Create(nil, newcm)
+			Expect(err).To(BeNil())
 
-	It("should be able to Create", func() {
-		By("Creating a new configmap")
-		newcm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
+			By("Getting the new configmap")
+			namespacedName := types.NamespacedName{
 				Name:      "new-test-cm",
 				Namespace: "ns2",
-			},
-		}
-		err := cl.Create(nil, newcm)
-		Expect(err).To(BeNil())
+			}
+			obj := &corev1.ConfigMap{}
+			err = cl.Get(nil, namespacedName, obj)
+			Expect(err).To(BeNil())
+			Expect(obj).To(Equal(newcm))
+		})
 
-		By("Getting the new configmap")
-		namespacedName := types.NamespacedName{
-			Name:      "new-test-cm",
-			Namespace: "ns2",
-		}
-		obj := &corev1.ConfigMap{}
-		err = cl.Get(nil, namespacedName, obj)
-		Expect(err).To(BeNil())
-		Expect(obj).To(Equal(newcm))
-	})
+		It("should be able to Update", func() {
+			By("Updating a new configmap")
+			newcm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cm",
+					Namespace: "ns2",
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+			err := cl.Update(nil, newcm)
+			Expect(err).To(BeNil())
 
-	It("should be able to Update", func() {
-		By("Updating a new configmap")
-		newcm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
+			By("Getting the new configmap")
+			namespacedName := types.NamespacedName{
 				Name:      "test-cm",
 				Namespace: "ns2",
-			},
-			Data: map[string]string{
-				"test-key": "new-value",
-			},
-		}
-		err := cl.Update(nil, newcm)
-		Expect(err).To(BeNil())
+			}
+			obj := &corev1.ConfigMap{}
+			err = cl.Get(nil, namespacedName, obj)
+			Expect(err).To(BeNil())
+			Expect(obj).To(Equal(newcm))
+		})
 
-		By("Getting the new configmap")
-		namespacedName := types.NamespacedName{
-			Name:      "test-cm",
-			Namespace: "ns2",
-		}
-		obj := &corev1.ConfigMap{}
-		err = cl.Get(nil, namespacedName, obj)
-		Expect(err).To(BeNil())
-		Expect(obj).To(Equal(newcm))
+		It("should be able to Delete", func() {
+			By("Deleting a deployment")
+			err := cl.Delete(nil, dep)
+			Expect(err).To(BeNil())
+
+			By("Listing all deployments in the namespace")
+			list := &appsv1.DeploymentList{}
+			err = cl.List(nil, &client.ListOptions{
+				Namespace: "ns1",
+			}, list)
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(0))
+		})
+	}
+
+	Context("with default scheme.Scheme", func() {
+		BeforeEach(func(done Done) {
+			cl = NewFakeClient(dep, cm)
+			close(done)
+		})
+		AssertClientBehavior()
 	})
 
-	It("should be able to Delete", func() {
-		By("Deleting a deployment")
-		err := cl.Delete(nil, dep)
-		Expect(err).To(BeNil())
-
-		By("Listing all deployments in the namespace")
-		list := &metav1.List{}
-		err = cl.List(nil, &client.ListOptions{
-			Namespace: "ns1",
-			Raw: &metav1.ListOptions{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "Deployment",
-				},
-			},
-		}, list)
-		Expect(err).To(BeNil())
-		Expect(list.Items).To(HaveLen(0))
+	Context("with given scheme", func() {
+		BeforeEach(func(done Done) {
+			scheme := runtime.NewScheme()
+			corev1.AddToScheme(scheme)
+			appsv1.AddToScheme(scheme)
+			cl = NewFakeClientWithScheme(scheme, dep, cm)
+			close(done)
+		})
+		AssertClientBehavior()
 	})
 })

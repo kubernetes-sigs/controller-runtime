@@ -93,7 +93,7 @@ func (c *fakeClient) List(ctx context.Context, opts *client.ListOptions, list ru
 	if err != nil {
 		// The old fake client required GVK info in Raw.TypeMeta, so check there
 		// before giving up
-		if opts.Raw.TypeMeta.APIVersion == "" || opts.Raw.TypeMeta.Kind == "" {
+		if opts.Raw == nil || opts.Raw.TypeMeta.APIVersion == "" || opts.Raw.TypeMeta.Kind == "" {
 			return err
 		}
 		gvk = opts.Raw.TypeMeta.GroupVersionKind()

@@ -270,7 +270,7 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 		RenewDeadline: 10 * time.Second,
 		RetryPeriod:   2 * time.Second,
 		Callbacks: leaderelection.LeaderCallbacks{
-			OnStartedLeading: func(_ <-chan struct{}) {
+			OnStartedLeading: func(_ context.Context) {
 				cm.start()
 			},
 			OnStoppedLeading: func() {
@@ -286,6 +286,6 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 	}
 
 	// Start the leader elector process
-	go l.Run()
+	go l.Run(context.Background())
 	return nil
 }

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -30,6 +31,7 @@ import (
 
 // Default binary path for test framework
 const (
+	envUseExistingCluster  = "USE_EXISTING_CLUSTER"
 	envKubeAPIServerBin    = "TEST_ASSET_KUBE_APISERVER"
 	envEtcdBin             = "TEST_ASSET_ETCD"
 	envKubectlBin          = "TEST_ASSET_KUBECTL"
@@ -95,6 +97,26 @@ type Environment struct {
 
 	// KubeAPIServerFlags is the set of flags passed while starting the api server.
 	KubeAPIServerFlags []string
+}
+
+// NewEnvironment creates a new instance of the Kubernetes test environment, and configures it
+// to use the existing cluster as defined in the current `~/.kube/config` profile if
+// the environment variable flag is set to `true`
+func NewEnvironment(crds ...string) *Environment {
+	useExisting := strings.ToLower(os.Getenv(envUseExistingCluster)) == "true"
+
+	e := &Environment{
+		UseExistingCluster: useExisting,
+	}
+
+	// we do not load CRD's when using existing cluster
+	if useExisting {
+		return e
+	}
+
+	// set CRD's paths
+	e.CRDDirectoryPaths = crds
+	return e
 }
 
 // Stop stops a running server

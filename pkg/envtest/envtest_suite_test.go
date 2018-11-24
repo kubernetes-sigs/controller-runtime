@@ -33,7 +33,7 @@ var env *Environment
 
 var _ = BeforeSuite(func(done Done) {
 	logf.SetLogger(logf.ZapLoggerTo(GinkgoWriter, true))
-	env = &Environment{}
+	env = NewEnvironment()
 	_, err := env.Start()
 	Expect(err).NotTo(HaveOccurred())
 

@@ -100,6 +100,10 @@ to match the PR. For instance, if you have a bugfix in with a breaking
 change, it's generally encouraged to submit the bugfix separately, but if
 you must put them in one PR, mark the commit separately.
 
+*Commits marked separately will be treated similiarly to a distinct PR by
+the cherrypick scripts*.  Therefore, only use them if you want the given
+commit to be considered separately.
+
 ### Commands and Workflow
 
 controller-runtime follows the standard Kubernetes workflow: any PR needs
@@ -126,17 +130,15 @@ will evaluate when to do a major release as it comes up.
 
 ### Exact Steps
 
-1. Generate release notes using the release note tooling (***TODO***)
+1. (*if doing a minor or patch release*) Update the release-X branch with
+   the latest set of changes using the cherrypick tooling (***TODO***)
 
-2. Add a release for controller-runtime on GitHub, using those release
-   notes
+2. Generate release notes using the release note tooling (***TODO***)
 
-3. Add a release for controller-tools on GitHub (folowing a similar
-   process for controller-tools release notes).
+3. Add a release for controller-runtime on GitHub, using those release
+   notes, with a title of `vX.Y.Z`.
 
-4. Publish associated binaries and release tarballs (***TODO***)
-
-5. Announce the release in `#kubebuilder` on Slack with a pinned message.
+4. Announce the release in `#kubebuilder` on Slack with a pinned message.
 
 ### Breaking Changes
 

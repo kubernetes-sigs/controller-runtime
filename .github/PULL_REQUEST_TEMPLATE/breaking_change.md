@@ -1,9 +1,3 @@
----
-name: Breaking change (X)
-about: A breaking change to the API surface or expected behavior of this project. 
-
----
-
 <!-- please add a :warning: (`:warning:`) to the title of this PR, and delete this line and similar ones -->
 
 <!-- What does this do, and why do we need it? -->

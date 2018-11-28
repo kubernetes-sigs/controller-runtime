@@ -204,6 +204,13 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	// join the passed-in stop channel as an upstream feeding into cm.internalStopper
 	defer close(cm.internalStopper)
 
+	// Metrics should be served whether the controller is leader or not.
+	// (If we don't serve metrics for non-leaders, prometheus will still scrape
+	// the pod but will get a connection refused)
+	if cm.metricsListener != nil {
+		go cm.serveMetrics(cm.internalStop)
+	}
+
 	if cm.resourceLock != nil {
 		err := cm.startLeaderElection()
 		if err != nil {
@@ -236,11 +243,6 @@ func (cm *controllerManager) start() {
 			cm.errChan <- err
 		}
 	}()
-
-	// Start the metrics server
-	if cm.metricsListener != nil {
-		go cm.serveMetrics(cm.internalStop)
-	}
 
 	// Wait for the caches to sync.
 	// TODO(community): Check the return value and write a test

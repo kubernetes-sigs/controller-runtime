@@ -894,7 +894,7 @@
   version = "v2.2.1"
 
 [[projects]]
-  digest = "1:728c0c37966b7a6c8980fab69a3d690cc0996e206804a55052318858d00f1e17"
+  digest = "1:26a67eb988225c6a0600c1af0b35e795ac4d23a9c40a7aa178fa2adc0670f1f7"
   name = "k8s.io/api"
   packages = [
     "admission/v1beta1",
@@ -909,10 +909,12 @@
     "authorization/v1beta1",
     "autoscaling/v1",
     "autoscaling/v2beta1",
+    "autoscaling/v2beta2",
     "batch/v1",
     "batch/v1beta1",
     "batch/v2alpha1",
     "certificates/v1beta1",
+    "coordination/v1beta1",
     "core/v1",
     "events/v1beta1",
     "extensions/v1beta1",
@@ -929,11 +931,11 @@
     "storage/v1beta1",
   ]
   pruneopts = "UT"
-  revision = "2d6f90ab1293a1fb871cf149423ebb72aa7423aa"
-  version = "kubernetes-1.11.2"
+  revision = "d1dc89ebaebe945edbeff52a79f50c791a59ff87"
+  version = "kubernetes-1.12.2"
 
 [[projects]]
-  digest = "1:3aa9838859a2cf61899ac0875263aceb1eb8feb75713bfc70d7ff80d72b8e2fc"
+  digest = "1:baeac12abc29d43f13709189aafac75574854deb444989f9aa23abb44acda584"
   name = "k8s.io/apiextensions-apiserver"
   packages = [
     ".",
@@ -961,20 +963,22 @@
     "pkg/client/listers/apiextensions/internalversion",
     "pkg/client/listers/apiextensions/v1beta1",
     "pkg/cmd/server",
+    "pkg/cmd/server/options",
     "pkg/controller/establish",
     "pkg/controller/finalizer",
     "pkg/controller/status",
+    "pkg/crdserverscheme",
     "pkg/features",
     "pkg/registry/customresource",
     "pkg/registry/customresource/tableconvertor",
     "pkg/registry/customresourcedefinition",
   ]
   pruneopts = "UT"
-  revision = "408db4a50408e2149acbd657bceb2480c13cb0a4"
-  version = "kubernetes-1.11.2"
+  revision = "ba848ee89ca33b38df441261aaa6fc32642e5628"
+  version = "kubernetes-1.12.2"
 
 [[projects]]
-  digest = "1:339c4cb4d30240f1b6276ba803da942b7deb28809790cde24e339e0d50adeb9e"
+  digest = "1:583504024bee52cbf769d4eeffcd458841fb99a95cfec65dde801fd4cc6534f5"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/equality",
@@ -1012,6 +1016,7 @@
     "pkg/util/intstr",
     "pkg/util/json",
     "pkg/util/mergepatch",
+    "pkg/util/naming",
     "pkg/util/net",
     "pkg/util/rand",
     "pkg/util/runtime",
@@ -1029,8 +1034,8 @@
     "third_party/forked/golang/reflect",
   ]
   pruneopts = "UT"
-  revision = "103fd098999dc9c0c88536f5c9ad2e5da39373ae"
-  version = "kubernetes-1.11.2"
+  revision = "f71dbbc36e126f5a371b85f6cca96bc8c57db2b6"
+  version = "kubernetes-1.12.2"
 
 [[projects]]
   branch = "master"
@@ -1133,7 +1138,7 @@
   revision = "c106140daf37a5d2b7a513726091a5eb8107e8b9"
 
 [[projects]]
-  digest = "1:5919b80013fe2204af836990cf255fc100d7d7cb077ec524c7518ff272e9a633"
+  digest = "1:46c01d24ae4f11a62a8aea53ef2bfe1b55042e1dd450f95e19b76732f5ae753f"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -1149,12 +1154,15 @@
     "informers/autoscaling",
     "informers/autoscaling/v1",
     "informers/autoscaling/v2beta1",
+    "informers/autoscaling/v2beta2",
     "informers/batch",
     "informers/batch/v1",
     "informers/batch/v1beta1",
     "informers/batch/v2alpha1",
     "informers/certificates",
     "informers/certificates/v1beta1",
+    "informers/coordination",
+    "informers/coordination/v1beta1",
     "informers/core",
     "informers/core/v1",
     "informers/events",
@@ -1192,10 +1200,12 @@
     "kubernetes/typed/authorization/v1beta1",
     "kubernetes/typed/autoscaling/v1",
     "kubernetes/typed/autoscaling/v2beta1",
+    "kubernetes/typed/autoscaling/v2beta2",
     "kubernetes/typed/batch/v1",
     "kubernetes/typed/batch/v1beta1",
     "kubernetes/typed/batch/v2alpha1",
     "kubernetes/typed/certificates/v1beta1",
+    "kubernetes/typed/coordination/v1beta1",
     "kubernetes/typed/core/v1",
     "kubernetes/typed/events/v1beta1",
     "kubernetes/typed/extensions/v1beta1",
@@ -1217,10 +1227,12 @@
     "listers/apps/v1beta2",
     "listers/autoscaling/v1",
     "listers/autoscaling/v2beta1",
+    "listers/autoscaling/v2beta2",
     "listers/batch/v1",
     "listers/batch/v1beta1",
     "listers/batch/v2alpha1",
     "listers/certificates/v1beta1",
+    "listers/coordination/v1beta1",
     "listers/core/v1",
     "listers/events/v1beta1",
     "listers/extensions/v1beta1",
@@ -1283,8 +1295,8 @@
     "util/workqueue",
   ]
   pruneopts = "UT"
-  revision = "1f13a808da65775f22cbf47862c4e5898d8f4ca1"
-  version = "kubernetes-1.11.2"
+  revision = "bf181536cb4da7eeb6ed732fcf79ecf0e36efaa2"
+  version = "kubernetes-1.12.2"
 
 [[projects]]
   branch = "master"

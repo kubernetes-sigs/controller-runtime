@@ -37,7 +37,7 @@ var _ = Describe("Scheme", func() {
 				Build()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(s.AllKnownTypes()).To(HaveLen(13))
+			Expect(s.AllKnownTypes()).To(HaveLen(15))
 			Expect(s.AllKnownTypes()[gv.WithKind("Pod")]).To(Equal(reflect.TypeOf(corev1.Pod{})))
 			Expect(s.AllKnownTypes()[gv.WithKind("PodList")]).To(Equal(reflect.TypeOf(corev1.PodList{})))
 
@@ -71,7 +71,7 @@ var _ = Describe("Scheme", func() {
 				Build()
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(s.AllKnownTypes()).To(HaveLen(21))
+			Expect(s.AllKnownTypes()).To(HaveLen(25))
 
 			// Types from b1
 			Expect(s.AllKnownTypes()[gv1.WithKind("Pod")]).To(Equal(reflect.TypeOf(corev1.Pod{})))

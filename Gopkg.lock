@@ -931,8 +931,8 @@
     "storage/v1beta1",
   ]
   pruneopts = "UT"
-  revision = "d1dc89ebaebe945edbeff52a79f50c791a59ff87"
-  version = "kubernetes-1.12.2"
+  revision = "b503174bad5991eb66f18247f52e41c3258f6348"
+  version = "kubernetes-1.12.3"
 
 [[projects]]
   digest = "1:baeac12abc29d43f13709189aafac75574854deb444989f9aa23abb44acda584"
@@ -974,8 +974,8 @@
     "pkg/registry/customresourcedefinition",
   ]
   pruneopts = "UT"
-  revision = "ba848ee89ca33b38df441261aaa6fc32642e5628"
-  version = "kubernetes-1.12.2"
+  revision = "0cd23ebeb6882bd1cdc2cb15fc7b2d72e8a86a5b"
+  version = "kubernetes-1.12.3"
 
 [[projects]]
   digest = "1:583504024bee52cbf769d4eeffcd458841fb99a95cfec65dde801fd4cc6534f5"
@@ -1034,8 +1034,8 @@
     "third_party/forked/golang/reflect",
   ]
   pruneopts = "UT"
-  revision = "f71dbbc36e126f5a371b85f6cca96bc8c57db2b6"
-  version = "kubernetes-1.12.2"
+  revision = "eddba98df674a16931d2d4ba75edc3a389bf633a"
+  version = "kubernetes-1.12.3"
 
 [[projects]]
   branch = "master"
@@ -1295,8 +1295,8 @@
     "util/workqueue",
   ]
   pruneopts = "UT"
-  revision = "bf181536cb4da7eeb6ed732fcf79ecf0e36efaa2"
-  version = "kubernetes-1.12.2"
+  revision = "d082d5923d3cc0bfbb066ee5fbdea3d0ca79acf8"
+  version = "kubernetes-1.12.3"
 
 [[projects]]
   branch = "master"

@@ -66,6 +66,7 @@ function fetch_kb_tools {
 header_text "using tools"
 
 which gometalinter.v2
+which dep
 fetch_kb_tools
 setup_envs
 

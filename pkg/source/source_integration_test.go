@@ -206,7 +206,7 @@ var _ = Describe("Source", func() {
 		})
 
 		// TODO(pwittrock): Write this test
-		Context("for a Foo CRD resource", func() {
+		PContext("for a Foo CRD resource", func() {
 			It("should provide Foo Events", func() {
 
 			})

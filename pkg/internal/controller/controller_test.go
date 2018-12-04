@@ -176,11 +176,11 @@ var _ = Describe("controller", func() {
 			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
 		})
 
-		It("should inject dependencies into the Reconciler", func() {
+		PIt("should inject dependencies into the Reconciler", func() {
 			// TODO(community): Write this
 		})
 
-		It("should return an error if there is an error injecting into the Reconciler", func() {
+		PIt("should return an error if there is an error injecting into the Reconciler", func() {
 			// TODO(community): Write this
 		})
 
@@ -299,7 +299,7 @@ var _ = Describe("controller", func() {
 			close(done)
 		})
 
-		It("should forget an item if it is not a Request and continue processing items", func() {
+		PIt("should forget an item if it is not a Request and continue processing items", func() {
 			// TODO(community): write this test
 		})
 
@@ -391,19 +391,19 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
 		})
 
-		It("should forget the Request if Reconciler is successful", func() {
+		PIt("should forget the Request if Reconciler is successful", func() {
 			// TODO(community): write this test
 		})
 
-		It("should return if the queue is shutdown", func() {
+		PIt("should return if the queue is shutdown", func() {
 			// TODO(community): write this test
 		})
 
-		It("should wait for informers to be synced before processing items", func() {
+		PIt("should wait for informers to be synced before processing items", func() {
 			// TODO(community): write this test
 		})
 
-		It("should create a new go routine for MaxConcurrentReconciles", func() {
+		PIt("should create a new go routine for MaxConcurrentReconciles", func() {
 			// TODO(community): write this test
 		})
 

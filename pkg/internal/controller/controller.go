@@ -118,7 +118,7 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 		}
 	}
 
-	log.Info("Starting EventSource", "Controller", c.Name, "Source", src)
+	log.Info("Starting EventSource", "controller", c.Name, "source", src)
 	return src.Start(evthdler, c.Queue, prct...)
 }
 
@@ -131,7 +131,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 	defer c.Queue.ShutDown()
 
 	// Start the SharedIndexInformer factories to begin populating the SharedIndexInformer caches
-	log.Info("Starting Controller", "Controller", c.Name)
+	log.Info("Starting Controller", "controller", c.Name)
 
 	// Wait for the caches to be synced before starting workers
 	if c.WaitForCacheSync == nil {
@@ -141,7 +141,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 		// This code is unreachable right now since WaitForCacheSync will never return an error
 		// Leaving it here because that could happen in the future
 		err := fmt.Errorf("failed to wait for %s caches to sync", c.Name)
-		log.Error(err, "Could not wait for Cache to sync", "Controller", c.Name)
+		log.Error(err, "Could not wait for Cache to sync", "controller", c.Name)
 		c.mu.Unlock()
 		return err
 	}
@@ -151,7 +151,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 	}
 
 	// Launch workers to process resources
-	log.Info("Starting workers", "Controller", c.Name, "WorkerCount", c.MaxConcurrentReconciles)
+	log.Info("Starting workers", "controller", c.Name, "worker count", c.MaxConcurrentReconciles)
 	for i := 0; i < c.MaxConcurrentReconciles; i++ {
 		// Process work items
 		go wait.Until(func() {
@@ -164,7 +164,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 	c.mu.Unlock()
 
 	<-stop
-	log.Info("Stopping workers", "Controller", c.Name)
+	log.Info("Stopping workers", "controller", c.Name)
 	return nil
 }
 
@@ -203,7 +203,7 @@ func (c *Controller) processNextWorkItem() bool {
 		// process a work item that is invalid.
 		c.Queue.Forget(obj)
 		log.Error(nil, "Queue item was not a Request",
-			"Controller", c.Name, "Type", fmt.Sprintf("%T", obj), "Value", obj)
+			"controller", c.Name, "type", fmt.Sprintf("%T", obj), "value", obj)
 		// Return true, don't take a break
 		return true
 	}
@@ -212,7 +212,7 @@ func (c *Controller) processNextWorkItem() bool {
 	// resource to be synced.
 	if result, err := c.Do.Reconcile(req); err != nil {
 		c.Queue.AddRateLimited(req)
-		log.Error(err, "Reconciler error", "Controller", c.Name, "Request", req)
+		log.Error(err, "Reconciler error", "controller", c.Name, "request", req)
 		ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Inc()
 
 		return false
@@ -229,7 +229,7 @@ func (c *Controller) processNextWorkItem() bool {
 	c.Queue.Forget(obj)
 
 	// TODO(directxman12): What does 1 mean?  Do we want level constants?  Do we want levels at all?
-	log.V(1).Info("Successfully Reconciled", "Controller", c.Name, "Request", req)
+	log.V(1).Info("Successfully Reconciled", "controller", c.Name, "request", req)
 
 	// Return true, don't take a break
 	return true

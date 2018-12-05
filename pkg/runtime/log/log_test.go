@@ -17,13 +17,23 @@ limitations under the License.
 package log
 
 import (
-	"fmt"
+	"bytes"
+	"encoding/json"
 	"io/ioutil"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	kapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
+
+// testStringer is a fmt.Stringer
+type testStringer struct{}
+
+func (testStringer) String() string {
+	return "value"
+}
 
 // fakeSyncWriter is a fake zap.SyncerWriter that lets us test if sync was called
 type fakeSyncWriter bool
@@ -249,26 +259,101 @@ var _ = Describe("runtime log", func() {
 				Expect(ZapLoggerTo(ioutil.Discard, true)).NotTo(BeNil())
 			})
 		})
-	})
 
-	Describe("fataliferr", func() {
-		It("should not call the fn if there is not an error", func() {
-			called := false
-			fn := func(format string, v ...interface{}) {
-				called = true
-			}
-			fatalIfErr(nil, fn)
-			Expect(called).To(BeFalse())
+		Context("when logging kubernetes objects", func() {
+			var logOut *bytes.Buffer
+			var logger logr.Logger
+
+			BeforeEach(func() {
+				logOut = new(bytes.Buffer)
+				By("setting up the logger")
+				// use production settings (false) to get just json output
+				logger = ZapLoggerTo(logOut, false)
+			})
+
+			It("should log a standard namespaced Kubernetes object name and namespace", func() {
+				pod := &kapi.Pod{}
+				pod.Name = "some-pod"
+				pod.Namespace = "some-ns"
+				logger.Info("here's a kubernetes object", "thing", pod)
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":      pod.Name,
+					"namespace": pod.Namespace,
+				}))
+			})
+
+			It("should work fine with normal stringers", func() {
+				logger.Info("here's a non-kubernetes stringer", "thing", testStringer{})
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", "value"))
+			})
+
+			It("should log a standard non-namespaced Kubernetes object name", func() {
+				node := &kapi.Node{}
+				node.Name = "some-node"
+				logger.Info("here's a kubernetes object", "thing", node)
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name": node.Name,
+				}))
+			})
+
+			It("should log a standard Kubernetes object's kind, if set", func() {
+				node := &kapi.Node{}
+				node.Name = "some-node"
+				node.APIVersion = "v1"
+				node.Kind = "Node"
+				logger.Info("here's a kubernetes object", "thing", node)
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":       node.Name,
+					"apiVersion": "v1",
+					"kind":       "Node",
+				}))
+			})
+
+			It("should log a standard non-namespaced NamespacedName name", func() {
+				name := types.NamespacedName{Name: "some-node"}
+				logger.Info("here's a kubernetes object", "thing", name)
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name": name.Name,
+				}))
+			})
+
+			It("should log a standard namespaced NamespacedName name and namespace", func() {
+				name := types.NamespacedName{Name: "some-pod", Namespace: "some-ns"}
+				logger.Info("here's a kubernetes object", "thing", name)
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":      name.Name,
+					"namespace": name.Namespace,
+				}))
+			})
 		})
-
-		It("should call the fn if there is an error", func() {
-			called := false
-			fn := func(format string, v ...interface{}) {
-				called = true
-			}
-			fatalIfErr(fmt.Errorf("error"), fn)
-			Expect(called).To(BeTrue())
-		})
 	})
-
 })

@@ -928,6 +928,7 @@
   input-imports = [
     "github.com/appscode/jsonpatch",
     "github.com/emicklei/go-restful",
+    "github.com/evanphx/json-patch",
     "github.com/ghodss/yaml",
     "github.com/go-logr/logr",
     "github.com/go-logr/logr/testing",

@@ -86,6 +86,28 @@ func (c *typedClient) Delete(ctx context.Context, obj runtime.Object, opts ...De
 		Error()
 }
 
+// Patch implements client.Client
+func (c *typedClient) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error {
+	o, err := c.cache.getObjMeta(obj)
+	if err != nil {
+		return err
+	}
+
+	data, err := patch.Data(obj)
+	if err != nil {
+		return err
+	}
+
+	return o.Patch(patch.Type()).
+		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
+		Resource(o.resource()).
+		Name(o.GetName()).
+		Body(data).
+		Context(ctx).
+		Do().
+		Into(obj)
+}
+
 // Get implements client.Client
 func (c *typedClient) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
 	r, err := c.cache.getResource(obj)

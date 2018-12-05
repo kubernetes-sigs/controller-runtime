@@ -91,6 +91,30 @@ func (uc *unstructuredClient) Delete(_ context.Context, obj runtime.Object, opts
 	return err
 }
 
+// Patch implements client.Client
+func (uc *unstructuredClient) Patch(_ context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return fmt.Errorf("unstructured client did not understand object: %T", obj)
+	}
+	r, err := uc.getResourceInterface(u.GroupVersionKind(), u.GetNamespace())
+	if err != nil {
+		return err
+	}
+
+	data, err := patch.Data(obj)
+	if err != nil {
+		return err
+	}
+
+	i, err := r.Patch(u.GetName(), patch.Type(), data, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+	u.Object = i.Object
+	return nil
+}
+
 // Get implements client.Client
 func (uc *unstructuredClient) Get(_ context.Context, key ObjectKey, obj runtime.Object) error {
 	u, ok := obj.(*unstructured.Unstructured)

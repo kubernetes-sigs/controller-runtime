@@ -21,9 +21,9 @@
   changes will go into an semi-immediate patch or minor release
 
 - Please *try* to avoid breaking changes when you can.  They make users
-  face difficult decisions (when do I go through the pain of upgrading),
-  and make life hard for maintainers and contributors (dealing with
-  differences on stable branches).
+  face difficult decisions ("when do I go through the pain of
+  upgrading?"), and make life hard for maintainers and contributors
+  (dealing with differences on stable branches).
 
 ### Mantainers
 
@@ -65,7 +65,9 @@ greatest code, including breaking changes, happens on master.
 
 The *release-X* branches contain stable, backwards compatible code.  Every
 major (X) release, a new such branch is created.  It is from these
-branches that minor and patch releases are tagged.
+branches that minor and patch releases are tagged.  If some cases, it may
+be neccessary open PRs for bugfixes directly against stable branches, but
+this should generally not be the case.
 
 The maintainers are responsible for updating the contents of this branch;
 generally, this is done just before a release using release tooling that
@@ -73,12 +75,8 @@ filters and checks for changes tagged as breaking (see below).
 
 ### Tooling
 
-* [gen-release-notes.sh](hack/gen-release-notes.sh): generate release
-  notes for a range of commits, and check for next version type
-  (***TODO***)
-
-* [cherrypick-minor-version.sh](hack/cherrypick-minor-version.sh): update
-  a stable branch with appropriate commits from the master (***TODO***).
+* [release-notes.sh](hack/release-notes.sh): generate release notes
+  for a range of commits, and check for next version type (***TODO***)
 
 * [verify-commit-messages.sh](hack/verify-commit-messages.sh): check that
   your PR and/or commit messages have the right versioning icon
@@ -95,14 +93,14 @@ a:
 - Docs: :book: (`:book:`)
 - Infra/Tests/Other: :running: (`:running:`)
 
-Individual commits may be tagged separately, but will generally be assumed
-to match the PR. For instance, if you have a bugfix in with a breaking
-change, it's generally encouraged to submit the bugfix separately, but if
-you must put them in one PR, mark the commit separately.
+You can also use the equivalent emoji directly, since GitHub doesn't
+render the `:xyz:` aliases in PR titles.
 
-*Commits marked separately will be treated similiarly to a distinct PR by
-the cherrypick scripts*.  Therefore, only use them if you want the given
-commit to be considered separately.
+Individual commits should not be tagged separately, but will generally be
+assumed to match the PR. For instance, if you have a bugfix in with
+a breaking change, it's generally encouraged to submit the bugfix
+separately, but if you must put them in one PR, mark the commit
+separately.
 
 ### Commands and Workflow
 
@@ -124,21 +122,44 @@ a command reference.
 Minor and patch releases are generally done immediately after a feature or
 bugfix is landed, or sometimes a series of features tied together.
 
-Major releases are done once a sufficient amount of breaking changes are
-accrued.  Since we don't intend to have a ton of these, the maintainers
-will evaluate when to do a major release as it comes up.
+Minor releases will only be tagged on the *most recent* major release
+branch, except in exceptional circumstances.  Patches will be backported
+to maintained stable versions, as needed.
+
+Major releases are done shortly after a breaking change is merged -- once
+a breaking change is merged, the next release *must* be a major revison.
+We don't intend to have a lot of these, so we may put off merging breaking
+PRs until a later date.
 
 ### Exact Steps
 
-1. (*if doing a minor or patch release*) Update the release-X branch with
-   the latest set of changes using the cherrypick tooling (***TODO***)
+Follow the release-specific steps below, then follow the general steps
+after that.
 
-2. Generate release notes using the release note tooling (***TODO***)
+#### Minor and patch releases
+
+1. Update the release-X branch with the latest set of changes by calling
+   `git rebase master` from the release branch.
+
+#### Major releases
+
+1. Create a new release branch named `release-X` (where `X` is the new
+   version) off of master.
+
+#### General
+
+2. Generate release notes using the release note tooling.
 
 3. Add a release for controller-runtime on GitHub, using those release
    notes, with a title of `vX.Y.Z`.
+ 
+4. Do a similar process for
+   [controller-tools](https://github.com/kubernetes-sigs/controller-tools)
 
-4. Announce the release in `#kubebuilder` on Slack with a pinned message.
+5. Announce the release in `#kubebuilder` on Slack with a pinned message.
+
+6. Potentially update
+   [kubebuilder](https://github.com/kubernetes-sigs/kubebuilder) as well.
 
 ### Breaking Changes
 
@@ -148,8 +169,11 @@ maintainers/contributors, who have to deal with differences between master
 and stable branches.
 
 That being said, we'll occaisonally want to make breaking changes. They'll
-be merged onto master, but won't make it into a release immediately (see
-[Release Proccess](#release-process)).
+be merged onto master, and will then trigger a major release (see [Release
+Proccess](#release-process)).  Because breaking changes induce a major
+revision, the maintainers may delay a particular breaking change until
+a later date when they are ready to make a major revision with a few
+breaking changes.
 
 If you're going to make a breaking change, please make sure to explain in
 detail why it's helpful.  Is it necessary to cleanly resolve an issue?
@@ -157,6 +181,11 @@ Does it improve API ergonomics?
 
 Maintainers should treat breaking changes with caution, and evaluate
 potential non-breaking solutions (see below).
+
+Note that API breakage in public APIs due to dependencies will trigger
+a major revision, so you may occaisonally need to have a major release
+anyway, due to changes in libraries like `k8s.io/client-go` or
+`k8s.io/apimachinery`.
 
 *NB*: Pre-1.0 releases treat breaking changes a bit more lightly.  We'll
 still consider carefully, but the pre-1.0 timeframe is useful for

@@ -134,7 +134,7 @@ var _ = Describe("admission webhook http handler", func() {
 			Type:     types.WebhookTypeValidating,
 			Handlers: []Handler{h},
 		}
-		expected := []byte(`{"response":{"uid":"","allowed":true}}
+		expected := []byte(`{"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
 `)
 		It("should return a response successfully", func() {
 			wh.ServeHTTP(w, req)

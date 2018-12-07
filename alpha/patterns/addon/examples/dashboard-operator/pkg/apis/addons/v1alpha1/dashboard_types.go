@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/alpha/patterns/addon"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -25,14 +26,30 @@ import (
 
 // DashboardSpec defines the desired state of Dashboard
 type DashboardSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	addon.CommonSpec
 }
 
 // DashboardStatus defines the observed state of Dashboard
 type DashboardStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	addon.CommonStatus
+}
+
+var _ addon.CommonObject = &Dashboard{}
+
+func (c *Dashboard) ComponentName() string {
+	return "dashboard"
+}
+
+func (c *Dashboard) CommonSpec() addon.CommonSpec {
+	return c.Spec.CommonSpec
+}
+
+func (c *Dashboard) GetCommonStatus() addon.CommonStatus {
+	return c.Status.CommonStatus
+}
+
+func (c *Dashboard) SetCommonStatus(s addon.CommonStatus) {
+	c.Status.CommonStatus = s
 }
 
 // +genclient

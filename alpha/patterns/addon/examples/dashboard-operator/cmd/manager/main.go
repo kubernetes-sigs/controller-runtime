@@ -20,6 +20,7 @@ import (
 	"os"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"sigs.k8s.io/controller-runtime/alpha/patterns/addon"
 	"sigs.k8s.io/controller-runtime/alpha/patterns/addon/examples/dashboard-operator/pkg/apis"
 	"sigs.k8s.io/controller-runtime/alpha/patterns/addon/examples/dashboard-operator/pkg/controller"
 	"sigs.k8s.io/controller-runtime/alpha/patterns/addon/examples/dashboard-operator/pkg/webhook"
@@ -30,6 +31,8 @@ import (
 )
 
 func main() {
+	addon.Init()
+
 	logf.SetLogger(logf.ZapLogger(false))
 	log := logf.Log.WithName("entrypoint")
 

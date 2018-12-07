@@ -23,7 +23,9 @@ import (
 
 // DefaultBindAddress sets the default bind address for the metrics
 // listener
-var DefaultBindAddress = ":8080"
+// The metrics is off by default.
+// TODO: Flip the default by changing DefaultBindAddress back to ":8080" in the v0.2.0.
+var DefaultBindAddress = "0"
 
 // NewListener creates a new TCP listener bound to the given address.
 func NewListener(addr string) (net.Listener, error) {

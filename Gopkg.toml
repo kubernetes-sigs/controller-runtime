@@ -13,31 +13,36 @@
 #  limitations under the License.
 
 # Packages required by users
+# NB(directxman12): be very careful how you word these --
+# dep considers them as a dependency on the package you list
+# meaning that if there's a main.go in the root package
+# (like in apiextensions-apiserver), you'll pull it's deps in.
 required = ["sigs.k8s.io/testing_frameworks/integration",
             "k8s.io/client-go/plugin/pkg/client/auth",
             "github.com/spf13/pflag",
             "github.com/emicklei/go-restful",
             "github.com/go-openapi/spec",
             "k8s.io/kube-openapi/pkg/common",
-            "k8s.io/apiextensions-apiserver",
+            "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
+            "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset",
             "github.com/prometheus/client_golang/prometheus",
             ]
 
 [[constraint]]
   name = "k8s.io/api"
-  version = "kubernetes-1.11.2"
+  version = "kubernetes-1.12.3"
 
 [[constraint]]
   name = "k8s.io/apiextensions-apiserver"
-  version = "kubernetes-1.11.2"
+  version = "kubernetes-1.12.3"
 
 [[constraint]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.11.2"
+  version = "kubernetes-1.12.3"
 
 [[constraint]]
   name = "k8s.io/client-go"
-  version = "kubernetes-1.11.2"
+  version = "kubernetes-1.12.3"
 
 [[constraint]]
   name = "github.com/onsi/ginkgo"

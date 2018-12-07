@@ -13,6 +13,27 @@ Documentation:
 - [Creating a controller](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/controller#example-New)
 - [Example `main.go`](https://github.com/kubernetes-sigs/controller-runtime/blob/master/example/main.go)
 
+# Versioning, Maintenance, and Compatibility
+
+The full documentation can be found at [VERSIONING.md](VERSIONING.md), but TL;DR:
+
+Users:
+
+- We follow [Semantic Versioning (semver)](https://semver.org)
+- Use releases with your dependency management to ensure that you get compatible code
+- The master branch contains all the latest code, some of which may break compatibility (so "normal" `go get` is not reccomended)
+
+Contributors:
+
+- All code PR must be labeled with :bug: (patch fixes), :sparkles: (backwards-compatible features), or :warning: (breaking changes)
+- Breaking changes will find their way into the next major release, other changes will go into an semi-immediate patch or minor release
+- For a quick PR template suggesting the right information, use one of these PR templates:
+  * [Breaking Changes/Features](/.github/PULL_REQUEST_TEMPLATE/breaking_change.md)
+  * [Backwards-Compatible Features](/.github/PULL_REQUEST_TEMPLATE/compat_feature.md)
+  * [Bug fixes](/.github/PULL_REQUEST_TEMPLATE/bug_fix.md)
+  * [Documentation Changes](/.github/PULL_REQUEST_TEMPLATE/docs.md)
+  * [Test/Build/Other Changes](/.github/PULL_REQUEST_TEMPLATE/other.md)
+
 ## Community, discussion, contribution, and support
 
 Learn how to engage with the Kubernetes community on the [community page](http://kubernetes.io/community/).

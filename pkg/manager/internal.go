@@ -69,7 +69,7 @@ type controllerManager struct {
 	// (and EventHandlers, Sources and Predicates).
 	recorderProvider recorder.Provider
 
-	// resourceLock
+	// resourceLock forms the basis for leader election
 	resourceLock resourcelock.Interface
 
 	// mapper is used to map resources to kind, and map kind and version.
@@ -81,7 +81,16 @@ type controllerManager struct {
 	mu      sync.Mutex
 	started bool
 	errChan chan error
-	stop    <-chan struct{}
+
+	// internalStop is the stop channel *actually* used by everything involved
+	// with the manager as a stop channel, so that we can pass a stop channel
+	// to things that need it off the bat (like the Channel source).  It can
+	// be closed via `internalStopper` (by being the same underlying channel).
+	internalStop <-chan struct{}
+
+	// internalStopper is the write side of the internal stop channel, allowing us to close it.
+	// It and `internalStop` should point to the same channel.
+	internalStopper chan<- struct{}
 
 	startCache func(stop <-chan struct{}) error
 }
@@ -101,7 +110,7 @@ func (cm *controllerManager) Add(r Runnable) error {
 	if cm.started {
 		// If already started, start the controller
 		go func() {
-			cm.errChan <- r.Start(cm.stop)
+			cm.errChan <- r.Start(cm.internalStop)
 		}()
 	}
 
@@ -124,7 +133,7 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 	if _, err := inject.InjectorInto(cm.SetFields, i); err != nil {
 		return err
 	}
-	if _, err := inject.StopChannelInto(cm.stop, i); err != nil {
+	if _, err := inject.StopChannelInto(cm.internalStop, i); err != nil {
 		return err
 	}
 	if _, err := inject.DecoderInto(cm.admissionDecoder, i); err != nil {
@@ -192,13 +201,23 @@ func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
 }
 
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
+	// join the passed-in stop channel as an upstream feeding into cm.internalStopper
+	defer close(cm.internalStopper)
+
+	// Metrics should be served whether the controller is leader or not.
+	// (If we don't serve metrics for non-leaders, prometheus will still scrape
+	// the pod but will get a connection refused)
+	if cm.metricsListener != nil {
+		go cm.serveMetrics(cm.internalStop)
+	}
+
 	if cm.resourceLock != nil {
-		err := cm.startLeaderElection(stop)
+		err := cm.startLeaderElection()
 		if err != nil {
 			return err
 		}
 	} else {
-		go cm.start(stop)
+		go cm.start()
 	}
 
 	select {
@@ -211,30 +230,23 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	}
 }
 
-func (cm *controllerManager) start(stop <-chan struct{}) {
+func (cm *controllerManager) start() {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-
-	cm.stop = stop
 
 	// Start the Cache. Allow the function to start the cache to be mocked out for testing
 	if cm.startCache == nil {
 		cm.startCache = cm.cache.Start
 	}
 	go func() {
-		if err := cm.startCache(stop); err != nil {
+		if err := cm.startCache(cm.internalStop); err != nil {
 			cm.errChan <- err
 		}
 	}()
 
-	// Start the metrics server
-	if cm.metricsListener != nil {
-		go cm.serveMetrics(stop)
-	}
-
 	// Wait for the caches to sync.
 	// TODO(community): Check the return value and write a test
-	cm.cache.WaitForCacheSync(stop)
+	cm.cache.WaitForCacheSync(cm.internalStop)
 
 	// Start the runnables after the cache has synced
 	for _, c := range cm.runnables {
@@ -242,14 +254,14 @@ func (cm *controllerManager) start(stop <-chan struct{}) {
 		// Write any Start errors to a channel so we can return them
 		ctrl := c
 		go func() {
-			cm.errChan <- ctrl.Start(stop)
+			cm.errChan <- ctrl.Start(cm.internalStop)
 		}()
 	}
 
 	cm.started = true
 }
 
-func (cm *controllerManager) startLeaderElection(stop <-chan struct{}) (err error) {
+func (cm *controllerManager) startLeaderElection() (err error) {
 	l, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
 		Lock: cm.resourceLock,
 		// Values taken from: https://github.com/kubernetes/apiserver/blob/master/pkg/apis/config/v1alpha1/defaults.go
@@ -258,8 +270,8 @@ func (cm *controllerManager) startLeaderElection(stop <-chan struct{}) (err erro
 		RenewDeadline: 10 * time.Second,
 		RetryPeriod:   2 * time.Second,
 		Callbacks: leaderelection.LeaderCallbacks{
-			OnStartedLeading: func(_ <-chan struct{}) {
-				cm.start(stop)
+			OnStartedLeading: func(_ context.Context) {
+				cm.start()
 			},
 			OnStoppedLeading: func() {
 				// Most implementations of leader election log.Fatal() here.
@@ -274,6 +286,6 @@ func (cm *controllerManager) startLeaderElection(stop <-chan struct{}) (err erro
 	}
 
 	// Start the leader elector process
-	go l.Run()
+	go l.Run(context.Background())
 	return nil
 }

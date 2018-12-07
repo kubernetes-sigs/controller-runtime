@@ -17,45 +17,58 @@ limitations under the License.
 package dashboard
 
 import (
-	"context"
-	"log"
-	"reflect"
-
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	addonsv1alpha1 "sigs.k8s.io/controller-runtime/alpha/patterns/addon/examples/dashboard-operator/pkg/apis/addons/v1alpha1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	//applicationv1beta1 "github.com/kubernetes-sigs/application/pkg/apis/app/v1beta1"
+	api "sigs.k8s.io/controller-runtime/alpha/patterns/addon/examples/dashboard-operator/pkg/apis/addons/v1alpha1"
+	"sigs.k8s.io/controller-runtime/alpha/patterns/declarative"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
+var _ reconcile.Reconciler = &ReconcileDashboard{}
 
-// Add creates a new Dashboard Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
-// USER ACTION REQUIRED: update cmd/manager/main.go to call this addons.Add(mgr) to install this Controller
+// ReconcileDashboard reconciles a Dashboard object
+type ReconcileDashboard struct {
+	declarative.Reconciler
+}
+
 func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileDashboard{Client: mgr.GetClient(), scheme: mgr.GetScheme()}
+func newReconciler(mgr manager.Manager) *ReconcileDashboard {
+	// TODO: Dynamic labels?
+	labels := map[string]string{
+		"k8s-app": "kubernetes-dashboard",
+	}
+
+	r := &ReconcileDashboard{}
+
+	/*
+		app := applicationv1beta1.Application{
+			Spec: applicationv1beta1.ApplicationSpec{
+				Descriptor: applicationv1beta1.Descriptor{
+					Description: "Kubernetes Dashboard is a general purpose, web-based UI for Kubernetes clusters. It allows users to manage applications running in the cluster and troubleshoot them, as well as manage the cluster itself.",
+					Links:       []applicationv1beta1.Link{{Description: "Project Homepage", Url: "https://github.com/kubernetes/dashboard"}},
+					Keywords:    []string{"dashboard", "addon"},
+				},
+			},
+		}
+	*/
+
+	r.Reconciler.Init(mgr, &api.Dashboard{}, "dashboard",
+		declarative.WithObjectTransform(declarative.AddLabels(labels)),
+		//operators.WithGroupVersionKind(api.SchemeGroupVersion.WithKind("dashboard")),
+		//operators.WithApplication(app),
+	)
+	return r
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
-func add(mgr manager.Manager, r reconcile.Reconciler) error {
+func add(mgr manager.Manager, r *ReconcileDashboard) error {
 	// Create a new controller
 	c, err := controller.New("dashboard-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
@@ -63,104 +76,18 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to Dashboard
-	err = c.Watch(&source.Kind{Type: &addonsv1alpha1.Dashboard{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &api.Dashboard{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create
-	// Uncomment watch a Deployment created by Dashboard - change this for objects you create
-	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &addonsv1alpha1.Dashboard{},
-	})
-	if err != nil {
-		return err
-	}
+	/*
+		// Watch for changes to deployed objects
+		err = r.WatchAllDeployedObjects(c)
+		if err != nil {
+			return err
+		}
+	*/
 
 	return nil
-}
-
-var _ reconcile.Reconciler = &ReconcileDashboard{}
-
-// ReconcileDashboard reconciles a Dashboard object
-type ReconcileDashboard struct {
-	client.Client
-	scheme *runtime.Scheme
-}
-
-// Reconcile reads that state of the cluster for a Dashboard object and makes changes based on the state read
-// and what is in the Dashboard.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
-// a Deployment as an example
-// Automatically generate RBAC rules to allow the Controller to read and write Deployments
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=addons.sigs.k8s.io,resources=dashboards,verbs=get;list;watch;create;update;patch;delete
-func (r *ReconcileDashboard) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	// Fetch the Dashboard instance
-	instance := &addonsv1alpha1.Dashboard{}
-	err := r.Get(context.TODO(), request.NamespacedName, instance)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Object not found, return.  Created objects are automatically garbage collected.
-			// For additional cleanup logic use finalizers.
-			return reconcile.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
-	}
-
-	// TODO(user): Change this to be the object type created by your controller
-	// Define the desired Deployment object
-	deploy := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      instance.Name + "-deployment",
-			Namespace: instance.Namespace,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"deployment": instance.Name + "-deployment"},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"deployment": instance.Name + "-deployment"}},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "nginx",
-							Image: "nginx",
-						},
-					},
-				},
-			},
-		},
-	}
-	if err := controllerutil.SetControllerReference(instance, deploy, r.scheme); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// TODO(user): Change this for the object type created by your controller
-	// Check if the Deployment already exists
-	found := &appsv1.Deployment{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		log.Printf("Creating Deployment %s/%s\n", deploy.Namespace, deploy.Name)
-		err = r.Create(context.TODO(), deploy)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-	} else if err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// TODO(user): Change this for the object type created by your controller
-	// Update the found object and write the result back if there are any changes
-	if !reflect.DeepEqual(deploy.Spec, found.Spec) {
-		found.Spec = deploy.Spec
-		log.Printf("Updating Deployment %s/%s\n", deploy.Namespace, deploy.Name)
-		err = r.Update(context.TODO(), found)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-	}
-	return reconcile.Result{}, nil
 }

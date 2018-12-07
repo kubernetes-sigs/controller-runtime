@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	"github.com/onsi/gomega/ghttp"
+	"sigs.k8s.io/testing_frameworks/integration/addr"
 	. "sigs.k8s.io/testing_frameworks/integration/internal"
 )
 
@@ -91,8 +92,7 @@ var _ = Describe("Start method", func() {
 				processState.HealthCheckEndpoint = "/healthz"
 				processState.StartTimeout = 500 * time.Millisecond
 
-				am := &AddressManager{}
-				port, host, err := am.Initialize()
+				port, host, err := addr.Suggest()
 				Expect(err).NotTo(HaveOccurred())
 
 				processState.URL = url.URL{

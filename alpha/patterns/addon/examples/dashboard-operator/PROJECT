@@ -1,0 +1,3 @@
+version: "1"
+domain: sigs.k8s.io
+repo: sigs.k8s.io/controller-runtime/alpha/patterns/addon/examples/dashboard-operator

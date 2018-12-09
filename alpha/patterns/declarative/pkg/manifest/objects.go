@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
 // Objects holds a collection of objects, so that we can filter / sequence them

@@ -1,9 +1,8 @@
 apiVersion: addons.sigs.k8s.io/v1alpha1
 kind: Dashboard
 metadata:
-  labels:
-    controller-tools.k8s.io: "1.0"
   name: dashboard-sample
+  namespace: kube-system
 spec:
   # Add fields here
   foo: bar

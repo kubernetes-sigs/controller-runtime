@@ -135,7 +135,6 @@ limitations under the License.
 package dashboard
 
 import (
-	//applicationv1beta1 "github.com/kubernetes-sigs/application/pkg/apis/app/v1beta1"
 	api "sigs.k8s.io/controller-runtime/alpha/patterns/addon/examples/dashboard-operator/pkg/apis/addons/v1alpha1"
 	"sigs.k8s.io/controller-runtime/alpha/patterns/declarative"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -180,12 +179,6 @@ func add(mgr manager.Manager, r *ReconcileDashboard) error {
 		return err
 	}
 
-    // Watch for changes to deployed objects
-	err = r.WatchAllDeployedObjects(c)
-	if err != nil {
-	    return err
-	}
-
 	return nil
 }
 
@@ -194,9 +187,7 @@ func add(mgr manager.Manager, r *ReconcileDashboard) error {
 The important things to note here:
 
 ```go
-	r.Reconciler.Init(mgr, &api.Dashboard{}, "dashboard",
-		addon.WithGroupVersionKind(api.SchemeGroupVersion.WithKind("dashboard")),
-	)
+	r.Reconciler.Init(mgr, &api.Dashboard{}, "dashboard")
 ```
 
 We bind the `api.Dashboard` type to the `dashboard` package in our `channels`
@@ -237,7 +228,7 @@ kubectl apply -n kube-system -f config/samples/addons_v1alpha1_dashboard.yaml
 
 You should now be able to run the controller using:
 
-`bazel run cmd/manager -- --channel `pwd`/channels`
+`make run`
 
 You should see your operator apply the manifest.  You can then control-C and you
 should see the deployment etc that the operator has created.

@@ -61,6 +61,7 @@ func newReconciler(mgr manager.Manager) *ReconcileDashboard {
 
 	r.Reconciler.Init(mgr, &api.Dashboard{}, "dashboard",
 		declarative.WithObjectTransform(declarative.AddLabels(labels)),
+		declarative.WithOwner(declarative.SourceAsOwner),
 		//operators.WithGroupVersionKind(api.SchemeGroupVersion.WithKind("dashboard")),
 		//operators.WithApplication(app),
 	)

@@ -21,7 +21,8 @@ type reconcilerParams struct {
 	manifestController ManifestController
 
 	//prune bool
-	watch DynamicWatch
+	watch   DynamicWatch
+	ownerFn OwnerSelector
 }
 
 type ManifestController interface {
@@ -39,6 +40,9 @@ type ManifestOperation = func(context.Context, DeclarativeObject, string) (strin
 
 // ObjectTransform is an operation that transforms the manifest objects before applying it
 type ObjectTransform = func(context.Context, DeclarativeObject, *manifest.Objects) error
+
+// OwnerSelector selects a runtime.Object to be the owner of a given manifest.Object
+type OwnerSelector = func(context.Context, DeclarativeObject, manifest.Object, manifest.Objects) (DeclarativeObject, error)
 
 // WithRawManifestOperation adds the specific ManifestOperations to the chain of manifest changes
 func WithRawManifestOperation(operations ...ManifestOperation) reconcilerOption {
@@ -147,5 +151,13 @@ func WithApplyPrune() reconcilerOption {
 	}
 }
 */
+
+// WithOwner sets an owner ref on each deployed object by the OwnerSelector
+func WithOwner(ownerFn OwnerSelector) reconcilerOption {
+	return func(p reconcilerParams) reconcilerParams {
+		p.ownerFn = ownerFn
+		return p
+	}
+}
 
 type reconcilerOption func(params reconcilerParams) reconcilerParams

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -39,6 +40,7 @@ type kubectlClient interface {
 
 type DeclarativeObject interface {
 	runtime.Object
+	metav1.Object
 }
 
 // For mocking
@@ -115,12 +117,12 @@ func (r *Reconciler) reconcileExists(ctx context.Context, name types.NamespacedN
 			return reconcile.Result{}, err
 		}
 		defer r.reconcileStatus(ctx, name, instance, app, objects)
-
-		err = r.injectOwnerRef(ctx, instance, objects)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
 	*/
+
+	err = r.injectOwnerRef(ctx, instance, objects)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 
 	m, err := objects.JSONManifest()
 	if err != nil {
@@ -238,4 +240,40 @@ func (r *Reconciler) applyOptions(opts ...reconcilerOption) {
 	}
 
 	r.options = params
+}
+
+func (r *Reconciler) injectOwnerRef(ctx context.Context, instance DeclarativeObject, objects *manifest.Objects) error {
+	if r.options.ownerFn == nil {
+		return nil
+	}
+
+	log := log.Log
+	log.WithValues("object", instance).Info("injecting owner references")
+
+	for _, o := range objects.Items {
+		owner, err := r.options.ownerFn(ctx, instance, *o, *objects)
+		if err != nil {
+			log.WithValues("object", o).Error(err, "resolving owner ref", o)
+			return err
+		}
+		if owner == nil {
+			log.WithValues("object", o).Info("no owner resolved")
+		}
+
+		gvk := owner.GetObjectKind().GroupVersionKind()
+		ownerRefs := []interface{}{
+			map[string]interface{}{
+				"apiVersion":         gvk.Group + "/" + gvk.Version,
+				"blockOwnerDeletion": true,
+				"controller":         true,
+				"kind":               gvk.Kind,
+				"name":               owner.GetName(),
+				"uid":                string(owner.GetUID()),
+			},
+		}
+		if err := o.SetNestedField(ownerRefs, "metadata", "ownerReferences"); err != nil {
+			return err
+		}
+	}
+	return nil
 }

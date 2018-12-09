@@ -82,13 +82,11 @@ func add(mgr manager.Manager, r *ReconcileDashboard) error {
 		return err
 	}
 
-	/*
-		// Watch for changes to deployed objects
-		err = r.WatchAllDeployedObjects(c)
-		if err != nil {
-			return err
-		}
-	*/
+	// Watch for changes to deployed objects
+	_, err = declarative.WatchAll(mgr.GetConfig(), c, r)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

@@ -146,16 +146,15 @@ func (r *Reconciler) reconcileExists(ctx context.Context, name types.NamespacedN
 
 	if err := r.kubectl.Apply(ctx, name.Namespace, m, extraArgs...); err != nil {
 		log.Error(err, "applying manifest")
-
 		return reconcile.Result{}, fmt.Errorf("error applying manifest: %v", err)
 	}
 
-	/*
-		if err := r.ensureWatches(ctx, name, objects); err != nil {
-			log.Error(err, "watching deployed object types")
-			panic(fmt.Errorf("error watching deployed object types: %v", err))
+	if r.options.sink != nil {
+		if err := r.options.sink.Notify(ctx, instance, objects); err != nil {
+			log.Error(err, "notifying sink")
+			return reconcile.Result{}, err
 		}
-	*/
+	}
 
 	return reconcile.Result{}, nil
 }
@@ -276,4 +275,9 @@ func (r *Reconciler) injectOwnerRef(ctx context.Context, instance DeclarativeObj
 		}
 	}
 	return nil
+}
+
+// SetSink provides a Sink that will be notified for all deployments
+func (r *Reconciler) SetSink(sink Sink) {
+	r.options.sink = sink
 }

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	//applicationv1beta1 "github.com/kubernetes-sigs/application/pkg/apis/app/v1beta1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -21,7 +21,7 @@ type reconcilerParams struct {
 	manifestController ManifestController
 
 	//prune bool
-	watch   DynamicWatch
+	sink    Sink
 	ownerFn OwnerSelector
 }
 
@@ -30,9 +30,9 @@ type ManifestController interface {
 	ResolveManifest(ctx context.Context, object runtime.Object) (string, error)
 }
 
-type DynamicWatch interface {
-	// Add registers a watch for changes to 'trigger' filtered by 'options' to raise an event on 'target'
-	Add(trigger schema.GroupVersionKind, options metav1.ListOptions, target metav1.ObjectMeta) error
+type Sink interface {
+	// Notify tells the Sink that all objs have been created
+	Notify(ctx context.Context, dest DeclarativeObject, objs *manifest.Objects) error
 }
 
 // ManifestOperation is an operation that transforms raw string manifests before applying it

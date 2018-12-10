@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/alpha/patterns/declarative/pkg/manifest"
@@ -27,7 +28,11 @@ type DynamicWatch interface {
 }
 
 // WatchAll creates a Watch on ctrl for all objects reconciled by recnl
-func WatchAll(config *rest.Config, ctrl controller.Controller, recnl Source) (chan struct{}, error) {
+func WatchAll(config *rest.Config, ctrl controller.Controller, recnl Source, labelMaker LabelMaker) (chan struct{}, error) {
+	if labelMaker == nil {
+		return nil, fmt.Errorf("labelMaker is required to scope watches")
+	}
+
 	dw, events, err := watch.NewDynamicWatch(*config)
 	if err != nil {
 		return nil, fmt.Errorf("creating dynamic watch: %v", err)
@@ -40,31 +45,33 @@ func WatchAll(config *rest.Config, ctrl controller.Controller, recnl Source) (ch
 	if err := ctrl.Watch(src, &handler.EnqueueRequestForObject{}); err != nil {
 		return nil, fmt.Errorf("setting up dynamic watch on the controller: %v", err)
 	}
-	recnl.SetSink(&watchAll{dw, make(map[schema.GroupVersionKind]struct{})})
+	recnl.SetSink(&watchAll{dw, labelMaker, make(map[string]struct{})})
 	return stopCh, nil
 }
 
 type watchAll struct {
 	dw         DynamicWatch
-	registered map[schema.GroupVersionKind]struct{}
+	labelMaker LabelMaker
+	registered map[string]struct{}
 }
 
 func (w *watchAll) Notify(ctx context.Context, dest DeclarativeObject, objs *manifest.Objects) error {
 	log := log.Log
-	// TODO(jrjohnson): How do we establish a fixed set of labels?
+
 	labelSelector := strings.Builder{}
-	// for k, v := range r.labels(name) {
-	// 	if labelSelector.Len() != 0 {
-	// 		labelSelector.WriteRune(',')
-	// 	}
-	// 	fmt.Fprintf(&labelSelector, "%s=%s", k, fields.EscapeValue(v))
-	// }
+	for k, v := range w.labelMaker(ctx, dest) {
+		if labelSelector.Len() != 0 {
+			labelSelector.WriteRune(',')
+		}
+		fmt.Fprintf(&labelSelector, "%s=%s", k, fields.EscapeValue(v))
+	}
 
 	notify := metav1.ObjectMeta{Name: dest.GetName(), Namespace: dest.GetNamespace()}
 	filter := metav1.ListOptions{LabelSelector: labelSelector.String()}
 
 	for _, gvk := range uniqueGroupVersionKind(objs) {
-		if _, ok := w.registered[gvk]; ok {
+		key := fmt.Sprintf("%s,%s", gvk.String(), labelSelector.String())
+		if _, ok := w.registered[key]; ok {
 			continue
 		}
 
@@ -74,7 +81,7 @@ func (w *watchAll) Notify(ctx context.Context, dest DeclarativeObject, objs *man
 			continue
 		}
 
-		w.registered[gvk] = struct{}{}
+		w.registered[key] = struct{}{}
 	}
 	return nil
 }

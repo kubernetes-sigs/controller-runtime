@@ -35,42 +35,18 @@ type ReconcileDashboard struct {
 }
 
 func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
-}
-
-// newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) *ReconcileDashboard {
-	// TODO: Dynamic labels?
 	labels := map[string]string{
 		"k8s-app": "kubernetes-dashboard",
 	}
 
 	r := &ReconcileDashboard{}
 
-	/*
-		app := applicationv1beta1.Application{
-			Spec: applicationv1beta1.ApplicationSpec{
-				Descriptor: applicationv1beta1.Descriptor{
-					Description: "Kubernetes Dashboard is a general purpose, web-based UI for Kubernetes clusters. It allows users to manage applications running in the cluster and troubleshoot them, as well as manage the cluster itself.",
-					Links:       []applicationv1beta1.Link{{Description: "Project Homepage", Url: "https://github.com/kubernetes/dashboard"}},
-					Keywords:    []string{"dashboard", "addon"},
-				},
-			},
-		}
-	*/
-
 	r.Reconciler.Init(mgr, &api.Dashboard{}, "dashboard",
 		declarative.WithObjectTransform(declarative.AddLabels(labels)),
 		declarative.WithOwner(declarative.SourceAsOwner),
-		//operators.WithGroupVersionKind(api.SchemeGroupVersion.WithKind("dashboard")),
-		//operators.WithApplication(app),
+		declarative.WithLabels(declarative.SourceLabel),
 	)
-	return r
-}
 
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
-func add(mgr manager.Manager, r *ReconcileDashboard) error {
-	// Create a new controller
 	c, err := controller.New("dashboard-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
@@ -83,7 +59,7 @@ func add(mgr manager.Manager, r *ReconcileDashboard) error {
 	}
 
 	// Watch for changes to deployed objects
-	_, err = declarative.WatchAll(mgr.GetConfig(), c, r)
+	_, err = declarative.WatchAll(mgr.GetConfig(), c, r, declarative.SourceLabel)
 	if err != nil {
 		return err
 	}

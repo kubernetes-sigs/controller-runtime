@@ -21,8 +21,9 @@ type reconcilerParams struct {
 	manifestController ManifestController
 
 	//prune bool
-	sink    Sink
-	ownerFn OwnerSelector
+	sink       Sink
+	ownerFn    OwnerSelector
+	labelMaker LabelMaker
 }
 
 type ManifestController interface {
@@ -43,6 +44,9 @@ type ObjectTransform = func(context.Context, DeclarativeObject, *manifest.Object
 
 // OwnerSelector selects a runtime.Object to be the owner of a given manifest.Object
 type OwnerSelector = func(context.Context, DeclarativeObject, manifest.Object, manifest.Objects) (DeclarativeObject, error)
+
+// LabelMaker returns a fixed set of labels for a given DeclarativeObject
+type LabelMaker = func(context.Context, DeclarativeObject) map[string]string
 
 // WithRawManifestOperation adds the specific ManifestOperations to the chain of manifest changes
 func WithRawManifestOperation(operations ...ManifestOperation) reconcilerOption {
@@ -156,6 +160,15 @@ func WithApplyPrune() reconcilerOption {
 func WithOwner(ownerFn OwnerSelector) reconcilerOption {
 	return func(p reconcilerParams) reconcilerParams {
 		p.ownerFn = ownerFn
+		return p
+	}
+}
+
+// WithLabels sets a fixed set of labels configured provided by a LabelMaker
+// to all deployment objecs for a given DeclarativeObject
+func WithLabels(labelMaker LabelMaker) reconcilerOption {
+	return func(p reconcilerParams) reconcilerParams {
+		p.labelMaker = labelMaker
 		return p
 	}
 }

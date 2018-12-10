@@ -188,10 +188,10 @@ func (r *Reconciler) BuildDeploymentObjects(ctx context.Context, name types.Name
 	}
 
 	// 4. Perform object transformations
-
-	// Always add a fixed set of labels for grouping with Application
-	//transforms := append(r.options.objectTransformations, AddLabels(r.labels(name)))
 	transforms := r.options.objectTransformations
+	if r.options.labelMaker != nil {
+		transforms = append(transforms, AddLabels(r.options.labelMaker(ctx, instance)))
+	}
 	for _, t := range transforms {
 		err := t(ctx, instance, objects)
 		if err != nil {

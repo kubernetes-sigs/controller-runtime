@@ -80,7 +80,7 @@ support (and we can hopefully evolve the contract with just a recompile!)
 
 So in `pkg/apis/addons/v1alpha1/dashboard_types.go`:
 
-* add an import for `"sigs.k8s.io/controller-runtime/alpha/patterns/addon"`
+* add an import for `addonv1alpha1 "sigs.k8s.io/controller-runtime/alpha/patterns/addon/pkg/apis/v1alpha1"`
 * add a field `addon.CommonSpec` to the Spec object (and remove the placeholders)
 * add a field `addon.CommonStatus` to the Status object (and remove the placeholders)
 
@@ -88,21 +88,23 @@ We'll also need to add some accessor functions (we could use reflection, but
 this doesn't feel too onerous - ?):
 
 ```go
-var _ addon.CommonObject = &Dashboard{}
+import addonv1alpha1 "sigs.k8s.io/controller-runtime/alpha/patterns/addon/pkg/apis/v1alpha1"
+
+var _ addonv1alpha1.CommonObject = &Dashboard{}
 
 func (c *Dashboard) ComponentName() string {
 	return "dashboard"
 }
 
-func (c *Dashboard) CommonSpec() addon.CommonSpec {
+func (c *Dashboard) CommonSpec() addonv1alpha1.CommonSpec {
 	return c.Spec.CommonSpec
 }
 
-func (c *Dashboard) GetCommonStatus() addon.CommonStatus {
+func (c *Dashboard) GetCommonStatus() addonv1alpha1.CommonStatus {
 	return c.Status.CommonStatus
 }
 
-func (c *Dashboard) SetCommonStatus(s addon.CommonStatus) {
+func (c *Dashboard) SetCommonStatus(s addonv1alpha1.CommonStatus) {
 	c.Status.CommonStatus = s
 }
 
@@ -115,7 +117,6 @@ We replace the controller code `pkg/controller/dashboard/dashboard_controller.go
 We are delegating most of the logic to `operators.StandardReconciler`
 
 ```go
-
 /*
 Copyright 2018 The Kubernetes Authors.
 
@@ -136,6 +137,7 @@ package dashboard
 
 import (
 	api "sigs.k8s.io/controller-runtime/alpha/patterns/addon/examples/dashboard-operator/pkg/apis/addons/v1alpha1"
+	"sigs.k8s.io/controller-runtime/alpha/patterns/addon/pkg/status"
 	"sigs.k8s.io/controller-runtime/alpha/patterns/declarative"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -152,22 +154,19 @@ type ReconcileDashboard struct {
 }
 
 func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
-}
+	labels := map[string]string{
+		"k8s-app": "kubernetes-dashboard",
+	}
 
-// newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) *ReconcileDashboard {
 	r := &ReconcileDashboard{}
 
 	r.Reconciler.Init(mgr, &api.Dashboard{}, "dashboard",
-		addon.WithGroupVersionKind(api.SchemeGroupVersion.WithKind("dashboard")),
+		declarative.WithObjectTransform(declarative.AddLabels(labels)),
+		declarative.WithOwner(declarative.SourceAsOwner),
+		declarative.WithLabels(declarative.SourceLabel),
+		declarative.WithStatus(status.NewBasic(mgr.GetClient())),
 	)
-	return r
-}
 
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
-func add(mgr manager.Manager, r *ReconcileDashboard) error {
-	// Create a new controller
 	c, err := controller.New("dashboard-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
@@ -175,6 +174,12 @@ func add(mgr manager.Manager, r *ReconcileDashboard) error {
 
 	// Watch for changes to Dashboard
 	err = c.Watch(&source.Kind{Type: &api.Dashboard{}}, &handler.EnqueueRequestForObject{})
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to deployed objects
+	_, err = declarative.WatchAll(mgr.GetConfig(), c, r, declarative.SourceLabel)
 	if err != nil {
 		return err
 	}
@@ -187,11 +192,11 @@ func add(mgr manager.Manager, r *ReconcileDashboard) error {
 The important things to note here:
 
 ```go
-	r.Reconciler.Init(mgr, &api.Dashboard{}, "dashboard")
+	r.Reconciler.Init(mgr, &api.Dashboard{}, "dashboard", ...)
 ```
 
 We bind the `api.Dashboard` type to the `dashboard` package in our `channels`
-directory.
+directory and pull in optional features of the declarative library.
 
 Because api.Dashboard implements `addon.CommonObject` the
 framework is then able to access CommonSpec and CommonStatus above, which

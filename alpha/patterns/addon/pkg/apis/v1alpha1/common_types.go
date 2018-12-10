@@ -1,4 +1,4 @@
-package addon
+package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,9 +19,10 @@ type CommonSpec struct {
 	Channel string `json:"channel,omitempty"`
 }
 
-//go:generate go run ../../vendor/k8s.io/code-generator/cmd/deepcopy-gen/main.go -O zz_generated.deepcopy -i ./...
+//go:generate go run ../../../../../../vendor/k8s.io/code-generator/cmd/deepcopy-gen/main.go -O zz_generated.deepcopy -i ./... -h ../../../../../../hack/boilerplate.go.txt
 
 // +k8s:deepcopy-gen=true
 type CommonStatus struct {
-	Healthy bool `json:"healthy,omitempty"`
+	Healthy bool     `json:"healthy"`
+	Errors  []string `json:"errors,omitempty"`
 }

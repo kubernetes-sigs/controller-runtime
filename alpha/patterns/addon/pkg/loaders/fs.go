@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/alpha/patterns/addon"
+	addonsv1alpha1 "sigs.k8s.io/controller-runtime/alpha/patterns/addon/pkg/apis/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
@@ -46,9 +46,9 @@ func NewManifestLoader() *ManifestLoader {
 func (c *ManifestLoader) ResolveManifest(ctx context.Context, object runtime.Object) (string, error) {
 	log := log.Log
 
-	addonObject, ok := object.(addon.CommonObject)
+	addonObject, ok := object.(addonsv1alpha1.CommonObject)
 	if !ok {
-		return "", fmt.Errorf("object %T was not an addon.CommonObject", object)
+		return "", fmt.Errorf("object %T was not an addonsv1alpha1.CommonObject", object)
 	}
 
 	componentName := addonObject.ComponentName()

@@ -18,37 +18,34 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/alpha/patterns/addon"
+	addonv1alpha1 "sigs.k8s.io/controller-runtime/alpha/patterns/addon/pkg/apis/v1alpha1"
 )
-
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // DashboardSpec defines the desired state of Dashboard
 type DashboardSpec struct {
-	addon.CommonSpec
+	addonv1alpha1.CommonSpec
 }
 
 // DashboardStatus defines the observed state of Dashboard
 type DashboardStatus struct {
-	addon.CommonStatus
+	addonv1alpha1.CommonStatus
 }
 
-var _ addon.CommonObject = &Dashboard{}
+var _ addonv1alpha1.CommonObject = &Dashboard{}
 
 func (c *Dashboard) ComponentName() string {
 	return "dashboard"
 }
 
-func (c *Dashboard) CommonSpec() addon.CommonSpec {
+func (c *Dashboard) CommonSpec() addonv1alpha1.CommonSpec {
 	return c.Spec.CommonSpec
 }
 
-func (c *Dashboard) GetCommonStatus() addon.CommonStatus {
+func (c *Dashboard) GetCommonStatus() addonv1alpha1.CommonStatus {
 	return c.Status.CommonStatus
 }
 
-func (c *Dashboard) SetCommonStatus(s addon.CommonStatus) {
+func (c *Dashboard) SetCommonStatus(s addonv1alpha1.CommonStatus) {
 	c.Status.CommonStatus = s
 }
 

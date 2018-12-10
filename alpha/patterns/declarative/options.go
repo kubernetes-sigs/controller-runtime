@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	//applicationv1beta1 "github.com/kubernetes-sigs/application/pkg/apis/app/v1beta1"
-
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -17,13 +15,13 @@ type reconcilerParams struct {
 	rawManifestOperations []ManifestOperation
 	groupVersionKind      *schema.GroupVersionKind
 	objectTransformations []ObjectTransform
-	//baseApp               applicationv1beta1.Application
-	manifestController ManifestController
+	manifestController    ManifestController
 
 	//prune bool
 	sink       Sink
 	ownerFn    OwnerSelector
 	labelMaker LabelMaker
+	status     Status
 }
 
 type ManifestController interface {
@@ -72,17 +70,6 @@ func WithGroupVersionKind(gvk schema.GroupVersionKind) reconcilerOption {
 		return p
 	}
 }
-
-/*
-// WithApplication specifies a base Application that will be deployed
-// with each instance. Callers should fill in the description fields.
-func WithApplication(app applicationv1beta1.Application) reconcilerOption {
-	return func(p reconcilerParams) reconcilerParams {
-		p.baseApp = *app.DeepCopy()
-		return p
-	}
-}
-*/
 
 // WithManifestController overrides the default source for loading manifests
 func WithManifestController(mc ManifestController) reconcilerOption {
@@ -169,6 +156,14 @@ func WithOwner(ownerFn OwnerSelector) reconcilerOption {
 func WithLabels(labelMaker LabelMaker) reconcilerOption {
 	return func(p reconcilerParams) reconcilerParams {
 		p.labelMaker = labelMaker
+		return p
+	}
+}
+
+// WithStatus provides a Status interface that will be used during Reconcile
+func WithStatus(status Status) reconcilerOption {
+	return func(p reconcilerParams) reconcilerParams {
+		p.status = status
 		return p
 	}
 }

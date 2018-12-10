@@ -95,6 +95,13 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		return reconcile.Result{}, err
 	}
 
+	if r.options.status != nil {
+		if err := r.options.status.Preflight(ctx, instance); err != nil {
+			log.Error(err, "preflight check failed, not reconciling")
+			return reconcile.Result{}, err
+		}
+	}
+
 	return r.reconcileExists(ctx, request.NamespacedName, instance)
 }
 
@@ -107,17 +114,15 @@ func (r *Reconciler) reconcileExists(ctx context.Context, name types.NamespacedN
 		log.Error(err, "building deployment objects")
 		return reconcile.Result{}, fmt.Errorf("error building deployment objects: %v", err)
 	}
-
 	log.WithValues("objects", fmt.Sprintf("%d", len(objects.Items))).Info("built deployment objects")
 
-	/*
-		app, err := r.ensureApplication(ctx, name, instance, objects)
-		if err != nil {
-			log.Error(err, "ensuring application")
-			return reconcile.Result{}, err
+	defer func() {
+		if r.options.status != nil {
+			if err := r.options.status.Reconciled(ctx, instance, objects); err != nil {
+				log.Error(err, "failed to reconcile status")
+			}
 		}
-		defer r.reconcileStatus(ctx, name, instance, app, objects)
-	*/
+	}()
 
 	err = r.injectOwnerRef(ctx, instance, objects)
 	if err != nil {

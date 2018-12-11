@@ -12,13 +12,13 @@ Create a new directory and use kubebuilder to create a basic operator for you:
 ```
 mkdir dashboard-operator/
 cd dashboard-operator/
-kubebuilder init --domain sigs.k8s.io --license apache2 --owner "The Kubernetes Authors" --dep=true
+kubebuilder init --domain sigs.k8s.io --license apache2 --owner "The Kubernetes Authors" --dep=true --pattern=addon
 ```
 
 ### Adding our first CRD
 
 ```
-kubebuilder create api --group addons --version v1alpha1 --kind Dashboard --controller --resource --namespaced=true
+kubebuilder create api --group addons --version v1alpha1 --kind Dashboard --controller --resource --namespaced=true --pattern=addon
 ```
 
 This creates API type definitions under `pkg/apis/addons/v1alpha1/`, and a basic

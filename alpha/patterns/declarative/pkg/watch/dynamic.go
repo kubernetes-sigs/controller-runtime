@@ -54,7 +54,7 @@ func (dw *dynamicWatch) Add(trigger schema.GroupVersionKind, options metav1.List
 
 	client, err := dw.newDynamicClient(trigger)
 	if err != nil {
-		fmt.Errorf("creating client for (%s): %v", trigger.String(), err)
+		return fmt.Errorf("creating client for (%s): %v", trigger.String(), err)
 	}
 
 	events, err := client.Watch(options)

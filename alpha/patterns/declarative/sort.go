@@ -31,7 +31,7 @@ func DefaultObjectOrder(ctx context.Context) func(o *manifest.Object) int {
 			return 100
 
 		// Create the pods after we've created other things they might be waiting for
-		case "extensions/Deployment", "app/Deployment":
+		case "extensions/Deployment", "apps/Deployment":
 			return 1000
 
 		// Autoscalers typically act on a deployment
@@ -43,8 +43,7 @@ func DefaultObjectOrder(ctx context.Context) func(o *manifest.Object) int {
 			return 10000
 
 		default:
-			// TODO: Downgrade to V(2) once we're more comfortable with the ordering
-			log.WithValues("group", o.Group).WithValues("kind", o.Kind).Info("unknown group / kind")
+			log.WithValues("group", o.Group).WithValues("kind", o.Kind).V(2).Info("unknown group / kind")
 			return 1000
 		}
 	}

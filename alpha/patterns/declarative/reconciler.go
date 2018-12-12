@@ -258,7 +258,7 @@ func (r *Reconciler) injectOwnerRef(ctx context.Context, instance DeclarativeObj
 	}
 
 	log := log.Log
-	log.WithValues("object", instance).Info("injecting owner references")
+	log.WithValues("object", fmt.Sprintf("%s/%s", instance.GetName(), instance.GetNamespace())).Info("injecting owner references")
 
 	for _, o := range objects.Items {
 		owner, err := r.options.ownerFn(ctx, instance, *o, *objects)

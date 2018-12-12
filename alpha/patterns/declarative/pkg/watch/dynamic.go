@@ -60,19 +60,19 @@ func (dw *dynamicWatch) Add(trigger schema.GroupVersionKind, options metav1.List
 	events, err := client.Watch(options)
 
 	if err != nil {
-		log.WithValues("kind", trigger.String()).WithValues("namespace", target.Namespace).WithValues("options", options.String()).Error(err, "adding watch to dynamic client")
+		log.WithValues("kind", trigger.String()).WithValues("namespace", target.Namespace).WithValues("labels", options.LabelSelector).Error(err, "adding watch to dynamic client")
 		return fmt.Errorf("adding watch to dynamic client: %v", err)
 	}
 
-	log.WithValues("kind", trigger.String()).WithValues("namespace", target.Namespace).WithValues("options", options.String()).Info("watch registered")
+	log.WithValues("kind", trigger.String()).WithValues("namespace", target.Namespace).WithValues("options", options.String()).V(2).Info("watch registered")
 	eventChan := events.ResultChan()
 
 	go func() {
 		for clientEvent := range eventChan {
-			log.WithValues("event", fmt.Sprintf("%#v", clientEvent)).WithValues("kind", trigger.String()).Info("event recieved")
 			if clientEvent.Object == nil || clientEvent.Type == watch.Added {
 				continue
 			}
+			log.WithValues("type", clientEvent.Type).WithValues("kind", trigger.String()).Info("broadcasting event")
 			dw.events <- event.GenericEvent{Object: clientEvent.Object, Meta: &target}
 		}
 	}()

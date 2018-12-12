@@ -47,7 +47,7 @@ func (a *aggregator) Reconciled(ctx context.Context, src declarative.Declarative
 		case "extensions/Deployment", "apps/Deployment":
 			healthy, err = a.deployment(ctx, instance, o.Name)
 		default:
-			log.WithValues("type", gk).Info("type not implemented for status aggregation, skipping")
+			log.WithValues("type", gk).V(2).Info("type not implemented for status aggregation, skipping")
 		}
 
 		status.Healthy = status.Healthy && healthy

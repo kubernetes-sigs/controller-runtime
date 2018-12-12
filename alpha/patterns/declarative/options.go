@@ -18,6 +18,8 @@ type reconcilerParams struct {
 	manifestController    ManifestController
 
 	//prune bool
+	preserveNamespace bool
+
 	sink       Sink
 	ownerFn    OwnerSelector
 	labelMaker LabelMaker
@@ -164,6 +166,15 @@ func WithLabels(labelMaker LabelMaker) reconcilerOption {
 func WithStatus(status Status) reconcilerOption {
 	return func(p reconcilerParams) reconcilerParams {
 		p.status = status
+		return p
+	}
+}
+
+// WithPreserveNamespace preserves the namespaces defined in the deployment manifest
+// instead of matching the namespace of the DeclarativeObject
+func WithPreserveNamespace() reconcilerOption {
+	return func(p reconcilerParams) reconcilerParams {
+		p.preserveNamespace = true
 		return p
 	}
 }

@@ -47,6 +47,7 @@ func Add(mgr manager.Manager) error {
 		declarative.WithOwner(declarative.SourceAsOwner),
 		declarative.WithLabels(declarative.SourceLabel),
 		declarative.WithStatus(status.NewBasic(mgr.GetClient())),
+		declarative.WithPreserveNamespace(),
 	)
 
 	c, err := controller.New("dashboard-controller", mgr, controller.Options{Reconciler: r})

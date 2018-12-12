@@ -149,7 +149,12 @@ func (r *Reconciler) reconcileExists(ctx context.Context, name types.NamespacedN
 			}
 	*/
 
-	if err := r.kubectl.Apply(ctx, name.Namespace, m, extraArgs...); err != nil {
+	ns := ""
+	if !r.options.preserveNamespace {
+		ns = name.Namespace
+	}
+
+	if err := r.kubectl.Apply(ctx, ns, m, extraArgs...); err != nil {
 		log.Error(err, "applying manifest")
 		return reconcile.Result{}, fmt.Errorf("error applying manifest: %v", err)
 	}
@@ -197,6 +202,7 @@ func (r *Reconciler) BuildDeploymentObjects(ctx context.Context, name types.Name
 	if r.options.labelMaker != nil {
 		transforms = append(transforms, AddLabels(r.options.labelMaker(ctx, instance)))
 	}
+	// TODO(jrjohnson): apply namespace here
 	for _, t := range transforms {
 		err := t(ctx, instance, objects)
 		if err != nil {

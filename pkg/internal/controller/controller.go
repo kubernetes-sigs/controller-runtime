@@ -175,7 +175,9 @@ func (c *Controller) processNextWorkItem() bool {
 
 	// Update metrics after processing each item
 	reconcileStartTS := time.Now()
-	defer c.updateMetrics(time.Now().Sub(reconcileStartTS))
+	defer func() {
+		c.updateMetrics(time.Now().Sub(reconcileStartTS))
+	}()
 
 	obj, shutdown := c.Queue.Get()
 	if obj == nil {

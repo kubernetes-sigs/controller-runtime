@@ -891,14 +891,16 @@
   revision = "e3762e86a74c878ffed47484592986685639c2cd"
 
 [[projects]]
-  digest = "1:16c26aad2883eddb0caa103f510401b468e71ae8854b93c340de63bd57015002"
+  digest = "1:9070222ca967d09b3966552a161dd4420d62315964bf5e1efd8cc4c7c30ebca8"
   name = "sigs.k8s.io/testing_frameworks"
   packages = [
     "integration",
+    "integration/addr",
     "integration/internal",
   ]
   pruneopts = "UT"
-  revision = "f53464b8b84b4507805a0b033a8377b225163fea"
+  revision = "d348cb12705b516376e0c323bacca72b00a78425"
+  version = "v0.1.1"
 
 [solve-meta]
   analyzer-name = "dep"

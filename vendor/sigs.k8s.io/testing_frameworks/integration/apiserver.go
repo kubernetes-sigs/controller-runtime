@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"time"
 
+	"sigs.k8s.io/testing_frameworks/integration/addr"
 	"sigs.k8s.io/testing_frameworks/integration/internal"
 )
 
@@ -15,6 +16,9 @@ type APIServer struct {
 	//
 	// If this is not specified, we default to a random free port on localhost.
 	URL *url.URL
+
+	// SecurePort is the additional secure port that the APIServer should listen on.
+	SecurePort int
 
 	// Path is the path to the apiserver binary.
 	//
@@ -87,6 +91,14 @@ func (s *APIServer) Start() error {
 		return err
 	}
 
+	// Defaulting the secure port
+	if s.SecurePort == 0 {
+		s.SecurePort, _, err = addr.Suggest()
+		if err != nil {
+			return err
+		}
+	}
+
 	s.processState.HealthCheckEndpoint = "/healthz"
 
 	s.URL = &s.processState.URL
@@ -110,3 +122,10 @@ func (s *APIServer) Start() error {
 func (s *APIServer) Stop() error {
 	return s.processState.Stop()
 }
+
+// APIServerDefaultArgs exposes the default args for the APIServer so that you
+// can use those to append your own additional arguments.
+//
+// The internal default arguments are explicitely copied here, we don't want to
+// allow users to change the internal ones.
+var APIServerDefaultArgs = append([]string{}, internal.APIServerDefaultArgs...)

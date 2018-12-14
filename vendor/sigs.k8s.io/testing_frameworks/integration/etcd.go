@@ -100,3 +100,10 @@ func (e *Etcd) Start() error {
 func (e *Etcd) Stop() error {
 	return e.processState.Stop()
 }
+
+// EtcdDefaultArgs exposes the default args for Etcd so that you
+// can use those to append your own additional arguments.
+//
+// The internal default arguments are explicitely copied here, we don't want to
+// allow users to change the internal ones.
+var EtcdDefaultArgs = append([]string{}, internal.EtcdDefaultArgs...)

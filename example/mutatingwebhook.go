@@ -50,7 +50,7 @@ func (a *podAnnotator) Handle(ctx context.Context, req types.Request) types.Resp
 	if err != nil {
 		return admission.ErrorResponse(http.StatusInternalServerError, err)
 	}
-	return admission.PatchResponse(pod, copy)
+	return admission.PatchResponse(pod, copy, req.AdmissionRequest.Object.Raw...)
 }
 
 // mutatePodsFn add an annotation to the given pod

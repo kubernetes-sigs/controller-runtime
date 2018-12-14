@@ -55,8 +55,10 @@ func ValidationResponse(allowed bool, reason string) types.Response {
 }
 
 // PatchResponse returns a new response with json patch.
-func PatchResponse(original, current runtime.Object) types.Response {
-	patches, err := patch.NewJSONPatch(original, current)
+// originalRaw is optional. If provided, it will be used to calculate json patch.
+// It is STRONGLY recommended to use it to avoid the roundtripping issue for non-pointer fields.
+func PatchResponse(original, current runtime.Object, originalRaw ...byte) types.Response {
+	patches, err := patch.NewJSONPatch(original, current, originalRaw...)
 	if err != nil {
 		return ErrorResponse(http.StatusInternalServerError, err)
 	}

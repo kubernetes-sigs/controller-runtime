@@ -26,16 +26,24 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// NewJSONPatch calculates the JSON patch between original and current objects.
-func NewJSONPatch(original, current runtime.Object) ([]jsonpatch.JsonPatchOperation, error) {
+// NewJSONPatch calculates the JSON patch between original and current objects and
+// an optional original object in raw bytes format.
+// If the original raw object is provided, it will be used to calculate json patch.
+// It is STRONGLY recommended to use the original raw object to avoid the roundtripping
+// issue for non-pointer fields.
+func NewJSONPatch(original, current runtime.Object, originalRaw ...byte) ([]jsonpatch.JsonPatchOperation, error) {
 	originalGVK := original.GetObjectKind().GroupVersionKind()
 	currentGVK := current.GetObjectKind().GroupVersionKind()
 	if !reflect.DeepEqual(originalGVK, currentGVK) {
 		return nil, fmt.Errorf("GroupVersionKind %#v is expected to match %#v", originalGVK, currentGVK)
 	}
-	ori, err := json.Marshal(original)
-	if err != nil {
-		return nil, err
+	ori := originalRaw
+	if len(ori) == 0 {
+		var err error
+		ori, err = json.Marshal(original)
+		if err != nil {
+			return nil, err
+		}
 	}
 	cur, err := json.Marshal(current)
 	if err != nil {

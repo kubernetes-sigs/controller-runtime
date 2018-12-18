@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-logr/logr"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -118,6 +119,9 @@ type Options struct {
 	// for serving prometheus metrics
 	MetricsBindAddress string
 
+	// Metrics overrides the default metrics if specified.
+	Metrics []prometheus.Collector
+
 	// Dependency injection for testing
 	newCache            func(config *rest.Config, opts cache.Options) (cache.Cache, error)
 	newClient           func(config *rest.Config, options client.Options) (client.Client, error)
@@ -193,6 +197,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
+	metrics.Registry.MustRegister(metrics.DefaultMetrics...)
 	// Create the mertics listener. This will throw an error if the metrics bind
 	// address is invalid or already in use.
 	metricsListener, err := options.newMetricsListener(options.MetricsBindAddress)
@@ -261,6 +266,9 @@ func setOptionsDefaults(options Options) Options {
 		options.newAdmissionDecoder = admission.NewDecoder
 	}
 
+	if options.Metrics == nil {
+		options.Metrics = metrics.DefaultMetrics
+	}
 	if options.newMetricsListener == nil {
 		options.newMetricsListener = metrics.NewListener
 	}

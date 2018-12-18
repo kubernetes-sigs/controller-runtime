@@ -18,6 +18,14 @@ package metrics
 
 import "github.com/prometheus/client_golang/prometheus"
 
+// DefaultMetrics are the default metrics provided by controller-runtime.
+var DefaultMetrics = []prometheus.Collector{
+	// expose process metrics like CPU, Memory, file descriptor usage etc.
+	prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+	// expose Go runtime metrics like GC stats, memory stats etc.
+	prometheus.NewGoCollector(),
+}
+
 // Registry is a prometheus registry for storing metrics within the
 // controller-runtime
 var Registry = prometheus.NewRegistry()

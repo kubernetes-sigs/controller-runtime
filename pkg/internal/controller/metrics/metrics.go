@@ -45,13 +45,10 @@ var (
 )
 
 func init() {
-	metrics.Registry.MustRegister(
+	metrics.DefaultMetrics = append(
+		metrics.DefaultMetrics,
 		QueueLength,
 		ReconcileErrors,
 		ReconcileTime,
-		// expose process metrics like CPU, Memory, file descriptor usage etc.
-		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
-		// expose Go runtime metrics like GC stats, memory stats etc.
-		prometheus.NewGoCollector(),
 	)
 }

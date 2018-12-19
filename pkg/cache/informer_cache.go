@@ -99,7 +99,7 @@ func (ip *informerCache) List(ctx context.Context, out runtime.Object, opts ...c
 }
 
 // GetInformerForKind returns the informer for the GroupVersionKind
-func (ip *informerCache) GetInformerForKind(gvk schema.GroupVersionKind) (cache.SharedIndexInformer, error) {
+func (ip *informerCache) GetInformerForKind(gvk schema.GroupVersionKind) (Informer, error) {
 	// Map the gvk to an object
 	obj, err := ip.Scheme.New(gvk)
 	if err != nil {
@@ -113,7 +113,7 @@ func (ip *informerCache) GetInformerForKind(gvk schema.GroupVersionKind) (cache.
 }
 
 // GetInformer returns the informer for the obj
-func (ip *informerCache) GetInformer(obj runtime.Object) (cache.SharedIndexInformer, error) {
+func (ip *informerCache) GetInformer(obj runtime.Object) (Informer, error) {
 	gvk, err := apiutil.GVKForObject(obj, ip.Scheme)
 	if err != nil {
 		return nil, err
@@ -135,10 +135,10 @@ func (ip *informerCache) IndexField(obj runtime.Object, field string, extractVal
 	if err != nil {
 		return err
 	}
-	return indexByField(informer.GetIndexer(), field, extractValue)
+	return indexByField(informer, field, extractValue)
 }
 
-func indexByField(indexer cache.Indexer, field string, extractor client.IndexerFunc) error {
+func indexByField(indexer Informer, field string, extractor client.IndexerFunc) error {
 	indexFunc := func(objRaw interface{}) ([]string, error) {
 		// TODO(directxman12): check if this is the correct type?
 		obj, isObj := objRaw.(runtime.Object)

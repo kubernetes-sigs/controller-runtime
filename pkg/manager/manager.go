@@ -125,7 +125,7 @@ type Options struct {
 
 	// NewCache is the function that will create the cache to be used
 	// by the manager. If not set this will use the default new cache function.
-	NewCache NewCacheFunc
+	NewCache cache.NewCacheFunc
 
 	// NewClient will create the client to be used by the manager.
 	// If not set this will create the default DelegatingClient that will
@@ -138,9 +138,6 @@ type Options struct {
 	newAdmissionDecoder func(scheme *runtime.Scheme) (types.Decoder, error)
 	newMetricsListener  func(addr string) (net.Listener, error)
 }
-
-// NewCacheFunc allows a user to define how to create a cache
-type NewCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error)
 
 // NewClientFunc allows a user to define how to create a client
 type NewClientFunc func(cache cache.Cache, config *rest.Config, options client.Options) (client.Client, error)

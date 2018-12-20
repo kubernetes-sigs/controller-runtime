@@ -18,7 +18,6 @@ package controller
 
 import (
 	"fmt"
-
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -63,9 +62,9 @@ var _ = Describe("controller", func() {
 		informers = &informertest.FakeInformers{}
 		ctrl = &Controller{
 			MaxConcurrentReconciles: 1,
-			Do:                      fakeReconcile,
-			Queue:                   queue,
-			Cache:                   informers,
+			Do:    fakeReconcile,
+			Queue: queue,
+			Cache: informers,
 		}
 		ctrl.InjectFunc(func(interface{}) error { return nil })
 	})

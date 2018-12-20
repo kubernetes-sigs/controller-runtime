@@ -78,13 +78,20 @@ location (`${FRAMEWORK_DIR}/assets/bin/`).
 
 Arguments for Etcd and APIServer
 
-Those components will start without any configuration. However, if you want our
+Those components will start without any configuration. However, if you want or
 need to, you can override certain configuration -- one of which are the
 arguments used when calling the binary.
 
 When you choose to specify your own set of arguments, those won't be appended
 to the default set of arguments, it is your responsibility to provide all the
 arguments needed for the binary to start successfully.
+
+However, the default arguments for APIServer and Etcd are exported as
+`APIServerDefaultArgs` and `EtcdDefaultArgs` from this package. Treat those
+variables as read-only constants. Internally we have a set of default
+arguments for defaulting, the `APIServerDefaultArgs` and `EtcdDefaultArgs` are
+just copies of those. So when you override them you loose access to the actual
+internal default arguments, but your override won't affect the defaulting.
 
 All arguments are interpreted as go templates. Those templates have access to
 all exported fields of the `APIServer`/`Etcd` struct. It does not matter if
@@ -93,19 +100,18 @@ those fields where explicitly set up or if they were defaulted by calling the
 executed and right after the defaulting of all the struct's fields has
 happened.
 
-	// All arguments needed for a successful start must be specified
-	etcdArgs := []string{
-		"--listen-peer-urls=http://localhost:0",
-		"--advertise-client-urls={{ .URL.String }}",
-		"--listen-client-urls={{ .URL.String }}",
-		"--data-dir={{ .DataDir }}",
-		// add some custom arguments
-		"--this-is-my-very-important-custom-argument",
-		"--arguments-dont-have-to-be-templates=but they can",
+	// When you want to append additional arguments ...
+	etcd := &Etcd{
+		// Additional custom arguments will appended to the set of default
+		// arguments
+		Args:    append(EtcdDefaultArgs, "--additional=arg"),
+		DataDir: "/my/special/data/dir",
 	}
 
+	// When you want to use a custom set of arguments ...
 	etcd := &Etcd{
-		Args:    etcdArgs,
+		// Only custom arguments will be passed to the binary
+		Args:    []string{"--one=1", "--two=2", "--three=3"},
 		DataDir: "/my/special/data/dir",
 	}
 

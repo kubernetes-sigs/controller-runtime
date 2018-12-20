@@ -83,7 +83,7 @@ var _ = Describe("admission webhook", func() {
 			})
 
 			It("should deny the request", func() {
-				expected := []byte(`{"response":{"uid":"","allowed":false}}
+				expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"code":200}}}
 `)
 				wh.ServeHTTP(w, req)
 				Expect(w.Body.Bytes()).To(Equal(expected))
@@ -102,7 +102,7 @@ var _ = Describe("admission webhook", func() {
 			})
 
 			It("should deny the request", func() {
-				expected := []byte(`{"response":{"uid":"","allowed":false}}
+				expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"code":200}}}
 `)
 				wh.ServeHTTP(w, req)
 				Expect(w.Body.Bytes()).To(Equal(expected))
@@ -162,7 +162,8 @@ var _ = Describe("admission webhook", func() {
 				Handlers: []Handler{patcher1, patcher2},
 			}
 			expected := []byte(
-				`{"response":{"uid":"","allowed":true,"patch":"W3sib3AiOiJhZGQiLCJwYXRoIjoiL21ldGFkYXRhL2Fubm90YXRpb2` +
+				`{"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200},` +
+					`"patch":"W3sib3AiOiJhZGQiLCJwYXRoIjoiL21ldGFkYXRhL2Fubm90YXRpb2` +
 					`4vbmV3LWtleSIsInZhbHVlIjoibmV3LXZhbHVlIn0seyJvcCI6InJlcGxhY2UiLCJwYXRoIjoiL3NwZWMvcmVwbGljYXMiLC` +
 					`J2YWx1ZSI6IjIifSx7Im9wIjoiYWRkIiwicGF0aCI6Ii9tZXRhZGF0YS9hbm5vdGF0aW9uL2hlbGxvIiwidmFsdWUiOiJ3b3JsZCJ9XQ==",` +
 					`"patchType":"JSONPatch"}}
@@ -213,7 +214,7 @@ var _ = Describe("admission webhook", func() {
 				Type:     types.WebhookTypeMutating,
 				Handlers: []Handler{errPatcher},
 			}
-			expected := []byte(`{"response":{"uid":"","allowed":false}}
+			expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"code":200}}}
 `)
 			It("should deny the request", func() {
 				wh.ServeHTTP(w, req)

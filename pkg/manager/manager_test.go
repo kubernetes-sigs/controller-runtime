@@ -72,7 +72,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should return an error it can't create a client.Client", func(done Done) {
 			m, err := New(cfg, Options{
-				newClient: func(config *rest.Config, options client.Options) (client.Client, error) {
+				NewClient: func(cache cache.Cache, config *rest.Config, options client.Options) (client.Client, error) {
 					return nil, fmt.Errorf("expected error")
 				},
 			})
@@ -85,7 +85,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should return an error it can't create a cache.Cache", func(done Done) {
 			m, err := New(cfg, Options{
-				newCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
+				NewCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 					return nil, fmt.Errorf("expected error")
 				},
 			})
@@ -95,6 +95,20 @@ var _ = Describe("manger.Manager", func() {
 
 			close(done)
 		})
+
+		It("should create a client defined in by the new client function", func(done Done) {
+			m, err := New(cfg, Options{
+				NewClient: func(cache cache.Cache, config *rest.Config, options client.Options) (client.Client, error) {
+					return nil, nil
+				},
+			})
+			Expect(m).ToNot(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(m.GetClient()).To(BeNil())
+
+			close(done)
+		})
+
 		It("should return an error it can't create a recorder.Provider", func(done Done) {
 			m, err := New(cfg, Options{
 				newRecorderProvider: func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error) {

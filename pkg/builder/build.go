@@ -38,7 +38,7 @@ var newController = controller.New
 var newManager = manager.New
 var getGvk = apiutil.GVKForObject
 
-// Builder builds an Application ControllerManagedBy (e.g. Operator) and returns a manager.Manager to start it.
+// Builder builds a Controller.
 type Builder struct {
 	apiType        runtime.Object
 	mgr            manager.Manager

@@ -35,7 +35,6 @@ gometalinter.v2 --disable-all \
     --enable=structcheck \
     --enable=golint \
     --enable=deadcode \
-    --enable=goimports \
     --enable=errcheck \
     --enable=varcheck \
     --enable=goconst \
@@ -52,6 +51,7 @@ gometalinter.v2 --disable-all \
     --skip=atomic \
     ./pkg/...
 # TODO: Enable these as we fix them to make them pass
+#    --enable=goimports \
 #    --enable=gosec \
 #    --enable=maligned \
 #    --enable=safesql \

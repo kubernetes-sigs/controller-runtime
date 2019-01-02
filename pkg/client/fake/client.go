@@ -154,6 +154,10 @@ func (c *fakeClient) Status() client.StatusWriter {
 	return &fakeStatusWriter{client: c}
 }
 
+func (c *fakeClient) APIReader() client.Reader {
+	return c
+}
+
 func getGVRFromObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionResource, error) {
 	gvk, err := apiutil.GVKForObject(obj, scheme)
 	if err != nil {

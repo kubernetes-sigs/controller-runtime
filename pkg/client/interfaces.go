@@ -81,11 +81,17 @@ type StatusWriter interface {
 	Update(ctx context.Context, obj runtime.Object) error
 }
 
+// APIClient knows how to return a reader that will contact the kubernetes api.
+type APIClient interface {
+	APIReader() Reader
+}
+
 // Client knows how to perform CRUD operations on Kubernetes objects.
 type Client interface {
 	Reader
 	Writer
 	StatusClient
+	APIClient
 }
 
 // IndexerFunc knows how to take an object and turn it into a series

@@ -30,6 +30,7 @@ type DelegatingClient struct {
 	Reader
 	Writer
 	StatusClient
+	APIClient
 }
 
 // DelegatingReader forms a interface Reader that will cause Get and List

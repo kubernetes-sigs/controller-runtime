@@ -248,6 +248,7 @@ func defaultNewClient(cache cache.Cache, config *rest.Config, options client.Opt
 		},
 		Writer:       c,
 		StatusClient: c,
+		APIClient:    c,
 	}, nil
 }
 

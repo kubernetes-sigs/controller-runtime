@@ -144,6 +144,10 @@ func (c *client) Status() StatusWriter {
 	return &statusWriter{client: c}
 }
 
+func (c *client) APIReader() Reader {
+	return c
+}
+
 // statusWriter is client.StatusWriter that writes status subresource
 type statusWriter struct {
 	client *client

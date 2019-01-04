@@ -57,7 +57,7 @@ func SimpleController() *Builder {
 
 // ControllerManagedBy returns a new controller builder that will be started by the provided Manager
 func ControllerManagedBy(m manager.Manager) *Builder {
-	return SimpleController().WithManager(m)
+	return &Builder{mgr: m}
 }
 
 // ForType defines the type of Object being *reconciled*, and configures the ControllerManagedBy to respond to create / delete /
@@ -66,6 +66,9 @@ func ControllerManagedBy(m manager.Manager) *Builder {
 // Watches(&source.Kind{Type: apiType}, &handler.EnqueueRequestForObject{})
 // Deprecated: Use For
 func (blder *Builder) ForType(apiType runtime.Object) *Builder {
+	if blder.mgr.GetWebhookServer() != nil {
+		blder.mgr.GetWebhookServer().For(apiType)
+	}
 	return blder.For(apiType)
 }
 

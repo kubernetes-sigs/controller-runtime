@@ -84,7 +84,8 @@ func main() {
 		Name("mutating.k8s.io").
 		Mutating().
 		Operations(admissionregistrationv1beta1.Create, admissionregistrationv1beta1.Update).
-		WithManager(mgr).
+		WithScheme(mgr.GetScheme()).
+		WithRestMapper(mgr.GetRESTMapper()).
 		ForType(&corev1.Pod{}).
 		Handlers(&podAnnotator{}).
 		Build()
@@ -97,7 +98,8 @@ func main() {
 		Name("validating.k8s.io").
 		Validating().
 		Operations(admissionregistrationv1beta1.Create, admissionregistrationv1beta1.Update).
-		WithManager(mgr).
+		WithScheme(mgr.GetScheme()).
+		WithRestMapper(mgr.GetRESTMapper()).
 		ForType(&corev1.Pod{}).
 		Handlers(&podValidator{}).
 		Build()
@@ -107,9 +109,9 @@ func main() {
 	}
 
 	entryLog.Info("setting up webhook server")
-	as, err := webhook.NewServer("foo-admission-server", mgr, webhook.ServerOptions{
-		Port:                          9876,
-		CertDir:                       "/tmp/cert",
+	as, err := webhook.NewServer("foo-admission-server", webhook.ServerOptions{
+		Port:    9876,
+		CertDir: "/tmp/cert",
 		DisableWebhookConfigInstaller: &disableWebhookConfigInstaller,
 		BootstrapOptions: &webhook.BootstrapOptions{
 			Secret: &apitypes.NamespacedName{
@@ -126,7 +128,7 @@ func main() {
 				},
 			},
 		},
-	})
+	}, mgr.GetRESTMapper(), mgr.GetScheme())
 	if err != nil {
 		entryLog.Error(err, "unable to create a new webhook server")
 		os.Exit(1)

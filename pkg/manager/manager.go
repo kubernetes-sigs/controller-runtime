@@ -21,6 +21,8 @@ import (
 	"net"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
 	"github.com/go-logr/logr"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -79,6 +81,9 @@ type Manager interface {
 
 	// GetRESTMapper returns a RESTMapper
 	GetRESTMapper() meta.RESTMapper
+
+	// GetWebhookServer returns a webhook.Server
+	GetWebhookServer() *webhook.Server
 }
 
 // Options are the arguments for creating a new Manager
@@ -128,6 +133,8 @@ type Options struct {
 	// If not set this will create the default DelegatingClient that will
 	// use the cache for reads and the client for writes.
 	NewClient NewClientFunc
+
+	WebhookServerOptions *webhook.ServerOptions
 
 	// Dependency injection for testing
 	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error)
@@ -216,7 +223,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 
 	stop := make(chan struct{})
 
-	return &controllerManager{
+	cm := &controllerManager{
 		config:           config,
 		scheme:           options.Scheme,
 		admissionDecoder: admissionDecoder,
@@ -230,7 +237,16 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		metricsListener:  metricsListener,
 		internalStop:     stop,
 		internalStopper:  stop,
-	}, nil
+	}
+
+	if options.WebhookServerOptions != nil {
+		cm.webhookServer, err = webhook.NewWebhookServer(
+			*options.WebhookServerOptions, cm.GetRESTMapper(), cm.GetScheme())
+		if err != nil {
+			return nil, err
+		}
+	}
+	return cm, nil
 }
 
 // defaultNewClient creates the default caching client

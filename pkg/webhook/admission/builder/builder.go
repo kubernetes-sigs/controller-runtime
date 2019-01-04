@@ -20,11 +20,12 @@ import (
 	"errors"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
 )
@@ -63,9 +64,9 @@ type WebhookBuilder struct {
 	// namespaceSelector maps to the NamespaceSelector in the admissionregistrationv1beta1.Webhook
 	namespaceSelector *metav1.LabelSelector
 
-	// manager is the manager for the webhook.
-	// It is used for provisioning various dependencies for the webhook. e.g. RESTMapper.
-	manager manager.Manager
+	restMapper meta.RESTMapper
+
+	scheme *runtime.Scheme
 }
 
 // NewWebhookBuilder creates an empty WebhookBuilder.
@@ -144,9 +145,15 @@ func (b *WebhookBuilder) NamespaceSelector(namespaceSelector *metav1.LabelSelect
 	return b
 }
 
-// WithManager set the manager for the webhook for provisioning various dependencies. e.g. client etc.
-func (b *WebhookBuilder) WithManager(mgr manager.Manager) *WebhookBuilder {
-	b.manager = mgr
+// WithScheme sets the runtime.Scheme
+func (b *WebhookBuilder) WithScheme(scheme *runtime.Scheme) *WebhookBuilder {
+	b.scheme = scheme
+	return b
+}
+
+// WithRestMapper sets the restMapper
+func (b *WebhookBuilder) WithRestMapper(restMapper meta.RESTMapper) *WebhookBuilder {
+	b.restMapper = restMapper
 	return b
 }
 
@@ -188,14 +195,11 @@ func (b *WebhookBuilder) Build() (*admission.Webhook, error) {
 	if b.rules != nil {
 		w.Rules = b.rules
 	} else {
-		if b.manager == nil {
-			return nil, errors.New("manager should be set using WithManager")
-		}
-		gvk, err := apiutil.GVKForObject(b.apiType, b.manager.GetScheme())
+		gvk, err := apiutil.GVKForObject(b.apiType, b.scheme)
 		if err != nil {
 			return nil, err
 		}
-		mapper := b.manager.GetRESTMapper()
+		mapper := b.restMapper
 		mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 		if err != nil {
 			return nil, err

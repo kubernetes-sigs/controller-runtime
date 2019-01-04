@@ -26,10 +26,11 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/writer"
@@ -125,10 +126,11 @@ type Server struct {
 	// They can be nil, if there is no webhook registered under it.
 	webhookConfigurations []runtime.Object
 
-	// manager is the manager that this webhook server will be registered.
-	manager manager.Manager
-
 	once sync.Once
+
+	scheme *runtime.Scheme
+
+	restMapper meta.RESTMapper
 }
 
 // Webhook defines the basics that a webhook should support.
@@ -148,26 +150,26 @@ type Webhook interface {
 }
 
 // NewServer creates a new admission webhook server.
-func NewServer(name string, mgr manager.Manager, options ServerOptions) (*Server, error) {
+func NewServer(name string, options ServerOptions, restMapper meta.RESTMapper, scheme *runtime.Scheme) (*Server, error) {
 	as := &Server{
 		Name:          name,
 		sMux:          http.NewServeMux(),
 		registry:      map[string]Webhook{},
 		ServerOptions: options,
-		manager:       mgr,
 	}
 
 	return as, nil
 }
 
-// NewSimpleServer creates a new admission webhook server.
-func NewWebhookServerManagedBy(options ServerOptions, mgr manager.Manager) (*Server, error) {
+// NewWebhookServer creates a new admission webhook server.
+func NewWebhookServer(options ServerOptions, restMapper meta.RESTMapper, scheme *runtime.Scheme) (*Server, error) {
 	as := &Server{
 		Name:          "webhook-server",
 		sMux:          http.NewServeMux(),
 		registry:      map[string]Webhook{},
 		ServerOptions: options,
-		manager:       mgr,
+		scheme:        scheme,
+		restMapper:    restMapper,
 	}
 
 	return as, nil
@@ -180,7 +182,7 @@ func (s *Server) For(objects ...runtime.Object) error {
 
 	// Create a webhook for each type
 	for _, object := range objects {
-		wh, err := NewResourceWebhook(object, s.manager)
+		wh, err := NewResourceWebhook(object, s.restMapper, s.scheme)
 		if err != nil {
 			return err
 		}
@@ -209,11 +211,6 @@ func (s *Server) Register(webhooks ...Webhook) error {
 		s.registry[webhook.GetPath()] = webhooks[i]
 		s.sMux.Handle(webhook.GetPath(), webhook.Handler())
 	}
-
-	// Lazily add Server to manager.
-	// Because the all webhook handlers to be in place, so we can inject the things they need.
-	return s.manager.Add(s)
-
 	return nil
 }
 
@@ -221,8 +218,6 @@ func (s *Server) Register(webhooks ...Webhook) error {
 func (s *Server) Handle(pattern string, handler http.Handler) {
 	s.sMux.Handle(pattern, handler)
 }
-
-var _ manager.Runnable = &Server{}
 
 // Start runs the server.
 // It will install the webhook related resources depend on the server configuration.
@@ -325,7 +320,7 @@ const (
 	defaultDir  = "/tmp/cert"
 )
 
-func NewServerOptions() ServerOptions {
+func NewServerOptions() *ServerOptions {
 	ns := os.Getenv("POD_NAMESPACE")
 	if len(ns) == 0 {
 		ns = "default"
@@ -334,7 +329,7 @@ func NewServerOptions() ServerOptions {
 	if len(secretName) == 0 {
 		secretName = "webhook-server-secret"
 	}
-	return ServerOptions{
+	return &ServerOptions{
 		Port:    defaultPort,
 		CertDir: defaultDir,
 		BootstrapOptions: &BootstrapOptions{

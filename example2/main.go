@@ -40,7 +40,7 @@ func main() {
 	entryLog := log.WithName("entrypoint")
 
 	entryLog.Info("setting up manager")
-	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
+	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{WebhookServerOptions: webhook.NewServerOptions()})
 	if err != nil {
 		entryLog.Error(err, "unable to set up overall controller manager")
 		os.Exit(1)
@@ -49,17 +49,6 @@ func main() {
 	entryLog.Info("setting up scheme")
 	if err := pkg.AddToScheme(mgr.GetScheme()); err != nil {
 		log.Error(err, "unable add APIs to scheme")
-		os.Exit(1)
-	}
-
-	entryLog.Info("setting up webhooks")
-	webhookserver, err := webhook.NewWebhookServerManagedBy(webhook.NewServerOptions(), mgr)
-	if err != nil {
-		entryLog.Error(err, "unable to set up webhook server")
-		os.Exit(1)
-	}
-	if err := webhookserver.For(&pkg.FirstMate{}); err != nil {
-		entryLog.Error(err, "unable register webhooks")
 		os.Exit(1)
 	}
 

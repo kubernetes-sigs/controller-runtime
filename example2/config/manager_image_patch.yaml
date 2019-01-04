@@ -7,5 +7,5 @@ spec:
   template:
     spec:
       containers:
-      - image: pwittrock/controller-runtime
+      - image: pwittrock/controller-manager
         name: manager

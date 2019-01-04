@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
@@ -93,6 +94,8 @@ type controllerManager struct {
 	internalStopper chan<- struct{}
 
 	startCache func(stop <-chan struct{}) error
+
+	webhookServer *webhook.Server
 }
 
 // Add sets dependencies on i, and adds it to the list of runnables to start.
@@ -174,6 +177,10 @@ func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
 	return cm.mapper
 }
 
+func (cm *controllerManager) GetWebhookServer() *webhook.Server {
+	return cm.webhookServer
+}
+
 func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
 	handler := promhttp.HandlerFor(metrics.Registry, promhttp.HandlerOpts{
 		ErrorHandling: promhttp.HTTPErrorOnError,
@@ -203,6 +210,11 @@ func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	// join the passed-in stop channel as an upstream feeding into cm.internalStopper
 	defer close(cm.internalStopper)
+
+	if cm.GetWebhookServer() != nil {
+		// Add the WebhookServer
+		cm.Add(cm.GetWebhookServer())
+	}
 
 	// Metrics should be served whether the controller is leader or not.
 	// (If we don't serve metrics for non-leaders, prometheus will still scrape

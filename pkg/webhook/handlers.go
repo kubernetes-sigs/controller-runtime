@@ -20,7 +20,7 @@ import (
 	"context"
 	"net/http"
 
-	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"k8s.io/apimachinery/pkg/api/meta"
 
 	"k8s.io/api/admission/v1beta1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
@@ -46,7 +46,7 @@ type Defaulter interface {
 
 // NewResourceWebhook creates a new WebhookBuilder for Validation and Defaulting the provided type.  Returns nil
 // if o does not implement either Validator or Defaulter.
-func NewResourceWebhook(o runtime.Object, manager manager.Manager) (*admission.Webhook, error) {
+func NewResourceWebhook(o runtime.Object, restMapper meta.RESTMapper, scheme *runtime.Scheme) (*admission.Webhook, error) {
 	// Create the handler
 	h := &resourceHandler{}
 	found := false
@@ -69,7 +69,8 @@ func NewResourceWebhook(o runtime.Object, manager manager.Manager) (*admission.W
 		Operations(
 			admissionregistrationv1beta1.Create,
 			admissionregistrationv1beta1.Update).
-		WithManager(manager).
+		WithRestMapper(restMapper).
+		WithScheme(scheme).
 		ForType(o).
 		Handlers(h).
 		Build()

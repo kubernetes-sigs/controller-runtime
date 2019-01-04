@@ -12,22 +12,16 @@ namespace: crew-system
 # field above.
 namePrefix: crew-
 
-resources:
-- crds/firstmate.yaml
-- rbac/rbac.yaml
-- manager/manager.yaml
+bases:
+- ../../base
 
-vars:
-- fieldref: {}
-  name: WEBHOOK_SECRET_NAME
-  objref:
-    apiVersion: v1
-    kind: Secret
-    name: webhook-server-secret
+resources:
+- firstmate.yaml
+- rbac.yaml
 
 patchesStrategicMerge:
-- manager/manager_image_patch.yaml
+- manager_image_patch.yaml
 
 imageTags:
-  - name: pwittrock/controller-runtime
+  - name: pwittrock/controller-manager
     newTag: v1

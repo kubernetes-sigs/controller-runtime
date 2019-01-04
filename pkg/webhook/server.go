@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path"
 	"sync"
 	"time"
@@ -30,7 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
-	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/writer"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
@@ -160,6 +160,40 @@ func NewServer(name string, mgr manager.Manager, options ServerOptions) (*Server
 	return as, nil
 }
 
+// NewSimpleServer creates a new admission webhook server.
+func NewWebhookServerManagedBy(options ServerOptions, mgr manager.Manager) (*Server, error) {
+	as := &Server{
+		Name:          "webhook-server",
+		sMux:          http.NewServeMux(),
+		registry:      map[string]Webhook{},
+		ServerOptions: options,
+		manager:       mgr,
+	}
+
+	return as, nil
+}
+
+// For Registers defaulting and validation webhooks for the provided types that implement either
+// webhooktuil.Validator or webhookutil.Defaulter.
+func (s *Server) For(objects ...runtime.Object) error {
+	var whs []Webhook
+
+	// Create a webhook for each type
+	for _, object := range objects {
+		wh, err := NewResourceWebhook(object, s.manager)
+		if err != nil {
+			return err
+		}
+		if wh == nil {
+			continue
+		}
+		whs = append(whs, wh)
+	}
+
+	// Register all of the types
+	return s.Register(whs...)
+}
+
 // Register validates and registers webhook(s) in the server
 func (s *Server) Register(webhooks ...Webhook) error {
 	for i, webhook := range webhooks {
@@ -179,6 +213,8 @@ func (s *Server) Register(webhooks ...Webhook) error {
 	// Lazily add Server to manager.
 	// Because the all webhook handlers to be in place, so we can inject the things they need.
 	return s.manager.Add(s)
+
+	return nil
 }
 
 // Handle registers a http.Handler for the given pattern.
@@ -268,25 +304,53 @@ func (s *Server) RefreshCert() (bool, error) {
 
 var _ inject.Client = &Server{}
 
-// InjectClient injects the client into the server
-func (s *Server) InjectClient(c client.Client) error {
-	s.Client = c
+// Recursively inject dependencies into handlers
+func (s *Server) InjectFunc(f inject.Func) error {
 	for _, wh := range s.registry {
-		if _, err := inject.ClientInto(c, wh.Handler()); err != nil {
+		if err := f(wh.Handler()); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-var _ inject.Decoder = &Server{}
-
-// InjectDecoder injects the client into the server
-func (s *Server) InjectDecoder(d atypes.Decoder) error {
-	for _, wh := range s.registry {
-		if _, err := inject.DecoderInto(d, wh.Handler()); err != nil {
-			return err
-		}
-	}
+// InjectClient injects the client into the server
+func (s *Server) InjectClient(c client.Client) error {
+	s.Client = c
 	return nil
+}
+
+const (
+	defaultPort = 9876
+	defaultDir  = "/tmp/cert"
+)
+
+func NewServerOptions() ServerOptions {
+	ns := os.Getenv("POD_NAMESPACE")
+	if len(ns) == 0 {
+		ns = "default"
+	}
+	secretName := os.Getenv("SECRET_NAME")
+	if len(secretName) == 0 {
+		secretName = "webhook-server-secret"
+	}
+	return ServerOptions{
+		Port:    defaultPort,
+		CertDir: defaultDir,
+		BootstrapOptions: &BootstrapOptions{
+			Secret: &apitypes.NamespacedName{
+				Namespace: ns,
+				Name:      secretName,
+			},
+
+			Service: &Service{
+				Namespace: ns,
+				Name:      "webhook-server-service",
+				// Selectors should select the pods that runs this webhook server.
+				Selectors: map[string]string{
+					"control-plane": "controller-manager",
+				},
+			},
+		},
+	}
 }

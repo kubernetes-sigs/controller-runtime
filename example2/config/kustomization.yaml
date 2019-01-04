@@ -1,0 +1,33 @@
+# Requires: kubectl create clusterrolebinding cluster-admin-binding --clusterrole cluster-admin --user USER
+apiVersion: v1beta1
+kind: Kustomization
+
+# Adds namespace to all resources.
+namespace: crew-system
+
+# Value of this field is prepended to the
+# names of all resources, e.g. a deployment named
+# "wordpress" becomes "alices-wordpress".
+# Note that it should also match with the prefix (text before '-') of the namespace
+# field above.
+namePrefix: crew-
+
+resources:
+- crds/firstmate.yaml
+- rbac/rbac.yaml
+- manager/manager.yaml
+
+vars:
+- fieldref: {}
+  name: WEBHOOK_SECRET_NAME
+  objref:
+    apiVersion: v1
+    kind: Secret
+    name: webhook-server-secret
+
+patchesStrategicMerge:
+- manager/manager_image_patch.yaml
+
+imageTags:
+  - name: pwittrock/controller-runtime
+    newTag: v1

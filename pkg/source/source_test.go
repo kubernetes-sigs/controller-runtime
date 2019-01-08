@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	corev1 "k8s.io/api/core/v1"
@@ -67,7 +66,7 @@ var _ = Describe("Source", func() {
 				instance := &source.Kind{
 					Type: &corev1.Pod{},
 				}
-				inject.CacheInto(ic, instance)
+				instance.InjectCache(ic)
 				err := instance.Start(handler.Funcs{
 					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
@@ -158,7 +157,7 @@ var _ = Describe("Source", func() {
 				instance := &source.Kind{
 					Type: &corev1.Pod{},
 				}
-				inject.CacheInto(ic, instance)
+				instance.InjectCache(ic)
 				err := instance.Start(handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
@@ -288,7 +287,7 @@ var _ = Describe("Source", func() {
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{Source: ch}
-				inject.StopChannelInto(stop, instance)
+				instance.InjectStopChannel(stop)
 				err := instance.Start(handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
@@ -330,7 +329,7 @@ var _ = Describe("Source", func() {
 				// Add a handler to get distribution blocked
 				instance := &source.Channel{Source: ch}
 				instance.DestBufferSize = 1
-				inject.StopChannelInto(stop, instance)
+				instance.InjectStopChannel(stop)
 				err := instance.Start(handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
@@ -382,7 +381,7 @@ var _ = Describe("Source", func() {
 			It("should get error if no source specified", func(done Done) {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{ /*no source specified*/ }
-				inject.StopChannelInto(stop, instance)
+				instance.InjectStopChannel(stop)
 				err := instance.Start(handler.Funcs{}, q)
 				Expect(err).To(Equal(fmt.Errorf("must specify Channel.Source")))
 				close(done)
@@ -413,7 +412,7 @@ var _ = Describe("Source", func() {
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{Source: ch}
-				inject.StopChannelInto(stop, instance)
+				instance.InjectStopChannel(stop)
 				err := instance.Start(handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()

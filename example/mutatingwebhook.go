@@ -22,7 +22,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
@@ -62,9 +61,7 @@ func (a *podAnnotator) mutatePodsFn(ctx context.Context, pod *corev1.Pod) error 
 	return nil
 }
 
-// podValidator implements inject.Client.
 // A client will be automatically injected.
-var _ inject.Client = &podValidator{}
 
 // InjectClient injects the client.
 func (v *podAnnotator) InjectClient(c client.Client) error {
@@ -72,9 +69,7 @@ func (v *podAnnotator) InjectClient(c client.Client) error {
 	return nil
 }
 
-// podValidator implements inject.Decoder.
 // A decoder will be automatically injected.
-var _ inject.Decoder = &podValidator{}
 
 // InjectDecoder injects the decoder.
 func (v *podAnnotator) InjectDecoder(d types.Decoder) error {

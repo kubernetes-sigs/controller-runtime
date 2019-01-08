@@ -25,7 +25,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source/internal"
 
@@ -102,8 +101,6 @@ func (ks *Kind) String() string {
 	return fmt.Sprintf("kind source: unknown GVK")
 }
 
-var _ inject.Cache = &Kind{}
-
 // InjectCache is internal should be called only by the Controller.  InjectCache is used to inject
 // the Cache dependency initialized by the ControllerManager.
 func (ks *Kind) InjectCache(c cache.Cache) error {
@@ -142,8 +139,6 @@ type Channel struct {
 func (cs *Channel) String() string {
 	return fmt.Sprintf("channel source: %p", cs)
 }
-
-var _ inject.Stoppable = &Channel{}
 
 // InjectStopChannel is internal should be called only by the Controller.
 // It is used to inject the stop channel initialized by the ControllerManager.

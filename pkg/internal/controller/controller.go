@@ -33,14 +33,12 @@ import (
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	"sigs.k8s.io/controller-runtime/pkg/inject"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 var log = logf.KBLog.WithName("controller")
-
-var _ inject.Injector = &Controller{}
 
 // Controller implements controller.Controller
 type Controller struct {
@@ -72,8 +70,8 @@ type Controller struct {
 	// the Queue for processing
 	Queue workqueue.RateLimitingInterface
 
-	// SetFields is used to inject dependencies into other objects such as Sources, EventHandlers and Predicates
-	SetFields func(i interface{}) error
+	// Dependencies are used to inject further dependencies into other objects, such as Sources, EventHandlers, and Predicates.
+	Dependencies inject.Context `inject:""`
 
 	// mu is used to synchronize Controller setup
 	mu sync.Mutex
@@ -106,14 +104,14 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	defer c.mu.Unlock()
 
 	// Inject Cache into arguments
-	if err := c.SetFields(src); err != nil {
+	if _, err := inject.Into(c.Dependencies, src); err != nil {
 		return err
 	}
-	if err := c.SetFields(evthdler); err != nil {
+	if _, err := inject.Into(c.Dependencies, evthdler); err != nil {
 		return err
 	}
 	for _, pr := range prct {
-		if err := c.SetFields(pr); err != nil {
+		if _, err := inject.Into(c.Dependencies, pr); err != nil {
 			return err
 		}
 	}
@@ -238,12 +236,6 @@ func (c *Controller) processNextWorkItem() bool {
 	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "success").Inc()
 	// Return true, don't take a break
 	return true
-}
-
-// InjectFunc implement SetFields.Injector
-func (c *Controller) InjectFunc(f inject.Func) error {
-	c.SetFields = f
-	return nil
 }
 
 // updateMetrics updates prometheus metrics within the controller

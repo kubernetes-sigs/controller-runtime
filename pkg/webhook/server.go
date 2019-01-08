@@ -29,8 +29,7 @@ import (
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
-	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
+	"sigs.k8s.io/controller-runtime/pkg/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/cert/writer"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
@@ -266,27 +265,19 @@ func (s *Server) RefreshCert() (bool, error) {
 	return changed, batchCreateOrReplace(s.Client, s.webhookConfigurations...)
 }
 
-var _ inject.Client = &Server{}
+// InjectDependencies injects received dependencies into the server.
+func (s *Server) InjectDependencies(ctx inject.Context) error {
+	for _, wh := range s.registry {
+		if _, err := inject.Into(ctx, wh.Handler()); err != nil {
+			return err
+		}
+	}
+	
+	return nil
+}
 
 // InjectClient injects the client into the server
 func (s *Server) InjectClient(c client.Client) error {
 	s.Client = c
-	for _, wh := range s.registry {
-		if _, err := inject.ClientInto(c, wh.Handler()); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-var _ inject.Decoder = &Server{}
-
-// InjectDecoder injects the client into the server
-func (s *Server) InjectDecoder(d atypes.Decoder) error {
-	for _, wh := range s.registry {
-		if _, err := inject.DecoderInto(d, wh.Handler()); err != nil {
-			return err
-		}
-	}
 	return nil
 }

@@ -22,7 +22,6 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	. "github.com/onsi/ginkgo"
@@ -62,10 +61,10 @@ var _ = Describe("Source", func() {
 
 	JustBeforeEach(func() {
 		instance1 = &source.Kind{Type: obj}
-		inject.CacheInto(icache, instance1)
+		instance1.InjectCache(icache)
 
 		instance2 = &source.Kind{Type: obj}
-		inject.CacheInto(icache, instance2)
+		instance2.InjectCache(icache)
 	})
 
 	AfterEach(func(done Done) {

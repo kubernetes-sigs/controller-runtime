@@ -21,6 +21,7 @@ import (
 
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/inject"
 	"sigs.k8s.io/controller-runtime/pkg/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -72,7 +73,7 @@ func New(name string, mgr manager.Manager, options Options) (Controller, error) 
 	}
 
 	// Inject dependencies into Reconciler
-	if err := mgr.SetFields(options.Reconciler); err != nil {
+	if _, err := inject.Into(mgr, options.Reconciler); err != nil {
 		return nil, err
 	}
 

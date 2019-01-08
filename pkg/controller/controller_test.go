@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 var _ = Describe("controller.Controller", func() {
@@ -94,7 +93,6 @@ var _ = Describe("controller.Controller", func() {
 })
 
 var _ reconcile.Reconciler = &failRec{}
-var _ inject.Client = &failRec{}
 
 type failRec struct{}
 

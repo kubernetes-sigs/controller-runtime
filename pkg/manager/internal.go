@@ -35,7 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	"sigs.k8s.io/controller-runtime/pkg/inject"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
@@ -78,6 +78,9 @@ type controllerManager struct {
 	// metricsListener is used to serve prometheus metrics
 	metricsListener net.Listener
 
+	// baseDeps is the base dependency context that this wraps
+	baseDeps inject.Context
+
 	mu      sync.Mutex
 	started bool
 	errChan chan error
@@ -101,7 +104,8 @@ func (cm *controllerManager) Add(r Runnable) error {
 	defer cm.mu.Unlock()
 
 	// Set dependencies on the object
-	if err := cm.SetFields(r); err != nil {
+	// TODO(directxman12): do we want to error out on missing dependencies?
+	if _, err := inject.Into(cm, r); err != nil {
 		return err
 	}
 
@@ -114,31 +118,6 @@ func (cm *controllerManager) Add(r Runnable) error {
 		}()
 	}
 
-	return nil
-}
-
-func (cm *controllerManager) SetFields(i interface{}) error {
-	if _, err := inject.ConfigInto(cm.config, i); err != nil {
-		return err
-	}
-	if _, err := inject.ClientInto(cm.client, i); err != nil {
-		return err
-	}
-	if _, err := inject.SchemeInto(cm.scheme, i); err != nil {
-		return err
-	}
-	if _, err := inject.CacheInto(cm.cache, i); err != nil {
-		return err
-	}
-	if _, err := inject.InjectorInto(cm.SetFields, i); err != nil {
-		return err
-	}
-	if _, err := inject.StopChannelInto(cm.internalStop, i); err != nil {
-		return err
-	}
-	if _, err := inject.DecoderInto(cm.admissionDecoder, i); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -172,6 +151,35 @@ func (cm *controllerManager) GetRecorder(name string) record.EventRecorder {
 
 func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
 	return cm.mapper
+}
+
+// PopulateThis implements inject.Context.
+func (cm *controllerManager) PopulateThis(key string, target interface{}) bool {
+	fmt.Printf("evaluating for %s, %T\n", key, target)
+	switch targetVal := target.(type) {
+	case **rest.Config:
+		*targetVal = cm.config
+		return true
+	case *client.Client:
+		*targetVal = cm.client
+		return true
+	case **runtime.Scheme:
+		*targetVal = cm.scheme
+		return true
+	case *cache.Cache:
+		*targetVal = cm.cache
+		return true
+	case *types.Decoder:
+		*targetVal = cm.admissionDecoder
+		return true
+	case *<-chan struct{}:
+		if key == "StopChannel" {
+			*targetVal = cm.internalStop
+			return true
+		}
+	}
+
+	return cm.baseDeps.PopulateThis(key, target)
 }
 
 func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {

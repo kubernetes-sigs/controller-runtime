@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/inject"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -38,6 +39,38 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile/reconciletest"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
+
+type fakeSource struct{
+	cache cache.Cache
+	throwCacheErr error
+}
+func (*fakeSource) Start(handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error {
+	return nil
+}
+func (f *fakeSource) InjectCache(c cache.Cache) error {
+	f.cache = c
+	return f.throwCacheErr
+}
+
+type fakeHandler struct{
+	cache cache.Cache
+	throwCacheErr error
+	handler.Funcs
+}
+func (f *fakeHandler) InjectCache(c cache.Cache) error {
+	f.cache = c
+	return f.throwCacheErr
+}
+
+type fakePredicate struct {
+	cache cache.Cache
+	throwCacheErr error
+	predicate.Funcs
+}
+func (f *fakePredicate) InjectCache(c cache.Cache) error {
+	f.cache = c
+	return f.throwCacheErr
+}
 
 var _ = Describe("controller", func() {
 	var fakeReconcile *reconciletest.FakeReconcile
@@ -65,8 +98,8 @@ var _ = Describe("controller", func() {
 			Do:    fakeReconcile,
 			Queue: queue,
 			Cache: informers,
+			Dependencies: inject.ProvideA(inject.Nothing(), informers),
 		}
-		ctrl.InjectFunc(func(interface{}) error { return nil })
 	})
 
 	AfterEach(func() {
@@ -116,64 +149,31 @@ var _ = Describe("controller", func() {
 
 	Describe("Watch", func() {
 		It("should inject dependencies into the Source", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			src.InjectCache(ctrl.Cache)
+			src := &fakeSource{}
 			evthdl := &handler.EnqueueRequestForObject{}
-			found := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == src {
-					found = true
-				}
-				return nil
-			}
 			Expect(ctrl.Watch(src, evthdl)).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue(), "Source not injected")
+			Expect(src.cache).To(Equal(ctrl.Cache))
 		})
 
 		It("should return an error if there is an error injecting into the Source", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			src.InjectCache(ctrl.Cache)
-			evthdl := &handler.EnqueueRequestForObject{}
 			expected := fmt.Errorf("expect fail source")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == src {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
+			src := &fakeSource{throwCacheErr: expected}
+			evthdl := &handler.EnqueueRequestForObject{}
+			Expect(ctrl.Watch(src, evthdl)).To(MatchError(expected.Error()))
 		})
 
 		It("should inject dependencies into the EventHandler", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
-			src.InjectCache(ctrl.Cache)
-			evthdl := &handler.EnqueueRequestForObject{}
-			found := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == evthdl {
-					found = true
-				}
-				return nil
-			}
+			evthdl := &fakeHandler{}
 			Expect(ctrl.Watch(src, evthdl)).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue(), "EventHandler not injected")
+			Expect(evthdl.cache).To(Equal(ctrl.Cache))
 		})
 
 		It("should return an error if there is an error injecting into the EventHandler", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
-			evthdl := &handler.EnqueueRequestForObject{}
 			expected := fmt.Errorf("expect fail eventhandler")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == evthdl {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
+			evthdl := &fakeHandler{throwCacheErr: expected}
+			Expect(ctrl.Watch(src, evthdl)).To(MatchError(expected.Error()))
 		})
 
 		It("should inject dependencies into the Reconciler", func() {
@@ -186,51 +186,20 @@ var _ = Describe("controller", func() {
 
 		It("should inject dependencies into all of the Predicates", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
-			src.InjectCache(ctrl.Cache)
 			evthdl := &handler.EnqueueRequestForObject{}
-			pr1 := &predicate.Funcs{}
-			pr2 := &predicate.Funcs{}
-			found1 := false
-			found2 := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr1 {
-					found1 = true
-				}
-				if i == pr2 {
-					found2 = true
-				}
-				return nil
-			}
+			pr1 := &fakePredicate{}
+			pr2 := &fakePredicate{}
 			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).NotTo(HaveOccurred())
-			Expect(found1).To(BeTrue(), "First Predicated not injected")
-			Expect(found2).To(BeTrue(), "Second Predicated not injected")
+			Expect(pr1.cache).To(Equal(ctrl.Cache))
+			Expect(pr2.cache).To(Equal(ctrl.Cache))
 		})
 
 		It("should return an error if there is an error injecting into any of the Predicates", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
-			src.InjectCache(ctrl.Cache)
 			evthdl := &handler.EnqueueRequestForObject{}
-			pr1 := &predicate.Funcs{}
-			pr2 := &predicate.Funcs{}
 			expected := fmt.Errorf("expect fail predicate")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr1 {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).To(Equal(expected))
-
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr2 {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).To(Equal(expected))
+			pr1 := &fakePredicate{throwCacheErr: expected}
+			Expect(ctrl.Watch(src, evthdl, pr1)).To(MatchError(expected.Error()))
 		})
 
 		It("should call Start the Source with the EventHandler, Queue, and Predicates", func() {

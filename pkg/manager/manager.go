@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
+	"sigs.k8s.io/controller-runtime/pkg/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
@@ -43,14 +44,13 @@ import (
 // Manager initializes shared dependencies such as Caches and Clients, and provides them to Runnables.
 // A Manager is required to create Controllers.
 type Manager interface {
+	// Every manager knows how to inject dependencies into other things.
+	inject.Context
+
 	// Add will set reqeusted dependencies on the component, and cause the component to be
 	// started when Start is called.  Add will inject any dependencies for which the argument
 	// implements the inject interface - e.g. inject.Client
 	Add(Runnable) error
-
-	// SetFields will set any dependencies on an object for which the object has implemented the inject
-	// interface - e.g. inject.Client.
-	SetFields(interface{}) error
 
 	// Start starts all registered Controllers and blocks until the Stop channel is closed.
 	// Returns an error if there is an error starting any controller.
@@ -128,6 +128,10 @@ type Options struct {
 	// If not set this will create the default DelegatingClient that will
 	// use the cache for reads and the client for writes.
 	NewClient NewClientFunc
+
+	// BaseDependencies is the base set of dependencies passed to everything
+	// that this manager knows about.
+	BaseDependencies inject.Context
 
 	// Dependency injection for testing
 	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error)
@@ -214,6 +218,12 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
+	// make sure we have *some* dependency context
+	baseDeps := options.BaseDependencies
+	if options.BaseDependencies == nil {
+		baseDeps = inject.Nothing()
+	}
+
 	stop := make(chan struct{})
 
 	return &controllerManager{
@@ -230,6 +240,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		metricsListener:  metricsListener,
 		internalStop:     stop,
 		internalStopper:  stop,
+		baseDeps:         baseDeps,
 	}, nil
 }
 

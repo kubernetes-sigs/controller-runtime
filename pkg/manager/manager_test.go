@@ -38,7 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	"sigs.k8s.io/controller-runtime/pkg/inject"
 )
 
 var _ = Describe("manger.Manager", func() {
@@ -472,13 +472,13 @@ var _ = Describe("manger.Manager", func() {
 			close(done)
 		})
 
-		It("should fail if SetFields fails", func() {
+		It("should fail if injection fails", func() {
 			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m.Add(&failRec{})).To(HaveOccurred())
 		})
 	})
-	Describe("SetFields", func() {
+	Context("as an injection context", func() {
 		It("should inject field values", func(done Done) {
 			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
@@ -488,7 +488,7 @@ var _ = Describe("manger.Manager", func() {
 			mgr.cache = &informertest.FakeInformers{}
 
 			By("Injecting the dependencies")
-			err = m.SetFields(&injectable{
+			_, err = inject.Into(m, &injectable{
 				scheme: func(scheme *runtime.Scheme) error {
 					defer GinkgoRecover()
 					Expect(scheme).To(Equal(m.GetScheme()))
@@ -514,57 +514,46 @@ var _ = Describe("manger.Manager", func() {
 					Expect(stop).NotTo(BeNil())
 					return nil
 				},
-				f: func(f inject.Func) error {
-					defer GinkgoRecover()
-					Expect(f).NotTo(BeNil())
-					return nil
-				},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Returning an error if dependency injection fails")
 
 			expected := fmt.Errorf("expected error")
-			err = m.SetFields(&injectable{
+			_, err = inject.Into(m, &injectable{
 				client: func(client client.Client) error {
 					return expected
 				},
 			})
-			Expect(err).To(Equal(expected))
+			Expect(err).To(HaveOccurred())
 
-			err = m.SetFields(&injectable{
+			_, err = inject.Into(m, &injectable{
 				scheme: func(scheme *runtime.Scheme) error {
 					return expected
 				},
 			})
-			Expect(err).To(Equal(expected))
+			Expect(err).To(HaveOccurred())
 
-			err = m.SetFields(&injectable{
+			_, err = inject.Into(m, &injectable{
 				config: func(config *rest.Config) error {
 					return expected
 				},
 			})
-			Expect(err).To(Equal(expected))
+			Expect(err).To(HaveOccurred())
 
-			err = m.SetFields(&injectable{
+			_, err = inject.Into(m, &injectable{
 				cache: func(c cache.Cache) error {
 					return expected
 				},
 			})
-			Expect(err).To(Equal(expected))
+			Expect(err).To(HaveOccurred())
 
-			err = m.SetFields(&injectable{
-				f: func(c inject.Func) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
-			err = m.SetFields(&injectable{
+			_, err = inject.Into(m, &injectable{
 				stop: func(<-chan struct{}) error {
 					return expected
 				},
 			})
-			Expect(err).To(Equal(expected))
+			Expect(err).To(HaveOccurred())
 			close(done)
 		})
 	})
@@ -609,7 +598,6 @@ var _ = Describe("manger.Manager", func() {
 })
 
 var _ reconcile.Reconciler = &failRec{}
-var _ inject.Client = &failRec{}
 
 type failRec struct{}
 
@@ -625,19 +613,11 @@ func (*failRec) InjectClient(client.Client) error {
 	return fmt.Errorf("expected error")
 }
 
-var _ inject.Injector = &injectable{}
-var _ inject.Cache = &injectable{}
-var _ inject.Client = &injectable{}
-var _ inject.Scheme = &injectable{}
-var _ inject.Config = &injectable{}
-var _ inject.Stoppable = &injectable{}
-
 type injectable struct {
 	scheme func(scheme *runtime.Scheme) error
 	client func(client.Client) error
 	config func(config *rest.Config) error
 	cache  func(cache.Cache) error
-	f      func(inject.Func) error
 	stop   func(<-chan struct{}) error
 }
 
@@ -667,13 +647,6 @@ func (i *injectable) InjectScheme(scheme *runtime.Scheme) error {
 		return nil
 	}
 	return i.scheme(scheme)
-}
-
-func (i *injectable) InjectFunc(f inject.Func) error {
-	if i.f == nil {
-		return nil
-	}
-	return i.f(f)
 }
 
 func (i *injectable) InjectStopChannel(stop <-chan struct{}) error {

@@ -26,7 +26,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
@@ -156,8 +155,6 @@ func (e *EnqueueRequestForOwner) getOwnersReferences(object metav1.Object) []met
 	// No Controller OwnerReference found
 	return nil
 }
-
-var _ inject.Scheme = &EnqueueRequestForOwner{}
 
 // InjectScheme is called by the Controller to provide a singleton scheme to the EnqueueRequestForOwner.
 func (e *EnqueueRequestForOwner) InjectScheme(s *runtime.Scheme) error {

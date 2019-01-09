@@ -181,7 +181,7 @@ func (te *Environment) startControlPlane() error {
 		}
 	}
 	if numTries == maxRetries {
-		return fmt.Errorf("failed to start the controlplane. retried %d times: %s", numTries, err.Error())
+		return fmt.Errorf("failed to start the controlplane. retried %d times: %v", numTries, err)
 	}
 	return nil
 }

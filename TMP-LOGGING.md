@@ -48,11 +48,11 @@ provides some helpers to make it easy to use
 [Zap](https://go.uber.org/zap) as the implementation.
 
 You can configure the logging implementation using
-`"sigs.k8s.io/controller-runtime/pkg/runtime/log".SetLogger`.  That
+`"sigs.k8s.io/controller-runtime/pkg/log".SetLogger`.  That
 package also contains the convinience functions for setting up Zap.
 
 You can get a handle to the the "root" logger using
-`"sigs.k8s.io/controller-runtime/pkg/runtime/log".Log`, and can then call
+`"sigs.k8s.io/controller-runtime/pkg/log".Log`, and can then call
 `WithName` to create individual named loggers.  You can call `WithName`
 repeatedly to chain names together:
 

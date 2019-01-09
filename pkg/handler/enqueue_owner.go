@@ -27,12 +27,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
 
 var _ EventHandler = &EnqueueRequestForOwner{}
 
-var log = logf.KBLog.WithName("eventhandler").WithName("EnqueueRequestForOwner")
+var log = logf.RuntimeLog.WithName("eventhandler").WithName("EnqueueRequestForOwner")
 
 // EnqueueRequestForOwner enqueues Requests for the Owners of an object.  E.g. the object that created
 // the object that was the source of the Event.

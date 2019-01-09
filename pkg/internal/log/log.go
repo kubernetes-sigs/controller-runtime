@@ -14,17 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package log contains utilities for fetching a new logger
+// when one is not already available.
+// Deprecated: use pkg/log
 package log
 
 import (
-	"testing"
+	"github.com/go-logr/logr"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func TestSource(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Runtime Log Suite", []Reporter{printer.NewlineReporter{}})
+var (
+	// RuntimeLog is a base parent logger for use inside controller-runtime.
+	RuntimeLog logr.Logger
+)
+
+func init() {
+	RuntimeLog = log.Log.WithName("controller-runtime")
 }

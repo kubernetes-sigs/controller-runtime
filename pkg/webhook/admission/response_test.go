@@ -20,7 +20,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/mattbaird/jsonpatch"
+	"github.com/appscode/jsonpatch"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 

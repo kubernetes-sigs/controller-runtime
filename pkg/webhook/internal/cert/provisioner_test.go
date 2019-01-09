@@ -40,11 +40,18 @@ var _ = Describe("provisioner", func() {
 		It("should return no error", func() {
 			fcw := &fakeCertWriter{}
 			p := Provisioner{CertWriter: fcw}
-			changed, err := p.Provision(Options{})
+			changed, err := p.Provision(Options{
+				ClientConfig: &admissionregistrationv1beta1.WebhookClientConfig{
+					Service: &admissionregistrationv1beta1.ServiceReference{
+						Namespace: "test-svc-namespace",
+						Name:      "test-service",
+					},
+				},
+			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(changed).To(BeFalse())
-			Expect(fcw.invokedEnsureCert).To(BeFalse())
-			Expect(fcw.invokedInject).To(BeFalse())
+			Expect(changed).To(BeTrue())
+			Expect(fcw.invokedEnsureCert).To(BeTrue())
+			Expect(fcw.invokedInject).To(BeTrue())
 		})
 	})
 

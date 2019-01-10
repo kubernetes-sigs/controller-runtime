@@ -533,16 +533,7 @@ var _ = Describe("controller", func() {
 
 		Context("should update prometheus metrics", func() {
 			It("should requeue a Request if there is an error and continue processing items", func(done Done) {
-				var queueLength, reconcileErrs dto.Metric
-				ctrlmetrics.QueueLength.Reset()
-				Expect(func() error {
-					ctrlmetrics.QueueLength.WithLabelValues(ctrl.Name).Write(&queueLength)
-					if queueLength.GetGauge().GetValue() != 0.0 {
-						return fmt.Errorf("metric queue length not reset")
-					}
-					return nil
-				}()).Should(Succeed())
-
+				var reconcileErrs dto.Metric
 				ctrlmetrics.ReconcileErrors.Reset()
 				Expect(func() error {
 					ctrlmetrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)
@@ -564,13 +555,6 @@ var _ = Describe("controller", func() {
 
 				By("Invoking Reconciler which will give an error")
 				Expect(<-reconciled).To(Equal(request))
-				Eventually(func() error {
-					ctrlmetrics.QueueLength.WithLabelValues(ctrl.Name).Write(&queueLength)
-					if queueLength.GetGauge().GetValue() != 1.0 {
-						return fmt.Errorf("metric queue length not updated")
-					}
-					return nil
-				}, 2.0).Should(Succeed())
 				Eventually(func() error {
 					ctrlmetrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)
 					if reconcileErrs.GetCounter().GetValue() != 1.0 {

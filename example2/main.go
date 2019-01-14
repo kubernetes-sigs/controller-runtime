@@ -20,24 +20,20 @@ import (
 	"flag"
 	"os"
 
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
-
 	appsv1 "k8s.io/api/apps/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"sigs.k8s.io/controller-runtime/example2/logutil"
 	"sigs.k8s.io/controller-runtime/example2/pkg"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
-
-var log = logf.Log.WithName("crew-controller")
 
 func main() {
 	flag.Parse()
-	logf.SetLogger(logf.ZapLogger(true))
-	entryLog := log.WithName("entrypoint")
+	entryLog := logutil.Log.WithName("entrypoint")
 
 	entryLog.Info("setting up manager")
 	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{WebhookServerOptions: webhook.NewServerOptions()})
@@ -48,7 +44,7 @@ func main() {
 
 	entryLog.Info("setting up scheme")
 	if err := pkg.AddToScheme(mgr.GetScheme()); err != nil {
-		log.Error(err, "unable add APIs to scheme")
+		entryLog.Error(err, "unable add APIs to scheme")
 		os.Exit(1)
 	}
 
@@ -56,7 +52,7 @@ func main() {
 	err = builder.ControllerManagedBy(mgr).
 		For(&pkg.FirstMate{}).
 		Owns(&appsv1.Deployment{}).
-		Complete(&FirstMateController{log: log.WithName("firstmate-reconciler")})
+		Complete(&FirstMateController{})
 	if err != nil {
 		entryLog.Error(err, "unable to set up controllers")
 		os.Exit(1)

@@ -19,6 +19,8 @@ package pkg
 import (
 	"fmt"
 
+	"sigs.k8s.io/controller-runtime/example2/logutil"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -27,6 +29,8 @@ import (
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+var log = logutil.Log.WithName("firstmate-resource")
 
 // firstMate is the Schema for the firstmates API
 // +k8s:openapi-gen=true
@@ -52,6 +56,8 @@ type FirstMateStatus struct {
 
 // ValidateCreate implements webhookutil.Validator so a webhook will be registered for the type
 func (f *FirstMate) ValidateCreate() error {
+	log.Info("validate create", *f)
+
 	if f.Spec.Crew <= 0 {
 		return fmt.Errorf("crew must be greater than 0")
 	}
@@ -60,6 +66,8 @@ func (f *FirstMate) ValidateCreate() error {
 
 // ValidateUpdate implements webhookutil.Validator so a webhook will be registered for the type
 func (f *FirstMate) ValidateUpdate(old runtime.Object) error {
+	log.Info("validate update", *f)
+
 	if f.Spec.Crew <= 0 {
 		return fmt.Errorf("crew must be greater than 0")
 	}
@@ -68,6 +76,8 @@ func (f *FirstMate) ValidateUpdate(old runtime.Object) error {
 
 // Default implements webhookutil.Defaulter so a webhook will be registered for the type
 func (f *FirstMate) Default() {
+	log.Info("default", *f)
+
 	if *f.Spec.Height == 0 {
 		height := 10
 		f.Spec.Height = &height

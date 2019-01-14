@@ -5,19 +5,13 @@ kind: Kustomization
 # Adds namespace to all resources.
 namespace: crew-system
 
-# Value of this field is prepended to the
-# names of all resources, e.g. a deployment named
-# "wordpress" becomes "alices-wordpress".
-# Note that it should also match with the prefix (text before '-') of the namespace
-# field above.
-namePrefix: crew-
-
 bases:
 - ../../base
 
 resources:
-- firstmate.yaml
-- rbac.yaml
+- firstmate_crd.yaml
+- manager_rbac.yaml
+- crew_namespace.yaml
 
 patchesStrategicMerge:
 - manager_image_patch.yaml

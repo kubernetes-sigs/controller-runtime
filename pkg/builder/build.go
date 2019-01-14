@@ -66,9 +66,6 @@ func ControllerManagedBy(m manager.Manager) *Builder {
 // Watches(&source.Kind{Type: apiType}, &handler.EnqueueRequestForObject{})
 // Deprecated: Use For
 func (blder *Builder) ForType(apiType runtime.Object) *Builder {
-	if blder.mgr.GetWebhookServer() != nil {
-		blder.mgr.GetWebhookServer().For(apiType)
-	}
 	return blder.For(apiType)
 }
 
@@ -77,6 +74,9 @@ func (blder *Builder) ForType(apiType runtime.Object) *Builder {
 // This is the equivalent of calling
 // Watches(&source.Kind{Type: apiType}, &handler.EnqueueRequestForObject{})
 func (blder *Builder) For(apiType runtime.Object) *Builder {
+	if blder.mgr.GetWebhookServer() != nil {
+		blder.mgr.GetWebhookServer().For(apiType)
+	}
 	blder.apiType = apiType
 	return blder
 }
@@ -149,6 +149,10 @@ func (blder *Builder) Build(r reconcile.Reconciler) (manager.Manager, error) {
 	// Set the ControllerManagedBy
 	if err := blder.doController(r); err != nil {
 		return nil, err
+	}
+
+	if blder.mgr.GetWebhookServer() != nil {
+		blder.mgr.GetWebhookServer().For(blder.apiType)
 	}
 
 	// Reconcile type

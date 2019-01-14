@@ -25,17 +25,19 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/example2/logutil"
 	"sigs.k8s.io/controller-runtime/example2/pkg"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+var fmLog = logutil.Log.WithName("firstmate-reconciler")
+
 // FirstMateController reconciles ReplicaSets
 type FirstMateController struct {
 	// client can be used to retrieve objects from the APIServer.
 	client client.Client
-	log    logr.Logger
 }
 
 func (i *FirstMateController) InjectClient(c client.Client) error {
@@ -48,7 +50,7 @@ var _ reconcile.Reconciler = &FirstMateController{}
 
 func (r *FirstMateController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// set up a entryLog object so we don't have to type request over and over again
-	log := r.log.WithValues("request", request)
+	log := fmLog.WithValues("request", request)
 	ctx := context.Background()
 
 	// Fetch the firstMate from the cache
@@ -61,7 +63,7 @@ func (r *FirstMateController) Reconcile(request reconcile.Request) (reconcile.Re
 	}
 
 	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: request.Name, Namespace: request.Namespace}}
-	updateFn := (&createOrUpdateDeployment{firstMate: fm, log: log}).do
+	updateFn := (&createOrUpdateDeployment{firstMate: fm, log: fmLog}).do
 
 	_, err := controllerutil.CreateOrUpdate(ctx, r.client, dep, updateFn)
 	if err != nil {
@@ -77,7 +79,7 @@ type createOrUpdateDeployment struct {
 }
 
 func (r *createOrUpdateDeployment) do(existing runtime.Object) error {
-	log.Info("creating or updating deployment")
+	r.log.Info("creating or updating deployment")
 	dep := existing.(*appsv1.Deployment)
 	dep.Labels = r.firstMate.Labels
 	dep.Spec.Replicas = &r.firstMate.Spec.Crew

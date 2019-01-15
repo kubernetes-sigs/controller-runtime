@@ -67,9 +67,7 @@ var _ = Describe("Fake client", func() {
 		It("should be able to List", func() {
 			By("Listing all deployments in a namespace")
 			list := &appsv1.DeploymentList{}
-			err := cl.List(nil, &client.ListOptions{
-				Namespace: "ns1",
-			}, list)
+			err := cl.List(nil, list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(HaveLen(1))
 			Expect(list.Items).To(ConsistOf(*dep))
@@ -129,9 +127,7 @@ var _ = Describe("Fake client", func() {
 
 			By("Listing all deployments in the namespace")
 			list := &appsv1.DeploymentList{}
-			err = cl.List(nil, &client.ListOptions{
-				Namespace: "ns1",
-			}, list)
+			err = cl.List(nil, list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(HaveLen(0))
 		})

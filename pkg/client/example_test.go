@@ -42,7 +42,7 @@ func ExampleNew() {
 
 	podList := &corev1.PodList{}
 
-	err = cl.List(context.Background(), client.InNamespace("default"), podList)
+	err = cl.List(context.Background(), podList, client.InNamespace("default"))
 	if err != nil {
 		fmt.Printf("failed to list pods in namespace default: %v\n", err)
 		os.Exit(1)
@@ -132,7 +132,7 @@ func ExampleClient_list() {
 	// Using a typed object.
 	pod := &corev1.PodList{}
 	// c is a created client.
-	_ = c.List(context.Background(), nil, pod)
+	_ = c.List(context.Background(), pod)
 
 	// Using a unstructured object.
 	u := &unstructured.UnstructuredList{}
@@ -141,7 +141,7 @@ func ExampleClient_list() {
 		Kind:    "DeploymentList",
 		Version: "v1",
 	})
-	_ = c.List(context.Background(), nil, u)
+	_ = c.List(context.Background(), u)
 }
 
 // This example shows how to use the client with typed and unstrucurted objects to update objects.

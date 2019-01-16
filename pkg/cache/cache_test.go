@@ -206,7 +206,7 @@ var _ = Describe("Informer Cache", func() {
 				Expect(listObj.Items).NotTo(BeEmpty())
 				Expect(listObj.Items).Should(HaveLen(3))
 				for _, p := range listObj.Items {
-					Expect(p.GroupVersionKind().Empty()).To(BeFalse())
+					Expect(p.GroupVersionKind()).To(Equal(kcorev1.SchemeGroupVersion.WithKind("Pod")))
 				}
 			})
 

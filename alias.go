@@ -14,8 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package controllerruntime alias' common functions and types to improve discoverability and reduce
-// the number of imports for simple Controllers.
 package controllerruntime
 
 import (

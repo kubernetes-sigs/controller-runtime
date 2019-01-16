@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	kcache "k8s.io/client-go/tools/cache"
-
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -196,6 +195,19 @@ var _ = Describe("Informer Cache", func() {
 				Expect(listObj.Items).Should(HaveLen(1))
 				actual := listObj.Items[0]
 				Expect(actual.Namespace).To(Equal(testNamespaceOne))
+			})
+
+			It("should be able to list objects with GVK populated", func() {
+				By("listing pods")
+				listObj := &kcorev1.PodList{}
+				Expect(informerCache.List(context.Background(), listObj)).To(Succeed())
+
+				By("verifying that the returned pods have GVK populated")
+				Expect(listObj.Items).NotTo(BeEmpty())
+				Expect(listObj.Items).Should(HaveLen(3))
+				for _, p := range listObj.Items {
+					Expect(p.GroupVersionKind().Empty()).To(BeFalse())
+				}
 			})
 
 			It("should be able to restrict cache to a namespace", func() {

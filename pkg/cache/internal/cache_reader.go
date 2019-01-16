@@ -142,7 +142,9 @@ func (c *CacheReader) getListItems(objs []interface{}, labelSel labels.Selector)
 				continue
 			}
 		}
-		outItems = append(outItems, obj.DeepCopyObject())
+		outObj := obj.DeepCopyObject()
+		outObj.GetObjectKind().SetGroupVersionKind(c.groupVersionKind)
+		outItems = append(outItems, outObj)
 	}
 	return outItems, nil
 }

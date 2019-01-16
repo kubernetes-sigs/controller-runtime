@@ -125,6 +125,7 @@ func (c *CacheReader) List(_ context.Context, out runtime.Object, opts ...client
 		if !isObj {
 			return fmt.Errorf("cache contained %T, which is not an Object", obj)
 		}
+		obj.GetObjectKind().SetGroupVersionKind(c.groupVersionKind)
 		runtimeObjs = append(runtimeObjs, obj)
 	}
 	filteredItems, err := objectutil.FilterWithLabels(runtimeObjs, labelSel)

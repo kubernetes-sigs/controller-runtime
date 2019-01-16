@@ -198,6 +198,19 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					}
 				})
 
+				It("should be able to list objects with GVK populated", func() {
+					By("listing pods")
+					listObj := &kcorev1.PodList{}
+					Expect(informerCache.List(context.Background(), listObj)).To(Succeed())
+
+					By("verifying that the returned pods have GVK populated")
+					Expect(listObj.Items).NotTo(BeEmpty())
+					Expect(listObj.Items).Should(HaveLen(3))
+					for _, p := range listObj.Items {
+						Expect(p.GroupVersionKind().Empty()).To(BeFalse())
+					}
+				})
+
 				It("should be able to list objects by namespace", func() {
 					By("listing pods in test-namespace-1")
 					listObj := &kcorev1.PodList{}

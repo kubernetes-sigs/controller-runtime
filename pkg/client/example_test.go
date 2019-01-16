@@ -199,7 +199,7 @@ func ExampleClient_delete() {
 	_ = c.Delete(context.Background(), u)
 }
 
-// This example shows how to set up and consume a field select over a pod's volumes' secretName field.
+// This example shows how to set up and consume a field selector over a pod's volumes' secretName field.
 func ExampleFieldIndexer_secretName() {
 	// someIndexer is a FieldIndexer over a Cache
 	_ = someIndexer.IndexField(&corev1.Pod{}, "spec.volumes.secret.secretName", func(o runtime.Object) []string {

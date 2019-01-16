@@ -23,7 +23,7 @@ limitations under the License.
 // and uncommon cases should be possible.  In general, controller-runtime tries
 // to guide users towards Kubernetes controller best-practices.
 //
-// Overview
+// Getting Started
 //
 // The main entrypoint for controller-runtime is this root package, which
 // contains all of the common types needed to get started building controllers:
@@ -40,7 +40,7 @@ limitations under the License.
 //
 // Organization
 //
-// A brief walkthrough of the layout of this library can be found below. Each
+// A brief-ish walkthrough of the layout of this library can be found below. Each
 // package contains more information about how to use it.
 //
 // Frequently asked questions about using controller-runtime and designing
@@ -58,8 +58,8 @@ limitations under the License.
 //
 // Controllers
 //
-// Controllers (pkg/controller) handle using events (pkg/events) to eventually
-// trigger reconcile requests.  They may be constructed manually, but are often
+// Controllers (pkg/controller) use events (pkg/events) to eventually trigger
+// reconcile requests.  They may be constructed manually, but are often
 // constructed with a Builder (pkg/builder), which eases the wiring of event
 // sources (pkg/source), like Kubernetes API object changes, to event handlers
 // (pkg/handler), like "enqueue a reconcile request for the object owner".
@@ -75,7 +75,7 @@ limitations under the License.
 // and returns a Response or an error indicating whether to requeue for a
 // second round of processing.
 //
-// Clients (and Caches)
+// Clients and Caches
 //
 // Reconcilers use Clients (pkg/client) to access API objects.  The default
 // client provided by the manager reads from a local shared cache (pkg/cache)
@@ -88,6 +88,12 @@ limitations under the License.
 // may retrieve event recorders (pkg/recorder) to emit events using the
 // manager.
 //
+// Schemes
+//
+// Clients, Caches, and many other things in Kubernetes use Schemes
+// (pkg/runtime/scheme) to associate Go types to Kubernetes API Kinds
+// (Group-Version-Kinds, to be specific).
+//
 // Webhooks
 //
 // Similarly, webhooks (pkg/webhook/admission) may be implemented directly, but
@@ -97,15 +103,16 @@ limitations under the License.
 // Logging and Metrics
 //
 // Logging (pkg/log) in controller-runtime is done via structured logs, using a
-// log interface set called logr (https://godoc.org/github.com/go-logr/logr).
-// While controller-runtime provides easy setup for using Zap
-// (https://go.uber.org/zap, pkg/log/zap), you can provide any implementation
-// of logr as the base logger for controller-runtime.
+// log set of interfaces called logr
+// (https://godoc.org/github.com/go-logr/logr).  While controller-runtime
+// provides easy setup for using Zap (https://go.uber.org/zap, pkg/log/zap),
+// you can provide any implementation of logr as the base logger for
+// controller-runtime.
 //
 // Metrics (pkg/metrics) provided by controller-runtime are registered into a
-// controller-runtime-specific Prometheus metrics registery.  The manager will
-// serve these by default at an HTTP endpoint, and additional metrics may be
-// registered to this Registry as normal.
+// controller-runtime-specific Prometheus metrics registery.  The manager can
+// serve these by an HTTP endpoint, and additional metrics may be registered to
+// this Registry as normal.
 //
 // Testing
 //

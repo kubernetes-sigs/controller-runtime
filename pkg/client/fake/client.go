@@ -47,6 +47,8 @@ var _ client.Client = &fakeClient{}
 
 // NewFakeClient creates a new fake client for testing.
 // You can choose to initialize it with a slice of runtime.Object.
+// Deprecated: use NewFakeClientWithScheme.  You should always be
+// passing an explicit Scheme.
 func NewFakeClient(initObjs ...runtime.Object) client.Client {
 	return NewFakeClientWithScheme(scheme.Scheme, initObjs...)
 }

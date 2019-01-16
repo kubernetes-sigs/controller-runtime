@@ -14,11 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*
-Package leaderelection contains a constructors for a leader election resource lock.
-This is used to ensure that multiple copies of a controller manager can be run with
-only one active set of controllers, for active-passive HA.
-
-It uses built-in Kubernetes leader election APIs.
-*/
-package leaderelection
+// Package runtime contains not-quite-internal mechanisms for
+// controller-runtime, plus some deprecated exports of functionality
+// moved elsewhere.  Most users should not need to import anything in
+// pkg/runtime.
+package runtime

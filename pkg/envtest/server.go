@@ -73,7 +73,9 @@ type Environment struct {
 	// ControlPlane is the ControlPlane including the apiserver and etcd
 	ControlPlane integration.ControlPlane
 
-	// Config can be used to talk to the apiserver
+	// Config can be used to talk to the apiserver.  It's automatically
+	// populated if not set using the standard controller-runtime config
+	// loading.
 	Config *rest.Config
 
 	// CRDs is a list of CRDs to install

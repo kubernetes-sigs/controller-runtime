@@ -25,12 +25,14 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 var (
 	c client.Client
+	someIndexer client.FieldIndexer
 )
 
 func ExampleNew() {
@@ -195,4 +197,25 @@ func ExampleClient_delete() {
 		Version: "v1",
 	})
 	_ = c.Delete(context.Background(), u)
+}
+
+// This example shows how to set up and consume a field select over a pod's volumes' secretName field.
+func ExampleFieldIndexer_secretName() {
+	// someIndexer is a FieldIndexer over a Cache
+	_ = someIndexer.IndexField(&corev1.Pod{}, "spec.volumes.secret.secretName", func(o runtime.Object) []string {
+		var res []string
+		for _, vol := range o.(*corev1.Pod).Spec.Volumes {
+			if vol.Secret == nil {
+				continue
+			}
+			// just return the raw field value -- the indexer will take care of dealing with namespaces for us
+			res = append(res, vol.Secret.SecretName)
+		}
+		return res
+	})
+
+	// elsewhere (e.g. in your reconciler)
+	mySecretName := "someSecret"  // derived from the reconcile.Request, for instance
+	var podsWithSecrets corev1.PodList
+	_ = c.List(context.Background(), &podsWithSecrets, client.MatchingField("spec.volumes.secret.secretName", mySecretName))
 }

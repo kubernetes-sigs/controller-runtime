@@ -100,6 +100,8 @@ type FieldIndexer interface {
 	// compatibility with the Kubernetes API server, only return one key, and only use
 	// fields that the API server supports.  Otherwise, you can return multiple keys,
 	// and "equality" in the field selector means that at least one key matches the value.
+	// The FieldIndexer will automatically take care of indexing over namespace
+	// and supporting efficient all-namespace queries.
 	IndexField(obj runtime.Object, field string, extractValue IndexerFunc) error
 }
 

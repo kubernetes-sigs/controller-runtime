@@ -41,6 +41,15 @@ type Options struct {
 }
 
 // New returns a new Client using the provided config and Options.
+// The returned client reads *and* writes directly from the server
+// (it doesn't use object caches).  It understands how to work with
+// normal types (both custom resources and aggregated/built-in resources),
+// as well as unstructured types.
+//
+// In the case of normal types, the scheme will be used to look up the
+// corresponding group, version, and kind for the given type.  In the
+// case of unstrctured types, the group, version, and kind will be extracted
+// from the corresponding fields on the object.
 func New(config *rest.Config, options Options) (Client, error) {
 	if config == nil {
 		return nil, fmt.Errorf("must provide non-nil rest.Config to client.New")

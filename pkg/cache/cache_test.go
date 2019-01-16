@@ -207,7 +207,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(listObj.Items).NotTo(BeEmpty())
 					Expect(listObj.Items).Should(HaveLen(3))
 					for _, p := range listObj.Items {
-						Expect(p.GroupVersionKind().Empty()).To(BeFalse())
+						Expect(p.GroupVersionKind()).To(Equal(kcorev1.SchemeGroupVersion.WithKind("Pod")))
 					}
 				})
 

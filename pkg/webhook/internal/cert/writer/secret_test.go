@@ -108,9 +108,7 @@ var _ = Describe("secretCertWriter", func() {
 				_, _, err := certWriter.EnsureCert(dnsName)
 				Expect(err).NotTo(HaveOccurred())
 				list := &corev1.SecretList{}
-				err = sCertWriter.Client.List(nil, &client.ListOptions{
-					Namespace: "namespace-bar",
-				}, list)
+				err = sCertWriter.Client.List(nil, list, client.InNamespace("namespace-bar"))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(list.Items).To(HaveLen(1))
 			})
@@ -121,9 +119,7 @@ var _ = Describe("secretCertWriter", func() {
 				_, changed, err := certWriter.EnsureCert(dnsName)
 				Expect(err).NotTo(HaveOccurred())
 				list := &corev1.SecretList{}
-				err = sCertWriter.Client.List(nil, &client.ListOptions{
-					Namespace: "namespace-bar",
-				}, list)
+				err = sCertWriter.Client.List(nil, list, client.InNamespace("namespace-bar"))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(list.Items).To(ConsistOf(*secret))
 				Expect(list.Items).To(HaveLen(1))
@@ -147,9 +143,7 @@ var _ = Describe("secretCertWriter", func() {
 						_, changed, err := certWriter.EnsureCert(dnsName)
 						Expect(err).NotTo(HaveOccurred())
 						list := &corev1.SecretList{}
-						err = sCertWriter.Client.List(nil, &client.ListOptions{
-							Namespace: "namespace-bar",
-						}, list)
+						err = sCertWriter.Client.List(nil, list, client.InNamespace("namespace-bar"))
 						Expect(err).NotTo(HaveOccurred())
 						Expect(list.Items).To(ConsistOf(*secret))
 						Expect(list.Items).To(HaveLen(1))
@@ -174,9 +168,7 @@ var _ = Describe("secretCertWriter", func() {
 						_, changed, err := certWriter.EnsureCert(dnsName)
 						Expect(err).NotTo(HaveOccurred())
 						list := &corev1.SecretList{}
-						err = sCertWriter.Client.List(nil, &client.ListOptions{
-							Namespace: "namespace-bar",
-						}, list)
+						err = sCertWriter.Client.List(nil, list, client.InNamespace("namespace-bar"))
 						Expect(err).NotTo(HaveOccurred())
 						Expect(list.Items).To(ConsistOf(*secret))
 						Expect(list.Items).To(HaveLen(1))
@@ -214,9 +206,7 @@ var _ = Describe("secretCertWriter", func() {
 						_, changed, err := certWriter.EnsureCert(dnsName)
 						Expect(err).NotTo(HaveOccurred())
 						list := &corev1.SecretList{}
-						err = sCertWriter.Client.List(nil, &client.ListOptions{
-							Namespace: "namespace-bar",
-						}, list)
+						err = sCertWriter.Client.List(nil, list, client.InNamespace("namespace-bar"))
 						Expect(err).NotTo(HaveOccurred())
 						Expect(list.Items).To(HaveLen(1))
 						Expect(list.Items[0]).To(Equal(*oldSecret))

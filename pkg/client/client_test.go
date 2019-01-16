@@ -1096,7 +1096,7 @@ var _ = Describe("Client", func() {
 
 				By("listing all objects of that type in the cluster")
 				deps := &appsv1.DeploymentList{}
-				Expect(cl.List(context.Background(), nil, deps)).NotTo(HaveOccurred())
+				Expect(cl.List(context.Background(), deps)).NotTo(HaveOccurred())
 
 				Expect(deps.Items).NotTo(BeEmpty())
 				hasDep := false
@@ -1126,7 +1126,7 @@ var _ = Describe("Client", func() {
 					Kind:    "DeploymentList",
 					Version: "v1",
 				})
-				err = cl.List(context.Background(), nil, deps)
+				err = cl.List(context.Background(), deps)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(deps.Items).NotTo(BeEmpty())
@@ -1149,7 +1149,7 @@ var _ = Describe("Client", func() {
 
 				By("listing all Deployments in the cluster")
 				deps := &appsv1.DeploymentList{}
-				Expect(cl.List(context.Background(), nil, deps)).NotTo(HaveOccurred())
+				Expect(cl.List(context.Background(), deps)).NotTo(HaveOccurred())
 
 				By("validating no Deployments are returned")
 				Expect(deps.Items).To(BeEmpty())
@@ -1205,9 +1205,7 @@ var _ = Describe("Client", func() {
 				By("listing all Deployments with label app=backend")
 				deps := &appsv1.DeploymentList{}
 				labels := map[string]string{"app": "backend"}
-				lo := &client.ListOptions{}
-				lo.MatchingLabels(labels)
-				err = cl.List(context.Background(), lo, deps)
+				err = cl.List(context.Background(), deps, client.MatchingLabels(labels))
 				Expect(err).NotTo(HaveOccurred())
 
 				By("only the Deployment with the backend label is returned")
@@ -1266,9 +1264,7 @@ var _ = Describe("Client", func() {
 
 				By("listing all Deployments in test-namespace-1")
 				deps := &appsv1.DeploymentList{}
-				lo := &client.ListOptions{}
-				lo.InNamespace("test-namespace-1")
-				err = cl.List(context.Background(), lo, deps)
+				err = cl.List(context.Background(), deps, client.InNamespace("test-namespace-1"))
 				Expect(err).NotTo(HaveOccurred())
 
 				By("only the Deployment in test-namespace-1 is returned")
@@ -1323,9 +1319,8 @@ var _ = Describe("Client", func() {
 
 				By("listing all Deployments with field metadata.name=deployment-backend")
 				deps := &appsv1.DeploymentList{}
-				lo := &client.ListOptions{}
-				lo.MatchingField("metadata.name", "deployment-backend")
-				err = cl.List(context.Background(), lo, deps)
+				err = cl.List(context.Background(), deps,
+					client.MatchingField("metadata.name", "deployment-backend"))
 				Expect(err).NotTo(HaveOccurred())
 
 				By("only the Deployment with the backend field is returned")
@@ -1413,10 +1408,10 @@ var _ = Describe("Client", func() {
 				By("listing all Deployments in test-namespace-3 with label app=frontend")
 				deps := &appsv1.DeploymentList{}
 				labels := map[string]string{"app": "frontend"}
-				lo := &client.ListOptions{}
-				lo.InNamespace("test-namespace-3")
-				lo.MatchingLabels(labels)
-				err = cl.List(context.Background(), lo, deps)
+				err = cl.List(context.Background(), deps,
+					client.InNamespace("test-namespace-3"),
+					client.MatchingLabels(labels),
+				)
 				Expect(err).NotTo(HaveOccurred())
 
 				By("only the Deployment in test-namespace-3 with label app=frontend is returned")
@@ -1464,7 +1459,7 @@ var _ = Describe("Client", func() {
 					Kind:    "DeploymentList",
 					Version: "v1",
 				})
-				err = cl.List(context.Background(), nil, deps)
+				err = cl.List(context.Background(), deps)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(deps.Items).NotTo(BeEmpty())
@@ -1490,7 +1485,7 @@ var _ = Describe("Client", func() {
 					Kind:    "DeploymentList",
 					Version: "v1",
 				})
-				Expect(cl.List(context.Background(), nil, deps)).NotTo(HaveOccurred())
+				Expect(cl.List(context.Background(), deps)).NotTo(HaveOccurred())
 
 				By("validating no Deployments are returned")
 				Expect(deps.Items).To(BeEmpty())
@@ -1547,9 +1542,7 @@ var _ = Describe("Client", func() {
 					Kind:    "DeploymentList",
 					Version: "v1",
 				})
-				lo := &client.ListOptions{}
-				lo.InNamespace("test-namespace-5")
-				err = cl.List(context.Background(), lo, deps)
+				err = cl.List(context.Background(), deps, client.InNamespace("test-namespace-5"))
 				Expect(err).NotTo(HaveOccurred())
 
 				By("only the Deployment in test-namespace-5 is returned")
@@ -1609,9 +1602,8 @@ var _ = Describe("Client", func() {
 					Kind:    "DeploymentList",
 					Version: "v1",
 				})
-				lo := &client.ListOptions{}
-				lo.MatchingField("metadata.name", "deployment-backend")
-				err = cl.List(context.Background(), lo, deps)
+				err = cl.List(context.Background(), deps,
+					client.MatchingField("metadata.name", "deployment-backend"))
 				Expect(err).NotTo(HaveOccurred())
 
 				By("only the Deployment with the backend field is returned")
@@ -1704,10 +1696,8 @@ var _ = Describe("Client", func() {
 					Version: "v1",
 				})
 				labels := map[string]string{"app": "frontend"}
-				lo := &client.ListOptions{}
-				lo.InNamespace("test-namespace-7")
-				lo.MatchingLabels(labels)
-				err = cl.List(context.Background(), lo, deps)
+				err = cl.List(context.Background(), deps,
+					client.InNamespace("test-namespace-7"), client.MatchingLabels(labels))
 				Expect(err).NotTo(HaveOccurred())
 
 				By("only the Deployment in test-namespace-7 with label app=frontend is returned")
@@ -1828,19 +1818,30 @@ var _ = Describe("Client", func() {
 
 		It("should be created from MatchingLabels", func() {
 			labels := map[string]string{"foo": "bar"}
-			lo := client.MatchingLabels(labels)
+			lo := &client.ListOptions{}
+			client.MatchingLabels(labels)(lo)
 			Expect(lo).NotTo(BeNil())
 			Expect(lo.LabelSelector.String()).To(Equal("foo=bar"))
 		})
 
 		It("should be created from MatchingField", func() {
-			lo := client.MatchingField("field1", "bar")
+			lo := &client.ListOptions{}
+			client.MatchingField("field1", "bar")(lo)
 			Expect(lo).NotTo(BeNil())
 			Expect(lo.FieldSelector.String()).To(Equal("field1=bar"))
 		})
 
 		It("should be created from InNamespace", func() {
-			lo := client.InNamespace("test")
+			lo := &client.ListOptions{}
+			client.InNamespace("test")(lo)
+			Expect(lo).NotTo(BeNil())
+			Expect(lo.Namespace).To(Equal("test"))
+		})
+
+		It("should allow pre-built ListOptions", func() {
+			lo := &client.ListOptions{}
+			newLo := &client.ListOptions{}
+			client.UseListOptions(newLo.InNamespace("test"))(lo)
 			Expect(lo).NotTo(BeNil())
 			Expect(lo.Namespace).To(Equal("test"))
 		})
@@ -1885,7 +1886,7 @@ var _ = Describe("DelegatingReader", func() {
 				ClientReader: clientReader,
 			}
 			var actual appsv1.DeploymentList
-			dReader.List(context.Background(), nil, &actual)
+			dReader.List(context.Background(), &actual)
 			Expect(1).To(Equal(cachedReader.Called))
 			Expect(0).To(Equal(clientReader.Called))
 
@@ -1899,7 +1900,7 @@ var _ = Describe("DelegatingReader", func() {
 			}
 
 			var actual unstructured.UnstructuredList
-			dReader.List(context.Background(), nil, &actual)
+			dReader.List(context.Background(), &actual)
 			Expect(0).To(Equal(cachedReader.Called))
 			Expect(1).To(Equal(clientReader.Called))
 
@@ -1916,7 +1917,7 @@ func (f *fakeReader) Get(ctx context.Context, key client.ObjectKey, obj runtime.
 	return nil
 }
 
-func (f *fakeReader) List(ctx context.Context, opts *client.ListOptions, list runtime.Object) error {
+func (f *fakeReader) List(ctx context.Context, list runtime.Object, opts ...client.ListOptionFunc) error {
 	f.Called = f.Called + 1
 	return nil
 }

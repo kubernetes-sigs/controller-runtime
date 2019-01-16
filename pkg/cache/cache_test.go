@@ -124,7 +124,7 @@ var _ = Describe("Informer Cache", func() {
 			It("should be able to list objects that haven't been watched previously", func() {
 				By("listing all services in the cluster")
 				listObj := &kcorev1.ServiceList{}
-				Expect(informerCache.List(context.Background(), nil, listObj)).To(Succeed())
+				Expect(informerCache.List(context.Background(), listObj)).To(Succeed())
 
 				By("verifying that the returned list contains the Kubernetes service")
 				// NB: kubernetes default service is automatically created in testenv.
@@ -154,10 +154,9 @@ var _ = Describe("Informer Cache", func() {
 				By("listing pods with a particular label")
 				// NB: each pod has a "test-label": <pod-name>
 				out := kcorev1.PodList{}
-				lo := &client.ListOptions{}
-				lo.InNamespace(testNamespaceTwo)
-				lo.MatchingLabels(map[string]string{"test-label": "test-pod-2"})
-				Expect(informerCache.List(context.Background(), lo, &out)).To(Succeed())
+				Expect(informerCache.List(context.Background(), &out,
+					client.InNamespace(testNamespaceTwo),
+					client.MatchingLabels(map[string]string{"test-label": "test-pod-2"}))).To(Succeed())
 
 				By("verifying the returned pods have the correct label")
 				Expect(out.Items).NotTo(BeEmpty())
@@ -174,9 +173,7 @@ var _ = Describe("Informer Cache", func() {
 				// NB: each pod has a "test-label": <pod-name>
 				out := kcorev1.PodList{}
 				labels := map[string]string{"test-label": "test-pod-2"}
-				lo := &client.ListOptions{}
-				lo.MatchingLabels(labels)
-				Expect(informerCache.List(context.Background(), lo, &out)).To(Succeed())
+				Expect(informerCache.List(context.Background(), &out, client.MatchingLabels(labels))).To(Succeed())
 
 				By("verifying multiple pods with the same label in different namespaces are returned")
 				Expect(out.Items).NotTo(BeEmpty())
@@ -191,9 +188,8 @@ var _ = Describe("Informer Cache", func() {
 			It("should be able to list objects by namespace", func() {
 				By("listing pods in test-namespace-1")
 				listObj := &kcorev1.PodList{}
-				lo := &client.ListOptions{}
-				lo.InNamespace(testNamespaceOne)
-				Expect(informerCache.List(context.Background(), lo, listObj)).To(Succeed())
+				Expect(informerCache.List(context.Background(), listObj,
+					client.InNamespace(testNamespaceOne))).To(Succeed())
 
 				By("verifying that the returned pods are in test-namespace-1")
 				Expect(listObj.Items).NotTo(BeEmpty())
@@ -216,7 +212,7 @@ var _ = Describe("Informer Cache", func() {
 
 				By("listing pods in all namespaces")
 				out := &kcorev1.PodList{}
-				Expect(namespacedCache.List(context.Background(), nil, out)).To(Succeed())
+				Expect(namespacedCache.List(context.Background(), out)).To(Succeed())
 
 				By("verifying the returned pod is from the watched namespace")
 				Expect(out.Items).NotTo(BeEmpty())
@@ -225,7 +221,7 @@ var _ = Describe("Informer Cache", func() {
 
 				By("listing all namespaces - should still be able to get a cluster-scoped resource")
 				namespaceList := &kcorev1.NamespaceList{}
-				Expect(namespacedCache.List(context.Background(), nil, namespaceList)).To(Succeed())
+				Expect(namespacedCache.List(context.Background(), namespaceList)).To(Succeed())
 
 				By("verifying the namespace list is not empty")
 				Expect(namespaceList.Items).NotTo(BeEmpty())
@@ -267,7 +263,7 @@ var _ = Describe("Informer Cache", func() {
 					Version: "v1",
 					Kind:    "ServiceList",
 				})
-				err := informerCache.List(context.Background(), nil, listObj)
+				err := informerCache.List(context.Background(), listObj)
 				Expect(err).To(Succeed())
 
 				By("verifying that the returned list contains the Kubernetes service")
@@ -308,10 +304,9 @@ var _ = Describe("Informer Cache", func() {
 					Version: "v1",
 					Kind:    "PodList",
 				})
-				lo := &client.ListOptions{}
-				lo.InNamespace(testNamespaceTwo)
-				lo.MatchingLabels(map[string]string{"test-label": "test-pod-2"})
-				err := informerCache.List(context.Background(), lo, &out)
+				err := informerCache.List(context.Background(), &out,
+					client.InNamespace(testNamespaceTwo),
+					client.MatchingLabels(map[string]string{"test-label": "test-pod-2"}))
 				Expect(err).To(Succeed())
 
 				By("verifying the returned pods have the correct label")
@@ -334,9 +329,7 @@ var _ = Describe("Informer Cache", func() {
 					Kind:    "PodList",
 				})
 				labels := map[string]string{"test-label": "test-pod-2"}
-				lo := &client.ListOptions{}
-				lo.MatchingLabels(labels)
-				err := informerCache.List(context.Background(), lo, &out)
+				err := informerCache.List(context.Background(), &out, client.MatchingLabels(labels))
 				Expect(err).To(Succeed())
 
 				By("verifying multiple pods with the same label in different namespaces are returned")
@@ -357,9 +350,7 @@ var _ = Describe("Informer Cache", func() {
 					Version: "v1",
 					Kind:    "PodList",
 				})
-				lo := &client.ListOptions{}
-				lo.InNamespace(testNamespaceOne)
-				err := informerCache.List(context.Background(), lo, listObj)
+				err := informerCache.List(context.Background(), listObj, client.InNamespace(testNamespaceOne))
 				Expect(err).To(Succeed())
 
 				By("verifying that the returned pods are in test-namespace-1")
@@ -388,7 +379,7 @@ var _ = Describe("Informer Cache", func() {
 					Version: "v1",
 					Kind:    "PodList",
 				})
-				Expect(namespacedCache.List(context.Background(), nil, out)).To(Succeed())
+				Expect(namespacedCache.List(context.Background(), out)).To(Succeed())
 
 				By("verifying the returned pod is from the watched namespace")
 				Expect(out.Items).NotTo(BeEmpty())
@@ -402,7 +393,7 @@ var _ = Describe("Informer Cache", func() {
 					Version: "v1",
 					Kind:    "NamespaceList",
 				})
-				Expect(namespacedCache.List(context.Background(), nil, namespaceList)).To(Succeed())
+				Expect(namespacedCache.List(context.Background(), namespaceList)).To(Succeed())
 
 				By("verifying the namespace list is not empty")
 				Expect(namespaceList.Items).NotTo(BeEmpty())
@@ -552,9 +543,8 @@ var _ = Describe("Informer Cache", func() {
 
 				By("listing Pods with restartPolicyOnFailure")
 				listObj := &kcorev1.PodList{}
-				lo := &client.ListOptions{}
-				lo.MatchingField("spec.restartPolicy", "OnFailure")
-				Expect(informer.List(context.Background(), lo, listObj)).To(Succeed())
+				Expect(informer.List(context.Background(), listObj,
+					client.MatchingField("spec.restartPolicy", "OnFailure"))).To(Succeed())
 
 				By("verifying that the returned pods have correct restart policy")
 				Expect(listObj.Items).NotTo(BeEmpty())
@@ -647,9 +637,8 @@ var _ = Describe("Informer Cache", func() {
 					Version: "v1",
 					Kind:    "PodList",
 				})
-				lo := &client.ListOptions{}
-				lo.MatchingField("spec.restartPolicy", "OnFailure")
-				err = informer.List(context.Background(), lo, listObj)
+				err = informer.List(context.Background(), listObj,
+					client.MatchingField("spec.restartPolicy", "OnFailure"))
 				Expect(err).To(Succeed())
 
 				By("verifying that the returned pods have correct restart policy")

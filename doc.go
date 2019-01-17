@@ -54,7 +54,7 @@ limitations under the License.
 // common dependencies (pkg/runtime/inject), like shared caches and clients, as
 // well as managing leader election (pkg/leaderelection).  Managers are
 // generally configured to gracefully shut down controllers on pod termination
-// by wiring up a signal handler (pkg/runtime/signals).
+// by wiring up a signal handler (pkg/manager/signals).
 //
 // Controllers
 //

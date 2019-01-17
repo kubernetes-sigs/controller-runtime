@@ -74,8 +74,8 @@ type Manager interface {
 	// GetCache returns a cache.Cache
 	GetCache() cache.Cache
 
-	// GetRecorder returns a new EventRecorder for the provided name
-	GetRecorder(name string) record.EventRecorder
+	// GetEventRecorderFor returns a new EventRecorder for the provided name
+	GetEventRecorderFor(name string) record.EventRecorder
 
 	// GetRESTMapper returns a RESTMapper
 	GetRESTMapper() meta.RESTMapper

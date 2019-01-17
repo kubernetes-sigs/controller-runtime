@@ -85,7 +85,7 @@ func New(name string, mgr manager.Manager, options Options) (Controller, error) 
 		Config:   mgr.GetConfig(),
 		Scheme:   mgr.GetScheme(),
 		Client:   mgr.GetClient(),
-		Recorder: mgr.GetRecorder(name),
+		Recorder: mgr.GetEventRecorderFor(name),
 		Queue:    workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), name),
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
 		Name: name,

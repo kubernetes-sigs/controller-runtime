@@ -166,7 +166,7 @@ func (cm *controllerManager) GetCache() cache.Cache {
 	return cm.cache
 }
 
-func (cm *controllerManager) GetRecorder(name string) record.EventRecorder {
+func (cm *controllerManager) GetEventRecorderFor(name string) record.EventRecorder {
 	return cm.recorderProvider.GetEventRecorderFor(name)
 }
 

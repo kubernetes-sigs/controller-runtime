@@ -25,7 +25,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/mattbaird/jsonpatch"
+	"github.com/appscode/jsonpatch"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 

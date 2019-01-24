@@ -18,7 +18,6 @@ package controller
 
 import (
 	"fmt"
-
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -63,9 +62,9 @@ var _ = Describe("controller", func() {
 		informers = &informertest.FakeInformers{}
 		ctrl = &Controller{
 			MaxConcurrentReconciles: 1,
-			Do:                      fakeReconcile,
-			Queue:                   queue,
-			Cache:                   informers,
+			Do:    fakeReconcile,
+			Queue: queue,
+			Cache: informers,
 		}
 		ctrl.InjectFunc(func(interface{}) error { return nil })
 	})
@@ -177,11 +176,11 @@ var _ = Describe("controller", func() {
 			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
 		})
 
-		It("should inject dependencies into the Reconciler", func() {
+		PIt("should inject dependencies into the Reconciler", func() {
 			// TODO(community): Write this
 		})
 
-		It("should return an error if there is an error injecting into the Reconciler", func() {
+		PIt("should return an error if there is an error injecting into the Reconciler", func() {
 			// TODO(community): Write this
 		})
 
@@ -300,7 +299,7 @@ var _ = Describe("controller", func() {
 			close(done)
 		})
 
-		It("should forget an item if it is not a Request and continue processing items", func() {
+		PIt("should forget an item if it is not a Request and continue processing items", func() {
 			// TODO(community): write this test
 		})
 
@@ -392,19 +391,19 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
 		})
 
-		It("should forget the Request if Reconciler is successful", func() {
+		PIt("should forget the Request if Reconciler is successful", func() {
 			// TODO(community): write this test
 		})
 
-		It("should return if the queue is shutdown", func() {
+		PIt("should return if the queue is shutdown", func() {
 			// TODO(community): write this test
 		})
 
-		It("should wait for informers to be synced before processing items", func() {
+		PIt("should wait for informers to be synced before processing items", func() {
 			// TODO(community): write this test
 		})
 
-		It("should create a new go routine for MaxConcurrentReconciles", func() {
+		PIt("should create a new go routine for MaxConcurrentReconciles", func() {
 			// TODO(community): write this test
 		})
 
@@ -534,16 +533,7 @@ var _ = Describe("controller", func() {
 
 		Context("should update prometheus metrics", func() {
 			It("should requeue a Request if there is an error and continue processing items", func(done Done) {
-				var queueLength, reconcileErrs dto.Metric
-				ctrlmetrics.QueueLength.Reset()
-				Expect(func() error {
-					ctrlmetrics.QueueLength.WithLabelValues(ctrl.Name).Write(&queueLength)
-					if queueLength.GetGauge().GetValue() != 0.0 {
-						return fmt.Errorf("metric queue length not reset")
-					}
-					return nil
-				}()).Should(Succeed())
-
+				var reconcileErrs dto.Metric
 				ctrlmetrics.ReconcileErrors.Reset()
 				Expect(func() error {
 					ctrlmetrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)
@@ -565,13 +555,6 @@ var _ = Describe("controller", func() {
 
 				By("Invoking Reconciler which will give an error")
 				Expect(<-reconciled).To(Equal(request))
-				Eventually(func() error {
-					ctrlmetrics.QueueLength.WithLabelValues(ctrl.Name).Write(&queueLength)
-					if queueLength.GetGauge().GetValue() != 1.0 {
-						return fmt.Errorf("metric queue length not updated")
-					}
-					return nil
-				}, 2.0).Should(Succeed())
 				Eventually(func() error {
 					ctrlmetrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)
 					if reconcileErrs.GetCounter().GetValue() != 1.0 {

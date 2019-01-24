@@ -21,41 +21,50 @@ import (
 	"fmt"
 	"os"
 
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 )
 
-// NB: don't call SetLogger in init(), or else you'll mess up logging in the main suite.
-var log = logf.Log.WithName("builder-examples")
-
-// This example creates a simple application Controller that is configured for ReplicaSets and Pods.
+// This example creates a simple application ControllerManagedBy that is configured for ReplicaSets and Pods.
 //
 // * Create a new application for ReplicaSets that manages Pods owned by the ReplicaSet and calls into
 // ReplicaSetReconciler.
 //
 // * Start the application.
 func ExampleBuilder() {
-	rs, err := builder.SimpleController().
-		ForType(&appsv1.ReplicaSet{}). // ReplicaSet is the Application API
-		Owns(&corev1.Pod{}).           // ReplicaSet owns Pods created by it
-		Build(&ReplicaSetReconciler{}) // Build
+	var log = logf.Log.WithName("builder-examples")
+
+	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
 	if err != nil {
-		log.Error(err, "Unable to build controller")
+		log.Error(err, "could not create manager")
 		os.Exit(1)
 	}
 
-	if err := rs.Start(signals.SetupSignalHandler()); err != nil {
-		log.Error(err, "Unable to run controller")
+	_, err = builder.
+		ControllerManagedBy(mgr).  // Create the ControllerManagedBy
+		For(&appsv1.ReplicaSet{}). // ReplicaSet is the Application API
+		Owns(&corev1.Pod{}).       // ReplicaSet owns Pods created by it
+		Build(&ReplicaSetReconciler{})
+	if err != nil {
+		log.Error(err, "could not create controller")
+		os.Exit(1)
+	}
+
+	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+		log.Error(err, "could not start manager")
 		os.Exit(1)
 	}
 }
 
-// ReplicaSetReconciler is a simple Controller example implementation.
+// ReplicaSetReconciler is a simple ControllerManagedBy example implementation.
 type ReplicaSetReconciler struct {
 	client.Client
 }

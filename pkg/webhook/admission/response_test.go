@@ -25,7 +25,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
@@ -72,7 +71,7 @@ var _ = Describe("admission webhook response", func() {
 					PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
 				},
 			}
-			resp := PatchResponse(&corev1.Pod{}, &corev1.Pod{})
+			resp := PatchResponseFromRaw([]byte(`{}`), []byte(`{}`))
 			Expect(resp).To(Equal(expected))
 		})
 	})

@@ -728,7 +728,7 @@
   version = "kubernetes-1.13.1"
 
 [[projects]]
-  digest = "1:1a0e15167c6d864afac0ccf99a04cda3132afd2a8a7b202e408508197f2cfe14"
+  digest = "1:2b9c47d30a4bd0491b138fc8b9eb016e5ab7eb785b86919aa879b30cb2919707"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -877,7 +877,6 @@
     "util/integer",
     "util/jsonpath",
     "util/retry",
-    "util/testing",
     "util/workqueue",
   ]
   pruneopts = "UT"
@@ -946,7 +945,6 @@
     "go.uber.org/zap/buffer",
     "go.uber.org/zap/zapcore",
     "k8s.io/api/admission/v1beta1",
-    "k8s.io/api/admissionregistration/v1beta1",
     "k8s.io/api/apps/v1",
     "k8s.io/api/autoscaling/v1",
     "k8s.io/api/core/v1",
@@ -964,7 +962,6 @@
     "k8s.io/apimachinery/pkg/runtime/serializer",
     "k8s.io/apimachinery/pkg/selection",
     "k8s.io/apimachinery/pkg/types",
-    "k8s.io/apimachinery/pkg/util/intstr",
     "k8s.io/apimachinery/pkg/util/runtime",
     "k8s.io/apimachinery/pkg/util/sets",
     "k8s.io/apimachinery/pkg/util/uuid",
@@ -988,12 +985,9 @@
     "k8s.io/client-go/tools/metrics",
     "k8s.io/client-go/tools/record",
     "k8s.io/client-go/tools/reference",
-    "k8s.io/client-go/util/cert",
-    "k8s.io/client-go/util/testing",
     "k8s.io/client-go/util/workqueue",
     "k8s.io/kube-openapi/pkg/common",
     "sigs.k8s.io/testing_frameworks/integration",
-    "sigs.k8s.io/testing_frameworks/integration/addr",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

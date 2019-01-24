@@ -20,17 +20,15 @@ import (
 	"flag"
 	"os"
 
-	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apitypes "k8s.io/apimachinery/pkg/types"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -81,52 +79,22 @@ func main() {
 
 	// Setup webhooks
 	entryLog.Info("setting up webhooks")
-	mutatingWebhook, err := builder.NewWebhookBuilder().
-		Name("mutating.k8s.io").
+	mutatingWebhook := builder.NewWebhookBuilder().
+		Path("/mutate-pods").
 		Mutating().
-		Operations(admissionregistrationv1beta1.Create, admissionregistrationv1beta1.Update).
-		WithManager(mgr).
-		ForType(&corev1.Pod{}).
 		Handlers(&podAnnotator{}).
 		Build()
-	if err != nil {
-		entryLog.Error(err, "unable to setup mutating webhook")
-		os.Exit(1)
-	}
 
-	validatingWebhook, err := builder.NewWebhookBuilder().
-		Name("validating.k8s.io").
+	validatingWebhook := builder.NewWebhookBuilder().
+		Path("/validate-pods").
 		Validating().
-		Operations(admissionregistrationv1beta1.Create, admissionregistrationv1beta1.Update).
-		WithManager(mgr).
-		ForType(&corev1.Pod{}).
 		Handlers(&podValidator{}).
 		Build()
-	if err != nil {
-		entryLog.Error(err, "unable to setup validating webhook")
-		os.Exit(1)
-	}
 
 	entryLog.Info("setting up webhook server")
 	as, err := webhook.NewServer("foo-admission-server", mgr, webhook.ServerOptions{
-		Port:                          9876,
-		CertDir:                       "/tmp/cert",
-		DisableWebhookConfigInstaller: &disableWebhookConfigInstaller,
-		BootstrapOptions: &webhook.BootstrapOptions{
-			Secret: &apitypes.NamespacedName{
-				Namespace: "default",
-				Name:      "foo-admission-server-secret",
-			},
-
-			Service: &webhook.Service{
-				Namespace: "default",
-				Name:      "foo-admission-server-service",
-				// Selectors should select the pods that runs this webhook server.
-				Selectors: map[string]string{
-					"app": "foo-admission-server",
-				},
-			},
-		},
+		Port:    9876,
+		CertDir: "/tmp/cert",
 	})
 	if err != nil {
 		entryLog.Error(err, "unable to create a new webhook server")

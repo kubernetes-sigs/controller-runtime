@@ -30,7 +30,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
-	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
 )
@@ -228,59 +227,33 @@ var _ = Describe("admission webhook", func() {
 		Context("valid mutating webhook", func() {
 			wh := &Webhook{
 				Type:     types.WebhookTypeMutating,
+				Path:     "/mutate-deployments",
 				Handlers: []Handler{&fakeHandler{}},
-				Rules: []admissionregistrationv1beta1.RuleWithOperations{
-					{
-						Operations: []admissionregistrationv1beta1.OperationType{},
-						Rule: admissionregistrationv1beta1.Rule{
-							APIGroups:   []string{"apps"},
-							APIVersions: []string{"v1"},
-							Resources:   []string{"deployments"}},
-					},
-				},
 			}
 			It("should pass validation", func() {
 				err := wh.Validate()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(wh.Name).To(Equal("mutatedeployments.example.com"))
-				Expect(wh.Path).To(Equal("/mutate-deployments"))
 			})
 		})
 
 		Context("valid validating webhook", func() {
 			wh := &Webhook{
 				Type:     types.WebhookTypeValidating,
+				Path:     "/validate-deployments",
 				Handlers: []Handler{&fakeHandler{}},
-				Rules: []admissionregistrationv1beta1.RuleWithOperations{
-					{
-						Operations: []admissionregistrationv1beta1.OperationType{},
-						Rule: admissionregistrationv1beta1.Rule{
-							APIGroups:   []string{"apps"},
-							APIVersions: []string{"v1"},
-							Resources:   []string{"deployments"}},
-					},
-				},
 			}
 			It("should pass validation", func() {
 				err := wh.Validate()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(wh.Name).To(Equal("validatedeployments.example.com"))
-				Expect(wh.Path).To(Equal("/validate-deployments"))
 			})
 		})
 
 		Context("missing webhook type", func() {
 			wh := &Webhook{
+				Path:     "/mutate-deployments",
 				Handlers: []Handler{&fakeHandler{}},
-				Rules: []admissionregistrationv1beta1.RuleWithOperations{
-					{
-						Operations: []admissionregistrationv1beta1.OperationType{},
-						Rule: admissionregistrationv1beta1.Rule{
-							APIGroups:   []string{"apps"},
-							APIVersions: []string{"v1"},
-							Resources:   []string{"deployments"}},
-					},
-				},
 			}
 			It("should fail validation", func() {
 				err := wh.Validate()
@@ -288,31 +261,11 @@ var _ = Describe("admission webhook", func() {
 			})
 		})
 
-		Context("missing Rules", func() {
-			wh := &Webhook{
-				Type:     types.WebhookTypeValidating,
-				Handlers: []Handler{&fakeHandler{}},
-			}
-			It("should fail validation", func() {
-				err := wh.Validate()
-				Expect(err).To(Equal(errors.New("field Rules should not be empty")))
-
-			})
-		})
-
 		Context("missing Handlers", func() {
 			wh := &Webhook{
 				Type:     types.WebhookTypeValidating,
+				Path:     "/validate-deployments",
 				Handlers: []Handler{},
-				Rules: []admissionregistrationv1beta1.RuleWithOperations{
-					{
-						Operations: []admissionregistrationv1beta1.OperationType{},
-						Rule: admissionregistrationv1beta1.Rule{
-							APIGroups:   []string{"apps"},
-							APIVersions: []string{"v1"},
-							Resources:   []string{"deployments"}},
-					},
-				},
 			}
 			It("should fail validation", func() {
 				err := wh.Validate()

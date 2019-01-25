@@ -30,6 +30,7 @@ import (
 
 var _ = Describe("Fake client", func() {
 	var dep *appsv1.Deployment
+	var dep2 *appsv1.Deployment
 	var cm *corev1.ConfigMap
 	var cl client.Client
 
@@ -38,6 +39,15 @@ var _ = Describe("Fake client", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-deployment",
 				Namespace: "ns1",
+			},
+		}
+		dep2 = &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-2",
+				Namespace: "ns1",
+				Labels: map[string]string{
+					"test-label": "label-value",
+				},
 			},
 		}
 		cm = &corev1.ConfigMap{
@@ -71,8 +81,20 @@ var _ = Describe("Fake client", func() {
 				Namespace: "ns1",
 			}, list)
 			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(2))
+			Expect(list.Items).To(ConsistOf(*dep, *dep2))
+		})
+
+		It("should support filtering by labels", func() {
+			By("Listing deployments with a particular label")
+			list := &appsv1.DeploymentList{}
+			err := cl.List(nil,
+				client.InNamespace("ns1").MatchingLabels(map[string]string{
+					"test-label": "label-value",
+				}), list)
+			Expect(err).To(BeNil())
 			Expect(list.Items).To(HaveLen(1))
-			Expect(list.Items).To(ConsistOf(*dep))
+			Expect(list.Items).To(ConsistOf(*dep2))
 		})
 
 		It("should be able to Create", func() {
@@ -133,13 +155,14 @@ var _ = Describe("Fake client", func() {
 				Namespace: "ns1",
 			}, list)
 			Expect(err).To(BeNil())
-			Expect(list.Items).To(HaveLen(0))
+			Expect(list.Items).To(HaveLen(1))
+			Expect(list.Items).To(ConsistOf(*dep2))
 		})
 	}
 
 	Context("with default scheme.Scheme", func() {
 		BeforeEach(func(done Done) {
-			cl = NewFakeClient(dep, cm)
+			cl = NewFakeClient(dep, dep2, cm)
 			close(done)
 		})
 		AssertClientBehavior()
@@ -150,7 +173,7 @@ var _ = Describe("Fake client", func() {
 			scheme := runtime.NewScheme()
 			corev1.AddToScheme(scheme)
 			appsv1.AddToScheme(scheme)
-			cl = NewFakeClientWithScheme(scheme, dep, cm)
+			cl = NewFakeClientWithScheme(scheme, dep, dep2, cm)
 			close(done)
 		})
 		AssertClientBehavior()

@@ -98,6 +98,36 @@ var _ = Describe("The Testing Framework", func() {
 		})
 	})
 
+	Context("when etcd already started", func() {
+		It("starts the control plane successfully", func() {
+			myEtcd := &integration.Etcd{}
+			Expect(myEtcd.Start()).To(Succeed())
+
+			controlPlane = &integration.ControlPlane{
+				Etcd: myEtcd,
+			}
+
+			Expect(controlPlane.Start()).To(Succeed())
+		})
+	})
+
+	Context("when control plane is already started", func() {
+		It("can attempt to start again without errors", func() {
+			controlPlane = &integration.ControlPlane{}
+			Expect(controlPlane.Start()).To(Succeed())
+			Expect(controlPlane.Start()).To(Succeed())
+		})
+	})
+
+	Context("when control plane starts and stops", func() {
+		It("can attempt to start again without errors", func() {
+			controlPlane = &integration.ControlPlane{}
+			Expect(controlPlane.Start()).To(Succeed())
+			Expect(controlPlane.Stop()).To(Succeed())
+			Expect(controlPlane.Start()).To(Succeed())
+		})
+	})
+
 	Measure("It should be fast to bring up and tear down the control plane", func(b Benchmarker) {
 		b.Time("lifecycle", func() {
 			controlPlane = &integration.ControlPlane{}

@@ -29,8 +29,8 @@ import (
 )
 
 var (
-	kubeconfig, masterURL string
-	log                   = logf.RuntimeLog.WithName("client").WithName("config")
+	kubeconfig, apiServerURL string
+	log                      = logf.RuntimeLog.WithName("client").WithName("config")
 )
 
 func init() {
@@ -38,12 +38,13 @@ func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "",
 		"Paths to a kubeconfig. Only required if out-of-cluster.")
 
-	flag.StringVar(&masterURL, "master", "",
-		"The address of the Kubernetes API server. Overrides any value in kubeconfig. "+
+	// This flag is deprecated, it'll be removed in a future iteration, please switch to --kubeconfig.
+	flag.StringVar(&apiServerURL, "master", "",
+		"(Deprecated: switch to `--kubeconfig`) The address of the Kubernetes API server. Overrides any value in kubeconfig. "+
 			"Only required if out-of-cluster.")
 }
 
-// GetConfig creates a *rest.Config for talking to a Kubernetes apiserver.
+// GetConfig creates a *rest.Config for talking to a Kubernetes API server.
 // If --kubeconfig is set, will use the kubeconfig file at that location.  Otherwise will assume running
 // in cluster and use the cluster provided kubeconfig.
 //
@@ -59,11 +60,11 @@ func init() {
 func GetConfig() (*rest.Config, error) {
 	// If a flag is specified with the config location, use that
 	if len(kubeconfig) > 0 {
-		return clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
+		return clientcmd.BuildConfigFromFlags(apiServerURL, kubeconfig)
 	}
 	// If an env variable is specified with the config locaiton, use that
 	if len(os.Getenv("KUBECONFIG")) > 0 {
-		return clientcmd.BuildConfigFromFlags(masterURL, os.Getenv("KUBECONFIG"))
+		return clientcmd.BuildConfigFromFlags(apiServerURL, os.Getenv("KUBECONFIG"))
 	}
 	// If no explicit location, try the in-cluster config
 	if c, err := rest.InClusterConfig(); err == nil {

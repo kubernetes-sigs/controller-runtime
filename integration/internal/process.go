@@ -39,6 +39,8 @@ type ProcessState struct {
 	StartMessage string
 	Args         []string
 
+	// ready holds wether the process is currently in ready state (hit the ready condition) or not.
+	// It will be set to true on a successful `Start()` and set to false on a successful `Stop()`
 	ready bool
 }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,77 +18,6 @@ limitations under the License.
 // which contain information associating Go types with Kubernetes
 // groups, versions, and kinds.
 //
-// Each API group should define a utility function
-// called AddToScheme for adding its types to a Scheme:
-//
-//  // in package myapigroupv1...
-//  var (
-//  	SchemeGroupVersion = schema.GroupVersion{Group: "my.api.group", Version: "v1"}
-//  	SchemeBuilder = &scheme.Builder{GroupVersion: SchemeGroupVersion}
-//  	AddToScheme = SchemeBuilder.AddToScheme
-//  )
-//
-//  func init() {
-//  	SchemeBuilder.Register(&MyType{}, &MyTypeList)
-//  }
-//  var (
-//  	scheme *runtime.Scheme = runtime.NewScheme()
-//  )
-//
-// This also true of the built-in Kubernetes types.  Then, in the entrypoint for
-// your manager, assemble the scheme containing exactly the types you need.
-// For instance, if our controller needs types from the core/v1 API group (e.g. Pod),
-// plus types from my.api.group/v1:
-//
-//  func init() {
-//  	myapigroupv1.AddToScheme(scheme)
-//  	kubernetesscheme.AddToScheme(scheme)
-//  }
-//
-//  func main() {
-//  	mgr := controllers.NewManager(controllers.GetConfigOrDie(), manager.Options{
-//  		Scheme: scheme,
-//  	})
-//  	// ...
-//  }
-//
+// Deprecated: use pkg/scheme instead.
 package scheme
 
-import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-)
-
-// Builder builds a new Scheme for mapping go types to Kubernetes GroupVersionKinds.
-type Builder struct {
-	GroupVersion schema.GroupVersion
-	runtime.SchemeBuilder
-}
-
-// Register adds one or objects to the SchemeBuilder so they can be added to a Scheme.  Register mutates bld.
-func (bld *Builder) Register(object ...runtime.Object) *Builder {
-	bld.SchemeBuilder.Register(func(scheme *runtime.Scheme) error {
-		scheme.AddKnownTypes(bld.GroupVersion, object...)
-		metav1.AddToGroupVersion(scheme, bld.GroupVersion)
-		return nil
-	})
-	return bld
-}
-
-// RegisterAll registers all types from the Builder argument.  RegisterAll mutates bld.
-func (bld *Builder) RegisterAll(b *Builder) *Builder {
-	bld.SchemeBuilder = append(bld.SchemeBuilder, b.SchemeBuilder...)
-	return bld
-}
-
-// AddToScheme adds all registered types to s.
-func (bld *Builder) AddToScheme(s *runtime.Scheme) error {
-	return bld.SchemeBuilder.AddToScheme(s)
-}
-
-// Build returns a new Scheme containing the registered types.
-func (bld *Builder) Build() (*runtime.Scheme, error) {
-	s := runtime.NewScheme()
-	return s, bld.AddToScheme(s)
-}

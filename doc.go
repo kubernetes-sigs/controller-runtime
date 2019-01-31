@@ -91,7 +91,7 @@ limitations under the License.
 // Schemes
 //
 // Clients, Caches, and many other things in Kubernetes use Schemes
-// (pkg/runtime/scheme) to associate Go types to Kubernetes API Kinds
+// (pkg/scheme) to associate Go types to Kubernetes API Kinds
 // (Group-Version-Kinds, to be specific).
 //
 // Webhooks

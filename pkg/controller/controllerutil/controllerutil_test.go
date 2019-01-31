@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"math/rand"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -140,7 +142,7 @@ var _ = Describe("Controllerutil", func() {
 					},
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
-							corev1.Container{
+							{
 								Name:  "busybox",
 								Image: "busybox",
 							},
@@ -148,6 +150,8 @@ var _ = Describe("Controllerutil", func() {
 					},
 				},
 			}
+
+			deploy.Spec = deplSpec
 
 			deplKey = types.NamespacedName{
 				Name:      deploy.Name,
@@ -158,7 +162,7 @@ var _ = Describe("Controllerutil", func() {
 		It("creates a new object if one doesn't exists", func() {
 			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentSpecr(deplSpec))
 
-			By("returning OperationResultCreatedd")
+			By("returning OperationResultCreated")
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
 
 			By("returning no error")
@@ -176,7 +180,7 @@ var _ = Describe("Controllerutil", func() {
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
 
 			op, err = controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentScaler(scale))
-			By("returning OperationResultUpdatedd")
+			By("returning OperationResultUpdated")
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultUpdated))
 
 			By("returning no error")
@@ -232,6 +236,16 @@ var _ = Describe("Controllerutil", func() {
 			By("returning error")
 			Expect(err).To(HaveOccurred())
 		})
+
+		It("aborts immediately if there was an error initially retrieving the object", func() {
+			op, err := controllerutil.CreateOrUpdate(context.TODO(), errorReader{c}, deploy, func(_ runtime.Object) error {
+				Fail("Mutation method should not run")
+				return nil
+			})
+
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
+			Expect(err).To(HaveOccurred())
+		})
 	})
 })
 
@@ -272,4 +286,12 @@ func deploymentScaler(replicas int32) controllerutil.MutateFn {
 		return nil
 	}
 	return fn
+}
+
+type errorReader struct {
+	client.Client
+}
+
+func (e errorReader) Get(ctx context.Context, key client.ObjectKey, into runtime.Object) error {
+	return fmt.Errorf("unexpected error")
 }

@@ -34,6 +34,10 @@ Contributors:
   * [Documentation Changes](/.github/PULL_REQUEST_TEMPLATE/docs.md)
   * [Test/Build/Other Changes](/.github/PULL_REQUEST_TEMPLATE/other.md)
 
+## FAQ
+
+See [FAQ.md](FAQ.md)
+
 ## Community, discussion, contribution, and support
 
 Learn how to engage with the Kubernetes community on the [community page](http://kubernetes.io/community/).

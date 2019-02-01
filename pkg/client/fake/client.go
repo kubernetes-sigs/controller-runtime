@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/controller-runtime/pkg/internal/objectutil"
 )
 
 var (
@@ -114,7 +115,25 @@ func (c *fakeClient) List(ctx context.Context, obj runtime.Object, opts ...clien
 	}
 	decoder := scheme.Codecs.UniversalDecoder()
 	_, _, err = decoder.Decode(j, nil, obj)
-	return err
+	if err != nil {
+		return err
+	}
+
+	if listOpts.LabelSelector != nil {
+		objs, err := meta.ExtractList(obj)
+		if err != nil {
+			return err
+		}
+		filteredObjs, err := objectutil.FilterWithLabels(objs, listOpts.LabelSelector)
+		if err != nil {
+			return err
+		}
+		err = meta.SetList(obj, filteredObjs)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *fakeClient) Create(ctx context.Context, obj runtime.Object) error {

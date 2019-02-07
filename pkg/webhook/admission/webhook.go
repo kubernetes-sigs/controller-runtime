@@ -209,10 +209,12 @@ func (w *Webhook) Validate() error {
 	return nil
 }
 
-var _ inject.Injector = &Webhook{}
-
-// InjectFunc injects dependencies into the handlers.
+// InjectFunc injects the field setter into the webhook.
 func (w *Webhook) InjectFunc(f inject.Func) error {
+	// inject directly into the handlers.  It would be more correct
+	// to do this in a sync.Once in Handle (since we don't have some
+	// other start/finalize-type method), but it's more efficient to
+	// do it here, presumably.
 	for _, handler := range w.Handlers {
 		if err := f(handler); err != nil {
 			return err

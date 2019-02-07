@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"sync"
 
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
@@ -62,11 +61,8 @@ type Server struct {
 	// registry maps a path to a http.Handler.
 	registry map[string]http.Handler
 
-	// setFields is used to inject dependencies into webhooks
-	setFields func(i interface{}) error
-
-	// manager is the manager that this webhook server will be registered.
-	manager manager.Manager
+	// setFields allows injecting dependencies from an external source
+	setFields inject.Func
 
 	once sync.Once
 }
@@ -85,12 +81,11 @@ type Webhook interface {
 }
 
 // NewServer creates a new admission webhook server.
-func NewServer(mgr manager.Manager, options ServerOptions) (*Server, error) {
+func NewServer(options ServerOptions) (*Server, error) {
 	as := &Server{
 		sMux:          http.NewServeMux(),
 		registry:      map[string]http.Handler{},
 		ServerOptions: options,
-		manager:       mgr,
 	}
 
 	return as, nil
@@ -130,9 +125,7 @@ func (s *Server) Register(webhooks ...Webhook) error {
 		}
 	}
 
-	// Lazily add Server to manager.
-	// Because the all webhook handlers to be in place, so we can inject the things they need.
-	return s.manager.Add(s)
+	return nil
 }
 
 // Handle registers a http.Handler for the given pattern.
@@ -140,12 +133,18 @@ func (s *Server) Handle(pattern string, handler http.Handler) {
 	s.sMux.Handle(pattern, handler)
 }
 
-var _ manager.Runnable = &Server{}
-
 // Start runs the server.
 // It will install the webhook related resources depend on the server configuration.
 func (s *Server) Start(stop <-chan struct{}) error {
 	s.once.Do(s.setDefault)
+
+	// inject fields here as opposed to in Register so that we're certain to have our setFields
+	// function available.
+	for _, webhook := range s.registry {
+		if err := s.setFields(webhook); err != nil {
+			return err
+		}
+	}
 
 	// TODO: watch the cert dir. Reload the cert if it changes
 	cert, err := tls.LoadX509KeyPair(path.Join(s.CertDir, certName), path.Join(s.CertDir, keyName))
@@ -187,7 +186,7 @@ func (s *Server) Start(stop <-chan struct{}) error {
 	return nil
 }
 
-// InjectFunc injects dependencies into the handlers.
+// InjectFunc injects the field setter into the server.
 func (s *Server) InjectFunc(f inject.Func) error {
 	s.setFields = f
 	return nil

@@ -22,7 +22,7 @@ setup_envs
 
 header_text "running go test"
 
-go test ./pkg/... -parallel 4
+go test ./... -parallel 4
 
 header_text "running coverage"
 

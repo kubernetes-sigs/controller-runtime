@@ -22,7 +22,6 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 // Cache is used by the ControllerManager to inject Cache into Sources, EventHandlers, Predicates, and
@@ -66,20 +65,6 @@ type Client interface {
 func ClientInto(client client.Client, i interface{}) (bool, error) {
 	if s, ok := i.(Client); ok {
 		return true, s.InjectClient(client)
-	}
-	return false, nil
-}
-
-// Decoder is used by the ControllerManager to inject decoder into webhook handlers.
-type Decoder interface {
-	InjectDecoder(types.Decoder) error
-}
-
-// DecoderInto will set decoder on i and return the result if it implements Decoder.  Returns
-// false if i does not implement Decoder.
-func DecoderInto(decoder types.Decoder, i interface{}) (bool, error) {
-	if s, ok := i.(Decoder); ok {
-		return true, s.InjectDecoder(decoder)
 	}
 	return false, nil
 }

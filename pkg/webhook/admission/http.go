@@ -31,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
@@ -55,7 +54,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var body []byte
 	var err error
 
-	var reviewResponse types.Response
+	var reviewResponse Response
 	if r.Body != nil {
 		if body, err = ioutil.ReadAll(r.Body); err != nil {
 			log.Error(err, "unable to read the body from the incoming request")
@@ -81,7 +80,11 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ar := v1beta1.AdmissionReview{}
+	req := Request{}
+	ar := v1beta1.AdmissionReview{
+		// avoid an extra copy
+		Request: &req.AdmissionRequest,
+	}
 	if _, _, err := admissionv1beta1schemecodecs.UniversalDeserializer().Decode(body, nil, &ar); err != nil {
 		log.Error(err, "unable to decode the request")
 		reviewResponse = ErrorResponse(http.StatusBadRequest, err)
@@ -90,13 +93,13 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: add panic-recovery for Handle
-	reviewResponse = wh.Handle(context.Background(), types.Request{AdmissionRequest: ar.Request})
+	reviewResponse = wh.Handle(context.Background(), req)
 	wh.writeResponse(w, reviewResponse)
 }
 
-func (wh *Webhook) writeResponse(w io.Writer, response types.Response) {
-	if response.Response.Result.Code != 0 {
-		if response.Response.Result.Code == http.StatusOK {
+func (wh *Webhook) writeResponse(w io.Writer, response Response) {
+	if response.Result.Code != 0 {
+		if response.Result.Code == http.StatusOK {
 			metrics.TotalRequests.WithLabelValues(wh.Name, "true").Inc()
 		} else {
 			metrics.TotalRequests.WithLabelValues(wh.Name, "false").Inc()
@@ -105,7 +108,7 @@ func (wh *Webhook) writeResponse(w io.Writer, response types.Response) {
 
 	encoder := json.NewEncoder(w)
 	responseAdmissionReview := v1beta1.AdmissionReview{
-		Response: response.Response,
+		Response: &response.AdmissionResponse,
 	}
 	err := encoder.Encode(responseAdmissionReview)
 	if err != nil {

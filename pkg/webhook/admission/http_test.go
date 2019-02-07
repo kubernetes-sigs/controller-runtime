@@ -27,8 +27,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
-	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
 )
 
 var _ = Describe("admission webhook http handler", func() {
@@ -77,7 +75,7 @@ var _ = Describe("admission webhook http handler", func() {
 			Body:   nopCloser{Reader: bytes.NewBufferString("{")},
 		}
 		wh := &Webhook{
-			Type:     types.WebhookTypeMutating,
+			Type:     MutatingWebhook,
 			Handlers: []Handler{},
 		}
 		expected := []byte(
@@ -87,23 +85,6 @@ var _ = Describe("admission webhook http handler", func() {
 			wh.ServeHTTP(w, req)
 			Expect(w.Body.Bytes()).To(Equal(expected))
 
-		})
-	})
-
-	Describe("empty body after decoding", func() {
-		req := &http.Request{
-			Header: http.Header{"Content-Type": []string{"application/json"}},
-			Body:   nopCloser{Reader: bytes.NewBuffer(nil)},
-		}
-		wh := &Webhook{
-			Type:     types.WebhookTypeMutating,
-			Handlers: []Handler{},
-		}
-		expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"got an empty AdmissionRequest","code":400}}}
-`)
-		It("should return an error with bad-request status code", func() {
-			wh.ServeHTTP(w, req)
-			Expect(w.Body.Bytes()).To(Equal(expected))
 		})
 	})
 
@@ -131,7 +112,7 @@ var _ = Describe("admission webhook http handler", func() {
 		}
 		h := &fakeHandler{}
 		wh := &Webhook{
-			Type:     types.WebhookTypeValidating,
+			Type:     ValidatingWebhook,
 			Handlers: []Handler{h},
 		}
 		expected := []byte(`{"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
@@ -152,15 +133,15 @@ func (nopCloser) Close() error { return nil }
 
 type fakeHandler struct {
 	invoked bool
-	fn      func(context.Context, atypes.Request) atypes.Response
+	fn      func(context.Context, Request) Response
 }
 
-func (h *fakeHandler) Handle(ctx context.Context, req atypes.Request) atypes.Response {
+func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {
 	h.invoked = true
 	if h.fn != nil {
 		return h.fn(ctx, req)
 	}
-	return atypes.Response{Response: &admissionv1beta1.AdmissionResponse{
+	return Response{AdmissionResponse: admissionv1beta1.AdmissionResponse{
 		Allowed: true,
 	}}
 }

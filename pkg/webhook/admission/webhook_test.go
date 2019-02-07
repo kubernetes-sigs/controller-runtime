@@ -30,8 +30,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
-	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
 )
 
 var _ = Describe("admission webhook", func() {
@@ -48,18 +46,18 @@ var _ = Describe("admission webhook", func() {
 		var wh *Webhook
 		BeforeEach(func(done Done) {
 			alwaysAllow = &fakeHandler{
-				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
-					return atypes.Response{
-						Response: &admissionv1beta1.AdmissionResponse{
+				fn: func(ctx context.Context, req Request) Response {
+					return Response{
+						AdmissionResponse: admissionv1beta1.AdmissionResponse{
 							Allowed: true,
 						},
 					}
 				},
 			}
 			alwaysDeny = &fakeHandler{
-				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
-					return atypes.Response{
-						Response: &admissionv1beta1.AdmissionResponse{
+				fn: func(ctx context.Context, req Request) Response {
+					return Response{
+						AdmissionResponse: admissionv1beta1.AdmissionResponse{
 							Allowed: false,
 						},
 					}
@@ -75,7 +73,7 @@ var _ = Describe("admission webhook", func() {
 		Context("multiple handlers can be invoked", func() {
 			BeforeEach(func(done Done) {
 				wh = &Webhook{
-					Type:     types.WebhookTypeValidating,
+					Type:     ValidatingWebhook,
 					Handlers: []Handler{alwaysAllow, alwaysDeny},
 				}
 				close(done)
@@ -94,7 +92,7 @@ var _ = Describe("admission webhook", func() {
 		Context("validating webhook should return if one of the handler denies", func() {
 			BeforeEach(func(done Done) {
 				wh = &Webhook{
-					Type:     types.WebhookTypeValidating,
+					Type:     ValidatingWebhook,
 					Handlers: []Handler{alwaysDeny, alwaysAllow},
 				}
 				close(done)
@@ -118,8 +116,8 @@ var _ = Describe("admission webhook", func() {
 				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
 			}
 			patcher1 := &fakeHandler{
-				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
-					return atypes.Response{
+				fn: func(ctx context.Context, req Request) Response {
+					return Response{
 						Patches: []jsonpatch.JsonPatchOperation{
 							{
 								Operation: "add",
@@ -132,7 +130,7 @@ var _ = Describe("admission webhook", func() {
 								Value:     "2",
 							},
 						},
-						Response: &admissionv1beta1.AdmissionResponse{
+						AdmissionResponse: admissionv1beta1.AdmissionResponse{
 							Allowed:   true,
 							PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
 						},
@@ -140,8 +138,8 @@ var _ = Describe("admission webhook", func() {
 				},
 			}
 			patcher2 := &fakeHandler{
-				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
-					return atypes.Response{
+				fn: func(ctx context.Context, req Request) Response {
+					return Response{
 						Patches: []jsonpatch.JsonPatchOperation{
 							{
 								Operation: "add",
@@ -149,7 +147,7 @@ var _ = Describe("admission webhook", func() {
 								Value:     "world",
 							},
 						},
-						Response: &admissionv1beta1.AdmissionResponse{
+						AdmissionResponse: admissionv1beta1.AdmissionResponse{
 							Allowed:   true,
 							PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
 						},
@@ -157,7 +155,7 @@ var _ = Describe("admission webhook", func() {
 				},
 			}
 			wh := &Webhook{
-				Type:     types.WebhookTypeMutating,
+				Type:     MutatingWebhook,
 				Handlers: []Handler{patcher1, patcher2},
 			}
 			expected := []byte(
@@ -201,16 +199,16 @@ var _ = Describe("admission webhook", func() {
 				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
 			}
 			errPatcher := &fakeHandler{
-				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
-					return atypes.Response{
-						Response: &admissionv1beta1.AdmissionResponse{
+				fn: func(ctx context.Context, req Request) Response {
+					return Response{
+						AdmissionResponse: admissionv1beta1.AdmissionResponse{
 							Allowed: false,
 						},
 					}
 				},
 			}
 			wh := &Webhook{
-				Type:     types.WebhookTypeMutating,
+				Type:     MutatingWebhook,
 				Handlers: []Handler{errPatcher},
 			}
 			expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"code":200}}}
@@ -226,7 +224,7 @@ var _ = Describe("admission webhook", func() {
 	Describe("webhook validation", func() {
 		Context("valid mutating webhook", func() {
 			wh := &Webhook{
-				Type:     types.WebhookTypeMutating,
+				Type:     MutatingWebhook,
 				Path:     "/mutate-deployments",
 				Handlers: []Handler{&fakeHandler{}},
 			}
@@ -239,7 +237,7 @@ var _ = Describe("admission webhook", func() {
 
 		Context("valid validating webhook", func() {
 			wh := &Webhook{
-				Type:     types.WebhookTypeValidating,
+				Type:     ValidatingWebhook,
 				Path:     "/validate-deployments",
 				Handlers: []Handler{&fakeHandler{}},
 			}
@@ -257,13 +255,13 @@ var _ = Describe("admission webhook", func() {
 			}
 			It("should fail validation", func() {
 				err := wh.Validate()
-				Expect(err.Error()).To(ContainSubstring("only WebhookTypeMutating and WebhookTypeValidating are supported"))
+				Expect(err).To(MatchError("unsupported Type: 0, only MutatingWebhook and ValidatingWebhook are supported"))
 			})
 		})
 
 		Context("missing Handlers", func() {
 			wh := &Webhook{
-				Type:     types.WebhookTypeValidating,
+				Type:     ValidatingWebhook,
 				Path:     "/validate-deployments",
 				Handlers: []Handler{},
 			}

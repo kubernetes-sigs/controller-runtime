@@ -18,7 +18,6 @@ package builder
 
 import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
 )
 
 // WebhookBuilder builds a webhook based on the provided options.
@@ -37,7 +36,7 @@ type WebhookBuilder struct {
 
 	// t specifies the type of the webhook.
 	// Currently, Mutating and Validating are supported.
-	t *types.WebhookType
+	t *admission.WebhookType
 }
 
 // NewWebhookBuilder creates an empty WebhookBuilder.
@@ -55,7 +54,7 @@ func (b *WebhookBuilder) Name(name string) *WebhookBuilder {
 // Mutating sets the type to mutating admission webhook
 // Only one of Mutating and Validating can be invoked.
 func (b *WebhookBuilder) Mutating() *WebhookBuilder {
-	m := types.WebhookTypeMutating
+	m := admission.MutatingWebhook
 	b.t = &m
 	return b
 }
@@ -63,7 +62,7 @@ func (b *WebhookBuilder) Mutating() *WebhookBuilder {
 // Validating sets the type to validating admission webhook
 // Only one of Mutating and Validating can be invoked.
 func (b *WebhookBuilder) Validating() *WebhookBuilder {
-	m := types.WebhookTypeValidating
+	m := admission.ValidatingWebhook
 	b.t = &m
 	return b
 }

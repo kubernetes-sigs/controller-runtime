@@ -23,13 +23,12 @@ import (
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 // ErrorResponse creates a new Response for error-handling a request.
-func ErrorResponse(code int32, err error) types.Response {
-	return types.Response{
-		Response: &admissionv1beta1.AdmissionResponse{
+func ErrorResponse(code int32, err error) Response {
+	return Response{
+		AdmissionResponse: admissionv1beta1.AdmissionResponse{
 			Allowed: false,
 			Result: &metav1.Status{
 				Code:    code,
@@ -40,14 +39,14 @@ func ErrorResponse(code int32, err error) types.Response {
 }
 
 // ValidationResponse returns a response for admitting a request.
-func ValidationResponse(allowed bool, reason string) types.Response {
-	resp := types.Response{
-		Response: &admissionv1beta1.AdmissionResponse{
+func ValidationResponse(allowed bool, reason string) Response {
+	resp := Response{
+		AdmissionResponse: admissionv1beta1.AdmissionResponse{
 			Allowed: allowed,
 		},
 	}
 	if len(reason) > 0 {
-		resp.Response.Result = &metav1.Status{
+		resp.Result = &metav1.Status{
 			Reason: metav1.StatusReason(reason),
 		}
 	}
@@ -57,14 +56,14 @@ func ValidationResponse(allowed bool, reason string) types.Response {
 // PatchResponseFromRaw takes 2 byte arrays and returns a new response with json patch.
 // The original object should be passed in as raw bytes to avoid the roundtripping problem
 // described in https://github.com/kubernetes-sigs/kubebuilder/issues/510.
-func PatchResponseFromRaw(original, current []byte) types.Response {
+func PatchResponseFromRaw(original, current []byte) Response {
 	patches, err := jsonpatch.CreatePatch(original, current)
 	if err != nil {
 		return ErrorResponse(http.StatusInternalServerError, err)
 	}
-	return types.Response{
+	return Response{
 		Patches: patches,
-		Response: &admissionv1beta1.AdmissionResponse{
+		AdmissionResponse: admissionv1beta1.AdmissionResponse{
 			Allowed:   true,
 			PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
 		},

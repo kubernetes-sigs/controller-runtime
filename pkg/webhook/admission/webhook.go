@@ -31,22 +31,20 @@ import (
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
-	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
 )
 
 // Handler can handle an AdmissionRequest.
 type Handler interface {
-	Handle(context.Context, atypes.Request) atypes.Response
+	Handle(context.Context, Request) Response
 }
 
 // HandlerFunc implements Handler interface using a single function.
-type HandlerFunc func(context.Context, atypes.Request) atypes.Response
+type HandlerFunc func(context.Context, Request) Response
 
 var _ Handler = HandlerFunc(nil)
 
 // Handle process the AdmissionRequest by invoking the underlying function.
-func (f HandlerFunc) Handle(ctx context.Context, req atypes.Request) atypes.Response {
+func (f HandlerFunc) Handle(ctx context.Context, req Request) Response {
 	return f(ctx, req)
 }
 
@@ -55,7 +53,7 @@ type Webhook struct {
 	// Name is the name of the webhook
 	Name string
 	// Type is the webhook type, i.e. mutating, validating
-	Type types.WebhookType
+	Type WebhookType
 	// Path is the path this webhook will serve.
 	Path string
 	// Handlers contains a list of handlers. Each handler may only contains the business logic for its own feature.
@@ -88,35 +86,32 @@ var _ Handler = &Webhook{}
 // If the webhook is mutating type, it delegates the AdmissionRequest to each handler and merge the patches.
 // If the webhook is validating type, it delegates the AdmissionRequest to each handler and
 // deny the request if anyone denies.
-func (w *Webhook) Handle(ctx context.Context, req atypes.Request) atypes.Response {
-	if req.AdmissionRequest == nil {
-		return ErrorResponse(http.StatusBadRequest, errors.New("got an empty AdmissionRequest"))
-	}
-	var resp atypes.Response
+func (w *Webhook) Handle(ctx context.Context, req Request) Response {
+	var resp Response
 	switch w.Type {
-	case types.WebhookTypeMutating:
+	case MutatingWebhook:
 		resp = w.handleMutating(ctx, req)
-	case types.WebhookTypeValidating:
+	case ValidatingWebhook:
 		resp = w.handleValidating(ctx, req)
 	default:
 		return ErrorResponse(http.StatusInternalServerError, errors.New("you must specify your webhook type"))
 	}
-	resp.Response.UID = req.AdmissionRequest.UID
+	resp.UID = req.AdmissionRequest.UID
 	return resp
 }
 
-func (w *Webhook) handleMutating(ctx context.Context, req atypes.Request) atypes.Response {
+func (w *Webhook) handleMutating(ctx context.Context, req Request) Response {
 	patches := []jsonpatch.JsonPatchOperation{}
 	for _, handler := range w.Handlers {
 		resp := handler.Handle(ctx, req)
-		if !resp.Response.Allowed {
-			setStatusOKInAdmissionResponse(resp.Response)
+		if !resp.Allowed {
+			setStatusOKInAdmissionResponse(&resp.AdmissionResponse)
 			return resp
 		}
-		if resp.Response.PatchType != nil && *resp.Response.PatchType != admissionv1beta1.PatchTypeJSONPatch {
+		if resp.PatchType != nil && *resp.PatchType != admissionv1beta1.PatchTypeJSONPatch {
 			return ErrorResponse(http.StatusInternalServerError,
 				fmt.Errorf("unexpected patch type returned by the handler: %v, only allow: %v",
-					resp.Response.PatchType, admissionv1beta1.PatchTypeJSONPatch))
+					resp.PatchType, admissionv1beta1.PatchTypeJSONPatch))
 		}
 		patches = append(patches, resp.Patches...)
 	}
@@ -125,8 +120,8 @@ func (w *Webhook) handleMutating(ctx context.Context, req atypes.Request) atypes
 	if err != nil {
 		return ErrorResponse(http.StatusBadRequest, fmt.Errorf("error when marshaling the patch: %v", err))
 	}
-	return atypes.Response{
-		Response: &admissionv1beta1.AdmissionResponse{
+	return Response{
+		AdmissionResponse: admissionv1beta1.AdmissionResponse{
 			Allowed: true,
 			Result: &metav1.Status{
 				Code: http.StatusOK,
@@ -137,16 +132,16 @@ func (w *Webhook) handleMutating(ctx context.Context, req atypes.Request) atypes
 	}
 }
 
-func (w *Webhook) handleValidating(ctx context.Context, req atypes.Request) atypes.Response {
+func (w *Webhook) handleValidating(ctx context.Context, req Request) Response {
 	for _, handler := range w.Handlers {
 		resp := handler.Handle(ctx, req)
-		if !resp.Response.Allowed {
-			setStatusOKInAdmissionResponse(resp.Response)
+		if !resp.Allowed {
+			setStatusOKInAdmissionResponse(&resp.AdmissionResponse)
 			return resp
 		}
 	}
-	return atypes.Response{
-		Response: &admissionv1beta1.AdmissionResponse{
+	return Response{
+		AdmissionResponse: admissionv1beta1.AdmissionResponse{
 			Allowed: true,
 			Result: &metav1.Status{
 				Code: http.StatusOK,
@@ -180,7 +175,7 @@ func (w *Webhook) GetPath() string {
 }
 
 // GetType returns the type of the webhook.
-func (w *Webhook) GetType() types.WebhookType {
+func (w *Webhook) GetType() WebhookType {
 	w.once.Do(w.setDefaults)
 	return w.Type
 }
@@ -197,8 +192,8 @@ func (w *Webhook) Validate() error {
 	if len(w.Name) == 0 {
 		return errors.New("field Name should not be empty")
 	}
-	if w.Type != types.WebhookTypeMutating && w.Type != types.WebhookTypeValidating {
-		return fmt.Errorf("unsupported Type: %v, only WebhookTypeMutating and WebhookTypeValidating are supported", w.Type)
+	if w.Type != MutatingWebhook && w.Type != ValidatingWebhook {
+		return fmt.Errorf("unsupported Type: %v, only MutatingWebhook and ValidatingWebhook are supported", w.Type)
 	}
 	if len(w.Path) == 0 {
 		return errors.New("field Path should not be empty")

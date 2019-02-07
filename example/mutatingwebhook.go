@@ -23,22 +23,20 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 // podAnnotator annotates Pods
 type podAnnotator struct {
 	client  client.Client
-	decoder types.Decoder
+	decoder admission.Decoder
 }
 
 // Implement admission.Handler so the controller can handle admission request.
 var _ admission.Handler = &podAnnotator{}
 
 // podAnnotator adds an annotation to every incoming pods.
-func (a *podAnnotator) Handle(ctx context.Context, req types.Request) types.Response {
+func (a *podAnnotator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	pod := &corev1.Pod{}
 
 	err := a.decoder.Decode(req, pod)
@@ -70,7 +68,6 @@ func (a *podAnnotator) mutatePodsFn(ctx context.Context, pod *corev1.Pod) error 
 
 // podAnnotator implements inject.Client.
 // A client will be automatically injected.
-var _ inject.Client = &podAnnotator{}
 
 // InjectClient injects the client.
 func (a *podAnnotator) InjectClient(c client.Client) error {
@@ -80,10 +77,9 @@ func (a *podAnnotator) InjectClient(c client.Client) error {
 
 // podAnnotator implements inject.Decoder.
 // A decoder will be automatically injected.
-var _ inject.Decoder = &podAnnotator{}
 
 // InjectDecoder injects the decoder.
-func (a *podAnnotator) InjectDecoder(d types.Decoder) error {
+func (a *podAnnotator) InjectDecoder(d admission.Decoder) error {
 	a.decoder = d
 	return nil
 }

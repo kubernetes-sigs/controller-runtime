@@ -21,27 +21,19 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 )
 
-// DecodeFunc is a function that implements an admission decoder in a single function.
-type DecodeFunc func(Request, runtime.Object) error
-
-var _ Decoder = DecodeFunc(nil)
-
-// Decode implements the Decoder interface.
-func (f DecodeFunc) Decode(req Request, obj runtime.Object) error {
-	return f(req, obj)
-}
-
-type decoder struct {
+// Decoder knows how to decode the contents of an admission
+// request into a concrete object.
+type Decoder struct {
 	codecs serializer.CodecFactory
 }
 
 // NewDecoder creates a Decoder given the runtime.Scheme
-func NewDecoder(scheme *runtime.Scheme) (Decoder, error) {
-	return decoder{codecs: serializer.NewCodecFactory(scheme)}, nil
+func NewDecoder(scheme *runtime.Scheme) (*Decoder, error) {
+	return &Decoder{codecs: serializer.NewCodecFactory(scheme)}, nil
 }
 
 // Decode decodes the inlined object in the AdmissionRequest into the passed-in runtime.Object.
-func (d decoder) Decode(req Request, into runtime.Object) error {
+func (d *Decoder) Decode(req Request, into runtime.Object) error {
 	deserializer := d.codecs.UniversalDeserializer()
 	return runtime.DecodeInto(deserializer, req.AdmissionRequest.Object.Raw, into)
 }

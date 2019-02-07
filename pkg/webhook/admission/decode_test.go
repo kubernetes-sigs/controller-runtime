@@ -27,7 +27,7 @@ import (
 )
 
 var _ = Describe("admission webhook decoder", func() {
-	var decoder Decoder
+	var decoder *Decoder
 	BeforeEach(func(done Done) {
 		var err error
 		decoder, err = NewDecoder(scheme.Scheme)

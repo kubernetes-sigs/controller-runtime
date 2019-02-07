@@ -20,7 +20,6 @@ import (
 	"github.com/appscode/jsonpatch"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // Request defines the input for an admission handler.
@@ -44,12 +43,6 @@ type Response struct {
 	// AdmissionResponse is the raw admission response.
 	// The Patch field in it will be overwritten by the listed patches.
 	admissionv1beta1.AdmissionResponse
-}
-
-// Decoder is used to decode AdmissionRequest.
-type Decoder interface {
-	// Decode decodes the raw byte object from the AdmissionRequest to the passed-in runtime.Object.
-	Decode(Request, runtime.Object) error
 }
 
 // WebhookType defines the type of an admission webhook

@@ -28,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = Describe("admission webhook response", func() {
+var _ = Describe("Admission Webhook Response Helpers", func() {
 	Describe("ErrorResponse", func() {
 		It("should return the response with an error", func() {
 			err := errors.New("this is an error")

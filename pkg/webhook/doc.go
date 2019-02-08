@@ -21,25 +21,14 @@ Currently, it only supports admission webhooks. It will support CRD conversion w
 
 Build webhooks
 
-	// mgr is the manager that runs the server.
-	webhook1, err := NewWebhookBuilder().
-		Name("foo.k8s.io").
-		Mutating().
-		Path("/mutating-pods").
-		Handlers(mutatingHandler1, mutatingHandler2).
-		Build()
-	if err != nil {
-		// handle error
+	webhook1 := &Webhook{
+		Path: "/mutating-pods",
+		Handler: mutatingHandler,
 	}
 
-	webhook2, err := NewWebhookBuilder().
-		Name("bar.k8s.io").
-		Validating().
-		Path("/validating-deployment").
-		Handlers(validatingHandler1).
-		Build()
-	if err != nil {
-		// handle error
+	webhook2 := &Webhook{
+		Path: "/validating-pods",
+		Handler: validatingHandler,
 	}
 
 Create a webhook server.

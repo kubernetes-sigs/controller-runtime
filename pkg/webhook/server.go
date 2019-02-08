@@ -19,6 +19,7 @@ package webhook
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"net/http"
 	"path"
@@ -69,12 +70,11 @@ type Server struct {
 
 // Webhook defines the basics that a webhook should support.
 type Webhook interface {
+	// Webhooks handle HTTP requests.
 	http.Handler
 
 	// GetPath returns the path that the webhook registered.
 	GetPath() string
-	// Handler returns a http.Handler for the webhook.
-	Handler() http.Handler
 	// Validate validates if the webhook itself is valid.
 	// If invalid, a non-nil error will be returned.
 	Validate() error
@@ -115,14 +115,13 @@ func (s *Server) Register(webhooks ...Webhook) error {
 		if err != nil {
 			return err
 		}
-		// Handle actually ensures that no duplicate paths are registered.
-		s.sMux.Handle(webhook.GetPath(), webhook.Handler())
-		s.registry[webhook.GetPath()] = webhooks[i]
-
-		// Inject dependencies to each webhook.
-		if err := s.setFields(webhooks[i]); err != nil {
-			return err
+		// TODO(directxman12): call setfields if we've already started the server
+		_, found := s.registry[webhook.GetPath()]
+		if found {
+			return fmt.Errorf("can't register duplicate path: %v", webhook.GetPath())
 		}
+		s.registry[webhook.GetPath()] = webhooks[i]
+		s.sMux.Handle(webhook.GetPath(), webhook)
 	}
 
 	return nil

@@ -16,35 +16,6 @@ limitations under the License.
 
 package admission
 
-import (
-	"github.com/appscode/jsonpatch"
-
-	admissionv1beta1 "k8s.io/api/admission/v1beta1"
-)
-
-// Request defines the input for an admission handler.
-// It contains information to identify the object in
-// question (group, version, kind, resource, subresource,
-// name, namespace), as well as the operation in question
-// (e.g. Get, Create, etc), and the object itself.
-type Request struct {
-	admissionv1beta1.AdmissionRequest
-}
-
-// Response is the output of an admission handler.
-// It contains a response indicating if a given
-// operation is allowed, as well as a set of patches
-// to mutate the object in the case of a mutating admission handler.
-type Response struct {
-	// Patches are the JSON patches for mutating webhooks.
-	// Using this instead of setting Response.Patch to minimize
-	// overhead of serialization and deserialization.
-	Patches []jsonpatch.JsonPatchOperation
-	// AdmissionResponse is the raw admission response.
-	// The Patch field in it will be overwritten by the listed patches.
-	admissionv1beta1.AdmissionResponse
-}
-
 // WebhookType defines the type of an admission webhook
 // (validating or mutating).
 type WebhookType int

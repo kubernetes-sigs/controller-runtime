@@ -73,7 +73,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// verify the content type is accurate
 	contentType := r.Header.Get("Content-Type")
 	if contentType != "application/json" {
-		err = fmt.Errorf("contentType=%s, expect application/json", contentType)
+		err = fmt.Errorf("contentType=%s, expected application/json", contentType)
 		log.Error(err, "unable to process a request with an unknown content type", "content type", contentType)
 		reviewResponse = ErrorResponse(http.StatusBadRequest, err)
 		wh.writeResponse(w, reviewResponse)

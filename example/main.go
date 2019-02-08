@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/builder"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var log = logf.Log.WithName("example-controller")
@@ -79,17 +79,15 @@ func main() {
 
 	// Setup webhooks
 	entryLog.Info("setting up webhooks")
-	mutatingWebhook := builder.NewWebhookBuilder().
-		Path("/mutate-pods").
-		Mutating().
-		Handlers(&podAnnotator{}).
-		Build()
+	mutatingWebhook := &admission.Webhook{
+		Path:    "/mutate-pods",
+		Handler: &podAnnotator{},
+	}
 
-	validatingWebhook := builder.NewWebhookBuilder().
-		Path("/validate-pods").
-		Validating().
-		Handlers(&podValidator{}).
-		Build()
+	validatingWebhook := &admission.Webhook{
+		Path:    "/validate-pods",
+		Handler: &podValidator{},
+	}
 
 	entryLog.Info("setting up webhook server")
 	as, err := webhook.NewServer(webhook.ServerOptions{

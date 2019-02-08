@@ -33,23 +33,21 @@ Build webhooks
 
 Create a webhook server.
 
-	as, err := NewServer("baz-admission-server", mgr, ServerOptions{
+	hookServer := &Server{
 		CertDir: "/tmp/cert",
-	})
-	if err != nil {
-		// handle error
 	}
+	mgr.Add(hookServer)
 
 Register the webhooks in the server.
 
-	err = as.Register(webhook1, webhook2)
+	err = hookServer.Register(webhook1, webhook2)
 	if err != nil {
 		// handle error
 	}
 
 Start the server by starting the manager
 
-	err := mrg.Start(signals.SetupSignalHandler())
+	err := mgr.Start(signals.SetupSignalHandler())
 	if err != nil {
 		// handle error
 	}

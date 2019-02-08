@@ -34,9 +34,10 @@ const (
 	keyName  = "tls.key"
 )
 
-// ServerOptions are options for configuring an admission webhook server.
-type ServerOptions struct {
-	// Address that the server will listen on.
+// Server is an admission webhook server that can serve traffic and
+// generates related k8s resources for deploying.
+type Server struct {
+	// Host is the address that the server will listen on.
 	// Defaults to "" - all addresses.
 	Host string
 
@@ -50,22 +51,20 @@ type ServerOptions struct {
 	// If using SecretCertWriter in Provisioner, the server will provision the certificate in a secret,
 	// the user is responsible to mount the secret to the this location for the server to consume.
 	CertDir string
-}
 
-// Server is an admission webhook server that can serve traffic and
-// generates related k8s resources for deploying.
-type Server struct {
-	// ServerOptions contains options for configuring the admission server.
-	ServerOptions
+	// TODO(directxman12): should we make the mux configurable?
 
-	sMux *http.ServeMux
-	// registry maps a path to a http.Handler.
-	registry map[string]http.Handler
+	// webhookMux is the multiplexer that handles different webhooks.
+	webhookMux *http.ServeMux
+	// webhooks keep track of all registered webhooks for dependency injection,
+	// and to provide better panic messages on duplicate webhook registration.
+	webhooks map[string]Webhook
 
 	// setFields allows injecting dependencies from an external source
 	setFields inject.Func
 
-	once sync.Once
+	// defaultingOnce ensures that the default fields are only ever set once.
+	defaultingOnce sync.Once
 }
 
 // Webhook defines the basics that a webhook should support.
@@ -80,35 +79,23 @@ type Webhook interface {
 	Validate() error
 }
 
-// NewServer creates a new admission webhook server.
-func NewServer(options ServerOptions) (*Server, error) {
-	as := &Server{
-		sMux:          http.NewServeMux(),
-		registry:      map[string]http.Handler{},
-		ServerOptions: options,
-	}
+// setDefaults does defaulting for the Server.
+func (s *Server) setDefaults() {
+	s.webhooks = map[string]Webhook{}
+	s.webhookMux = http.NewServeMux()
 
-	return as, nil
-}
-
-// setDefault does defaulting for the Server.
-func (s *Server) setDefault() {
-	if s.registry == nil {
-		s.registry = map[string]http.Handler{}
-	}
-	if s.sMux == nil {
-		s.sMux = http.NewServeMux()
-	}
 	if s.Port <= 0 {
 		s.Port = 443
 	}
 	if len(s.CertDir) == 0 {
-		s.CertDir = path.Join("k8s-webhook-server", "cert")
+		s.CertDir = path.Join("/tmp", "k8s-webhook-server", "serving-certs")
 	}
 }
 
 // Register validates and registers webhook(s) in the server
 func (s *Server) Register(webhooks ...Webhook) error {
+	// TODO(directxman12): is it really worth the ergonomics hit to make this a catchable error?
+	// In most cases you'll probably just bail immediately anyway.
 	for i, webhook := range webhooks {
 		// validate the webhook before registering it.
 		err := webhook.Validate()
@@ -116,30 +103,25 @@ func (s *Server) Register(webhooks ...Webhook) error {
 			return err
 		}
 		// TODO(directxman12): call setfields if we've already started the server
-		_, found := s.registry[webhook.GetPath()]
+		_, found := s.webhooks[webhook.GetPath()]
 		if found {
 			return fmt.Errorf("can't register duplicate path: %v", webhook.GetPath())
 		}
-		s.registry[webhook.GetPath()] = webhooks[i]
-		s.sMux.Handle(webhook.GetPath(), webhook)
+		s.webhooks[webhook.GetPath()] = webhooks[i]
+		s.webhookMux.Handle(webhook.GetPath(), webhook)
 	}
 
 	return nil
 }
 
-// Handle registers a http.Handler for the given pattern.
-func (s *Server) Handle(pattern string, handler http.Handler) {
-	s.sMux.Handle(pattern, handler)
-}
-
 // Start runs the server.
 // It will install the webhook related resources depend on the server configuration.
 func (s *Server) Start(stop <-chan struct{}) error {
-	s.once.Do(s.setDefault)
+	s.defaultingOnce.Do(s.setDefaults)
 
 	// inject fields here as opposed to in Register so that we're certain to have our setFields
 	// function available.
-	for _, webhook := range s.registry {
+	for _, webhook := range s.webhooks {
 		if err := s.setFields(webhook); err != nil {
 			return err
 		}
@@ -161,7 +143,7 @@ func (s *Server) Start(stop <-chan struct{}) error {
 	}
 
 	srv := &http.Server{
-		Handler: s.sMux,
+		Handler: s.webhookMux,
 	}
 
 	idleConnsClosed := make(chan struct{})

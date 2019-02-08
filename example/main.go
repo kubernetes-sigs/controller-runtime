@@ -90,18 +90,17 @@ func main() {
 	}
 
 	entryLog.Info("setting up webhook server")
-	as, err := webhook.NewServer(webhook.ServerOptions{
+	hookServer := &webhook.Server{
 		Port:    9876,
 		CertDir: "/tmp/cert",
-	})
-	if err != nil {
-		entryLog.Error(err, "unable to create a new webhook server")
+	}
+	if err := mgr.Add(hookServer); err != nil {
+		entryLog.Error(err, "unable register webhook server with manager")
 		os.Exit(1)
 	}
-	mgr.Add(as)
 
 	entryLog.Info("registering webhooks to the webhook server")
-	err = as.Register(mutatingWebhook, validatingWebhook)
+	err = hookServer.Register(mutatingWebhook, validatingWebhook)
 	if err != nil {
 		entryLog.Error(err, "unable to setup the admission server")
 		os.Exit(1)

@@ -20,9 +20,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"regexp"
-	"strings"
-	"sync"
 
 	"github.com/appscode/jsonpatch"
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
@@ -108,23 +105,11 @@ func (f HandlerFunc) Handle(ctx context.Context, req Request) Response {
 
 // Webhook represents each individual webhook.
 type Webhook struct {
-	// Name is the name of the webhook
-	Name string
 	// Path is the path this webhook will serve.
 	Path string
 	// Handler actually processes an admission request returning whether it was allowed or denied,
 	// and potentially patches to apply to the handler.
 	Handler Handler
-
-	once sync.Once
-}
-
-func (w *Webhook) setDefaults() {
-	if len(w.Name) == 0 {
-		reg := regexp.MustCompile("[^a-zA-Z0-9]+")
-		processedPath := strings.ToLower(reg.ReplaceAllString(w.Path, ""))
-		w.Name = processedPath + ".example.com"
-	}
 }
 
 // Webhook implements Handler interface.
@@ -144,24 +129,13 @@ func (w *Webhook) Handle(ctx context.Context, req Request) Response {
 	return resp
 }
 
-// GetName returns the name of the webhook.
-func (w *Webhook) GetName() string {
-	w.once.Do(w.setDefaults)
-	return w.Name
-}
-
 // GetPath returns the path that the webhook registered.
 func (w *Webhook) GetPath() string {
-	w.once.Do(w.setDefaults)
 	return w.Path
 }
 
 // Validate validates if the webhook is valid.
 func (w *Webhook) Validate() error {
-	w.once.Do(w.setDefaults)
-	if len(w.Name) == 0 {
-		return errors.New("field Name should not be empty")
-	}
 	if len(w.Path) == 0 {
 		return errors.New("field Path should not be empty")
 	}

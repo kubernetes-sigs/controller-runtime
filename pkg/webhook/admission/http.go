@@ -49,7 +49,7 @@ var _ http.Handler = &Webhook{}
 
 func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	startTS := time.Now()
-	defer metrics.RequestLatency.WithLabelValues(wh.Name).Observe(time.Now().Sub(startTS).Seconds())
+	defer metrics.RequestLatency.WithLabelValues(wh.Path).Observe(time.Now().Sub(startTS).Seconds())
 
 	var body []byte
 	var err error
@@ -100,9 +100,9 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (wh *Webhook) writeResponse(w io.Writer, response Response) {
 	if response.Result.Code != 0 {
 		if response.Result.Code == http.StatusOK {
-			metrics.TotalRequests.WithLabelValues(wh.Name, "true").Inc()
+			metrics.TotalRequests.WithLabelValues(wh.Path, "true").Inc()
 		} else {
-			metrics.TotalRequests.WithLabelValues(wh.Name, "false").Inc()
+			metrics.TotalRequests.WithLabelValues(wh.Path, "false").Inc()
 		}
 	}
 

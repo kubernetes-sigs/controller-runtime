@@ -124,15 +124,6 @@ var _ = Describe("Admission Webhooks", func() {
 		Expect(resp.Patch).To(Equal([]byte(`[{"op":"add","path":"/a","value":2},{"op":"replace","path":"/b","value":4}]`)))
 	})
 
-	It("should default a name if none is given", func() {
-		wh := &Webhook{
-			Path:    "/somepath",
-			Handler: &fakeHandler{},
-		}
-
-		Expect(wh.GetName()).NotTo(BeEmpty())
-	})
-
 	Context("validation", func() {
 		It("should accept a properly populated webhook", func() {
 			wh := &Webhook{

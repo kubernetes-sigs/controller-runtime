@@ -16,7 +16,7 @@ limitations under the License.
 
 package admission
 
-// Decoder is used by the ControllerManager to inject decoder into webhook handlers.
+// DecoderInjector is used by the ControllerManager to inject decoder into webhook handlers.
 type DecoderInjector interface {
 	InjectDecoder(Decoder) error
 }

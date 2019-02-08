@@ -105,13 +105,7 @@ var _ = Describe("Admission Webhooks", func() {
 		By("setting up a webhook with a patching handler")
 		webhook := &Webhook{
 			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
-				return Response{
-					Patches: []jsonpatch.Operation{jsonpatch.Operation{Operation: "add", Path: "/a", Value: 2}, jsonpatch.Operation{Operation: "replace", Path: "/b", Value: 4}},
-					AdmissionResponse: admissionv1beta1.AdmissionResponse{
-						Allowed:   true,
-						PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
-					},
-				}
+				return Patched("", jsonpatch.Operation{Operation: "add", Path: "/a", Value: 2}, jsonpatch.Operation{Operation: "replace", Path: "/b", Value: 4})
 			}),
 		}
 
@@ -122,29 +116,5 @@ var _ = Describe("Admission Webhooks", func() {
 		patchType := admissionv1beta1.PatchTypeJSONPatch
 		Expect(resp.PatchType).To(Equal(&patchType))
 		Expect(resp.Patch).To(Equal([]byte(`[{"op":"add","path":"/a","value":2},{"op":"replace","path":"/b","value":4}]`)))
-	})
-
-	Context("validation", func() {
-		It("should accept a properly populated webhook", func() {
-			wh := &Webhook{
-				Path:    "/somepath",
-				Handler: &fakeHandler{},
-			}
-			Expect(wh.Validate()).To(Succeed())
-		})
-
-		It("should fail when missing a path", func() {
-			wh := &Webhook{
-				Handler: &fakeHandler{},
-			}
-			Expect(wh.Validate()).NotTo(Succeed())
-		})
-
-		It("should fail when missing a handler", func() {
-			wh := &Webhook{
-				Path: "/somepath",
-			}
-			Expect(wh.Validate()).NotTo(Succeed())
-		})
 	})
 })

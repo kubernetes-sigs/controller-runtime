@@ -32,9 +32,6 @@ type podAnnotator struct {
 	decoder admission.Decoder
 }
 
-// Implement admission.Handler so the controller can handle admission request.
-var _ admission.Handler = &podAnnotator{}
-
 // podAnnotator adds an annotation to every incoming pods.
 func (a *podAnnotator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	pod := &corev1.Pod{}
@@ -44,10 +41,10 @@ func (a *podAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 		return admission.ErrorResponse(http.StatusBadRequest, err)
 	}
 
-	err = a.mutatePodsFn(ctx, pod)
-	if err != nil {
-		return admission.ErrorResponse(http.StatusInternalServerError, err)
+	if pod.Annotations == nil {
+		pod.Annotations = map[string]string{}
 	}
+	pod.Annotations["example-mutating-admission-webhook"] = "foo"
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
@@ -55,15 +52,6 @@ func (a *podAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 	}
 
 	return admission.PatchResponseFromRaw(req.AdmissionRequest.Object.Raw, marshaledPod)
-}
-
-// mutatePodsFn add an annotation to the given pod
-func (a *podAnnotator) mutatePodsFn(ctx context.Context, pod *corev1.Pod) error {
-	if pod.Annotations == nil {
-		pod.Annotations = map[string]string{}
-	}
-	pod.Annotations["example-mutating-admission-webhook"] = "foo"
-	return nil
 }
 
 // podAnnotator implements inject.Client.

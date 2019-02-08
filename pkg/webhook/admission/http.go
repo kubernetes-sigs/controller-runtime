@@ -24,33 +24,24 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"time"
 
 	"k8s.io/api/admission/v1beta1"
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
-var admissionv1beta1scheme = runtime.NewScheme()
-var admissionv1beta1schemecodecs = serializer.NewCodecFactory(admissionv1beta1scheme)
+var admissionScheme = runtime.NewScheme()
+var admissionCodecs = serializer.NewCodecFactory(admissionScheme)
 
 func init() {
-	addToScheme(admissionv1beta1scheme)
-}
-
-func addToScheme(scheme *runtime.Scheme) {
-	utilruntime.Must(admissionv1beta1.AddToScheme(scheme))
+	utilruntime.Must(admissionv1beta1.AddToScheme(admissionScheme))
 }
 
 var _ http.Handler = &Webhook{}
 
-func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	startTS := time.Now()
-	defer metrics.RequestLatency.WithLabelValues(wh.Path).Observe(time.Now().Sub(startTS).Seconds())
-
+func (wh Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var body []byte
 	var err error
 
@@ -85,7 +76,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// avoid an extra copy
 		Request: &req.AdmissionRequest,
 	}
-	if _, _, err := admissionv1beta1schemecodecs.UniversalDeserializer().Decode(body, nil, &ar); err != nil {
+	if _, _, err := admissionCodecs.UniversalDeserializer().Decode(body, nil, &ar); err != nil {
 		log.Error(err, "unable to decode the request")
 		reviewResponse = ErrorResponse(http.StatusBadRequest, err)
 		wh.writeResponse(w, reviewResponse)
@@ -98,14 +89,6 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wh *Webhook) writeResponse(w io.Writer, response Response) {
-	if response.Result.Code != 0 {
-		if response.Result.Code == http.StatusOK {
-			metrics.TotalRequests.WithLabelValues(wh.Path, "true").Inc()
-		} else {
-			metrics.TotalRequests.WithLabelValues(wh.Path, "false").Inc()
-		}
-	}
-
 	encoder := json.NewEncoder(w)
 	responseAdmissionReview := v1beta1.AdmissionReview{
 		Response: &response.AdmissionResponse,

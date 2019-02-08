@@ -25,6 +25,28 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// Allowed constructs a response indicating that the given operation
+// is allowed (without any patches).
+func Allowed(reason string) Response {
+	return ValidationResponse(true, reason)
+}
+
+// Denied constructs a response indicating that the given operation
+// is not allowed.
+func Denied(reason string) Response {
+	return ValidationResponse(false, reason)
+}
+
+// Patched constructs a response indicating that the given operation is
+// allowed, and that the target object should be modified by the given
+// JSONPatch operations.
+func Patched(reason string, patches ...jsonpatch.JsonPatchOperation) Response {
+	resp := Allowed(reason)
+	resp.Patches = patches
+
+	return resp
+}
+
 // ErrorResponse creates a new Response for error-handling a request.
 func ErrorResponse(code int32, err error) Response {
 	return Response{

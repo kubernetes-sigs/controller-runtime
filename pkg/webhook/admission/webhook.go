@@ -105,15 +105,10 @@ func (f HandlerFunc) Handle(ctx context.Context, req Request) Response {
 
 // Webhook represents each individual webhook.
 type Webhook struct {
-	// Path is the path this webhook will serve.
-	Path string
 	// Handler actually processes an admission request returning whether it was allowed or denied,
 	// and potentially patches to apply to the handler.
 	Handler Handler
 }
-
-// Webhook implements Handler interface.
-var _ Handler = &Webhook{}
 
 // Handle processes AdmissionRequest.
 // If the webhook is mutating type, it delegates the AdmissionRequest to each handler and merge the patches.
@@ -127,22 +122,6 @@ func (w *Webhook) Handle(ctx context.Context, req Request) Response {
 	}
 
 	return resp
-}
-
-// GetPath returns the path that the webhook registered.
-func (w *Webhook) GetPath() string {
-	return w.Path
-}
-
-// Validate validates if the webhook is valid.
-func (w *Webhook) Validate() error {
-	if len(w.Path) == 0 {
-		return errors.New("field Path should not be empty")
-	}
-	if w.Handler == nil {
-		return errors.New("field Handler should not be empty")
-	}
-	return nil
 }
 
 // InjectFunc injects the field setter into the webhook.

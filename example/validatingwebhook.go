@@ -32,9 +32,6 @@ type podValidator struct {
 	decoder admission.Decoder
 }
 
-// Implement admission.Handler so the controller can handle admission request.
-var _ admission.Handler = &podValidator{}
-
 // podValidator admits a pod iff a specific annotation exists.
 func (v *podValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	pod := &corev1.Pod{}
@@ -44,26 +41,16 @@ func (v *podValidator) Handle(ctx context.Context, req admission.Request) admiss
 		return admission.ErrorResponse(http.StatusBadRequest, err)
 	}
 
-	allowed, reason, err := v.validatePodsFn(ctx, pod)
-	if err != nil {
-		return admission.ErrorResponse(http.StatusInternalServerError, err)
-	}
-	return admission.ValidationResponse(allowed, reason)
-}
-
-func (v *podValidator) validatePodsFn(ctx context.Context, pod *corev1.Pod) (bool, string, error) {
 	key := "example-mutating-admission-webhook"
 	anno, found := pod.Annotations[key]
-	switch {
-	case !found:
-		return found, fmt.Sprintf("failed to find annotation with key: %q", key), nil
-	case found && anno == "foo":
-		return found, "", nil
-	case found && anno != "foo":
-		return false,
-			fmt.Sprintf("the value associate with key %q is expected to be %q, but got %q", key, "foo", anno), nil
+	if !found {
+		return admission.Denied(fmt.Sprintf("missing annotation %s", key))
 	}
-	return false, "", nil
+	if anno != "foo" {
+		return admission.Denied(fmt.Sprintf("annotation %s did not have value %q", key, "foo"))
+	}
+
+	return admission.Allowed("")
 }
 
 // podValidator implements inject.Client.

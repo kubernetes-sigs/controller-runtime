@@ -25,8 +25,10 @@ import (
 	"path"
 	"strconv"
 	"sync"
+	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
 const (
@@ -58,7 +60,7 @@ type Server struct {
 	webhookMux *http.ServeMux
 	// webhooks keep track of all registered webhooks for dependency injection,
 	// and to provide better panic messages on duplicate webhook registration.
-	webhooks map[string]Webhook
+	webhooks map[string]http.Handler
 
 	// setFields allows injecting dependencies from an external source
 	setFields inject.Func
@@ -67,21 +69,9 @@ type Server struct {
 	defaultingOnce sync.Once
 }
 
-// Webhook defines the basics that a webhook should support.
-type Webhook interface {
-	// Webhooks handle HTTP requests.
-	http.Handler
-
-	// GetPath returns the path that the webhook registered.
-	GetPath() string
-	// Validate validates if the webhook itself is valid.
-	// If invalid, a non-nil error will be returned.
-	Validate() error
-}
-
 // setDefaults does defaulting for the Server.
 func (s *Server) setDefaults() {
-	s.webhooks = map[string]Webhook{}
+	s.webhooks = map[string]http.Handler{}
 	s.webhookMux = http.NewServeMux()
 
 	if s.Port <= 0 {
@@ -92,26 +82,28 @@ func (s *Server) setDefaults() {
 	}
 }
 
-// Register validates and registers webhook(s) in the server
-func (s *Server) Register(webhooks ...Webhook) error {
-	// TODO(directxman12): is it really worth the ergonomics hit to make this a catchable error?
-	// In most cases you'll probably just bail immediately anyway.
-	for i, webhook := range webhooks {
-		// validate the webhook before registering it.
-		err := webhook.Validate()
-		if err != nil {
-			return err
-		}
-		// TODO(directxman12): call setfields if we've already started the server
-		_, found := s.webhooks[webhook.GetPath()]
-		if found {
-			return fmt.Errorf("can't register duplicate path: %v", webhook.GetPath())
-		}
-		s.webhooks[webhook.GetPath()] = webhooks[i]
-		s.webhookMux.Handle(webhook.GetPath(), webhook)
+// Register marks the given webhook as being served at the given path.
+// It panics if two hooks are registered on the same path.
+func (s *Server) Register(path string, hook http.Handler) {
+	s.defaultingOnce.Do(s.setDefaults)
+	_, found := s.webhooks[path]
+	if found {
+		panic(fmt.Errorf("can't register duplicate path: %v", path))
 	}
+	// TODO(directxman12): call setfields if we've already started the server
+	s.webhooks[path] = hook
+	s.webhookMux.Handle(path, instrumentedHook(path, hook))
+}
 
-	return nil
+// instrumentedHook adds some instrumentation on top of the given webhook.
+func instrumentedHook(path string, hookRaw http.Handler) http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		startTS := time.Now()
+		defer func() { metrics.RequestLatency.WithLabelValues(path).Observe(time.Now().Sub(startTS).Seconds()) }()
+		hookRaw.ServeHTTP(resp, req)
+
+		// TODO(directxman12): add back in metric about total requests broken down by result?
+	})
 }
 
 // Start runs the server.

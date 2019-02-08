@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var log = logf.Log.WithName("example-controller")
@@ -78,17 +77,6 @@ func main() {
 	}
 
 	// Setup webhooks
-	entryLog.Info("setting up webhooks")
-	mutatingWebhook := &admission.Webhook{
-		Path:    "/mutate-pods",
-		Handler: &podAnnotator{},
-	}
-
-	validatingWebhook := &admission.Webhook{
-		Path:    "/validate-pods",
-		Handler: &podValidator{},
-	}
-
 	entryLog.Info("setting up webhook server")
 	hookServer := &webhook.Server{
 		Port:    9876,
@@ -100,11 +88,8 @@ func main() {
 	}
 
 	entryLog.Info("registering webhooks to the webhook server")
-	err = hookServer.Register(mutatingWebhook, validatingWebhook)
-	if err != nil {
-		entryLog.Error(err, "unable to setup the admission server")
-		os.Exit(1)
-	}
+	hookServer.Register("/mutate-pods", webhook.Admission{&podAnnotator{}})
+	hookServer.Register("/validate-pods", webhook.Admission{&podValidator{}})
 
 	entryLog.Info("starting manager")
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {

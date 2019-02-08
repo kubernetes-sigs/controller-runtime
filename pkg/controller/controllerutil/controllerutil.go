@@ -116,11 +116,13 @@ const ( // They should complete the sentence "Deployment default/foo has been ..
 
 // CreateOrUpdate creates or updates the given object obj in the Kubernetes
 // cluster. The object's desired state should be reconciled with the existing
-// state using the passed in ReconcileFn. obj must be a struct pointer so that
+// state using the passed in MutateFn. obj is just a struct pointer so that
 // obj can be updated with the content returned by the Server.
 //
+// The MutateFn is called regardless of creating or updating an object.
+//
 // It returns the executed operation and an error.
-func CreateOrUpdate(ctx context.Context, c client.Client, obj runtime.Object, f MutateFn) (OperationResult, error) {
+func CreateOrUpdate(ctx context.Context, c client.Client, obj runtime.Object, f MutateFn) (OperationResult, error) { // nolint: gocyclo
 	key, err := client.ObjectKeyFromObject(obj)
 	if err != nil {
 		return OperationResultNone, err
@@ -128,6 +130,9 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj runtime.Object, f 
 
 	if err := c.Get(ctx, key, obj); err != nil {
 		if errors.IsNotFound(err) {
+			if err := f(obj); err != nil {
+				return OperationResultNone, err
+			}
 			if err := c.Create(ctx, obj); err != nil {
 				return OperationResultNone, err
 			}

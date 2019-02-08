@@ -151,8 +151,6 @@ var _ = Describe("Controllerutil", func() {
 				},
 			}
 
-			deploy.Spec = deplSpec
-
 			deplKey = types.NamespacedName{
 				Name:      deploy.Name,
 				Namespace: deploy.Namespace,
@@ -162,15 +160,20 @@ var _ = Describe("Controllerutil", func() {
 		It("creates a new object if one doesn't exists", func() {
 			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentSpecr(deplSpec))
 
-			By("returning OperationResultCreated")
-			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
-
 			By("returning no error")
 			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultCreated")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
 
 			By("actually having the deployment created")
 			fetched := &appsv1.Deployment{}
 			Expect(c.Get(context.TODO(), deplKey, fetched)).To(Succeed())
+
+			By("applying MutateFn")
+			Expect(fetched.Spec.Template.Spec.Containers).To(HaveLen(1))
+			Expect(fetched.Spec.Template.Spec.Containers[0].Name).To(Equal(deplSpec.Template.Spec.Containers[0].Name))
+			Expect(fetched.Spec.Template.Spec.Containers[0].Image).To(Equal(deplSpec.Template.Spec.Containers[0].Image))
 		})
 
 		It("updates existing object", func() {
@@ -180,11 +183,11 @@ var _ = Describe("Controllerutil", func() {
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
 
 			op, err = controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentScaler(scale))
-			By("returning OperationResultUpdated")
-			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultUpdated))
-
 			By("returning no error")
 			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultUpdated")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultUpdated))
 
 			By("actually having the deployment scaled")
 			fetched := &appsv1.Deployment{}
@@ -199,12 +202,11 @@ var _ = Describe("Controllerutil", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			op, err = controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentIdentity)
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("returning OperationResultNone")
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
-
-			By("returning no error")
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("errors when reconcile renames an object", func() {
@@ -215,11 +217,11 @@ var _ = Describe("Controllerutil", func() {
 
 			op, err = controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentRenamer)
 
-			By("returning OperationResultNone")
-			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
-
 			By("returning error")
 			Expect(err).To(HaveOccurred())
+
+			By("returning OperationResultNone")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
 		})
 
 		It("errors when object namespace changes", func() {
@@ -230,11 +232,11 @@ var _ = Describe("Controllerutil", func() {
 
 			op, err = controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentNamespaceChanger)
 
-			By("returning OperationResultNone")
-			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
-
 			By("returning error")
 			Expect(err).To(HaveOccurred())
+
+			By("returning OperationResultNone")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
 		})
 
 		It("aborts immediately if there was an error initially retrieving the object", func() {

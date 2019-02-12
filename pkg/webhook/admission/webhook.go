@@ -30,7 +30,6 @@ import (
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
@@ -210,24 +209,12 @@ func (w *Webhook) Validate() error {
 	return nil
 }
 
-var _ inject.Client = &Webhook{}
+var _ inject.Injector = &Webhook{}
 
-// InjectClient injects the client into the handlers
-func (w *Webhook) InjectClient(c client.Client) error {
+// InjectFunc injects dependencies into the handlers.
+func (w *Webhook) InjectFunc(f inject.Func) error {
 	for _, handler := range w.Handlers {
-		if _, err := inject.ClientInto(c, handler); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-var _ inject.Decoder = &Webhook{}
-
-// InjectDecoder injects the decoder into the handlers
-func (w *Webhook) InjectDecoder(d atypes.Decoder) error {
-	for _, handler := range w.Handlers {
-		if _, err := inject.DecoderInto(d, handler); err != nil {
+		if err := f(handler); err != nil {
 			return err
 		}
 	}

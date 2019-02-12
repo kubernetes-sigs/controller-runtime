@@ -25,8 +25,6 @@ import (
 	"strconv"
 	"sync"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
@@ -48,11 +46,6 @@ type ServerOptions struct {
 	// If using SecretCertWriter in Provisioner, the server will provision the certificate in a secret,
 	// the user is responsible to mount the secret to the this location for the server to consume.
 	CertDir string
-
-	// Client is a client defined in controller-runtime instead of a client-go client.
-	// It knows how to talk to a kubernetes cluster.
-	// Client will be injected by the manager if not set.
-	Client client.Client
 }
 
 // Server is an admission webhook server that can serve traffic and
@@ -70,6 +63,9 @@ type Server struct {
 
 	// manager is the manager that this webhook server will be registered.
 	manager manager.Manager
+
+	// setFields is used to inject dependencies into webhooks
+	setFields func(i interface{}) error
 
 	// err will be non-nil if there is an error occur during initialization.
 	err error
@@ -120,19 +116,6 @@ func (s *Server) setDefault() {
 	if len(s.CertDir) == 0 {
 		s.CertDir = path.Join("k8s-webhook-server", "cert")
 	}
-
-	if s.Client == nil {
-		cfg, err := config.GetConfig()
-		if err != nil {
-			s.err = err
-			return
-		}
-		s.Client, err = client.New(cfg, client.Options{})
-		if err != nil {
-			s.err = err
-			return
-		}
-	}
 }
 
 // Register validates and registers webhook(s) in the server
@@ -160,7 +143,13 @@ func (s *Server) Complete() error {
 	if s.err != nil {
 		return s.err
 	}
-	// TODO(mengqiy): inject dependencies into each http.Handler
+
+	for path := range s.registry {
+		// Inject dependencies into each http.Handler
+		if err := s.setFields(s.registry[path]); err != nil {
+			return err
+		}
+	}
 	return s.manager.Add(s)
 }
 
@@ -214,18 +203,10 @@ func (s *Server) Start(stop <-chan struct{}) error {
 	return nil
 }
 
-var _ inject.Client = &Server{}
+var _ inject.Injector = &Server{}
 
-// InjectClient injects the client into the server
-func (s *Server) InjectClient(c client.Client) error {
-	s.Client = c
-	for path := range s.registry {
-		// TODO(mengqiy): remove this in PR #316
-		if wh, ok := s.registry[path].(Webhook); ok {
-			if _, err := inject.ClientInto(c, wh.Handler()); err != nil {
-				return err
-			}
-		}
-	}
+// InjectFunc injects dependencies into the handlers.
+func (s *Server) InjectFunc(f inject.Func) error {
+	s.setFields = f
 	return nil
 }

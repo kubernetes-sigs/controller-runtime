@@ -92,7 +92,7 @@ func main() {
 		Build()
 
 	entryLog.Info("setting up webhook server")
-	as, err := webhook.NewServer("foo-admission-server", mgr, webhook.ServerOptions{
+	as, err := webhook.NewServer(mgr, webhook.ServerOptions{
 		Port:    9876,
 		CertDir: "/tmp/cert",
 	})
@@ -104,7 +104,7 @@ func main() {
 	entryLog.Info("registering webhooks to the webhook server")
 	err = as.Register(mutatingWebhook, validatingWebhook)
 	if err != nil {
-		entryLog.Error(err, "unable to register webhooks in the admission server")
+		entryLog.Error(err, "unable to setup the admission server")
 		os.Exit(1)
 	}
 

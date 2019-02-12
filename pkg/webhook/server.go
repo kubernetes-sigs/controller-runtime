@@ -19,18 +19,14 @@ package webhook
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"net"
 	"net/http"
 	"path"
 	"strconv"
 	"sync"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
-	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 const (
@@ -50,28 +46,20 @@ type ServerOptions struct {
 	// If using SecretCertWriter in Provisioner, the server will provision the certificate in a secret,
 	// the user is responsible to mount the secret to the this location for the server to consume.
 	CertDir string
-
-	// Client is a client defined in controller-runtime instead of a client-go client.
-	// It knows how to talk to a kubernetes cluster.
-	// Client will be injected by the manager if not set.
-	Client client.Client
-
-	// err will be non-nil if there is an error occur during initialization.
-	err error // nolint: structcheck
 }
 
 // Server is an admission webhook server that can serve traffic and
 // generates related k8s resources for deploying.
 type Server struct {
-	// Name is the name of server
-	Name string
-
 	// ServerOptions contains options for configuring the admission server.
 	ServerOptions
 
 	sMux *http.ServeMux
 	// registry maps a path to a http.Handler.
-	registry map[string]Webhook
+	registry map[string]http.Handler
+
+	// setFields is used to inject dependencies into webhooks
+	setFields func(i interface{}) error
 
 	// manager is the manager that this webhook server will be registered.
 	manager manager.Manager
@@ -81,6 +69,8 @@ type Server struct {
 
 // Webhook defines the basics that a webhook should support.
 type Webhook interface {
+	http.Handler
+
 	// GetPath returns the path that the webhook registered.
 	GetPath() string
 	// Handler returns a http.Handler for the webhook.
@@ -91,11 +81,10 @@ type Webhook interface {
 }
 
 // NewServer creates a new admission webhook server.
-func NewServer(name string, mgr manager.Manager, options ServerOptions) (*Server, error) {
+func NewServer(mgr manager.Manager, options ServerOptions) (*Server, error) {
 	as := &Server{
-		Name:          name,
 		sMux:          http.NewServeMux(),
-		registry:      map[string]Webhook{},
+		registry:      map[string]http.Handler{},
 		ServerOptions: options,
 		manager:       mgr,
 	}
@@ -105,33 +94,17 @@ func NewServer(name string, mgr manager.Manager, options ServerOptions) (*Server
 
 // setDefault does defaulting for the Server.
 func (s *Server) setDefault() {
-	if len(s.Name) == 0 {
-		s.Name = "default-k8s-webhook-server"
-	}
 	if s.registry == nil {
-		s.registry = map[string]Webhook{}
+		s.registry = map[string]http.Handler{}
 	}
 	if s.sMux == nil {
-		s.sMux = http.DefaultServeMux
+		s.sMux = http.NewServeMux()
 	}
 	if s.Port <= 0 {
 		s.Port = 443
 	}
 	if len(s.CertDir) == 0 {
 		s.CertDir = path.Join("k8s-webhook-server", "cert")
-	}
-
-	if s.Client == nil {
-		cfg, err := config.GetConfig()
-		if err != nil {
-			s.err = err
-			return
-		}
-		s.Client, err = client.New(cfg, client.Options{})
-		if err != nil {
-			s.err = err
-			return
-		}
 	}
 }
 
@@ -143,12 +116,14 @@ func (s *Server) Register(webhooks ...Webhook) error {
 		if err != nil {
 			return err
 		}
-		_, found := s.registry[webhook.GetPath()]
-		if found {
-			return fmt.Errorf("can't register duplicate path: %v", webhook.GetPath())
-		}
-		s.registry[webhook.GetPath()] = webhooks[i]
+		// Handle actually ensures that no duplicate paths are registered.
 		s.sMux.Handle(webhook.GetPath(), webhook.Handler())
+		s.registry[webhook.GetPath()] = webhooks[i]
+
+		// Inject dependencies to each webhook.
+		if err := s.setFields(webhooks[i]); err != nil {
+			return err
+		}
 	}
 
 	// Lazily add Server to manager.
@@ -167,9 +142,6 @@ var _ manager.Runnable = &Server{}
 // It will install the webhook related resources depend on the server configuration.
 func (s *Server) Start(stop <-chan struct{}) error {
 	s.once.Do(s.setDefault)
-	if s.err != nil {
-		return s.err
-	}
 
 	// TODO: watch the cert dir. Reload the cert if it changes
 	cert, err := tls.LoadX509KeyPair(path.Join(s.CertDir, certName), path.Join(s.CertDir, keyName))
@@ -211,27 +183,10 @@ func (s *Server) Start(stop <-chan struct{}) error {
 	return nil
 }
 
-var _ inject.Client = &Server{}
+var _ inject.Injector = &Server{}
 
-// InjectClient injects the client into the server
-func (s *Server) InjectClient(c client.Client) error {
-	s.Client = c
-	for _, wh := range s.registry {
-		if _, err := inject.ClientInto(c, wh.Handler()); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-var _ inject.Decoder = &Server{}
-
-// InjectDecoder injects the decoder into the server
-func (s *Server) InjectDecoder(d atypes.Decoder) error {
-	for _, wh := range s.registry {
-		if _, err := inject.DecoderInto(d, wh.Handler()); err != nil {
-			return err
-		}
-	}
+// InjectFunc injects dependencies into the handlers.
+func (s *Server) InjectFunc(f inject.Func) error {
+	s.setFields = f
 	return nil
 }

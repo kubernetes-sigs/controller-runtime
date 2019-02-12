@@ -102,9 +102,10 @@ func main() {
 	}
 
 	entryLog.Info("registering webhooks to the webhook server")
-	err = as.Register(mutatingWebhook, validatingWebhook)
+	as.Register(mutatingWebhook, validatingWebhook)
+	err = as.Complete()
 	if err != nil {
-		entryLog.Error(err, "unable to register webhooks in the admission server")
+		entryLog.Error(err, "unable to setup the admission server")
 		os.Exit(1)
 	}
 

@@ -19,7 +19,6 @@ package webhook
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"net"
 	"net/http"
 	"path"
@@ -30,7 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
-	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 const (
@@ -55,9 +53,6 @@ type ServerOptions struct {
 	// It knows how to talk to a kubernetes cluster.
 	// Client will be injected by the manager if not set.
 	Client client.Client
-
-	// err will be non-nil if there is an error occur during initialization.
-	err error // nolint: structcheck
 }
 
 // Server is an admission webhook server that can serve traffic and
@@ -71,16 +66,21 @@ type Server struct {
 
 	sMux *http.ServeMux
 	// registry maps a path to a http.Handler.
-	registry map[string]Webhook
+	registry map[string]http.Handler
 
 	// manager is the manager that this webhook server will be registered.
 	manager manager.Manager
+
+	// err will be non-nil if there is an error occur during initialization.
+	err error
 
 	once sync.Once
 }
 
 // Webhook defines the basics that a webhook should support.
 type Webhook interface {
+	http.Handler
+
 	// GetPath returns the path that the webhook registered.
 	GetPath() string
 	// Handler returns a http.Handler for the webhook.
@@ -95,7 +95,7 @@ func NewServer(name string, mgr manager.Manager, options ServerOptions) (*Server
 	as := &Server{
 		Name:          name,
 		sMux:          http.NewServeMux(),
-		registry:      map[string]Webhook{},
+		registry:      map[string]http.Handler{},
 		ServerOptions: options,
 		manager:       mgr,
 	}
@@ -109,7 +109,7 @@ func (s *Server) setDefault() {
 		s.Name = "default-k8s-webhook-server"
 	}
 	if s.registry == nil {
-		s.registry = map[string]Webhook{}
+		s.registry = map[string]http.Handler{}
 	}
 	if s.sMux == nil {
 		s.sMux = http.DefaultServeMux
@@ -136,29 +136,32 @@ func (s *Server) setDefault() {
 }
 
 // Register validates and registers webhook(s) in the server
-func (s *Server) Register(webhooks ...Webhook) error {
+func (s *Server) Register(webhooks ...Webhook) {
 	for i, webhook := range webhooks {
 		// validate the webhook before registering it.
 		err := webhook.Validate()
 		if err != nil {
-			return err
+			s.err = err
+			return
 		}
-		_, found := s.registry[webhook.GetPath()]
-		if found {
-			return fmt.Errorf("can't register duplicate path: %v", webhook.GetPath())
-		}
-		s.registry[webhook.GetPath()] = webhooks[i]
+		// Handle actually ensures that no duplicate paths are registered.
 		s.sMux.Handle(webhook.GetPath(), webhook.Handler())
+		s.registry[webhook.GetPath()] = webhooks[i]
 	}
-
-	// Lazily add Server to manager.
-	// Because the all webhook handlers to be in place, so we can inject the things they need.
-	return s.manager.Add(s)
 }
 
 // Handle registers a http.Handler for the given pattern.
 func (s *Server) Handle(pattern string, handler http.Handler) {
 	s.sMux.Handle(pattern, handler)
+}
+
+// Complete must be called to complete the server setup
+func (s *Server) Complete() error {
+	if s.err != nil {
+		return s.err
+	}
+	// TODO(mengqiy): inject dependencies into each http.Handler
+	return s.manager.Add(s)
 }
 
 var _ manager.Runnable = &Server{}
@@ -216,21 +219,12 @@ var _ inject.Client = &Server{}
 // InjectClient injects the client into the server
 func (s *Server) InjectClient(c client.Client) error {
 	s.Client = c
-	for _, wh := range s.registry {
-		if _, err := inject.ClientInto(c, wh.Handler()); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-var _ inject.Decoder = &Server{}
-
-// InjectDecoder injects the decoder into the server
-func (s *Server) InjectDecoder(d atypes.Decoder) error {
-	for _, wh := range s.registry {
-		if _, err := inject.DecoderInto(d, wh.Handler()); err != nil {
-			return err
+	for path := range s.registry {
+		// TODO(mengqiy): remove this in PR #316
+		if wh, ok := s.registry[path].(Webhook); ok {
+			if _, err := inject.ClientInto(c, wh.Handler()); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

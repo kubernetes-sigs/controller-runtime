@@ -154,6 +154,18 @@ var _ = Describe("Fake client", func() {
 			Expect(list.Items).To(HaveLen(1))
 			Expect(list.Items).To(ConsistOf(*dep2))
 		})
+
+		It("should be able to Delete a Collection", func() {
+			By("Deleting a deploymentList")
+			err := cl.DeleteCollection(nil, &appsv1.DeploymentList{})
+			Expect(err).To(BeNil())
+
+			By("Listing all deployments in the namespace")
+			list := &appsv1.DeploymentList{}
+			err = cl.List(nil, list, client.InNamespace("ns1"))
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(BeEmpty())
+		})
 	}
 
 	Context("with default scheme.Scheme", func() {

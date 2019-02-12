@@ -131,6 +131,28 @@ func (uc *unstructuredClient) List(_ context.Context, obj runtime.Object, opts .
 	return nil
 }
 
+func (uc *unstructuredClient) DeleteCollection(_ context.Context, obj runtime.Object, opts ...DeleteCollectionOptionFunc) error {
+	u, ok := obj.(*unstructured.UnstructuredList)
+	if !ok {
+		return fmt.Errorf("unstructured client did not understand object: %T", obj)
+	}
+	gvk := u.GroupVersionKind()
+	if strings.HasSuffix(gvk.Kind, "List") {
+		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
+	}
+
+	dcOpts := DeleteCollectionOptions{}
+	dcOpts.ApplyOptions(opts)
+
+	r, err := uc.getResourceInterface(gvk, dcOpts.ListOptions.Namespace)
+	if err != nil {
+		return err
+	}
+
+	err = r.DeleteCollection(dcOpts.AsDeleteOptions(), *dcOpts.AsListOptions())
+	return err
+}
+
 func (uc *unstructuredClient) UpdateStatus(_ context.Context, obj runtime.Object) error {
 	u, ok := obj.(*unstructured.Unstructured)
 	if !ok {

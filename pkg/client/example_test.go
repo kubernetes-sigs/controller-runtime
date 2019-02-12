@@ -22,7 +22,7 @@ import (
 	"os"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -195,4 +195,20 @@ func ExampleClient_delete() {
 		Version: "v1",
 	})
 	_ = c.Delete(context.Background(), u)
+}
+
+// This example shows how to use the client with typed and unstrucurted objects to delete collections of objects.
+func ExampleClient_deleteCollection() {
+	// Using a typed object.
+	pod := &corev1.PodList{}
+	// c is a created client.
+	_ = c.DeleteCollection(context.Background(), pod)
+
+	u := &unstructured.UnstructuredList{}
+	u.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "apps",
+		Kind:    "DeploymentList",
+		Version: "v1",
+	})
+	_ = c.DeleteCollection(context.Background(), u)
 }

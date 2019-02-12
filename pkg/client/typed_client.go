@@ -109,6 +109,25 @@ func (c *typedClient) List(ctx context.Context, obj runtime.Object, opts ...List
 		Into(obj)
 }
 
+func (c *typedClient) DeleteCollection(ctx context.Context, obj runtime.Object, opts ...DeleteCollectionOptionFunc) error {
+	r, err := c.cache.getResource(obj)
+	if err != nil {
+		return err
+	}
+
+	dcOpts := DeleteCollectionOptions{}
+	dcOpts.ApplyOptions(opts)
+
+	return r.Delete().
+		NamespaceIfScoped(dcOpts.Namespace, r.isNamespaced()).
+		Resource(r.resource()).
+		VersionedParams(dcOpts.AsListOptions(), c.paramCodec).
+		Body(dcOpts.AsDeleteOptions()).
+		Context(ctx).
+		Do().
+		Error()
+}
+
 // UpdateStatus used by StatusWriter to write status.
 func (c *typedClient) UpdateStatus(ctx context.Context, obj runtime.Object) error {
 	o, err := c.cache.getObjMeta(obj)

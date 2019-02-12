@@ -65,6 +65,8 @@ type Writer interface {
 	// Update updates the given obj in the Kubernetes cluster. obj must be a
 	// struct pointer so that obj can be updated with the content returned by the Server.
 	Update(ctx context.Context, obj runtime.Object) error
+
+	DeleteCollection(ctx context.Context, obj runtime.Object, opts ...DeleteCollectionOptionFunc) error
 }
 
 // StatusClient knows how to create a client which can update status subresource
@@ -321,5 +323,38 @@ func InNamespace(ns string) ListOptionFunc {
 func UseListOptions(newOpts *ListOptions) ListOptionFunc {
 	return func(opts *ListOptions) {
 		*opts = *newOpts
+	}
+}
+
+// DeleteCollectionOptions contains options for delete collection requests. It's a collection of
+// Both metav1.DeletOptions and metav1.ListOptions
+type DeleteCollectionOptions struct {
+	DeleteOptions
+	ListOptions
+}
+
+// ApplyOptions executes the given DeleteCollectionOptionFuncs and returns the mutated
+// DeleteOptions.
+func (o *DeleteCollectionOptions) ApplyOptions(optFuncs []DeleteCollectionOptionFunc) *DeleteCollectionOptions {
+	for _, optFunc := range optFuncs {
+		optFunc(o)
+	}
+	return o
+}
+
+// DeleteCollectionOptionFunc is a function that mutates a DeleteOptions struct. It implements
+// the functional options pattern. See
+// https://github.com/tmrts/go-patterns/blob/master/idiom/functional-options.md.
+type DeleteCollectionOptionFunc func(*DeleteCollectionOptions)
+
+func FromListOptionsFunc(newFunc ListOptionFunc) DeleteCollectionOptionFunc {
+	return func(opts *DeleteCollectionOptions) {
+		newFunc(&opts.ListOptions)
+	}
+}
+
+func FromDeleteOptionsFunc(newFunc DeleteOptionFunc) DeleteCollectionOptionFunc {
+	return func(opts *DeleteCollectionOptions) {
+		newFunc(&opts.DeleteOptions)
 	}
 }

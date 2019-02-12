@@ -1846,6 +1846,37 @@ var _ = Describe("Client", func() {
 			Expect(lo.Namespace).To(Equal("test"))
 		})
 	})
+
+	Describe("DeleteCollectionOptions", func() {
+		It("should be created from ListOptions", func() {
+			labels := map[string]string{"foo": "bar"}
+			dco := &client.DeleteCollectionOptions{}
+			client.FromListOptionsFunc(client.MatchingLabels(labels))(dco)
+			Expect(dco).NotTo(BeNil())
+			Expect(dco.LabelSelector.String()).To(Equal("foo=bar"))
+			Expect(dco.AsDeleteOptions()).To(Equal(&metav1.DeleteOptions{}))
+		})
+		It("should be created from DeleteOptions", func() {
+			dco := &client.DeleteCollectionOptions{}
+			client.FromDeleteOptionsFunc(client.GracePeriodSeconds(1))(dco)
+			gp := int64(1)
+			Expect(dco.GracePeriodSeconds).To(Equal(&gp))
+			Expect(dco.AsListOptions()).To(Equal(&metav1.ListOptions{}))
+		})
+		It("should merge multiple options together", func() {
+			gp := int64(1)
+			labels := map[string]string{"foo": "bar"}
+
+			dco := &client.DeleteCollectionOptions{}
+			dco.ApplyOptions([]client.DeleteCollectionOptionFunc{
+				client.FromListOptionsFunc(client.MatchingLabels(labels)),
+				client.FromDeleteOptionsFunc(client.GracePeriodSeconds(1)),
+			})
+
+			Expect(dco.GracePeriodSeconds).To(Equal(&gp))
+			Expect(dco.LabelSelector.String()).To(Equal("foo=bar"))
+		})
+	})
 })
 
 var _ = Describe("DelegatingReader", func() {

@@ -606,6 +606,11 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.GetEventRecorderFor("test")).NotTo(BeNil())
 	})
+	It("should provide a function to get the APIReader", func() {
+		m, err := New(cfg, Options{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetAPIReader()).NotTo(BeNil())
+	})
 })
 
 var _ reconcile.Reconciler = &failRec{}

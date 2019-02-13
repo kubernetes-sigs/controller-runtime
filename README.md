@@ -21,7 +21,7 @@ Users:
 
 - We follow [Semantic Versioning (semver)](https://semver.org)
 - Use releases with your dependency management to ensure that you get compatible code
-- The master branch contains all the latest code, some of which may break compatibility (so "normal" `go get` is not reccomended)
+- The master branch contains all the latest code, some of which may break compatibility (so "normal" `go get` is not recommended)
 
 Contributors:
 
@@ -33,6 +33,10 @@ Contributors:
   * [Bug fixes](/.github/PULL_REQUEST_TEMPLATE/bug_fix.md)
   * [Documentation Changes](/.github/PULL_REQUEST_TEMPLATE/docs.md)
   * [Test/Build/Other Changes](/.github/PULL_REQUEST_TEMPLATE/other.md)
+
+## FAQ
+
+See [FAQ.md](FAQ.md)
 
 ## Community, discussion, contribution, and support
 

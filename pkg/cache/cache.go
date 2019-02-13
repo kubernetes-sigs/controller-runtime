@@ -34,17 +34,20 @@ import (
 
 var log = logf.RuntimeLog.WithName("object-cache")
 
-// Cache implements CacheReader by reading objects from a cache populated by InformersMap
+// Cache knows how to load Kubernetes objects, fetch informers to request
+// to receive events for Kubernetes objects (at a low-level),
+// and add indicies to fields on the objects stored in the cache.
 type Cache interface {
-	// Cache implements the client CacheReader
+	// Cache acts as a client to objects stored in the cache.
 	client.Reader
 
-	// Cache implements InformersMap
+	// Cache loads informers and adds field indicies.
 	Informers
 }
 
-// Informers knows how to create or fetch informers for different group-version-kinds.
-// It's safe to call GetInformer from multiple threads.
+// Informers knows how to create or fetch informers for different
+// group-version-kinds, and add indicies to those informers.  It's safe to call
+// GetInformer from multiple threads.
 type Informers interface {
 	// GetInformer fetches or constructs an informer for the given object that corresponds to a single
 	// API kind and resource.
@@ -61,15 +64,11 @@ type Informers interface {
 	// WaitForCacheSync waits for all the caches to sync.  Returns false if it could not sync a cache.
 	WaitForCacheSync(stop <-chan struct{}) bool
 
-	// IndexField adds an index with the given field name on the given object type
-	// by using the given function to extract the value for that field.  If you want
-	// compatibility with the Kubernetes API server, only return one key, and only use
-	// fields that the API server supports.  Otherwise, you can return multiple keys,
-	// and "equality" in the field selector means that at least one key matches the value.
-	IndexField(obj runtime.Object, field string, extractValue client.IndexerFunc) error
+	// Informers knows how to add indicies to the caches (informers) that it manages.
+	client.FieldIndexer
 }
 
-// Options are the optional arguments for creating a new InformersMap object
+// Options are the optional arguments for creating a new set of Informers.
 type Options struct {
 	// Scheme is the scheme to use for mapping objects to GroupVersionKinds
 	Scheme *runtime.Scheme
@@ -87,7 +86,7 @@ type Options struct {
 
 var defaultResyncTime = 10 * time.Hour
 
-// New initializes and returns a new Cache
+// New initializes and returns a new Cache.
 func New(config *rest.Config, opts Options) (Cache, error) {
 	opts, err := defaultOpts(config, opts)
 	if err != nil {

@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,11 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*
-Package leaderelection contains a constructors for a leader election resource lock.
-This is used to ensure that multiple copies of a controller manager can be run with
-only one active set of controllers, for active-passive HA.
-
-It uses built-in Kubernetes leader election APIs.
-*/
-package leaderelection
+// Package cache provides object caches that act as caching client.Reader
+// instances and help drive Kubernetes-object-based event handlers.
+package cache

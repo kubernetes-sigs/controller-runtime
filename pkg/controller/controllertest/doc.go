@@ -15,4 +15,6 @@ limitations under the License.
 */
 
 // Package controllertest contains fake informers for testing controllers
+// When in doubt, it's almost always better to test against a real API server
+// using envtest.Environment.
 package controllertest

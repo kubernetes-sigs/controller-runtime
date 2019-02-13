@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2017 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*
-Package leaderelection contains a constructors for a leader election resource lock.
-This is used to ensure that multiple copies of a controller manager can be run with
-only one active set of controllers, for active-passive HA.
-
-It uses built-in Kubernetes leader election APIs.
-*/
-package leaderelection
+// Package signals contains libraries for handling signals to gracefully
+// shutdown the manager in combination with Kubernetes pod graceful termination
+// policy.
+package signals

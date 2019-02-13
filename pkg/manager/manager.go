@@ -74,8 +74,8 @@ type Manager interface {
 	// GetCache returns a cache.Cache
 	GetCache() cache.Cache
 
-	// GetRecorder returns a new EventRecorder for the provided name
-	GetRecorder(name string) record.EventRecorder
+	// GetEventRecorderFor returns a new EventRecorder for the provided name
+	GetEventRecorderFor(name string) record.EventRecorder
 
 	// GetRESTMapper returns a RESTMapper
 	GetRESTMapper() meta.RESTMapper
@@ -84,7 +84,8 @@ type Manager interface {
 // Options are the arguments for creating a new Manager
 type Options struct {
 	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
-	// Defaults to the kubernetes/client-go scheme.Scheme
+	// Defaults to the kubernetes/client-go scheme.Scheme, but it's almost always better
+	// idea to pass your own scheme in.  See the documentation in pkg/scheme for more information.
 	Scheme *runtime.Scheme
 
 	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs
@@ -108,10 +109,12 @@ type Options struct {
 	// will use for holding the leader lock.
 	LeaderElectionID string
 
-	// Namespace if specified restricts the manager's cache to watch objects in the desired namespace
-	// Defaults to all namespaces
-	// Note: If a namespace is specified then controllers can still Watch for a cluster-scoped resource e.g Node
-	// For namespaced resources the cache will only hold objects from the desired namespace.
+	// Namespace if specified restricts the manager's cache to watch objects in
+	// the desired namespace Defaults to all namespaces
+	//
+	// Note: If a namespace is specified, controllers can still Watch for a
+	// cluster-scoped resource (e.g Node).  For namespaced resources the cache
+	// will only hold objects from the desired namespace.
 	Namespace string
 
 	// MetricsBindAddress is the TCP address that the controller should bind to
@@ -143,13 +146,18 @@ type NewCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, er
 type NewClientFunc func(cache cache.Cache, config *rest.Config, options client.Options) (client.Client, error)
 
 // Runnable allows a component to be started.
+// It's very important that Start blocks until
+// it's done running.
 type Runnable interface {
-	// Start starts running the component.  The component will stop running when the channel is closed.
-	// Start blocks until the channel is closed or an error occurs.
+	// Start starts running the component.  The component will stop running
+	// when the channel is closed.  Start blocks until the channel is closed or
+	// an error occurs.
 	Start(<-chan struct{}) error
 }
 
-// RunnableFunc implements Runnable
+// RunnableFunc implements Runnable using a function.
+// It's very important that the given function block
+// until it's done running.
 type RunnableFunc func(<-chan struct{}) error
 
 // Start implements Runnable

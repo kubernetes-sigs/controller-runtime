@@ -14,6 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package apiutil contains utilities for working with raw Kubernetes
+// API machinery, such as creating RESTMappers and raw REST clients,
+// and extracting the GVK of an object.
 package apiutil
 
 import (

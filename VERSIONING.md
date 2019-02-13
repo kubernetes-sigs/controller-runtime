@@ -10,7 +10,7 @@
 - Use releases with your dependency management to ensure that you get
   compatible code
 - The master branch contains all the latest code, some of which may break
-  compatibility (so "normal" `go get` is not reccomended)
+  compatibility (so "normal" `go get` is not recommended)
 
 ### Contributors
 
@@ -32,7 +32,7 @@ Don't be lazy, read the rest of this doc :-)
 ## Overview
 
 controller-runtime (and friends) follow [Semantic
-Versioning](https://semver.org).  I'd reccomend reading the aforementioned
+Versioning](https://semver.org).  I'd recommend reading the aforementioned
 link if you're not familiar, but essentially, for any given release X.Y.Z:
 
 - an X (*major*) release indicates a set of backwards-compatible code.

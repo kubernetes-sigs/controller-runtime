@@ -74,7 +74,7 @@ logger.V(1).Info("this is particularly verbose!", "state of the world",
 allKubernetesObjectsEverywhere)
 ```
 
-While it's possible to use higher log levels, it's reccomended that you
+While it's possible to use higher log levels, it's recommended that you
 stick with `V(1)` or V(0)` (which is equivalent to not specifying `V`),
 and then filter later based on key-value pairs or messages; different
 numbers tend to lose meaning easily over time, and you'll be left

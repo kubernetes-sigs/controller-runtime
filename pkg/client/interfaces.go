@@ -89,7 +89,8 @@ type Client interface {
 }
 
 // IndexerFunc knows how to take an object and turn it into a series
-// of (non-namespaced) keys for that object.
+// of non-namespaced keys. Namespaced objects are automatically given
+// namespaced and non-spaced variants, so keys do not need to include namespace.
 type IndexerFunc func(runtime.Object) []string
 
 // FieldIndexer knows how to index over a particular "field" such that it

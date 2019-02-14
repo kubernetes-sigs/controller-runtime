@@ -41,12 +41,17 @@ func Logger(development bool) logr.Logger {
 // to the given destination, instead of stderr.  It otherwise behaves like
 // ZapLogger.
 func LoggerTo(destWriter io.Writer, development bool) logr.Logger {
+	return zapr.NewLogger(RawLoggerTo(destWriter, development))
+}
+
+// RawLoggerTo returns a new zap.Logger configured with KubeAwareEncoder
+// which logs to a given destination
+func RawLoggerTo(destWriter io.Writer, development bool, opts ...zap.Option) *zap.Logger {
 	// this basically mimics New<type>Config, but with a custom sink
 	sink := zapcore.AddSync(destWriter)
 
 	var enc zapcore.Encoder
 	var lvl zap.AtomicLevel
-	var opts []zap.Option
 	if development {
 		encCfg := zap.NewDevelopmentEncoderConfig()
 		enc = zapcore.NewConsoleEncoder(encCfg)
@@ -64,5 +69,5 @@ func LoggerTo(destWriter io.Writer, development bool) logr.Logger {
 	opts = append(opts, zap.AddCallerSkip(1), zap.ErrorOutput(sink))
 	log := zap.New(zapcore.NewCore(&KubeAwareEncoder{Encoder: enc, Verbose: development}, sink, lvl))
 	log = log.WithOptions(opts...)
-	return zapr.NewLogger(log)
+	return log
 }

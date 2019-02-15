@@ -59,7 +59,7 @@ type Manager interface {
 	// GetConfig returns an initialized Config
 	GetConfig() *rest.Config
 
-	// GetScheme returns and initialized Scheme
+	// GetScheme returns an initialized Scheme
 	GetScheme() *runtime.Scheme
 
 	// GetAdmissionDecoder returns the runtime.Decoder based on the scheme.

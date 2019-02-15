@@ -71,7 +71,7 @@ var _ = Describe("Controllerutil", func() {
 		It("should return an error if object is already owned by another controller", func() {
 			t := true
 			rsOwners := []metav1.OwnerReference{
-				metav1.OwnerReference{
+				{
 					Name:               "bar",
 					Kind:               "Deployment",
 					APIVersion:         "extensions/v1beta1",
@@ -93,7 +93,7 @@ var _ = Describe("Controllerutil", func() {
 			f := false
 			t := true
 			rsOwners := []metav1.OwnerReference{
-				metav1.OwnerReference{
+				{
 					Name:               "foo",
 					Kind:               "Deployment",
 					APIVersion:         "extensions/v1beta1",
@@ -121,6 +121,7 @@ var _ = Describe("Controllerutil", func() {
 		var deploy *appsv1.Deployment
 		var deplSpec appsv1.DeploymentSpec
 		var deplKey types.NamespacedName
+		var specr controllerutil.MutateFn
 
 		BeforeEach(func() {
 			deploy = &appsv1.Deployment{
@@ -155,10 +156,12 @@ var _ = Describe("Controllerutil", func() {
 				Name:      deploy.Name,
 				Namespace: deploy.Namespace,
 			}
+
+			specr = deploymentSpecr(deploy, deplSpec)
 		})
 
 		It("creates a new object if one doesn't exists", func() {
-			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentSpecr(deplSpec))
+			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, specr)
 
 			By("returning no error")
 			Expect(err).NotTo(HaveOccurred())
@@ -170,7 +173,7 @@ var _ = Describe("Controllerutil", func() {
 			fetched := &appsv1.Deployment{}
 			Expect(c.Get(context.TODO(), deplKey, fetched)).To(Succeed())
 
-			By("applying MutateFn")
+			By("being mutated by MutateFn")
 			Expect(fetched.Spec.Template.Spec.Containers).To(HaveLen(1))
 			Expect(fetched.Spec.Template.Spec.Containers[0].Name).To(Equal(deplSpec.Template.Spec.Containers[0].Name))
 			Expect(fetched.Spec.Template.Spec.Containers[0].Image).To(Equal(deplSpec.Template.Spec.Containers[0].Image))
@@ -178,11 +181,11 @@ var _ = Describe("Controllerutil", func() {
 
 		It("updates existing object", func() {
 			var scale int32 = 2
-			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentSpecr(deplSpec))
+			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, specr)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
 
-			op, err = controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentScaler(scale))
+			op, err = controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentScaler(deploy, scale))
 			By("returning no error")
 			Expect(err).NotTo(HaveOccurred())
 
@@ -196,7 +199,7 @@ var _ = Describe("Controllerutil", func() {
 		})
 
 		It("updates only changed objects", func() {
-			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentSpecr(deplSpec))
+			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, specr)
 
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
 			Expect(err).NotTo(HaveOccurred())
@@ -209,13 +212,26 @@ var _ = Describe("Controllerutil", func() {
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
 		})
 
-		It("errors when reconcile renames an object", func() {
-			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentSpecr(deplSpec))
+		It("errors when MutateFn changes objct name on creation", func() {
+			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, func() error {
+				specr()
+				return deploymentRenamer(deploy)()
+			})
+
+			By("returning error")
+			Expect(err).To(HaveOccurred())
+
+			By("returning OperationResultNone")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
+		})
+
+		It("errors when MutateFn renames an object", func() {
+			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, specr)
 
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
 			Expect(err).NotTo(HaveOccurred())
 
-			op, err = controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentRenamer)
+			op, err = controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentRenamer(deploy))
 
 			By("returning error")
 			Expect(err).To(HaveOccurred())
@@ -225,12 +241,12 @@ var _ = Describe("Controllerutil", func() {
 		})
 
 		It("errors when object namespace changes", func() {
-			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentSpecr(deplSpec))
+			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, specr)
 
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
 			Expect(err).NotTo(HaveOccurred())
 
-			op, err = controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentNamespaceChanger)
+			op, err = controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentNamespaceChanger(deploy))
 
 			By("returning error")
 			Expect(err).To(HaveOccurred())
@@ -240,7 +256,7 @@ var _ = Describe("Controllerutil", func() {
 		})
 
 		It("aborts immediately if there was an error initially retrieving the object", func() {
-			op, err := controllerutil.CreateOrUpdate(context.TODO(), errorReader{c}, deploy, func(_ runtime.Object) error {
+			op, err := controllerutil.CreateOrUpdate(context.TODO(), errorReader{c}, deploy, func() error {
 				Fail("Mutation method should not run")
 				return nil
 			})
@@ -257,33 +273,34 @@ type errMetaObj struct {
 	metav1.ObjectMeta
 }
 
-func deploymentSpecr(spec appsv1.DeploymentSpec) controllerutil.MutateFn {
-	return func(obj runtime.Object) error {
-		deploy := obj.(*appsv1.Deployment)
+func deploymentSpecr(deploy *appsv1.Deployment, spec appsv1.DeploymentSpec) controllerutil.MutateFn {
+	return func() error {
 		deploy.Spec = spec
 		return nil
 	}
 }
 
-var deploymentIdentity controllerutil.MutateFn = func(obj runtime.Object) error {
+var deploymentIdentity controllerutil.MutateFn = func() error {
 	return nil
 }
 
-var deploymentRenamer controllerutil.MutateFn = func(obj runtime.Object) error {
-	deploy := obj.(*appsv1.Deployment)
-	deploy.Name = fmt.Sprintf("%s-1", deploy.Name)
-	return nil
+func deploymentRenamer(deploy *appsv1.Deployment) controllerutil.MutateFn {
+	return func() error {
+		deploy.Name = fmt.Sprintf("%s-1", deploy.Name)
+		return nil
+	}
 }
 
-var deploymentNamespaceChanger controllerutil.MutateFn = func(obj runtime.Object) error {
-	deploy := obj.(*appsv1.Deployment)
-	deploy.Namespace = fmt.Sprintf("%s-1", deploy.Namespace)
-	return nil
+func deploymentNamespaceChanger(deploy *appsv1.Deployment) controllerutil.MutateFn {
+	return func() error {
+		deploy.Namespace = fmt.Sprintf("%s-1", deploy.Namespace)
+		return nil
+
+	}
 }
 
-func deploymentScaler(replicas int32) controllerutil.MutateFn {
-	fn := func(obj runtime.Object) error {
-		deploy := obj.(*appsv1.Deployment)
+func deploymentScaler(deploy *appsv1.Deployment, replicas int32) controllerutil.MutateFn {
+	fn := func() error {
 		deploy.Spec.Replicas = &replicas
 		return nil
 	}

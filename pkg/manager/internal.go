@@ -42,10 +42,10 @@ import (
 var log = logf.RuntimeLog.WithName("manager")
 
 type controllerManager struct {
-	// config is the rest.config used to talk to the apiserver.  Required.
+	// config is the rest.config used to talk to the apiserver. Required.
 	config *rest.Config
 
-	// scheme is the scheme injected into Controllers, EventHandlers, Sources and Predicates.  Defaults
+	// scheme is the scheme injected into Controllers, EventHandlers, Sources and Predicates. Defaults
 	// to scheme.scheme.
 	scheme *runtime.Scheme
 
@@ -74,6 +74,10 @@ type controllerManager struct {
 
 	// metricsListener is used to serve prometheus metrics
 	metricsListener net.Listener
+
+	// metricsServingDisabled is used to disable the serving of metrics
+	// by default these are enabled, as the value is false.
+	metricsServingDisabled bool
 
 	mu      sync.Mutex
 	started bool
@@ -167,7 +171,7 @@ func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
 	return cm.mapper
 }
 
-func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
+func (cm *controllerManager) ServeMetrics(stop <-chan struct{}) {
 	handler := promhttp.HandlerFor(metrics.Registry, promhttp.HandlerOpts{
 		ErrorHandling: promhttp.HTTPErrorOnError,
 	})
@@ -200,8 +204,8 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	// Metrics should be served whether the controller is leader or not.
 	// (If we don't serve metrics for non-leaders, prometheus will still scrape
 	// the pod but will get a connection refused)
-	if cm.metricsListener != nil {
-		go cm.serveMetrics(cm.internalStop)
+	if cm.metricsListener != nil && !cm.metricsServingDisabled {
+		go cm.ServeMetrics(cm.internalStop)
 	}
 
 	if cm.resourceLock != nil {

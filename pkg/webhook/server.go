@@ -36,6 +36,10 @@ const (
 
 // ServerOptions are options for configuring an admission webhook server.
 type ServerOptions struct {
+	// Address that the server will listen on.
+	// Defaults to "" - all addresses.
+	Host string
+
 	// Port is the port number that the server will serve.
 	// It will be defaulted to 443 if unspecified.
 	Port int32
@@ -153,7 +157,7 @@ func (s *Server) Start(stop <-chan struct{}) error {
 		Certificates: []tls.Certificate{cert},
 	}
 
-	listener, err := tls.Listen("tcp", net.JoinHostPort("", strconv.Itoa(int(s.Port))), cfg)
+	listener, err := tls.Listen("tcp", net.JoinHostPort(s.Host, strconv.Itoa(int(s.Port))), cfg)
 	if err != nil {
 		return err
 	}

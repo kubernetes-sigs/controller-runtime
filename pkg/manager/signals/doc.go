@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2017 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,30 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package writer
-
-type notFoundError struct {
-	err error
-}
-
-func (e notFoundError) Error() string {
-	return e.err.Error()
-}
-
-func isNotFound(err error) bool {
-	_, ok := err.(notFoundError)
-	return ok
-}
-
-type alreadyExistError struct {
-	err error
-}
-
-func (e alreadyExistError) Error() string {
-	return e.err.Error()
-}
-
-func isAlreadyExists(err error) bool {
-	_, ok := err.(alreadyExistError)
-	return ok
-}
+// Package signals contains libraries for handling signals to gracefully
+// shutdown the manager in combination with Kubernetes pod graceful termination
+// policy.
+package signals

@@ -14,25 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package generator
-
-import (
-	"testing"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-)
-
-func TestSource(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Cert Generator Test Suite", []Reporter{envtest.NewlineReporter{}})
-}
-
-var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
-	close(done)
-}, 60)
+// Package runtime contains not-quite-internal mechanisms for
+// controller-runtime, plus some deprecated exports of functionality
+// moved elsewhere.  Most users should not need to import anything in
+// pkg/runtime.
+package runtime

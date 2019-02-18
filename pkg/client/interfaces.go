@@ -92,7 +92,8 @@ type Client interface {
 }
 
 // IndexerFunc knows how to take an object and turn it into a series
-// of (non-namespaced) keys for that object.
+// of non-namespaced keys. Namespaced objects are automatically given
+// namespaced and non-spaced variants, so keys do not need to include namespace.
 type IndexerFunc func(runtime.Object) []string
 
 // FieldIndexer knows how to index over a particular "field" such that it
@@ -103,6 +104,8 @@ type FieldIndexer interface {
 	// compatibility with the Kubernetes API server, only return one key, and only use
 	// fields that the API server supports.  Otherwise, you can return multiple keys,
 	// and "equality" in the field selector means that at least one key matches the value.
+	// The FieldIndexer will automatically take care of indexing over namespace
+	// and supporting efficient all-namespace queries.
 	IndexField(obj runtime.Object, field string, extractValue IndexerFunc) error
 }
 

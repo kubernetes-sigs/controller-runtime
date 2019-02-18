@@ -1722,6 +1722,32 @@ var _ = Describe("Client", func() {
 		})
 	})
 
+	Describe("DeleteCollection", func() {
+		Context("with structured objects", func() {
+			PIt("should fail if the object is not a List", func() {
+
+			})
+			PIt("should delete a collection of objects", func() {
+
+			})
+			PIt("should filter results by namespace selector", func() {
+
+			})
+		})
+
+		Context("with unstructured objects", func() {
+			PIt("should fail if the object is not an UnstructuredList", func() {
+
+			})
+			PIt("should delete a collection of objects", func() {
+
+			})
+			PIt("should filter results by namespace selector", func() {
+
+			})
+		})
+	})
+
 	Describe("DeleteOptions", func() {
 		It("should allow setting GracePeriodSeconds", func() {
 			do := &client.DeleteOptions{}
@@ -1761,10 +1787,13 @@ var _ = Describe("Client", func() {
 				client.GracePeriodSeconds(gp),
 				client.Preconditions(pc),
 				client.PropagationPolicy(dp),
+				client.CollectionOptions(client.UseListOptions(&client.ListOptions{Namespace: "test"})),
 			})
 			Expect(do.GracePeriodSeconds).To(Equal(&gp))
 			Expect(do.Preconditions).To(Equal(pc))
 			Expect(do.PropagationPolicy).To(Equal(&dp))
+			Expect(do.CollectionOptions).NotTo(BeNil())
+			Expect(do.CollectionOptions.Namespace).To(Equal("test"))
 		})
 	})
 
@@ -1845,38 +1874,15 @@ var _ = Describe("Client", func() {
 			Expect(lo).NotTo(BeNil())
 			Expect(lo.Namespace).To(Equal("test"))
 		})
-	})
 
-	Describe("DeleteCollectionOptions", func() {
-		It("should be created from ListOptions", func() {
-			labels := map[string]string{"foo": "bar"}
-			dco := &client.DeleteCollectionOptions{}
-			client.FromListOptionsFunc(client.MatchingLabels(labels))(dco)
-			Expect(dco).NotTo(BeNil())
-			Expect(dco.LabelSelector.String()).To(Equal("foo=bar"))
-			Expect(dco.AsDeleteOptions()).To(Equal(&metav1.DeleteOptions{}))
-		})
-		It("should be created from DeleteOptions", func() {
-			dco := &client.DeleteCollectionOptions{}
-			client.FromDeleteOptionsFunc(client.GracePeriodSeconds(1))(dco)
-			gp := int64(1)
-			Expect(dco.GracePeriodSeconds).To(Equal(&gp))
-			Expect(dco.AsListOptions()).To(Equal(&metav1.ListOptions{}))
-		})
-		It("should merge multiple options together", func() {
-			gp := int64(1)
-			labels := map[string]string{"foo": "bar"}
-
-			dco := &client.DeleteCollectionOptions{}
-			dco.ApplyOptions([]client.DeleteCollectionOptionFunc{
-				client.FromListOptionsFunc(client.MatchingLabels(labels)),
-				client.FromDeleteOptionsFunc(client.GracePeriodSeconds(1)),
-			})
-
-			Expect(dco.GracePeriodSeconds).To(Equal(&gp))
-			Expect(dco.LabelSelector.String()).To(Equal("foo=bar"))
+		It("should produce empty metav1.ListOptions if nil", func() {
+			var do *client.ListOptions
+			Expect(do.AsListOptions()).To(Equal(&metav1.ListOptions{}))
+			do = &client.ListOptions{}
+			Expect(do.AsListOptions()).To(Equal(&metav1.ListOptions{}))
 		})
 	})
+
 })
 
 var _ = Describe("DelegatingReader", func() {

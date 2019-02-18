@@ -66,7 +66,8 @@ type Writer interface {
 	// struct pointer so that obj can be updated with the content returned by the Server.
 	Update(ctx context.Context, obj runtime.Object) error
 
-	DeleteCollection(ctx context.Context, obj runtime.Object, opts ...DeleteCollectionOptionFunc) error
+	// DeleteCollection deletes all objects of the List's kind that match the List options.
+	DeleteCollection(ctx context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error
 }
 
 // StatusClient knows how to create a client which can update status subresource
@@ -128,6 +129,10 @@ type DeleteOptions struct {
 	// foreground.
 	PropagationPolicy *metav1.DeletionPropagation
 
+	// CollectionOptions is used by the DeleteCollection to determine the objects
+	// To be deleted.
+	CollectionOptions *ListOptions
+
 	// Raw represents raw DeleteOptions, as passed to the API server.
 	Raw *metav1.DeleteOptions
 }
@@ -152,6 +157,9 @@ func (o *DeleteOptions) AsDeleteOptions() *metav1.DeleteOptions {
 // ApplyOptions executes the given DeleteOptionFuncs and returns the mutated
 // DeleteOptions.
 func (o *DeleteOptions) ApplyOptions(optFuncs []DeleteOptionFunc) *DeleteOptions {
+	if o.CollectionOptions == nil {
+		o.CollectionOptions = &ListOptions{}
+	}
 	for _, optFunc := range optFuncs {
 		optFunc(o)
 	}
@@ -184,6 +192,14 @@ func Preconditions(p *metav1.Preconditions) DeleteOptionFunc {
 func PropagationPolicy(p metav1.DeletionPropagation) DeleteOptionFunc {
 	return func(opts *DeleteOptions) {
 		opts.PropagationPolicy = &p
+	}
+}
+
+// CollectionOptions is a functional option that sets the CollectionOptions
+// field of a DeleteOptions struct
+func CollectionOptions(listOpts ...ListOptionFunc) DeleteOptionFunc {
+	return func(opts *DeleteOptions) {
+		opts.CollectionOptions.ApplyOptions(listOpts)
 	}
 }
 
@@ -323,38 +339,5 @@ func InNamespace(ns string) ListOptionFunc {
 func UseListOptions(newOpts *ListOptions) ListOptionFunc {
 	return func(opts *ListOptions) {
 		*opts = *newOpts
-	}
-}
-
-// DeleteCollectionOptions contains options for delete collection requests. It's a collection of
-// Both metav1.DeletOptions and metav1.ListOptions
-type DeleteCollectionOptions struct {
-	DeleteOptions
-	ListOptions
-}
-
-// ApplyOptions executes the given DeleteCollectionOptionFuncs and returns the mutated
-// DeleteOptions.
-func (o *DeleteCollectionOptions) ApplyOptions(optFuncs []DeleteCollectionOptionFunc) *DeleteCollectionOptions {
-	for _, optFunc := range optFuncs {
-		optFunc(o)
-	}
-	return o
-}
-
-// DeleteCollectionOptionFunc is a function that mutates a DeleteOptions struct. It implements
-// the functional options pattern. See
-// https://github.com/tmrts/go-patterns/blob/master/idiom/functional-options.md.
-type DeleteCollectionOptionFunc func(*DeleteCollectionOptions)
-
-func FromListOptionsFunc(newFunc ListOptionFunc) DeleteCollectionOptionFunc {
-	return func(opts *DeleteCollectionOptions) {
-		newFunc(&opts.ListOptions)
-	}
-}
-
-func FromDeleteOptionsFunc(newFunc DeleteOptionFunc) DeleteCollectionOptionFunc {
-	return func(opts *DeleteCollectionOptions) {
-		newFunc(&opts.DeleteOptions)
 	}
 }

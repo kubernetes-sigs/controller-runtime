@@ -140,7 +140,7 @@ func (c *client) List(ctx context.Context, obj runtime.Object, opts ...ListOptio
 }
 
 // DeleteCollection implements client.Client
-func (c *client) DeleteCollection(ctx context.Context, obj runtime.Object, opts ...DeleteCollectionOptionFunc) error {
+func (c *client) DeleteCollection(ctx context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error {
 	_, ok := obj.(*unstructured.UnstructuredList)
 	if ok {
 		return c.unstructuredClient.DeleteCollection(ctx, obj, opts...)

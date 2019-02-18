@@ -109,19 +109,20 @@ func (c *typedClient) List(ctx context.Context, obj runtime.Object, opts ...List
 		Into(obj)
 }
 
-func (c *typedClient) DeleteCollection(ctx context.Context, obj runtime.Object, opts ...DeleteCollectionOptionFunc) error {
+// DeleteCollection implements client.Client
+func (c *typedClient) DeleteCollection(ctx context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error {
 	r, err := c.cache.getResource(obj)
 	if err != nil {
 		return err
 	}
 
-	dcOpts := DeleteCollectionOptions{}
+	dcOpts := DeleteOptions{}
 	dcOpts.ApplyOptions(opts)
 
 	return r.Delete().
-		NamespaceIfScoped(dcOpts.Namespace, r.isNamespaced()).
+		NamespaceIfScoped(dcOpts.CollectionOptions.Namespace, r.isNamespaced()).
 		Resource(r.resource()).
-		VersionedParams(dcOpts.AsListOptions(), c.paramCodec).
+		VersionedParams(dcOpts.CollectionOptions.AsListOptions(), c.paramCodec).
 		Body(dcOpts.AsDeleteOptions()).
 		Context(ctx).
 		Do().

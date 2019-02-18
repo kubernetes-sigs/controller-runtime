@@ -161,7 +161,7 @@ func (c *fakeClient) Delete(ctx context.Context, obj runtime.Object, opts ...cli
 	return c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
 }
 
-func (c *fakeClient) DeleteCollection(ctx context.Context, obj runtime.Object, opts ...client.DeleteCollectionOptionFunc) error {
+func (c *fakeClient) DeleteCollection(ctx context.Context, obj runtime.Object, opts ...client.DeleteOptionFunc) error {
 	gvk, err := apiutil.GVKForObject(obj, scheme.Scheme)
 	if err != nil {
 		return err
@@ -173,11 +173,11 @@ func (c *fakeClient) DeleteCollection(ctx context.Context, obj runtime.Object, o
 	// we need the non-list GVK, so chop off the "List" from the end of the kind
 	gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 
-	dcOptions := client.DeleteCollectionOptions{}
+	dcOptions := client.DeleteOptions{}
 	dcOptions.ApplyOptions(opts)
 
 	gvr, _ := meta.UnsafeGuessKindToResource(gvk)
-	o, err := c.tracker.List(gvr, gvk, dcOptions.Namespace)
+	o, err := c.tracker.List(gvr, gvk, dcOptions.CollectionOptions.Namespace)
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func (c *fakeClient) DeleteCollection(ctx context.Context, obj runtime.Object, o
 	if err != nil {
 		return err
 	}
-	filteredObjs, err := objectutil.FilterWithLabels(objs, dcOptions.LabelSelector)
+	filteredObjs, err := objectutil.FilterWithLabels(objs, dcOptions.CollectionOptions.LabelSelector)
 	if err != nil {
 		return err
 	}

@@ -131,7 +131,8 @@ func (uc *unstructuredClient) List(_ context.Context, obj runtime.Object, opts .
 	return nil
 }
 
-func (uc *unstructuredClient) DeleteCollection(_ context.Context, obj runtime.Object, opts ...DeleteCollectionOptionFunc) error {
+// DeleteCollection implements client.Client
+func (uc *unstructuredClient) DeleteCollection(_ context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error {
 	u, ok := obj.(*unstructured.UnstructuredList)
 	if !ok {
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
@@ -141,15 +142,15 @@ func (uc *unstructuredClient) DeleteCollection(_ context.Context, obj runtime.Ob
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 	}
 
-	dcOpts := DeleteCollectionOptions{}
+	dcOpts := DeleteOptions{}
 	dcOpts.ApplyOptions(opts)
 
-	r, err := uc.getResourceInterface(gvk, dcOpts.ListOptions.Namespace)
+	r, err := uc.getResourceInterface(gvk, dcOpts.CollectionOptions.Namespace)
 	if err != nil {
 		return err
 	}
 
-	err = r.DeleteCollection(dcOpts.AsDeleteOptions(), *dcOpts.AsListOptions())
+	err = r.DeleteCollection(dcOpts.AsDeleteOptions(), *dcOpts.CollectionOptions.AsListOptions())
 	return err
 }
 

@@ -23,6 +23,7 @@ import (
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 )
@@ -86,5 +87,17 @@ var _ = Describe("Admission Webhook Decoder", func() {
 	It("should fail to decode if the object in the request doesn't match the passed-in type", func() {
 		By("trying to extract a pod into a node")
 		Expect(decoder.Decode(req, &corev1.Node{})).NotTo(Succeed())
+	})
+
+	It("should be able to decode into an unstructured object", func() {
+		By("decoding into an unstructured object")
+		var target unstructured.Unstructured
+		Expect(decoder.Decode(req, &target)).To(Succeed())
+
+		By("sanity-checking the metadata on the output object")
+		Expect(target.Object["metadata"]).To(Equal(map[string]interface{}{
+			"name":      "foo",
+			"namespace": "default",
+		}))
 	})
 })

@@ -38,7 +38,7 @@ func (hs multiMutating) Handle(ctx context.Context, req Request) Response {
 			return resp
 		}
 		if resp.PatchType != nil && *resp.PatchType != admissionv1beta1.PatchTypeJSONPatch {
-			return ErrorResponse(http.StatusInternalServerError,
+			return Errored(http.StatusInternalServerError,
 				fmt.Errorf("unexpected patch type returned by the handler: %v, only allow: %v",
 					resp.PatchType, admissionv1beta1.PatchTypeJSONPatch))
 		}
@@ -47,7 +47,7 @@ func (hs multiMutating) Handle(ctx context.Context, req Request) Response {
 	var err error
 	marshaledPatch, err := json.Marshal(patches)
 	if err != nil {
-		return ErrorResponse(http.StatusBadRequest, fmt.Errorf("error when marshaling the patch: %v", err))
+		return Errored(http.StatusBadRequest, fmt.Errorf("error when marshaling the patch: %v", err))
 	}
 	return Response{
 		AdmissionResponse: admissionv1beta1.AdmissionResponse{

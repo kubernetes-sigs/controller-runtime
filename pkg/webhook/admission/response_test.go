@@ -116,7 +116,7 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 		})
 	})
 
-	Describe("ErrorResponse", func() {
+	Describe("Errored", func() {
 		It("should return a denied response with an error", func() {
 			err := errors.New("this is an error")
 			expected := Response{
@@ -128,7 +128,7 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 					},
 				},
 			}
-			resp := ErrorResponse(http.StatusBadRequest, err)
+			resp := Errored(http.StatusBadRequest, err)
 			Expect(resp).To(Equal(expected))
 		})
 	})

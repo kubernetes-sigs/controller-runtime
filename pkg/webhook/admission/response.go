@@ -47,8 +47,8 @@ func Patched(reason string, patches ...jsonpatch.JsonPatchOperation) Response {
 	return resp
 }
 
-// ErrorResponse creates a new Response for error-handling a request.
-func ErrorResponse(code int32, err error) Response {
+// Errored creates a new Response for error-handling a request.
+func Errored(code int32, err error) Response {
 	return Response{
 		AdmissionResponse: admissionv1beta1.AdmissionResponse{
 			Allowed: false,
@@ -81,7 +81,7 @@ func ValidationResponse(allowed bool, reason string) Response {
 func PatchResponseFromRaw(original, current []byte) Response {
 	patches, err := jsonpatch.CreatePatch(original, current)
 	if err != nil {
-		return ErrorResponse(http.StatusInternalServerError, err)
+		return Errored(http.StatusInternalServerError, err)
 	}
 	return Response{
 		Patches: patches,

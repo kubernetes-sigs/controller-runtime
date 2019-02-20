@@ -63,5 +63,5 @@ var (
 	Patched = admission.Patched
 
 	// Errored indicates that an error occurred in the admission request.
-	Errored = admission.ErrorResponse
+	Errored = admission.Errored
 )

@@ -32,13 +32,13 @@ The following snippet is an example implementation of mutating handler.
 		pod := &corev1.Pod{}
 		err := m.decoder.Decode(req, pod)
 		if err != nil {
-			return admission.ErrorResponse(http.StatusBadRequest, err)
+			return admission.Errored(http.StatusBadRequest, err)
 		}
 		// Do deepcopy before actually mutate the object.
 		copy := pod.DeepCopy()
 		err = m.mutatePodsFn(ctx, copy)
 		if err != nil {
-			return admission.ErrorResponse(http.StatusInternalServerError, err)
+			return admission.Errored(http.StatusInternalServerError, err)
 		}
 		return admission.PatchResponse(pod, copy)
 	}
@@ -70,12 +70,12 @@ The following snippet is an example implementation of validating handler.
 		pod := &corev1.Pod{}
 		err := h.decoder.Decode(req, pod)
 		if err != nil {
-			return admission.ErrorResponse(http.StatusBadRequest, err)
+			return admission.Errored(http.StatusBadRequest, err)
 		}
 
 		allowed, reason, err := h.validatePodsFn(ctx, pod)
 		if err != nil {
-			return admission.ErrorResponse(http.StatusInternalServerError, err)
+			return admission.Errored(http.StatusInternalServerError, err)
 		}
 		return admission.ValidationResponse(allowed, reason)
 	}

@@ -49,14 +49,14 @@ func (wh Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Body != nil {
 		if body, err = ioutil.ReadAll(r.Body); err != nil {
 			log.Error(err, "unable to read the body from the incoming request")
-			reviewResponse = ErrorResponse(http.StatusBadRequest, err)
+			reviewResponse = Errored(http.StatusBadRequest, err)
 			wh.writeResponse(w, reviewResponse)
 			return
 		}
 	} else {
 		err = errors.New("request body is empty")
 		log.Error(err, "bad request")
-		reviewResponse = ErrorResponse(http.StatusBadRequest, err)
+		reviewResponse = Errored(http.StatusBadRequest, err)
 		wh.writeResponse(w, reviewResponse)
 		return
 	}
@@ -66,7 +66,7 @@ func (wh Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if contentType != "application/json" {
 		err = fmt.Errorf("contentType=%s, expected application/json", contentType)
 		log.Error(err, "unable to process a request with an unknown content type", "content type", contentType)
-		reviewResponse = ErrorResponse(http.StatusBadRequest, err)
+		reviewResponse = Errored(http.StatusBadRequest, err)
 		wh.writeResponse(w, reviewResponse)
 		return
 	}
@@ -78,7 +78,7 @@ func (wh Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, _, err := admissionCodecs.UniversalDeserializer().Decode(body, nil, &ar); err != nil {
 		log.Error(err, "unable to decode the request")
-		reviewResponse = ErrorResponse(http.StatusBadRequest, err)
+		reviewResponse = Errored(http.StatusBadRequest, err)
 		wh.writeResponse(w, reviewResponse)
 		return
 	}
@@ -96,6 +96,6 @@ func (wh *Webhook) writeResponse(w io.Writer, response Response) {
 	err := encoder.Encode(responseAdmissionReview)
 	if err != nil {
 		log.Error(err, "unable to encode the response")
-		wh.writeResponse(w, ErrorResponse(http.StatusInternalServerError, err))
+		wh.writeResponse(w, Errored(http.StatusInternalServerError, err))
 	}
 }

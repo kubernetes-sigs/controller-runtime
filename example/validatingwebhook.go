@@ -38,7 +38,7 @@ func (v *podValidator) Handle(ctx context.Context, req admission.Request) admiss
 
 	err := v.decoder.Decode(req, pod)
 	if err != nil {
-		return admission.ErrorResponse(http.StatusBadRequest, err)
+		return admission.Errored(http.StatusBadRequest, err)
 	}
 
 	key := "example-mutating-admission-webhook"

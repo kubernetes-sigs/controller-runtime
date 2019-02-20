@@ -38,7 +38,7 @@ func (a *podAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 
 	err := a.decoder.Decode(req, pod)
 	if err != nil {
-		return admission.ErrorResponse(http.StatusBadRequest, err)
+		return admission.Errored(http.StatusBadRequest, err)
 	}
 
 	if pod.Annotations == nil {
@@ -48,7 +48,7 @@ func (a *podAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
-		return admission.ErrorResponse(http.StatusInternalServerError, err)
+		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
 	return admission.PatchResponseFromRaw(req.AdmissionRequest.Object.Raw, marshaledPod)

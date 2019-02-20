@@ -122,7 +122,7 @@ func (w *Webhook) Handle(ctx context.Context, req Request) Response {
 	resp := w.Handler.Handle(ctx, req)
 	if err := resp.Complete(req); err != nil {
 		log.Error(err, "unable to encode response")
-		return ErrorResponse(http.StatusInternalServerError, errUnableToEncodeResponse)
+		return Errored(http.StatusInternalServerError, errUnableToEncodeResponse)
 	}
 
 	return resp

@@ -26,7 +26,10 @@ import (
 	"github.com/appscode/jsonpatch"
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	machinerytypes "k8s.io/apimachinery/pkg/types"
+
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 var _ = Describe("Admission Webhooks", func() {
@@ -117,4 +120,92 @@ var _ = Describe("Admission Webhooks", func() {
 		Expect(resp.PatchType).To(Equal(&patchType))
 		Expect(resp.Patch).To(Equal([]byte(`[{"op":"add","path":"/a","value":2},{"op":"replace","path":"/b","value":4}]`)))
 	})
+
+	Describe("dependency injection", func() {
+		It("should set dependencies passed in on the handler", func() {
+			By("setting up a webhook and injecting it with a injection func that injects a string")
+			setFields := func(target interface{}) error {
+				inj, ok := target.(stringInjector)
+				if !ok {
+					return nil
+				}
+
+				return inj.InjectString("something")
+			}
+			handler := &fakeHandler{}
+			webhook := &Webhook{
+				Handler: handler,
+			}
+			Expect(setFields(webhook)).To(Succeed())
+			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
+
+			By("checking that the string was injected")
+			Expect(handler.injectedString).To(Equal("something"))
+		})
+
+		It("should inject a decoder into the handler", func() {
+			By("setting up a webhook and injecting it with a injection func that injects a scheme")
+			setFields := func(target interface{}) error {
+				if _, err := inject.SchemeInto(runtime.NewScheme(), target); err != nil {
+					return err
+				}
+				return nil
+			}
+			handler := &fakeHandler{}
+			webhook := &Webhook{
+				Handler: handler,
+			}
+			Expect(setFields(webhook)).To(Succeed())
+			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
+
+			By("checking that the decoder was injected")
+			Expect(handler.decoder).NotTo(BeNil())
+		})
+
+		It("should pass a setFields that also injects a decoder into sub-dependencies", func() {
+			By("setting up a webhook and injecting it with a injection func that injects a scheme")
+			setFields := func(target interface{}) error {
+				if _, err := inject.SchemeInto(runtime.NewScheme(), target); err != nil {
+					return err
+				}
+				return nil
+			}
+			handler := &handlerWithSubDependencies{
+				Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
+					return Response{}
+				}),
+				dep: &subDep{},
+			}
+			webhook := &Webhook{
+				Handler: handler,
+			}
+			Expect(setFields(webhook)).To(Succeed())
+			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
+
+			By("checking that setFields sets the decoder as well")
+			Expect(handler.dep.decoder).NotTo(BeNil())
+		})
+	})
 })
+
+type stringInjector interface {
+	InjectString(s string) error
+}
+
+type handlerWithSubDependencies struct {
+	Handler
+	dep *subDep
+}
+
+func (h *handlerWithSubDependencies) InjectFunc(f inject.Func) error {
+	return f(h.dep)
+}
+
+type subDep struct {
+	decoder *Decoder
+}
+
+func (d *subDep) InjectDecoder(dec *Decoder) error {
+	d.decoder = dec
+	return nil
+}

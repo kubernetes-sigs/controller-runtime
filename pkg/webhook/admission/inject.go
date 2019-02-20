@@ -18,12 +18,12 @@ package admission
 
 // DecoderInjector is used by the ControllerManager to inject decoder into webhook handlers.
 type DecoderInjector interface {
-	InjectDecoder(Decoder) error
+	InjectDecoder(*Decoder) error
 }
 
 // InjectDecoderInto will set decoder on i and return the result if it implements Decoder.  Returns
 // false if i does not implement Decoder.
-func InjectDecoderInto(decoder Decoder, i interface{}) (bool, error) {
+func InjectDecoderInto(decoder *Decoder, i interface{}) (bool, error) {
 	if s, ok := i.(DecoderInjector); ok {
 		return true, s.InjectDecoder(decoder)
 	}

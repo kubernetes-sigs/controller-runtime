@@ -100,8 +100,20 @@ type nopCloser struct {
 func (nopCloser) Close() error { return nil }
 
 type fakeHandler struct {
-	invoked bool
-	fn      func(context.Context, Request) Response
+	invoked        bool
+	fn             func(context.Context, Request) Response
+	decoder        *Decoder
+	injectedString string
+}
+
+func (h *fakeHandler) InjectDecoder(d *Decoder) error {
+	h.decoder = d
+	return nil
+}
+
+func (h *fakeHandler) InjectString(s string) error {
+	h.injectedString = s
+	return nil
 }
 
 func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {

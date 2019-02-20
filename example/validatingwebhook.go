@@ -29,7 +29,7 @@ import (
 // podValidator validates Pods
 type podValidator struct {
 	client  client.Client
-	decoder admission.Decoder
+	decoder *admission.Decoder
 }
 
 // podValidator admits a pod iff a specific annotation exists.
@@ -66,7 +66,7 @@ func (v *podValidator) InjectClient(c client.Client) error {
 // A decoder will be automatically injected.
 
 // InjectDecoder injects the decoder.
-func (v *podValidator) InjectDecoder(d admission.Decoder) error {
+func (v *podValidator) InjectDecoder(d *admission.Decoder) error {
 	v.decoder = d
 	return nil
 }

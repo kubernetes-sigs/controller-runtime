@@ -29,7 +29,7 @@ import (
 // podAnnotator annotates Pods
 type podAnnotator struct {
 	client  client.Client
-	decoder admission.Decoder
+	decoder *admission.Decoder
 }
 
 // podAnnotator adds an annotation to every incoming pods.
@@ -67,7 +67,7 @@ func (a *podAnnotator) InjectClient(c client.Client) error {
 // A decoder will be automatically injected.
 
 // InjectDecoder injects the decoder.
-func (a *podAnnotator) InjectDecoder(d admission.Decoder) error {
+func (a *podAnnotator) InjectDecoder(d *admission.Decoder) error {
 	a.decoder = d
 	return nil
 }

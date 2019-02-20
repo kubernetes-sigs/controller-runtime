@@ -20,7 +20,7 @@ source $(dirname ${BASH_SOURCE})/common.sh
 
 header_text "running go vet"
 
-go vet ./pkg/...
+go vet ./...
 
 # go get is broken for golint.  re-enable this once it is fixed.
 #header_text "running golint"
@@ -49,9 +49,9 @@ gometalinter.v2 --disable-all \
     --dupl-threshold=400 \
     --enable=dupl \
     --skip=atomic \
-    ./pkg/...
+    --enable=goimports \
+    ./pkg/... ./example/... .
 # TODO: Enable these as we fix them to make them pass
-#    --enable=goimports \
 #    --enable=gosec \
 #    --enable=maligned \
 #    --enable=safesql \

@@ -22,16 +22,16 @@ import (
 	"os"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 var (
-	c client.Client
+	c           client.Client
 	someIndexer client.FieldIndexer
 )
 
@@ -78,7 +78,7 @@ func ExampleClient_get() {
 func ExampleClient_create() {
 	// Using a typed object.
 	pod := &corev1.Pod{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "namespace",
 			Name:      "name",
 		},
@@ -177,7 +177,7 @@ func ExampleClient_update() {
 func ExampleClient_delete() {
 	// Using a typed object.
 	pod := &corev1.Pod{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "namespace",
 			Name:      "name",
 		},
@@ -215,7 +215,7 @@ func ExampleFieldIndexer_secretName() {
 	})
 
 	// elsewhere (e.g. in your reconciler)
-	mySecretName := "someSecret"  // derived from the reconcile.Request, for instance
+	mySecretName := "someSecret" // derived from the reconcile.Request, for instance
 	var podsWithSecrets corev1.PodList
 	_ = c.List(context.Background(), &podsWithSecrets, client.MatchingField("spec.volumes.secret.secretName", mySecretName))
 }

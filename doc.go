@@ -110,7 +110,7 @@ limitations under the License.
 // controller-runtime.
 //
 // Metrics (pkg/metrics) provided by controller-runtime are registered into a
-// controller-runtime-specific Prometheus metrics registery.  The manager can
+// controller-runtime-specific Prometheus metrics registry.  The manager can
 // serve these by an HTTP endpoint, and additional metrics may be registered to
 // this Registry as normal.
 //

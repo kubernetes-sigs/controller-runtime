@@ -17,7 +17,7 @@ limitations under the License.
 // Package signals contains libraries for handling signals to gracefully
 // shutdown the manager in combination with Kubernetes pod graceful termination
 // policy.
-// 
+//
 // Deprecated: use pkg/manager/signals instead.
 package signals
 

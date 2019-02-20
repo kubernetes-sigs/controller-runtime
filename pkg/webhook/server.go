@@ -187,8 +187,6 @@ func (s *Server) Start(stop <-chan struct{}) error {
 	return nil
 }
 
-var _ inject.Injector = &Server{}
-
 // InjectFunc injects dependencies into the handlers.
 func (s *Server) InjectFunc(f inject.Func) error {
 	s.setFields = f

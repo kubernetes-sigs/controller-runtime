@@ -73,8 +73,8 @@ func (a *podAnnotator) mutatePodsFn(ctx context.Context, pod *corev1.Pod) error 
 var _ inject.Client = &podAnnotator{}
 
 // InjectClient injects the client.
-func (v *podAnnotator) InjectClient(c client.Client) error {
-	v.client = c
+func (a *podAnnotator) InjectClient(c client.Client) error {
+	a.client = c
 	return nil
 }
 
@@ -83,7 +83,7 @@ func (v *podAnnotator) InjectClient(c client.Client) error {
 var _ inject.Decoder = &podAnnotator{}
 
 // InjectDecoder injects the decoder.
-func (v *podAnnotator) InjectDecoder(d types.Decoder) error {
-	v.decoder = d
+func (a *podAnnotator) InjectDecoder(d types.Decoder) error {
+	a.decoder = d
 	return nil
 }

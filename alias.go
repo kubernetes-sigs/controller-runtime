@@ -22,11 +22,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
 // Builder builds an Application ControllerManagedBy (e.g. Operator) and returns a manager.Manager to start it.
@@ -47,7 +47,7 @@ type Manager = manager.Manager
 // Options are the arguments for creating a new Manager
 type Options = manager.Options
 
-// Builder builds a new Scheme for mapping go types to Kubernetes GroupVersionKinds.
+// SchemeBuilder builds a new Scheme for mapping go types to Kubernetes GroupVersionKinds.
 type SchemeBuilder = scheme.Builder
 
 // GroupVersion contains the "group" and the "version", which uniquely identifies the API.

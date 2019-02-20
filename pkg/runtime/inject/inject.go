@@ -17,9 +17,11 @@ limitations under the License.
 package inject
 
 import (
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -126,6 +128,21 @@ type Injector interface {
 func InjectorInto(f Func, i interface{}) (bool, error) {
 	if ii, ok := i.(Injector); ok {
 		return true, ii.InjectFunc(f)
+	}
+	return false, nil
+}
+
+// Logger is used to inject Loggers into components that need them
+// and don't otherwise have opinions.
+type Logger interface {
+	InjectLogger(l logr.Logger) error
+}
+
+// LoggerInto will set the logger on the given object if it implements inject.Logger,
+// returning true if a InjectLogger was called, and false otherwise.
+func LoggerInto(l logr.Logger, i interface{}) (bool, error) {
+	if injectable, wantsLogger := i.(Logger); wantsLogger {
+		return true, injectable.InjectLogger(l)
 	}
 	return false, nil
 }

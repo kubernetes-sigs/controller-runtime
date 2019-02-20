@@ -111,10 +111,18 @@ func instrumentedHook(path string, hookRaw http.Handler) http.Handler {
 func (s *Server) Start(stop <-chan struct{}) error {
 	s.defaultingOnce.Do(s.setDefaults)
 
+	baseHookLog := log.WithName("webhooks")
 	// inject fields here as opposed to in Register so that we're certain to have our setFields
 	// function available.
-	for _, webhook := range s.webhooks {
+	for hookPath, webhook := range s.webhooks {
 		if err := s.setFields(webhook); err != nil {
+			return err
+		}
+
+		// NB(directxman12): we don't propagate this further by wrapping setFields because it's
+		// unclear if this is how we want to deal with log propagation.  In this specific instance,
+		// we want to be able to pass a logger to webhooks because they don't know their own path.
+		if _, err := inject.LoggerInto(baseHookLog.WithValues("webhook", hookPath), webhook); err != nil {
 			return err
 		}
 	}

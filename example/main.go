@@ -88,8 +88,8 @@ func main() {
 	}
 
 	entryLog.Info("registering webhooks to the webhook server")
-	hookServer.Register("/mutate-pods", webhook.Admission{Handler: &podAnnotator{}})
-	hookServer.Register("/validate-pods", webhook.Admission{Handler: &podValidator{}})
+	hookServer.Register("/mutate-pods", &webhook.Admission{Handler: &podAnnotator{}})
+	hookServer.Register("/validate-pods", &webhook.Admission{Handler: &podValidator{}})
 
 	entryLog.Info("starting manager")
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {

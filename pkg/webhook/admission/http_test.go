@@ -26,6 +26,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 )
 
@@ -33,14 +35,16 @@ var _ = Describe("Admission Webhooks", func() {
 
 	Describe("HTTP Handler", func() {
 		var respRecorder *httptest.ResponseRecorder
+		webhook := &Webhook{
+			Handler: nil,
+		}
 		BeforeEach(func() {
 			respRecorder = &httptest.ResponseRecorder{
 				Body: bytes.NewBuffer(nil),
 			}
+			_, err := inject.LoggerInto(log.WithName("test-webhook"), webhook)
+			Expect(err).NotTo(HaveOccurred())
 		})
-		webhook := &Webhook{
-			Handler: nil,
-		}
 
 		It("should return bad-request when given an empty body", func() {
 			req := &http.Request{Body: nil}

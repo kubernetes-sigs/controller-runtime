@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	"github.com/appscode/jsonpatch"
+	"github.com/go-logr/logr"
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -110,8 +111,16 @@ type Webhook struct {
 	// and potentially patches to apply to the handler.
 	Handler Handler
 
-	// scheme is used to construct the Decoder
+	// decoder is constructed on receiving a scheme and passed down to then handler
 	decoder *Decoder
+
+	log logr.Logger
+}
+
+// InjectLogger gets a handle to a logging instance, hopefully with more info about this particular webhook.
+func (w *Webhook) InjectLogger(l logr.Logger) error {
+	w.log = l
+	return nil
 }
 
 // Handle processes AdmissionRequest.
@@ -121,7 +130,7 @@ type Webhook struct {
 func (w *Webhook) Handle(ctx context.Context, req Request) Response {
 	resp := w.Handler.Handle(ctx, req)
 	if err := resp.Complete(req); err != nil {
-		log.Error(err, "unable to encode response")
+		w.log.Error(err, "unable to encode response")
 		return Errored(http.StatusInternalServerError, errUnableToEncodeResponse)
 	}
 

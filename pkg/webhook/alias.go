@@ -17,6 +17,7 @@ limitations under the License.
 package webhook
 
 import (
+	"github.com/appscode/jsonpatch"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -46,6 +47,9 @@ type AdmissionHandler = admission.Handler
 
 // AdmissionDecoder knows how to decode objects from admission requests.
 type AdmissionDecoder = admission.Decoder
+
+// JSONPatchOp represents a single JSONPatch patch operation.
+type JSONPatchOp = jsonpatch.Operation
 
 var (
 	// Allowed indicates that the admission request should be allowed for the given reason.

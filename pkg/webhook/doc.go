@@ -18,39 +18,6 @@ limitations under the License.
 Package webhook provides methods to build and bootstrap a webhook server.
 
 Currently, it only supports admission webhooks. It will support CRD conversion webhooks in the near future.
-
-Build webhooks
-
-	webhook1 := &Webhook{
-		Path: "/mutating-pods",
-		Handler: mutatingHandler,
-	}
-
-	webhook2 := &Webhook{
-		Path: "/validating-pods",
-		Handler: validatingHandler,
-	}
-
-Create a webhook server.
-
-	hookServer := &Server{
-		CertDir: "/tmp/cert",
-	}
-	mgr.Add(hookServer)
-
-Register the webhooks in the server.
-
-	err = hookServer.Register(webhook1, webhook2)
-	if err != nil {
-		// handle error
-	}
-
-Start the server by starting the manager
-
-	err := mgr.Start(signals.SetupSignalHandler())
-	if err != nil {
-		// handle error
-	}
 */
 package webhook
 

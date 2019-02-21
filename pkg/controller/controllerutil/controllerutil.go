@@ -22,7 +22,7 @@ import (
 	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,15 +33,15 @@ import (
 // a controller reference is already owned by another controller Object is the
 // subject and Owner is the reference for the current owner
 type AlreadyOwnedError struct {
-	Object v1.Object
-	Owner  v1.OwnerReference
+	Object metav1.Object
+	Owner  metav1.OwnerReference
 }
 
 func (e *AlreadyOwnedError) Error() string {
 	return fmt.Sprintf("Object %s/%s is already owned by another %s controller %s", e.Object.GetNamespace(), e.Object.GetName(), e.Owner.Kind, e.Owner.Name)
 }
 
-func newAlreadyOwnedError(Object v1.Object, Owner v1.OwnerReference) *AlreadyOwnedError {
+func newAlreadyOwnedError(Object metav1.Object, Owner metav1.OwnerReference) *AlreadyOwnedError {
 	return &AlreadyOwnedError{
 		Object: Object,
 		Owner:  Owner,
@@ -53,7 +53,7 @@ func newAlreadyOwnedError(Object v1.Object, Owner v1.OwnerReference) *AlreadyOwn
 // reconciling the owner object on changes to owned (with a Watch + EnqueueRequestForOwner).
 // Since only one OwnerReference can be a controller, it returns an error if
 // there is another OwnerReference with Controller flag set.
-func SetControllerReference(owner, object v1.Object, scheme *runtime.Scheme) error {
+func SetControllerReference(owner, object metav1.Object, scheme *runtime.Scheme) error {
 	ro, ok := owner.(runtime.Object)
 	if !ok {
 		return fmt.Errorf("is not a %T a runtime.Object, cannot call SetControllerReference", owner)
@@ -65,7 +65,7 @@ func SetControllerReference(owner, object v1.Object, scheme *runtime.Scheme) err
 	}
 
 	// Create a new ref
-	ref := *v1.NewControllerRef(owner, schema.GroupVersionKind{Group: gvk.Group, Version: gvk.Version, Kind: gvk.Kind})
+	ref := *metav1.NewControllerRef(owner, schema.GroupVersionKind{Group: gvk.Group, Version: gvk.Version, Kind: gvk.Kind})
 
 	existingRefs := object.GetOwnerReferences()
 	fi := -1
@@ -88,7 +88,7 @@ func SetControllerReference(owner, object v1.Object, scheme *runtime.Scheme) err
 }
 
 // Returns true if a and b point to the same object
-func referSameObject(a, b v1.OwnerReference) bool {
+func referSameObject(a, b metav1.OwnerReference) bool {
 	aGV, err := schema.ParseGroupVersion(a.APIVersion)
 	if err != nil {
 		return false

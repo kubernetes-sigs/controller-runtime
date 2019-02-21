@@ -20,4 +20,3 @@ limitations under the License.
 //
 // Deprecated: use pkg/scheme instead.
 package scheme
-

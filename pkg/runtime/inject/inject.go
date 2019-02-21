@@ -17,12 +17,13 @@ limitations under the License.
 package inject
 
 import (
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 // Cache is used by the ControllerManager to inject Cache into Sources, EventHandlers, Predicates, and
@@ -66,20 +67,6 @@ type Client interface {
 func ClientInto(client client.Client, i interface{}) (bool, error) {
 	if s, ok := i.(Client); ok {
 		return true, s.InjectClient(client)
-	}
-	return false, nil
-}
-
-// Decoder is used by the ControllerManager to inject decoder into webhook handlers.
-type Decoder interface {
-	InjectDecoder(types.Decoder) error
-}
-
-// DecoderInto will set decoder on i and return the result if it implements Decoder.  Returns
-// false if i does not implement Decoder.
-func DecoderInto(decoder types.Decoder, i interface{}) (bool, error) {
-	if s, ok := i.(Decoder); ok {
-		return true, s.InjectDecoder(decoder)
 	}
 	return false, nil
 }
@@ -141,6 +128,21 @@ type Injector interface {
 func InjectorInto(f Func, i interface{}) (bool, error) {
 	if ii, ok := i.(Injector); ok {
 		return true, ii.InjectFunc(f)
+	}
+	return false, nil
+}
+
+// Logger is used to inject Loggers into components that need them
+// and don't otherwise have opinions.
+type Logger interface {
+	InjectLogger(l logr.Logger) error
+}
+
+// LoggerInto will set the logger on the given object if it implements inject.Logger,
+// returning true if a InjectLogger was called, and false otherwise.
+func LoggerInto(l logr.Logger, i interface{}) (bool, error) {
+	if injectable, wantsLogger := i.(Logger); wantsLogger {
+		return true, injectable.InjectLogger(l)
 	}
 	return false, nil
 }

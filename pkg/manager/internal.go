@@ -33,11 +33,10 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
-	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 var log = logf.RuntimeLog.WithName("manager")
@@ -49,8 +48,6 @@ type controllerManager struct {
 	// scheme is the scheme injected into Controllers, EventHandlers, Sources and Predicates.  Defaults
 	// to scheme.scheme.
 	scheme *runtime.Scheme
-	// admissionDecoder is used to decode an admission.Request.
-	admissionDecoder types.Decoder
 
 	// runnables is the set of Controllers that the controllerManager injects deps into and Starts.
 	runnables []Runnable
@@ -136,9 +133,6 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 	if _, err := inject.StopChannelInto(cm.internalStop, i); err != nil {
 		return err
 	}
-	if _, err := inject.DecoderInto(cm.admissionDecoder, i); err != nil {
-		return err
-	}
 	if _, err := inject.MapperInto(cm.mapper, i); err != nil {
 		return err
 	}
@@ -155,10 +149,6 @@ func (cm *controllerManager) GetClient() client.Client {
 
 func (cm *controllerManager) GetScheme() *runtime.Scheme {
 	return cm.scheme
-}
-
-func (cm *controllerManager) GetAdmissionDecoder() types.Decoder {
-	return cm.admissionDecoder
 }
 
 func (cm *controllerManager) GetFieldIndexer() client.FieldIndexer {

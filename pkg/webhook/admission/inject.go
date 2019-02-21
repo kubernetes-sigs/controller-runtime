@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,5 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package admission provides libraries for creating admission webhooks.
 package admission
+
+// DecoderInjector is used by the ControllerManager to inject decoder into webhook handlers.
+type DecoderInjector interface {
+	InjectDecoder(*Decoder) error
+}
+
+// InjectDecoderInto will set decoder on i and return the result if it implements Decoder.  Returns
+// false if i does not implement Decoder.
+func InjectDecoderInto(decoder *Decoder, i interface{}) (bool, error) {
+	if s, ok := i.(DecoderInjector); ok {
+		return true, s.InjectDecoder(decoder)
+	}
+	return false, nil
+}

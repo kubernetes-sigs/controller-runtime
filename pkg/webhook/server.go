@@ -19,14 +19,16 @@ package webhook
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"net/http"
 	"path"
 	"strconv"
 	"sync"
+	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
 const (
@@ -34,9 +36,10 @@ const (
 	keyName  = "tls.key"
 )
 
-// ServerOptions are options for configuring an admission webhook server.
-type ServerOptions struct {
-	// Address that the server will listen on.
+// Server is an admission webhook server that can serve traffic and
+// generates related k8s resources for deploying.
+type Server struct {
+	// Host is the address that the server will listen on.
 	// Defaults to "" - all addresses.
 	Host string
 
@@ -50,102 +53,79 @@ type ServerOptions struct {
 	// If using SecretCertWriter in Provisioner, the server will provision the certificate in a secret,
 	// the user is responsible to mount the secret to the this location for the server to consume.
 	CertDir string
+
+	// TODO(directxman12): should we make the mux configurable?
+
+	// webhookMux is the multiplexer that handles different webhooks.
+	webhookMux *http.ServeMux
+	// webhooks keep track of all registered webhooks for dependency injection,
+	// and to provide better panic messages on duplicate webhook registration.
+	webhooks map[string]http.Handler
+
+	// setFields allows injecting dependencies from an external source
+	setFields inject.Func
+
+	// defaultingOnce ensures that the default fields are only ever set once.
+	defaultingOnce sync.Once
 }
 
-// Server is an admission webhook server that can serve traffic and
-// generates related k8s resources for deploying.
-type Server struct {
-	// ServerOptions contains options for configuring the admission server.
-	ServerOptions
+// setDefaults does defaulting for the Server.
+func (s *Server) setDefaults() {
+	s.webhooks = map[string]http.Handler{}
+	s.webhookMux = http.NewServeMux()
 
-	sMux *http.ServeMux
-	// registry maps a path to a http.Handler.
-	registry map[string]http.Handler
-
-	// setFields is used to inject dependencies into webhooks
-	setFields func(i interface{}) error
-
-	// manager is the manager that this webhook server will be registered.
-	manager manager.Manager
-
-	once sync.Once
-}
-
-// Webhook defines the basics that a webhook should support.
-type Webhook interface {
-	http.Handler
-
-	// GetPath returns the path that the webhook registered.
-	GetPath() string
-	// Handler returns a http.Handler for the webhook.
-	Handler() http.Handler
-	// Validate validates if the webhook itself is valid.
-	// If invalid, a non-nil error will be returned.
-	Validate() error
-}
-
-// NewServer creates a new admission webhook server.
-func NewServer(mgr manager.Manager, options ServerOptions) (*Server, error) {
-	as := &Server{
-		sMux:          http.NewServeMux(),
-		registry:      map[string]http.Handler{},
-		ServerOptions: options,
-		manager:       mgr,
-	}
-
-	return as, nil
-}
-
-// setDefault does defaulting for the Server.
-func (s *Server) setDefault() {
-	if s.registry == nil {
-		s.registry = map[string]http.Handler{}
-	}
-	if s.sMux == nil {
-		s.sMux = http.NewServeMux()
-	}
 	if s.Port <= 0 {
 		s.Port = 443
 	}
 	if len(s.CertDir) == 0 {
-		s.CertDir = path.Join("k8s-webhook-server", "cert")
+		s.CertDir = path.Join("/tmp", "k8s-webhook-server", "serving-certs")
 	}
 }
 
-// Register validates and registers webhook(s) in the server
-func (s *Server) Register(webhooks ...Webhook) error {
-	for i, webhook := range webhooks {
-		// validate the webhook before registering it.
-		err := webhook.Validate()
-		if err != nil {
-			return err
-		}
-		// Handle actually ensures that no duplicate paths are registered.
-		s.sMux.Handle(webhook.GetPath(), webhook.Handler())
-		s.registry[webhook.GetPath()] = webhooks[i]
-
-		// Inject dependencies to each webhook.
-		if err := s.setFields(webhooks[i]); err != nil {
-			return err
-		}
+// Register marks the given webhook as being served at the given path.
+// It panics if two hooks are registered on the same path.
+func (s *Server) Register(path string, hook http.Handler) {
+	s.defaultingOnce.Do(s.setDefaults)
+	_, found := s.webhooks[path]
+	if found {
+		panic(fmt.Errorf("can't register duplicate path: %v", path))
 	}
-
-	// Lazily add Server to manager.
-	// Because the all webhook handlers to be in place, so we can inject the things they need.
-	return s.manager.Add(s)
+	// TODO(directxman12): call setfields if we've already started the server
+	s.webhooks[path] = hook
+	s.webhookMux.Handle(path, instrumentedHook(path, hook))
 }
 
-// Handle registers a http.Handler for the given pattern.
-func (s *Server) Handle(pattern string, handler http.Handler) {
-	s.sMux.Handle(pattern, handler)
-}
+// instrumentedHook adds some instrumentation on top of the given webhook.
+func instrumentedHook(path string, hookRaw http.Handler) http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		startTS := time.Now()
+		defer func() { metrics.RequestLatency.WithLabelValues(path).Observe(time.Now().Sub(startTS).Seconds()) }()
+		hookRaw.ServeHTTP(resp, req)
 
-var _ manager.Runnable = &Server{}
+		// TODO(directxman12): add back in metric about total requests broken down by result?
+	})
+}
 
 // Start runs the server.
 // It will install the webhook related resources depend on the server configuration.
 func (s *Server) Start(stop <-chan struct{}) error {
-	s.once.Do(s.setDefault)
+	s.defaultingOnce.Do(s.setDefaults)
+
+	baseHookLog := log.WithName("webhooks")
+	// inject fields here as opposed to in Register so that we're certain to have our setFields
+	// function available.
+	for hookPath, webhook := range s.webhooks {
+		if err := s.setFields(webhook); err != nil {
+			return err
+		}
+
+		// NB(directxman12): we don't propagate this further by wrapping setFields because it's
+		// unclear if this is how we want to deal with log propagation.  In this specific instance,
+		// we want to be able to pass a logger to webhooks because they don't know their own path.
+		if _, err := inject.LoggerInto(baseHookLog.WithValues("webhook", hookPath), webhook); err != nil {
+			return err
+		}
+	}
 
 	// TODO: watch the cert dir. Reload the cert if it changes
 	cert, err := tls.LoadX509KeyPair(path.Join(s.CertDir, certName), path.Join(s.CertDir, keyName))
@@ -163,7 +143,7 @@ func (s *Server) Start(stop <-chan struct{}) error {
 	}
 
 	srv := &http.Server{
-		Handler: s.sMux,
+		Handler: s.webhookMux,
 	}
 
 	idleConnsClosed := make(chan struct{})
@@ -187,9 +167,7 @@ func (s *Server) Start(stop <-chan struct{}) error {
 	return nil
 }
 
-var _ inject.Injector = &Server{}
-
-// InjectFunc injects dependencies into the handlers.
+// InjectFunc injects the field setter into the server.
 func (s *Server) InjectFunc(f inject.Func) error {
 	s.setFields = f
 	return nil

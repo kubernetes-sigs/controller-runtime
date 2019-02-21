@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/builder"
 )
 
 var log = logf.Log.WithName("example-controller")
@@ -78,35 +77,19 @@ func main() {
 	}
 
 	// Setup webhooks
-	entryLog.Info("setting up webhooks")
-	mutatingWebhook := builder.NewWebhookBuilder().
-		Path("/mutate-pods").
-		Mutating().
-		Handlers(&podAnnotator{}).
-		Build()
-
-	validatingWebhook := builder.NewWebhookBuilder().
-		Path("/validate-pods").
-		Validating().
-		Handlers(&podValidator{}).
-		Build()
-
 	entryLog.Info("setting up webhook server")
-	as, err := webhook.NewServer(mgr, webhook.ServerOptions{
+	hookServer := &webhook.Server{
 		Port:    9876,
 		CertDir: "/tmp/cert",
-	})
-	if err != nil {
-		entryLog.Error(err, "unable to create a new webhook server")
+	}
+	if err := mgr.Add(hookServer); err != nil {
+		entryLog.Error(err, "unable register webhook server with manager")
 		os.Exit(1)
 	}
 
 	entryLog.Info("registering webhooks to the webhook server")
-	err = as.Register(mutatingWebhook, validatingWebhook)
-	if err != nil {
-		entryLog.Error(err, "unable to setup the admission server")
-		os.Exit(1)
-	}
+	hookServer.Register("/mutate-pods", &webhook.Admission{Handler: &podAnnotator{}})
+	hookServer.Register("/validate-pods", &webhook.Admission{Handler: &podValidator{}})
 
 	entryLog.Info("starting manager")
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {

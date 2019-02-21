@@ -27,7 +27,7 @@ import (
 
 var (
 	recorderProvider recorder.Provider
-	somePod *corev1.Pod // the object you're reconciling, for example
+	somePod          *corev1.Pod // the object you're reconciling, for example
 )
 
 func Example_event() {
@@ -54,7 +54,7 @@ func Example_pastEventf() {
 	recorder := recorderProvider.GetEventRecorderFor("my-controller")
 
 	// emit a backdated event (potentially with variable message)
-	recorder.PastEventf(somePod, metav1.Time{Time: time.Now().Add(-5*time.Minute)},
+	recorder.PastEventf(somePod, metav1.Time{Time: time.Now().Add(-5 * time.Minute)},
 		corev1.EventTypeWarning, "ForgottenCrackers",
 		"Crackers, Gromit!  We forgot the crackers!")
 }

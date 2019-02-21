@@ -23,54 +23,38 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 // podValidator validates Pods
 type podValidator struct {
 	client  client.Client
-	decoder types.Decoder
+	decoder *admission.Decoder
 }
 
-// Implement admission.Handler so the controller can handle admission request.
-var _ admission.Handler = &podValidator{}
-
 // podValidator admits a pod iff a specific annotation exists.
-func (v *podValidator) Handle(ctx context.Context, req types.Request) types.Response {
+func (v *podValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	pod := &corev1.Pod{}
 
 	err := v.decoder.Decode(req, pod)
 	if err != nil {
-		return admission.ErrorResponse(http.StatusBadRequest, err)
+		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	allowed, reason, err := v.validatePodsFn(ctx, pod)
-	if err != nil {
-		return admission.ErrorResponse(http.StatusInternalServerError, err)
-	}
-	return admission.ValidationResponse(allowed, reason)
-}
-
-func (v *podValidator) validatePodsFn(ctx context.Context, pod *corev1.Pod) (bool, string, error) {
 	key := "example-mutating-admission-webhook"
 	anno, found := pod.Annotations[key]
-	switch {
-	case !found:
-		return found, fmt.Sprintf("failed to find annotation with key: %q", key), nil
-	case found && anno == "foo":
-		return found, "", nil
-	case found && anno != "foo":
-		return false,
-			fmt.Sprintf("the value associate with key %q is expected to be %q, but got %q", key, "foo", anno), nil
+	if !found {
+		return admission.Denied(fmt.Sprintf("missing annotation %s", key))
 	}
-	return false, "", nil
+	if anno != "foo" {
+		return admission.Denied(fmt.Sprintf("annotation %s did not have value %q", key, "foo"))
+	}
+
+	return admission.Allowed("")
 }
 
 // podValidator implements inject.Client.
 // A client will be automatically injected.
-var _ inject.Client = &podValidator{}
 
 // InjectClient injects the client.
 func (v *podValidator) InjectClient(c client.Client) error {
@@ -80,10 +64,9 @@ func (v *podValidator) InjectClient(c client.Client) error {
 
 // podValidator implements inject.Decoder.
 // A decoder will be automatically injected.
-var _ inject.Decoder = &podValidator{}
 
 // InjectDecoder injects the decoder.
-func (v *podValidator) InjectDecoder(d types.Decoder) error {
+func (v *podValidator) InjectDecoder(d *admission.Decoder) error {
 	v.decoder = d
 	return nil
 }

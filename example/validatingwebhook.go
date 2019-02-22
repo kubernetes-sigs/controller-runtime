@@ -36,7 +36,7 @@ type podValidator struct {
 func (v *podValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	pod := &corev1.Pod{}
 
-	err := v.decoder.Decode(req, pod)
+	err := v.decoder.Decode(req.Object, pod)
 	if err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
@@ -62,7 +62,7 @@ func (v *podValidator) InjectClient(c client.Client) error {
 	return nil
 }
 
-// podValidator implements inject.Decoder.
+// podValidator implements admission.DecoderInjector.
 // A decoder will be automatically injected.
 
 // InjectDecoder injects the decoder.

@@ -36,7 +36,7 @@ type podAnnotator struct {
 func (a *podAnnotator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	pod := &corev1.Pod{}
 
-	err := a.decoder.Decode(req, pod)
+	err := a.decoder.Decode(req.Object, pod)
 	if err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
@@ -51,7 +51,7 @@ func (a *podAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	return admission.PatchResponseFromRaw(req.AdmissionRequest.Object.Raw, marshaledPod)
+	return admission.PatchResponseFromRaw(req.Object.Raw, marshaledPod)
 }
 
 // podAnnotator implements inject.Client.
@@ -63,7 +63,7 @@ func (a *podAnnotator) InjectClient(c client.Client) error {
 	return nil
 }
 
-// podAnnotator implements inject.Decoder.
+// podAnnotator implements admission.DecoderInjector.
 // A decoder will be automatically injected.
 
 // InjectDecoder injects the decoder.

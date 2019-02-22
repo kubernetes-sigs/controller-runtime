@@ -989,6 +989,7 @@
     "k8s.io/client-go/util/workqueue",
     "k8s.io/kube-openapi/pkg/common",
     "sigs.k8s.io/testing_frameworks/integration",
+    "sigs.k8s.io/testing_frameworks/integration/addr",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

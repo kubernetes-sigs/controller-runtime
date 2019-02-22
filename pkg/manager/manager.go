@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 // Manager initializes shared dependencies such as Caches and Clients, and provides them to Runnables.
@@ -79,6 +80,9 @@ type Manager interface {
 	// This should be used sparingly and only when the client does not fit your
 	// use case.
 	GetAPIReader() client.Reader
+
+	// GetWebhookServer returns a webhook.Server
+	GetWebhookServer() *webhook.Server
 }
 
 // Options are the arguments for creating a new Manager
@@ -120,6 +124,13 @@ type Options struct {
 	// MetricsBindAddress is the TCP address that the controller should bind to
 	// for serving prometheus metrics
 	MetricsBindAddress string
+
+	// Port is the port that the webhook server serves at.
+	// It is used to set webhook.Server.Port.
+	Port int
+	// Host is the hostname that the webhook server binds to.
+	// It is used to set webhook.Server.Host.
+	Host string
 
 	// Functions to all for a user to customize the values that will be injected.
 
@@ -234,6 +245,8 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		metricsListener:  metricsListener,
 		internalStop:     stop,
 		internalStopper:  stop,
+		port:             options.Port,
+		host:             options.Host,
 	}, nil
 }
 

@@ -21,14 +21,17 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/testing_frameworks/integration/addr"
 )
 
-func TestSource(t *testing.T) {
+func TestBuilder(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecsWithDefaultAndCustomReporters(t, "application Suite", []Reporter{envtest.NewlineReporter{}})
 }
@@ -48,6 +51,9 @@ var _ = BeforeSuite(func(done Done) {
 	// Prevent the metrics listener being created
 	metrics.DefaultBindAddress = "0"
 
+	webhook.DefaultPort, _, err = addr.Suggest()
+	Expect(err).NotTo(HaveOccurred())
+
 	close(done)
 }, 60)
 
@@ -56,4 +62,7 @@ var _ = AfterSuite(func() {
 
 	// Put the DefaultBindAddress back
 	metrics.DefaultBindAddress = ":8080"
+
+	// Change the webhook.DefaultPort back to the original default.
+	webhook.DefaultPort = 443
 })

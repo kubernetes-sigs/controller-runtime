@@ -48,11 +48,11 @@ func ExampleBuilder() {
 		os.Exit(1)
 	}
 
-	_, err = builder.
+	err = builder.
 		ControllerManagedBy(mgr).  // Create the ControllerManagedBy
 		For(&appsv1.ReplicaSet{}). // ReplicaSet is the Application API
 		Owns(&corev1.Pod{}).       // ReplicaSet owns Pods created by it
-		Build(&ReplicaSetReconciler{})
+		Complete(&ReplicaSetReconciler{})
 	if err != nil {
 		log.Error(err, "could not create controller")
 		os.Exit(1)

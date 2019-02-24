@@ -104,7 +104,7 @@ type client struct {
 }
 
 // Create implements client.Client
-func (c *client) Create(ctx context.Context, obj runtime.Object) error {
+func (c *client) Create(ctx context.Context, obj runtime.Object, opts ...CreateOptionFunc) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return c.unstructuredClient.Create(ctx, obj)

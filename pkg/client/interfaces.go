@@ -57,7 +57,7 @@ type Reader interface {
 // Writer knows how to create, delete, and update Kubernetes objects.
 type Writer interface {
 	// Create saves the object obj in the Kubernetes cluster.
-	Create(ctx context.Context, obj runtime.Object) error
+	Create(ctx context.Context, obj runtime.Object, opts ...CreateOptionFunc) error
 
 	// Delete deletes the given obj from Kubernetes cluster.
 	Delete(ctx context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error
@@ -104,6 +104,57 @@ type FieldIndexer interface {
 	// The FieldIndexer will automatically take care of indexing over namespace
 	// and supporting efficient all-namespace queries.
 	IndexField(obj runtime.Object, field string, extractValue IndexerFunc) error
+}
+
+// CreateOptions contains options for create requests. It's generally a subset
+// of metav1.CreateOptions.
+type CreateOptions struct {
+	// When present, indicates that modifications should not be
+	// persisted. An invalid or unrecognized dryRun directive will
+	// result in an error response and no further processing of the
+	// request. Valid values are:
+	// - All: all dry run stages will be processed
+	DryRun []string
+
+	// Raw represents raw CreateOptions, as passed to the API server.
+	Raw *metav1.CreateOptions
+}
+
+// AsCreateOptions returns these options as a metav1.CreateOptions.
+// This may mutate the Raw field.
+func (o *CreateOptions) AsCreateOptions() *metav1.CreateOptions {
+
+	if o == nil {
+		return &metav1.CreateOptions{}
+	}
+	if o.Raw == nil {
+		o.Raw = &metav1.CreateOptions{}
+	}
+
+	o.Raw.DryRun = o.DryRun
+	return o.Raw
+}
+
+// ApplyOptions executes the given CreateOptionFuncs and returns the mutated
+// CreateOptions.
+func (o *CreateOptions) ApplyOptions(optFuncs []CreateOptionFunc) *CreateOptions {
+	for _, optFunc := range optFuncs {
+		optFunc(o)
+	}
+	return o
+}
+
+// CreateOptionFunc is a function that mutates a CreateOptions struct. It implements
+// the functional options pattern. See
+// https://github.com/tmrts/go-patterns/blob/master/idiom/functional-options.md.
+type CreateOptionFunc func(*CreateOptions)
+
+// DryRunAll is a functional option that sets the DryRun
+// field of a CreateOptions struct to metav1.DryRunAll.
+func DryRunAll() CreateOptionFunc {
+	return func(opts *CreateOptions) {
+		opts.DryRun = []string{metav1.DryRunAll}
+	}
 }
 
 // DeleteOptions contains options for delete requests. It's generally a subset

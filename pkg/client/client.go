@@ -113,7 +113,7 @@ func (c *client) Create(ctx context.Context, obj runtime.Object, opts ...CreateO
 }
 
 // Update implements client.Client
-func (c *client) Update(ctx context.Context, obj runtime.Object) error {
+func (c *client) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOptionFunc) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return c.unstructuredClient.Update(ctx, obj)

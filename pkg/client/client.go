@@ -107,18 +107,18 @@ type client struct {
 func (c *client) Create(ctx context.Context, obj runtime.Object, opts ...CreateOptionFunc) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
-		return c.unstructuredClient.Create(ctx, obj)
+		return c.unstructuredClient.Create(ctx, obj, opts...)
 	}
-	return c.typedClient.Create(ctx, obj)
+	return c.typedClient.Create(ctx, obj, opts...)
 }
 
 // Update implements client.Client
 func (c *client) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOptionFunc) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
-		return c.unstructuredClient.Update(ctx, obj)
+		return c.unstructuredClient.Update(ctx, obj, opts...)
 	}
-	return c.typedClient.Update(ctx, obj)
+	return c.typedClient.Update(ctx, obj, opts...)
 }
 
 // Delete implements client.Client

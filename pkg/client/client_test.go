@@ -1904,6 +1904,89 @@ var _ = Describe("Client", func() {
 				close(done)
 			}, serverSideTimeoutSeconds)
 
+			It("should filter results using limit and continue options", func() {
+
+				makeDeployment := func(suffix string) *appsv1.Deployment {
+					return &appsv1.Deployment{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: fmt.Sprintf("deployment-%s", suffix),
+						},
+						Spec: appsv1.DeploymentSpec{
+							Selector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo": "bar"},
+							},
+							Template: corev1.PodTemplateSpec{
+								ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
+								Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+							},
+						},
+					}
+				}
+
+				By("creating 4 deployments")
+				dep1 := makeDeployment("1")
+				dep1, err := clientset.AppsV1().Deployments(ns).Create(dep1)
+				Expect(err).NotTo(HaveOccurred())
+				defer deleteDeployment(dep1, ns)
+
+				dep2 := makeDeployment("2")
+				dep2, err = clientset.AppsV1().Deployments(ns).Create(dep2)
+				Expect(err).NotTo(HaveOccurred())
+				defer deleteDeployment(dep2, ns)
+
+				dep3 := makeDeployment("3")
+				dep3, err = clientset.AppsV1().Deployments(ns).Create(dep3)
+				Expect(err).NotTo(HaveOccurred())
+				defer deleteDeployment(dep3, ns)
+
+				dep4 := makeDeployment("4")
+				dep4, err = clientset.AppsV1().Deployments(ns).Create(dep4)
+				Expect(err).NotTo(HaveOccurred())
+				defer deleteDeployment(dep4, ns)
+
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("listing 1 deployment when limit=1 is used")
+				deps := &appsv1.DeploymentList{}
+				err = cl.List(context.Background(), deps,
+					client.Limit(1),
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(deps.Items).To(HaveLen(1))
+				Expect(deps.Continue).NotTo(BeEmpty())
+				Expect(deps.Items[0].Name).To(Equal(dep1.Name))
+
+				continueToken := deps.Continue
+
+				By("listing the next deployment when previous continuation token is used and limit=1")
+				deps = &appsv1.DeploymentList{}
+				err = cl.List(context.Background(), deps,
+					client.Limit(1),
+					client.Continue(continueToken),
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(deps.Items).To(HaveLen(1))
+				Expect(deps.Continue).NotTo(BeEmpty())
+				Expect(deps.Items[0].Name).To(Equal(dep2.Name))
+
+				continueToken = deps.Continue
+
+				By("listing the 2 remaining deployments when previous continuation token is used without a limit")
+				deps = &appsv1.DeploymentList{}
+				err = cl.List(context.Background(), deps,
+					client.Continue(continueToken),
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(deps.Items).To(HaveLen(2))
+				Expect(deps.Continue).To(BeEmpty())
+				Expect(deps.Items[0].Name).To(Equal(dep3.Name))
+				Expect(deps.Items[1].Name).To(Equal(dep4.Name))
+			}, serverSideTimeoutSeconds)
+
 			PIt("should fail if the object doesn't have meta", func() {
 
 			})
@@ -2309,11 +2392,15 @@ var _ = Describe("Client", func() {
 				client.MatchingField("field1", "bar"),
 				client.InNamespace("test-namespace"),
 				client.MatchingLabels{"foo": "bar"},
+				client.Limit(1),
+				client.Continue("foo"),
 			})
 			mlo := lo.AsListOptions()
 			Expect(mlo).NotTo(BeNil())
 			Expect(mlo.LabelSelector).To(Equal("foo=bar"))
 			Expect(mlo.FieldSelector).To(Equal("field1=bar"))
+			Expect(mlo.Limit).To(Equal(int64(1)))
+			Expect(mlo.Continue).To(Equal("foo"))
 		})
 
 		It("should be populated by MatchingLabels", func() {
@@ -2342,6 +2429,58 @@ var _ = Describe("Client", func() {
 			Expect(do.AsListOptions()).To(Equal(&metav1.ListOptions{}))
 			do = &client.ListOptions{}
 			Expect(do.AsListOptions()).To(Equal(&metav1.ListOptions{}))
+		})
+
+		It("should be populated by Limit", func() {
+			lo := &client.ListOptions{}
+			client.Limit(1).ApplyToList(lo)
+			Expect(lo).NotTo(BeNil())
+			Expect(lo.Limit).To(Equal(int64(1)))
+		})
+
+		It("should ignore Limit when converted to metav1.ListOptions and watch is true", func() {
+			lo := &client.ListOptions{
+				Raw: &metav1.ListOptions{Watch: true},
+			}
+			lo.ApplyOptions([]client.ListOption{
+				client.Limit(1),
+			})
+			mlo := lo.AsListOptions()
+			Expect(mlo).NotTo(BeNil())
+			Expect(mlo.Limit).To(BeZero())
+		})
+
+		It("should be populated by Continue", func() {
+			lo := &client.ListOptions{}
+			client.Continue("foo").ApplyToList(lo)
+			Expect(lo).NotTo(BeNil())
+			Expect(lo.Continue).To(Equal("foo"))
+		})
+
+		It("should ignore Continue token when converted to metav1.ListOptions and watch is true", func() {
+			lo := &client.ListOptions{
+				Raw: &metav1.ListOptions{Watch: true},
+			}
+			lo.ApplyOptions([]client.ListOption{
+				client.Continue("foo"),
+			})
+			mlo := lo.AsListOptions()
+			Expect(mlo).NotTo(BeNil())
+			Expect(mlo.Continue).To(BeEmpty())
+		})
+
+		It("should ignore both Limit and Continue token when converted to metav1.ListOptions and watch is true", func() {
+			lo := &client.ListOptions{
+				Raw: &metav1.ListOptions{Watch: true},
+			}
+			lo.ApplyOptions([]client.ListOption{
+				client.Limit(1),
+				client.Continue("foo"),
+			})
+			mlo := lo.AsListOptions()
+			Expect(mlo).NotTo(BeNil())
+			Expect(mlo.Limit).To(BeZero())
+			Expect(mlo.Continue).To(BeEmpty())
 		})
 	})
 

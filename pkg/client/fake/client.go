@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -138,7 +139,16 @@ func (c *fakeClient) List(ctx context.Context, obj runtime.Object, opts ...clien
 	return nil
 }
 
-func (c *fakeClient) Create(ctx context.Context, obj runtime.Object) error {
+func (c *fakeClient) Create(ctx context.Context, obj runtime.Object, opts ...client.CreateOptionFunc) error {
+	createOptions := &client.CreateOptions{}
+	createOptions.ApplyOptions(opts)
+
+	for _, dryRunOpt := range createOptions.DryRun {
+		if dryRunOpt == metav1.DryRunAll {
+			return nil
+		}
+	}
+
 	gvr, err := getGVRFromObject(obj, c.scheme)
 	if err != nil {
 		return err
@@ -163,7 +173,16 @@ func (c *fakeClient) Delete(ctx context.Context, obj runtime.Object, opts ...cli
 	return c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
 }
 
-func (c *fakeClient) Update(ctx context.Context, obj runtime.Object) error {
+func (c *fakeClient) Update(ctx context.Context, obj runtime.Object, opts ...client.UpdateOptionFunc) error {
+	updateOptions := &client.UpdateOptions{}
+	updateOptions.ApplyOptions(opts)
+
+	for _, dryRunOpt := range updateOptions.DryRun {
+		if dryRunOpt == metav1.DryRunAll {
+			return nil
+		}
+	}
+
 	gvr, err := getGVRFromObject(obj, c.scheme)
 	if err != nil {
 		return err

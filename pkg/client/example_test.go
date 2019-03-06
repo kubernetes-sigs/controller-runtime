@@ -22,7 +22,7 @@ import (
 	"os"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -78,7 +78,7 @@ func ExampleClient_get() {
 func ExampleClient_create() {
 	// Using a typed object.
 	pod := &corev1.Pod{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "namespace",
 			Name:      "name",
 		},
@@ -177,7 +177,7 @@ func ExampleClient_update() {
 func ExampleClient_delete() {
 	// Using a typed object.
 	pod := &corev1.Pod{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "namespace",
 			Name:      "name",
 		},

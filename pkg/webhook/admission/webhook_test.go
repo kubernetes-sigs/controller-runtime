@@ -17,261 +17,195 @@ limitations under the License.
 package admission
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/json"
-	"errors"
 	"net/http"
-	"net/http/httptest"
 
-	"github.com/appscode/jsonpatch"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/appscode/jsonpatch"
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
-	atypes "sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/types"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	machinerytypes "k8s.io/apimachinery/pkg/types"
+
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
-var _ = Describe("admission webhook", func() {
-	var w *httptest.ResponseRecorder
-	BeforeEach(func(done Done) {
-		w = &httptest.ResponseRecorder{
-			Body: bytes.NewBuffer(nil),
+var _ = Describe("Admission Webhooks", func() {
+	allowHandler := func() *Webhook {
+		handler := &fakeHandler{
+			fn: func(ctx context.Context, req Request) Response {
+				return Response{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+						Allowed: true,
+					},
+				}
+			},
 		}
-		close(done)
-	})
-	Describe("validating webhook", func() {
-		var alwaysAllow, alwaysDeny *fakeHandler
-		var req *http.Request
-		var wh *Webhook
-		BeforeEach(func(done Done) {
-			alwaysAllow = &fakeHandler{
-				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
-					return atypes.Response{
-						Response: &admissionv1beta1.AdmissionResponse{
-							Allowed: true,
-						},
-					}
-				},
-			}
-			alwaysDeny = &fakeHandler{
-				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
-					return atypes.Response{
-						Response: &admissionv1beta1.AdmissionResponse{
-							Allowed: false,
-						},
-					}
-				},
-			}
-			req = &http.Request{
-				Header: http.Header{"Content-Type": []string{"application/json"}},
-				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
-			}
-			close(done)
-		})
+		webhook := &Webhook{
+			Handler: handler,
+		}
 
-		Context("multiple handlers can be invoked", func() {
-			BeforeEach(func(done Done) {
-				wh = &Webhook{
-					Type:     types.WebhookTypeValidating,
-					Handlers: []Handler{alwaysAllow, alwaysDeny},
+		return webhook
+	}
+
+	It("should invoke the handler to get a response", func() {
+		By("setting up a webhook with an allow handler")
+		webhook := allowHandler()
+
+		By("invoking the webhook")
+		resp := webhook.Handle(context.Background(), Request{})
+
+		By("checking that it allowed the request")
+		Expect(resp.Allowed).To(BeTrue())
+	})
+
+	It("should ensure that the response's UID is set to the request's UID", func() {
+		By("setting up a webhook")
+		webhook := allowHandler()
+
+		By("invoking the webhook")
+		resp := webhook.Handle(context.Background(), Request{AdmissionRequest: admissionv1beta1.AdmissionRequest{UID: "foobar"}})
+
+		By("checking that the response share's the request's UID")
+		Expect(resp.UID).To(Equal(machinerytypes.UID("foobar")))
+	})
+
+	It("should populate the status on a response if one is not provided", func() {
+		By("setting up a webhook")
+		webhook := allowHandler()
+
+		By("invoking the webhook")
+		resp := webhook.Handle(context.Background(), Request{})
+
+		By("checking that the response share's the request's UID")
+		Expect(resp.Result).To(Equal(&metav1.Status{Code: http.StatusOK}))
+	})
+
+	It("shouldn't overwrite the status on a response", func() {
+		By("setting up a webhook that sets a status")
+		webhook := &Webhook{
+			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
+				return Response{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+						Allowed: true,
+						Result:  &metav1.Status{Message: "Ground Control to Major Tom"},
+					},
 				}
-				close(done)
-			})
+			}),
+		}
 
-			It("should deny the request", func() {
-				expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"code":200}}}
-`)
-				wh.ServeHTTP(w, req)
-				Expect(w.Body.Bytes()).To(Equal(expected))
-				Expect(alwaysAllow.invoked).To(BeTrue())
-				Expect(alwaysDeny.invoked).To(BeTrue())
-			})
-		})
+		By("invoking the webhook")
+		resp := webhook.Handle(context.Background(), Request{})
 
-		Context("validating webhook should return if one of the handler denies", func() {
-			BeforeEach(func(done Done) {
-				wh = &Webhook{
-					Type:     types.WebhookTypeValidating,
-					Handlers: []Handler{alwaysDeny, alwaysAllow},
+		By("checking that the message is intact")
+		Expect(resp.Result).NotTo(BeNil())
+		Expect(resp.Result.Message).To(Equal("Ground Control to Major Tom"))
+	})
+
+	It("should serialize patch operations into a single jsonpatch blob", func() {
+		By("setting up a webhook with a patching handler")
+		webhook := &Webhook{
+			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
+				return Patched("", jsonpatch.Operation{Operation: "add", Path: "/a", Value: 2}, jsonpatch.Operation{Operation: "replace", Path: "/b", Value: 4})
+			}),
+		}
+
+		By("invoking the webhoook")
+		resp := webhook.Handle(context.Background(), Request{})
+
+		By("checking that a JSON patch is populated on the response")
+		patchType := admissionv1beta1.PatchTypeJSONPatch
+		Expect(resp.PatchType).To(Equal(&patchType))
+		Expect(resp.Patch).To(Equal([]byte(`[{"op":"add","path":"/a","value":2},{"op":"replace","path":"/b","value":4}]`)))
+	})
+
+	Describe("dependency injection", func() {
+		It("should set dependencies passed in on the handler", func() {
+			By("setting up a webhook and injecting it with a injection func that injects a string")
+			setFields := func(target interface{}) error {
+				inj, ok := target.(stringInjector)
+				if !ok {
+					return nil
 				}
-				close(done)
-			})
 
-			It("should deny the request", func() {
-				expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"code":200}}}
-`)
-				wh.ServeHTTP(w, req)
-				Expect(w.Body.Bytes()).To(Equal(expected))
-				Expect(alwaysDeny.invoked).To(BeTrue())
-				Expect(alwaysAllow.invoked).To(BeFalse())
-			})
-		})
-	})
+				return inj.InjectString("something")
+			}
+			handler := &fakeHandler{}
+			webhook := &Webhook{
+				Handler: handler,
+			}
+			Expect(setFields(webhook)).To(Succeed())
+			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
 
-	Describe("mutating webhook", func() {
-		Context("multiple patch handlers", func() {
-			req := &http.Request{
-				Header: http.Header{"Content-Type": []string{"application/json"}},
-				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
-			}
-			patcher1 := &fakeHandler{
-				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
-					return atypes.Response{
-						Patches: []jsonpatch.JsonPatchOperation{
-							{
-								Operation: "add",
-								Path:      "/metadata/annotation/new-key",
-								Value:     "new-value",
-							},
-							{
-								Operation: "replace",
-								Path:      "/spec/replicas",
-								Value:     "2",
-							},
-						},
-						Response: &admissionv1beta1.AdmissionResponse{
-							Allowed:   true,
-							PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
-						},
-					}
-				},
-			}
-			patcher2 := &fakeHandler{
-				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
-					return atypes.Response{
-						Patches: []jsonpatch.JsonPatchOperation{
-							{
-								Operation: "add",
-								Path:      "/metadata/annotation/hello",
-								Value:     "world",
-							},
-						},
-						Response: &admissionv1beta1.AdmissionResponse{
-							Allowed:   true,
-							PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
-						},
-					}
-				},
-			}
-			wh := &Webhook{
-				Type:     types.WebhookTypeMutating,
-				Handlers: []Handler{patcher1, patcher2},
-			}
-			expected := []byte(
-				`{"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200},` +
-					`"patch":"W3sib3AiOiJhZGQiLCJwYXRoIjoiL21ldGFkYXRhL2Fubm90YXRpb2` +
-					`4vbmV3LWtleSIsInZhbHVlIjoibmV3LXZhbHVlIn0seyJvcCI6InJlcGxhY2UiLCJwYXRoIjoiL3NwZWMvcmVwbGljYXMiLC` +
-					`J2YWx1ZSI6IjIifSx7Im9wIjoiYWRkIiwicGF0aCI6Ii9tZXRhZGF0YS9hbm5vdGF0aW9uL2hlbGxvIiwidmFsdWUiOiJ3b3JsZCJ9XQ==",` +
-					`"patchType":"JSONPatch"}}
-`)
-			patches := []jsonpatch.JsonPatchOperation{
-				{
-					Operation: "add",
-					Path:      "/metadata/annotation/new-key",
-					Value:     "new-value",
-				},
-				{
-					Operation: "replace",
-					Path:      "/spec/replicas",
-					Value:     "2",
-				},
-				{
-					Operation: "add",
-					Path:      "/metadata/annotation/hello",
-					Value:     "world",
-				},
-			}
-			j, _ := json.Marshal(patches)
-			base64encoded := base64.StdEncoding.EncodeToString(j)
-			It("should aggregates patches from multiple handlers", func() {
-				wh.ServeHTTP(w, req)
-				Expect(w.Body.Bytes()).To(Equal(expected))
-				Expect(w.Body.String()).To(ContainSubstring(base64encoded))
-				Expect(patcher1.invoked).To(BeTrue())
-				Expect(patcher2.invoked).To(BeTrue())
-			})
+			By("checking that the string was injected")
+			Expect(handler.injectedString).To(Equal("something"))
 		})
 
-		Context("patch handler denies the request", func() {
-			req := &http.Request{
-				Header: http.Header{"Content-Type": []string{"application/json"}},
-				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
+		It("should inject a decoder into the handler", func() {
+			By("setting up a webhook and injecting it with a injection func that injects a scheme")
+			setFields := func(target interface{}) error {
+				if _, err := inject.SchemeInto(runtime.NewScheme(), target); err != nil {
+					return err
+				}
+				return nil
 			}
-			errPatcher := &fakeHandler{
-				fn: func(ctx context.Context, req atypes.Request) atypes.Response {
-					return atypes.Response{
-						Response: &admissionv1beta1.AdmissionResponse{
-							Allowed: false,
-						},
-					}
-				},
+			handler := &fakeHandler{}
+			webhook := &Webhook{
+				Handler: handler,
 			}
-			wh := &Webhook{
-				Type:     types.WebhookTypeMutating,
-				Handlers: []Handler{errPatcher},
-			}
-			expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"code":200}}}
-`)
-			It("should deny the request", func() {
-				wh.ServeHTTP(w, req)
-				Expect(w.Body.Bytes()).To(Equal(expected))
-				Expect(errPatcher.invoked).To(BeTrue())
-			})
-		})
-	})
+			Expect(setFields(webhook)).To(Succeed())
+			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
 
-	Describe("webhook validation", func() {
-		Context("valid mutating webhook", func() {
-			wh := &Webhook{
-				Type:     types.WebhookTypeMutating,
-				Path:     "/mutate-deployments",
-				Handlers: []Handler{&fakeHandler{}},
-			}
-			It("should pass validation", func() {
-				err := wh.Validate()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(wh.Name).To(Equal("mutatedeployments.example.com"))
-			})
+			By("checking that the decoder was injected")
+			Expect(handler.decoder).NotTo(BeNil())
 		})
 
-		Context("valid validating webhook", func() {
-			wh := &Webhook{
-				Type:     types.WebhookTypeValidating,
-				Path:     "/validate-deployments",
-				Handlers: []Handler{&fakeHandler{}},
+		It("should pass a setFields that also injects a decoder into sub-dependencies", func() {
+			By("setting up a webhook and injecting it with a injection func that injects a scheme")
+			setFields := func(target interface{}) error {
+				if _, err := inject.SchemeInto(runtime.NewScheme(), target); err != nil {
+					return err
+				}
+				return nil
 			}
-			It("should pass validation", func() {
-				err := wh.Validate()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(wh.Name).To(Equal("validatedeployments.example.com"))
-			})
-		})
-
-		Context("missing webhook type", func() {
-			wh := &Webhook{
-				Path:     "/mutate-deployments",
-				Handlers: []Handler{&fakeHandler{}},
+			handler := &handlerWithSubDependencies{
+				Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
+					return Response{}
+				}),
+				dep: &subDep{},
 			}
-			It("should fail validation", func() {
-				err := wh.Validate()
-				Expect(err.Error()).To(ContainSubstring("only WebhookTypeMutating and WebhookTypeValidating are supported"))
-			})
-		})
-
-		Context("missing Handlers", func() {
-			wh := &Webhook{
-				Type:     types.WebhookTypeValidating,
-				Path:     "/validate-deployments",
-				Handlers: []Handler{},
+			webhook := &Webhook{
+				Handler: handler,
 			}
-			It("should fail validation", func() {
-				err := wh.Validate()
-				Expect(err).To(Equal(errors.New("field Handler should not be empty")))
-			})
-		})
+			Expect(setFields(webhook)).To(Succeed())
+			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
 
+			By("checking that setFields sets the decoder as well")
+			Expect(handler.dep.decoder).NotTo(BeNil())
+		})
 	})
 })
+
+type stringInjector interface {
+	InjectString(s string) error
+}
+
+type handlerWithSubDependencies struct {
+	Handler
+	dep *subDep
+}
+
+func (h *handlerWithSubDependencies) InjectFunc(f inject.Func) error {
+	return f(h.dep)
+}
+
+type subDep struct {
+	decoder *Decoder
+}
+
+func (d *subDep) InjectDecoder(dec *Decoder) error {
+	d.decoder = dec
+	return nil
+}

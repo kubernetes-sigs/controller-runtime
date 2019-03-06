@@ -26,15 +26,101 @@ import (
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
-var _ = Describe("admission webhook response", func() {
-	Describe("ErrorResponse", func() {
-		It("should return the response with an error", func() {
+var _ = Describe("Admission Webhook Response Helpers", func() {
+	Describe("Allowed", func() {
+		It("should return an 'allowed' response", func() {
+			Expect(Allowed("")).To(Equal(
+				Response{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+						Allowed: true,
+					},
+				},
+			))
+		})
+
+		It("should populate a status with a reason when a reason is given", func() {
+			Expect(Allowed("acceptable")).To(Equal(
+				Response{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+						Allowed: true,
+						Result: &metav1.Status{
+							Reason: "acceptable",
+						},
+					},
+				},
+			))
+		})
+	})
+
+	Describe("Denied", func() {
+		It("should return a 'not allowed' response", func() {
+			Expect(Denied("")).To(Equal(
+				Response{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+						Allowed: false,
+					},
+				},
+			))
+		})
+
+		It("should populate a status with a reason when a reason is given", func() {
+			Expect(Denied("UNACCEPTABLE!")).To(Equal(
+				Response{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+						Allowed: false,
+						Result: &metav1.Status{
+							Reason: "UNACCEPTABLE!",
+						},
+					},
+				},
+			))
+		})
+	})
+
+	Describe("Patched", func() {
+		ops := []jsonpatch.JsonPatchOperation{
+			{
+				Operation: "replace",
+				Path:      "/spec/selector/matchLabels",
+				Value:     map[string]string{"foo": "bar"},
+			},
+			{
+				Operation: "delete",
+				Path:      "/spec/replicas",
+			},
+		}
+		It("should return an 'allowed' response with the given patches", func() {
+			Expect(Patched("", ops...)).To(Equal(
+				Response{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+						Allowed: true,
+					},
+					Patches: ops,
+				},
+			))
+		})
+		It("should populate a status with a reason when a reason is given", func() {
+			Expect(Patched("some changes", ops...)).To(Equal(
+				Response{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+						Allowed: true,
+						Result: &metav1.Status{
+							Reason: "some changes",
+						},
+					},
+					Patches: ops,
+				},
+			))
+		})
+	})
+
+	Describe("Errored", func() {
+		It("should return a denied response with an error", func() {
 			err := errors.New("this is an error")
-			expected := types.Response{
-				Response: &admissionv1beta1.AdmissionResponse{
+			expected := Response{
+				AdmissionResponse: admissionv1beta1.AdmissionResponse{
 					Allowed: false,
 					Result: &metav1.Status{
 						Code:    http.StatusBadRequest,
@@ -42,36 +128,71 @@ var _ = Describe("admission webhook response", func() {
 					},
 				},
 			}
-			resp := ErrorResponse(http.StatusBadRequest, err)
+			resp := Errored(http.StatusBadRequest, err)
 			Expect(resp).To(Equal(expected))
 		})
 	})
 
 	Describe("ValidationResponse", func() {
-		It("should return the response with an admission decision", func() {
-			expected := types.Response{
-				Response: &admissionv1beta1.AdmissionResponse{
-					Allowed: true,
-					Result: &metav1.Status{
-						Reason: metav1.StatusReason("allow to admit"),
+		It("should populate a status with a reason when a reason is given", func() {
+			By("checking that a message is populated for 'allowed' responses")
+			Expect(ValidationResponse(true, "acceptable")).To(Equal(
+				Response{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+						Allowed: true,
+						Result: &metav1.Status{
+							Reason: "acceptable",
+						},
 					},
 				},
-			}
-			resp := ValidationResponse(true, "allow to admit")
-			Expect(resp).To(Equal(expected))
+			))
+
+			By("checking that a message is populated for 'denied' responses")
+			Expect(ValidationResponse(false, "UNACCEPTABLE!")).To(Equal(
+				Response{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+						Allowed: false,
+						Result: &metav1.Status{
+							Reason: "UNACCEPTABLE!",
+						},
+					},
+				},
+			))
+		})
+
+		It("should return an admission decision", func() {
+			By("checking that it returns a 'denied' response when allowed is false")
+			Expect(ValidationResponse(true, "")).To(Equal(
+				Response{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+						Allowed: true,
+					},
+				},
+			))
+
+			By("checking that it returns an 'allowed' response when allowed is true")
+			Expect(ValidationResponse(false, "")).To(Equal(
+				Response{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+						Allowed: false,
+					},
+				},
+			))
 		})
 	})
 
-	Describe("PatchResponse", func() {
-		It("should return the response with patches", func() {
-			expected := types.Response{
-				Patches: []jsonpatch.JsonPatchOperation{},
-				Response: &admissionv1beta1.AdmissionResponse{
+	Describe("PatchResponseFromRaw", func() {
+		It("should return an 'allowed' response with a patch of the diff between two sets of serialized JSON", func() {
+			expected := Response{
+				Patches: []jsonpatch.JsonPatchOperation{
+					{Operation: "replace", Path: "/a", Value: "bar"},
+				},
+				AdmissionResponse: admissionv1beta1.AdmissionResponse{
 					Allowed:   true,
 					PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
 				},
 			}
-			resp := PatchResponseFromRaw([]byte(`{}`), []byte(`{}`))
+			resp := PatchResponseFromRaw([]byte(`{"a": "foo"}`), []byte(`{"a": "bar"}`))
 			Expect(resp).To(Equal(expected))
 		})
 	})

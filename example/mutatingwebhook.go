@@ -23,67 +23,51 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 // podAnnotator annotates Pods
 type podAnnotator struct {
 	client  client.Client
-	decoder types.Decoder
+	decoder *admission.Decoder
 }
 
-// Implement admission.Handler so the controller can handle admission request.
-var _ admission.Handler = &podAnnotator{}
-
 // podAnnotator adds an annotation to every incoming pods.
-func (a *podAnnotator) Handle(ctx context.Context, req types.Request) types.Response {
+func (a *podAnnotator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	pod := &corev1.Pod{}
 
 	err := a.decoder.Decode(req, pod)
 	if err != nil {
-		return admission.ErrorResponse(http.StatusBadRequest, err)
+		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	err = a.mutatePodsFn(ctx, pod)
-	if err != nil {
-		return admission.ErrorResponse(http.StatusInternalServerError, err)
+	if pod.Annotations == nil {
+		pod.Annotations = map[string]string{}
 	}
+	pod.Annotations["example-mutating-admission-webhook"] = "foo"
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
-		return admission.ErrorResponse(http.StatusInternalServerError, err)
+		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
 	return admission.PatchResponseFromRaw(req.AdmissionRequest.Object.Raw, marshaledPod)
 }
 
-// mutatePodsFn add an annotation to the given pod
-func (a *podAnnotator) mutatePodsFn(ctx context.Context, pod *corev1.Pod) error {
-	if pod.Annotations == nil {
-		pod.Annotations = map[string]string{}
-	}
-	pod.Annotations["example-mutating-admission-webhook"] = "foo"
-	return nil
-}
-
 // podAnnotator implements inject.Client.
 // A client will be automatically injected.
-var _ inject.Client = &podAnnotator{}
 
 // InjectClient injects the client.
-func (v *podAnnotator) InjectClient(c client.Client) error {
-	v.client = c
+func (a *podAnnotator) InjectClient(c client.Client) error {
+	a.client = c
 	return nil
 }
 
 // podAnnotator implements inject.Decoder.
 // A decoder will be automatically injected.
-var _ inject.Decoder = &podAnnotator{}
 
 // InjectDecoder injects the decoder.
-func (v *podAnnotator) InjectDecoder(d types.Decoder) error {
-	v.decoder = d
+func (a *podAnnotator) InjectDecoder(d *admission.Decoder) error {
+	a.decoder = d
 	return nil
 }

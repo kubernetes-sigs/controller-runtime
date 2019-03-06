@@ -50,7 +50,7 @@ type Controller interface {
 	//
 	// Watch may be provided one or more Predicates to filter events before
 	// they are given to the EventHandler.  Events will be passed to the
-	// EventHandler iff all provided Predicates evaluate to true.
+	// EventHandler if all provided Predicates evaluate to true.
 	Watch(src source.Source, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error
 
 	// Start starts the controller.  Start blocks until stop is closed or a
@@ -80,15 +80,15 @@ func New(name string, mgr manager.Manager, options Options) (Controller, error) 
 
 	// Create controller with dependencies set
 	c := &controller.Controller{
-		Do:       options.Reconciler,
-		Cache:    mgr.GetCache(),
-		Config:   mgr.GetConfig(),
-		Scheme:   mgr.GetScheme(),
-		Client:   mgr.GetClient(),
-		Recorder: mgr.GetEventRecorderFor(name),
-		Queue:    workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), name),
+		Do:                      options.Reconciler,
+		Cache:                   mgr.GetCache(),
+		Config:                  mgr.GetConfig(),
+		Scheme:                  mgr.GetScheme(),
+		Client:                  mgr.GetClient(),
+		Recorder:                mgr.GetEventRecorderFor(name),
+		Queue:                   workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), name),
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
-		Name: name,
+		Name:                    name,
 	}
 
 	// Add the controller as a Manager components

@@ -36,8 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/types"
 )
 
 // Manager initializes shared dependencies such as Caches and Clients, and provides them to Runnables.
@@ -61,9 +59,6 @@ type Manager interface {
 
 	// GetScheme returns an initialized Scheme
 	GetScheme() *runtime.Scheme
-
-	// GetAdmissionDecoder returns the runtime.Decoder based on the scheme.
-	GetAdmissionDecoder() types.Decoder
 
 	// GetClient returns a client configured with the Config
 	GetClient() client.Client
@@ -125,7 +120,7 @@ type Options struct {
 
 	// NewCache is the function that will create the cache to be used
 	// by the manager. If not set this will use the default new cache function.
-	NewCache NewCacheFunc
+	NewCache cache.NewCacheFunc
 
 	// NewClient will create the client to be used by the manager.
 	// If not set this will create the default DelegatingClient that will
@@ -135,12 +130,8 @@ type Options struct {
 	// Dependency injection for testing
 	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error)
 	newResourceLock     func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
-	newAdmissionDecoder func(scheme *runtime.Scheme) (types.Decoder, error)
 	newMetricsListener  func(addr string) (net.Listener, error)
 }
-
-// NewCacheFunc allows a user to define how to create a cache
-type NewCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error)
 
 // NewClientFunc allows a user to define how to create a client
 type NewClientFunc func(cache cache.Cache, config *rest.Config, options client.Options) (client.Client, error)
@@ -210,11 +201,6 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
-	admissionDecoder, err := options.newAdmissionDecoder(options.Scheme)
-	if err != nil {
-		return nil, err
-	}
-
 	// Create the mertics listener. This will throw an error if the metrics bind
 	// address is invalid or already in use.
 	metricsListener, err := options.newMetricsListener(options.MetricsBindAddress)
@@ -227,7 +213,6 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	return &controllerManager{
 		config:           config,
 		scheme:           options.Scheme,
-		admissionDecoder: admissionDecoder,
 		errChan:          make(chan error),
 		cache:            cache,
 		fieldIndexes:     cache,
@@ -288,10 +273,6 @@ func setOptionsDefaults(options Options) Options {
 	// Allow newResourceLock to be mocked
 	if options.newResourceLock == nil {
 		options.newResourceLock = leaderelection.NewResourceLock
-	}
-
-	if options.newAdmissionDecoder == nil {
-		options.newAdmissionDecoder = admission.NewDecoder
 	}
 
 	if options.newMetricsListener == nil {

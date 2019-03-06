@@ -26,9 +26,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
-	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
 
 var _ EventHandler = &EnqueueRequestForOwner{}

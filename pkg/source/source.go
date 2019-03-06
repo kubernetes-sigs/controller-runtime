@@ -25,8 +25,8 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source/internal"
 
 	toolscache "k8s.io/client-go/tools/cache"

@@ -125,4 +125,3 @@ func (k *KubeAwareEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Fie
 
 	return k.Encoder.EncodeEntry(entry, fields)
 }
-

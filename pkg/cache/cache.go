@@ -51,11 +51,11 @@ type Cache interface {
 type Informers interface {
 	// GetInformer fetches or constructs an informer for the given object that corresponds to a single
 	// API kind and resource.
-	GetInformer(obj runtime.Object) (toolscache.SharedIndexInformer, error)
+	GetInformer(obj runtime.Object) (Informer, error)
 
 	// GetInformerForKind is similar to GetInformer, except that it takes a group-version-kind, instead
 	// of the underlying object.
-	GetInformerForKind(gvk schema.GroupVersionKind) (toolscache.SharedIndexInformer, error)
+	GetInformerForKind(gvk schema.GroupVersionKind) (Informer, error)
 
 	// Start runs all the informers known to this cache until the given channel is closed.
 	// It blocks.
@@ -68,7 +68,24 @@ type Informers interface {
 	client.FieldIndexer
 }
 
-// Options are the optional arguments for creating a new set of Informers.
+// Informer - informer allows you interact with the underlying informer
+type Informer interface {
+	// AddEventHandler adds an event handler to the shared informer using the shared informer's resync
+	// period.  Events to a single handler are delivered sequentially, but there is no coordination
+	// between different handlers.
+	AddEventHandler(handler toolscache.ResourceEventHandler)
+	// AddEventHandlerWithResyncPeriod adds an event handler to the shared informer using the
+	// specified resync period.  Events to a single handler are delivered sequentially, but there is
+	// no coordination between different handlers.
+	AddEventHandlerWithResyncPeriod(handler toolscache.ResourceEventHandler, resyncPeriod time.Duration)
+	// AddIndexers adds more indexers to this store.  If you call this after you already have data
+	// in the store, the results are undefined.
+	AddIndexers(indexers toolscache.Indexers) error
+	//HasSynced return true if the informers underlying store has synced
+	HasSynced() bool
+}
+
+// Options are the optional arguments for creating a new InformersMap object
 type Options struct {
 	// Scheme is the scheme to use for mapping objects to GroupVersionKinds
 	Scheme *runtime.Scheme

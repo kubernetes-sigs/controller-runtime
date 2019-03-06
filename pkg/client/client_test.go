@@ -1133,9 +1133,7 @@ var _ = Describe("Client", func() {
 				hasDep := false
 				for _, item := range deps.Items {
 					if item.GetName() == dep.Name && item.GetNamespace() == dep.Namespace {
-						fmt.Printf("HERE!!!!!!!! ITEM: %v\n\n", item)
 						hasDep = true
-						fmt.Printf("HERE hasDep: %v\n\n", hasDep)
 						break
 					}
 				}

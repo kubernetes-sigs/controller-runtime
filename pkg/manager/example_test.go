@@ -19,9 +19,10 @@ package manager_test
 import (
 	"os"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
@@ -47,8 +48,26 @@ func ExampleNew() {
 	log.Info("created manager", "manager", mgr)
 }
 
+// This example creates a new Manager that has a cache scoped to a list of namespaces.
+func ExampleNew_multinamespaceCache() {
+	cfg, err := config.GetConfig()
+	if err != nil {
+		log.Error(err, "unable to get kubeconfig")
+		os.Exit(1)
+	}
+
+	mgr, err := manager.New(cfg, manager.Options{
+		NewCache: cache.MultiNamespacedCacheBuilder([]string{"namespace1", "namespace2"}),
+	})
+	if err != nil {
+		log.Error(err, "unable to set up manager")
+		os.Exit(1)
+	}
+	log.Info("created manager", "manager", mgr)
+}
+
 // This example adds a Runnable for the Manager to Start.
-func ExampleManager_Add() {
+func ExampleManager_add() {
 	err := mgr.Add(manager.RunnableFunc(func(<-chan struct{}) error {
 		// Do something
 		return nil
@@ -60,7 +79,7 @@ func ExampleManager_Add() {
 }
 
 // This example starts a Manager that has had Runnables added.
-func ExampleManager_Start() {
+func ExampleManager_start() {
 	err := mgr.Start(signals.SetupSignalHandler())
 	if err != nil {
 		log.Error(err, "unable start the manager")

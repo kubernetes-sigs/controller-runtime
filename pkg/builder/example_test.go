@@ -29,8 +29,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // This example creates a simple application ControllerManagedBy that is configured for ReplicaSets and Pods.

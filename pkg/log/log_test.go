@@ -17,7 +17,6 @@ limitations under the License.
 package log
 
 import (
-
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

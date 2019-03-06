@@ -22,7 +22,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -37,10 +36,9 @@ func ExampleCreateOrUpdate() {
 	// c is client.Client
 
 	// Create or Update the deployment default/foo
-	deployment := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"}}
+	deploy := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"}}
 
-	op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deployment, func(existing runtime.Object) error {
-		deploy := existing.(*appsv1.Deployment)
+	op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, func() error {
 
 		// Deployment selector is immutable so we set this value only if
 		// a new object is going to be created
@@ -59,7 +57,7 @@ func ExampleCreateOrUpdate() {
 			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{
-					corev1.Container{
+					{
 						Name:  "busybox",
 						Image: "busybox",
 					},

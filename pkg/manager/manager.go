@@ -74,6 +74,11 @@ type Manager interface {
 
 	// GetRESTMapper returns a RESTMapper
 	GetRESTMapper() meta.RESTMapper
+
+	// GetAPIReader returns a reader that will be configured to use the API server.
+	// This should be used sparingly and only when the client does not fit your
+	// use case.
+	GetAPIReader() client.Reader
 }
 
 // Options are the arguments for creating a new Manager
@@ -179,6 +184,11 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
+	apiReader, err := client.New(config, client.Options{Scheme: options.Scheme, Mapper: mapper})
+	if err != nil {
+		return nil, err
+	}
+
 	writeObj, err := options.NewClient(cache, config, client.Options{Scheme: options.Scheme, Mapper: mapper})
 	if err != nil {
 		return nil, err
@@ -217,6 +227,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		cache:            cache,
 		fieldIndexes:     cache,
 		client:           writeObj,
+		apiReader:        apiReader,
 		recorderProvider: recorderProvider,
 		resourceLock:     resourceLock,
 		mapper:           mapper,

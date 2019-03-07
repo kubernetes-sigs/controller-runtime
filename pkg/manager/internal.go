@@ -58,6 +58,9 @@ type controllerManager struct {
 	// client is the client injected into Controllers (and EventHandlers, Sources and Predicates).
 	client client.Client
 
+	// apiReader is the reader that will make requests to the api server and not the cache.
+	apiReader client.Reader
+
 	// fieldIndexes knows how to add field indexes over the Cache used by this controller,
 	// which can later be consumed via field selectors from the injected client.
 	fieldIndexes client.FieldIndexer
@@ -121,6 +124,9 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 	if _, err := inject.ClientInto(cm.client, i); err != nil {
 		return err
 	}
+	if _, err := inject.APIReaderInto(cm.apiReader, i); err != nil {
+		return err
+	}
 	if _, err := inject.SchemeInto(cm.scheme, i); err != nil {
 		return err
 	}
@@ -165,6 +171,10 @@ func (cm *controllerManager) GetEventRecorderFor(name string) record.EventRecord
 
 func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
 	return cm.mapper
+}
+
+func (cm *controllerManager) GetAPIReader() client.Reader {
+	return cm.apiReader
 }
 
 func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {

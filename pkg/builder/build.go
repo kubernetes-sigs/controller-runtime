@@ -50,6 +50,7 @@ type Builder struct {
 }
 
 // SimpleController returns a new Builder.
+//
 // Deprecated: Use ControllerManagedBy(Manager) instead.
 func SimpleController() *Builder {
 	return &Builder{}
@@ -64,6 +65,7 @@ func ControllerManagedBy(m manager.Manager) *Builder {
 // update events by *reconciling the object*.
 // This is the equivalent of calling
 // Watches(&source.Kind{Type: apiType}, &handler.EnqueueRequestForObject{})
+//
 // Deprecated: Use For
 func (blder *Builder) ForType(apiType runtime.Object) *Builder {
 	return blder.For(apiType)
@@ -99,6 +101,7 @@ func (blder *Builder) Watches(src source.Source, eventhandler handler.EventHandl
 }
 
 // WithConfig sets the Config to use for configuring clients.  Defaults to the in-cluster config or to ~/.kube/config.
+//
 // Deprecated: Use ControllerManagedBy(Manager) and this isn't needed.
 func (blder *Builder) WithConfig(config *rest.Config) *Builder {
 	blder.config = config
@@ -106,6 +109,7 @@ func (blder *Builder) WithConfig(config *rest.Config) *Builder {
 }
 
 // WithManager sets the Manager to use for registering the ControllerManagedBy.  Defaults to a new manager.Manager.
+//
 // Deprecated: Use ControllerManagedBy(Manager) and this isn't needed.
 func (blder *Builder) WithManager(m manager.Manager) *Builder {
 	blder.mgr = m
@@ -127,6 +131,7 @@ func (blder *Builder) Complete(r reconcile.Reconciler) error {
 }
 
 // Build builds the Application ControllerManagedBy and returns the Manager used to start it.
+//
 // Deprecated: Use Complete
 func (blder *Builder) Build(r reconcile.Reconciler) (manager.Manager, error) {
 	if r == nil {

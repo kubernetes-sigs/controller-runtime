@@ -482,6 +482,18 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:cc5c2ca087db25b6dcae0e2e2714582bc900f0b711acc42f8bc10c5e2bc5a159"
+  name = "golang.org/x/exp"
+  packages = [
+    "errors",
+    "errors/fmt",
+    "errors/internal",
+  ]
+  pruneopts = "UT"
+  revision = "a1d7652674e8f269b17d9be90d3c4c1d0e8830e8"
+
+[[projects]]
+  branch = "master"
   digest = "1:ff58bc124488348ba2ca02f62de899d07ba3e7dce51da02557bfc9a8052608db"
   name = "golang.org/x/net"
   packages = [
@@ -944,6 +956,8 @@
     "go.uber.org/zap",
     "go.uber.org/zap/buffer",
     "go.uber.org/zap/zapcore",
+    "golang.org/x/exp/errors",
+    "golang.org/x/exp/errors/fmt",
     "k8s.io/api/admission/v1beta1",
     "k8s.io/api/apps/v1",
     "k8s.io/api/autoscaling/v1",

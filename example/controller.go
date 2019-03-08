@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/erreur"
 )
 
 // reconcileReplicaSet reconciles ReplicaSets
@@ -51,7 +52,7 @@ func (r *reconcileReplicaSet) Reconcile(request reconcile.Request) (reconcile.Re
 
 	if err != nil {
 		log.Error(err, "Could not fetch ReplicaSet")
-		return reconcile.Result{}, err
+		return reconcile.Result{}, erreur.WithValues("could not find ReplicaSet", "replicaset", request.NamespacedName).CausedBy(err)
 	}
 
 	// Print the ReplicaSet

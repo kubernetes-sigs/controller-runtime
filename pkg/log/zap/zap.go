@@ -67,7 +67,10 @@ func RawLoggerTo(destWriter io.Writer, development bool, opts ...zap.Option) *za
 			}))
 	}
 	opts = append(opts, zap.AddCallerSkip(1), zap.ErrorOutput(sink))
-	log := zap.New(zapcore.NewCore(&KubeAwareEncoder{Encoder: enc, Verbose: development}, sink, lvl))
+	log := zap.New(zapcore.NewCore(&ErreurAwareEncoder{
+		Encoder: &KubeAwareEncoder{Encoder: enc, Verbose: development},
+		Verbose: true,
+	}, sink, lvl))
 	log = log.WithOptions(opts...)
 	return log
 }

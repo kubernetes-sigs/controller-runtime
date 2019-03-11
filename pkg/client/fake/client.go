@@ -159,24 +159,22 @@ func (c *fakeClient) Delete(ctx context.Context, obj runtime.Object, opts ...cli
 	if err != nil {
 		return err
 	}
+	delOptions := client.DeleteOptions{}
+	delOptions.ApplyOptions(opts)
+	if delOptions.CollectionOptions != nil {
+		return c.deleteCollection(obj, delOptions)
+	}
+
 	//TODO: implement propagation
 	return c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
 }
 
-func (c *fakeClient) DeleteCollection(ctx context.Context, obj runtime.Object, opts ...client.DeleteOptionFunc) error {
+func (c *fakeClient) deleteCollection(obj runtime.Object, dcOptions client.DeleteOptions) error {
+
 	gvk, err := apiutil.GVKForObject(obj, scheme.Scheme)
 	if err != nil {
 		return err
 	}
-
-	if !strings.HasSuffix(gvk.Kind, "List") {
-		return fmt.Errorf("non-list type %T (kind %q) passed as input", obj, gvk)
-	}
-	// we need the non-list GVK, so chop off the "List" from the end of the kind
-	gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
-
-	dcOptions := client.DeleteOptions{}
-	dcOptions.ApplyOptions(opts)
 
 	gvr, _ := meta.UnsafeGuessKindToResource(gvk)
 	o, err := c.tracker.List(gvr, gvk, dcOptions.CollectionOptions.Namespace)

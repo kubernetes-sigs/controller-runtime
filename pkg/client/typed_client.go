@@ -68,11 +68,30 @@ func (c *typedClient) Delete(ctx context.Context, obj runtime.Object, opts ...De
 	}
 
 	deleteOpts := DeleteOptions{}
+	deleteOpts.ApplyOptions(opts)
+
+	if deleteOpts.CollectionOptions != nil {
+		return c.deleteCollection(ctx, o, deleteOpts)
+	}
+
 	return o.Delete().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		Body(deleteOpts.ApplyOptions(opts).AsDeleteOptions()).
+		Body(deleteOpts.AsDeleteOptions()).
+		Context(ctx).
+		Do().
+		Error()
+}
+
+// DeleteCollection implements client.Client
+func (c *typedClient) deleteCollection(ctx context.Context, o *objMeta, deleteOpts DeleteOptions) error {
+
+	return o.Delete().
+		NamespaceIfScoped(deleteOpts.CollectionOptions.Namespace, o.isNamespaced()).
+		Resource(o.resource()).
+		VersionedParams(deleteOpts.CollectionOptions.AsListOptions(), c.paramCodec).
+		Body(deleteOpts.AsDeleteOptions()).
 		Context(ctx).
 		Do().
 		Error()
@@ -107,26 +126,6 @@ func (c *typedClient) List(ctx context.Context, obj runtime.Object, opts ...List
 		Context(ctx).
 		Do().
 		Into(obj)
-}
-
-// DeleteCollection implements client.Client
-func (c *typedClient) DeleteCollection(ctx context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error {
-	r, err := c.cache.getResource(obj)
-	if err != nil {
-		return err
-	}
-
-	dcOpts := DeleteOptions{}
-	dcOpts.ApplyOptions(opts)
-
-	return r.Delete().
-		NamespaceIfScoped(dcOpts.CollectionOptions.Namespace, r.isNamespaced()).
-		Resource(r.resource()).
-		VersionedParams(dcOpts.CollectionOptions.AsListOptions(), c.paramCodec).
-		Body(dcOpts.AsDeleteOptions()).
-		Context(ctx).
-		Do().
-		Error()
 }
 
 // UpdateStatus used by StatusWriter to write status.

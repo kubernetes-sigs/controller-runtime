@@ -201,18 +201,23 @@ func ExampleClient_delete() {
 
 // This example shows how to use the client with typed and unstrucurted objects to delete collections of objects.
 func ExampleClient_deleteCollection() {
+	labelMatcher := client.CollectionOptions(
+		client.MatchingLabels(map[string]string{"app": "foo"}),
+		client.InNamespace("foo"),
+	)
 	// Using a typed object.
-	pod := &corev1.PodList{}
+	pod := &corev1.Pod{}
 	// c is a created client.
-	_ = c.DeleteCollection(context.Background(), pod)
+	_ = c.Delete(context.Background(), pod, labelMatcher)
 
+	// Using an unstructured Object
 	u := &unstructured.UnstructuredList{}
 	u.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "apps",
-		Kind:    "DeploymentList",
+		Kind:    "Deployment",
 		Version: "v1",
 	})
-	_ = c.DeleteCollection(context.Background(), u)
+	_ = c.Delete(context.Background(), u, labelMatcher)
 }
 
 // This example shows how to set up and consume a field selector over a pod's volumes' secretName field.

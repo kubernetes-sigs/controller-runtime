@@ -66,7 +66,7 @@ var _ = Describe("Client", func() {
 	BeforeEach(func(done Done) {
 		atomic.AddUint64(&count, 1)
 		dep = &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("deployment-name-%v", count), Namespace: ns},
+			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("deployment-name-%v", count), Namespace: ns, Labels: map[string]string{"app": fmt.Sprintf("bar-%v", count)}},
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &replicaCount,
 				Selector: &metav1.LabelSelector{
@@ -839,6 +839,42 @@ var _ = Describe("Client", func() {
 			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 			})
+
+			It("should delete a collection of object", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating two Deployments")
+
+				dep2 := dep.DeepCopy()
+				dep2.Name = dep2.Name + "-2"
+
+				dep, err = clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+				dep2, err = clientset.AppsV1().Deployments(ns).Create(dep2)
+				Expect(err).NotTo(HaveOccurred())
+
+				depName := dep.Name
+				dep2Name := dep2.Name
+
+				labelmatcher := client.CollectionOptions(
+					client.MatchingLabels(dep.ObjectMeta.Labels),
+					client.InNamespace(ns),
+				)
+
+				By("deleting Deployments")
+				err = cl.Delete(context.TODO(), dep, labelmatcher)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating the Deployment no longer exists")
+				_, err = clientset.AppsV1().Deployments(ns).Get(depName, metav1.GetOptions{})
+				Expect(err).To(HaveOccurred())
+				_, err = clientset.AppsV1().Deployments(ns).Get(dep2Name, metav1.GetOptions{})
+				Expect(err).To(HaveOccurred())
+
+				close(done)
+			})
 		})
 		Context("with unstructured objects", func() {
 			It("should delete an existing object from a go struct", func(done Done) {
@@ -911,6 +947,49 @@ var _ = Describe("Client", func() {
 					Version: "v1",
 				})
 				err = cl.Delete(context.TODO(), node)
+				Expect(err).To(HaveOccurred())
+
+				close(done)
+			})
+
+			It("should delete a collection of object", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating two Deployments")
+
+				dep2 := dep.DeepCopy()
+				dep2.Name = dep2.Name + "-2"
+
+				dep, err = clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+				dep2, err = clientset.AppsV1().Deployments(ns).Create(dep2)
+				Expect(err).NotTo(HaveOccurred())
+
+				depName := dep.Name
+				dep2Name := dep2.Name
+
+				labelmatcher := client.CollectionOptions(
+					client.MatchingLabels(dep.ObjectMeta.Labels),
+					client.InNamespace(ns),
+				)
+
+				By("deleting Deployments")
+				u := &unstructured.Unstructured{}
+				scheme.Convert(dep, u, nil)
+				u.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Kind:    "Deployment",
+					Version: "v1",
+				})
+				err = cl.Delete(context.TODO(), u, labelmatcher)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating the Deployment no longer exists")
+				_, err = clientset.AppsV1().Deployments(ns).Get(depName, metav1.GetOptions{})
+				Expect(err).To(HaveOccurred())
+				_, err = clientset.AppsV1().Deployments(ns).Get(dep2Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 
 				close(done)
@@ -1717,29 +1796,7 @@ var _ = Describe("Client", func() {
 			PIt("should fail if the object doesn't have meta", func() {
 
 			})
-		})
-	})
 
-	Describe("DeleteCollection", func() {
-		Context("with structured objects", func() {
-			PIt("should fail if the object is not a List", func() {
-
-			})
-			PIt("should delete a collection of objects", func() {
-
-			})
-			PIt("should filter results by namespace selector", func() {
-
-			})
-		})
-
-		Context("with unstructured objects", func() {
-			PIt("should fail if the object is not an UnstructuredList", func() {
-
-			})
-			PIt("should delete a collection of objects", func() {
-
-			})
 			PIt("should filter results by namespace selector", func() {
 
 			})
@@ -1774,6 +1831,12 @@ var _ = Describe("Client", func() {
 			Expect(do.AsDeleteOptions()).To(Equal(&metav1.DeleteOptions{}))
 			do = &client.DeleteOptions{}
 			Expect(do.AsDeleteOptions()).To(Equal(&metav1.DeleteOptions{}))
+		})
+
+		It("should producte nil CollectionOptions if not present", func() {
+			do := &client.DeleteOptions{}
+			do.AsDeleteOptions()
+			Expect(do.CollectionOptions).To(BeNil())
 		})
 
 		It("should merge multiple options together", func() {

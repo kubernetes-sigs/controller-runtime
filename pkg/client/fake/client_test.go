@@ -157,7 +157,10 @@ var _ = Describe("Fake client", func() {
 
 		It("should be able to Delete a Collection", func() {
 			By("Deleting a deploymentList")
-			err := cl.DeleteCollection(nil, &appsv1.DeploymentList{})
+			labelFilter := client.CollectionOptions(
+				client.InNamespace("ns1"),
+			)
+			err := cl.Delete(nil, &appsv1.Deployment{}, labelFilter)
 			Expect(err).To(BeNil())
 
 			By("Listing all deployments in the namespace")

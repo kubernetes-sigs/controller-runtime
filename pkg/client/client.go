@@ -148,15 +148,6 @@ func (c *client) List(ctx context.Context, obj runtime.Object, opts ...ListOptio
 	return c.typedClient.List(ctx, obj, opts...)
 }
 
-// DeleteCollection implements client.Client
-func (c *client) DeleteCollection(ctx context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error {
-	_, ok := obj.(*unstructured.UnstructuredList)
-	if ok {
-		return c.unstructuredClient.DeleteCollection(ctx, obj, opts...)
-	}
-	return c.typedClient.DeleteCollection(ctx, obj, opts...)
-}
-
 // Status implements client.StatusClient
 func (c *client) Status() StatusWriter {
 	return &statusWriter{client: c}

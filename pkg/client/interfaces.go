@@ -65,9 +65,6 @@ type Writer interface {
 	// Update updates the given obj in the Kubernetes cluster. obj must be a
 	// struct pointer so that obj can be updated with the content returned by the Server.
 	Update(ctx context.Context, obj runtime.Object) error
-
-	// DeleteCollection deletes all objects of the List's kind that match the List options.
-	DeleteCollection(ctx context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error
 }
 
 // StatusClient knows how to create a client which can update status subresource
@@ -160,9 +157,6 @@ func (o *DeleteOptions) AsDeleteOptions() *metav1.DeleteOptions {
 // ApplyOptions executes the given DeleteOptionFuncs and returns the mutated
 // DeleteOptions.
 func (o *DeleteOptions) ApplyOptions(optFuncs []DeleteOptionFunc) *DeleteOptions {
-	if o.CollectionOptions == nil {
-		o.CollectionOptions = &ListOptions{}
-	}
 	for _, optFunc := range optFuncs {
 		optFunc(o)
 	}
@@ -202,6 +196,9 @@ func PropagationPolicy(p metav1.DeletionPropagation) DeleteOptionFunc {
 // field of a DeleteOptions struct
 func CollectionOptions(listOpts ...ListOptionFunc) DeleteOptionFunc {
 	return func(opts *DeleteOptions) {
+		if opts.CollectionOptions == nil {
+			opts.CollectionOptions = &ListOptions{}
+		}
 		opts.CollectionOptions.ApplyOptions(listOpts)
 	}
 }

@@ -83,7 +83,23 @@ func (uc *unstructuredClient) Delete(_ context.Context, obj runtime.Object, opts
 		return err
 	}
 	deleteOpts := DeleteOptions{}
-	err = r.Delete(u.GetName(), deleteOpts.ApplyOptions(opts).AsDeleteOptions())
+	deleteOpts.ApplyOptions(opts)
+	if deleteOpts.CollectionOptions != nil {
+		return uc.deleteCollection(u, deleteOpts)
+	}
+	err = r.Delete(u.GetName(), deleteOpts.AsDeleteOptions())
+	return err
+}
+
+func (uc *unstructuredClient) deleteCollection(u *unstructured.Unstructured, dcOpts DeleteOptions) error {
+	gvk := u.GroupVersionKind()
+
+	r, err := uc.getResourceInterface(gvk, dcOpts.CollectionOptions.Namespace)
+	if err != nil {
+		return err
+	}
+
+	err = r.DeleteCollection(dcOpts.AsDeleteOptions(), *dcOpts.CollectionOptions.AsListOptions())
 	return err
 }
 
@@ -129,29 +145,6 @@ func (uc *unstructuredClient) List(_ context.Context, obj runtime.Object, opts .
 	u.Items = i.Items
 	u.Object = i.Object
 	return nil
-}
-
-// DeleteCollection implements client.Client
-func (uc *unstructuredClient) DeleteCollection(_ context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error {
-	u, ok := obj.(*unstructured.UnstructuredList)
-	if !ok {
-		return fmt.Errorf("unstructured client did not understand object: %T", obj)
-	}
-	gvk := u.GroupVersionKind()
-	if strings.HasSuffix(gvk.Kind, "List") {
-		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
-	}
-
-	dcOpts := DeleteOptions{}
-	dcOpts.ApplyOptions(opts)
-
-	r, err := uc.getResourceInterface(gvk, dcOpts.CollectionOptions.Namespace)
-	if err != nil {
-		return err
-	}
-
-	err = r.DeleteCollection(dcOpts.AsDeleteOptions(), *dcOpts.CollectionOptions.AsListOptions())
-	return err
 }
 
 func (uc *unstructuredClient) UpdateStatus(_ context.Context, obj runtime.Object) error {

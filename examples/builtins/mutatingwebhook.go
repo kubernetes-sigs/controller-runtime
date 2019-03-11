@@ -18,7 +18,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"net/http"
 
 	corev1 "k8s.io/api/core/v1"
@@ -26,47 +26,48 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-// podValidator validates Pods
-type podValidator struct {
+// podAnnotator annotates Pods
+type podAnnotator struct {
 	client  client.Client
 	decoder *admission.Decoder
 }
 
-// podValidator admits a pod iff a specific annotation exists.
-func (v *podValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+// podAnnotator adds an annotation to every incoming pods.
+func (a *podAnnotator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	pod := &corev1.Pod{}
 
-	err := v.decoder.Decode(req, pod)
+	err := a.decoder.Decode(req, pod)
 	if err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	key := "example-mutating-admission-webhook"
-	anno, found := pod.Annotations[key]
-	if !found {
-		return admission.Denied(fmt.Sprintf("missing annotation %s", key))
+	if pod.Annotations == nil {
+		pod.Annotations = map[string]string{}
 	}
-	if anno != "foo" {
-		return admission.Denied(fmt.Sprintf("annotation %s did not have value %q", key, "foo"))
+	pod.Annotations["example-mutating-admission-webhook"] = "foo"
+
+	marshaledPod, err := json.Marshal(pod)
+	if err != nil {
+		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	return admission.Allowed("")
+	return admission.PatchResponseFromRaw(req.Object.Raw, marshaledPod)
 }
 
-// podValidator implements inject.Client.
+// podAnnotator implements inject.Client.
 // A client will be automatically injected.
 
 // InjectClient injects the client.
-func (v *podValidator) InjectClient(c client.Client) error {
-	v.client = c
+func (a *podAnnotator) InjectClient(c client.Client) error {
+	a.client = c
 	return nil
 }
 
-// podValidator implements inject.Decoder.
+// podAnnotator implements admission.DecoderInjector.
 // A decoder will be automatically injected.
 
 // InjectDecoder injects the decoder.
-func (v *podValidator) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
+func (a *podAnnotator) InjectDecoder(d *admission.Decoder) error {
+	a.decoder = d
 	return nil
 }

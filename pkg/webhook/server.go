@@ -36,6 +36,9 @@ const (
 	keyName  = "tls.key"
 )
 
+// DefaultPort is the default port that the webhook server serves.
+var DefaultPort = 443
+
 // Server is an admission webhook server that can serve traffic and
 // generates related k8s resources for deploying.
 type Server struct {
@@ -45,7 +48,7 @@ type Server struct {
 
 	// Port is the port number that the server will serve.
 	// It will be defaulted to 443 if unspecified.
-	Port int32
+	Port int
 
 	// CertDir is the directory that contains the server key and certificate.
 	// If using FSCertWriter in Provisioner, the server itself will provision the certificate and
@@ -75,8 +78,9 @@ func (s *Server) setDefaults() {
 	s.webhookMux = http.NewServeMux()
 
 	if s.Port <= 0 {
-		s.Port = 443
+		s.Port = DefaultPort
 	}
+
 	if len(s.CertDir) == 0 {
 		s.CertDir = path.Join("/tmp", "k8s-webhook-server", "serving-certs")
 	}

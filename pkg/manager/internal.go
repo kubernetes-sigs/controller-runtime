@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 var log = logf.RuntimeLog.WithName("manager")
@@ -93,6 +94,13 @@ type controllerManager struct {
 	internalStopper chan<- struct{}
 
 	startCache func(stop <-chan struct{}) error
+
+	// port is the port that the webhook server serves at.
+	port int
+	// host is the hostname that the webhook server binds to.
+	host string
+
+	webhookServer *webhook.Server
 }
 
 // Add sets dependencies on i, and adds it to the list of runnables to start.
@@ -175,6 +183,19 @@ func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
 
 func (cm *controllerManager) GetAPIReader() client.Reader {
 	return cm.apiReader
+}
+
+func (cm *controllerManager) GetWebhookServer() *webhook.Server {
+	if cm.webhookServer == nil {
+		cm.webhookServer = &webhook.Server{
+			Port: cm.port,
+			Host: cm.host,
+		}
+		if err := cm.Add(cm.webhookServer); err != nil {
+			panic("unable to add webhookServer to the controller manager")
+		}
+	}
+	return cm.webhookServer
 }
 
 func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {

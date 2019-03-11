@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // Supporting mocking out functions for testing
@@ -65,6 +66,8 @@ func ControllerManagedBy(m manager.Manager) *Builder {
 // update events by *reconciling the object*.
 // This is the equivalent of calling
 // Watches(&source.Kind{Type: apiType}, &handler.EnqueueRequestForObject{})
+// If the passed in object has implemented the admission.Defaulter interface, a MutatingWebhook will be wired for this type.
+// If the passed in object has implemented the admission.Validator interface, a ValidatingWebhook will be wired for this type.
 //
 // Deprecated: Use For
 func (blder *Builder) ForType(apiType runtime.Object) *Builder {
@@ -75,6 +78,8 @@ func (blder *Builder) ForType(apiType runtime.Object) *Builder {
 // update events by *reconciling the object*.
 // This is the equivalent of calling
 // Watches(&source.Kind{Type: apiType}, &handler.EnqueueRequestForObject{})
+// If the passed in object has implemented the admission.Defaulter interface, a MutatingWebhook will be wired for this type.
+// If the passed in object has implemented the admission.Validator interface, a ValidatingWebhook will be wired for this type.
 func (blder *Builder) For(apiType runtime.Object) *Builder {
 	blder.apiType = apiType
 	return blder
@@ -124,7 +129,7 @@ func (blder *Builder) WithEventFilter(p predicate.Predicate) *Builder {
 	return blder
 }
 
-// Complete builds the Application ControllerManagedBy and returns the Manager used to start it.
+// Complete builds the Application ControllerManagedBy.
 func (blder *Builder) Complete(r reconcile.Reconciler) error {
 	_, err := blder.Build(r)
 	return err
@@ -135,7 +140,7 @@ func (blder *Builder) Complete(r reconcile.Reconciler) error {
 // Deprecated: Use Complete
 func (blder *Builder) Build(r reconcile.Reconciler) (manager.Manager, error) {
 	if r == nil {
-		return nil, fmt.Errorf("must call WithReconciler to set Reconciler")
+		return nil, fmt.Errorf("must provide a non-nil Reconciler")
 	}
 
 	// Set the Config
@@ -153,12 +158,26 @@ func (blder *Builder) Build(r reconcile.Reconciler) (manager.Manager, error) {
 		return nil, err
 	}
 
+	// Set the Webook if needed
+	if err := blder.doWebhook(); err != nil {
+		return nil, err
+	}
+
+	// Set the Watch
+	if err := blder.doWatch(); err != nil {
+		return nil, err
+	}
+
+	return blder.mgr, nil
+}
+
+func (blder *Builder) doWatch() error {
 	// Reconcile type
 	src := &source.Kind{Type: blder.apiType}
 	hdler := &handler.EnqueueRequestForObject{}
 	err := blder.ctrl.Watch(src, hdler, blder.predicates...)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Watches the managed types
@@ -169,19 +188,18 @@ func (blder *Builder) Build(r reconcile.Reconciler) (manager.Manager, error) {
 			IsController: true,
 		}
 		if err := blder.ctrl.Watch(src, hdler, blder.predicates...); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
 	// Do the watch requests
 	for _, w := range blder.watchRequest {
 		if err := blder.ctrl.Watch(w.src, w.eventhandler, blder.predicates...); err != nil {
-			return nil, err
+			return err
 		}
 
 	}
-
-	return blder.mgr, nil
+	return nil
 }
 
 func (blder *Builder) doConfig() error {
@@ -221,5 +239,53 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 		return err
 	}
 	blder.ctrl, err = newController(name, blder.mgr, controller.Options{Reconciler: r})
+	return err
+}
+
+func (blder *Builder) doWebhook() error {
+	// Create a webhook for each type
+	gvk, err := apiutil.GVKForObject(blder.apiType, blder.mgr.GetScheme())
+	if err != nil {
+		return err
+	}
+
+	partialPath := strings.Replace(gvk.Group, ".", "-", -1) + "-" +
+		gvk.Version + "-" + strings.ToLower(gvk.Kind)
+
+	// TODO: When the conversion webhook lands, we need to handle all registered versions of a given group-kind.
+	// A potential workflow for defaulting webhook
+	// 1) a bespoke (non-hub) version comes in
+	// 2) convert it to the hub version
+	// 3) do defaulting
+	// 4) convert it back to the same bespoke version
+	// 5) calculate the JSON patch
+	//
+	// A potential workflow for validating webhook
+	// 1) a bespoke (non-hub) version comes in
+	// 2) convert it to the hub version
+	// 3) do validation
+	if defaulter, isDefaulter := blder.apiType.(admission.Defaulter); isDefaulter {
+		mwh := admission.DefaultingWebhookFor(defaulter)
+		if mwh != nil {
+			path := "/mutate-" + partialPath
+			log.Info("Registering a mutating webhook",
+				"GVK", gvk,
+				"path", path)
+
+			blder.mgr.GetWebhookServer().Register(path, mwh)
+		}
+	}
+
+	if validator, isValidator := blder.apiType.(admission.Validator); isValidator {
+		vwh := admission.ValidatingWebhookFor(validator)
+		if vwh != nil {
+			path := "/validate-" + partialPath
+			log.Info("Registering a validating webhook",
+				"GVK", gvk,
+				"path", path)
+			blder.mgr.GetWebhookServer().Register(path, vwh)
+		}
+	}
+
 	return err
 }

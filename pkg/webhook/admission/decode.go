@@ -35,7 +35,13 @@ func NewDecoder(scheme *runtime.Scheme) (*Decoder, error) {
 }
 
 // Decode decodes the inlined object in the AdmissionRequest into the passed-in runtime.Object.
+// If you want decode the OldObject in the AdmissionRequest, use DecodeRaw.
 func (d *Decoder) Decode(req Request, into runtime.Object) error {
+	return d.DecodeRaw(req.Object, into)
+}
+
+// DecodeRaw decodes a RawExtension object into the passed-in runtime.Object.
+func (d *Decoder) DecodeRaw(rawObj runtime.RawExtension, into runtime.Object) error {
 	// NB(directxman12): there's a bug/weird interaction between decoders and
 	// the API server where the API server doesn't send a GVK on the embedded
 	// objects, which means the unstructured decoder refuses to decode.  It
@@ -45,7 +51,7 @@ func (d *Decoder) Decode(req Request, into runtime.Object) error {
 	// See kubernetes/kubernetes#74373.
 	if unstructuredInto, isUnstructured := into.(*unstructured.Unstructured); isUnstructured {
 		// unmarshal into unstructured's underlying object to avoid calling the decoder
-		if err := json.Unmarshal(req.Object.Raw, &unstructuredInto.Object); err != nil {
+		if err := json.Unmarshal(rawObj.Raw, &unstructuredInto.Object); err != nil {
 			return err
 		}
 
@@ -53,5 +59,5 @@ func (d *Decoder) Decode(req Request, into runtime.Object) error {
 	}
 
 	deserializer := d.codecs.UniversalDeserializer()
-	return runtime.DecodeInto(deserializer, req.AdmissionRequest.Object.Raw, into)
+	return runtime.DecodeInto(deserializer, rawObj.Raw, into)
 }

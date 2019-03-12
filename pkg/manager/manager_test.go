@@ -121,6 +121,22 @@ var _ = Describe("manger.Manager", func() {
 
 			close(done)
 		})
+
+		It("should lazily initialize a webhook server if needed", func(done Done) {
+			By("creating a manager with options")
+			m, err := New(cfg, Options{Port: 9443, Host: "foo.com"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(m).NotTo(BeNil())
+
+			By("checking options are passed to the webhook server")
+			svr := m.GetWebhookServer()
+			Expect(svr).NotTo(BeNil())
+			Expect(svr.Port).To(Equal(9443))
+			Expect(svr.Host).To(Equal("foo.com"))
+
+			close(done)
+		})
+
 		Context("with leader election enabled", func() {
 			It("should default ID to controller-runtime if ID is not set", func() {
 				var rl resourcelock.Interface

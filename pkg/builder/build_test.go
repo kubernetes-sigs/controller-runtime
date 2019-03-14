@@ -18,11 +18,12 @@ package builder
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"strings"
-
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -33,10 +34,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var _ = Describe("application", func() {
@@ -47,7 +51,6 @@ var _ = Describe("application", func() {
 		getConfig = func() (*rest.Config, error) { return cfg, nil }
 		newController = controller.New
 		newManager = manager.New
-		getGvk = apiutil.GVKForObject
 	})
 
 	AfterEach(func() {
@@ -120,6 +123,232 @@ var _ = Describe("application", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
 			Expect(instance).To(BeNil())
+		})
+
+		It("should scaffold a defaulting webhook if the type implements the Defaulter interface", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("registering the type in the Scheme")
+			builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
+			builder.Register(&TestDefaulter{}, &TestDefaulterList{})
+			err = builder.AddToScheme(m.GetScheme())
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				For(&TestDefaulter{}).
+				Owns(&appsv1.ReplicaSet{}).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeNil())
+			svr := m.GetWebhookServer()
+			Expect(svr).NotTo(BeNil())
+
+			reader := strings.NewReader(`{
+  "kind":"AdmissionReview",
+  "apiVersion":"admission.k8s.io/v1beta1",
+  "request":{
+    "uid":"07e52e8d-4513-11e9-a716-42010a800270",
+    "kind":{
+      "group":"",
+      "version":"v1",
+      "kind":"TestDefaulter"
+    },
+    "resource":{
+      "group":"",
+      "version":"v1",
+      "resource":"testdefaulter"
+    },
+    "namespace":"default",
+    "operation":"CREATE",
+    "object":{
+      "replica":1
+    },
+    "oldObject":null
+  }
+}`)
+
+			stopCh := make(chan struct{})
+			close(stopCh)
+			// TODO: we may want to improve it to make it be able to inject dependencies,
+			// but not always try to load certs and return not found error.
+			err = svr.Start(stopCh)
+			if err != nil && !os.IsNotExist(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			By("sending a request to a mutating webhook path")
+			path := generateMutatePath(testDefaulterGVK)
+			req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+			w := httptest.NewRecorder()
+			svr.WebhookMux.ServeHTTP(w, req)
+			Expect(w.Code).To(Equal(http.StatusOK))
+			By("sanity checking the response contains reasonable fields")
+			Expect(w.Body).To(ContainSubstring(`"allowed":true`))
+			Expect(w.Body).To(ContainSubstring(`"patch":`))
+			Expect(w.Body).To(ContainSubstring(`"code":200`))
+
+			By("sending a request to a validating webhook path that doesn't exist")
+			path = generateValidatePath(testDefaulterGVK)
+			req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+			w = httptest.NewRecorder()
+			svr.WebhookMux.ServeHTTP(w, req)
+			Expect(w.Code).To(Equal(http.StatusNotFound))
+		})
+
+		It("should scaffold a validating webhook if the type implements the Validator interface", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("registering the type in the Scheme")
+			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+			builder.Register(&TestValidator{}, &TestValidatorList{})
+			err = builder.AddToScheme(m.GetScheme())
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				For(&TestValidator{}).
+				Owns(&appsv1.ReplicaSet{}).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeNil())
+			svr := m.GetWebhookServer()
+			Expect(svr).NotTo(BeNil())
+
+			reader := strings.NewReader(`{
+  "kind":"AdmissionReview",
+  "apiVersion":"admission.k8s.io/v1beta1",
+  "request":{
+    "uid":"07e52e8d-4513-11e9-a716-42010a800270",
+    "kind":{
+      "group":"",
+      "version":"v1",
+      "kind":"TestValidator"
+    },
+    "resource":{
+      "group":"",
+      "version":"v1",
+      "resource":"testvalidator"
+    },
+    "namespace":"default",
+    "operation":"UPDATE",
+    "object":{
+      "replica":1
+    },
+    "oldObject":{
+      "replica":2
+    }
+  }
+}`)
+
+			stopCh := make(chan struct{})
+			close(stopCh)
+			// TODO: we may want to improve it to make it be able to inject dependencies,
+			// but not always try to load certs and return not found error.
+			err = svr.Start(stopCh)
+			if err != nil && !os.IsNotExist(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			By("sending a request to a mutating webhook path that doesn't exist")
+			path := generateMutatePath(testValidatorGVK)
+			req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+			w := httptest.NewRecorder()
+			svr.WebhookMux.ServeHTTP(w, req)
+			Expect(w.Code).To(Equal(http.StatusNotFound))
+
+			By("sending a request to a validating webhook path")
+			path = generateValidatePath(testValidatorGVK)
+			req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+			w = httptest.NewRecorder()
+			svr.WebhookMux.ServeHTTP(w, req)
+			Expect(w.Code).To(Equal(http.StatusOK))
+			By("sanity checking the response contains reasonable field")
+			Expect(w.Body).To(ContainSubstring(`"allowed":false`))
+			Expect(w.Body).To(ContainSubstring(`"code":200`))
+		})
+
+		It("should scaffold defaulting and validating webhooks if the type implements both Defaulter and Validator interfaces", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("registering the type in the Scheme")
+			builder := scheme.Builder{GroupVersion: testDefaultValidatorGVK.GroupVersion()}
+			builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
+			err = builder.AddToScheme(m.GetScheme())
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				For(&TestDefaultValidator{}).
+				Owns(&appsv1.ReplicaSet{}).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeNil())
+			svr := m.GetWebhookServer()
+			Expect(svr).NotTo(BeNil())
+
+			reader := strings.NewReader(`{
+  "kind":"AdmissionReview",
+  "apiVersion":"admission.k8s.io/v1beta1",
+  "request":{
+    "uid":"07e52e8d-4513-11e9-a716-42010a800270",
+    "kind":{
+      "group":"",
+      "version":"v1",
+      "kind":"TestDefaultValidator"
+    },
+    "resource":{
+      "group":"",
+      "version":"v1",
+      "resource":"testdefaultvalidator"
+    },
+    "namespace":"default",
+    "operation":"CREATE",
+    "object":{
+      "replica":1
+    },
+    "oldObject":null
+  }
+}`)
+
+			stopCh := make(chan struct{})
+			close(stopCh)
+			// TODO: we may want to improve it to make it be able to inject dependencies,
+			// but not always try to load certs and return not found error.
+			err = svr.Start(stopCh)
+			if err != nil && !os.IsNotExist(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			By("sending a request to a mutating webhook path")
+			path := generateMutatePath(testDefaultValidatorGVK)
+			req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+			w := httptest.NewRecorder()
+			svr.WebhookMux.ServeHTTP(w, req)
+			Expect(w.Code).To(Equal(http.StatusOK))
+			By("sanity checking the response contains reasonable field")
+			Expect(w.Body).To(ContainSubstring(`"allowed":true`))
+			Expect(w.Body).To(ContainSubstring(`"patch":`))
+			Expect(w.Body).To(ContainSubstring(`"code":200`))
+
+			By("sending a request to a validating webhook path")
+			path = generateValidatePath(testDefaultValidatorGVK)
+			req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+			w = httptest.NewRecorder()
+			svr.WebhookMux.ServeHTTP(w, req)
+			Expect(w.Code).To(Equal(http.StatusOK))
+			By("sanity checking the response contains reasonable field")
+			Expect(w.Body).To(ContainSubstring(`"allowed":true`))
+			Expect(w.Body).To(ContainSubstring(`"code":200`))
 		})
 	})
 
@@ -281,3 +510,121 @@ type fakeType struct{}
 
 func (*fakeType) GetObjectKind() schema.ObjectKind { return nil }
 func (*fakeType) DeepCopyObject() runtime.Object   { return nil }
+
+// TestDefaulter
+var _ runtime.Object = &TestDefaulter{}
+
+type TestDefaulter struct {
+	Replica int `json:"replica,omitempty"`
+}
+
+var testDefaulterGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: "TestDefaulter"}
+
+func (*TestDefaulter) GetObjectKind() schema.ObjectKind { return nil }
+func (d *TestDefaulter) DeepCopyObject() runtime.Object {
+	return &TestDefaulter{
+		Replica: d.Replica,
+	}
+}
+
+var _ runtime.Object = &TestDefaulterList{}
+
+type TestDefaulterList struct{}
+
+func (*TestDefaulterList) GetObjectKind() schema.ObjectKind { return nil }
+func (*TestDefaulterList) DeepCopyObject() runtime.Object   { return nil }
+
+func (d *TestDefaulter) Default() {
+	if d.Replica < 2 {
+		d.Replica = 2
+	}
+}
+
+// TestValidator
+var _ runtime.Object = &TestValidator{}
+
+type TestValidator struct {
+	Replica int `json:"replica,omitempty"`
+}
+
+var testValidatorGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: "TestValidator"}
+
+func (*TestValidator) GetObjectKind() schema.ObjectKind { return nil }
+func (v *TestValidator) DeepCopyObject() runtime.Object {
+	return &TestValidator{
+		Replica: v.Replica,
+	}
+}
+
+var _ runtime.Object = &TestValidatorList{}
+
+type TestValidatorList struct{}
+
+func (*TestValidatorList) GetObjectKind() schema.ObjectKind { return nil }
+func (*TestValidatorList) DeepCopyObject() runtime.Object   { return nil }
+
+var _ admission.Validator = &TestValidator{}
+
+func (v *TestValidator) ValidateCreate() error {
+	if v.Replica < 0 {
+		return errors.New("number of replica should be greater than or equal to 0")
+	}
+	return nil
+}
+
+func (v *TestValidator) ValidateUpdate(old runtime.Object) error {
+	if v.Replica < 0 {
+		return errors.New("number of replica should be greater than or equal to 0")
+	}
+	if oldObj, ok := old.(*TestValidator); !ok {
+		return fmt.Errorf("the old object is expected to be %T", oldObj)
+	} else if v.Replica < oldObj.Replica {
+		return fmt.Errorf("new replica %v should not be fewer than old replica %v", v.Replica, oldObj.Replica)
+	}
+	return nil
+}
+
+// TestDefaultValidator
+var _ runtime.Object = &TestDefaultValidator{}
+
+type TestDefaultValidator struct {
+	Replica int `json:"replica,omitempty"`
+}
+
+var testDefaultValidatorGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: "TestDefaultValidator"}
+
+func (*TestDefaultValidator) GetObjectKind() schema.ObjectKind { return nil }
+func (dv *TestDefaultValidator) DeepCopyObject() runtime.Object {
+	return &TestDefaultValidator{
+		Replica: dv.Replica,
+	}
+}
+
+var _ runtime.Object = &TestDefaultValidatorList{}
+
+type TestDefaultValidatorList struct{}
+
+func (*TestDefaultValidatorList) GetObjectKind() schema.ObjectKind { return nil }
+func (*TestDefaultValidatorList) DeepCopyObject() runtime.Object   { return nil }
+
+func (dv *TestDefaultValidator) Default() {
+	if dv.Replica < 2 {
+		dv.Replica = 2
+	}
+}
+
+var _ admission.Validator = &TestDefaultValidator{}
+
+func (dv *TestDefaultValidator) ValidateCreate() error {
+	if dv.Replica < 0 {
+		return errors.New("number of replica should be greater than or equal to 0")
+	}
+	return nil
+}
+
+func (dv *TestDefaultValidator) ValidateUpdate(old runtime.Object) error {
+	if dv.Replica < 0 {
+		return errors.New("number of replica should be greater than or equal to 0")
+	}
+	return nil
+}

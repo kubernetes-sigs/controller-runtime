@@ -57,10 +57,9 @@ type Server struct {
 	// the user is responsible to mount the secret to the this location for the server to consume.
 	CertDir string
 
-	// TODO(directxman12): should we make the mux configurable?
+	// WebhookMux is the multiplexer that handles different webhooks.
+	WebhookMux *http.ServeMux
 
-	// webhookMux is the multiplexer that handles different webhooks.
-	webhookMux *http.ServeMux
 	// webhooks keep track of all registered webhooks for dependency injection,
 	// and to provide better panic messages on duplicate webhook registration.
 	webhooks map[string]http.Handler
@@ -75,9 +74,11 @@ type Server struct {
 // setDefaults does defaulting for the Server.
 func (s *Server) setDefaults() {
 	s.webhooks = map[string]http.Handler{}
-	s.webhookMux = http.NewServeMux()
+	if s.WebhookMux == nil {
+		s.WebhookMux = http.NewServeMux()
+	}
 
-	if s.Port <= 0 {
+	if s.Port < 0 {
 		s.Port = DefaultPort
 	}
 
@@ -96,7 +97,7 @@ func (s *Server) Register(path string, hook http.Handler) {
 	}
 	// TODO(directxman12): call setfields if we've already started the server
 	s.webhooks[path] = hook
-	s.webhookMux.Handle(path, instrumentedHook(path, hook))
+	s.WebhookMux.Handle(path, instrumentedHook(path, hook))
 }
 
 // instrumentedHook adds some instrumentation on top of the given webhook.
@@ -147,7 +148,7 @@ func (s *Server) Start(stop <-chan struct{}) error {
 	}
 
 	srv := &http.Server{
-		Handler: s.webhookMux,
+		Handler: s.WebhookMux,
 	}
 
 	idleConnsClosed := make(chan struct{})

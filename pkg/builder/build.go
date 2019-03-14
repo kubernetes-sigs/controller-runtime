@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -249,9 +250,6 @@ func (blder *Builder) doWebhook() error {
 		return err
 	}
 
-	partialPath := strings.Replace(gvk.Group, ".", "-", -1) + "-" +
-		gvk.Version + "-" + strings.ToLower(gvk.Kind)
-
 	// TODO: When the conversion webhook lands, we need to handle all registered versions of a given group-kind.
 	// A potential workflow for defaulting webhook
 	// 1) a bespoke (non-hub) version comes in
@@ -267,7 +265,7 @@ func (blder *Builder) doWebhook() error {
 	if defaulter, isDefaulter := blder.apiType.(admission.Defaulter); isDefaulter {
 		mwh := admission.DefaultingWebhookFor(defaulter)
 		if mwh != nil {
-			path := "/mutate-" + partialPath
+			path := generateMutatePath(gvk)
 			log.Info("Registering a mutating webhook",
 				"GVK", gvk,
 				"path", path)
@@ -279,7 +277,7 @@ func (blder *Builder) doWebhook() error {
 	if validator, isValidator := blder.apiType.(admission.Validator); isValidator {
 		vwh := admission.ValidatingWebhookFor(validator)
 		if vwh != nil {
-			path := "/validate-" + partialPath
+			path := generateValidatePath(gvk)
 			log.Info("Registering a validating webhook",
 				"GVK", gvk,
 				"path", path)
@@ -288,4 +286,14 @@ func (blder *Builder) doWebhook() error {
 	}
 
 	return err
+}
+
+func generateMutatePath(gvk schema.GroupVersionKind) string {
+	return "/mutate-" + strings.Replace(gvk.Group, ".", "-", -1) + "-" +
+		gvk.Version + "-" + strings.ToLower(gvk.Kind)
+}
+
+func generateValidatePath(gvk schema.GroupVersionKind) string {
+	return "/validate-" + strings.Replace(gvk.Group, ".", "-", -1) + "-" +
+		gvk.Version + "-" + strings.ToLower(gvk.Kind)
 }

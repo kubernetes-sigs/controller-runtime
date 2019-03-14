@@ -22,6 +22,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -153,6 +154,56 @@ var _ = Describe("Fake client", func() {
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(HaveLen(1))
 			Expect(list.Items).To(ConsistOf(*dep2))
+		})
+
+		Context("with the DryRun option", func() {
+			It("should not create a new object", func() {
+				By("Creating a new configmap with DryRun")
+				newcm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "new-test-cm",
+						Namespace: "ns2",
+					},
+				}
+				err := cl.Create(nil, newcm, client.CreateDryRunAll())
+				Expect(err).To(BeNil())
+
+				By("Getting the new configmap")
+				namespacedName := types.NamespacedName{
+					Name:      "new-test-cm",
+					Namespace: "ns2",
+				}
+				obj := &corev1.ConfigMap{}
+				err = cl.Get(nil, namespacedName, obj)
+				Expect(err).To(HaveOccurred())
+				Expect(errors.IsNotFound(err)).To(BeTrue())
+				Expect(obj).NotTo(Equal(newcm))
+			})
+
+			It("should not Update the object", func() {
+				By("Updating a new configmap with DryRun")
+				newcm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cm",
+						Namespace: "ns2",
+					},
+					Data: map[string]string{
+						"test-key": "new-value",
+					},
+				}
+				err := cl.Update(nil, newcm, client.UpdateDryRunAll())
+				Expect(err).To(BeNil())
+
+				By("Getting the new configmap")
+				namespacedName := types.NamespacedName{
+					Name:      "test-cm",
+					Namespace: "ns2",
+				}
+				obj := &corev1.ConfigMap{}
+				err = cl.Get(nil, namespacedName, obj)
+				Expect(err).To(BeNil())
+				Expect(obj).To(Equal(cm))
+			})
 		})
 	}
 

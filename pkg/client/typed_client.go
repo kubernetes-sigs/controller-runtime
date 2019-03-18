@@ -98,10 +98,12 @@ func (c *typedClient) Patch(ctx context.Context, obj runtime.Object, patch Patch
 		return err
 	}
 
+	patchOpts := &PatchOptions{}
 	return o.Patch(patch.Type()).
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
+		VersionedParams(patchOpts.ApplyOptions(opts).AsUpdateOptions(), c.paramCodec).
 		Body(data).
 		Context(ctx).
 		Do().

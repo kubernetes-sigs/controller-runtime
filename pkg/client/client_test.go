@@ -1062,6 +1062,27 @@ var _ = Describe("Client", func() {
 			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 			})
+
+			It("should respect passed in update options", func() {
+				By("creating a new client")
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("patching the Deployment with dry-run")
+				err = cl.Patch(context.TODO(), dep, client.ConstantPatch(types.MergePatchType, mergePatch), client.UpdatePatchWith(client.UpdateDryRunAll()))
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating patched Deployment doesn't have the new annotation")
+				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Annotations).NotTo(HaveKey("foo"))
+			})
 		})
 		Context("with unstructured objects", func() {
 			It("should patch an existing object from a go struct", func(done Done) {
@@ -1141,6 +1162,35 @@ var _ = Describe("Client", func() {
 				Expect(err).To(HaveOccurred())
 
 				close(done)
+			})
+
+			It("should respect passed-in update options", func() {
+				By("creating a new client")
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("patching the Deployment")
+				depName := dep.Name
+				u := &unstructured.Unstructured{}
+				scheme.Convert(dep, u, nil)
+				u.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Kind:    "Deployment",
+					Version: "v1",
+				})
+				err = cl.Patch(context.TODO(), u, client.ConstantPatch(types.MergePatchType, mergePatch), client.UpdatePatchWith(client.UpdateDryRunAll()))
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating patched Deployment does not have the new annotation")
+				actual, err := clientset.AppsV1().Deployments(ns).Get(depName, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Annotations).NotTo(HaveKey("foo"))
 			})
 		})
 	})

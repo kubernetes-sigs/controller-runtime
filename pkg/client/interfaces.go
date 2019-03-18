@@ -443,9 +443,31 @@ func UpdateDryRunAll() UpdateOptionFunc {
 
 // PatchOptions contains options for patch requests.
 type PatchOptions struct {
+	UpdateOptions
+}
+
+// ApplyOptions executes the given PatchOptionFuncs, mutating these PatchOptions.
+// It returns the mutated PatchOptions for convenience.
+func (o *PatchOptions) ApplyOptions(optFuncs []PatchOptionFunc) *PatchOptions {
+	for _, optFunc := range optFuncs {
+		optFunc(o)
+	}
+	return o
 }
 
 // PatchOptionFunc is a function that mutates a PatchOptions struct. It implements
 // the functional options pattern. See
 // https://github.com/tmrts/go-patterns/blob/master/idiom/functional-options.md.
 type PatchOptionFunc func(*PatchOptions)
+
+// Sadly, we need a separate function to "adapt" PatchOptions to the constituent
+// update options, since there's no way to write a function that works for both.
+
+// UpdatePatchWith adapts the given UpdateOptionFuncs to be a PatchOptionFunc.
+func UpdatePatchWith(optFuncs ...UpdateOptionFunc) PatchOptionFunc {
+	return func(opts *PatchOptions) {
+		for _, optFunc := range optFuncs {
+			optFunc(&opts.UpdateOptions)
+		}
+	}
+}

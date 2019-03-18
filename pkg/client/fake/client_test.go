@@ -218,7 +218,7 @@ var _ = Describe("Fake client", func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			err = cl.Patch(nil, dep, client.ConstantPatch(types.JSONPatchType, mergePatch))
+			err = cl.Patch(nil, dep, client.ConstantPatch(types.StrategicMergePatchType, mergePatch))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Getting the patched deployment")

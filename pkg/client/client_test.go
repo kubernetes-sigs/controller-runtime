@@ -255,6 +255,25 @@ var _ = Describe("Client", func() {
 				// TODO(seans3): implement these
 				// Example: ListOptions
 			})
+
+			Context("with the DryRun option", func() {
+				It("should not create a new object", func(done Done) {
+					cl, err := client.New(cfg, client.Options{})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(cl).NotTo(BeNil())
+
+					By("creating the object (with DryRun)")
+					err = cl.Create(context.TODO(), dep, client.CreateDryRunAll())
+					Expect(err).NotTo(HaveOccurred())
+
+					actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+					Expect(err).To(HaveOccurred())
+					Expect(errors.IsNotFound(err)).To(BeTrue())
+					Expect(actual).To(Equal(&appsv1.Deployment{}))
+
+					close(done)
+				})
+			})
 		})
 
 		Context("with unstructured objects", func() {
@@ -367,6 +386,33 @@ var _ = Describe("Client", func() {
 
 		})
 
+		Context("with the DryRun option", func() {
+			It("should not create a new object from a go struct", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("encoding the deployment as unstructured")
+				u := &unstructured.Unstructured{}
+				scheme.Convert(dep, u, nil)
+				u.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Kind:    "Deployment",
+					Version: "v1",
+				})
+
+				By("creating the object")
+				err = cl.Create(context.TODO(), u, client.CreateDryRunAll())
+				Expect(err).NotTo(HaveOccurred())
+
+				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				Expect(err).To(HaveOccurred())
+				Expect(errors.IsNotFound(err)).To(BeTrue())
+				Expect(actual).To(Equal(&appsv1.Deployment{}))
+
+				close(done)
+			})
+		})
 	})
 
 	Describe("Update", func() {
@@ -1803,6 +1849,22 @@ var _ = Describe("Client", func() {
 		})
 	})
 
+	Describe("CreateOptions", func() {
+		It("should allow setting DryRun to 'all'", func() {
+			co := &client.CreateOptions{}
+			client.CreateDryRunAll()(co)
+			all := []string{metav1.DryRunAll}
+			Expect(co.AsCreateOptions().DryRun).To(Equal(all))
+		})
+
+		It("should produce empty metav1.CreateOptions if nil", func() {
+			var co *client.CreateOptions
+			Expect(co.AsCreateOptions()).To(Equal(&metav1.CreateOptions{}))
+			co = &client.CreateOptions{}
+			Expect(co.AsCreateOptions()).To(Equal(&metav1.CreateOptions{}))
+		})
+	})
+
 	Describe("DeleteOptions", func() {
 		It("should allow setting GracePeriodSeconds", func() {
 			do := &client.DeleteOptions{}
@@ -1944,6 +2006,21 @@ var _ = Describe("Client", func() {
 		})
 	})
 
+	Describe("UpdateOptions", func() {
+		It("should allow setting DryRun to 'all'", func() {
+			uo := &client.UpdateOptions{}
+			client.UpdateDryRunAll()(uo)
+			all := []string{metav1.DryRunAll}
+			Expect(uo.AsUpdateOptions().DryRun).To(Equal(all))
+		})
+
+		It("should produce empty metav1.UpdateOptions if nil", func() {
+			var co *client.UpdateOptions
+			Expect(co.AsUpdateOptions()).To(Equal(&metav1.UpdateOptions{}))
+			co = &client.UpdateOptions{}
+			Expect(co.AsUpdateOptions()).To(Equal(&metav1.UpdateOptions{}))
+		})
+	})
 })
 
 var _ = Describe("DelegatingReader", func() {

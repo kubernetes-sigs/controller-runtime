@@ -150,6 +150,27 @@ var _ = Describe("runtime inject", func() {
 		Expect(res).To(Equal(true))
 	})
 
+	It("should set api reader", func() {
+		apiReader := &client.DelegatingReader{}
+
+		By("Validating injecting client")
+		res, err := APIReaderInto(apiReader, instance)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res).To(Equal(true))
+		Expect(apiReader).To(Equal(instance.GetAPIReader()))
+
+		By("Returning false if the type does not implement inject.Client")
+		res, err = APIReaderInto(apiReader, uninjectable)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res).To(Equal(false))
+		Expect(uninjectable.GetAPIReader()).To(BeNil())
+
+		By("Returning an error if client injection fails")
+		res, err = APIReaderInto(nil, instance)
+		Expect(err).To(Equal(errInjectFail))
+		Expect(res).To(Equal(true))
+	})
+
 	It("should set dependencies", func() {
 
 		f := func(interface{}) error { return nil }
@@ -175,12 +196,13 @@ var _ = Describe("runtime inject", func() {
 })
 
 type testSource struct {
-	scheme *runtime.Scheme
-	cache  cache.Cache
-	config *rest.Config
-	client client.Client
-	f      Func
-	stop   <-chan struct{}
+	scheme    *runtime.Scheme
+	cache     cache.Cache
+	config    *rest.Config
+	client    client.Client
+	apiReader client.Reader
+	f         Func
+	stop      <-chan struct{}
 }
 
 func (s *testSource) InjectCache(c cache.Cache) error {
@@ -223,6 +245,14 @@ func (s *testSource) InjectStopChannel(stop <-chan struct{}) error {
 	return fmt.Errorf("injection fails")
 }
 
+func (s *testSource) InjectAPIReader(reader client.Reader) error {
+	if reader != nil {
+		s.apiReader = reader
+		return nil
+	}
+	return fmt.Errorf("injection fails")
+}
+
 func (s *testSource) InjectFunc(f Func) error {
 	if f != nil {
 		s.f = f
@@ -247,6 +277,10 @@ func (s *testSource) GetClient() client.Client {
 	return s.client
 }
 
+func (s *testSource) GetAPIReader() client.Reader {
+	return s.apiReader
+}
+
 func (s *testSource) GetFunc() Func {
 	return s.f
 }
@@ -256,12 +290,13 @@ func (s *testSource) GetStop() <-chan struct{} {
 }
 
 type failSource struct {
-	scheme *runtime.Scheme
-	cache  cache.Cache
-	config *rest.Config
-	client client.Client
-	f      Func
-	stop   <-chan struct{}
+	scheme    *runtime.Scheme
+	cache     cache.Cache
+	config    *rest.Config
+	client    client.Client
+	apiReader client.Reader
+	f         Func
+	stop      <-chan struct{}
 }
 
 func (s *failSource) GetCache() cache.Cache {
@@ -278,6 +313,10 @@ func (s *failSource) GetScheme() *runtime.Scheme {
 
 func (s *failSource) GetClient() client.Client {
 	return s.client
+}
+
+func (s *failSource) GetAPIReader() client.Reader {
+	return s.apiReader
 }
 
 func (s *failSource) GetFunc() Func {

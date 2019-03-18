@@ -50,7 +50,7 @@ gometalinter.v2 --disable-all \
     --enable=dupl \
     --skip=atomic \
     --enable=goimports \
-    ./pkg/... ./example/... .
+    ./pkg/... ./examples/... .
 # TODO: Enable these as we fix them to make them pass
 #    --enable=gosec \
 #    --enable=maligned \

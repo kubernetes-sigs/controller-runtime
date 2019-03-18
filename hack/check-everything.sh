@@ -19,7 +19,7 @@ set -e
 hack_dir=$(dirname ${BASH_SOURCE})
 source ${hack_dir}/common.sh
 
-k8s_version=1.10.1
+k8s_version=1.13.1
 goarch=amd64
 goos="unknown"
 
@@ -73,8 +73,9 @@ setup_envs
 ${hack_dir}/verify.sh
 ${hack_dir}/test-all.sh
 
-header_text "confirming example compiles (via go install)"
-go install ./example
+header_text "confirming examples compile (via go install)"
+go install ./examples/builtins
+go install ./examples/crd
 
 echo "passed"
 exit 0

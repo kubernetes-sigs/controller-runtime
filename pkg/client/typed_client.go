@@ -30,31 +30,39 @@ type typedClient struct {
 }
 
 // Create implements client.Client
-func (c *typedClient) Create(ctx context.Context, obj runtime.Object) error {
+func (c *typedClient) Create(ctx context.Context, obj runtime.Object, opts ...CreateOptionFunc) error {
 	o, err := c.cache.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
+
+	createOpts := &CreateOptions{}
+	createOpts.ApplyOptions(opts)
 	return o.Post().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Body(obj).
+		VersionedParams(createOpts.AsCreateOptions(), c.paramCodec).
 		Context(ctx).
 		Do().
 		Into(obj)
 }
 
 // Update implements client.Client
-func (c *typedClient) Update(ctx context.Context, obj runtime.Object) error {
+func (c *typedClient) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOptionFunc) error {
 	o, err := c.cache.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
+
+	updateOpts := &UpdateOptions{}
+	updateOpts.ApplyOptions(opts)
 	return o.Put().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
 		Body(obj).
+		VersionedParams(updateOpts.AsUpdateOptions(), c.paramCodec).
 		Context(ctx).
 		Do().
 		Into(obj)

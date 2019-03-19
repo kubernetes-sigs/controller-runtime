@@ -39,6 +39,14 @@ func ObjectKeyFromObject(obj runtime.Object) (ObjectKey, error) {
 	return ObjectKey{Namespace: accessor.GetNamespace(), Name: accessor.GetName()}, nil
 }
 
+// Patch is a patch that can be applied to a Kubernetes object.
+type Patch interface {
+	// Type is the PatchType of the patch.
+	Type() types.PatchType
+	// Data is the raw data representing the patch.
+	Data(obj runtime.Object) ([]byte, error)
+}
+
 // TODO(directxman12): is there a sane way to deal with get/delete options?
 
 // Reader knows how to read and list Kubernetes objects.
@@ -65,6 +73,10 @@ type Writer interface {
 	// Update updates the given obj in the Kubernetes cluster. obj must be a
 	// struct pointer so that obj can be updated with the content returned by the Server.
 	Update(ctx context.Context, obj runtime.Object, opts ...UpdateOptionFunc) error
+
+	// Patch patches the given obj in the Kubernetes cluster. obj must be a
+	// struct pointer so that obj can be updated with the content returned by the Server.
+	Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error
 }
 
 // StatusClient knows how to create a client which can update status subresource
@@ -426,5 +438,36 @@ type UpdateOptionFunc func(*UpdateOptions)
 func UpdateDryRunAll() UpdateOptionFunc {
 	return func(opts *UpdateOptions) {
 		opts.DryRun = []string{metav1.DryRunAll}
+	}
+}
+
+// PatchOptions contains options for patch requests.
+type PatchOptions struct {
+	UpdateOptions
+}
+
+// ApplyOptions executes the given PatchOptionFuncs, mutating these PatchOptions.
+// It returns the mutated PatchOptions for convenience.
+func (o *PatchOptions) ApplyOptions(optFuncs []PatchOptionFunc) *PatchOptions {
+	for _, optFunc := range optFuncs {
+		optFunc(o)
+	}
+	return o
+}
+
+// PatchOptionFunc is a function that mutates a PatchOptions struct. It implements
+// the functional options pattern. See
+// https://github.com/tmrts/go-patterns/blob/master/idiom/functional-options.md.
+type PatchOptionFunc func(*PatchOptions)
+
+// Sadly, we need a separate function to "adapt" PatchOptions to the constituent
+// update options, since there's no way to write a function that works for both.
+
+// UpdatePatchWith adapts the given UpdateOptionFuncs to be a PatchOptionFunc.
+func UpdatePatchWith(optFuncs ...UpdateOptionFunc) PatchOptionFunc {
+	return func(opts *PatchOptions) {
+		for _, optFunc := range optFuncs {
+			optFunc(&opts.UpdateOptions)
+		}
 	}
 }

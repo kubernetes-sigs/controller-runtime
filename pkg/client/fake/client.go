@@ -194,6 +194,38 @@ func (c *fakeClient) Update(ctx context.Context, obj runtime.Object, opts ...cli
 	return c.tracker.Update(gvr, obj, accessor.GetNamespace())
 }
 
+func (c *fakeClient) Patch(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOptionFunc) error {
+	gvr, err := getGVRFromObject(obj, c.scheme)
+	if err != nil {
+		return err
+	}
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
+		return err
+	}
+	data, err := patch.Data(obj)
+	if err != nil {
+		return err
+	}
+
+	reaction := testing.ObjectReaction(c.tracker)
+	handled, o, err := reaction(testing.NewPatchAction(gvr, accessor.GetNamespace(), accessor.GetName(), patch.Type(), data))
+	if err != nil {
+		return err
+	}
+	if !handled {
+		panic("tracker could not handle patch method")
+	}
+
+	j, err := json.Marshal(o)
+	if err != nil {
+		return err
+	}
+	decoder := scheme.Codecs.UniversalDecoder()
+	_, _, err = decoder.Decode(j, nil, obj)
+	return err
+}
+
 func (c *fakeClient) Status() client.StatusWriter {
 	return &fakeStatusWriter{client: c}
 }

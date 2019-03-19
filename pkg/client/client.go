@@ -130,6 +130,15 @@ func (c *client) Delete(ctx context.Context, obj runtime.Object, opts ...DeleteO
 	return c.typedClient.Delete(ctx, obj, opts...)
 }
 
+// Patch implements client.Client
+func (c *client) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error {
+	_, ok := obj.(*unstructured.Unstructured)
+	if ok {
+		return c.unstructuredClient.Patch(ctx, obj, patch, opts...)
+	}
+	return c.typedClient.Patch(ctx, obj, patch, opts...)
+}
+
 // Get implements client.Client
 func (c *client) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
 	_, ok := obj.(*unstructured.Unstructured)

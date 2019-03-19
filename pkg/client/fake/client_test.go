@@ -17,6 +17,8 @@ limitations under the License.
 package fake
 
 import (
+	"encoding/json"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -204,6 +206,30 @@ var _ = Describe("Fake client", func() {
 				Expect(err).To(BeNil())
 				Expect(obj).To(Equal(cm))
 			})
+		})
+
+		It("should be able to Patch", func() {
+			By("Patching a deployment")
+			mergePatch, err := json.Marshal(map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"annotations": map[string]interface{}{
+						"foo": "bar",
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			err = cl.Patch(nil, dep, client.ConstantPatch(types.StrategicMergePatchType, mergePatch))
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Getting the patched deployment")
+			namespacedName := types.NamespacedName{
+				Name:      "test-deployment",
+				Namespace: "ns1",
+			}
+			obj := &appsv1.Deployment{}
+			err = cl.Get(nil, namespacedName, obj)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(obj.Annotations["foo"]).To(Equal("bar"))
 		})
 	}
 

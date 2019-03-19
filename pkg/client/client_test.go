@@ -2228,7 +2228,7 @@ var _ = Describe("Patch", func() {
 			}
 		})
 
-		It("creates a merge patch with the modifications applied during the mutation", func() {
+		It("creates a strategic merge patch with the modifications applied during the mutation", func() {
 			const (
 				annotationKey   = "test"
 				annotationValue = "foo"
@@ -2238,7 +2238,7 @@ var _ = Describe("Patch", func() {
 			patch := client.MergeFrom(cm.DeepCopy())
 
 			By("returning a patch with type MergePatch")
-			Expect(patch.Type()).To(Equal(types.MergePatchType))
+			Expect(patch.Type()).To(Equal(types.StrategicMergePatchType))
 
 			By("retrieving modifying the config map")
 			metav1.SetMetaDataAnnotation(&cm.ObjectMeta, annotationKey, annotationValue)

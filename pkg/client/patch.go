@@ -17,10 +17,10 @@ limitations under the License.
 package client
 
 import (
-	jsonpatch "github.com/evanphx/json-patch"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 )
 
 type patch struct {
@@ -49,7 +49,7 @@ type mergeFromPatch struct {
 
 // Type implements patch.
 func (s *mergeFromPatch) Type() types.PatchType {
-	return types.MergePatchType
+	return types.StrategicMergePatchType
 }
 
 // Data implements Patch.
@@ -64,10 +64,11 @@ func (s *mergeFromPatch) Data(obj runtime.Object) ([]byte, error) {
 		return nil, err
 	}
 
-	return jsonpatch.CreateMergePatch(originalJSON, modifiedJSON)
+	return strategicpatch.CreateTwoWayMergePatch(originalJSON, modifiedJSON, obj)
 }
 
-// MergeFrom creates a Patch that patches using the merge-patch strategy with the given object as base.
+// MergeFrom creates a Patch that patches using the strategic
+// merge-patch strategy with the given object as base.
 func MergeFrom(obj runtime.Object) Patch {
 	return &mergeFromPatch{obj}
 }

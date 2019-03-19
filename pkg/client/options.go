@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 )
+
 // CreateOptions contains options for create requests. It's generally a subset
 // of metav1.CreateOptions.
 type CreateOptions struct {
@@ -66,10 +67,8 @@ type CreateOptionFunc func(*CreateOptions)
 
 // CreateDryRunAll is a functional option that sets the DryRun
 // field of a CreateOptions struct to metav1.DryRunAll.
-func CreateDryRunAll() CreateOptionFunc {
-	return func(opts *CreateOptions) {
-		opts.DryRun = []string{metav1.DryRunAll}
-	}
+var CreateDryRunAll CreateOptionFunc = func(opts *CreateOptions) {
+	opts.DryRun = []string{metav1.DryRunAll}
 }
 
 // DeleteOptions contains options for delete requests. It's generally a subset
@@ -338,15 +337,26 @@ type UpdateOptionFunc func(*UpdateOptions)
 
 // UpdateDryRunAll is a functional option that sets the DryRun
 // field of a UpdateOptions struct to metav1.DryRunAll.
-func UpdateDryRunAll() UpdateOptionFunc {
-	return func(opts *UpdateOptions) {
-		opts.DryRun = []string{metav1.DryRunAll}
-	}
+var UpdateDryRunAll UpdateOptionFunc = func(opts *UpdateOptions) {
+	opts.DryRun = []string{metav1.DryRunAll}
 }
 
 // PatchOptions contains options for patch requests.
 type PatchOptions struct {
-	UpdateOptions
+	// When present, indicates that modifications should not be
+	// persisted. An invalid or unrecognized dryRun directive will
+	// result in an error response and no further processing of the
+	// request. Valid values are:
+	// - All: all dry run stages will be processed
+	DryRun []string
+	
+	// Force ignores conflicts during server-side apply,
+	// re-marking ownership of any fields that aren't already owned.
+	// It's probably what controllers want to do.
+	Force *bool
+
+	// Raw represets raw patch options, passed directly to the server.
+	Raw *metav1.PatchOptions
 }
 
 // ApplyOptions executes the given PatchOptionFuncs, mutating these PatchOptions.
@@ -358,19 +368,35 @@ func (o *PatchOptions) ApplyOptions(optFuncs []PatchOptionFunc) *PatchOptions {
 	return o
 }
 
+func (o *PatchOptions) AsPatchOptions() *metav1.PatchOptions {
+	if o == nil {
+		return &metav1.PatchOptions{}
+	}
+	if o.Raw == nil {
+		o.Raw = &metav1.PatchOptions{}
+	}
+
+	o.Raw.DryRun = o.DryRun
+	o.Raw.Force = o.Force
+	return o.Raw
+}
+
 // PatchOptionFunc is a function that mutates a PatchOptions struct. It implements
 // the functional options pattern. See
 // https://github.com/tmrts/go-patterns/blob/master/idiom/functional-options.md.
 type PatchOptionFunc func(*PatchOptions)
 
-// Sadly, we need a separate function to "adapt" PatchOptions to the constituent
-// update options, since there's no way to write a function that works for both.
+// ForceOwnership sets the Force option, indicating that
+// in case of conflicts with server-side apply, the client should
+// acquire ownership of the conflicting field.  Most controllers
+// should use this.
+var ForceOwnership PatchOptionFunc = func(opts *PatchOptions) {
+	definitelyTrue := true
+	opts.Force = &definitelyTrue
+}
 
-// UpdatePatchWith adapts the given UpdateOptionFuncs to be a PatchOptionFunc.
-func UpdatePatchWith(optFuncs ...UpdateOptionFunc) PatchOptionFunc {
-	return func(opts *PatchOptions) {
-		for _, optFunc := range optFuncs {
-			optFunc(&opts.UpdateOptions)
-		}
-	}
+// PatchDryRunAll is a functional option that sets the DryRun
+// field of a CreateOptions struct to metav1.DryRunAll.
+var PatchDryRunAll PatchOptionFunc = func(opts *PatchOptions) {
+	opts.DryRun = []string{metav1.DryRunAll}
 }

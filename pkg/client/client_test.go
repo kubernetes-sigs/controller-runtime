@@ -276,7 +276,7 @@ var _ = Describe("Client", func() {
 					Expect(cl).NotTo(BeNil())
 
 					By("creating the object (with DryRun)")
-					err = cl.Create(context.TODO(), dep, client.CreateDryRunAll())
+					err = cl.Create(context.TODO(), dep, client.CreateDryRunAll)
 					Expect(err).NotTo(HaveOccurred())
 
 					actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
@@ -415,7 +415,7 @@ var _ = Describe("Client", func() {
 				})
 
 				By("creating the object")
-				err = cl.Create(context.TODO(), u, client.CreateDryRunAll())
+				err = cl.Create(context.TODO(), u, client.CreateDryRunAll)
 				Expect(err).NotTo(HaveOccurred())
 
 				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
@@ -1074,7 +1074,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("patching the Deployment with dry-run")
-				err = cl.Patch(context.TODO(), dep, client.ConstantPatch(types.MergePatchType, mergePatch), client.UpdatePatchWith(client.UpdateDryRunAll()))
+				err = cl.Patch(context.TODO(), dep, client.ConstantPatch(types.MergePatchType, mergePatch), client.PatchDryRunAll)
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating patched Deployment doesn't have the new annotation")
@@ -1183,7 +1183,7 @@ var _ = Describe("Client", func() {
 					Kind:    "Deployment",
 					Version: "v1",
 				})
-				err = cl.Patch(context.TODO(), u, client.ConstantPatch(types.MergePatchType, mergePatch), client.UpdatePatchWith(client.UpdateDryRunAll()))
+				err = cl.Patch(context.TODO(), u, client.ConstantPatch(types.MergePatchType, mergePatch), client.PatchDryRunAll)
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating patched Deployment does not have the new annotation")
@@ -2000,7 +2000,7 @@ var _ = Describe("Client", func() {
 	Describe("CreateOptions", func() {
 		It("should allow setting DryRun to 'all'", func() {
 			co := &client.CreateOptions{}
-			client.CreateDryRunAll()(co)
+			client.CreateDryRunAll(co)
 			all := []string{metav1.DryRunAll}
 			Expect(co.AsCreateOptions().DryRun).To(Equal(all))
 		})
@@ -2141,7 +2141,7 @@ var _ = Describe("Client", func() {
 	Describe("UpdateOptions", func() {
 		It("should allow setting DryRun to 'all'", func() {
 			uo := &client.UpdateOptions{}
-			client.UpdateDryRunAll()(uo)
+			client.UpdateDryRunAll(uo)
 			all := []string{metav1.DryRunAll}
 			Expect(uo.AsUpdateOptions().DryRun).To(Equal(all))
 		})

@@ -23,6 +23,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 )
 
+var (
+	// Apply uses server-side apply to patch the given object.
+	Apply = applyPatch{}
+)
+
 type patch struct {
 	patchType types.PatchType
 	data      []byte
@@ -47,7 +52,7 @@ type mergeFromPatch struct {
 	from runtime.Object
 }
 
-// Type implements patch.
+// Type implements Patch.
 func (s *mergeFromPatch) Type() types.PatchType {
 	return types.StrategicMergePatchType
 }
@@ -71,4 +76,22 @@ func (s *mergeFromPatch) Data(obj runtime.Object) ([]byte, error) {
 // merge-patch strategy with the given object as base.
 func MergeFrom(obj runtime.Object) Patch {
 	return &mergeFromPatch{obj}
+}
+
+// applyPatch uses server-side apply to patch the object.
+type applyPatch struct{}
+
+// Type implements Patch.
+func (p applyPatch) Type() types.PatchType {
+	// TODO(directxman12): when we update to 1.14, just use types.ApplyPatch
+	return "application/apply-patch+yaml"
+}
+
+// Data implements Patch.
+func (p applyPatch) Data(obj runtime.Object) ([]byte, error) {
+	// NB(directxman12): we might techically want to be using an actual encoder
+	// here (in case some more performant encoder is introduced) but this is
+	// correct and sufficient for our uses (it's what the JSON serializer in
+	// client-go does, more-or-less).
+	return json.Marshal(obj)
 }

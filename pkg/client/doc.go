@@ -36,6 +36,9 @@ limitations under the License.
 // For instance, to use a label selector on list, you can call
 //  err := someReader.List(context.Background(), &podList, client.MatchingLabels(someLabelMap))
 //
+// Options that take no arguments don't need to be called as a function:
+//  err := someWriter.Update(context.Background(), &pod, client.UpdateDryRunAll)
+//
 // Indexing
 //
 // Indexes may be added to caches using a FieldIndexer.  This allows you to easily

@@ -41,6 +41,8 @@ type Patch interface {
 	// Type is the PatchType of the patch.
 	Type() types.PatchType
 	// Data is the raw data representing the patch.
+	// It receives the object passed to client.Patch, in order to
+	// allow constructing diffs, etc.
 	Data(obj runtime.Object) ([]byte, error)
 }
 

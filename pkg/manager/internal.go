@@ -20,11 +20,9 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/http"
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -199,28 +197,8 @@ func (cm *controllerManager) GetWebhookServer() *webhook.Server {
 }
 
 func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
-	handler := promhttp.HandlerFor(metrics.Registry, promhttp.HandlerOpts{
-		ErrorHandling: promhttp.HTTPErrorOnError,
-	})
-	// TODO(JoelSpeed): Use existing Kubernetes machinery for serving metrics
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", handler)
-	server := http.Server{
-		Handler: mux,
-	}
-	// Run the server
-	go func() {
-		if err := server.Serve(cm.metricsListener); err != nil && err != http.ErrServerClosed {
-			cm.errChan <- err
-		}
-	}()
-
-	// Shutdown the server when stop is closed
-	select {
-	case <-stop:
-		if err := server.Shutdown(context.Background()); err != nil {
-			cm.errChan <- err
-		}
+	if err := metrics.ServeMetrics(cm.metricsListener, stop); err != nil {
+		cm.errChan <- err
 	}
 }
 

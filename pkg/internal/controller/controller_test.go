@@ -24,6 +24,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+	"go.opencensus.io/stats/view"
+	"go.opencensus.io/tag"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
+	"sigs.k8s.io/controller-runtime/pkg/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -62,9 +65,9 @@ var _ = Describe("controller", func() {
 		informers = &informertest.FakeInformers{}
 		ctrl = &Controller{
 			MaxConcurrentReconciles: 1,
-			Do:                      fakeReconcile,
-			Queue:                   queue,
-			Cache:                   informers,
+			Do:    fakeReconcile,
+			Queue: queue,
+			Cache: informers,
 		}
 		ctrl.InjectFunc(func(interface{}) error { return nil })
 	})
@@ -408,18 +411,47 @@ var _ = Describe("controller", func() {
 		})
 
 		Context("prometheus metric reconcile_total", func() {
-			var reconcileTotal dto.Metric
+			var reconcileTotal dto.Metric // Prometheus
 
+			// Prometheus
 			BeforeEach(func() {
 				ctrlmetrics.ReconcileTotal.Reset()
 				reconcileTotal.Reset()
 			})
 
+			// OpenCensus
+			BeforeEach(func() {
+				view.Register(&view.View{
+					Name:        metrics.MeasureReconcileTotal.Name(),
+					Measure:     metrics.MeasureReconcileTotal,
+					Aggregation: view.Count(),
+					TagKeys:     []tag.Key{metrics.TagController, metrics.TagResult},
+				})
+			})
+
+			// OpenCensus
+			AfterEach(func() {
+				view.Unregister(view.Find(metrics.MeasureReconcileTotal.Name()))
+			})
+
 			It("should get updated on successful reconciliation", func(done Done) {
+				// Prometheus
 				Expect(func() error {
 					ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "success").Write(&reconcileTotal)
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile total not reset")
+					}
+					return nil
+				}()).Should(Succeed())
+
+				// OpenCensus
+				Expect(func() error {
+					rows, err := view.RetrieveData(metrics.MeasureReconcileTotal.Name())
+					if err != nil {
+						return err
+					}
+					if len(rows) > 0 {
+						return fmt.Errorf("OpenCensus View has data, expected none")
 					}
 					return nil
 				}()).Should(Succeed())
@@ -432,22 +464,49 @@ var _ = Describe("controller", func() {
 				ctrl.Queue.Add(request)
 
 				Expect(<-reconciled).To(Equal(request))
+				// Prometheus
 				Eventually(func() error {
 					ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "success").Write(&reconcileTotal)
 					if actual := reconcileTotal.GetCounter().GetValue(); actual != 1.0 {
 						return fmt.Errorf("metric reconcile total expected: %v and got: %v", 1.0, actual)
 					}
+
 					return nil
 				}, 2.0).Should(Succeed())
+
+				// OpenCensus
+				Expect(func() error {
+					rows, err := view.RetrieveData(metrics.MeasureReconcileTotal.Name())
+					if err != nil {
+						return err
+					}
+					Expect(rows).To(HaveLen(1))
+					Expect(rows[0].Data).To(Equal(&view.CountData{Value: 1}))
+					Expect(rows[0].Tags).To(ContainElement(tag.Tag{Key: metrics.TagResult, Value: "success"}))
+					return nil
+				}()).Should(Succeed())
 
 				close(done)
 			}, 2.0)
 
 			It("should get updated on reconcile errors", func(done Done) {
+				// Prometheus
 				Expect(func() error {
 					ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "error").Write(&reconcileTotal)
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile total not reset")
+					}
+					return nil
+				}()).Should(Succeed())
+
+				// OpenCensus
+				Expect(func() error {
+					rows, err := view.RetrieveData(metrics.MeasureReconcileTotal.Name())
+					if err != nil {
+						return err
+					}
+					if len(rows) > 0 {
+						return fmt.Errorf("OpenCensus View has data, expected none")
 					}
 					return nil
 				}()).Should(Succeed())
@@ -461,6 +520,7 @@ var _ = Describe("controller", func() {
 				ctrl.Queue.Add(request)
 
 				Expect(<-reconciled).To(Equal(request))
+				// Prometheus
 				Eventually(func() error {
 					ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "error").Write(&reconcileTotal)
 					if actual := reconcileTotal.GetCounter().GetValue(); actual != 1.0 {
@@ -469,14 +529,39 @@ var _ = Describe("controller", func() {
 					return nil
 				}, 2.0).Should(Succeed())
 
+				// OpenCensus
+				Expect(func() error {
+					rows, err := view.RetrieveData(metrics.MeasureReconcileTotal.Name())
+					if err != nil {
+						return err
+					}
+					Expect(rows).To(HaveLen(1))
+					Expect(rows[0].Data).To(Equal(&view.CountData{Value: 1}))
+					Expect(rows[0].Tags).To(ContainElement(tag.Tag{Key: metrics.TagResult, Value: "error"}))
+					return nil
+				}()).Should(Succeed())
+
 				close(done)
 			}, 2.0)
 
 			It("should get updated when reconcile returns with retry enabled", func(done Done) {
+				// Prometheus
 				Expect(func() error {
 					ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "retry").Write(&reconcileTotal)
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile total not reset")
+					}
+					return nil
+				}()).Should(Succeed())
+
+				// OpenCensus
+				Expect(func() error {
+					rows, err := view.RetrieveData(metrics.MeasureReconcileTotal.Name())
+					if err != nil {
+						return err
+					}
+					if len(rows) > 0 {
+						return fmt.Errorf("OpenCensus View has data, expected none")
 					}
 					return nil
 				}()).Should(Succeed())
@@ -490,6 +575,7 @@ var _ = Describe("controller", func() {
 				ctrl.Queue.Add(request)
 
 				Expect(<-reconciled).To(Equal(request))
+				// Prometheus
 				Eventually(func() error {
 					ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "requeue").Write(&reconcileTotal)
 					if actual := reconcileTotal.GetCounter().GetValue(); actual != 1.0 {
@@ -498,14 +584,39 @@ var _ = Describe("controller", func() {
 					return nil
 				}, 2.0).Should(Succeed())
 
+				// OpenCensus
+				Expect(func() error {
+					rows, err := view.RetrieveData(metrics.MeasureReconcileTotal.Name())
+					if err != nil {
+						return err
+					}
+					Expect(rows).To(HaveLen(1))
+					Expect(rows[0].Data).To(Equal(&view.CountData{Value: 1}))
+					Expect(rows[0].Tags).To(ContainElement(tag.Tag{Key: metrics.TagResult, Value: "requeue"}))
+					return nil
+				}()).Should(Succeed())
+
 				close(done)
 			}, 2.0)
 
 			It("should get updated when reconcile returns with retryAfter enabled", func(done Done) {
+				// Prometheus
 				Expect(func() error {
 					ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "retry_after").Write(&reconcileTotal)
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile total not reset")
+					}
+					return nil
+				}()).Should(Succeed())
+
+				// OpenCensus
+				Expect(func() error {
+					rows, err := view.RetrieveData(metrics.MeasureReconcileTotal.Name())
+					if err != nil {
+						return err
+					}
+					if len(rows) > 0 {
+						return fmt.Errorf("OpenCensus View has data, expected none")
 					}
 					return nil
 				}()).Should(Succeed())
@@ -519,6 +630,7 @@ var _ = Describe("controller", func() {
 				ctrl.Queue.Add(request)
 
 				Expect(<-reconciled).To(Equal(request))
+				// Prometheus
 				Eventually(func() error {
 					ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "requeue_after").Write(&reconcileTotal)
 					if actual := reconcileTotal.GetCounter().GetValue(); actual != 1.0 {
@@ -526,6 +638,18 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
+
+				// OpenCensus
+				Expect(func() error {
+					rows, err := view.RetrieveData(metrics.MeasureReconcileTotal.Name())
+					if err != nil {
+						return err
+					}
+					Expect(rows).To(HaveLen(1))
+					Expect(rows[0].Data).To(Equal(&view.CountData{Value: 1}))
+					Expect(rows[0].Tags).To(ContainElement(tag.Tag{Key: metrics.TagResult, Value: "requeue_after"}))
+					return nil
+				}()).Should(Succeed())
 
 				close(done)
 			}, 2.0)

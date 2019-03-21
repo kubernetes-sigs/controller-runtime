@@ -17,10 +17,13 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
+	"go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -29,6 +32,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
@@ -173,10 +177,18 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 func (c *Controller) processNextWorkItem() bool {
 	// This code copy-pasted from the sample-Controller.
 
+	// Create a context used for tagging OpenCensus measurements.
+	metricsCtx, _ := tag.New(context.Background(),
+		tag.Insert(metrics.TagController, c.Name),
+	)
+
 	// Update metrics after processing each item
+	// TODO if no reconcile occurred, should the time metric be updated?
 	reconcileStartTS := time.Now()
 	defer func() {
-		c.updateMetrics(time.Now().Sub(reconcileStartTS))
+		reconcileTime := time.Now().Sub(reconcileStartTS)
+		c.updatePromMetrics(reconcileTime)
+		c.updateOCMetrics(metricsCtx, reconcileTime)
 	}()
 
 	obj, shutdown := c.Queue.Get()
@@ -210,6 +222,11 @@ func (c *Controller) processNextWorkItem() bool {
 		return true
 	}
 
+	// Defer recording that a reconcile occurred. Result checks will set the
+	// correct tag in metricsCtx.
+	defer func() {
+		stats.Record(metricsCtx, metrics.MeasureReconcileTotal.M(1))
+	}()
 	// RunInformersAndControllers the syncHandler, passing it the namespace/Name string of the
 	// resource to be synced.
 	if result, err := c.Do.Reconcile(req); err != nil {
@@ -217,14 +234,19 @@ func (c *Controller) processNextWorkItem() bool {
 		log.Error(err, "Reconciler error", "controller", c.Name, "request", req)
 		ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Inc()
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "error").Inc()
+		stats.Record(metricsCtx, metrics.MeasureReconcileErrors.M(1))
+		metricsCtx, _ = tag.New(metricsCtx, tag.Insert(metrics.TagResult, "error"))
 		return false
 	} else if result.RequeueAfter > 0 {
 		c.Queue.AddAfter(req, result.RequeueAfter)
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "requeue_after").Inc()
+		metricsCtx, _ = tag.New(metricsCtx, tag.Insert(metrics.TagResult, "requeue_after"))
 		return true
 	} else if result.Requeue {
 		c.Queue.AddRateLimited(req)
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "requeue").Inc()
+		metricsCtx, _ = tag.New(metricsCtx, tag.Insert(metrics.TagResult, "requeue"))
+
 		return true
 	}
 
@@ -236,6 +258,7 @@ func (c *Controller) processNextWorkItem() bool {
 	log.V(1).Info("Successfully Reconciled", "controller", c.Name, "request", req)
 
 	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "success").Inc()
+	metricsCtx, _ = tag.New(metricsCtx, tag.Insert(metrics.TagResult, "success"))
 	// Return true, don't take a break
 	return true
 }
@@ -246,7 +269,12 @@ func (c *Controller) InjectFunc(f inject.Func) error {
 	return nil
 }
 
-// updateMetrics updates prometheus metrics within the controller
-func (c *Controller) updateMetrics(reconcileTime time.Duration) {
+// updatePromMetrics updates prometheus metrics within the controller
+func (c *Controller) updatePromMetrics(reconcileTime time.Duration) {
 	ctrlmetrics.ReconcileTime.WithLabelValues(c.Name).Observe(reconcileTime.Seconds())
+}
+
+// updateOCMetrics updates OpenCensus metrics within the controller
+func (c *Controller) updateOCMetrics(ctx context.Context, reconcileTime time.Duration) {
+	stats.Record(ctx, metrics.MeasureReconcileTime.M(reconcileTime.Seconds()))
 }

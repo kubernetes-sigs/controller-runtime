@@ -442,6 +442,24 @@
   version = "v1.0.2"
 
 [[projects]]
+  digest = "1:f9a3c08e215326587c0e3ad166f24d598ed6a36a82070a4b230c867e9d18cc14"
+  name = "go.opencensus.io"
+  packages = [
+    ".",
+    "exemplar",
+    "exporter/prometheus",
+    "internal",
+    "internal/tagencoding",
+    "stats",
+    "stats/internal",
+    "stats/view",
+    "tag",
+  ]
+  pruneopts = "UT"
+  revision = "2b5032d79456124f42db6b7eb19ac6c155449dc2"
+  version = "v0.19.0"
+
+[[projects]]
   digest = "1:3c1a69cdae3501bf75e76d0d86dc6f2b0a7421bc205c0cb7b96b19eed464a34d"
   name = "go.uber.org/atomic"
   packages = ["."]
@@ -942,6 +960,10 @@
     "github.com/prometheus/client_golang/prometheus/promhttp",
     "github.com/prometheus/client_model/go",
     "github.com/spf13/pflag",
+    "go.opencensus.io/exporter/prometheus",
+    "go.opencensus.io/stats",
+    "go.opencensus.io/stats/view",
+    "go.opencensus.io/tag",
     "go.uber.org/zap",
     "go.uber.org/zap/buffer",
     "go.uber.org/zap/zapcore",

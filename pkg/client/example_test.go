@@ -219,3 +219,22 @@ func ExampleFieldIndexer_secretName() {
 	var podsWithSecrets corev1.PodList
 	_ = c.List(context.Background(), &podsWithSecrets, client.MatchingField("spec.volumes.secret.secretName", mySecretName))
 }
+
+// This example shows how to ensure that a given pod has some labels set.
+func ExampleApplier_Ensure_Labels() {
+	// You'd generally embed this in your controller, like Client.
+	app := &client.Applier{Name: "pod-label-setter-controller", Client: c}
+
+	// For any particular name, we need to always set all the fields
+	// and map elements that we care about, otherwise they'll be deleted.
+	_ = app.Ensure(context.Background(), &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "my-pod",
+			Namespace: "my-ns",
+			Labels: map[string]string{
+				"some-label": "some-value",
+				"other-label": "other-value",
+			},
+		},
+	})
+}

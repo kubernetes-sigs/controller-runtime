@@ -29,6 +29,8 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
+// TODO(directxman12): respect context in unstructured
+
 // client is a client.Client that reads and writes directly from/to an API server.  It lazily initializes
 // new clients at the time they are used, and caches the client.
 type unstructuredClient struct {
@@ -170,6 +172,30 @@ func (uc *unstructuredClient) UpdateStatus(_ context.Context, obj runtime.Object
 		return err
 	}
 	i, err := r.UpdateStatus(u, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+	u.Object = i.Object
+	return nil
+}
+
+func (uc *unstructuredClient) PatchStatus(_ context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return fmt.Errorf("unstructured client did not understand object: %T", obj)
+	}
+	r, err := uc.getResourceInterface(u.GroupVersionKind(), u.GetNamespace())
+	if err != nil {
+		return err
+	}
+
+	data, err := patch.Data(obj)
+	if err != nil {
+		return err
+	}
+
+	patchOpts := &PatchOptions{}
+	i, err := r.Patch(u.GetName(), patch.Type(), data, *patchOpts.ApplyOptions(opts).AsPatchOptions(), "status")
 	if err != nil {
 		return err
 	}

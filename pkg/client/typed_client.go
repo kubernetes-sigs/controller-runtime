@@ -161,3 +161,28 @@ func (c *typedClient) UpdateStatus(ctx context.Context, obj runtime.Object) erro
 		Do().
 		Into(obj)
 }
+
+// PatchStatus used by StatusWriter to write status.
+func (c *typedClient) PatchStatus(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error {
+	o, err := c.cache.getObjMeta(obj)
+	if err != nil {
+		return err
+	}
+
+	data, err := patch.Data(obj)
+	if err != nil {
+		return err
+	}
+
+	patchOpts := &PatchOptions{}
+	return o.Patch(patch.Type()).
+		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
+		Resource(o.resource()).
+		Name(o.GetName()).
+		SubResource("status").
+		VersionedParams(patchOpts.ApplyOptions(opts).AsPatchOptions(), c.paramCodec).
+		Body(data).
+		Context(ctx).
+		Do().
+		Into(obj)
+}

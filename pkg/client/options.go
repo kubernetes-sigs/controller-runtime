@@ -355,6 +355,10 @@ type PatchOptions struct {
 	// It's probably what controllers want to do.
 	Force *bool
 
+	// FieldManager is the name of the user or component submitting
+	// this request.  It must be set with server-side apply.
+	FieldManager string
+
 	// Raw represets raw patch options, passed directly to the server.
 	Raw *metav1.PatchOptions
 }
@@ -378,6 +382,7 @@ func (o *PatchOptions) AsPatchOptions() *metav1.PatchOptions {
 
 	o.Raw.DryRun = o.DryRun
 	o.Raw.Force = o.Force
+	o.Raw.FieldManager = o.FieldManager
 	return o.Raw
 }
 
@@ -399,4 +404,11 @@ var ForceOwnership PatchOptionFunc = func(opts *PatchOptions) {
 // field of a CreateOptions struct to metav1.DryRunAll.
 var PatchDryRunAll PatchOptionFunc = func(opts *PatchOptions) {
 	opts.DryRun = []string{metav1.DryRunAll}
+}
+
+// FieldManager set the field manager name for the given server-side apply patch.
+func FieldManager(name string) PatchOptionFunc {
+	return func(opts *PatchOptions) {
+		opts.FieldManager = name
+	}
 }

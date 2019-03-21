@@ -86,10 +86,17 @@ type StatusClient interface {
 
 // StatusWriter knows how to update status subresource of a Kubernetes object.
 type StatusWriter interface {
+	// TODO(directxman12): add update options to this
+
 	// Update updates the fields corresponding to the status subresource for the
 	// given obj. obj must be a struct pointer so that obj can be updated
 	// with the content returned by the Server.
 	Update(ctx context.Context, obj runtime.Object) error
+
+	// Patch patches the given object's subresource. obj must be a struct
+	// pointer so that obj can be updated with the content returned by the
+	// Server.
+	Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error
 }
 
 // Client knows how to perform CRUD operations on Kubernetes objects.

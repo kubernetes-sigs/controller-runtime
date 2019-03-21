@@ -178,3 +178,11 @@ func (sw *statusWriter) Update(ctx context.Context, obj runtime.Object) error {
 	}
 	return sw.client.typedClient.UpdateStatus(ctx, obj)
 }
+
+func (sw *statusWriter) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error {
+	_, ok := obj.(*unstructured.Unstructured)
+	if ok {
+		return sw.client.unstructuredClient.PatchStatus(ctx, obj, patch, opts...)
+	}
+	return sw.client.typedClient.PatchStatus(ctx, obj, patch, opts...)
+}

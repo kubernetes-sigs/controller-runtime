@@ -23,26 +23,28 @@ import (
 )
 
 func TestRegisterUnregisterDefaultViews(t *testing.T) {
-	RegisterDefaultViews()
-	if view.Find(MeasureReconcileTotal.Name()) == nil {
-		t.Errorf("Couldn't find view for ReconcileTotal")
+	if err := view.Register(DefaultViews...); err != nil {
+		t.Fatalf("Error registering views: %v", err)
 	}
-	if view.Find(MeasureReconcileErrors.Name()) == nil {
-		t.Errorf("Couldn't find view for ReconcileErrors")
+	if view.Find(ViewReconcileTotal.Name) == nil {
+		t.Errorf("Couldn't find view: %s", ViewReconcileTotal.Name)
 	}
-	if view.Find(MeasureReconcileTime.Name()) == nil {
-		t.Errorf("Couldn't find view for ReconcileTime")
+	if view.Find(ViewReconcileError.Name) == nil {
+		t.Errorf("Couldn't find view: %s", ViewReconcileError.Name)
+	}
+	if view.Find(ViewReconcileTime.Name) == nil {
+		t.Errorf("Couldn't find view %s", ViewReconcileTime.Name)
 	}
 
-	UnregisterDefaultViews()
-	if view.Find(MeasureReconcileTotal.Name()) != nil {
-		t.Errorf("view for ReconcileTotal was not unregistered")
+	view.Unregister(DefaultViews...)
+	if view.Find(ViewReconcileTotal.Name) != nil {
+		t.Errorf("view %s was not unregistered", ViewReconcileTotal.Name)
 	}
-	if view.Find(MeasureReconcileErrors.Name()) != nil {
-		t.Errorf("view for ReconcileErrors was not unregistered")
+	if view.Find(ViewReconcileError.Name) != nil {
+		t.Errorf("view %s was not unregistered", ViewReconcileError.Name)
 	}
-	if view.Find(MeasureReconcileTime.Name()) != nil {
-		t.Errorf("view for ReconcileTime was not unregistered")
+	if view.Find(ViewReconcileTime.Name) != nil {
+		t.Errorf("view %s was not unregistered", ViewReconcileTime.Name)
 	}
 
 }

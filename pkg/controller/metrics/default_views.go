@@ -25,41 +25,35 @@ var (
 	// DefaultPrometheusDistribution is an OpenCensus Distribution with the same
 	// buckets as the default buckets in the Prometheus client.
 	DefaultPrometheusDistribution = view.Distribution(.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10)
-)
 
-// RegisterDefaultViews registers default OpenCensus views for controller
-// measures. It does not create an exporter.
-func RegisterDefaultViews() {
-	// Count ReconcileTotal with Controller and Result tags
-	view.Register(&view.View{
-		Name:        MeasureReconcileTotal.Name(),
+	// ViewReconcileTotal counts ReconcileTotal with Controller and Result tags.
+	ViewReconcileTotal = view.View{
+		Name:        "controller_runtime_reconcile_total",
 		Measure:     MeasureReconcileTotal,
 		Aggregation: view.Count(),
 		TagKeys:     []tag.Key{TagController, TagResult},
-	})
+	}
 
-	// Count ReconcileError with Controller tag
-	view.Register(&view.View{
-		Name:        MeasureReconcileErrors.Name(),
+	// ViewReconcileError counts ReconcileError with a Controller tag.
+	ViewReconcileError = view.View{
+		Name:        "controller_runtime_reconcile_errors_total",
 		Measure:     MeasureReconcileErrors,
 		Aggregation: view.Count(),
 		TagKeys:     []tag.Key{TagController},
-	})
-
-	// Histogram of ReconcileTime with Controller tag
-	view.Register(&view.View{
-		Name:        MeasureReconcileTime.Name(),
+	}
+	// ViewReconcileTime is a histogram of ReconcileTime with a Controller tag.
+	ViewReconcileTime = view.View{
+		Name:        "controller_runtime_reconcile_time_seconds",
 		Measure:     MeasureReconcileTime,
 		Aggregation: DefaultPrometheusDistribution,
 		TagKeys:     []tag.Key{TagController},
-	})
-}
+	}
 
-// UnregisterDefaultViews unregisters the OpenCensus views registered by
-// RegisterDefaultViews.
-func UnregisterDefaultViews() {
-	view.Unregister(view.Find(MeasureReconcileTotal.Name()))
-	view.Unregister(view.Find(MeasureReconcileErrors.Name()))
-	view.Unregister(view.Find(MeasureReconcileTime.Name()))
-
-}
+	// DefaultViews is an array of OpenCensus views that can be registered
+	// using view.Register(metrics.DefaultViews...) to export default metrics.
+	DefaultViews = []*view.View{
+		&ViewReconcileTotal,
+		&ViewReconcileError,
+		&ViewReconcileTime,
+	}
+)

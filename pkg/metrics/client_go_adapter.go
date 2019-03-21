@@ -198,7 +198,8 @@ func registerWorkqueueMetrics() {
 	Registry.MustRegister(longestRunning)
 	Registry.MustRegister(unfinishedWork)
 
-	workqueuemetrics.SetProvider(workqueueMetricsProvider{})
+	// TODO: fix this before push
+	//workqueuemetrics.SetProvider(workqueueMetricsProvider{})
 }
 
 // this section contains adapters, implementations, and other sundry organic, artisinally

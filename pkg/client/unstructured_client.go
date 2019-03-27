@@ -108,7 +108,7 @@ func (uc *unstructuredClient) Patch(_ context.Context, obj runtime.Object, patch
 	}
 
 	patchOpts := &PatchOptions{}
-	i, err := r.Patch(u.GetName(), patch.Type(), data, *patchOpts.ApplyOptions(opts).AsUpdateOptions())
+	i, err := r.Patch(u.GetName(), patch.Type(), data, *patchOpts.ApplyOptions(opts).AsPatchOptions())
 	if err != nil {
 		return err
 	}

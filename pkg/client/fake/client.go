@@ -187,6 +187,15 @@ func (c *fakeClient) Update(ctx context.Context, obj runtime.Object, opts ...cli
 }
 
 func (c *fakeClient) Patch(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOptionFunc) error {
+	patchOptions := &client.PatchOptions{}
+	patchOptions.ApplyOptions(opts)
+
+	for _, dryRunOpt := range patchOptions.DryRun {
+		if dryRunOpt == metav1.DryRunAll {
+			return nil
+		}
+	}
+
 	gvr, err := getGVRFromObject(obj, c.scheme)
 	if err != nil {
 		return err

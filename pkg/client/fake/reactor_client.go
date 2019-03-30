@@ -73,16 +73,8 @@ func (c *fakeReactorClient) Get(ctx context.Context, key client.ObjectKey, obj r
 	if err != nil {
 		return err
 	}
-	// TODO Is the defaultObj necessary?
-	gvk, err := apiutil.GVKForObject(obj, scheme.Scheme)
-	if err != nil {
-		return err
-	}
-	defaultObj, err := scheme.Scheme.New(gvk)
-	if err != nil {
-		return fmt.Errorf("error creating a copy of %T: %v", obj, err)
-	}
-	o, err := c.Invokes(testing.NewGetAction(gvr, key.Namespace, key.Name), defaultObj)
+
+	o, err := c.Invokes(testing.NewGetAction(gvr, key.Namespace, key.Name), nil)
 	if err != nil {
 		return err
 	}
@@ -104,8 +96,7 @@ func (c *fakeReactorClient) List(ctx context.Context, obj runtime.Object, opts .
 	if !strings.HasSuffix(gvk.Kind, "List") {
 		return fmt.Errorf("non-list type %T (kind %q) passed as output", obj, gvk)
 	}
-	// TODO Is the defaultObj necessary?
-	defaultObj, err := scheme.Scheme.New(gvk)
+
 	// we need the non-list GVK, so chop off the "List" from the end of the kind
 	gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 
@@ -114,10 +105,7 @@ func (c *fakeReactorClient) List(ctx context.Context, obj runtime.Object, opts .
 
 	gvr, _ := meta.UnsafeGuessKindToResource(gvk)
 
-	if err != nil {
-		return fmt.Errorf("error creating a copy of %T: %v", obj, err)
-	}
-	o, err := c.Invokes(testing.NewListAction(gvr, gvk, listOpts.Namespace, *listOpts.AsListOptions()), defaultObj)
+	o, err := c.Invokes(testing.NewListAction(gvr, gvk, listOpts.Namespace, *listOpts.AsListOptions()), nil)
 	if err != nil {
 		return err
 	}
@@ -223,17 +211,7 @@ func (c *fakeReactorClient) Patch(ctx context.Context, obj runtime.Object, patch
 		return err
 	}
 
-	// TODO Is the defaultObj necessary?
-	gvk, err := apiutil.GVKForObject(obj, scheme.Scheme)
-	if err != nil {
-		return err
-	}
-	defaultObj, err := scheme.Scheme.New(gvk)
-	if err != nil {
-		return fmt.Errorf("error creating a copy of %T: %v", obj, err)
-	}
-
-	o, err := c.Invokes(testing.NewPatchAction(gvr, accessor.GetNamespace(), accessor.GetName(), patch.Type(), data), defaultObj)
+	o, err := c.Invokes(testing.NewPatchAction(gvr, accessor.GetNamespace(), accessor.GetName(), patch.Type(), data), nil)
 
 	j, err := json.Marshal(o)
 	if err != nil {

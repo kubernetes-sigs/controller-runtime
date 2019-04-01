@@ -93,7 +93,7 @@ func (c *fakeClient) Get(ctx context.Context, key client.ObjectKey, obj runtime.
 }
 
 func (c *fakeClient) List(ctx context.Context, obj runtime.Object, opts ...client.ListOptionFunc) error {
-	gvk, err := apiutil.GVKForObject(obj, scheme.Scheme)
+	gvk, err := apiutil.GVKForObject(obj, c.scheme)
 	if err != nil {
 		return err
 	}

@@ -18,6 +18,7 @@ package fake
 
 import (
 	"encoding/json"
+	"fmt"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -28,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/testing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -35,7 +37,7 @@ var _ = Describe("Fake client", func() {
 	var dep *appsv1.Deployment
 	var dep2 *appsv1.Deployment
 	var cm *corev1.ConfigMap
-	var cl client.Client
+	var cl *FakeReactorClient
 
 	BeforeEach(func() {
 		dep = &appsv1.Deployment{
@@ -234,7 +236,93 @@ var _ = Describe("Fake client", func() {
 	}
 
 	AssertReactorBehavior := func() {
+		It("Should add a reactor to Get", func() {
+			cl.PrependReactor("get", "*", func(action testing.Action) (bool, runtime.Object, error) {
+				return true, nil, fmt.Errorf("mocked get error")
+			})
+			namespacedName := types.NamespacedName{
+				Name:      "test-deployment",
+				Namespace: "ns1",
+			}
+			obj := &appsv1.Deployment{}
+			err := cl.Get(nil, namespacedName, obj)
+			Expect(err).To(MatchError("mocked get error"))
+		})
 
+		It("Should add a reactor to List", func() {
+			cl.PrependReactor("list", "*", func(action testing.Action) (bool, runtime.Object, error) {
+				return true, nil, fmt.Errorf("mocked list error")
+			})
+			list := &appsv1.DeploymentList{}
+			err := cl.List(nil, list, client.InNamespace("ns1"))
+			Expect(err).To(MatchError("mocked list error"))
+		})
+
+		It("Should add a reactor to Create", func() {
+			cl.PrependReactor("create", "*", func(action testing.Action) (bool, runtime.Object, error) {
+				return true, nil, fmt.Errorf("mocked create error")
+			})
+			newcm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "new-test-cm",
+					Namespace: "ns2",
+				},
+			}
+			err := cl.Create(nil, newcm)
+			Expect(err).To(MatchError("mocked create error"))
+		})
+
+		It("Should add a reactor to Update", func() {
+			cl.PrependReactor("update", "*", func(action testing.Action) (bool, runtime.Object, error) {
+				return true, nil, fmt.Errorf("mocked update error")
+			})
+			newcm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cm",
+					Namespace: "ns2",
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+			err := cl.Update(nil, newcm)
+			Expect(err).To(MatchError("mocked update error"))
+		})
+
+		It("Should add a reactor to Delete", func() {
+			cl.PrependReactor("delete", "*", func(action testing.Action) (bool, runtime.Object, error) {
+				return true, nil, fmt.Errorf("mocked delete error")
+			})
+			err := cl.Delete(nil, dep)
+			Expect(err).To(MatchError("mocked delete error"))
+		})
+
+		It("Should add a reactor to Patch", func() {
+			cl.PrependReactor("patch", "*", func(action testing.Action) (bool, runtime.Object, error) {
+				return true, nil, fmt.Errorf("mocked patch error")
+			})
+			mergePatch, err := json.Marshal(map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"annotations": map[string]interface{}{
+						"foo": "bar",
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			err = cl.Patch(nil, dep, client.ConstantPatch(types.StrategicMergePatchType, mergePatch))
+			Expect(err).To(MatchError("mocked patch error"))
+		})
+
+		It("Should add a reactor to Status update", func() {
+			cl.PrependReactor("update", "*", func(action testing.Action) (bool, runtime.Object, error) {
+				Expect(action.GetSubresource()).To(Equal("status"))
+				return true, nil, fmt.Errorf("mocked status update error")
+			})
+			newdep := dep.DeepCopy()
+			newdep.Status.Replicas++
+			err := cl.Status().Update(nil, newdep)
+			Expect(err).To(MatchError("mocked status update error"))
+		})
 	}
 
 	Context("with default scheme.Scheme", func() {

@@ -33,29 +33,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/internal/objectutil"
 )
 
-var (
-//log = logf.RuntimeLog.WithName("fake-client")
-)
-
-type fakeReactorClient struct {
+// FakeReactorClient implements client.Client and also includes methods for
+// inserting reactors into the handler chain.
+type FakeReactorClient struct {
 	testing.Fake
 	scheme *runtime.Scheme
 }
 
-var _ client.Client = &fakeReactorClient{}
+var _ client.Client = &FakeReactorClient{}
 
 // NewFakeReactorClient creates a new fake client for testing.
 // You can choose to initialize it with a slice of runtime.Object.
 // Deprecated: use NewFakeReactorClientWithScheme.  You should always be
 // passing an explicit Scheme.
-func NewFakeReactorClient(initObjs ...runtime.Object) client.Client {
+func NewFakeReactorClient(initObjs ...runtime.Object) *FakeReactorClient {
 	return NewFakeReactorClientWithScheme(scheme.Scheme, initObjs...)
 }
 
 // NewFakeReactorClientWithScheme creates a new fake client with the given scheme
 // for testing.
 // You can choose to initialize it with a slice of runtime.Object.
-func NewFakeReactorClientWithScheme(clientScheme *runtime.Scheme, initObjs ...runtime.Object) client.Client {
+func NewFakeReactorClientWithScheme(clientScheme *runtime.Scheme, initObjs ...runtime.Object) *FakeReactorClient {
 	tracker := testing.NewObjectTracker(clientScheme, scheme.Codecs.UniversalDecoder())
 	for _, obj := range initObjs {
 		if err := tracker.Add(obj); err != nil {
@@ -63,12 +61,12 @@ func NewFakeReactorClientWithScheme(clientScheme *runtime.Scheme, initObjs ...ru
 		}
 	}
 
-	fc := &fakeReactorClient{scheme: clientScheme}
+	fc := &FakeReactorClient{scheme: clientScheme}
 	fc.AddReactor("*", "*", testing.ObjectReaction(tracker))
 	return fc
 }
 
-func (c *fakeReactorClient) Get(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+func (c *FakeReactorClient) Get(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
 	gvr, err := getGVRFromObject(obj, c.scheme)
 	if err != nil {
 		return err
@@ -87,7 +85,7 @@ func (c *fakeReactorClient) Get(ctx context.Context, key client.ObjectKey, obj r
 	return err
 }
 
-func (c *fakeReactorClient) List(ctx context.Context, obj runtime.Object, opts ...client.ListOptionFunc) error {
+func (c *FakeReactorClient) List(ctx context.Context, obj runtime.Object, opts ...client.ListOptionFunc) error {
 	gvk, err := apiutil.GVKForObject(obj, scheme.Scheme)
 	if err != nil {
 		return err
@@ -136,7 +134,7 @@ func (c *fakeReactorClient) List(ctx context.Context, obj runtime.Object, opts .
 	return nil
 }
 
-func (c *fakeReactorClient) Create(ctx context.Context, obj runtime.Object, opts ...client.CreateOptionFunc) error {
+func (c *FakeReactorClient) Create(ctx context.Context, obj runtime.Object, opts ...client.CreateOptionFunc) error {
 	createOptions := &client.CreateOptions{}
 	createOptions.ApplyOptions(opts)
 
@@ -159,7 +157,7 @@ func (c *fakeReactorClient) Create(ctx context.Context, obj runtime.Object, opts
 	return err
 }
 
-func (c *fakeReactorClient) Delete(ctx context.Context, obj runtime.Object, opts ...client.DeleteOptionFunc) error {
+func (c *FakeReactorClient) Delete(ctx context.Context, obj runtime.Object, opts ...client.DeleteOptionFunc) error {
 	gvr, err := getGVRFromObject(obj, c.scheme)
 	if err != nil {
 		return err
@@ -174,7 +172,7 @@ func (c *fakeReactorClient) Delete(ctx context.Context, obj runtime.Object, opts
 	return err
 }
 
-func (c *fakeReactorClient) Update(ctx context.Context, obj runtime.Object, opts ...client.UpdateOptionFunc) error {
+func (c *FakeReactorClient) Update(ctx context.Context, obj runtime.Object, opts ...client.UpdateOptionFunc) error {
 	updateOptions := &client.UpdateOptions{}
 	updateOptions.ApplyOptions(opts)
 
@@ -197,7 +195,7 @@ func (c *fakeReactorClient) Update(ctx context.Context, obj runtime.Object, opts
 	return err
 }
 
-func (c *fakeReactorClient) Patch(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOptionFunc) error {
+func (c *FakeReactorClient) Patch(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOptionFunc) error {
 	gvr, err := getGVRFromObject(obj, c.scheme)
 	if err != nil {
 		return err
@@ -212,7 +210,9 @@ func (c *fakeReactorClient) Patch(ctx context.Context, obj runtime.Object, patch
 	}
 
 	o, err := c.Invokes(testing.NewPatchAction(gvr, accessor.GetNamespace(), accessor.GetName(), patch.Type(), data), nil)
-
+	if err != nil {
+		return err
+	}
 	j, err := json.Marshal(o)
 	if err != nil {
 		return err
@@ -222,21 +222,12 @@ func (c *fakeReactorClient) Patch(ctx context.Context, obj runtime.Object, patch
 	return err
 }
 
-func (c *fakeReactorClient) Status() client.StatusWriter {
+func (c *FakeReactorClient) Status() client.StatusWriter {
 	return &fakeReactorStatusWriter{client: c}
 }
 
-// func getGVRFromObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionResource, error) {
-// 	gvk, err := apiutil.GVKForObject(obj, scheme)
-// 	if err != nil {
-// 		return schema.GroupVersionResource{}, err
-// 	}
-// 	gvr, _ := meta.UnsafeGuessKindToResource(gvk)
-// 	return gvr, nil
-// }
-
 type fakeReactorStatusWriter struct {
-	client *fakeReactorClient
+	client *FakeReactorClient
 }
 
 func (sw *fakeReactorStatusWriter) Update(ctx context.Context, obj runtime.Object) error {

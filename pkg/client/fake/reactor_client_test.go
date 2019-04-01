@@ -236,32 +236,29 @@ var _ = Describe("Fake client", func() {
 	}
 
 	AssertReactorBehavior := func() {
+		errorReactor := func(action testing.Action) (bool, runtime.Object, error) {
+			return true, nil, fmt.Errorf("mocked %s: %s", action.GetVerb(), action.GetResource())
+		}
 		It("Should add a reactor to Get", func() {
-			cl.PrependReactor("get", "*", func(action testing.Action) (bool, runtime.Object, error) {
-				return true, nil, fmt.Errorf("mocked get error")
-			})
+			cl.PrependReactor("get", "*", errorReactor)
 			namespacedName := types.NamespacedName{
 				Name:      "test-deployment",
 				Namespace: "ns1",
 			}
 			obj := &appsv1.Deployment{}
 			err := cl.Get(nil, namespacedName, obj)
-			Expect(err).To(MatchError("mocked get error"))
+			Expect(err).To(MatchError("mocked get: apps/v1, Resource=deployments"))
 		})
 
 		It("Should add a reactor to List", func() {
-			cl.PrependReactor("list", "*", func(action testing.Action) (bool, runtime.Object, error) {
-				return true, nil, fmt.Errorf("mocked list error")
-			})
+			cl.PrependReactor("list", "*", errorReactor)
 			list := &appsv1.DeploymentList{}
 			err := cl.List(nil, list, client.InNamespace("ns1"))
-			Expect(err).To(MatchError("mocked list error"))
+			Expect(err).To(MatchError("mocked list: apps/v1, Resource=deployments"))
 		})
 
 		It("Should add a reactor to Create", func() {
-			cl.PrependReactor("create", "*", func(action testing.Action) (bool, runtime.Object, error) {
-				return true, nil, fmt.Errorf("mocked create error")
-			})
+			cl.PrependReactor("create", "*", errorReactor)
 			newcm := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "new-test-cm",
@@ -269,13 +266,11 @@ var _ = Describe("Fake client", func() {
 				},
 			}
 			err := cl.Create(nil, newcm)
-			Expect(err).To(MatchError("mocked create error"))
+			Expect(err).To(MatchError("mocked create: /v1, Resource=configmaps"))
 		})
 
 		It("Should add a reactor to Update", func() {
-			cl.PrependReactor("update", "*", func(action testing.Action) (bool, runtime.Object, error) {
-				return true, nil, fmt.Errorf("mocked update error")
-			})
+			cl.PrependReactor("update", "*", errorReactor)
 			newcm := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cm",
@@ -286,21 +281,17 @@ var _ = Describe("Fake client", func() {
 				},
 			}
 			err := cl.Update(nil, newcm)
-			Expect(err).To(MatchError("mocked update error"))
+			Expect(err).To(MatchError("mocked update: /v1, Resource=configmaps"))
 		})
 
 		It("Should add a reactor to Delete", func() {
-			cl.PrependReactor("delete", "*", func(action testing.Action) (bool, runtime.Object, error) {
-				return true, nil, fmt.Errorf("mocked delete error")
-			})
+			cl.PrependReactor("delete", "*", errorReactor)
 			err := cl.Delete(nil, dep)
-			Expect(err).To(MatchError("mocked delete error"))
+			Expect(err).To(MatchError("mocked delete: apps/v1, Resource=deployments"))
 		})
 
 		It("Should add a reactor to Patch", func() {
-			cl.PrependReactor("patch", "*", func(action testing.Action) (bool, runtime.Object, error) {
-				return true, nil, fmt.Errorf("mocked patch error")
-			})
+			cl.PrependReactor("patch", "*", errorReactor)
 			mergePatch, err := json.Marshal(map[string]interface{}{
 				"metadata": map[string]interface{}{
 					"annotations": map[string]interface{}{
@@ -310,18 +301,17 @@ var _ = Describe("Fake client", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 			err = cl.Patch(nil, dep, client.ConstantPatch(types.StrategicMergePatchType, mergePatch))
-			Expect(err).To(MatchError("mocked patch error"))
+			Expect(err).To(MatchError("mocked patch: apps/v1, Resource=deployments"))
 		})
 
 		It("Should add a reactor to Status update", func() {
 			cl.PrependReactor("update", "*", func(action testing.Action) (bool, runtime.Object, error) {
-				Expect(action.GetSubresource()).To(Equal("status"))
-				return true, nil, fmt.Errorf("mocked status update error")
+				return true, nil, fmt.Errorf("mocked %s: %s/%s", action.GetVerb(), action.GetResource(), action.GetSubresource())
 			})
 			newdep := dep.DeepCopy()
 			newdep.Status.Replicas++
 			err := cl.Status().Update(nil, newdep)
-			Expect(err).To(MatchError("mocked status update error"))
+			Expect(err).To(MatchError("mocked update: apps/v1, Resource=deployments/status"))
 		})
 	}
 

@@ -32,9 +32,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 
-	jobsapis "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testData/pkg/apis"
-	jobsv1 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testData/pkg/apis/jobs/v1"
-	jobsv2 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testData/pkg/apis/jobs/v2"
+	jobsapis "sigs.k8s.io/controller-runtime/examples/conversion/pkg/apis"
+	jobsv1 "sigs.k8s.io/controller-runtime/examples/conversion/pkg/apis/jobs/v1"
+	jobsv2 "sigs.k8s.io/controller-runtime/examples/conversion/pkg/apis/jobs/v2"
 )
 
 var _ = Describe("Conversion Webhook", func() {
@@ -74,9 +74,8 @@ var _ = Describe("Conversion Webhook", func() {
 		return convReview
 	}
 
-	It("should convert objects successfully", func() {
-
-		v1Obj := &jobsv1.ExternalJob{
+	makeV1Obj := func() *jobsv1.ExternalJob {
+		return &jobsv1.ExternalJob{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "ExternalJob",
 				APIVersion: "jobs.example.org/v1",
@@ -89,6 +88,11 @@ var _ = Describe("Conversion Webhook", func() {
 				RunAt: "every 2 seconds",
 			},
 		}
+	}
+
+	It("should convert objects successfully", func() {
+
+		v1Obj := makeV1Obj()
 
 		expected := &jobsv2.ExternalJob{
 			TypeMeta: metav1.TypeMeta{
@@ -118,26 +122,14 @@ var _ = Describe("Conversion Webhook", func() {
 
 		convReview := doRequest(convReq)
 
-		Expect(convReview.Response.ConvertedObjects).Should(HaveLen(1))
+		Expect(convReview.Response.ConvertedObjects).To(HaveLen(1))
 		got, _, err := decoder.Decode(convReview.Response.ConvertedObjects[0].Raw)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(got).To(Equal(expected))
 	})
 
 	It("should return error when dest/src objects belong to different API groups", func() {
-		v1Obj := &jobsv1.ExternalJob{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ExternalJob",
-				APIVersion: "jobs.example.org/v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "default",
-				Name:      "obj-1",
-			},
-			Spec: jobsv1.ExternalJobSpec{
-				RunAt: "every 2 seconds",
-			},
-		}
+		v1Obj := makeV1Obj()
 
 		convReq := &apix.ConversionReview{
 			TypeMeta: metav1.TypeMeta{},
@@ -159,19 +151,8 @@ var _ = Describe("Conversion Webhook", func() {
 	})
 
 	It("should return error when dest/src objects are of same type", func() {
-		v1Obj := &jobsv1.ExternalJob{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ExternalJob",
-				APIVersion: "jobs.example.org/v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "default",
-				Name:      "obj-1",
-			},
-			Spec: jobsv1.ExternalJobSpec{
-				RunAt: "every 2 seconds",
-			},
-		}
+
+		v1Obj := makeV1Obj()
 
 		convReq := &apix.ConversionReview{
 			TypeMeta: metav1.TypeMeta{},
@@ -220,7 +201,7 @@ var _ = Describe("Conversion Webhook", func() {
 		convReview := doRequest(convReq)
 
 		Expect(convReview.Response.Result.Message).To(
-			Equal("API Group apps/v1beta1, Kind=Deployment does not have any Hub defined"))
+			Equal("*v1beta1.Deployment is not convertible to *v1.Deployment"))
 		Expect(convReview.Response.ConvertedObjects).Should(BeEmpty())
 	})
 

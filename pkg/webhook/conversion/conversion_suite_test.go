@@ -35,4 +35,4 @@ var _ = BeforeSuite(func(done Done) {
 	logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
 
 	close(done)
-}, 60)
+})

@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package conversion provides interface definitions that an API Type needs to
+implement in order to be supported by the generic conversion webhook handler
+defined under pkg/webhook/conversion.
+*/
 package conversion
 
 import "k8s.io/apimachinery/pkg/runtime"
@@ -25,9 +30,10 @@ type Convertible interface {
 	ConvertFrom(src Hub) error
 }
 
-// Hub defines capability to indicate whether a versioned type is a Hub or not.
-// Default conversion handler will use this interface to implement spoke to
-// spoke conversion.
+// Hub marks that a given type is the hub type for conversion. This means that
+// all conversions will first convert to the hub type, then convert from the hub
+// type to the destination type. All types besides the hub type should implement
+// Convertible.
 type Hub interface {
 	runtime.Object
 	Hub()

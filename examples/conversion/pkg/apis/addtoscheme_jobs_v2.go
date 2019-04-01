@@ -16,7 +16,7 @@ limitations under the License.
 package apis
 
 import (
-	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testData/pkg/apis/jobs/v2"
+	"sigs.k8s.io/controller-runtime/examples/conversion/pkg/apis/jobs/v2"
 )
 
 func init() {

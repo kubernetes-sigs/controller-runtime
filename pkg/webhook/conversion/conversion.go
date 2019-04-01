@@ -14,16 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package conversion provides implementation for CRD conversion webhook that implements handler for version conversion requests for types that are convertible.
+
+See pkg/conversion for interface definitions required to ensure a Type is convertible.
+*/
 package conversion
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 
 	apix "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
@@ -31,7 +36,7 @@ import (
 )
 
 var (
-	log = logf.Log.WithName("conversion_webhook")
+	log = logf.Log.WithName("conversion-webhook")
 )
 
 // Webhook implements a CRD conversion webhook HTTP handler.
@@ -49,14 +54,6 @@ func (wh *Webhook) InjectScheme(s *runtime.Scheme) error {
 		return err
 	}
 
-	// inject the decoder here too, just in case the order of calling this is not
-	// scheme first, then inject func
-	// if w.Handler != nil {
-	// 	if _, err := InjectDecoderInto(w.GetDecoder(), w.Handler); err != nil {
-	// 		return err
-	// 	}
-	// }
-
 	return nil
 }
 
@@ -64,7 +61,8 @@ func (wh *Webhook) InjectScheme(s *runtime.Scheme) error {
 var _ http.Handler = &Webhook{}
 
 func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	convertReview, err := wh.readRequest(r)
+	convertReview := &apix.ConversionReview{}
+	err := json.NewDecoder(r.Body).Decode(convertReview)
 	if err != nil {
 		log.Error(err, "failed to read conversion request")
 		w.WriteHeader(http.StatusBadRequest)
@@ -87,28 +85,6 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Error(err, "failed to write response")
 		return
 	}
-}
-
-func (wh *Webhook) readRequest(r *http.Request) (*apix.ConversionReview, error) {
-
-	var body []byte
-	if r.Body == nil {
-		return nil, fmt.Errorf("nil request body")
-	}
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return nil, err
-	}
-	body = data
-
-	convertReview := &apix.ConversionReview{}
-	// TODO(droot): figure out if we want to split decoder for conversion
-	// request from the objects contained in the request
-	err = wh.decoder.DecodeInto(body, convertReview)
-	if err != nil {
-		return nil, err
-	}
-	return convertReview, nil
 }
 
 // handles a version conversion request.
@@ -142,58 +118,49 @@ func (wh *Webhook) handleConvertRequest(req *apix.ConversionRequest) (*apix.Conv
 // convertObject will convert given a src object to dst object.
 // Note(droot): couldn't find a way to reduce the cyclomatic complexity under 10
 // without compromising readability, so disabling gocyclo linter
-// nolint: gocyclo
 func (wh *Webhook) convertObject(src, dst runtime.Object) error {
 	srcGVK := src.GetObjectKind().GroupVersionKind()
 	dstGVK := dst.GetObjectKind().GroupVersionKind()
 
-	if srcGVK.GroupKind().String() != dstGVK.GroupKind().String() {
+	if srcGVK.GroupKind() != dstGVK.GroupKind() {
 		return fmt.Errorf("src %T and dst %T does not belong to same API Group", src, dst)
 	}
 
-	if srcGVK.String() == dstGVK.String() {
+	if srcGVK == dstGVK {
 		return fmt.Errorf("conversion is not allowed between same type %T", src)
 	}
 
 	srcIsHub, dstIsHub := isHub(src), isHub(dst)
 	srcIsConvertible, dstIsConvertible := isConvertible(src), isConvertible(dst)
 
-	if srcIsHub {
-		if dstIsConvertible {
-			return dst.(conversion.Convertible).ConvertFrom(src.(conversion.Hub))
-		}
+	switch {
+	case srcIsHub && dstIsConvertible:
+		return dst.(conversion.Convertible).ConvertFrom(src.(conversion.Hub))
+	case dstIsHub && srcIsConvertible:
+		return src.(conversion.Convertible).ConvertTo(dst.(conversion.Hub))
+	case srcIsConvertible && dstIsConvertible:
+		return wh.convertViaHub(src.(conversion.Convertible), dst.(conversion.Convertible))
+	default:
 		return fmt.Errorf("%T is not convertible to %T", src, dst)
 	}
+}
 
-	if dstIsHub {
-		if srcIsConvertible {
-			return src.(conversion.Convertible).ConvertTo(dst.(conversion.Hub))
-		}
-		return fmt.Errorf("%T is not convertible %T", dst, src)
-	}
-
-	// neither src nor dst are Hub, means both of them are spoke, so lets get the hub
-	// version type.
+func (wh *Webhook) convertViaHub(src, dst conversion.Convertible) error {
 	hub, err := wh.getHub(src)
 	if err != nil {
 		return err
 	}
 
 	if hub == nil {
-		return fmt.Errorf("API Group %s does not have any Hub defined", srcGVK)
+		return fmt.Errorf("%s does not have any Hub defined", src)
 	}
 
-	// src and dst needs to be convertable for it to work
-	if !srcIsConvertible || !dstIsConvertible {
-		return fmt.Errorf("%T and %T needs to be convertable", src, dst)
-	}
-
-	err = src.(conversion.Convertible).ConvertTo(hub)
+	err = src.ConvertTo(hub)
 	if err != nil {
 		return fmt.Errorf("%T failed to convert to hub version %T : %v", src, hub, err)
 	}
 
-	err = dst.(conversion.Convertible).ConvertFrom(hub)
+	err = dst.ConvertFrom(hub)
 	if err != nil {
 		return fmt.Errorf("%T failed to convert from hub version %T : %v", dst, hub, err)
 	}
@@ -255,4 +222,14 @@ func isHub(obj runtime.Object) bool {
 func isConvertible(obj runtime.Object) bool {
 	_, yes := obj.(conversion.Convertible)
 	return yes
+}
+
+// helper to construct error response.
+func errored(err error) *apix.ConversionResponse {
+	return &apix.ConversionResponse{
+		Result: metav1.Status{
+			Status:  metav1.StatusFailure,
+			Message: err.Error(),
+		},
+	}
 }

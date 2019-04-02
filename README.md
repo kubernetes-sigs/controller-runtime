@@ -11,7 +11,7 @@ Documentation:
 - [Basic controller using builder](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/builder#example-Builder)
 - [Creating a manager](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/manager#example-New)
 - [Creating a controller](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/controller#example-New)
-- [Example `main.go`](https://github.com/kubernetes-sigs/controller-runtime/blob/master/example/main.go)
+- [Examples](https://github.com/kubernetes-sigs/controller-runtime/blob/master/examples)
 
 # Versioning, Maintenance, and Compatibility
 

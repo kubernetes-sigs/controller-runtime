@@ -200,13 +200,13 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to list objects with GVK populated", func() {
 					By("listing pods")
-					listObj := &kcorev1.PodList{}
-					Expect(informerCache.List(context.Background(), listObj)).To(Succeed())
+					out := &kcorev1.PodList{}
+					Expect(informerCache.List(context.Background(), out)).To(Succeed())
 
 					By("verifying that the returned pods have GVK populated")
-					Expect(listObj.Items).NotTo(BeEmpty())
-					Expect(listObj.Items).Should(HaveLen(3))
-					for _, p := range listObj.Items {
+					Expect(out.Items).NotTo(BeEmpty())
+					Expect(out.Items).Should(SatisfyAny(HaveLen(3), HaveLen(4)))
+					for _, p := range out.Items {
 						Expect(p.GroupVersionKind()).To(Equal(kcorev1.SchemeGroupVersion.WithKind("Pod")))
 					}
 				})

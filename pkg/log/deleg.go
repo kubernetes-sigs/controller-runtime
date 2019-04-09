@@ -27,7 +27,7 @@ import (
 type loggerPromise struct {
 	logger        *DelegatingLogger
 	childPromises []*loggerPromise
-	promisesLock  *sync.Mutex
+	promisesLock  sync.Mutex
 
 	name *string
 	tags []interface{}
@@ -38,7 +38,7 @@ func (p *loggerPromise) WithName(l *DelegatingLogger, name string) *loggerPromis
 	res := &loggerPromise{
 		logger:       l,
 		name:         &name,
-		promisesLock: &sync.Mutex{},
+		promisesLock: sync.Mutex{},
 	}
 
 	p.promisesLock.Lock()
@@ -52,7 +52,7 @@ func (p *loggerPromise) WithValues(l *DelegatingLogger, tags ...interface{}) *lo
 	res := &loggerPromise{
 		logger:       l,
 		tags:         tags,
-		promisesLock: &sync.Mutex{},
+		promisesLock: sync.Mutex{},
 	}
 
 	p.promisesLock.Lock()
@@ -130,7 +130,7 @@ func (l *DelegatingLogger) Fulfill(actual logr.Logger) {
 func NewDelegatingLogger(initial logr.Logger) *DelegatingLogger {
 	l := &DelegatingLogger{
 		Logger:  initial,
-		promise: &loggerPromise{promisesLock: &sync.Mutex{}},
+		promise: &loggerPromise{promisesLock: sync.Mutex{}},
 	}
 	l.promise.logger = l
 	return l

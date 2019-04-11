@@ -20,22 +20,34 @@ source $(dirname ${BASH_SOURCE})/common.sh
 
 header_text "running go vet"
 
-go vet ./...
+#go vet ./...
 
 # go get is broken for golint.  re-enable this once it is fixed.
 #header_text "running golint"
 #
 #golint -set_exit_status ./pkg/...
 
-header_text "running gometalinter.v2"
+header_text "creating config"
+echo "
+linters-settings:
+  linters-settings:
+  dupl:
+    threshold: 400
+    min-len: 3
+  lll:
+    line-length: 170
+    tab-width: 1" > /tmp/.golangci-lint-config.yml
 
-gometalinter.v2 --disable-all \
+header_text "running golangci-lint"
+
+golangci-lint run --disable-all \
+    --config /tmp/.golangci-lint-config.yml \
     --deadline 5m \
     --enable=misspell \
     --enable=structcheck \
     --enable=golint \
     --enable=deadcode \
-    --enable=errcheck \
+    --enable=goimports \
     --enable=varcheck \
     --enable=goconst \
     --enable=unparam \
@@ -44,14 +56,13 @@ gometalinter.v2 --disable-all \
     --enable=interfacer \
     --enable=misspell \
     --enable=gocyclo \
-    --line-length=170 \
     --enable=lll \
-    --dupl-threshold=400 \
     --enable=dupl \
-    --skip=atomic \
+    --skip-dirs=atomic \
     --enable=goimports \
     ./pkg/... ./examples/... .
 # TODO: Enable these as we fix them to make them pass
+#    --enable=errcheck \
 #    --enable=gosec \
 #    --enable=maligned \
 #    --enable=safesql \

@@ -350,7 +350,7 @@ var _ = Describe("Source", func() {
 						if eventCount == 0 {
 							<-unblock
 						}
-						eventCount += 1
+						eventCount++
 
 						if eventCount == 3 {
 							close(processed)

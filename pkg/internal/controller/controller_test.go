@@ -360,7 +360,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should requeue a Request after a duration if the Result sets Requeue:true and "+
-			"RequeueAfter is set", func() {
+			"RequeueAfter is set and forget the item", func() {
 			fakeReconcile.Result.RequeueAfter = time.Millisecond * 100
 			go func() {
 				defer GinkgoRecover()
@@ -375,16 +375,52 @@ var _ = Describe("controller", func() {
 
 			By("Invoking Reconciler which will ask for requeue")
 			Expect(<-reconciled).To(Equal(request))
-			Expect(dq.countAdd).To(Equal(1))
+			Expect(dq.countAdd).To(Equal(0))
 			Expect(dq.countAddAfter).To(Equal(1))
 			Expect(dq.countAddRateLimited).To(Equal(0))
 
 			By("Invoking Reconciler a second time without asking for requeue")
 			fakeReconcile.Result.Requeue = false
 			Expect(<-reconciled).To(Equal(request))
-			Expect(dq.countAdd).To(Equal(1))
+			Expect(dq.countAdd).To(Equal(0))
 			Expect(dq.countAddAfter).To(Equal(1))
 			Expect(dq.countAddRateLimited).To(Equal(0))
+
+			By("Removing the item from the queue")
+			Eventually(ctrl.Queue.Len).Should(Equal(0))
+			Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+		})
+
+		PIt("should not requeue a Request after a duration if the Result sets Requeue:true and "+
+			"RequeueAfter is set and err is not nil", func() {
+
+			fakeReconcile.Result.RequeueAfter = time.Millisecond * 100
+			fakeReconcile.Err = fmt.Errorf("expected error: reconcile")
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+			}()
+			dq := &DelegatingQueue{RateLimitingInterface: ctrl.Queue}
+			ctrl.Queue = dq
+			ctrl.JitterPeriod = time.Millisecond
+			ctrl.Queue.Add(request)
+			Expect(dq.countAdd).To(Equal(1))
+			Expect(dq.countAddAfter).To(Equal(0))
+			Expect(dq.countAddRateLimited).To(Equal(0))
+
+			By("Invoking Reconciler which will ask for requeue with an error")
+			Expect(<-reconciled).To(Equal(request))
+			Expect(dq.countAdd).To(Equal(1))
+			Expect(dq.countAddAfter).To(Equal(0))
+			Expect(dq.countAddRateLimited).To(Equal(1))
+
+			fakeReconcile.Result.RequeueAfter = time.Millisecond * 100
+			fakeReconcile.Err = nil
+			By("Invoking Reconciler a second time asking for requeue without errors")
+			Expect(<-reconciled).To(Equal(request))
+			Expect(dq.countAdd).To(Equal(0))
+			Expect(dq.countAddAfter).To(Equal(1))
+			Expect(dq.countAddRateLimited).To(Equal(1))
 
 			By("Removing the item from the queue")
 			Eventually(ctrl.Queue.Len).Should(Equal(0))
@@ -638,4 +674,9 @@ func (q *DelegatingQueue) AddAfter(item interface{}, d time.Duration) {
 func (q *DelegatingQueue) Add(item interface{}) {
 	q.countAdd++
 	q.RateLimitingInterface.Add(item)
+}
+
+func (q *DelegatingQueue) Forget(item interface{}) {
+	q.countAdd--
+	q.RateLimitingInterface.Forget(item)
 }

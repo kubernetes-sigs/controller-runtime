@@ -214,6 +214,11 @@ func (c *Controller) processNextWorkItem() bool {
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "error").Inc()
 		return false
 	} else if result.RequeueAfter > 0 {
+		// The result.RequeueAfter request will be lost, if it is returned
+		// along with a non-nil error. But this is intended as
+		// We need to drive to stable reconcile loops before queuing due
+		// to result.RequestAfter
+		c.Queue.Forget(obj)
 		c.Queue.AddAfter(req, result.RequeueAfter)
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "requeue_after").Inc()
 		return true

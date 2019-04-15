@@ -309,7 +309,16 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 		return err
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		select {
+		case <-cm.internalStop:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
 	// Start the leader elector process
-	go l.Run(context.Background())
+	go l.Run(ctx)
 	return nil
 }

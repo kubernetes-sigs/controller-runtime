@@ -132,14 +132,15 @@ func (s *Server) Start(stop <-chan struct{}) error {
 		}
 	}
 
-	// TODO: watch the cert dir. Reload the cert if it changes
-	cert, err := tls.LoadX509KeyPair(path.Join(s.CertDir, certName), path.Join(s.CertDir, keyName))
+	wrappedTLS := wrappedTLS{}
+
+	err := wrappedTLS.autoloadTLS(path.Join(s.CertDir, certName), path.Join(s.CertDir, keyName))
 	if err != nil {
 		return err
 	}
 
 	cfg := &tls.Config{
-		Certificates: []tls.Certificate{cert},
+		GetCertificate: wrappedTLS.getCertificate,
 	}
 
 	listener, err := tls.Listen("tcp", net.JoinHostPort(s.Host, strconv.Itoa(int(s.Port))), cfg)

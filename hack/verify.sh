@@ -20,7 +20,7 @@ source $(dirname ${BASH_SOURCE})/common.sh
 
 header_text "running go vet"
 
-#go vet ./...
+go vet ./...
 
 # go get is broken for golint.  re-enable this once it is fixed.
 #header_text "running golint"
@@ -36,7 +36,12 @@ linters-settings:
     min-len: 3
   lll:
     line-length: 170
-    tab-width: 1" > /tmp/.golangci-lint-config.yml
+    tab-width: 1
+issues:
+  exclude-rules:
+  - path: _test\.go
+    linters:
+    - errcheck"> /tmp/.golangci-lint-config.yml
 
 header_text "running golangci-lint"
 
@@ -48,6 +53,7 @@ golangci-lint run --disable-all \
     --enable=golint \
     --enable=deadcode \
     --enable=goimports \
+    --enable=errcheck \
     --enable=varcheck \
     --enable=goconst \
     --enable=unparam \
@@ -62,7 +68,6 @@ golangci-lint run --disable-all \
     --enable=goimports \
     ./pkg/... ./examples/... .
 # TODO: Enable these as we fix them to make them pass
-#    --enable=errcheck \
 #    --enable=gosec \
 #    --enable=maligned \
 #    --enable=safesql \

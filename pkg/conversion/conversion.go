@@ -16,7 +16,7 @@ limitations under the License.
 
 /*
 Package conversion provides interface definitions that an API Type needs to
-implement in order to be supported by the generic conversion webhook handler
+implement for it to be supported by the generic conversion webhook handler
 defined under pkg/webhook/conversion.
 */
 package conversion

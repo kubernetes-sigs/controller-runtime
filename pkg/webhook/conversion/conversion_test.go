@@ -145,8 +145,7 @@ var _ = Describe("Conversion Webhook", func() {
 		}
 
 		convReview := doRequest(convReq)
-		Expect(convReview.Response.Result.Message).Should(
-			ContainSubstring(`no kind "ExternalJob" is registered for version`))
+		Expect(convReview.Response.Result.Status).To(Equal("Failure"))
 		Expect(convReview.Response.ConvertedObjects).Should(BeEmpty())
 	})
 
@@ -167,9 +166,7 @@ var _ = Describe("Conversion Webhook", func() {
 		}
 
 		convReview := doRequest(convReq)
-
-		Expect(convReview.Response.Result.Message).To(
-			Equal("conversion is not allowed between same type *v1.ExternalJob"))
+		Expect(convReview.Response.Result.Status).To(Equal("Failure"))
 		Expect(convReview.Response.ConvertedObjects).Should(BeEmpty())
 	})
 
@@ -199,9 +196,7 @@ var _ = Describe("Conversion Webhook", func() {
 		}
 
 		convReview := doRequest(convReq)
-
-		Expect(convReview.Response.Result.Message).To(
-			Equal("*v1beta1.Deployment is not convertible to *v1.Deployment"))
+		Expect(convReview.Response.Result.Status).To(Equal("Failure"))
 		Expect(convReview.Response.ConvertedObjects).Should(BeEmpty())
 	})
 

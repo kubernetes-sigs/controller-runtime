@@ -17,7 +17,7 @@ limitations under the License.
 /*
 Package conversion provides implementation for CRD conversion webhook that implements handler for version conversion requests for types that are convertible.
 
-See pkg/conversion for interface definitions required to ensure a Type is convertible.
+See pkg/conversion for interface definitions required to ensure an API Type is convertible.
 */
 package conversion
 

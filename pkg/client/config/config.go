@@ -29,8 +29,8 @@ import (
 )
 
 var (
-	kubeconfig, apiServerURL string
-	log                      = logf.RuntimeLog.WithName("client").WithName("config")
+	kubeconfig, apiServerURL, namespace string
+	log                                 = logf.RuntimeLog.WithName("client").WithName("config")
 )
 
 func init() {
@@ -42,6 +42,10 @@ func init() {
 	flag.StringVar(&apiServerURL, "master", "",
 		"(Deprecated: switch to `--kubeconfig`) The address of the Kubernetes API server. Overrides any value in kubeconfig. "+
 			"Only required if out-of-cluster.")
+
+	flag.StringVar(&namespace, "namespace", "",
+		"Namespace if specified restricts the manager's cache to watch objects in the desired namespace. "+
+			"Otherwise objects will be watched in all the namespaces.")
 }
 
 // GetConfig creates a *rest.Config for talking to a Kubernetes API server.
@@ -111,4 +115,10 @@ func GetConfigOrDie() *rest.Config {
 		os.Exit(1)
 	}
 	return config
+}
+
+// GetNamespaceConfig returns the name of the namespace which is used to restrict
+// the manager's cache to watch objects in this namespace
+func GetNamespaceConfig() string {
+	return namespace
 }

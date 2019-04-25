@@ -140,6 +140,7 @@ func (s *Server) Start(stop <-chan struct{}) error {
 
 	cfg := &tls.Config{
 		Certificates: []tls.Certificate{cert},
+		NextProtos:   []string{"h2"},
 	}
 
 	listener, err := tls.Listen("tcp", net.JoinHostPort(s.Host, strconv.Itoa(int(s.Port))), cfg)

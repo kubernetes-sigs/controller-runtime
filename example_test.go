@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -38,6 +39,50 @@ func Example() {
 	var log = controllers.Log.WithName("builder-examples")
 
 	manager, err := controllers.NewManager(controllers.GetConfigOrDie(), controllers.Options{})
+	if err != nil {
+		log.Error(err, "could not create manager")
+		os.Exit(1)
+	}
+
+	err = controllers.
+		NewControllerManagedBy(manager). // Create the Controller
+		For(&appsv1.ReplicaSet{}).       // ReplicaSet is the Application API
+		Owns(&corev1.Pod{}).             // ReplicaSet owns Pods created by it
+		Complete(&ReplicaSetReconciler{Client: manager.GetClient()})
+	if err != nil {
+		log.Error(err, "could not create controller")
+		os.Exit(1)
+	}
+
+	if err := manager.Start(controllers.SetupSignalHandler()); err != nil {
+		log.Error(err, "could not start manager")
+		os.Exit(1)
+	}
+}
+
+// This example creates a simple application Controller that is configured for ReplicaSets and Pods.
+// This application controller will be running leader election with the provided configuration in the manager options.
+// If leader election configuration is not provided, controller runs leader election with default values.
+// Default values taken from: https://github.com/kubernetes/apiserver/blob/master/pkg/apis/config/v1alpha1/defaults.go
+//	defaultLeaseDuration = 15 * time.Second
+//	defaultRenewDeadline = 10 * time.Second
+//	defaultRetryPeriod   = 2 * time.Second
+//
+// * Create a new application for ReplicaSets that manages Pods owned by the ReplicaSet and calls into
+// ReplicaSetReconciler.
+//
+// * Start the application.
+// TODO(pwittrock): Update this example when we have better dependency injection support
+func Example_updateLeaderElectionDurations() {
+	var log = controllers.Log.WithName("builder-examples")
+	leaseDuration := 100 * time.Second
+	renewDeadline := 80 * time.Second
+	retryPeriod := 20 * time.Second
+	manager, err := controllers.NewManager(controllers.GetConfigOrDie(), controllers.Options{
+		LeaseDuration: &leaseDuration,
+		RenewDeadline: &renewDeadline,
+		RetryPeriod:   &retryPeriod,
+	})
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)

@@ -113,6 +113,17 @@ type Options struct {
 	// will use for holding the leader lock.
 	LeaderElectionID string
 
+	// LeaseDuration is the duration that non-leader candidates will
+	// wait to force acquire leadership. This is measured against time of
+	// last observed ack. Default is 15 seconds.
+	LeaseDuration *time.Duration
+	// RenewDeadline is the duration that the acting master will retry
+	// refreshing leadership before giving up. Default is 10 seconds.
+	RenewDeadline *time.Duration
+	// RetryPeriod is the duration the LeaderElector clients should wait
+	// between tries of actions. Default is 2 seconds.
+	RetryPeriod *time.Duration
+
 	// Namespace if specified restricts the manager's cache to watch objects in
 	// the desired namespace Defaults to all namespaces
 	//
@@ -247,6 +258,9 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		internalStopper:  stop,
 		port:             options.Port,
 		host:             options.Host,
+		leaseDuration:    *options.LeaseDuration,
+		renewDeadline:    *options.RenewDeadline,
+		retryPeriod:      *options.RetryPeriod,
 	}, nil
 }
 
@@ -301,6 +315,18 @@ func setOptionsDefaults(options Options) Options {
 
 	if options.newMetricsListener == nil {
 		options.newMetricsListener = metrics.NewListener
+	}
+	leaseDuration, renewDeadline, retryPeriod := defaultLeaseDuration, defaultRenewDeadline, defaultRetryPeriod
+	if options.LeaseDuration == nil {
+		options.LeaseDuration = &leaseDuration
+	}
+
+	if options.RenewDeadline == nil {
+		options.RenewDeadline = &renewDeadline
+	}
+
+	if options.RetryPeriod == nil {
+		options.RetryPeriod = &retryPeriod
 	}
 
 	return options

@@ -76,7 +76,9 @@ function fetch_go_tools {
   header_text "Checking for dep"
   if ! is_installed dep; then
     header_text "Installing dep"
-    go get -u github.com/golang/dep/cmd/dep
+    # can't install dep with modules from source due to an issue with semver,
+    # so install from the compiled binary instead
+    curl -sL -o $(go env GOPATH)/bin/dep https://github.com/golang/dep/releases/download/0.5.2/dep-$(go env GOOS)-$(go env GOARCH)
   fi
 }
 
@@ -93,8 +95,8 @@ ${hack_dir}/verify.sh
 ${hack_dir}/test-all.sh
 
 header_text "confirming examples compile (via go install)"
-go install ./examples/builtins
-go install ./examples/crd
+go install ${MOD_OPT} ./examples/builtins
+go install ${MOD_OPT} ./examples/crd
 
 echo "passed"
 exit 0

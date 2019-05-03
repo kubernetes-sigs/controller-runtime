@@ -25,6 +25,16 @@ if [ -n "$TRACE" ]; then
   set -x
 fi
 
+# check if modules are enabled
+(go mod edit -json &>/dev/null)
+MODULES_ENABLED=$?
+
+MOD_OPT=""
+MODULES_OPT=${MODULES_OPT:-""}
+if [[ -n "${MODULES_OPT}" && $MODULES_ENABLED ]]; then
+    MOD_OPT="-mod=${MODULES_OPT}"
+fi
+
 # Turn colors in this script off by setting the NO_COLOR variable in your
 # environment to any value:
 #

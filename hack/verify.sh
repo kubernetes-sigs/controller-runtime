@@ -20,7 +20,7 @@ source $(dirname ${BASH_SOURCE})/common.sh
 
 header_text "running go vet"
 
-go vet ./...
+go vet ${MOD_OPT} ./...
 
 # go get is broken for golint.  re-enable this once it is fixed.
 #header_text "running golint"
@@ -57,4 +57,5 @@ gometalinter.v2 --disable-all \
 #    --enable=safesql \
 
 header_text "running dep check"
-dep check
+dep check -skip-vendor  # vendor is maintained by go modules
+GO111MODULES=on go list -mod=readonly ./...

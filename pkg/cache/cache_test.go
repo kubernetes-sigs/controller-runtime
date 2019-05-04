@@ -401,7 +401,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						Kind:    "Pod",
 					})
 					uKnownPod2 := &unstructured.Unstructured{}
-					kscheme.Scheme.Convert(knownPod2, uKnownPod2, nil)
+					Expect(kscheme.Scheme.Convert(knownPod2, uKnownPod2, nil)).To(Succeed())
 
 					podKey := client.ObjectKey{Name: "test-pod-2", Namespace: testNamespaceTwo}
 					Expect(informerCache.Get(context.Background(), podKey, out)).To(Succeed())

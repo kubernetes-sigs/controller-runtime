@@ -67,7 +67,7 @@ var _ = Describe("Source", func() {
 				instance := &source.Kind{
 					Type: &corev1.Pod{},
 				}
-				inject.CacheInto(ic, instance)
+				Expect(inject.CacheInto(ic, instance)).To(BeTrue())
 				err := instance.Start(handler.Funcs{
 					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
@@ -108,7 +108,7 @@ var _ = Describe("Source", func() {
 				instance := &source.Kind{
 					Type: &corev1.Pod{},
 				}
-				instance.InjectCache(ic)
+				Expect(instance.InjectCache(ic)).To(Succeed())
 				err := instance.Start(handler.Funcs{
 					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
@@ -158,7 +158,7 @@ var _ = Describe("Source", func() {
 				instance := &source.Kind{
 					Type: &corev1.Pod{},
 				}
-				inject.CacheInto(ic, instance)
+				Expect(inject.CacheInto(ic, instance)).To(BeTrue())
 				err := instance.Start(handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
@@ -202,7 +202,7 @@ var _ = Describe("Source", func() {
 
 		It("should return an error from Start if a type was not provided", func(done Done) {
 			instance := source.Kind{}
-			instance.InjectCache(&informertest.FakeInformers{})
+			Expect(instance.InjectCache(&informertest.FakeInformers{})).To(Succeed())
 			err := instance.Start(nil, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("must specify Kind.Type"))
@@ -218,7 +218,7 @@ var _ = Describe("Source", func() {
 				instance := &source.Kind{
 					Type: &corev1.Pod{},
 				}
-				instance.InjectCache(ic)
+				Expect(instance.InjectCache(ic)).To(Succeed())
 				err := instance.Start(handler.Funcs{}, q)
 				Expect(err).To(HaveOccurred())
 
@@ -288,7 +288,7 @@ var _ = Describe("Source", func() {
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{Source: ch}
-				inject.StopChannelInto(stop, instance)
+				Expect(inject.StopChannelInto(stop, instance)).To(BeTrue())
 				err := instance.Start(handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
@@ -330,7 +330,7 @@ var _ = Describe("Source", func() {
 				// Add a handler to get distribution blocked
 				instance := &source.Channel{Source: ch}
 				instance.DestBufferSize = 1
-				inject.StopChannelInto(stop, instance)
+				Expect(inject.StopChannelInto(stop, instance)).To(BeTrue())
 				err := instance.Start(handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
@@ -350,7 +350,7 @@ var _ = Describe("Source", func() {
 						if eventCount == 0 {
 							<-unblock
 						}
-						eventCount += 1
+						eventCount++
 
 						if eventCount == 3 {
 							close(processed)
@@ -382,7 +382,7 @@ var _ = Describe("Source", func() {
 			It("should get error if no source specified", func(done Done) {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{ /*no source specified*/ }
-				inject.StopChannelInto(stop, instance)
+				Expect(inject.StopChannelInto(stop, instance)).To(BeTrue())
 				err := instance.Start(handler.Funcs{}, q)
 				Expect(err).To(Equal(fmt.Errorf("must specify Channel.Source")))
 				close(done)
@@ -413,7 +413,7 @@ var _ = Describe("Source", func() {
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{Source: ch}
-				inject.StopChannelInto(stop, instance)
+				Expect(inject.StopChannelInto(stop, instance)).To(BeTrue())
 				err := instance.Start(handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()

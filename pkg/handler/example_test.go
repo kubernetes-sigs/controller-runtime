@@ -34,30 +34,36 @@ var c controller.Controller
 // the Event (i.e. change caused by a Create, Update, Delete).
 func ExampleEnqueueRequestForObject() {
 	// controller is a controller.controller
-	c.Watch(
+	err := c.Watch(
 		&source.Kind{Type: &corev1.Pod{}},
 		&handler.EnqueueRequestForObject{},
 	)
+	if err != nil {
+		// handle it
+	}
 }
 
 // This example watches ReplicaSets and enqueues a Request containing the Name and Namespace of the
 // owning (direct) Deployment responsible for the creation of the ReplicaSet.
 func ExampleEnqueueRequestForOwner() {
 	// controller is a controller.controller
-	c.Watch(
+	err := c.Watch(
 		&source.Kind{Type: &appsv1.ReplicaSet{}},
 		&handler.EnqueueRequestForOwner{
 			OwnerType:    &appsv1.Deployment{},
 			IsController: true,
 		},
 	)
+	if err != nil {
+		// handle it
+	}
 }
 
 // This example watches Deployments and enqueues a Request contain the Name and Namespace of different
 // objects (of Type: MyKind) using a mapping function defined by the user.
 func ExampleEnqueueRequestsFromMapFunc() {
 	// controller is a controller.controller
-	c.Watch(
+	err := c.Watch(
 		&source.Kind{Type: &appsv1.Deployment{}},
 		&handler.EnqueueRequestsFromMapFunc{
 			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
@@ -73,12 +79,15 @@ func ExampleEnqueueRequestsFromMapFunc() {
 				}
 			}),
 		})
+	if err != nil {
+		// handle it
+	}
 }
 
 // This example implements handler.EnqueueRequestForObject.
 func ExampleFuncs() {
 	// controller is a controller.controller
-	c.Watch(
+	err := c.Watch(
 		&source.Kind{Type: &corev1.Pod{}},
 		handler.Funcs{
 			CreateFunc: func(e event.CreateEvent, q workqueue.RateLimitingInterface) {
@@ -107,4 +116,7 @@ func ExampleFuncs() {
 			},
 		},
 	)
+	if err != nil {
+		// handle it
+	}
 }

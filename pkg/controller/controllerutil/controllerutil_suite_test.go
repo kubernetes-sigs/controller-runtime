@@ -49,5 +49,5 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	t.Stop()
+	Expect(t.Stop()).To(Succeed())
 })

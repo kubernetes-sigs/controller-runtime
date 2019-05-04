@@ -52,7 +52,9 @@ func Example() {
 	hookServer := &Server{
 		Port: 8443,
 	}
-	mgr.Add(hookServer)
+	if err := mgr.Add(hookServer); err != nil {
+		panic(err)
+	}
 
 	// Register the webhooks in the server.
 	hookServer.Register("/mutating", mutatingHook)

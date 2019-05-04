@@ -62,10 +62,10 @@ var _ = Describe("Source", func() {
 
 	JustBeforeEach(func() {
 		instance1 = &source.Kind{Type: obj}
-		inject.CacheInto(icache, instance1)
+		Expect(inject.CacheInto(icache, instance1)).To(BeTrue())
 
 		instance2 = &source.Kind{Type: obj}
-		inject.CacheInto(icache, instance2)
+		Expect(inject.CacheInto(icache, instance2)).To(BeTrue())
 	})
 
 	AfterEach(func(done Done) {
@@ -131,8 +131,8 @@ var _ = Describe("Source", func() {
 				handler2 := newHandler(c2)
 
 				// Create 2 instances
-				instance1.Start(handler1, q)
-				instance2.Start(handler2, q)
+				Expect(instance1.Start(handler1, q)).To(Succeed())
+				Expect(instance2.Start(handler2, q)).To(Succeed())
 
 				By("Creating a Deployment and expecting the CreateEvent.")
 				created, err = client.Create(deployment)

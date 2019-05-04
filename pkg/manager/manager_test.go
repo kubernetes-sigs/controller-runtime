@@ -205,18 +205,18 @@ var _ = Describe("manger.Manager", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				c1 := make(chan struct{})
-				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer close(c1)
 					defer GinkgoRecover()
 					return nil
-				}))
+				}))).To(Succeed())
 
 				c2 := make(chan struct{})
-				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer close(c2)
 					defer GinkgoRecover()
 					return nil
-				}))
+				}))).To(Succeed())
 
 				go func() {
 					defer GinkgoRecover()
@@ -255,25 +255,25 @@ var _ = Describe("manger.Manager", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				c1 := make(chan struct{})
-				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer GinkgoRecover()
 					defer close(c1)
 					return nil
-				}))
+				}))).To(Succeed())
 
 				c2 := make(chan struct{})
-				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer GinkgoRecover()
 					defer close(c2)
 					return fmt.Errorf("expected error")
-				}))
+				}))).To(Succeed())
 
 				c3 := make(chan struct{})
-				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer GinkgoRecover()
 					defer close(c3)
 					return nil
-				}))
+				}))).To(Succeed())
 
 				go func() {
 					defer GinkgoRecover()
@@ -436,11 +436,11 @@ var _ = Describe("manger.Manager", func() {
 
 				// Add one component before starting
 				c1 := make(chan struct{})
-				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer close(c1)
 					defer GinkgoRecover()
 					return nil
-				}))
+				}))).To(Succeed())
 
 				go func() {
 					defer GinkgoRecover()
@@ -452,11 +452,11 @@ var _ = Describe("manger.Manager", func() {
 
 				// Add another component after starting
 				c2 := make(chan struct{})
-				m.Add(RunnableFunc(func(s <-chan struct{}) error {
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer close(c2)
 					defer GinkgoRecover()
 					return nil
-				}))
+				}))).To(Succeed())
 				<-c1
 				<-c2
 
@@ -478,11 +478,11 @@ var _ = Describe("manger.Manager", func() {
 			Eventually(func() bool { return mgr.started }).Should(BeTrue())
 
 			c1 := make(chan struct{})
-			m.Add(RunnableFunc(func(s <-chan struct{}) error {
+			Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 				defer close(c1)
 				defer GinkgoRecover()
 				return nil
-			}))
+			}))).To(Succeed())
 			<-c1
 
 			close(done)

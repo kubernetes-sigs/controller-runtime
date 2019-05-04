@@ -68,9 +68,9 @@ function is_installed {
 
 function fetch_go_tools {
   header_text "Checking for gometalinter.v2"
-  if ! is_installed gometalinter.v2; then
-    header_text "Installing gometalinter.v2"
-    go get -u gopkg.in/alecthomas/gometalinter.v2 && gometalinter.v2 --install
+  if ! is_installed golangci-lint; then
+    header_text "Installing golangci-lint"
+    GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.15.0
   fi
 
   header_text "Checking for dep"

@@ -271,7 +271,7 @@ var _ = Describe("application", func() {
 			Expect(w.Code).To(Equal(http.StatusOK))
 			By("sanity checking the response contains reasonable field")
 			Expect(w.Body).To(ContainSubstring(`"allowed":false`))
-			Expect(w.Body).To(ContainSubstring(`"code":200`))
+			Expect(w.Body).To(ContainSubstring(`"code":403`))
 		})
 
 		It("should scaffold defaulting and validating webhooks if the type implements both Defaulter and Validator interfaces", func() {

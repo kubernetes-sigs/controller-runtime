@@ -92,14 +92,6 @@
   version = "v4.1.0"
 
 [[projects]]
-  digest = "1:2cd7915ab26ede7d95b8749e6b1f933f1c6d5398030684e6505940a10f31cfda"
-  name = "github.com/ghodss/yaml"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "0ca9ea5df5451ffdf184b4428c902747c2c11cd7"
-  version = "v1.0.0"
-
-[[projects]]
   branch = "master"
   digest = "1:99f994f4c2f71aeea1810d6061f3b52f3d2ee0084cfcb1ebbf40e00a0d0666f6"
   name = "github.com/go-logr/logr"
@@ -929,7 +921,6 @@
     "github.com/appscode/jsonpatch",
     "github.com/emicklei/go-restful",
     "github.com/evanphx/json-patch",
-    "github.com/ghodss/yaml",
     "github.com/go-logr/logr",
     "github.com/go-logr/logr/testing",
     "github.com/go-logr/zapr",
@@ -991,6 +982,7 @@
     "k8s.io/kube-openapi/pkg/common",
     "sigs.k8s.io/testing_frameworks/integration",
     "sigs.k8s.io/testing_frameworks/integration/addr",
+    "sigs.k8s.io/yaml",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

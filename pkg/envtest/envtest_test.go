@@ -76,6 +76,16 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Baz"))
 
+			crd = &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "captains.crew.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("Captain"))
+
+			crd = &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "firstmates.crew.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("FirstMate"))
+
 			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
 				{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
@@ -91,6 +101,22 @@ var _ = Describe("Test", func() {
 						Version: "v1beta1",
 						Names: v1beta1.CustomResourceDefinitionNames{
 							Plural: "foos",
+						}},
+				},
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group:   "crew.example.com",
+						Version: "v1beta1",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "captains",
+						}},
+				},
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group:   "crew.example.com",
+						Version: "v1beta1",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "firstmates",
 						}},
 				}},
 				CRDInstallOptions{maxTime: 50 * time.Millisecond, pollInterval: 15 * time.Millisecond},

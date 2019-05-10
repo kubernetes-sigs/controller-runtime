@@ -48,10 +48,6 @@ SKIP_FETCH_TOOLS=${SKIP_FETCH_TOOLS:-""}
 
 # fetch k8s API gen tools and make it available under kb_root_dir/bin.
 function fetch_kb_tools {
-  if [ -n "$SKIP_FETCH_TOOLS" ]; then
-    return 0
-  fi
-
   header_text "fetching tools"
   kb_tools_archive_name="kubebuilder-tools-$k8s_version-$goos-$goarch.tar.gz"
   kb_tools_download_url="https://storage.googleapis.com/kubebuilder-tools/$kb_tools_archive_name"
@@ -63,11 +59,34 @@ function fetch_kb_tools {
   tar -zvxf "$kb_tools_archive_path" -C "$tmp_root/"
 }
 
+function is_installed {
+  if [ command -v $1 &>/dev/null ]; then
+    return 0
+  fi
+  return 1
+}
+
+function fetch_go_tools {
+  header_text "Checking for gometalinter.v2"
+  if ! is_installed gometalinter.v2; then
+    header_text "Installing gometalinter.v2"
+    go get -u gopkg.in/alecthomas/gometalinter.v2 && gometalinter.v2 --install
+  fi
+
+  header_text "Checking for dep"
+  if ! is_installed dep; then
+    header_text "Installing dep"
+    go get -u github.com/golang/dep/cmd/dep
+  fi
+}
+
 header_text "using tools"
 
-which gometalinter.v2
-which dep
-fetch_kb_tools
+if [ -z "$SKIP_FETCH_TOOLS" ]; then
+  fetch_go_tools
+  fetch_kb_tools
+fi
+
 setup_envs
 
 ${hack_dir}/verify.sh

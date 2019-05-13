@@ -214,7 +214,7 @@ var _ = Describe("Controllerutil", func() {
 
 		It("errors when MutateFn changes objct name on creation", func() {
 			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, func() error {
-				specr()
+				Expect(specr()).To(Succeed())
 				return deploymentRenamer(deploy)()
 			})
 

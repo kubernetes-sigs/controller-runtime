@@ -51,7 +51,7 @@ var _ = Describe("Test", func() {
 	// Cleanup CRDs
 	AfterEach(func(done Done) {
 		for _, crd := range crds {
-			c.Delete(context.TODO(), crd)
+			Expect(c.Delete(context.TODO(), crd)).To(Succeed())
 		}
 		close(done)
 	})

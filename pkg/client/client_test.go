@@ -297,7 +297,7 @@ var _ = Describe("Client", func() {
 
 				By("encoding the deployment as unstructured")
 				u := &unstructured.Unstructured{}
-				scheme.Convert(dep, u, nil)
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "apps",
 					Kind:    "Deployment",
@@ -321,7 +321,7 @@ var _ = Describe("Client", func() {
 
 				By("encoding the deployment as unstructured")
 				u := &unstructured.Unstructured{}
-				scheme.Convert(node, u, nil)
+				Expect(scheme.Convert(node, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "",
 					Kind:    "Node",
@@ -336,8 +336,8 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				au := &unstructured.Unstructured{}
-				scheme.Convert(actual, au, nil)
-				scheme.Convert(node, u, nil)
+				Expect(scheme.Convert(actual, au, nil)).To(Succeed())
+				Expect(scheme.Convert(node, u, nil)).To(Succeed())
 				By("writing the result back to the go struct")
 
 				Expect(u).To(Equal(au))
@@ -361,7 +361,7 @@ var _ = Describe("Client", func() {
 
 				By("encoding the deployment as unstructured")
 				u := &unstructured.Unstructured{}
-				scheme.Convert(old, u, nil)
+				Expect(scheme.Convert(old, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "apps",
 					Kind:    "Deployment",
@@ -383,7 +383,7 @@ var _ = Describe("Client", func() {
 
 				By("creating the pod, since required field Containers is empty")
 				u := &unstructured.Unstructured{}
-				scheme.Convert(pod, u, nil)
+				Expect(scheme.Convert(pod, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "",
 					Version: "v1",
@@ -407,7 +407,7 @@ var _ = Describe("Client", func() {
 
 				By("encoding the deployment as unstructured")
 				u := &unstructured.Unstructured{}
-				scheme.Convert(dep, u, nil)
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "apps",
 					Kind:    "Deployment",
@@ -531,7 +531,7 @@ var _ = Describe("Client", func() {
 
 				By("updating the Deployment")
 				u := &unstructured.Unstructured{}
-				scheme.Convert(dep, u, nil)
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "apps",
 					Kind:    "Deployment",
@@ -560,7 +560,7 @@ var _ = Describe("Client", func() {
 
 				By("updating the object")
 				u := &unstructured.Unstructured{}
-				scheme.Convert(node, u, nil)
+				Expect(scheme.Convert(node, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "",
 					Kind:    "Node",
@@ -585,7 +585,7 @@ var _ = Describe("Client", func() {
 
 				By("updating non-existent object")
 				u := &unstructured.Unstructured{}
-				scheme.Convert(dep, u, nil)
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "apps",
 					Kind:    "Deployment",
@@ -726,7 +726,7 @@ var _ = Describe("Client", func() {
 				By("updating the status of Deployment")
 				u := &unstructured.Unstructured{}
 				dep.Status.Replicas = 1
-				scheme.Convert(dep, u, nil)
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
 				err = cl.Status().Update(context.TODO(), u)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -753,7 +753,7 @@ var _ = Describe("Client", func() {
 				var rc int32 = 1
 				dep.Status.Replicas = 1
 				dep.Spec.Replicas = &rc
-				scheme.Convert(dep, u, nil)
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
 				err = cl.Status().Update(context.TODO(), u)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -778,7 +778,7 @@ var _ = Describe("Client", func() {
 				By("updating status of the object")
 				u := &unstructured.Unstructured{}
 				node.Status.Phase = corev1.NodeRunning
-				scheme.Convert(node, u, nil)
+				Expect(scheme.Convert(node, u, nil)).To(Succeed())
 				err = cl.Status().Update(context.TODO(), u)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -798,7 +798,7 @@ var _ = Describe("Client", func() {
 
 				By("updating status of a non-existent object")
 				u := &unstructured.Unstructured{}
-				scheme.Convert(dep, u, nil)
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
 				err = cl.Status().Update(context.TODO(), u)
 				Expect(err).To(HaveOccurred())
 
@@ -912,7 +912,7 @@ var _ = Describe("Client", func() {
 				By("deleting the Deployment")
 				depName := dep.Name
 				u := &unstructured.Unstructured{}
-				scheme.Convert(dep, u, nil)
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "apps",
 					Kind:    "Deployment",
@@ -940,7 +940,7 @@ var _ = Describe("Client", func() {
 				By("deleting the Node")
 				nodeName := node.Name
 				u := &unstructured.Unstructured{}
-				scheme.Convert(node, u, nil)
+				Expect(scheme.Convert(node, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "",
 					Kind:    "Node",
@@ -963,7 +963,7 @@ var _ = Describe("Client", func() {
 
 				By("Deleting node before it is ever created")
 				u := &unstructured.Unstructured{}
-				scheme.Convert(node, u, nil)
+				Expect(scheme.Convert(node, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "",
 					Kind:    "Node",
@@ -1097,7 +1097,7 @@ var _ = Describe("Client", func() {
 				By("patching the Deployment")
 				depName := dep.Name
 				u := &unstructured.Unstructured{}
-				scheme.Convert(dep, u, nil)
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "apps",
 					Kind:    "Deployment",
@@ -1127,7 +1127,7 @@ var _ = Describe("Client", func() {
 				By("patching the Node")
 				nodeName := node.Name
 				u := &unstructured.Unstructured{}
-				scheme.Convert(node, u, nil)
+				Expect(scheme.Convert(node, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "",
 					Kind:    "Node",
@@ -1152,7 +1152,7 @@ var _ = Describe("Client", func() {
 
 				By("Patching node before it is ever created")
 				u := &unstructured.Unstructured{}
-				scheme.Convert(node, u, nil)
+				Expect(scheme.Convert(node, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "",
 					Kind:    "Node",
@@ -1177,7 +1177,7 @@ var _ = Describe("Client", func() {
 				By("patching the Deployment")
 				depName := dep.Name
 				u := &unstructured.Unstructured{}
-				scheme.Convert(dep, u, nil)
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
 				u.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "apps",
 					Kind:    "Deployment",
@@ -1294,7 +1294,7 @@ var _ = Describe("Client", func() {
 
 				By("encoding the Deployment as unstructured")
 				var u runtime.Unstructured = &unstructured.Unstructured{}
-				scheme.Convert(dep, u, nil)
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
 
 				By("fetching the created Deployment")
 				var actual unstructured.Unstructured
@@ -1321,7 +1321,7 @@ var _ = Describe("Client", func() {
 
 				By("encoding the Node as unstructured")
 				var u runtime.Unstructured = &unstructured.Unstructured{}
-				scheme.Convert(node, u, nil)
+				Expect(scheme.Convert(node, u, nil)).To(Succeed())
 
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
@@ -2166,7 +2166,7 @@ var _ = Describe("DelegatingReader", func() {
 			}
 			var actual appsv1.Deployment
 			key := client.ObjectKey{Namespace: "ns", Name: "name"}
-			dReader.Get(context.TODO(), key, &actual)
+			Expect(dReader.Get(context.TODO(), key, &actual)).To(Succeed())
 			Expect(1).To(Equal(cachedReader.Called))
 			Expect(0).To(Equal(clientReader.Called))
 		})
@@ -2179,7 +2179,7 @@ var _ = Describe("DelegatingReader", func() {
 			}
 			var actual unstructured.Unstructured
 			key := client.ObjectKey{Namespace: "ns", Name: "name"}
-			dReader.Get(context.TODO(), key, &actual)
+			Expect(dReader.Get(context.TODO(), key, &actual)).To(Succeed())
 			Expect(0).To(Equal(cachedReader.Called))
 			Expect(1).To(Equal(clientReader.Called))
 		})
@@ -2193,7 +2193,7 @@ var _ = Describe("DelegatingReader", func() {
 				ClientReader: clientReader,
 			}
 			var actual appsv1.DeploymentList
-			dReader.List(context.Background(), &actual)
+			Expect(dReader.List(context.Background(), &actual)).To(Succeed())
 			Expect(1).To(Equal(cachedReader.Called))
 			Expect(0).To(Equal(clientReader.Called))
 
@@ -2207,7 +2207,7 @@ var _ = Describe("DelegatingReader", func() {
 			}
 
 			var actual unstructured.UnstructuredList
-			dReader.List(context.Background(), &actual)
+			Expect(dReader.List(context.Background(), &actual)).To(Succeed())
 			Expect(0).To(Equal(cachedReader.Called))
 			Expect(1).To(Equal(clientReader.Called))
 

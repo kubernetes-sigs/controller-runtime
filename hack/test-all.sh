@@ -22,16 +22,16 @@ setup_envs
 
 header_text "running go test"
 
-go test ./... -parallel 4
+go test ${MOD_OPT} ./... -parallel 4
 
 header_text "running coverage"
 
 # Verify no coverage regressions have been introduced.  Remove the exception list from here
 # once the coverage has been brought back up
-if [[ ! $(go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements" | grep "controller-runtime/pkg " | grep -v "controller-runtime/pkg \|controller-runtime/pkg/recorder \|pkg/cache\|pkg/client \|pkg/event \|pkg/client/config \|pkg/controller/controllertest \|pkg/reconcile/reconciletest \|pkg/test ") ]]; then
+if [[ ! $(go test ${MOD_OPT} ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements" | grep "controller-runtime/pkg " | grep -v "controller-runtime/pkg \|controller-runtime/pkg/recorder \|pkg/cache\|pkg/client \|pkg/event \|pkg/client/config \|pkg/controller/controllertest \|pkg/reconcile/reconciletest \|pkg/test ") ]]; then
 echo "ok"
 else
-go test ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements" | grep "controller-runtime/pkg " | grep -v "controller-runtime/pkg \|controller-runtime/pkg/recorder \|pkg/cache\|pkg/client \|pkg/event \|pkg/client/config \|pkg/controller/controllertest \|pkg/reconcile/reconciletest \|pkg/test "
+go test ${MOD_OPT} ./pkg/...  -coverprofile cover.out -parallel 4 | grep -v "coverage: 100.0% of statements" | grep "controller-runtime/pkg " | grep -v "controller-runtime/pkg \|controller-runtime/pkg/recorder \|pkg/cache\|pkg/client \|pkg/event \|pkg/client/config \|pkg/controller/controllertest \|pkg/reconcile/reconciletest \|pkg/test "
 echo "missing test coverage"
 exit 1
 fi

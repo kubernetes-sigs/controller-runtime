@@ -244,8 +244,8 @@ var _ = Describe("Fake client", func() {
 	Context("with given scheme", func() {
 		BeforeEach(func(done Done) {
 			scheme := runtime.NewScheme()
-			corev1.AddToScheme(scheme)
-			appsv1.AddToScheme(scheme)
+			Expect(corev1.AddToScheme(scheme)).To(Succeed())
+			Expect(appsv1.AddToScheme(scheme)).To(Succeed())
 			cl = NewFakeClientWithScheme(scheme, dep, dep2, cm)
 			close(done)
 		})

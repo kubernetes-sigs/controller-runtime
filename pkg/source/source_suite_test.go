@@ -66,7 +66,7 @@ var _ = BeforeSuite(func(done Done) {
 
 var _ = AfterSuite(func(done Done) {
 	close(stop)
-	testenv.Stop()
+	Expect(testenv.Stop()).To(Succeed())
 
 	close(done)
 }, 5)

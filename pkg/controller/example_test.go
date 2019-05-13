@@ -77,7 +77,10 @@ func ExampleController() {
 	}
 
 	// Start the Controller through the manager.
-	mgr.Start(signals.SetupSignalHandler())
+	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+		log.Error(err, "unable to continue running manager")
+		os.Exit(1)
+	}
 }
 
 // This example starts a new Controller named "pod-controller" to Watch Pods with the unstructured object and call a no-op Reconciler.
@@ -111,5 +114,8 @@ func ExampleController_unstructured() {
 	}
 
 	// Start the Controller through the manager.
-	mgr.Start(signals.SetupSignalHandler())
+	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+		log.Error(err, "unable to continue running manager")
+		os.Exit(1)
+	}
 }

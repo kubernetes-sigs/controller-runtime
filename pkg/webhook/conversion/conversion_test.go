@@ -50,9 +50,8 @@ var _ = Describe("Conversion Webhook", func() {
 		}
 
 		scheme = kscheme.Scheme
-		Expect(jobsapis.AddToScheme(scheme)).Should(Succeed())
-
-		Expect(webhook.InjectScheme(scheme)).Should(Succeed())
+		Expect(jobsapis.AddToScheme(scheme)).To(Succeed())
+		Expect(webhook.InjectScheme(scheme)).To(Succeed())
 
 		var err error
 		decoder, err = NewDecoder(scheme)
@@ -70,7 +69,7 @@ var _ = Describe("Conversion Webhook", func() {
 			Body: ioutil.NopCloser(bytes.NewReader(payload.Bytes())),
 		}
 		webhook.ServeHTTP(respRecorder, req)
-		Expect(json.NewDecoder(respRecorder.Result().Body).Decode(convReview)).Should(Succeed())
+		Expect(json.NewDecoder(respRecorder.Result().Body).Decode(convReview)).To(Succeed())
 		return convReview
 	}
 
@@ -146,7 +145,7 @@ var _ = Describe("Conversion Webhook", func() {
 
 		convReview := doRequest(convReq)
 		Expect(convReview.Response.Result.Status).To(Equal("Failure"))
-		Expect(convReview.Response.ConvertedObjects).Should(BeEmpty())
+		Expect(convReview.Response.ConvertedObjects).To(BeEmpty())
 	})
 
 	It("should return error when dest/src objects are of same type", func() {
@@ -167,7 +166,7 @@ var _ = Describe("Conversion Webhook", func() {
 
 		convReview := doRequest(convReq)
 		Expect(convReview.Response.Result.Status).To(Equal("Failure"))
-		Expect(convReview.Response.ConvertedObjects).Should(BeEmpty())
+		Expect(convReview.Response.ConvertedObjects).To(BeEmpty())
 	})
 
 	It("should return error when the API group does not have a hub defined", func() {
@@ -197,7 +196,7 @@ var _ = Describe("Conversion Webhook", func() {
 
 		convReview := doRequest(convReq)
 		Expect(convReview.Response.Result.Status).To(Equal("Failure"))
-		Expect(convReview.Response.ConvertedObjects).Should(BeEmpty())
+		Expect(convReview.Response.ConvertedObjects).To(BeEmpty())
 	})
 
 })

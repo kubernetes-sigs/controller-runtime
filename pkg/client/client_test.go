@@ -28,7 +28,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -232,7 +232,7 @@ var _ = Describe("Client", func() {
 				By("creating the object a second time")
 				err = cl.Create(context.TODO(), old)
 				Expect(err).To(HaveOccurred())
-				Expect(errors.IsAlreadyExists(err)).To(BeTrue())
+				Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
 
 				close(done)
 			})
@@ -281,7 +281,7 @@ var _ = Describe("Client", func() {
 
 					actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
 					Expect(err).To(HaveOccurred())
-					Expect(errors.IsNotFound(err)).To(BeTrue())
+					Expect(apierrors.IsNotFound(err)).To(BeTrue())
 					Expect(actual).To(Equal(&appsv1.Deployment{}))
 
 					close(done)
@@ -371,7 +371,7 @@ var _ = Describe("Client", func() {
 				By("creating the object a second time")
 				err = cl.Create(context.TODO(), u)
 				Expect(err).To(HaveOccurred())
-				Expect(errors.IsAlreadyExists(err)).To(BeTrue())
+				Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
 
 				close(done)
 			})
@@ -420,7 +420,7 @@ var _ = Describe("Client", func() {
 
 				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
-				Expect(errors.IsNotFound(err)).To(BeTrue())
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
 				Expect(actual).To(Equal(&appsv1.Deployment{}))
 
 				close(done)
@@ -2276,6 +2276,32 @@ var _ = Describe("Patch", func() {
 			By("returning a patch with data only containing the annotation change")
 			Expect(data).To(Equal([]byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`, annotationKey, annotationValue))))
 		})
+	})
+})
+
+var _ = Describe("IgnoreNotFound", func() {
+	It("should return nil on a 'NotFound' error", func() {
+		By("creating a NotFound error")
+		err := apierrors.NewNotFound(schema.GroupResource{}, "")
+
+		By("returning no error")
+		Expect(client.IgnoreNotFound(err)).To(Succeed())
+	})
+
+	It("should return the error on a status other than not found", func() {
+		By("creating a BadRequest error")
+		err := apierrors.NewBadRequest("")
+
+		By("returning an error")
+		Expect(client.IgnoreNotFound(err)).To(HaveOccurred())
+	})
+
+	It("should return the error on a non-status error", func() {
+		By("creating an fmt error")
+		err := fmt.Errorf("arbitrary error")
+
+		By("returning an error")
+		Expect(client.IgnoreNotFound(err)).To(HaveOccurred())
 	})
 })
 

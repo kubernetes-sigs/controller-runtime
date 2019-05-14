@@ -212,6 +212,87 @@ func (wh *Webhook) allocateDstObject(apiVersion, kind string) (runtime.Object, e
 	return obj, nil
 }
 
+// CheckConvertibility determines if given type is convertible or not. For a type
+// to be convertible, the group-kind needs to have a Hub type defined and all
+// non-hub types must be able to convert to/from Hub.
+func CheckConvertibility(scheme *runtime.Scheme, obj runtime.Object) error {
+	var hubs, spokes, nonSpokes []runtime.Object
+
+	gvks, _, err := scheme.ObjectKinds(obj)
+	if err != nil {
+		return fmt.Errorf("error retriving object kinds for given object : %v", err)
+	}
+
+	for _, gvk := range gvks {
+		instance, err := scheme.New(gvk)
+		if err != nil {
+			return fmt.Errorf("failed to allocate an instance for gvk %v %v", gvk, err)
+		}
+
+		if isHub(instance) {
+			hubs = append(hubs, instance)
+			continue
+		}
+
+		if !isConvertible(instance) {
+			nonSpokes = append(nonSpokes, instance)
+			continue
+		}
+
+		spokes = append(spokes, instance)
+	}
+
+	if len(gvks) == 1 {
+		return nil // single version
+	}
+
+	if len(hubs) == 0 && len(spokes) == 0 {
+		// multiple version detected with no conversion implementation. This is
+		// true for multi-version built-in types.
+		return nil
+	}
+
+	if len(hubs) == 1 && len(nonSpokes) == 0 { // convertible
+		spokeVersions := []string{}
+		for _, sp := range spokes {
+			spokeVersions = append(spokeVersions, sp.GetObjectKind().GroupVersionKind().String())
+		}
+		log.V(1).Info("conversion enabled for kind", "kind",
+			gvks[0].GroupKind(), "hub", hubs[0], "spokes", spokeVersions)
+		return nil
+	}
+
+	return PartialImplementationError{
+		hubs:      hubs,
+		nonSpokes: nonSpokes,
+		spokes:    spokes,
+	}
+}
+
+// PartialImplementationError represents an error due to partial conversion
+// implementation such as hub without spokes, multiple hubs or spokes without hub.
+type PartialImplementationError struct {
+	gvk       schema.GroupVersionKind
+	hubs      []runtime.Object
+	nonSpokes []runtime.Object
+	spokes    []runtime.Object
+}
+
+func (e PartialImplementationError) Error() string {
+	if len(e.hubs) == 0 {
+		return fmt.Sprintf("no hub defined for gvk %s", e.gvk)
+	}
+	if len(e.hubs) > 1 {
+		return fmt.Sprintf("multiple(%d) hubs defined for group-kind '%s' ",
+			len(e.hubs), e.gvk.GroupKind())
+	}
+	if len(e.nonSpokes) > 0 {
+		return fmt.Sprintf("%d inconvertible types detected for group-kind '%s'",
+			len(e.nonSpokes), e.gvk.GroupKind())
+	}
+	return ""
+}
+
 // isHub determines if passed-in object is a Hub or not.
 func isHub(obj runtime.Object) bool {
 	_, yes := obj.(conversion.Hub)

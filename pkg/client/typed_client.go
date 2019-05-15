@@ -103,7 +103,7 @@ func (c *typedClient) Patch(ctx context.Context, obj runtime.Object, patch Patch
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		VersionedParams(patchOpts.ApplyOptions(opts).AsUpdateOptions(), c.paramCodec).
+		VersionedParams(patchOpts.ApplyOptions(opts).AsPatchOptions(), c.paramCodec).
 		Body(data).
 		Context(ctx).
 		Do().

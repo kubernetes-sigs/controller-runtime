@@ -443,7 +443,20 @@ func UpdateDryRunAll() UpdateOptionFunc {
 
 // PatchOptions contains options for patch requests.
 type PatchOptions struct {
-	UpdateOptions
+	// When present, indicates that modifications should not be
+	// persisted. An invalid or unrecognized dryRun directive will
+	// result in an error response and no further processing of the
+	// request. Valid values are:
+	// - All: all dry run stages will be processed
+	DryRun []string
+	// Force is going to "force" Apply requests. It means user will
+	// re-acquire conflicting fields owned by other people. Force
+	// flag must be unset for non-apply patch requests.
+	// +optional
+	Force *bool
+
+	// Raw represents raw PatchOptions, as passed to the API server.
+	Raw *metav1.PatchOptions
 }
 
 // ApplyOptions executes the given PatchOptionFuncs, mutating these PatchOptions.
@@ -455,19 +468,39 @@ func (o *PatchOptions) ApplyOptions(optFuncs []PatchOptionFunc) *PatchOptions {
 	return o
 }
 
+// AsPatchOptions returns these options as a metav1.PatchOptions.
+// This may mutate the Raw field.
+func (o *PatchOptions) AsPatchOptions() *metav1.PatchOptions {
+	if o == nil {
+		return &metav1.PatchOptions{}
+	}
+	if o.Raw == nil {
+		o.Raw = &metav1.PatchOptions{}
+	}
+
+	o.Raw.DryRun = o.DryRun
+	o.Raw.Force = o.Force
+	return o.Raw
+}
+
 // PatchOptionFunc is a function that mutates a PatchOptions struct. It implements
 // the functional options pattern. See
 // https://github.com/tmrts/go-patterns/blob/master/idiom/functional-options.md.
 type PatchOptionFunc func(*PatchOptions)
 
-// Sadly, we need a separate function to "adapt" PatchOptions to the constituent
-// update options, since there's no way to write a function that works for both.
-
-// UpdatePatchWith adapts the given UpdateOptionFuncs to be a PatchOptionFunc.
-func UpdatePatchWith(optFuncs ...UpdateOptionFunc) PatchOptionFunc {
+// PatchDryRunAll is a functional option that sets the DryRun
+// field of a PatchOptions struct to metav1.DryRunAll.
+func PatchDryRunAll() PatchOptionFunc {
 	return func(opts *PatchOptions) {
-		for _, optFunc := range optFuncs {
-			optFunc(&opts.UpdateOptions)
-		}
+		opts.DryRun = []string{metav1.DryRunAll}
+	}
+}
+
+// PatchWithForce is a functional option that sets the Force
+// field of a PatchOptions struct to true.
+func PatchWithForce() PatchOptionFunc {
+	force := true
+	return func(opts *PatchOptions) {
+		opts.Force = &force
 	}
 }

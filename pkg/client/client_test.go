@@ -1074,7 +1074,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("patching the Deployment with dry-run")
-				err = cl.Patch(context.TODO(), dep, client.ConstantPatch(types.MergePatchType, mergePatch), client.UpdatePatchWith(client.UpdateDryRunAll()))
+				err = cl.Patch(context.TODO(), dep, client.ConstantPatch(types.MergePatchType, mergePatch), client.PatchDryRunAll())
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating patched Deployment doesn't have the new annotation")
@@ -1183,7 +1183,7 @@ var _ = Describe("Client", func() {
 					Kind:    "Deployment",
 					Version: "v1",
 				})
-				err = cl.Patch(context.TODO(), u, client.ConstantPatch(types.MergePatchType, mergePatch), client.UpdatePatchWith(client.UpdateDryRunAll()))
+				err = cl.Patch(context.TODO(), u, client.ConstantPatch(types.MergePatchType, mergePatch), client.PatchDryRunAll())
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating patched Deployment does not have the new annotation")
@@ -2151,6 +2151,30 @@ var _ = Describe("Client", func() {
 			Expect(co.AsUpdateOptions()).To(Equal(&metav1.UpdateOptions{}))
 			co = &client.UpdateOptions{}
 			Expect(co.AsUpdateOptions()).To(Equal(&metav1.UpdateOptions{}))
+		})
+	})
+
+	Describe("PatchOptions", func() {
+		It("should allow setting DryRun to 'all'", func() {
+			po := &client.PatchOptions{}
+			client.PatchDryRunAll()(po)
+			all := []string{metav1.DryRunAll}
+			Expect(po.AsPatchOptions().DryRun).To(Equal(all))
+		})
+
+		It("should allow setting Force to 'true'", func() {
+			po := &client.PatchOptions{}
+			client.PatchWithForce()(po)
+			mpo := po.AsPatchOptions()
+			Expect(mpo.Force).NotTo(BeNil())
+			Expect(*mpo.Force).To(BeTrue())
+		})
+
+		It("should produce empty metav1.PatchOptions if nil", func() {
+			var po *client.PatchOptions
+			Expect(po.AsPatchOptions()).To(Equal(&metav1.PatchOptions{}))
+			po = &client.PatchOptions{}
+			Expect(po.AsPatchOptions()).To(Equal(&metav1.PatchOptions{}))
 		})
 	})
 })

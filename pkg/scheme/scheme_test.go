@@ -37,11 +37,13 @@ var _ = Describe("Scheme", func() {
 				Build()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(s.AllKnownTypes()).To(HaveLen(15))
+			Expect(s.AllKnownTypes()).To(HaveLen(16))
 			Expect(s.AllKnownTypes()[gv.WithKind("Pod")]).To(Equal(reflect.TypeOf(corev1.Pod{})))
 			Expect(s.AllKnownTypes()[gv.WithKind("PodList")]).To(Equal(reflect.TypeOf(corev1.PodList{})))
 
 			// Base types
+			Expect(s.AllKnownTypes()).To(HaveKey(gv.WithKind("UpdateOptions")))
+			Expect(s.AllKnownTypes()).To(HaveKey(gv.WithKind("PatchOptions")))
 			Expect(s.AllKnownTypes()).To(HaveKey(gv.WithKind("DeleteOptions")))
 			Expect(s.AllKnownTypes()).To(HaveKey(gv.WithKind("ExportOptions")))
 			Expect(s.AllKnownTypes()).To(HaveKey(gv.WithKind("GetOptions")))
@@ -71,7 +73,7 @@ var _ = Describe("Scheme", func() {
 				Build()
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(s.AllKnownTypes()).To(HaveLen(25))
+			Expect(s.AllKnownTypes()).To(HaveLen(27))
 
 			// Types from b1
 			Expect(s.AllKnownTypes()[gv1.WithKind("Pod")]).To(Equal(reflect.TypeOf(corev1.Pod{})))
@@ -82,6 +84,8 @@ var _ = Describe("Scheme", func() {
 			Expect(s.AllKnownTypes()[gv2.WithKind("Deployment")]).To(Equal(reflect.TypeOf(appsv1.Deployment{})))
 
 			// Base types
+			Expect(s.AllKnownTypes()).To(HaveKey(gv1.WithKind("UpdateOptions")))
+			Expect(s.AllKnownTypes()).To(HaveKey(gv1.WithKind("PatchOptions")))
 			Expect(s.AllKnownTypes()).To(HaveKey(gv1.WithKind("DeleteOptions")))
 			Expect(s.AllKnownTypes()).To(HaveKey(gv1.WithKind("ExportOptions")))
 			Expect(s.AllKnownTypes()).To(HaveKey(gv1.WithKind("GetOptions")))
@@ -91,6 +95,8 @@ var _ = Describe("Scheme", func() {
 			internalGv1 := schema.GroupVersion{Group: "core", Version: "__internal"}
 			Expect(s.AllKnownTypes()).To(HaveKey(internalGv1.WithKind("WatchEvent")))
 
+			Expect(s.AllKnownTypes()).To(HaveKey(gv2.WithKind("UpdateOptions")))
+			Expect(s.AllKnownTypes()).To(HaveKey(gv2.WithKind("PatchOptions")))
 			Expect(s.AllKnownTypes()).To(HaveKey(gv2.WithKind("DeleteOptions")))
 			Expect(s.AllKnownTypes()).To(HaveKey(gv2.WithKind("ExportOptions")))
 			Expect(s.AllKnownTypes()).To(HaveKey(gv2.WithKind("GetOptions")))

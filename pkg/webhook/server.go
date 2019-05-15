@@ -78,7 +78,7 @@ func (s *Server) setDefaults() {
 		s.WebhookMux = http.NewServeMux()
 	}
 
-	if s.Port < 0 {
+	if s.Port <= 0 {
 		s.Port = DefaultPort
 	}
 

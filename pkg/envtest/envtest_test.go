@@ -18,6 +18,7 @@ package envtest
 
 import (
 	"context"
+	"path/filepath"
 
 	"time"
 
@@ -60,7 +61,7 @@ var _ = Describe("Test", func() {
 		It("should install the CRDs into the cluster", func(done Done) {
 
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
-				Paths: []string{"."},
+				Paths: []string{filepath.Join(".", "testdata")},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -85,6 +86,11 @@ var _ = Describe("Test", func() {
 			err = c.Get(context.TODO(), types.NamespacedName{Name: "firstmates.crew.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("FirstMate"))
+
+			crd = &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
 			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
 				{
@@ -118,7 +124,27 @@ var _ = Describe("Test", func() {
 						Names: v1beta1.CustomResourceDefinitionNames{
 							Plural: "firstmates",
 						}},
-				}},
+				},
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group: "crew.example.com",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "drivers",
+						},
+						Versions: []v1beta1.CustomResourceDefinitionVersion{
+							{
+								Name:    "v1",
+								Storage: true,
+								Served:  true,
+							},
+							{
+								Name:    "v2",
+								Storage: false,
+								Served:  true,
+							},
+						}},
+				},
+			},
 				CRDInstallOptions{maxTime: 50 * time.Millisecond, pollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -145,9 +171,11 @@ var _ = Describe("Test", func() {
 			err := WaitForCRDs(env.Config,
 				[]*v1beta1.CustomResourceDefinition{
 					{
-						Spec: v1beta1.CustomResourceDefinitionSpec{Names: v1beta1.CustomResourceDefinitionNames{
-							Plural: "notfound",
-						}},
+						Spec: v1beta1.CustomResourceDefinitionSpec{
+							Version: "v1",
+							Names: v1beta1.CustomResourceDefinitionNames{
+								Plural: "notfound",
+							}},
 					},
 				},
 				CRDInstallOptions{maxTime: 50 * time.Millisecond, pollInterval: 15 * time.Millisecond},

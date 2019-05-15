@@ -110,13 +110,24 @@ func WaitForCRDs(config *rest.Config, crds []*apiextensionsv1beta1.CustomResourc
 	// Add each CRD to a map of GroupVersion to Resource
 	waitingFor := map[schema.GroupVersion]*sets.String{}
 	for _, crd := range crds {
-		gv := schema.GroupVersion{Group: crd.Spec.Group, Version: crd.Spec.Version}
-		if _, found := waitingFor[gv]; !found {
-			// Initialize the set
-			waitingFor[gv] = &sets.String{}
+		gvs := []schema.GroupVersion{}
+		if crd.Spec.Version != "" {
+			gvs = append(gvs, schema.GroupVersion{Group: crd.Spec.Group, Version: crd.Spec.Version})
 		}
-		// Add the Resource
-		waitingFor[gv].Insert(crd.Spec.Names.Plural)
+		for _, ver := range crd.Spec.Versions {
+			if ver.Served {
+				gvs = append(gvs, schema.GroupVersion{Group: crd.Spec.Group, Version: ver.Name})
+			}
+		}
+		for _, gv := range gvs {
+			log.V(1).Info("adding API in waitlist", "GV", gv)
+			if _, found := waitingFor[gv]; !found {
+				// Initialize the set
+				waitingFor[gv] = &sets.String{}
+			}
+			// Add the Resource
+			waitingFor[gv].Insert(crd.Spec.Names.Plural)
+		}
 	}
 
 	// Poll until all resources are found in discovery
@@ -225,7 +236,7 @@ func readCRDs(path string) ([]*apiextensionsv1beta1.CustomResourceDefinition, er
 			crds = append(crds, crd)
 		}
 
-		log.V(1).Info("read CRDs from file", "file", file)
+		log.V(1).Info("read CRDs from file", "file", file.Name())
 	}
 	return crds, nil
 }

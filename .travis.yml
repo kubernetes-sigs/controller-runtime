@@ -4,6 +4,11 @@ os:
   - linux
   - osx
 
+cache:
+  directories:
+  - $HOME/.cache/go-build
+  - $GOPATH/pkg/mod
+
 go:
 - "1.12"
 
@@ -18,7 +23,7 @@ install:
 - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin v1.15.0
 
 script:
-- MODULES_OPT=vendor GO111MODULE=on TRACE=1 ./hack/check-everything.sh
+- GO111MODULE=on TRACE=1 ./hack/check-everything.sh
 
 
 # TBD. Suppressing for now.

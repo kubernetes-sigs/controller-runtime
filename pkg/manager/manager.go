@@ -42,9 +42,11 @@ import (
 // Manager initializes shared dependencies such as Caches and Clients, and provides them to Runnables.
 // A Manager is required to create Controllers.
 type Manager interface {
-	// Add will set reqeusted dependencies on the component, and cause the component to be
+	// Add will set requested dependencies on the component, and cause the component to be
 	// started when Start is called.  Add will inject any dependencies for which the argument
-	// implements the inject interface - e.g. inject.Client
+	// implements the inject interface - e.g. inject.Client.
+	// Depending on if a Runnable implements LeaderElectionRunnable interface, a Runnable can be run in either
+	// non-leaderelection mode (always running) or leader election mode (managed by leader election if enabled).
 	Add(Runnable) error
 
 	// SetFields will set any dependencies on an object for which the object has implemented the inject
@@ -181,6 +183,13 @@ type RunnableFunc func(<-chan struct{}) error
 // Start implements Runnable
 func (r RunnableFunc) Start(s <-chan struct{}) error {
 	return r(s)
+}
+
+// LeaderElectionRunnable knows if a Runnable needs to be run in the leader election mode.
+type LeaderElectionRunnable interface {
+	// NeedLeaderElection returns true if the Runnable needs to be run in the leader election mode.
+	// e.g. controllers need to be run in leader election mode, while webhook server doesn't.
+	NeedLeaderElection() bool
 }
 
 // New returns a new Manager for creating Controllers.

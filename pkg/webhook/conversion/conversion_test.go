@@ -200,3 +200,39 @@ var _ = Describe("Conversion Webhook", func() {
 	})
 
 })
+
+var _ = Describe("Convertibility Check", func() {
+
+	var scheme *runtime.Scheme
+
+	BeforeEach(func() {
+
+		scheme = kscheme.Scheme
+		Expect(jobsapis.AddToScheme(scheme)).To(Succeed())
+
+	})
+
+	It("should not return error for convertible types", func() {
+		obj := &jobsv2.ExternalJob{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ExternalJob",
+				APIVersion: "jobs.example.org/v2",
+			},
+		}
+
+		err := CheckConvertibility(scheme, obj)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should not return error for a built-in multi-version type", func() {
+		obj := &appsv1beta1.Deployment{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Deployment",
+				APIVersion: "apps/v1beta1",
+			},
+		}
+
+		err := CheckConvertibility(scheme, obj)
+		Expect(err).NotTo(HaveOccurred())
+	})
+})

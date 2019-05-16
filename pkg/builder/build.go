@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 )
 
 // Supporting mocking out functions for testing
@@ -285,7 +286,11 @@ func (blder *Builder) doWebhook() error {
 		}
 	}
 
-	return err
+	err = conversion.CheckConvertibility(blder.mgr.GetScheme(), blder.apiType)
+	if err != nil {
+		log.Error(err, "conversion check failed", "GVK", gvk)
+	}
+	return nil
 }
 
 func generateMutatePath(gvk schema.GroupVersionKind) string {

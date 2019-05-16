@@ -23,8 +23,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"sigs.k8s.io/controller-runtime/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -41,12 +39,11 @@ type ChaosPodStatus struct {
 	LastRun metav1.Time `json:"lastRun,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ChaosPod is the Schema for the randomjobs API
 // +kubebuilder:printcolumn:name="next stop",type="string",JSONPath=".spec.nextStop",format="date"
 // +kubebuilder:printcolumn:name="last run",type="string",JSONPath=".status.lastRun",format="date"
-// +k8s:openapi-gen=true
 type ChaosPod struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -55,7 +52,7 @@ type ChaosPod struct {
 	Status ChaosPodStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ChaosPodList contains a list of ChaosPod
 type ChaosPodList struct {
@@ -106,14 +103,3 @@ func (c *ChaosPod) Default() {
 func init() {
 	SchemeBuilder.Register(&ChaosPod{}, &ChaosPodList{})
 }
-
-var (
-	// SchemeGroupVersion is group version used to register these objects
-	SchemeGroupVersion = schema.GroupVersion{Group: "chaosapps.metamagical.io", Version: "v1"}
-
-	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
-	SchemeBuilder = &scheme.Builder{GroupVersion: SchemeGroupVersion}
-
-	// AddToScheme is required by pkg/client/...
-	AddToScheme = SchemeBuilder.AddToScheme
-)

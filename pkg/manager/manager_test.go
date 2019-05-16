@@ -284,6 +284,10 @@ var _ = Describe("manger.Manager", func() {
 				<-c2
 				<-c3
 			})
+
+			It("should return an error if any non-leaderelection Components fail to Start", func() {
+				// TODO(mengqiy): implement this after resolving https://github.com/kubernetes-sigs/controller-runtime/issues/429
+			})
 		}
 
 		Context("with defaults", func() {

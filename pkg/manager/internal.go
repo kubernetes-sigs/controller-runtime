@@ -58,8 +58,12 @@ type controllerManager struct {
 	// to scheme.scheme.
 	scheme *runtime.Scheme
 
-	// runnables is the set of Controllers that the controllerManager injects deps into and Starts.
-	runnables []Runnable
+	// leaderElectionRunnables is the set of Controllers that the controllerManager injects deps into and Starts.
+	// These Runnables are managed by lead election.
+	leaderElectionRunnables []Runnable
+	// nonLeaderElectionRunnables is the set of webhook servers that the controllerManager injects deps into and Starts.
+	// These Runnables will not be blocked by lead election.
+	nonLeaderElectionRunnables []Runnable
 
 	cache cache.Cache
 
@@ -121,7 +125,7 @@ type controllerManager struct {
 	retryPeriod time.Duration
 }
 
-// Add sets dependencies on i, and adds it to the list of runnables to start.
+// Add sets dependencies on i, and adds it to the list of Runnables to start.
 func (cm *controllerManager) Add(r Runnable) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -131,8 +135,13 @@ func (cm *controllerManager) Add(r Runnable) error {
 		return err
 	}
 
-	// Add the runnable to the list
-	cm.runnables = append(cm.runnables, r)
+	// Add the runnable to the leader election or the non-leaderelection list
+	if leRunnable, ok := r.(LeaderElectionRunnable); ok && !leRunnable.NeedLeaderElection() {
+		cm.nonLeaderElectionRunnables = append(cm.nonLeaderElectionRunnables, r)
+	} else {
+		cm.leaderElectionRunnables = append(cm.leaderElectionRunnables, r)
+	}
+
 	if cm.started {
 		// If already started, start the controller
 		go func() {
@@ -254,13 +263,15 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 		go cm.serveMetrics(cm.internalStop)
 	}
 
+	go cm.startNonLeaderElectionRunnables()
+
 	if cm.resourceLock != nil {
 		err := cm.startLeaderElection()
 		if err != nil {
 			return err
 		}
 	} else {
-		go cm.start()
+		go cm.startLeaderElectionRunnables()
 	}
 
 	select {
@@ -273,7 +284,7 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	}
 }
 
-func (cm *controllerManager) start() {
+func (cm *controllerManager) startNonLeaderElectionRunnables() {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -291,8 +302,26 @@ func (cm *controllerManager) start() {
 	// TODO(community): Check the return value and write a test
 	cm.cache.WaitForCacheSync(cm.internalStop)
 
-	// Start the runnables after the cache has synced
-	for _, c := range cm.runnables {
+	// Start the non-leaderelection Runnables after the cache has synced
+	for _, c := range cm.nonLeaderElectionRunnables {
+		// Controllers block, but we want to return an error if any have an error starting.
+		// Write any Start errors to a channel so we can return them
+		ctrl := c
+		go func() {
+			cm.errChan <- ctrl.Start(cm.internalStop)
+		}()
+	}
+
+	cm.started = true
+}
+
+func (cm *controllerManager) startLeaderElectionRunnables() {
+	// Wait for the caches to sync.
+	// TODO(community): Check the return value and write a test
+	cm.cache.WaitForCacheSync(cm.internalStop)
+
+	// Start the leader election Runnables after the cache has synced
+	for _, c := range cm.leaderElectionRunnables {
 		// Controllers block, but we want to return an error if any have an error starting.
 		// Write any Start errors to a channel so we can return them
 		ctrl := c
@@ -312,7 +341,7 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 		RetryPeriod:   cm.retryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(_ context.Context) {
-				cm.start()
+				cm.startLeaderElectionRunnables()
 			},
 			OnStoppedLeading: func() {
 				// Most implementations of leader election log.Fatal() here.

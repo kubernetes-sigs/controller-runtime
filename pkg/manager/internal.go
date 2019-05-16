@@ -41,6 +41,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 )
 
+const (
+	// Values taken from: https://github.com/kubernetes/apiserver/blob/master/pkg/apis/config/v1alpha1/defaults.go
+	defaultLeaseDuration = 15 * time.Second
+	defaultRenewDeadline = 10 * time.Second
+	defaultRetryPeriod   = 2 * time.Second
+)
+
 var log = logf.RuntimeLog.WithName("manager")
 
 type controllerManager struct {
@@ -102,6 +109,16 @@ type controllerManager struct {
 	host string
 
 	webhookServer *webhook.Server
+
+	// leaseDuration is the duration that non-leader candidates will
+	// wait to force acquire leadership.
+	leaseDuration time.Duration
+	// renewDeadline is the duration that the acting master will retry
+	// refreshing leadership before giving up.
+	renewDeadline time.Duration
+	// retryPeriod is the duration the LeaderElector clients should wait
+	// between tries of actions.
+	retryPeriod time.Duration
 }
 
 // Add sets dependencies on i, and adds it to the list of runnables to start.
@@ -289,12 +306,10 @@ func (cm *controllerManager) start() {
 
 func (cm *controllerManager) startLeaderElection() (err error) {
 	l, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
-		Lock: cm.resourceLock,
-		// Values taken from: https://github.com/kubernetes/apiserver/blob/master/pkg/apis/config/v1alpha1/defaults.go
-		// TODO(joelspeed): These timings should be configurable
-		LeaseDuration: 15 * time.Second,
-		RenewDeadline: 10 * time.Second,
-		RetryPeriod:   2 * time.Second,
+		Lock:          cm.resourceLock,
+		LeaseDuration: cm.leaseDuration,
+		RenewDeadline: cm.renewDeadline,
+		RetryPeriod:   cm.retryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(_ context.Context) {
 				cm.start()

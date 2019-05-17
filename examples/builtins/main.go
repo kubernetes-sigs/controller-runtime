@@ -53,7 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup a new controller to Reconciler ReplicaSets
+	// Setup a new controller to reconcile ReplicaSets
 	entryLog.Info("Setting up controller")
 	c, err := controller.New("foo-controller", mgr, controller.Options{
 		Reconciler: &reconcileReplicaSet{client: mgr.GetClient(), log: log.WithName("reconciler")},

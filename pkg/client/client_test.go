@@ -2164,10 +2164,16 @@ var _ = Describe("Client", func() {
 
 		It("should allow setting Force to 'true'", func() {
 			po := &client.PatchOptions{}
-			client.PatchWithForce()(po)
+			client.ForceOwnership(po)
 			mpo := po.AsPatchOptions()
 			Expect(mpo.Force).NotTo(BeNil())
 			Expect(*mpo.Force).To(BeTrue())
+		})
+
+		It("should allow setting the field manager", func() {
+			po := &client.PatchOptions{}
+			client.FieldOwner("some-owner")(po)
+			Expect(po.AsPatchOptions().FieldManager).To(Equal("some-owner"))
 		})
 
 		It("should produce empty metav1.PatchOptions if nil", func() {

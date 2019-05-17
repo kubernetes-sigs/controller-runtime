@@ -67,10 +67,8 @@ type CreateOptionFunc func(*CreateOptions)
 
 // CreateDryRunAll is a functional option that sets the DryRun
 // field of a CreateOptions struct to metav1.DryRunAll.
-func CreateDryRunAll() CreateOptionFunc {
-	return func(opts *CreateOptions) {
-		opts.DryRun = []string{metav1.DryRunAll}
-	}
+var CreateDryRunAll CreateOptionFunc = func(opts *CreateOptions) {
+	opts.DryRun = []string{metav1.DryRunAll}
 }
 
 // DeleteOptions contains options for delete requests. It's generally a subset
@@ -339,10 +337,8 @@ type UpdateOptionFunc func(*UpdateOptions)
 
 // UpdateDryRunAll is a functional option that sets the DryRun
 // field of a UpdateOptions struct to metav1.DryRunAll.
-func UpdateDryRunAll() UpdateOptionFunc {
-	return func(opts *UpdateOptions) {
-		opts.DryRun = []string{metav1.DryRunAll}
-	}
+var UpdateDryRunAll UpdateOptionFunc = func(opts *UpdateOptions) {
+	opts.DryRun = []string{metav1.DryRunAll}
 }
 
 // PatchOptions contains options for patch requests.
@@ -398,21 +394,19 @@ func (o *PatchOptions) AsPatchOptions() *metav1.PatchOptions {
 // https://github.com/tmrts/go-patterns/blob/master/idiom/functional-options.md.
 type PatchOptionFunc func(*PatchOptions)
 
-// PatchDryRunAll is a functional option that sets the DryRun
-// field of a PatchOptions struct to metav1.DryRunAll.
-func PatchDryRunAll() PatchOptionFunc {
-	return func(opts *PatchOptions) {
-		opts.DryRun = []string{metav1.DryRunAll}
-	}
+// ForceOwnership sets the Force option, indicating that
+// in case of conflicts with server-side apply, the client should
+// acquire ownership of the conflicting field.  Most controllers
+// should use this.
+var ForceOwnership PatchOptionFunc = func(opts *PatchOptions) {
+	definitelyTrue := true
+	opts.Force = &definitelyTrue
 }
 
-// ForceOwnership is a functional option that sets the Force
-// field of a PatchOptions struct to true.
-func ForceOwnership() PatchOptionFunc {
-	force := true
-	return func(opts *PatchOptions) {
-		opts.Force = &force
-	}
+// PatchDryRunAll is a functional option that sets the DryRun
+// field of a PatchOptions struct to metav1.DryRunAll.
+var PatchDryRunAll PatchOptionFunc = func(opts *PatchOptions) {
+	opts.DryRun = []string{metav1.DryRunAll}
 }
 
 // FieldOwner set the field manager name for the given server-side apply patch.

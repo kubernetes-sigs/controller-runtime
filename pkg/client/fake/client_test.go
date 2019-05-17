@@ -167,7 +167,7 @@ var _ = Describe("Fake client", func() {
 						Namespace: "ns2",
 					},
 				}
-				err := cl.Create(nil, newcm, client.CreateDryRunAll())
+				err := cl.Create(nil, newcm, client.CreateDryRunAll)
 				Expect(err).To(BeNil())
 
 				By("Getting the new configmap")
@@ -193,7 +193,7 @@ var _ = Describe("Fake client", func() {
 						"test-key": "new-value",
 					},
 				}
-				err := cl.Update(nil, newcm, client.UpdateDryRunAll())
+				err := cl.Update(nil, newcm, client.UpdateDryRunAll)
 				Expect(err).To(BeNil())
 
 				By("Getting the new configmap")

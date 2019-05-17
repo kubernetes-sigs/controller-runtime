@@ -89,7 +89,7 @@ type StatusWriter interface {
 	// Update updates the fields corresponding to the status subresource for the
 	// given obj. obj must be a struct pointer so that obj can be updated
 	// with the content returned by the Server.
-	Update(ctx context.Context, obj runtime.Object) error
+	Update(ctx context.Context, obj runtime.Object, opts ...UpdateOptionFunc) error
 
 	// Patch patches the given object's subresource. obj must be a struct
 	// pointer so that obj can be updated with the content returned by the

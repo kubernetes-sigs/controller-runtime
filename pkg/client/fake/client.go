@@ -244,8 +244,14 @@ type fakeStatusWriter struct {
 	client *fakeClient
 }
 
-func (sw *fakeStatusWriter) Update(ctx context.Context, obj runtime.Object) error {
+func (sw *fakeStatusWriter) Update(ctx context.Context, obj runtime.Object, opts ...client.UpdateOptionFunc) error {
 	// TODO(droot): This results in full update of the obj (spec + status). Need
 	// a way to update status field only.
-	return sw.client.Update(ctx, obj)
+	return sw.client.Update(ctx, obj, opts...)
+}
+
+func (sw *fakeStatusWriter) Patch(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOptionFunc) error {
+	// TODO(droot): This results in full update of the obj (spec + status). Need
+	// a way to update status field only.
+	return sw.client.Patch(ctx, obj, patch, opts...)
 }

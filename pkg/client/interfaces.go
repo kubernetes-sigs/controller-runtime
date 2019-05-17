@@ -19,6 +19,8 @@ package client
 import (
 	"context"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -503,4 +505,13 @@ func PatchWithForce() PatchOptionFunc {
 	return func(opts *PatchOptions) {
 		opts.Force = &force
 	}
+}
+
+// IgnoreNotFound returns nil on NotFound errors.
+// All other values that are not NotFound errors or nil are returned unmodified.
+func IgnoreNotFound(err error) error {
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	return err
 }

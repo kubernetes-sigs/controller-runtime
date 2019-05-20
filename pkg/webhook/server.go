@@ -23,11 +23,13 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
@@ -132,15 +134,23 @@ func (s *Server) Start(stop <-chan struct{}) error {
 		}
 	}
 
-	// TODO: watch the cert dir. Reload the cert if it changes
-	cert, err := tls.LoadX509KeyPair(path.Join(s.CertDir, certName), path.Join(s.CertDir, keyName))
+	certPath := filepath.Join(s.CertDir, certName)
+	keyPath := filepath.Join(s.CertDir, keyName)
+
+	certWatcher, err := certwatcher.New(certPath, keyPath)
 	if err != nil {
 		return err
 	}
 
+	go func() {
+		if err := certWatcher.Start(stop); err != nil {
+			log.Error(err, "certificate watcher error")
+		}
+	}()
+
 	cfg := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		NextProtos:   []string{"h2"},
+		NextProtos:     []string{"h2"},
+		GetCertificate: certWatcher.GetCertificate,
 	}
 
 	listener, err := tls.Listen("tcp", net.JoinHostPort(s.Host, strconv.Itoa(int(s.Port))), cfg)

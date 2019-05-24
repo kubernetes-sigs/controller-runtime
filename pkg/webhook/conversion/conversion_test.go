@@ -122,6 +122,7 @@ var _ = Describe("Conversion Webhook", func() {
 		convReview := doRequest(convReq)
 
 		Expect(convReview.Response.ConvertedObjects).To(HaveLen(1))
+		Expect(convReview.Response.Result.Status).To(Equal(metav1.StatusSuccess))
 		got, _, err := decoder.Decode(convReview.Response.ConvertedObjects[0].Raw)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(got).To(Equal(expected))

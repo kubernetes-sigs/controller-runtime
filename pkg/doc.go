@@ -35,15 +35,15 @@ clients, caches, schemes, etc.  Controllers should be Started through the Manage
 Controller
 
 Controller implements a Kubernetes API by responding to events (object Create, Update, Delete) and ensuring that
-the state specified in the Spec of the object matches the state of the system.  This is called a Reconciler.
+the state specified in the Spec of the object matches the state of the system.  This is called a reconcile.
 If they do not match, the Controller will create / update / delete objects as needed to make them match.
 
-Controllers are implemented as worker queues that process reconcile.Requests (requests to Reconciler the
+Controllers are implemented as worker queues that process reconcile.Requests (requests to reconcile the
 state for a specific object).
 
-Unlike http handlers, Controllers DO NOT handle events directly, but enqueue Requests to eventually Reconciler
+Unlike http handlers, Controllers DO NOT handle events directly, but enqueue Requests to eventually reconcile
 the object.  This means the handling of multiple events may be batched together and the full state of the
-system must be read for each Reconciler.
+system must be read for each reconcile.
 
 * Controllers require a Reconciler to be provided to perform the work pulled from the work queue.
 
@@ -65,11 +65,11 @@ Validating webhook is used to validate if an object meets certain requirements.
 Reconciler
 
 Reconciler is a function provided to a Controller that may be called at anytime with the Name and Namespace of an object.
-When called, Reconciler will ensure that the state of the system matches what is specified in the object at the
-time Reconciler is called.
+When called, the Reconciler will ensure that the state of the system matches what is specified in the object at the
+time the Reconciler is called.
 
 Example: Reconciler invoked for a ReplicaSet object.  The ReplicaSet specifies 5 replicas but only
-3 Pods exist in the system.  Reconciler creates 2 more Pods and sets their OwnerReference to point at the
+3 Pods exist in the system.  The Reconciler creates 2 more Pods and sets their OwnerReference to point at the
 ReplicaSet with controller=true.
 
 * Reconciler contains all of the business logic of a Controller.
@@ -80,7 +80,7 @@ a mapping (e.g. owner references) that maps the object that triggers the reconci
 
 * Reconciler is provided the Name / Namespace of the object to reconcile.
 
-* Reconciler does not care about the event contents or event type responsible for triggering the Reconciler.
+* Reconciler does not care about the event contents or event type responsible for triggering the reconcile.
 - e.g. it doesn't matter whether a ReplicaSet was created or updated, Reconciler will always compare the number of
 Pods in the system against what is specified in the object at the time it is called.
 
@@ -159,7 +159,7 @@ Controller Example
 1.2 Pod (created by ReplicaSet) -> handler.EnqueueRequestForOwnerHandler - enqueue a Request with the
 Owning ReplicaSet Namespace and Name.
 
-2. Reconciler ReplicaSet in response to an event
+2. reconcile ReplicaSet in response to an event
 
 2.1 ReplicaSet object created -> Read ReplicaSet, try to read Pods -> if is missing create Pods.
 
@@ -169,7 +169,7 @@ Owning ReplicaSet Namespace and Name.
 
 Watching and EventHandling
 
-Controllers may Watch multiple Kinds of objects (e.g. Pods, ReplicaSets and Deployments), but they Reconciler
+Controllers may Watch multiple Kinds of objects (e.g. Pods, ReplicaSets and Deployments), but they reconcile
 only a single Type.  When one Type of object must be updated in response to changes in another Type of object,
 an EnqueueRequestFromMapFunc may be used to map events from one type to another.  e.g. Respond to a cluster resize
 event (add / delete Node) by re-reconciling all instances of some API.
@@ -189,10 +189,10 @@ Controller Writing Tips
 
 Reconciler Runtime Complexity:
 
-* It is better to write Controllers to perform an O(1) Reconciler N times (e.g. on N different objects) instead of
-performing an O(N) Reconciler 1 time (e.g. on a single object which manages N other objects).
+* It is better to write Controllers to perform an O(1) reconcile N times (e.g. on N different objects) instead of
+performing an O(N) reconcile 1 time (e.g. on a single object which manages N other objects).
 
-* Example: If you need to update all Services in response to a Node being added - Reconciler Services but Watch
+* Example: If you need to update all Services in response to a Node being added - reconcile Services but Watch
 Nodes (transformed to Service object name / Namespaces) instead of Reconciling Nodes and updating Services
 
 Event Multiplexing:

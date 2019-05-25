@@ -17,6 +17,7 @@ limitations under the License.
 package leaderelection
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -52,9 +53,9 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 		return nil, nil
 	}
 
-	// Default the LeaderElectionID
+	// LeaderElectionID must be provided to prevent clashes
 	if options.LeaderElectionID == "" {
-		options.LeaderElectionID = "controller-leader-election-helper"
+		return nil, errors.New("LeaderElectionID must be configured")
 	}
 
 	// Default the namespace (if running in cluster)

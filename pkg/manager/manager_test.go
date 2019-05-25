@@ -143,15 +143,16 @@ var _ = Describe("manger.Manager", func() {
 				m, err := New(cfg, Options{
 					LeaderElection:          true,
 					LeaderElectionNamespace: "default",
+					LeaderElectionID:        "test-leader-election-id",
 					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
 						var err error
 						rl, err = leaderelection.NewResourceLock(config, recorderProvider, options)
 						return rl, err
 					},
 				})
-				Expect(m).ToNot(BeNil())
 				Expect(err).ToNot(HaveOccurred())
-				Expect(rl.Describe()).To(Equal("default/controller-leader-election-helper"))
+				Expect(m).ToNot(BeNil())
+				Expect(rl.Describe()).To(Equal("default/test-leader-election-id"))
 			})
 
 			It("should return an error if namespace not set and not running in cluster", func() {

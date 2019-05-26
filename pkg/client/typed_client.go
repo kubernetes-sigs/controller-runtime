@@ -76,11 +76,33 @@ func (c *typedClient) Delete(ctx context.Context, obj runtime.Object, opts ...De
 	}
 
 	deleteOpts := DeleteOptions{}
+	deleteOpts.ApplyOptions(opts)
+
 	return o.Delete().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		Body(deleteOpts.ApplyOptions(opts).AsDeleteOptions()).
+		Body(deleteOpts.AsDeleteOptions()).
+		Context(ctx).
+		Do().
+		Error()
+}
+
+// DeleteAllOf implements client.Client
+func (c *typedClient) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...DeleteAllOfOption) error {
+	o, err := c.cache.getObjMeta(obj)
+	if err != nil {
+		return err
+	}
+
+	deleteAllOfOpts := DeleteAllOfOptions{}
+	deleteAllOfOpts.ApplyOptions(opts)
+
+	return o.Delete().
+		NamespaceIfScoped(deleteAllOfOpts.ListOptions.Namespace, o.isNamespaced()).
+		Resource(o.resource()).
+		VersionedParams(deleteAllOfOpts.AsListOptions(), c.paramCodec).
+		Body(deleteAllOfOpts.AsDeleteOptions()).
 		Context(ctx).
 		Do().
 		Error()

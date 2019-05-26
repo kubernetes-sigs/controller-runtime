@@ -30,28 +30,34 @@ type CreateOption interface {
 	ApplyToCreate(*CreateOptions)
 }
 
-// DeleteOption is some configuration that modifies options for a create request.
+// DeleteOption is some configuration that modifies options for a delete request.
 type DeleteOption interface {
 	// ApplyToDelete applies this configuration to the given delete options.
 	ApplyToDelete(*DeleteOptions)
 }
 
-// ListOption is some configuration that modifies options for a create request.
+// ListOption is some configuration that modifies options for a list request.
 type ListOption interface {
 	// ApplyToList applies this configuration to the given list options.
 	ApplyToList(*ListOptions)
 }
 
-// UpdateOption is some configuration that modifies options for a create request.
+// UpdateOption is some configuration that modifies options for a update request.
 type UpdateOption interface {
 	// ApplyToUpdate applies this configuration to the given update options.
 	ApplyToUpdate(*UpdateOptions)
 }
 
-// PatchOption is some configuration that modifies options for a create request.
+// PatchOption is some configuration that modifies options for a patch request.
 type PatchOption interface {
 	// ApplyToPatch applies this configuration to the given patch options.
 	ApplyToPatch(*PatchOptions)
+}
+
+// DeleteAllOfOption is some configuration that modifies options for a delete request.
+type DeleteAllOfOption interface {
+	// ApplyToDeleteAllOf applies this configuration to the given deletecollection options.
+	ApplyToDeleteAllOf(*DeleteAllOfOptions)
 }
 
 // }}}
@@ -214,6 +220,10 @@ func (s GracePeriodSeconds) ApplyToDelete(opts *DeleteOptions) {
 	opts.GracePeriodSeconds = &secs
 }
 
+func (s GracePeriodSeconds) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
+	s.ApplyToDelete(&opts.DeleteOptions)
+}
+
 type Preconditions metav1.Preconditions
 
 func (p Preconditions) ApplyToDelete(opts *DeleteOptions) {
@@ -221,11 +231,19 @@ func (p Preconditions) ApplyToDelete(opts *DeleteOptions) {
 	opts.Preconditions = &preconds
 }
 
+func (p Preconditions) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
+	p.ApplyToDelete(&opts.DeleteOptions)
+}
+
 type PropagationPolicy metav1.DeletionPropagation
 
 func (p PropagationPolicy) ApplyToDelete(opts *DeleteOptions) {
 	policy := metav1.DeletionPropagation(p)
 	opts.PropagationPolicy = &policy
+}
+
+func (p PropagationPolicy) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
+	p.ApplyToDelete(&opts.DeleteOptions)
 }
 
 // }}}
@@ -282,13 +300,17 @@ func (o *ListOptions) ApplyOptions(opts []ListOption) *ListOptions {
 	return o
 }
 
-// MatchingLabels filters the list operation on the given set of labels.
+// MatchingLabels filters the list/delete operation on the given set of labels.
 type MatchingLabels map[string]string
 
 func (m MatchingLabels) ApplyToList(opts *ListOptions) {
 	// TODO(directxman12): can we avoid reserializing this over and over?
 	sel := labels.SelectorFromSet(map[string]string(m))
 	opts.LabelSelector = sel
+}
+
+func (m MatchingLabels) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
+	m.ApplyToList(&opts.ListOptions)
 }
 
 // MatchingField filters the list operation on the given field selector
@@ -299,7 +321,7 @@ func MatchingField(name, val string) MatchingFields {
 	return MatchingFields{name: val}
 }
 
-// MatchingField filters the list operation on the given field selector
+// MatchingField filters the list/delete operation on the given field selector
 // (or index in the case of cached lists).
 type MatchingFields fields.Set
 
@@ -309,11 +331,19 @@ func (m MatchingFields) ApplyToList(opts *ListOptions) {
 	opts.FieldSelector = sel
 }
 
-// InNamespace restricts the given operation to the given namespace.
+func (m MatchingFields) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
+	m.ApplyToList(&opts.ListOptions)
+}
+
+// InNamespace restricts the list/delete operation to the given namespace.
 type InNamespace string
 
 func (n InNamespace) ApplyToList(opts *ListOptions) {
 	opts.Namespace = string(n)
+}
+
+func (n InNamespace) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
+	n.ApplyToList(&opts.ListOptions)
 }
 
 // }}}
@@ -435,5 +465,27 @@ func (forceOwnership) ApplyToPatch(opts *PatchOptions) {
 //
 // Deprecated: Use DryRunAll
 var PatchDryRunAll = DryRunAll
+
+// }}}
+
+// {{{ DeleteAllOf Options
+
+// these are all just delete options and list options
+
+// DeleteAllOfOptions contains options for deletecollection (deleteallof) requests.
+// It's just list and delete options smooshed together.
+type DeleteAllOfOptions struct {
+	ListOptions
+	DeleteOptions
+}
+
+// ApplyOptions applies the given deleteallof options on these options,
+// and then returns itself (for convenient chaining).
+func (o *DeleteAllOfOptions) ApplyOptions(opts []DeleteAllOfOption) *DeleteAllOfOptions {
+	for _, opt := range opts {
+		opt.ApplyToDeleteAllOf(o)
+	}
+	return o
+}
 
 // }}}

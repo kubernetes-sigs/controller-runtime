@@ -87,7 +87,25 @@ func (uc *unstructuredClient) Delete(_ context.Context, obj runtime.Object, opts
 		return err
 	}
 	deleteOpts := DeleteOptions{}
-	err = r.Delete(u.GetName(), deleteOpts.ApplyOptions(opts).AsDeleteOptions())
+	deleteOpts.ApplyOptions(opts)
+	err = r.Delete(u.GetName(), deleteOpts.AsDeleteOptions())
+	return err
+}
+
+// DeleteAllOf implements client.Client
+func (uc *unstructuredClient) DeleteAllOf(_ context.Context, obj runtime.Object, opts ...DeleteAllOfOption) error {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return fmt.Errorf("unstructured client did not understand object: %T", obj)
+	}
+	r, err := uc.getResourceInterface(u.GroupVersionKind(), u.GetNamespace())
+	if err != nil {
+		return err
+	}
+
+	deleteAllOfOpts := DeleteAllOfOptions{}
+	deleteAllOfOpts.ApplyOptions(opts)
+	err = r.DeleteCollection(deleteAllOfOpts.AsDeleteOptions(), *deleteAllOfOpts.AsListOptions())
 	return err
 }
 

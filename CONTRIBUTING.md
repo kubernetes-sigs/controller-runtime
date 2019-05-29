@@ -19,11 +19,10 @@ Please see https://git.k8s.io/community/CLA.md for more info
 1. Setup tools
     ```bash
     $ go get -u github.com/golang/dep/cmd/dep
-    $ go get -u gopkg.in/alecthomas/gometalinter.v2 
-    $ gometalinter.v2 --install # if can't load package, refer: https://github.com/alecthomas/gometalinter/issues/404
+    $ curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin v1.15.0
     ```
 1. Test
     ```bash
-    TRACE=1 ./hack/check-everything.sh
+    GO111MODULE=on TRACE=1 ./hack/check-everything.sh
     ```
 

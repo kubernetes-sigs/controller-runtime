@@ -50,6 +50,7 @@ type Builder struct {
 	watchRequest   []watchRequest
 	config         *rest.Config
 	ctrl           controller.Controller
+	name           string
 }
 
 // SimpleController returns a new Builder.
@@ -128,6 +129,16 @@ func (blder *Builder) WithManager(m manager.Manager) *Builder {
 // Defaults to the empty list.
 func (blder *Builder) WithEventFilter(p predicate.Predicate) *Builder {
 	blder.predicates = append(blder.predicates, p)
+	return blder
+}
+
+// Named sets the name of the controller to the given name.  The name shows up
+// in metrics, among other things, and thus should be a prometheus compatible name
+// (underscores and alphanumeric characters only).
+//
+// By default, controllers are named using the lowercase version of their kind.
+func (blder *Builder) Named(name string) *Builder {
+	blder.name = name
 	return blder
 }
 
@@ -227,12 +238,14 @@ func (blder *Builder) doManager() error {
 }
 
 func (blder *Builder) getControllerName() (string, error) {
+	if blder.name != "" {
+		return blder.name, nil
+	}
 	gvk, err := getGvk(blder.apiType, blder.mgr.GetScheme())
 	if err != nil {
 		return "", err
 	}
-	name := fmt.Sprintf("%s-application", strings.ToLower(gvk.Kind))
-	return name, nil
+	return strings.ToLower(gvk.Kind), nil
 }
 
 func (blder *Builder) doController(r reconcile.Reconciler) error {

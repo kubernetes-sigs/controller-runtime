@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -34,6 +35,7 @@ var log = logf.RuntimeLog.WithName("test-env")
 
 // Default binary path for test framework
 const (
+	envUseExistingCluster  = "USE_EXISTING_CLUSTER"
 	envKubeAPIServerBin    = "TEST_ASSET_KUBE_APISERVER"
 	envEtcdBin             = "TEST_ASSET_ETCD"
 	envKubectlBin          = "TEST_ASSET_KUBECTL"
@@ -122,6 +124,10 @@ func (te Environment) getAPIServerFlags() []string {
 
 // Start starts a local Kubernetes server and updates te.ApiserverPort with the port it is listening on
 func (te *Environment) Start() (*rest.Config, error) {
+	if !te.UseExistingCluster {
+		// Check USE_EXISTING_CLUSTER env then
+		te.UseExistingCluster = strings.ToLower(os.Getenv(envUseExistingCluster)) == "true"
+	}
 	if te.UseExistingCluster {
 		log.V(1).Info("using existing cluster")
 		if te.Config == nil {

@@ -27,6 +27,7 @@ import (
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -190,7 +191,8 @@ func CreateCRDs(config *rest.Config, crds []*apiextensionsv1beta1.CustomResource
 	// Create each CRD
 	for _, crd := range crds {
 		log.V(1).Info("installing CRD", "crd", crd)
-		if _, err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd); err != nil {
+		// Ignore AlreadyExists errors as they just means the CRD is already there.
+		if _, err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd); err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
 	}

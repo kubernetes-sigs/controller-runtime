@@ -61,6 +61,10 @@ type ChaosPodList struct {
 	Items           []ChaosPod `json:"items"`
 }
 
+// +kubebuilder:webhook:failurePolicy=fail,groups=chaosapps.metamagical.io,resources=chaospods,verbs=create;update,versions=v1,name=vchaospod.kb.io,path=/validate-chaosapps-metamagical-io-v1-chaospod,mutating=false
+
+var _ webhook.Validator = &ChaosPod{}
+
 // ValidateCreate implements webhookutil.validator so a webhook will be registered for the type
 func (c *ChaosPod) ValidateCreate() error {
 	log.Info("validate create", "name", c.Name)
@@ -88,6 +92,8 @@ func (c *ChaosPod) ValidateUpdate(old runtime.Object) error {
 	}
 	return nil
 }
+
+// +kubebuilder:webhook:failurePolicy=fail,groups=chaosapps.metamagical.io,resources=chaospods,verbs=create;update,versions=v1,name=mchaospod.kb.io,path=/mutate-chaosapps-metamagical-io-v1-chaospod,mutating=true
 
 var _ webhook.Defaulter = &ChaosPod{}
 

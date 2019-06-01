@@ -62,6 +62,11 @@ var _ = Describe("application", func() {
 			instance, err := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
+				WithOptions(controller.Options{
+					LeaderElection: &controller.LeaderElectionOptions{
+						NeedLeaderElection: false,
+					},
+				}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())
@@ -76,6 +81,11 @@ var _ = Describe("application", func() {
 			instance, err := ControllerManagedBy(m).
 				For(&fakeType{}).
 				Owns(&appsv1.ReplicaSet{}).
+				WithOptions(controller.Options{
+					LeaderElection: &controller.LeaderElectionOptions{
+						NeedLeaderElection: false,
+					},
+				}).
 				Build(noop)
 			Expect(err).To(MatchError(ContainSubstring("no kind is registered for the type builder.fakeType")))
 			Expect(instance).To(BeNil())
@@ -98,6 +108,11 @@ var _ = Describe("application", func() {
 			instance, err := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
+				WithOptions(controller.Options{
+					LeaderElection: &controller.LeaderElectionOptions{
+						NeedLeaderElection: false,
+					},
+				}).
 				Build(noop)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
@@ -121,7 +136,12 @@ var _ = Describe("application", func() {
 			instance, err := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
-				WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
+				WithOptions(controller.Options{
+					MaxConcurrentReconciles: maxConcurrentReconciles,
+					LeaderElection: &controller.LeaderElectionOptions{
+						NeedLeaderElection: false,
+					},
+				}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())
@@ -164,6 +184,11 @@ var _ = Describe("application", func() {
 			ctrl1, err := ControllerManagedBy(m).
 				For(&TestDefaultValidator{}).
 				Owns(&appsv1.ReplicaSet{}).
+				WithOptions(controller.Options{
+					LeaderElection: &controller.LeaderElectionOptions{
+						NeedLeaderElection: false,
+					},
+				}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ctrl1).NotTo(BeNil())
@@ -172,6 +197,11 @@ var _ = Describe("application", func() {
 			ctrl2, err := ControllerManagedBy(m).
 				For(&TestDefaultValidator{}).
 				Owns(&appsv1.ReplicaSet{}).
+				WithOptions(controller.Options{
+					LeaderElection: &controller.LeaderElectionOptions{
+						NeedLeaderElection: false,
+					},
+				}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ctrl2).NotTo(BeNil())
@@ -185,7 +215,12 @@ var _ = Describe("application", func() {
 
 			bldr := ControllerManagedBy(m).
 				For(&appsv1.Deployment{}).
-				Owns(&appsv1.ReplicaSet{})
+				Owns(&appsv1.ReplicaSet{}).
+				WithOptions(controller.Options{
+					LeaderElection: &controller.LeaderElectionOptions{
+						NeedLeaderElection: false,
+					},
+				})
 			doReconcileTest("3", stop, bldr, m, false)
 			close(done)
 		}, 10)
@@ -196,6 +231,11 @@ var _ = Describe("application", func() {
 
 			bldr := ControllerManagedBy(m).
 				For(&appsv1.Deployment{}).
+				WithOptions(controller.Options{
+					LeaderElection: &controller.LeaderElectionOptions{
+						NeedLeaderElection: false,
+					},
+				}).
 				Watches( // Equivalent of Owns
 					&source.Kind{Type: &appsv1.ReplicaSet{}},
 					&handler.EnqueueRequestForOwner{OwnerType: &appsv1.Deployment{}, IsController: true})

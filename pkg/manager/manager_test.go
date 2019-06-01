@@ -31,12 +31,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -138,32 +136,6 @@ var _ = Describe("manger.Manager", func() {
 			Expect(svr.Host).To(Equal("foo.com"))
 
 			close(done)
-		})
-
-		Context("with leader election enabled", func() {
-			It("should default ID to controller-runtime if ID is not set", func() {
-				var rl resourcelock.Interface
-				m, err := New(cfg, Options{
-					LeaderElection:          true,
-					LeaderElectionNamespace: "default",
-					LeaderElectionID:        "test-leader-election-id",
-					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
-						var err error
-						rl, err = leaderelection.NewResourceLock(config, recorderProvider, options)
-						return rl, err
-					},
-				})
-				Expect(err).ToNot(HaveOccurred())
-				Expect(m).ToNot(BeNil())
-				Expect(rl.Describe()).To(Equal("default/test-leader-election-id"))
-			})
-
-			It("should return an error if namespace not set and not running in cluster", func() {
-				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime"})
-				Expect(m).To(BeNil())
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unable to find leader election namespace: not running in-cluster, please specify LeaderElectionNamespace"))
-			})
 		})
 
 		It("should create a listener for the metrics if a valid address is provided", func() {
@@ -327,6 +299,41 @@ var _ = Describe("manger.Manager", func() {
 				<-c3
 			})
 
+			It("shouldn't allow empty LeaderElectionID for controller", func(done Done) {
+				m, err := New(cfg, options)
+				Expect(err).ToNot(HaveOccurred())
+
+				r := &leRunnable{
+					leaderElectionID: "",
+				}
+				Expect(m.Add(r).Error()).To(ContainSubstring("LeaderElectionID must be configured"))
+				close(done)
+			})
+
+			It("should be able to add runnables with same LeaderElectionID", func(done Done) {
+				if options.LeaderElectionNamespace != "" {
+					uniqueLeaderElectionID := "unique"
+					nonUniqueLeaderElectionID := "non-unique"
+					m, err := New(cfg, options)
+					Expect(err).ToNot(HaveOccurred())
+
+					uniqueR := &leRunnable{
+						leaderElectionID: uniqueLeaderElectionID,
+					}
+					r1 := &leRunnable{
+						leaderElectionID: nonUniqueLeaderElectionID,
+					}
+					r2 := &leRunnable{
+						leaderElectionID: nonUniqueLeaderElectionID,
+					}
+					Expect(m.Add(uniqueR)).To(Succeed())
+					Expect(m.Add(r1)).To(Succeed())
+					Expect(m.Add(r2)).To(Succeed())
+				}
+
+				close(done)
+			})
+
 			It("should return an error if any non-leaderelection Components fail to Start", func() {
 				// TODO(mengqiy): implement this after resolving https://github.com/kubernetes-sigs/controller-runtime/issues/429
 			})
@@ -338,8 +345,6 @@ var _ = Describe("manger.Manager", func() {
 
 		Context("with leaderelection enabled", func() {
 			startSuite(Options{
-				LeaderElection:          true,
-				LeaderElectionID:        "controller-runtime",
 				LeaderElectionNamespace: "default",
 				newResourceLock:         fakeleaderelection.NewResourceLock,
 			})
@@ -888,4 +893,20 @@ func (i *injectable) InjectStopChannel(stop <-chan struct{}) error {
 
 func (i *injectable) Start(<-chan struct{}) error {
 	return nil
+}
+
+type leRunnable struct {
+	leaderElectionID string
+}
+
+func (*leRunnable) Start(<-chan struct{}) error {
+	return nil
+}
+
+func (*leRunnable) NeedLeaderElection() bool {
+	return true
+}
+
+func (le *leRunnable) GetID() string {
+	return le.leaderElectionID
 }

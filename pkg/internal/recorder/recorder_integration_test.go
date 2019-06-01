@@ -61,6 +61,9 @@ var _ = Describe("recorder", func() {
 						recorder.Event(dp, corev1.EventTypeNormal, "test-reason", "test-msg")
 						return reconcile.Result{}, nil
 					}),
+				LeaderElection: &controller.LeaderElectionOptions{
+					NeedLeaderElection: false,
+				},
 			})
 			Expect(err).NotTo(HaveOccurred())
 

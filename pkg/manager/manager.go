@@ -40,6 +40,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
+const (
+	defaultLeaderElectionID = "default-le-id"
+)
+
 // Manager initializes shared dependencies such as Caches and Clients, and provides them to Runnables.
 // A Manager is required to create Controllers.
 type Manager interface {
@@ -115,17 +119,18 @@ type Options struct {
 	// so that all controllers will not send list requests simultaneously.
 	SyncPeriod *time.Duration
 
-	// LeaderElection determines whether or not to use leader election when
-	// starting the manager.
-	LeaderElection bool
+	// DefaultLeaderElection determines whether or not to use leader election by default
+	// for runnables that don't implement LeaderElectionRunnable interface.
+	DefaultLeaderElection bool
+
+	// DefaultLeaderElectionID determines the name of the configmap that leader election
+	// will use for runnables that don't implement LeaderElectionRunnable interface.
+	// If not specified, default value will be assigned.
+	DefaultLeaderElectionID string
 
 	// LeaderElectionNamespace determines the namespace in which the leader
-	// election configmap will be created.
+	// election configmaps will be created.
 	LeaderElectionNamespace string
-
-	// LeaderElectionID determines the name of the configmap that leader election
-	// will use for holding the leader lock.
-	LeaderElectionID string
 
 	// LeaseDuration is the duration that non-leader candidates will
 	// wait to force acquire leadership. This is measured against time of
@@ -223,6 +228,9 @@ type LeaderElectionRunnable interface {
 	// NeedLeaderElection returns true if the Runnable needs to be run in the leader election mode.
 	// e.g. controllers need to be run in leader election mode, while webhook server doesn't.
 	NeedLeaderElection() bool
+
+	// GetID returns leader election ID
+	GetID() string
 }
 
 // New returns a new Manager for creating Controllers.
@@ -265,16 +273,6 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
-	// Create the resource lock to enable leader election)
-	resourceLock, err := options.newResourceLock(config, recorderProvider, leaderelection.Options{
-		LeaderElection:          options.LeaderElection,
-		LeaderElectionID:        options.LeaderElectionID,
-		LeaderElectionNamespace: options.LeaderElectionNamespace,
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	// Create the metrics listener. This will throw an error if the metrics bind
 	// address is invalid or already in use.
 	metricsListener, err := options.newMetricsListener(options.MetricsBindAddress)
@@ -292,27 +290,30 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	stop := make(chan struct{})
 
 	return &controllerManager{
-		config:                config,
-		scheme:                options.Scheme,
-		cache:                 cache,
-		fieldIndexes:          cache,
-		client:                writeObj,
-		apiReader:             apiReader,
-		recorderProvider:      recorderProvider,
-		resourceLock:          resourceLock,
-		mapper:                mapper,
-		metricsListener:       metricsListener,
-		internalStop:          stop,
-		internalStopper:       stop,
-		port:                  options.Port,
-		host:                  options.Host,
-		certDir:               options.CertDir,
-		leaseDuration:         *options.LeaseDuration,
-		renewDeadline:         *options.RenewDeadline,
-		retryPeriod:           *options.RetryPeriod,
-		healthProbeListener:   healthProbeListener,
-		readinessEndpointName: options.ReadinessEndpointName,
-		livenessEndpointName:  options.LivenessEndpointName,
+		config:                  config,
+		scheme:                  options.Scheme,
+		cache:                   cache,
+		fieldIndexes:            cache,
+		client:                  writeObj,
+		apiReader:               apiReader,
+		recorderProvider:        recorderProvider,
+		mapper:                  mapper,
+		metricsListener:         metricsListener,
+		internalStop:            stop,
+		internalStopper:         stop,
+		port:                    options.Port,
+		host:                    options.Host,
+		certDir:                 options.CertDir,
+		leaseDuration:           *options.LeaseDuration,
+		renewDeadline:           *options.RenewDeadline,
+		retryPeriod:             *options.RetryPeriod,
+		healthProbeListener:     healthProbeListener,
+		readinessEndpointName:   options.ReadinessEndpointName,
+		livenessEndpointName:    options.LivenessEndpointName,
+		defaultLeaderElection:   options.DefaultLeaderElection,
+		defaultLeaderElectionID: options.DefaultLeaderElectionID,
+		leaderElectionNamespace: options.LeaderElectionNamespace,
+		newResourceLock:         options.newResourceLock,
 	}, nil
 }
 
@@ -410,6 +411,10 @@ func setOptionsDefaults(options Options) Options {
 
 	if options.newHealthProbeListener == nil {
 		options.newHealthProbeListener = defaultHealthProbeListener
+	}
+
+	if options.DefaultLeaderElectionID == "" {
+		options.DefaultLeaderElectionID = defaultLeaderElectionID
 	}
 
 	return options

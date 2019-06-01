@@ -50,6 +50,14 @@ type Controller struct {
 	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 
+	// LeaderElection determines whether or not to use leader election when
+	// starting the controller.
+	LeaderElection bool
+
+	// LeaderElectionID determines the name of the configmap that leader election
+	// will use for holding the leader lock.
+	LeaderElectionID string
+
 	// Reconciler is a function that can be called at any time with the Name / Namespace of an object and
 	// ensures that the state of the system matches the state specified in the object.
 	// Defaults to the DefaultReconcileFunc.
@@ -295,4 +303,12 @@ func (c *Controller) InjectFunc(f inject.Func) error {
 // updateMetrics updates prometheus metrics within the controller
 func (c *Controller) updateMetrics(reconcileTime time.Duration) {
 	ctrlmetrics.ReconcileTime.WithLabelValues(c.Name).Observe(reconcileTime.Seconds())
+}
+
+func (c *Controller) NeedLeaderElection() bool {
+	return c.LeaderElection
+}
+
+func (c *Controller) GetID() string {
+	return c.LeaderElectionID
 }

@@ -107,6 +107,12 @@ func (*Server) NeedLeaderElection() bool {
 	return false
 }
 
+// GetID implements the LeaderElectionRunnable interface.
+// It's dummy method that always returns empty string as webhook.Server doesn't need leader election.
+func (*Server) GetID() string {
+	return ""
+}
+
 // Register marks the given webhook as being served at the given path.
 // It panics if two hooks are registered on the same path.
 func (s *Server) Register(path string, hook http.Handler) {

@@ -18,6 +18,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -36,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	crleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -62,9 +64,10 @@ type controllerManager struct {
 	// to scheme.scheme.
 	scheme *runtime.Scheme
 
-	// leaderElectionRunnables is the set of Controllers that the controllerManager injects deps into and Starts.
+	// leaderElectionRunnables is the map that groups runnables that use same leader election ID.
 	// These Runnables are managed by lead election.
-	leaderElectionRunnables []Runnable
+	leaderElectionRunnables map[string][]Runnable
+
 	// nonLeaderElectionRunnables is the set of webhook servers that the controllerManager injects deps into and Starts.
 	// These Runnables will not be blocked by lead election.
 	nonLeaderElectionRunnables []Runnable
@@ -86,8 +89,16 @@ type controllerManager struct {
 	// (and EventHandlers, Sources and Predicates).
 	recorderProvider recorder.Provider
 
-	// resourceLock forms the basis for leader election
-	resourceLock resourcelock.Interface
+	// defaultLeaderElection determines whether or not to use leader election by default
+	// for runnables that don't implement LeaderElectionRunnable interface.
+	defaultLeaderElection bool
+
+	// defaultLeaderElectionID is used for runnables that don't implement LeaderElectionRunnable interface.
+	defaultLeaderElectionID string
+
+	// leaderElectionNamespace determines the namespace in which the leader
+	// election configmaps will be created.
+	leaderElectionNamespace string
 
 	// mapper is used to map resources to kind, and map kind and version.
 	mapper meta.RESTMapper
@@ -112,7 +123,6 @@ type controllerManager struct {
 
 	mu             sync.Mutex
 	started        bool
-	startedLeader  bool
 	healthzStarted bool
 
 	// NB(directxman12): we don't just use an error channel here to avoid the situation where the
@@ -152,6 +162,19 @@ type controllerManager struct {
 	// retryPeriod is the duration the LeaderElector clients should wait
 	// between tries of actions.
 	retryPeriod time.Duration
+
+	// electedLeaderElectionIDs is the map from leader election ID to it's election status
+	electedLeaderElectionIDs map[string]bool
+
+	// leaderElectionGroupStopChannels is map from leader election ID
+	// to channel used to stop all runnables in this LE ID group
+	leaderElectionGroupStopChannels map[string]<-chan struct{}
+
+	// leaderElectionIDResourceLocks is map from leader election ID to resourceLock
+	leaderElectionIDResourceLocks map[string]resourcelock.Interface
+
+	// Dependency injection for testing
+	newResourceLock func(config *rest.Config, recorderProvider recorder.Provider, options crleaderelection.Options) (resourcelock.Interface, error)
 }
 
 type errSignaler struct {
@@ -209,24 +232,56 @@ func (cm *controllerManager) Add(r Runnable) error {
 		return err
 	}
 
-	var shouldStart bool
-
-	// Add the runnable to the leader election or the non-leaderelection list
-	if leRunnable, ok := r.(LeaderElectionRunnable); ok && !leRunnable.NeedLeaderElection() {
-		shouldStart = cm.started
-		cm.nonLeaderElectionRunnables = append(cm.nonLeaderElectionRunnables, r)
-	} else {
-		shouldStart = cm.startedLeader
-		cm.leaderElectionRunnables = append(cm.leaderElectionRunnables, r)
+	if cm.leaderElectionRunnables == nil {
+		cm.leaderElectionRunnables = make(map[string][]Runnable)
 	}
 
-	if shouldStart {
-		// If already started, start the controller
-		go func() {
-			if err := r.Start(cm.internalStop); err != nil {
-				cm.errSignal.SignalError(err)
+	// Add the runnable to the leader election or the non-leaderelection list
+	if leRunnable, ok := r.(LeaderElectionRunnable); (ok && !leRunnable.NeedLeaderElection()) || (!ok && !cm.defaultLeaderElection) {
+		cm.nonLeaderElectionRunnables = append(cm.nonLeaderElectionRunnables, r)
+
+		if cm.started {
+			// If already started, start the controller
+			go func() {
+				err := r.Start(cm.internalStop)
+				if err != nil {
+					cm.errSignal.SignalError(err)
+				}
+			}()
+		}
+	} else {
+		var leID string
+
+		if ok {
+			leID := leRunnable.GetID()
+
+			// Check that leader election ID is defined
+			if leID == "" {
+				return errors.New("LeaderElectionID must be configured")
 			}
-		}()
+		} else if cm.defaultLeaderElection {
+			// If runnable doesn't implement LeaderElectionRunnable interface and defaultLeaderElection is true
+			// it's assumed that it needs leader election.
+			// This is done to maintain backwards compatibility
+			leID = cm.defaultLeaderElectionID
+		}
+
+		cm.leaderElectionRunnables[leID] = append(cm.leaderElectionRunnables[leID], r)
+
+		if cm.started {
+			// If Leader Election ID is already used and elected, start the controller.
+			// If it's appeared first time, start leader election for it.
+			if cm.electedLeaderElectionIDs[leID] {
+				go func() {
+					err := r.Start(cm.leaderElectionGroupStopChannels[leID])
+					if err != nil {
+						cm.errSignal.SignalError(err)
+					}
+				}()
+			} else {
+				go cm.startLeaderElectionRunnable(leID)
+			}
+		}
 	}
 
 	return nil
@@ -417,14 +472,7 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 
 	go cm.startNonLeaderElectionRunnables()
 
-	if cm.resourceLock != nil {
-		err := cm.startLeaderElection()
-		if err != nil {
-			return err
-		}
-	} else {
-		go cm.startLeaderElectionRunnables()
-	}
+	go cm.startLeaderElectionRunnables()
 
 	select {
 	case <-stop:
@@ -465,21 +513,9 @@ func (cm *controllerManager) startLeaderElectionRunnables() {
 	cm.waitForCache()
 
 	// Start the leader election Runnables after the cache has synced
-	for _, c := range cm.leaderElectionRunnables {
-		// Controllers block, but we want to return an error if any have an error starting.
-		// Write any Start errors to a channel so we can return them
-		ctrl := c
-		go func() {
-			if err := ctrl.Start(cm.internalStop); err != nil {
-				cm.errSignal.SignalError(err)
-			}
-			// we use %T here because we don't have a good stand-in for "name",
-			// and the full runnable might not serialize (mutexes, etc)
-			log.V(1).Info("leader-election runnable finished", "runnable type", fmt.Sprintf("%T", ctrl))
-		}()
+	for leID := range cm.leaderElectionRunnables {
+		go cm.startLeaderElectionRunnable(leID)
 	}
-
-	cm.startedLeader = true
 }
 
 func (cm *controllerManager) waitForCache() {
@@ -503,23 +539,94 @@ func (cm *controllerManager) waitForCache() {
 	cm.started = true
 }
 
-func (cm *controllerManager) startLeaderElection() (err error) {
+func (cm *controllerManager) startLeaderElectionRunnable(leaderElectionID string) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	// Get or create resource lock
+	if cm.leaderElectionIDResourceLocks == nil {
+		cm.leaderElectionIDResourceLocks = make(map[string]resourcelock.Interface)
+	}
+
+	if _, ok := cm.leaderElectionIDResourceLocks[leaderElectionID]; !ok {
+		resourceLock, err := cm.newResourceLock(cm.config, cm.recorderProvider, crleaderelection.Options{
+			LeaderElection:          true,
+			LeaderElectionID:        leaderElectionID,
+			LeaderElectionNamespace: cm.leaderElectionNamespace,
+		})
+
+		// Controllers block, but we want to return an error if any have an error starting.
+		// Write any Start errors to a channel so we can return them
+		if err != nil {
+			cm.errSignal.SignalError(err)
+			return
+		}
+
+		cm.leaderElectionIDResourceLocks[leaderElectionID] = resourceLock
+	}
+
+	// Channel to stop all runnables in LE group
+	groupStopChan := make(chan struct{})
+
+	err := cm.startLeaderElection(cm.leaderElectionIDResourceLocks[leaderElectionID], leaderelection.LeaderCallbacks{
+		OnStartedLeading: func(_ context.Context) {
+			cm.mu.Lock()
+			defer cm.mu.Unlock()
+
+			if cm.electedLeaderElectionIDs == nil {
+				cm.electedLeaderElectionIDs = make(map[string]bool)
+			}
+			cm.electedLeaderElectionIDs[leaderElectionID] = true
+
+			if cm.leaderElectionGroupStopChannels == nil {
+				cm.leaderElectionGroupStopChannels = make(map[string]<-chan struct{})
+			}
+			cm.leaderElectionGroupStopChannels[leaderElectionID] = groupStopChan
+
+			runnables := cm.leaderElectionRunnables[leaderElectionID]
+			for _, r := range runnables {
+				runnable := r
+				go func() {
+					err := runnable.Start(cm.leaderElectionGroupStopChannels[leaderElectionID])
+					if err != nil {
+						cm.errSignal.SignalError(err)
+					}
+
+					// we use %T here because we don't have a good stand-in for "name",
+					// and the full runnable might not serialize (mutexes, etc)
+					log.V(1).Info("leader-election runnable finished", "runnable type", fmt.Sprintf("%T", runnable))
+				}()
+			}
+		},
+		OnStoppedLeading: func() {
+			cm.mu.Lock()
+
+			cm.electedLeaderElectionIDs[leaderElectionID] = false
+			close(groupStopChan)
+
+			cm.mu.Unlock()
+
+			// Starting leader election for LE group if controller isn't stopped
+			select {
+			case <-cm.internalStop:
+				return
+			default:
+				go cm.startLeaderElectionRunnable(leaderElectionID)
+			}
+		},
+	})
+	if err != nil {
+		cm.errSignal.SignalError(err)
+	}
+}
+
+func (cm *controllerManager) startLeaderElection(resourceLock resourcelock.Interface, callbacks leaderelection.LeaderCallbacks) (err error) {
 	l, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
-		Lock:          cm.resourceLock,
+		Lock:          resourceLock,
 		LeaseDuration: cm.leaseDuration,
 		RenewDeadline: cm.renewDeadline,
 		RetryPeriod:   cm.retryPeriod,
-		Callbacks: leaderelection.LeaderCallbacks{
-			OnStartedLeading: func(_ context.Context) {
-				cm.startLeaderElectionRunnables()
-			},
-			OnStoppedLeading: func() {
-				// Most implementations of leader election log.Fatal() here.
-				// Since Start is wrapped in log.Fatal when called, we can just return
-				// an error here which will cause the program to exit.
-				cm.errSignal.SignalError(fmt.Errorf("leader election lost"))
-			},
-		},
+		Callbacks:     callbacks,
 	})
 	if err != nil {
 		return err

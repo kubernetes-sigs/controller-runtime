@@ -41,6 +41,18 @@ type Options struct {
 	// Defaults to MaxOfRateLimiter which has both overall and per-item rate limiting.
 	// The overall is a token bucket and the per-item is exponential.
 	RateLimiter ratelimiter.RateLimiter
+
+	// Leader election is by default
+	LeaderElection *LeaderElectionOptions
+}
+
+// Leader Election options
+type LeaderElectionOptions struct {
+	// NeedLeaderElection determines whether or not to use leader election when starting the controller.
+	NeedLeaderElection bool
+
+	// LeaderElectionID determines the name of the configmap that leader election will use for holding the leader lock.
+	LeaderElectionID string
 }
 
 // Controller implements a Kubernetes API.  A Controller manages a work queue fed reconcile.Requests
@@ -83,6 +95,13 @@ func New(name string, mgr manager.Manager, options Options) (Controller, error) 
 		options.RateLimiter = workqueue.DefaultControllerRateLimiter()
 	}
 
+	if options.LeaderElection == nil {
+		options.LeaderElection = &LeaderElectionOptions{
+			NeedLeaderElection: true,
+			LeaderElectionID:   name,
+		}
+	}
+
 	// Inject dependencies into Reconciler
 	if err := mgr.SetFields(options.Reconciler); err != nil {
 		return nil, err
@@ -101,6 +120,8 @@ func New(name string, mgr manager.Manager, options Options) (Controller, error) 
 		},
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
 		Name:                    name,
+		LeaderElection:          options.LeaderElection.NeedLeaderElection,
+		LeaderElectionID:        options.LeaderElection.LeaderElectionID,
 	}
 
 	// Add the controller as a Manager components

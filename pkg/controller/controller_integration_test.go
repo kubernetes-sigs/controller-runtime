@@ -65,6 +65,9 @@ var _ = Describe("controller", func() {
 						reconciled <- request
 						return reconcile.Result{}, nil
 					}),
+				LeaderElection: &controller.LeaderElectionOptions{
+					NeedLeaderElection: false,
+				},
 			})
 			Expect(err).NotTo(HaveOccurred())
 

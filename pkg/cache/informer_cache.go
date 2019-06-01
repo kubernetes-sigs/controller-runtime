@@ -169,6 +169,12 @@ func (ip *informerCache) NeedLeaderElection() bool {
 	return false
 }
 
+// GetID implements the LeaderElectionRunnable interface.
+// It's dummy method that always returns empty string as informerCache doesn't need leader election.
+func (ip *informerCache) GetID() string {
+	return ""
+}
+
 // IndexField adds an indexer to the underlying cache, using extraction function to get
 // value(s) from the given field.  This index can then be used by passing a field selector
 // to List. For one-to-one compatibility with "normal" field selectors, only return one value.

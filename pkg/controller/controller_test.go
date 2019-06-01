@@ -48,7 +48,12 @@ var _ = Describe("controller.Controller", func() {
 		It("should return an error if Name is not Specified", func(done Done) {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
-			c, err := controller.New("", m, controller.Options{Reconciler: rec})
+			c, err := controller.New("", m, controller.Options{
+				Reconciler: rec,
+				LeaderElection: &controller.LeaderElectionOptions{
+					NeedLeaderElection: false,
+				},
+			})
 			Expect(c).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Name for Controller"))
 
@@ -70,7 +75,12 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("foo", m, controller.Options{Reconciler: &failRec{}})
+			c, err := controller.New("foo", m, controller.Options{
+				Reconciler: &failRec{},
+				LeaderElection: &controller.LeaderElectionOptions{
+					NeedLeaderElection: false,
+				},
+			})
 			Expect(c).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
@@ -82,11 +92,21 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c1, err := controller.New("c1", m, controller.Options{Reconciler: rec})
+			c1, err := controller.New("c1", m, controller.Options{
+				Reconciler: rec,
+				LeaderElection: &controller.LeaderElectionOptions{
+					NeedLeaderElection: false,
+				},
+			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(c1).ToNot(BeNil())
 
-			c2, err := controller.New("c2", m, controller.Options{Reconciler: rec})
+			c2, err := controller.New("c2", m, controller.Options{
+				Reconciler: rec,
+				LeaderElection: &controller.LeaderElectionOptions{
+					NeedLeaderElection: false,
+				},
+			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(c2).ToNot(BeNil())
 

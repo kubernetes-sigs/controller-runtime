@@ -27,6 +27,7 @@ import (
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -76,6 +77,25 @@ func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]*apiextensio
 	}
 
 	return options.CRDs, nil
+}
+
+// UninstallCRDs uninstalls a collection of CRDs on a cluster by reading the crd yaml files from a directory
+func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
+	// Read the CRD yamls into options.CRDs
+	if err := readCRDFiles(&options); err != nil {
+		return err
+	}
+
+	if len(options.CRDs) == 0 {
+		return nil
+	}
+
+	// Delete the CRDs in the apiserver
+	if err := DeleteCRDs(config, options.CRDs); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // readCRDFiles reads the directories of CRDs in options.Paths and adds the CRD structs to options.CRDs
@@ -191,6 +211,23 @@ func CreateCRDs(config *rest.Config, crds []*apiextensionsv1beta1.CustomResource
 	for _, crd := range crds {
 		log.V(1).Info("installing CRD", "crd", crd)
 		if _, err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteCRDs deletes the CRDs
+func DeleteCRDs(config *rest.Config, crds []*apiextensionsv1beta1.CustomResourceDefinition) error {
+	cs, err := clientset.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	// Delete each CRD
+	for _, crd := range crds {
+		log.V(1).Info("uninstalling CRD", "crd", crd)
+		if err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Delete(crd.Name, &metav1.DeleteOptions{}); err != nil {
 			return err
 		}
 	}

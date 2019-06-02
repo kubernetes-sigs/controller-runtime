@@ -106,7 +106,10 @@ type Environment struct {
 // Stop stops a running server
 func (te *Environment) Stop() error {
 	if te.UseExistingCluster {
-		return nil
+		return UninstallCRDs(te.Config, CRDInstallOptions{
+			Paths: te.CRDDirectoryPaths,
+			CRDs:  te.CRDs,
+		})
 	}
 	return te.ControlPlane.Stop()
 }

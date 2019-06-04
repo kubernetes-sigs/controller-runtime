@@ -50,7 +50,7 @@ while read commit_word commit; do
         patch)
             bugfixes="${bugfixes}- ${pr_title} (#${pr_number})${NEWLINE}"
             ;;
-        docs|other)
+        docs|no_release_note|other)
             # skip non-code-changes
             ;;
         unknown)

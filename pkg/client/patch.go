@@ -18,6 +18,7 @@ package client
 
 import (
 	jsonpatch "github.com/evanphx/json-patch"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -40,6 +41,11 @@ func (s *patch) Type() types.PatchType {
 
 // Data implements Patch.
 func (s *patch) Data(obj runtime.Object) ([]byte, error) {
+	return s.data, nil
+}
+
+// DataFromUnstructured implements Patch.
+func (s *patch) DataFromUnstructured(obj runtime.Unstructured) ([]byte, error) {
 	return s.data, nil
 }
 
@@ -72,6 +78,23 @@ func (s *mergeFromPatch) Data(obj runtime.Object) ([]byte, error) {
 	return jsonpatch.CreateMergePatch(originalJSON, modifiedJSON)
 }
 
+// DataFromUnstructured implements Patch.
+func (s *mergeFromPatch) DataFromUnstructured(obj runtime.Unstructured) ([]byte, error) {
+	originalJSON, err := json.Marshal(s.from)
+	if err != nil {
+		return nil, err
+	}
+
+	u := &unstructured.Unstructured{Object: obj.UnstructuredContent()}
+
+	modifiedJSON, err := u.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	return jsonpatch.CreateMergePatch(originalJSON, modifiedJSON)
+}
+
 // MergeFrom creates a Patch that patches using the merge-patch strategy with the given object as base.
 func MergeFrom(obj runtime.Object) Patch {
 	return &mergeFromPatch{obj}
@@ -92,4 +115,9 @@ func (p applyPatch) Data(obj runtime.Object) ([]byte, error) {
 	// correct and sufficient for our uses (it's what the JSON serializer in
 	// client-go does, more-or-less).
 	return json.Marshal(obj)
+}
+
+func (p applyPatch) DataFromUnstructured(obj runtime.Unstructured) ([]byte, error) {
+	u := &unstructured.Unstructured{Object: obj.UnstructuredContent()}
+	return u.MarshalJSON()
 }

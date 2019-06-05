@@ -18,7 +18,6 @@ package client
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -37,51 +36,49 @@ type unstructuredClient struct {
 }
 
 // Create implements client.Client
-func (uc *unstructuredClient) Create(_ context.Context, obj runtime.Object, opts ...CreateOptionFunc) error {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return fmt.Errorf("unstructured client did not understand object: %T", obj)
-	}
+func (uc *unstructuredClient) Create(_ context.Context, obj runtime.Unstructured, opts ...CreateOptionFunc) error {
 	createOpts := CreateOptions{}
 	createOpts.ApplyOptions(opts)
+
+	u := &unstructured.Unstructured{Object: obj.UnstructuredContent()}
+
 	r, err := uc.getResourceInterface(u.GroupVersionKind(), u.GetNamespace())
 	if err != nil {
 		return err
 	}
+
 	i, err := r.Create(u, *createOpts.AsCreateOptions())
 	if err != nil {
 		return err
 	}
-	u.Object = i.Object
+	obj.SetUnstructuredContent(i.UnstructuredContent())
 	return nil
 }
 
 // Update implements client.Client
-func (uc *unstructuredClient) Update(_ context.Context, obj runtime.Object, opts ...UpdateOptionFunc) error {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return fmt.Errorf("unstructured client did not understand object: %T", obj)
-	}
+func (uc *unstructuredClient) Update(_ context.Context, obj runtime.Unstructured, opts ...UpdateOptionFunc) error {
 	updateOpts := UpdateOptions{}
 	updateOpts.ApplyOptions(opts)
+
+	u := &unstructured.Unstructured{Object: obj.UnstructuredContent()}
+
 	r, err := uc.getResourceInterface(u.GroupVersionKind(), u.GetNamespace())
 	if err != nil {
 		return err
 	}
+
 	i, err := r.Update(u, *updateOpts.AsUpdateOptions())
 	if err != nil {
 		return err
 	}
-	u.Object = i.Object
+	obj.SetUnstructuredContent(i.UnstructuredContent())
 	return nil
 }
 
 // Delete implements client.Client
-func (uc *unstructuredClient) Delete(_ context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return fmt.Errorf("unstructured client did not understand object: %T", obj)
-	}
+func (uc *unstructuredClient) Delete(_ context.Context, obj runtime.Unstructured, opts ...DeleteOptionFunc) error {
+	u := &unstructured.Unstructured{Object: obj.UnstructuredContent()}
+
 	r, err := uc.getResourceInterface(u.GroupVersionKind(), u.GetNamespace())
 	if err != nil {
 		return err
@@ -92,17 +89,15 @@ func (uc *unstructuredClient) Delete(_ context.Context, obj runtime.Object, opts
 }
 
 // Patch implements client.Client
-func (uc *unstructuredClient) Patch(_ context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return fmt.Errorf("unstructured client did not understand object: %T", obj)
-	}
+func (uc *unstructuredClient) Patch(_ context.Context, obj runtime.Unstructured, patch Patch, opts ...PatchOptionFunc) error {
+	u := &unstructured.Unstructured{Object: obj.UnstructuredContent()}
+
 	r, err := uc.getResourceInterface(u.GroupVersionKind(), u.GetNamespace())
 	if err != nil {
 		return err
 	}
 
-	data, err := patch.Data(obj)
+	data, err := patch.DataFromUnstructured(obj)
 	if err != nil {
 		return err
 	}
@@ -112,16 +107,14 @@ func (uc *unstructuredClient) Patch(_ context.Context, obj runtime.Object, patch
 	if err != nil {
 		return err
 	}
-	u.Object = i.Object
+	obj.SetUnstructuredContent(i.UnstructuredContent())
 	return nil
 }
 
 // Get implements client.Client
-func (uc *unstructuredClient) Get(_ context.Context, key ObjectKey, obj runtime.Object) error {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return fmt.Errorf("unstructured client did not understand object: %T", obj)
-	}
+func (uc *unstructuredClient) Get(_ context.Context, key ObjectKey, obj runtime.Unstructured) error {
+	u := &unstructured.Unstructured{Object: obj.UnstructuredContent()}
+
 	r, err := uc.getResourceInterface(u.GroupVersionKind(), key.Namespace)
 	if err != nil {
 		return err
@@ -130,17 +123,13 @@ func (uc *unstructuredClient) Get(_ context.Context, key ObjectKey, obj runtime.
 	if err != nil {
 		return err
 	}
-	u.Object = i.Object
+	obj.SetUnstructuredContent(i.UnstructuredContent())
 	return nil
 }
 
 // List implements client.Client
-func (uc *unstructuredClient) List(_ context.Context, obj runtime.Object, opts ...ListOptionFunc) error {
-	u, ok := obj.(*unstructured.UnstructuredList)
-	if !ok {
-		return fmt.Errorf("unstructured client did not understand object: %T", obj)
-	}
-	gvk := u.GroupVersionKind()
+func (uc *unstructuredClient) List(_ context.Context, obj runtime.Unstructured, opts ...ListOptionFunc) error {
+	gvk := obj.GetObjectKind().GroupVersionKind()
 	if strings.HasSuffix(gvk.Kind, "List") {
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 	}
@@ -155,39 +144,35 @@ func (uc *unstructuredClient) List(_ context.Context, obj runtime.Object, opts .
 	if err != nil {
 		return err
 	}
-	u.Items = i.Items
-	u.Object = i.Object
+	obj.SetUnstructuredContent(i.UnstructuredContent())
 	return nil
 }
 
-func (uc *unstructuredClient) UpdateStatus(_ context.Context, obj runtime.Object, opts ...UpdateOptionFunc) error {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return fmt.Errorf("unstructured client did not understand object: %T", obj)
-	}
+func (uc *unstructuredClient) UpdateStatus(_ context.Context, obj runtime.Unstructured, opts ...UpdateOptionFunc) error {
+	u := &unstructured.Unstructured{Object: obj.UnstructuredContent()}
+
 	r, err := uc.getResourceInterface(u.GroupVersionKind(), u.GetNamespace())
 	if err != nil {
 		return err
 	}
+
 	i, err := r.UpdateStatus(u, *(&UpdateOptions{}).ApplyOptions(opts).AsUpdateOptions())
 	if err != nil {
 		return err
 	}
-	u.Object = i.Object
+	obj.SetUnstructuredContent(i.UnstructuredContent())
 	return nil
 }
 
-func (uc *unstructuredClient) PatchStatus(_ context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return fmt.Errorf("unstructured client did not understand object: %T", obj)
-	}
+func (uc *unstructuredClient) PatchStatus(_ context.Context, obj runtime.Unstructured, patch Patch, opts ...PatchOptionFunc) error {
+	u := &unstructured.Unstructured{Object: obj.UnstructuredContent()}
+
 	r, err := uc.getResourceInterface(u.GroupVersionKind(), u.GetNamespace())
 	if err != nil {
 		return err
 	}
 
-	data, err := patch.Data(obj)
+	data, err := patch.DataFromUnstructured(obj)
 	if err != nil {
 		return err
 	}
@@ -196,7 +181,7 @@ func (uc *unstructuredClient) PatchStatus(_ context.Context, obj runtime.Object,
 	if err != nil {
 		return err
 	}
-	u.Object = i.Object
+	obj.SetUnstructuredContent(i.UnstructuredContent())
 	return nil
 }
 

@@ -19,7 +19,6 @@ package client
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -44,7 +43,7 @@ type DelegatingReader struct {
 
 // Get retrieves an obj for a given object key from the Kubernetes Cluster.
 func (d *DelegatingReader) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
-	_, isUnstructured := obj.(*unstructured.Unstructured)
+	_, isUnstructured := obj.(runtime.Unstructured)
 	if isUnstructured {
 		return d.ClientReader.Get(ctx, key, obj)
 	}
@@ -53,7 +52,7 @@ func (d *DelegatingReader) Get(ctx context.Context, key ObjectKey, obj runtime.O
 
 // List retrieves list of objects for a given namespace and list options.
 func (d *DelegatingReader) List(ctx context.Context, list runtime.Object, opts ...ListOptionFunc) error {
-	_, isUnstructured := list.(*unstructured.UnstructuredList)
+	_, isUnstructured := list.(runtime.Unstructured)
 	if isUnstructured {
 		return d.ClientReader.List(ctx, list, opts...)
 	}

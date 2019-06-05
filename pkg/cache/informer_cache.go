@@ -69,7 +69,7 @@ func (ip *informerCache) List(ctx context.Context, out runtime.Object, opts ...c
 	}
 	// we need the non-list GVK, so chop off the "List" from the end of the kind
 	gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
-	_, isUnstructured := out.(*unstructured.UnstructuredList)
+	_, isUnstructured := out.(runtime.Unstructured)
 	var cacheTypeObj runtime.Object
 	if isUnstructured {
 		u := &unstructured.Unstructured{}

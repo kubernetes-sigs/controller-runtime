@@ -44,6 +44,8 @@ type Patch interface {
 	Type() types.PatchType
 	// Data is the raw data representing the patch.
 	Data(obj runtime.Object) ([]byte, error)
+	// DataFromUnstructured is the raw data representing the patch from unstructured
+	DataFromUnstructured(obj runtime.Unstructured) ([]byte, error)
 }
 
 // TODO(directxman12): is there a sane way to deal with get/delete options?

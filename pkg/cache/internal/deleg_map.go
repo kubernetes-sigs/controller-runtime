@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -74,9 +73,7 @@ func (m *InformersMap) WaitForCacheSync(stop <-chan struct{}) bool {
 // Get will create a new Informer and add it to the map of InformersMap if none exists.  Returns
 // the Informer from the map.
 func (m *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*MapEntry, error) {
-	_, isUnstructured := obj.(*unstructured.Unstructured)
-	_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
-	isUnstructured = isUnstructured || isUnstructuredList
+	_, isUnstructured := obj.(runtime.Unstructured)
 
 	if isUnstructured {
 		return m.unstructured.Get(gvk, obj)

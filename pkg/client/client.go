@@ -22,7 +22,6 @@ import (
 	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/dynamic"
@@ -105,54 +104,54 @@ type client struct {
 
 // Create implements client.Client
 func (c *client) Create(ctx context.Context, obj runtime.Object, opts ...CreateOptionFunc) error {
-	_, ok := obj.(*unstructured.Unstructured)
+	u, ok := obj.(runtime.Unstructured)
 	if ok {
-		return c.unstructuredClient.Create(ctx, obj, opts...)
+		return c.unstructuredClient.Create(ctx, u, opts...)
 	}
 	return c.typedClient.Create(ctx, obj, opts...)
 }
 
 // Update implements client.Client
 func (c *client) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOptionFunc) error {
-	_, ok := obj.(*unstructured.Unstructured)
+	u, ok := obj.(runtime.Unstructured)
 	if ok {
-		return c.unstructuredClient.Update(ctx, obj, opts...)
+		return c.unstructuredClient.Update(ctx, u, opts...)
 	}
 	return c.typedClient.Update(ctx, obj, opts...)
 }
 
 // Delete implements client.Client
 func (c *client) Delete(ctx context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error {
-	_, ok := obj.(*unstructured.Unstructured)
+	u, ok := obj.(runtime.Unstructured)
 	if ok {
-		return c.unstructuredClient.Delete(ctx, obj, opts...)
+		return c.unstructuredClient.Delete(ctx, u, opts...)
 	}
 	return c.typedClient.Delete(ctx, obj, opts...)
 }
 
 // Patch implements client.Client
 func (c *client) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error {
-	_, ok := obj.(*unstructured.Unstructured)
+	u, ok := obj.(runtime.Unstructured)
 	if ok {
-		return c.unstructuredClient.Patch(ctx, obj, patch, opts...)
+		return c.unstructuredClient.Patch(ctx, u, patch, opts...)
 	}
 	return c.typedClient.Patch(ctx, obj, patch, opts...)
 }
 
 // Get implements client.Client
 func (c *client) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
-	_, ok := obj.(*unstructured.Unstructured)
+	u, ok := obj.(runtime.Unstructured)
 	if ok {
-		return c.unstructuredClient.Get(ctx, key, obj)
+		return c.unstructuredClient.Get(ctx, key, u)
 	}
 	return c.typedClient.Get(ctx, key, obj)
 }
 
 // List implements client.Client
 func (c *client) List(ctx context.Context, obj runtime.Object, opts ...ListOptionFunc) error {
-	_, ok := obj.(*unstructured.UnstructuredList)
+	u, ok := obj.(runtime.Unstructured)
 	if ok {
-		return c.unstructuredClient.List(ctx, obj, opts...)
+		return c.unstructuredClient.List(ctx, u, opts...)
 	}
 	return c.typedClient.List(ctx, obj, opts...)
 }
@@ -172,18 +171,18 @@ var _ StatusWriter = &statusWriter{}
 
 // Update implements client.StatusWriter
 func (sw *statusWriter) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOptionFunc) error {
-	_, ok := obj.(*unstructured.Unstructured)
+	u, ok := obj.(runtime.Unstructured)
 	if ok {
-		return sw.client.unstructuredClient.UpdateStatus(ctx, obj, opts...)
+		return sw.client.unstructuredClient.UpdateStatus(ctx, u, opts...)
 	}
 	return sw.client.typedClient.UpdateStatus(ctx, obj, opts...)
 }
 
 // Patch implements client.Client
 func (sw *statusWriter) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error {
-	_, ok := obj.(*unstructured.Unstructured)
+	u, ok := obj.(runtime.Unstructured)
 	if ok {
-		return sw.client.unstructuredClient.PatchStatus(ctx, obj, patch, opts...)
+		return sw.client.unstructuredClient.PatchStatus(ctx, u, patch, opts...)
 	}
 	return sw.client.typedClient.PatchStatus(ctx, obj, patch, opts...)
 }

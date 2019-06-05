@@ -92,6 +92,10 @@ a:
 - Patch fix: :bug: (`:bug:`)
 - Docs: :book: (`:book:`)
 - Infra/Tests/Other: :running: (`:running:`)
+- No release note: :ghost: (`:ghost:`)
+
+Use :ghost: (no release note) only for the PRs that change or revert unreleased
+changes, which don't deserve a release note. Please don't abuse it.
 
 You can also use the equivalent emoji directly, since GitHub doesn't
 render the `:xyz:` aliases in PR titles.

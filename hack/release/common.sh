@@ -5,6 +5,7 @@ cr_major_pattern=":warning:|$(printf "\xe2\x9a\xa0")"
 cr_minor_pattern=":sparkles:|$(printf "\xe2\x9c\xa8")"
 cr_patch_pattern=":bug:|$(printf "\xf0\x9f\x90\x9b")"
 cr_docs_pattern=":book:|$(printf "\xf0\x9f\x93\x96")"
+cr_no_release_note_pattern=":ghost:|$(printf "\xf0\x9f\x91\xbb")"
 cr_other_pattern=":running:|$(printf "\xf0\x9f\x8f\x83")"
 
 # cr::symbol-type-raw turns :xyz: and the corresponding emoji
@@ -23,6 +24,9 @@ cr::symbol-type-raw() {
             ;;
         @(${cr_docs_pattern})?('!'))
             echo "docs"
+            ;;
+        @(${cr_no_release_note_pattern})?('!'))
+            echo "no_release_note"
             ;;
         @(${cr_other_pattern})?('!'))
             echo "other"

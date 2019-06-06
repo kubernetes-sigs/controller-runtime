@@ -51,16 +51,22 @@ func WithPredicates(predicates ...predicate.Predicate) Predicates {
 	}
 }
 
+// Predicates filters events before enqueuing the keys.
 type Predicates struct {
 	predicates []predicate.Predicate
 }
 
+// ApplyToFor applies this configuration to the given ForInput options.
 func (w Predicates) ApplyToFor(opts *ForInput) {
 	opts.predicates = w.predicates
 }
+
+// ApplyToOwns applies this configuration to the given OwnsInput options.
 func (w Predicates) ApplyToOwns(opts *OwnsInput) {
 	opts.predicates = w.predicates
 }
+
+// ApplyToWatches applies this configuration to the given WatchesInput options.
 func (w Predicates) ApplyToWatches(opts *WatchesInput) {
 	opts.predicates = w.predicates
 }

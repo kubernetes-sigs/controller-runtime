@@ -206,15 +206,15 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).NotTo(HaveOccurred())
 				c1 := make(chan struct{})
 				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
-					defer close(c1)
 					defer GinkgoRecover()
+					close(c1)
 					return nil
 				}))).To(Succeed())
 
 				c2 := make(chan struct{})
 				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
-					defer close(c2)
 					defer GinkgoRecover()
+					close(c2)
 					return nil
 				}))).To(Succeed())
 
@@ -257,21 +257,21 @@ var _ = Describe("manger.Manager", func() {
 				c1 := make(chan struct{})
 				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer GinkgoRecover()
-					defer close(c1)
+					close(c1)
 					return nil
 				}))).To(Succeed())
 
 				c2 := make(chan struct{})
 				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer GinkgoRecover()
-					defer close(c2)
+					close(c2)
 					return fmt.Errorf("expected error")
 				}))).To(Succeed())
 
 				c3 := make(chan struct{})
 				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer GinkgoRecover()
-					defer close(c3)
+					close(c3)
 					return nil
 				}))).To(Succeed())
 
@@ -441,8 +441,8 @@ var _ = Describe("manger.Manager", func() {
 				// Add one component before starting
 				c1 := make(chan struct{})
 				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
-					defer close(c1)
 					defer GinkgoRecover()
+					close(c1)
 					return nil
 				}))).To(Succeed())
 
@@ -457,8 +457,8 @@ var _ = Describe("manger.Manager", func() {
 				// Add another component after starting
 				c2 := make(chan struct{})
 				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
-					defer close(c2)
 					defer GinkgoRecover()
+					close(c2)
 					return nil
 				}))).To(Succeed())
 				<-c1
@@ -483,8 +483,8 @@ var _ = Describe("manger.Manager", func() {
 
 			c1 := make(chan struct{})
 			Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
-				defer close(c1)
 				defer GinkgoRecover()
+				close(c1)
 				return nil
 			}))).To(Succeed())
 			<-c1

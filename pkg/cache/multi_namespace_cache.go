@@ -52,7 +52,10 @@ func MultiNamespacedCacheBuilder(namespaces []string) NewCacheFunc {
 			}
 			caches[ns] = c
 		}
-		return &multiNamespaceCache{namespaceToCache: caches, Scheme: opts.Scheme}, nil
+		return &multiNamespaceCache{
+			namespaceToCache: caches,
+			Scheme: opts.Scheme,
+		}, nil
 	}
 }
 

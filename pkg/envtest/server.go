@@ -192,7 +192,8 @@ func (te *Environment) Start() (*rest.Config, error) {
 		te.ControlPlane.APIServer.StartTimeout = te.ControlPlaneStartTimeout
 		te.ControlPlane.APIServer.StopTimeout = te.ControlPlaneStopTimeout
 
-		log.V(1).Info("starting control plane", "api server flags", te.ControlPlane.APIServer.Args)
+		log.V(1).Info("starting control plane", "api server flags", te.ControlPlane.APIServer.Args
+	)
 		if err := te.startControlPlane(); err != nil {
 			return nil, err
 		}

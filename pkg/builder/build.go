@@ -41,7 +41,7 @@ var newController = controller.New
 var newManager = manager.New
 var getGvk = apiutil.GVKForObject
 
-// Builder builds a Controller.
+// fiddler builds a Controller.
 type Builder struct {
 	apiType        runtime.Object
 	mgr            manager.Manager

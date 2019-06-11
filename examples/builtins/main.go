@@ -78,18 +78,11 @@ func main() {
 
 	// Setup webhooks
 	entryLog.Info("setting up webhook server")
-	hookServer := &webhook.Server{
-		Port:    9876,
-		CertDir: "/tmp/cert",
-	}
-	if err := mgr.Add(hookServer); err != nil {
-		entryLog.Error(err, "unable register webhook server with manager")
-		os.Exit(1)
-	}
+	hookServer := mgr.GetWebhookServer()
 
 	entryLog.Info("registering webhooks to the webhook server")
-	hookServer.Register("/mutate-pods", &webhook.Admission{Handler: &podAnnotator{}})
-	hookServer.Register("/validate-pods", &webhook.Admission{Handler: &podValidator{}})
+	hookServer.Register("/mutate-v1-pod", &webhook.Admission{Handler: &podAnnotator{}})
+	hookServer.Register("/validate-v1-pod", &webhook.Admission{Handler: &podValidator{}})
 
 	entryLog.Info("starting manager")
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {

@@ -18,6 +18,8 @@ package builder
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -280,11 +282,15 @@ func (blder *Builder) doWebhook() error {
 		mwh := admission.DefaultingWebhookFor(defaulter)
 		if mwh != nil {
 			path := generateMutatePath(gvk)
-			log.Info("Registering a mutating webhook",
-				"GVK", gvk,
-				"path", path)
 
-			blder.mgr.GetWebhookServer().Register(path, mwh)
+			// Checking if the path is already registered.
+			// If so, just skip it.
+			if !blder.isAlreadyHandled(path) {
+				log.Info("Registering a mutating webhook",
+					"GVK", gvk,
+					"path", path)
+				blder.mgr.GetWebhookServer().Register(path, mwh)
+			}
 		}
 	}
 
@@ -292,10 +298,15 @@ func (blder *Builder) doWebhook() error {
 		vwh := admission.ValidatingWebhookFor(validator)
 		if vwh != nil {
 			path := generateValidatePath(gvk)
-			log.Info("Registering a validating webhook",
-				"GVK", gvk,
-				"path", path)
-			blder.mgr.GetWebhookServer().Register(path, vwh)
+
+			// Checking if the path is already registered.
+			// If so, just skip it.
+			if !blder.isAlreadyHandled(path) {
+				log.Info("Registering a validating webhook",
+					"GVK", gvk,
+					"path", path)
+				blder.mgr.GetWebhookServer().Register(path, vwh)
+			}
 		}
 	}
 
@@ -304,6 +315,14 @@ func (blder *Builder) doWebhook() error {
 		log.Error(err, "conversion check failed", "GVK", gvk)
 	}
 	return nil
+}
+
+func (blder *Builder) isAlreadyHandled(path string) bool {
+	h, p := blder.mgr.GetWebhookServer().WebhookMux.Handler(&http.Request{URL: &url.URL{Path: path}})
+	if p == path && h != nil {
+		return true
+	}
+	return false
 }
 
 func generateMutatePath(gvk schema.GroupVersionKind) string {

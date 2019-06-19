@@ -350,6 +350,34 @@ var _ = Describe("application", func() {
 			Expect(w.Body).To(ContainSubstring(`"allowed":true`))
 			Expect(w.Body).To(ContainSubstring(`"code":200`))
 		})
+
+		It("should allow multiple controllers for the same kind", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("registering the type in the Scheme")
+			builder := scheme.Builder{GroupVersion: testDefaultValidatorGVK.GroupVersion()}
+			builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
+			err = builder.AddToScheme(m.GetScheme())
+			Expect(err).NotTo(HaveOccurred())
+
+			By("creating the 1st controller")
+			ctrl1, err := ControllerManagedBy(m).
+				For(&TestDefaultValidator{}).
+				Owns(&appsv1.ReplicaSet{}).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ctrl1).NotTo(BeNil())
+
+			By("creating the 2nd controller")
+			ctrl2, err := ControllerManagedBy(m).
+				For(&TestDefaultValidator{}).
+				Owns(&appsv1.ReplicaSet{}).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ctrl2).NotTo(BeNil())
+		})
 	})
 
 	Describe("Start with SimpleController", func() {

@@ -213,17 +213,22 @@ func (cm *controllerManager) GetAPIReader() client.Reader {
 }
 
 func (cm *controllerManager) GetWebhookServer() *webhook.Server {
-	if cm.webhookServer == nil {
-		cm.webhookServer = &webhook.Server{
-			Port: cm.port,
-			Host: cm.host,
-		}
-		cm.webhookServer.Register("/convert", &conversion.Webhook{})
-		if err := cm.Add(cm.webhookServer); err != nil {
-			panic("unable to add webhookServer to the controller manager")
-		}
-	}
+	cm.initDefaultWebhookServer()
 	return cm.webhookServer
+}
+
+func (cm *controllerManager) initDefaultWebhookServer() {
+	if cm.webhookServer != nil {
+		return
+	}
+	cm.webhookServer = &webhook.Server{
+		Port: cm.port,
+		Host: cm.host,
+	}
+	cm.webhookServer.Register("/convert", &conversion.Webhook{})
+	if err := cm.Add(cm.webhookServer); err != nil {
+		panic("unable to add webhookServer to the controller manager")
+	}
 }
 
 func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
@@ -255,6 +260,9 @@ func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	// join the passed-in stop channel as an upstream feeding into cm.internalStopper
 	defer close(cm.internalStopper)
+
+	// initialize default webhookServer
+	cm.initDefaultWebhookServer()
 
 	// Metrics should be served whether the controller is leader or not.
 	// (If we don't serve metrics for non-leaders, prometheus will still scrape

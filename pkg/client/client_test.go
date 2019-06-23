@@ -475,7 +475,7 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
-			It("should fail if the object does not exists", func(done Done) {
+			It("should fail if the object does not exist", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -578,7 +578,7 @@ var _ = Describe("Client", func() {
 
 				close(done)
 			})
-			It("should fail if the object does not exists", func(done Done) {
+			It("should fail if the object does not exist", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -672,7 +672,7 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
-			It("should fail if the object does not exists", func(done Done) {
+			It("should fail if the object does not exist", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -791,7 +791,7 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
-			It("should fail if the object does not exists", func(done Done) {
+			It("should fail if the object does not exist", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -860,7 +860,7 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
-			It("should fail if the object does not exists", func(done Done) {
+			It("should fail if the object does not exist", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -956,7 +956,7 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
-			It("should fail if the object does not exists", func(done Done) {
+			It("should fail if the object does not exist", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1024,7 +1024,7 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
-			It("should fail if the object does not exists", func(done Done) {
+			It("should fail if the object does not exist", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1136,7 +1136,7 @@ var _ = Describe("Client", func() {
 				err = cl.Patch(context.TODO(), u, client.ConstantPatch(types.MergePatchType, mergePatch))
 				Expect(err).NotTo(HaveOccurred())
 
-				By("validating pathed Node has new annotation")
+				By("validating patched Node has new annotation")
 				actual, err := clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
@@ -1240,7 +1240,7 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
-			It("should fail if the object does not exists", func(done Done) {
+			It("should fail if the object does not exist", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1345,7 +1345,7 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
-			It("should fail if the object does not exists", func(done Done) {
+			It("should fail if the object does not exist", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())

@@ -126,6 +126,10 @@ func main() {
 			scheme: mgr.GetScheme(),
 		})
 
+	err = ctrl.NewWebhookManagedBy(mgr).
+		For(&api.ChaosPod{}).
+		Complete()
+
 	if err != nil {
 		setupLog.Error(err, "unable to create controller")
 		os.Exit(1)

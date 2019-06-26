@@ -202,7 +202,7 @@ var _ = Describe("Conversion Webhook", func() {
 
 })
 
-var _ = Describe("Convertibility Check", func() {
+var _ = Describe("IsConvertible", func() {
 
 	var scheme *runtime.Scheme
 
@@ -213,7 +213,7 @@ var _ = Describe("Convertibility Check", func() {
 
 	})
 
-	It("should not return error for convertible types", func() {
+	It("should return true for convertible types", func() {
 		obj := &jobsv2.ExternalJob{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "ExternalJob",
@@ -221,11 +221,12 @@ var _ = Describe("Convertibility Check", func() {
 			},
 		}
 
-		err := CheckConvertibility(scheme, obj)
+		ok, err := IsConvertible(scheme, obj)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(ok).To(BeTrue())
 	})
 
-	It("should not return error for a built-in multi-version type", func() {
+	It("should return false for a built-in multi-version type", func() {
 		obj := &appsv1beta1.Deployment{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Deployment",
@@ -233,7 +234,8 @@ var _ = Describe("Convertibility Check", func() {
 			},
 		}
 
-		err := CheckConvertibility(scheme, obj)
+		ok, err := IsConvertible(scheme, obj)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(ok).ToNot(BeTrue())
 	})
 })

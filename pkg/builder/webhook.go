@@ -146,10 +146,18 @@ func (blder *WebhookBuilder) doWebhook() error {
 		}
 	}
 
-	err = conversion.CheckConvertibility(blder.mgr.GetScheme(), blder.apiType)
+	ok, err := conversion.IsConvertible(blder.mgr.GetScheme(), blder.apiType)
 	if err != nil {
-		log.Error(err, "conversion check failed", "GVK", gvk)
+		log.Error(err, "conversion check failed", "object", blder.apiType)
+		return err
 	}
+	if ok {
+		if !blder.isAlreadyHandled("/convert") {
+			blder.mgr.GetWebhookServer().Register("/convert", &conversion.Webhook{})
+		}
+		log.Info("conversion webhook enabled", "object", blder.apiType)
+	}
+
 	return nil
 }
 

@@ -180,17 +180,18 @@ func (wh *Webhook) getHub(obj runtime.Object) (conversion.Hub, error) {
 	}
 
 	var hub conversion.Hub
-	var isHub, hubFoundAlready bool
+	var hubFoundAlready bool
 	for _, gvk := range gvks {
 		instance, err := wh.scheme.New(gvk)
 		if err != nil {
 			return nil, fmt.Errorf("failed to allocate an instance for gvk %v %v", gvk, err)
 		}
-		if hub, isHub = instance.(conversion.Hub); isHub {
+		if val, isHub := instance.(conversion.Hub); isHub {
 			if hubFoundAlready {
 				return nil, fmt.Errorf("multiple hub version defined for %T", obj)
 			}
 			hubFoundAlready = true
+			hub = val
 		}
 	}
 	return hub, nil

@@ -17,10 +17,10 @@ package v1
 
 import (
 	"fmt"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/examples/conversion/pkg/apis/jobs/v2"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
+
+	v2 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v2"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -39,11 +39,9 @@ type ExternalJobStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ExternalJob is the Schema for the externaljobs API
-// +k8s:openapi-gen=true
 type ExternalJob struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -52,7 +50,7 @@ type ExternalJob struct {
 	Status ExternalJobStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ExternalJobList contains a list of ExternalJob
 type ExternalJobList struct {

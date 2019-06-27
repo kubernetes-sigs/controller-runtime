@@ -13,10 +13,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v2
+package v3
 
 import (
+	"fmt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/conversion"
+
+	v2 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v2"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -26,7 +30,7 @@ import (
 type ExternalJobSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	ScheduleAt string `json:"scheduleAt"`
+	DeferredAt string `json:"deferredAt"`
 }
 
 // ExternalJobStatus defines the observed state of ExternalJob
@@ -35,11 +39,9 @@ type ExternalJobStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ExternalJob is the Schema for the externaljobs API
-// +k8s:openapi-gen=true
 type ExternalJob struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -48,7 +50,7 @@ type ExternalJob struct {
 	Status ExternalJobStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ExternalJobList contains a list of ExternalJob
 type ExternalJobList struct {
@@ -61,10 +63,30 @@ func init() {
 	SchemeBuilder.Register(&ExternalJob{}, &ExternalJobList{})
 }
 
-// Hub is just a marker method to indicate that v2.ExternalJob is the Hub type
-// in this case.
-// v2.ExternalJob is the storage version so mark this as Hub.
-// Storage version doesn't need to implement any conversion methods because
-// default conversionHandler implements conversion logic for storage version.
-// TODO(droot): Add comment annotation here to mark it as storage version
-func (ej *ExternalJob) Hub() {}
+// ConvertTo implements conversion logic to convert to Hub type (v2.ExternalJob
+// in this case)
+func (ej *ExternalJob) ConvertTo(dst conversion.Hub) error {
+	switch t := dst.(type) {
+	case *v2.ExternalJob:
+		jobv2 := dst.(*v2.ExternalJob)
+		jobv2.ObjectMeta = ej.ObjectMeta
+		jobv2.Spec.ScheduleAt = ej.Spec.DeferredAt
+		return nil
+	default:
+		return fmt.Errorf("unsupported type %v", t)
+	}
+}
+
+// ConvertFrom implements conversion logic to convert from Hub type (v2.ExternalJob
+// in this case)
+func (ej *ExternalJob) ConvertFrom(src conversion.Hub) error {
+	switch t := src.(type) {
+	case *v2.ExternalJob:
+		jobv2 := src.(*v2.ExternalJob)
+		ej.ObjectMeta = jobv2.ObjectMeta
+		ej.Spec.DeferredAt = jobv2.Spec.ScheduleAt
+		return nil
+	default:
+		return fmt.Errorf("unsupported type %v", t)
+	}
+}

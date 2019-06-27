@@ -281,12 +281,18 @@ type TestDefaulter struct {
 
 var testDefaulterGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: "TestDefaulter"}
 
-func (*TestDefaulter) GetObjectKind() schema.ObjectKind { return nil }
+func (d *TestDefaulter) GetObjectKind() schema.ObjectKind { return d }
 func (d *TestDefaulter) DeepCopyObject() runtime.Object {
 	return &TestDefaulter{
 		Replica: d.Replica,
 	}
 }
+
+func (d *TestDefaulter) GroupVersionKind() schema.GroupVersionKind {
+	return testDefaulterGVK
+}
+
+func (d *TestDefaulter) SetGroupVersionKind(gvk schema.GroupVersionKind) {}
 
 var _ runtime.Object = &TestDefaulterList{}
 
@@ -310,12 +316,18 @@ type TestValidator struct {
 
 var testValidatorGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: "TestValidator"}
 
-func (*TestValidator) GetObjectKind() schema.ObjectKind { return nil }
+func (v *TestValidator) GetObjectKind() schema.ObjectKind { return v }
 func (v *TestValidator) DeepCopyObject() runtime.Object {
 	return &TestValidator{
 		Replica: v.Replica,
 	}
 }
+
+func (v *TestValidator) GroupVersionKind() schema.GroupVersionKind {
+	return testValidatorGVK
+}
+
+func (v *TestValidator) SetGroupVersionKind(gvk schema.GroupVersionKind) {}
 
 var _ runtime.Object = &TestValidatorList{}
 
@@ -354,12 +366,18 @@ type TestDefaultValidator struct {
 
 var testDefaultValidatorGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: "TestDefaultValidator"}
 
-func (*TestDefaultValidator) GetObjectKind() schema.ObjectKind { return nil }
+func (dv *TestDefaultValidator) GetObjectKind() schema.ObjectKind { return dv }
 func (dv *TestDefaultValidator) DeepCopyObject() runtime.Object {
 	return &TestDefaultValidator{
 		Replica: dv.Replica,
 	}
 }
+
+func (dv *TestDefaultValidator) GroupVersionKind() schema.GroupVersionKind {
+	return testDefaultValidatorGVK
+}
+
+func (dv *TestDefaultValidator) SetGroupVersionKind(gvk schema.GroupVersionKind) {}
 
 var _ runtime.Object = &TestDefaultValidatorList{}
 

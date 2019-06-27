@@ -87,9 +87,9 @@ func (blder *WebhookBuilder) registerWebhooks() error {
 	blder.registerDefaultingWebhook()
 	blder.registerValidatingWebhook()
 
-	err = conversion.CheckConvertibility(blder.mgr.GetScheme(), blder.apiType)
+	err = blder.registerConversionWebhook()
 	if err != nil {
-		log.Error(err, "conversion check failed", "GVK", blder.gvk)
+		return err
 	}
 	return nil
 }
@@ -131,7 +131,26 @@ func (blder *WebhookBuilder) registerValidatingWebhook() {
 	}
 }
 
+func (blder *WebhookBuilder) registerConversionWebhook() error {
+	ok, err := conversion.IsConvertible(blder.mgr.GetScheme(), blder.apiType)
+	if err != nil {
+		log.Error(err, "conversion check failed", "object", blder.apiType)
+		return err
+	}
+	if ok {
+		if !blder.isAlreadyHandled("/convert") {
+			blder.mgr.GetWebhookServer().Register("/convert", &conversion.Webhook{})
+		}
+		log.Info("conversion webhook enabled", "object", blder.apiType)
+	}
+
+	return nil
+}
+
 func (blder *WebhookBuilder) isAlreadyHandled(path string) bool {
+	if blder.mgr.GetWebhookServer().WebhookMux == nil {
+		return false
+	}
 	h, p := blder.mgr.GetWebhookServer().WebhookMux.Handler(&http.Request{URL: &url.URL{Path: path}})
 	if p == path && h != nil {
 		return true

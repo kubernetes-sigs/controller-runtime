@@ -29,6 +29,7 @@ import (
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	apix "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 
@@ -310,6 +311,27 @@ var _ = Describe("IsConvertible", func() {
 		Expect(jobsv1.AddToScheme(scheme)).To(Succeed())
 		Expect(jobsv2.AddToScheme(scheme)).To(Succeed())
 		Expect(jobsv3.AddToScheme(scheme)).To(Succeed())
+	})
+
+	It("should not error for uninitialized types", func() {
+		obj := &jobsv2.ExternalJob{}
+
+		ok, err := IsConvertible(scheme, obj)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ok).To(BeTrue())
+	})
+
+	It("should not error for unstructured types", func() {
+		obj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"kind":       "ExternalJob",
+				"apiVersion": "jobs.testprojects.kb.io/v2",
+			},
+		}
+
+		ok, err := IsConvertible(scheme, obj)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ok).To(BeTrue())
 	})
 
 	It("should return true for convertible types", func() {

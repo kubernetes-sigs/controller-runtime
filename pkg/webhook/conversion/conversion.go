@@ -174,7 +174,10 @@ func (wh *Webhook) convertViaHub(src, dst conversion.Convertible) error {
 
 // getHub returns an instance of the Hub for passed-in object's group/kind.
 func (wh *Webhook) getHub(obj runtime.Object) (conversion.Hub, error) {
-	gvks := objectGVKs(wh.scheme, obj)
+	gvks, err := objectGVKs(wh.scheme, obj)
+	if err != nil {
+		return nil, err
+	}
 	if len(gvks) == 0 {
 		return nil, fmt.Errorf("error retrieving gvks for object : %v", obj)
 	}
@@ -223,7 +226,10 @@ func (wh *Webhook) allocateDstObject(apiVersion, kind string) (runtime.Object, e
 func IsConvertible(scheme *runtime.Scheme, obj runtime.Object) (bool, error) {
 	var hubs, spokes, nonSpokes []runtime.Object
 
-	gvks := objectGVKs(scheme, obj)
+	gvks, err := objectGVKs(scheme, obj)
+	if err != nil {
+		return false, err
+	}
 	if len(gvks) == 0 {
 		return false, fmt.Errorf("error retrieving gvks for object : %v", obj)
 	}
@@ -273,18 +279,27 @@ func IsConvertible(scheme *runtime.Scheme, obj runtime.Object) (bool, error) {
 }
 
 // objectGVKs returns all (Group,Version,Kind) for the Group/Kind of given object.
-func objectGVKs(scheme *runtime.Scheme, obj runtime.Object) []schema.GroupVersionKind {
-	var gvks []schema.GroupVersionKind
-
-	objGVK := obj.GetObjectKind().GroupVersionKind()
+func objectGVKs(scheme *runtime.Scheme, obj runtime.Object) ([]schema.GroupVersionKind, error) {
+	// NB: we should not use `obj.GetObjectKind().GroupVersionKind()` to get the
+	// GVK here, since it is parsed from apiVersion and kind fields and it may
+	// return empty GVK if obj is an uninitialized object.
+	objGVKs, _, err := scheme.ObjectKinds(obj)
+	if err != nil {
+		return nil, err
+	}
+	if len(objGVKs) != 1 {
+		return nil, fmt.Errorf("expect to get only one GVK for %v", obj)
+	}
+	objGVK := objGVKs[0]
 	knownTypes := scheme.AllKnownTypes()
 
+	var gvks []schema.GroupVersionKind
 	for gvk := range knownTypes {
 		if objGVK.GroupKind() == gvk.GroupKind() {
 			gvks = append(gvks, gvk)
 		}
 	}
-	return gvks
+	return gvks, nil
 }
 
 // PartialImplementationError represents an error due to partial conversion

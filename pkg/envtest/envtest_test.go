@@ -58,10 +58,28 @@ var _ = Describe("Test", func() {
 	})
 
 	Describe("InstallCRDs", func() {
+
+		It("should set ErrorIfCRDPathMissing through env settings", func(done Done) {
+
+			testEnv := &Environment{
+				ErrorIfCRDPathMissing: true,
+			}
+
+			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
+				Paths:              []string{"fake"},
+				ErrorIfPathMissing: testEnv.ErrorIfCRDPathMissing,
+			})
+
+			Expect(err).To(HaveOccurred())
+
+			close(done)
+		})
+
 		It("should install the CRDs into the cluster", func(done Done) {
 
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
-				Paths: []string{filepath.Join(".", "testdata")},
+				Paths:              []string{filepath.Join(".", "testdata")},
+				ErrorIfPathMissing: env.ErrorIfCRDPathMissing,
 			})
 			Expect(err).NotTo(HaveOccurred())
 

@@ -81,6 +81,11 @@ type Environment struct {
 	// loading.
 	Config *rest.Config
 
+	// ErrorIfCRDPathMissing provides an interface for the underlying
+	// CRDInstallOptions.ErrorIfPathMissing. It prevents silent failures
+	// for missing CRD paths.
+	ErrorIfCRDPathMissing bool
+
 	// CRDs is a list of CRDs to install
 	CRDs []*apiextensionsv1beta1.CustomResourceDefinition
 

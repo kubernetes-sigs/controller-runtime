@@ -212,7 +212,7 @@ var _ = Describe("Controllerutil", func() {
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
 		})
 
-		It("errors when MutateFn changes objct name on creation", func() {
+		It("errors when MutateFn changes object name on creation", func() {
 			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, func() error {
 				Expect(specr()).To(Succeed())
 				return deploymentRenamer(deploy)()

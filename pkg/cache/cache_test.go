@@ -75,7 +75,7 @@ func deletePod(pod runtime.Object) {
 var _ = Describe("Informer Cache", func() {
 	CacheTest(cache.New)
 })
-var _ = Describe("Multi-Namesapce Informer Cache", func() {
+var _ = Describe("Multi-Namespace Informer Cache", func() {
 	CacheTest(cache.MultiNamespacedCacheBuilder([]string{testNamespaceOne, testNamespaceTwo, "default"}))
 })
 

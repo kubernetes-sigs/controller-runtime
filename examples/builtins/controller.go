@@ -38,7 +38,7 @@ type reconcileReplicaSet struct {
 var _ reconcile.Reconciler = &reconcileReplicaSet{}
 
 func (r *reconcileReplicaSet) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	// set up a convinient log object so we don't have to type request over and over again
+	// set up a convenient log object so we don't have to type request over and over again
 	log := r.log.WithValues("request", request)
 
 	// Fetch the ReplicaSet from the cache

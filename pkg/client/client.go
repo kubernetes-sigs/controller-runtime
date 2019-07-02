@@ -48,7 +48,7 @@ type Options struct {
 //
 // In the case of normal types, the scheme will be used to look up the
 // corresponding group, version, and kind for the given type.  In the
-// case of unstrctured types, the group, version, and kind will be extracted
+// case of unstructured types, the group, version, and kind will be extracted
 // from the corresponding fields on the object.
 func New(config *rest.Config, options Options) (Client, error) {
 	if config == nil {

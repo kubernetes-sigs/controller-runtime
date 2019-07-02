@@ -112,7 +112,7 @@ var _ = Describe("Admission Webhooks", func() {
 			}),
 		}
 
-		By("invoking the webhoook")
+		By("invoking the webhook")
 		resp := webhook.Handle(context.Background(), Request{})
 
 		By("checking that a JSON patch is populated on the response")

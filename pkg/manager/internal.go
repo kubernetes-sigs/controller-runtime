@@ -230,17 +230,19 @@ func (cm *controllerManager) GetWebhookServer() *webhook.Server {
 }
 
 func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
+	var metricsPath = "/metrics"
 	handler := promhttp.HandlerFor(metrics.Registry, promhttp.HandlerOpts{
 		ErrorHandling: promhttp.HTTPErrorOnError,
 	})
 	// TODO(JoelSpeed): Use existing Kubernetes machinery for serving metrics
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", handler)
+	mux.Handle(metricsPath, handler)
 	server := http.Server{
 		Handler: mux,
 	}
 	// Run the server
 	go func() {
+		log.Info("starting metrics server", "path", metricsPath)
 		if err := server.Serve(cm.metricsListener); err != nil && err != http.ErrServerClosed {
 			cm.errChan <- err
 		}

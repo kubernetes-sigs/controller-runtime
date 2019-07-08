@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"os"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -37,11 +36,6 @@ import (
 var log = logf.Log.WithName("example-controller")
 
 func main() {
-	var disableWebhookConfigInstaller bool
-	flag.BoolVar(&disableWebhookConfigInstaller, "disable-webhook-config-installer", false,
-		"disable the installer in the webhook server, so it won't install webhook configuration resources during bootstrapping")
-
-	flag.Parse()
 	logf.SetLogger(zap.Logger(false))
 	entryLog := log.WithName("entrypoint")
 

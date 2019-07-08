@@ -243,7 +243,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
-	// Create the mertics listener. This will throw an error if the metrics bind
+	// Create the metrics listener. This will throw an error if the metrics bind
 	// address is invalid or already in use.
 	metricsListener, err := options.newMetricsListener(options.MetricsBindAddress)
 	if err != nil {

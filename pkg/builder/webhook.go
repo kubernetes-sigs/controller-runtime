@@ -59,7 +59,7 @@ func (blder *WebhookBuilder) Complete() error {
 		return err
 	}
 
-	// Set the Webook if needed
+	// Set the Webhook if needed
 	return blder.registerWebhooks()
 }
 

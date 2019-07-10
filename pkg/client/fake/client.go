@@ -31,7 +31,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-	"sigs.k8s.io/controller-runtime/pkg/internal/objectutil"
+	"github.com/kubernetes-sigs/controller-runtime/pkg/internal/objectutil"
 )
 
 type fakeClient struct {

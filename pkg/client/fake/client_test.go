@@ -235,7 +235,8 @@ var _ = Describe("Fake client", func() {
 
 	Context("with default scheme.Scheme", func() {
 		BeforeEach(func(done Done) {
-			cl = NewFakeClient(dep, dep2, cm)
+			objs:= []runtime.Object{dep, dep2, cm}
+			cl = NewFakeClient(objs)
 			close(done)
 		})
 		AssertClientBehavior()
@@ -246,7 +247,8 @@ var _ = Describe("Fake client", func() {
 			scheme := runtime.NewScheme()
 			Expect(corev1.AddToScheme(scheme)).To(Succeed())
 			Expect(appsv1.AddToScheme(scheme)).To(Succeed())
-			cl = NewFakeClientWithScheme(scheme, dep, dep2, cm)
+			objs:= []runtime.Object{dep, dep2, cm}
+			cl = NewFakeClientWithScheme(scheme, objs)
 			close(done)
 		})
 		AssertClientBehavior()

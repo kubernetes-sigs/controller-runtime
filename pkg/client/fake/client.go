@@ -45,14 +45,14 @@ var _ client.Client = &fakeClient{}
 // You can choose to initialize it with a slice of runtime.Object.
 // Deprecated: use NewFakeClientWithScheme.  You should always be
 // passing an explicit Scheme.
-func NewFakeClient(initObjs ...runtime.Object) client.Client {
-	return NewFakeClientWithScheme(scheme.Scheme, initObjs...)
+func NewFakeClient(initObjs []runtime.Object) client.Client {
+	return NewFakeClientWithScheme(scheme.Scheme, initObjs)
 }
 
 // NewFakeClientWithScheme creates a new fake client with the given scheme
 // for testing.
 // You can choose to initialize it with a slice of runtime.Object.
-func NewFakeClientWithScheme(clientScheme *runtime.Scheme, initObjs ...runtime.Object) client.Client {
+func NewFakeClientWithScheme(clientScheme *runtime.Scheme, initObjs []runtime.Object) client.Client {
 	tracker := testing.NewObjectTracker(clientScheme, scheme.Codecs.UniversalDecoder())
 	for _, obj := range initObjs {
 		err := tracker.Add(obj)

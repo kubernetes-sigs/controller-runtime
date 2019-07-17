@@ -1,0 +1,11 @@
+steps:
+- name: "golang"
+  args: ["go", "build", "-o", "lint2check", "."]
+  env: ["GO111MODULE=on", "CGO_ENABLED=0"]
+- name: "golang"
+  args: ["go", "get", "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.16.0"]
+  env: ["GO111MODULE=on", "CGO_ENABLED=0", "GOBIN=/workspace"]
+- name: "gcr.io/cloud-builders/docker"
+  args: ["build", "-t", "gcr.io/$PROJECT_ID/lint2check", "."]
+images:
+- "gcr.io/$PROJECT_ID/lint2check"

@@ -38,6 +38,7 @@ type WebhookBuilder struct {
 	config  *rest.Config
 }
 
+// WebhookManagedBy manages a Webhook
 func WebhookManagedBy(m manager.Manager) *WebhookBuilder {
 	return &WebhookBuilder{mgr: m}
 }

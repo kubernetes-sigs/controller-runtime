@@ -24,25 +24,8 @@ go vet ${MOD_OPT} ./...
 
 header_text "running golangci-lint"
 
-golangci-lint run --disable-all \
-    --deadline 5m \
-    --enable=misspell \
-    --enable=structcheck \
-    --enable=golint \
-    --enable=deadcode \
-    --enable=errcheck \
-    --enable=varcheck \
-    --enable=goconst \
-    --enable=unparam \
-    --enable=ineffassign \
-    --enable=nakedret \
-    --enable=interfacer \
-    --enable=misspell \
-    --enable=gocyclo \
-    --enable=lll \
-    --enable=dupl \
-    --enable=goimports \
-    ./pkg/... ./examples/... .
+
+golangci-lint run ./pkg/... ./examples/... .
 
 # TODO: Enable these as we fix them to make them pass
 #    --enable=gosec \

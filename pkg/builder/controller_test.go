@@ -121,6 +121,24 @@ var _ = Describe("application", func() {
 			Expect(instance).To(BeNil())
 		})
 
+		It("should override max concurrent reconcilers during creation of controller", func() {
+			const maxConcurrentReconciles = 5
+			newController = func(name string, mgr manager.Manager, options controller.Options) (
+				controller.Controller, error) {
+				if options.MaxConcurrentReconciles == maxConcurrentReconciles {
+					return controller.New(name, mgr, options)
+				}
+				return nil, fmt.Errorf("max concurrent reconcilers expected %d but found %d", maxConcurrentReconciles, options.MaxConcurrentReconciles)
+			}
+			instance, err := SimpleController().
+				For(&appsv1.ReplicaSet{}).
+				Owns(&appsv1.ReplicaSet{}).
+				WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeNil())
+		})
+
 		It("should allow multiple controllers for the same kind", func() {
 			By("creating a controller manager")
 			m, err := manager.New(cfg, manager.Options{})

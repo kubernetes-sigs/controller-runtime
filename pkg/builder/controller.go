@@ -47,6 +47,7 @@ type Builder struct {
 	watchRequest   []watchRequest
 	config         *rest.Config
 	ctrl           controller.Controller
+	ctrlOptions    controller.Options
 	name           string
 }
 
@@ -122,6 +123,12 @@ func (blder *Builder) WithManager(m manager.Manager) *Builder {
 // Defaults to the empty list.
 func (blder *Builder) WithEventFilter(p predicate.Predicate) *Builder {
 	blder.predicates = append(blder.predicates, p)
+	return blder
+}
+
+// WithOptions overrides the controller options use in doController. Defaults to empty.
+func (blder *Builder) WithOptions(options controller.Options) *Builder {
+	blder.ctrlOptions = options
 	return blder
 }
 
@@ -241,6 +248,8 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 	if err != nil {
 		return err
 	}
-	blder.ctrl, err = newController(name, blder.mgr, controller.Options{Reconciler: r})
+	ctrlOptions := blder.ctrlOptions
+	ctrlOptions.Reconciler = r
+	blder.ctrl, err = newController(name, blder.mgr, ctrlOptions)
 	return err
 }

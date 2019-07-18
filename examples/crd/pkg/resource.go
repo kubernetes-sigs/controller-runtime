@@ -93,6 +93,16 @@ func (c *ChaosPod) ValidateUpdate(old runtime.Object) error {
 	return nil
 }
 
+// ValidateDelete implements webhookutil.validator so a webhook will be registered for the type
+func (c *ChaosPod) ValidateDelete() error {
+	log.Info("validate delete", "name", c.Name)
+
+	if c.Spec.NextStop.Before(&metav1.Time{Time: time.Now()}) {
+		return fmt.Errorf(".spec.nextStop must be later than current time")
+	}
+	return nil
+}
+
 // +kubebuilder:webhook:path=/mutate-chaosapps-metamagical-io-v1-chaospod,mutating=true,failurePolicy=fail,groups=chaosapps.metamagical.io,resources=chaospods,verbs=create;update,versions=v1,name=mchaospod.kb.io
 
 var _ webhook.Defaulter = &ChaosPod{}

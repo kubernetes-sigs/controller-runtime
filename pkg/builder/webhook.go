@@ -96,37 +96,43 @@ func (blder *WebhookBuilder) registerWebhooks() error {
 
 // registerDefaultingWebhook registers a defaulting webhook if th
 func (blder *WebhookBuilder) registerDefaultingWebhook() {
-	if defaulter, isDefaulter := blder.apiType.(admission.Defaulter); isDefaulter {
-		mwh := admission.DefaultingWebhookFor(defaulter)
-		if mwh != nil {
-			path := generateMutatePath(blder.gvk)
+	defaulter, isDefaulter := blder.apiType.(admission.Defaulter)
+	if !isDefaulter {
+		log.Info("skip registering a mutating webhook, admission.Defaulter interface is not implemented", "GVK", blder.gvk)
+		return
+	}
+	mwh := admission.DefaultingWebhookFor(defaulter)
+	if mwh != nil {
+		path := generateMutatePath(blder.gvk)
 
-			// Checking if the path is already registered.
-			// If so, just skip it.
-			if !blder.isAlreadyHandled(path) {
-				log.Info("Registering a mutating webhook",
-					"GVK", blder.gvk,
-					"path", path)
-				blder.mgr.GetWebhookServer().Register(path, mwh)
-			}
+		// Checking if the path is already registered.
+		// If so, just skip it.
+		if !blder.isAlreadyHandled(path) {
+			log.Info("Registering a mutating webhook",
+				"GVK", blder.gvk,
+				"path", path)
+			blder.mgr.GetWebhookServer().Register(path, mwh)
 		}
 	}
 }
 
 func (blder *WebhookBuilder) registerValidatingWebhook() {
-	if validator, isValidator := blder.apiType.(admission.Validator); isValidator {
-		vwh := admission.ValidatingWebhookFor(validator)
-		if vwh != nil {
-			path := generateValidatePath(blder.gvk)
+	validator, isValidator := blder.apiType.(admission.Validator)
+	if !isValidator {
+		log.Info("skip registering a validating webhook, admission.Validator interface is not implemented", "GVK", blder.gvk)
+		return
+	}
+	vwh := admission.ValidatingWebhookFor(validator)
+	if vwh != nil {
+		path := generateValidatePath(blder.gvk)
 
-			// Checking if the path is already registered.
-			// If so, just skip it.
-			if !blder.isAlreadyHandled(path) {
-				log.Info("Registering a validating webhook",
-					"GVK", blder.gvk,
-					"path", path)
-				blder.mgr.GetWebhookServer().Register(path, vwh)
-			}
+		// Checking if the path is already registered.
+		// If so, just skip it.
+		if !blder.isAlreadyHandled(path) {
+			log.Info("Registering a validating webhook",
+				"GVK", blder.gvk,
+				"path", path)
+			blder.mgr.GetWebhookServer().Register(path, vwh)
 		}
 	}
 }

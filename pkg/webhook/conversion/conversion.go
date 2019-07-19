@@ -174,23 +174,27 @@ func (wh *Webhook) convertViaHub(src, dst conversion.Convertible) error {
 
 // getHub returns an instance of the Hub for passed-in object's group/kind.
 func (wh *Webhook) getHub(obj runtime.Object) (conversion.Hub, error) {
-	gvks, _, err := wh.scheme.ObjectKinds(obj)
+	gvks, err := objectGVKs(wh.scheme, obj)
 	if err != nil {
-		return nil, fmt.Errorf("error retriving object kinds for given object : %v", err)
+		return nil, err
+	}
+	if len(gvks) == 0 {
+		return nil, fmt.Errorf("error retrieving gvks for object : %v", obj)
 	}
 
 	var hub conversion.Hub
-	var isHub, hubFoundAlready bool
+	var hubFoundAlready bool
 	for _, gvk := range gvks {
 		instance, err := wh.scheme.New(gvk)
 		if err != nil {
 			return nil, fmt.Errorf("failed to allocate an instance for gvk %v %v", gvk, err)
 		}
-		if hub, isHub = instance.(conversion.Hub); isHub {
+		if val, isHub := instance.(conversion.Hub); isHub {
 			if hubFoundAlready {
 				return nil, fmt.Errorf("multiple hub version defined for %T", obj)
 			}
 			hubFoundAlready = true
+			hub = val
 		}
 	}
 	return hub, nil
@@ -216,21 +220,24 @@ func (wh *Webhook) allocateDstObject(apiVersion, kind string) (runtime.Object, e
 	return obj, nil
 }
 
-// CheckConvertibility determines if given type is convertible or not. For a type
+// IsConvertible determines if given type is convertible or not. For a type
 // to be convertible, the group-kind needs to have a Hub type defined and all
 // non-hub types must be able to convert to/from Hub.
-func CheckConvertibility(scheme *runtime.Scheme, obj runtime.Object) error {
+func IsConvertible(scheme *runtime.Scheme, obj runtime.Object) (bool, error) {
 	var hubs, spokes, nonSpokes []runtime.Object
 
-	gvks, _, err := scheme.ObjectKinds(obj)
+	gvks, err := objectGVKs(scheme, obj)
 	if err != nil {
-		return fmt.Errorf("error retriving object kinds for given object : %v", err)
+		return false, err
+	}
+	if len(gvks) == 0 {
+		return false, fmt.Errorf("error retrieving gvks for object : %v", obj)
 	}
 
 	for _, gvk := range gvks {
 		instance, err := scheme.New(gvk)
 		if err != nil {
-			return fmt.Errorf("failed to allocate an instance for gvk %v %v", gvk, err)
+			return false, fmt.Errorf("failed to allocate an instance for gvk %v %v", gvk, err)
 		}
 
 		if isHub(instance) {
@@ -247,13 +254,13 @@ func CheckConvertibility(scheme *runtime.Scheme, obj runtime.Object) error {
 	}
 
 	if len(gvks) == 1 {
-		return nil // single version
+		return false, nil // single version
 	}
 
 	if len(hubs) == 0 && len(spokes) == 0 {
 		// multiple version detected with no conversion implementation. This is
 		// true for multi-version built-in types.
-		return nil
+		return false, nil
 	}
 
 	if len(hubs) == 1 && len(nonSpokes) == 0 { // convertible
@@ -261,16 +268,38 @@ func CheckConvertibility(scheme *runtime.Scheme, obj runtime.Object) error {
 		for _, sp := range spokes {
 			spokeVersions = append(spokeVersions, sp.GetObjectKind().GroupVersionKind().String())
 		}
-		log.V(1).Info("conversion enabled for kind", "kind",
-			gvks[0].GroupKind(), "hub", hubs[0], "spokes", spokeVersions)
-		return nil
+		return true, nil
 	}
 
-	return PartialImplementationError{
+	return false, PartialImplementationError{
 		hubs:      hubs,
 		nonSpokes: nonSpokes,
 		spokes:    spokes,
 	}
+}
+
+// objectGVKs returns all (Group,Version,Kind) for the Group/Kind of given object.
+func objectGVKs(scheme *runtime.Scheme, obj runtime.Object) ([]schema.GroupVersionKind, error) {
+	// NB: we should not use `obj.GetObjectKind().GroupVersionKind()` to get the
+	// GVK here, since it is parsed from apiVersion and kind fields and it may
+	// return empty GVK if obj is an uninitialized object.
+	objGVKs, _, err := scheme.ObjectKinds(obj)
+	if err != nil {
+		return nil, err
+	}
+	if len(objGVKs) != 1 {
+		return nil, fmt.Errorf("expect to get only one GVK for %v", obj)
+	}
+	objGVK := objGVKs[0]
+	knownTypes := scheme.AllKnownTypes()
+
+	var gvks []schema.GroupVersionKind
+	for gvk := range knownTypes {
+		if objGVK.GroupKind() == gvk.GroupKind() {
+			gvks = append(gvks, gvk)
+		}
+	}
+	return gvks, nil
 }
 
 // PartialImplementationError represents an error due to partial conversion

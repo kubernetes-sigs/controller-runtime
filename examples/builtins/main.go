@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"os"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -37,11 +36,6 @@ import (
 var log = logf.Log.WithName("example-controller")
 
 func main() {
-	var disableWebhookConfigInstaller bool
-	flag.BoolVar(&disableWebhookConfigInstaller, "disable-webhook-config-installer", false,
-		"disable the installer in the webhook server, so it won't install webhook configuration resources during bootstrapping")
-
-	flag.Parse()
 	logf.SetLogger(zap.Logger(false))
 	entryLog := log.WithName("entrypoint")
 
@@ -78,18 +72,11 @@ func main() {
 
 	// Setup webhooks
 	entryLog.Info("setting up webhook server")
-	hookServer := &webhook.Server{
-		Port:    9876,
-		CertDir: "/tmp/cert",
-	}
-	if err := mgr.Add(hookServer); err != nil {
-		entryLog.Error(err, "unable register webhook server with manager")
-		os.Exit(1)
-	}
+	hookServer := mgr.GetWebhookServer()
 
 	entryLog.Info("registering webhooks to the webhook server")
-	hookServer.Register("/mutate-pods", &webhook.Admission{Handler: &podAnnotator{}})
-	hookServer.Register("/validate-pods", &webhook.Admission{Handler: &podValidator{}})
+	hookServer.Register("/mutate-v1-pod", &webhook.Admission{Handler: &podAnnotator{}})
+	hookServer.Register("/validate-v1-pod", &webhook.Admission{Handler: &podValidator{}})
 
 	entryLog.Info("starting manager")
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {

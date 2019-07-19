@@ -29,12 +29,13 @@ import (
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	apix "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 
-	jobsapis "sigs.k8s.io/controller-runtime/examples/conversion/pkg/apis"
-	jobsv1 "sigs.k8s.io/controller-runtime/examples/conversion/pkg/apis/jobs/v1"
-	jobsv2 "sigs.k8s.io/controller-runtime/examples/conversion/pkg/apis/jobs/v2"
+	jobsv1 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v1"
+	jobsv2 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v2"
+	jobsv3 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v3"
 )
 
 var _ = Describe("Conversion Webhook", func() {
@@ -49,8 +50,11 @@ var _ = Describe("Conversion Webhook", func() {
 			Body: bytes.NewBuffer(nil),
 		}
 
-		scheme = kscheme.Scheme
-		Expect(jobsapis.AddToScheme(scheme)).To(Succeed())
+		scheme = runtime.NewScheme()
+		Expect(kscheme.AddToScheme(scheme)).To(Succeed())
+		Expect(jobsv1.AddToScheme(scheme)).To(Succeed())
+		Expect(jobsv2.AddToScheme(scheme)).To(Succeed())
+		Expect(jobsv3.AddToScheme(scheme)).To(Succeed())
 		Expect(webhook.InjectScheme(scheme)).To(Succeed())
 
 		var err error
@@ -77,7 +81,7 @@ var _ = Describe("Conversion Webhook", func() {
 		return &jobsv1.ExternalJob{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "ExternalJob",
-				APIVersion: "jobs.example.org/v1",
+				APIVersion: "jobs.testprojects.kb.io/v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "default",
@@ -89,14 +93,30 @@ var _ = Describe("Conversion Webhook", func() {
 		}
 	}
 
-	It("should convert objects successfully", func() {
+	makeV2Obj := func() *jobsv2.ExternalJob {
+		return &jobsv2.ExternalJob{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ExternalJob",
+				APIVersion: "jobs.testprojects.kb.io/v2",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "obj-1",
+			},
+			Spec: jobsv2.ExternalJobSpec{
+				ScheduleAt: "every 2 seconds",
+			},
+		}
+	}
+
+	It("should convert spoke to hub successfully", func() {
 
 		v1Obj := makeV1Obj()
 
 		expected := &jobsv2.ExternalJob{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "ExternalJob",
-				APIVersion: "jobs.example.org/v2",
+				APIVersion: "jobs.testprojects.kb.io/v2",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "default",
@@ -110,7 +130,85 @@ var _ = Describe("Conversion Webhook", func() {
 		convReq := &apix.ConversionReview{
 			TypeMeta: metav1.TypeMeta{},
 			Request: &apix.ConversionRequest{
-				DesiredAPIVersion: "jobs.example.org/v2",
+				DesiredAPIVersion: "jobs.testprojects.kb.io/v2",
+				Objects: []runtime.RawExtension{
+					{
+						Object: v1Obj,
+					},
+				},
+			},
+		}
+
+		convReview := doRequest(convReq)
+
+		Expect(convReview.Response.ConvertedObjects).To(HaveLen(1))
+		Expect(convReview.Response.Result.Status).To(Equal(metav1.StatusSuccess))
+		got, _, err := decoder.Decode(convReview.Response.ConvertedObjects[0].Raw)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(got).To(Equal(expected))
+	})
+
+	It("should convert hub to spoke successfully", func() {
+
+		v2Obj := makeV2Obj()
+
+		expected := &jobsv1.ExternalJob{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ExternalJob",
+				APIVersion: "jobs.testprojects.kb.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "obj-1",
+			},
+			Spec: jobsv1.ExternalJobSpec{
+				RunAt: "every 2 seconds",
+			},
+		}
+
+		convReq := &apix.ConversionReview{
+			TypeMeta: metav1.TypeMeta{},
+			Request: &apix.ConversionRequest{
+				DesiredAPIVersion: "jobs.testprojects.kb.io/v1",
+				Objects: []runtime.RawExtension{
+					{
+						Object: v2Obj,
+					},
+				},
+			},
+		}
+
+		convReview := doRequest(convReq)
+
+		Expect(convReview.Response.ConvertedObjects).To(HaveLen(1))
+		Expect(convReview.Response.Result.Status).To(Equal(metav1.StatusSuccess))
+		got, _, err := decoder.Decode(convReview.Response.ConvertedObjects[0].Raw)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(got).To(Equal(expected))
+	})
+
+	It("should convert spoke to spoke successfully", func() {
+
+		v1Obj := makeV1Obj()
+
+		expected := &jobsv3.ExternalJob{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ExternalJob",
+				APIVersion: "jobs.testprojects.kb.io/v3",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "obj-1",
+			},
+			Spec: jobsv3.ExternalJobSpec{
+				DeferredAt: "every 2 seconds",
+			},
+		}
+
+		convReq := &apix.ConversionReview{
+			TypeMeta: metav1.TypeMeta{},
+			Request: &apix.ConversionRequest{
+				DesiredAPIVersion: "jobs.testprojects.kb.io/v3",
 				Objects: []runtime.RawExtension{
 					{
 						Object: v1Obj,
@@ -156,7 +254,7 @@ var _ = Describe("Conversion Webhook", func() {
 		convReq := &apix.ConversionReview{
 			TypeMeta: metav1.TypeMeta{},
 			Request: &apix.ConversionRequest{
-				DesiredAPIVersion: "jobs.example.org/v1",
+				DesiredAPIVersion: "jobs.testprojects.kb.io/v1",
 				Objects: []runtime.RawExtension{
 					{
 						Object: v1Obj,
@@ -202,30 +300,54 @@ var _ = Describe("Conversion Webhook", func() {
 
 })
 
-var _ = Describe("Convertibility Check", func() {
+var _ = Describe("IsConvertible", func() {
 
 	var scheme *runtime.Scheme
 
 	BeforeEach(func() {
+		scheme = runtime.NewScheme()
 
-		scheme = kscheme.Scheme
-		Expect(jobsapis.AddToScheme(scheme)).To(Succeed())
-
+		Expect(kscheme.AddToScheme(scheme)).To(Succeed())
+		Expect(jobsv1.AddToScheme(scheme)).To(Succeed())
+		Expect(jobsv2.AddToScheme(scheme)).To(Succeed())
+		Expect(jobsv3.AddToScheme(scheme)).To(Succeed())
 	})
 
-	It("should not return error for convertible types", func() {
-		obj := &jobsv2.ExternalJob{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ExternalJob",
-				APIVersion: "jobs.example.org/v2",
+	It("should not error for uninitialized types", func() {
+		obj := &jobsv2.ExternalJob{}
+
+		ok, err := IsConvertible(scheme, obj)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ok).To(BeTrue())
+	})
+
+	It("should not error for unstructured types", func() {
+		obj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"kind":       "ExternalJob",
+				"apiVersion": "jobs.testprojects.kb.io/v2",
 			},
 		}
 
-		err := CheckConvertibility(scheme, obj)
+		ok, err := IsConvertible(scheme, obj)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(ok).To(BeTrue())
 	})
 
-	It("should not return error for a built-in multi-version type", func() {
+	It("should return true for convertible types", func() {
+		obj := &jobsv2.ExternalJob{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ExternalJob",
+				APIVersion: "jobs.testprojects.kb.io/v2",
+			},
+		}
+
+		ok, err := IsConvertible(scheme, obj)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ok).To(BeTrue())
+	})
+
+	It("should return false for a non convertible type", func() {
 		obj := &appsv1beta1.Deployment{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Deployment",
@@ -233,7 +355,8 @@ var _ = Describe("Convertibility Check", func() {
 			},
 		}
 
-		err := CheckConvertibility(scheme, obj)
+		ok, err := IsConvertible(scheme, obj)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(ok).ToNot(BeTrue())
 	})
 })

@@ -50,7 +50,7 @@ var _ = Describe("runtime inject", func() {
 		Expect(res).To(Equal(true))
 		Expect(injectedCache).To(Equal(instance.GetCache()))
 
-		By("Returing false if the type does not implement inject.Cache")
+		By("Returning false if the type does not implement inject.Cache")
 		res, err = CacheInto(injectedCache, uninjectable)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(Equal(expectedFalse))

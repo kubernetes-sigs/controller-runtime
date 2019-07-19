@@ -97,7 +97,7 @@ func (c *CacheReader) List(_ context.Context, out runtime.Object, opts ...client
 
 	if listOpts.FieldSelector != nil {
 		// TODO(directxman12): support more complicated field selectors by
-		// combining multiple indicies, GetIndexers, etc
+		// combining multiple indices, GetIndexers, etc
 		field, val, requiresExact := requiresExactMatch(listOpts.FieldSelector)
 		if !requiresExact {
 			return fmt.Errorf("non-exact field matches are not supported by the cache")

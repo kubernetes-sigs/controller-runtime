@@ -63,7 +63,10 @@ type Manager interface {
 	// GetScheme returns an initialized Scheme
 	GetScheme() *runtime.Scheme
 
-	// GetClient returns a client configured with the Config
+	// GetClient returns a client configured with the Config. This client may
+	// not be a fully "direct" client -- it may read from a cache, for
+	// instance.  See Options.NewClient for more information on how the default
+	// implementation works.
 	GetClient() client.Client
 
 	// GetFieldIndexer returns a client.FieldIndexer configured with the client
@@ -135,7 +138,8 @@ type Options struct {
 	Namespace string
 
 	// MetricsBindAddress is the TCP address that the controller should bind to
-	// for serving prometheus metrics
+	// for serving prometheus metrics.
+	// It can be set to "0" to disable the metrics serving.
 	MetricsBindAddress string
 
 	// Port is the port that the webhook server serves at.
@@ -242,7 +246,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
-	// Create the mertics listener. This will throw an error if the metrics bind
+	// Create the metrics listener. This will throw an error if the metrics bind
 	// address is invalid or already in use.
 	metricsListener, err := options.newMetricsListener(options.MetricsBindAddress)
 	if err != nil {

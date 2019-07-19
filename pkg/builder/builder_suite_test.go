@@ -77,7 +77,7 @@ var _ = AfterSuite(func() {
 
 func addCRDToEnvironment(env *envtest.Environment, gvks ...schema.GroupVersionKind) {
 	for _, gvk := range gvks {
-		plural, singlar := meta.UnsafeGuessKindToResource(gvk)
+		plural, singular := meta.UnsafeGuessKindToResource(gvk)
 		crd := &apiextensionsv1beta1.CustomResourceDefinition{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "apiextensions.k8s.io",
@@ -91,7 +91,7 @@ func addCRDToEnvironment(env *envtest.Environment, gvks ...schema.GroupVersionKi
 				Version: gvk.Version,
 				Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
 					Plural:   plural.Resource,
-					Singular: singlar.Resource,
+					Singular: singular.Resource,
 					Kind:     gvk.Kind,
 				},
 				Versions: []apiextensionsv1beta1.CustomResourceDefinitionVersion{

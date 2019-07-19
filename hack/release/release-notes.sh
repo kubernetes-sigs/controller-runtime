@@ -50,7 +50,7 @@ while read commit_word commit; do
         patch)
             bugfixes="${bugfixes}- ${pr_title} (#${pr_number})${NEWLINE}"
             ;;
-        docs|other)
+        docs|no_release_note|other)
             # skip non-code-changes
             ;;
         unknown)
@@ -64,8 +64,8 @@ done <<<$(git rev-list ${last_tag}..HEAD --merges --pretty=format:%B)
 
 # TODO: sort non merge commits with tags
 
-[[ -n "${breaking}" ]] && printf '\e[1;31mbreaking changes this version\e[0m' >&2
-[[ -n "${unknown}" ]] && printf '\e[1;35munknown changes in this release -- categorize manually\e[0m' >&2
+[[ -n "${breaking}" ]] && printf '\e[1;31mbreaking changes this version\e[0m\n' >&2
+[[ -n "${unknown}" ]] && printf '\e[1;35munknown changes in this release -- categorize manually\e[0m\n' >&2
 
 echo "" >&2
 echo "" >&2

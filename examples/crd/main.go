@@ -125,9 +125,16 @@ func main() {
 			Client: mgr.GetClient(),
 			scheme: mgr.GetScheme(),
 		})
-
 	if err != nil {
 		setupLog.Error(err, "unable to create controller")
+		os.Exit(1)
+	}
+
+	err = ctrl.NewWebhookManagedBy(mgr).
+		For(&api.ChaosPod{}).
+		Complete()
+	if err != nil {
+		setupLog.Error(err, "unable to create webhook")
 		os.Exit(1)
 	}
 

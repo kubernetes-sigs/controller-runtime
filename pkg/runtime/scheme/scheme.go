@@ -20,3 +20,10 @@ limitations under the License.
 //
 // Deprecated: use pkg/scheme instead.
 package scheme
+
+import (
+	"sigs.k8s.io/controller-runtime/pkg/scheme"
+)
+
+// Builder builds a new Scheme for mapping go types to Kubernetes GroupVersionKinds.
+type Builder = scheme.Builder

@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/appscode/jsonpatch"
+	"gomodules.xyz/jsonpatch/v2"
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -112,7 +112,7 @@ var _ = Describe("Admission Webhooks", func() {
 			}),
 		}
 
-		By("invoking the webhoook")
+		By("invoking the webhook")
 		resp := webhook.Handle(context.Background(), Request{})
 
 		By("checking that a JSON patch is populated on the response")

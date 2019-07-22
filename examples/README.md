@@ -2,7 +2,7 @@
 
 These two examples represent the usage of `controller-runtime` libraries for built-in Kubernetes resources as well as custom resources.
 
-## builtins/
+### builtins/
 
 This example implements a custom controller and webhooks for the *existing* ReplicaSet resource.
 
@@ -15,7 +15,7 @@ This example implements a custom controller and webhooks for the *existing* Repl
     3. Registers the mutating and validating webhooks with the manager
     4. Starts the manager
 
-## crd/
+### crd/
 
 This example implements a *new* Kubernetes resource, ChaosPod, and creates a custom controller that watches it and webhooks that mutate and validate.
 
@@ -30,3 +30,7 @@ This example implements a *new* Kubernetes resource, ChaosPod, and creates a cus
     4. Creates a new controller that watches ChaosPods and reconciles the objects with the implemented reconciler
     5. Adds ChaosPod webhooks to manager
     6. Starts the manager
+
+## Deploying and Running
+
+To install and run the provided examples, see the Kubebuilder [Quick Start](https://book.kubebuilder.io/quick-start.html).

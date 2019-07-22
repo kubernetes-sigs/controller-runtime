@@ -59,6 +59,7 @@ func deleteNamespace(ns *corev1.Namespace) {
 var _ = Describe("Client", func() {
 
 	var scheme *runtime.Scheme
+	var depGvk schema.GroupVersionKind
 	var dep *appsv1.Deployment
 	var pod *corev1.Pod
 	var node *corev1.Node
@@ -81,6 +82,11 @@ var _ = Describe("Client", func() {
 					Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
 				},
 			},
+		}
+		depGvk = schema.GroupVersionKind{
+			Group:   "apps",
+			Kind:    "Deployment",
+			Version: "v1",
 		}
 		// Pod is invalid without a container field in the PodSpec
 		pod = &corev1.Pod{
@@ -453,6 +459,26 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
+			It("should update and preserve type information", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("updating the Deployment")
+				dep.SetGroupVersionKind(depGvk)
+				err = cl.Update(context.TODO(), dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating updated Deployment has type information")
+				Expect(dep.GroupVersionKind()).To(Equal(depGvk))
+
+				close(done)
+			})
+
 			It("should update an existing object non-namespace object from a go struct", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
@@ -550,6 +576,29 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
+			It("should update and preserve type information", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("updating the Deployment")
+				u := &unstructured.Unstructured{}
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
+				u.SetGroupVersionKind(depGvk)
+				u.SetAnnotations(map[string]string{"foo": "bar"})
+				err = cl.Update(context.TODO(), u)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating updated Deployment has type information")
+				Expect(u.GroupVersionKind()).To(Equal(depGvk))
+
+				close(done)
+			})
+
 			It("should update an existing object non-namespace object from a go struct", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
@@ -586,11 +635,7 @@ var _ = Describe("Client", func() {
 				By("updating non-existent object")
 				u := &unstructured.Unstructured{}
 				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
-				u.SetGroupVersionKind(schema.GroupVersionKind{
-					Group:   "apps",
-					Kind:    "Deployment",
-					Version: "v1",
-				})
+				u.SetGroupVersionKind(depGvk)
 				err = cl.Update(context.TODO(), dep)
 				Expect(err).To(HaveOccurred())
 
@@ -620,6 +665,49 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
+
+				close(done)
+			})
+
+			It("should update status and preserve type information", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("updating the status of Deployment")
+				dep.SetGroupVersionKind(depGvk)
+				dep.Status.Replicas = 1
+				err = cl.Status().Update(context.TODO(), dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating updated Deployment has type information")
+				Expect(dep.GroupVersionKind()).To(Equal(depGvk))
+
+				close(done)
+			})
+
+			It("should patch status and preserve type information", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("patching the status of Deployment")
+				dep.SetGroupVersionKind(depGvk)
+				depPatch := client.MergeFrom(dep.DeepCopy())
+				dep.Status.Replicas = 1
+				err = cl.Status().Patch(context.TODO(), dep, depPatch)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating updated Deployment has type information")
+				Expect(dep.GroupVersionKind()).To(Equal(depGvk))
 
 				close(done)
 			})
@@ -1001,6 +1089,26 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
+			It("should patch and preserve type information", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("patching the Deployment")
+				dep.SetGroupVersionKind(depGvk)
+				err = cl.Patch(context.TODO(), dep, client.ConstantPatch(types.MergePatchType, mergePatch))
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating updated Deployment has type information")
+				Expect(dep.GroupVersionKind()).To(Equal(depGvk))
+
+				close(done)
+			})
+
 			It("should patch an existing object non-namespace object from a go struct", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1111,6 +1219,28 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
+
+				close(done)
+			})
+
+			It("should patch and preserve type information", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("patching the Deployment")
+				u := &unstructured.Unstructured{}
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
+				u.SetGroupVersionKind(depGvk)
+				err = cl.Patch(context.TODO(), u, client.ConstantPatch(types.MergePatchType, mergePatch))
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating updated Deployment has type information")
+				Expect(u.GroupVersionKind()).To(Equal(depGvk))
 
 				close(done)
 			})

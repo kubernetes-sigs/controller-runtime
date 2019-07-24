@@ -2000,7 +2000,7 @@ var _ = Describe("Client", func() {
 	Describe("CreateOptions", func() {
 		It("should allow setting DryRun to 'all'", func() {
 			co := &client.CreateOptions{}
-			client.CreateDryRunAll(co)
+			client.DryRunAll.ApplyToCreate(co)
 			all := []string{metav1.DryRunAll}
 			Expect(co.AsCreateOptions().DryRun).To(Equal(all))
 		})
@@ -2016,7 +2016,7 @@ var _ = Describe("Client", func() {
 	Describe("DeleteOptions", func() {
 		It("should allow setting GracePeriodSeconds", func() {
 			do := &client.DeleteOptions{}
-			client.GracePeriodSeconds(1)(do)
+			client.GracePeriodSeconds(1).ApplyToDelete(do)
 			gp := int64(1)
 			Expect(do.AsDeleteOptions().GracePeriodSeconds).To(Equal(&gp))
 		})
@@ -2024,14 +2024,14 @@ var _ = Describe("Client", func() {
 		It("should allow setting Precondition", func() {
 			do := &client.DeleteOptions{}
 			pc := metav1.NewUIDPreconditions("uid")
-			client.Preconditions(pc)(do)
+			client.Preconditions(*pc).ApplyToDelete(do)
 			Expect(do.AsDeleteOptions().Preconditions).To(Equal(pc))
 			Expect(do.Preconditions).To(Equal(pc))
 		})
 
 		It("should allow setting PropagationPolicy", func() {
 			do := &client.DeleteOptions{}
-			client.PropagationPolicy(metav1.DeletePropagationForeground)(do)
+			client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(do)
 			dp := metav1.DeletePropagationForeground
 			Expect(do.AsDeleteOptions().PropagationPolicy).To(Equal(&dp))
 		})
@@ -2048,9 +2048,9 @@ var _ = Describe("Client", func() {
 			pc := metav1.NewUIDPreconditions("uid")
 			dp := metav1.DeletePropagationForeground
 			do := &client.DeleteOptions{}
-			do.ApplyOptions([]client.DeleteOptionFunc{
+			do.ApplyOptions([]client.DeleteOption{
 				client.GracePeriodSeconds(gp),
-				client.Preconditions(pc),
+				client.Preconditions(*pc),
 				client.PropagationPolicy(dp),
 			})
 			Expect(do.GracePeriodSeconds).To(Equal(&gp))
@@ -2060,79 +2060,35 @@ var _ = Describe("Client", func() {
 	})
 
 	Describe("ListOptions", func() {
-		It("should be able to set a LabelSelector", func() {
-			lo := &client.ListOptions{}
-			err := lo.SetLabelSelector("foo=bar")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(lo.LabelSelector.String()).To(Equal("foo=bar"))
-		})
-
-		It("should be able to set a FieldSelector", func() {
-			lo := &client.ListOptions{}
-			err := lo.SetFieldSelector("field1=bar")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(lo.FieldSelector.String()).To(Equal("field1=bar"))
-		})
-
-		It("should be converted to metav1.ListOptions", func() {
-			lo := &client.ListOptions{}
-			labels := map[string]string{"foo": "bar"}
-			mlo := lo.MatchingLabels(labels).
-				MatchingField("field1", "bar").
-				InNamespace("test-namespace").
-				AsListOptions()
+		It("should be convertable to metav1.ListOptions", func() {
+			lo := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
+				client.MatchingField("field1", "bar"),
+				client.InNamespace("test-namespace"),
+				client.MatchingLabels{"foo": "bar"},
+			})
+			mlo := lo.AsListOptions()
 			Expect(mlo).NotTo(BeNil())
 			Expect(mlo.LabelSelector).To(Equal("foo=bar"))
 			Expect(mlo.FieldSelector).To(Equal("field1=bar"))
 		})
 
-		It("should be able to set MatchingLabels", func() {
+		It("should be populated by MatchingLabels", func() {
 			lo := &client.ListOptions{}
-			Expect(lo.LabelSelector).To(BeNil())
-			labels := map[string]string{"foo": "bar"}
-			lo = lo.MatchingLabels(labels)
-			Expect(lo.LabelSelector.String()).To(Equal("foo=bar"))
-		})
-
-		It("should be able to set MatchingField", func() {
-			lo := &client.ListOptions{}
-			Expect(lo.FieldSelector).To(BeNil())
-			lo = lo.MatchingField("field1", "bar")
-			Expect(lo.FieldSelector.String()).To(Equal("field1=bar"))
-		})
-
-		It("should be able to set InNamespace", func() {
-			lo := &client.ListOptions{}
-			lo = lo.InNamespace("test-namespace")
-			Expect(lo.Namespace).To(Equal("test-namespace"))
-		})
-
-		It("should be created from MatchingLabels", func() {
-			labels := map[string]string{"foo": "bar"}
-			lo := &client.ListOptions{}
-			client.MatchingLabels(labels)(lo)
+			client.MatchingLabels{"foo": "bar"}.ApplyToList(lo)
 			Expect(lo).NotTo(BeNil())
 			Expect(lo.LabelSelector.String()).To(Equal("foo=bar"))
 		})
 
-		It("should be created from MatchingField", func() {
+		It("should be populated by MatchingField", func() {
 			lo := &client.ListOptions{}
-			client.MatchingField("field1", "bar")(lo)
+			client.MatchingField("field1", "bar").ApplyToList(lo)
 			Expect(lo).NotTo(BeNil())
 			Expect(lo.FieldSelector.String()).To(Equal("field1=bar"))
 		})
 
-		It("should be created from InNamespace", func() {
+		It("should be populated by InNamespace", func() {
 			lo := &client.ListOptions{}
-			client.InNamespace("test")(lo)
-			Expect(lo).NotTo(BeNil())
-			Expect(lo.Namespace).To(Equal("test"))
-		})
-
-		It("should allow pre-built ListOptions", func() {
-			lo := &client.ListOptions{}
-			newLo := &client.ListOptions{}
-			client.UseListOptions(newLo.InNamespace("test"))(lo)
+			client.InNamespace("test").ApplyToList(lo)
 			Expect(lo).NotTo(BeNil())
 			Expect(lo.Namespace).To(Equal("test"))
 		})
@@ -2141,7 +2097,7 @@ var _ = Describe("Client", func() {
 	Describe("UpdateOptions", func() {
 		It("should allow setting DryRun to 'all'", func() {
 			uo := &client.UpdateOptions{}
-			client.UpdateDryRunAll(uo)
+			client.DryRunAll.ApplyToUpdate(uo)
 			all := []string{metav1.DryRunAll}
 			Expect(uo.AsUpdateOptions().DryRun).To(Equal(all))
 		})
@@ -2157,14 +2113,14 @@ var _ = Describe("Client", func() {
 	Describe("PatchOptions", func() {
 		It("should allow setting DryRun to 'all'", func() {
 			po := &client.PatchOptions{}
-			client.PatchDryRunAll(po)
+			client.DryRunAll.ApplyToPatch(po)
 			all := []string{metav1.DryRunAll}
 			Expect(po.AsPatchOptions().DryRun).To(Equal(all))
 		})
 
 		It("should allow setting Force to 'true'", func() {
 			po := &client.PatchOptions{}
-			client.ForceOwnership(po)
+			client.ForceOwnership.ApplyToPatch(po)
 			mpo := po.AsPatchOptions()
 			Expect(mpo.Force).NotTo(BeNil())
 			Expect(*mpo.Force).To(BeTrue())
@@ -2172,7 +2128,7 @@ var _ = Describe("Client", func() {
 
 		It("should allow setting the field manager", func() {
 			po := &client.PatchOptions{}
-			client.FieldOwner("some-owner")(po)
+			client.FieldOwner("some-owner").ApplyToPatch(po)
 			Expect(po.AsPatchOptions().FieldManager).To(Equal("some-owner"))
 		})
 
@@ -2320,7 +2276,7 @@ func (f *fakeReader) Get(ctx context.Context, key client.ObjectKey, obj runtime.
 	return nil
 }
 
-func (f *fakeReader) List(ctx context.Context, list runtime.Object, opts ...client.ListOptionFunc) error {
+func (f *fakeReader) List(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
 	f.Called = f.Called + 1
 	return nil
 }

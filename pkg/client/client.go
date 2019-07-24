@@ -104,7 +104,7 @@ type client struct {
 }
 
 // Create implements client.Client
-func (c *client) Create(ctx context.Context, obj runtime.Object, opts ...CreateOptionFunc) error {
+func (c *client) Create(ctx context.Context, obj runtime.Object, opts ...CreateOption) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return c.unstructuredClient.Create(ctx, obj, opts...)
@@ -113,7 +113,7 @@ func (c *client) Create(ctx context.Context, obj runtime.Object, opts ...CreateO
 }
 
 // Update implements client.Client
-func (c *client) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOptionFunc) error {
+func (c *client) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOption) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return c.unstructuredClient.Update(ctx, obj, opts...)
@@ -122,7 +122,7 @@ func (c *client) Update(ctx context.Context, obj runtime.Object, opts ...UpdateO
 }
 
 // Delete implements client.Client
-func (c *client) Delete(ctx context.Context, obj runtime.Object, opts ...DeleteOptionFunc) error {
+func (c *client) Delete(ctx context.Context, obj runtime.Object, opts ...DeleteOption) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return c.unstructuredClient.Delete(ctx, obj, opts...)
@@ -131,7 +131,7 @@ func (c *client) Delete(ctx context.Context, obj runtime.Object, opts ...DeleteO
 }
 
 // Patch implements client.Client
-func (c *client) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error {
+func (c *client) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOption) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return c.unstructuredClient.Patch(ctx, obj, patch, opts...)
@@ -149,7 +149,7 @@ func (c *client) Get(ctx context.Context, key ObjectKey, obj runtime.Object) err
 }
 
 // List implements client.Client
-func (c *client) List(ctx context.Context, obj runtime.Object, opts ...ListOptionFunc) error {
+func (c *client) List(ctx context.Context, obj runtime.Object, opts ...ListOption) error {
 	_, ok := obj.(*unstructured.UnstructuredList)
 	if ok {
 		return c.unstructuredClient.List(ctx, obj, opts...)
@@ -171,7 +171,7 @@ type statusWriter struct {
 var _ StatusWriter = &statusWriter{}
 
 // Update implements client.StatusWriter
-func (sw *statusWriter) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOptionFunc) error {
+func (sw *statusWriter) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOption) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return sw.client.unstructuredClient.UpdateStatus(ctx, obj, opts...)
@@ -180,7 +180,7 @@ func (sw *statusWriter) Update(ctx context.Context, obj runtime.Object, opts ...
 }
 
 // Patch implements client.Client
-func (sw *statusWriter) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOptionFunc) error {
+func (sw *statusWriter) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOption) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return sw.client.unstructuredClient.PatchStatus(ctx, obj, patch, opts...)

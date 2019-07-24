@@ -143,7 +143,7 @@ var _ = Describe("manger.Manager", func() {
 				m, err := New(cfg, Options{
 					LeaderElection:          true,
 					LeaderElectionNamespace: "default",
-					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+					NewResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
 						var err error
 						rl, err = leaderelection.NewResourceLock(config, recorderProvider, options)
 						return rl, err
@@ -299,7 +299,7 @@ var _ = Describe("manger.Manager", func() {
 				LeaderElection:          true,
 				LeaderElectionID:        "controller-runtime",
 				LeaderElectionNamespace: "default",
-				newResourceLock:         fakeleaderelection.NewResourceLock,
+				NewResourceLock:         fakeleaderelection.NewResourceLock,
 			})
 		})
 

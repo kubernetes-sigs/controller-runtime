@@ -160,9 +160,13 @@ type Options struct {
 	// use the cache for reads and the client for writes.
 	NewClient NewClientFunc
 
+	// NewResourceLock is the function to create a resourceLock
+	// Manager can use customized resourcelock for leader selection
+	// If not privided, will use configmapLocks as default
+	NewResourceLock func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
+
 	// Dependency injection for testing
 	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error)
-	newResourceLock     func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
 	newMetricsListener  func(addr string) (net.Listener, error)
 }
 
@@ -237,7 +241,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}
 
 	// Create the resource lock to enable leader election)
-	resourceLock, err := options.newResourceLock(config, recorderProvider, leaderelection.Options{
+	resourceLock, err := options.NewResourceLock(config, recorderProvider, leaderelection.Options{
 		LeaderElection:          options.LeaderElection,
 		LeaderElectionID:        options.LeaderElectionID,
 		LeaderElectionNamespace: options.LeaderElectionNamespace,
@@ -321,9 +325,9 @@ func setOptionsDefaults(options Options) Options {
 		options.newRecorderProvider = internalrecorder.NewProvider
 	}
 
-	// Allow newResourceLock to be mocked
-	if options.newResourceLock == nil {
-		options.newResourceLock = leaderelection.NewResourceLock
+	// Allow NewResourceLock to be mocked
+	if options.NewResourceLock == nil {
+		options.NewResourceLock = leaderelection.NewResourceLock
 	}
 
 	if options.newMetricsListener == nil {

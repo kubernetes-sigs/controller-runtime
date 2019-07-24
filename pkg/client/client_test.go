@@ -2005,6 +2005,12 @@ var _ = Describe("Client", func() {
 			Expect(co.AsCreateOptions().DryRun).To(Equal(all))
 		})
 
+		It("should allow setting the field manager", func() {
+			po := &client.CreateOptions{}
+			client.FieldOwner("some-owner").ApplyToCreate(po)
+			Expect(po.AsCreateOptions().FieldManager).To(Equal("some-owner"))
+		})
+
 		It("should produce empty metav1.CreateOptions if nil", func() {
 			var co *client.CreateOptions
 			Expect(co.AsCreateOptions()).To(Equal(&metav1.CreateOptions{}))
@@ -2034,6 +2040,13 @@ var _ = Describe("Client", func() {
 			client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(do)
 			dp := metav1.DeletePropagationForeground
 			Expect(do.AsDeleteOptions().PropagationPolicy).To(Equal(&dp))
+		})
+
+		It("should allow setting DryRun", func() {
+			do := &client.DeleteOptions{}
+			client.DryRunAll.ApplyToDelete(do)
+			all := []string{metav1.DryRunAll}
+			Expect(do.AsDeleteOptions().DryRun).To(Equal(all))
 		})
 
 		It("should produce empty metav1.DeleteOptions if nil", func() {
@@ -2100,6 +2113,12 @@ var _ = Describe("Client", func() {
 			client.DryRunAll.ApplyToUpdate(uo)
 			all := []string{metav1.DryRunAll}
 			Expect(uo.AsUpdateOptions().DryRun).To(Equal(all))
+		})
+
+		It("should allow setting the field manager", func() {
+			po := &client.UpdateOptions{}
+			client.FieldOwner("some-owner").ApplyToUpdate(po)
+			Expect(po.AsUpdateOptions().FieldManager).To(Equal("some-owner"))
 		})
 
 		It("should produce empty metav1.UpdateOptions if nil", func() {

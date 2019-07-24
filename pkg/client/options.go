@@ -73,6 +73,9 @@ func (dryRunAll) ApplyToUpdate(opts *UpdateOptions) {
 func (dryRunAll) ApplyToPatch(opts *PatchOptions) {
 	opts.DryRun = []string{metav1.DryRunAll}
 }
+func (dryRunAll) ApplyToDelete(opts *DeleteOptions) {
+	opts.DryRun = []string{metav1.DryRunAll}
+}
 
 // FieldOwner set the field manager name for the given server-side apply patch.
 type FieldOwner string
@@ -80,17 +83,11 @@ type FieldOwner string
 func (f FieldOwner) ApplyToPatch(opts *PatchOptions) {
 	opts.FieldManager = string(f)
 }
-
-// ForceOwnership indicates that in case of conflicts with server-side apply,
-// the client should acquire ownership of the conflicting field.  Most
-// controllers should use this.
-var ForceOwnership = forceOwnership{}
-
-type forceOwnership struct{}
-
-func (forceOwnership) ApplyToPatch(opts *PatchOptions) {
-	definitelyTrue := true
-	opts.Force = &definitelyTrue
+func (f FieldOwner) ApplyToCreate(opts *CreateOptions) {
+	opts.FieldManager = string(f)
+}
+func (f FieldOwner) ApplyToUpdate(opts *UpdateOptions) {
+	opts.FieldManager = string(f)
 }
 
 // }}}
@@ -107,6 +104,10 @@ type CreateOptions struct {
 	// - All: all dry run stages will be processed
 	DryRun []string
 
+	// FieldManager is the name of the user or component submitting
+	// this request.  It must be set with server-side apply.
+	FieldManager string
+
 	// Raw represents raw CreateOptions, as passed to the API server.
 	Raw *metav1.CreateOptions
 }
@@ -122,6 +123,7 @@ func (o *CreateOptions) AsCreateOptions() *metav1.CreateOptions {
 	}
 
 	o.Raw.DryRun = o.DryRun
+	o.Raw.FieldManager = o.FieldManager
 	return o.Raw
 }
 
@@ -168,6 +170,13 @@ type DeleteOptions struct {
 
 	// Raw represents raw DeleteOptions, as passed to the API server.
 	Raw *metav1.DeleteOptions
+
+	// When present, indicates that modifications should not be
+	// persisted. An invalid or unrecognized dryRun directive will
+	// result in an error response and no further processing of the
+	// request. Valid values are:
+	// - All: all dry run stages will be processed
+	DryRun []string
 }
 
 // AsDeleteOptions returns these options as a metav1.DeleteOptions.
@@ -183,6 +192,7 @@ func (o *DeleteOptions) AsDeleteOptions() *metav1.DeleteOptions {
 	o.Raw.GracePeriodSeconds = o.GracePeriodSeconds
 	o.Raw.Preconditions = o.Preconditions
 	o.Raw.PropagationPolicy = o.PropagationPolicy
+	o.Raw.DryRun = o.DryRun
 	return o.Raw
 }
 
@@ -320,6 +330,10 @@ type UpdateOptions struct {
 	// - All: all dry run stages will be processed
 	DryRun []string
 
+	// FieldManager is the name of the user or component submitting
+	// this request.  It must be set with server-side apply.
+	FieldManager string
+
 	// Raw represents raw UpdateOptions, as passed to the API server.
 	Raw *metav1.UpdateOptions
 }
@@ -335,6 +349,7 @@ func (o *UpdateOptions) AsUpdateOptions() *metav1.UpdateOptions {
 	}
 
 	o.Raw.DryRun = o.DryRun
+	o.Raw.FieldManager = o.FieldManager
 	return o.Raw
 }
 
@@ -402,6 +417,18 @@ func (o *PatchOptions) AsPatchOptions() *metav1.PatchOptions {
 	o.Raw.Force = o.Force
 	o.Raw.FieldManager = o.FieldManager
 	return o.Raw
+}
+
+// ForceOwnership indicates that in case of conflicts with server-side apply,
+// the client should acquire ownership of the conflicting field.  Most
+// controllers should use this.
+var ForceOwnership = forceOwnership{}
+
+type forceOwnership struct{}
+
+func (forceOwnership) ApplyToPatch(opts *PatchOptions) {
+	definitelyTrue := true
+	opts.Force = &definitelyTrue
 }
 
 // PatchDryRunAll sets the "dry run" option to "all".

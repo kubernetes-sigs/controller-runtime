@@ -161,8 +161,47 @@ func (c *fakeClient) Delete(ctx context.Context, obj runtime.Object, opts ...cli
 	if err != nil {
 		return err
 	}
+	delOptions := client.DeleteOptions{}
+	delOptions.ApplyOptions(opts)
+
 	//TODO: implement propagation
 	return c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
+}
+
+func (c *fakeClient) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...client.DeleteAllOfOption) error {
+	gvk, err := apiutil.GVKForObject(obj, scheme.Scheme)
+	if err != nil {
+		return err
+	}
+
+	dcOptions := client.DeleteAllOfOptions{}
+	dcOptions.ApplyOptions(opts)
+
+	gvr, _ := meta.UnsafeGuessKindToResource(gvk)
+	o, err := c.tracker.List(gvr, gvk, dcOptions.Namespace)
+	if err != nil {
+		return err
+	}
+
+	objs, err := meta.ExtractList(o)
+	if err != nil {
+		return err
+	}
+	filteredObjs, err := objectutil.FilterWithLabels(objs, dcOptions.LabelSelector)
+	if err != nil {
+		return err
+	}
+	for _, o := range filteredObjs {
+		accessor, err := meta.Accessor(o)
+		if err != nil {
+			return err
+		}
+		err = c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *fakeClient) Update(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {

@@ -199,6 +199,22 @@ func ExampleClient_delete() {
 	_ = c.Delete(context.Background(), u)
 }
 
+// This example shows how to use the client with typed and unstrucurted objects to delete collections of objects.
+func ExampleClient_deleteAllOf() {
+	// Using a typed object.
+	// c is a created client.
+	_ = c.DeleteAllOf(context.Background(), &corev1.Pod{}, client.InNamespace("foo"), client.MatchingLabels{"app": "foo"})
+
+	// Using an unstructured Object
+	u := &unstructured.UnstructuredList{}
+	u.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "apps",
+		Kind:    "Deployment",
+		Version: "v1",
+	})
+	_ = c.DeleteAllOf(context.Background(), u, client.InNamespace("foo"), client.MatchingLabels{"app": "foo"})
+}
+
 // This example shows how to set up and consume a field selector over a pod's volumes' secretName field.
 func ExampleFieldIndexer_secretName() {
 	// someIndexer is a FieldIndexer over a Cache

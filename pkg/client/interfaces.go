@@ -76,6 +76,9 @@ type Writer interface {
 	// Patch patches the given obj in the Kubernetes cluster. obj must be a
 	// struct pointer so that obj can be updated with the content returned by the Server.
 	Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOption) error
+
+	// DeleteAllOf deletes all objects of the given type matching the given options.
+	DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...DeleteAllOfOption) error
 }
 
 // StatusClient knows how to create a client which can update status subresource

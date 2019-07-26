@@ -28,7 +28,6 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
@@ -40,9 +39,7 @@ var _ = Describe("application", func() {
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
-		getConfig = func() (*rest.Config, error) { return cfg, nil }
 		newController = controller.New
-		newManager = manager.New
 	})
 
 	AfterEach(func() {

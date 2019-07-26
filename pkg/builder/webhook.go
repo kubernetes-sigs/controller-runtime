@@ -55,25 +55,16 @@ func (blder *WebhookBuilder) For(apiType runtime.Object) *WebhookBuilder {
 // Complete builds the webhook.
 func (blder *WebhookBuilder) Complete() error {
 	// Set the Config
-	if err := blder.loadRestConfig(); err != nil {
-		return err
-	}
+	blder.loadRestConfig()
 
 	// Set the Webhook if needed
 	return blder.registerWebhooks()
 }
 
-func (blder *WebhookBuilder) loadRestConfig() error {
-	if blder.config != nil {
-		return nil
-	}
-	if blder.mgr != nil {
+func (blder *WebhookBuilder) loadRestConfig() {
+	if blder.config == nil {
 		blder.config = blder.mgr.GetConfig()
-		return nil
 	}
-	var err error
-	blder.config, err = getConfig()
-	return err
 }
 
 func (blder *WebhookBuilder) registerWebhooks() error {

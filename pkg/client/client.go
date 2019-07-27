@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -103,6 +104,16 @@ type client struct {
 	unstructuredClient unstructuredClient
 }
 
+// resetGroupVersionKind is a helper function to restore and preserve GroupVersionKind on an object.
+// TODO(vincepri): Remove this function and its calls once    controller-runtime dependencies are upgraded to 1.15.
+func (c *client) resetGroupVersionKind(obj runtime.Object, gvk schema.GroupVersionKind) {
+	if gvk != schema.EmptyObjectKind.GroupVersionKind() {
+		if v, ok := obj.(schema.ObjectKind); ok {
+			v.SetGroupVersionKind(gvk)
+		}
+	}
+}
+
 // Create implements client.Client
 func (c *client) Create(ctx context.Context, obj runtime.Object, opts ...CreateOption) error {
 	_, ok := obj.(*unstructured.Unstructured)
@@ -114,6 +125,7 @@ func (c *client) Create(ctx context.Context, obj runtime.Object, opts ...CreateO
 
 // Update implements client.Client
 func (c *client) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOption) error {
+	defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return c.unstructuredClient.Update(ctx, obj, opts...)
@@ -141,6 +153,7 @@ func (c *client) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...De
 
 // Patch implements client.Client
 func (c *client) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOption) error {
+	defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return c.unstructuredClient.Patch(ctx, obj, patch, opts...)
@@ -181,6 +194,7 @@ var _ StatusWriter = &statusWriter{}
 
 // Update implements client.StatusWriter
 func (sw *statusWriter) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOption) error {
+	defer sw.client.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return sw.client.unstructuredClient.UpdateStatus(ctx, obj, opts...)
@@ -190,6 +204,7 @@ func (sw *statusWriter) Update(ctx context.Context, obj runtime.Object, opts ...
 
 // Patch implements client.Client
 func (sw *statusWriter) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOption) error {
+	defer sw.client.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return sw.client.unstructuredClient.PatchStatus(ctx, obj, patch, opts...)

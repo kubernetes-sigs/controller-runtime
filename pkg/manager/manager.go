@@ -325,7 +325,6 @@ func setOptionsDefaults(options Options) Options {
 		options.newRecorderProvider = internalrecorder.NewProvider
 	}
 
-	// Allow NewResourceLock to be mocked
 	if options.NewResourceLock == nil {
 		options.NewResourceLock = leaderelection.NewResourceLock
 	}

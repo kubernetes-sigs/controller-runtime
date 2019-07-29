@@ -162,7 +162,7 @@ type Options struct {
 
 	// NewResourceLock is the function to create a resourceLock
 	// Manager can use customized resourcelock for leader selection
-	// If not privided, will use configmapLocks as default
+	// If not privided, will use ConfigMapsResourceLock as default
 	NewResourceLock func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
 
 	// Dependency injection for testing

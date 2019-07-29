@@ -265,9 +265,62 @@ var _ = Describe("Controllerutil", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
+
+	Describe("Finalizers", func() {
+		var obj runtime.Object = &errRuntimeObj{}
+		var deploy *appsv1.Deployment
+
+		Describe("AddFinalizerWithError", func() {
+			It("should return an error if object can't provide accessor", func() {
+				Expect(controllerutil.AddFinalizerWithError(obj, testFinalizer)).To(HaveOccurred())
+			})
+		})
+
+		Describe("RemoveFinalizerWithError", func() {
+			It("should return an error if object can't provide accessor", func() {
+				Expect(controllerutil.RemoveFinalizerWithError(obj, testFinalizer)).To(HaveOccurred())
+			})
+		})
+
+		Describe("AddFinalizer", func() {
+			deploy = &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Finalizers: []string{},
+				},
+			}
+
+			It("should add the finalizer when not present", func() {
+				controllerutil.AddFinalizer(deploy, testFinalizer)
+				Expect(deploy.ObjectMeta.GetFinalizers()).To(Equal([]string{testFinalizer}))
+			})
+
+			It("should not add the finalizer when already present", func() {
+				controllerutil.AddFinalizer(deploy, testFinalizer)
+				Expect(deploy.ObjectMeta.GetFinalizers()).To(Equal([]string{testFinalizer}))
+			})
+		})
+
+		Describe("RemoveFinalizer", func() {
+			It("should remove finalizer if present", func() {
+				controllerutil.RemoveFinalizer(deploy, testFinalizer)
+				Expect(deploy.ObjectMeta.GetFinalizers()).To(Equal([]string{}))
+			})
+		})
+	})
 })
 
+const testFinalizer = "foo.bar.baz"
+
+var _ runtime.Object = &errRuntimeObj{}
 var _ metav1.Object = &errMetaObj{}
+
+type errRuntimeObj struct {
+	runtime.TypeMeta
+}
+
+func (o *errRuntimeObj) DeepCopyObject() runtime.Object {
+	return &errRuntimeObj{}
+}
 
 type errMetaObj struct {
 	metav1.ObjectMeta

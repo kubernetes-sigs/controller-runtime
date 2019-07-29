@@ -22,6 +22,7 @@ import (
 	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -168,3 +169,47 @@ func mutate(f MutateFn, key client.ObjectKey, obj runtime.Object) error {
 
 // MutateFn is a function which mutates the existing object into it's desired state.
 type MutateFn func() error
+
+// AddFinalizer accepts a metav1 object and adds the provided finalizer if not present.
+func AddFinalizer(o metav1.Object, finalizer string) {
+	f := o.GetFinalizers()
+	for _, e := range f {
+		if e == finalizer {
+			return
+		}
+	}
+	o.SetFinalizers(append(f, finalizer))
+}
+
+// AddFinalizerWithError tries to convert a runtime object to a metav1 object and add the provided finalizer.
+// It returns an error if the provided object cannot provide an accessor.
+func AddFinalizerWithError(o runtime.Object, finalizer string) error {
+	m, err := meta.Accessor(o)
+	if err != nil {
+		return err
+	}
+	AddFinalizer(m, finalizer)
+	return nil
+}
+
+// RemoveFinalizer accepts a metav1 object and removes the provided finalizer if present.
+func RemoveFinalizer(o metav1.Object, finalizer string) {
+	f := o.GetFinalizers()
+	for i, e := range f {
+		if e == finalizer {
+			f = append(f[:i], f[i+1:]...)
+		}
+	}
+	o.SetFinalizers(f)
+}
+
+// RemoveFinalizerWithError tries to convert a runtime object to a metav1 object and remove the provided finalizer.
+// It returns an error if the provided object cannot provide an accessor.
+func RemoveFinalizerWithError(o runtime.Object, finalizer string) error {
+	m, err := meta.Accessor(o)
+	if err != nil {
+		return err
+	}
+	RemoveFinalizer(m, finalizer)
+	return nil
+}

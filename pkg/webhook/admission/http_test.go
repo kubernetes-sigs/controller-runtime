@@ -19,6 +19,7 @@ package admission
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -92,6 +93,32 @@ var _ = Describe("Admission Webhooks", func() {
 			expected := []byte(`{"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
 `)
 			webhook.ServeHTTP(respRecorder, req)
+			Expect(respRecorder.Body.Bytes()).To(Equal(expected))
+		})
+
+		It("should present the Context from the HTTP request, if any", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
+			}
+			type ctxkey int
+			const key ctxkey = 1
+			const value = "from-ctx"
+			webhook := &Webhook{
+				Handler: &fakeHandler{
+					fn: func(ctx context.Context, req Request) Response {
+						<-ctx.Done()
+						return Allowed(ctx.Value(key).(string))
+					},
+				},
+			}
+
+			expected := []byte(fmt.Sprintf(`{"response":{"uid":"","allowed":true,"status":{"metadata":{},"reason":%q,"code":200}}}
+`, value))
+
+			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), key, value))
+			cancel()
+			webhook.ServeHTTP(respRecorder, req.WithContext(ctx))
 			Expect(respRecorder.Body.Bytes()).To(Equal(expected))
 		})
 	})

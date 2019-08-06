@@ -116,7 +116,12 @@ var _ = Describe("application", func() {
 				}
 				return nil, fmt.Errorf("max concurrent reconcilers expected %d but found %d", maxConcurrentReconciles, options.MaxConcurrentReconciles)
 			}
-			instance, err := SimpleController().
+
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).

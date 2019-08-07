@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -44,9 +43,7 @@ var _ = Describe("application", func() {
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
-		getConfig = func() (*rest.Config, error) { return cfg, nil }
 		newController = controller.New
-		newManager = manager.New
 	})
 
 	AfterEach(func() {
@@ -57,7 +54,11 @@ var _ = Describe("application", func() {
 
 	Describe("New", func() {
 		It("should return success if given valid objects", func() {
-			instance, err := SimpleController().
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
 				Build(noop)
@@ -65,19 +66,12 @@ var _ = Describe("application", func() {
 			Expect(instance).NotTo(BeNil())
 		})
 
-		It("should return an error if the Config is invalid", func() {
-			getConfig = func() (*rest.Config, error) { return cfg, fmt.Errorf("expected error") }
-			instance, err := SimpleController().
-				For(&appsv1.ReplicaSet{}).
-				Owns(&appsv1.ReplicaSet{}).
-				Build(noop)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("expected error"))
-			Expect(instance).To(BeNil())
-		})
-
 		It("should return an error if there is no GVK for an object", func() {
-			instance, err := SimpleController().
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
 				For(&fakeType{}).
 				Owns(&appsv1.ReplicaSet{}).
 				Build(noop)
@@ -85,7 +79,7 @@ var _ = Describe("application", func() {
 			Expect(err.Error()).To(ContainSubstring("no kind is registered for the type builder.fakeType"))
 			Expect(instance).To(BeNil())
 
-			instance, err = SimpleController().
+			instance, err = ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&fakeType{}).
 				Build(noop)
@@ -94,11 +88,17 @@ var _ = Describe("application", func() {
 			Expect(instance).To(BeNil())
 		})
 
-		It("should return an error if it cannot create the manager", func() {
-			newManager = func(config *rest.Config, options manager.Options) (manager.Manager, error) {
+		It("should return an error if it cannot create the controller", func() {
+			newController = func(name string, mgr manager.Manager, options controller.Options) (
+				controller.Controller, error) {
 				return nil, fmt.Errorf("expected error")
 			}
-			instance, err := SimpleController().
+
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
 				Build(noop)
@@ -107,18 +107,27 @@ var _ = Describe("application", func() {
 			Expect(instance).To(BeNil())
 		})
 
-		It("should return an error if it cannot create the controller", func() {
+		It("should override max concurrent reconcilers during creation of controller", func() {
+			const maxConcurrentReconciles = 5
 			newController = func(name string, mgr manager.Manager, options controller.Options) (
 				controller.Controller, error) {
-				return nil, fmt.Errorf("expected error")
+				if options.MaxConcurrentReconciles == maxConcurrentReconciles {
+					return controller.New(name, mgr, options)
+				}
+				return nil, fmt.Errorf("max concurrent reconcilers expected %d but found %d", maxConcurrentReconciles, options.MaxConcurrentReconciles)
 			}
-			instance, err := SimpleController().
+
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
+				WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
 				Build(noop)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("expected error"))
-			Expect(instance).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeNil())
 		})
 
 		It("should allow multiple controllers for the same kind", func() {
@@ -148,30 +157,6 @@ var _ = Describe("application", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ctrl2).NotTo(BeNil())
 		})
-	})
-
-	Describe("Start with SimpleController", func() {
-		It("should Reconcile Owns objects", func(done Done) {
-			bldr := SimpleController().
-				ForType(&appsv1.Deployment{}).
-				WithConfig(cfg).
-				Owns(&appsv1.ReplicaSet{})
-			doReconcileTest("1", stop, bldr, nil, false)
-
-			close(done)
-		}, 10)
-
-		It("should Reconcile Owns objects with a Manager", func(done Done) {
-			m, err := manager.New(cfg, manager.Options{})
-			Expect(err).NotTo(HaveOccurred())
-
-			bldr := SimpleController().
-				WithManager(m).
-				For(&appsv1.Deployment{}).
-				Owns(&appsv1.ReplicaSet{})
-			doReconcileTest("2", stop, bldr, m, false)
-			close(done)
-		}, 10)
 	})
 
 	Describe("Start with ControllerManagedBy", func() {
@@ -217,25 +202,21 @@ func doReconcileTest(nameSuffix string, stop chan struct{}, blder *Builder, mgr 
 		return reconcile.Result{}, nil
 	})
 
-	instance := mgr
 	if complete {
 		err := blder.Complete(fn)
 		Expect(err).NotTo(HaveOccurred())
 	} else {
 		var err error
-		instance, err = blder.Build(fn)
+		var c controller.Controller
+		c, err = blder.Build(fn)
 		Expect(err).NotTo(HaveOccurred())
-	}
-
-	// Manager should match
-	if mgr != nil {
-		Expect(instance).To(Equal(mgr))
+		Expect(c).NotTo(BeNil())
 	}
 
 	By("Starting the application")
 	go func() {
 		defer GinkgoRecover()
-		Expect(instance.Start(stop)).NotTo(HaveOccurred())
+		Expect(mgr.Start(stop)).NotTo(HaveOccurred())
 		By("Stopping the application")
 	}()
 
@@ -263,7 +244,7 @@ func doReconcileTest(nameSuffix string, stop chan struct{}, blder *Builder, mgr 
 			},
 		},
 	}
-	err := instance.GetClient().Create(context.TODO(), dep)
+	err := mgr.GetClient().Create(context.TODO(), dep)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Waiting for the Deployment Reconcile")
@@ -293,7 +274,7 @@ func doReconcileTest(nameSuffix string, stop chan struct{}, blder *Builder, mgr 
 			Template: dep.Spec.Template,
 		},
 	}
-	err = instance.GetClient().Create(context.TODO(), rs)
+	err = mgr.GetClient().Create(context.TODO(), rs)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Waiting for the ReplicaSet Reconcile")

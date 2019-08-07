@@ -20,7 +20,7 @@ limitations under the License.
 // An application is a Controller and Resource that together implement the operational logic for an application.
 // They are often used to take off-the-shelf OSS applications, and make them Kubernetes native.
 //
-// A typical application Controller may use a new builder.SimpleController() to create a Controller
+// A typical application Controller may use builder.ControllerManagedBy() to create a Controller
 // for a single API type that manages other objects it creates.
 //
 // Application Controllers are most useful for stateful applications such as Cassandra, Etcd and MySQL

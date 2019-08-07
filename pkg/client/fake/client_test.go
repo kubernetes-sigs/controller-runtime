@@ -158,6 +158,18 @@ var _ = Describe("Fake client", func() {
 			Expect(list.Items).To(ConsistOf(*dep2))
 		})
 
+		It("should be able to Delete a Collection", func() {
+			By("Deleting a deploymentList")
+			err := cl.DeleteAllOf(nil, &appsv1.Deployment{}, client.InNamespace("ns1"))
+			Expect(err).To(BeNil())
+
+			By("Listing all deployments in the namespace")
+			list := &appsv1.DeploymentList{}
+			err = cl.List(nil, list, client.InNamespace("ns1"))
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(BeEmpty())
+		})
+
 		Context("with the DryRun option", func() {
 			It("should not create a new object", func() {
 				By("Creating a new configmap with DryRun")

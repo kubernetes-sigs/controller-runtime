@@ -28,7 +28,6 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
@@ -40,9 +39,7 @@ var _ = Describe("application", func() {
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
-		getConfig = func() (*rest.Config, error) { return cfg, nil }
 		newController = controller.New
-		newManager = manager.New
 	})
 
 	AfterEach(func() {
@@ -269,6 +266,103 @@ var _ = Describe("application", func() {
 			Expect(w.Body).To(ContainSubstring(`"allowed":true`))
 			Expect(w.Body).To(ContainSubstring(`"code":200`))
 		})
+
+		It("should scaffold a validating webhook if the type implements the Validator interface to validate deletes", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("registering the type in the Scheme")
+			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+			builder.Register(&TestValidator{}, &TestValidatorList{})
+			err = builder.AddToScheme(m.GetScheme())
+			Expect(err).NotTo(HaveOccurred())
+
+			err = WebhookManagedBy(m).
+				For(&TestValidator{}).
+				Complete()
+			Expect(err).NotTo(HaveOccurred())
+			svr := m.GetWebhookServer()
+			Expect(svr).NotTo(BeNil())
+
+			reader := strings.NewReader(`{
+  "kind":"AdmissionReview",
+  "apiVersion":"admission.k8s.io/v1beta1",
+  "request":{
+    "uid":"07e52e8d-4513-11e9-a716-42010a800270",
+    "kind":{
+      "group":"",
+      "version":"v1",
+      "kind":"TestValidator"
+    },
+    "resource":{
+      "group":"",
+      "version":"v1",
+      "resource":"testvalidator"
+    },
+    "namespace":"default",
+    "operation":"DELETE",
+    "object":null,
+    "oldObject":{
+      "replica":1
+    }
+  }
+}`)
+			stopCh := make(chan struct{})
+			close(stopCh)
+			// TODO: we may want to improve it to make it be able to inject dependencies,
+			// but not always try to load certs and return not found error.
+			err = svr.Start(stopCh)
+			if err != nil && !os.IsNotExist(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			By("sending a request to a validating webhook path to check for failed delete")
+			path := generateValidatePath(testValidatorGVK)
+			req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+			w := httptest.NewRecorder()
+			svr.WebhookMux.ServeHTTP(w, req)
+			Expect(w.Code).To(Equal(http.StatusOK))
+			By("sanity checking the response contains reasonable field")
+			Expect(w.Body).To(ContainSubstring(`"allowed":false`))
+			Expect(w.Body).To(ContainSubstring(`"code":403`))
+
+			reader = strings.NewReader(`{
+  "kind":"AdmissionReview",
+  "apiVersion":"admission.k8s.io/v1beta1",
+  "request":{
+    "uid":"07e52e8d-4513-11e9-a716-42010a800270",
+    "kind":{
+      "group":"",
+      "version":"v1",
+      "kind":"TestValidator"
+    },
+    "resource":{
+      "group":"",
+      "version":"v1",
+      "resource":"testvalidator"
+    },
+    "namespace":"default",
+    "operation":"DELETE",
+    "object":null,
+    "oldObject":{
+      "replica":0
+    }
+  }
+}`)
+			By("sending a request to a validating webhook path with correct request")
+			path = generateValidatePath(testValidatorGVK)
+			req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+			w = httptest.NewRecorder()
+			svr.WebhookMux.ServeHTTP(w, req)
+			Expect(w.Code).To(Equal(http.StatusOK))
+			By("sanity checking the response contains reasonable field")
+			Expect(w.Body).To(ContainSubstring(`"allowed":true`))
+			Expect(w.Body).To(ContainSubstring(`"code":200`))
+
+		})
 	})
 })
 
@@ -357,6 +451,13 @@ func (v *TestValidator) ValidateUpdate(old runtime.Object) error {
 	return nil
 }
 
+func (v *TestValidator) ValidateDelete() error {
+	if v.Replica > 0 {
+		return errors.New("number of replica should be less than or equal to 0 to delete")
+	}
+	return nil
+}
+
 // TestDefaultValidator
 var _ runtime.Object = &TestDefaultValidator{}
 
@@ -404,6 +505,13 @@ func (dv *TestDefaultValidator) ValidateCreate() error {
 func (dv *TestDefaultValidator) ValidateUpdate(old runtime.Object) error {
 	if dv.Replica < 0 {
 		return errors.New("number of replica should be greater than or equal to 0")
+	}
+	return nil
+}
+
+func (dv *TestDefaultValidator) ValidateDelete() error {
+	if dv.Replica > 0 {
+		return errors.New("number of replica should be less than or equal to 0 to delete")
 	}
 	return nil
 }

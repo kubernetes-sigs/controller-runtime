@@ -74,7 +74,7 @@ func ExampleClient_get() {
 	}, u)
 }
 
-// This example shows how to use the client with typed and unstrucurted objects to create objects.
+// This example shows how to use the client with typed and unstructured objects to create objects.
 func ExampleClient_create() {
 	// Using a typed object.
 	pod := &corev1.Pod{
@@ -129,7 +129,7 @@ func ExampleClient_create() {
 	_ = c.Create(context.Background(), u)
 }
 
-// This example shows how to use the client with typed and unstrucurted objects to list objects.
+// This example shows how to use the client with typed and unstructured objects to list objects.
 func ExampleClient_list() {
 	// Using a typed object.
 	pod := &corev1.PodList{}
@@ -146,7 +146,7 @@ func ExampleClient_list() {
 	_ = c.List(context.Background(), u)
 }
 
-// This example shows how to use the client with typed and unstrucurted objects to update objects.
+// This example shows how to use the client with typed and unstructured objects to update objects.
 func ExampleClient_update() {
 	// Using a typed object.
 	pod := &corev1.Pod{}
@@ -173,7 +173,7 @@ func ExampleClient_update() {
 	_ = c.Update(context.Background(), u)
 }
 
-// This example shows how to use the client with typed and unstrucurted objects to delete objects.
+// This example shows how to use the client with typed and unstructured objects to delete objects.
 func ExampleClient_delete() {
 	// Using a typed object.
 	pod := &corev1.Pod{
@@ -197,6 +197,22 @@ func ExampleClient_delete() {
 		Version: "v1",
 	})
 	_ = c.Delete(context.Background(), u)
+}
+
+// This example shows how to use the client with typed and unstrucurted objects to delete collections of objects.
+func ExampleClient_deleteAllOf() {
+	// Using a typed object.
+	// c is a created client.
+	_ = c.DeleteAllOf(context.Background(), &corev1.Pod{}, client.InNamespace("foo"), client.MatchingLabels{"app": "foo"})
+
+	// Using an unstructured Object
+	u := &unstructured.UnstructuredList{}
+	u.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "apps",
+		Kind:    "Deployment",
+		Version: "v1",
+	})
+	_ = c.DeleteAllOf(context.Background(), u, client.InNamespace("foo"), client.MatchingLabels{"app": "foo"})
 }
 
 // This example shows how to set up and consume a field selector over a pod's volumes' secretName field.

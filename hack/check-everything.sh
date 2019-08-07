@@ -60,7 +60,7 @@ function fetch_kb_tools {
 }
 
 function is_installed {
-  if [ command -v $1 &>/dev/null ]; then
+  if command -v "$1" &>/dev/null; then
     return 0
   fi
   return 1

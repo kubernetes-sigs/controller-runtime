@@ -1,0 +1,11 @@
+on: pull_request
+name: PR Formatting
+jobs:
+  verify-emoji:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: verify-emoji
+      uses: ./hack/release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

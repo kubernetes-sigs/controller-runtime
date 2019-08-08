@@ -1,0 +1,6 @@
+name: 'Verify Emoji'
+description: 'Verify KubeBuilder PR Emoji Prefix'
+author: 'The KubeBuilder Maintainers'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'

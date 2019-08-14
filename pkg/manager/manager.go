@@ -312,7 +312,9 @@ func setOptionsDefaults(options Options) Options {
 	}
 
 	if options.MapperProvider == nil {
-		options.MapperProvider = apiutil.NewDiscoveryRESTMapper
+		options.MapperProvider = func(c *rest.Config) (meta.RESTMapper, error) {
+			return apiutil.NewDynamicRESTMapper(c, apiutil.WithLazyDiscovery)
+		}
 	}
 
 	// Allow newClient to be mocked

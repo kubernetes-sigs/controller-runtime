@@ -1178,6 +1178,41 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
+			It("should patch spec and metadata changes after patching status", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep := dep.DeepCopy()
+				dep.Labels["test"] = "true"
+				dep, err = clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+				depPatch := client.MergeFrom(dep.DeepCopy())
+
+				By("changing the Deployment's metadata, spec and status")
+				delete(dep.Labels, "true")
+				dep.Spec.Paused = true
+				dep.Status.Replicas = 2
+
+				By("patching the status of Deployment")
+				err = cl.Status().Patch(context.TODO(), dep, depPatch)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("patching the spec of the Deployment")
+				err = cl.Patch(context.TODO(), dep, depPatch)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating updated Deployment has expected fields")
+				dep, err = clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dep.Status.Replicas).To(BeEquivalentTo(2))
+				Expect(dep.Spec.Paused).To(BeEquivalentTo(true))
+				Expect(dep.Labels).ToNot(ContainElement("test"))
+
+				close(done)
+			})
+
 			It("should patch an existing object non-namespace object from a go struct", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())

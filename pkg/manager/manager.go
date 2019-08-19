@@ -149,6 +149,10 @@ type Options struct {
 	// It is used to set webhook.Server.Host.
 	Host string
 
+	// CertDir is the directory that contains the server key and certificate.
+	// if not set, webhook server would look up the server key and certificate in
+	// {TempDir}/k8s-webhook-server/serving-certs
+	CertDir string
 	// Functions to all for a user to customize the values that will be injected.
 
 	// NewCache is the function that will create the cache to be used
@@ -271,6 +275,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		internalStopper:  stop,
 		port:             options.Port,
 		host:             options.Host,
+		certDir:          options.CertDir,
 		leaseDuration:    *options.LeaseDuration,
 		renewDeadline:    *options.RenewDeadline,
 		retryPeriod:      *options.RetryPeriod,

@@ -2,12 +2,13 @@ package internal_test
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
+	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -97,7 +98,7 @@ var _ = Describe("Start method", func() {
 
 				processState.URL = url.URL{
 					Scheme: "http",
-					Host:   fmt.Sprintf("%s:%d", host, port),
+					Host:   net.JoinHostPort(host, strconv.Itoa(port)),
 				}
 
 				err = processState.Start(nil, nil)

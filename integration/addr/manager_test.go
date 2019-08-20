@@ -3,8 +3,8 @@ package addr_test
 import (
 	"sigs.k8s.io/testing_frameworks/integration/addr"
 
-	"fmt"
 	"net"
+	"strconv"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -15,10 +15,10 @@ var _ = Describe("SuggestAddress", func() {
 		port, host, err := addr.Suggest()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(host).To(Equal("127.0.0.1"))
+		Expect(host).To(Or(Equal("127.0.0.1"), Equal("::1")))
 		Expect(port).NotTo(Equal(0))
 
-		addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", host, port))
+		addr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
 		Expect(err).NotTo(HaveOccurred())
 		l, err := net.ListenTCP("tcp", addr)
 		defer func() {

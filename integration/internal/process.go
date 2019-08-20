@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/onsi/gomega/gbytes"
@@ -75,7 +77,7 @@ func DoDefaulting(
 		}
 		defaults.URL = url.URL{
 			Scheme: "http",
-			Host:   fmt.Sprintf("%s:%d", host, port),
+			Host:   net.JoinHostPort(host, strconv.Itoa(port)),
 		}
 	} else {
 		defaults.URL = *listenUrl

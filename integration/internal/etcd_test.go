@@ -33,7 +33,7 @@ var _ = Describe("GetEtcdStartMessage()", func() {
 				Host:   "some.insecure.host:1234",
 			}
 			message := GetEtcdStartMessage(url)
-			Expect(message).To(Equal("serving insecure client requests on some.insecure.host"))
+			Expect(message).To(Equal("serving insecure client requests on "))
 		})
 	})
 	Context("when using a tls URL", func() {
@@ -43,7 +43,7 @@ var _ = Describe("GetEtcdStartMessage()", func() {
 				Host:   "some.secure.host:8443",
 			}
 			message := GetEtcdStartMessage(url)
-			Expect(message).To(Equal("serving client requests on some.secure.host"))
+			Expect(message).To(Equal("serving client requests on "))
 		})
 	})
 })

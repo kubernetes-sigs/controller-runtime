@@ -313,6 +313,21 @@ func (m MatchingLabels) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	m.ApplyToList(&opts.ListOptions)
 }
 
+// MatchingLabelsSelector filters the list/delete operation on the given label
+// selector (or index in the case of cached lists). A struct is used because
+// labels.Selector is an interface, which cannot be aliased.
+type MatchingLabelsSelector struct {
+	labels.Selector
+}
+
+func (m MatchingLabelsSelector) ApplyToList(opts *ListOptions) {
+	opts.LabelSelector = m
+}
+
+func (m MatchingLabelsSelector) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
+	m.ApplyToList(&opts.ListOptions)
+}
+
 // MatchingField filters the list operation on the given field selector
 // (or index in the case of cached lists).
 //
@@ -321,7 +336,7 @@ func MatchingField(name, val string) MatchingFields {
 	return MatchingFields{name: val}
 }
 
-// MatchingField filters the list/delete operation on the given field selector
+// MatchingField filters the list/delete operation on the given field Set
 // (or index in the case of cached lists).
 type MatchingFields fields.Set
 
@@ -332,6 +347,21 @@ func (m MatchingFields) ApplyToList(opts *ListOptions) {
 }
 
 func (m MatchingFields) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
+	m.ApplyToList(&opts.ListOptions)
+}
+
+// MatchingFieldsSelector filters the list/delete operation on the given field
+// selector (or index in the case of cached lists). A struct is used because
+// fields.Selector is an interface, which cannot be aliased.
+type MatchingFieldsSelector struct {
+	fields.Selector
+}
+
+func (m MatchingFieldsSelector) ApplyToList(opts *ListOptions) {
+	opts.FieldSelector = m
+}
+
+func (m MatchingFieldsSelector) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	m.ApplyToList(&opts.ListOptions)
 }
 

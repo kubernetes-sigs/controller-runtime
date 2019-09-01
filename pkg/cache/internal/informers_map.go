@@ -17,6 +17,7 @@ limitations under the License.
 package internal
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -145,7 +146,7 @@ func (ip *specificInformersMap) HasSyncedFuncs() []cache.InformerSynced {
 
 // Get will create a new Informer and add it to the map of specificInformersMap if none exists.  Returns
 // the Informer from the map.
-func (ip *specificInformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*MapEntry, error) {
+func (ip *specificInformersMap) Get(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object) (*MapEntry, error) {
 	// Return the informer if it is found
 	i, started, ok := func() (*MapEntry, bool, bool) {
 		ip.mu.RLock()
@@ -162,9 +163,22 @@ func (ip *specificInformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Obj
 	}
 
 	if started && !i.Informer.HasSynced() {
+		syncReturn := make(chan bool)
+		done := make(chan struct{})
+		go func() {
+			syncReturn <- cache.WaitForCacheSync(done, i.Informer.HasSynced)
+		}()
+
 		// Wait for it to sync before returning the Informer so that folks don't read from a stale cache.
-		if !cache.WaitForCacheSync(ip.stop, i.Informer.HasSynced) {
-			return nil, fmt.Errorf("failed waiting for %T Informer to sync", obj)
+		select {
+		case <-ctx.Done():
+			//end the polling for cache to sync
+			done <- struct{}{}
+			return nil, fmt.Errorf("timeout waiting for %T Informer to sync", obj)
+		case syncSuccess := <-syncReturn:
+			if !syncSuccess {
+				return nil, fmt.Errorf("failed waiting for %T Informer to sync", obj)
+			}
 		}
 	}
 

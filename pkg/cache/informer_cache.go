@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -50,7 +51,11 @@ func (ip *informerCache) Get(ctx context.Context, key client.ObjectKey, out runt
 		return err
 	}
 
-	cache, err := ip.InformersMap.Get(gvk, out)
+	ctx, cancelFunc := addTimeout(ctx)
+	if cancelFunc != nil {
+		defer cancelFunc()
+	}
+	cache, err := ip.InformersMap.Get(ctx, gvk, out)
 	if err != nil {
 		return err
 	}
@@ -90,7 +95,11 @@ func (ip *informerCache) List(ctx context.Context, out runtime.Object, opts ...c
 		}
 	}
 
-	cache, err := ip.InformersMap.Get(gvk, cacheTypeObj)
+	ctx, cancelFunc := addTimeout(ctx)
+	if cancelFunc != nil {
+		defer cancelFunc()
+	}
+	cache, err := ip.InformersMap.Get(ctx, gvk, cacheTypeObj)
 	if err != nil {
 		return err
 	}
@@ -98,14 +107,29 @@ func (ip *informerCache) List(ctx context.Context, out runtime.Object, opts ...c
 	return cache.Reader.List(ctx, out, opts...)
 }
 
+// addTimeout adds a default 30 second timeout to a child contxt
+// if one does not exist.
+func addTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	var cancelFunc context.CancelFunc
+	if _, ok := ctx.Deadline(); !ok {
+		ctx, cancelFunc = context.WithTimeout(ctx, 30*time.Second)
+	}
+	return ctx, cancelFunc
+}
+
 // GetInformerForKind returns the informer for the GroupVersionKind
+// Will timeout after 30 seconds if the informer is new and can not be
+// synced.
 func (ip *informerCache) GetInformerForKind(gvk schema.GroupVersionKind) (Informer, error) {
 	// Map the gvk to an object
 	obj, err := ip.Scheme.New(gvk)
 	if err != nil {
 		return nil, err
 	}
-	i, err := ip.InformersMap.Get(gvk, obj)
+	ctx, cancelFunc := addTimeout(context.TODO())
+	// There will never be a nil cancelFunc
+	defer cancelFunc()
+	i, err := ip.InformersMap.Get(ctx, gvk, obj)
 	if err != nil {
 		return nil, err
 	}
@@ -113,12 +137,17 @@ func (ip *informerCache) GetInformerForKind(gvk schema.GroupVersionKind) (Inform
 }
 
 // GetInformer returns the informer for the obj
+// Will timeout after 30 seconds if the informer is new and can not be
+// synced.
 func (ip *informerCache) GetInformer(obj runtime.Object) (Informer, error) {
 	gvk, err := apiutil.GVKForObject(obj, ip.Scheme)
 	if err != nil {
 		return nil, err
 	}
-	i, err := ip.InformersMap.Get(gvk, obj)
+	ctx, cancelFunc := addTimeout(context.TODO())
+	// There will never be a nil cancelFunc
+	defer cancelFunc()
+	i, err := ip.InformersMap.Get(ctx, gvk, obj)
 	if err != nil {
 		return nil, err
 	}

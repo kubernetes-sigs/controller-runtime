@@ -111,10 +111,10 @@ type Options struct {
 	LeaderElection bool
 
 	// LeaderElectionNamespace determines the namespace in which the leader
-	// election configmap will be created.
+	// election will be created.
 	LeaderElectionNamespace string
 
-	// LeaderElectionID determines the name of the configmap that leader election
+	// LeaderElectionID determines the name of the resource lock that leader election
 	// will use for holding the leader lock.
 	LeaderElectionID string
 

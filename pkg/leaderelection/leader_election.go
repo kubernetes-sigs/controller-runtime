@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	coordinationv1 "k8s.io/api/coordination/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -37,16 +38,17 @@ type Options struct {
 	LeaderElection bool
 
 	// LeaderElectionNamespace determines the namespace in which the leader
-	// election configmap will be created.
+	// election will be created.
 	LeaderElectionNamespace string
 
-	// LeaderElectionID determines the name of the configmap that leader election
+	// LeaderElectionID determines the name of the resource lock that leader election
 	// will use for holding the leader lock.
 	LeaderElectionID string
 }
 
-// NewResourceLock creates a new config map resource lock for use in a leader
-// election loop
+// NewResourceLock creates a new resource lock to use in a leader
+// election loop. Choose the Lease lock if `lease.coordination.k8s.io` is available.
+// Otherwise, the ConfigMap resource lock is used.
 func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, options Options) (resourcelock.Interface, error) {
 	if !options.LeaderElection {
 		return nil, nil
@@ -79,8 +81,14 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 		return nil, err
 	}
 
+	// Determine lock type
+	lockType, err := getDefaultLockType(client)
+	if err != nil {
+		return nil, err
+	}
+
 	// TODO(JoelSpeed): switch to leaderelection object in 1.12
-	return resourcelock.New(resourcelock.ConfigMapsResourceLock,
+	return resourcelock.New(lockType,
 		options.LeaderElectionNamespace,
 		options.LeaderElectionID,
 		client.CoreV1(),
@@ -89,6 +97,21 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 			Identity:      id,
 			EventRecorder: recorderProvider.GetEventRecorderFor(id),
 		})
+}
+
+func getDefaultLockType(client *kubernetes.Clientset) (string, error) {
+	// check if new leader election api is available
+	supportedGroups, err := client.Discovery().ServerGroups()
+	if err != nil {
+		return "", fmt.Errorf("unable to retrieve supported server groups: %v", err)
+	}
+	for _, g := range supportedGroups.Groups {
+		if g.Name == coordinationv1.GroupName {
+			return resourcelock.LeasesResourceLock, nil
+		}
+	}
+
+	return resourcelock.ConfigMapsResourceLock, nil
 }
 
 func getInClusterNamespace() (string, error) {

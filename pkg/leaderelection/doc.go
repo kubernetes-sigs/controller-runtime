@@ -19,6 +19,9 @@ Package leaderelection contains a constructors for a leader election resource lo
 This is used to ensure that multiple copies of a controller manager can be run with
 only one active set of controllers, for active-passive HA.
 
-It uses built-in Kubernetes leader election APIs.
+It uses built-in Kubernetes leader election APIs. The Lease lock type takes precedence
+as edits to Leases are less common and fewer objects in the cluster watch "all Leases".
+If the Lease API is not available, the ConfigMap resource lock is used.
+
 */
 package leaderelection

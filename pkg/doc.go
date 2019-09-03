@@ -148,7 +148,7 @@ Usage
 The following example shows creating a new Controller program which Reconciles ReplicaSet objects in response
 to Pod or ReplicaSet events.  The Reconciler function simply adds a label to the ReplicaSet.
 
-See the example/main.go for a usage example.
+See the examples/builtins/main.go for a usage example.
 
 Controller Example
 
@@ -159,7 +159,7 @@ Controller Example
 1.2 Pod (created by ReplicaSet) -> handler.EnqueueRequestForOwnerHandler - enqueue a Request with the
 Owning ReplicaSet Namespace and Name.
 
-2. reconcile ReplicaSet in response to an event
+2. Reconcile ReplicaSet in response to an event
 
 2.1 ReplicaSet object created -> Read ReplicaSet, try to read Pods -> if is missing create Pods.
 

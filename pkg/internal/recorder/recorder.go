@@ -40,13 +40,17 @@ type provider struct {
 
 // NewProvider create a new Provider instance.
 func NewProvider(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error) {
+	return NewProviderWithCorrelatorOptions(config, scheme, logger, record.CorrelatorOptions{})
+}
+
+func NewProviderWithCorrelatorOptions(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, opts record.CorrelatorOptions) (recorder.Provider, error) {
 	clientSet, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init clientSet: %v", err)
 	}
 
 	p := &provider{scheme: scheme, logger: logger}
-	p.eventBroadcaster = record.NewBroadcaster()
+	p.eventBroadcaster = record.NewBroadcasterWithCorrelatorOptions(opts)
 	p.eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: clientSet.CoreV1().Events("")})
 	p.eventBroadcaster.StartEventWatcher(
 		func(e *corev1.Event) {
@@ -54,6 +58,7 @@ func NewProvider(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger
 		})
 
 	return p, nil
+
 }
 
 func (p *provider) GetEventRecorderFor(name string) record.EventRecorder {

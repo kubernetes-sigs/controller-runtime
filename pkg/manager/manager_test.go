@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -111,7 +112,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should return an error it can't create a recorder.Provider", func(done Done) {
 			m, err := New(cfg, Options{
-				newRecorderProvider: func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error) {
+				newRecorderProvider: func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, opts record.CorrelatorOptions) (recorder.Provider, error) {
 					return nil, fmt.Errorf("expected error")
 				},
 			})

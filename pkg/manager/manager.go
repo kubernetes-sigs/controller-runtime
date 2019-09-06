@@ -118,6 +118,9 @@ type Options struct {
 	// will use for holding the leader lock.
 	LeaderElectionID string
 
+	// CorrelatorOptions are options for the event recording correlator
+	CorrelatorOptions *record.CorrelatorOptions
+
 	// LeaseDuration is the duration that non-leader candidates will
 	// wait to force acquire leadership. This is measured against time of
 	// last observed ack. Default is 15 seconds.
@@ -161,7 +164,7 @@ type Options struct {
 	NewClient NewClientFunc
 
 	// Dependency injection for testing
-	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger) (recorder.Provider, error)
+	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, opts record.CorrelatorOptions) (recorder.Provider, error)
 	newResourceLock     func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
 	newMetricsListener  func(addr string) (net.Listener, error)
 }
@@ -231,7 +234,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Create the recorder provider to inject event recorders for the components.
 	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.
-	recorderProvider, err := options.newRecorderProvider(config, options.Scheme, log.WithName("events"))
+	recorderProvider, err := options.newRecorderProvider(config, options.Scheme, log.WithName("events"), *options.CorrelatorOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +321,7 @@ func setOptionsDefaults(options Options) Options {
 
 	// Allow newRecorderProvider to be mocked
 	if options.newRecorderProvider == nil {
-		options.newRecorderProvider = internalrecorder.NewProvider
+		options.newRecorderProvider = internalrecorder.NewProviderWithCorrelatorOptions
 	}
 
 	// Allow newResourceLock to be mocked
@@ -332,6 +335,10 @@ func setOptionsDefaults(options Options) Options {
 	leaseDuration, renewDeadline, retryPeriod := defaultLeaseDuration, defaultRenewDeadline, defaultRetryPeriod
 	if options.LeaseDuration == nil {
 		options.LeaseDuration = &leaseDuration
+	}
+
+	if options.CorrelatorOptions == nil {
+		options.CorrelatorOptions = &record.CorrelatorOptions{}
 	}
 
 	if options.RenewDeadline == nil {

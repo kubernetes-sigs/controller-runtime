@@ -21,10 +21,10 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.0.1
 	gopkg.in/fsnotify.v1 v1.4.7
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/api v0.0.0-20190918155943-95b840bb6a1f
-	k8s.io/apiextensions-apiserver v0.0.0-20190918161926-8f644eb6e783
-	k8s.io/apimachinery v0.0.0-20190913080033-27d36303b655
-	k8s.io/client-go v0.0.0-20190918160344-1fbdaa4c8d90
+	k8s.io/api v0.0.0-20191016110408-35e52d86657a
+	k8s.io/apiextensions-apiserver v0.0.0-20191016113550-5357c4baaf65
+	k8s.io/apimachinery v0.0.0-20191004115801-a2eda9f80ab8
+	k8s.io/client-go v0.0.0-20191016111102-bec269661e48
 	k8s.io/utils v0.0.0-20190801114015-581e00157fb1
 	sigs.k8s.io/testing_frameworks v0.1.1
 	sigs.k8s.io/yaml v1.1.0

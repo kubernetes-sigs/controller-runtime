@@ -273,6 +273,24 @@ type ListOptions struct {
 	Raw *metav1.ListOptions
 }
 
+var _ ListOption = &ListOptions{}
+
+// ApplyToList implements ListOption for ListOptions
+func (o *ListOptions) ApplyToList(lo *ListOptions) {
+	if o.LabelSelector != nil {
+		lo.LabelSelector = o.LabelSelector
+	}
+	if o.FieldSelector != nil {
+		lo.FieldSelector = o.FieldSelector
+	}
+	if o.Namespace != "" {
+		lo.Namespace = o.Namespace
+	}
+	if o.Raw != nil {
+		lo.Raw = o.Raw
+	}
+}
+
 // AsListOptions returns these options as a flattened metav1.ListOptions.
 // This may mutate the Raw field.
 func (o *ListOptions) AsListOptions() *metav1.ListOptions {

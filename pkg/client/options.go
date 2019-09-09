@@ -575,4 +575,12 @@ func (o *DeleteAllOfOptions) ApplyOptions(opts []DeleteAllOfOption) *DeleteAllOf
 	return o
 }
 
+var _ DeleteAllOfOption = &DeleteAllOfOptions{}
+
+// ApplyToDeleteAllOf implements DeleteAllOfOption
+func (o *DeleteAllOfOptions) ApplyToDeleteAllOf(do *DeleteAllOfOptions) {
+	o.ApplyToList(&do.ListOptions)
+	o.ApplyToDelete(&do.DeleteOptions)
+}
+
 // }}}

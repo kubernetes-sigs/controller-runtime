@@ -188,3 +188,18 @@ var _ = Describe("PatchOptions", func() {
 		Expect(newPatchOpts).To(Equal(o))
 	})
 })
+
+var _ = Describe("DeleteAllOfOptions", func() {
+	It("Should set ListOptions", func() {
+		o := &client.DeleteAllOfOptions{ListOptions: client.ListOptions{Raw: &metav1.ListOptions{}}}
+		newDeleteAllOfOpts := &client.DeleteAllOfOptions{}
+		o.ApplyToDeleteAllOf(newDeleteAllOfOpts)
+		Expect(newDeleteAllOfOpts).To(Equal(o))
+	})
+	It("Should set DeleleteOptions", func() {
+		o := &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: utilpointer.Int64Ptr(44)}}
+		newDeleteAllOfOpts := &client.DeleteAllOfOptions{}
+		o.ApplyToDeleteAllOf(newDeleteAllOfOpts)
+		Expect(newDeleteAllOfOpts).To(Equal(o))
+	})
+})

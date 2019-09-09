@@ -155,3 +155,36 @@ var _ = Describe("UpdateOptions", func() {
 		Expect(newUpdateOpts).To(Equal(o))
 	})
 })
+
+var _ = Describe("PatchOptions", func() {
+	It("Should set DryRun", func() {
+		o := &client.PatchOptions{DryRun: []string{"Bye", "Boris"}}
+		newPatchOpts := &client.PatchOptions{}
+		o.ApplyToPatch(newPatchOpts)
+		Expect(newPatchOpts).To(Equal(o))
+	})
+	It("Should set Force", func() {
+		o := &client.PatchOptions{Force: utilpointer.BoolPtr(true)}
+		newPatchOpts := &client.PatchOptions{}
+		o.ApplyToPatch(newPatchOpts)
+		Expect(newPatchOpts).To(Equal(o))
+	})
+	It("Should set FieldManager", func() {
+		o := &client.PatchOptions{FieldManager: "Hello Julian"}
+		newPatchOpts := &client.PatchOptions{}
+		o.ApplyToPatch(newPatchOpts)
+		Expect(newPatchOpts).To(Equal(o))
+	})
+	It("Should set Raw", func() {
+		o := &client.PatchOptions{Raw: &metav1.PatchOptions{}}
+		newPatchOpts := &client.PatchOptions{}
+		o.ApplyToPatch(newPatchOpts)
+		Expect(newPatchOpts).To(Equal(o))
+	})
+	It("Should not set anything", func() {
+		o := &client.PatchOptions{}
+		newPatchOpts := &client.PatchOptions{}
+		o.ApplyToPatch(newPatchOpts)
+		Expect(newPatchOpts).To(Equal(o))
+	})
+})

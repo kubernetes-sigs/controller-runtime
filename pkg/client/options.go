@@ -518,6 +518,24 @@ func (o *PatchOptions) AsPatchOptions() *metav1.PatchOptions {
 	return o.Raw
 }
 
+var _ PatchOption = &PatchOptions{}
+
+// ApplyToPatch implements PatchOptions
+func (o *PatchOptions) ApplyToPatch(po *PatchOptions) {
+	if o.DryRun != nil {
+		po.DryRun = o.DryRun
+	}
+	if o.Force != nil {
+		po.Force = o.Force
+	}
+	if o.FieldManager != "" {
+		po.FieldManager = o.FieldManager
+	}
+	if o.Raw != nil {
+		po.Raw = o.Raw
+	}
+}
+
 // ForceOwnership indicates that in case of conflicts with server-side apply,
 // the client should acquire ownership of the conflicting field.  Most
 // controllers should use this.

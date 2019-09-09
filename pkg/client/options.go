@@ -142,6 +142,21 @@ func (o *CreateOptions) ApplyOptions(opts []CreateOption) *CreateOptions {
 	return o
 }
 
+// ApplyToCreate implements CreateOption
+func (o *CreateOptions) ApplyToCreate(co *CreateOptions) {
+	if o.DryRun != nil {
+		co.DryRun = o.DryRun
+	}
+	if o.FieldManager != "" {
+		co.FieldManager = o.FieldManager
+	}
+	if o.Raw != nil {
+		co.Raw = o.Raw
+	}
+}
+
+var _ CreateOption = &CreateOptions{}
+
 // CreateDryRunAll sets the "dry run" option to "all".
 //
 // Deprecated: Use DryRunAll

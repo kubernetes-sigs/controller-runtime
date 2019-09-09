@@ -60,3 +60,30 @@ var _ = Describe("ListOptions", func() {
 		Expect(newListOpts).To(Equal(o))
 	})
 })
+
+var _ = Describe("CreateOptions", func() {
+	It("Should set DryRun", func() {
+		o := &client.CreateOptions{DryRun: []string{"Hello", "Theodore"}}
+		newCreatOpts := &client.CreateOptions{}
+		o.ApplyToCreate(newCreatOpts)
+		Expect(newCreatOpts).To(Equal(o))
+	})
+	It("Should set FieldManager", func() {
+		o := &client.CreateOptions{FieldManager: "FieldManager"}
+		newCreatOpts := &client.CreateOptions{}
+		o.ApplyToCreate(newCreatOpts)
+		Expect(newCreatOpts).To(Equal(o))
+	})
+	It("Should set Raw", func() {
+		o := &client.CreateOptions{Raw: &metav1.CreateOptions{DryRun: []string{"Bye", "Theodore"}}}
+		newCreatOpts := &client.CreateOptions{}
+		o.ApplyToCreate(newCreatOpts)
+		Expect(newCreatOpts).To(Equal(o))
+	})
+	It("Should not set anything", func() {
+		o := &client.CreateOptions{}
+		newCreatOpts := &client.CreateOptions{}
+		o.ApplyToCreate(newCreatOpts)
+		Expect(newCreatOpts).To(Equal(o))
+	})
+})

@@ -446,6 +446,21 @@ func (o *UpdateOptions) ApplyOptions(opts []UpdateOption) *UpdateOptions {
 	return o
 }
 
+var _ UpdateOption = &UpdateOptions{}
+
+// ApplyToUpdate implements UpdateOption
+func (o *UpdateOptions) ApplyToUpdate(uo *UpdateOptions) {
+	if o.DryRun != nil {
+		uo.DryRun = o.DryRun
+	}
+	if o.FieldManager != "" {
+		uo.FieldManager = o.FieldManager
+	}
+	if o.Raw != nil {
+		uo.Raw = o.Raw
+	}
+}
+
 // UpdateDryRunAll sets the "dry run" option to "all".
 //
 // Deprecated: Use DryRunAll

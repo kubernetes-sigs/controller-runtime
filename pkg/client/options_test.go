@@ -128,3 +128,30 @@ var _ = Describe("DeleteOptions", func() {
 		Expect(newDeleteOpts).To(Equal(o))
 	})
 })
+
+var _ = Describe("UpdateOptions", func() {
+	It("Should set DryRun", func() {
+		o := &client.UpdateOptions{DryRun: []string{"Bye", "Pippa"}}
+		newUpdateOpts := &client.UpdateOptions{}
+		o.ApplyToUpdate(newUpdateOpts)
+		Expect(newUpdateOpts).To(Equal(o))
+	})
+	It("Should set FieldManager", func() {
+		o := &client.UpdateOptions{FieldManager: "Hello Boris"}
+		newUpdateOpts := &client.UpdateOptions{}
+		o.ApplyToUpdate(newUpdateOpts)
+		Expect(newUpdateOpts).To(Equal(o))
+	})
+	It("Should set Raw", func() {
+		o := &client.UpdateOptions{Raw: &metav1.UpdateOptions{}}
+		newUpdateOpts := &client.UpdateOptions{}
+		o.ApplyToUpdate(newUpdateOpts)
+		Expect(newUpdateOpts).To(Equal(o))
+	})
+	It("Should not set anything", func() {
+		o := &client.UpdateOptions{}
+		newUpdateOpts := &client.UpdateOptions{}
+		o.ApplyToUpdate(newUpdateOpts)
+		Expect(newUpdateOpts).To(Equal(o))
+	})
+})

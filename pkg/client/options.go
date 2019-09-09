@@ -226,6 +226,27 @@ func (o *DeleteOptions) ApplyOptions(opts []DeleteOption) *DeleteOptions {
 	return o
 }
 
+var _ DeleteOption = &DeleteOptions{}
+
+// ApplyToDelete implements DeleteOption
+func (o *DeleteOptions) ApplyToDelete(do *DeleteOptions) {
+	if o.GracePeriodSeconds != nil {
+		do.GracePeriodSeconds = o.GracePeriodSeconds
+	}
+	if o.Preconditions != nil {
+		do.Preconditions = o.Preconditions
+	}
+	if o.PropagationPolicy != nil {
+		do.PropagationPolicy = o.PropagationPolicy
+	}
+	if o.Raw != nil {
+		do.Raw = o.Raw
+	}
+	if o.DryRun != nil {
+		do.DryRun = o.DryRun
+	}
+}
+
 // GracePeriodSeconds sets the grace period for the deletion
 // to the given number of seconds.
 type GracePeriodSeconds int64

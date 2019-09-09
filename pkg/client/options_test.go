@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
+	utilpointer "k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -85,5 +86,45 @@ var _ = Describe("CreateOptions", func() {
 		newCreatOpts := &client.CreateOptions{}
 		o.ApplyToCreate(newCreatOpts)
 		Expect(newCreatOpts).To(Equal(o))
+	})
+})
+
+var _ = Describe("DeleteOptions", func() {
+	It("Should set GracePeriodSeconds", func() {
+		o := &client.DeleteOptions{GracePeriodSeconds: utilpointer.Int64Ptr(42)}
+		newDeleteOpts := &client.DeleteOptions{}
+		o.ApplyToDelete(newDeleteOpts)
+		Expect(newDeleteOpts).To(Equal(o))
+	})
+	It("Should set Preconditions", func() {
+		o := &client.DeleteOptions{Preconditions: &metav1.Preconditions{}}
+		newDeleteOpts := &client.DeleteOptions{}
+		o.ApplyToDelete(newDeleteOpts)
+		Expect(newDeleteOpts).To(Equal(o))
+	})
+	It("Should set PropagationPolicy", func() {
+		policy := metav1.DeletePropagationBackground
+		o := &client.DeleteOptions{PropagationPolicy: &policy}
+		newDeleteOpts := &client.DeleteOptions{}
+		o.ApplyToDelete(newDeleteOpts)
+		Expect(newDeleteOpts).To(Equal(o))
+	})
+	It("Should set Raw", func() {
+		o := &client.DeleteOptions{Raw: &metav1.DeleteOptions{}}
+		newDeleteOpts := &client.DeleteOptions{}
+		o.ApplyToDelete(newDeleteOpts)
+		Expect(newDeleteOpts).To(Equal(o))
+	})
+	It("Should set DryRun", func() {
+		o := &client.DeleteOptions{DryRun: []string{"Hello", "Pippa"}}
+		newDeleteOpts := &client.DeleteOptions{}
+		o.ApplyToDelete(newDeleteOpts)
+		Expect(newDeleteOpts).To(Equal(o))
+	})
+	It("Should not set anything", func() {
+		o := &client.DeleteOptions{}
+		newDeleteOpts := &client.DeleteOptions{}
+		o.ApplyToDelete(newDeleteOpts)
+		Expect(newDeleteOpts).To(Equal(o))
 	})
 })

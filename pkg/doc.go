@@ -148,7 +148,7 @@ Usage
 The following example shows creating a new Controller program which Reconciles ReplicaSet objects in response
 to Pod or ReplicaSet events.  The Reconciler function simply adds a label to the ReplicaSet.
 
-See the example/main.go for a usage example.
+See the examples/builtins/main.go for a usage example.
 
 Controller Example
 
@@ -159,7 +159,7 @@ Controller Example
 1.2 Pod (created by ReplicaSet) -> handler.EnqueueRequestForOwnerHandler - enqueue a Request with the
 Owning ReplicaSet Namespace and Name.
 
-2. reconcile ReplicaSet in response to an event
+2. Reconcile ReplicaSet in response to an event
 
 2.1 ReplicaSet object created -> Read ReplicaSet, try to read Pods -> if is missing create Pods.
 
@@ -171,7 +171,7 @@ Watching and EventHandling
 
 Controllers may Watch multiple Kinds of objects (e.g. Pods, ReplicaSets and Deployments), but they reconcile
 only a single Type.  When one Type of object must be updated in response to changes in another Type of object,
-an EnqueueRequestFromMapFunc may be used to map events from one type to another.  e.g. Respond to a cluster resize
+an EnqueueRequestsFromMapFunc may be used to map events from one type to another.  e.g. Respond to a cluster resize
 event (add / delete Node) by re-reconciling all instances of some API.
 
 A Deployment Controller might use an EnqueueRequestForObject and EnqueueRequestForOwner to:

@@ -54,10 +54,11 @@ func DelayIfRateLimited(err error) (time.Duration, bool) {
 // dynamicRESTMapper is a RESTMapper that dynamically discovers resource
 // types at runtime.
 type dynamicRESTMapper struct {
-	mu           sync.RWMutex // protects the following fields
-	staticMapper meta.RESTMapper
-	limiter      *dynamicLimiter
-	newMapper    func() (meta.RESTMapper, error)
+	mu              sync.RWMutex // protects the following fields
+	staticMapper    meta.RESTMapper
+	limiter         *dynamicLimiter
+	newMapper       func() (meta.RESTMapper, error)
+	discoveryClient discovery.DiscoveryInterface
 
 	lazy bool
 	// Used for lazy init.
@@ -94,25 +95,40 @@ func WithCustomMapper(newMapper func() (meta.RESTMapper, error)) DynamicRESTMapp
 	}
 }
 
+// WithDiscoveryFilter sets a groupVersion filter for the discovery client
+// that allows to limit the relevant groups for the mapper
+func WithDiscoveryFilter(filter FilterGroupFunc) DynamicRESTMapperOption {
+	return func(drm *dynamicRESTMapper) error {
+		drm.discoveryClient = &FilterDiscoveryClient{
+			Discovery: drm.discoveryClient,
+			Filter:    filter,
+		}
+		return nil
+	}
+}
+
 // NewDynamicRESTMapper returns a dynamic RESTMapper for cfg. The dynamic
 // RESTMapper dynamically discovers resource types at runtime. opts
 // configure the RESTMapper.
 func NewDynamicRESTMapper(cfg *rest.Config, opts ...DynamicRESTMapperOption) (meta.RESTMapper, error) {
-	client, err := discovery.NewDiscoveryClientForConfig(cfg)
+	defaultDiscoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
 	drm := &dynamicRESTMapper{
+		discoveryClient: defaultDiscoveryClient,
 		limiter: &dynamicLimiter{
 			rate.NewLimiter(rate.Limit(defaultRefillRate), defaultLimitSize),
 		},
-		newMapper: func() (meta.RESTMapper, error) {
-			groupResources, err := restmapper.GetAPIGroupResources(client)
-			if err != nil {
-				return nil, err
-			}
-			return restmapper.NewDiscoveryRESTMapper(groupResources), nil
-		},
+	}
+	drm.newMapper = func() (meta.RESTMapper, error) {
+		// NOTICE that we're using the struct's drm.discoveryClient and not the defaultDiscoveryClient
+		// because we want to allow overridding it by WithDiscoveryFilter()
+		groupResources, err := restmapper.GetAPIGroupResources(drm.discoveryClient)
+		if err != nil {
+			return nil, err
+		}
+		return restmapper.NewDiscoveryRESTMapper(groupResources), nil
 	}
 	for _, opt := range opts {
 		if err = opt(drm); err != nil {

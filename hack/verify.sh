@@ -49,6 +49,4 @@ golangci-lint run --disable-all \
 #    --enable=maligned \
 #    --enable=safesql \
 
-header_text "running dep check"
-dep check -skip-vendor  # vendor is maintained by go modules
 GO111MODULES=on go list -mod=readonly ./...

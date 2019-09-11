@@ -72,14 +72,6 @@ function fetch_go_tools {
     header_text "Installing golangci-lint"
     GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.15.0
   fi
-
-  header_text "Checking for dep"
-  if ! is_installed dep; then
-    header_text "Installing dep"
-    # can't install dep with modules from source due to an issue with semver,
-    # so install from the compiled binary instead
-    curl -sL -o $(go env GOPATH)/bin/dep https://github.com/golang/dep/releases/download/0.5.2/dep-$(go env GOOS)-$(go env GOARCH)
-  fi
 }
 
 header_text "using tools"

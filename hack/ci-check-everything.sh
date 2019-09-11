@@ -23,11 +23,6 @@ export TRACE=1
 export PATH=$(go env GOPATH)/bin:$PATH
 mkdir -p $(go env GOPATH)/bin
 
-echo "Installing dep"
-export DEP_RELEASE_TAG=v0.5.4
-curl --location --silent --retry 5 --fail https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-echo "Finished installing dep"
-
 echo "Installing golangci-lint"
 curl --location --silent --retry 5 --fail  https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin v1.15.0
 echo "Finished installing golangci-lint"

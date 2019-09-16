@@ -21,7 +21,16 @@ NEWLINE="
 "
 head_commit=$(git rev-parse HEAD)
 while read commit_word commit; do
+    if [[ -z ${commit_word} ]]; then
+        # skip terminating blank lines
+        continue
+    fi
     read title
+    if [[ ${title} == "Merge branch '"*"' into release-"* ]]; then
+        # skip temporary merge commits for calculating release notes
+        continue
+    fi
+
     read # skip the blank line
     read prefix body
 

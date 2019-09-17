@@ -18,7 +18,6 @@ Please see https://git.k8s.io/community/CLA.md for more info
 
 1. Setup tools
     ```bash
-    $ go get -u github.com/golang/dep/cmd/dep
     $ curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin v1.15.0
     ```
 1. Test

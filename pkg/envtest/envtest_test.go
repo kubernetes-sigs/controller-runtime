@@ -145,7 +145,7 @@ var _ = Describe("Test", func() {
 						}},
 				},
 			},
-				CRDInstallOptions{maxTime: 50 * time.Millisecond, pollInterval: 15 * time.Millisecond},
+				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -178,7 +178,7 @@ var _ = Describe("Test", func() {
 							}},
 					},
 				},
-				CRDInstallOptions{maxTime: 50 * time.Millisecond, pollInterval: 15 * time.Millisecond},
+				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).To(HaveOccurred())
 
@@ -209,7 +209,7 @@ var _ = Describe("Test", func() {
 							Plural: "fake",
 						}},
 				}},
-				CRDInstallOptions{maxTime: 50 * time.Millisecond, pollInterval: 15 * time.Millisecond},
+				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).To(HaveOccurred())
 

@@ -81,10 +81,17 @@ type Environment struct {
 	// loading.
 	Config *rest.Config
 
-	// CRDs is a list of CRDs to install
+	// CRDInstallOptions are the options for installing CRDs.
+	CRDInstallOptions CRDInstallOptions
+
+	// CRDs is a list of CRDs to install.
+	// If both this field and CRDs field in CRDInstallOptions are specified, the
+	// values are merged.
 	CRDs []*apiextensionsv1beta1.CustomResourceDefinition
 
 	// CRDDirectoryPaths is a list of paths containing CRD yaml or json configs.
+	// If both this field and Paths field in CRDInstallOptions are specified, the
+	// values are merged.
 	CRDDirectoryPaths []string
 
 	// UseExisting indicates that this environments should use an
@@ -203,10 +210,9 @@ func (te *Environment) Start() (*rest.Config, error) {
 	}
 
 	log.V(1).Info("installing CRDs")
-	_, err := InstallCRDs(te.Config, CRDInstallOptions{
-		Paths: te.CRDDirectoryPaths,
-		CRDs:  te.CRDs,
-	})
+	te.CRDInstallOptions.CRDs = mergeCRDs(te.CRDInstallOptions.CRDs, te.CRDs)
+	te.CRDInstallOptions.Paths = mergePaths(te.CRDInstallOptions.Paths, te.CRDDirectoryPaths)
+	_, err := InstallCRDs(te.Config, te.CRDInstallOptions)
 	return te.Config, err
 }
 

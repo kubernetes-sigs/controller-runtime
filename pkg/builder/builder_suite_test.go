@@ -103,6 +103,6 @@ func addCRDToEnvironment(env *envtest.Environment, gvks ...schema.GroupVersionKi
 				},
 			},
 		}
-		env.CRDs = append(env.CRDs, crd)
+		env.CRDInstallOptions.CRDs = append(env.CRDInstallOptions.CRDs, crd)
 	}
 }

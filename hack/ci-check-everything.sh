@@ -16,7 +16,6 @@
 
 set -e
 
-export GO111MODULE=on
 export TRACE=1
 
 # Not included or existing by default in Prow

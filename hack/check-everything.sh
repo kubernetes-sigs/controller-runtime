@@ -70,11 +70,18 @@ function is_installed {
   return 1
 }
 
+function golangci_lint_has_version {
+  # Trim "v" from version prefix since golangci-lint --version
+  # sometimes does not include it, depending on how it's built
+  golangci-lint --version | grep --quiet --fixed-strings "${1#"v"}"
+}
+
 function fetch_go_tools {
-  header_text "Checking for gometalinter.v2"
-  if ! is_installed golangci-lint; then
+  header_text "Checking for golangci-lint"
+  local golangci_lint_version="v1.21.0"
+  if ! is_installed golangci-lint || ! golangci_lint_has_version "${golangci_lint_version}"; then
     header_text "Installing golangci-lint"
-    curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b $(go env GOPATH)/bin v1.21.0
+    curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b $(go env GOPATH)/bin "${golangci_lint_version}"
   fi
 }
 

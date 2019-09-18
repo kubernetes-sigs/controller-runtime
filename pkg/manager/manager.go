@@ -86,6 +86,11 @@ type Manager interface {
 	// use case.
 	GetAPIReader() client.Reader
 
+	// GetAPIClient returns a client that will be configured to use the API server.
+	// This should be used sparingly and only when the cached client does not fit your
+	// use case. It suitable for create some command line or CNI needs query CRD.
+	GetAPIClient() client.Client
+
 	// GetWebhookServer returns a webhook.Server
 	GetWebhookServer() *webhook.Server
 }
@@ -227,7 +232,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
-	apiReader, err := client.New(config, client.Options{Scheme: options.Scheme, Mapper: mapper})
+	apiClient, err := client.New(config, client.Options{Scheme: options.Scheme, Mapper: mapper})
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +275,8 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		cache:            cache,
 		fieldIndexes:     cache,
 		client:           writeObj,
-		apiReader:        apiReader,
+		apiReader:        apiClient,
+		apiClient:        apiClient,
 		recorderProvider: recorderProvider,
 		resourceLock:     resourceLock,
 		mapper:           mapper,

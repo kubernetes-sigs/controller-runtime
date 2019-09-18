@@ -73,6 +73,9 @@ type controllerManager struct {
 	// apiReader is the reader that will make requests to the api server and not the cache.
 	apiReader client.Reader
 
+	// apiClient is the client that will make requests to the api server and not the cache.
+	apiClient client.Client
+
 	// fieldIndexes knows how to add field indexes over the Cache used by this controller,
 	// which can later be consumed via field selectors from the injected client.
 	fieldIndexes client.FieldIndexer
@@ -218,6 +221,10 @@ func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
 
 func (cm *controllerManager) GetAPIReader() client.Reader {
 	return cm.apiReader
+}
+
+func (cm *controllerManager) GetAPIClient() client.Client {
+	return cm.apiClient
 }
 
 func (cm *controllerManager) GetWebhookServer() *webhook.Server {

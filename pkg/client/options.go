@@ -336,6 +336,12 @@ func (o *ListOptions) ApplyToList(lo *ListOptions) {
 	if o.Raw != nil {
 		lo.Raw = o.Raw
 	}
+	if o.Limit > 0 {
+		lo.Limit = o.Limit
+	}
+	if o.Continue != "" {
+		lo.Continue = o.Continue
+	}
 }
 
 // AsListOptions returns these options as a flattened metav1.ListOptions.

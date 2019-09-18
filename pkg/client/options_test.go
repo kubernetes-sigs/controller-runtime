@@ -54,6 +54,18 @@ var _ = Describe("ListOptions", func() {
 		o.ApplyToList(newListOpts)
 		Expect(newListOpts).To(Equal(o))
 	})
+	It("Should set Limit", func() {
+		o := &client.ListOptions{Limit: int64(1)}
+		newListOpts := &client.ListOptions{}
+		o.ApplyToList(newListOpts)
+		Expect(newListOpts).To(Equal(o))
+	})
+	It("Should set Continue", func() {
+		o := &client.ListOptions{Continue: "foo"}
+		newListOpts := &client.ListOptions{}
+		o.ApplyToList(newListOpts)
+		Expect(newListOpts).To(Equal(o))
+	})
 	It("Should not set anything", func() {
 		o := &client.ListOptions{}
 		newListOpts := &client.ListOptions{}

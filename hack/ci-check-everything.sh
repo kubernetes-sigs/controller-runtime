@@ -22,8 +22,4 @@ export TRACE=1
 export PATH=$(go env GOPATH)/bin:$PATH
 mkdir -p $(go env GOPATH)/bin
 
-echo "Installing golangci-lint"
-curl --location --silent --retry 5 --fail  https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin v1.21.0
-echo "Finished installing golangci-lint"
-
 $(dirname ${BASH_SOURCE})/check-everything.sh

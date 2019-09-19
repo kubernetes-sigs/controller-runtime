@@ -88,7 +88,7 @@ type Manager interface {
 
 	// GetAPIClient returns a client that will be configured to use the API server.
 	// This should be used sparingly and only when the cached client does not fit your
-	// use case. It suitable for create some command line or CNI needs query CRD.
+	// use case.
 	GetAPIClient() client.Client
 
 	// GetWebhookServer returns a webhook.Server

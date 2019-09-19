@@ -18,7 +18,6 @@ package healthz_test
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 
@@ -31,93 +30,174 @@ const (
 	contentType = "text/plain; charset=utf-8"
 )
 
-var _ = Describe("Healthz", func() {
-	Describe("Install", func() {
-		It("should install handler", func(done Done) {
-			mux := http.NewServeMux()
-			handler := &healthz.Handler{}
+func requestTo(handler http.Handler, dest string) *httptest.ResponseRecorder {
+	req, err := http.NewRequest("GET", dest, nil)
+	Expect(err).NotTo(HaveOccurred())
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
 
-			healthz.InstallPathHandler(mux, "/healthz/test", handler)
-			req, err := http.NewRequest("GET", "http://example.com/healthz/test", nil)
-			Expect(req).ToNot(BeNil())
-			Expect(err).ToNot(HaveOccurred())
+	return resp
+}
 
-			w := httptest.NewRecorder()
-			mux.ServeHTTP(w, req)
-			Expect(w.Code).To(Equal(http.StatusOK))
-			Expect(w.Header().Get("Content-Type")).To(Equal(contentType))
-			Expect(w.Body.String()).To(Equal("ok"))
+var _ = Describe("Healthz Handler", func() {
+	Describe("the aggregated endpoint", func() {
+		It("should return healthy if all checks succeed", func() {
+			handler := &healthz.Handler{Checks: map[string]healthz.Checker{
+				"ok1": healthz.Ping,
+				"ok2": healthz.Ping,
+			}}
 
-			close(done)
+			resp := requestTo(handler, "/")
+			Expect(resp.Code).To(Equal(http.StatusOK))
+		})
+
+		It("should return unhealthy if at least one check fails", func() {
+			handler := &healthz.Handler{Checks: map[string]healthz.Checker{
+				"ok1": healthz.Ping,
+				"bad1": func(req *http.Request) error {
+					return errors.New("blech")
+				},
+			}}
+
+			resp := requestTo(handler, "/")
+			Expect(resp.Code).To(Equal(http.StatusInternalServerError))
+		})
+
+		It("should ingore excluded checks when determining health", func() {
+			handler := &healthz.Handler{Checks: map[string]healthz.Checker{
+				"ok1": healthz.Ping,
+				"bad1": func(req *http.Request) error {
+					return errors.New("blech")
+				},
+			}}
+
+			resp := requestTo(handler, "/?exclude=bad1")
+			Expect(resp.Code).To(Equal(http.StatusOK))
+		})
+
+		It("should be fine if asked to exclude a check that doesn't exist", func() {
+			handler := &healthz.Handler{Checks: map[string]healthz.Checker{
+				"ok1": healthz.Ping,
+				"ok2": healthz.Ping,
+			}}
+
+			resp := requestTo(handler, "/?exclude=nonexistant")
+			Expect(resp.Code).To(Equal(http.StatusOK))
+		})
+
+		Context("when verbose output is requested with ?verbose=true", func() {
+			It("should return verbose output for ok cases", func() {
+				handler := &healthz.Handler{Checks: map[string]healthz.Checker{
+					"ok1": healthz.Ping,
+					"ok2": healthz.Ping,
+				}}
+
+				resp := requestTo(handler, "/?verbose=true")
+				Expect(resp.Code).To(Equal(http.StatusOK))
+				Expect(resp.Header().Get("Content-Type")).To(Equal(contentType))
+				Expect(resp.Body.String()).To(Equal("[+]ok1 ok\n[+]ok2 ok\nhealthz check passed\n"))
+			})
+
+			It("should return verbose output for failures", func() {
+				handler := &healthz.Handler{Checks: map[string]healthz.Checker{
+					"ok1": healthz.Ping,
+					"bad1": func(req *http.Request) error {
+						return errors.New("blech")
+					},
+				}}
+
+				resp := requestTo(handler, "/?verbose=true")
+				Expect(resp.Code).To(Equal(http.StatusInternalServerError))
+				Expect(resp.Header().Get("Content-Type")).To(Equal(contentType))
+				Expect(resp.Body.String()).To(Equal("[-]bad1 failed: reason withheld\n[+]ok1 ok\nhealthz check failed\n"))
+			})
+		})
+
+		It("should return non-verbose output when healthy and not specified as verbose", func() {
+			handler := &healthz.Handler{Checks: map[string]healthz.Checker{
+				"ok1": healthz.Ping,
+				"ok2": healthz.Ping,
+			}}
+
+			resp := requestTo(handler, "/")
+			Expect(resp.Header().Get("Content-Type")).To(Equal(contentType))
+			Expect(resp.Body.String()).To(Equal("ok"))
+
+		})
+
+		It("should always be verbose if a check fails", func() {
+			handler := &healthz.Handler{Checks: map[string]healthz.Checker{
+				"ok1": healthz.Ping,
+				"bad1": func(req *http.Request) error {
+					return errors.New("blech")
+				},
+			}}
+
+			resp := requestTo(handler, "/")
+			Expect(resp.Header().Get("Content-Type")).To(Equal(contentType))
+			Expect(resp.Body.String()).To(Equal("[-]bad1 failed: reason withheld\n[+]ok1 ok\nhealthz check failed\n"))
+		})
+
+		It("should always return a ping endpoint if no other ones are present", func() {
+			resp := requestTo(&healthz.Handler{}, "/?verbose=true")
+			Expect(resp.Code).To(Equal(http.StatusOK))
+			Expect(resp.Header().Get("Content-Type")).To(Equal(contentType))
+			Expect(resp.Body.String()).To(Equal("[+]ping ok\nhealthz check passed\n"))
 		})
 	})
 
-	Describe("Checks", func() {
-		var testMultipleChecks = func(path string) {
-			tests := []struct {
-				path             string
-				expectedResponse string
-				expectedStatus   int
-				addBadCheck      bool
-			}{
-				{"?verbose", "[+]ping ok\nhealthz check passed\n", http.StatusOK,
-					false},
-				{"?exclude=dontexist", "ok", http.StatusOK, false},
-				{"?exclude=bad", "ok", http.StatusOK, true},
-				{"?verbose=true&exclude=bad", "[+]ping ok\n[+]bad excluded: ok\nhealthz check passed\n",
-					http.StatusOK, true},
-				{"?verbose=true&exclude=dontexist",
-					"[+]ping ok\nwarn: some health checks cannot be excluded: no matches for \"dontexist\"\nhealthz check passed\n",
-					http.StatusOK, false},
-				{"/ping", "ok", http.StatusOK, false},
-				{"", "ok", http.StatusOK, false},
-				{"?verbose", "[+]ping ok\n[-]bad failed: reason withheld\nhealthz check failed\n",
-					http.StatusInternalServerError, true},
-				{"/ping", "ok", http.StatusOK, true},
-				{"/bad", "internal server error: this will fail\n",
-					http.StatusInternalServerError, true},
-				{"", "[+]ping ok\n[-]bad failed: reason withheld\nhealthz check failed\n",
-					http.StatusInternalServerError, true},
-			}
+	Describe("the per-check endpoints", func() {
+		It("should return ok if the requested check is healthy", func() {
+			handler := &healthz.Handler{Checks: map[string]healthz.Checker{
+				"okcheck": healthz.Ping,
+			}}
 
-			for _, test := range tests {
-				mux := http.NewServeMux()
-				checks := []healthz.Checker{healthz.PingHealthz}
-				if test.addBadCheck {
-					checks = append(checks, healthz.NamedCheck("bad", func(_ *http.Request) error {
-						return errors.New("this will fail")
-					}))
-				}
-				handler := &healthz.Handler{}
-				for _, check := range checks {
-					handler.AddCheck(check)
-				}
-
-				if path == "" {
-					path = "/healthz"
-				}
-
-				healthz.InstallPathHandler(mux, path, handler)
-				req, err := http.NewRequest("GET", fmt.Sprintf("http://example.com%s%v", path, test.path), nil)
-				Expect(req).ToNot(BeNil())
-				Expect(err).ToNot(HaveOccurred())
-
-				w := httptest.NewRecorder()
-				mux.ServeHTTP(w, req)
-				Expect(w.Code).To(Equal(test.expectedStatus))
-				Expect(w.Header().Get("Content-Type")).To(Equal(contentType))
-				Expect(w.Body.String()).To(Equal(test.expectedResponse))
-			}
-		}
-
-		It("should do multiple checks", func(done Done) {
-			testMultipleChecks("")
-			close(done)
+			resp := requestTo(handler, "/okcheck")
+			Expect(resp.Code).To(Equal(http.StatusOK))
+			Expect(resp.Header().Get("Content-Type")).To(Equal(contentType))
+			Expect(resp.Body.String()).To(Equal("ok"))
 		})
 
-		It("should do multiple path checks", func(done Done) {
-			testMultipleChecks("/ready")
-			close(done)
+		It("should return an error if the requested check is unhealthy", func() {
+			handler := &healthz.Handler{Checks: map[string]healthz.Checker{
+				"failcheck": func(req *http.Request) error {
+					return errors.New("blech")
+				},
+			}}
+
+			resp := requestTo(handler, "/failcheck")
+			Expect(resp.Code).To(Equal(http.StatusInternalServerError))
+			Expect(resp.Header().Get("Content-Type")).To(Equal(contentType))
+			Expect(resp.Body.String()).To(Equal("internal server error: blech\n"))
+		})
+
+		It("shouldn't take other checks into account", func() {
+			handler := &healthz.Handler{Checks: map[string]healthz.Checker{
+				"failcheck": func(req *http.Request) error {
+					return errors.New("blech")
+				},
+				"okcheck": healthz.Ping,
+			}}
+
+			By("checking the bad endpoint and expecting it to fail")
+			resp := requestTo(handler, "/failcheck")
+			Expect(resp.Code).To(Equal(http.StatusInternalServerError))
+
+			By("checking the good endpoint and expecting it to succeed")
+			resp = requestTo(handler, "/okcheck")
+			Expect(resp.Code).To(Equal(http.StatusOK))
+		})
+
+		It("should return non-found for paths that don't match a checker", func() {
+			handler := &healthz.Handler{}
+
+			resp := requestTo(handler, "/doesnotexist")
+			Expect(resp.Code).To(Equal(http.StatusNotFound))
+		})
+
+		It("should always return a ping endpoint if no other ones are present", func() {
+			resp := requestTo(&healthz.Handler{}, "/ping")
+			Expect(resp.Code).To(Equal(http.StatusOK))
 		})
 	})
 })

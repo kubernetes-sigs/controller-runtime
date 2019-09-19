@@ -55,10 +55,10 @@ type Manager interface {
 	SetFields(interface{}) error
 
 	// AddHealthzCheck allows you to add Healthz checker
-	AddHealthzCheck(check healthz.Checker) error
+	AddHealthzCheck(name string, check healthz.Checker) error
 
 	// AddReadyzCheck allows you to add Readyz checker
-	AddReadyzCheck(check healthz.Checker) error
+	AddReadyzCheck(name string, check healthz.Checker) error
 
 	// Start starts all registered Controllers and blocks until the Stop channel is closed.
 	// Returns an error if there is an error starting any controller.

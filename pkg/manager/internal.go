@@ -24,8 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
-
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,8 +31,10 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
@@ -210,7 +210,7 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 }
 
 // AddHealthzCheck allows you to add Healthz checker
-func (cm *controllerManager) AddHealthzCheck(check healthz.Checker) error {
+func (cm *controllerManager) AddHealthzCheck(name string, check healthz.Checker) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -219,15 +219,15 @@ func (cm *controllerManager) AddHealthzCheck(check healthz.Checker) error {
 	}
 
 	if cm.healthzHandler == nil {
-		cm.healthzHandler = &healthz.Handler{}
+		cm.healthzHandler = &healthz.Handler{Checks: map[string]healthz.Checker{}}
 	}
 
-	cm.healthzHandler.AddCheck(check)
+	cm.healthzHandler.Checks[name] = check
 	return nil
 }
 
 // AddReadyzCheck allows you to add Readyz checker
-func (cm *controllerManager) AddReadyzCheck(check healthz.Checker) error {
+func (cm *controllerManager) AddReadyzCheck(name string, check healthz.Checker) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -236,10 +236,10 @@ func (cm *controllerManager) AddReadyzCheck(check healthz.Checker) error {
 	}
 
 	if cm.readyzHandler == nil {
-		cm.readyzHandler = &healthz.Handler{}
+		cm.readyzHandler = &healthz.Handler{Checks: map[string]healthz.Checker{}}
 	}
 
-	cm.readyzHandler.AddCheck(check)
+	cm.readyzHandler.Checks[name] = check
 	return nil
 }
 
@@ -322,10 +322,10 @@ func (cm *controllerManager) serveHealthProbes(stop <-chan struct{}) {
 	mux := http.NewServeMux()
 
 	if cm.readyzHandler != nil {
-		healthz.InstallPathHandler(mux, cm.readinessEndpointName, cm.readyzHandler)
+		mux.Handle(cm.readinessEndpointName, http.StripPrefix(cm.readinessEndpointName, cm.readyzHandler))
 	}
 	if cm.healthzHandler != nil {
-		healthz.InstallPathHandler(mux, cm.livenessEndpointName, cm.healthzHandler)
+		mux.Handle(cm.livenessEndpointName, http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
 	}
 
 	server := http.Server{

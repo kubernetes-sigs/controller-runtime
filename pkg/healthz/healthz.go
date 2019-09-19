@@ -17,97 +17,175 @@ limitations under the License.
 package healthz
 
 import (
-	"bytes"
 	"fmt"
 	"net/http"
+	"path"
+	"sort"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
+// Handler is an http.Handler that aggregates the results of the given
+// checkers to the root path, and supports calling individual checkers on
+// subpaths of the name of the checker.
+//
+// Adding checks on the fly is *not* threadsafe -- use a wrapper.
 type Handler struct {
-	checks []Checker
+	Checks map[string]Checker
 }
 
-// GetChecks returns all health checks.
-func (h *Handler) GetChecks() []Checker {
-	return h.checks
+// checkStatus holds the output of a particular check
+type checkStatus struct {
+	name     string
+	healthy  bool
+	excluded bool
 }
 
-// AddCheck adds new health check to handler.
-func (h *Handler) AddCheck(check Checker) {
-	h.checks = append(h.checks, check)
-}
+func (h *Handler) serveAggregated(resp http.ResponseWriter, req *http.Request) {
+	failed := false
+	excluded := getExcludedChecks(req)
 
-// Build creates http.Handler that serves checks.
-func (h *Handler) Build() http.Handler {
-	return handleRootHealthz(h.checks...)
-}
+	parts := make([]checkStatus, 0, len(h.Checks))
 
-// HealthzChecker is a named healthz checker.
-type Checker interface {
-	Name() string
-	Check(req *http.Request) error
-}
-
-// PingHealthz returns true automatically when checked
-var PingHealthz Checker = ping{}
-
-// ping implements the simplest possible healthz checker.
-type ping struct{}
-
-func (ping) Name() string {
-	return "ping"
-}
-
-// PingHealthz is a health check that returns true.
-func (ping) Check(_ *http.Request) error {
-	return nil
-}
-
-// NamedCheck returns a healthz checker for the given name and function.
-func NamedCheck(name string, check func(r *http.Request) error) Checker {
-	return &healthzCheck{name, check}
-}
-
-// InstallPathHandler registers handlers for health checking on
-// a specific path to mux. *All handlers* for the path must be
-// specified in exactly one call to InstallPathHandler. Calling
-// InstallPathHandler more than once for the same path and mux will
-// result in a panic.
-func InstallPathHandler(mux mux, path string, handler *Handler) {
-	if len(handler.GetChecks()) == 0 {
-		log.V(1).Info("No default health checks specified. Installing the ping handler.")
-		handler.AddCheck(PingHealthz)
+	// calculate the results...
+	for checkName, check := range h.Checks {
+		// no-op the check if we've specified we want to exclude the check
+		if excluded.Has(checkName) {
+			excluded.Delete(checkName)
+			parts = append(parts, checkStatus{name: checkName, healthy: true, excluded: true})
+			continue
+		}
+		if err := check(req); err != nil {
+			log.V(1).Info("healthz check failed", "checker", checkName, "error", err)
+			parts = append(parts, checkStatus{name: checkName, healthy: false})
+			failed = true
+		} else {
+			parts = append(parts, checkStatus{name: checkName, healthy: true})
+		}
 	}
 
-	mux.Handle(path, handler.Build())
-	for _, check := range handler.GetChecks() {
-		log.V(1).Info("installing healthz checker", "checker", check.Name())
-		mux.Handle(fmt.Sprintf("%s/%s", path, check.Name()), adaptCheckToHandler(check.Check))
+	// ...default a check if none is present...
+	if len(h.Checks) == 0 {
+		parts = append(parts, checkStatus{name: "ping", healthy: true})
+	}
+
+	for _, c := range excluded.List() {
+		log.V(1).Info("cannot exclude health check, no matches for it", "checker", c)
+	}
+
+	// ...sort to be consistent...
+	sort.Slice(parts, func(i, j int) bool { return parts[i].name < parts[j].name })
+
+	// ...and write out the result
+	// TODO(directxman12): this should also accept a request for JSON content (via a accept header)
+	_, forceVerbose := req.URL.Query()["verbose"]
+	writeStatusesAsText(resp, parts, excluded, failed, forceVerbose)
+}
+
+// writeStatusAsText writes out the given check statuses in some semi-arbitrary
+// bespoke text format that we copied from Kubernetes.  unknownExcludes lists
+// any checks that the user requested to have excluded, but weren't actually
+// known checks.  writeStatusAsText is always verbose on failure, and can be
+// forced to be verbose on success using the given argument.
+func writeStatusesAsText(resp http.ResponseWriter, parts []checkStatus, unknownExcludes sets.String, failed, forceVerbose bool) {
+	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	resp.Header().Set("X-Content-Type-Options", "nosniff")
+
+	// always write status code first
+	if failed {
+		resp.WriteHeader(http.StatusInternalServerError)
+	} else {
+		resp.WriteHeader(http.StatusOK)
+	}
+
+	// shortcut for easy non-verbose success
+	if !failed && !forceVerbose {
+		fmt.Fprint(resp, "ok")
+		return
+	}
+
+	// we're always verbose on failure, so from this point on we're guaranteed to be verbose
+
+	for _, checkOut := range parts {
+		switch {
+		case checkOut.excluded:
+			fmt.Fprintf(resp, "[+]%s excluded: ok\n", checkOut.name)
+		case checkOut.healthy:
+			fmt.Fprintf(resp, "[+]%s ok\n", checkOut.name)
+		default:
+			// don't include the error since this endpoint is public.  If someone wants more detail
+			// they should have explicit permission to the detailed checks.
+			fmt.Fprintf(resp, "[-]%s failed: reason withheld\n", checkOut.name)
+		}
+	}
+
+	if unknownExcludes.Len() > 0 {
+		fmt.Fprintf(resp, "warn: some health checks cannot be excluded: no matches for %s\n", formatQuoted(unknownExcludes.List()...))
+	}
+
+	if failed {
+		log.Info("healthz check failed", "statuses", parts)
+		fmt.Fprintf(resp, "healthz check failed\n")
+	} else {
+		fmt.Fprint(resp, "healthz check passed\n")
 	}
 }
 
-// mux is an interface describing the methods InstallHandler requires.
-type mux interface {
-	Handle(pattern string, handler http.Handler)
+func (h *Handler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	// clean up the request (duplicating the internal logic of http.ServeMux a bit)
+	// clean up the path a bit
+	reqPath := req.URL.Path
+	if reqPath == "" || reqPath[0] != '/' {
+		reqPath = "/" + reqPath
+	}
+	// path.Clean removes the trailing slash except for root for us
+	// (which is fine, since we're only serving one layer of sub-paths)
+	reqPath = path.Clean(reqPath)
+
+	// either serve the root endpoint...
+	if reqPath == "/" {
+		h.serveAggregated(resp, req)
+		return
+	}
+
+	// ...the default check (if nothing else is present)...
+	if len(h.Checks) == 0 && reqPath[1:] == "ping" {
+		CheckHandler{Checker: Ping}.ServeHTTP(resp, req)
+		return
+	}
+
+	// ...or an individual checker
+	checkName := reqPath[1:] // ignore the leading slash
+	checker, known := h.Checks[checkName]
+	if !known {
+		http.NotFoundHandler().ServeHTTP(resp, req)
+		return
+	}
+
+	CheckHandler{Checker: checker}.ServeHTTP(resp, req)
 }
 
-// healthzCheck implements HealthzChecker on an arbitrary name and check function.
-type healthzCheck struct {
-	name  string
-	check func(r *http.Request) error
+// CheckHandler is an http.Handler that serves a health check endpoint at the root path,
+// based on its checker.
+type CheckHandler struct {
+	Checker
 }
 
-var _ Checker = &healthzCheck{}
-
-func (c *healthzCheck) Name() string {
-	return c.name
+func (h CheckHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	err := h.Checker(req)
+	if err != nil {
+		http.Error(resp, fmt.Sprintf("internal server error: %v", err), http.StatusInternalServerError)
+	} else {
+		fmt.Fprint(resp, "ok")
+	}
 }
 
-func (c *healthzCheck) Check(r *http.Request) error {
-	return c.check(r)
-}
+// Checker knows how to perform a health check.
+type Checker func(req *http.Request) error
+
+// Ping returns true automatically when checked
+var Ping Checker = func(_ *http.Request) error { return nil }
 
 // getExcludedChecks extracts the health check names to be excluded from the query param
 func getExcludedChecks(r *http.Request) sets.String {
@@ -116,71 +194,6 @@ func getExcludedChecks(r *http.Request) sets.String {
 		return sets.NewString(checks...)
 	}
 	return sets.NewString()
-}
-
-// handleRootHealthz returns an http.HandlerFunc that serves the provided checks.
-func handleRootHealthz(checks ...Checker) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		failed := false
-		excluded := getExcludedChecks(r)
-		var verboseOut bytes.Buffer
-		for _, check := range checks {
-			// no-op the check if we've specified we want to exclude the check
-			if excluded.Has(check.Name()) {
-				excluded.Delete(check.Name())
-				fmt.Fprintf(&verboseOut, "[+]%s excluded: ok\n", check.Name())
-				continue
-			}
-			if err := check.Check(r); err != nil {
-				// don't include the error since this endpoint is public.  If someone wants more detail
-				// they should have explicit permission to the detailed checks.
-				log.V(1).Info("healthz check failed", "checker", check.Name(), "error", err)
-				fmt.Fprintf(&verboseOut, "[-]%s failed: reason withheld\n", check.Name())
-				failed = true
-			} else {
-				fmt.Fprintf(&verboseOut, "[+]%s ok\n", check.Name())
-			}
-		}
-		if excluded.Len() > 0 {
-			fmt.Fprintf(&verboseOut, "warn: some health checks cannot be excluded: no matches for %s\n", formatQuoted(excluded.List()...))
-			for _, c := range excluded.List() {
-				log.Info("cannot exclude health check, no matches for it", "checker", c)
-			}
-		}
-		// always be verbose on failure
-		if failed {
-			log.V(1).Info("healthz check failed", "message", verboseOut.String())
-			http.Error(w, fmt.Sprintf("%shealthz check failed", verboseOut.String()), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		if _, found := r.URL.Query()["verbose"]; !found {
-			fmt.Fprint(w, "ok")
-			return
-		}
-
-		_, err := verboseOut.WriteTo(w)
-		if err != nil {
-			log.V(1).Info("healthz check failed", "message", verboseOut.String())
-			http.Error(w, fmt.Sprintf("%shealthz check failed", verboseOut.String()), http.StatusInternalServerError)
-			return
-		}
-		fmt.Fprint(w, "healthz check passed\n")
-	})
-}
-
-// adaptCheckToHandler returns an http.HandlerFunc that serves the provided checks.
-func adaptCheckToHandler(c func(r *http.Request) error) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := c(r)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("internal server error: %v", err), http.StatusInternalServerError)
-		} else {
-			fmt.Fprint(w, "ok")
-		}
-	})
 }
 
 // formatQuoted returns a formatted string of the health check names,

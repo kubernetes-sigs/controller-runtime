@@ -14,11 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// This package is almost exact copy of apiserver's healthz package:
-//   https://github.com/kubernetes/apiserver/tree/master/pkg/server/healthz
+// Package healthz contains helpers from supporting liveness and readiness endpoints.
+// (often referred to as healthz and readyz, respectively).
 //
-// Except that LogHealthz checker removed
-// and some style fixes is made to satisfy linters
+// This package draws heavily from the apiserver's healthz package
+// ( https://github.com/kubernetes/apiserver/tree/master/pkg/server/healthz )
+// but has some changes to bring it in line with controller-runtime's style.
+//
+// The main entrypoint is the Handler -- this serves both aggregated health status
+// and individual health check endpoints.
 package healthz
 
 import (

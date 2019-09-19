@@ -520,8 +520,8 @@ var _ = Describe("manger.Manager", func() {
 			m, err := New(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 
-			readyzChecker := &checker{check: fmt.Errorf("not ready yet")}
-			err = m.AddReadyzCheck(readyzChecker)
+			res := fmt.Errorf("not ready yet")
+			err = m.AddReadyzCheck("check", func(_ *http.Request) error { return res })
 			Expect(err).NotTo(HaveOccurred())
 
 			s := make(chan struct{})
@@ -540,7 +540,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
 
 			// Controller is ready
-			readyzChecker.check = nil
+			res = nil
 			resp, err = http.Get(readinessEndpoint)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -551,8 +551,8 @@ var _ = Describe("manger.Manager", func() {
 			m, err := New(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 
-			healthzChecker := &checker{check: fmt.Errorf("not alive")}
-			err = m.AddHealthzCheck(healthzChecker)
+			res := fmt.Errorf("not alive")
+			err = m.AddHealthzCheck("check", func(_ *http.Request) error { return res })
 			Expect(err).NotTo(HaveOccurred())
 
 			s := make(chan struct{})
@@ -571,7 +571,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
 
 			// Controller is ready
-			healthzChecker.check = nil
+			res = nil
 			resp, err = http.Get(livenessEndpoint)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -858,16 +858,4 @@ func (i *injectable) InjectStopChannel(stop <-chan struct{}) error {
 
 func (i *injectable) Start(<-chan struct{}) error {
 	return nil
-}
-
-type checker struct {
-	check error
-}
-
-func (*checker) Name() string {
-	return "check"
-}
-
-func (c *checker) Check(req *http.Request) error {
-	return c.check
 }

@@ -47,7 +47,7 @@ var _ = Describe("The Testing Framework", func() {
 		bytes, err := ioutil.ReadAll(stdout)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(bytes).To(BeEmpty())
-		Expect(stderr).To(ContainSubstring("No resources found."))
+		Expect(stderr).To(ContainSubstring("No resources found"))
 
 		By("Stopping all the control plane processes")
 		err = controlPlane.Stop()

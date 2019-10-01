@@ -118,14 +118,16 @@ var _ = Describe("Fake client", func() {
 			err = cl.Get(nil, namespacedName, obj)
 			Expect(err).To(BeNil())
 			Expect(obj).To(Equal(newcm))
+			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
 		})
 
 		It("should be able to Update", func() {
 			By("Updating a new configmap")
 			newcm := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-cm",
-					Namespace: "ns2",
+					Name:            "test-cm",
+					Namespace:       "ns2",
+					ResourceVersion: "1",
 				},
 				Data: map[string]string{
 					"test-key": "new-value",
@@ -143,6 +145,7 @@ var _ = Describe("Fake client", func() {
 			err = cl.Get(nil, namespacedName, obj)
 			Expect(err).To(BeNil())
 			Expect(obj).To(Equal(newcm))
+			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("2"))
 		})
 
 		It("should be able to Delete", func() {
@@ -198,8 +201,9 @@ var _ = Describe("Fake client", func() {
 				By("Updating a new configmap with DryRun")
 				newcm := &corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-cm",
-						Namespace: "ns2",
+						Name:            "test-cm",
+						Namespace:       "ns2",
+						ResourceVersion: "1",
 					},
 					Data: map[string]string{
 						"test-key": "new-value",
@@ -217,6 +221,7 @@ var _ = Describe("Fake client", func() {
 				err = cl.Get(nil, namespacedName, obj)
 				Expect(err).To(BeNil())
 				Expect(obj).To(Equal(cm))
+				Expect(obj.ObjectMeta.ResourceVersion).To(Equal(""))
 			})
 		})
 
@@ -242,6 +247,7 @@ var _ = Describe("Fake client", func() {
 			err = cl.Get(nil, namespacedName, obj)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(obj.Annotations["foo"]).To(Equal("bar"))
+			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
 		})
 	}
 

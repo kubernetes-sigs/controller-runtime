@@ -35,7 +35,10 @@ import (
 // information fetched by a new client with the given config.
 func NewDiscoveryRESTMapper(c *rest.Config) (meta.RESTMapper, error) {
 	// Get a mapper
-	dc := discovery.NewDiscoveryClientForConfigOrDie(c)
+	dc, err := discovery.NewDiscoveryClientForConfig(c)
+	if err != nil {
+		return nil, err
+	}
 	gr, err := restmapper.GetAPIGroupResources(dc)
 	if err != nil {
 		return nil, err

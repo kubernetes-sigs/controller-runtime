@@ -55,17 +55,20 @@ func DelayIfRateLimited(err error) (time.Duration, bool) {
 // types at runtime.
 type dynamicRESTMapper struct {
 	mu           sync.RWMutex // protects the following fields
-	client       discovery.DiscoveryInterface
 	staticMapper meta.RESTMapper
 	limiter      *dynamicLimiter
+	newMapper    func() (meta.RESTMapper, error)
 
 	lazy bool
 	// Used for lazy init.
 	initOnce sync.Once
 }
 
+// DynamicRESTMapperOption is a functional option on the dynamicRESTMapper
+type DynamicRESTMapperOption func(*dynamicRESTMapper) error
+
 // WithLimiter sets the RESTMapper's underlying limiter to lim.
-func WithLimiter(lim *rate.Limiter) func(*dynamicRESTMapper) error {
+func WithLimiter(lim *rate.Limiter) DynamicRESTMapperOption {
 	return func(drm *dynamicRESTMapper) error {
 		drm.limiter = &dynamicLimiter{lim}
 		return nil
@@ -74,23 +77,41 @@ func WithLimiter(lim *rate.Limiter) func(*dynamicRESTMapper) error {
 
 // WithLazyDiscovery prevents the RESTMapper from discovering REST mappings
 // until an API call is made.
-var WithLazyDiscovery = func(drm *dynamicRESTMapper) error {
+var WithLazyDiscovery DynamicRESTMapperOption = func(drm *dynamicRESTMapper) error {
 	drm.lazy = true
 	return nil
+}
+
+// WithCustomMapper supports setting a custom RESTMapper refresher instead of
+// the default method, which uses a discovery client.
+//
+// This exists mainly for testing, but can be useful if you need tighter control
+// over how discovery is performed, which discovery endpoints are queried, etc.
+func WithCustomMapper(newMapper func() (meta.RESTMapper, error)) DynamicRESTMapperOption {
+	return func(drm *dynamicRESTMapper) error {
+		drm.newMapper = newMapper
+		return nil
+	}
 }
 
 // NewDynamicRESTMapper returns a dynamic RESTMapper for cfg. The dynamic
 // RESTMapper dynamically discovers resource types at runtime. opts
 // configure the RESTMapper.
-func NewDynamicRESTMapper(cfg *rest.Config, opts ...func(*dynamicRESTMapper) error) (meta.RESTMapper, error) {
+func NewDynamicRESTMapper(cfg *rest.Config, opts ...DynamicRESTMapperOption) (meta.RESTMapper, error) {
 	client, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
 	drm := &dynamicRESTMapper{
-		client: client,
 		limiter: &dynamicLimiter{
-			rate.NewLimiter(rate.Limit(defaultLimitRate), defaultLimitSize),
+			rate.NewLimiter(rate.Limit(defaultRefillRate), defaultLimitSize),
+		},
+		newMapper: func() (meta.RESTMapper, error) {
+			groupResources, err := restmapper.GetAPIGroupResources(client)
+			if err != nil {
+				return nil, err
+			}
+			return restmapper.NewDiscoveryRESTMapper(groupResources), nil
 		},
 	}
 	for _, opt := range opts {
@@ -107,22 +128,23 @@ func NewDynamicRESTMapper(cfg *rest.Config, opts ...func(*dynamicRESTMapper) err
 }
 
 var (
-	// defaultLimitRate is the number of RESTMapper API calls allowed
-	// per second assuming the rate of API calls <= defaultLimitRate.
-	defaultLimitRate = 600
-	// defaultLimitSize is the maximum number of simultaneous RESTMapper
-	// API calls allowed.
+	// defaultRefilRate is the default rate at which potential calls are
+	// added back to the "bucket" of allowed calls.
+	defaultRefillRate = 5
+	// defaultLimitSize is the default starting/max number of potential calls
+	// per second.  Once a call is used, it's added back to the bucket at a rate
+	// of defaultRefillRate per second.
 	defaultLimitSize = 5
 )
 
 // setStaticMapper sets drm's staticMapper by querying its client, regardless
 // of reload backoff.
 func (drm *dynamicRESTMapper) setStaticMapper() error {
-	groupResources, err := restmapper.GetAPIGroupResources(drm.client)
+	newMapper, err := drm.newMapper()
 	if err != nil {
 		return err
 	}
-	drm.staticMapper = restmapper.NewDiscoveryRESTMapper(groupResources)
+	drm.staticMapper = newMapper
 	return nil
 }
 
@@ -136,17 +158,58 @@ func (drm *dynamicRESTMapper) init() (err error) {
 	return err
 }
 
-// reload reloads the static RESTMapper, and will return an error only
-// if a rate limit has been hit. reload is thread-safe.
-func (drm *dynamicRESTMapper) reload() error {
-	// limiter is thread-safe.
+// checkAndReload attempts to call the given callback, which is assumed to be dependent
+// on the data in the restmapper.
+//
+// If the callback returns a NoKindMatchError, it will attempt to reload
+// the RESTMapper's data and re-call the callback once that's occurred.
+// If the callback returns any other error, the function will return immediately regardless.
+//
+// It will take care
+// ensuring that reloads are rate-limitted and that extraneous calls aren't made.
+// It's thread-safe, and worries about thread-safety for the callback (so the callback does
+// not need to attempt to lock the restmapper).
+func (drm *dynamicRESTMapper) checkAndReload(needsReloadErr error, checkNeedsReload func() error) error {
+	// first, check the common path -- data is fresh enough
+	// (use an IIFE for the lock's defer)
+	err := func() error {
+		drm.mu.RLock()
+		defer drm.mu.RUnlock()
+
+		return checkNeedsReload()
+	}()
+
+	// NB(directxman12): `Is` and `As` have a confusing relationship --
+	// `Is` is like `== or does this implement .Is`, whereas `As` says
+	// `can I type-assert into`
+	needsReload := xerrors.As(err, &needsReloadErr)
+	if !needsReload {
+		return err
+	}
+
+	// if the data wasn't fresh, we'll need to try and update it, so grab the lock...
+	drm.mu.Lock()
+	defer drm.mu.Unlock()
+
+	// ... and double-check that we didn't reload in the meantime
+	err = checkNeedsReload()
+	needsReload = xerrors.As(err, &needsReloadErr)
+	if !needsReload {
+		return err
+	}
+
+	// we're still stale, so grab a rate-limit token if we can...
 	if err := drm.limiter.checkRate(); err != nil {
 		return err
 	}
-	// Lock here so callers can be rate-limited regardless of lock state.
-	drm.mu.Lock()
-	defer drm.mu.Unlock()
-	return drm.setStaticMapper()
+
+	// ...reload...
+	if err := drm.setStaticMapper(); err != nil {
+		return err
+	}
+
+	// ...and return the results of the closure regardless
+	return checkNeedsReload()
 }
 
 // TODO: wrap reload errors on NoKindMatchError with go 1.13 errors.
@@ -155,154 +218,92 @@ func (drm *dynamicRESTMapper) KindFor(resource schema.GroupVersionResource) (sch
 	if err := drm.init(); err != nil {
 		return schema.GroupVersionKind{}, err
 	}
-	gvk, err := drm.kindFor(resource)
-	if xerrors.Is(err, &meta.NoKindMatchError{}) {
-		if rerr := drm.reload(); rerr != nil {
-			return schema.GroupVersionKind{}, rerr
-		}
-		gvk, err = drm.kindFor(resource)
-	}
+	var gvk schema.GroupVersionKind
+	err := drm.checkAndReload(&meta.NoResourceMatchError{}, func() error {
+		var err error
+		gvk, err = drm.staticMapper.KindFor(resource)
+		return err
+	})
 	return gvk, err
-}
-
-// kindFor calls the underlying static RESTMapper's KindFor method in a
-// thread-safe manner.
-func (drm *dynamicRESTMapper) kindFor(resource schema.GroupVersionResource) (schema.GroupVersionKind, error) {
-	drm.mu.RLock()
-	defer drm.mu.RUnlock()
-	return drm.staticMapper.KindFor(resource)
 }
 
 func (drm *dynamicRESTMapper) KindsFor(resource schema.GroupVersionResource) ([]schema.GroupVersionKind, error) {
 	if err := drm.init(); err != nil {
 		return nil, err
 	}
-	gvks, err := drm.kindsFor(resource)
-	if xerrors.Is(err, &meta.NoKindMatchError{}) {
-		if rerr := drm.reload(); rerr != nil {
-			return nil, rerr
-		}
-		gvks, err = drm.kindsFor(resource)
-	}
+	var gvks []schema.GroupVersionKind
+	err := drm.checkAndReload(&meta.NoResourceMatchError{}, func() error {
+		var err error
+		gvks, err = drm.staticMapper.KindsFor(resource)
+		return err
+	})
 	return gvks, err
-}
-
-// kindsFor calls the underlying static RESTMapper's KindsFor method in a
-// thread-safe manner.
-func (drm *dynamicRESTMapper) kindsFor(resource schema.GroupVersionResource) ([]schema.GroupVersionKind, error) {
-	drm.mu.RLock()
-	defer drm.mu.RUnlock()
-	return drm.staticMapper.KindsFor(resource)
 }
 
 func (drm *dynamicRESTMapper) ResourceFor(input schema.GroupVersionResource) (schema.GroupVersionResource, error) {
 	if err := drm.init(); err != nil {
 		return schema.GroupVersionResource{}, err
 	}
-	gvr, err := drm.resourceFor(input)
-	if xerrors.Is(err, &meta.NoKindMatchError{}) {
-		if rerr := drm.reload(); rerr != nil {
-			return schema.GroupVersionResource{}, rerr
-		}
-		gvr, err = drm.resourceFor(input)
-	}
-	return gvr, err
-}
 
-// resourceFor calls the underlying static RESTMapper's ResourceFor method in a
-// thread-safe manner.
-func (drm *dynamicRESTMapper) resourceFor(input schema.GroupVersionResource) (schema.GroupVersionResource, error) {
-	drm.mu.RLock()
-	defer drm.mu.RUnlock()
-	return drm.staticMapper.ResourceFor(input)
+	var gvr schema.GroupVersionResource
+	err := drm.checkAndReload(&meta.NoResourceMatchError{}, func() error {
+		var err error
+		gvr, err = drm.staticMapper.ResourceFor(input)
+		return err
+	})
+	return gvr, err
 }
 
 func (drm *dynamicRESTMapper) ResourcesFor(input schema.GroupVersionResource) ([]schema.GroupVersionResource, error) {
 	if err := drm.init(); err != nil {
 		return nil, err
 	}
-	gvrs, err := drm.resourcesFor(input)
-	if xerrors.Is(err, &meta.NoKindMatchError{}) {
-		if rerr := drm.reload(); rerr != nil {
-			return nil, rerr
-		}
-		gvrs, err = drm.resourcesFor(input)
-	}
+	var gvrs []schema.GroupVersionResource
+	err := drm.checkAndReload(&meta.NoResourceMatchError{}, func() error {
+		var err error
+		gvrs, err = drm.staticMapper.ResourcesFor(input)
+		return err
+	})
 	return gvrs, err
-}
-
-// resourcesFor calls the underlying static RESTMapper's ResourcesFor method
-// in a thread-safe manner.
-func (drm *dynamicRESTMapper) resourcesFor(input schema.GroupVersionResource) ([]schema.GroupVersionResource, error) {
-	drm.mu.RLock()
-	defer drm.mu.RUnlock()
-	return drm.staticMapper.ResourcesFor(input)
 }
 
 func (drm *dynamicRESTMapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
 	if err := drm.init(); err != nil {
 		return nil, err
 	}
-	mapping, err := drm.restMapping(gk, versions...)
-	if xerrors.Is(err, &meta.NoKindMatchError{}) {
-		if rerr := drm.reload(); rerr != nil {
-			return nil, rerr
-		}
-		mapping, err = drm.restMapping(gk, versions...)
-	}
+	var mapping *meta.RESTMapping
+	err := drm.checkAndReload(&meta.NoKindMatchError{}, func() error {
+		var err error
+		mapping, err = drm.staticMapper.RESTMapping(gk, versions...)
+		return err
+	})
 	return mapping, err
-}
-
-// restMapping calls the underlying static RESTMapper's RESTMapping method
-// in a thread-safe manner.
-func (drm *dynamicRESTMapper) restMapping(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
-	drm.mu.RLock()
-	defer drm.mu.RUnlock()
-	return drm.staticMapper.RESTMapping(gk, versions...)
 }
 
 func (drm *dynamicRESTMapper) RESTMappings(gk schema.GroupKind, versions ...string) ([]*meta.RESTMapping, error) {
 	if err := drm.init(); err != nil {
 		return nil, err
 	}
-	mappings, err := drm.restMappings(gk, versions...)
-	if xerrors.Is(err, &meta.NoKindMatchError{}) {
-		if rerr := drm.reload(); rerr != nil {
-			return nil, rerr
-		}
-		mappings, err = drm.restMappings(gk, versions...)
-	}
+	var mappings []*meta.RESTMapping
+	err := drm.checkAndReload(&meta.NoKindMatchError{}, func() error {
+		var err error
+		mappings, err = drm.staticMapper.RESTMappings(gk, versions...)
+		return err
+	})
 	return mappings, err
-}
-
-// restMappings calls the underlying static RESTMapper's RESTMappings method
-// in a thread-safe manner.
-func (drm *dynamicRESTMapper) restMappings(gk schema.GroupKind, versions ...string) ([]*meta.RESTMapping, error) {
-	drm.mu.RLock()
-	defer drm.mu.RUnlock()
-	return drm.staticMapper.RESTMappings(gk, versions...)
 }
 
 func (drm *dynamicRESTMapper) ResourceSingularizer(resource string) (string, error) {
 	if err := drm.init(); err != nil {
 		return "", err
 	}
-	singular, err := drm.resourceSingularizer(resource)
-	if xerrors.Is(err, &meta.NoKindMatchError{}) {
-		if rerr := drm.reload(); rerr != nil {
-			return "", rerr
-		}
-		singular, err = drm.resourceSingularizer(resource)
-	}
+	var singular string
+	err := drm.checkAndReload(&meta.NoResourceMatchError{}, func() error {
+		var err error
+		singular, err = drm.staticMapper.ResourceSingularizer(resource)
+		return err
+	})
 	return singular, err
-}
-
-// resourceSingularizer calls the underlying static RESTMapper's
-// ResourceSingularizer method in a thread-safe manner.
-func (drm *dynamicRESTMapper) resourceSingularizer(resource string) (string, error) {
-	drm.mu.RLock()
-	defer drm.mu.RUnlock()
-	return drm.staticMapper.ResourceSingularizer(resource)
 }
 
 // dynamicLimiter holds a rate limiter used to throttle chatty RESTMapper users.

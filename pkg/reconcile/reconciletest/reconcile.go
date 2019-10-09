@@ -16,19 +16,26 @@ limitations under the License.
 
 package reconciletest
 
-import "sigs.k8s.io/controller-runtime/pkg/reconcile"
+import (
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+)
 
 var _ reconcile.Reconciler = &FakeReconcile{}
 
 // FakeReconcile implements reconcile.Reconciler by always returning Result and Err
+//
+// Deprecated: Please don't use this.  There's some subtle concurrency issues with it,
+// and there are better ways to test reconciliation.
 type FakeReconcile struct {
+	// TODO(directxman12): make this internal
+
 	// Result is the result that will be returned by Reconciler
 	Result reconcile.Result
 
 	// Err is the error that will be returned by Reconciler
 	Err error
 
-	// If specified, Reconciler will write Requests to Chan
+	// Chan will have requests written to it, if not nil
 	Chan chan reconcile.Request
 }
 
@@ -37,5 +44,6 @@ func (f *FakeReconcile) Reconcile(r reconcile.Request) (reconcile.Result, error)
 	if f.Chan != nil {
 		f.Chan <- r
 	}
+
 	return f.Result, f.Err
 }

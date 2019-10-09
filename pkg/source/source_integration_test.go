@@ -265,7 +265,7 @@ var _ = Describe("Source", func() {
 					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						var err error
-						rs, err = clientset.AppsV1().ReplicaSets("default").Get(rs.Name, metav1.GetOptions{})
+						rs, err := clientset.AppsV1().ReplicaSets("default").Get(rs.Name, metav1.GetOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
 						Expect(q2).To(BeIdenticalTo(q))
@@ -288,7 +288,7 @@ var _ = Describe("Source", func() {
 				}, q)
 				Expect(err).NotTo(HaveOccurred())
 
-				rs, err = clientset.AppsV1().ReplicaSets("default").Create(rs)
+				_, err = clientset.AppsV1().ReplicaSets("default").Create(rs)
 				Expect(err).NotTo(HaveOccurred())
 				<-c
 				close(done)
@@ -310,7 +310,7 @@ var _ = Describe("Source", func() {
 					UpdateFunc: func(evt event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						var err error
-						rs2, err = clientset.AppsV1().ReplicaSets("default").Get(rs.Name, metav1.GetOptions{})
+						rs2, err := clientset.AppsV1().ReplicaSets("default").Get(rs.Name, metav1.GetOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
 						Expect(q2).To(Equal(q))
@@ -333,7 +333,7 @@ var _ = Describe("Source", func() {
 				}, q)
 				Expect(err).NotTo(HaveOccurred())
 
-				rs2, err = clientset.AppsV1().ReplicaSets("default").Update(rs2)
+				_, err = clientset.AppsV1().ReplicaSets("default").Update(rs2)
 				Expect(err).NotTo(HaveOccurred())
 				<-c
 				close(done)

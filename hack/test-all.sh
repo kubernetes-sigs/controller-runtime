@@ -22,6 +22,7 @@ setup_envs
 
 header_text "running go test"
 
+# TODO(directxman12): enable the race detector once the LeaderElector race condition is resolved in client-go
 go test ${MOD_OPT} ./... -parallel 4
 
 header_text "running coverage"

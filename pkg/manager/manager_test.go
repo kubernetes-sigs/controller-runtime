@@ -453,7 +453,11 @@ var _ = Describe("manger.Manager", func() {
 				}()
 
 				// Wait for the Manager to start
-				Eventually(func() bool { return mgr.started }).Should(BeTrue())
+				Eventually(func() bool {
+					mgr.mu.Lock()
+					defer mgr.mu.Unlock()
+					return mgr.started
+				}).Should(BeTrue())
 
 				// Add another component after starting
 				c2 := make(chan struct{})
@@ -480,7 +484,11 @@ var _ = Describe("manger.Manager", func() {
 			}()
 
 			// Wait for the Manager to start
-			Eventually(func() bool { return mgr.started }).Should(BeTrue())
+			Eventually(func() bool {
+				mgr.mu.Lock()
+				defer mgr.mu.Unlock()
+				return mgr.started
+			}).Should(BeTrue())
 
 			c1 := make(chan struct{})
 			Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {

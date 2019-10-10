@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// CacheReader is a CacheReader
+// CacheReader is a client.Reader
 var _ client.Reader = &CacheReader{}
 
 // CacheReader wraps a cache.Index to implement the client.CacheReader interface for a single type

@@ -17,11 +17,14 @@ limitations under the License.
 package controller_test
 
 import (
+	"context"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -72,6 +75,11 @@ var _ = Describe("controller", func() {
 
 			err = instance.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForObject{})
 			Expect(err).NotTo(HaveOccurred())
+
+			err = cm.GetClient().Get(context.Background(), types.NamespacedName{Name: "foo"}, &corev1.Namespace{})
+			Expect(err).To(Equal(&cache.ErrCacheNotStarted{}))
+			err = cm.GetClient().List(context.Background(), &corev1.NamespaceList{})
+			Expect(err).To(Equal(&cache.ErrCacheNotStarted{}))
 
 			By("Starting the Manager")
 			go func() {

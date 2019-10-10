@@ -313,7 +313,7 @@ func setOptionsDefaults(options Options) Options {
 
 	if options.MapperProvider == nil {
 		options.MapperProvider = func(c *rest.Config) (meta.RESTMapper, error) {
-			return apiutil.NewDynamicRESTMapper(c, apiutil.WithLazyDiscovery)
+			return apiutil.NewDynamicRESTMapper(c)
 		}
 	}
 

@@ -70,7 +70,7 @@ function fetch_go_tools {
   header_text "Checking for gometalinter.v2"
   if ! is_installed golangci-lint; then
     header_text "Installing golangci-lint"
-    GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.15.0
+    GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.17.1
   fi
 }
 

@@ -26,8 +26,9 @@ while read commit_word commit; do
         continue
     fi
     read title
-    if [[ ${title} == "Merge branch '"*"' into release-"* ]]; then
-        # skip temporary merge commits for calculating release notes
+    if [[ ${title} == "Merge branch '"*"' into"* ]]; then
+        # skip temporary merge commits and accidental merge commit inclusion
+        # for calcuating release notes.
         continue
     fi
 

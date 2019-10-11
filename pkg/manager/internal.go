@@ -31,8 +31,10 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
@@ -45,6 +47,9 @@ const (
 	defaultLeaseDuration = 15 * time.Second
 	defaultRenewDeadline = 10 * time.Second
 	defaultRetryPeriod   = 2 * time.Second
+
+	defaultReadinessEndpoint = "/readyz"
+	defaultLivenessEndpoint  = "/healthz"
 )
 
 var log = logf.RuntimeLog.WithName("manager")
@@ -90,10 +95,26 @@ type controllerManager struct {
 	// metricsListener is used to serve prometheus metrics
 	metricsListener net.Listener
 
-	mu            sync.Mutex
-	started       bool
-	startedLeader bool
-	errChan       chan error
+	// healthProbeListener is used to serve liveness probe
+	healthProbeListener net.Listener
+
+	// Readiness probe endpoint name
+	readinessEndpointName string
+
+	// Liveness probe endpoint name
+	livenessEndpointName string
+
+	// Readyz probe handler
+	readyzHandler *healthz.Handler
+
+	// Healthz probe handler
+	healthzHandler *healthz.Handler
+
+	mu             sync.Mutex
+	started        bool
+	startedLeader  bool
+	healthzStarted bool
+	errChan        chan error
 
 	// internalStop is the stop channel *actually* used by everything involved
 	// with the manager as a stop channel, so that we can pass a stop channel
@@ -188,6 +209,40 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 	return nil
 }
 
+// AddHealthzCheck allows you to add Healthz checker
+func (cm *controllerManager) AddHealthzCheck(name string, check healthz.Checker) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	if cm.healthzStarted {
+		return fmt.Errorf("unable to add new checker because healthz endpoint has already been created")
+	}
+
+	if cm.healthzHandler == nil {
+		cm.healthzHandler = &healthz.Handler{Checks: map[string]healthz.Checker{}}
+	}
+
+	cm.healthzHandler.Checks[name] = check
+	return nil
+}
+
+// AddReadyzCheck allows you to add Readyz checker
+func (cm *controllerManager) AddReadyzCheck(name string, check healthz.Checker) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	if cm.healthzStarted {
+		return fmt.Errorf("unable to add new checker because readyz endpoint has already been created")
+	}
+
+	if cm.readyzHandler == nil {
+		cm.readyzHandler = &healthz.Handler{Checks: map[string]healthz.Checker{}}
+	}
+
+	cm.readyzHandler.Checks[name] = check
+	return nil
+}
+
 func (cm *controllerManager) GetConfig() *rest.Config {
 	return cm.config
 }
@@ -262,6 +317,38 @@ func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
 	}
 }
 
+func (cm *controllerManager) serveHealthProbes(stop <-chan struct{}) {
+	cm.mu.Lock()
+	mux := http.NewServeMux()
+
+	if cm.readyzHandler != nil {
+		mux.Handle(cm.readinessEndpointName, http.StripPrefix(cm.readinessEndpointName, cm.readyzHandler))
+	}
+	if cm.healthzHandler != nil {
+		mux.Handle(cm.livenessEndpointName, http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
+	}
+
+	server := http.Server{
+		Handler: mux,
+	}
+	// Run server
+	go func() {
+		if err := server.Serve(cm.healthProbeListener); err != nil && err != http.ErrServerClosed {
+			cm.errChan <- err
+		}
+	}()
+	cm.healthzStarted = true
+	cm.mu.Unlock()
+
+	// Shutdown the server when stop is closed
+	select {
+	case <-stop:
+		if err := server.Shutdown(context.Background()); err != nil {
+			cm.errChan <- err
+		}
+	}
+}
+
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	// join the passed-in stop channel as an upstream feeding into cm.internalStopper
 	defer close(cm.internalStopper)
@@ -271,6 +358,11 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	// the pod but will get a connection refused)
 	if cm.metricsListener != nil {
 		go cm.serveMetrics(cm.internalStop)
+	}
+
+	// Serve health probes
+	if cm.healthProbeListener != nil {
+		go cm.serveHealthProbes(cm.internalStop)
 	}
 
 	go cm.startNonLeaderElectionRunnables()

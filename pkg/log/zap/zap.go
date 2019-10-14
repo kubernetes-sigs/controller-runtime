@@ -64,14 +64,9 @@ func LoggerTo(destWriter io.Writer, development bool) logr.Logger {
 //
 // Deprecated: use NewRaw() and the functional opts pattern instead:
 //
-// NewRaw(UseDevMode(development))
+// NewRaw(UseDevMode(development), WriteTo(destWriter), RawZapOpts(opts...))
 func RawLoggerTo(destWriter io.Writer, development bool, opts ...zap.Option) *zap.Logger {
-	o := func(o *Options) {
-		o.DestWritter = destWriter
-		o.Development = development
-		o.ZapOpts = opts
-	}
-	return NewRaw(o)
+	return NewRaw(UseDevMode(development), WriteTo(destWriter), RawZapOpts(opts...))
 }
 
 // Opts allows to manipulate Options
@@ -87,10 +82,43 @@ func UseDevMode(enabled bool) Opts {
 }
 
 // WriteTo configures the logger to write to the given io.Writer, instead of standard error.
-// See Options.WriterTo.
+// See Options.DestWritter
 func WriteTo(out io.Writer) Opts {
 	return func(o *Options) {
 		o.DestWritter = out
+	}
+}
+
+// Encoder configures how the logger will encode the output e.g JSON or console.
+// See Options.Encoder
+func Encoder(encoder zapcore.Encoder) func(o *Options) {
+	return func(o *Options) {
+		o.Encoder = encoder
+	}
+}
+
+// Level sets the the minimum enabled logging level e.g Debug, Info
+// See Options.Level
+func Level(level *zap.AtomicLevel) func(o *Options) {
+	return func(o *Options) {
+		o.Level = level
+	}
+}
+
+// StacktraceLevel configures the logger to record a stack trace for all messages at
+// or above a given level.
+// See Options.StacktraceLevel
+func StacktraceLevel(stacktraceLevel *zap.AtomicLevel) func(o *Options) {
+	return func(o *Options) {
+		o.StacktraceLevel = stacktraceLevel
+	}
+}
+
+// RawZapOpts allows appending arbitrary zap.Options to configure the underlying zap logger.
+// See Options.ZapOpts
+func RawZapOpts(zapOpts ...zap.Option) func(o *Options) {
+	return func(o *Options) {
+		o.ZapOpts = append(o.ZapOpts, zapOpts...)
 	}
 }
 

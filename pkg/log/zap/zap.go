@@ -44,7 +44,7 @@ func New(opts ...Opts) logr.Logger {
 // Deprecated, use New() and the functional opts pattern instead:
 //
 // New(func(o *Options){
-//    o.Development: development,
+//    o.Development = development
 // })
 func Logger(development bool) logr.Logger {
 	return LoggerTo(os.Stderr, development)
@@ -57,8 +57,8 @@ func Logger(development bool) logr.Logger {
 // Deprecated, use New() and the functional opts pattern instead:
 //
 // New(func(o *Options){
-//    o.Development: development,
-//    o.DestWriter: writer,
+//    o.Development = development
+//    o.DestWriter = writer
 // })
 func LoggerTo(destWriter io.Writer, development bool) logr.Logger {
 	return zapr.NewLogger(RawLoggerTo(destWriter, development))
@@ -70,7 +70,7 @@ func LoggerTo(destWriter io.Writer, development bool) logr.Logger {
 // Deprecated, use NewRaw() and the functional opts pattern instead:
 //
 // NewRaw(func(o *Options){
-//    o.Development: development,
+//    o.Development = development
 // })
 func RawLoggerTo(destWriter io.Writer, development bool, opts ...zap.Option) *zap.Logger {
 	o := func(o *Options) {

@@ -22,11 +22,14 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"net"
+	"io/ioutil"
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/testing_frameworks/integration"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/setup"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/setup/addr"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
@@ -67,22 +70,37 @@ var DefaultKubeAPIServerFlags = []string{
 	"--insecure-port={{ if .URL }}{{ .URL.Port }}{{ end }}",
 	"--insecure-bind-address={{ if .URL }}{{ .URL.Hostname }}{{ end }}",
 	"--secure-port={{ if .SecurePort }}{{ .SecurePort }}{{ end }}",
-	"--admission-control=AlwaysAdmit",
+	"--disable-admission-plugins=ServiceAccount",
+	"--service-cluster-ip-range=10.0.0.0/24",
+	"--authorization-mode=RBAC",
 }
 
 // Environment creates a Kubernetes test environment that will start / stop the Kubernetes control plane and
 // install extension APIs
 type Environment struct {
 	// ControlPlane is the ControlPlane including the apiserver and etcd
-	ControlPlane integration.ControlPlane
+	ControlPlane setup.ControlPlane
 
-	// Config can be used to talk to the apiserver.  It's automatically
+	// Config can be used to talk to the apiserver.
+	//
+	// If using an existing cluster and it's not set, it's automatically
 	// populated if not set using the standard controller-runtime config
 	// loading.
+	//
+	// If not using an existing cluster, it's set to a set to an admin-level
+	// user.
 	Config *rest.Config
+
+	// LocalServingPort is the allocated port for serving webhooks on.
+	LocalServingPort int
+	// LocalServingCertDir is the allocated directory for serving certificates.
+	LocalServingCertDir string
 
 	// CRDInstallOptions are the options for installing CRDs.
 	CRDInstallOptions CRDInstallOptions
+	
+	// WebhookInstallOptions are the options for installing webhooks.
+	WebhookInstallOptions WebhookInstallOptions
 
 	// CRDs is a list of CRDs to install.
 	// If both this field and CRDs field in CRDInstallOptions are specified, the
@@ -123,6 +141,11 @@ func (te *Environment) Stop() error {
 	if te.useExistingCluster() {
 		return nil
 	}
+	if te.LocalServingCertDir != "" {
+		if err := os.RemoveAll(te.LocalServingCertDir); err != nil {
+			return err
+		}
+	}
 	return te.ControlPlane.Stop()
 }
 
@@ -152,10 +175,10 @@ func (te *Environment) Start() (*rest.Config, error) {
 		}
 	} else {
 		if te.ControlPlane.APIServer == nil {
-			te.ControlPlane.APIServer = &integration.APIServer{Args: te.getAPIServerFlags()}
+			te.ControlPlane.APIServer = &setup.APIServer{Args: te.getAPIServerFlags()}
 		}
 		if te.ControlPlane.Etcd == nil {
-			te.ControlPlane.Etcd = &integration.Etcd{}
+			te.ControlPlane.Etcd = &setup.Etcd{}
 		}
 
 		if os.Getenv(envAttachOutput) == "true" {
@@ -207,12 +230,71 @@ func (te *Environment) Start() (*rest.Config, error) {
 			QPS:   1000.0,
 			Burst: 2000.0,
 		}
+
+		// TODO: move this into controlplane
+		if len(te.ControlPlane.UserProvisioners) > 0 {
+			adminInfo := setup.User{
+				Username: "system:admin",
+				Groups: []string{"system:masters" /* actually gives admin */},
+			}
+			te.Config.Host = te.ControlPlane.SecureURL().Host
+			te.Config.CAData = te.ControlPlane.APIServer.CAData
+			if err := te.ControlPlane.UserProvisioners[0].RegisterUser(adminInfo, te.Config); err != nil {
+				return nil, fmt.Errorf("unable to provision system:admin user: %v", err)
+			}
+		}
+
+		if te.WebhookInstallOptions.MightHaveHooks() {
+			hookCA, err := setup.NewTinyCA()
+			if err != nil {
+				return te.Config, fmt.Errorf("unable to set up webhook CA: %v", err)
+			}
+
+			hookCert, err := hookCA.NewServingCert()
+			if err != nil {
+				return te.Config, fmt.Errorf("unable to set up webhook serving certs: %v", err)
+			}
+
+			// TODO: save this somewhere for serving to use
+			port, host, err := addr.Suggest()
+			if err != nil {
+				return te.Config, fmt.Errorf("unable to grab random port for serving webhooks on: %v", err)
+			}
+
+			te.LocalServingCertDir, err = ioutil.TempDir("", "envtest-serving-certs-")
+			if err != nil {
+				return te.Config, fmt.Errorf("unable to create directory for webhook serving certs: %v", err)
+			}
+
+			certData, keyData, err := hookCert.Data()
+			if err != nil {
+				return te.Config, fmt.Errorf("unable to marshal webhook serving certs: %v", err)
+			}
+
+			if err := ioutil.WriteFile(filepath.Join(te.LocalServingCertDir, "tls.crt"), certData, 0640); err != nil {
+				return te.Config, fmt.Errorf("unable to write webhook serving cert to disk: %v", err)
+			}
+			if err := ioutil.WriteFile(filepath.Join(te.LocalServingCertDir, "tls.key"), keyData, 0640); err != nil {
+				return te.Config, fmt.Errorf("unable to write webhook serving key to disk: %v", err)
+			}
+
+			te.WebhookInstallOptions.CAData = hookCA.CA.CertData()
+			te.WebhookInstallOptions.BaseHost = net.JoinHostPort(host, fmt.Sprintf("%d", port))
+			te.LocalServingPort = port
+
+		}
 	}
 
 	log.V(1).Info("installing CRDs")
 	te.CRDInstallOptions.CRDs = mergeCRDs(te.CRDInstallOptions.CRDs, te.CRDs)
 	te.CRDInstallOptions.Paths = mergePaths(te.CRDInstallOptions.Paths, te.CRDDirectoryPaths)
 	_, err := InstallCRDs(te.Config, te.CRDInstallOptions)
+	if err != nil {
+		return te.Config, err
+	}
+
+	log.V(1).Info("installing webhooks")
+	_, _, err = InstallWebhooks(te.Config, te.WebhookInstallOptions)
 	return te.Config, err
 }
 

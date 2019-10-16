@@ -53,10 +53,6 @@ type Server struct {
 	Port int
 
 	// CertDir is the directory that contains the server key and certificate.
-	// If using FSCertWriter in Provisioner, the server itself will provision the certificate and
-	// store it in this directory.
-	// If using SecretCertWriter in Provisioner, the server will provision the certificate in a secret,
-	// the user is responsible to mount the secret to the this location for the server to consume.
 	CertDir string
 
 	// WebhookMux is the multiplexer that handles different webhooks.

@@ -1,12 +1,12 @@
 package apiutil_test
 
 import (
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"golang.org/x/time/rate"
-	"golang.org/x/xerrors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -82,7 +82,7 @@ var _ = Describe("Dynamic REST Mapper", func() {
 
 			By("calling another time that would need a requery and failing")
 			Eventually(func() bool {
-				return xerrors.As(callWithTarget(), &apiutil.ErrRateLimited{})
+				return errors.As(callWithTarget(), &apiutil.ErrRateLimited{})
 			}, "10s").Should(BeTrue())
 		})
 

@@ -66,26 +66,22 @@ var _ = Describe("application", func() {
 			Expect(instance).NotTo(BeNil())
 		})
 
-		It("should return an error if there is no GVK for an object", func() {
+		It("should return an error if there is no GVK for an object, and thus we can't default the controller name", func() {
 			By("creating a controller manager")
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
+			By("creating a controller with a bad For type")
 			instance, err := ControllerManagedBy(m).
 				For(&fakeType{}).
 				Owns(&appsv1.ReplicaSet{}).
 				Build(noop)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no kind is registered for the type builder.fakeType"))
+			Expect(err).To(MatchError(ContainSubstring("no kind is registered for the type builder.fakeType")))
 			Expect(instance).To(BeNil())
 
-			instance, err = ControllerManagedBy(m).
-				For(&appsv1.ReplicaSet{}).
-				Owns(&fakeType{}).
-				Build(noop)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no kind is registered for the type builder.fakeType"))
-			Expect(instance).To(BeNil())
+			// NB(directxman12): we don't test non-for types, since errors for
+			// them now manifest on controller.Start, not controller.Watch.  Errors on the For type
+			// manifest when we try to default the controller name, which is good to double check.
 		})
 
 		It("should return an error if it cannot create the controller", func() {

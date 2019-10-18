@@ -283,7 +283,7 @@ var _ = Describe("manger.Manager", func() {
 				mgr.startCache = func(stop <-chan struct{}) error {
 					return fmt.Errorf("expected error")
 				}
-				Expect(m.Start(stop).Error()).To(ContainSubstring("expected error"))
+				Expect(m.Start(stop)).To(MatchError(ContainSubstring("expected error")))
 
 				close(done)
 			})
@@ -314,7 +314,9 @@ var _ = Describe("manger.Manager", func() {
 
 				go func() {
 					defer GinkgoRecover()
-					Expect(m.Start(stop)).NotTo(HaveOccurred())
+					// NB(directxman12): this should definitely return an error.  If it doesn't happen,
+					// it means someone was signaling "stop: error" with a nil "error".
+					Expect(m.Start(stop)).NotTo(Succeed())
 					close(done)
 				}()
 				<-c1

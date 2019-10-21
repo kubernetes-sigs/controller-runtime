@@ -112,24 +112,52 @@ func (f *fakeLogger) Info(msg string, vals ...interface{}) {
 func (f *fakeLogger) Enabled() bool             { return true }
 func (f *fakeLogger) V(lvl int) logr.InfoLogger { return f }
 
+var _ = Describe("Zap options setup", func() {
+	var opts *Options
+
+	BeforeEach(func() {
+		opts = &Options{}
+	})
+
+	It("should enable development mode", func() {
+		UseDevMode(true)(opts)
+		Expect(opts.Development).To(BeTrue())
+	})
+
+	It("should disable development mode", func() {
+		UseDevMode(false)(opts)
+		Expect(opts.Development).To(BeFalse())
+	})
+
+	It("should set a custom writer", func() {
+		var w fakeSyncWriter
+		WriteTo(&w)(opts)
+		Expect(opts.DestWritter).To(Equal(&w))
+	})
+})
+
 var _ = Describe("Zap logger setup", func() {
 	Context("with the default output", func() {
 		It("shouldn't fail when setting up production", func() {
 			Expect(Logger(false)).NotTo(BeNil())
+			Expect(New(UseDevMode(false))).NotTo(BeNil())
 		})
 
 		It("shouldn't fail when setting up development", func() {
 			Expect(Logger(true)).NotTo(BeNil())
+			Expect(New(UseDevMode(true))).NotTo(BeNil())
 		})
 	})
 
 	Context("with custom non-sync output", func() {
 		It("shouldn't fail when setting up production", func() {
 			Expect(LoggerTo(ioutil.Discard, false)).NotTo(BeNil())
+			Expect(New(WriteTo(ioutil.Discard), UseDevMode(false))).NotTo(BeNil())
 		})
 
 		It("shouldn't fail when setting up development", func() {
 			Expect(LoggerTo(ioutil.Discard, true)).NotTo(BeNil())
+			Expect(New(WriteTo(ioutil.Discard), UseDevMode(true))).NotTo(BeNil())
 		})
 	})
 
@@ -137,95 +165,110 @@ var _ = Describe("Zap logger setup", func() {
 		var logOut *bytes.Buffer
 		var logger logr.Logger
 
-		BeforeEach(func() {
-			logOut = new(bytes.Buffer)
-			By("setting up the logger")
-			// use production settings (false) to get just json output
-			logger = LoggerTo(logOut, false)
+		defineTests := func() {
+			It("should log a standard namespaced Kubernetes object name and namespace", func() {
+				pod := &kapi.Pod{}
+				pod.Name = "some-pod"
+				pod.Namespace = "some-ns"
+				logger.Info("here's a kubernetes object", "thing", pod)
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":      pod.Name,
+					"namespace": pod.Namespace,
+				}))
+			})
+
+			It("should work fine with normal stringers", func() {
+				logger.Info("here's a non-kubernetes stringer", "thing", testStringer{})
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", "value"))
+			})
+
+			It("should log a standard non-namespaced Kubernetes object name", func() {
+				node := &kapi.Node{}
+				node.Name = "some-node"
+				logger.Info("here's a kubernetes object", "thing", node)
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name": node.Name,
+				}))
+			})
+
+			It("should log a standard Kubernetes object's kind, if set", func() {
+				node := &kapi.Node{}
+				node.Name = "some-node"
+				node.APIVersion = "v1"
+				node.Kind = "Node"
+				logger.Info("here's a kubernetes object", "thing", node)
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":       node.Name,
+					"apiVersion": "v1",
+					"kind":       "Node",
+				}))
+			})
+
+			It("should log a standard non-namespaced NamespacedName name", func() {
+				name := types.NamespacedName{Name: "some-node"}
+				logger.Info("here's a kubernetes object", "thing", name)
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name": name.Name,
+				}))
+			})
+
+			It("should log a standard namespaced NamespacedName name and namespace", func() {
+				name := types.NamespacedName{Name: "some-pod", Namespace: "some-ns"}
+				logger.Info("here's a kubernetes object", "thing", name)
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":      name.Name,
+					"namespace": name.Namespace,
+				}))
+			})
+		}
+
+		Context("with logger created using New", func() {
+			BeforeEach(func() {
+				logOut = new(bytes.Buffer)
+				By("setting up the logger")
+				// use production settings (false) to get just json output
+				logger = New(WriteTo(logOut), UseDevMode(false))
+			})
+			defineTests()
+
 		})
-
-		It("should log a standard namespaced Kubernetes object name and namespace", func() {
-			pod := &kapi.Pod{}
-			pod.Name = "some-pod"
-			pod.Namespace = "some-ns"
-			logger.Info("here's a kubernetes object", "thing", pod)
-
-			outRaw := logOut.Bytes()
-			res := map[string]interface{}{}
-			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
-
-			Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
-				"name":      pod.Name,
-				"namespace": pod.Namespace,
-			}))
-		})
-
-		It("should work fine with normal stringers", func() {
-			logger.Info("here's a non-kubernetes stringer", "thing", testStringer{})
-			outRaw := logOut.Bytes()
-			res := map[string]interface{}{}
-			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
-
-			Expect(res).To(HaveKeyWithValue("thing", "value"))
-		})
-
-		It("should log a standard non-namespaced Kubernetes object name", func() {
-			node := &kapi.Node{}
-			node.Name = "some-node"
-			logger.Info("here's a kubernetes object", "thing", node)
-
-			outRaw := logOut.Bytes()
-			res := map[string]interface{}{}
-			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
-
-			Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
-				"name": node.Name,
-			}))
-		})
-
-		It("should log a standard Kubernetes object's kind, if set", func() {
-			node := &kapi.Node{}
-			node.Name = "some-node"
-			node.APIVersion = "v1"
-			node.Kind = "Node"
-			logger.Info("here's a kubernetes object", "thing", node)
-
-			outRaw := logOut.Bytes()
-			res := map[string]interface{}{}
-			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
-
-			Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
-				"name":       node.Name,
-				"apiVersion": "v1",
-				"kind":       "Node",
-			}))
-		})
-
-		It("should log a standard non-namespaced NamespacedName name", func() {
-			name := types.NamespacedName{Name: "some-node"}
-			logger.Info("here's a kubernetes object", "thing", name)
-
-			outRaw := logOut.Bytes()
-			res := map[string]interface{}{}
-			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
-
-			Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
-				"name": name.Name,
-			}))
-		})
-
-		It("should log a standard namespaced NamespacedName name and namespace", func() {
-			name := types.NamespacedName{Name: "some-pod", Namespace: "some-ns"}
-			logger.Info("here's a kubernetes object", "thing", name)
-
-			outRaw := logOut.Bytes()
-			res := map[string]interface{}{}
-			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
-
-			Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
-				"name":      name.Name,
-				"namespace": name.Namespace,
-			}))
+		Context("with logger created using LoggerTo", func() {
+			BeforeEach(func() {
+				logOut = new(bytes.Buffer)
+				By("setting up the logger")
+				// use production settings (false) to get just json output
+				logger = LoggerTo(logOut, false)
+			})
+			defineTests()
 		})
 	})
 })

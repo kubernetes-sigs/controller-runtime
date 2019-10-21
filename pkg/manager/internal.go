@@ -455,6 +455,9 @@ func (cm *controllerManager) startNonLeaderElectionRunnables() {
 			if err := ctrl.Start(cm.internalStop); err != nil {
 				cm.errSignal.SignalError(err)
 			}
+			// we use %T here because we don't have a good stand-in for "name",
+			// and the full runnable might not serialize (mutexes, etc)
+			log.V(1).Info("non-leader-election runnable finished", "runnable type", fmt.Sprintf("%T", ctrl))
 		}()
 	}
 }
@@ -474,6 +477,9 @@ func (cm *controllerManager) startLeaderElectionRunnables() {
 			if err := ctrl.Start(cm.internalStop); err != nil {
 				cm.errSignal.SignalError(err)
 			}
+			// we use %T here because we don't have a good stand-in for "name",
+			// and the full runnable might not serialize (mutexes, etc)
+			log.V(1).Info("leader-election runnable finished", "runnable type", fmt.Sprintf("%T", ctrl))
 		}()
 	}
 

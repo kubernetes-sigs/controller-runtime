@@ -157,11 +157,13 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 
 func (blder *Builder) doWatch() error {
 	// Reconcile type
-	src := &source.Kind{Type: blder.apiType}
-	hdler := &handler.EnqueueRequestForObject{}
-	err := blder.ctrl.Watch(src, hdler, blder.predicates...)
-	if err != nil {
-		return err
+	if blder.apiType != nil {
+		src := &source.Kind{Type: blder.apiType}
+		hdler := &handler.EnqueueRequestForObject{}
+		err := blder.ctrl.Watch(src, hdler, blder.predicates...)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Watches the managed types

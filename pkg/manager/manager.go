@@ -111,6 +111,8 @@ type Options struct {
 	// reconciled. A lower period will correct entropy more quickly, but reduce
 	// responsiveness to change if there are many watched resources. Change this
 	// value only if you know what you are doing. Defaults to 10 hours if unset.
+	// there will a 10 percent jitter between the SyncPeriod of all controllers
+	// so that all controllers will not send list requests simultaneously.
 	SyncPeriod *time.Duration
 
 	// LeaderElection determines whether or not to use leader election when

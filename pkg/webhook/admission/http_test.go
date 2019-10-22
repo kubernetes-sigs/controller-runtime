@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
+	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
 
 var _ = Describe("Admission Webhooks", func() {
@@ -88,6 +89,7 @@ var _ = Describe("Admission Webhooks", func() {
 			}
 			webhook := &Webhook{
 				Handler: &fakeHandler{},
+				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := []byte(`{"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
@@ -111,6 +113,7 @@ var _ = Describe("Admission Webhooks", func() {
 						return Allowed(ctx.Value(key).(string))
 					},
 				},
+				log: logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := []byte(fmt.Sprintf(`{"response":{"uid":"","allowed":true,"status":{"metadata":{},"reason":%q,"code":200}}}

@@ -185,6 +185,10 @@ type Options struct {
 	// Use this to customize the event correlator and spam filter
 	EventBroadcaster record.EventBroadcaster
 
+	// RunnableTearDownTimeout is the duration given to runnable to stop
+	// before the manager actually returns on stop.
+	RunnableTearDownTimeout *time.Duration
+
 	// Dependency injection for testing
 	newRecorderProvider    func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, broadcaster record.EventBroadcaster) (recorder.Provider, error)
 	newResourceLock        func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
@@ -289,27 +293,28 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	stop := make(chan struct{})
 
 	return &controllerManager{
-		config:                config,
-		scheme:                options.Scheme,
-		cache:                 cache,
-		fieldIndexes:          cache,
-		client:                writeObj,
-		apiReader:             apiReader,
-		recorderProvider:      recorderProvider,
-		resourceLock:          resourceLock,
-		mapper:                mapper,
-		metricsListener:       metricsListener,
-		internalStop:          stop,
-		internalStopper:       stop,
-		port:                  options.Port,
-		host:                  options.Host,
-		certDir:               options.CertDir,
-		leaseDuration:         *options.LeaseDuration,
-		renewDeadline:         *options.RenewDeadline,
-		retryPeriod:           *options.RetryPeriod,
-		healthProbeListener:   healthProbeListener,
-		readinessEndpointName: options.ReadinessEndpointName,
-		livenessEndpointName:  options.LivenessEndpointName,
+		config:                  config,
+		scheme:                  options.Scheme,
+		cache:                   cache,
+		fieldIndexes:            cache,
+		client:                  writeObj,
+		apiReader:               apiReader,
+		recorderProvider:        recorderProvider,
+		resourceLock:            resourceLock,
+		mapper:                  mapper,
+		metricsListener:         metricsListener,
+		internalStop:            stop,
+		internalStopper:         stop,
+		port:                    options.Port,
+		host:                    options.Host,
+		certDir:                 options.CertDir,
+		leaseDuration:           *options.LeaseDuration,
+		renewDeadline:           *options.RenewDeadline,
+		retryPeriod:             *options.RetryPeriod,
+		healthProbeListener:     healthProbeListener,
+		readinessEndpointName:   options.ReadinessEndpointName,
+		livenessEndpointName:    options.LivenessEndpointName,
+		runnableTearDownTimeout: *options.RunnableTearDownTimeout,
 	}, nil
 }
 
@@ -407,6 +412,11 @@ func setOptionsDefaults(options Options) Options {
 
 	if options.newHealthProbeListener == nil {
 		options.newHealthProbeListener = defaultHealthProbeListener
+	}
+
+	if options.RunnableTearDownTimeout == nil {
+		runnableTearDownTimeout := defaultRunnableTearDownTimeout
+		options.RunnableTearDownTimeout = &runnableTearDownTimeout
 	}
 
 	return options

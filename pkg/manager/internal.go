@@ -48,6 +48,8 @@ const (
 	defaultRenewDeadline = 10 * time.Second
 	defaultRetryPeriod   = 2 * time.Second
 
+	defaultRunnableTearDownTimeout = 10 * time.Second
+
 	defaultReadinessEndpoint = "/readyz"
 	defaultLivenessEndpoint  = "/healthz"
 )
@@ -114,11 +116,7 @@ type controllerManager struct {
 	started        bool
 	startedLeader  bool
 	healthzStarted bool
-
-	// NB(directxman12): we don't just use an error channel here to avoid the situation where the
-	// error channel is too small and we end up blocking some goroutines waiting to report their errors.
-	// errSignal lets us track when we should stop because an error occurred
-	errSignal *errSignaler
+	errChan        chan error
 
 	// internalStop is the stop channel *actually* used by everything involved
 	// with the manager as a stop channel, so that we can pass a stop channel
@@ -129,6 +127,9 @@ type controllerManager struct {
 	// internalStopper is the write side of the internal stop channel, allowing us to close it.
 	// It and `internalStop` should point to the same channel.
 	internalStopper chan<- struct{}
+
+	// stop procedure engaged. In other words, we should not add anything else to the manager
+	stopProcedureEngaged bool
 
 	startCache func(stop <-chan struct{}) error
 
@@ -152,57 +153,23 @@ type controllerManager struct {
 	// retryPeriod is the duration the LeaderElector clients should wait
 	// between tries of actions.
 	retryPeriod time.Duration
-}
 
-type errSignaler struct {
-	// errSignal indicates that an error occurred, when closed.  It shouldn't
-	// be written to.
-	errSignal chan struct{}
+	// waitForRunnable is holding the number of runnables currently running so that
+	// we can wait for them to exit before quitting the manager
+	waitForRunnable sync.WaitGroup
 
-	// err is the received error
-	err error
-
-	mu sync.Mutex
-}
-
-func (r *errSignaler) SignalError(err error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if err == nil {
-		// non-error, ignore
-		log.Error(nil, "SignalError called without an (with a nil) error, which should never happen, ignoring")
-		return
-	}
-
-	if r.err != nil {
-		// we already have an error, don't try again
-		return
-	}
-
-	// save the error and report it
-	r.err = err
-	close(r.errSignal)
-}
-
-func (r *errSignaler) Error() error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	return r.err
-}
-
-func (r *errSignaler) GotError() chan struct{} {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	return r.errSignal
+	// runnableTearDownTimeout is the duration given to runnable to stop
+	// before the manager actually returns on stop.
+	runnableTearDownTimeout time.Duration
 }
 
 // Add sets dependencies on i, and adds it to the list of Runnables to start.
 func (cm *controllerManager) Add(r Runnable) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
+	if cm.stopProcedureEngaged {
+		return fmt.Errorf("can't accept new runnable as stop procedure is already engaged")
+	}
 
 	// Set dependencies on the object
 	if err := cm.SetFields(r); err != nil {
@@ -222,11 +189,7 @@ func (cm *controllerManager) Add(r Runnable) error {
 
 	if shouldStart {
 		// If already started, start the controller
-		go func() {
-			if err := r.Start(cm.internalStop); err != nil {
-				cm.errSignal.SignalError(err)
-			}
-		}()
+		cm.startRunnable(r)
 	}
 
 	return nil
@@ -264,6 +227,9 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 func (cm *controllerManager) AddHealthzCheck(name string, check healthz.Checker) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
+	if cm.stopProcedureEngaged {
+		return fmt.Errorf("can't accept new healthCheck as stop procedure is already engaged")
+	}
 
 	if cm.healthzStarted {
 		return fmt.Errorf("unable to add new checker because healthz endpoint has already been created")
@@ -281,6 +247,9 @@ func (cm *controllerManager) AddHealthzCheck(name string, check healthz.Checker)
 func (cm *controllerManager) AddReadyzCheck(name string, check healthz.Checker) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
+	if cm.stopProcedureEngaged {
+		return fmt.Errorf("can't accept new ready check as stop procedure is already engaged")
+	}
 
 	if cm.healthzStarted {
 		return fmt.Errorf("unable to add new checker because readyz endpoint has already been created")
@@ -355,7 +324,7 @@ func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
 	go func() {
 		log.Info("starting metrics server", "path", metricsPath)
 		if err := server.Serve(cm.metricsListener); err != nil && err != http.ErrServerClosed {
-			cm.errSignal.SignalError(err)
+			cm.errChan <- err
 		}
 	}()
 
@@ -363,7 +332,7 @@ func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
 	select {
 	case <-stop:
 		if err := server.Shutdown(context.Background()); err != nil {
-			cm.errSignal.SignalError(err)
+			cm.errChan <- err
 		}
 	}
 }
@@ -385,7 +354,7 @@ func (cm *controllerManager) serveHealthProbes(stop <-chan struct{}) {
 	// Run server
 	go func() {
 		if err := server.Serve(cm.healthProbeListener); err != nil && err != http.ErrServerClosed {
-			cm.errSignal.SignalError(err)
+			cm.errChan <- err
 		}
 	}()
 	cm.healthzStarted = true
@@ -395,17 +364,18 @@ func (cm *controllerManager) serveHealthProbes(stop <-chan struct{}) {
 	select {
 	case <-stop:
 		if err := server.Shutdown(context.Background()); err != nil {
-			cm.errSignal.SignalError(err)
+			cm.errChan <- err
 		}
 	}
 }
 
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
-	// join the passed-in stop channel as an upstream feeding into cm.internalStopper
-	defer close(cm.internalStopper)
+	// This chan indicates that stop is complete, in other words all runnables have returned or timeout on stop request
+	stopComplete := make(chan struct{})
+	defer close(stopComplete)
 
 	// initialize this here so that we reset the signal channel state on every start
-	cm.errSignal = &errSignaler{errSignal: make(chan struct{})}
+	cm.errChan = make(chan error)
 
 	// Metrics should be served whether the controller is leader or not.
 	// (If we don't serve metrics for non-leaders, prometheus will still scrape
@@ -424,6 +394,9 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	if cm.resourceLock != nil {
 		err := cm.startLeaderElection()
 		if err != nil {
+			if errStop := cm.engageStopProcedure(stopComplete); errStop != nil {
+				log.Error(errStop, "some runnables could not be stopped after error occurred in startLeaderElection.")
+			}
 			return err
 		}
 	} else {
@@ -433,10 +406,50 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	select {
 	case <-stop:
 		// We are done
+		return cm.engageStopProcedure(stopComplete)
+	case err := <-cm.errChan:
+		// Error starting or running a runnable
+		if errStop := cm.engageStopProcedure(stopComplete); errStop != nil {
+			log.Error(errStop, "some runnables could not be stopped after error occurred starting/running the manager.")
+		}
+		return err
+	}
+}
+func (cm *controllerManager) engageStopProcedure(stopComplete chan struct{}) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.stopProcedureEngaged = true
+	close(cm.internalStopper)
+	go func() {
+		for {
+			select {
+			case err, ok := <-cm.errChan:
+				if ok {
+					log.Error(err, "error received after stop sequence was engaged")
+				}
+			case <-stopComplete:
+				return
+			}
+		}
+	}()
+	return cm.waitForRunnableToEnd()
+}
+
+func (cm *controllerManager) waitForRunnableToEnd() error {
+	runnableTearDownTimer := time.NewTimer(cm.runnableTearDownTimeout)
+	defer runnableTearDownTimer.Stop()
+	allStopped := make(chan struct{})
+
+	go func() {
+		cm.waitForRunnable.Wait()
+		close(allStopped)
+	}()
+
+	select {
+	case <-allStopped:
 		return nil
-	case <-cm.errSignal.GotError():
-		// Error starting a controller
-		return cm.errSignal.Error()
+	case <-runnableTearDownTimer.C:
+		return fmt.Errorf("not all runnables have stopped within the proposed delay of %s", cm.runnableTearDownTimeout.String())
 	}
 }
 
@@ -453,7 +466,7 @@ func (cm *controllerManager) startNonLeaderElectionRunnables() {
 		ctrl := c
 		go func() {
 			if err := ctrl.Start(cm.internalStop); err != nil {
-				cm.errSignal.SignalError(err)
+				cm.errChan <- err
 			}
 			// we use %T here because we don't have a good stand-in for "name",
 			// and the full runnable might not serialize (mutexes, etc)
@@ -473,14 +486,7 @@ func (cm *controllerManager) startLeaderElectionRunnables() {
 		// Controllers block, but we want to return an error if any have an error starting.
 		// Write any Start errors to a channel so we can return them
 		ctrl := c
-		go func() {
-			if err := ctrl.Start(cm.internalStop); err != nil {
-				cm.errSignal.SignalError(err)
-			}
-			// we use %T here because we don't have a good stand-in for "name",
-			// and the full runnable might not serialize (mutexes, etc)
-			log.V(1).Info("leader-election runnable finished", "runnable type", fmt.Sprintf("%T", ctrl))
-		}()
+		cm.startRunnable(ctrl)
 	}
 
 	cm.startedLeader = true
@@ -497,7 +503,7 @@ func (cm *controllerManager) waitForCache() {
 	}
 	go func() {
 		if err := cm.startCache(cm.internalStop); err != nil {
-			cm.errSignal.SignalError(err)
+			cm.errChan <- err
 		}
 	}()
 
@@ -521,7 +527,7 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 				// Most implementations of leader election log.Fatal() here.
 				// Since Start is wrapped in log.Fatal when called, we can just return
 				// an error here which will cause the program to exit.
-				cm.errSignal.SignalError(fmt.Errorf("leader election lost"))
+				cm.errChan <- fmt.Errorf("leader election lost")
 			},
 		},
 	})
@@ -541,4 +547,14 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 	// Start the leader elector process
 	go l.Run(ctx)
 	return nil
+}
+
+func (cm *controllerManager) startRunnable(r Runnable) {
+	cm.waitForRunnable.Add(1)
+	go func() {
+		defer cm.waitForRunnable.Done()
+		if err := r.Start(cm.internalStop); err != nil {
+			cm.errChan <- err
+		}
+	}()
 }

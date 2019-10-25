@@ -21,6 +21,8 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
@@ -241,17 +243,17 @@ var _ = Describe("manger.Manager", func() {
 			It("should Start each Component", func(done Done) {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
-				c1 := make(chan struct{})
+				var wgRunnableStarted sync.WaitGroup
+				wgRunnableStarted.Add(2)
 				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer GinkgoRecover()
-					close(c1)
+					wgRunnableStarted.Done()
 					return nil
 				}))).To(Succeed())
 
-				c2 := make(chan struct{})
 				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer GinkgoRecover()
-					close(c2)
+					wgRunnableStarted.Done()
 					return nil
 				}))).To(Succeed())
 
@@ -259,8 +261,8 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					Expect(m.Start(stop)).NotTo(HaveOccurred())
 				}()
-				<-c1
-				<-c2
+
+				wgRunnableStarted.Wait()
 
 				close(done)
 			})
@@ -291,41 +293,133 @@ var _ = Describe("manger.Manager", func() {
 			It("should return an error if any Components fail to Start", func(done Done) {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
-				c1 := make(chan struct{})
 				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer GinkgoRecover()
-					close(c1)
+					<-s
 					return nil
 				}))).To(Succeed())
 
-				c2 := make(chan struct{})
 				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer GinkgoRecover()
-					close(c2)
 					return fmt.Errorf("expected error")
 				}))).To(Succeed())
 
-				c3 := make(chan struct{})
 				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
 					defer GinkgoRecover()
-					close(c3)
 					return nil
 				}))).To(Succeed())
 
-				go func() {
-					defer GinkgoRecover()
-					// NB(directxman12): this should definitely return an error.  If it doesn't happen,
-					// it means someone was signaling "stop: error" with a nil "error".
-					Expect(m.Start(stop)).NotTo(Succeed())
-					close(done)
-				}()
-				<-c1
-				<-c2
-				<-c3
+				defer GinkgoRecover()
+				Expect(m.Start(stop)).NotTo(Succeed()) //.To(HaveOccurred())
+
+				close(done)
 			})
 
-			It("should return an error if any non-leaderelection Components fail to Start", func() {
-				// TODO(mengqiy): implement this after resolving https://github.com/kubernetes-sigs/controller-runtime/issues/429
+			It("should wait for runnables to stop", func(done Done) {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+
+				var lock sync.Mutex
+				runnableDoneCount := 0
+				runnableDoneFunc := func() {
+					lock.Lock()
+					defer lock.Unlock()
+					runnableDoneCount++
+				}
+				var wgRunnableRunning sync.WaitGroup
+				wgRunnableRunning.Add(2)
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					wgRunnableRunning.Done()
+					defer GinkgoRecover()
+					defer runnableDoneFunc()
+					<-s
+					return nil
+				}))).To(Succeed())
+
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					wgRunnableRunning.Done()
+					defer GinkgoRecover()
+					defer runnableDoneFunc()
+					<-s
+					time.Sleep(300 * time.Millisecond) //slow closure simulation
+					return nil
+				}))).To(Succeed())
+
+				defer GinkgoRecover()
+				s := make(chan struct{})
+
+				var wgManagerRunning sync.WaitGroup
+				wgManagerRunning.Add(1)
+				go func() {
+					defer wgManagerRunning.Done()
+					Expect(m.Start(s)).NotTo(HaveOccurred())
+					Expect(runnableDoneCount).To(Equal(2))
+				}()
+				wgRunnableRunning.Wait() // ensure that runnable are running
+				close(s)
+
+				wgManagerRunning.Wait() // wait for the manager clean exit before closing the test
+				close(done)
+			})
+
+			It("should return an error if any Components fail to Start and wait for runnables to stop", func(done Done) {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				defer GinkgoRecover()
+				var lock sync.Mutex
+				runnableDoneCount := 0
+				runnableDoneFunc := func() {
+					lock.Lock()
+					defer lock.Unlock()
+					runnableDoneCount++
+				}
+
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					defer GinkgoRecover()
+					defer runnableDoneFunc()
+					return fmt.Errorf("expected error")
+				}))).To(Succeed())
+
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					defer GinkgoRecover()
+					defer runnableDoneFunc()
+					<-s
+					return nil
+				}))).To(Succeed())
+
+				Expect(m.Start(stop)).To(HaveOccurred())
+				Expect(runnableDoneCount).To(Equal(2))
+
+				close(done)
+			})
+
+			It("should refuse to add runnable if stop procedure is already engaged", func(done Done) {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				defer GinkgoRecover()
+
+				var wgRunnableRunning sync.WaitGroup
+				wgRunnableRunning.Add(1)
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					wgRunnableRunning.Done()
+					defer GinkgoRecover()
+					<-s
+					return nil
+				}))).To(Succeed())
+
+				s := make(chan struct{})
+				go func() {
+					Expect(m.Start(s)).NotTo(HaveOccurred())
+				}()
+				wgRunnableRunning.Wait()
+				close(s)
+				time.Sleep(100 * time.Millisecond) // give some time for the stop chan closure to be caught by the manager
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					defer GinkgoRecover()
+					return nil
+				}))).NotTo(Succeed())
+
+				close(done)
 			})
 		}
 

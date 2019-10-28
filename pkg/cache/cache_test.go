@@ -261,6 +261,20 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					err := informerCache.Get(context.Background(), svcKey, svc)
 					Expect(err).To(HaveOccurred())
 				})
+
+				It("should return an error when context is cancelled", func() {
+					By("creating a context and cancelling it")
+					ctx, cancel := context.WithCancel(context.Background())
+					cancel()
+
+					By("listing pods in test-namespace-1 with a cancelled context")
+					listObj := &kcorev1.PodList{}
+					err := informerCache.List(ctx, listObj, client.InNamespace(testNamespaceOne))
+
+					By("verifying that an error is returned")
+					Expect(err).To(HaveOccurred())
+					Expect(errors.IsTimeout(err)).To(BeTrue())
+				})
 			})
 			Context("with unstructured objects", func() {
 				It("should be able to list objects that haven't been watched previously", func() {

@@ -93,6 +93,11 @@ func GetConfigWithContext(context string) (*rest.Config, error) {
 	return cfg, nil
 }
 
+// loadInClusterConfig is a function used to load the in-cluster
+// Kubernetes client config. This variable makes is possible to
+// test the precedence of loading the config.
+var loadInClusterConfig = rest.InClusterConfig
+
 // loadConfig loads a REST Config as per the rules specified in GetConfig
 func loadConfig(context string) (*rest.Config, error) {
 
@@ -105,7 +110,7 @@ func loadConfig(context string) (*rest.Config, error) {
 	// try the in-cluster config.
 	kubeconfigPath := os.Getenv(clientcmd.RecommendedConfigPathEnvVar)
 	if len(kubeconfigPath) == 0 {
-		if c, err := rest.InClusterConfig(); err == nil {
+		if c, err := loadInClusterConfig(); err == nil {
 			return c, nil
 		}
 	}

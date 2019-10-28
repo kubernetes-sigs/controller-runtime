@@ -24,6 +24,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -41,14 +42,6 @@ var _ = Describe("Config", func() {
 	var dir string
 
 	origRecommendedHomeFile := clientcmd.RecommendedHomeFile
-
-	kubeconfigFiles := map[string]string{
-		"kubeconfig-flag":          genKubeconfig("from-flag"),
-		"kubeconfig-multi-context": genKubeconfig("ctx-1", "ctx-2"),
-		"kubeconfig-env-1":         genKubeconfig("from-env-1"),
-		"kubeconfig-env-2":         genKubeconfig("from-env-2"),
-		".kubeconfig":              genKubeconfig("from-home"),
-	}
 
 	BeforeEach(func() {
 		// create temporary directory for test case
@@ -71,6 +64,21 @@ var _ = Describe("Config", func() {
 	})
 
 	Describe("GetConfigWithContext", func() {
+		defineTests := func(testCases []testCase) {
+			for _, testCase := range testCases {
+				tc := testCase
+				It(tc.text, func() {
+					// set global and environment configs
+					setConfigs(tc, dir)
+
+					// run the test
+					cfg, err := GetConfigWithContext(tc.context)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(cfg.Host).To(Equal(tc.wantHost))
+				})
+			}
+		}
+
 		Context("when kubeconfig files don't exist", func() {
 			It("should fail", func() {
 				cfg, err := GetConfigWithContext("")
@@ -79,7 +87,44 @@ var _ = Describe("Config", func() {
 			})
 		})
 
-		Context("when kubeconfig files exist", func() {
+		Context("when in-cluster", func() {
+			kubeconfigFiles := map[string]string{
+				"kubeconfig-multi-context": genKubeconfig("from-multi-env-1", "from-multi-env-2"),
+				".kubeconfig":              genKubeconfig("from-home"),
+			}
+			BeforeEach(func() {
+				err := createFiles(kubeconfigFiles, dir)
+				Expect(err).NotTo(HaveOccurred())
+
+				// override in-cluster config loader
+				loadInClusterConfig = func() (*rest.Config, error) {
+					return &rest.Config{Host: "from-in-cluster"}, nil
+				}
+			})
+			AfterEach(func() { loadInClusterConfig = rest.InClusterConfig })
+
+			testCases := []testCase{
+				{
+					text:          "should prefer the envvar over the in-cluster config",
+					kubeconfigEnv: []string{"kubeconfig-multi-context"},
+					wantHost:      "from-multi-env-1",
+				},
+				{
+					text:     "should prefer in-cluster over the recommended home file",
+					wantHost: "from-in-cluster",
+				},
+			}
+			defineTests(testCases)
+		})
+
+		Context("when outside the cluster", func() {
+			kubeconfigFiles := map[string]string{
+				"kubeconfig-flag":          genKubeconfig("from-flag"),
+				"kubeconfig-multi-context": genKubeconfig("from-multi-env-1", "from-multi-env-2"),
+				"kubeconfig-env-1":         genKubeconfig("from-env-1"),
+				"kubeconfig-env-2":         genKubeconfig("from-env-2"),
+				".kubeconfig":              genKubeconfig("from-home"),
+			}
 			BeforeEach(func() {
 				err := createFiles(kubeconfigFiles, dir)
 				Expect(err).NotTo(HaveOccurred())
@@ -93,7 +138,7 @@ var _ = Describe("Config", func() {
 				{
 					text:          "should use the envvar",
 					kubeconfigEnv: []string{"kubeconfig-multi-context"},
-					wantHost:      "ctx-1",
+					wantHost:      "from-multi-env-1",
 				},
 				{
 					text:     "should use the recommended home file",
@@ -106,9 +151,9 @@ var _ = Describe("Config", func() {
 					wantHost:       "from-flag",
 				},
 				{
-					text:          "should prefer the envar over the recommended home file",
+					text:          "should prefer the envvar over the recommended home file",
 					kubeconfigEnv: []string{"kubeconfig-multi-context"},
-					wantHost:      "ctx-1",
+					wantHost:      "from-multi-env-1",
 				},
 				{
 					text:          "should allow overriding the API server URL",
@@ -118,9 +163,9 @@ var _ = Describe("Config", func() {
 				},
 				{
 					text:          "should allow overriding the context",
-					context:       "ctx-2",
+					context:       "from-multi-env-2",
 					kubeconfigEnv: []string{"kubeconfig-multi-context"},
-					wantHost:      "ctx-2",
+					wantHost:      "from-multi-env-2",
 				},
 				{
 					text:          "should support a multi-value envvar",
@@ -129,19 +174,7 @@ var _ = Describe("Config", func() {
 					wantHost:      "from-env-2",
 				},
 			}
-
-			for _, testCase := range testCases {
-				tc := testCase
-				It(tc.text, func() {
-					// set global and environment configs
-					setConfigs(tc, dir)
-
-					// run the test
-					cfg, err := GetConfigWithContext(tc.context)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(cfg.Host).To(Equal(tc.wantHost))
-				})
-			}
+			defineTests(testCases)
 		})
 	})
 })

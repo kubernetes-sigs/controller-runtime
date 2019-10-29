@@ -291,7 +291,6 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	return &controllerManager{
 		config:                config,
 		scheme:                options.Scheme,
-		errChan:               make(chan error),
 		cache:                 cache,
 		fieldIndexes:          cache,
 		client:                writeObj,

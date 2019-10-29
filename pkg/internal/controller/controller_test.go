@@ -64,7 +64,7 @@ var _ = Describe("controller", func() {
 		ctrl = &Controller{
 			MaxConcurrentReconciles: 1,
 			Do:                      fakeReconcile,
-			Queue:                   queue,
+			MakeQueue:               func() workqueue.RateLimitingInterface { return queue },
 			Cache:                   informers,
 		}
 		Expect(ctrl.InjectFunc(func(interface{}) error { return nil })).To(Succeed())
@@ -116,6 +116,45 @@ var _ = Describe("controller", func() {
 			Expect(ctrl.Start(stopped)).NotTo(HaveOccurred())
 
 			close(done)
+		})
+
+		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {
+			pr1 := &predicate.Funcs{}
+			pr2 := &predicate.Funcs{}
+			evthdl := &handler.EnqueueRequestForObject{}
+			started := false
+			src := source.Func(func(e handler.EventHandler, q workqueue.RateLimitingInterface, p ...predicate.Predicate) error {
+				defer GinkgoRecover()
+				Expect(e).To(Equal(evthdl))
+				Expect(q).To(Equal(ctrl.Queue))
+				Expect(p).To(ConsistOf(pr1, pr2))
+
+				started = true
+				return nil
+			})
+			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).NotTo(HaveOccurred())
+
+			// Use a stopped channel so Start doesn't block
+			stopped := make(chan struct{})
+			close(stopped)
+			Expect(ctrl.Start(stopped)).To(Succeed())
+			Expect(started).To(BeTrue())
+		})
+
+		It("should return an error if there is an error starting sources", func() {
+			err := fmt.Errorf("Expected Error: could not start source")
+			src := source.Func(func(handler.EventHandler,
+				workqueue.RateLimitingInterface,
+				...predicate.Predicate) error {
+				defer GinkgoRecover()
+				return err
+			})
+			Expect(ctrl.Watch(src, &handler.EnqueueRequestForObject{})).To(Succeed())
+
+			// Use a stopped channel so Start doesn't block
+			stopped := make(chan struct{})
+			close(stopped)
+			Expect(ctrl.Start(stopped)).To(Equal(err))
 		})
 	})
 
@@ -237,32 +276,6 @@ var _ = Describe("controller", func() {
 			}
 			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).To(Equal(expected))
 		})
-
-		It("should call Start the Source with the EventHandler, Queue, and Predicates", func() {
-			pr1 := &predicate.Funcs{}
-			pr2 := &predicate.Funcs{}
-			evthdl := &handler.EnqueueRequestForObject{}
-			src := source.Func(func(e handler.EventHandler, q workqueue.RateLimitingInterface, p ...predicate.Predicate) error {
-				defer GinkgoRecover()
-				Expect(e).To(Equal(evthdl))
-				Expect(q).To(Equal(ctrl.Queue))
-				Expect(p).To(ConsistOf(pr1, pr2))
-				return nil
-			})
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).NotTo(HaveOccurred())
-
-		})
-
-		It("should return an error if there is an error starting the Source", func() {
-			err := fmt.Errorf("Expected Error: could not start source")
-			src := source.Func(func(handler.EventHandler,
-				workqueue.RateLimitingInterface,
-				...predicate.Predicate) error {
-				defer GinkgoRecover()
-				return err
-			})
-			Expect(ctrl.Watch(src, &handler.EnqueueRequestForObject{})).To(Equal(err))
-		})
 	})
 
 	Describe("Processing queue items from a Controller", func() {
@@ -271,15 +284,15 @@ var _ = Describe("controller", func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 			}()
-			ctrl.Queue.Add(request)
+			queue.Add(request)
 
 			By("Invoking Reconciler")
 			fakeReconcile.AddResult(reconcile.Result{}, nil)
 			Expect(<-reconciled).To(Equal(request))
 
 			By("Removing the item from the queue")
-			Eventually(ctrl.Queue.Len).Should(Equal(0))
-			Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+			Eventually(queue.Len).Should(Equal(0))
+			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
 
 			close(done)
 		})
@@ -294,13 +307,14 @@ var _ = Describe("controller", func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 			}()
-			ctrl.Queue.Add("foo/bar")
 
-			By("checking that process next work item indicates that we should continue processing")
-			Expect(ctrl.processNextWorkItem()).To(BeTrue())
+			By("adding two bad items to the queue")
+			queue.Add("foo/bar1")
+			queue.Add("foo/bar2")
 
-			Eventually(ctrl.Queue.Len).Should(Equal(0))
-			Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+			By("expecting both of them to be skipped")
+			Eventually(queue.Len).Should(Equal(0))
+			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
 
 			close(done)
 		})
@@ -318,7 +332,7 @@ var _ = Describe("controller", func() {
 				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 			}()
 
-			ctrl.Queue.Add(request)
+			queue.Add(request)
 
 			By("Invoking Reconciler which will give an error")
 			fakeReconcile.AddResult(reconcile.Result{}, fmt.Errorf("expected error: reconcile"))
@@ -329,8 +343,8 @@ var _ = Describe("controller", func() {
 			Expect(<-reconciled).To(Equal(request))
 
 			By("Removing the item from the queue")
-			Eventually(ctrl.Queue.Len).Should(Equal(0))
-			Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+			Eventually(queue.Len).Should(Equal(0))
+			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
 
 			close(done)
 		}, 1.0)
@@ -338,14 +352,14 @@ var _ = Describe("controller", func() {
 		// TODO(directxman12): we should ensure that backoff occurrs with error requeue
 
 		It("should not reset backoff until there's a non-error result", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.Queue}
-			ctrl.Queue = dq
+			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
+			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 			}()
 
-			ctrl.Queue.Add(request)
+			dq.Add(request)
 			Expect(dq.getCounts()).To(Equal(countInfo{Trying: 1}))
 
 			By("Invoking Reconciler which returns an error")
@@ -366,19 +380,19 @@ var _ = Describe("controller", func() {
 			Eventually(dq.getCounts).Should(Equal(countInfo{Trying: 0, AddRateLimited: 2}))
 
 			By("Removing the item from the queue")
-			Eventually(ctrl.Queue.Len).Should(Equal(0))
-			Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+			Eventually(dq.Len).Should(Equal(0))
+			Eventually(func() int { return dq.NumRequeues(request) }).Should(Equal(0))
 		})
 
 		It("should requeue a Request with rate limiting if the Result sets Requeue:true and continue processing items", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.Queue}
-			ctrl.Queue = dq
+			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
+			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 			}()
 
-			ctrl.Queue.Add(request)
+			dq.Add(request)
 			Expect(dq.getCounts()).To(Equal(countInfo{Trying: 1}))
 
 			By("Invoking Reconciler which will ask for requeue")
@@ -393,19 +407,19 @@ var _ = Describe("controller", func() {
 			Eventually(dq.getCounts).Should(Equal(countInfo{Trying: 0, AddRateLimited: 1}))
 
 			By("Removing the item from the queue")
-			Eventually(ctrl.Queue.Len).Should(Equal(0))
-			Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+			Eventually(dq.Len).Should(Equal(0))
+			Eventually(func() int { return dq.NumRequeues(request) }).Should(Equal(0))
 		})
 
 		It("should requeue a Request after a duration (but not rate-limitted) if the Result sets RequeueAfter (regardless of Requeue)", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.Queue}
-			ctrl.Queue = dq
+			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
+			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 			}()
 
-			ctrl.Queue.Add(request)
+			dq.Add(request)
 			Expect(dq.getCounts()).To(Equal(countInfo{Trying: 1}))
 
 			By("Invoking Reconciler which will ask for requeue & requeueafter")
@@ -420,20 +434,20 @@ var _ = Describe("controller", func() {
 			Eventually(dq.getCounts).Should(Equal(countInfo{Trying: -1 /* we don't increment the count in addafter */, AddAfter: 2}))
 
 			By("Removing the item from the queue")
-			Eventually(ctrl.Queue.Len).Should(Equal(0))
-			Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+			Eventually(dq.Len).Should(Equal(0))
+			Eventually(func() int { return dq.NumRequeues(request) }).Should(Equal(0))
 		})
 
 		It("should perform error behavior if error is not nil, regardless of RequeueAfter", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.Queue}
-			ctrl.Queue = dq
+			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
+			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
 			ctrl.JitterPeriod = time.Millisecond
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 			}()
 
-			ctrl.Queue.Add(request)
+			dq.Add(request)
 			Expect(dq.getCounts()).To(Equal(countInfo{Trying: 1}))
 
 			By("Invoking Reconciler which will ask for requeueafter with an error")
@@ -447,8 +461,8 @@ var _ = Describe("controller", func() {
 			Eventually(dq.getCounts).Should(Equal(countInfo{AddAfter: 1, AddRateLimited: 1}))
 
 			By("Removing the item from the queue")
-			Eventually(ctrl.Queue.Len).Should(Equal(0))
-			Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+			Eventually(dq.Len).Should(Equal(0))
+			Eventually(func() int { return dq.NumRequeues(request) }).Should(Equal(0))
 		})
 
 		PIt("should return if the queue is shutdown", func() {
@@ -485,7 +499,7 @@ var _ = Describe("controller", func() {
 					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 				}()
 				By("Invoking Reconciler which will succeed")
-				ctrl.Queue.Add(request)
+				queue.Add(request)
 
 				fakeReconcile.AddResult(reconcile.Result{}, nil)
 				Expect(<-reconciled).To(Equal(request))
@@ -514,7 +528,7 @@ var _ = Describe("controller", func() {
 					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 				}()
 				By("Invoking Reconciler which will give an error")
-				ctrl.Queue.Add(request)
+				queue.Add(request)
 
 				fakeReconcile.AddResult(reconcile.Result{}, fmt.Errorf("expected error: reconcile"))
 				Expect(<-reconciled).To(Equal(request))
@@ -542,8 +556,9 @@ var _ = Describe("controller", func() {
 					defer GinkgoRecover()
 					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 				}()
+
 				By("Invoking Reconciler which will return result with Requeue enabled")
-				ctrl.Queue.Add(request)
+				queue.Add(request)
 
 				fakeReconcile.AddResult(reconcile.Result{Requeue: true}, nil)
 				Expect(<-reconciled).To(Equal(request))
@@ -572,7 +587,7 @@ var _ = Describe("controller", func() {
 					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 				}()
 				By("Invoking Reconciler which will return result with requeueAfter enabled")
-				ctrl.Queue.Add(request)
+				queue.Add(request)
 
 				fakeReconcile.AddResult(reconcile.Result{RequeueAfter: 5 * time.Hour}, nil)
 				Expect(<-reconciled).To(Equal(request))
@@ -604,7 +619,7 @@ var _ = Describe("controller", func() {
 					defer GinkgoRecover()
 					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 				}()
-				ctrl.Queue.Add(request)
+				queue.Add(request)
 
 				// Reduce the jitterperiod so we don't have to wait a second before the reconcile function is rerun.
 				ctrl.JitterPeriod = time.Millisecond
@@ -625,8 +640,8 @@ var _ = Describe("controller", func() {
 				Expect(<-reconciled).To(Equal(request))
 
 				By("Removing the item from the queue")
-				Eventually(ctrl.Queue.Len).Should(Equal(0))
-				Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+				Eventually(queue.Len).Should(Equal(0))
+				Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
 
 				close(done)
 			}, 2.0)
@@ -649,15 +664,15 @@ var _ = Describe("controller", func() {
 					defer GinkgoRecover()
 					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
 				}()
-				ctrl.Queue.Add(request)
+				queue.Add(request)
 
 				By("Invoking Reconciler")
 				fakeReconcile.AddResult(reconcile.Result{}, nil)
 				Expect(<-reconciled).To(Equal(request))
 
 				By("Removing the item from the queue")
-				Eventually(ctrl.Queue.Len).Should(Equal(0))
-				Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+				Eventually(queue.Len).Should(Equal(0))
+				Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
 
 				Eventually(func() error {
 					histObserver := ctrlmetrics.ReconcileTime.WithLabelValues(ctrl.Name)

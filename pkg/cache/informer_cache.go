@@ -93,7 +93,11 @@ func (ip *informerCache) List(ctx context.Context, out runtime.Object, opts ...c
 		}
 		// http://knowyourmeme.com/memes/this-is-fine
 		elemType := reflect.Indirect(reflect.ValueOf(itemsPtr)).Type().Elem()
-		cacheTypeValue := reflect.Zero(reflect.PtrTo(elemType))
+		if elemType.Kind() != reflect.Ptr {
+			elemType = reflect.PtrTo(elemType)
+		}
+
+		cacheTypeValue := reflect.Zero(elemType)
 		var ok bool
 		cacheTypeObj, ok = cacheTypeValue.Interface().(runtime.Object)
 		if !ok {

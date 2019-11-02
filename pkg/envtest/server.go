@@ -62,6 +62,9 @@ func defaultAssetPath(binary string) string {
 
 // DefaultKubeAPIServerFlags are default flags necessary to bring up apiserver.
 var DefaultKubeAPIServerFlags = []string{
+	// Allow tests to run offline, by preventing API server from attempting to
+	// use default route to determine its --advertise-address
+	"--advertise-address=127.0.0.1",
 	"--etcd-servers={{ if .EtcdURL }}{{ .EtcdURL.String }}{{ end }}",
 	"--cert-dir={{ .CertDir }}",
 	"--insecure-port={{ if .URL }}{{ .URL.Port }}{{ end }}",

@@ -82,7 +82,7 @@ type Opts func(*Options)
 // See Options.Development
 func UseDevMode(enabled bool) Opts {
 	return func(o *Options) {
-		o.Development = true
+		o.Development = enabled
 	}
 }
 

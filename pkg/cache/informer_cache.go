@@ -140,6 +140,12 @@ func (ip *informerCache) GetInformer(obj runtime.Object) (Informer, error) {
 	return i.Informer, err
 }
 
+// NeedLeaderElection implements the LeaderElectionRunnable interface
+// to indicate that this can be started without requiring the leader lock
+func (ip *informerCache) NeedLeaderElection() bool {
+	return false
+}
+
 // IndexField adds an indexer to the underlying cache, using extraction function to get
 // value(s) from the given field.  This index can then be used by passing a field selector
 // to List. For one-to-one compatibility with "normal" field selectors, only return one value.

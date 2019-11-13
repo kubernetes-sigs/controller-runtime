@@ -116,6 +116,7 @@ func (c *fakeClient) Get(ctx context.Context, key client.ObjectKey, obj runtime.
 		return err
 	}
 	ta.SetKind(gvk.Kind)
+	ta.SetAPIVersion(gvk.GroupVersion().String())
 
 	j, err := json.Marshal(o)
 	if err != nil {
@@ -154,6 +155,7 @@ func (c *fakeClient) List(ctx context.Context, obj runtime.Object, opts ...clien
 		return err
 	}
 	ta.SetKind(OriginalKind)
+	ta.SetAPIVersion(gvk.GroupVersion().String())
 
 	j, err := json.Marshal(o)
 	if err != nil {
@@ -317,6 +319,7 @@ func (c *fakeClient) Patch(ctx context.Context, obj runtime.Object, patch client
 		return err
 	}
 	ta.SetKind(gvk.Kind)
+	ta.SetAPIVersion(gvk.GroupVersion().String())
 
 	j, err := json.Marshal(o)
 	if err != nil {

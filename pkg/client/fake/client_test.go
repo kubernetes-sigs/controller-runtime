@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -39,12 +40,18 @@ var _ = Describe("Fake client", func() {
 
 	BeforeEach(func() {
 		dep = &appsv1.Deployment{
+			TypeMeta: metav1.TypeMeta{
+				Kind: "Deployment",
+			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-deployment",
 				Namespace: "ns1",
 			},
 		}
 		dep2 = &appsv1.Deployment{
+			TypeMeta: metav1.TypeMeta{
+				Kind: "Deployment",
+			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-deployment-2",
 				Namespace: "ns1",
@@ -54,6 +61,9 @@ var _ = Describe("Fake client", func() {
 			},
 		}
 		cm = &corev1.ConfigMap{
+			TypeMeta: metav1.TypeMeta{
+				Kind: "ConfigMap",
+			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-cm",
 				Namespace: "ns2",
@@ -77,6 +87,19 @@ var _ = Describe("Fake client", func() {
 			Expect(obj).To(Equal(dep))
 		})
 
+		It("should be able to Get using unstructured", func() {
+			By("Getting a deployment")
+			namespacedName := types.NamespacedName{
+				Name:      "test-deployment",
+				Namespace: "ns1",
+			}
+			obj := &unstructured.Unstructured{}
+			obj.SetAPIVersion("apps/v1")
+			obj.SetKind("Deployment")
+			err := cl.Get(nil, namespacedName, obj)
+			Expect(err).To(BeNil())
+		})
+
 		It("should be able to List", func() {
 			By("Listing all deployments in a namespace")
 			list := &appsv1.DeploymentList{}
@@ -84,6 +107,16 @@ var _ = Describe("Fake client", func() {
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(HaveLen(2))
 			Expect(list.Items).To(ConsistOf(*dep, *dep2))
+		})
+
+		It("should be able to List using unstructured list", func() {
+			By("Listing all deployments in a namespace")
+			list := &unstructured.UnstructuredList{}
+			list.SetAPIVersion("apps/v1")
+			list.SetKind("DeploymentList")
+			err := cl.List(nil, list, client.InNamespace("ns1"))
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(2))
 		})
 
 		It("should support filtering by labels", func() {
@@ -101,6 +134,9 @@ var _ = Describe("Fake client", func() {
 		It("should be able to Create", func() {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "ConfigMap",
+				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "new-test-cm",
 					Namespace: "ns2",
@@ -124,6 +160,9 @@ var _ = Describe("Fake client", func() {
 		It("should be able to Update", func() {
 			By("Updating a new configmap")
 			newcm := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "ConfigMap",
+				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "test-cm",
 					Namespace:       "ns2",

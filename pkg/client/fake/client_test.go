@@ -41,7 +41,8 @@ var _ = Describe("Fake client", func() {
 	BeforeEach(func() {
 		dep = &appsv1.Deployment{
 			TypeMeta: metav1.TypeMeta{
-				Kind: "Deployment",
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-deployment",
@@ -50,7 +51,8 @@ var _ = Describe("Fake client", func() {
 		}
 		dep2 = &appsv1.Deployment{
 			TypeMeta: metav1.TypeMeta{
-				Kind: "Deployment",
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-deployment-2",
@@ -62,7 +64,8 @@ var _ = Describe("Fake client", func() {
 		}
 		cm = &corev1.ConfigMap{
 			TypeMeta: metav1.TypeMeta{
-				Kind: "ConfigMap",
+				APIVersion: "v1",
+				Kind:       "ConfigMap",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-cm",
@@ -135,7 +138,8 @@ var _ = Describe("Fake client", func() {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{
-					Kind: "ConfigMap",
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "new-test-cm",
@@ -161,7 +165,8 @@ var _ = Describe("Fake client", func() {
 			By("Updating a new configmap")
 			newcm := &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{
-					Kind: "ConfigMap",
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "test-cm",

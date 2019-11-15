@@ -115,6 +115,24 @@ var _ = Describe("Controllerutil", func() {
 				BlockOwnerDeletion: &t,
 			}))
 		})
+
+		It("should return an error if it's setting a cross-namespace owner reference", func() {
+			rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "namespace1"}}
+			dep := &extensionsv1beta1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "namespace2", UID: "foo-uid"}}
+
+			err := controllerutil.SetControllerReference(dep, rs, scheme.Scheme)
+
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should return an error if it's owner is namespaced resource but dependant is cluster-scoped resource", func() {
+			pv := &corev1.PersistentVolume{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+			pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", UID: "foo-uid"}}
+
+			err := controllerutil.SetControllerReference(pod, pv, scheme.Scheme)
+
+			Expect(err).To(HaveOccurred())
+		})
 	})
 
 	Describe("CreateOrUpdate", func() {

@@ -83,6 +83,7 @@ var DefaultKubeAPIServerFlags = []string{
 	"--insecure-bind-address={{ if .URL }}{{ .URL.Hostname }}{{ end }}",
 	"--secure-port={{ if .SecurePort }}{{ .SecurePort }}{{ end }}",
 	"--admission-control=AlwaysAdmit",
+	"--service-cluster-ip-range=10.0.0.0/24",
 }
 
 // Environment creates a Kubernetes test environment that will start / stop the Kubernetes control plane and
@@ -147,6 +148,17 @@ func (te Environment) getAPIServerFlags() []string {
 	// Set default API server flags if not set.
 	if len(te.KubeAPIServerFlags) == 0 {
 		return DefaultKubeAPIServerFlags
+	}
+	// Check KubeAPIServerFlags contains service-cluster-ip-range, if not, set default value to service-cluster-ip-range
+	containServiceClusterIPRange := false
+	for _, flag := range te.KubeAPIServerFlags {
+		if strings.Contains(flag, "service-cluster-ip-range") {
+			containServiceClusterIPRange = true
+			break
+		}
+	}
+	if !containServiceClusterIPRange {
+		te.KubeAPIServerFlags = append(te.KubeAPIServerFlags, "--service-cluster-ip-range=10.0.0.0/24")
 	}
 	return te.KubeAPIServerFlags
 }

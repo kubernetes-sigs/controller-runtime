@@ -187,10 +187,8 @@ func ExampleClient_delete() {
 
 	// Using a unstructured object.
 	u := &unstructured.Unstructured{}
-	u.Object = map[string]interface{}{
-		"name":      "name",
-		"namespace": "namespace",
-	}
+	u.SetName("name")
+	u.SetNamespace("namespace")
 	u.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "apps",
 		Kind:    "Deployment",

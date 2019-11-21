@@ -9,4 +9,4 @@ approvers:
 reviewers:
   - controller-runtime-admins
   - controller-runtime-maintainers
-  - shawn-hurley
+  - controller-runtime-reviewers

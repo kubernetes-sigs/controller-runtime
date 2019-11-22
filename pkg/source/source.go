@@ -60,6 +60,9 @@ type Kind struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
 	Type runtime.Object
 
+	// Namespace is the namespace for watching the objects
+	Namespace *string
+
 	// cache used to watch APIs
 	cache cache.Cache
 }
@@ -82,7 +85,7 @@ func (ks *Kind) Start(handler handler.EventHandler, queue workqueue.RateLimiting
 	}
 
 	// Lookup the Informer from the Cache and add an EventHandler which populates the Queue
-	i, err := ks.cache.GetInformer(ks.Type)
+	i, err := ks.cache.GetInformerInNamespace(ks.Type, ks.Namespace)
 	if err != nil {
 		if kindMatchErr, ok := err.(*meta.NoKindMatchError); ok {
 			log.Error(err, "if kind is a CRD, it should be installed before calling Start",

@@ -53,9 +53,17 @@ type Informers interface {
 	// API kind and resource.
 	GetInformer(obj runtime.Object) (Informer, error)
 
+	// GetInformer fetches or constructs an informer for the given object that corresponds to a single
+	// API kind and resource.
+	GetInformerInNamespace(obj runtime.Object, namespace *string) (Informer, error)
+
 	// GetInformerForKind is similar to GetInformer, except that it takes a group-version-kind, instead
 	// of the underlying object.
 	GetInformerForKind(gvk schema.GroupVersionKind) (Informer, error)
+
+	// GetInformerForKindInNamespace is similar to GetInformerInNamespace, except that it takes a group-version-kind, instead
+	// of the underlying object.
+	GetInformerForKindInNamespace(gvk schema.GroupVersionKind, namespace *string) (Informer, error)
 
 	// Start runs all the informers known to this cache until the given channel is closed.
 	// It blocks.

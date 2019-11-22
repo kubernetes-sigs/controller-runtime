@@ -69,9 +69,12 @@ var _ Cache = &multiNamespaceCache{}
 
 // Methods for multiNamespaceCache to conform to the Informers interface
 func (c *multiNamespaceCache) GetInformer(obj runtime.Object) (Informer, error) {
+	return c.GetInformerInNamespace(obj, nil)
+}
+func (c *multiNamespaceCache) GetInformerInNamespace(obj runtime.Object, namespace *string) (Informer, error) {
 	informers := map[string]Informer{}
 	for ns, cache := range c.namespaceToCache {
-		informer, err := cache.GetInformer(obj)
+		informer, err := cache.GetInformerInNamespace(obj, namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -81,9 +84,13 @@ func (c *multiNamespaceCache) GetInformer(obj runtime.Object) (Informer, error) 
 }
 
 func (c *multiNamespaceCache) GetInformerForKind(gvk schema.GroupVersionKind) (Informer, error) {
+	return c.GetInformerForKindInNamespace(gvk, nil)
+}
+
+func (c *multiNamespaceCache) GetInformerForKindInNamespace(gvk schema.GroupVersionKind, namespace *string) (Informer, error) {
 	informers := map[string]Informer{}
 	for ns, cache := range c.namespaceToCache {
-		informer, err := cache.GetInformerForKind(gvk)
+		informer, err := cache.GetInformerForKindInNamespace(gvk, namespace)
 		if err != nil {
 			return nil, err
 		}

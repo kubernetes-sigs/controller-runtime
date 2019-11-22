@@ -73,16 +73,16 @@ func (m *InformersMap) WaitForCacheSync(stop <-chan struct{}) bool {
 
 // Get will create a new Informer and add it to the map of InformersMap if none exists.  Returns
 // the Informer from the map.
-func (m *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (bool, *MapEntry, error) {
+func (m *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object, namespace *string) (bool, *MapEntry, error) {
 	_, isUnstructured := obj.(*unstructured.Unstructured)
 	_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
 	isUnstructured = isUnstructured || isUnstructuredList
 
 	if isUnstructured {
-		return m.unstructured.Get(gvk, obj)
+		return m.unstructured.Get(gvk, obj, namespace)
 	}
 
-	return m.structured.Get(gvk, obj)
+	return m.structured.Get(gvk, obj, namespace)
 }
 
 // newStructuredInformersMap creates a new InformersMap for structured objects.

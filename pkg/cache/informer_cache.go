@@ -57,7 +57,7 @@ func (ip *informerCache) Get(ctx context.Context, key client.ObjectKey, out runt
 		return err
 	}
 
-	started, cache, err := ip.InformersMap.Get(gvk, out)
+	started, cache, err := ip.InformersMap.Get(gvk, out, &key.Namespace)
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (ip *informerCache) List(ctx context.Context, out runtime.Object, opts ...c
 		}
 	}
 
-	started, cache, err := ip.InformersMap.Get(gvk, cacheTypeObj)
+	started, cache, err := ip.InformersMap.Get(gvk, cacheTypeObj, nil)
 	if err != nil {
 		return err
 	}
@@ -115,12 +115,16 @@ func (ip *informerCache) List(ctx context.Context, out runtime.Object, opts ...c
 
 // GetInformerForKind returns the informer for the GroupVersionKind
 func (ip *informerCache) GetInformerForKind(gvk schema.GroupVersionKind) (Informer, error) {
+	return ip.GetInformerForKindInNamespace(gvk, nil)
+}
+
+func (ip *informerCache) GetInformerForKindInNamespace(gvk schema.GroupVersionKind, namespace *string) (Informer, error) {
 	// Map the gvk to an object
 	obj, err := ip.Scheme.New(gvk)
 	if err != nil {
 		return nil, err
 	}
-	_, i, err := ip.InformersMap.Get(gvk, obj)
+	_, i, err := ip.InformersMap.Get(gvk, obj, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -129,11 +133,15 @@ func (ip *informerCache) GetInformerForKind(gvk schema.GroupVersionKind) (Inform
 
 // GetInformer returns the informer for the obj
 func (ip *informerCache) GetInformer(obj runtime.Object) (Informer, error) {
+	return ip.GetInformerInNamespace(obj, nil)
+}
+
+func (ip *informerCache) GetInformerInNamespace(obj runtime.Object, namespace *string) (Informer, error) {
 	gvk, err := apiutil.GVKForObject(obj, ip.Scheme)
 	if err != nil {
 		return nil, err
 	}
-	_, i, err := ip.InformersMap.Get(gvk, obj)
+	_, i, err := ip.InformersMap.Get(gvk, obj, namespace)
 	if err != nil {
 		return nil, err
 	}

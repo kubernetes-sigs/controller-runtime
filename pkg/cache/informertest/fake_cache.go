@@ -50,6 +50,18 @@ func (c *FakeInformers) GetInformerForKind(gvk schema.GroupVersionKind) (cache.I
 	return c.informerFor(gvk, obj)
 }
 
+// GetInformerForKindInNamespace implements Informers
+func (c *FakeInformers) GetInformerForKindInNamespace(gvk schema.GroupVersionKind, namespace *string) (cache.Informer, error) {
+	if c.Scheme == nil {
+		c.Scheme = scheme.Scheme
+	}
+	obj, err := c.Scheme.New(gvk)
+	if err != nil {
+		return nil, err
+	}
+	return c.informerFor(gvk, obj)
+}
+
 // FakeInformerForKind implements Informers
 func (c *FakeInformers) FakeInformerForKind(gvk schema.GroupVersionKind) (*controllertest.FakeInformer, error) {
 	if c.Scheme == nil {
@@ -68,6 +80,19 @@ func (c *FakeInformers) FakeInformerForKind(gvk schema.GroupVersionKind) (*contr
 
 // GetInformer implements Informers
 func (c *FakeInformers) GetInformer(obj runtime.Object) (cache.Informer, error) {
+	if c.Scheme == nil {
+		c.Scheme = scheme.Scheme
+	}
+	gvks, _, err := c.Scheme.ObjectKinds(obj)
+	if err != nil {
+		return nil, err
+	}
+	gvk := gvks[0]
+	return c.informerFor(gvk, obj)
+}
+
+// GetInformerInNamespace implements Informers
+func (c *FakeInformers) GetInformerInNamespace(obj runtime.Object, namespace *string) (cache.Informer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}

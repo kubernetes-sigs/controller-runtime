@@ -57,7 +57,7 @@ func (ip *informerCache) Get(ctx context.Context, key client.ObjectKey, out runt
 		return err
 	}
 
-	started, cache, err := ip.InformersMap.Get(gvk, out, &key.Namespace)
+	started, cache, err := ip.InformersMap.Get(gvk, out, nil)
 	if err != nil {
 		return err
 	}

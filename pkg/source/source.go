@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source/internal"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
@@ -60,11 +61,22 @@ type Kind struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
 	Type runtime.Object
 
+	// Options are the list options for watching the objects.
+	// TODO: Only namespace is used by the implementation at present
+	options []client.ListOption
+
 	// cache used to watch APIs
 	cache cache.Cache
 }
 
 var _ Source = &Kind{}
+
+func NewKind(obj runtime.Object, opts ...client.ListOption) *Kind {
+	return &Kind{
+		Type:    obj,
+		options: opts,
+	}
+}
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
@@ -82,7 +94,7 @@ func (ks *Kind) Start(handler handler.EventHandler, queue workqueue.RateLimiting
 	}
 
 	// Lookup the Informer from the Cache and add an EventHandler which populates the Queue
-	i, err := ks.cache.GetInformer(ks.Type)
+	i, err := ks.cache.GetInformer(ks.Type, ks.options...)
 	if err != nil {
 		if kindMatchErr, ok := err.(*meta.NoKindMatchError); ok {
 			log.Error(err, "if kind is a CRD, it should be installed before calling Start",

@@ -39,7 +39,7 @@ type FakeInformers struct {
 }
 
 // GetInformerForKind implements Informers
-func (c *FakeInformers) GetInformerForKind(gvk schema.GroupVersionKind) (cache.Informer, error) {
+func (c *FakeInformers) GetInformerForKind(gvk schema.GroupVersionKind, opts ...client.ListOption) (cache.Informer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}
@@ -67,7 +67,7 @@ func (c *FakeInformers) FakeInformerForKind(gvk schema.GroupVersionKind) (*contr
 }
 
 // GetInformer implements Informers
-func (c *FakeInformers) GetInformer(obj runtime.Object) (cache.Informer, error) {
+func (c *FakeInformers) GetInformer(obj runtime.Object, opts ...client.ListOption) (cache.Informer, error) {
 	if c.Scheme == nil {
 		c.Scheme = scheme.Scheme
 	}

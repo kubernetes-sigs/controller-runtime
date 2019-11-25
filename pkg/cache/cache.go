@@ -51,11 +51,11 @@ type Cache interface {
 type Informers interface {
 	// GetInformer fetches or constructs an informer for the given object that corresponds to a single
 	// API kind and resource.
-	GetInformer(obj runtime.Object) (Informer, error)
+	GetInformer(obj runtime.Object, opts ...client.ListOption) (Informer, error)
 
 	// GetInformerForKind is similar to GetInformer, except that it takes a group-version-kind, instead
 	// of the underlying object.
-	GetInformerForKind(gvk schema.GroupVersionKind) (Informer, error)
+	GetInformerForKind(gvk schema.GroupVersionKind, opts ...client.ListOption) (Informer, error)
 
 	// Start runs all the informers known to this cache until the given channel is closed.
 	// It blocks.

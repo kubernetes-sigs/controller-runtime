@@ -68,10 +68,10 @@ type multiNamespaceCache struct {
 var _ Cache = &multiNamespaceCache{}
 
 // Methods for multiNamespaceCache to conform to the Informers interface
-func (c *multiNamespaceCache) GetInformer(obj runtime.Object) (Informer, error) {
+func (c *multiNamespaceCache) GetInformer(obj runtime.Object, opts ...client.ListOption) (Informer, error) {
 	informers := map[string]Informer{}
 	for ns, cache := range c.namespaceToCache {
-		informer, err := cache.GetInformer(obj)
+		informer, err := cache.GetInformer(obj, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -80,10 +80,10 @@ func (c *multiNamespaceCache) GetInformer(obj runtime.Object) (Informer, error) 
 	return &multiNamespaceInformer{namespaceToInformer: informers}, nil
 }
 
-func (c *multiNamespaceCache) GetInformerForKind(gvk schema.GroupVersionKind) (Informer, error) {
+func (c *multiNamespaceCache) GetInformerForKind(gvk schema.GroupVersionKind, opts ...client.ListOption) (Informer, error) {
 	informers := map[string]Informer{}
 	for ns, cache := range c.namespaceToCache {
-		informer, err := cache.GetInformerForKind(gvk)
+		informer, err := cache.GetInformerForKind(gvk, opts...)
 		if err != nil {
 			return nil, err
 		}

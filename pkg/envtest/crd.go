@@ -225,8 +225,19 @@ func CreateCRDs(config *rest.Config, crds []*apiextensionsv1beta1.CustomResource
 	// Create each CRD
 	for _, crd := range crds {
 		log.V(1).Info("installing CRD", "crd", crd.Name)
-		if _, err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd); err != nil {
-			return err
+		if existingCrd, err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crd.Name, metav1.GetOptions{}); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return err
+			}
+			if _, err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd); err != nil {
+				return err
+			}
+		} else {
+			log.V(1).Info("CRD already exists, updating", "crd", crd.Name)
+			crd.ResourceVersion = existingCrd.ResourceVersion
+			if _, err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Update(crd); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

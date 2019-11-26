@@ -135,8 +135,15 @@ type Environment struct {
 }
 
 // Stop stops a running server.
-// If USE_EXISTING_CLUSTER is set to true, this method is a no-op.
+// Previously installed CRDs, as listed in CRDInstallOptions.CRDs, will be uninstalled
+// if CRDInstallOptions.CleanUpAfterUse are set to true.
 func (te *Environment) Stop() error {
+	if te.CRDInstallOptions.CleanUpAfterUse {
+		if err := UninstallCRDs(te.Config, te.CRDInstallOptions); err != nil {
+			// This error should be harmless so just log it.
+			log.Error(err, "failed to uninstall CRDs")
+		}
+	}
 	if te.useExistingCluster() {
 		return nil
 	}

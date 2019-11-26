@@ -27,6 +27,7 @@ import (
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -51,6 +52,11 @@ type CRDInstallOptions struct {
 
 	// PollInterval is the interval to check
 	PollInterval time.Duration
+
+	// CleanUpAfterUse will cause the CRDs listed for installation to be
+	// uninstalled when terminating the test environment.
+	// Defaults to false.
+	CleanUpAfterUse bool
 }
 
 const defaultPollInterval = 100 * time.Millisecond
@@ -178,6 +184,31 @@ func (p *poller) poll() (done bool, err error) {
 		}
 	}
 	return allFound, nil
+}
+
+// UninstallCRDs uninstalls a collection of CRDs by reading the crd yaml files from a directory
+func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
+
+	// Read the CRD yamls into options.CRDs
+	if err := readCRDFiles(&options); err != nil {
+		return err
+	}
+
+	// Delete the CRDs from the apiserver
+	cs, err := clientset.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	// Uninstall each CRD
+	for _, crd := range options.CRDs {
+		log.V(1).Info("uninstalling CRD", "crd", crd.Name)
+		if err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Delete(crd.Name, &metav1.DeleteOptions{}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // CreateCRDs creates the CRDs

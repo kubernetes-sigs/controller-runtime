@@ -19,8 +19,8 @@ package controllerutil
 import (
 	"context"
 	"fmt"
-	"reflect"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -157,7 +157,7 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj runtime.Object, f 
 		return OperationResultNone, err
 	}
 
-	if reflect.DeepEqual(existing, obj) {
+	if equality.Semantic.DeepEqual(existing, obj) {
 		return OperationResultNone, nil
 	}
 

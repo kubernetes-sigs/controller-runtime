@@ -84,6 +84,7 @@ var DefaultKubeAPIServerFlags = []string{
 	"--secure-port={{ if .SecurePort }}{{ .SecurePort }}{{ end }}",
 	"--admission-control=AlwaysAdmit",
 	"--service-cluster-ip-range=10.0.0.0/24",
+	"--allow-privileged=true",
 }
 
 // Environment creates a Kubernetes test environment that will start / stop the Kubernetes control plane and

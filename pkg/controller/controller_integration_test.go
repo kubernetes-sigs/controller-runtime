@@ -100,6 +100,9 @@ var _ = Describe("controller", func() {
 								{
 									Name:  "nginx",
 									Image: "nginx",
+									SecurityContext: &corev1.SecurityContext{
+										Privileged: truePtr(),
+									},
 								},
 							},
 						},
@@ -168,3 +171,8 @@ var _ = Describe("controller", func() {
 		}, 5)
 	})
 })
+
+func truePtr() *bool {
+	t := true
+	return &t
+}

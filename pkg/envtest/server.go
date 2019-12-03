@@ -240,7 +240,8 @@ func (te *Environment) Start() (*rest.Config, error) {
 	log.V(1).Info("installing CRDs")
 	te.CRDInstallOptions.CRDs = mergeCRDs(te.CRDInstallOptions.CRDs, te.CRDs)
 	te.CRDInstallOptions.Paths = mergePaths(te.CRDInstallOptions.Paths, te.CRDDirectoryPaths)
-	_, err := InstallCRDs(te.Config, te.CRDInstallOptions)
+	crds, err := InstallCRDs(te.Config, te.CRDInstallOptions)
+	te.CRDs = crds
 	return te.Config, err
 }
 

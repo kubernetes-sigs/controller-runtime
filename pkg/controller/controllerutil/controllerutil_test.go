@@ -134,7 +134,6 @@ var _ = Describe("Controllerutil", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-
 		It("should not return any error if the existing owner has a different version", func() {
 			f := false
 			t := true
@@ -153,8 +152,8 @@ var _ = Describe("Controllerutil", func() {
 
 			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
 			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
-				Name:               "foo",
-				Kind:               "Deployment",
+				Name: "foo",
+				Kind: "Deployment",
 				// APIVersion is the new owner's one
 				APIVersion:         "extensions/v1beta1",
 				UID:                "foo-uid",

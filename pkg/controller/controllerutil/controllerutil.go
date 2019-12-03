@@ -111,7 +111,7 @@ func referSameObject(a, b metav1.OwnerReference) bool {
 		return false
 	}
 
-	return aGV == bGV && a.Kind == b.Kind && a.Name == b.Name
+	return aGV.Group == bGV.Group && a.Kind == b.Kind && a.Name == b.Name
 }
 
 // OperationResult is the action result of a CreateOrUpdate call

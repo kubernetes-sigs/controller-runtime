@@ -133,6 +133,34 @@ var _ = Describe("Controllerutil", func() {
 
 			Expect(err).To(HaveOccurred())
 		})
+
+		It("should not return any error if the existing owner has a different version", func() {
+			f := false
+			t := true
+			rsOwners := []metav1.OwnerReference{
+				{
+					Name:               "foo",
+					Kind:               "Deployment",
+					APIVersion:         "extensions/v1alpha1",
+					UID:                "foo-uid",
+					Controller:         &f,
+					BlockOwnerDeletion: &t,
+				},
+			}
+			rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", OwnerReferences: rsOwners}}
+			dep := &extensionsv1beta1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", UID: "foo-uid"}}
+
+			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
+			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+				Name: "foo",
+				Kind: "Deployment",
+				// APIVersion is the new owner's one
+				APIVersion:         "extensions/v1beta1",
+				UID:                "foo-uid",
+				Controller:         &t,
+				BlockOwnerDeletion: &t,
+			}))
+		})
 	})
 
 	Describe("CreateOrUpdate", func() {

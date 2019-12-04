@@ -27,6 +27,7 @@ import (
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -204,7 +205,10 @@ func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
 	for _, crd := range options.CRDs {
 		log.V(1).Info("uninstalling CRD", "crd", crd.Name)
 		if err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Delete(crd.Name, &metav1.DeleteOptions{}); err != nil {
-			return err
+			// If CRD is not found, we can consider success
+			if !apierrors.IsNotFound(err) {
+				return err
+			}
 		}
 	}
 

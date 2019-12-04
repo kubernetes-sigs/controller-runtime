@@ -140,8 +140,7 @@ type Environment struct {
 func (te *Environment) Stop() error {
 	if te.CRDInstallOptions.CleanUpAfterUse {
 		if err := UninstallCRDs(te.Config, te.CRDInstallOptions); err != nil {
-			// This error should be harmless so just log it.
-			log.Error(err, "failed to uninstall CRDs")
+			return err
 		}
 	}
 	if te.useExistingCluster() {

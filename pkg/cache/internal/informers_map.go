@@ -18,6 +18,7 @@ package internal
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -92,7 +93,9 @@ type specificInformersMap struct {
 	// stop is the stop channel to stop informers
 	stop <-chan struct{}
 
-	// resync is the frequency the informers are resynced
+	// resync is the base frequency the informers are resynced
+	// a 10 percent jitter will be added to the resync period between informers
+	// so that all informers will not send list requests simultaneously.
 	resync time.Duration
 
 	// mu guards access to the map
@@ -188,7 +191,7 @@ func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, ob
 	if err != nil {
 		return nil, false, err
 	}
-	ni := cache.NewSharedIndexInformer(lw, obj, ip.resync, cache.Indexers{
+	ni := cache.NewSharedIndexInformer(lw, obj, resyncPeriod(ip.resync)(), cache.Indexers{
 		cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 	})
 	i := &MapEntry{
@@ -273,4 +276,15 @@ func createUnstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInform
 			return dynamicClient.Resource(mapping.Resource).Watch(opts)
 		},
 	}, nil
+}
+
+// resyncPeriod returns a function which generates a duration each time it is
+// invoked; this is so that multiple controllers don't get into lock-step and all
+// hammer the apiserver with list requests simultaneously.
+func resyncPeriod(resync time.Duration) func() time.Duration {
+	return func() time.Duration {
+		// the factor will fall into [0.9, 1.1)
+		factor := rand.Float64()/5.0 + 0.9
+		return time.Duration(float64(resync.Nanoseconds()) * factor)
+	}
 }

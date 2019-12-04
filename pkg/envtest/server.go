@@ -40,6 +40,7 @@ const (
 	envKubebuilderPath     = "KUBEBUILDER_ASSETS"
 	envStartTimeout        = "KUBEBUILDER_CONTROLPLANE_START_TIMEOUT"
 	envStopTimeout         = "KUBEBUILDER_CONTROLPLANE_STOP_TIMEOUT"
+	envAttachOutput        = "KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT"
 	defaultKubebuilderPath = "/usr/local/kubebuilder/bin"
 	StartTimeout           = 60
 	StopTimeout            = 60
@@ -99,6 +100,11 @@ type Environment struct {
 
 	// KubeAPIServerFlags is the set of flags passed while starting the api server.
 	KubeAPIServerFlags []string
+
+	// AttachControlPlaneOutput indicates if control plane output will be attached to os.Stdout and os.Stderr.
+	// Enable this to get more visibility of the testing control plane.
+	// It respect KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT environment variable.
+	AttachControlPlaneOutput bool
 }
 
 // Stop stops a running server
@@ -119,7 +125,7 @@ func (te Environment) getAPIServerFlags() []string {
 }
 
 // Start starts a local Kubernetes server and updates te.ApiserverPort with the port it is listening on
-func (te *Environment) Start() (*rest.Config, error) {
+func (te *Environment) Start() (*rest.Config, error) { // nolint: gocyclo
 	if te.UseExistingCluster {
 		log.V(1).Info("using existing cluster")
 		if te.Config == nil {
@@ -134,9 +140,28 @@ func (te *Environment) Start() (*rest.Config, error) {
 			}
 		}
 	} else {
-		te.ControlPlane = integration.ControlPlane{}
-		te.ControlPlane.APIServer = &integration.APIServer{Args: te.getAPIServerFlags()}
-		te.ControlPlane.Etcd = &integration.Etcd{}
+		if te.ControlPlane.APIServer == nil {
+			te.ControlPlane.APIServer = &integration.APIServer{Args: te.getAPIServerFlags()}
+		}
+		if te.ControlPlane.Etcd == nil {
+			te.ControlPlane.Etcd = &integration.Etcd{}
+		}
+
+		if os.Getenv(envAttachOutput) == "true" {
+			te.AttachControlPlaneOutput = true
+		}
+		if te.ControlPlane.APIServer.Out == nil && te.AttachControlPlaneOutput {
+			te.ControlPlane.APIServer.Out = os.Stdout
+		}
+		if te.ControlPlane.APIServer.Err == nil && te.AttachControlPlaneOutput {
+			te.ControlPlane.APIServer.Err = os.Stderr
+		}
+		if te.ControlPlane.Etcd.Out == nil && te.AttachControlPlaneOutput {
+			te.ControlPlane.Etcd.Out = os.Stdout
+		}
+		if te.ControlPlane.Etcd.Err == nil && te.AttachControlPlaneOutput {
+			te.ControlPlane.Etcd.Err = os.Stderr
+		}
 
 		if os.Getenv(envKubeAPIServerBin) == "" {
 			te.ControlPlane.APIServer.Path = defaultAssetPath("kube-apiserver")

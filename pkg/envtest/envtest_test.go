@@ -325,7 +325,28 @@ var _ = Describe("Test", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
+			// Expect to NOT find the CRDs
+
+			crds := []string{
+				"foos.bar.example.com",
+				"bazs.qux.example.com",
+				"captains.crew.example.com",
+				"firstmates.crew.example.com",
+				"drivers.crew.example.com",
+			}
+			placeholder := &v1beta1.CustomResourceDefinition{}
+			Eventually(func() bool {
+				for _, crd := range crds {
+					err = c.Get(context.TODO(), types.NamespacedName{Name: crd}, placeholder)
+					notFound := err != nil && apierrors.IsNotFound(err)
+					if !notFound {
+						return false
+					}
+				}
+				return true
+			}, 20).Should(BeTrue())
+
 			close(done)
-		}, 10)
+		}, 30)
 	})
 })

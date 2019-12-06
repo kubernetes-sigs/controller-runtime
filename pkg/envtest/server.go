@@ -26,7 +26,7 @@ import (
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/testing_frameworks/integration"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )

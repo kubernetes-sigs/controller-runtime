@@ -257,7 +257,6 @@ func renderCRDs(options *CRDInstallOptions) ([]*apiextensionsv1beta1.CustomResou
 		}
 
 		log.V(1).Info("reading CRDs from path", "path", path)
-
 		crdList, err := readCRDs(filePath, files)
 		if err != nil {
 			return nil, err
@@ -267,7 +266,6 @@ func renderCRDs(options *CRDInstallOptions) ([]*apiextensionsv1beta1.CustomResou
 		if existsCRDs(crds, crdList) {
 			continue
 		}
-
 		crds = append(crds, crdList...)
 	}
 

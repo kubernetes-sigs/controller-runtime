@@ -36,6 +36,9 @@ var _ = Describe("Test", func() {
 	var s *runtime.Scheme
 	var c client.Client
 
+	var validDirectory = filepath.Join(".", "testdata")
+	var invalidDirectory = "fake"
+
 	// Initialize the client
 	BeforeEach(func(done Done) {
 		crds = []*v1beta1.CustomResourceDefinition{}
@@ -72,7 +75,7 @@ var _ = Describe("Test", func() {
 		It("should install the CRDs into the cluster", func(done Done) {
 
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
-				Paths: []string{filepath.Join(".", "testdata")},
+				Paths: []string{validDirectory},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -164,14 +167,16 @@ var _ = Describe("Test", func() {
 		}, 5)
 
 		It("should not return an not error if the directory doesn't exist", func(done Done) {
-			crds, err = InstallCRDs(env.Config, CRDInstallOptions{Paths: []string{"fake"}})
+			crds, err = InstallCRDs(env.Config, CRDInstallOptions{Paths: []string{invalidDirectory}})
 			Expect(err).NotTo(HaveOccurred())
 
 			close(done)
 		}, 5)
 
 		It("should return an error if the directory doesn't exist", func(done Done) {
-			crds, err = InstallCRDs(env.Config, CRDInstallOptions{Paths: []string{"fake"}, ErrorIfPathMissing: true})
+			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
+				Paths: []string{invalidDirectory}, ErrorIfPathMissing: true,
+			})
 			Expect(err).To(HaveOccurred())
 
 			close(done)
@@ -232,7 +237,7 @@ var _ = Describe("Test", func() {
 		It("should uninstall the CRDs from the cluster", func(done Done) {
 
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
-				Paths: []string{filepath.Join(".", "testdata")},
+				Paths: []string{validDirectory},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -321,7 +326,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			err = UninstallCRDs(env.Config, CRDInstallOptions{
-				Paths: []string{filepath.Join(".", "testdata")},
+				Paths: []string{validDirectory},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -346,6 +351,22 @@ var _ = Describe("Test", func() {
 				return true
 			}, 20).Should(BeTrue())
 
+			close(done)
+		}, 30)
+	})
+
+	Describe("Start", func() {
+		It("should raise an error", func(done Done) {
+			env = &Environment{ErrorIfCRDPathMissing: true, CRDDirectoryPaths: []string{invalidDirectory}}
+			_, err := env.Start()
+			Expect(err).To(HaveOccurred())
+			close(done)
+		}, 30)
+
+		It("should not raise an error", func(done Done) {
+			env = &Environment{ErrorIfCRDPathMissing: false, CRDDirectoryPaths: []string{invalidDirectory}}
+			_, err := env.Start()
+			Expect(err).NotTo(HaveOccurred())
 			close(done)
 		}, 30)
 	})

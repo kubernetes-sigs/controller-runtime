@@ -100,6 +100,11 @@ type Environment struct {
 	// CRDInstallOptions are the options for installing CRDs.
 	CRDInstallOptions CRDInstallOptions
 
+	// ErrorIfCRDPathMissing provides an interface for the underlying
+	// CRDInstallOptions.ErrorIfPathMissing. It prevents silent failures
+	// for missing CRD paths.
+	ErrorIfCRDPathMissing bool
+
 	// CRDs is a list of CRDs to install.
 	// If both this field and CRDs field in CRDInstallOptions are specified, the
 	// values are merged.
@@ -246,6 +251,7 @@ func (te *Environment) Start() (*rest.Config, error) {
 	log.V(1).Info("installing CRDs")
 	te.CRDInstallOptions.CRDs = mergeCRDs(te.CRDInstallOptions.CRDs, te.CRDs)
 	te.CRDInstallOptions.Paths = mergePaths(te.CRDInstallOptions.Paths, te.CRDDirectoryPaths)
+	te.CRDInstallOptions.ErrorIfPathMissing = te.ErrorIfCRDPathMissing
 	crds, err := InstallCRDs(te.Config, te.CRDInstallOptions)
 	te.CRDs = crds
 	return te.Config, err

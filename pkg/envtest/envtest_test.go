@@ -69,8 +69,7 @@ var _ = Describe("Test", func() {
 	})
 
 	Describe("InstallCRDs", func() {
-		It("should install the CRDs into the cluster", func(done Done) {
-
+		It("should install the CRDs into the cluster using directory", func(done Done) {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{filepath.Join(".", "testdata")},
 			})
@@ -163,6 +162,65 @@ var _ = Describe("Test", func() {
 			close(done)
 		}, 5)
 
+		It("should install the CRDs into the cluster using file", func(done Done) {
+			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
+				Paths: []string{filepath.Join(".", "testdata", "examplecrd2.yaml")},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			crd := &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("Baz"))
+
+			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group:   "qux.example.com",
+						Version: "v1beta1",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "bazs",
+						}},
+				},
+			},
+				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			close(done)
+		}, 10)
+
+		It("should filter out already existent CRD", func(done Done) {
+			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
+				Paths: []string{
+					filepath.Join(".", "testdata"),
+					filepath.Join(".", "testdata", "examplecrd1.yaml"),
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			crd := &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "foos.bar.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("Foo"))
+
+			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group:   "bar.example.com",
+						Version: "v1beta1",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "foos",
+						}},
+				},
+			},
+				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			close(done)
+		}, 10)
+
 		It("should not return an not error if the directory doesn't exist", func(done Done) {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{Paths: []string{"fake"}})
 			Expect(err).NotTo(HaveOccurred())
@@ -172,6 +230,15 @@ var _ = Describe("Test", func() {
 
 		It("should return an error if the directory doesn't exist", func(done Done) {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{Paths: []string{"fake"}, ErrorIfPathMissing: true})
+			Expect(err).To(HaveOccurred())
+
+			close(done)
+		}, 5)
+
+		It("should return an error if the file doesn't exist", func(done Done) {
+			crds, err = InstallCRDs(env.Config, CRDInstallOptions{Paths: []string{
+				filepath.Join(".", "testdata", "fake.yaml")}, ErrorIfPathMissing: true,
+			})
 			Expect(err).To(HaveOccurred())
 
 			close(done)

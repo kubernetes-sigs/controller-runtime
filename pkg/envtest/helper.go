@@ -1,6 +1,10 @@
 package envtest
 
-import apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+import (
+	"reflect"
+
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+)
 
 // mergePaths merges two string slices containing paths.
 // This function makes no guarantees about order of the merged slice.
@@ -38,4 +42,16 @@ func mergeCRDs(s1, s2 []*apiextensionsv1beta1.CustomResourceDefinition) []*apiex
 		i++
 	}
 	return merged
+}
+
+// existsCRDs verify if a any CRD is common between two lists.
+func existsCRDs(s1, s2 []*apiextensionsv1beta1.CustomResourceDefinition) bool {
+	for _, s1crd := range s1 {
+		for _, s2crd := range s2 {
+			if reflect.DeepEqual(s1crd, s2crd) {
+				return true
+			}
+		}
+	}
+	return false
 }

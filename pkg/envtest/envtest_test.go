@@ -167,22 +167,22 @@ var _ = Describe("Test", func() {
 
 		It("should install the CRDs into the cluster using file", func(done Done) {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
-				Paths: []string{filepath.Join(".", "testdata", "examplecrd2.yaml")},
+				Paths: []string{filepath.Join(".", "testdata", "crds", "examplecrd3.yaml")},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
 			crd := &v1beta1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "configs.foo.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(crd.Spec.Names.Kind).To(Equal("Baz"))
+			Expect(crd.Spec.Names.Kind).To(Equal("Config"))
 
 			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
 				{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
-						Group:   "qux.example.com",
+						Group:   "foo.example.com",
 						Version: "v1beta1",
 						Names: v1beta1.CustomResourceDefinitionNames{
-							Plural: "bazs",
+							Plural: "configs",
 						}},
 				},
 			},
@@ -428,13 +428,13 @@ var _ = Describe("Test", func() {
 			_, err := env.Start()
 			Expect(err).To(HaveOccurred())
 			close(done)
-		}, 30)
+		}, 10)
 
 		It("should not raise an error on invalid dir when flag is disabled", func(done Done) {
 			env = &Environment{ErrorIfCRDPathMissing: false, CRDDirectoryPaths: []string{invalidDirectory}}
 			_, err := env.Start()
 			Expect(err).NotTo(HaveOccurred())
 			close(done)
-		}, 30)
+		}, 10)
 	})
 })

@@ -1,0 +1,12 @@
+on: pull_request
+
+jobs:
+    pr_checks:
+        runs-on: ubuntu-latest
+        name: verify emoji
+        steps:
+        - uses: actions/checkout@v2
+        - name: verify
+          uses: ./hack/release
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

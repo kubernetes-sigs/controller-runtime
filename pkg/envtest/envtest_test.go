@@ -428,13 +428,13 @@ var _ = Describe("Test", func() {
 			_, err := env.Start()
 			Expect(err).To(HaveOccurred())
 			close(done)
-		}, 10)
+		}, 30)
 
 		It("should not raise an error on invalid dir when flag is disabled", func(done Done) {
 			env = &Environment{ErrorIfCRDPathMissing: false, CRDDirectoryPaths: []string{invalidDirectory}}
 			_, err := env.Start()
 			Expect(err).NotTo(HaveOccurred())
 			close(done)
-		}, 10)
+		}, 30)
 	})
 })

@@ -21,11 +21,13 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	rt "runtime"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -745,6 +747,23 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err).To(Equal(expected))
 			close(done)
 		})
+	})
+
+	It("should not leak goroutines when stop", func(done Done) {
+		// TODO(directxman12): After closing the proper leaks on watch this must be reduced to 0
+		// The leaks currently come from the event-related code (as in corev1.Event).
+		threshold := 3
+
+		m, err := New(cfg, Options{})
+		Expect(err).NotTo(HaveOccurred())
+		startGoruntime := rt.NumGoroutine()
+
+		s := make(chan struct{})
+		close(s)
+		Expect(m.Start(s)).NotTo(HaveOccurred())
+
+		Expect(rt.NumGoroutine() - startGoruntime).To(BeNumerically("<=", threshold))
+		close(done)
 	})
 
 	It("should provide a function to get the Config", func() {

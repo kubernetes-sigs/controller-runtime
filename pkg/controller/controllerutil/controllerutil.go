@@ -54,7 +54,7 @@ func newAlreadyOwnedError(Object metav1.Object, Owner metav1.OwnerReference) *Al
 // reconciling the owner object on changes to owned (with a Watch + EnqueueRequestForOwner).
 // Since only one OwnerReference can be a controller, it returns an error if
 // there is another OwnerReference with Controller flag set.
-func SetControllerReference(owner, object metav1.Object, scheme *runtime.Scheme) error {
+func SetControllerReference(owner, owned metav1.Object, scheme *runtime.Scheme) error {
 	ro, ok := owner.(runtime.Object)
 	if !ok {
 		return fmt.Errorf("%T is not a runtime.Object, cannot call SetControllerReference", owner)
@@ -62,12 +62,12 @@ func SetControllerReference(owner, object metav1.Object, scheme *runtime.Scheme)
 
 	ownerNs := owner.GetNamespace()
 	if ownerNs != "" {
-		objNs := object.GetNamespace()
+		objNs := owned.GetNamespace()
 		if objNs == "" {
 			return fmt.Errorf("cluster-scoped resource must not have a namespace-scoped owner, owner's namespace %s", ownerNs)
 		}
 		if ownerNs != objNs {
-			return fmt.Errorf("cross-namespace owner references are disallowed, owner's namespace %s, obj's namespace %s", owner.GetNamespace(), object.GetNamespace())
+			return fmt.Errorf("cross-namespace owner references are disallowed, owner's namespace %s, obj's namespace %s", owner.GetNamespace(), owned.GetNamespace())
 		}
 	}
 
@@ -79,13 +79,13 @@ func SetControllerReference(owner, object metav1.Object, scheme *runtime.Scheme)
 	// Create a new ref
 	ref := *metav1.NewControllerRef(owner, schema.GroupVersionKind{Group: gvk.Group, Version: gvk.Version, Kind: gvk.Kind})
 
-	existingRefs := object.GetOwnerReferences()
+	existingRefs := owned.GetOwnerReferences()
 	fi := -1
 	for i, r := range existingRefs {
 		if referSameObject(ref, r) {
 			fi = i
 		} else if r.Controller != nil && *r.Controller {
-			return newAlreadyOwnedError(object, r)
+			return newAlreadyOwnedError(owned, r)
 		}
 	}
 	if fi == -1 {
@@ -95,7 +95,7 @@ func SetControllerReference(owner, object metav1.Object, scheme *runtime.Scheme)
 	}
 
 	// Update owner references
-	object.SetOwnerReferences(existingRefs)
+	owner.SetOwnerReferences(existingRefs)
 	return nil
 }
 

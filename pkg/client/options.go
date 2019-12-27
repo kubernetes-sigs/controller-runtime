@@ -411,13 +411,13 @@ func MatchingField(name, val string) MatchingFields {
 	return MatchingFields{name: val}
 }
 
-// MatchingField filters the list/delete operation on the given field Set
+// MatchingFields filters the list/delete operation on the given field Set
 // (or index in the case of cached lists).
 type MatchingFields fields.Set
 
 func (m MatchingFields) ApplyToList(opts *ListOptions) {
 	// TODO(directxman12): can we avoid re-serializing this?
-	sel := fields.SelectorFromSet(fields.Set(m))
+	sel := fields.Set(m).AsSelector()
 	opts.FieldSelector = sel
 }
 

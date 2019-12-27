@@ -560,8 +560,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("listing Pods with restartPolicyOnFailure")
 					listObj := &kcorev1.PodList{}
 					Expect(informer.List(context.Background(), listObj,
-						client.MatchingField("spec.restartPolicy", "OnFailure"))).To(Succeed())
-
+						client.MatchingFields{"spec.restartPolicy": "OnFailure"})).To(Succeed())
 					By("verifying that the returned pods have correct restart policy")
 					Expect(listObj.Items).NotTo(BeEmpty())
 					Expect(listObj.Items).Should(HaveLen(1))
@@ -655,7 +654,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						Kind:    "PodList",
 					})
 					err = informer.List(context.Background(), listObj,
-						client.MatchingField("spec.restartPolicy", "OnFailure"))
+						client.MatchingFields{"spec.restartPolicy": "OnFailure"})
 					Expect(err).To(Succeed())
 
 					By("verifying that the returned pods have correct restart policy")

@@ -231,5 +231,5 @@ func ExampleFieldIndexer_secretName() {
 	// elsewhere (e.g. in your reconciler)
 	mySecretName := "someSecret" // derived from the reconcile.Request, for instance
 	var podsWithSecrets corev1.PodList
-	_ = c.List(context.Background(), &podsWithSecrets, client.MatchingField("spec.volumes.secret.secretName", mySecretName))
+	_ = c.List(context.Background(), &podsWithSecrets, client.MatchingFields{"spec.volumes.secret.secretName": mySecretName})
 }

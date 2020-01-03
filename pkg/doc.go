@@ -99,7 +99,7 @@ through the Watch API.
 
 EventHandler
 
-handler.EventHandler is a argument to Controller.Watch that enqueues reconcile.Requests in response to events.
+handler.EventHandler is an argument to Controller.Watch that enqueues reconcile.Requests in response to events.
 
 Example: a Pod Create event from a Source is provided to the eventhandler.EnqueueHandler, which enqueues a
 reconcile.Request containing the name / Namespace of the Pod.

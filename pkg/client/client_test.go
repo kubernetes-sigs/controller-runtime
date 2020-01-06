@@ -1794,7 +1794,7 @@ var _ = Describe("Client", func() {
 				By("listing all Deployments with field metadata.name=deployment-backend")
 				deps := &appsv1.DeploymentList{}
 				err = cl.List(context.Background(), deps,
-					client.MatchingField("metadata.name", "deployment-backend"))
+					client.MatchingFields{"metadata.name": "deployment-backend"})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("only the Deployment with the backend field is returned")
@@ -2160,7 +2160,7 @@ var _ = Describe("Client", func() {
 					Version: "v1",
 				})
 				err = cl.List(context.Background(), deps,
-					client.MatchingField("metadata.name", "deployment-backend"))
+					client.MatchingFields{"metadata.name": "deployment-backend"})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("only the Deployment with the backend field is returned")
@@ -2389,7 +2389,7 @@ var _ = Describe("Client", func() {
 	Describe("ListOptions", func() {
 		It("should be convertable to metav1.ListOptions", func() {
 			lo := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
-				client.MatchingField("field1", "bar"),
+				client.MatchingFields{"field1": "bar"},
 				client.InNamespace("test-namespace"),
 				client.MatchingLabels{"foo": "bar"},
 				client.Limit(1),
@@ -2412,7 +2412,7 @@ var _ = Describe("Client", func() {
 
 		It("should be populated by MatchingField", func() {
 			lo := &client.ListOptions{}
-			client.MatchingField("field1", "bar").ApplyToList(lo)
+			client.MatchingFields{"field1": "bar"}.ApplyToList(lo)
 			Expect(lo).NotTo(BeNil())
 			Expect(lo.FieldSelector.String()).To(Equal("field1=bar"))
 		})

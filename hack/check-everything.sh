@@ -48,7 +48,9 @@ SKIP_FETCH_TOOLS=${SKIP_FETCH_TOOLS:-""}
 
 # fetch k8s API gen tools and make it available under kb_root_dir/bin.
 function fetch_kb_tools {
-  header_text "fetching tools"
+  local dest_dir="${1}"
+
+  header_text "fetching tools (into '${dest_dir}')"
   kb_tools_archive_name="kubebuilder-tools-$k8s_version-$goos-$goarch.tar.gz"
   kb_tools_download_url="https://storage.googleapis.com/kubebuilder-tools/$kb_tools_archive_name"
 
@@ -56,7 +58,9 @@ function fetch_kb_tools {
   if [ ! -f $kb_tools_archive_path ]; then
     curl -sL ${kb_tools_download_url} -o "$kb_tools_archive_path"
   fi
-  tar -zvxf "$kb_tools_archive_path" -C "$tmp_root/"
+
+  mkdir -p "${dest_dir}"
+  tar -C "${dest_dir}" --strip-components=1 -zvxf "$kb_tools_archive_path"
 }
 
 function is_installed {
@@ -78,7 +82,8 @@ header_text "using tools"
 
 if [ -z "$SKIP_FETCH_TOOLS" ]; then
   fetch_go_tools
-  fetch_kb_tools
+  fetch_kb_tools "$kb_root_dir"
+  fetch_kb_tools "${hack_dir}/../pkg/internal/testing/integration/assets"
 fi
 
 setup_envs

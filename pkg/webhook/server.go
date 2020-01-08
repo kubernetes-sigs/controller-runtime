@@ -52,7 +52,9 @@ type Server struct {
 	// It will be defaulted to 443 if unspecified.
 	Port int
 
-	// CertDir is the directory that contains the server key and certificate.
+	// CertDir is the directory that contains the server key and certificate. The
+	// server key and certificate must be named tls.key and tls.crt,
+	// respectively.
 	CertDir string
 
 	// WebhookMux is the multiplexer that handles different webhooks.

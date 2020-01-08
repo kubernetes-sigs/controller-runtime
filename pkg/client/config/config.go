@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/user"
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -117,6 +118,22 @@ func loadConfig(context string) (*rest.Config, error) {
 
 	// If the recommended kubeconfig env variable is set, or there
 	// is no in-cluster config, try the default recommended locations.
+	//
+	// NOTE: For default config file locations, upstream only checks
+	// $HOME for the user's home directory, but we can also use
+	// os/user.HomeDir when $HOME is unset.
+	//
+	// TODO(jlanford): could this be done upstream?
+	if _, ok := os.LookupEnv("HOME"); !ok {
+		u, err := user.Current()
+		if err != nil {
+			return nil, fmt.Errorf("could not get current user: %v", err)
+		}
+		if err := os.Setenv("HOME", u.HomeDir); err != nil {
+			return nil, fmt.Errorf("could not set HOME env var: %v", err)
+		}
+		defer func() { _ = os.Unsetenv("HOME") }()
+	}
 	if c, err := loadConfigWithContext(apiServerURL, clientcmd.NewDefaultClientConfigLoadingRules(), context); err == nil {
 		return c, nil
 	}

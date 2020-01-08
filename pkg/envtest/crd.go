@@ -19,21 +19,23 @@ package envtest
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
 
-	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
 
@@ -43,7 +45,7 @@ type CRDInstallOptions struct {
 	Paths []string
 
 	// CRDs is a list of CRDs to install
-	CRDs []*apiextensionsv1beta1.CustomResourceDefinition
+	CRDs []runtime.Object
 
 	// ErrorIfPathMissing will cause an error if a Path does not exist
 	ErrorIfPathMissing bool
@@ -64,7 +66,7 @@ const defaultPollInterval = 100 * time.Millisecond
 const defaultMaxWait = 10 * time.Second
 
 // InstallCRDs installs a collection of CRDs into a cluster by reading the crd yaml files from a directory
-func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]*apiextensionsv1beta1.CustomResourceDefinition, error) {
+func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]runtime.Object, error) {
 	defaultCRDOptions(&options)
 
 	// Read the CRD yamls into options.CRDs
@@ -109,19 +111,49 @@ func defaultCRDOptions(o *CRDInstallOptions) {
 }
 
 // WaitForCRDs waits for the CRDs to appear in discovery
-func WaitForCRDs(config *rest.Config, crds []*apiextensionsv1beta1.CustomResourceDefinition, options CRDInstallOptions) error {
+func WaitForCRDs(config *rest.Config, crds []runtime.Object, options CRDInstallOptions) error {
 	// Add each CRD to a map of GroupVersion to Resource
 	waitingFor := map[schema.GroupVersion]*sets.String{}
-	for _, crd := range crds {
+	for _, crd := range runtimeListToUnstructured(crds) {
 		gvs := []schema.GroupVersion{}
-		if crd.Spec.Version != "" {
-			gvs = append(gvs, schema.GroupVersion{Group: crd.Spec.Group, Version: crd.Spec.Version})
+		crdGroup, _, err := unstructured.NestedString(crd.Object, "spec", "group")
+		if err != nil {
+			return err
 		}
-		for _, ver := range crd.Spec.Versions {
-			if ver.Served {
-				gvs = append(gvs, schema.GroupVersion{Group: crd.Spec.Group, Version: ver.Name})
+		crdPlural, _, err := unstructured.NestedString(crd.Object, "spec", "names", "plural")
+		if err != nil {
+			return err
+		}
+		crdVersion, _, err := unstructured.NestedString(crd.Object, "spec", "version")
+		if err != nil {
+			return err
+		}
+		if crdVersion != "" {
+			gvs = append(gvs, schema.GroupVersion{Group: crdGroup, Version: crdVersion})
+		}
+
+		versions, _, err := unstructured.NestedSlice(crd.Object, "spec", "versions")
+		if err != nil {
+			return err
+		}
+		for _, version := range versions {
+			versionMap, ok := version.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			served, _, err := unstructured.NestedBool(versionMap, "served")
+			if err != nil {
+				return err
+			}
+			if served {
+				versionName, _, err := unstructured.NestedString(versionMap, "name")
+				if err != nil {
+					return err
+				}
+				gvs = append(gvs, schema.GroupVersion{Group: crdGroup, Version: versionName})
 			}
 		}
+
 		for _, gv := range gvs {
 			log.V(1).Info("adding API in waitlist", "GV", gv)
 			if _, found := waitingFor[gv]; !found {
@@ -129,7 +161,7 @@ func WaitForCRDs(config *rest.Config, crds []*apiextensionsv1beta1.CustomResourc
 				waitingFor[gv] = &sets.String{}
 			}
 			// Add the Resource
-			waitingFor[gv].Insert(crd.Spec.Names.Plural)
+			waitingFor[gv].Insert(crdPlural)
 		}
 	}
 
@@ -192,15 +224,15 @@ func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
 	}
 
 	// Delete the CRDs from the apiserver
-	cs, err := clientset.NewForConfig(config)
+	cs, err := client.New(config, client.Options{})
 	if err != nil {
 		return err
 	}
 
 	// Uninstall each CRD
-	for _, crd := range options.CRDs {
-		log.V(1).Info("uninstalling CRD", "crd", crd.Name)
-		if err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Delete(crd.Name, &metav1.DeleteOptions{}); err != nil {
+	for _, crd := range runtimeListToUnstructured(options.CRDs) {
+		log.V(1).Info("uninstalling CRD", "crd", crd.GetName())
+		if err := cs.Delete(context.TODO(), crd); err != nil {
 			// If CRD is not found, we can consider success
 			if !apierrors.IsNotFound(err) {
 				return err
@@ -212,26 +244,28 @@ func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
 }
 
 // CreateCRDs creates the CRDs
-func CreateCRDs(config *rest.Config, crds []*apiextensionsv1beta1.CustomResourceDefinition) error {
-	cs, err := clientset.NewForConfig(config)
+func CreateCRDs(config *rest.Config, crds []runtime.Object) error {
+	cs, err := client.New(config, client.Options{})
 	if err != nil {
 		return err
 	}
 
 	// Create each CRD
-	for _, crd := range crds {
-		log.V(1).Info("installing CRD", "crd", crd.Name)
-		if existingCrd, err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crd.Name, metav1.GetOptions{}); err != nil {
-			if !apierrors.IsNotFound(err) {
+	for _, crd := range runtimeListToUnstructured(crds) {
+		log.V(1).Info("installing CRD", "crd", crd.GetName())
+		existingCrd := crd.DeepCopy()
+		err := cs.Get(context.TODO(), client.ObjectKey{Name: crd.GetName()}, existingCrd)
+		switch {
+		case apierrors.IsNotFound(err):
+			if err := cs.Create(context.TODO(), crd); err != nil {
 				return err
 			}
-			if _, err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd); err != nil {
-				return err
-			}
-		} else {
-			log.V(1).Info("CRD already exists, updating", "crd", crd.Name)
-			crd.ResourceVersion = existingCrd.ResourceVersion
-			if _, err := cs.ApiextensionsV1beta1().CustomResourceDefinitions().Update(crd); err != nil {
+		case err != nil:
+			return err
+		default:
+			log.V(1).Info("CRD already exists, updating", "crd", crd.GetName())
+			crd.SetResourceVersion(existingCrd.GetResourceVersion())
+			if err := cs.Update(context.TODO(), crd); err != nil {
 				return err
 			}
 		}
@@ -240,11 +274,11 @@ func CreateCRDs(config *rest.Config, crds []*apiextensionsv1beta1.CustomResource
 }
 
 // renderCRDs iterate through options.Paths and extract all CRD files.
-func renderCRDs(options *CRDInstallOptions) ([]*apiextensionsv1beta1.CustomResourceDefinition, error) {
+func renderCRDs(options *CRDInstallOptions) ([]runtime.Object, error) {
 	var (
 		err   error
 		info  os.FileInfo
-		crds  []*apiextensionsv1beta1.CustomResourceDefinition
+		crds  []*unstructured.Unstructured
 		files []os.FileInfo
 	)
 
@@ -274,18 +308,18 @@ func renderCRDs(options *CRDInstallOptions) ([]*apiextensionsv1beta1.CustomResou
 		}
 
 		// If CRD already in the list, skip it.
-		if existsCRDs(crds, crdList) {
+		if existsUnstructured(crds, crdList) {
 			continue
 		}
 		crds = append(crds, crdList...)
 	}
 
-	return crds, nil
+	return unstructuredListToRuntime(crds), nil
 }
 
 // readCRDs reads the CRDs from files and Unmarshals them into structs
-func readCRDs(basePath string, files []os.FileInfo) ([]*apiextensionsv1beta1.CustomResourceDefinition, error) {
-	var crds []*apiextensionsv1beta1.CustomResourceDefinition
+func readCRDs(basePath string, files []os.FileInfo) ([]*unstructured.Unstructured, error) {
+	var crds []*unstructured.Unstructured
 
 	// White list the file extensions that may contain CRDs
 	crdExts := sets.NewString(".json", ".yaml", ".yml")
@@ -303,13 +337,22 @@ func readCRDs(basePath string, files []os.FileInfo) ([]*apiextensionsv1beta1.Cus
 		}
 
 		for _, doc := range docs {
-			crd := &apiextensionsv1beta1.CustomResourceDefinition{}
+			crd := &unstructured.Unstructured{}
 			if err = yaml.Unmarshal(doc, crd); err != nil {
 				return nil, err
 			}
 
 			// Check that it is actually a CRD
-			if crd.Spec.Names.Kind == "" || crd.Spec.Group == "" {
+			crdKind, _, err := unstructured.NestedString(crd.Object, "spec", "names", "kind")
+			if err != nil {
+				return nil, err
+			}
+			crdGroup, _, err := unstructured.NestedString(crd.Object, "spec", "group")
+			if err != nil {
+				return nil, err
+			}
+
+			if crd.GetKind() != "CustomResourceDefinition" || crdKind == "" || crdGroup == "" {
 				continue
 			}
 			crds = append(crds, crd)

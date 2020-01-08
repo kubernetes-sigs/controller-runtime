@@ -1,4 +1,4 @@
-apiVersion: apiextensions.k8s.io/v1beta1
+apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: foos.bar.example.com
@@ -8,4 +8,10 @@ spec:
     kind: Foo
     plural: foos
   scope: Namespaced
-  version: "v1beta1"
+  versions:
+  - name: "v1"
+    storage: true
+    served: true
+    schema:
+      openAPIV3Schema:
+        type: object

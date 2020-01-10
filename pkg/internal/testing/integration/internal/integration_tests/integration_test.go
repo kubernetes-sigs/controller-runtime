@@ -8,6 +8,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration"
 )
 
@@ -38,7 +44,24 @@ var _ = Describe("The Testing Framework", func() {
 			fmt.Sprintf("Expected Etcd to listen for clients on %s,", etcdClientURL.Host))
 
 		By("Ensuring APIServer is listening")
-		CheckAPIServerIsReady(controlPlane.KubeCtl())
+		c, err := controlPlane.RESTClientConfig()
+		Expect(err).NotTo(HaveOccurred())
+		CheckAPIServerIsReady(c)
+
+		By("getting a kubeclient & run it against the control plane")
+		c.APIPath = "/api"
+		c.ContentConfig.GroupVersion = &schema.GroupVersion{Version: "v1"}
+		kubeClient, err := rest.RESTClientFor(c)
+		Expect(err).NotTo(HaveOccurred())
+		result := &corev1.PodList{}
+		err = kubeClient.Get().
+			Namespace("default").
+			Resource("pods").
+			VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
+			Do().
+			Into(result)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Items).To(BeEmpty())
 
 		By("getting a kubectl & run it against the control plane")
 		kubeCtl := controlPlane.KubeCtl()
@@ -165,26 +188,98 @@ func isSomethingListeningOnPort(hostAndPort string) portChecker {
 // this changed behaviour does what it should do, we used the same test as in
 // k/k's test-cmd (see link above) and test if certain well-known known APIs
 // are actually available.
-func CheckAPIServerIsReady(kubeCtl *integration.KubeCtl) {
-	expectedAPIS := []string{
-		"/api/v1/namespaces/default/pods 200 OK",
-		"/api/v1/namespaces/default/replicationcontrollers 200 OK",
-		"/api/v1/namespaces/default/services 200 OK",
-		"/apis/apps/v1/namespaces/default/daemonsets 200 OK",
-		"/apis/apps/v1/namespaces/default/deployments 200 OK",
-		"/apis/apps/v1/namespaces/default/replicasets 200 OK",
-		"/apis/apps/v1/namespaces/default/statefulsets 200 OK",
-		"/apis/autoscaling/v1/namespaces/default/horizontalpodautoscalers 200",
-		"/apis/batch/v1/namespaces/default/jobs 200 OK",
-	}
+func CheckAPIServerIsReady(c *rest.Config) {
+	// check pods, replicationcontrollers and services
+	c.APIPath = "/api"
+	c.ContentConfig.GroupVersion = &schema.GroupVersion{Version: "v1"}
+	kubeClient, err := rest.RESTClientFor(c)
+	Expect(err).NotTo(HaveOccurred())
 
-	_, output, err := kubeCtl.Run("--v=6", "--namespace", "default", "get", "all", "--chunk-size=0")
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	_, err = kubeClient.Get().
+		Namespace("default").
+		Resource("pods").
+		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
+		Do().
+		Get()
+	Expect(err).NotTo(HaveOccurred())
 
-	stdoutBytes, err := ioutil.ReadAll(output)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	_, err = kubeClient.Get().
+		Namespace("default").
+		Resource("replicationcontrollers").
+		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
+		Do().
+		Get()
+	Expect(err).NotTo(HaveOccurred())
 
-	for _, api := range expectedAPIS {
-		ExpectWithOffset(1, string(stdoutBytes)).To(ContainSubstring(api))
-	}
+	_, err = kubeClient.Get().
+		Namespace("default").
+		Resource("services").
+		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
+		Do().
+		Get()
+	Expect(err).NotTo(HaveOccurred())
+
+	// check daemonsets, deployments, replicasets and statefulsets,
+	c.APIPath = "/apis"
+	c.ContentConfig.GroupVersion = &schema.GroupVersion{Group: "apps", Version: "v1"}
+	kubeClient, err = rest.RESTClientFor(c)
+	Expect(err).NotTo(HaveOccurred())
+
+	_, err = kubeClient.Get().
+		Namespace("default").
+		Resource("daemonsets").
+		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
+		Do().
+		Get()
+	Expect(err).NotTo(HaveOccurred())
+
+	_, err = kubeClient.Get().
+		Namespace("default").
+		Resource("deployments").
+		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
+		Do().
+		Get()
+	Expect(err).NotTo(HaveOccurred())
+
+	_, err = kubeClient.Get().
+		Namespace("default").
+		Resource("replicasets").
+		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
+		Do().
+		Get()
+	Expect(err).NotTo(HaveOccurred())
+
+	_, err = kubeClient.Get().
+		Namespace("default").
+		Resource("statefulsets").
+		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
+		Do().
+		Get()
+	Expect(err).NotTo(HaveOccurred())
+
+	// check horizontalpodautoscalers
+	c.ContentConfig.GroupVersion = &schema.GroupVersion{Group: "autoscaling", Version: "v1"}
+	kubeClient, err = rest.RESTClientFor(c)
+	Expect(err).NotTo(HaveOccurred())
+
+	_, err = kubeClient.Get().
+		Namespace("default").
+		Resource("horizontalpodautoscalers").
+		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
+		Do().
+		Get()
+	Expect(err).NotTo(HaveOccurred())
+
+	// check jobs
+	c.ContentConfig.GroupVersion = &schema.GroupVersion{Group: "batch", Version: "v1"}
+	kubeClient, err = rest.RESTClientFor(c)
+	Expect(err).NotTo(HaveOccurred())
+
+	_, err = kubeClient.Get().
+		Namespace("default").
+		Resource("jobs").
+		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
+		Do().
+		Get()
+	Expect(err).NotTo(HaveOccurred())
 }

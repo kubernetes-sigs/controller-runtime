@@ -25,6 +25,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
+	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -206,4 +207,24 @@ func NewRaw(opts ...Opts) *zap.Logger {
 	log := zap.New(zapcore.NewCore(&KubeAwareEncoder{Encoder: o.Encoder, Verbose: o.Development}, sink, *o.Level))
 	log = log.WithOptions(o.ZapOpts...)
 	return log
+}
+
+// BindToFlagSet
+func (o *Options) BindFlags(fs *pflag.FlagSet) {
+	// Set Encoder value
+	encval := encoderValue{newEncoder: o.Encoder}
+	fs.Var(&encval, "encoder-value", "json||console")
+	o.Encoder = encval.newEncoder
+
+	// Set the log level
+	lv := levelValue{level: zap.NewAtomicLevel()}
+	fs.Var(&lv, "log-level", "Log level")
+	o.Level = &lv.level
+}
+
+func UseNewOptions(in *Options) func(o *Options) {
+	return func(o *Options) {
+		*o = *in
+		o.addDefaults()
+	}
 }

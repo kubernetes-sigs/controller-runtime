@@ -13,6 +13,7 @@ require (
 	github.com/onsi/gomega v1.8.1
 	github.com/prometheus/client_golang v1.0.0
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90
+	github.com/spf13/pflag v1.0.5
 	go.uber.org/zap v1.10.0
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
@@ -22,6 +23,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.17.2
 	k8s.io/apimachinery v0.17.2
 	k8s.io/client-go v0.17.2
+	k8s.io/klog v1.0.0
 	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f
 	sigs.k8s.io/yaml v1.1.0
 )

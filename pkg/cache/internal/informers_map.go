@@ -54,6 +54,7 @@ func newSpecificInformersMap(config *rest.Config,
 		codecs:            serializer.NewCodecFactory(scheme),
 		paramCodec:        runtime.NewParameterCodec(scheme),
 		resync:            resync,
+		startWait:         make(chan struct{}),
 		createListWatcher: createListWatcher,
 		namespace:         namespace,
 	}
@@ -104,6 +105,10 @@ type specificInformersMap struct {
 	// start is true if the informers have been started
 	started bool
 
+	// startWait is a channel that is closed after the
+	// informer has been started.
+	startWait chan struct{}
+
 	// createClient knows how to create a client and a list object,
 	// and allows for abstracting over the particulars of structured vs
 	// unstructured objects.
@@ -131,8 +136,18 @@ func (ip *specificInformersMap) Start(stop <-chan struct{}) {
 
 		// Set started to true so we immediately start any informers added later.
 		ip.started = true
+		close(ip.startWait)
 	}()
 	<-stop
+}
+
+func (ip *specificInformersMap) waitForStarted(stop <-chan struct{}) bool {
+	select {
+	case <-ip.startWait:
+		return true
+	case <-stop:
+		return false
+	}
 }
 
 // HasSyncedFuncs returns all the HasSynced functions for the informers in this map.

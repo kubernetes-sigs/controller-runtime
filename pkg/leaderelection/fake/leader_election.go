@@ -17,6 +17,7 @@ limitations under the License.
 package fake
 
 import (
+	"encoding/json"
 	"os"
 	"time"
 
@@ -58,8 +59,12 @@ type ResourceLock struct {
 }
 
 // Get implements the ResourceLockInterface.
-func (f *ResourceLock) Get() (*resourcelock.LeaderElectionRecord, error) {
-	return &f.record, nil
+func (f *ResourceLock) Get() (*resourcelock.LeaderElectionRecord, []byte, error) {
+	recordBytes, err := json.Marshal(f.record)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &f.record, recordBytes, nil
 }
 
 // Create implements the ResourceLockInterface.

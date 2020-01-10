@@ -16,14 +16,14 @@ require (
 	go.uber.org/atomic v1.3.2 // indirect
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.9.1
-	golang.org/x/time v0.0.0-20181108054448-85acf8d2951c
+	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
 	gomodules.xyz/jsonpatch/v2 v2.0.1
 	gopkg.in/fsnotify.v1 v1.4.7
 	k8s.io/api v0.17.0
 	k8s.io/apiextensions-apiserver v0.0.0-20190918161926-8f644eb6e783
 	k8s.io/apimachinery v0.17.0
-	k8s.io/client-go v0.0.0-20190918160344-1fbdaa4c8d90
-	k8s.io/utils v0.0.0-20190801114015-581e00157fb1
+	k8s.io/client-go v0.17.0
+	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f
 	sigs.k8s.io/yaml v1.1.0
 )

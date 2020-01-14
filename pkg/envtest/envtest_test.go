@@ -298,7 +298,284 @@ var _ = Describe("Test", func() {
 
 			close(done)
 		}, 5)
+
+		It("should reinstall the CRDs if already present in the cluster", func(done Done) {
+
+			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
+				Paths: []string{filepath.Join(".", "testdata")},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Expect to find the CRDs
+
+			crd := &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "foos.bar.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("Foo"))
+
+			crd = &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("Baz"))
+
+			crd = &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "captains.crew.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("Captain"))
+
+			crd = &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "firstmates.crew.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("FirstMate"))
+
+			crd = &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
+
+			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group:   "qux.example.com",
+						Version: "v1beta1",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "bazs",
+						}},
+				},
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group:   "bar.example.com",
+						Version: "v1beta1",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "foos",
+						}},
+				},
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group:   "crew.example.com",
+						Version: "v1beta1",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "captains",
+						}},
+				},
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group:   "crew.example.com",
+						Version: "v1beta1",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "firstmates",
+						}},
+				},
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group: "crew.example.com",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "drivers",
+						},
+						Versions: []v1beta1.CustomResourceDefinitionVersion{
+							{
+								Name:    "v1",
+								Storage: true,
+								Served:  true,
+							},
+							{
+								Name:    "v2",
+								Storage: false,
+								Served:  true,
+							},
+						}},
+				},
+			},
+				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Try to re-install the CRDs
+
+			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
+				Paths: []string{filepath.Join(".", "testdata")},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Expect to find the CRDs
+
+			crd = &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "foos.bar.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("Foo"))
+
+			crd = &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("Baz"))
+
+			crd = &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "captains.crew.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("Captain"))
+
+			crd = &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "firstmates.crew.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("FirstMate"))
+
+			crd = &v1beta1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
+
+			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group:   "qux.example.com",
+						Version: "v1beta1",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "bazs",
+						}},
+				},
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group:   "bar.example.com",
+						Version: "v1beta1",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "foos",
+						}},
+				},
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group:   "crew.example.com",
+						Version: "v1beta1",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "captains",
+						}},
+				},
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group:   "crew.example.com",
+						Version: "v1beta1",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "firstmates",
+						}},
+				},
+				{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group: "crew.example.com",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "drivers",
+						},
+						Versions: []v1beta1.CustomResourceDefinitionVersion{
+							{
+								Name:    "v1",
+								Storage: true,
+								Served:  true,
+							},
+							{
+								Name:    "v2",
+								Storage: false,
+								Served:  true,
+							},
+						}},
+				},
+			},
+				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			close(done)
+		}, 5)
 	})
+
+	It("should update CRDs if already present in the cluster", func(done Done) {
+
+		// Install only the CRDv1 multi-version example
+		crds, err = InstallCRDs(env.Config, CRDInstallOptions{
+			Paths: []string{filepath.Join(".", "testdata")},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect to find the CRDs
+
+		crd := &v1beta1.CustomResourceDefinition{}
+		err = c.Get(context.TODO(), types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
+		Expect(len(crd.Spec.Versions)).To(BeEquivalentTo(2))
+
+		// Store resource version for comparison later on
+		firstRV := crd.ResourceVersion
+
+		err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
+			{
+				Spec: v1beta1.CustomResourceDefinitionSpec{
+					Group: "crew.example.com",
+					Names: v1beta1.CustomResourceDefinitionNames{
+						Plural: "drivers",
+					},
+					Versions: []v1beta1.CustomResourceDefinitionVersion{
+						{
+							Name:    "v1",
+							Storage: true,
+							Served:  true,
+						},
+						{
+							Name:    "v2",
+							Storage: false,
+							Served:  true,
+						},
+					}},
+			},
+		},
+			CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Add one more version and update
+		_, err = InstallCRDs(env.Config, CRDInstallOptions{
+			Paths: []string{filepath.Join(".", "testdata", "crdv1_updated")},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect to find updated CRD
+
+		crd = &v1beta1.CustomResourceDefinition{}
+		err = c.Get(context.TODO(), types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
+		Expect(len(crd.Spec.Versions)).To(BeEquivalentTo(3))
+		Expect(crd.ResourceVersion).NotTo(BeEquivalentTo(firstRV))
+
+		err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
+			{
+				Spec: v1beta1.CustomResourceDefinitionSpec{
+					Group: "crew.example.com",
+					Names: v1beta1.CustomResourceDefinitionNames{
+						Plural: "drivers",
+					},
+					Versions: []v1beta1.CustomResourceDefinitionVersion{
+						{
+							Name:    "v1",
+							Storage: true,
+							Served:  true,
+						},
+						{
+							Name:    "v2",
+							Storage: false,
+							Served:  true,
+						},
+						{
+							Name:    "v3",
+							Storage: false,
+							Served:  true,
+						},
+					}},
+			},
+		},
+			CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		close(done)
+	}, 5)
 
 	Describe("UninstallCRDs", func() {
 		It("should uninstall the CRDs from the cluster", func(done Done) {

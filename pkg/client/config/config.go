@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"path"
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -129,10 +130,9 @@ func loadConfig(context string) (*rest.Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("could not get current user: %v", err)
 		}
-		if err := os.Setenv("HOME", u.HomeDir); err != nil {
-			return nil, fmt.Errorf("could not set HOME env var: %v", err)
-		}
-		defer func() { _ = os.Unsetenv("HOME") }()
+		oldRecommendedHomeFile := clientcmd.RecommendedHomeFile
+		clientcmd.RecommendedHomeFile = path.Join(u.HomeDir, clientcmd.RecommendedHomeDir, clientcmd.RecommendedFileName)
+		defer func() { clientcmd.RecommendedHomeFile = oldRecommendedHomeFile }()
 	}
 	if c, err := loadConfigWithContext(apiServerURL, clientcmd.NewDefaultClientConfigLoadingRules(), context); err == nil {
 		return c, nil

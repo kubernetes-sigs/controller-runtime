@@ -19,6 +19,7 @@ limitations under the License.
 package zap
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -211,20 +212,36 @@ func NewRaw(opts ...Opts) *zap.Logger {
 
 // BindToFlagSet
 func (o *Options) BindFlags(fs *pflag.FlagSet) {
+	// Set Development mode value
+	fs.BoolVar(&o.Development, "zap-devel", false, "Enable zap development mode (changes defaults to console encoder, debug log level, and disables sampling)")
+
 	// Set Encoder value
-	encval := encoderValue{newEncoder: o.Encoder}
-	fs.Var(&encval, "encoder-value", "json||console")
-	o.Encoder = encval.newEncoder
+	var encVal encoderValue
+	//encVal := encoderValue{newEncoder: o.Encoder}
+	fs.Var(&encVal, "zap-encoder", "Zap log encoding ('json' or 'console')")
+	o.Encoder = encVal.newEncoder
+	fmt.Printf("got o.Encoder : %p \n", o.Encoder)
+	fmt.Printf("got newEncoder : %p \n", encVal.newEncoder)
 
 	// Set the log level
-	lv := levelValue{level: zap.NewAtomicLevel()}
-	fs.Var(&lv, "log-level", "Log level")
+	var lv levelValue
+	//lv := levelValue{level: zap.NewAtomicLevel()}
+	fs.Var(&lv, "zap-log-level", "Zap log level (one of 'debug', 'info', 'error' or any integer value > 0)")
 	o.Level = &lv.level
+	fmt.Println("LOG LEVEL IS : ", o.Level)
+
+	/*	 Set the log level
+	stackVal := stackTraceValue{lv: zap.NewAtomicLevel()}
+	fs.Var(&stackVal, "zap-stacktrace-level", "Zap log level (one of 'warn',  'error'")
+	o.StacktraceLevel = &stackVal.lv
+	fmt.Println("STACKTRACE VALUE IS :", o.StacktraceLevel)*/
+
 }
 
 func UseNewOptions(in *Options) func(o *Options) {
 	return func(o *Options) {
 		*o = *in
 		o.addDefaults()
+		fmt.Println("FINAL OPTS:  ", o)
 	}
 }

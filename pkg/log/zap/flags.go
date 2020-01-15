@@ -15,14 +15,11 @@
 package zap
 
 import (
-	"flag"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"k8s.io/klog"
 )
 
 type encoderConfigFunc func(*zapcore.EncoderConfig)
@@ -33,17 +30,6 @@ type encoderValue struct {
 	str        string
 }
 
-func (v *encoderValue) Set(e string) error {
-	v.set = true
-	if e == "json" || e == "console" {
-		v.newEncoder = newEncoder(e)
-	} else {
-		return fmt.Errorf("unknown encoder \"%s\"", e)
-	}
-	v.str = e
-	return nil
-}
-
 func (v encoderValue) String() string {
 	return v.str
 }
@@ -52,23 +38,39 @@ func (v encoderValue) Type() string {
 	return "encoder"
 }
 
-func newEncoder(e string, ecfs ...encoderConfigFunc) zapcore.Encoder {
-	if e == "json" {
-		encoderConfig := zap.NewProductionEncoderConfig()
-		for _, f := range ecfs {
-			f(&encoderConfig)
-		}
-		fmt.Println("HERE WITH JSON")
-		return zapcore.NewJSONEncoder(encoderConfig)
-	} else {
-		encoderConfig := zap.NewDevelopmentEncoderConfig()
-		for _, f := range ecfs {
-			f(&encoderConfig)
-		}
-		fmt.Println("HERE WITH CONSOLE")
-		return zapcore.NewConsoleEncoder(encoderConfig)
-	}
+func (v *encoderValue) Set(e string) error {
+	v.set = true
+	val := strings.ToLower(e)
+	switch val {
+	case "json":
+		v.newEncoder = newJSONEncoder()
+		fmt.Printf("got JSON : %p \n", v.newEncoder)
 
+	case "console":
+		v.newEncoder = newConsoleEncoder()
+		fmt.Printf("got CONSOLE : %p \n", v.newEncoder)
+
+	default:
+		return fmt.Errorf("invalid encoder value \"%s\"", e)
+	}
+	v.str = e
+	return nil
+}
+
+func newJSONEncoder(ecfs ...encoderConfigFunc) zapcore.Encoder {
+	encoderConfig := zap.NewProductionEncoderConfig()
+	for _, f := range ecfs {
+		f(&encoderConfig)
+	}
+	return zapcore.NewJSONEncoder(encoderConfig)
+}
+
+func newConsoleEncoder(ecfs ...encoderConfigFunc) zapcore.Encoder {
+	encoderConfig := zap.NewDevelopmentEncoderConfig()
+	for _, f := range ecfs {
+		f(&encoderConfig)
+	}
+	return zapcore.NewConsoleEncoder(encoderConfig)
 }
 
 type levelValue struct {
@@ -79,36 +81,19 @@ type levelValue struct {
 func (v *levelValue) Set(l string) error {
 	v.set = true
 	lower := strings.ToLower(l)
-	var lvl int
+	var lvl zap.AtomicLevel
 	switch lower {
 	case "debug":
-		lvl = -1
+		lvl = zap.NewAtomicLevelAt(zap.DebugLevel)
 	case "info":
-		lvl = 0
-	case "error":
-		lvl = 2
+		lvl = zap.NewAtomicLevelAt(zap.InfoLevel)
 	default:
-		i, err := strconv.Atoi(lower)
-		if err != nil {
-			return fmt.Errorf("invalid log level \"%s\"", l)
-		}
+		return fmt.Errorf("invalid log level \"%s\"", l)
+	}
+	//v.level.SetLevel(zapcore.Level(int8(lvl)))
+	v.level = lvl
+	fmt.Println("*******", v.level)
 
-		if i > 0 {
-			lvl = -1 * i
-		} else {
-			return fmt.Errorf("NO LIKEY log level \"%s\"", l)
-		}
-	}
-	v.level.SetLevel(zapcore.Level(int8(lvl)))
-	// If log level is greater than debug, set glog/klog level to that level.
-	if lvl < -3 {
-		fs := flag.NewFlagSet("", flag.ContinueOnError)
-		klog.InitFlags(fs)
-		err := fs.Set("v", fmt.Sprintf("%v", -1*lvl))
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -118,4 +103,33 @@ func (v levelValue) String() string {
 
 func (v levelValue) Type() string {
 	return "level"
+}
+
+type stackTraceValue struct {
+	set bool
+	lv  zap.AtomicLevel
+}
+
+func (s *stackTraceValue) Set(val string) error {
+	s.set = true
+	lower := strings.ToLower(val)
+	//var lv1 zap.AtomicLevel
+	switch lower {
+	case "warn":
+		s.lv = zap.NewAtomicLevelAt(zap.WarnLevel)
+	case "error":
+		s.lv = zap.NewAtomicLevelAt(zap.ErrorLevel)
+	default:
+		return fmt.Errorf("invalid stacktrace level \"%s\"", val)
+	}
+	//s.lv = lv1
+	return nil
+}
+
+func (s stackTraceValue) String() string {
+	return s.lv.String()
+}
+
+func (_ stackTraceValue) Type() string {
+	return "lv"
 }

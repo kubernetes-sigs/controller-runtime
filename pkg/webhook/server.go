@@ -33,11 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
-const (
-	certName = "tls.crt"
-	keyName  = "tls.key"
-)
-
 // DefaultPort is the default port that the webhook server serves.
 var DefaultPort = 443
 
@@ -53,9 +48,14 @@ type Server struct {
 	Port int
 
 	// CertDir is the directory that contains the server key and certificate. The
-	// server key and certificate must be named tls.key and tls.crt,
-	// respectively.
+	// server key and certificate.
 	CertDir string
+
+	// CertName is the server certificate name. default tls.crt
+	CertName string
+
+	// CertName is the server key name. default tls.key
+	KeyName string
 
 	// WebhookMux is the multiplexer that handles different webhooks.
 	WebhookMux *http.ServeMux
@@ -84,6 +84,14 @@ func (s *Server) setDefaults() {
 
 	if len(s.CertDir) == 0 {
 		s.CertDir = filepath.Join(os.TempDir(), "k8s-webhook-server", "serving-certs")
+	}
+
+	if len(s.CertName) == 0 {
+		s.CertName = "tls.crt"
+	}
+
+	if len(s.KeyName) == 0 {
+		s.KeyName = "tls.key"
 	}
 }
 
@@ -141,8 +149,8 @@ func (s *Server) Start(stop <-chan struct{}) error {
 		}
 	}
 
-	certPath := filepath.Join(s.CertDir, certName)
-	keyPath := filepath.Join(s.CertDir, keyName)
+	certPath := filepath.Join(s.CertDir, s.CertName)
+	keyPath := filepath.Join(s.CertDir, s.KeyName)
 
 	certWatcher, err := certwatcher.New(certPath, keyPath)
 	if err != nil {

@@ -25,9 +25,9 @@ import (
 type encoderConfigFunc func(*zapcore.EncoderConfig)
 
 type encoderValue struct {
-	set        bool
-	newEncoder zapcore.Encoder
-	str        string
+	set     bool
+	setFunc func(zapcore.Encoder)
+	str     string
 }
 
 func (v encoderValue) String() string {
@@ -43,13 +43,9 @@ func (v *encoderValue) Set(e string) error {
 	val := strings.ToLower(e)
 	switch val {
 	case "json":
-		v.newEncoder = newJSONEncoder()
-		fmt.Printf("got JSON : %p \n", v.newEncoder)
-
+		v.setFunc(newJSONEncoder())
 	case "console":
-		v.newEncoder = newConsoleEncoder()
-		fmt.Printf("got CONSOLE : %p \n", v.newEncoder)
-
+		v.setFunc(newConsoleEncoder())
 	default:
 		return fmt.Errorf("invalid encoder value \"%s\"", e)
 	}
@@ -74,31 +70,28 @@ func newConsoleEncoder(ecfs ...encoderConfigFunc) zapcore.Encoder {
 }
 
 type levelValue struct {
-	set   bool
-	level zap.AtomicLevel
+	set     bool
+	setFunc func(zap.AtomicLevel)
+	str     string
 }
 
 func (v *levelValue) Set(l string) error {
 	v.set = true
 	lower := strings.ToLower(l)
-	var lvl zap.AtomicLevel
 	switch lower {
 	case "debug":
-		lvl = zap.NewAtomicLevelAt(zap.DebugLevel)
+		v.setFunc(zap.NewAtomicLevelAt(zap.DebugLevel))
 	case "info":
-		lvl = zap.NewAtomicLevelAt(zap.InfoLevel)
+		v.setFunc(zap.NewAtomicLevelAt(zap.InfoLevel))
 	default:
 		return fmt.Errorf("invalid log level \"%s\"", l)
 	}
-	//v.level.SetLevel(zapcore.Level(int8(lvl)))
-	v.level = lvl
-	fmt.Println("*******", v.level)
-
+	v.str = l
 	return nil
 }
 
 func (v levelValue) String() string {
-	return v.level.String()
+	return v.str
 }
 
 func (v levelValue) Type() string {
@@ -106,30 +99,29 @@ func (v levelValue) Type() string {
 }
 
 type stackTraceValue struct {
-	set bool
-	lv  zap.AtomicLevel
+	set     bool
+	setFunc func(zap.AtomicLevel)
+	str     string
 }
 
 func (s *stackTraceValue) Set(val string) error {
 	s.set = true
 	lower := strings.ToLower(val)
-	//var lv1 zap.AtomicLevel
 	switch lower {
 	case "warn":
-		s.lv = zap.NewAtomicLevelAt(zap.WarnLevel)
+		s.setFunc(zap.NewAtomicLevelAt(zap.WarnLevel))
 	case "error":
-		s.lv = zap.NewAtomicLevelAt(zap.ErrorLevel)
+		s.setFunc(zap.NewAtomicLevelAt(zap.ErrorLevel))
 	default:
 		return fmt.Errorf("invalid stacktrace level \"%s\"", val)
 	}
-	//s.lv = lv1
 	return nil
 }
 
 func (s stackTraceValue) String() string {
-	return s.lv.String()
+	return s.str
 }
 
 func (_ stackTraceValue) Type() string {
-	return "lv"
+	return "level"
 }

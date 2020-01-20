@@ -209,7 +209,7 @@ func NewRaw(opts ...Opts) *zap.Logger {
 	return log
 }
 
-// BindToFlagSet
+// BindToFlagSet func allows CLI passed flags to be parsed.
 func (o *Options) BindFlags(fs *pflag.FlagSet) {
 	// Set Development mode value
 	fs.BoolVar(&o.Development, "zap-devel", false, "Enable zap development mode (changes defaults to console encoder, debug log level, and disables sampling)")
@@ -237,6 +237,7 @@ func (o *Options) BindFlags(fs *pflag.FlagSet) {
 
 }
 
+// UseFlagOptions to set logger with CLI passed flags.
 func UseFlagOptions(in *Options) func(o *Options) {
 	return func(o *Options) {
 		*o = *in

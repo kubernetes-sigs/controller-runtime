@@ -51,7 +51,7 @@ type Server struct {
 	// server key and certificate.
 	CertDir string
 
-	// CertName is the server certificate name. defaults to tls.crt
+	// CertName is the server certificate name. Defaults to tls.crt.
 	CertName string
 
 	// CertName is the server key name. defaults to tls.key

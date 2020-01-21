@@ -54,7 +54,7 @@ type Server struct {
 	// CertName is the server certificate name. Defaults to tls.crt.
 	CertName string
 
-	// CertName is the server key name. defaults to tls.key
+	// CertName is the server key name. Defaults to tls.key.
 	KeyName string
 
 	// WebhookMux is the multiplexer that handles different webhooks.

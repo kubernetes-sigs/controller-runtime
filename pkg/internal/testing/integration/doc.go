@@ -8,9 +8,7 @@ needed to provide this API is managed by this framework.
 
 Quickstart
 
-If you want to test a kubernetes client against the latest kubernetes APIServer
-and Etcd, you can use `./scripts/download-binaries.sh` to download APIServer
-and Etcd binaries for your platform. Then add something like the following to
+Add something like the following to
 your tests:
 
 	cp := &integration.ControlPlane{}
@@ -70,11 +68,6 @@ APIServer, Etcd or KubeCtl.
 3. If neither the `Path` field, nor the environment variable is set, the
 framework tries to use the binaries `kube-apiserver`, `etcd` or `kubectl` in
 the directory `${FRAMEWORK_DIR}/assets/bin/`.
-
-For convenience this framework ships with
-`${FRAMEWORK_DIR}/scripts/download-binaries.sh` which can be used to download
-pre-compiled versions of the needed binaries and place them in the default
-location (`${FRAMEWORK_DIR}/assets/bin/`).
 
 Arguments for Etcd and APIServer
 

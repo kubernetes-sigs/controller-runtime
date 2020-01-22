@@ -80,7 +80,7 @@ func addCRDToEnvironment(env *envtest.Environment, gvks ...schema.GroupVersionKi
 		plural, singular := meta.UnsafeGuessKindToResource(gvk)
 		crd := &apiextensionsv1beta1.CustomResourceDefinition{
 			TypeMeta: metav1.TypeMeta{
-				APIVersion: "apiextensions.k8s.io",
+				APIVersion: "apiextensions.k8s.io/v1beta1",
 				Kind:       "CustomResourceDefinition",
 			},
 			ObjectMeta: metav1.ObjectMeta{

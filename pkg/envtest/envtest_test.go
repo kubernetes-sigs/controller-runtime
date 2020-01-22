@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,7 +32,7 @@ import (
 )
 
 var _ = Describe("Test", func() {
-	var crds []*v1beta1.CustomResourceDefinition
+	var crds []runtime.Object
 	var err error
 	var s *runtime.Scheme
 	var c client.Client
@@ -41,9 +42,11 @@ var _ = Describe("Test", func() {
 
 	// Initialize the client
 	BeforeEach(func(done Done) {
-		crds = []*v1beta1.CustomResourceDefinition{}
+		crds = []runtime.Object{}
 		s = runtime.NewScheme()
 		err = v1beta1.AddToScheme(s)
+		Expect(err).NotTo(HaveOccurred())
+		err = apiextensionsv1.AddToScheme(s)
 		Expect(err).NotTo(HaveOccurred())
 
 		c, err = client.New(env.Config, client.Options{Scheme: s})
@@ -54,10 +57,10 @@ var _ = Describe("Test", func() {
 
 	// Cleanup CRDs
 	AfterEach(func(done Done) {
-		for _, crd := range crds {
+		for _, crd := range runtimeListToUnstructured(crds) {
 			// Delete only if CRD exists.
 			crdObjectKey := client.ObjectKey{
-				Name: crd.Name,
+				Name: crd.GetName(),
 			}
 			var placeholder v1beta1.CustomResourceDefinition
 			err := c.Get(context.TODO(), crdObjectKey, &placeholder)
@@ -67,6 +70,10 @@ var _ = Describe("Test", func() {
 			}
 			Expect(err).NotTo(HaveOccurred())
 			Expect(c.Delete(context.TODO(), crd)).To(Succeed())
+			Eventually(func() bool {
+				err := c.Get(context.TODO(), crdObjectKey, &placeholder)
+				return apierrors.IsNotFound(err)
+			}, 1*time.Second).Should(BeTrue())
 		}
 		close(done)
 	})
@@ -80,12 +87,12 @@ var _ = Describe("Test", func() {
 
 			// Expect to find the CRDs
 
-			crd := &v1beta1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "foos.bar.example.com"}, crd)
+			crdv1 := &apiextensionsv1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "foos.bar.example.com"}, crdv1)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(crd.Spec.Names.Kind).To(Equal("Foo"))
+			Expect(crdv1.Spec.Names.Kind).To(Equal("Foo"))
 
-			crd = &v1beta1.CustomResourceDefinition{}
+			crd := &v1beta1.CustomResourceDefinition{}
 			err = c.Get(context.TODO(), types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Baz"))
@@ -105,8 +112,27 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
-			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
-				{
+			err = WaitForCRDs(env.Config, []runtime.Object{
+				&apiextensionsv1.CustomResourceDefinition{
+					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+						Group: "bar.example.com",
+						Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+							{
+								Name:    "v1",
+								Storage: true,
+								Served:  true,
+								Schema: &apiextensionsv1.CustomResourceValidation{
+									OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+										Type: "object",
+									},
+								},
+							},
+						},
+						Names: apiextensionsv1.CustomResourceDefinitionNames{
+							Plural: "foos",
+						}},
+				},
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "qux.example.com",
 						Version: "v1beta1",
@@ -114,15 +140,7 @@ var _ = Describe("Test", func() {
 							Plural: "bazs",
 						}},
 				},
-				{
-					Spec: v1beta1.CustomResourceDefinitionSpec{
-						Group:   "bar.example.com",
-						Version: "v1beta1",
-						Names: v1beta1.CustomResourceDefinitionNames{
-							Plural: "foos",
-						}},
-				},
-				{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "crew.example.com",
 						Version: "v1beta1",
@@ -130,7 +148,7 @@ var _ = Describe("Test", func() {
 							Plural: "captains",
 						}},
 				},
-				{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "crew.example.com",
 						Version: "v1beta1",
@@ -138,7 +156,7 @@ var _ = Describe("Test", func() {
 							Plural: "firstmates",
 						}},
 				},
-				{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group: "crew.example.com",
 						Names: v1beta1.CustomResourceDefinitionNames{
@@ -176,8 +194,8 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Config"))
 
-			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
-				{
+			err = WaitForCRDs(env.Config, []runtime.Object{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "foo.example.com",
 						Version: "v1beta1",
@@ -202,17 +220,28 @@ var _ = Describe("Test", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			crd := &v1beta1.CustomResourceDefinition{}
+			crd := &apiextensionsv1.CustomResourceDefinition{}
 			err = c.Get(context.TODO(), types.NamespacedName{Name: "foos.bar.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Foo"))
 
-			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
-				{
-					Spec: v1beta1.CustomResourceDefinitionSpec{
-						Group:   "bar.example.com",
-						Version: "v1beta1",
-						Names: v1beta1.CustomResourceDefinitionNames{
+			err = WaitForCRDs(env.Config, []runtime.Object{
+				&apiextensionsv1.CustomResourceDefinition{
+					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+						Group: "bar.example.com",
+						Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+							{
+								Name:    "v1",
+								Storage: true,
+								Served:  true,
+								Schema: &apiextensionsv1.CustomResourceValidation{
+									OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+										Type: "object",
+									},
+								},
+							},
+						},
+						Names: apiextensionsv1.CustomResourceDefinitionNames{
 							Plural: "foos",
 						}},
 				},
@@ -252,8 +281,8 @@ var _ = Describe("Test", func() {
 		It("should return an error if the resource group version isn't found", func(done Done) {
 			// Wait for a CRD where the Group and Version don't exist
 			err := WaitForCRDs(env.Config,
-				[]*v1beta1.CustomResourceDefinition{
-					{
+				[]runtime.Object{
+					&v1beta1.CustomResourceDefinition{
 						Spec: v1beta1.CustomResourceDefinitionSpec{
 							Version: "v1",
 							Names: v1beta1.CustomResourceDefinitionNames{
@@ -275,8 +304,8 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Wait for a CRD that doesn't exist, but the Group and Version do
-			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
-				{
+			err = WaitForCRDs(env.Config, []runtime.Object{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "qux.example.com",
 						Version: "v1beta1",
@@ -284,7 +313,7 @@ var _ = Describe("Test", func() {
 							Plural: "bazs",
 						}},
 				},
-				{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "bar.example.com",
 						Version: "v1beta1",
@@ -333,8 +362,27 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
-			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
-				{
+			err = WaitForCRDs(env.Config, []runtime.Object{
+				&apiextensionsv1.CustomResourceDefinition{
+					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+						Group: "bar.example.com",
+						Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+							{
+								Name:    "v1",
+								Storage: true,
+								Served:  true,
+								Schema: &apiextensionsv1.CustomResourceValidation{
+									OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+										Type: "object",
+									},
+								},
+							},
+						},
+						Names: apiextensionsv1.CustomResourceDefinitionNames{
+							Plural: "foos",
+						}},
+				},
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "qux.example.com",
 						Version: "v1beta1",
@@ -342,15 +390,7 @@ var _ = Describe("Test", func() {
 							Plural: "bazs",
 						}},
 				},
-				{
-					Spec: v1beta1.CustomResourceDefinitionSpec{
-						Group:   "bar.example.com",
-						Version: "v1beta1",
-						Names: v1beta1.CustomResourceDefinitionNames{
-							Plural: "foos",
-						}},
-				},
-				{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "crew.example.com",
 						Version: "v1beta1",
@@ -358,7 +398,7 @@ var _ = Describe("Test", func() {
 							Plural: "captains",
 						}},
 				},
-				{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "crew.example.com",
 						Version: "v1beta1",
@@ -366,7 +406,7 @@ var _ = Describe("Test", func() {
 							Plural: "firstmates",
 						}},
 				},
-				{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group: "crew.example.com",
 						Names: v1beta1.CustomResourceDefinitionNames{
@@ -424,8 +464,27 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
-			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
-				{
+			err = WaitForCRDs(env.Config, []runtime.Object{
+				&apiextensionsv1.CustomResourceDefinition{
+					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+						Group: "bar.example.com",
+						Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+							{
+								Name:    "v1",
+								Storage: true,
+								Served:  true,
+								Schema: &apiextensionsv1.CustomResourceValidation{
+									OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+										Type: "object",
+									},
+								},
+							},
+						},
+						Names: apiextensionsv1.CustomResourceDefinitionNames{
+							Plural: "foos",
+						}},
+				},
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "qux.example.com",
 						Version: "v1beta1",
@@ -433,15 +492,7 @@ var _ = Describe("Test", func() {
 							Plural: "bazs",
 						}},
 				},
-				{
-					Spec: v1beta1.CustomResourceDefinitionSpec{
-						Group:   "bar.example.com",
-						Version: "v1beta1",
-						Names: v1beta1.CustomResourceDefinitionNames{
-							Plural: "foos",
-						}},
-				},
-				{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "crew.example.com",
 						Version: "v1beta1",
@@ -449,7 +500,7 @@ var _ = Describe("Test", func() {
 							Plural: "captains",
 						}},
 				},
-				{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "crew.example.com",
 						Version: "v1beta1",
@@ -457,7 +508,7 @@ var _ = Describe("Test", func() {
 							Plural: "firstmates",
 						}},
 				},
-				{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group: "crew.example.com",
 						Names: v1beta1.CustomResourceDefinitionNames{
@@ -504,8 +555,8 @@ var _ = Describe("Test", func() {
 		// Store resource version for comparison later on
 		firstRV := crd.ResourceVersion
 
-		err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
-			{
+		err = WaitForCRDs(env.Config, []runtime.Object{
+			&v1beta1.CustomResourceDefinition{
 				Spec: v1beta1.CustomResourceDefinitionSpec{
 					Group: "crew.example.com",
 					Names: v1beta1.CustomResourceDefinitionNames{
@@ -544,8 +595,8 @@ var _ = Describe("Test", func() {
 		Expect(len(crd.Spec.Versions)).To(BeEquivalentTo(3))
 		Expect(crd.ResourceVersion).NotTo(BeEquivalentTo(firstRV))
 
-		err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
-			{
+		err = WaitForCRDs(env.Config, []runtime.Object{
+			&v1beta1.CustomResourceDefinition{
 				Spec: v1beta1.CustomResourceDefinitionSpec{
 					Group: "crew.example.com",
 					Names: v1beta1.CustomResourceDefinitionNames{
@@ -587,12 +638,12 @@ var _ = Describe("Test", func() {
 
 			// Expect to find the CRDs
 
-			crd := &v1beta1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "foos.bar.example.com"}, crd)
+			crdv1 := &apiextensionsv1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "foos.bar.example.com"}, crdv1)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(crd.Spec.Names.Kind).To(Equal("Foo"))
+			Expect(crdv1.Spec.Names.Kind).To(Equal("Foo"))
 
-			crd = &v1beta1.CustomResourceDefinition{}
+			crd := &v1beta1.CustomResourceDefinition{}
 			err = c.Get(context.TODO(), types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Baz"))
@@ -612,8 +663,27 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
-			err = WaitForCRDs(env.Config, []*v1beta1.CustomResourceDefinition{
-				{
+			err = WaitForCRDs(env.Config, []runtime.Object{
+				&apiextensionsv1.CustomResourceDefinition{
+					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+						Group: "bar.example.com",
+						Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+							{
+								Name:    "v1",
+								Storage: true,
+								Served:  true,
+								Schema: &apiextensionsv1.CustomResourceValidation{
+									OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+										Type: "object",
+									},
+								},
+							},
+						},
+						Names: apiextensionsv1.CustomResourceDefinitionNames{
+							Plural: "foos",
+						}},
+				},
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "qux.example.com",
 						Version: "v1beta1",
@@ -621,15 +691,7 @@ var _ = Describe("Test", func() {
 							Plural: "bazs",
 						}},
 				},
-				{
-					Spec: v1beta1.CustomResourceDefinitionSpec{
-						Group:   "bar.example.com",
-						Version: "v1beta1",
-						Names: v1beta1.CustomResourceDefinitionNames{
-							Plural: "foos",
-						}},
-				},
-				{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "crew.example.com",
 						Version: "v1beta1",
@@ -637,7 +699,7 @@ var _ = Describe("Test", func() {
 							Plural: "captains",
 						}},
 				},
-				{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "crew.example.com",
 						Version: "v1beta1",
@@ -645,7 +707,7 @@ var _ = Describe("Test", func() {
 							Plural: "firstmates",
 						}},
 				},
-				{
+				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group: "crew.example.com",
 						Names: v1beta1.CustomResourceDefinitionNames{
@@ -676,17 +738,31 @@ var _ = Describe("Test", func() {
 
 			// Expect to NOT find the CRDs
 
-			crds := []string{
+			v1crds := []string{
 				"foos.bar.example.com",
+			}
+			v1placeholder := &apiextensionsv1.CustomResourceDefinition{}
+			Eventually(func() bool {
+				for _, crd := range v1crds {
+					err = c.Get(context.TODO(), types.NamespacedName{Name: crd}, v1placeholder)
+					notFound := err != nil && apierrors.IsNotFound(err)
+					if !notFound {
+						return false
+					}
+				}
+				return true
+			}, 20).Should(BeTrue())
+
+			v1beta1crds := []string{
 				"bazs.qux.example.com",
 				"captains.crew.example.com",
 				"firstmates.crew.example.com",
 				"drivers.crew.example.com",
 			}
-			placeholder := &v1beta1.CustomResourceDefinition{}
+			v1beta1placeholder := &v1beta1.CustomResourceDefinition{}
 			Eventually(func() bool {
-				for _, crd := range crds {
-					err = c.Get(context.TODO(), types.NamespacedName{Name: crd}, placeholder)
+				for _, crd := range v1beta1crds {
+					err = c.Get(context.TODO(), types.NamespacedName{Name: crd}, v1beta1placeholder)
 					notFound := err != nil && apierrors.IsNotFound(err)
 					if !notFound {
 						return false

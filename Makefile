@@ -30,7 +30,7 @@ help:  ## Display this help
 
 ##@ Tests
 
-.PHONY: check-all
+.PHONY: test
 test: ## Run the script check-everything.sh which will check all
 	GO111MODULE=on TRACE=1 ./hack/check-everything.sh
 

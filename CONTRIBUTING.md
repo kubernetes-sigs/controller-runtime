@@ -16,4 +16,4 @@ Please see https://git.k8s.io/community/CLA.md for more info
 
 ## Test locally
 
-Run the command `make check-all` to test the changes locally.
+Run the command `make test` to test the changes locally.

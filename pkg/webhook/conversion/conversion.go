@@ -264,10 +264,6 @@ func IsConvertible(scheme *runtime.Scheme, obj runtime.Object) (bool, error) {
 	}
 
 	if len(hubs) == 1 && len(nonSpokes) == 0 { // convertible
-		spokeVersions := []string{}
-		for _, sp := range spokes {
-			spokeVersions = append(spokeVersions, sp.GetObjectKind().GroupVersionKind().String())
-		}
 		return true, nil
 	}
 

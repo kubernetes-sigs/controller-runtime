@@ -27,7 +27,8 @@ aliases:
   - alenkacz
   - vincepri
   - alexeldeib
-
+  - kensipe
+  
   # folks to can approve things in the directly-ported
   # testing_frameworks portions of the codebase
   testing-integration-approvers:

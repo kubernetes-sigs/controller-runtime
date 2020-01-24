@@ -125,7 +125,10 @@ func (s *APIServer) setProcessState() error {
 // Stop stops this process gracefully, waits for its termination, and cleans up
 // the CertDir if necessary.
 func (s *APIServer) Stop() error {
-	return s.processState.Stop()
+	if s.processState != nil {
+		return s.processState.Stop()
+	}
+	return nil
 }
 
 // APIServerDefaultArgs exposes the default args for the APIServer so that you

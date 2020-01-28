@@ -19,6 +19,14 @@ package signals
 import (
 	"os"
 	"os/signal"
+	"strconv"
+	"time"
+)
+
+const (
+	channelClosureDelaySecondsEnv = "CHANNEL_CLOSURE_DELAY_SECONDS"
+
+	defaultChannelClosureDelaySeconds = 0
 )
 
 var onlyOneSignalHandler = make(chan struct{})
@@ -34,10 +42,31 @@ func SetupSignalHandler() (stopCh <-chan struct{}) {
 	signal.Notify(c, shutdownSignals...)
 	go func() {
 		<-c
+		d := getDelaySecondsFromEnv()
+		log.Info("receive signal", "delay", d)
+		time.Sleep(time.Duration(d) * time.Second)
 		close(stop)
 		<-c
 		os.Exit(1) // second signal. Exit directly.
 	}()
 
 	return stop
+}
+
+func getDelaySecondsFromEnv() int {
+	delayStr := os.Getenv(channelClosureDelaySecondsEnv)
+	if len(delayStr) == 0 {
+		return defaultChannelClosureDelaySeconds
+	}
+
+	delay, err := strconv.Atoi(delayStr)
+	if err != nil {
+		log.Info("failed to convert channel closure delay", "envvar", delayStr)
+		return defaultChannelClosureDelaySeconds
+	}
+	if delay < 0 {
+		log.Info("get invalid channel closure delay from envvar", "envvar", delayStr)
+		return 0
+	}
+	return delay
 }

@@ -18,3 +18,9 @@ limitations under the License.
 // shutdown the manager in combination with Kubernetes pod graceful termination
 // policy.
 package signals
+
+import (
+	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+)
+
+var log = logf.RuntimeLog.WithName("signal")

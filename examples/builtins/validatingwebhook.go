@@ -30,7 +30,7 @@ import (
 
 // podValidator validates Pods
 type podValidator struct {
-	client  client.Client
+	Client  client.Client
 	decoder *admission.Decoder
 }
 
@@ -53,15 +53,6 @@ func (v *podValidator) Handle(ctx context.Context, req admission.Request) admiss
 	}
 
 	return admission.Allowed("")
-}
-
-// podValidator implements inject.Client.
-// A client will be automatically injected.
-
-// InjectClient injects the client.
-func (v *podValidator) InjectClient(c client.Client) error {
-	v.client = c
-	return nil
 }
 
 // podValidator implements admission.DecoderInjector.

@@ -42,6 +42,7 @@ golangci-lint run --disable-all \
     --enable=lll \
     --enable=dupl \
     --enable=goimports \
+    --enable=bodyclose \
     ./pkg/... ./examples/... .
 
 # TODO: Enable these as we fix them to make them pass

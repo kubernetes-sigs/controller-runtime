@@ -9,7 +9,8 @@ aliases:
   - mengqiy
 
   # non-admin folks who can approve any PRs in the repo
-  controller-runtime-approvers: []
+  controller-runtime-approvers:
+  - gerred
 
   # folks who can review and LGTM any PRs in the repo (doesn't
   # include approvers & admins -- those count too via the OWNERS
@@ -17,7 +18,6 @@ aliases:
   controller-runtime-reviewers:
   - alvaroaleman
   - shawn-hurley
-  - gerred
   - joelanford
   - alenkacz
   - vincepri

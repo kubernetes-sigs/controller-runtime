@@ -144,7 +144,7 @@ var _ = Describe("Start method", func() {
 
 			Context("when the polling interval is configured", func() {
 				BeforeEach(func() {
-					processState.HealthCheckPollInterval = time.Millisecond * 20
+					processState.HealthCheckPollInterval = time.Millisecond * 150
 				})
 
 				It("hits the endpoint in the configured interval", func() {

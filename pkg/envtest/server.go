@@ -72,21 +72,6 @@ func defaultAssetPath(binary string) string {
 
 }
 
-// DefaultKubeAPIServerFlags are default flags necessary to bring up apiserver.
-var DefaultKubeAPIServerFlags = []string{
-	// Allow tests to run offline, by preventing API server from attempting to
-	// use default route to determine its --advertise-address
-	"--advertise-address=127.0.0.1",
-	"--etcd-servers={{ if .EtcdURL }}{{ .EtcdURL.String }}{{ end }}",
-	"--cert-dir={{ .CertDir }}",
-	"--insecure-port={{ if .URL }}{{ .URL.Port }}{{ end }}",
-	"--insecure-bind-address={{ if .URL }}{{ .URL.Hostname }}{{ end }}",
-	"--secure-port={{ if .SecurePort }}{{ .SecurePort }}{{ end }}",
-	"--admission-control=AlwaysAdmit",
-	"--service-cluster-ip-range=10.0.0.0/24",
-	"--allow-privileged=true",
-}
-
 // Environment creates a Kubernetes test environment that will start / stop the Kubernetes control plane and
 // install extension APIs
 type Environment struct {
@@ -156,10 +141,11 @@ func (te *Environment) Stop() error {
 }
 
 // getAPIServerFlags returns flags to be used with the Kubernetes API server.
+// it returns empty slice for api server defined defaults to be applied if no args specified
 func (te Environment) getAPIServerFlags() []string {
 	// Set default API server flags if not set.
 	if len(te.KubeAPIServerFlags) == 0 {
-		return DefaultKubeAPIServerFlags
+		return []string{}
 	}
 	// Check KubeAPIServerFlags contains service-cluster-ip-range, if not, set default value to service-cluster-ip-range
 	containServiceClusterIPRange := false

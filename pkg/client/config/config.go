@@ -121,20 +121,19 @@ func loadConfig(context string) (*rest.Config, error) {
 	// is no in-cluster config, try the default recommended locations.
 	//
 	// NOTE: For default config file locations, upstream only checks
-	// $HOME for the user's home directory, but we can also use
+	// $HOME for the user's home directory, but we can also try
 	// os/user.HomeDir when $HOME is unset.
 	//
 	// TODO(jlanford): could this be done upstream?
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	if _, ok := os.LookupEnv("HOME"); !ok {
 		u, err := user.Current()
 		if err != nil {
 			return nil, fmt.Errorf("could not get current user: %v", err)
 		}
-		oldRecommendedHomeFile := clientcmd.RecommendedHomeFile
-		clientcmd.RecommendedHomeFile = path.Join(u.HomeDir, clientcmd.RecommendedHomeDir, clientcmd.RecommendedFileName)
-		defer func() { clientcmd.RecommendedHomeFile = oldRecommendedHomeFile }()
+		loadingRules.Precedence = append(loadingRules.Precedence, path.Join(u.HomeDir, clientcmd.RecommendedHomeDir, clientcmd.RecommendedFileName))
 	}
-	if c, err := loadConfigWithContext(apiServerURL, clientcmd.NewDefaultClientConfigLoadingRules(), context); err == nil {
+	if c, err := loadConfigWithContext(apiServerURL, loadingRules, context); err == nil {
 		return c, nil
 	}
 

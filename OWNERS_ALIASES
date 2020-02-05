@@ -8,6 +8,10 @@ aliases:
   - droot
   - mengqiy
 
+  # non-admin folks who have write-access and can approve any PRs in the repo
+  controller-runtime-maintainers:
+  - vincepri
+
   # non-admin folks who can approve any PRs in the repo
   controller-runtime-approvers:
   - gerred

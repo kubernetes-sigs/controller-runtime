@@ -62,7 +62,7 @@ func NewFakeClientWithScheme(clientScheme *runtime.Scheme, initObjs ...runtime.O
 	for _, obj := range initObjs {
 		err := tracker.Add(obj)
 		if err != nil {
-			panic(fmt.Errorf("failed to add object %v to fake client: %v", obj, err))
+			panic(fmt.Errorf("failed to add object %v to fake client: %w", obj, err))
 		}
 	}
 	return &fakeClient{

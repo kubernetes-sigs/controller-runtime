@@ -63,7 +63,7 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 		var err error
 		options.LeaderElectionNamespace, err = getInClusterNamespace()
 		if err != nil {
-			return nil, fmt.Errorf("unable to find leader election namespace: %v", err)
+			return nil, fmt.Errorf("unable to find leader election namespace: %w", err)
 		}
 	}
 
@@ -99,13 +99,13 @@ func getInClusterNamespace() (string, error) {
 	if os.IsNotExist(err) {
 		return "", fmt.Errorf("not running in-cluster, please specify LeaderElectionNamespace")
 	} else if err != nil {
-		return "", fmt.Errorf("error checking namespace file: %v", err)
+		return "", fmt.Errorf("error checking namespace file: %w", err)
 	}
 
 	// Load the namespace file and return its content
 	namespace, err := ioutil.ReadFile(inClusterNamespacePath)
 	if err != nil {
-		return "", fmt.Errorf("error reading namespace file: %v", err)
+		return "", fmt.Errorf("error reading namespace file: %w", err)
 	}
 	return string(namespace), nil
 }

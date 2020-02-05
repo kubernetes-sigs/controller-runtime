@@ -214,7 +214,7 @@ func (te *Environment) Start() (*rest.Config, error) {
 		}
 
 		if err := te.defaultTimeouts(); err != nil {
-			return nil, fmt.Errorf("failed to default controlplane timeouts: %v", err)
+			return nil, fmt.Errorf("failed to default controlplane timeouts: %w", err)
 		}
 		te.ControlPlane.Etcd.StartTimeout = te.ControlPlaneStartTimeout
 		te.ControlPlane.Etcd.StopTimeout = te.ControlPlaneStopTimeout
@@ -256,7 +256,7 @@ func (te *Environment) startControlPlane() error {
 		log.Error(err, "unable to start the controlplane", "tries", numTries)
 	}
 	if numTries == maxRetries {
-		return fmt.Errorf("failed to start the controlplane. retried %d times: %v", numTries, err)
+		return fmt.Errorf("failed to start the controlplane. retried %d times: %w", numTries, err)
 	}
 	return nil
 }

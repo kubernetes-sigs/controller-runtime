@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 )
 
 // {{{ "Functional" Option Interfaces
@@ -385,6 +386,25 @@ func (m MatchingLabels) ApplyToList(opts *ListOptions) {
 }
 
 func (m MatchingLabels) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
+	m.ApplyToList(&opts.ListOptions)
+}
+
+// HasLabels filters the list/delete operation checking if the set of labels exists
+// without checking their values.
+type HasLabels []string
+
+func (m HasLabels) ApplyToList(opts *ListOptions) {
+	sel := labels.NewSelector()
+	for _, label := range m {
+		r, err := labels.NewRequirement(label, selection.Exists, nil)
+		if err == nil {
+			sel = sel.Add(*r)
+		}
+	}
+	opts.LabelSelector = sel
+}
+
+func (m HasLabels) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	m.ApplyToList(&opts.ListOptions)
 }
 

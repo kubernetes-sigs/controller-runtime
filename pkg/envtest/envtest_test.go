@@ -40,6 +40,8 @@ var _ = Describe("Test", func() {
 	var validDirectory = filepath.Join(".", "testdata")
 	var invalidDirectory = "fake"
 
+	var teardownTimeoutSeconds float64 = 10
+
 	// Initialize the client
 	BeforeEach(func(done Done) {
 		crds = []runtime.Object{}
@@ -76,7 +78,7 @@ var _ = Describe("Test", func() {
 			}, 1*time.Second).Should(BeTrue())
 		}
 		close(done)
-	})
+	}, teardownTimeoutSeconds)
 
 	Describe("InstallCRDs", func() {
 		It("should install the CRDs into the cluster using directory", func(done Done) {

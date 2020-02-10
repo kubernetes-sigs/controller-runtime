@@ -170,9 +170,12 @@ func pollURLUntilOK(url url.URL, interval time.Duration, ready chan bool, stopCh
 	}
 	for {
 		res, err := http.Get(url.String())
-		if err == nil && res.StatusCode == http.StatusOK {
-			ready <- true
-			return
+		if err == nil {
+			res.Body.Close()
+			if res.StatusCode == http.StatusOK {
+				ready <- true
+				return
+			}
 		}
 
 		select {

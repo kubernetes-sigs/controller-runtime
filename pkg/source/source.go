@@ -55,17 +55,18 @@ type Source interface {
 	Start(handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
 }
 
-// CreateSourceWithFixedCache creates a Source without InjectCache, so that it is assured that the given cache is used
-// and not overwritten
-func CreateSourceWithFixedCache(object runtime.Object, cache cache.Cache) Source {
-	return &sourceWithFixedCache{kind: Kind{Type: object, cache: cache}}
+// NewKindWithFixedCache creates a Source without InjectCache, so that it is assured that the given cache is used
+// and not overwritten. It can be used to watch objects in a different cluster by passing the cache
+// from that other cluster
+func NewKindWithFixedCache(object runtime.Object, cache cache.Cache) Source {
+	return &kindWithFixedCache{kind: Kind{Type: object, cache: cache}}
 }
 
-type sourceWithFixedCache struct {
+type kindWithFixedCache struct {
 	kind Kind
 }
 
-func (ks *sourceWithFixedCache) Start(handler handler.EventHandler, queue workqueue.RateLimitingInterface,
+func (ks *kindWithFixedCache) Start(handler handler.EventHandler, queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
 	return ks.kind.Start(handler, queue, prct...)
 }

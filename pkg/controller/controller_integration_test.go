@@ -122,7 +122,7 @@ var _ = Describe("controller", func() {
 			By("Invoking Reconciling for Update")
 			newDeployment := deployment.DeepCopy()
 			newDeployment.Labels = map[string]string{"foo": "bar"}
-			newDeployment, err = clientset.AppsV1().Deployments("default").Update(newDeployment)
+			_, err = clientset.AppsV1().Deployments("default").Update(newDeployment)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
@@ -152,7 +152,7 @@ var _ = Describe("controller", func() {
 			By("Invoking Reconciling for an OwnedObject when it is updated")
 			newReplicaset := replicaset.DeepCopy()
 			newReplicaset.Labels = map[string]string{"foo": "bar"}
-			newReplicaset, err = clientset.AppsV1().ReplicaSets("default").Update(newReplicaset)
+			_, err = clientset.AppsV1().ReplicaSets("default").Update(newReplicaset)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 

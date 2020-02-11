@@ -78,7 +78,7 @@ function golangci_lint_has_version {
 
 function fetch_go_tools {
   header_text "Checking for golangci-lint"
-  local golangci_lint_version="v1.21.0"
+  local golangci_lint_version="v1.23.6"
   if ! is_installed golangci-lint || ! golangci_lint_has_version "${golangci_lint_version}"; then
     header_text "Installing golangci-lint"
     curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b $(go env GOPATH)/bin "${golangci_lint_version}"

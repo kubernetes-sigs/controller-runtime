@@ -119,7 +119,7 @@ func (s *Server) Register(path string, hook http.Handler) {
 func instrumentedHook(path string, hookRaw http.Handler) http.Handler {
 	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
 		startTS := time.Now()
-		defer func() { metrics.RequestLatency.WithLabelValues(path).Observe(time.Now().Sub(startTS).Seconds()) }()
+		defer func() { metrics.RequestLatency.WithLabelValues(path).Observe(time.Since(startTS).Seconds()) }()
 		hookRaw.ServeHTTP(resp, req)
 
 		// TODO(directxman12): add back in metric about total requests broken down by result?

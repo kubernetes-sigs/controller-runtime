@@ -167,6 +167,11 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
+			By("Listing a type with a slice of pointers as items field")
+			err = cm.GetClient().
+				List(context.Background(), &UnconventionalListTypeList{})
+			Expect(err).NotTo(HaveOccurred())
+
 			close(done)
 		}, 5)
 	})

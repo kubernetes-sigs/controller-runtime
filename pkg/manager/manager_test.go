@@ -320,11 +320,11 @@ var _ = Describe("manger.Manager", func() {
 					// NB(directxman12): this should definitely return an error.  If it doesn't happen,
 					// it means someone was signaling "stop: error" with a nil "error".
 					Expect(m.Start(stop)).NotTo(Succeed())
-					close(done)
 				}()
 				<-c1
 				<-c2
 				<-c3
+				close(done)
 			})
 
 			It("should return an error if any non-leaderelection Components fail to Start", func() {
@@ -342,6 +342,56 @@ var _ = Describe("manger.Manager", func() {
 				LeaderElectionID:        "controller-runtime",
 				LeaderElectionNamespace: "default",
 				newResourceLock:         fakeleaderelection.NewResourceLock,
+			})
+		})
+
+		Context("with leaderelection enabled and release on cancel enabled", func() {
+			opts := Options{
+				LeaderElection:          true,
+				LeaderElectionID:        "controller-runtime",
+				LeaderElectionNamespace: "default",
+				ReleaseOnCancel:         func() *bool { ptr := true; return &ptr }(),
+				newResourceLock:         fakeleaderelection.NewResourceLock,
+			}
+
+			startSuite(opts)
+
+			It("should release lease when exit if release on cancel enabled", func(done Done) {
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+				mgr, ok := m.(*controllerManager)
+				Expect(ok).To(BeTrue())
+				c1 := make(chan struct{})
+				Expect(m.Add(RunnableFunc(func(s <-chan struct{}) error {
+					defer GinkgoRecover()
+					close(c1)
+					return nil
+				}))).To(Succeed())
+
+				stop := make(chan struct{})
+				exited := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(stop)).To(Succeed())
+					close(exited)
+				}()
+
+				<-c1
+
+				// Check if manager hold the lease
+				leader, _, err := mgr.resourceLock.Get()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(leader.HolderIdentity).NotTo(Equal(""))
+
+				close(stop)
+				<-exited
+
+				// Check if manager released the lease
+				leader, _, err = mgr.resourceLock.Get()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(leader.HolderIdentity).To(Equal(""))
+
+				close(done)
 			})
 		})
 

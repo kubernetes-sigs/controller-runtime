@@ -202,6 +202,8 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 
 	<-stop
 	log.Info("Stopping workers", "controller", c.Name)
+	// make sure worker can not get items from queue(never do reconcile again)
+	c.Queue.ShutDown()
 	return nil
 }
 

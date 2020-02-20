@@ -44,9 +44,10 @@ import (
 
 const (
 	// Values taken from: https://github.com/kubernetes/apiserver/blob/master/pkg/apis/config/v1alpha1/defaults.go
-	defaultLeaseDuration = 15 * time.Second
-	defaultRenewDeadline = 10 * time.Second
-	defaultRetryPeriod   = 2 * time.Second
+	defaultLeaseDuration   = 15 * time.Second
+	defaultRenewDeadline   = 10 * time.Second
+	defaultRetryPeriod     = 2 * time.Second
+	defaultReleaseOnCancel = false
 
 	defaultReadinessEndpoint = "/readyz"
 	defaultLivenessEndpoint  = "/healthz"
@@ -152,6 +153,20 @@ type controllerManager struct {
 	// retryPeriod is the duration the LeaderElector clients should wait
 	// between tries of actions.
 	retryPeriod time.Duration
+
+	// releaseOnCancel indicated if the lock should be released
+	// when the run context is cancelled.
+	releaseOnCancel bool
+
+	// notifyRelease is the stop channel which notify lease to release
+	notifyRelease chan<- struct{}
+
+	// stoppedLeading is the stop channel from which can get leading stopped event
+	stoppedLeading <-chan struct{}
+
+	// wg is a WaitGroup to wait for the end of all Runnables,
+	// used for graceful exit
+	wg sync.WaitGroup
 }
 
 type errSignaler struct {
@@ -223,6 +238,8 @@ func (cm *controllerManager) Add(r Runnable) error {
 	if shouldStart {
 		// If already started, start the controller
 		go func() {
+			cm.wg.Add(1)
+			defer cm.wg.Done()
 			if err := r.Start(cm.internalStop); err != nil {
 				cm.errSignal.SignalError(err)
 			}
@@ -401,8 +418,14 @@ func (cm *controllerManager) serveHealthProbes(stop <-chan struct{}) {
 }
 
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
-	// join the passed-in stop channel as an upstream feeding into cm.internalStopper
-	defer close(cm.internalStopper)
+	if cm.resourceLock != nil {
+		err := cm.startLeaderElection()
+		if err != nil {
+			return err
+		}
+	} else {
+		go cm.startLeaderElectionRunnables()
+	}
 
 	// initialize this here so that we reset the signal channel state on every start
 	cm.errSignal = &errSignaler{errSignal: make(chan struct{})}
@@ -421,23 +444,34 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 
 	go cm.startNonLeaderElectionRunnables()
 
-	if cm.resourceLock != nil {
-		err := cm.startLeaderElection()
-		if err != nil {
-			return err
-		}
-	} else {
-		go cm.startLeaderElectionRunnables()
-	}
-
 	select {
 	case <-stop:
 		// We are done
-		return nil
+		break
 	case <-cm.errSignal.GotError():
 		// Error starting a controller
-		return cm.errSignal.Error()
+		break
 	}
+
+	// join the passed-in stop channel as an upstream feeding into cm.internalStopper
+	// Stop the Runnables
+	close(cm.internalStopper)
+
+	// wait for Runnables to exit
+	cm.wg.Wait()
+
+	// notify leaderelection to exit
+	if cm.notifyRelease != nil {
+		close(cm.notifyRelease)
+	}
+
+	// waiting for leaderelection release the lease
+	// NOTE: if we never be a leader, we will also receive notify from cm.stoppedLeading
+	if cm.stoppedLeading != nil {
+		<-cm.stoppedLeading
+	}
+
+	return cm.errSignal.Error()
 }
 
 func (cm *controllerManager) startNonLeaderElectionRunnables() {
@@ -452,6 +486,9 @@ func (cm *controllerManager) startNonLeaderElectionRunnables() {
 		// Write any Start errors to a channel so we can return them
 		ctrl := c
 		go func() {
+			cm.wg.Add(1)
+			defer cm.wg.Done()
+
 			if err := ctrl.Start(cm.internalStop); err != nil {
 				cm.errSignal.SignalError(err)
 			}
@@ -474,6 +511,9 @@ func (cm *controllerManager) startLeaderElectionRunnables() {
 		// Write any Start errors to a channel so we can return them
 		ctrl := c
 		go func() {
+			cm.wg.Add(1)
+			defer cm.wg.Done()
+
 			if err := ctrl.Start(cm.internalStop); err != nil {
 				cm.errSignal.SignalError(err)
 			}
@@ -508,20 +548,24 @@ func (cm *controllerManager) waitForCache() {
 }
 
 func (cm *controllerManager) startLeaderElection() (err error) {
+	notifyRelease := make(chan struct{})
+	cm.notifyRelease = notifyRelease
+	stoppedLeading := make(chan struct{})
+	cm.stoppedLeading = stoppedLeading
+
 	l, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
-		Lock:          cm.resourceLock,
-		LeaseDuration: cm.leaseDuration,
-		RenewDeadline: cm.renewDeadline,
-		RetryPeriod:   cm.retryPeriod,
+		Lock:            cm.resourceLock,
+		LeaseDuration:   cm.leaseDuration,
+		RenewDeadline:   cm.renewDeadline,
+		RetryPeriod:     cm.retryPeriod,
+		ReleaseOnCancel: cm.releaseOnCancel,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(_ context.Context) {
 				cm.startLeaderElectionRunnables()
 			},
 			OnStoppedLeading: func() {
-				// Most implementations of leader election log.Fatal() here.
-				// Since Start is wrapped in log.Fatal when called, we can just return
-				// an error here which will cause the program to exit.
-				cm.errSignal.SignalError(fmt.Errorf("leader election lost"))
+				log.Info("stopped leading")
+				close(stoppedLeading)
 			},
 		},
 	})
@@ -531,11 +575,8 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		select {
-		case <-cm.internalStop:
-			cancel()
-		case <-ctx.Done():
-		}
+		<-notifyRelease
+		cancel()
 	}()
 
 	// Start the leader elector process

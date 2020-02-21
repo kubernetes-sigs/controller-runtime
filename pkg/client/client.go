@@ -19,7 +19,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -75,20 +74,24 @@ func New(config *rest.Config, options Options) (Client, error) {
 		return nil, err
 	}
 
+	clientcache := &clientCache{
+		config:         config,
+		scheme:         options.Scheme,
+		mapper:         options.Mapper,
+		codecs:         serializer.NewCodecFactory(options.Scheme),
+		resourceByType: make(map[schema.GroupVersionKind]*resourceMeta),
+	}
+
 	c := &client{
 		typedClient: typedClient{
-			cache: clientCache{
-				config:         config,
-				scheme:         options.Scheme,
-				mapper:         options.Mapper,
-				codecs:         serializer.NewCodecFactory(options.Scheme),
-				resourceByType: make(map[reflect.Type]*resourceMeta),
-			},
+			cache:      clientcache,
 			paramCodec: runtime.NewParameterCodec(options.Scheme),
 		},
 		unstructuredClient: unstructuredClient{
+			cache:      clientcache,
 			client:     dynamicClient,
 			restMapper: options.Mapper,
+			paramCodec: parameterCodec{},
 		},
 	}
 

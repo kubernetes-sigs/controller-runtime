@@ -58,6 +58,8 @@ type fakeLoggerRoot struct {
 	messages []logInfo
 }
 
+var _ logr.Logger = &fakeLogger{}
+
 // fakeLogger is a fake implementation of logr.Logger that records
 // messages, tags, and names,
 // just records the name.

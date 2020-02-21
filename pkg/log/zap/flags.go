@@ -23,38 +23,39 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 type encoderConfigFunc func(*zapcore.EncoderConfig)
 
-type encoderValue struct {
-	set     bool
+type encoderFlag struct {
 	setFunc func(zapcore.Encoder)
-	str     string
+	value   string
 }
 
-func (v encoderValue) String() string {
-	return v.str
+var _ pflag.Value = &encoderFlag{}
+
+func (ev *encoderFlag) String() string {
+	return ev.value
 }
 
-func (v encoderValue) Type() string {
+func (ev *encoderFlag) Type() string {
 	return "encoder"
 }
 
-func (v *encoderValue) Set(e string) error {
-	v.set = true
-	val := strings.ToLower(e)
+func (ev *encoderFlag) Set(flagValue string) error {
+	val := strings.ToLower(flagValue)
 	switch val {
 	case "json":
-		v.setFunc(newJSONEncoder())
+		ev.setFunc(newJSONEncoder())
 	case "console":
-		v.setFunc(newConsoleEncoder())
+		ev.setFunc(newConsoleEncoder())
 	default:
-		return fmt.Errorf("invalid encoder value \"%s\"", e)
+		return fmt.Errorf("invalid encoder value \"%s\"", flagValue)
 	}
-	v.str = e
+	ev.value = flagValue
 	return nil
 }
 
@@ -74,59 +75,58 @@ func newConsoleEncoder(ecfs ...encoderConfigFunc) zapcore.Encoder {
 	return zapcore.NewConsoleEncoder(encoderConfig)
 }
 
-type levelValue struct {
-	set     bool
+type levelFlag struct {
 	setFunc func(zap.AtomicLevel)
-	str     string
+	value   string
 }
 
-func (v *levelValue) Set(l string) error {
-	v.set = true
-	lower := strings.ToLower(l)
+var _ pflag.Value = &levelFlag{}
+
+func (ev *levelFlag) Set(flagValue string) error {
+	lower := strings.ToLower(flagValue)
 	switch lower {
 	case "debug":
-		v.setFunc(zap.NewAtomicLevelAt(zap.DebugLevel))
+		ev.setFunc(zap.NewAtomicLevelAt(zap.DebugLevel))
 	case "info":
-		v.setFunc(zap.NewAtomicLevelAt(zap.InfoLevel))
+		ev.setFunc(zap.NewAtomicLevelAt(zap.InfoLevel))
 	default:
-		return fmt.Errorf("invalid log level \"%s\"", l)
+		return fmt.Errorf("invalid log level \"%s\"", flagValue)
 	}
-	v.str = l
+	ev.value = flagValue
 	return nil
 }
 
-func (v levelValue) String() string {
-	return v.str
+func (ev *levelFlag) String() string {
+	return ev.value
 }
 
-func (v levelValue) Type() string {
+func (ev *levelFlag) Type() string {
 	return "level"
 }
 
-type stackTraceValue struct {
-	set     bool
+type stackTraceFlag struct {
 	setFunc func(zap.AtomicLevel)
-	str     string
+	value   string
 }
 
-func (s *stackTraceValue) Set(val string) error {
-	s.set = true
-	lower := strings.ToLower(val)
+func (ev *stackTraceFlag) Set(flagValue string) error {
+	lower := strings.ToLower(flagValue)
 	switch lower {
 	case "warn":
-		s.setFunc(zap.NewAtomicLevelAt(zap.WarnLevel))
+		ev.setFunc(zap.NewAtomicLevelAt(zap.WarnLevel))
 	case "error":
-		s.setFunc(zap.NewAtomicLevelAt(zap.ErrorLevel))
+		ev.setFunc(zap.NewAtomicLevelAt(zap.ErrorLevel))
 	default:
-		return fmt.Errorf("invalid stacktrace level \"%s\"", val)
+		return fmt.Errorf("invalid stacktrace level \"%s\"", flagValue)
 	}
+	ev.value = flagValue
 	return nil
 }
 
-func (s stackTraceValue) String() string {
-	return s.str
+func (ev *stackTraceFlag) String() string {
+	return ev.value
 }
 
-func (_ stackTraceValue) Type() string {
+func (ev *stackTraceFlag) Type() string {
 	return "level"
 }

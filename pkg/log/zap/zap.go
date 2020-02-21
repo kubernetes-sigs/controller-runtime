@@ -215,21 +215,21 @@ func (o *Options) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.Development, "zap-devel", false, "Enable zap development mode (changes defaults to console encoder, debug log level, and disables sampling)")
 
 	// Set Encoder value
-	var encVal encoderValue
+	var encVal encoderFlag
 	encVal.setFunc = func(fromFlag zapcore.Encoder) {
 		o.Encoder = fromFlag
 	}
 	fs.Var(&encVal, "zap-encoder", "Zap log encoding ('json' or 'console')")
 
 	// Set the Log Level
-	var levelVal levelValue
+	var levelVal levelFlag
 	levelVal.setFunc = func(fromFlag zap.AtomicLevel) {
 		o.Level = &fromFlag
 	}
 	fs.Var(&levelVal, "zap-log-level", "Zap log level (one of 'debug', 'info', 'error' or any integer value > 0)")
 
 	// Set the StrackTrace Level
-	var stackVal stackTraceValue
+	var stackVal stackTraceFlag
 	stackVal.setFunc = func(fromFlag zap.AtomicLevel) {
 		o.StacktraceLevel = &fromFlag
 	}
@@ -238,7 +238,7 @@ func (o *Options) BindFlags(fs *pflag.FlagSet) {
 }
 
 // UseFlagOptions to set logger with CLI passed flags.
-func UseFlagOptions(in *Options) func(o *Options) {
+func UseFlagOptions(in *Options) Opts {
 	return func(o *Options) {
 		*o = *in
 		o.addDefaults()

@@ -138,6 +138,9 @@ func (o *CreateOptions) AsCreateOptions() *metav1.CreateOptions {
 // and then returns itself (for convenient chaining).
 func (o *CreateOptions) ApplyOptions(opts []CreateOption) *CreateOptions {
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		opt.ApplyToCreate(o)
 	}
 	return o

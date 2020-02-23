@@ -21,18 +21,14 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/dynamic"
 )
 
 // client is a client.Client that reads and writes directly from/to an API server.  It lazily initializes
 // new clients at the time they are used, and caches the client.
 type unstructuredClient struct {
 	cache      *clientCache
-	client     dynamic.Interface
-	restMapper meta.RESTMapper
 	paramCodec runtime.ParameterCodec
 }
 
@@ -190,7 +186,9 @@ func (uc *unstructuredClient) Get(ctx context.Context, key ObjectKey, obj runtim
 		NamespaceIfScoped(key.Namespace, r.isNamespaced()).
 		Resource(r.resource()).
 		Context(ctx).
-		Name(key.Name).Do().Into(obj)
+		Name(key.Name).
+		Do().
+		Into(obj)
 
 	u.SetGroupVersionKind(gvk)
 
@@ -250,10 +248,12 @@ func (uc *unstructuredClient) UpdateStatus(ctx context.Context, obj runtime.Obje
 }
 
 func (uc *unstructuredClient) PatchStatus(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOption) error {
-	_, ok := obj.(*unstructured.Unstructured)
+	u, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
 	}
+
+	gvk := u.GroupVersionKind()
 
 	o, err := uc.cache.getObjMeta(obj)
 	if err != nil {
@@ -266,7 +266,7 @@ func (uc *unstructuredClient) PatchStatus(ctx context.Context, obj runtime.Objec
 	}
 
 	patchOpts := &PatchOptions{}
-	return o.Patch(patch.Type()).
+	result := o.Patch(patch.Type()).
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
@@ -275,5 +275,8 @@ func (uc *unstructuredClient) PatchStatus(ctx context.Context, obj runtime.Objec
 		VersionedParams(patchOpts.ApplyOptions(opts).AsPatchOptions(), uc.paramCodec).
 		Context(ctx).
 		Do().
-		Into(obj)
+		Into(u)
+
+	u.SetGroupVersionKind(gvk)
+	return result
 }

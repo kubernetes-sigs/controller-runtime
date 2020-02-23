@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -69,11 +68,6 @@ func New(config *rest.Config, options Options) (Client, error) {
 		}
 	}
 
-	dynamicClient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
 	clientcache := &clientCache{
 		config:         config,
 		scheme:         options.Scheme,
@@ -89,9 +83,7 @@ func New(config *rest.Config, options Options) (Client, error) {
 		},
 		unstructuredClient: unstructuredClient{
 			cache:      clientcache,
-			client:     dynamicClient,
-			restMapper: options.Mapper,
-			paramCodec: parameterCodec{},
+			paramCodec: noConversionParamCodec{},
 		},
 	}
 

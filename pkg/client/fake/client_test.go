@@ -172,6 +172,35 @@ var _ = Describe("Fake client", func() {
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
 		})
 
+		It("should be able to Create with GenerateName", func() {
+			By("Creating a new configmap")
+			newcm := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "new-test-cm",
+					Namespace:    "ns2",
+					Labels: map[string]string{
+						"test-label": "label-value",
+					},
+				},
+			}
+			err := cl.Create(nil, newcm)
+			Expect(err).To(BeNil())
+
+			By("Listing configmaps with a particular label")
+			list := &corev1.ConfigMapList{}
+			err = cl.List(nil, list, client.InNamespace("ns2"),
+				client.MatchingLabels(map[string]string{
+					"test-label": "label-value",
+				}))
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(1))
+			Expect(list.Items[0].Name).NotTo(BeEmpty())
+		})
+
 		It("should be able to Update", func() {
 			By("Updating a new configmap")
 			newcm := &corev1.ConfigMap{

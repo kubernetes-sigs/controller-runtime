@@ -18,12 +18,11 @@ set -e
 
 source $(dirname ${BASH_SOURCE})/common.sh
 
-header_text "running go vet"
-
-go vet ${MOD_OPT} ./...
+REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
+cd "${REPO_ROOT}"
 
 header_text "running golangci-lint"
+make lint
 
-golangci-lint run ./pkg/... ./examples/... .
-
-GO111MODULES=on go list -mod=readonly ./...
+header_text "verifying modules"
+make modules verify-modules

@@ -869,6 +869,12 @@ var _ = Describe("Client", func() {
 				By("validating updated Deployment has type information")
 				Expect(u.GroupVersionKind()).To(Equal(depGvk))
 
+				By("validating patched Deployment has new status")
+				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
+
 				close(done)
 			})
 

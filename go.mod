@@ -15,7 +15,6 @@ require (
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90
 	go.uber.org/zap v1.10.0
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
-	golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
 	gomodules.xyz/jsonpatch/v2 v2.0.1
 	gopkg.in/fsnotify.v1 v1.4.7
 	k8s.io/api v0.17.2

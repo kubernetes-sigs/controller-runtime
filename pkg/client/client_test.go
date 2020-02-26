@@ -827,6 +827,57 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
+			It("should update status and preserve type information", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("updating the status of Deployment")
+				u := &unstructured.Unstructured{}
+				dep.Status.Replicas = 1
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
+				err = cl.Status().Update(context.TODO(), u)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating updated Deployment has type information")
+				Expect(u.GroupVersionKind()).To(Equal(depGvk))
+
+				close(done)
+			})
+
+			It("should patch status and preserve type information", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("patching the status of Deployment")
+				u := &unstructured.Unstructured{}
+				depPatch := client.MergeFrom(dep.DeepCopy())
+				dep.Status.Replicas = 1
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
+				err = cl.Status().Patch(context.TODO(), u, depPatch)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating updated Deployment has type information")
+				Expect(u.GroupVersionKind()).To(Equal(depGvk))
+
+				By("validating patched Deployment has new status")
+				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
+
+				close(done)
+			})
+
 			It("should not update spec of an existing object", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())

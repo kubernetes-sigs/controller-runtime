@@ -57,7 +57,7 @@ func (ip *informerCache) Get(ctx context.Context, key client.ObjectKey, out runt
 		return err
 	}
 
-	started, cache, err := ip.InformersMap.Get(gvk, out)
+	started, cache, err := ip.InformersMap.Get(ctx, gvk, out)
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func (ip *informerCache) List(ctx context.Context, out runtime.Object, opts ...c
 		return err
 	}
 
-	started, cache, err := ip.InformersMap.Get(*gvk, cacheTypeObj)
+	started, cache, err := ip.InformersMap.Get(ctx, *gvk, cacheTypeObj)
 	if err != nil {
 		return err
 	}
@@ -128,7 +128,6 @@ func (ip *informerCache) objectTypeForListObject(list runtime.Object) (*schema.G
 	}
 
 	return &gvk, cacheTypeObj, nil
-
 }
 
 // GetInformerForKind returns the informer for the GroupVersionKind
@@ -138,7 +137,10 @@ func (ip *informerCache) GetInformerForKind(gvk schema.GroupVersionKind) (Inform
 	if err != nil {
 		return nil, err
 	}
-	_, i, err := ip.InformersMap.Get(gvk, obj)
+
+	// TODO(djzager): before a context can be passed down, the Informers interface
+	// must be updated to accept a context when getting an informer
+	_, i, err := ip.InformersMap.Get(context.TODO(), gvk, obj)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +153,10 @@ func (ip *informerCache) GetInformer(obj runtime.Object) (Informer, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, i, err := ip.InformersMap.Get(gvk, obj)
+
+	// TODO(djzager): before a context can be passed down, the Informers interface
+	// must be updated to accept a context when getting an informer
+	_, i, err := ip.InformersMap.Get(context.TODO(), gvk, obj)
 	if err != nil {
 		return nil, err
 	}

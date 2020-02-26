@@ -70,38 +70,13 @@ func (ip *informerCache) Get(ctx context.Context, key client.ObjectKey, out runt
 
 // List implements Reader
 func (ip *informerCache) List(ctx context.Context, out runtime.Object, opts ...client.ListOption) error {
-	gvk, err := apiutil.GVKForObject(out, ip.Scheme)
+
+	gvk, cacheTypeObj, err := ip.objectTypeForListObject(out)
 	if err != nil {
 		return err
 	}
 
-	if !strings.HasSuffix(gvk.Kind, "List") {
-		return fmt.Errorf("non-list type %T (kind %q) passed as output", out, gvk)
-	}
-	// we need the non-list GVK, so chop off the "List" from the end of the kind
-	gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
-	_, isUnstructured := out.(*unstructured.UnstructuredList)
-	var cacheTypeObj runtime.Object
-	if isUnstructured {
-		u := &unstructured.Unstructured{}
-		u.SetGroupVersionKind(gvk)
-		cacheTypeObj = u
-	} else {
-		itemsPtr, err := apimeta.GetItemsPtr(out)
-		if err != nil {
-			return nil
-		}
-		// http://knowyourmeme.com/memes/this-is-fine
-		elemType := reflect.Indirect(reflect.ValueOf(itemsPtr)).Type().Elem()
-		cacheTypeValue := reflect.Zero(reflect.PtrTo(elemType))
-		var ok bool
-		cacheTypeObj, ok = cacheTypeValue.Interface().(runtime.Object)
-		if !ok {
-			return fmt.Errorf("cannot get cache for %T, its element %T is not a runtime.Object", out, cacheTypeValue.Interface())
-		}
-	}
-
-	started, cache, err := ip.InformersMap.Get(gvk, cacheTypeObj)
+	started, cache, err := ip.InformersMap.Get(*gvk, cacheTypeObj)
 	if err != nil {
 		return err
 	}
@@ -111,6 +86,49 @@ func (ip *informerCache) List(ctx context.Context, out runtime.Object, opts ...c
 	}
 
 	return cache.Reader.List(ctx, out, opts...)
+}
+
+// objectTypeForListObject tries to find the runtime.Object and associated GVK
+// for a single object corresponding to the passed-in list type. We need them
+// because they are used as cache map key.
+func (ip *informerCache) objectTypeForListObject(list runtime.Object) (*schema.GroupVersionKind, runtime.Object, error) {
+	gvk, err := apiutil.GVKForObject(list, ip.Scheme)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !strings.HasSuffix(gvk.Kind, "List") {
+		return nil, nil, fmt.Errorf("non-list type %T (kind %q) passed as output", list, gvk)
+	}
+	// we need the non-list GVK, so chop off the "List" from the end of the kind
+	gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
+	_, isUnstructured := list.(*unstructured.UnstructuredList)
+	var cacheTypeObj runtime.Object
+	if isUnstructured {
+		u := &unstructured.Unstructured{}
+		u.SetGroupVersionKind(gvk)
+		cacheTypeObj = u
+	} else {
+		itemsPtr, err := apimeta.GetItemsPtr(list)
+		if err != nil {
+			return nil, nil, err
+		}
+		// http://knowyourmeme.com/memes/this-is-fine
+		elemType := reflect.Indirect(reflect.ValueOf(itemsPtr)).Type().Elem()
+		if elemType.Kind() != reflect.Ptr {
+			elemType = reflect.PtrTo(elemType)
+		}
+
+		cacheTypeValue := reflect.Zero(elemType)
+		var ok bool
+		cacheTypeObj, ok = cacheTypeValue.Interface().(runtime.Object)
+		if !ok {
+			return nil, nil, fmt.Errorf("cannot get cache for %T, its element %T is not a runtime.Object", list, cacheTypeValue.Interface())
+		}
+	}
+
+	return &gvk, cacheTypeObj, nil
+
 }
 
 // GetInformerForKind returns the informer for the GroupVersionKind

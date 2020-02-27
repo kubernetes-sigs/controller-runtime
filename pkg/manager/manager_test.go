@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -903,8 +904,8 @@ func (*leRunnable) Start(<-chan struct{}) error {
 	return nil
 }
 
-func (*leRunnable) NeedLeaderElection() bool {
-	return true
+func (*leRunnable) GetLeaderElectionMode() leaderelection.Mode {
+	return leaderelection.PerControllerGroupLeaderElectionMode
 }
 
 func (le *leRunnable) GetID() string {

@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
@@ -101,10 +102,10 @@ func (s *Server) setDefaults() {
 	}
 }
 
-// NeedLeaderElection implements the LeaderElectionRunnable interface, which indicates
+// GetLeaderElectionMode implements the LeaderElectionRunnable interface, which indicates
 // the webhook server doesn't need leader election.
-func (*Server) NeedLeaderElection() bool {
-	return false
+func (*Server) GetLeaderElectionMode() leaderelection.Mode {
+	return leaderelection.NonLeaderElectionMode
 }
 
 // GetID implements the LeaderElectionRunnable interface.

@@ -25,6 +25,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -51,7 +52,7 @@ var _ = Describe("controller.Controller", func() {
 			c, err := controller.New("", m, controller.Options{
 				Reconciler: rec,
 				LeaderElection: &controller.LeaderElectionOptions{
-					NeedLeaderElection: false,
+					LeaderElectionMode: leaderelection.NonLeaderElectionMode,
 				},
 			})
 			Expect(c).To(BeNil())
@@ -78,7 +79,7 @@ var _ = Describe("controller.Controller", func() {
 			c, err := controller.New("foo", m, controller.Options{
 				Reconciler: &failRec{},
 				LeaderElection: &controller.LeaderElectionOptions{
-					NeedLeaderElection: false,
+					LeaderElectionMode: leaderelection.NonLeaderElectionMode,
 				},
 			})
 			Expect(c).To(BeNil())
@@ -95,7 +96,7 @@ var _ = Describe("controller.Controller", func() {
 			c1, err := controller.New("c1", m, controller.Options{
 				Reconciler: rec,
 				LeaderElection: &controller.LeaderElectionOptions{
-					NeedLeaderElection: false,
+					LeaderElectionMode: leaderelection.NonLeaderElectionMode,
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -104,7 +105,7 @@ var _ = Describe("controller.Controller", func() {
 			c2, err := controller.New("c2", m, controller.Options{
 				Reconciler: rec,
 				LeaderElection: &controller.LeaderElectionOptions{
-					NeedLeaderElection: false,
+					LeaderElectionMode: leaderelection.NonLeaderElectionMode,
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())

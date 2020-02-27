@@ -25,6 +25,7 @@ import (
 	ref "k8s.io/client-go/tools/reference"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -62,7 +63,7 @@ var _ = Describe("recorder", func() {
 						return reconcile.Result{}, nil
 					}),
 				LeaderElection: &controller.LeaderElectionOptions{
-					NeedLeaderElection: false,
+					LeaderElectionMode: leaderelection.NonLeaderElectionMode,
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())

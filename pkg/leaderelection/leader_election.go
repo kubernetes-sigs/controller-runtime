@@ -29,7 +29,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
 
-const inClusterNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+type Mode uint8
+
+const (
+	inClusterNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+
+	// NonLeaderElectionMode mode for Runnables that don't need leader election
+	NonLeaderElectionMode Mode = 0
+
+	// PerManagerLeaderElectionMode mode for Runnables that need per-manager leader election mode
+	PerManagerLeaderElectionMode Mode = 1
+
+	// PerControllerGroupLeaderElectionMode mode for Runnables that need per-controller leader election mode
+	PerControllerGroupLeaderElectionMode Mode = 2
+)
 
 // Options provides the required configuration to create a new resource lock
 type Options struct {

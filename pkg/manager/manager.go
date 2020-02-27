@@ -119,12 +119,14 @@ type Options struct {
 	// so that all controllers will not send list requests simultaneously.
 	SyncPeriod *time.Duration
 
-	// DefaultLeaderElection determines whether or not to use leader election by default
-	// for runnables that don't implement LeaderElectionRunnable interface.
+	// DefaultLeaderElection determines whether or not to use leader election
+	// for runnables that need per-manager leader election or
+	// don't implement LeaderElectionRunnable interface.
 	DefaultLeaderElection bool
 
 	// DefaultLeaderElectionID determines the name of the configmap that leader election
-	// will use for runnables that don't implement LeaderElectionRunnable interface.
+	// will use for runnables that need per-manager leader election or
+	// don't implement LeaderElectionRunnable interface.
 	// If not specified, default value will be assigned.
 	DefaultLeaderElectionID string
 
@@ -225,11 +227,10 @@ func (r RunnableFunc) Start(s <-chan struct{}) error {
 
 // LeaderElectionRunnable knows if a Runnable needs to be run in the leader election mode.
 type LeaderElectionRunnable interface {
-	// NeedLeaderElection returns true if the Runnable needs to be run in the leader election mode.
-	// e.g. controllers need to be run in leader election mode, while webhook server doesn't.
-	NeedLeaderElection() bool
+	// GetLeaderElectionMode returns leader election mode in which Runnable needs to be run.
+	GetLeaderElectionMode() leaderelection.Mode
 
-	// GetID returns leader election ID
+	// GetID returns leader election ID for per-controller leader election mode.
 	GetID() string
 }
 

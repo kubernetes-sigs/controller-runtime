@@ -89,8 +89,9 @@ type controllerManager struct {
 	// (and EventHandlers, Sources and Predicates).
 	recorderProvider recorder.Provider
 
-	// defaultLeaderElection determines whether or not to use leader election by default
-	// for runnables that don't implement LeaderElectionRunnable interface.
+	// defaultLeaderElection determines whether or not to use leader election
+	// for runnables that need per-manager leader election or
+	// don't implement LeaderElectionRunnable interface.
 	defaultLeaderElection bool
 
 	// defaultLeaderElectionID is used for runnables that don't implement LeaderElectionRunnable interface.
@@ -237,7 +238,16 @@ func (cm *controllerManager) Add(r Runnable) error {
 	}
 
 	// Add the runnable to the leader election or the non-leaderelection list
-	if leRunnable, ok := r.(LeaderElectionRunnable); (ok && !leRunnable.NeedLeaderElection()) || (!ok && !cm.defaultLeaderElection) {
+	leRunnable, ok := r.(LeaderElectionRunnable)
+
+	// If runnable doesn't implement LeaderElectionRunnable interface and defaultLeaderElection is true
+	// it's assumed that it needs per-manager leader election.
+	// This is done to maintain backwards compatibility
+	needPerManagerLE := cm.defaultLeaderElection && (!ok || (ok && (leRunnable.GetLeaderElectionMode() == crleaderelection.PerManagerLeaderElectionMode)))
+
+	needPerControllerLE := ok && (leRunnable.GetLeaderElectionMode() == crleaderelection.PerControllerGroupLeaderElectionMode)
+
+	if !needPerManagerLE && !needPerControllerLE {
 		cm.nonLeaderElectionRunnables = append(cm.nonLeaderElectionRunnables, r)
 
 		if cm.started {
@@ -252,18 +262,15 @@ func (cm *controllerManager) Add(r Runnable) error {
 	} else {
 		var leID string
 
-		if ok {
+		if needPerManagerLE {
+			leID = cm.defaultLeaderElectionID
+		} else {
 			leID := leRunnable.GetID()
 
 			// Check that leader election ID is defined
 			if leID == "" {
 				return errors.New("LeaderElectionID must be configured")
 			}
-		} else if cm.defaultLeaderElection {
-			// If runnable doesn't implement LeaderElectionRunnable interface and defaultLeaderElection is true
-			// it's assumed that it needs leader election.
-			// This is done to maintain backwards compatibility
-			leID = cm.defaultLeaderElectionID
 		}
 
 		cm.leaderElectionRunnables[leID] = append(cm.leaderElectionRunnables[leID], r)

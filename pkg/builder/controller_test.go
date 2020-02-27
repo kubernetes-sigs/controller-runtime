@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
@@ -64,7 +65,7 @@ var _ = Describe("application", func() {
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{
 					LeaderElection: &controller.LeaderElectionOptions{
-						NeedLeaderElection: false,
+						LeaderElectionMode: leaderelection.NonLeaderElectionMode,
 					},
 				}).
 				Build(noop)
@@ -83,7 +84,7 @@ var _ = Describe("application", func() {
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{
 					LeaderElection: &controller.LeaderElectionOptions{
-						NeedLeaderElection: false,
+						LeaderElectionMode: leaderelection.NonLeaderElectionMode,
 					},
 				}).
 				Build(noop)
@@ -110,7 +111,7 @@ var _ = Describe("application", func() {
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{
 					LeaderElection: &controller.LeaderElectionOptions{
-						NeedLeaderElection: false,
+						LeaderElectionMode: leaderelection.NonLeaderElectionMode,
 					},
 				}).
 				Build(noop)
@@ -139,7 +140,7 @@ var _ = Describe("application", func() {
 				WithOptions(controller.Options{
 					MaxConcurrentReconciles: maxConcurrentReconciles,
 					LeaderElection: &controller.LeaderElectionOptions{
-						NeedLeaderElection: false,
+						LeaderElectionMode: leaderelection.NonLeaderElectionMode,
 					},
 				}).
 				Build(noop)
@@ -186,7 +187,7 @@ var _ = Describe("application", func() {
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{
 					LeaderElection: &controller.LeaderElectionOptions{
-						NeedLeaderElection: false,
+						LeaderElectionMode: leaderelection.NonLeaderElectionMode,
 					},
 				}).
 				Build(noop)
@@ -199,7 +200,7 @@ var _ = Describe("application", func() {
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{
 					LeaderElection: &controller.LeaderElectionOptions{
-						NeedLeaderElection: false,
+						LeaderElectionMode: leaderelection.NonLeaderElectionMode,
 					},
 				}).
 				Build(noop)
@@ -218,7 +219,7 @@ var _ = Describe("application", func() {
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{
 					LeaderElection: &controller.LeaderElectionOptions{
-						NeedLeaderElection: false,
+						LeaderElectionMode: leaderelection.NonLeaderElectionMode,
 					},
 				})
 			doReconcileTest("3", stop, bldr, m, false)
@@ -233,7 +234,7 @@ var _ = Describe("application", func() {
 				For(&appsv1.Deployment{}).
 				WithOptions(controller.Options{
 					LeaderElection: &controller.LeaderElectionOptions{
-						NeedLeaderElection: false,
+						LeaderElectionMode: leaderelection.NonLeaderElectionMode,
 					},
 				}).
 				Watches( // Equivalent of Owns

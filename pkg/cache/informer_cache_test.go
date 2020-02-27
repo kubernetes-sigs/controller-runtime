@@ -8,6 +8,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
@@ -23,6 +24,6 @@ var _ = Describe("informerCache", func() {
 
 		leaderElectionRunnable, ok := c.(manager.LeaderElectionRunnable)
 		Expect(ok).To(BeTrue())
-		Expect(leaderElectionRunnable.NeedLeaderElection()).To(BeFalse())
+		Expect(leaderElectionRunnable.GetLeaderElectionMode()).To(Equal(leaderelection.NonLeaderElectionMode))
 	})
 })

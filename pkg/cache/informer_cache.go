@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache/internal"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 )
 
 var (
@@ -163,10 +164,10 @@ func (ip *informerCache) GetInformer(obj runtime.Object) (Informer, error) {
 	return i.Informer, err
 }
 
-// NeedLeaderElection implements the LeaderElectionRunnable interface
+// GetLeaderElectionMode implements the LeaderElectionRunnable interface
 // to indicate that this can be started without requiring the leader lock
-func (ip *informerCache) NeedLeaderElection() bool {
-	return false
+func (ip *informerCache) GetLeaderElectionMode() leaderelection.Mode {
+	return leaderelection.NonLeaderElectionMode
 }
 
 // GetID implements the LeaderElectionRunnable interface.

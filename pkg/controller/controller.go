@@ -22,6 +22,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/internal/controller"
+	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
@@ -48,8 +49,8 @@ type Options struct {
 
 // Leader Election options
 type LeaderElectionOptions struct {
-	// NeedLeaderElection determines whether or not to use leader election when starting the controller.
-	NeedLeaderElection bool
+	// LeaderElectionMode determines what leader election mode to use when starting the controller.
+	LeaderElectionMode leaderelection.Mode
 
 	// LeaderElectionID determines the name of the configmap that leader election will use for holding the leader lock.
 	LeaderElectionID string
@@ -96,8 +97,9 @@ func New(name string, mgr manager.Manager, options Options) (Controller, error) 
 	}
 
 	if options.LeaderElection == nil {
+		// Defaulting to per-manager leader election mode for backwards compatibility
 		options.LeaderElection = &LeaderElectionOptions{
-			NeedLeaderElection: true,
+			LeaderElectionMode: leaderelection.PerManagerLeaderElectionMode,
 			LeaderElectionID:   name,
 		}
 	}
@@ -120,7 +122,7 @@ func New(name string, mgr manager.Manager, options Options) (Controller, error) 
 		},
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
 		Name:                    name,
-		LeaderElection:          options.LeaderElection.NeedLeaderElection,
+		LeaderElectionMode:      options.LeaderElection.LeaderElectionMode,
 		LeaderElectionID:        options.LeaderElection.LeaderElectionID,
 	}
 

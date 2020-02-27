@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -50,9 +51,9 @@ type Controller struct {
 	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 
-	// LeaderElection determines whether or not to use leader election when
+	// LeaderElectionMode determines which leader election mode to use when
 	// starting the controller.
-	LeaderElection bool
+	LeaderElectionMode leaderelection.Mode
 
 	// LeaderElectionID determines the name of the configmap that leader election
 	// will use for holding the leader lock.
@@ -305,8 +306,8 @@ func (c *Controller) updateMetrics(reconcileTime time.Duration) {
 	ctrlmetrics.ReconcileTime.WithLabelValues(c.Name).Observe(reconcileTime.Seconds())
 }
 
-func (c *Controller) NeedLeaderElection() bool {
-	return c.LeaderElection
+func (c *Controller) GetLeaderElectionMode() leaderelection.Mode {
+	return c.LeaderElectionMode
 }
 
 func (c *Controller) GetID() string {

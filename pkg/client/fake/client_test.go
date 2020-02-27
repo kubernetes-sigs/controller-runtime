@@ -27,6 +27,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -172,6 +173,19 @@ var _ = Describe("Fake client", func() {
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
 		})
 
+		It("should error on create with set resourceVersion", func() {
+			By("Creating a new configmap")
+			newcm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "new-test-cm",
+					Namespace:       "ns2",
+					ResourceVersion: "1",
+				},
+			}
+			err := cl.Create(context.Background(), newcm)
+			Expect(apierrors.IsBadRequest(err)).To(BeTrue())
+		})
+
 		It("should be able to Create with GenerateName", func() {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
@@ -211,7 +225,7 @@ var _ = Describe("Fake client", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "test-cm",
 					Namespace:       "ns2",
-					ResourceVersion: "1",
+					ResourceVersion: "",
 				},
 				Data: map[string]string{
 					"test-key": "new-value",
@@ -229,7 +243,34 @@ var _ = Describe("Fake client", func() {
 			err = cl.Get(context.Background(), namespacedName, obj)
 			Expect(err).To(BeNil())
 			Expect(obj).To(Equal(newcm))
-			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("2"))
+			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
+		})
+
+		It("should reject updates with non-matching ResourceVersion", func() {
+			By("Updating a new configmap")
+			newcm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test-cm",
+					Namespace:       "ns2",
+					ResourceVersion: "1",
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+			err := cl.Update(context.Background(), newcm)
+			Expect(apierrors.IsConflict(err)).To(BeTrue())
+
+			By("Getting the configmap")
+			namespacedName := types.NamespacedName{
+				Name:      "test-cm",
+				Namespace: "ns2",
+			}
+			obj := &corev1.ConfigMap{}
+			err = cl.Get(context.Background(), namespacedName, obj)
+			Expect(err).To(BeNil())
+			Expect(obj).To(Equal(cm))
+			Expect(obj.ObjectMeta.ResourceVersion).To(Equal(""))
 		})
 
 		It("should be able to Delete", func() {

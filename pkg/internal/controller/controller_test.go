@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -106,9 +107,9 @@ var _ = Describe("controller", func() {
 
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = c.GetInformer(&appsv1.Deployment{})
+			_, err = c.GetInformer(context.TODO(), &appsv1.Deployment{})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = c.GetInformer(&appsv1.ReplicaSet{})
+			_, err = c.GetInformer(context.TODO(), &appsv1.ReplicaSet{})
 			Expect(err).NotTo(HaveOccurred())
 			ctrl.Cache = c
 			ctrl.WaitForCacheSync = func(<-chan struct{}) bool { return true }

@@ -216,7 +216,7 @@ func ExampleClient_deleteAllOf() {
 // This example shows how to set up and consume a field selector over a pod's volumes' secretName field.
 func ExampleFieldIndexer_secretName() {
 	// someIndexer is a FieldIndexer over a Cache
-	_ = someIndexer.IndexField(&corev1.Pod{}, "spec.volumes.secret.secretName", func(o runtime.Object) []string {
+	_ = someIndexer.IndexField(context.TODO(), &corev1.Pod{}, "spec.volumes.secret.secretName", func(o runtime.Object) []string {
 		var res []string
 		for _, vol := range o.(*corev1.Pod).Spec.Volumes {
 			if vol.Secret == nil {

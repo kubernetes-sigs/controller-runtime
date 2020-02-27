@@ -56,7 +56,7 @@ type Server struct {
 	// CertName is the server certificate name. Defaults to tls.crt.
 	CertName string
 
-	// CertName is the server key name. Defaults to tls.key.
+	// KeyName is the server key name. Defaults to tls.key.
 	KeyName string
 
 	// ClientCAName is the CA certificate name which server used to verify remote(client)'s certificate.

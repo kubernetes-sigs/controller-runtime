@@ -114,7 +114,7 @@ func defaultCRDOptions(o *CRDInstallOptions) {
 func WaitForCRDs(config *rest.Config, crds []runtime.Object, options CRDInstallOptions) error {
 	// Add each CRD to a map of GroupVersion to Resource
 	waitingFor := map[schema.GroupVersion]*sets.String{}
-	for _, crd := range runtimeListToUnstructured(crds) {
+	for _, crd := range runtimeCRDListToUnstructured(crds) {
 		gvs := []schema.GroupVersion{}
 		crdGroup, _, err := unstructured.NestedString(crd.Object, "spec", "group")
 		if err != nil {
@@ -230,7 +230,7 @@ func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
 	}
 
 	// Uninstall each CRD
-	for _, crd := range runtimeListToUnstructured(options.CRDs) {
+	for _, crd := range runtimeCRDListToUnstructured(options.CRDs) {
 		log.V(1).Info("uninstalling CRD", "crd", crd.GetName())
 		if err := cs.Delete(context.TODO(), crd); err != nil {
 			// If CRD is not found, we can consider success
@@ -251,7 +251,7 @@ func CreateCRDs(config *rest.Config, crds []runtime.Object) error {
 	}
 
 	// Create each CRD
-	for _, crd := range runtimeListToUnstructured(crds) {
+	for _, crd := range runtimeCRDListToUnstructured(crds) {
 		log.V(1).Info("installing CRD", "crd", crd.GetName())
 		existingCrd := crd.DeepCopy()
 		err := cs.Get(context.TODO(), client.ObjectKey{Name: crd.GetName()}, existingCrd)
@@ -314,7 +314,7 @@ func renderCRDs(options *CRDInstallOptions) ([]runtime.Object, error) {
 		crds = append(crds, crdList...)
 	}
 
-	return unstructuredListToRuntime(crds), nil
+	return unstructuredCRDListToRuntime(crds), nil
 }
 
 // readCRDs reads the CRDs from files and Unmarshals them into structs

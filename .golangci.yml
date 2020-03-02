@@ -4,6 +4,7 @@ linters:
     - misspell
     - structcheck
     - golint
+    - govet
     - deadcode
     - errcheck
     - varcheck

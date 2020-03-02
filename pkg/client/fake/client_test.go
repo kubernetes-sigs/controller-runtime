@@ -17,6 +17,7 @@ limitations under the License.
 package fake
 
 import (
+	"context"
 	"encoding/json"
 
 	. "github.com/onsi/ginkgo"
@@ -85,7 +86,7 @@ var _ = Describe("Fake client", func() {
 				Namespace: "ns1",
 			}
 			obj := &appsv1.Deployment{}
-			err := cl.Get(nil, namespacedName, obj)
+			err := cl.Get(context.Background(), namespacedName, obj)
 			Expect(err).To(BeNil())
 			Expect(obj).To(Equal(dep))
 		})
@@ -99,14 +100,14 @@ var _ = Describe("Fake client", func() {
 			obj := &unstructured.Unstructured{}
 			obj.SetAPIVersion("apps/v1")
 			obj.SetKind("Deployment")
-			err := cl.Get(nil, namespacedName, obj)
+			err := cl.Get(context.Background(), namespacedName, obj)
 			Expect(err).To(BeNil())
 		})
 
 		It("should be able to List", func() {
 			By("Listing all deployments in a namespace")
 			list := &appsv1.DeploymentList{}
-			err := cl.List(nil, list, client.InNamespace("ns1"))
+			err := cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(HaveLen(2))
 			Expect(list.Items).To(ConsistOf(*dep, *dep2))
@@ -117,7 +118,7 @@ var _ = Describe("Fake client", func() {
 			list := &unstructured.UnstructuredList{}
 			list.SetAPIVersion("apps/v1")
 			list.SetKind("DeploymentList")
-			err := cl.List(nil, list, client.InNamespace("ns1"))
+			err := cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(HaveLen(2))
 		})
@@ -125,7 +126,7 @@ var _ = Describe("Fake client", func() {
 		It("should support filtering by labels and their values", func() {
 			By("Listing deployments with a particular label and value")
 			list := &appsv1.DeploymentList{}
-			err := cl.List(nil, list, client.InNamespace("ns1"),
+			err := cl.List(context.Background(), list, client.InNamespace("ns1"),
 				client.MatchingLabels(map[string]string{
 					"test-label": "label-value",
 				}))
@@ -156,7 +157,7 @@ var _ = Describe("Fake client", func() {
 					Namespace: "ns2",
 				},
 			}
-			err := cl.Create(nil, newcm)
+			err := cl.Create(context.Background(), newcm)
 			Expect(err).To(BeNil())
 
 			By("Getting the new configmap")
@@ -165,10 +166,39 @@ var _ = Describe("Fake client", func() {
 				Namespace: "ns2",
 			}
 			obj := &corev1.ConfigMap{}
-			err = cl.Get(nil, namespacedName, obj)
+			err = cl.Get(context.Background(), namespacedName, obj)
 			Expect(err).To(BeNil())
 			Expect(obj).To(Equal(newcm))
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
+		})
+
+		It("should be able to Create with GenerateName", func() {
+			By("Creating a new configmap")
+			newcm := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "new-test-cm",
+					Namespace:    "ns2",
+					Labels: map[string]string{
+						"test-label": "label-value",
+					},
+				},
+			}
+			err := cl.Create(nil, newcm)
+			Expect(err).To(BeNil())
+
+			By("Listing configmaps with a particular label")
+			list := &corev1.ConfigMapList{}
+			err = cl.List(nil, list, client.InNamespace("ns2"),
+				client.MatchingLabels(map[string]string{
+					"test-label": "label-value",
+				}))
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(1))
+			Expect(list.Items[0].Name).NotTo(BeEmpty())
 		})
 
 		It("should be able to Update", func() {
@@ -187,7 +217,7 @@ var _ = Describe("Fake client", func() {
 					"test-key": "new-value",
 				},
 			}
-			err := cl.Update(nil, newcm)
+			err := cl.Update(context.Background(), newcm)
 			Expect(err).To(BeNil())
 
 			By("Getting the new configmap")
@@ -196,7 +226,7 @@ var _ = Describe("Fake client", func() {
 				Namespace: "ns2",
 			}
 			obj := &corev1.ConfigMap{}
-			err = cl.Get(nil, namespacedName, obj)
+			err = cl.Get(context.Background(), namespacedName, obj)
 			Expect(err).To(BeNil())
 			Expect(obj).To(Equal(newcm))
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("2"))
@@ -204,12 +234,12 @@ var _ = Describe("Fake client", func() {
 
 		It("should be able to Delete", func() {
 			By("Deleting a deployment")
-			err := cl.Delete(nil, dep)
+			err := cl.Delete(context.Background(), dep)
 			Expect(err).To(BeNil())
 
 			By("Listing all deployments in the namespace")
 			list := &appsv1.DeploymentList{}
-			err = cl.List(nil, list, client.InNamespace("ns1"))
+			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(HaveLen(1))
 			Expect(list.Items).To(ConsistOf(*dep2))
@@ -217,12 +247,12 @@ var _ = Describe("Fake client", func() {
 
 		It("should be able to Delete a Collection", func() {
 			By("Deleting a deploymentList")
-			err := cl.DeleteAllOf(nil, &appsv1.Deployment{}, client.InNamespace("ns1"))
+			err := cl.DeleteAllOf(context.Background(), &appsv1.Deployment{}, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
 
 			By("Listing all deployments in the namespace")
 			list := &appsv1.DeploymentList{}
-			err = cl.List(nil, list, client.InNamespace("ns1"))
+			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(BeEmpty())
 		})
@@ -236,7 +266,7 @@ var _ = Describe("Fake client", func() {
 						Namespace: "ns2",
 					},
 				}
-				err := cl.Create(nil, newcm, client.CreateDryRunAll)
+				err := cl.Create(context.Background(), newcm, client.DryRunAll)
 				Expect(err).To(BeNil())
 
 				By("Getting the new configmap")
@@ -245,7 +275,7 @@ var _ = Describe("Fake client", func() {
 					Namespace: "ns2",
 				}
 				obj := &corev1.ConfigMap{}
-				err = cl.Get(nil, namespacedName, obj)
+				err = cl.Get(context.Background(), namespacedName, obj)
 				Expect(err).To(HaveOccurred())
 				Expect(errors.IsNotFound(err)).To(BeTrue())
 				Expect(obj).NotTo(Equal(newcm))
@@ -263,7 +293,7 @@ var _ = Describe("Fake client", func() {
 						"test-key": "new-value",
 					},
 				}
-				err := cl.Update(nil, newcm, client.UpdateDryRunAll)
+				err := cl.Update(context.Background(), newcm, client.DryRunAll)
 				Expect(err).To(BeNil())
 
 				By("Getting the new configmap")
@@ -272,7 +302,7 @@ var _ = Describe("Fake client", func() {
 					Namespace: "ns2",
 				}
 				obj := &corev1.ConfigMap{}
-				err = cl.Get(nil, namespacedName, obj)
+				err = cl.Get(context.Background(), namespacedName, obj)
 				Expect(err).To(BeNil())
 				Expect(obj).To(Equal(cm))
 				Expect(obj.ObjectMeta.ResourceVersion).To(Equal(""))
@@ -289,7 +319,7 @@ var _ = Describe("Fake client", func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			err = cl.Patch(nil, dep, client.RawPatch(types.StrategicMergePatchType, mergePatch))
+			err = cl.Patch(context.Background(), dep, client.RawPatch(types.StrategicMergePatchType, mergePatch))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Getting the patched deployment")
@@ -298,7 +328,7 @@ var _ = Describe("Fake client", func() {
 				Namespace: "ns1",
 			}
 			obj := &appsv1.Deployment{}
-			err = cl.Get(nil, namespacedName, obj)
+			err = cl.Get(context.Background(), namespacedName, obj)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(obj.Annotations["foo"]).To(Equal("bar"))
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))

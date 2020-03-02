@@ -11,6 +11,7 @@ Documentation:
 - [Creating a manager](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/manager#example-New)
 - [Creating a controller](https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/controller#example-New)
 - [Examples](https://github.com/kubernetes-sigs/controller-runtime/blob/master/examples)
+- [Designs](https://github.com/kubernetes-sigs/controller-runtime/blob/master/designs)
 
 # Versioning, Maintenance, and Compatibility
 

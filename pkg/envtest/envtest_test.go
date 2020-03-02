@@ -59,7 +59,7 @@ var _ = Describe("Test", func() {
 
 	// Cleanup CRDs
 	AfterEach(func(done Done) {
-		for _, crd := range runtimeListToUnstructured(crds) {
+		for _, crd := range runtimeCRDListToUnstructured(crds) {
 			// Delete only if CRD exists.
 			crdObjectKey := client.ObjectKey{
 				Name: crd.GetName(),

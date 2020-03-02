@@ -42,7 +42,6 @@ var _ = Describe("Eventhandler", func() {
 	t := true
 	BeforeEach(func() {
 		q = controllertest.Queue{Interface: workqueue.New()}
-		instance = handler.EnqueueRequestForObject{}
 		pod = &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "biz", Name: "baz"},
 		}

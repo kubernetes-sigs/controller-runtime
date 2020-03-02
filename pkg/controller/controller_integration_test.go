@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -122,7 +123,7 @@ var _ = Describe("controller", func() {
 			By("Invoking Reconciling for Update")
 			newDeployment := deployment.DeepCopy()
 			newDeployment.Labels = map[string]string{"foo": "bar"}
-			newDeployment, err = clientset.AppsV1().Deployments("default").Update(newDeployment)
+			_, err = clientset.AppsV1().Deployments("default").Update(newDeployment)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
@@ -152,7 +153,7 @@ var _ = Describe("controller", func() {
 			By("Invoking Reconciling for an OwnedObject when it is updated")
 			newReplicaset := replicaset.DeepCopy()
 			newReplicaset.Labels = map[string]string{"foo": "bar"}
-			newReplicaset, err = clientset.AppsV1().ReplicaSets("default").Update(newReplicaset)
+			_, err = clientset.AppsV1().ReplicaSets("default").Update(newReplicaset)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
@@ -166,6 +167,11 @@ var _ = Describe("controller", func() {
 				Delete("deployment-name", &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
+
+			By("Listing a type with a slice of pointers as items field")
+			err = cm.GetClient().
+				List(context.Background(), &controllertest.UnconventionalListTypeList{})
+			Expect(err).NotTo(HaveOccurred())
 
 			close(done)
 		}, 5)

@@ -1,6 +1,7 @@
 package integrationtests
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -19,6 +20,7 @@ import (
 
 var _ = Describe("The Testing Framework", func() {
 	var controlPlane *integration.ControlPlane
+	ctx := context.TODO()
 
 	AfterEach(func() {
 		Expect(controlPlane.Stop()).To(Succeed())
@@ -58,7 +60,7 @@ var _ = Describe("The Testing Framework", func() {
 			Namespace("default").
 			Resource("pods").
 			VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
-			Do().
+			Do(ctx).
 			Into(result)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Items).To(BeEmpty())
@@ -189,6 +191,7 @@ func isSomethingListeningOnPort(hostAndPort string) portChecker {
 // k/k's test-cmd (see link above) and test if certain well-known known APIs
 // are actually available.
 func CheckAPIServerIsReady(c *rest.Config) {
+	ctx := context.TODO()
 	// check pods, replicationcontrollers and services
 	c.APIPath = "/api"
 	c.ContentConfig.GroupVersion = &schema.GroupVersion{Version: "v1"}
@@ -199,7 +202,7 @@ func CheckAPIServerIsReady(c *rest.Config) {
 		Namespace("default").
 		Resource("pods").
 		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Get()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -207,7 +210,7 @@ func CheckAPIServerIsReady(c *rest.Config) {
 		Namespace("default").
 		Resource("replicationcontrollers").
 		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Get()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -215,7 +218,7 @@ func CheckAPIServerIsReady(c *rest.Config) {
 		Namespace("default").
 		Resource("services").
 		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Get()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -229,7 +232,7 @@ func CheckAPIServerIsReady(c *rest.Config) {
 		Namespace("default").
 		Resource("daemonsets").
 		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Get()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -237,7 +240,7 @@ func CheckAPIServerIsReady(c *rest.Config) {
 		Namespace("default").
 		Resource("deployments").
 		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Get()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -245,7 +248,7 @@ func CheckAPIServerIsReady(c *rest.Config) {
 		Namespace("default").
 		Resource("replicasets").
 		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Get()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -253,7 +256,7 @@ func CheckAPIServerIsReady(c *rest.Config) {
 		Namespace("default").
 		Resource("statefulsets").
 		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Get()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -266,7 +269,7 @@ func CheckAPIServerIsReady(c *rest.Config) {
 		Namespace("default").
 		Resource("horizontalpodautoscalers").
 		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Get()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -279,7 +282,7 @@ func CheckAPIServerIsReady(c *rest.Config) {
 		Namespace("default").
 		Resource("jobs").
 		VersionedParams(&metav1.ListOptions{}, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Get()
 	Expect(err).NotTo(HaveOccurred())
 }

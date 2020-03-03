@@ -17,6 +17,8 @@ limitations under the License.
 package recorder_test
 
 import (
+	"context"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,6 +37,7 @@ import (
 
 var _ = Describe("recorder", func() {
 	var stop chan struct{}
+	ctx := context.TODO()
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
@@ -56,7 +59,7 @@ var _ = Describe("recorder", func() {
 			instance, err := controller.New("foo-controller", cm, controller.Options{
 				Reconciler: reconcile.Func(
 					func(request reconcile.Request) (reconcile.Result, error) {
-						dp, err := clientset.AppsV1().Deployments(request.Namespace).Get(request.Name, metav1.GetOptions{})
+						dp, err := clientset.AppsV1().Deployments(request.Namespace).Get(ctx, request.Name, metav1.GetOptions{})
 						Expect(err).NotTo(HaveOccurred())
 						recorder.Event(dp, corev1.EventTypeNormal, "test-reason", "test-msg")
 						return reconcile.Result{}, nil
@@ -95,11 +98,11 @@ var _ = Describe("recorder", func() {
 			}
 
 			By("Invoking Reconciling")
-			deployment, err = clientset.AppsV1().Deployments("default").Create(deployment)
+			deployment, err = clientset.AppsV1().Deployments("default").Create(ctx, deployment, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Validate event is published as expected")
-			evtWatcher, err := clientset.CoreV1().Events("default").Watch(metav1.ListOptions{})
+			evtWatcher, err := clientset.CoreV1().Events("default").Watch(ctx, metav1.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			resultEvent := <-evtWatcher.ResultChan()

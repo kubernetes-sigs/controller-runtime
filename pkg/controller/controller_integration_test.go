@@ -39,6 +39,7 @@ import (
 var _ = Describe("controller", func() {
 	var reconciled chan reconcile.Request
 	var stop chan struct{}
+	ctx := context.Background()
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
@@ -116,14 +117,14 @@ var _ = Describe("controller", func() {
 			}}
 
 			By("Invoking Reconciling for Create")
-			deployment, err = clientset.AppsV1().Deployments("default").Create(deployment)
+			deployment, err = clientset.AppsV1().Deployments("default").Create(ctx, deployment, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for Update")
 			newDeployment := deployment.DeepCopy()
 			newDeployment.Labels = map[string]string{"foo": "bar"}
-			_, err = clientset.AppsV1().Deployments("default").Update(newDeployment)
+			_, err = clientset.AppsV1().Deployments("default").Update(ctx, newDeployment, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
@@ -146,25 +147,25 @@ var _ = Describe("controller", func() {
 					Template: deployment.Spec.Template,
 				},
 			}
-			replicaset, err = clientset.AppsV1().ReplicaSets("default").Create(replicaset)
+			replicaset, err = clientset.AppsV1().ReplicaSets("default").Create(ctx, replicaset, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for an OwnedObject when it is updated")
 			newReplicaset := replicaset.DeepCopy()
 			newReplicaset.Labels = map[string]string{"foo": "bar"}
-			_, err = clientset.AppsV1().ReplicaSets("default").Update(newReplicaset)
+			_, err = clientset.AppsV1().ReplicaSets("default").Update(ctx, newReplicaset, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for an OwnedObject when it is deleted")
-			err = clientset.AppsV1().ReplicaSets("default").Delete(replicaset.Name, &metav1.DeleteOptions{})
+			err = clientset.AppsV1().ReplicaSets("default").Delete(ctx, replicaset.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for Delete")
 			err = clientset.AppsV1().Deployments("default").
-				Delete("deployment-name", &metav1.DeleteOptions{})
+				Delete(ctx, "deployment-name", metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 

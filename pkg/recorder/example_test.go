@@ -17,10 +17,7 @@ limitations under the License.
 package recorder_test
 
 import (
-	"time"
-
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
@@ -47,14 +44,4 @@ func Example_eventf() {
 	mildCheese := "Wensleydale"
 	recorder.Eventf(somePod, corev1.EventTypeNormal,
 		"DislikesCheese", "Not even %s?", mildCheese)
-}
-
-func Example_pastEventf() {
-	// recorderProvider is a recorder.Provider
-	recorder := recorderProvider.GetEventRecorderFor("my-controller")
-
-	// emit a backdated event (potentially with variable message)
-	recorder.PastEventf(somePod, metav1.Time{Time: time.Now().Add(-5 * time.Minute)},
-		corev1.EventTypeWarning, "ForgottenCrackers",
-		"Crackers, Gromit!  We forgot the crackers!")
 }

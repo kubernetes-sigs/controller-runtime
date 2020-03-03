@@ -17,6 +17,7 @@ limitations under the License.
 package source_test
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -43,14 +44,15 @@ var _ = Describe("Source", func() {
 	var c1, c2 chan interface{}
 	var ns string
 	count := 0
+	ctx := context.TODO()
 
 	BeforeEach(func(done Done) {
 		// Create the namespace for the test
 		ns = fmt.Sprintf("controller-source-kindsource-%v", count)
 		count++
-		_, err := clientset.CoreV1().Namespaces().Create(&corev1.Namespace{
+		_, err := clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: ns},
-		})
+		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		q = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
@@ -69,7 +71,7 @@ var _ = Describe("Source", func() {
 	})
 
 	AfterEach(func(done Done) {
-		err := clientset.CoreV1().Namespaces().Delete(ns, &metav1.DeleteOptions{})
+		err := clientset.CoreV1().Namespaces().Delete(ctx, ns, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		close(c1)
 		close(c2)
@@ -135,7 +137,7 @@ var _ = Describe("Source", func() {
 				Expect(instance2.Start(handler2, q)).To(Succeed())
 
 				By("Creating a Deployment and expecting the CreateEvent.")
-				created, err = client.Create(deployment)
+				created, err = client.Create(ctx, deployment, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(created).NotTo(BeNil())
 
@@ -156,7 +158,7 @@ var _ = Describe("Source", func() {
 				By("Updating a Deployment and expecting the UpdateEvent.")
 				updated = created.DeepCopy()
 				updated.Labels = map[string]string{"biz": "buz"}
-				updated, err = client.Update(updated)
+				updated, err = client.Update(ctx, updated, metav1.UpdateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				// Check first UpdateEvent
@@ -183,7 +185,7 @@ var _ = Describe("Source", func() {
 
 				By("Deleting a Deployment and expecting the Delete.")
 				deleted = updated.DeepCopy()
-				err = client.Delete(created.Name, &metav1.DeleteOptions{})
+				err = client.Delete(ctx, created.Name, metav1.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				deleted.SetResourceVersion("")
@@ -265,7 +267,7 @@ var _ = Describe("Source", func() {
 					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						var err error
-						rs, err := clientset.AppsV1().ReplicaSets("default").Get(rs.Name, metav1.GetOptions{})
+						rs, err := clientset.AppsV1().ReplicaSets("default").Get(ctx, rs.Name, metav1.GetOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
 						Expect(q2).To(BeIdenticalTo(q))
@@ -288,7 +290,7 @@ var _ = Describe("Source", func() {
 				}, q)
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = clientset.AppsV1().ReplicaSets("default").Create(rs)
+				_, err = clientset.AppsV1().ReplicaSets("default").Create(ctx, rs, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				<-c
 				close(done)
@@ -296,7 +298,7 @@ var _ = Describe("Source", func() {
 
 			It("should provide a ReplicaSet UpdateEvent", func(done Done) {
 				var err error
-				rs, err = clientset.AppsV1().ReplicaSets("default").Get(rs.Name, metav1.GetOptions{})
+				rs, err = clientset.AppsV1().ReplicaSets("default").Get(ctx, rs.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				rs2 := rs.DeepCopy()
@@ -310,7 +312,7 @@ var _ = Describe("Source", func() {
 					UpdateFunc: func(evt event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						var err error
-						rs2, err := clientset.AppsV1().ReplicaSets("default").Get(rs.Name, metav1.GetOptions{})
+						rs2, err := clientset.AppsV1().ReplicaSets("default").Get(ctx, rs.Name, metav1.GetOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
 						Expect(q2).To(Equal(q))
@@ -333,7 +335,7 @@ var _ = Describe("Source", func() {
 				}, q)
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = clientset.AppsV1().ReplicaSets("default").Update(rs2)
+				_, err = clientset.AppsV1().ReplicaSets("default").Update(ctx, rs2, metav1.UpdateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				<-c
 				close(done)
@@ -362,7 +364,7 @@ var _ = Describe("Source", func() {
 				}, q)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = clientset.AppsV1().ReplicaSets("default").Delete(rs.Name, &metav1.DeleteOptions{})
+				err = clientset.AppsV1().ReplicaSets("default").Delete(ctx, rs.Name, metav1.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				<-c
 				close(done)

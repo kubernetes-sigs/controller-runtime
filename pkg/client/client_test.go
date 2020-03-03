@@ -40,18 +40,18 @@ import (
 
 const serverSideTimeoutSeconds = 10
 
-func deleteDeployment(dep *appsv1.Deployment, ns string) {
-	_, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+func deleteDeployment(ctx context.Context, dep *appsv1.Deployment, ns string) {
+	_, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 	if err == nil {
-		err = clientset.AppsV1().Deployments(ns).Delete(dep.Name, &metav1.DeleteOptions{})
+		err = clientset.AppsV1().Deployments(ns).Delete(ctx, dep.Name, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	}
 }
 
-func deleteNamespace(ns *corev1.Namespace) {
-	_, err := clientset.CoreV1().Namespaces().Get(ns.Name, metav1.GetOptions{})
+func deleteNamespace(ctx context.Context, ns *corev1.Namespace) {
+	_, err := clientset.CoreV1().Namespaces().Get(ctx, ns.Name, metav1.GetOptions{})
 	if err == nil {
-		err = clientset.CoreV1().Namespaces().Delete(ns.Name, &metav1.DeleteOptions{})
+		err = clientset.CoreV1().Namespaces().Delete(ctx, ns.Name, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	}
 }
@@ -67,6 +67,7 @@ var _ = Describe("Client", func() {
 	var replicaCount int32 = 2
 	var ns = "default"
 	var mergePatch []byte
+	ctx := context.TODO()
 
 	BeforeEach(func(done Done) {
 		atomic.AddUint64(&count, 1)
@@ -120,10 +121,10 @@ var _ = Describe("Client", func() {
 			GracePeriodSeconds: &zero,
 			PropagationPolicy:  &policy,
 		}
-		deleteDeployment(dep, ns)
-		_, err := clientset.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+		deleteDeployment(ctx, dep, ns)
+		_, err := clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 		if err == nil {
-			err = clientset.CoreV1().Nodes().Delete(node.Name, delOptions)
+			err = clientset.CoreV1().Nodes().Delete(ctx, node.Name, *delOptions)
 			Expect(err).NotTo(HaveOccurred())
 		}
 		close(done)
@@ -191,7 +192,7 @@ var _ = Describe("Client", func() {
 				err = cl.Create(context.TODO(), dep)
 				Expect(err).NotTo(HaveOccurred())
 
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 
@@ -210,7 +211,7 @@ var _ = Describe("Client", func() {
 				err = cl.Create(context.TODO(), node)
 				Expect(err).NotTo(HaveOccurred())
 
-				actual, err := clientset.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+				actual, err := clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 
@@ -231,7 +232,7 @@ var _ = Describe("Client", func() {
 				err = cl.Create(context.TODO(), dep)
 				Expect(err).NotTo(HaveOccurred())
 
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 
@@ -285,7 +286,7 @@ var _ = Describe("Client", func() {
 					err = cl.Create(context.TODO(), dep, client.CreateDryRunAll)
 					Expect(err).NotTo(HaveOccurred())
 
-					actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+					actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 					Expect(err).To(HaveOccurred())
 					Expect(apierrors.IsNotFound(err)).To(BeTrue())
 					Expect(actual).To(Equal(&appsv1.Deployment{}))
@@ -314,7 +315,7 @@ var _ = Describe("Client", func() {
 				err = cl.Create(context.TODO(), u)
 				Expect(err).NotTo(HaveOccurred())
 
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				close(done)
@@ -338,7 +339,7 @@ var _ = Describe("Client", func() {
 				err = cl.Create(context.TODO(), node)
 				Expect(err).NotTo(HaveOccurred())
 
-				actual, err := clientset.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+				actual, err := clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				au := &unstructured.Unstructured{}
@@ -361,7 +362,7 @@ var _ = Describe("Client", func() {
 				By("creating the object")
 				err = cl.Create(context.TODO(), dep)
 				Expect(err).NotTo(HaveOccurred())
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 
@@ -424,7 +425,7 @@ var _ = Describe("Client", func() {
 				err = cl.Create(context.TODO(), u, client.CreateDryRunAll)
 				Expect(err).NotTo(HaveOccurred())
 
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 				Expect(apierrors.IsNotFound(err)).To(BeTrue())
 				Expect(actual).To(Equal(&appsv1.Deployment{}))
@@ -442,7 +443,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating the Deployment")
@@ -451,7 +452,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating updated Deployment has new annotation")
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
@@ -465,7 +466,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating the Deployment")
@@ -484,7 +485,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
-				node, err := clientset.CoreV1().Nodes().Create(node)
+				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating the object")
@@ -493,7 +494,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validate updated Node had new annotation")
-				actual, err := clientset.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+				actual, err := clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
@@ -529,7 +530,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating the Deployment")
@@ -552,7 +553,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating the Deployment")
@@ -568,7 +569,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating updated Deployment has new annotation")
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
@@ -582,7 +583,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating the Deployment")
@@ -604,7 +605,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
-				node, err := clientset.CoreV1().Nodes().Create(node)
+				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating the object")
@@ -620,7 +621,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validate updated Node had new annotation")
-				actual, err := clientset.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+				actual, err := clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
@@ -652,7 +653,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating the status of Deployment")
@@ -661,7 +662,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating updated Deployment has new status")
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
@@ -675,7 +676,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating the status of Deployment")
@@ -696,7 +697,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("patching the status of Deployment")
@@ -718,7 +719,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating the spec and status of Deployment")
@@ -729,7 +730,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating updated Deployment has new status and unchanged spec")
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
@@ -743,7 +744,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
-				node, err := clientset.CoreV1().Nodes().Create(node)
+				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating status of the object")
@@ -752,7 +753,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validate updated Node had new annotation")
-				actual, err := clientset.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+				actual, err := clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Phase).To(Equal(corev1.NodeRunning))
@@ -780,7 +781,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating status of the Deployment")
@@ -808,7 +809,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating the status of Deployment")
@@ -819,7 +820,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating updated Deployment has new status")
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
@@ -833,7 +834,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating the status of Deployment")
@@ -855,7 +856,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("patching the status of Deployment")
@@ -870,7 +871,7 @@ var _ = Describe("Client", func() {
 				Expect(u.GroupVersionKind()).To(Equal(depGvk))
 
 				By("validating patched Deployment has new status")
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
@@ -884,7 +885,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating the spec and status of Deployment")
@@ -897,7 +898,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating updated Deployment has new status and unchanged spec")
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
@@ -911,7 +912,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
-				node, err := clientset.CoreV1().Nodes().Create(node)
+				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("updating status of the object")
@@ -922,7 +923,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validate updated Node had new annotation")
-				actual, err := clientset.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+				actual, err := clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Phase).To(Equal(corev1.NodeRunning))
@@ -963,7 +964,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("deleting the Deployment")
@@ -972,7 +973,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating the Deployment no longer exists")
-				_, err = clientset.AppsV1().Deployments(ns).Get(depName, metav1.GetOptions{})
+				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, depName, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 
 				close(done)
@@ -984,7 +985,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Node")
-				node, err := clientset.CoreV1().Nodes().Create(node)
+				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("deleting the Node")
@@ -993,7 +994,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating the Node no longer exists")
-				_, err = clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+				_, err = clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 
 				close(done)
@@ -1023,7 +1024,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("deleting the Deployment fails")
@@ -1048,9 +1049,9 @@ var _ = Describe("Client", func() {
 				dep2 := dep.DeepCopy()
 				dep2.Name = dep2.Name + "-2"
 
-				dep, err = clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				dep2, err = clientset.AppsV1().Deployments(ns).Create(dep2)
+				dep2, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep2, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				depName := dep.Name
@@ -1061,9 +1062,9 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating the Deployment no longer exists")
-				_, err = clientset.AppsV1().Deployments(ns).Get(depName, metav1.GetOptions{})
+				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, depName, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
-				_, err = clientset.AppsV1().Deployments(ns).Get(dep2Name, metav1.GetOptions{})
+				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep2Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 
 				close(done)
@@ -1076,7 +1077,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("deleting the Deployment")
@@ -1092,7 +1093,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating the Deployment no longer exists")
-				_, err = clientset.AppsV1().Deployments(ns).Get(depName, metav1.GetOptions{})
+				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, depName, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 
 				close(done)
@@ -1104,7 +1105,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Node")
-				node, err := clientset.CoreV1().Nodes().Create(node)
+				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("deleting the Node")
@@ -1120,7 +1121,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating the Node no longer exists")
-				_, err = clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+				_, err = clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 
 				close(done)
@@ -1155,9 +1156,9 @@ var _ = Describe("Client", func() {
 				dep2 := dep.DeepCopy()
 				dep2.Name = dep2.Name + "-2"
 
-				dep, err = clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				dep2, err = clientset.AppsV1().Deployments(ns).Create(dep2)
+				dep2, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep2, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				depName := dep.Name
@@ -1175,9 +1176,9 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating the Deployment no longer exists")
-				_, err = clientset.AppsV1().Deployments(ns).Get(depName, metav1.GetOptions{})
+				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, depName, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
-				_, err = clientset.AppsV1().Deployments(ns).Get(dep2Name, metav1.GetOptions{})
+				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep2Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 
 				close(done)
@@ -1193,7 +1194,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("patching the Deployment")
@@ -1201,7 +1202,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating patched Deployment has new annotation")
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
@@ -1215,7 +1216,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("patching the Deployment")
@@ -1235,7 +1236,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Node")
-				node, err := clientset.CoreV1().Nodes().Create(node)
+				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("patching the Node")
@@ -1244,7 +1245,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating the Node no longer exists")
-				actual, err := clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+				actual, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
@@ -1276,7 +1277,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("patching the Deployment fails")
@@ -1298,7 +1299,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("patching the Deployment with dry-run")
@@ -1306,7 +1307,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating patched Deployment doesn't have the new annotation")
-				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations).NotTo(HaveKey("foo"))
@@ -1319,7 +1320,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("patching the Deployment")
@@ -1335,7 +1336,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating patched Deployment has new annotation")
-				actual, err := clientset.AppsV1().Deployments(ns).Get(depName, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, depName, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
@@ -1349,7 +1350,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("patching the Deployment")
@@ -1371,7 +1372,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Node")
-				node, err := clientset.CoreV1().Nodes().Create(node)
+				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("patching the Node")
@@ -1387,7 +1388,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating patched Node has new annotation")
-				actual, err := clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+				actual, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
@@ -1421,7 +1422,7 @@ var _ = Describe("Client", func() {
 				Expect(cl).NotTo(BeNil())
 
 				By("initially creating a Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("patching the Deployment")
@@ -1437,7 +1438,7 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating patched Deployment does not have the new annotation")
-				actual, err := clientset.AppsV1().Deployments(ns).Get(depName, metav1.GetOptions{})
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, depName, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations).NotTo(HaveKey("foo"))
@@ -1449,7 +1450,7 @@ var _ = Describe("Client", func() {
 		Context("with structured objects", func() {
 			It("should fetch an existing object for a go struct", func(done Done) {
 				By("first creating the Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				cl, err := client.New(cfg, client.Options{})
@@ -1471,7 +1472,7 @@ var _ = Describe("Client", func() {
 
 			It("should fetch an existing non-namespace object for a go struct", func(done Done) {
 				By("first creating the object")
-				node, err := clientset.CoreV1().Nodes().Create(node)
+				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				cl, err := client.New(cfg, client.Options{})
@@ -1510,7 +1511,7 @@ var _ = Describe("Client", func() {
 
 			It("should fail if the object cannot be mapped to a GVK", func() {
 				By("first creating the Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a client with an empty Scheme")
@@ -1535,7 +1536,7 @@ var _ = Describe("Client", func() {
 		Context("with unstructured objects", func() {
 			It("should fetch an existing object", func(done Done) {
 				By("first creating the Deployment")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				cl, err := client.New(cfg, client.Options{})
@@ -1566,7 +1567,7 @@ var _ = Describe("Client", func() {
 
 			It("should fetch an existing non-namespace object", func(done Done) {
 				By("first creating the Node")
-				node, err := clientset.CoreV1().Nodes().Create(node)
+				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("encoding the Node as unstructured")
@@ -1615,7 +1616,7 @@ var _ = Describe("Client", func() {
 		Context("with structured objects", func() {
 			It("should fetch collection of objects", func(done Done) {
 				By("creating an initial object")
-				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				cl, err := client.New(cfg, client.Options{})
@@ -1640,7 +1641,7 @@ var _ = Describe("Client", func() {
 
 			It("should fetch unstructured collection of objects", func(done Done) {
 				By("create an initial object")
-				_, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				_, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				cl, err := client.New(cfg, client.Options{})
@@ -1701,7 +1702,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depFrontend, err := clientset.AppsV1().Deployments(ns).Create(depFrontend)
+				depFrontend, err := clientset.AppsV1().Deployments(ns).Create(ctx, depFrontend, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment with the app=backend label")
@@ -1721,7 +1722,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depBackend, err = clientset.AppsV1().Deployments(ns).Create(depBackend)
+				depBackend, err = clientset.AppsV1().Deployments(ns).Create(ctx, depBackend, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				cl, err := client.New(cfg, client.Options{})
@@ -1739,8 +1740,8 @@ var _ = Describe("Client", func() {
 				actual := deps.Items[0]
 				Expect(actual.Name).To(Equal("deployment-backend"))
 
-				deleteDeployment(depFrontend, ns)
-				deleteDeployment(depBackend, ns)
+				deleteDeployment(ctx, depFrontend, ns)
+				deleteDeployment(ctx, depBackend, ns)
 
 				close(done)
 			}, serverSideTimeoutSeconds)
@@ -1748,7 +1749,7 @@ var _ = Describe("Client", func() {
 			It("should filter results by namespace selector", func(done Done) {
 				By("creating a Deployment in test-namespace-1")
 				tns1 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-1"}}
-				_, err := clientset.CoreV1().Namespaces().Create(tns1)
+				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns1, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: "test-namespace-1"},
@@ -1762,12 +1763,12 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depFrontend, err = clientset.AppsV1().Deployments("test-namespace-1").Create(depFrontend)
+				depFrontend, err = clientset.AppsV1().Deployments("test-namespace-1").Create(ctx, depFrontend, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment in test-namespace-2")
 				tns2 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-2"}}
-				_, err = clientset.CoreV1().Namespaces().Create(tns2)
+				_, err = clientset.CoreV1().Namespaces().Create(ctx, tns2, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depBackend := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{Name: "deployment-backend", Namespace: "test-namespace-2"},
@@ -1781,7 +1782,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depBackend, err = clientset.AppsV1().Deployments("test-namespace-2").Create(depBackend)
+				depBackend, err = clientset.AppsV1().Deployments("test-namespace-2").Create(ctx, depBackend, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				cl, err := client.New(cfg, client.Options{})
@@ -1798,10 +1799,10 @@ var _ = Describe("Client", func() {
 				actual := deps.Items[0]
 				Expect(actual.Name).To(Equal("deployment-frontend"))
 
-				deleteDeployment(depFrontend, "test-namespace-1")
-				deleteDeployment(depBackend, "test-namespace-2")
-				deleteNamespace(tns1)
-				deleteNamespace(tns2)
+				deleteDeployment(ctx, depFrontend, "test-namespace-1")
+				deleteDeployment(ctx, depBackend, "test-namespace-2")
+				deleteNamespace(ctx, tns1)
+				deleteNamespace(ctx, tns2)
 
 				close(done)
 			}, serverSideTimeoutSeconds)
@@ -1820,7 +1821,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depFrontend, err := clientset.AppsV1().Deployments(ns).Create(depFrontend)
+				depFrontend, err := clientset.AppsV1().Deployments(ns).Create(ctx, depFrontend, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment with name deployment-backend")
@@ -1836,7 +1837,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depBackend, err = clientset.AppsV1().Deployments(ns).Create(depBackend)
+				depBackend, err = clientset.AppsV1().Deployments(ns).Create(ctx, depBackend, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				cl, err := client.New(cfg, client.Options{})
@@ -1854,8 +1855,8 @@ var _ = Describe("Client", func() {
 				actual := deps.Items[0]
 				Expect(actual.Name).To(Equal("deployment-backend"))
 
-				deleteDeployment(depFrontend, ns)
-				deleteDeployment(depBackend, ns)
+				deleteDeployment(ctx, depFrontend, ns)
+				deleteDeployment(ctx, depBackend, ns)
 
 				close(done)
 			}, serverSideTimeoutSeconds)
@@ -1863,7 +1864,7 @@ var _ = Describe("Client", func() {
 			It("should filter results by namespace selector and label selector", func(done Done) {
 				By("creating a Deployment in test-namespace-3 with the app=frontend label")
 				tns3 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-3"}}
-				_, err := clientset.CoreV1().Namespaces().Create(tns3)
+				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns3, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend3 := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1881,7 +1882,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depFrontend3, err = clientset.AppsV1().Deployments("test-namespace-3").Create(depFrontend3)
+				depFrontend3, err = clientset.AppsV1().Deployments("test-namespace-3").Create(ctx, depFrontend3, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment in test-namespace-3 with the app=backend label")
@@ -1901,12 +1902,12 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depBackend3, err = clientset.AppsV1().Deployments("test-namespace-3").Create(depBackend3)
+				depBackend3, err = clientset.AppsV1().Deployments("test-namespace-3").Create(ctx, depBackend3, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment in test-namespace-4 with the app=frontend label")
 				tns4 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-4"}}
-				_, err = clientset.CoreV1().Namespaces().Create(tns4)
+				_, err = clientset.CoreV1().Namespaces().Create(ctx, tns4, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend4 := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1924,7 +1925,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depFrontend4, err = clientset.AppsV1().Deployments("test-namespace-4").Create(depFrontend4)
+				depFrontend4, err = clientset.AppsV1().Deployments("test-namespace-4").Create(ctx, depFrontend4, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				cl, err := client.New(cfg, client.Options{})
@@ -1946,11 +1947,11 @@ var _ = Describe("Client", func() {
 				Expect(actual.Name).To(Equal("deployment-frontend"))
 				Expect(actual.Namespace).To(Equal("test-namespace-3"))
 
-				deleteDeployment(depFrontend3, "test-namespace-3")
-				deleteDeployment(depBackend3, "test-namespace-3")
-				deleteDeployment(depFrontend4, "test-namespace-4")
-				deleteNamespace(tns3)
-				deleteNamespace(tns4)
+				deleteDeployment(ctx, depFrontend3, "test-namespace-3")
+				deleteDeployment(ctx, depBackend3, "test-namespace-3")
+				deleteDeployment(ctx, depFrontend4, "test-namespace-4")
+				deleteNamespace(ctx, tns3)
+				deleteNamespace(ctx, tns4)
 
 				close(done)
 			}, serverSideTimeoutSeconds)
@@ -1976,24 +1977,24 @@ var _ = Describe("Client", func() {
 
 				By("creating 4 deployments")
 				dep1 := makeDeployment("1")
-				dep1, err := clientset.AppsV1().Deployments(ns).Create(dep1)
+				dep1, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep1, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				defer deleteDeployment(dep1, ns)
+				defer deleteDeployment(ctx, dep1, ns)
 
 				dep2 := makeDeployment("2")
-				dep2, err = clientset.AppsV1().Deployments(ns).Create(dep2)
+				dep2, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep2, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				defer deleteDeployment(dep2, ns)
+				defer deleteDeployment(ctx, dep2, ns)
 
 				dep3 := makeDeployment("3")
-				dep3, err = clientset.AppsV1().Deployments(ns).Create(dep3)
+				dep3, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep3, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				defer deleteDeployment(dep3, ns)
+				defer deleteDeployment(ctx, dep3, ns)
 
 				dep4 := makeDeployment("4")
-				dep4, err = clientset.AppsV1().Deployments(ns).Create(dep4)
+				dep4, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep4, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				defer deleteDeployment(dep4, ns)
+				defer deleteDeployment(ctx, dep4, ns)
 
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
@@ -2054,7 +2055,7 @@ var _ = Describe("Client", func() {
 		Context("with unstructured objects", func() {
 			It("should fetch collection of objects", func(done Done) {
 				By("create an initial object")
-				_, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				_, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				cl, err := client.New(cfg, client.Options{})
@@ -2104,7 +2105,7 @@ var _ = Describe("Client", func() {
 			It("should filter results by namespace selector", func(done Done) {
 				By("creating a Deployment in test-namespace-5")
 				tns1 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-5"}}
-				_, err := clientset.CoreV1().Namespaces().Create(tns1)
+				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns1, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: "test-namespace-5"},
@@ -2118,12 +2119,12 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depFrontend, err = clientset.AppsV1().Deployments("test-namespace-5").Create(depFrontend)
+				depFrontend, err = clientset.AppsV1().Deployments("test-namespace-5").Create(ctx, depFrontend, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment in test-namespace-6")
 				tns2 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-6"}}
-				_, err = clientset.CoreV1().Namespaces().Create(tns2)
+				_, err = clientset.CoreV1().Namespaces().Create(ctx, tns2, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depBackend := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{Name: "deployment-backend", Namespace: "test-namespace-6"},
@@ -2137,7 +2138,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depBackend, err = clientset.AppsV1().Deployments("test-namespace-6").Create(depBackend)
+				depBackend, err = clientset.AppsV1().Deployments("test-namespace-6").Create(ctx, depBackend, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				cl, err := client.New(cfg, client.Options{})
@@ -2159,10 +2160,10 @@ var _ = Describe("Client", func() {
 				actual := deps.Items[0]
 				Expect(actual.GetName()).To(Equal("deployment-frontend"))
 
-				deleteDeployment(depFrontend, "test-namespace-5")
-				deleteDeployment(depBackend, "test-namespace-6")
-				deleteNamespace(tns1)
-				deleteNamespace(tns2)
+				deleteDeployment(ctx, depFrontend, "test-namespace-5")
+				deleteDeployment(ctx, depBackend, "test-namespace-6")
+				deleteNamespace(ctx, tns1)
+				deleteNamespace(ctx, tns2)
 
 				close(done)
 			}, serverSideTimeoutSeconds)
@@ -2181,7 +2182,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depFrontend, err := clientset.AppsV1().Deployments(ns).Create(depFrontend)
+				depFrontend, err := clientset.AppsV1().Deployments(ns).Create(ctx, depFrontend, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment with name deployment-backend")
@@ -2197,7 +2198,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depBackend, err = clientset.AppsV1().Deployments(ns).Create(depBackend)
+				depBackend, err = clientset.AppsV1().Deployments(ns).Create(ctx, depBackend, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				cl, err := client.New(cfg, client.Options{})
@@ -2220,8 +2221,8 @@ var _ = Describe("Client", func() {
 				actual := deps.Items[0]
 				Expect(actual.GetName()).To(Equal("deployment-backend"))
 
-				deleteDeployment(depFrontend, ns)
-				deleteDeployment(depBackend, ns)
+				deleteDeployment(ctx, depFrontend, ns)
+				deleteDeployment(ctx, depBackend, ns)
 
 				close(done)
 			}, serverSideTimeoutSeconds)
@@ -2229,7 +2230,7 @@ var _ = Describe("Client", func() {
 			It("should filter results by namespace selector and label selector", func(done Done) {
 				By("creating a Deployment in test-namespace-7 with the app=frontend label")
 				tns3 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-7"}}
-				_, err := clientset.CoreV1().Namespaces().Create(tns3)
+				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns3, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend3 := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{
@@ -2247,7 +2248,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depFrontend3, err = clientset.AppsV1().Deployments("test-namespace-7").Create(depFrontend3)
+				depFrontend3, err = clientset.AppsV1().Deployments("test-namespace-7").Create(ctx, depFrontend3, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment in test-namespace-7 with the app=backend label")
@@ -2267,12 +2268,12 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depBackend3, err = clientset.AppsV1().Deployments("test-namespace-7").Create(depBackend3)
+				depBackend3, err = clientset.AppsV1().Deployments("test-namespace-7").Create(ctx, depBackend3, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment in test-namespace-8 with the app=frontend label")
 				tns4 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-8"}}
-				_, err = clientset.CoreV1().Namespaces().Create(tns4)
+				_, err = clientset.CoreV1().Namespaces().Create(ctx, tns4, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend4 := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{
@@ -2290,7 +2291,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				depFrontend4, err = clientset.AppsV1().Deployments("test-namespace-8").Create(depFrontend4)
+				depFrontend4, err = clientset.AppsV1().Deployments("test-namespace-8").Create(ctx, depFrontend4, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				cl, err := client.New(cfg, client.Options{})
@@ -2315,11 +2316,11 @@ var _ = Describe("Client", func() {
 				Expect(actual.GetName()).To(Equal("deployment-frontend"))
 				Expect(actual.GetNamespace()).To(Equal("test-namespace-7"))
 
-				deleteDeployment(depFrontend3, "test-namespace-7")
-				deleteDeployment(depBackend3, "test-namespace-7")
-				deleteDeployment(depFrontend4, "test-namespace-8")
-				deleteNamespace(tns3)
-				deleteNamespace(tns4)
+				deleteDeployment(ctx, depFrontend3, "test-namespace-7")
+				deleteDeployment(ctx, depBackend3, "test-namespace-7")
+				deleteDeployment(ctx, depFrontend4, "test-namespace-8")
+				deleteNamespace(ctx, tns3)
+				deleteNamespace(ctx, tns4)
 
 				close(done)
 			}, serverSideTimeoutSeconds)

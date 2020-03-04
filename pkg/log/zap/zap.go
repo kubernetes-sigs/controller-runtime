@@ -19,13 +19,13 @@ limitations under the License.
 package zap
 
 import (
+	"flag"
 	"io"
 	"os"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
-	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -210,9 +210,11 @@ func NewRaw(opts ...Opts) *zap.Logger {
 }
 
 // BindToFlagSet func allows CLI passed flags to be parsed.
-func (o *Options) BindFlags(fs *pflag.FlagSet) {
+func (o *Options) BindFlags(fs *flag.FlagSet) {
+
 	// Set Development mode value
-	fs.BoolVar(&o.Development, "zap-devel", false, "Enable zap development mode (changes defaults to console encoder, debug log level, and disables sampling)")
+	fs.BoolVar(&o.Development, "zap-devel", false, "Development Mode defaults(encoder=consoleEncoder,logLevel=Debug,stackTraceLevel=Warn)."+
+		"If Development Mode is not set, defaults apply(encoder=jsonEncoder,logLevel=Info,stackTraceLevel=Error)")
 
 	// Set Encoder value
 	var encVal encoderFlag
@@ -226,15 +228,15 @@ func (o *Options) BindFlags(fs *pflag.FlagSet) {
 	levelVal.setFunc = func(fromFlag zap.AtomicLevel) {
 		o.Level = &fromFlag
 	}
-	fs.Var(&levelVal, "zap-log-level", "Zap log level (one of 'debug', 'info', 'error' or any integer value > 0)")
+	fs.Var(&levelVal, "zap-log-level", "Zap Level to configure the verbosity of logging. Can be one of 'debug', 'info', 'error',"+
+		"or any integer value > 0 which corresponds to custom debug levels of increasing verbosity")
 
 	// Set the StrackTrace Level
 	var stackVal stackTraceFlag
 	stackVal.setFunc = func(fromFlag zap.AtomicLevel) {
 		o.StacktraceLevel = &fromFlag
 	}
-	fs.Var(&stackVal, "zap-stacktrace-level", "Zap log level (one of 'warn',  'error'")
-
+	fs.Var(&stackVal, "zap-stacktrace-level", "Zap Level at and above which stacktraces are captured (one of 'warn' or 'error'")
 }
 
 // UseFlagOptions to set logger with CLI passed flags.

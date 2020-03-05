@@ -92,13 +92,13 @@ func (ev *levelFlag) Set(flagValue string) error {
 	if !validLevel {
 		logLevel, err := strconv.Atoi(flagValue)
 		if err != nil {
-			return fmt.Errorf("In here invalid log level \"%s\"", flagValue)
+			return fmt.Errorf("invalid log level \"%s\"", flagValue)
 		}
 		if logLevel > 0 {
 			intLevel := -1 * logLevel
 			ev.setFunc(zap.NewAtomicLevelAt(zapcore.Level(int8(intLevel))))
 		} else {
-			return fmt.Errorf("There invalid log level \"%s\"", flagValue)
+			return fmt.Errorf("invalid log level \"%s\"", flagValue)
 		}
 	}
 	ev.setFunc(zap.NewAtomicLevelAt(level))

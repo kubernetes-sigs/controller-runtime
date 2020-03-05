@@ -20,7 +20,6 @@ package zap
 
 import (
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"time"
@@ -247,7 +246,6 @@ func (o *Options) BindFlags(fs *flag.FlagSet) {
 func UseFlagOptions(in *Options) Opts {
 	return func(o *Options) {
 		*o = *in
-		fmt.Println("Passed Options are: ", in)
 		o.addDefaults()
 	}
 }

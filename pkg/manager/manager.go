@@ -184,6 +184,10 @@ type Options struct {
 	// use the cache for reads and the client for writes.
 	NewClient NewClientFunc
 
+	// DryRunClient specifies whether the client should be configured to enforce
+	// dryRun mode.
+	DryRunClient bool
+
 	// EventBroadcaster records Events emitted by the manager and sends them to the Kubernetes API
 	// Use this to customize the event correlator and spam filter
 	EventBroadcaster record.EventBroadcaster
@@ -257,6 +261,11 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if options.DryRunClient {
+		writeObj = client.NewDryRunClient(writeObj)
+	}
+
 	// Create the recorder provider to inject event recorders for the components.
 	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.

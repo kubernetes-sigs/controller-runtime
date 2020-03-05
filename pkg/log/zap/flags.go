@@ -28,6 +28,19 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+var levelStrings = map[string]zapcore.Level{
+	"debug":  zap.DebugLevel,
+	"-1":     zap.DebugLevel,
+	"info":   zap.InfoLevel,
+	"0":      zap.InfoLevel,
+	"error":  zap.ErrorLevel,
+	"2":      zap.ErrorLevel,
+	"dpanic": zap.DPanicLevel,
+	"panic":  zap.PanicLevel,
+	"warn":   zap.WarnLevel,
+	"fatal":  zap.FatalLevel,
+}
+
 type encoderFlag struct {
 	setFunc func(zapcore.Encoder)
 	value   string
@@ -75,32 +88,22 @@ type levelFlag struct {
 var _ pflag.Value = &levelFlag{}
 
 func (ev *levelFlag) Set(flagValue string) error {
-	lower := strings.ToLower(flagValue)
-	var lvl int
-	switch lower {
-	case "debug", "-1":
-		ev.setFunc(zap.NewAtomicLevelAt(zap.DebugLevel))
-	case "info", "0":
-		ev.setFunc(zap.NewAtomicLevelAt(zap.InfoLevel))
-	case "error", "2":
-		ev.setFunc(zap.NewAtomicLevelAt(zap.ErrorLevel))
-	default:
-		i, err := strconv.Atoi(lower)
+	level, validLevel := levelStrings[strings.ToLower(flagValue)]
+	if !validLevel {
+		logLevel, err := strconv.Atoi(flagValue)
 		if err != nil {
-			return fmt.Errorf("invalid log level \"%s\"", flagValue)
+			return fmt.Errorf("In here invalid log level \"%s\"", flagValue)
 		}
-		if i > 0 {
-			fmt.Println("Iam here")
-			lvl = -1 * i
-			ev.setFunc(zap.NewAtomicLevelAt(zapcore.Level(int8(lvl))))
+		if logLevel > 0 {
+			intLevel := -1 * logLevel
+			ev.setFunc(zap.NewAtomicLevelAt(zapcore.Level(int8(intLevel))))
 		} else {
-			return fmt.Errorf("invalid log level \"%s\"", flagValue)
+			return fmt.Errorf("There invalid log level \"%s\"", flagValue)
 		}
 	}
-
+	ev.setFunc(zap.NewAtomicLevelAt(level))
 	ev.value = flagValue
 	return nil
-
 }
 
 func (ev *levelFlag) String() string {
@@ -119,25 +122,11 @@ type stackTraceFlag struct {
 var _ pflag.Value = &stackTraceFlag{}
 
 func (ev *stackTraceFlag) Set(flagValue string) error {
-	lower := strings.ToLower(flagValue)
-	switch lower {
-	case "debug":
-		ev.setFunc(zap.NewAtomicLevelAt(zap.DebugLevel))
-	case "info":
-		ev.setFunc(zap.NewAtomicLevelAt(zap.InfoLevel))
-	case "warn":
-		ev.setFunc(zap.NewAtomicLevelAt(zap.WarnLevel))
-	case "dpanic":
-		ev.setFunc(zap.NewAtomicLevelAt(zap.DPanicLevel))
-	case "panic":
-		ev.setFunc(zap.NewAtomicLevelAt(zap.PanicLevel))
-	case "fatal":
-		ev.setFunc(zap.NewAtomicLevelAt(zap.FatalLevel))
-	case "error":
-		ev.setFunc(zap.NewAtomicLevelAt(zap.ErrorLevel))
-	default:
+	level, validLevel := levelStrings[strings.ToLower(flagValue)]
+	if !validLevel {
 		return fmt.Errorf("invalid stacktrace level \"%s\"", flagValue)
 	}
+	ev.setFunc(zap.NewAtomicLevelAt(level))
 	ev.value = flagValue
 	return nil
 }

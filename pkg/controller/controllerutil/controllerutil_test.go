@@ -35,13 +35,13 @@ import (
 )
 
 var _ = Describe("Controllerutil", func() {
-	Describe("EnsureOwnerReference", func() {
+	Describe("SetOwnerReference", func() {
 		It("should set ownerRef on an empty list", func() {
 			rs := &appsv1.ReplicaSet{}
 			dep := &extensionsv1beta1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
 			}
-			Expect(controllerutil.EnsureOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
 				Name:       "foo",
 				Kind:       "Deployment",
@@ -67,7 +67,7 @@ var _ = Describe("Controllerutil", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
 			}
 
-			Expect(controllerutil.EnsureOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
 				Name:       "foo",
 				Kind:       "Deployment",
@@ -93,7 +93,7 @@ var _ = Describe("Controllerutil", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
 			}
 
-			Expect(controllerutil.EnsureOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
 				Name:       "foo",
 				Kind:       "Deployment",

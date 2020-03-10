@@ -18,36 +18,11 @@ set -e
 
 source $(dirname ${BASH_SOURCE})/common.sh
 
-header_text "running go vet"
-
-go vet ${MOD_OPT} ./...
+REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
+cd "${REPO_ROOT}"
 
 header_text "running golangci-lint"
+make lint
 
-golangci-lint run --disable-all \
-    --deadline 5m \
-    --enable=misspell \
-    --enable=structcheck \
-    --enable=golint \
-    --enable=deadcode \
-    --enable=errcheck \
-    --enable=varcheck \
-    --enable=goconst \
-    --enable=unparam \
-    --enable=ineffassign \
-    --enable=nakedret \
-    --enable=interfacer \
-    --enable=misspell \
-    --enable=gocyclo \
-    --enable=lll \
-    --enable=dupl \
-    --enable=goimports \
-    --enable=bodyclose \
-    ./pkg/... ./examples/... .
-
-# TODO: Enable these as we fix them to make them pass
-#    --enable=gosec \
-#    --enable=maligned \
-#    --enable=safesql \
-
-GO111MODULES=on go list -mod=readonly ./...
+header_text "verifying modules"
+make modules verify-modules

@@ -96,6 +96,14 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			Expect(cfg).NotTo(BeNil())
 
 			By("creating three pods")
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			err = ensureNamespace(testNamespaceOne, cl)
+			Expect(err).NotTo(HaveOccurred())
+			err = ensureNamespace(testNamespaceTwo, cl)
+			Expect(err).NotTo(HaveOccurred())
+			err = ensureNamespace(testNamespaceThree, cl)
+			Expect(err).NotTo(HaveOccurred())
 			// Includes restart policy since these objects are indexed on this field.
 			knownPod1 = createPod("test-pod-1", testNamespaceOne, kcorev1.RestartPolicyNever)
 			knownPod2 = createPod("test-pod-2", testNamespaceTwo, kcorev1.RestartPolicyAlways)
@@ -111,7 +119,6 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			knownPod4.GetObjectKind().SetGroupVersionKind(podGVK)
 
 			By("creating the informer cache")
-			var err error
 			informerCache, err = createCacheFunc(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			By("running the cache and waiting for it to sync")
@@ -260,6 +267,20 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("verifying that an error is returned")
 					err := informerCache.Get(context.Background(), svcKey, svc)
 					Expect(err).To(HaveOccurred())
+				})
+
+				It("should return an error when context is cancelled", func() {
+					By("creating a context and cancelling it")
+					ctx, cancel := context.WithCancel(context.Background())
+					cancel()
+
+					By("listing pods in test-namespace-1 with a cancelled context")
+					listObj := &kcorev1.PodList{}
+					err := informerCache.List(ctx, listObj, client.InNamespace(testNamespaceOne))
+
+					By("verifying that an error is returned")
+					Expect(err).To(HaveOccurred())
+					Expect(errors.IsTimeout(err)).To(BeTrue())
 				})
 			})
 			Context("with unstructured objects", func() {
@@ -666,4 +687,22 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			})
 		})
 	})
+}
+
+// ensureNamespace installs namespace of a given name if not exists
+func ensureNamespace(namespace string, client client.Client) error {
+	ns := kcorev1.Namespace{
+		ObjectMeta: kmetav1.ObjectMeta{
+			Name: namespace,
+		},
+		TypeMeta: kmetav1.TypeMeta{
+			Kind:       "Namespace",
+			APIVersion: "v1",
+		},
+	}
+	err := client.Create(context.TODO(), &ns)
+	if errors.IsAlreadyExists(err) {
+		return nil
+	}
+	return err
 }

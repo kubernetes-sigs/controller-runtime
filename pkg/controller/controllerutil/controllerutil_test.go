@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"math/rand"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -32,10 +30,80 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 var _ = Describe("Controllerutil", func() {
+	Describe("SetOwnerReference", func() {
+		It("should set ownerRef on an empty list", func() {
+			rs := &appsv1.ReplicaSet{}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+			}
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+				Name:       "foo",
+				Kind:       "Deployment",
+				APIVersion: "extensions/v1beta1",
+				UID:        "foo-uid",
+			}))
+		})
+
+		It("should not duplicate owner references", func() {
+			rs := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:       "foo",
+							Kind:       "Deployment",
+							APIVersion: "extensions/v1beta1",
+							UID:        "foo-uid",
+						},
+					},
+				},
+			}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+			}
+
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+				Name:       "foo",
+				Kind:       "Deployment",
+				APIVersion: "extensions/v1beta1",
+				UID:        "foo-uid",
+			}))
+		})
+
+		It("should update the reference", func() {
+			rs := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:       "foo",
+							Kind:       "Deployment",
+							APIVersion: "extensions/v1alpha1",
+							UID:        "foo-uid-1",
+						},
+					},
+				},
+			}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+			}
+
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+				Name:       "foo",
+				Kind:       "Deployment",
+				APIVersion: "extensions/v1beta1",
+				UID:        "foo-uid-2",
+			}))
+
+		})
+	})
+
 	Describe("SetControllerReference", func() {
 		It("should set the OwnerReference if it can find the group version kind", func() {
 			rs := &appsv1.ReplicaSet{}
@@ -99,6 +167,32 @@ var _ = Describe("Controllerutil", func() {
 					APIVersion:         "extensions/v1beta1",
 					UID:                "foo-uid",
 					Controller:         &f,
+					BlockOwnerDeletion: &t,
+				},
+			}
+			rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", OwnerReferences: rsOwners}}
+			dep := &extensionsv1beta1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", UID: "foo-uid"}}
+
+			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
+			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+				Name:               "foo",
+				Kind:               "Deployment",
+				APIVersion:         "extensions/v1beta1",
+				UID:                "foo-uid",
+				Controller:         &t,
+				BlockOwnerDeletion: &t,
+			}))
+		})
+
+		It("should replace the owner reference if it's already present", func() {
+			t := true
+			rsOwners := []metav1.OwnerReference{
+				{
+					Name:               "foo",
+					Kind:               "Deployment",
+					APIVersion:         "extensions/v1alpha1",
+					UID:                "foo-uid",
+					Controller:         &t,
 					BlockOwnerDeletion: &t,
 				},
 			}

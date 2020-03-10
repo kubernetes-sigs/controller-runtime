@@ -81,7 +81,7 @@ func (f *ResourceLock) Update(ler resourcelock.LeaderElectionRecord) error {
 
 // RecordEvent implements the ResourceLockInterface.
 func (f *ResourceLock) RecordEvent(s string) {
-	return
+
 }
 
 // Identity implements the ResourceLockInterface.

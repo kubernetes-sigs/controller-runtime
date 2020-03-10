@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -121,6 +122,28 @@ var _ = Describe("application", func() {
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeNil())
+		})
+
+		It("should override rate limiter during creation of controller", func() {
+			rateLimiter := workqueue.DefaultItemBasedRateLimiter()
+			newController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
+				if options.RateLimiter == rateLimiter {
+					return controller.New(name, mgr, options)
+				}
+				return nil, fmt.Errorf("rate limiter expected %T but found %T", rateLimiter, options.RateLimiter)
+			}
+
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				For(&appsv1.ReplicaSet{}).
+				Owns(&appsv1.ReplicaSet{}).
+				WithOptions(controller.Options{RateLimiter: rateLimiter}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())

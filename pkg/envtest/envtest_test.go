@@ -59,7 +59,7 @@ var _ = Describe("Test", func() {
 
 	// Cleanup CRDs
 	AfterEach(func(done Done) {
-		for _, crd := range runtimeListToUnstructured(crds) {
+		for _, crd := range runtimeCRDListToUnstructured(crds) {
 			// Delete only if CRD exists.
 			crdObjectKey := client.ObjectKey{
 				Name: crd.GetName(),
@@ -779,16 +779,18 @@ var _ = Describe("Test", func() {
 
 	Describe("Start", func() {
 		It("should raise an error on invalid dir when flag is enabled", func(done Done) {
-			env = &Environment{ErrorIfCRDPathMissing: true, CRDDirectoryPaths: []string{invalidDirectory}}
+			env := &Environment{ErrorIfCRDPathMissing: true, CRDDirectoryPaths: []string{invalidDirectory}}
 			_, err := env.Start()
 			Expect(err).To(HaveOccurred())
+			Expect(env.Stop()).To(Succeed())
 			close(done)
 		}, 30)
 
 		It("should not raise an error on invalid dir when flag is disabled", func(done Done) {
-			env = &Environment{ErrorIfCRDPathMissing: false, CRDDirectoryPaths: []string{invalidDirectory}}
+			env := &Environment{ErrorIfCRDPathMissing: false, CRDDirectoryPaths: []string{invalidDirectory}}
 			_, err := env.Start()
 			Expect(err).NotTo(HaveOccurred())
+			Expect(env.Stop()).To(Succeed())
 			close(done)
 		}, 30)
 	})

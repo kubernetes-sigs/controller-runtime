@@ -242,7 +242,10 @@ func (o *Options) BindFlags(fs *flag.FlagSet) {
 		"Zap Level at and above which stacktraces are captured (one of 'warn' or 'error')")
 }
 
-// UseFlagOptions to set logger with CLI passed flags.
+// UseFlagOptions configures the logger to use the Options set by parsing zap option flags from the CLI.
+//  opts := zap.Options{}
+//  opts.BindFlags(flag.CommandLine)
+//  log := zap.New(zap.UseFlagOptions(&opts))
 func UseFlagOptions(in *Options) Opts {
 	return func(o *Options) {
 		*o = *in

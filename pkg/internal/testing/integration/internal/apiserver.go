@@ -9,7 +9,9 @@ var APIServerDefaultArgs = []string{
 	"--insecure-port={{ if .URL }}{{ .URL.Port }}{{ end }}",
 	"--insecure-bind-address={{ if .URL }}{{ .URL.Hostname }}{{ end }}",
 	"--secure-port={{ if .SecurePort }}{{ .SecurePort }}{{ end }}",
-	"--disable-admission-plugins=NamespaceLifecycle,LimitRanger,ServiceAccount,TaintNodesByCondition,Priority,DefaultTolerationSeconds,DefaultStorageClass,StorageObjectInUseProtection,PersistentVolumeClaimResize,ResourceQuota", //nolint
+	// we're keeping this disabled because if enabled, default SA is missing which would force all tests to create one
+	// in normal apiserver operation this SA is created by controller, but that is not run in integration environment
+	"--disable-admission-plugins=ServiceAccount",
 	"--service-cluster-ip-range=10.0.0.0/24",
 	"--allow-privileged=true",
 }

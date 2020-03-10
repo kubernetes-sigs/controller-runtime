@@ -412,7 +412,7 @@ var _ = Describe("manger.Manager", func() {
 				Expect(resp.StatusCode).To(Equal(200))
 			})
 
-			It("should not serve anything other than metrics endpoint", func(done Done) {
+			It("should not serve anything other than metrics endpoint by default", func(done Done) {
 				opts.MetricsBindAddress = ":0"
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
@@ -468,6 +468,40 @@ var _ = Describe("manger.Manager", func() {
 				// Unregister will return false if the metric was never registered
 				ok := metrics.Registry.Unregister(one)
 				Expect(ok).To(BeTrue())
+			})
+
+			It("should serve extra endpoints", func(done Done) {
+				opts.MetricsBindAddress = ":0"
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = m.AddMetricsExtraHandler("/debug", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+					_, _ = w.Write([]byte("Some debug info"))
+				}))
+				Expect(err).NotTo(HaveOccurred())
+
+				// Should error when we add another extra endpoint on the already registered path.
+				err = m.AddMetricsExtraHandler("/debug", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+					_, _ = w.Write([]byte("Another debug info"))
+				}))
+				Expect(err).To(HaveOccurred())
+
+				s := make(chan struct{})
+				defer close(s)
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(s)).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				endpoint := fmt.Sprintf("http://%s/debug", listener.Addr().String())
+				resp, err := http.Get(endpoint)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+				body, err := ioutil.ReadAll(resp.Body)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(body)).To(Equal("Some debug info"))
 			})
 		})
 	})

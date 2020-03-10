@@ -19,11 +19,13 @@ package controllerutil
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/pointer"
@@ -180,6 +182,10 @@ const ( // They should complete the sentence "Deployment default/foo has been ..
 	OperationResultCreated OperationResult = "created"
 	// OperationResultUpdated means that an existing resource is updated
 	OperationResultUpdated OperationResult = "updated"
+	// OperationResultUpdatedStatus means that an existing resource and its status is updated
+	OperationResultUpdatedStatus OperationResult = "updatedStatus"
+	// OperationResultUpdatedStatusOnly means that only an existing status is updated
+	OperationResultUpdatedStatusOnly OperationResult = "updatedStatusOnly"
 )
 
 // CreateOrUpdate creates or updates the given object in the Kubernetes
@@ -221,6 +227,108 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj runtime.Object, f 
 		return OperationResultNone, err
 	}
 	return OperationResultUpdated, nil
+}
+
+// CreateOrPatch creates or patches the given object in the Kubernetes
+// cluster. The object's desired state must be reconciled with the before
+// state inside the passed in callback MutateFn.
+//
+// The MutateFn is called regardless of creating or updating an object.
+//
+// It returns the executed operation and an error.
+func CreateOrPatch(ctx context.Context, c client.Client, obj runtime.Object, f MutateFn) (OperationResult, error) {
+	key, err := client.ObjectKeyFromObject(obj)
+	if err != nil {
+		return OperationResultNone, err
+	}
+
+	if err := c.Get(ctx, key, obj); err != nil {
+		if !errors.IsNotFound(err) {
+			return OperationResultNone, err
+		}
+		if f != nil {
+			if err := mutate(f, key, obj); err != nil {
+				return OperationResultNone, err
+			}
+		}
+		if err := c.Create(ctx, obj); err != nil {
+			return OperationResultNone, err
+		}
+		return OperationResultCreated, nil
+	}
+
+	// Create patches for the object and its possible status.
+	objPatch := client.MergeFrom(obj.DeepCopyObject())
+	statusPatch := client.MergeFrom(obj.DeepCopyObject())
+
+	// Create a copy of the original object as well as converting that copy to
+	// unstructured data.
+	before, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj.DeepCopyObject())
+	if err != nil {
+		return OperationResultNone, err
+	}
+
+	// Attempt to extract the status from the resource for easier comparison later
+	beforeStatus, hasBeforeStatus, err := unstructured.NestedFieldCopy(before, "status")
+	if err != nil {
+		return OperationResultNone, err
+	}
+
+	// If the resource contains a status then remove it from the unstructured
+	// copy to avoid unnecessary patching later.
+	if hasBeforeStatus {
+		unstructured.RemoveNestedField(before, "status")
+	}
+
+	// Mutate the original object.
+	if f != nil {
+		if err := mutate(f, key, obj); err != nil {
+			return OperationResultNone, err
+		}
+	}
+
+	// Convert the resource to unstructured to compare against our before copy.
+	after, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		return OperationResultNone, err
+	}
+
+	// Attempt to extract the status from the resource for easier comparison later
+	afterStatus, hasAfterStatus, err := unstructured.NestedFieldCopy(after, "status")
+	if err != nil {
+		return OperationResultNone, err
+	}
+
+	// If the resource contains a status then remove it from the unstructured
+	// copy to avoid unnecessary patching later.
+	if hasAfterStatus {
+		unstructured.RemoveNestedField(after, "status")
+	}
+
+	result := OperationResultNone
+
+	if !reflect.DeepEqual(before, after) {
+		// Only issue a Patch if the before and after resources (minus status) differ
+		if err := c.Patch(ctx, obj, objPatch); err != nil {
+			return result, err
+		}
+		result = OperationResultUpdated
+	}
+
+	if (hasBeforeStatus || hasAfterStatus) && !reflect.DeepEqual(beforeStatus, afterStatus) {
+		// Only issue a Status Patch if the resource has a status and the beforeStatus
+		// and afterStatus copies differ
+		if err := c.Status().Patch(ctx, obj, statusPatch); err != nil {
+			return result, err
+		}
+		if result == OperationResultUpdated {
+			result = OperationResultUpdatedStatus
+		} else {
+			result = OperationResultUpdatedStatusOnly
+		}
+	}
+
+	return result, nil
 }
 
 // mutate wraps a MutateFn and applies validation to its result

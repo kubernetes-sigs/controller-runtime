@@ -89,10 +89,10 @@ func SetControllerReference(owner, controlled metav1.Object, scheme *runtime.Sch
 	return nil
 }
 
-// EnsureOwnerReference is a helper method to make sure the given object contains
-// an object reference to the object provided.
-// If a reference already exists, it'll be overwritten with the newly provided version.
-func EnsureOwnerReference(owner, object metav1.Object, scheme *runtime.Scheme) error {
+// SetOwnerReference is a helper method to make sure the given object contains an object reference to the object provided.
+// This allows you to declare that owner has a dependency on the object without specifying it as a controller.
+// If a reference to the same object already exists, it'll be overwritten with the newly provided version.
+func SetOwnerReference(owner, object metav1.Object, scheme *runtime.Scheme) error {
 	// Validate the owner.
 	ro, ok := owner.(runtime.Object)
 	if !ok {

@@ -21,11 +21,12 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	jobsv1 "testdata.kb.io/api/v1"
-	jobsv2 "testdata.kb.io/api/v2"
-	jobsv3 "testdata.kb.io/api/v3"
+	jobsv1 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v1"
+	jobsv2 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v2"
+	jobsv3 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v3"
 	// +kubebuilder:scaffold:imports
 )
 

@@ -7,7 +7,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/internal"
 )
+
+// NewTinyCA creates a new a tiny CA utility for provisioning serving certs and client certs FOR TESTING ONLY.
+// Don't use this for anything else!
+var NewTinyCA = internal.NewTinyCA
 
 // ControlPlane is a struct that knows how to start your test control plane.
 //

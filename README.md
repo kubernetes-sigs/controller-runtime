@@ -2,7 +2,12 @@
 
 # Kubernetes controller-runtime Project
 
-The Kubernetes controller-runtime Project is a set of go libraries for building Controllers.
+The Kubernetes controller-runtime Project is a set of go libraries for building
+Controllers. It is leveraged by [Kubebuilder](https://book.kubebuilder.io/) and
+[Operator SDK](https://github.com/operator-framework/operator-sdk). Both are
+a great place to start for new projects. See
+[Kubebuilder's Quick Start](https://book.kubebuilder.io/quick-start.html) to
+see how it can be used.
 
 Documentation:
 

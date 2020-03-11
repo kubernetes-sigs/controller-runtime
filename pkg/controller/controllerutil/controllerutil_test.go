@@ -449,6 +449,17 @@ var _ = Describe("Controllerutil", func() {
 			specr = deploymentSpecr(deploy, deplSpec)
 		})
 
+		assertLocalDeployWasUpdated := func(fetched *appsv1.Deployment) {
+			By("local deploy object was updated during patch & has same spec, status, resource version as fetched")
+			if fetched == nil {
+				fetched = &appsv1.Deployment{}
+				ExpectWithOffset(1, c.Get(context.TODO(), deplKey, fetched)).To(Succeed())
+			}
+			ExpectWithOffset(1, fetched.ResourceVersion).To(Equal(deploy.ResourceVersion))
+			ExpectWithOffset(1, fetched.Spec).To(BeEquivalentTo(deploy.Spec))
+			ExpectWithOffset(1, fetched.Status).To(BeEquivalentTo(deploy.Status))
+		}
+
 		It("creates a new object if one doesn't exists", func() {
 			op, err := controllerutil.CreateOrPatch(context.TODO(), c, deploy, specr)
 
@@ -485,6 +496,7 @@ var _ = Describe("Controllerutil", func() {
 			fetched := &appsv1.Deployment{}
 			Expect(c.Get(context.TODO(), deplKey, fetched)).To(Succeed())
 			Expect(*fetched.Spec.Replicas).To(Equal(scale))
+			assertLocalDeployWasUpdated(fetched)
 		})
 
 		It("patches only changed objects", func() {
@@ -499,6 +511,8 @@ var _ = Describe("Controllerutil", func() {
 
 			By("returning OperationResultNone")
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
+
+			assertLocalDeployWasUpdated(nil)
 		})
 
 		It("patches only changed status", func() {
@@ -517,6 +531,8 @@ var _ = Describe("Controllerutil", func() {
 
 			By("returning OperationResultUpdatedStatusOnly")
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultUpdatedStatusOnly))
+
+			assertLocalDeployWasUpdated(nil)
 		})
 
 		It("patches resource and status", func() {
@@ -539,6 +555,8 @@ var _ = Describe("Controllerutil", func() {
 
 			By("returning OperationResultUpdatedStatus")
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultUpdatedStatus))
+
+			assertLocalDeployWasUpdated(nil)
 		})
 
 		It("errors when MutateFn changes object name on creation", func() {

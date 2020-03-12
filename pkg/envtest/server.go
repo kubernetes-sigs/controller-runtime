@@ -307,3 +307,7 @@ func (te *Environment) useExistingCluster() bool {
 	}
 	return *te.UseExistingCluster
 }
+
+// DefaultKubeAPIServerFlags exposes the default args for the APIServer so that
+// you can use those to append your own additional arguments.
+var DefaultKubeAPIServerFlags = integration.APIServerDefaultArgs

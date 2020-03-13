@@ -21,6 +21,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -83,6 +84,41 @@ func ExampleManager_start() {
 	err := mgr.Start(signals.SetupSignalHandler())
 	if err != nil {
 		log.Error(err, "unable start the manager")
+		os.Exit(1)
+	}
+}
+
+// This example adds liveness/readiness probes to the Manager
+func ExampleManager_probes() {
+	cfg, err := config.GetConfig()
+	if err != nil {
+		log.Error(err, "unable to get kubeconfig")
+		os.Exit(1)
+	}
+
+	// Set health probes address(required to run probes)
+	// and desired liveness and readiness endpoints(optional)
+	mgr, err := manager.New(cfg, manager.Options{
+		HealthProbeBindAddress: ":8080",
+		LivenessEndpointName:   "health",
+		ReadinessEndpointName:  "ready",
+	})
+	if err != nil {
+		log.Error(err, "unable to set up manager")
+		os.Exit(1)
+	}
+
+	// Add readiness probe
+	err = mgr.AddReadyzCheck("ready-ping", healthz.Ping)
+	if err != nil {
+		log.Error(err, "unable add a readiness check")
+		os.Exit(1)
+	}
+
+	// Add liveness probe
+	err = mgr.AddHealthzCheck("health-ping", healthz.Ping)
+	if err != nil {
+		log.Error(err, "unable add a health check")
 		os.Exit(1)
 	}
 }

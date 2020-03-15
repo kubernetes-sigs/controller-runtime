@@ -86,6 +86,19 @@ var _ = Describe("Dynamic REST Mapper", func() {
 			}, "10s").Should(BeTrue())
 		})
 
+		It("should not rate-limit reloads when we poll at an interval above the rate limit", func() {
+			By("setting a small limit")
+			*lim = *rate.NewLimiter(rate.Limit(1), 1)
+
+			By("forcing a reload after changing the mapper")
+			addToMapper = func(baseMapper *meta.DefaultRESTMapper) {
+				baseMapper.Add(secondGVK, meta.RESTScopeNamespace)
+			}
+
+			By("calling 1 time per 2s for 6s total should consistently succeed")
+			Consistently(callWithOther(), "6s", "2s").Should(Succeed())
+		})
+
 		It("should avoid reloading twice if two requests for the same thing come in", func() {
 			count := 0
 			// we use sleeps here to simulate two simulataneous requests by slowing things down

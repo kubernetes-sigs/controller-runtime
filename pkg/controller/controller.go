@@ -67,6 +67,17 @@ type Controller interface {
 // New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have
 // been synced before the Controller is Started.
 func New(name string, mgr manager.Manager, options Options) (Controller, error) {
+	c, err := Configure(name, mgr, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add the controller as a Manager components
+	return c, mgr.Add(c)
+}
+
+// Configure a new controller without starting it or adding it to the manager.
+func Configure(name string, mgr manager.Manager, options Options) (Controller, error) {
 	if options.Reconciler == nil {
 		return nil, fmt.Errorf("must specify Reconciler")
 	}
@@ -103,6 +114,5 @@ func New(name string, mgr manager.Manager, options Options) (Controller, error) 
 		Name:                    name,
 	}
 
-	// Add the controller as a Manager components
-	return c, mgr.Add(c)
+	return c, nil
 }

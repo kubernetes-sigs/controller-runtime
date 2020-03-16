@@ -66,6 +66,10 @@ type Webhook struct {
 	// This optional. If not set, will be defaulted to Ignore (fail-open) by the server.
 	// More details: https://github.com/kubernetes/api/blob/f5c295feaba2cbc946f0bbb8b535fc5f6a0345ee/admissionregistration/v1beta1/types.go#L144-L147
 	FailurePolicy *admissionregistrationv1beta1.FailurePolicyType
+	// SideEffects maps to the SideEffects field in admissionregistrationv1beta1.Webhook
+	// This optional. If not set, will be defaulted to Unknown (blocked on dryrun) by the server.
+	// More details: https://github.com/kubernetes/api/blob/92c357b38a264f79e00a62e36242a258f5b82626/admissionregistration/v1beta1/types.go#L410-L417
+	SideEffects *admissionregistrationv1beta1.SideEffectClass
 	// NamespaceSelector maps to the NamespaceSelector field in admissionregistrationv1beta1.Webhook
 	// This optional.
 	NamespaceSelector *metav1.LabelSelector

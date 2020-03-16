@@ -60,6 +60,9 @@ type WebhookBuilder struct {
 	// failurePolicy maps to the FailurePolicy in the admissionregistrationv1beta1.Webhook
 	failurePolicy *admissionregistrationv1beta1.FailurePolicyType
 
+	// sideEffects maps to the SideEffectClass in the admissionregistrationv1beta1.Webhook
+	sideEffects *admissionregistrationv1beta1.SideEffectClass
+
 	// namespaceSelector maps to the NamespaceSelector in the admissionregistrationv1beta1.Webhook
 	namespaceSelector *metav1.LabelSelector
 
@@ -137,6 +140,14 @@ func (b *WebhookBuilder) FailurePolicy(policy admissionregistrationv1beta1.Failu
 	return b
 }
 
+// SideEffects sets the SideEffect of the webhook
+// If not set, it will be defaulted by the server.
+// This is optional
+func (b *WebhookBuilder) SideEffects(effect admissionregistrationv1beta1.SideEffectClass) *WebhookBuilder {
+	b.sideEffects = &effect
+	return b
+}
+
 // NamespaceSelector sets the NamespaceSelector for the webhook.
 // This is optional
 func (b *WebhookBuilder) NamespaceSelector(namespaceSelector *metav1.LabelSelector) *WebhookBuilder {
@@ -180,6 +191,7 @@ func (b *WebhookBuilder) Build() (*admission.Webhook, error) {
 		Name:              b.name,
 		Type:              *b.t,
 		FailurePolicy:     b.failurePolicy,
+		SideEffects:       b.sideEffects,
 		NamespaceSelector: b.namespaceSelector,
 		Handlers:          b.handlers,
 	}

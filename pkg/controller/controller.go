@@ -111,6 +111,7 @@ func Configure(name string, mgr manager.Manager, options Options) (Controller, e
 			return workqueue.NewNamedRateLimitingQueue(options.RateLimiter, name)
 		},
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
+		SetFields:               mgr.SetFields,
 		Name:                    name,
 	}
 

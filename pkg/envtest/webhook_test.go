@@ -3,6 +3,7 @@ package envtest
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -72,6 +73,16 @@ var _ = Describe("Test", func() {
 
 			close(stopCh)
 			close(done)
+		})
+
+		It("should load webhooks from files", func() {
+			installOptions := WebhookInstallOptions{
+				DirectoryPaths: []string{filepath.Join("testdata", "webhooks")},
+			}
+			err := parseWebhookDirs(&installOptions)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(installOptions.MutatingWebhooks)).To(Equal(2))
+			Expect(len(installOptions.ValidatingWebhooks)).To(Equal(2))
 		})
 	})
 })

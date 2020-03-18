@@ -50,6 +50,15 @@ SKIP_FETCH_TOOLS=${SKIP_FETCH_TOOLS:-""}
 function fetch_kb_tools {
   local dest_dir="${1}"
 
+  # use the pre-existing version in the temporary folder if it matches our k8s version
+  if [[ -x "${dest_dir}/kubebuilder/bin/kube-apiserver" ]]; then
+    version=$("${dest_dir}"/kubebuilder/bin/kube-apiserver --version)
+    if [[ $version == *"${k8s_version}"* ]]; then
+      header_text "Using cached kubebuilder-tools from ${dest_dir}"
+      return 0
+    fi
+  fi
+
   header_text "fetching tools (into '${dest_dir}')"
   kb_tools_archive_name="kubebuilder-tools-$k8s_version-$goos-$goarch.tar.gz"
   kb_tools_download_url="https://storage.googleapis.com/kubebuilder-tools/$kb_tools_archive_name"

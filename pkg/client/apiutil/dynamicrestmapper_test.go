@@ -86,6 +86,26 @@ var _ = Describe("Dynamic REST Mapper", func() {
 			}, "10s").Should(BeTrue())
 		})
 
+		It("should rate-limit then allow more at 1rps", func() {
+			By("setting a small limit")
+			*lim = *rate.NewLimiter(rate.Limit(1), 1)
+
+			By("forcing a reload after changing the mapper")
+			addToMapper = func(baseMapper *meta.DefaultRESTMapper) {
+				baseMapper.Add(secondGVK, meta.RESTScopeNamespace)
+			}
+
+			By("calling twice to trigger rate limiting")
+			Expect(callWithOther()).To(Succeed())
+			Expect(callWithTarget()).NotTo(Succeed())
+
+			// by 2nd call loop should succeed because we canceled our 1st rate-limited token, then waited a full second
+			By("calling until no longer rate-limited, 2nd call should succeed")
+			Eventually(func() bool {
+				return errors.As(callWithTarget(), &apiutil.ErrRateLimited{})
+			}, "2.5s", "1s").Should(BeFalse())
+		})
+
 		It("should avoid reloading twice if two requests for the same thing come in", func() {
 			count := 0
 			// we use sleeps here to simulate two simulataneous requests by slowing things down

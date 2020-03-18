@@ -30,6 +30,11 @@ while read commit_word commit; do
         # skip temporary merge commits and accidental merge commit inclusion
         # for calcuating release notes.
         continue
+    elif [[ ${title} == "Merge branch '"*"'"* ]]; then
+        # skip for accidental merge commit inclusion for calculating release notes
+        # NB(directxman12): it's not clear what tool generates this style, but we've
+        # got some now, so tolerate them.
+        continue
     fi
 
     read # skip the blank line

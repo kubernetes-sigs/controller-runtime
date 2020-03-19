@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -146,6 +147,10 @@ type Options struct {
 	// will only hold objects from the desired namespace.
 	Namespace string
 
+	// ListWatchOptions is the list/watch mutating functions which restrict the manager's cache
+	// to watch objects the desired label selector or field selector.
+	ListWatchOptions map[runtime.Object]func(*metav1.ListOptions)
+
 	// MetricsBindAddress is the TCP address that the controller should bind to
 	// for serving prometheus metrics.
 	// It can be set to "0" to disable the metrics serving.
@@ -243,7 +248,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}
 
 	// Create the cache for the cached read client and registering informers
-	cache, err := options.NewCache(config, cache.Options{Scheme: options.Scheme, Mapper: mapper, Resync: options.SyncPeriod, Namespace: options.Namespace})
+	cache, err := options.NewCache(config, cache.Options{Scheme: options.Scheme, Mapper: mapper, Resync: options.SyncPeriod, Namespace: options.Namespace, ListWatchOptions: options.ListWatchOptions})
 	if err != nil {
 		return nil, err
 	}

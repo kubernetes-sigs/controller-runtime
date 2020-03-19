@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -46,11 +47,12 @@ func NewInformersMap(config *rest.Config,
 	scheme *runtime.Scheme,
 	mapper meta.RESTMapper,
 	resync time.Duration,
-	namespace string) *InformersMap {
+	namespace string,
+	listWatchOptions map[schema.GroupVersionKind]func(*metav1.ListOptions)) *InformersMap {
 
 	return &InformersMap{
-		structured:   newStructuredInformersMap(config, scheme, mapper, resync, namespace),
-		unstructured: newUnstructuredInformersMap(config, scheme, mapper, resync, namespace),
+		structured:   newStructuredInformersMap(config, scheme, mapper, resync, namespace, listWatchOptions),
+		unstructured: newUnstructuredInformersMap(config, scheme, mapper, resync, namespace, listWatchOptions),
 
 		Scheme: scheme,
 	}
@@ -93,11 +95,13 @@ func (m *InformersMap) Get(ctx context.Context, gvk schema.GroupVersionKind, obj
 }
 
 // newStructuredInformersMap creates a new InformersMap for structured objects.
-func newStructuredInformersMap(config *rest.Config, scheme *runtime.Scheme, mapper meta.RESTMapper, resync time.Duration, namespace string) *specificInformersMap {
-	return newSpecificInformersMap(config, scheme, mapper, resync, namespace, createStructuredListWatch)
+func newStructuredInformersMap(config *rest.Config, scheme *runtime.Scheme, mapper meta.RESTMapper, resync time.Duration, namespace string,
+	listWatchOptions map[schema.GroupVersionKind]func(*metav1.ListOptions)) *specificInformersMap {
+	return newSpecificInformersMap(config, scheme, mapper, resync, namespace, listWatchOptions, createStructuredListWatch)
 }
 
 // newUnstructuredInformersMap creates a new InformersMap for unstructured objects.
-func newUnstructuredInformersMap(config *rest.Config, scheme *runtime.Scheme, mapper meta.RESTMapper, resync time.Duration, namespace string) *specificInformersMap {
-	return newSpecificInformersMap(config, scheme, mapper, resync, namespace, createUnstructuredListWatch)
+func newUnstructuredInformersMap(config *rest.Config, scheme *runtime.Scheme, mapper meta.RESTMapper, resync time.Duration, namespace string,
+	listWatchOptions map[schema.GroupVersionKind]func(*metav1.ListOptions)) *specificInformersMap {
+	return newSpecificInformersMap(config, scheme, mapper, resync, namespace, listWatchOptions, createUnstructuredListWatch)
 }

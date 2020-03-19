@@ -83,12 +83,13 @@ var _ = Describe("Multi-Namespace Informer Cache", func() {
 func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error)) {
 	Describe("Cache test", func() {
 		var (
-			informerCache cache.Cache
-			stop          chan struct{}
-			knownPod1     runtime.Object
-			knownPod2     runtime.Object
-			knownPod3     runtime.Object
-			knownPod4     runtime.Object
+			informerCache              cache.Cache
+			labelSelectorInformerCache cache.Cache
+			stop                       chan struct{}
+			knownPod1                  runtime.Object
+			knownPod2                  runtime.Object
+			knownPod3                  runtime.Object
+			knownPod4                  runtime.Object
 		)
 
 		BeforeEach(func() {
@@ -128,6 +129,23 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				Expect(informerCache.Start(stopCh)).To(Succeed())
 			}(stop)
 			Expect(informerCache.WaitForCacheSync(stop)).To(BeTrue())
+
+			By("creating the label selector informer cache")
+			labelSelectorInformerCache, err = createCacheFunc(cfg, cache.Options{
+				ListWatchOptions: map[runtime.Object]func(*kmetav1.ListOptions){
+					&kcorev1.Pod{}: func(options *kmetav1.ListOptions) {
+						options.LabelSelector = "test-label=test-pod-2"
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			By("running the cache and waiting for it to sync")
+			// pass as an arg so that we don't race between close and re-assign
+			go func(stopCh chan struct{}) {
+				defer GinkgoRecover()
+				Expect(labelSelectorInformerCache.Start(stopCh)).To(Succeed())
+			}(stop)
+			Expect(labelSelectorInformerCache.WaitForCacheSync(stop)).To(BeTrue())
 		})
 
 		AfterEach(func() {
@@ -281,6 +299,20 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("verifying that an error is returned")
 					Expect(err).To(HaveOccurred())
 					Expect(errors.IsTimeout(err)).To(BeTrue())
+				})
+
+				It("should be enable to list-watch by label selector", func() {
+					By("listing all pods")
+					out := kcorev1.PodList{}
+					Expect(labelSelectorInformerCache.List(context.Background(), &out)).To(Succeed())
+
+					By("verifying the returned pods have the correct label")
+					Expect(out.Items).NotTo(BeEmpty())
+					Expect(out.Items).Should(HaveLen(1))
+					for i := range out.Items {
+						actual := out.Items[i]
+						Expect(actual.Labels["test-label"]).To(Equal("test-pod-2"))
+					}
 				})
 			})
 			Context("with unstructured objects", func() {
@@ -626,6 +658,69 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
 					Expect(errors.IsTimeout(err)).To(BeTrue())
+
+				})
+
+				It("should be able to get label selector informer for the object", func(done Done) {
+					By("getting a label selector enabled shared index informer for a pod")
+					pod1 := &kcorev1.Pod{
+						ObjectMeta: kmetav1.ObjectMeta{
+							Name:      "informer-obj-1",
+							Namespace: "default",
+							Labels: map[string]string{
+								"test-label": "test-pod-2",
+							},
+						},
+						Spec: kcorev1.PodSpec{
+							Containers: []kcorev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx",
+								},
+							},
+						},
+					}
+					pod2 := &kcorev1.Pod{
+						ObjectMeta: kmetav1.ObjectMeta{
+							Name:      "informer-obj-2",
+							Namespace: "default",
+							Labels: map[string]string{
+								"test-label": "test-pod-1",
+							},
+						},
+						Spec: kcorev1.PodSpec{
+							Containers: []kcorev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx",
+								},
+							},
+						},
+					}
+					sii, err := informerCache.GetInformer(context.Background(), pod1)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(sii).NotTo(BeNil())
+					Expect(sii.HasSynced()).To(BeTrue())
+					By("adding an event handler listening for object creation which sends the object to a channel")
+					out := make(chan interface{})
+					addFunc := func(obj interface{}) {
+						out <- obj
+					}
+					sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+					By("adding an label matched object")
+					cl, err := client.New(cfg, client.Options{})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(cl.Create(context.Background(), pod1)).To(Succeed())
+					defer deletePod(pod1)
+					By("verifying the object is received on the channel")
+					Eventually(out).Should(Receive(Equal(pod1)))
+					By("adding an label un-matched object")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(cl.Create(context.Background(), pod2)).To(Succeed())
+					defer deletePod(pod2)
+					By("verifying the label un-matched object is not received on the channel")
+					Eventually(out).ShouldNot(Receive())
+					close(done)
 				})
 			})
 			Context("with unstructured objects", func() {

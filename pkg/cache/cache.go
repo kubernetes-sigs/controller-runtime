@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -103,6 +104,10 @@ type Options struct {
 	// Namespace restricts the cache's ListWatch to the desired namespace
 	// Default watches all namespaces
 	Namespace string
+
+	// ListWatchOptions is ListWatch mutating functions which restricts the cache's ListWatch
+	// to the desired label selector or field selector
+	ListWatchOptions map[runtime.Object]func(*metav1.ListOptions)
 }
 
 var defaultResyncTime = 10 * time.Hour
@@ -113,7 +118,13 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 	if err != nil {
 		return nil, err
 	}
-	im := internal.NewInformersMap(config, opts.Scheme, opts.Mapper, *opts.Resync, opts.Namespace)
+
+	lwOptions, err := convertListWatchOptions(opts.Scheme, opts.ListWatchOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	im := internal.NewInformersMap(config, opts.Scheme, opts.Mapper, *opts.Resync, opts.Namespace, lwOptions)
 	return &informerCache{InformersMap: im}, nil
 }
 
@@ -138,4 +149,19 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 		opts.Resync = &defaultResyncTime
 	}
 	return opts, nil
+}
+
+func convertListWatchOptions(runtimeScheme *runtime.Scheme, from map[runtime.Object]func(*metav1.ListOptions)) (map[schema.GroupVersionKind]func(*metav1.ListOptions), error) {
+	ret := make(map[schema.GroupVersionKind]func(*metav1.ListOptions))
+
+	for obj, f := range from {
+		gvk, err := apiutil.GVKForObject(obj, runtimeScheme)
+		if err != nil {
+			return nil, err
+		}
+
+		ret[gvk] = f
+	}
+
+	return ret, nil
 }

@@ -38,7 +38,7 @@ import (
 )
 
 // clientListWatcherFunc knows how to create a ListWatcher
-type createListWatcherFunc func(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error)
+type createListWatcherFunc func(gvk schema.GroupVersionKind, ip *specificInformersMap, listWatchOptions func(*metav1.ListOptions)) (*cache.ListWatch, error)
 
 // newSpecificInformersMap returns a new specificInformersMap (like
 // the generical InformersMap, except that it doesn't implement WaitForCacheSync).
@@ -47,6 +47,7 @@ func newSpecificInformersMap(config *rest.Config,
 	mapper meta.RESTMapper,
 	resync time.Duration,
 	namespace string,
+	listWatchOptions map[schema.GroupVersionKind]func(*metav1.ListOptions),
 	createListWatcher createListWatcherFunc) *specificInformersMap {
 	ip := &specificInformersMap{
 		config:            config,
@@ -59,6 +60,7 @@ func newSpecificInformersMap(config *rest.Config,
 		startWait:         make(chan struct{}),
 		createListWatcher: createListWatcher,
 		namespace:         namespace,
+		listWatchOptions:  listWatchOptions,
 	}
 	return ip
 }
@@ -119,6 +121,9 @@ type specificInformersMap struct {
 	// namespace is the namespace that all ListWatches are restricted to
 	// default or empty string means all namespaces
 	namespace string
+
+	// listWatchOptions is resource ListWatch mutating functions keyed by groupVersionKind
+	listWatchOptions map[schema.GroupVersionKind]func(*metav1.ListOptions)
 }
 
 // Start calls Run on each of the informers and sets started to true.  Blocks on the stop channel.
@@ -204,7 +209,8 @@ func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, ob
 
 	// Create a NewSharedIndexInformer and add it to the map.
 	var lw *cache.ListWatch
-	lw, err := ip.createListWatcher(gvk, ip)
+	lwOptions := ip.listWatchOptions[gvk]
+	lw, err := ip.createListWatcher(gvk, ip, lwOptions)
 	if err != nil {
 		return nil, false, err
 	}
@@ -227,7 +233,7 @@ func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, ob
 }
 
 // newListWatch returns a new ListWatch object that can be used to create a SharedIndexInformer.
-func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
+func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformersMap, listWatchOptions func(*metav1.ListOptions)) (*cache.ListWatch, error) {
 	// Kubernetes APIs work against Resources, not GroupVersionKinds.  Map the
 	// groupVersionKind to the Resource API we will use.
 	mapping, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
@@ -251,6 +257,9 @@ func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformer
 	// Create a new ListWatch for the obj
 	return &cache.ListWatch{
 		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
+			if listWatchOptions != nil {
+				listWatchOptions(&opts)
+			}
 			res := listObj.DeepCopyObject()
 			isNamespaceScoped := ip.namespace != "" && mapping.Scope.Name() != meta.RESTScopeNameRoot
 			err := client.Get().NamespaceIfScoped(ip.namespace, isNamespaceScoped).Resource(mapping.Resource.Resource).VersionedParams(&opts, ip.paramCodec).Do(ctx).Into(res)
@@ -258,6 +267,9 @@ func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformer
 		},
 		// Setup the watch function
 		WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
+			if listWatchOptions != nil {
+				listWatchOptions(&opts)
+			}
 			// Watch needs to be set to true separately
 			opts.Watch = true
 			isNamespaceScoped := ip.namespace != "" && mapping.Scope.Name() != meta.RESTScopeNameRoot
@@ -266,7 +278,7 @@ func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformer
 	}, nil
 }
 
-func createUnstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
+func createUnstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformersMap, listWatchOptions func(*metav1.ListOptions)) (*cache.ListWatch, error) {
 	// Kubernetes APIs work against Resources, not GroupVersionKinds.  Map the
 	// groupVersionKind to the Resource API we will use.
 	mapping, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
@@ -284,6 +296,9 @@ func createUnstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInform
 	// Create a new ListWatch for the obj
 	return &cache.ListWatch{
 		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
+			if listWatchOptions != nil {
+				listWatchOptions(&opts)
+			}
 			if ip.namespace != "" && mapping.Scope.Name() != meta.RESTScopeNameRoot {
 				return dynamicClient.Resource(mapping.Resource).Namespace(ip.namespace).List(ctx, opts)
 			}
@@ -291,6 +306,9 @@ func createUnstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInform
 		},
 		// Setup the watch function
 		WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
+			if listWatchOptions != nil {
+				listWatchOptions(&opts)
+			}
 			// Watch needs to be set to true separately
 			opts.Watch = true
 			if ip.namespace != "" && mapping.Scope.Name() != meta.RESTScopeNameRoot {

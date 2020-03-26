@@ -19,10 +19,12 @@ package fake
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -79,28 +81,42 @@ func NewFakeClientWithScheme(clientScheme *runtime.Scheme, initObjs ...runtime.O
 }
 
 func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Object, ns string) error {
-	if accessor, err := meta.Accessor(obj); err == nil {
-		if accessor.GetResourceVersion() == "" {
-			accessor.SetResourceVersion("1")
-		}
-	} else {
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
 		return err
 	}
+	if accessor.GetResourceVersion() != "" {
+		return apierrors.NewBadRequest("resourceVersion can not be set for Create requests")
+	}
+	accessor.SetResourceVersion("1")
 	return t.ObjectTracker.Create(gvr, obj, ns)
 }
 
 func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Object, ns string) error {
-	if accessor, err := meta.Accessor(obj); err == nil {
-		version := 0
-		if rv := accessor.GetResourceVersion(); rv != "" {
-			version, err = strconv.Atoi(rv)
-		}
-		if err == nil {
-			accessor.SetResourceVersion(strconv.Itoa(version + 1))
-		}
-	} else {
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
+		return fmt.Errorf("failed to get accessor for object: %v", err)
+	}
+	oldObject, err := t.ObjectTracker.Get(gvr, ns, accessor.GetName())
+	if err != nil {
 		return err
 	}
+	oldAccessor, err := meta.Accessor(oldObject)
+	if err != nil {
+		return err
+	}
+	if accessor.GetResourceVersion() != oldAccessor.GetResourceVersion() {
+		return apierrors.NewConflict(gvr.GroupResource(), accessor.GetName(), errors.New("object was modified"))
+	}
+	if oldAccessor.GetResourceVersion() == "" {
+		oldAccessor.SetResourceVersion("0")
+	}
+	intResourceVersion, err := strconv.ParseUint(oldAccessor.GetResourceVersion(), 10, 64)
+	if err != nil {
+		return fmt.Errorf("can not convert resourceVersion %q to int: %v", oldAccessor.GetResourceVersion(), err)
+	}
+	intResourceVersion++
+	accessor.SetResourceVersion(strconv.FormatUint(intResourceVersion, 10))
 	return t.ObjectTracker.Update(gvr, obj, ns)
 }
 

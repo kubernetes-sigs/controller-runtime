@@ -130,7 +130,10 @@ type controllerManager struct {
 	// It and `internalStop` should point to the same channel.
 	internalStopper chan<- struct{}
 
-	elected chan struct{}
+	// leading is closed when this manager becomes the leader of a group of
+	// managers, either because it won a leader election or because no leader
+	// election was configured.
+	leading chan struct{}
 
 	startCache func(stop <-chan struct{}) error
 
@@ -425,8 +428,8 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 			return err
 		}
 	} else {
-		// Treat not having an election the same as being elected.
-		close(cm.elected)
+		// Treat not having leader election enabled the same as being elected.
+		close(cm.leading)
 		go cm.startLeaderElectionRunnables()
 	}
 
@@ -515,7 +518,7 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 		RetryPeriod:   cm.retryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(_ context.Context) {
-				close(cm.elected)
+				close(cm.leading)
 				cm.startLeaderElectionRunnables()
 			},
 			OnStoppedLeading: func() {
@@ -544,6 +547,6 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 	return nil
 }
 
-func (cm *controllerManager) Elected() <-chan struct{} {
-	return cm.elected
+func (cm *controllerManager) Leading() <-chan struct{} {
+	return cm.leading
 }

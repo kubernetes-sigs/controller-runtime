@@ -67,7 +67,7 @@ type Controller interface {
 // New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have
 // been synced before the Controller is Started.
 func New(name string, mgr manager.Manager, options Options) (Controller, error) {
-	c, err := Configure(name, mgr, options)
+	c, err := NewUnmanaged(name, mgr, options)
 	if err != nil {
 		return nil, err
 	}
@@ -76,8 +76,9 @@ func New(name string, mgr manager.Manager, options Options) (Controller, error) 
 	return c, mgr.Add(c)
 }
 
-// Configure a new controller without starting it or adding it to the manager.
-func Configure(name string, mgr manager.Manager, options Options) (Controller, error) {
+// NewUnmanaged returns a new controller without adding it to the manager. The
+// caller is responsible for starting the returned controller.
+func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller, error) {
 	if options.Reconciler == nil {
 		return nil, fmt.Errorf("must specify Reconciler")
 	}

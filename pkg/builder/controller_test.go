@@ -32,8 +32,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -203,6 +205,67 @@ var _ = Describe("application", func() {
 			close(done)
 		}, 10)
 	})
+
+	Describe("Set custom predicates", func() {
+		It("should execute registered predicates only for assigned kind", func(done Done) {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			var (
+				deployPrctExecuted     = false
+				replicaSetPrctExecuted = false
+				allPrctExecuted        = 0
+			)
+
+			deployPrct := predicate.Funcs{
+				CreateFunc: func(e event.CreateEvent) bool {
+					defer GinkgoRecover()
+					// check that it was called only for deployment
+					Expect(e.Meta).To(BeAssignableToTypeOf(&appsv1.Deployment{}))
+					deployPrctExecuted = true
+					return true
+				},
+			}
+
+			replicaSetPrct := predicate.Funcs{
+				CreateFunc: func(e event.CreateEvent) bool {
+					defer GinkgoRecover()
+					// check that it was called only for replicaset
+					Expect(e.Meta).To(BeAssignableToTypeOf(&appsv1.ReplicaSet{}))
+					replicaSetPrctExecuted = true
+					return true
+				},
+			}
+
+			allPrct := predicate.Funcs{
+				CreateFunc: func(e event.CreateEvent) bool {
+					defer GinkgoRecover()
+					//check that it was called for all registered kinds
+					Expect(e.Meta).Should(Or(
+						BeAssignableToTypeOf(&appsv1.Deployment{}),
+						BeAssignableToTypeOf(&appsv1.ReplicaSet{}),
+					))
+
+					allPrctExecuted++
+					return true
+				},
+			}
+
+			bldr := ControllerManagedBy(m).
+				For(&appsv1.Deployment{}, WithPredicates(deployPrct)).
+				Owns(&appsv1.ReplicaSet{}, WithPredicates(replicaSetPrct)).
+				WithEventFilter(allPrct)
+
+			doReconcileTest("5", stop, bldr, m, true)
+
+			Expect(deployPrctExecuted).To(BeTrue(), "Deploy predicated should be called at least once")
+			Expect(replicaSetPrctExecuted).To(BeTrue(), "ReplicaSet predicated should be called at least once")
+			Expect(allPrctExecuted).To(BeNumerically(">=", 2), "Global Predicated should be called at least twice")
+
+			close(done)
+		})
+	})
+
 })
 
 func doReconcileTest(nameSuffix string, stop chan struct{}, blder *Builder, mgr manager.Manager, complete bool) {

@@ -496,7 +496,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 							},
 						},
 					}
-					sii, err := informerCache.GetInformer(pod)
+					sii, err := informerCache.GetInformer(context.TODO(), pod)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(sii).NotTo(BeNil())
 					Expect(sii.HasSynced()).To(BeTrue())
@@ -522,7 +522,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				It("should be able to get an informer by group/version/kind", func(done Done) {
 					By("getting an shared index informer for gvk = core/v1/pod")
 					gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
-					sii, err := informerCache.GetInformerForKind(gvk)
+					sii, err := informerCache.GetInformerForKind(context.TODO(), gvk)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(sii).NotTo(BeNil())
 					Expect(sii.HasSynced()).To(BeTrue())
@@ -569,7 +569,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					indexFunc := func(obj runtime.Object) []string {
 						return []string{string(obj.(*kcorev1.Pod).Spec.RestartPolicy)}
 					}
-					Expect(informer.IndexField(pod, "spec.restartPolicy", indexFunc)).To(Succeed())
+					Expect(informer.IndexField(context.TODO(), pod, "spec.restartPolicy", indexFunc)).To(Succeed())
 
 					By("running the cache and waiting for it to sync")
 					go func() {
@@ -587,6 +587,45 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(listObj.Items).Should(HaveLen(1))
 					actual := listObj.Items[0]
 					Expect(actual.Name).To(Equal("test-pod-3"))
+				})
+
+				It("should allow for get informer to be cancelled", func() {
+					By("creating a context and cancelling it")
+					ctx, cancel := context.WithCancel(context.Background())
+					cancel()
+
+					By("getting a shared index informer for a pod with a cancelled context")
+					pod := &kcorev1.Pod{
+						ObjectMeta: kmetav1.ObjectMeta{
+							Name:      "informer-obj",
+							Namespace: "default",
+						},
+						Spec: kcorev1.PodSpec{
+							Containers: []kcorev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx",
+								},
+							},
+						},
+					}
+					sii, err := informerCache.GetInformer(ctx, pod)
+					Expect(err).To(HaveOccurred())
+					Expect(sii).To(BeNil())
+					Expect(errors.IsTimeout(err)).To(BeTrue())
+				})
+
+				It("should allow getting an informer by group/version/kind to be cancelled", func() {
+					By("creating a context and cancelling it")
+					ctx, cancel := context.WithCancel(context.Background())
+					cancel()
+
+					By("getting an shared index informer for gvk = core/v1/pod with a cancelled context")
+					gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
+					sii, err := informerCache.GetInformerForKind(ctx, gvk)
+					Expect(err).To(HaveOccurred())
+					Expect(sii).To(BeNil())
+					Expect(errors.IsTimeout(err)).To(BeTrue())
 				})
 			})
 			Context("with unstructured objects", func() {
@@ -612,7 +651,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						Version: "v1",
 						Kind:    "Pod",
 					})
-					sii, err := informerCache.GetInformer(pod)
+					sii, err := informerCache.GetInformer(context.TODO(), pod)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(sii).NotTo(BeNil())
 					Expect(sii.HasSynced()).To(BeTrue())
@@ -658,7 +697,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						}
 						return []string{fmt.Sprintf("%v", m["restartPolicy"])}
 					}
-					Expect(informer.IndexField(pod, "spec.restartPolicy", indexFunc)).To(Succeed())
+					Expect(informer.IndexField(context.TODO(), pod, "spec.restartPolicy", indexFunc)).To(Succeed())
 
 					By("running the cache and waiting for it to sync")
 					go func() {
@@ -684,6 +723,26 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					actual := listObj.Items[0]
 					Expect(actual.GetName()).To(Equal("test-pod-3"))
 				}, 3)
+
+				It("should allow for get informer to be cancelled", func() {
+					By("creating a context and cancelling it")
+					ctx, cancel := context.WithCancel(context.Background())
+					cancel()
+
+					By("getting a shared index informer for a pod with a cancelled context")
+					pod := &unstructured.Unstructured{}
+					pod.SetName("informer-obj2")
+					pod.SetNamespace("default")
+					pod.SetGroupVersionKind(schema.GroupVersionKind{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Pod",
+					})
+					sii, err := informerCache.GetInformer(ctx, pod)
+					Expect(err).To(HaveOccurred())
+					Expect(sii).To(BeNil())
+					Expect(errors.IsTimeout(err)).To(BeTrue())
+				})
 			})
 		})
 	})

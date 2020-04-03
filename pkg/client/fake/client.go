@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/testing"
 
@@ -85,6 +86,12 @@ func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Ob
 	if err != nil {
 		return err
 	}
+	if accessor.GetName() == "" {
+		return apierrors.NewInvalid(
+			obj.GetObjectKind().GroupVersionKind().GroupKind(),
+			accessor.GetName(),
+			field.ErrorList{field.Required(field.NewPath("metadata.name"), "name is required")})
+	}
 	if accessor.GetResourceVersion() != "" {
 		return apierrors.NewBadRequest("resourceVersion can not be set for Create requests")
 	}
@@ -96,6 +103,12 @@ func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Ob
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
 		return fmt.Errorf("failed to get accessor for object: %v", err)
+	}
+	if accessor.GetName() == "" {
+		return apierrors.NewInvalid(
+			obj.GetObjectKind().GroupVersionKind().GroupKind(),
+			accessor.GetName(),
+			field.ErrorList{field.Required(field.NewPath("metadata.name"), "name is required")})
 	}
 	oldObject, err := t.ObjectTracker.Get(gvr, ns, accessor.GetName())
 	if err != nil {

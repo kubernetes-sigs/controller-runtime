@@ -186,6 +186,36 @@ var _ = Describe("Fake client", func() {
 			Expect(apierrors.IsBadRequest(err)).To(BeTrue())
 		})
 
+		It("should error on Create with empty Name", func() {
+			By("Creating a new configmap")
+			newcm := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns2",
+				},
+			}
+			err := cl.Create(context.Background(), newcm)
+			Expect(err.Error()).To(Equal("ConfigMap \"\" is invalid: metadata.name: Required value: name is required"))
+		})
+
+		It("should error on Update with empty Name", func() {
+			By("Creating a new configmap")
+			newcm := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns2",
+				},
+			}
+			err := cl.Update(context.Background(), newcm)
+			Expect(err.Error()).To(Equal("ConfigMap \"\" is invalid: metadata.name: Required value: name is required"))
+		})
+
 		It("should be able to Create with GenerateName", func() {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{

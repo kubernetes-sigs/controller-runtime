@@ -17,6 +17,10 @@ limitations under the License.
 package handler_test
 
 import (
+	"fmt"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -39,15 +43,27 @@ var _ = Describe("Eventhandler", func() {
 	var instance handler.EnqueueRequestForObject
 	var pod *corev1.Pod
 	var mapper meta.RESTMapper
+	var podOwner = &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "podOwnerNs",
+			Name:      "podOwnerName",
+		},
+	}
 	t := true
 	BeforeEach(func() {
 		q = controllertest.Queue{Interface: workqueue.New()}
 		pod = &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Namespace: "biz", Name: "baz"},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "biz",
+				Name:      "baz",
+			},
 		}
+
+		err := handler.SetWatchOwnerAnnotation(podOwner, pod, schema.GroupKind{Group: "Pods", Kind: "core"})
+		Expect(err).To(BeNil())
+
 		Expect(cfg).NotTo(BeNil())
 
-		var err error
 		mapper, err = apiutil.NewDiscoveryRESTMapper(cfg)
 		Expect(err).ShouldNot(HaveOccurred())
 	})
@@ -948,6 +964,355 @@ var _ = Describe("Eventhandler", func() {
 			}
 			instance.Generic(evt, q)
 			close(done)
+		})
+	})
+
+	Describe("EnqueueRequestForAnnotation", func() {
+		It("should enqueue a Request with the annotations of the object in the CreateEvent.", func() {
+			instance := handler.EnqueueRequestForAnnotation{Type: schema.GroupKind{Group: "Pods", Kind: "core"}}
+
+			evt := event.CreateEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+
+			instance.Create(evt, q)
+			Expect(q.Len()).To(Equal(1))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.Request{
+				NamespacedName: types.NamespacedName{Namespace: podOwner.Namespace, Name: podOwner.Name}}))
+		})
+
+		It("should enqueue a Request with the annotations of the object in the DeleteEvent.", func() {
+			instance := handler.EnqueueRequestForAnnotation{Type: schema.GroupKind{Group: "Pods", Kind: "core"}}
+
+			evt := event.DeleteEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Delete(evt, q)
+			Expect(q.Len()).To(Equal(1))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.Request{
+				NamespacedName: types.NamespacedName{Namespace: podOwner.Namespace, Name: podOwner.Name}}))
+		})
+
+		It("should enqueue a Request with the annotations applied to both objects in the UpdateEvent.", func() {
+			newPod := pod.DeepCopy()
+			newPod.Name = pod.Name + "2"
+			newPod.Namespace = pod.Namespace + "2"
+
+			instance := handler.EnqueueRequestForAnnotation{Type: schema.GroupKind{Group: "Pods", Kind: "core"}}
+
+			evt := event.UpdateEvent{
+				ObjectOld: pod,
+				MetaOld:   pod.GetObjectMeta(),
+				ObjectNew: newPod,
+				MetaNew:   newPod.GetObjectMeta(),
+			}
+			instance.Update(evt, q)
+			Expect(q.Len()).To(Equal(1))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.Request{
+				NamespacedName: types.NamespacedName{Namespace: podOwner.Namespace, Name: podOwner.Name}}))
+		})
+
+		It("should enqueue a Request with the annotations applied in one of the objects in the UpdateEvent.", func() {
+			newPod := pod.DeepCopy()
+			newPod.Name = pod.Name + "2"
+			newPod.Namespace = pod.Namespace + "2"
+			newPod.Annotations = map[string]string{}
+			instance := handler.EnqueueRequestForAnnotation{Type: schema.GroupKind{Group: "Pods", Kind: "core"}}
+
+			evt := event.UpdateEvent{
+				ObjectOld: pod,
+				MetaOld:   pod.GetObjectMeta(),
+				ObjectNew: newPod,
+				MetaNew:   newPod.GetObjectMeta(),
+			}
+			instance.Update(evt, q)
+			Expect(q.Len()).To(Equal(1))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.Request{
+				NamespacedName: types.NamespacedName{Namespace: podOwner.Namespace, Name: podOwner.Name}}))
+		})
+
+		It("should enqueue a Request when the annotations are applied in new object in the UpdateEvent", func() {
+			var repl *appsv1.ReplicaSet
+
+			repl = &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "foo",
+					Name:      "faz",
+				},
+			}
+
+			instance := handler.EnqueueRequestForAnnotation{Type: schema.GroupKind{Group: "ReplicaSet", Kind: "apps"}}
+			evt := event.CreateEvent{
+				Object: repl,
+				Meta:   repl.GetObjectMeta(),
+			}
+
+			instance.Create(evt, q)
+			Expect(q.Len()).To(Equal(0))
+
+			newRepl := repl.DeepCopy()
+			newRepl.Name = pod.Name + "2"
+			newRepl.Namespace = pod.Namespace + "2"
+
+			newRepl.Annotations = map[string]string{
+				handler.TypeAnnotation:           schema.GroupKind{Group: "ReplicaSet", Kind: "apps"}.String(),
+				handler.NamespacedNameAnnotation: "foo/faz",
+			}
+			instance2 := handler.EnqueueRequestForAnnotation{Type: schema.GroupKind{Group: "ReplicaSet", Kind: "apps"}}
+
+			evt2 := event.UpdateEvent{
+				ObjectOld: repl,
+				MetaOld:   repl.GetObjectMeta(),
+				ObjectNew: newRepl,
+				MetaNew:   newRepl.GetObjectMeta(),
+			}
+			instance2.Update(evt2, q)
+			Expect(q.Len()).To(Equal(1))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.Request{
+				NamespacedName: types.NamespacedName{Namespace: "foo", Name: "faz"}}))
+
+		})
+
+		It("should enqueue a Request to the owner resource when the annotations are applied in child object in the CreateEvent", func() {
+			var repl *appsv1.ReplicaSet
+
+			repl = &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "foo",
+					Name:      "faz",
+				},
+			}
+
+			err := handler.SetWatchOwnerAnnotation(podOwner, repl, schema.GroupKind{Group: "Pods", Kind: "core"})
+			Expect(err).To(BeNil())
+
+			instance := handler.EnqueueRequestForAnnotation{Type: schema.GroupKind{Group: "Pods", Kind: "core"}}
+			evt := event.CreateEvent{
+				Object: repl,
+				Meta:   repl.GetObjectMeta(),
+			}
+
+			instance.Create(evt, q)
+			Expect(q.Len()).To(Equal(1))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.Request{
+				NamespacedName: types.NamespacedName{Namespace: podOwner.Namespace, Name: podOwner.Name}}))
+
+		})
+
+		It("should enqueue a Request with the annotations of the object in the GenericEvent.", func() {
+			instance := handler.EnqueueRequestForAnnotation{Type: schema.GroupKind{Group: "Pods", Kind: "core"}}
+
+			evt := event.GenericEvent{
+				Object: pod,
+				Meta:   pod.GetObjectMeta(),
+			}
+			instance.Generic(evt, q)
+			Expect(q.Len()).To(Equal(1))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.Request{
+				NamespacedName: types.NamespacedName{Namespace: podOwner.Namespace, Name: podOwner.Name}}))
+		})
+
+		It("should not enqueue a Request if there are no annotations matching with the object.", func() {
+			var repl *appsv1.ReplicaSet
+
+			repl = &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "faz"},
+			}
+
+			instance := handler.EnqueueRequestForAnnotation{Type: schema.GroupKind{Group: "Pods", Kind: "core"}}
+
+			evt := event.CreateEvent{
+				Object: repl,
+				Meta:   repl.GetObjectMeta(),
+			}
+
+			instance.Create(evt, q)
+			Expect(q.Len()).To(Equal(0))
+
+		})
+
+		It("should not enqueue a Request if there are no Namespace and name annotation matching for the object.", func() {
+			var repl *appsv1.ReplicaSet
+
+			repl = &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "foo",
+					Name:      "faz",
+					Annotations: map[string]string{
+						handler.TypeAnnotation: schema.GroupKind{Group: "Pods", Kind: "core"}.String(),
+					},
+				},
+			}
+
+			instance := handler.EnqueueRequestForAnnotation{Type: schema.GroupKind{Group: "Pods", Kind: "core"}}
+			evt := event.CreateEvent{
+				Object: repl,
+				Meta:   repl.GetObjectMeta(),
+			}
+
+			instance.Create(evt, q)
+			Expect(q.Len()).To(Equal(0))
+
+		})
+
+		It("should not enqueue a Request if there are no TypeAnnotation matching Group and Kind.", func() {
+			var repl *appsv1.ReplicaSet
+
+			repl = &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "foo",
+					Name:      "faz",
+
+					Annotations: map[string]string{
+						handler.NamespacedNameAnnotation: "AppService",
+					},
+				},
+			}
+
+			instance := handler.EnqueueRequestForAnnotation{Type: schema.GroupKind{Group: "Pods", Kind: "core"}}
+			evt := event.CreateEvent{
+				Object: repl,
+				Meta:   repl.GetObjectMeta(),
+			}
+
+			instance.Create(evt, q)
+			Expect(q.Len()).To(Equal(0))
+
+		})
+
+		It("should enqueue a Request if there are no Namespace annotation matching for the object.", func() {
+			var repl *appsv1.ReplicaSet
+
+			repl = &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "foo",
+					Name:      "faz",
+					Annotations: map[string]string{
+						handler.NamespacedNameAnnotation: "AppService",
+						handler.TypeAnnotation:           schema.GroupKind{Group: "Pods", Kind: "core"}.String(),
+					},
+				},
+			}
+
+			instance := handler.EnqueueRequestForAnnotation{Type: schema.GroupKind{Group: "Pods", Kind: "core"}}
+			evt := event.CreateEvent{
+				Object: repl,
+				Meta:   repl.GetObjectMeta(),
+			}
+
+			instance.Create(evt, q)
+			Expect(q.Len()).To(Equal(1))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.Request{
+				NamespacedName: types.NamespacedName{Namespace: "", Name: "AppService"}}))
+
+		})
+
+		It("should enqueue a Request for a object that is cluster scoped which has the annotations", func() {
+
+			var nd *corev1.Node
+
+			nd = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-1",
+					Annotations: map[string]string{
+						handler.NamespacedNameAnnotation: "myapp",
+						handler.TypeAnnotation:           schema.GroupKind{Group: "ReplicaSet", Kind: "apps"}.String(),
+					},
+				},
+			}
+			instance := handler.EnqueueRequestForAnnotation{Type: schema.GroupKind{Group: "ReplicaSet", Kind: "apps"}}
+			evt := event.CreateEvent{
+				Object: nd,
+				Meta:   nd.GetObjectMeta(),
+			}
+			instance.Create(evt, q)
+			Expect(q.Len()).To(Equal(1))
+
+			i, _ := q.Get()
+			Expect(i).To(Equal(reconcile.Request{
+				NamespacedName: types.NamespacedName{Namespace: "", Name: "myapp"}}))
+
+		})
+
+		It("should not enqueue a Request for a object that is cluster scoped which has not the annotations", func() {
+
+			var nd *corev1.Node
+
+			nd = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: "node-1"},
+			}
+
+			instance := handler.EnqueueRequestForAnnotation{Type: nd.GetObjectKind().GroupVersionKind().GroupKind()}
+			evt := event.CreateEvent{
+				Object: nd,
+				Meta:   nd.GetObjectMeta(),
+			}
+			instance.Create(evt, q)
+			Expect(q.Len()).To(Equal(0))
+
+		})
+	})
+
+	Describe("EnqueueRequestForAnnotation.SetWatchOwnerAnnotation", func() {
+		It("should add the watch owner annotations without losing existing ones", func() {
+
+			var nd *corev1.Node
+
+			nd = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-1",
+					Annotations: map[string]string{
+						"my-test-annotation": "should-keep",
+					},
+				},
+			}
+
+			err := handler.SetWatchOwnerAnnotation(podOwner, nd, schema.GroupKind{Group: "Pods", Kind: "core"})
+			Expect(err).To(BeNil())
+
+			expected := map[string]string{
+				"my-test-annotation":             "should-keep",
+				handler.NamespacedNameAnnotation: fmt.Sprintf("%v/%v", podOwner.GetNamespace(), podOwner.GetName()),
+				handler.TypeAnnotation:           schema.GroupKind{Group: "Pods", Kind: "core"}.String(),
+			}
+
+			Expect(len(nd.GetAnnotations())).To(Equal(3))
+			Expect(nd.GetAnnotations()).To(Equal(expected))
+
+		})
+
+		It("should return error when the owner Group or Kind is not informed", func() {
+			var nd *corev1.Node
+
+			nd = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-1",
+				},
+			}
+
+			err := handler.SetWatchOwnerAnnotation(podOwner, nd, schema.GroupKind{Group: "", Kind: "core"})
+			Expect(err).NotTo(BeNil())
+
+			err = handler.SetWatchOwnerAnnotation(podOwner, nd, schema.GroupKind{Group: "Pod", Kind: ""})
+			Expect(err).NotTo(BeNil())
 		})
 	})
 })

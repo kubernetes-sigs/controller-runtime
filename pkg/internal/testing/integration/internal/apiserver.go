@@ -1,8 +1,8 @@
 package internal
 
+// APIServerDefaultArgs allow tests to run offline, by preventing API server from attempting to
+// use default route to determine its --advertise-address.
 var APIServerDefaultArgs = []string{
-	// Allow tests to run offline, by preventing API server from attempting to
-	// use default route to determine its --advertise-address
 	"--advertise-address=127.0.0.1",
 	"--etcd-servers={{ if .EtcdURL }}{{ .EtcdURL.String }}{{ end }}",
 	"--cert-dir={{ .CertDir }}",
@@ -14,6 +14,8 @@ var APIServerDefaultArgs = []string{
 	"--allow-privileged=true",
 }
 
+// DoAPIServerArgDefaulting will set default values to allow tests to run offline when the args are not informed. Otherwise,
+// it will return the same []string arg passed as param.
 func DoAPIServerArgDefaulting(args []string) []string {
 	if len(args) != 0 {
 		return args

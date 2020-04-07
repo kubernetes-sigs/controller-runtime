@@ -22,6 +22,8 @@ func (u *UnconventionalListType) DeepCopyObject() runtime.Object {
 	return u.DeepCopy()
 }
 
+// DeepCopy implements *UnconventionalListType
+// Handwritten for simplicity.
 func (u *UnconventionalListType) DeepCopy() *UnconventionalListType {
 	return &UnconventionalListType{
 		TypeMeta:   u.TypeMeta,
@@ -44,6 +46,8 @@ func (u *UnconventionalListTypeList) DeepCopyObject() runtime.Object {
 	return u.DeepCopy()
 }
 
+// DeepCopy implements *UnconventionalListTypeListt
+// Handwritten for simplicity.
 func (u *UnconventionalListTypeList) DeepCopy() *UnconventionalListTypeList {
 	out := &UnconventionalListTypeList{
 		TypeMeta: u.TypeMeta,

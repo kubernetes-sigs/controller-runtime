@@ -96,7 +96,7 @@ func SetOwnerReference(owner, object metav1.Object, scheme *runtime.Scheme) erro
 	// Validate the owner.
 	ro, ok := owner.(runtime.Object)
 	if !ok {
-		return fmt.Errorf("%T is not a runtime.Object, cannot call SetControllerReference", owner)
+		return fmt.Errorf("%T is not a runtime.Object, cannot call SetOwnerReference", owner)
 	}
 	if err := validateOwner(owner, object); err != nil {
 		return err

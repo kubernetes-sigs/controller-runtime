@@ -22,6 +22,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -132,4 +133,11 @@ func IgnoreNotFound(err error) error {
 		return nil
 	}
 	return err
+}
+
+// KubernetesResource allows functions to work indistinctly with any resource that
+// implements both Object interfaces.
+type KubernetesResource interface {
+	metav1.Object
+	runtime.Object
 }

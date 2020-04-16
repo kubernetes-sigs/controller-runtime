@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -136,7 +137,7 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	c.watches = append(c.watches, watchDescription{src: src, handler: evthdler, predicates: prct})
 	if c.Started {
 		log.Info("Starting EventSource", "controller", c.Name, "source", src)
-		return src.Start(evthdler, c.Queue, prct...)
+		return src.Start(context.TODO(), evthdler, c.Queue, prct...)
 	}
 
 	return nil
@@ -151,6 +152,9 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 	c.Queue = c.MakeQueue()
 	defer c.Queue.ShutDown() // needs to be outside the iife so that we shutdown after the stop channel is closed
 
+	ctx, cancel := contextWithStopChannel(context.TODO(), stop)
+	defer cancel()
+
 	err := func() error {
 		defer c.mu.Unlock()
 
@@ -162,7 +166,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 		// caches.
 		for _, watch := range c.watches {
 			log.Info("Starting EventSource", "controller", c.Name, "source", watch.src)
-			if err := watch.src.Start(watch.handler, c.Queue, watch.predicates...); err != nil {
+			if err := watch.src.Start(ctx, watch.handler, c.Queue, watch.predicates...); err != nil {
 				return err
 			}
 		}
@@ -295,4 +299,22 @@ func (c *Controller) InjectFunc(f inject.Func) error {
 // updateMetrics updates prometheus metrics within the controller
 func (c *Controller) updateMetrics(reconcileTime time.Duration) {
 	ctrlmetrics.ReconcileTime.WithLabelValues(c.Name).Observe(reconcileTime.Seconds())
+}
+
+// contextWithStopChannel creates and returns a cancellable child context from the
+// provided stop channel. If stop is already closed, cancel immediately.
+// Otherwise start a goroutine that asynchronously cancels when stop is closed.
+func contextWithStopChannel(parent context.Context, stop <-chan struct{}) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(parent)
+
+	select {
+	case <-stop:
+		cancel()
+	default:
+		go func() {
+			<-stop
+			cancel()
+		}()
+	}
+	return ctx, cancel
 }

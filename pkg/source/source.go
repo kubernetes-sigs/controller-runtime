@@ -53,7 +53,7 @@ const (
 type Source interface {
 	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 	// to enqueue reconcile.Requests.
-	Start(handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+	Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
 }
 
 // NewKindWithCache creates a Source without InjectCache, so that it is assured that the given cache is used
@@ -67,9 +67,9 @@ type kindWithCache struct {
 	kind Kind
 }
 
-func (ks *kindWithCache) Start(handler handler.EventHandler, queue workqueue.RateLimitingInterface,
+func (ks *kindWithCache) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
-	return ks.kind.Start(handler, queue, prct...)
+	return ks.kind.Start(ctx, handler, queue, prct...)
 }
 
 // Kind is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create)
@@ -85,7 +85,7 @@ var _ Source = &Kind{}
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (ks *Kind) Start(handler handler.EventHandler, queue workqueue.RateLimitingInterface,
+func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
 
 	// Type should have been specified by the user.
@@ -99,7 +99,7 @@ func (ks *Kind) Start(handler handler.EventHandler, queue workqueue.RateLimiting
 	}
 
 	// Lookup the Informer from the Cache and add an EventHandler which populates the Queue
-	i, err := ks.cache.GetInformer(context.TODO(), ks.Type)
+	i, err := ks.cache.GetInformer(ctx, ks.Type)
 	if err != nil {
 		if kindMatchErr, ok := err.(*meta.NoKindMatchError); ok {
 			log.Error(err, "if kind is a CRD, it should be installed before calling Start",
@@ -173,6 +173,7 @@ func (cs *Channel) InjectStopChannel(stop <-chan struct{}) error {
 
 // Start implements Source and should only be called by the Controller.
 func (cs *Channel) Start(
+	ctx context.Context,
 	handler handler.EventHandler,
 	queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
@@ -267,7 +268,7 @@ var _ Source = &Informer{}
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (is *Informer) Start(handler handler.EventHandler, queue workqueue.RateLimitingInterface,
+func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
 
 	// Informer should have been specified by the user.
@@ -287,7 +288,7 @@ func (is *Informer) String() string {
 type Func func(handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
 
 // Start implements Source
-func (f Func) Start(evt handler.EventHandler, queue workqueue.RateLimitingInterface,
+func (f Func) Start(ctx context.Context, evt handler.EventHandler, queue workqueue.RateLimitingInterface,
 	pr ...predicate.Predicate) error {
 	return f(evt, queue, pr...)
 }

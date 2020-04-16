@@ -81,7 +81,7 @@ func newConsoleEncoder() zapcore.Encoder {
 }
 
 type levelFlag struct {
-	setFunc func(zap.AtomicLevel)
+	setFunc func(zapcore.LevelEnabler)
 	value   string
 }
 
@@ -115,7 +115,7 @@ func (ev *levelFlag) Type() string {
 }
 
 type stackTraceFlag struct {
-	setFunc func(zap.AtomicLevel)
+	setFunc func(zapcore.LevelEnabler)
 	value   string
 }
 

@@ -90,6 +90,9 @@ func (dryRunAll) ApplyToPatch(opts *PatchOptions) {
 func (dryRunAll) ApplyToDelete(opts *DeleteOptions) {
 	opts.DryRun = []string{metav1.DryRunAll}
 }
+func (dryRunAll) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
+	opts.DryRun = []string{metav1.DryRunAll}
+}
 
 // FieldOwner set the field manager name for the given server-side apply patch.
 type FieldOwner string

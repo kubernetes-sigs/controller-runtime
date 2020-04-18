@@ -81,6 +81,9 @@ var _ = Describe("Config", func() {
 
 		Context("when kubeconfig files don't exist", func() {
 			It("should fail", func() {
+				err := os.Unsetenv(clientcmd.RecommendedConfigPathEnvVar)
+				Expect(err).NotTo(HaveOccurred())
+
 				cfg, err := GetConfigWithContext("")
 				Expect(cfg).To(BeNil())
 				Expect(err).To(HaveOccurred())

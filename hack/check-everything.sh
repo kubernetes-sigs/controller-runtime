@@ -40,7 +40,7 @@ kb_root_dir=$tmp_root/kubebuilder
 # Skip fetching and untaring the tools by setting the SKIP_FETCH_TOOLS variable
 # in your environment to any value:
 #
-# $ SKIP_FETCH_TOOLS=1 ./test.sh
+# $ SKIP_FETCH_TOOLS=1 ./check-everything.sh
 #
 # If you skip fetching tools, this script will use the tools already on your
 # machine, but rebuild the kubebuilder and kubebuilder-bin binaries.

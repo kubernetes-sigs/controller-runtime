@@ -15,7 +15,6 @@ require (
 	github.com/onsi/gomega v1.10.1
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/client_model v0.2.0
-	github.com/spf13/pflag v1.0.5
 	go.uber.org/zap v1.15.0
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e
 	gomodules.xyz/jsonpatch/v2 v2.1.0

@@ -261,6 +261,7 @@ var _ = Describe("manger.Manager", func() {
 				go func() {
 					defer GinkgoRecover()
 					Expect(m.Start(stop)).NotTo(HaveOccurred())
+					Expect(m.Elected()).To(BeClosed())
 				}()
 				<-c1
 				<-c2

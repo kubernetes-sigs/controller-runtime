@@ -19,6 +19,7 @@ package manager
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -53,6 +54,13 @@ type Manager interface {
 	// SetFields will set any dependencies on an object for which the object has implemented the inject
 	// interface - e.g. inject.Client.
 	SetFields(interface{}) error
+
+	// AddMetricsExtraHandler adds an extra handler served on path to the http server that serves metrics.
+	// Might be useful to register some diagnostic endpoints e.g. pprof. Note that these endpoints meant to be
+	// sensitive and shouldn't be exposed publicly.
+	// If the simple path -> handler mapping offered here is not enough, a new http server/listener should be added as
+	// Runnable to the manager via Add method.
+	AddMetricsExtraHandler(path string, handler http.Handler) error
 
 	// AddHealthzCheck allows you to add Healthz checker
 	AddHealthzCheck(name string, check healthz.Checker) error
@@ -291,6 +299,9 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
+	// By default we have no extra endpoints to expose on metrics http server.
+	metricsExtraHandlers := make(map[string]http.Handler)
+
 	// Create health probes listener. This will throw an error if the bind
 	// address is invalid or already in use.
 	healthProbeListener, err := options.newHealthProbeListener(options.HealthProbeBindAddress)
@@ -311,6 +322,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		resourceLock:          resourceLock,
 		mapper:                mapper,
 		metricsListener:       metricsListener,
+		metricsExtraHandlers:  metricsExtraHandlers,
 		internalStop:          stop,
 		internalStopper:       stop,
 		port:                  options.Port,

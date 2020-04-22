@@ -143,7 +143,7 @@ var _ = Describe("manger.Manager", func() {
 		Context("with leader election enabled", func() {
 			It("should default ID to controller-runtime if ID is not set", func() {
 				var rl resourcelock.Interface
-				m, err := New(cfg, Options{
+				m1, err := New(cfg, Options{
 					LeaderElection:          true,
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id",
@@ -152,10 +152,61 @@ var _ = Describe("manger.Manager", func() {
 						rl, err = leaderelection.NewResourceLock(config, recorderProvider, options)
 						return rl, err
 					},
+					HealthProbeBindAddress: "0",
+					MetricsBindAddress:     "0",
 				})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(m).ToNot(BeNil())
+				Expect(m1).ToNot(BeNil())
 				Expect(rl.Describe()).To(Equal("default/test-leader-election-id"))
+
+				m2, err := New(cfg, Options{
+					LeaderElection:          true,
+					LeaderElectionNamespace: "default",
+					LeaderElectionID:        "test-leader-election-id",
+					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+						var err error
+						rl, err = leaderelection.NewResourceLock(config, recorderProvider, options)
+						return rl, err
+					},
+					HealthProbeBindAddress: "0",
+					MetricsBindAddress:     "0",
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(m2).ToNot(BeNil())
+				Expect(rl.Describe()).To(Equal("default/test-leader-election-id"))
+
+				c1 := make(chan struct{})
+				Expect(m1.Add(RunnableFunc(func(s <-chan struct{}) error {
+					defer GinkgoRecover()
+					close(c1)
+					return nil
+				}))).To(Succeed())
+
+				go func() {
+					defer GinkgoRecover()
+					Expect(m1.Elected()).ShouldNot(BeClosed())
+					Expect(m1.Start(stop)).NotTo(HaveOccurred())
+					Expect(m1.Elected()).Should(BeClosed())
+				}()
+				<-c1
+
+				c2 := make(chan struct{})
+				Expect(m2.Add(RunnableFunc(func(s <-chan struct{}) error {
+					defer GinkgoRecover()
+					close(c2)
+					return nil
+				}))).To(Succeed())
+
+				By("Expect second manager to lose leader election")
+				go func() {
+					defer GinkgoRecover()
+					Expect(m2.Start(stop)).NotTo(HaveOccurred())
+					Consistently(m2.Elected()).ShouldNot(Receive())
+				}()
+
+				By("Expect controller on manager without leader lease never to run")
+				Consistently(c2).ShouldNot(Receive())
 			})
 
 			It("should return an error if namespace not set and not running in cluster", func() {
@@ -260,8 +311,9 @@ var _ = Describe("manger.Manager", func() {
 
 				go func() {
 					defer GinkgoRecover()
+					Expect(m.Elected()).ShouldNot(BeClosed())
 					Expect(m.Start(stop)).NotTo(HaveOccurred())
-					Expect(m.Elected()).To(BeClosed())
+					Expect(m.Elected()).Should(BeClosed())
 				}()
 				<-c1
 				<-c2

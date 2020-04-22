@@ -152,7 +152,7 @@ func ExampleNewUnmanaged() {
 		// Block until our controller manager is elected leader. We presume our
 		// entire process will terminate if we lose leadership, so we don't need
 		// to handle that.
-		<-mgr.Leading()
+		<-mgr.Elected()
 
 		// Start our controller. This will block until the stop channel is
 		// closed, or the controller returns an error.

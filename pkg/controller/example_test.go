@@ -119,3 +119,48 @@ func ExampleController_unstructured() {
 		os.Exit(1)
 	}
 }
+
+// This example creates a new controller named "pod-controller" to watch Pods
+// and call a no-op reconciler. The controller is not added to the provided
+// manager, and must thus be started and stopped by the caller.
+func ExampleNewUnmanaged() {
+	// mgr is a manager.Manager
+
+	// Configure creates a new controller but does not add it to the supplied
+	// manager.
+	c, err := controller.NewUnmanaged("pod-controller", mgr, controller.Options{
+		Reconciler: reconcile.Func(func(_ reconcile.Request) (reconcile.Result, error) {
+			return reconcile.Result{}, nil
+		}),
+	})
+	if err != nil {
+		log.Error(err, "unable to create pod-controller")
+		os.Exit(1)
+	}
+
+	if err := c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForObject{}); err != nil {
+		log.Error(err, "unable to watch pods")
+		os.Exit(1)
+	}
+
+	// Create a stop channel for our controller. The controller will stop when
+	// this channel is closed.
+	stop := make(chan struct{})
+
+	// Start our controller in a goroutine so that we do not block.
+	go func() {
+		// Block until our controller manager is elected leader. We presume our
+		// entire process will terminate if we lose leadership, so we don't need
+		// to handle that.
+		<-mgr.Elected()
+
+		// Start our controller. This will block until the stop channel is
+		// closed, or the controller returns an error.
+		if err := c.Start(stop); err != nil {
+			log.Error(err, "cannot run experiment controller")
+		}
+	}()
+
+	// Stop our controller.
+	close(stop)
+}

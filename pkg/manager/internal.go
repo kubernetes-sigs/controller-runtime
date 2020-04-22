@@ -134,6 +134,11 @@ type controllerManager struct {
 	// It and `internalStop` should point to the same channel.
 	internalStopper chan<- struct{}
 
+	// elected is closed when this manager becomes the leader of a group of
+	// managers, either because it won a leader election or because no leader
+	// election was configured.
+	elected chan struct{}
+
 	startCache func(stop <-chan struct{}) error
 
 	// port is the port that the webhook server serves at.
@@ -457,6 +462,8 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 			return err
 		}
 	} else {
+		// Treat not having leader election enabled the same as being elected.
+		close(cm.elected)
 		go cm.startLeaderElectionRunnables()
 	}
 
@@ -545,6 +552,7 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 		RetryPeriod:   cm.retryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(_ context.Context) {
+				close(cm.elected)
 				cm.startLeaderElectionRunnables()
 			},
 			OnStoppedLeading: func() {
@@ -571,4 +579,8 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 	// Start the leader elector process
 	go l.Run(ctx)
 	return nil
+}
+
+func (cm *controllerManager) Elected() <-chan struct{} {
+	return cm.elected
 }

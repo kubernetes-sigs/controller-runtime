@@ -67,6 +67,18 @@ type Controller interface {
 // New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have
 // been synced before the Controller is Started.
 func New(name string, mgr manager.Manager, options Options) (Controller, error) {
+	c, err := NewUnmanaged(name, mgr, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add the controller as a Manager components
+	return c, mgr.Add(c)
+}
+
+// NewUnmanaged returns a new controller without adding it to the manager. The
+// caller is responsible for starting the returned controller.
+func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller, error) {
 	if options.Reconciler == nil {
 		return nil, fmt.Errorf("must specify Reconciler")
 	}
@@ -100,9 +112,9 @@ func New(name string, mgr manager.Manager, options Options) (Controller, error) 
 			return workqueue.NewNamedRateLimitingQueue(options.RateLimiter, name)
 		},
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
+		SetFields:               mgr.SetFields,
 		Name:                    name,
 	}
 
-	// Add the controller as a Manager components
-	return c, mgr.Add(c)
+	return c, nil
 }

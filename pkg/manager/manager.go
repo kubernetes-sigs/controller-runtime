@@ -51,6 +51,11 @@ type Manager interface {
 	// non-leaderelection mode (always running) or leader election mode (managed by leader election if enabled).
 	Add(Runnable) error
 
+	// Elected is closed when this manager is elected leader of a group of
+	// managers, either because it won a leader election or because no leader
+	// election was configured.
+	Elected() <-chan struct{}
+
 	// SetFields will set any dependencies on an object for which the object has implemented the inject
 	// interface - e.g. inject.Client.
 	SetFields(interface{}) error
@@ -325,6 +330,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		metricsExtraHandlers:  metricsExtraHandlers,
 		internalStop:          stop,
 		internalStopper:       stop,
+		elected:               make(chan struct{}),
 		port:                  options.Port,
 		host:                  options.Host,
 		certDir:               options.CertDir,

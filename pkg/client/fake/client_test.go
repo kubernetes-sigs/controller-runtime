@@ -186,6 +186,14 @@ var _ = Describe("Fake client", func() {
 			Expect(apierrors.IsBadRequest(err)).To(BeTrue())
 		})
 
+		It("should not change the submitted object if Create failed", func() {
+			By("Trying to create an existing configmap")
+			submitted := cm.DeepCopy()
+			err := cl.Create(context.Background(), submitted)
+			Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
+			Expect(submitted).To(Equal(cm))
+		})
+
 		It("should error on Create with empty Name", func() {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{

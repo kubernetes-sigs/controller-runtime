@@ -34,7 +34,7 @@ type podValidator struct {
 	decoder *admission.Decoder
 }
 
-// podValidator admits a pod iff a specific annotation exists.
+// podValidator admits a pod if a specific annotation exists.
 func (v *podValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	pod := &corev1.Pod{}
 

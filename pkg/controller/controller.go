@@ -41,6 +41,10 @@ type Options struct {
 	// Defaults to MaxOfRateLimiter which has both overall and per-item rate limiting.
 	// The overall is a token bucket and the per-item is exponential.
 	RateLimiter ratelimiter.RateLimiter
+
+	// WithoutLeaderElection is used to bypass manager leader election in case
+	// it's activated, by default leader election is activated for controllers.
+	WithoutLeaderElection bool
 }
 
 // Controller implements a Kubernetes API.  A Controller manages a work queue fed reconcile.Requests
@@ -109,6 +113,7 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
 		SetFields:               mgr.SetFields,
 		Name:                    name,
+		WithoutLeaderElection:   options.WithoutLeaderElection,
 	}
 
 	return c, nil

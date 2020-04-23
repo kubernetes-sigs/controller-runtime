@@ -71,6 +71,9 @@ type Controller struct {
 	// Started is true if the Controller has been Started
 	Started bool
 
+	// Flag to indicate if this controller need leader election or not
+	WithoutLeaderElection bool
+
 	// TODO(community): Consider initializing a logger with the Controller Name as the tag
 
 	// watches maintains a list of sources, handlers, and predicates to start when the controller is started.
@@ -266,6 +269,11 @@ func (c *Controller) reconcileHandler(obj interface{}) bool {
 func (c *Controller) InjectFunc(f inject.Func) error {
 	c.SetFields = f
 	return nil
+}
+
+// NeedLeaderElection implements LeaderElectionRunnable
+func (c *Controller) NeedLeaderElection() bool {
+	return !c.WithoutLeaderElection
 }
 
 // updateMetrics updates prometheus metrics within the controller

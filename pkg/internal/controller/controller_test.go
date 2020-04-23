@@ -74,6 +74,20 @@ var _ = Describe("controller", func() {
 		close(stop)
 	})
 
+	Describe("NeedLeaderElection", func() {
+		It("should return true by default", func() {
+			Expect(ctrl.NeedLeaderElection()).To(BeTrue())
+		})
+		It("should be true WithoutLeaderElection is false", func() {
+			ctrl.WithoutLeaderElection = false
+			Expect(ctrl.NeedLeaderElection()).To(BeTrue())
+		})
+		It("should be false WithoutLeaderElection is true", func() {
+			ctrl.WithoutLeaderElection = true
+			Expect(ctrl.NeedLeaderElection()).To(BeFalse())
+		})
+	})
+
 	Describe("Reconciler", func() {
 		It("should call the Reconciler function", func() {
 			ctrl.Do = reconcile.Func(func(reconcile.Request) (reconcile.Result, error) {

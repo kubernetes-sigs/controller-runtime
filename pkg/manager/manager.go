@@ -343,8 +343,8 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}, nil
 }
 
-// defaultNewClient creates the default caching client
-func defaultNewClient(cache cache.Cache, config *rest.Config, options client.Options) (client.Client, error) {
+// DefaultNewClient creates the default caching client
+func DefaultNewClient(cache cache.Cache, config *rest.Config, options client.Options) (client.Client, error) {
 	// Create the Client for Write operations.
 	c, err := client.New(config, options)
 	if err != nil {
@@ -389,7 +389,7 @@ func setOptionsDefaults(options Options) Options {
 
 	// Allow newClient to be mocked
 	if options.NewClient == nil {
-		options.NewClient = defaultNewClient
+		options.NewClient = DefaultNewClient
 	}
 
 	// Allow newCache to be mocked

@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -159,6 +160,24 @@ func (ip *informerCache) GetInformer(ctx context.Context, obj runtime.Object) (I
 	return i.Informer, err
 }
 
+// GetInformerNonBlocking returns the informer for the obj without waiting for its cache to sync.
+func (ip *informerCache) GetInformerNonBlocking(obj runtime.Object) (Informer, error) {
+	gvk, err := apiutil.GVKForObject(obj, ip.Scheme)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use a cancelled context to signal non-blocking
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, i, err := ip.InformersMap.Get(ctx, gvk, obj)
+	if err != nil && !apierrors.IsTimeout(err) {
+		return nil, err
+	}
+	return i.Informer, nil
+}
+
 // NeedLeaderElection implements the LeaderElectionRunnable interface
 // to indicate that this can be started without requiring the leader lock
 func (ip *informerCache) NeedLeaderElection() bool {
@@ -215,4 +234,15 @@ func indexByField(indexer Informer, field string, extractor client.IndexerFunc) 
 	}
 
 	return indexer.AddIndexers(cache.Indexers{internal.FieldIndexName(field): indexFunc})
+}
+
+// Remove removes an informer specified by the obj argument from the cache and stops it if it existed.
+func (ip *informerCache) Remove(obj runtime.Object) error {
+	gvk, err := apiutil.GVKForObject(obj, ip.Scheme)
+	if err != nil {
+		return err
+	}
+
+	ip.InformersMap.Remove(gvk, obj)
+	return nil
 }

@@ -109,7 +109,19 @@ func (workqueueMetricsProvider) NewAddsMetric(name string) workqueue.CounterMetr
 	return adds.WithLabelValues(name)
 }
 
+func (workqueueMetricsProvider) NewDeprecatedAddsMetric(name string) workqueue.CounterMetric {
+	return adds.WithLabelValues(name)
+}
+
+func (workqueueMetricsProvider) NewDeprecatedDepthMetric(name string) workqueue.GaugeMetric {
+	return depth.WithLabelValues(name)
+}
+
 func (workqueueMetricsProvider) NewLatencyMetric(name string) workqueue.HistogramMetric {
+	return latency.WithLabelValues(name)
+}
+
+func (workqueueMetricsProvider) NewDeprecatedLatencyMetric(name string) workqueue.SummaryMetric {
 	return latency.WithLabelValues(name)
 }
 
@@ -117,7 +129,15 @@ func (workqueueMetricsProvider) NewWorkDurationMetric(name string) workqueue.His
 	return workDuration.WithLabelValues(name)
 }
 
+func (workqueueMetricsProvider) NewDeprecatedWorkDurationMetric(name string) workqueue.SummaryMetric {
+	return workDuration.WithLabelValues(name)
+}
+
 func (workqueueMetricsProvider) NewUnfinishedWorkSecondsMetric(name string) workqueue.SettableGaugeMetric {
+	return unfinished.WithLabelValues(name)
+}
+
+func (workqueueMetricsProvider) NewDeprecatedUnfinishedWorkSecondsMetric(name string) workqueue.SettableGaugeMetric {
 	return unfinished.WithLabelValues(name)
 }
 
@@ -125,6 +145,14 @@ func (workqueueMetricsProvider) NewLongestRunningProcessorSecondsMetric(name str
 	return longestRunningProcessor.WithLabelValues(name)
 }
 
+func (workqueueMetricsProvider) NewDeprecatedLongestRunningProcessorMicrosecondsMetric(name string) workqueue.SettableGaugeMetric {
+	return longestRunningProcessor.WithLabelValues(name)
+}
+
 func (workqueueMetricsProvider) NewRetriesMetric(name string) workqueue.CounterMetric {
+	return retries.WithLabelValues(name)
+}
+
+func (workqueueMetricsProvider) NewDeprecatedRetriesMetric(name string) workqueue.CounterMetric {
 	return retries.WithLabelValues(name)
 }

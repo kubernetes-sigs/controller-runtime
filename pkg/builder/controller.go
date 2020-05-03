@@ -187,6 +187,11 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 }
 
 func (blder *Builder) doWatch() error {
+	// Fill the GVK if empty
+	if err := blder.setGvkIfEmpty(blder.forInput.object); err != nil {
+		return err
+	}
+
 	// Reconcile type
 	src := &source.Kind{Type: blder.forInput.object}
 	hdler := &handler.EnqueueRequestForObject{}
@@ -198,6 +203,10 @@ func (blder *Builder) doWatch() error {
 
 	// Watches the managed types
 	for _, own := range blder.ownsInput {
+		if err := blder.setGvkIfEmpty(own.object); err != nil {
+			return err
+		}
+
 		src := &source.Kind{Type: own.object}
 		hdler := &handler.EnqueueRequestForOwner{
 			OwnerType:    blder.forInput.object,
@@ -248,4 +257,22 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 	ctrlOptions.Reconciler = r
 	blder.ctrl, err = newController(name, blder.mgr, ctrlOptions)
 	return err
+}
+
+func (blder *Builder) setGvkIfEmpty(obj runtime.Object) error {
+	if obj == nil {
+		return nil
+	}
+
+	kind := obj.GetObjectKind()
+	if kind == nil || !kind.GroupVersionKind().Empty() {
+		return nil
+	}
+
+	gvk, err := getGvk(obj, blder.mgr.GetScheme())
+	if err != nil {
+		return err
+	}
+	kind.SetGroupVersionKind(gvk)
+	return nil
 }

@@ -281,9 +281,9 @@ func RemoveFinalizerWithError(o runtime.Object, finalizer string) error {
 	return nil
 }
 
-// KubernetesObject allows functions to work indistinctly with any resource that
+// Object allows functions to work indistinctly with any resource that
 // implements both Object interfaces.
-type KubernetesObject interface {
+type Object interface {
 	metav1.Object
 	runtime.Object
 }

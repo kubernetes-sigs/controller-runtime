@@ -104,7 +104,6 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 	c := &controller.Controller{
 		Do:       options.Reconciler,
 		Cache:    mgr.GetCache(),
-		Config:   mgr.GetConfig(),
 		Scheme:   mgr.GetScheme(),
 		Client:   mgr.GetClient(),
 		Recorder: mgr.GetEventRecorderFor(name),

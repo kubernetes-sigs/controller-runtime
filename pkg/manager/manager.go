@@ -183,8 +183,9 @@ type Options struct {
 
 	// CertDir is the directory that contains the server key and certificate.
 	// if not set, webhook server would look up the server key and certificate in
-	// {TempDir}/k8s-webhook-server/serving-certs. The server key and certificate
-	// must be named tls.key and tls.crt, respectively.
+	// {TempDir}/k8s-webhook-server/serving-certs. Please note that TempDir is
+	// os.TempDir(). The server key and certificate must be named tls.key and
+	// tls.crt, respectively.
 	CertDir string
 	// Functions to all for a user to customize the values that will be injected.
 

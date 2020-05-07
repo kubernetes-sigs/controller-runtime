@@ -78,6 +78,11 @@ func main() {
 	hookServer.Register("/mutate-v1-pod", &webhook.Admission{Handler: &podAnnotator{Client: mgr.GetClient()}})
 	hookServer.Register("/validate-v1-pod", &webhook.Admission{Handler: &podValidator{Client: mgr.GetClient()}})
 
+	if mgr.GetWebhookServer().CertDir == "" {
+		entryLog.Error(err, "unable to read certs from Manager.CertDir: %w")
+		os.Exit(1)
+	}
+
 	entryLog.Info("starting manager")
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
 		entryLog.Error(err, "unable to run manager")

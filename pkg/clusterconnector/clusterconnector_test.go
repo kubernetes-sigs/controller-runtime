@@ -95,7 +95,7 @@ var _ = Describe("clusterconnector.ClusterConnector", func() {
 	Describe("New", func() {
 
 		It("should return an error it can't create a recorder.Provider", func(done Done) {
-			m, err := New(cfg, "", Options{
+			m, err := NewUnmanaged(cfg, "", Options{
 				newRecorderProvider: func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, broadcaster record.EventBroadcaster) (recorder.Provider, error) {
 					return nil, fmt.Errorf("expected error")
 				},
@@ -111,7 +111,7 @@ var _ = Describe("clusterconnector.ClusterConnector", func() {
 
 	Describe("SetFields", func() {
 		It("should inject field values", func(done Done) {
-			c, err := New(cfg, "", Options{})
+			c, err := NewUnmanaged(cfg, "", Options{})
 			Expect(err).NotTo(HaveOccurred())
 			cc, ok := c.(*clusterConnector)
 			Expect(ok).To(BeTrue())

@@ -115,3 +115,7 @@ func (cc *clusterConnector) GetRESTMapper() meta.RESTMapper {
 func (cc *clusterConnector) GetAPIReader() client.Reader {
 	return cc.apiReader
 }
+
+func (cc *clusterConnector) AddToManager(mgr Manager) error {
+	return mgr.Add(cc.GetCache())
+}

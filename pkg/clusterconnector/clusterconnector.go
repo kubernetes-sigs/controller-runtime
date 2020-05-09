@@ -32,9 +32,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	internalrecorder "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
+	"sigs.k8s.io/controller-runtime/pkg/manager/runner"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
 
+// ClusterConnector contains everything thats needed to build a controller
+// that watches and interacts with objects in the given cluster.
 type ClusterConnector interface {
 	// SetFields will set any dependencies on an object for which the object has implemented the inject
 	// interface - e.g. inject.Client.
@@ -68,6 +71,9 @@ type ClusterConnector interface {
 	// This should be used sparingly and only when the client does not fit your
 	// use case.
 	GetAPIReader() client.Reader
+
+	// AddToManager adds the ClusterConnector to a manager
+	AddToManager(mgr Manager) error
 }
 
 // NewClientFunc allows a user to define how to create a client
@@ -91,6 +97,7 @@ func DefaultNewClient(cache cache.Cache, config *rest.Config, options client.Opt
 	}, nil
 }
 
+// Options holds all possible Options for a ClusterConnector
 type Options struct {
 	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
 	// Defaults to the kubernetes/client-go scheme.Scheme, but it's almost always better
@@ -137,6 +144,7 @@ type Options struct {
 	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, broadcaster record.EventBroadcaster) (recorder.Provider, error)
 }
 
+// Apply implements Option
 func (o Options) Apply(target *Options) {
 	if o.Scheme != nil {
 		target.Scheme = o.Scheme
@@ -173,6 +181,7 @@ func (o Options) Apply(target *Options) {
 
 var _ Option = Options{}
 
+// Option can be used to customize a ClusterConnector
 type Option interface {
 	Apply(o *Options)
 }
@@ -222,7 +231,28 @@ func setOptionsDefaults(options Options) Options {
 	return options
 }
 
-func New(config *rest.Config, name string, opts ...Option) (ClusterConnector, error) {
+// Manager manages the lifecycle of Runnables
+type Manager interface {
+	Add(r runner.Runnable) error
+}
+
+// New creates a new ClusterConnector
+func New(config *rest.Config, mgr Manager, name string, opts ...Option) (ClusterConnector, error) {
+	cc, err := NewUnmanaged(config, name, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cc.AddToManager(mgr); err != nil {
+		return nil, err
+	}
+
+	return cc, nil
+}
+
+// NewUnmanaged creates a new unmanaged ClusterConnector. It must be manually added to a
+// Manager by calling its AddToManager.
+func NewUnmanaged(config *rest.Config, name string, opts ...Option) (ClusterConnector, error) {
 	log := logf.RuntimeLog.WithName("clusterconnector").WithValues("name", name)
 	if config == nil {
 		return nil, fmt.Errorf("must specify Config")

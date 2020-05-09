@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/clusterconnector"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -40,6 +41,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
+
+// ControllerManager is a clusterconnector.Manager
+var _ clusterconnector.Manager = &controllerManager{}
 
 var _ = Describe("manger.Manager", func() {
 	var stop chan struct{}
@@ -320,9 +324,9 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).NotTo(HaveOccurred())
 				mgr, ok := m.(*controllerManager)
 				Expect(ok).To(BeTrue())
-				mgr.startCache = func(stop <-chan struct{}) error {
+				mgr.caches = []runnableCache{&fakeRunnableCache{start: func(stop <-chan struct{}) error {
 					return fmt.Errorf("expected error")
-				}
+				}}}
 				Expect(m.Start(stop)).To(MatchError(ContainSubstring("expected error")))
 
 				close(done)
@@ -955,4 +959,18 @@ func (i *injectable) InjectStopChannel(stop <-chan struct{}) error {
 
 func (i *injectable) Start(<-chan struct{}) error {
 	return nil
+}
+
+var _ runnableCache = &fakeRunnableCache{}
+
+type fakeRunnableCache struct {
+	start func(<-chan struct{}) error
+}
+
+func (frc *fakeRunnableCache) Start(c <-chan struct{}) error {
+	return frc.start(c)
+}
+
+func (frc *fakeRunnableCache) WaitForCacheSync(_ <-chan struct{}) bool {
+	return true
 }

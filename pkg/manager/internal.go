@@ -28,9 +28,11 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/clusterconnector"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager/runner"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -49,13 +51,21 @@ const (
 
 var log = logf.RuntimeLog.WithName("manager")
 
+type runnableCache interface {
+	runner.Runnable
+	WaitForCacheSync(stop <-chan struct{}) bool
+}
+
 type controllerManager struct {
+	// caches holds all caches this controllerManager handles. They must be started before everything else.
+	caches []runnableCache
+
 	// leaderElectionRunnables is the set of Controllers that the controllerManager injects deps into and Starts.
 	// These Runnables are managed by lead election.
-	leaderElectionRunnables []Runnable
+	leaderElectionRunnables []runner.Runnable
 	// nonLeaderElectionRunnables is the set of webhook servers that the controllerManager injects deps into and Starts.
 	// These Runnables will not be blocked by lead election.
-	nonLeaderElectionRunnables []Runnable
+	nonLeaderElectionRunnables []runner.Runnable
 
 	// resourceLock forms the basis for leader election
 	resourceLock resourcelock.Interface
@@ -105,8 +115,6 @@ type controllerManager struct {
 	// managers, either because it won a leader election or because no leader
 	// election was configured.
 	elected chan struct{}
-
-	startCache func(stop <-chan struct{}) error
 
 	// port is the port that the webhook server serves at.
 	port int
@@ -178,7 +186,7 @@ func (r *errSignaler) GotError() chan struct{} {
 }
 
 // Add sets dependencies on i, and adds it to the list of Runnables to start.
-func (cm *controllerManager) Add(r Runnable) error {
+func (cm *controllerManager) Add(r runner.Runnable) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -190,7 +198,10 @@ func (cm *controllerManager) Add(r Runnable) error {
 	var shouldStart bool
 
 	// Add the runnable to the leader election or the non-leaderelection list
-	if leRunnable, ok := r.(LeaderElectionRunnable); ok && !leRunnable.NeedLeaderElection() {
+	if cache, ok := r.(cache.Cache); ok {
+		shouldStart = cm.started
+		cm.caches = append(cm.caches, cache)
+	} else if leRunnable, ok := r.(LeaderElectionRunnable); ok && !leRunnable.NeedLeaderElection() {
 		shouldStart = cm.started
 		cm.nonLeaderElectionRunnables = append(cm.nonLeaderElectionRunnables, r)
 	} else {
@@ -449,19 +460,19 @@ func (cm *controllerManager) waitForCache() {
 		return
 	}
 
-	// Start the Cache. Allow the function to start the cache to be mocked out for testing
-	if cm.startCache == nil {
-		cm.startCache = cm.GetCache().Start
+	for idx := range cm.caches {
+		go func(idx int) {
+			if err := cm.caches[idx].Start(cm.internalStop); err != nil {
+				cm.errSignal.SignalError(err)
+			}
+		}(idx)
 	}
-	go func() {
-		if err := cm.startCache(cm.internalStop); err != nil {
-			cm.errSignal.SignalError(err)
-		}
-	}()
 
 	// Wait for the caches to sync.
 	// TODO(community): Check the return value and write a test
-	cm.GetCache().WaitForCacheSync(cm.internalStop)
+	for _, cache := range cm.caches {
+		cache.WaitForCacheSync(cm.internalStop)
+	}
 	cm.started = true
 }
 

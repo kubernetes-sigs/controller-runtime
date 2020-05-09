@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/clusterconnector"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
+	"sigs.k8s.io/controller-runtime/pkg/manager/runner"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -46,7 +47,7 @@ type Manager interface {
 	// implements the inject interface - e.g. inject.Client.
 	// Depending on if a Runnable implements LeaderElectionRunnable interface, a Runnable can be run in either
 	// non-leaderelection mode (always running) or leader election mode (managed by leader election if enabled).
-	Add(Runnable) error
+	Add(runner.Runnable) error
 
 	// Elected is closed when this manager is elected leader of a group of
 	// managers, either because it won a leader election or because no leader
@@ -177,16 +178,6 @@ type Options struct {
 	newHealthProbeListener func(addr string) (net.Listener, error)
 }
 
-// Runnable allows a component to be started.
-// It's very important that Start blocks until
-// it's done running.
-type Runnable interface {
-	// Start starts running the component.  The component will stop running
-	// when the channel is closed.  Start blocks until the channel is closed or
-	// an error occurs.
-	Start(<-chan struct{}) error
-}
-
 // RunnableFunc implements Runnable using a function.
 // It's very important that the given function block
 // until it's done running.
@@ -258,7 +249,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 
 	stop := make(chan struct{})
 
-	return &controllerManager{
+	cm := &controllerManager{
 		resourceLock:          resourceLock,
 		metricsListener:       metricsListener,
 		metricsExtraHandlers:  metricsExtraHandlers,
@@ -275,7 +266,13 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		readinessEndpointName: options.ReadinessEndpointName,
 		livenessEndpointName:  options.LivenessEndpointName,
 		ClusterConnector:      clusterConnector,
-	}, nil
+	}
+
+	if err := cm.ClusterConnector.AddToManager(cm); err != nil {
+		return nil, err
+	}
+
+	return cm, nil
 }
 
 // DefaultNewClient creates the default caching client

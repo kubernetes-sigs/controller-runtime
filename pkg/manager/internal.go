@@ -25,19 +25,13 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
-	"k8s.io/client-go/tools/record"
 
-	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/clusterconnector"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
-	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
@@ -56,13 +50,6 @@ const (
 var log = logf.RuntimeLog.WithName("manager")
 
 type controllerManager struct {
-	// config is the rest.config used to talk to the apiserver.  Required.
-	config *rest.Config
-
-	// scheme is the scheme injected into Controllers, EventHandlers, Sources and Predicates.  Defaults
-	// to scheme.scheme.
-	scheme *runtime.Scheme
-
 	// leaderElectionRunnables is the set of Controllers that the controllerManager injects deps into and Starts.
 	// These Runnables are managed by lead election.
 	leaderElectionRunnables []Runnable
@@ -70,28 +57,8 @@ type controllerManager struct {
 	// These Runnables will not be blocked by lead election.
 	nonLeaderElectionRunnables []Runnable
 
-	cache cache.Cache
-
-	// TODO(directxman12): Provide an escape hatch to get individual indexers
-	// client is the client injected into Controllers (and EventHandlers, Sources and Predicates).
-	client client.Client
-
-	// apiReader is the reader that will make requests to the api server and not the cache.
-	apiReader client.Reader
-
-	// fieldIndexes knows how to add field indexes over the Cache used by this controller,
-	// which can later be consumed via field selectors from the injected client.
-	fieldIndexes client.FieldIndexer
-
-	// recorderProvider is used to generate event recorders that will be injected into Controllers
-	// (and EventHandlers, Sources and Predicates).
-	recorderProvider recorder.Provider
-
 	// resourceLock forms the basis for leader election
 	resourceLock resourcelock.Interface
-
-	// mapper is used to map resources to kind, and map kind and version.
-	mapper meta.RESTMapper
 
 	// metricsListener is used to serve prometheus metrics
 	metricsListener net.Listener
@@ -161,6 +128,8 @@ type controllerManager struct {
 	// retryPeriod is the duration the LeaderElector clients should wait
 	// between tries of actions.
 	retryPeriod time.Duration
+
+	clusterconnector.ClusterConnector
 }
 
 type errSignaler struct {
@@ -242,31 +211,15 @@ func (cm *controllerManager) Add(r Runnable) error {
 }
 
 func (cm *controllerManager) SetFields(i interface{}) error {
-	if _, err := inject.ConfigInto(cm.config, i); err != nil {
-		return err
-	}
-	if _, err := inject.ClientInto(cm.client, i); err != nil {
-		return err
-	}
-	if _, err := inject.APIReaderInto(cm.apiReader, i); err != nil {
-		return err
-	}
-	if _, err := inject.SchemeInto(cm.scheme, i); err != nil {
-		return err
-	}
-	if _, err := inject.CacheInto(cm.cache, i); err != nil {
-		return err
-	}
 	if _, err := inject.InjectorInto(cm.SetFields, i); err != nil {
 		return err
 	}
+
 	if _, err := inject.StopChannelInto(cm.internalStop, i); err != nil {
 		return err
 	}
-	if _, err := inject.MapperInto(cm.mapper, i); err != nil {
-		return err
-	}
-	return nil
+
+	return cm.ClusterConnector.SetFields(i)
 }
 
 // AddMetricsExtraHandler adds extra handler served on path to the http server that serves metrics.
@@ -320,38 +273,6 @@ func (cm *controllerManager) AddReadyzCheck(name string, check healthz.Checker) 
 
 	cm.readyzHandler.Checks[name] = check
 	return nil
-}
-
-func (cm *controllerManager) GetConfig() *rest.Config {
-	return cm.config
-}
-
-func (cm *controllerManager) GetClient() client.Client {
-	return cm.client
-}
-
-func (cm *controllerManager) GetScheme() *runtime.Scheme {
-	return cm.scheme
-}
-
-func (cm *controllerManager) GetFieldIndexer() client.FieldIndexer {
-	return cm.fieldIndexes
-}
-
-func (cm *controllerManager) GetCache() cache.Cache {
-	return cm.cache
-}
-
-func (cm *controllerManager) GetEventRecorderFor(name string) record.EventRecorder {
-	return cm.recorderProvider.GetEventRecorderFor(name)
-}
-
-func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
-	return cm.mapper
-}
-
-func (cm *controllerManager) GetAPIReader() client.Reader {
-	return cm.apiReader
 }
 
 func (cm *controllerManager) GetWebhookServer() *webhook.Server {
@@ -530,7 +451,7 @@ func (cm *controllerManager) waitForCache() {
 
 	// Start the Cache. Allow the function to start the cache to be mocked out for testing
 	if cm.startCache == nil {
-		cm.startCache = cm.cache.Start
+		cm.startCache = cm.GetCache().Start
 	}
 	go func() {
 		if err := cm.startCache(cm.internalStop); err != nil {
@@ -540,7 +461,7 @@ func (cm *controllerManager) waitForCache() {
 
 	// Wait for the caches to sync.
 	// TODO(community): Check the return value and write a test
-	cm.cache.WaitForCacheSync(cm.internalStop)
+	cm.GetCache().WaitForCacheSync(cm.internalStop)
 	cm.started = true
 }
 

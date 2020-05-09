@@ -23,7 +23,6 @@ import (
 	"net/http"
 	rt "runtime"
 
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
@@ -32,9 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
@@ -108,19 +105,6 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m).ToNot(BeNil())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(m.GetClient()).To(BeNil())
-
-			close(done)
-		})
-
-		It("should return an error it can't create a recorder.Provider", func(done Done) {
-			m, err := New(cfg, Options{
-				newRecorderProvider: func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, broadcaster record.EventBroadcaster) (recorder.Provider, error) {
-					return nil, fmt.Errorf("expected error")
-				},
-			})
-			Expect(m).To(BeNil())
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("expected error"))
 
 			close(done)
 		})
@@ -750,10 +734,6 @@ var _ = Describe("manger.Manager", func() {
 		It("should inject field values", func(done Done) {
 			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
-			mgr, ok := m.(*controllerManager)
-			Expect(ok).To(BeTrue())
-
-			mgr.cache = &informertest.FakeInformers{}
 
 			By("Injecting the dependencies")
 			err = m.SetFields(&injectable{
@@ -859,7 +839,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetConfig()).To(Equal(mgr.config))
+		Expect(m.GetConfig()).To(Equal(mgr.ClusterConnector.GetConfig()))
 	})
 
 	It("should provide a function to get the Client", func() {
@@ -867,7 +847,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetClient()).To(Equal(mgr.client))
+		Expect(m.GetClient()).To(Equal(mgr.ClusterConnector.GetClient()))
 	})
 
 	It("should provide a function to get the Scheme", func() {
@@ -875,7 +855,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetScheme()).To(Equal(mgr.scheme))
+		Expect(m.GetScheme()).To(Equal(mgr.ClusterConnector.GetScheme()))
 	})
 
 	It("should provide a function to get the FieldIndexer", func() {
@@ -883,7 +863,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetFieldIndexer()).To(Equal(mgr.fieldIndexes))
+		Expect(m.GetFieldIndexer()).To(Equal(mgr.ClusterConnector.GetFieldIndexer()))
 	})
 
 	It("should provide a function to get the EventRecorder", func() {

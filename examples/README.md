@@ -31,6 +31,15 @@ This example implements a *new* Kubernetes resource, ChaosPod, and creates a cus
     5. Adds ChaosPod webhooks to manager
     6. Starts the manager
 
+### multicluster
+
+This example implements a simplistic controller that watches pods in one cluster (`referencecluster`) and creates
+an identical pod for each pod observed in a different cluster (`mirrorcluster`).
+
+* `main.go`: Initialization code
+* `main_test.go`: Tests that verify the reconciliation
+* `reconciler/reconciler.go`: The actual reconciliation logic
+
 ## Deploying and Running
 
 To install and run the provided examples, see the Kubebuilder [Quick Start](https://book.kubebuilder.io/quick-start.html).

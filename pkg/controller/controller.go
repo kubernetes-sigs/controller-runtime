@@ -103,7 +103,6 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 	// Create controller with dependencies set
 	c := &controller.Controller{
 		Do:       options.Reconciler,
-		Cache:    mgr.GetCache(),
 		Scheme:   mgr.GetScheme(),
 		Client:   mgr.GetClient(),
 		Recorder: mgr.GetEventRecorderFor(name),

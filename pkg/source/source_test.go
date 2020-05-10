@@ -210,6 +210,18 @@ var _ = Describe("Source", func() {
 			close(done)
 		})
 
+		It("should return an error if syncing fails", func(done Done) {
+			instance := source.Kind{}
+			f := false
+			Expect(instance.InjectCache(&informertest.FakeInformers{Synced: &f})).To(Succeed())
+			err := instance.WaitForSync(nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("cache did not sync"))
+
+			close(done)
+
+		})
+
 		Context("for a Kind not in the cache", func() {
 			It("should return an error when Start is called", func(done Done) {
 				ic.Error = fmt.Errorf("test error")
@@ -224,6 +236,26 @@ var _ = Describe("Source", func() {
 
 				close(done)
 			})
+		})
+	})
+
+	Describe("KindWithCache", func() {
+		It("should not allow injecting a cache", func() {
+			instance := source.NewKindWithCache(nil, nil)
+			injected, err := inject.CacheInto(&informertest.FakeInformers{}, instance)
+			Expect(err).To(BeNil())
+			Expect(injected).To(BeFalse())
+		})
+
+		It("should return an error if syncing fails", func(done Done) {
+			f := false
+			instance := source.NewKindWithCache(nil, &informertest.FakeInformers{Synced: &f})
+			err := instance.WaitForSync(nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("cache did not sync"))
+
+			close(done)
+
 		})
 	})
 

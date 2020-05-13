@@ -30,7 +30,7 @@ var (
 			Name: "controller_runtime_webhook_latency_seconds",
 			Help: "Histogram of the latency of processing admission requests",
 		},
-		[]string{"webhook", "code"},
+		[]string{"webhook"},
 	)
 
 	// RequestTotal is a prometheus metric which is a counter of the total processed admission requests.

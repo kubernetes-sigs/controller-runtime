@@ -131,8 +131,6 @@ func instrumentedHook(path string, hookRaw http.Handler) http.Handler {
 	gge := metrics.RequestInFlight.With(lbl)
 
 	// Initialize the most likely HTTP status codes.
-	lat.WithLabelValues("200")
-	lat.WithLabelValues("500")
 	cnt.WithLabelValues("200")
 	cnt.WithLabelValues("500")
 

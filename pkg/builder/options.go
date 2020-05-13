@@ -58,17 +58,17 @@ type Predicates struct {
 
 // ApplyToFor applies this configuration to the given ForInput options.
 func (w Predicates) ApplyToFor(opts *ForInput) {
-	opts.predicates = w.predicates
+	opts.predicates = append(opts.predicates, w.predicates...)
 }
 
 // ApplyToOwns applies this configuration to the given OwnsInput options.
 func (w Predicates) ApplyToOwns(opts *OwnsInput) {
-	opts.predicates = w.predicates
+	opts.predicates = append(opts.predicates, w.predicates...)
 }
 
 // ApplyToWatches applies this configuration to the given WatchesInput options.
 func (w Predicates) ApplyToWatches(opts *WatchesInput) {
-	opts.predicates = w.predicates
+	opts.predicates = append(opts.predicates, w.predicates...)
 }
 
 var _ ForOption = &Predicates{}

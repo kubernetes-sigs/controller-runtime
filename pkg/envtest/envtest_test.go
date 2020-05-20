@@ -213,6 +213,19 @@ var _ = Describe("Test", func() {
 			close(done)
 		}, 10)
 
+		It("should be able to install CRDs using multiple files", func(done Done) {
+			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
+				Paths: []string{
+					filepath.Join(".", "testdata", "examplecrd.yaml"),
+					filepath.Join(".", "testdata", "examplecrd_v1.yaml"),
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crds).To(HaveLen(2))
+
+			close(done)
+		}, 10)
+
 		It("should filter out already existent CRD", func(done Done) {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{

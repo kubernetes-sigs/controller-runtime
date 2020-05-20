@@ -381,7 +381,7 @@ type MatchingLabels map[string]string
 
 func (m MatchingLabels) ApplyToList(opts *ListOptions) {
 	// TODO(directxman12): can we avoid reserializing this over and over?
-	sel := labels.SelectorFromSet(map[string]string(m))
+	sel := labels.SelectorFromValidatedSet(map[string]string(m))
 	opts.LabelSelector = sel
 }
 

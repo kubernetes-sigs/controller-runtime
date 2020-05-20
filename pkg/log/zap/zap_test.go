@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	kapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -235,6 +236,27 @@ var _ = Describe("Zap logger setup", func() {
 
 				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
 					"name": name.Name,
+				}))
+			})
+
+			It("should log an unstructured Kubernetes object", func() {
+				pod := &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"name":      "some-pod",
+							"namespace": "some-ns",
+						},
+					},
+				}
+				logger.Info("here's a kubernetes object", "thing", pod)
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":      "some-pod",
+					"namespace": "some-ns",
 				}))
 			})
 

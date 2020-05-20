@@ -262,9 +262,10 @@ func AddFinalizerWithError(o runtime.Object, finalizer string) error {
 // RemoveFinalizer accepts a metav1 object and removes the provided finalizer if present.
 func RemoveFinalizer(o metav1.Object, finalizer string) {
 	f := o.GetFinalizers()
-	for i, e := range f {
-		if e == finalizer {
+	for i := 0; i < len(f); i++ {
+		if f[i] == finalizer {
 			f = append(f[:i], f[i+1:]...)
+			i--
 		}
 	}
 	o.SetFinalizers(f)
@@ -279,4 +280,11 @@ func RemoveFinalizerWithError(o runtime.Object, finalizer string) error {
 	}
 	RemoveFinalizer(m, finalizer)
 	return nil
+}
+
+// Object allows functions to work indistinctly with any resource that
+// implements both Object interfaces.
+type Object interface {
+	metav1.Object
+	runtime.Object
 }

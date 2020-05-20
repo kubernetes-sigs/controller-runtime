@@ -215,3 +215,17 @@ var _ = Describe("DeleteAllOfOptions", func() {
 		Expect(newDeleteAllOfOpts).To(Equal(o))
 	})
 })
+
+var _ = Describe("MatchingLabels", func() {
+	It("Should produce an invalid selector when given invalid input", func() {
+		matchingLabels := client.MatchingLabels(map[string]string{"k": "axahm2EJ8Phiephe2eixohbee9eGeiyees1thuozi1xoh0GiuH3diewi8iem7Nui"})
+		listOpts := &client.ListOptions{}
+		matchingLabels.ApplyToList(listOpts)
+
+		r, _ := listOpts.LabelSelector.Requirements()
+		_, err := labels.NewRequirement(r[0].Key(), r[0].Operator(), r[0].Values().List())
+		Expect(err).ToNot(BeNil())
+		expectedErrMsg := `invalid label value: "axahm2EJ8Phiephe2eixohbee9eGeiyees1thuozi1xoh0GiuH3diewi8iem7Nui": at key: "k": must be no more than 63 characters`
+		Expect(err.Error()).To(Equal(expectedErrMsg))
+	})
+})

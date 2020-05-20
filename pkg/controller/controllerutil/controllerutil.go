@@ -281,3 +281,10 @@ func RemoveFinalizerWithError(o runtime.Object, finalizer string) error {
 	RemoveFinalizer(m, finalizer)
 	return nil
 }
+
+// Object allows functions to work indistinctly with any resource that
+// implements both Object interfaces.
+type Object interface {
+	metav1.Object
+	runtime.Object
+}

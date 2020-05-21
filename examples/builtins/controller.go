@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 
@@ -50,8 +51,7 @@ func (r *reconcileReplicaSet) Reconcile(request reconcile.Request) (reconcile.Re
 	}
 
 	if err != nil {
-		log.Error(err, "Could not fetch ReplicaSet")
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("could not fetch ReplicaSet: %+v", err)
 	}
 
 	// Print the ReplicaSet
@@ -69,8 +69,7 @@ func (r *reconcileReplicaSet) Reconcile(request reconcile.Request) (reconcile.Re
 	rs.Labels["hello"] = "world"
 	err = r.client.Update(context.TODO(), rs)
 	if err != nil {
-		log.Error(err, "Could not write ReplicaSet")
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("could not write ReplicaSet: %+v", err)
 	}
 
 	return reconcile.Result{}, nil

@@ -288,3 +288,9 @@ type Object interface {
 	metav1.Object
 	runtime.Object
 }
+
+// ServerSideApply peforms a Patch using client.Apply as strategy and forcing ownership in case of conflicts.
+func ServerSideApply(ctx context.Context, c client.Client, owner client.FieldOwner, obj Object, opts ...client.PatchOption) error {
+	opts = append([]client.PatchOption{client.ForceOwnership, owner}, opts...)
+	return c.Patch(ctx, obj, client.Apply, opts...)
+}

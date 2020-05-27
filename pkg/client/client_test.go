@@ -1210,6 +1210,42 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 
+			It("should patch an existing object from a go struct, using optimistic locking", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("creating a patch from with optimistic lock")
+				patch := client.MergeFromWithOptions(dep.DeepCopy(), client.MergeFromWithOptimisticLock{})
+
+				By("adding a new annotation")
+				dep.Annotations = map[string]string{
+					"foo": "bar",
+				}
+
+				By("patching the Deployment")
+				err = cl.Patch(context.TODO(), dep, patch)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating patched Deployment has new annotation")
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Annotations["foo"]).To(Equal("bar"))
+
+				By("validating that a patch should fail with conflict, when it has an outdated resource version")
+				dep.Annotations["should"] = "conflict"
+				err = cl.Patch(context.TODO(), dep, patch)
+				Expect(err).To(HaveOccurred())
+				Expect(apierrors.IsConflict(err)).To(BeTrue())
+
+				close(done)
+			})
+
 			It("should patch and preserve type information", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
@@ -2656,8 +2692,9 @@ var _ = Describe("Patch", func() {
 		BeforeEach(func() {
 			cm = &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: metav1.NamespaceDefault,
-					Name:      "cm",
+					Namespace:       metav1.NamespaceDefault,
+					Name:            "cm",
+					ResourceVersion: "10",
 				},
 			}
 		})
@@ -2685,6 +2722,31 @@ var _ = Describe("Patch", func() {
 
 			By("returning a patch with data only containing the annotation change")
 			Expect(data).To(Equal([]byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`, annotationKey, annotationValue))))
+		})
+
+		It("creates a merge patch with the modifications applied during the mutation, using optimistic locking", func() {
+			const (
+				annotationKey   = "test"
+				annotationValue = "foo"
+			)
+
+			By("creating a merge patch")
+			patch := client.MergeFromWithOptions(cm.DeepCopy(), client.MergeFromWithOptimisticLock{})
+
+			By("returning a patch with type MergePatch")
+			Expect(patch.Type()).To(Equal(types.MergePatchType))
+
+			By("retrieving modifying the config map")
+			metav1.SetMetaDataAnnotation(&cm.ObjectMeta, annotationKey, annotationValue)
+
+			By("computing the patch data")
+			data, err := patch.Data(cm)
+
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning a patch with data containing the annotation change and the resourceVersion change")
+			Expect(data).To(Equal([]byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"},"resourceVersion":"%s"}}`, annotationKey, annotationValue, cm.ResourceVersion))))
 		})
 	})
 })

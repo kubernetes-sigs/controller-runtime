@@ -70,8 +70,14 @@ func NewFakeClient(initObjs ...runtime.Object) client.Client {
 func NewFakeClientWithScheme(clientScheme *runtime.Scheme, initObjs ...runtime.Object) client.Client {
 	tracker := testing.NewObjectTracker(clientScheme, scheme.Codecs.UniversalDecoder())
 	for _, obj := range initObjs {
-		err := tracker.Add(obj)
+		accessor, err := meta.Accessor(obj)
 		if err != nil {
+			panic(fmt.Errorf("failed to get accessor for object: %v", err))
+		}
+		if accessor.GetResourceVersion() == "" {
+			accessor.SetResourceVersion("1")
+		}
+		if err := tracker.Add(obj); err != nil {
 			panic(fmt.Errorf("failed to add object %v to fake client: %w", obj, err))
 		}
 	}

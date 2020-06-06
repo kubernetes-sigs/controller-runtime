@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"k8s.io/client-go/rest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"time"
+
+	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/addr"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/internal"
@@ -25,7 +26,7 @@ type APIServer struct {
 	SecurePort int
 
 	// TLSconfig is tls configuration to connect to its secure endpoint.
-	TlsClientConfig rest.TLSClientConfig
+	TLSClientConfig rest.TLSClientConfig
 
 	// Path is the path to the apiserver binary.
 	//
@@ -161,7 +162,7 @@ func (s *APIServer) populateAPIServerCerts() error {
 		return err
 	}
 
-	s.TlsClientConfig = rest.TLSClientConfig{
+	s.TLSClientConfig = rest.TLSClientConfig{
 		CAData: ca.CA.CertBytes(),
 	}
 

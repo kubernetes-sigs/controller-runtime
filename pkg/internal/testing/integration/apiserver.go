@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"k8s.io/client-go/rest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -22,6 +23,9 @@ type APIServer struct {
 
 	// SecurePort is the additional secure port that the APIServer should listen on.
 	SecurePort int
+
+	// TLSconfig is tls configuration to connect to its secure endpoint.
+	TlsClientConfig rest.TLSClientConfig
 
 	// Path is the path to the apiserver binary.
 	//
@@ -155,6 +159,10 @@ func (s *APIServer) populateAPIServerCerts() error {
 	}
 	if err := ioutil.WriteFile(filepath.Join(s.CertDir, "apiserver.key"), keyData, 0640); err != nil {
 		return err
+	}
+
+	s.TlsClientConfig = rest.TLSClientConfig{
+		CAData: ca.CA.CertBytes(),
 	}
 
 	return nil

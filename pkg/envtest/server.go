@@ -87,10 +87,33 @@ type Environment struct {
 	// ControlPlane is the ControlPlane including the apiserver and etcd
 	ControlPlane integration.ControlPlane
 
-	// Config can be used to talk to the apiserver.  It's automatically
-	// populated if not set using the standard controller-runtime config
+	// Config can be used to talk to the apiserver (insecure endpoint).
+	// It's automatically populated if not set using the standard controller-runtime config
 	// loading.
 	Config *rest.Config
+
+	// SecureConfig can be used to talk to the apiserver (secure endpoint).
+	// It's automatically populated if not set using the standard controller-runtime config
+	// loading.  This just contains secure endpoint and tlsconfig (no authn info).
+	// To use this config, you have to configure kube-apiserver with some authn module(static token, basic auth, etc.)
+	// and set your authentication info to this config.  For example:
+	//
+	// // basic authn plugin case
+	// te := &envtest.Environment{
+	//   KubeAPIServerFlags: append(
+	//     envtest.DefaultKubeAPIServerFlags,
+	//     "--basic-auth-file=my-file", "--authorization-mode=RBAC",
+	//   ),
+	// }
+	// te.Start()
+	//
+	// cfg := rest.CopyConfig(te.SecureConfig)
+	// cfg.Username = "myname"
+	// cfg.Password = "mypassword"
+	//
+	// // This client can send a request as "myname" user.
+	// cli := client.New(cfg)
+	SecureConfig *rest.Config
 
 	// CRDInstallOptions are the options for installing CRDs.
 	CRDInstallOptions CRDInstallOptions
@@ -245,6 +268,13 @@ func (te *Environment) Start() (*rest.Config, error) {
 		// Create the *rest.Config for creating new clients
 		te.Config = &rest.Config{
 			Host: te.ControlPlane.APIURL().Host,
+			// gotta go fast during tests -- we don't really care about overwhelming our test API server
+			QPS:   1000.0,
+			Burst: 2000.0,
+		}
+		te.SecureConfig = &rest.Config{
+			Host:            fmt.Sprintf("%s:%d", te.ControlPlane.APIURL().Hostname(), te.ControlPlane.APIServer.SecurePort),
+			TLSClientConfig: te.ControlPlane.APIServer.TLSClientConfig,
 			// gotta go fast during tests -- we don't really care about overwhelming our test API server
 			QPS:   1000.0,
 			Burst: 2000.0,

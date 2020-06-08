@@ -23,7 +23,10 @@ import (
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // KubeAwareEncoder is a Kubernetes-aware Zap Encoder.
@@ -38,6 +41,9 @@ type KubeAwareEncoder struct {
 	// If false, only name, namespace, api version, and kind are printed.
 	// Otherwise, the full object is logged.
 	Verbose bool
+
+	// Scheme provides the necessary GVK data for arbitrary objects
+	Scheme *runtime.Scheme
 }
 
 // namespacedNameWrapper is a zapcore.ObjectMarshaler for Kubernetes NamespacedName
@@ -57,14 +63,25 @@ func (w namespacedNameWrapper) MarshalLogObject(enc zapcore.ObjectEncoder) error
 
 // kubeObjectWrapper is a zapcore.ObjectMarshaler for Kubernetes objects.
 type kubeObjectWrapper struct {
-	obj runtime.Object
+	obj    runtime.Object
+	scheme *runtime.Scheme
 }
 
 // MarshalLogObject implements zapcore.ObjectMarshaler
 func (w kubeObjectWrapper) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	// TODO(directxman12): log kind and apiversion if not set explicitly (common case)
-	// -- needs an a scheme to convert to the GVK.
 	gvk := w.obj.GetObjectKind().GroupVersionKind()
+	if gvk.Version == "" && w.scheme != nil {
+		var err error
+		gvk, err = apiutil.GVKForObject(w.obj, w.scheme)
+		if err != nil {
+			gvk = schema.GroupVersionKind{
+				Group:   "__unknown",
+				Version: "__unknown",
+				Kind:    fmt.Sprintf("%T", w.obj),
+			}
+		}
+	}
+
 	if gvk.Version != "" {
 		enc.AddString("apiVersion", gvk.GroupVersion().String())
 		enc.AddString("kind", gvk.Kind)
@@ -90,6 +107,8 @@ func (w kubeObjectWrapper) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 func (k *KubeAwareEncoder) Clone() zapcore.Encoder {
 	return &KubeAwareEncoder{
 		Encoder: k.Encoder.Clone(),
+		Verbose: k.Verbose,
+		Scheme:  k.Scheme,
 	}
 }
 
@@ -113,7 +132,7 @@ func (k *KubeAwareEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Fie
 				fields[i] = zapcore.Field{
 					Type:      zapcore.ObjectMarshalerType,
 					Key:       field.Key,
-					Interface: kubeObjectWrapper{obj: val},
+					Interface: kubeObjectWrapper{obj: val, scheme: k.Scheme},
 				}
 			case types.NamespacedName:
 				fields[i] = zapcore.Field{

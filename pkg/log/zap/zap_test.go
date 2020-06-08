@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	kapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -166,8 +167,10 @@ var _ = Describe("Zap logger setup", func() {
 
 	Context("when logging kubernetes objects", func() {
 		var logOut *bytes.Buffer
+		var scheme *runtime.Scheme
 		var logger logr.Logger
 
+		nodeName := "some-node"
 		defineTests := func() {
 			It("should log a standard namespaced Kubernetes object name and namespace", func() {
 				pod := &kapi.Pod{}
@@ -180,8 +183,10 @@ var _ = Describe("Zap logger setup", func() {
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
 				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
-					"name":      pod.Name,
-					"namespace": pod.Namespace,
+					"name":       pod.Name,
+					"namespace":  pod.Namespace,
+					"apiVersion": "v1",
+					"kind":       "Pod",
 				}))
 			})
 
@@ -196,7 +201,7 @@ var _ = Describe("Zap logger setup", func() {
 
 			It("should log a standard non-namespaced Kubernetes object name", func() {
 				node := &kapi.Node{}
-				node.Name = "some-node"
+				node.Name = nodeName
 				logger.Info("here's a kubernetes object", "thing", node)
 
 				outRaw := logOut.Bytes()
@@ -204,13 +209,15 @@ var _ = Describe("Zap logger setup", func() {
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
 				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
-					"name": node.Name,
+					"apiVersion": "v1",
+					"kind":       "Node",
+					"name":       node.Name,
 				}))
 			})
 
 			It("should log a standard Kubernetes object's kind, if set", func() {
 				node := &kapi.Node{}
-				node.Name = "some-node"
+				node.Name = nodeName
 				node.APIVersion = "v1"
 				node.Kind = "Node"
 				logger.Info("here's a kubernetes object", "thing", node)
@@ -227,7 +234,7 @@ var _ = Describe("Zap logger setup", func() {
 			})
 
 			It("should log a standard non-namespaced NamespacedName name", func() {
-				name := types.NamespacedName{Name: "some-node"}
+				name := types.NamespacedName{Name: nodeName}
 				logger.Info("here's a kubernetes object", "thing", name)
 
 				outRaw := logOut.Bytes()
@@ -243,8 +250,10 @@ var _ = Describe("Zap logger setup", func() {
 				pod := &unstructured.Unstructured{
 					Object: map[string]interface{}{
 						"metadata": map[string]interface{}{
-							"name":      "some-pod",
-							"namespace": "some-ns",
+							"name":       "some-pod",
+							"namespace":  "some-ns",
+							"apiVersion": "__unknown/__unknown",
+							"kind":       "*unstructured.Unstructured",
 						},
 					},
 				}
@@ -255,8 +264,10 @@ var _ = Describe("Zap logger setup", func() {
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
 				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
-					"name":      "some-pod",
-					"namespace": "some-ns",
+					"name":       "some-pod",
+					"namespace":  "some-ns",
+					"apiVersion": "__unknown/__unknown",
+					"kind":       "*unstructured.Unstructured",
 				}))
 			})
 
@@ -284,6 +295,32 @@ var _ = Describe("Zap logger setup", func() {
 			})
 			defineTests()
 
+		})
+		Context("with logger created using New with scheme", func() {
+			BeforeEach(func() {
+				logOut = new(bytes.Buffer)
+				By("setting up the logger")
+				// use production settings (false) to get just json output
+				scheme = runtime.NewScheme()
+				logger = New(WriteTo(logOut), UseDevMode(false), WithScheme(scheme))
+			})
+
+			It("should log a standard Kubernetes object's kind deduced from scheme", func() {
+				Expect(kapi.AddToScheme(scheme)).To(Succeed())
+				node := &kapi.Node{}
+				node.Name = nodeName
+				logger.Info("here's a kubernetes object", "thing", node)
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":       node.Name,
+					"apiVersion": "v1",
+					"kind":       "Node",
+				}))
+			})
 		})
 		Context("with logger created using LoggerTo", func() {
 			BeforeEach(func() {

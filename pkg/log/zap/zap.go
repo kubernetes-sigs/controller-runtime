@@ -28,6 +28,8 @@ import (
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
 )
 
 // New returns a brand new Logger configured with Opts. It
@@ -145,6 +147,10 @@ type Options struct {
 	// ZapOpts allows passing arbitrary zap.Options to configure on the
 	// underlying Zap logger.
 	ZapOpts []zap.Option
+
+	// Scheme for deducing GVK for arbitrary runtime.Object if not
+	// explicitly specified
+	Scheme *runtime.Scheme
 }
 
 // addDefaults adds defaults to the Options
@@ -187,6 +193,10 @@ func (o *Options) addDefaults() {
 			}))
 	}
 
+	if o.Scheme == nil {
+		o.Scheme = scheme.Scheme
+	}
+
 	o.ZapOpts = append(o.ZapOpts, zap.AddStacktrace(o.StacktraceLevel))
 }
 
@@ -204,7 +214,7 @@ func NewRaw(opts ...Opts) *zap.Logger {
 	sink := zapcore.AddSync(o.DestWritter)
 
 	o.ZapOpts = append(o.ZapOpts, zap.AddCallerSkip(1), zap.ErrorOutput(sink))
-	log := zap.New(zapcore.NewCore(&KubeAwareEncoder{Encoder: o.Encoder, Verbose: o.Development}, sink, o.Level))
+	log := zap.New(zapcore.NewCore(&KubeAwareEncoder{Encoder: o.Encoder, Verbose: o.Development, Scheme: o.Scheme}, sink, o.Level))
 	log = log.WithOptions(o.ZapOpts...)
 	return log
 }
@@ -256,5 +266,13 @@ func UseFlagOptions(in *Options) Opts {
 	return func(o *Options) {
 		*o = *in
 		o.addDefaults()
+	}
+}
+
+// WithScheme configures the logger to use the passed in schema for
+// deducing arbitrary runtime.ObjectGVK during encoding
+func WithScheme(scheme *runtime.Scheme) Opts {
+	return func(options *Options) {
+		options.Scheme = scheme
 	}
 }

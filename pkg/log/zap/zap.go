@@ -181,12 +181,17 @@ func (o *Options) addDefaults() {
 			lvl := zap.NewAtomicLevelAt(zap.ErrorLevel)
 			o.StacktraceLevel = &lvl
 		}
-		o.ZapOpts = append(o.ZapOpts,
-			zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-				return zapcore.NewSampler(core, time.Second, 100, 100)
-			}))
+		// Disable sampling when we are in debug mode. Otherwise, this will
+		// cause index out of bounds errors in the sampling code.
+		if o.Level.Enabled(zapcore.DebugLevel) {
+			o.ZapOpts = append(o.ZapOpts)
+		} else {
+			o.ZapOpts = append(o.ZapOpts,
+				zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+					return zapcore.NewSampler(core, time.Second, 100, 100)
+				}))
+		}
 	}
-
 	o.ZapOpts = append(o.ZapOpts, zap.AddStacktrace(o.StacktraceLevel))
 }
 
@@ -215,7 +220,7 @@ func NewRaw(opts ...Opts) *zap.Logger {
 //  zap-encoder: Zap log encoding ('json' or 'console')
 //  zap-log-level:  Zap Level to configure the verbosity of logging. Can be one of 'debug', 'info', 'error',
 //			       or any integer value > 0 which corresponds to custom debug levels of increasing verbosity")
-//  zap-stacktrace-level: Zap Level at and above which stacktraces are captured (one of 'warn' or 'error')
+//  zap-stacktrace-level: Zap Level at and above which stacktraces are captured (one of 'info' or 'error')
 func (o *Options) BindFlags(fs *flag.FlagSet) {
 
 	// Set Development mode value
@@ -245,7 +250,7 @@ func (o *Options) BindFlags(fs *flag.FlagSet) {
 		o.StacktraceLevel = fromFlag
 	}
 	fs.Var(&stackVal, "zap-stacktrace-level",
-		"Zap Level at and above which stacktraces are captured (one of 'warn' or 'error')")
+		"Zap Level at and above which stacktraces are captured (one of 'info', 'error').")
 }
 
 // UseFlagOptions configures the logger to use the Options set by parsing zap option flags from the CLI.

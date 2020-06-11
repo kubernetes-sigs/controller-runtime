@@ -17,10 +17,12 @@ limitations under the License.
 package manager
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
+	"path/filepath"
 	rt "runtime"
 
 	"github.com/go-logr/logr"
@@ -224,6 +226,24 @@ var _ = Describe("manger.Manager", func() {
 				newMetricsListener: func(addr string) (net.Listener, error) {
 					var err error
 					listener, err = metrics.NewListener(addr)
+					return listener, err
+				},
+			})
+			Expect(m).ToNot(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(listener).ToNot(BeNil())
+			Expect(listener.Close()).ToNot(HaveOccurred())
+		})
+
+		It("should create a TLS listener for the metrics if certificates are provided and the address is correct", func() {
+			var listener net.Listener
+			certDir := filepath.Join(".", "testdata", "certs")
+			m, err := New(cfg, Options{
+				MetricsBindAddress: ":0",
+				MetricsCertDir:     certDir,
+				newSecureMetricsListener: func(addr, certDir string) (net.Listener, error) {
+					var err error
+					listener, err = metrics.NewSecureListener(addr, certDir)
 					return listener, err
 				},
 			})
@@ -556,6 +576,76 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(string(body)).To(Equal("Some debug info"))
 			})
+		})
+	})
+
+	Context("should start serving metrics over TLS", func() {
+		var listener net.Listener
+		var opts Options
+
+		BeforeEach(func() {
+			listener = nil
+			opts = Options{
+				MetricsCertDir: filepath.Join(".", "testdata", "certs"),
+				newSecureMetricsListener: func(addr, certDir string) (net.Listener, error) {
+					var err error
+					listener, err = metrics.NewSecureListener(addr, certDir)
+					return listener, err
+				},
+			}
+		})
+
+		AfterEach(func() {
+			if listener != nil {
+				listener.Close()
+			}
+		})
+
+		It("should serve secure metrics endpoint", func(done Done) {
+			opts.MetricsBindAddress = ":0"
+			m, err := New(cfg, opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			s := make(chan struct{})
+			defer close(s)
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(s)).NotTo(HaveOccurred())
+				close(done)
+			}()
+
+			metricsEndpoint := fmt.Sprintf("https://%s/metrics", listener.Addr().String())
+			tr := &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+			}
+			client := &http.Client{Transport: tr}
+			resp, err := client.Get(metricsEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.StatusCode).To(Equal(200))
+		})
+
+		It("should not serve both endpoints", func(done Done) {
+			var insecureListener net.Listener
+			opts.MetricsBindAddress = ":0"
+			opts.newMetricsListener = func(addr string) (net.Listener, error) {
+				var err error
+				insecureListener, err = metrics.NewListener(addr)
+				return listener, err
+			}
+
+			m, err := New(cfg, opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			s := make(chan struct{})
+			defer close(s)
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(s)).NotTo(HaveOccurred())
+				close(done)
+			}()
+			Expect(insecureListener).To(BeNil())
 		})
 	})
 

@@ -164,6 +164,12 @@ type Options struct {
 	// It can be set to "0" to disable the metrics serving.
 	MetricsBindAddress string
 
+	// MetricsCertDir is the directory that contains the secure metrics server key and certificate.
+	// When is set, server would be served over TLS and look up the server key and certificate in
+	// {MetricsCertDir}/tls.key and {MetricsCertDir}/tls.crt. The server key and certificate
+	// must be named tls.key and tls.crt, respectively.
+	MetricsCertDir string
+
 	// HealthProbeBindAddress is the TCP address that the controller should bind to
 	// for serving health probes
 	HealthProbeBindAddress string
@@ -206,9 +212,11 @@ type Options struct {
 	EventBroadcaster record.EventBroadcaster
 
 	// Dependency injection for testing
-	newRecorderProvider    func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, broadcaster record.EventBroadcaster) (recorder.Provider, error)
-	newResourceLock        func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
-	newMetricsListener     func(addr string) (net.Listener, error)
+	newRecorderProvider      func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, broadcaster record.EventBroadcaster) (recorder.Provider, error)
+	newResourceLock          func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
+	newMetricsListener       func(addr string) (net.Listener, error)
+	newSecureMetricsListener func(addr, certDir string) (net.Listener, error)
+
 	newHealthProbeListener func(addr string) (net.Listener, error)
 }
 
@@ -299,9 +307,17 @@ func New(config *rest.Config, options Options) (Manager, error) {
 
 	// Create the metrics listener. This will throw an error if the metrics bind
 	// address is invalid or already in use.
-	metricsListener, err := options.newMetricsListener(options.MetricsBindAddress)
-	if err != nil {
-		return nil, err
+	var metricsListener net.Listener
+	if options.MetricsCertDir == "" {
+		metricsListener, err = options.newMetricsListener(options.MetricsBindAddress)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		metricsListener, err = options.newSecureMetricsListener(options.MetricsBindAddress, options.MetricsCertDir)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// By default we have no extra endpoints to expose on metrics http server.
@@ -410,6 +426,11 @@ func setOptionsDefaults(options Options) Options {
 	if options.newMetricsListener == nil {
 		options.newMetricsListener = metrics.NewListener
 	}
+
+	if options.newSecureMetricsListener == nil {
+		options.newSecureMetricsListener = metrics.NewSecureListener
+	}
+
 	leaseDuration, renewDeadline, retryPeriod := defaultLeaseDuration, defaultRenewDeadline, defaultRetryPeriod
 	if options.LeaseDuration == nil {
 		options.LeaseDuration = &leaseDuration

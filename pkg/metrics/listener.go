@@ -17,9 +17,13 @@ limitations under the License.
 package metrics
 
 import (
+	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
+	"path/filepath"
 
+	"sigs.k8s.io/controller-runtime/pkg/internal/certwatcher"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
 
@@ -28,6 +32,12 @@ var log = logf.RuntimeLog.WithName("metrics")
 // DefaultBindAddress sets the default bind address for the metrics listener
 // The metrics is on by default.
 var DefaultBindAddress = ":8080"
+
+// DefaultKeyPath is prefix path for TLS key
+var DefaultKeyPath = "tls.key"
+
+// DefualtCertPath is prefix path for TLS certificate
+var DefualtCertPath = "tls.crt"
 
 // NewListener creates a new TCP listener bound to the given address.
 func NewListener(addr string) (net.Listener, error) {
@@ -44,9 +54,39 @@ func NewListener(addr string) (net.Listener, error) {
 	log.Info("metrics server is starting to listen", "addr", addr)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		er := fmt.Errorf("error listening on %s: %w", addr, err)
-		log.Error(er, "metrics server failed to listen. You may want to disable the metrics server or use another port if it is due to conflicts")
-		return nil, er
+		err = fmt.Errorf("error listening on %s: %w", addr, err)
+		log.Error(err, "metrics server failed to listen. You may want to disable the metrics server or use another port if it is due to conflicts")
+		return nil, err
 	}
+
 	return ln, nil
+}
+
+// NewSecureListener creates a new TCP listener over TLS bound to the given address.
+func NewSecureListener(addr, certDir string) (net.Listener, error) {
+	ln, err := NewListener(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	certPath := filepath.Join(certDir, DefualtCertPath)
+	certKey := filepath.Join(certDir, DefaultKeyPath)
+	certWatcher, err := certwatcher.New(certPath, certKey)
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		if err := certWatcher.Start(context.Background().Done()); err != nil {
+			log.Error(err, "certificate watcher error")
+			return
+		}
+	}()
+
+	cfg := &tls.Config{
+		NextProtos:     []string{"h2"},
+		GetCertificate: certWatcher.GetCertificate,
+	}
+
+	return tls.NewListener(ln, cfg), nil
 }

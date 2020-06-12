@@ -112,8 +112,8 @@ func (f *fakeLogger) Info(msg string, vals ...interface{}) {
 	})
 }
 
-func (f *fakeLogger) Enabled() bool             { return true }
-func (f *fakeLogger) V(lvl int) logr.InfoLogger { return f }
+func (f *fakeLogger) Enabled() bool         { return true }
+func (f *fakeLogger) V(lvl int) logr.Logger { return f }
 
 var _ = Describe("Zap options setup", func() {
 	var opts *Options

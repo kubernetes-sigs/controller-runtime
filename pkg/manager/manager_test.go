@@ -34,6 +34,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -1235,6 +1236,12 @@ var _ = Describe("manger.Manager", func() {
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.GetAPIReader()).NotTo(BeNil())
+	})
+	It("should provide a function to get a REST client for a runtime object", func() {
+		dep := &appsv1.Deployment{}
+		m, err := New(cfg, Options{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(m.GetRESTClientFor(dep)).NotTo(BeNil())
 	})
 })
 

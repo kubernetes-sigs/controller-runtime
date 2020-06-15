@@ -28,6 +28,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
@@ -36,6 +37,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -355,6 +357,18 @@ func (cm *controllerManager) GetWebhookServer() *webhook.Server {
 		}
 	}
 	return cm.webhookServer
+}
+
+func (cm *controllerManager) GetRESTClientFor(obj runtime.Object) (rest.Interface, error) {
+	gvk, err := apiutil.GVKForObject(obj, cm.GetScheme())
+	if err != nil {
+		return nil, err
+	}
+	restClient, err := apiutil.RESTClientForGVK(gvk, cm.GetConfig(), serializer.NewCodecFactory(cm.GetScheme()))
+	if err != nil {
+		return nil, err
+	}
+	return restClient, nil
 }
 
 func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {

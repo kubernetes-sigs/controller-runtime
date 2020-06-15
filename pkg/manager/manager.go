@@ -111,6 +111,10 @@ type Manager interface {
 
 	// GetWebhookServer returns a webhook.Server
 	GetWebhookServer() *webhook.Server
+
+	// GetRESTClientFor returns new rest.Interface capable of accessing the resources
+	// of the same GVK as the specified object.
+	GetRESTClientFor(obj runtime.Object) (rest.Interface, error)
 }
 
 // Options are the arguments for creating a new Manager

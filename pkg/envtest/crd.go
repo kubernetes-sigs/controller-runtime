@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"fmt"
 
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -60,18 +61,62 @@ type CRDInstallOptions struct {
 	// uninstalled when terminating the test environment.
 	// Defaults to false.
 	CleanUpAfterUse bool
+
+	// Used for CRD Conversoin Webhooks
+
+	*LocalWebhookOptions
 }
 
 const defaultPollInterval = 100 * time.Millisecond
 const defaultMaxWait = 10 * time.Second
 
+func ConfigureCRDWebhooks(opts *LocalWebhookOptions, crds []runtime.Object) error {
+	caData, err := opts.setupCAIfNecessary()
+	if err != nil {
+		return fmt.Errorf("unable to initialize CA for CRD conversion webhook serving certs: %w", err)
+	}
+	hostPort, err := opts.HostPort()
+	if err != nil {
+		return fmt.Errorf("unable to grab host-port for CRD conversion webhooks: %w", err)
+	}
+
+	for i, crd := range runtimeCRDListToUnstructured(crds) {
+		log := log.WithValues("crd", crd.GetName())
+		conv, found, err := unstructured.NestedMap(crd.Object, "spec", "conversion")
+		if !found || err != nil {
+			log.V(1).Info("not configuring conversion webhooks on CRD, no conversion")
+			continue
+		}
+
+		if strat, found := conv["strategy"].(string); !found || strat != "Webhook" {
+			log.V(1).Info("not configuring conversion webhooks on CRD, strategy not already webhook", "strategy", strat)
+			continue
+		}
+
+		if _, found := conv["webhookClientConfig"].(map[string]interface{}); !found {
+			conv["webhookClientConfig"] = make(map[string]interface{})
+		}
+		modifyClientConfig(conv["webhookClientConfig"].(map[string]interface{}), caData, hostPort)
+		unstructured.SetNestedMap(crd.Object, conv, "spec", "conversion")
+		log.V(1).Info("configured crd webhook", "conv", conv)
+
+		crds[i] = crd
+	}
+
+	return nil
+}
+
 // InstallCRDs installs a collection of CRDs into a cluster by reading the crd yaml files from a directory
-func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]runtime.Object, error) {
-	defaultCRDOptions(&options)
+func InstallCRDs(config *rest.Config, options *CRDInstallOptions) ([]runtime.Object, error) {
+	defaultCRDOptions(options)
 
 	// Read the CRD yamls into options.CRDs
-	if err := readCRDFiles(&options); err != nil {
+	if err := readCRDFiles(options); err != nil {
 		return nil, err
+	}
+
+	if err := ConfigureCRDWebhooks(options.LocalWebhookOptions, options.CRDs); err != nil {
+		return options.CRDs, err
 	}
 
 	// Create the CRDs in the apiserver
@@ -80,7 +125,7 @@ func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]runtime.Obje
 	}
 
 	// Wait for the CRDs to appear as Resources in the apiserver
-	if err := WaitForCRDs(config, options.CRDs, options); err != nil {
+	if err := WaitForCRDs(config, options.CRDs, *options); err != nil {
 		return options.CRDs, err
 	}
 
@@ -107,6 +152,9 @@ func defaultCRDOptions(o *CRDInstallOptions) {
 	}
 	if o.PollInterval == 0 {
 		o.PollInterval = defaultPollInterval
+	}
+	if o.LocalWebhookOptions == nil {
+		o.LocalWebhookOptions = &LocalWebhookOptions{}
 	}
 }
 

@@ -38,6 +38,24 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+type LocalWebhookOptions struct {
+	// LocalServingHost is the host for serving webhooks on.
+	// it will be automatically populated
+	LocalServingHost string
+
+	// LocalServingPort is the allocated port for serving webhooks on.
+	// it will be automatically populated by a random available local port
+	LocalServingPort int
+
+	// LocalServingCertDir is the allocated directory for serving certificates.
+	// it will be automatically populated by the local temp dir
+	LocalServingCertDir string
+
+	// The CA data corresponding to the serving certs generated for the webhooks.
+	// It will be set automatically.
+	CAData []byte
+}
+
 // WebhookInstallOptions are the options for installing mutating or validating webhooks
 type WebhookInstallOptions struct {
 	// Paths is a list of paths to the directories containing the mutating or validating webhooks yaml or json configs.
@@ -52,30 +70,30 @@ type WebhookInstallOptions struct {
 	// IgnoreErrorIfPathMissing will ignore an error if a DirectoryPath does not exist when set to true
 	IgnoreErrorIfPathMissing bool
 
-	// LocalServingHost is the host for serving webhooks on.
-	// it will be automatically populated
-	LocalServingHost string
-
-	// LocalServingPort is the allocated port for serving webhooks on.
-	// it will be automatically populated by a random available local port
-	LocalServingPort int
-
-	// LocalServingCertDir is the allocated directory for serving certificates.
-	// it will be automatically populated by the local temp dir
-	LocalServingCertDir string
 
 	// MaxTime is the max time to wait
 	MaxTime time.Duration
 
 	// PollInterval is the interval to check
 	PollInterval time.Duration
+
+	*LocalWebhookOptions
 }
 
 // ModifyWebhookDefinitions modifies webhook definitions by:
 // - applying CABundle based on the provided tinyca
 // - if webhook client config uses service spec, it's removed and replaced with direct url
-func (o *WebhookInstallOptions) ModifyWebhookDefinitions(caData []byte) error {
-	hostPort, err := o.generateHostPort()
+func (o *WebhookInstallOptions) ModifyWebhookDefinitions() error {
+	if o.LocalWebhookOptions == nil {
+		o.LocalWebhookOptions = &LocalWebhookOptions{}
+	}
+
+	caData, err := o.setupCAIfNecessary()
+	if err != nil {
+		return err
+	}
+
+	hostPort, err := o.HostPort()
 	if err != nil {
 		return err
 	}
@@ -111,14 +129,11 @@ func (o *WebhookInstallOptions) ModifyWebhookDefinitions(caData []byte) error {
 			o.ValidatingWebhooks[i] = unstructuredHook
 		}
 	}
+
 	return nil
 }
 
-func modifyWebhook(webhook map[string]interface{}, caData []byte, hostPort string) (map[string]interface{}, error) {
-	clientConfig, found, err := unstructured.NestedMap(webhook, "clientConfig")
-	if !found || err != nil {
-		return nil, fmt.Errorf("cannot find clientconfig: %v", err)
-	}
+func modifyClientConfig(clientConfig map[string]interface{}, caData []byte, hostPort string) {
 	clientConfig["caBundle"] = base64.StdEncoding.EncodeToString(caData)
 	servicePath, found, err := unstructured.NestedString(clientConfig, "service", "path")
 	if found && err == nil {
@@ -129,32 +144,44 @@ func modifyWebhook(webhook map[string]interface{}, caData []byte, hostPort strin
 		clientConfig["url"] = url
 		clientConfig["service"] = nil
 	}
+}
+
+func modifyWebhook(webhook map[string]interface{}, caData []byte, hostPort string) (map[string]interface{}, error) {
+	clientConfig, found, err := unstructured.NestedMap(webhook, "clientConfig")
+	if !found || err != nil {
+		return nil, fmt.Errorf("cannot find clientconfig: %v", err)
+	}
+	modifyClientConfig(clientConfig, caData, hostPort)
 	webhook["clientConfig"] = clientConfig
 	return webhook, nil
 }
 
-func (o *WebhookInstallOptions) generateHostPort() (string, error) {
+func (o *LocalWebhookOptions) generateHostPort() error {
 	port, host, err := addr.Suggest()
 	if err != nil {
-		return "", fmt.Errorf("unable to grab random port for serving webhooks on: %v", err)
+		return fmt.Errorf("unable to grab random port for serving webhooks on: %v", err)
 	}
 	o.LocalServingPort = port
 	o.LocalServingHost = host
-	return net.JoinHostPort(host, fmt.Sprintf("%d", port)), nil
+	return nil
+}
+
+func (o *LocalWebhookOptions) HostPort() (string, error) {
+	if o.LocalServingPort == 0 {
+		if err := o.generateHostPort(); err != nil {
+			return "", err
+		}
+	}
+	return net.JoinHostPort(o.LocalServingHost, fmt.Sprintf("%d", o.LocalServingPort)), nil
 }
 
 // Install installs specified webhooks to the API server
 func (o *WebhookInstallOptions) Install(config *rest.Config) error {
-	hookCA, err := o.setupCA()
-	if err != nil {
-		return err
-	}
 	if err := parseWebhookDirs(o); err != nil {
 		return err
 	}
 
-	err = o.ModifyWebhookDefinitions(hookCA)
-	if err != nil {
+	if err := o.ModifyWebhookDefinitions(); err != nil {
 		return err
 	}
 
@@ -169,12 +196,17 @@ func (o *WebhookInstallOptions) Install(config *rest.Config) error {
 	return nil
 }
 
-// Cleanup cleans up cert directories
-func (o *WebhookInstallOptions) Cleanup() error {
+func (o *LocalWebhookOptions) cleanupCertsIfNecessary() error {
 	if o.LocalServingCertDir != "" {
 		return os.RemoveAll(o.LocalServingCertDir)
 	}
+	o.LocalServingCertDir = ""
 	return nil
+}
+
+// Cleanup cleans up cert directories
+func (o *WebhookInstallOptions) Cleanup() error {
+	return o.cleanupCertsIfNecessary()
 }
 
 // WaitForWebhooks waits for the Webhooks to be available through API server
@@ -243,8 +275,15 @@ func (p *webhookPoller) poll() (done bool, err error) {
 	return allFound, nil
 }
 
+func (o *LocalWebhookOptions) setupCAIfNecessary() ([]byte, error) {
+	if o.CAData != nil {
+		return o.CAData, nil
+	}
+	return o.setupCA()
+}
+
 // setupCA creates CA for testing and writes them to disk
-func (o *WebhookInstallOptions) setupCA() ([]byte, error) {
+func (o *LocalWebhookOptions) setupCA() ([]byte, error) {
 	hookCA, err := integration.NewTinyCA()
 	if err != nil {
 		return nil, fmt.Errorf("unable to set up webhook CA: %v", err)
@@ -272,6 +311,8 @@ func (o *WebhookInstallOptions) setupCA() ([]byte, error) {
 	if err := ioutil.WriteFile(filepath.Join(localServingCertsDir, "tls.key"), keyData, 0640); err != nil {
 		return nil, fmt.Errorf("unable to write webhook serving key to disk: %v", err)
 	}
+
+	o.CAData = certData
 
 	return certData, nil
 }

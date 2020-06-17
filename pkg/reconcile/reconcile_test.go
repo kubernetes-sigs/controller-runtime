@@ -66,4 +66,30 @@ var _ = Describe("reconcile", func() {
 			Expect(actualErr).To(Equal(err))
 		})
 	})
+	Describe("Test panic handler", func() {
+		It("should panic and return error", func() {
+			var err error
+			func() {
+				defer reconcile.PanicHandler(&err)
+				panic("Test Panic")
+			}()
+			Expect(err).NotTo(BeNil())
+		})
+		It("should panic and return error as directed by custom handler", func() {
+			var res interface{}
+			var err error
+			handlers := []func(interface{}){
+				func(r interface{}) {
+					res = r
+				},
+			}
+			func() {
+				defer reconcile.PanicHandler(&err, handlers...)
+				panic("Test Panic")
+			}()
+			Expect(err).NotTo(BeNil())
+			Expect(res).To(Equal("Test Panic"))
+		})
+
+	})
 })

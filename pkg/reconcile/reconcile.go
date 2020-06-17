@@ -17,6 +17,8 @@ limitations under the License.
 package reconcile
 
 import (
+	"fmt"
+	"runtime/debug"
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -91,3 +93,31 @@ var _ Reconciler = Func(nil)
 
 // Reconcile implements Reconciler.
 func (r Func) Reconcile(o Request) (Result, error) { return r(o) }
+
+// PanicHandler can be called with defer in order to recover from panic in reconcile logic.
+// Additional handlers can also be passed to manage the go routines. The error passed to the
+// PanicHandler is set to the value of panic if not nil.
+// If any resource triggers a panic, the reconciler will recover and modify the raised panic
+// to the normal reconciler error.
+// Example usage:
+/*
+
+import (
+	...
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	)
+
+func (a *ReplicaSetReconciler) Reconcile(req reconcile.Request) (result reconcile.Result, err error) {
+	defer PanicHandler(&err)
+	// reconciler logic here
+
+	...
+*/
+func PanicHandler(err *error, panicHandlers ...func(interface{})) {
+	if r := recover(); r != nil {
+		for _, fn := range panicHandlers {
+			fn(r)
+		}
+		*err = fmt.Errorf("panic: %v [recovered]\n\n%s", r, debug.Stack())
+	}
+}

@@ -32,11 +32,39 @@ type Validator interface {
 	ValidateDelete() error
 }
 
+// ValidatorService can be implemented and injected into the webhook to validate an operation
+type ValidatorService interface {
+	ValidateCreate(new runtime.Object) error
+	ValidateUpdate(new runtime.Object, old runtime.Object) error
+	ValidateDelete(existing runtime.Object) error
+}
+
 // ValidatingWebhookFor creates a new Webhook for validating the provided type.
 func ValidatingWebhookFor(validator Validator) *Webhook {
 	return &Webhook{
 		Handler: &validatingHandler{validator: validator},
 	}
+}
+
+// ValidatingWebhookServiceFor creates a new Webhook for validating the provided type.
+func ValidatingWebhookServiceFor(validatorService ValidatorService, runtimeObject runtime.Object) *Webhook {
+	return &Webhook{
+		Handler: &validatingServiceHandler{
+			validatorService: validatorService,
+			runtimeObject:    runtimeObject,
+		},
+	}
+}
+
+type validatingServiceHandler struct {
+	runtimeObject    runtime.Object
+	validatorService ValidatorService
+	decoder          *Decoder
+}
+
+func (v *validatingServiceHandler) InjectDecoder(d *Decoder) error {
+	v.decoder = d
+	return nil
 }
 
 type validatingHandler struct {
@@ -99,6 +127,60 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 		}
 
 		err = obj.ValidateDelete()
+		if err != nil {
+			return Denied(err.Error())
+		}
+	}
+
+	return Allowed("")
+}
+
+func (v *validatingServiceHandler) Handle(ctx context.Context, req Request) Response {
+	if v.validatorService == nil {
+		panic("validator service should never be nil")
+	}
+
+	// Get the object in the request
+	obj := v.runtimeObject.DeepCopyObject()
+	if req.Operation == v1beta1.Create {
+		err := v.decoder.Decode(req, obj)
+		if err != nil {
+			return Errored(http.StatusBadRequest, err)
+		}
+
+		err = v.validatorService.ValidateCreate(obj)
+		if err != nil {
+			return Denied(err.Error())
+		}
+	}
+
+	if req.Operation == v1beta1.Update {
+		oldObj := obj.DeepCopyObject()
+
+		err := v.decoder.DecodeRaw(req.Object, obj)
+		if err != nil {
+			return Errored(http.StatusBadRequest, err)
+		}
+		err = v.decoder.DecodeRaw(req.OldObject, oldObj)
+		if err != nil {
+			return Errored(http.StatusBadRequest, err)
+		}
+
+		err = v.validatorService.ValidateUpdate(obj, oldObj)
+		if err != nil {
+			return Denied(err.Error())
+		}
+	}
+
+	if req.Operation == v1beta1.Delete {
+		// In reference to PR: https://github.com/kubernetes/kubernetes/pull/76346
+		// OldObject contains the object being deleted
+		err := v.decoder.DecodeRaw(req.OldObject, obj)
+		if err != nil {
+			return Errored(http.StatusBadRequest, err)
+		}
+
+		err = v.validatorService.ValidateDelete(obj)
 		if err != nil {
 			return Denied(err.Error())
 		}

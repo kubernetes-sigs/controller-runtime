@@ -37,15 +37,41 @@ func DefaultingWebhookFor(defaulter Defaulter) *Webhook {
 	}
 }
 
+// DefaulterService can be implemented and injected into the webhook to perform defaulting
+type DefaulterService interface {
+	Default(runtime.Object)
+}
+
+// DefaultingWebhookServiceFor creates a new Webhook for Defaulting the provided type.
+func DefaultingWebhookServiceFor(defaulterService DefaulterService, runtimeObject runtime.Object) *Webhook {
+	return &Webhook{
+		Handler: &mutatingServiceHandler{
+			defaulterService: defaulterService,
+			runtimeObject:    runtimeObject,
+		},
+	}
+}
+
 type mutatingHandler struct {
 	defaulter Defaulter
 	decoder   *Decoder
+}
+
+type mutatingServiceHandler struct {
+	runtimeObject    runtime.Object
+	defaulterService DefaulterService
+	decoder          *Decoder
 }
 
 var _ DecoderInjector = &mutatingHandler{}
 
 // InjectDecoder injects the decoder into a mutatingHandler.
 func (h *mutatingHandler) InjectDecoder(d *Decoder) error {
+	h.decoder = d
+	return nil
+}
+
+func (h *mutatingServiceHandler) InjectDecoder(d *Decoder) error {
 	h.decoder = d
 	return nil
 }
@@ -65,6 +91,29 @@ func (h *mutatingHandler) Handle(ctx context.Context, req Request) Response {
 
 	// Default the object
 	obj.Default()
+	marshalled, err := json.Marshal(obj)
+	if err != nil {
+		return Errored(http.StatusInternalServerError, err)
+	}
+
+	// Create the patch
+	return PatchResponseFromRaw(req.Object.Raw, marshalled)
+}
+
+func (h *mutatingServiceHandler) Handle(ctx context.Context, req Request) Response {
+	if h.defaulterService == nil {
+		panic("defaulter should never be nil")
+	}
+
+	// Get the object in the request
+	obj := h.runtimeObject.DeepCopyObject()
+	err := h.decoder.Decode(req, obj)
+	if err != nil {
+		return Errored(http.StatusBadRequest, err)
+	}
+
+	// Default the object
+	h.defaulterService.Default(obj)
 	marshalled, err := json.Marshal(obj)
 	if err != nil {
 		return Errored(http.StatusInternalServerError, err)

@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -32,10 +33,12 @@ import (
 
 // WebhookBuilder builds a Webhook.
 type WebhookBuilder struct {
-	apiType runtime.Object
-	gvk     schema.GroupVersionKind
-	mgr     manager.Manager
-	config  *rest.Config
+	apiType          runtime.Object
+	gvk              schema.GroupVersionKind
+	mgr              manager.Manager
+	config           *rest.Config
+	defaulterService admission.DefaulterService
+	validatorService admission.ValidatorService
 }
 
 // WebhookManagedBy allows inform its manager.Manager
@@ -48,8 +51,22 @@ func WebhookManagedBy(m manager.Manager) *WebhookBuilder {
 // For takes a runtime.Object which should be a CR.
 // If the given object implements the admission.Defaulter interface, a MutatingWebhook will be wired for this type.
 // If the given object implements the admission.Validator interface, a ValidatingWebhook will be wired for this type.
+// If an admission.DefaulterService is registered, a MutatingWebhook will be wired for this type.
+// If an admission.ValidatorService is registered, a ValidatingWebhook will be wired for this type.
 func (blder *WebhookBuilder) For(apiType runtime.Object) *WebhookBuilder {
 	blder.apiType = apiType
+	return blder
+}
+
+// WithDefaulter registers a DefaulterService to use when defaulting
+func (blder *WebhookBuilder) WithDefaulter(defaulter admission.DefaulterService) *WebhookBuilder {
+	blder.defaulterService = defaulter
+	return blder
+}
+
+// WithValidator registers a ValidatorService to use when validating
+func (blder *WebhookBuilder) WithValidator(validatorService admission.ValidatorService) *WebhookBuilder {
+	blder.validatorService = validatorService
 	return blder
 }
 
@@ -88,12 +105,19 @@ func (blder *WebhookBuilder) registerWebhooks() error {
 
 // registerDefaultingWebhook registers a defaulting webhook if th
 func (blder *WebhookBuilder) registerDefaultingWebhook() {
-	defaulter, isDefaulter := blder.apiType.(admission.Defaulter)
-	if !isDefaulter {
-		log.Info("skip registering a mutating webhook, admission.Defaulter interface is not implemented", "GVK", blder.gvk)
-		return
+	var mwh *admission.Webhook
+
+	if blder.defaulterService != nil {
+		mwh = admission.DefaultingWebhookServiceFor(blder.defaulterService, blder.apiType)
+	} else {
+		defaulter, isDefaulter := blder.apiType.(admission.Defaulter)
+		if !isDefaulter {
+			log.Info("skip registering a mutating webhook, admission.Defaulter interface is not implemented", "GVK", blder.gvk)
+			return
+		}
+		mwh = admission.DefaultingWebhookFor(defaulter)
 	}
-	mwh := admission.DefaultingWebhookFor(defaulter)
+
 	if mwh != nil {
 		path := generateMutatePath(blder.gvk)
 
@@ -109,12 +133,19 @@ func (blder *WebhookBuilder) registerDefaultingWebhook() {
 }
 
 func (blder *WebhookBuilder) registerValidatingWebhook() {
-	validator, isValidator := blder.apiType.(admission.Validator)
-	if !isValidator {
-		log.Info("skip registering a validating webhook, admission.Validator interface is not implemented", "GVK", blder.gvk)
-		return
+	var vwh *admission.Webhook
+
+	if blder.validatorService != nil {
+		vwh = admission.ValidatingWebhookServiceFor(blder.validatorService, blder.apiType)
+	} else {
+		validator, isValidator := blder.apiType.(admission.Validator)
+		if !isValidator {
+			log.Info("skip registering a validating webhook, admission.Validator interface is not implemented", "GVK", blder.gvk)
+			return
+		}
+		vwh = admission.ValidatingWebhookFor(validator)
 	}
-	vwh := admission.ValidatingWebhookFor(validator)
+
 	if vwh != nil {
 		path := generateValidatePath(blder.gvk)
 

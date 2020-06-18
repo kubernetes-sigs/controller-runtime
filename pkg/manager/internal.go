@@ -436,8 +436,14 @@ func (cm *controllerManager) serveHealthProbes(stop <-chan struct{}) {
 }
 
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
-	// join the passed-in stop channel as an upstream feeding into cm.internalStopper
-	defer close(cm.internalStopper)
+	// This will block until all runnables started via
+	// startNonLeaderElectionRunnables finish.
+	doneCh := make(chan struct{})
+	defer func() {
+		// join the passed-in stop channel as an upstream feeding into cm.internalStopper
+		close(cm.internalStopper)
+		<-doneCh
+	}()
 
 	// initialize this here so that we reset the signal channel state on every start
 	cm.errSignal = &errSignaler{errSignal: make(chan struct{})}
@@ -454,7 +460,7 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 		go cm.serveHealthProbes(cm.internalStop)
 	}
 
-	go cm.startNonLeaderElectionRunnables()
+	go cm.startNonLeaderElectionRunnables(doneCh)
 
 	if cm.resourceLock != nil {
 		err := cm.startLeaderElection()
@@ -477,12 +483,13 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	}
 }
 
-func (cm *controllerManager) startNonLeaderElectionRunnables() {
+func (cm *controllerManager) startNonLeaderElectionRunnables(doneCh chan<- struct{}) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
 	cm.waitForCache()
 
+	returnCh := make(chan struct{})
 	// Start the non-leaderelection Runnables after the cache has synced
 	for _, c := range cm.nonLeaderElectionRunnables {
 		// Controllers block, but we want to return an error if any have an error starting.
@@ -495,8 +502,22 @@ func (cm *controllerManager) startNonLeaderElectionRunnables() {
 			// we use %T here because we don't have a good stand-in for "name",
 			// and the full runnable might not serialize (mutexes, etc)
 			log.V(1).Info("non-leader-election runnable finished", "runnable type", fmt.Sprintf("%T", ctrl))
+			returnCh <- struct{}{}
 		}()
 	}
+
+	doneCount := 0
+
+	numRunners := len(cm.nonLeaderElectionRunnables)
+	for doneCount < numRunners {
+		select {
+		case <-returnCh:
+			doneCount++
+		default:
+		}
+	}
+	close(returnCh)
+	close(doneCh)
 }
 
 func (cm *controllerManager) startLeaderElectionRunnables() {

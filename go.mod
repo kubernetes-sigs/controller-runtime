@@ -28,6 +28,6 @@ require (
 	k8s.io/apiextensions-apiserver v0.17.7
 	k8s.io/apimachinery v0.17.7
 	k8s.io/client-go v0.17.7
-	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f
+	k8s.io/utils v0.0.0-20200603063816-c1c6865ac451
 	sigs.k8s.io/yaml v1.1.0
 )

@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
+	"sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -66,6 +67,7 @@ var _ = Describe("controller", func() {
 			MaxConcurrentReconciles: 1,
 			Do:                      fakeReconcile,
 			MakeQueue:               func() workqueue.RateLimitingInterface { return queue },
+			Log:                     log.RuntimeLog.WithName("controller").WithName("test"),
 		}
 		Expect(ctrl.InjectFunc(func(interface{}) error { return nil })).To(Succeed())
 	})

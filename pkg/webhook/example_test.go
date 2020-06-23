@@ -24,10 +24,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-var (
-	mgr ctrl.Manager
-)
-
 func Example() {
 	// Build webhooks
 	// These handlers could be also be implementations
@@ -48,6 +44,13 @@ func Example() {
 		}),
 	}
 
+	// Create a manager
+	// Note: GetConfigOrDie will os.Exit(1) w/o any message if no kube-config can be found
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
+	if err != nil {
+		panic(err)
+	}
+
 	// Create a webhook server.
 	hookServer := &Server{
 		Port: 8443,
@@ -61,7 +64,7 @@ func Example() {
 	hookServer.Register("/validating", validatingHook)
 
 	// Start the server by starting a previously-set-up manager
-	err := mgr.Start(ctrl.SetupSignalHandler())
+	err = mgr.Start(ctrl.SetupSignalHandler())
 	if err != nil {
 		// handle error
 		panic(err)

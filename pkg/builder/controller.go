@@ -245,7 +245,9 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 		return err
 	}
 	ctrlOptions := blder.ctrlOptions
-	ctrlOptions.Reconciler = r
+	if ctrlOptions.Reconciler == nil {
+		ctrlOptions.Reconciler = r
+	}
 	blder.ctrl, err = newController(name, blder.mgr, ctrlOptions)
 	return err
 }

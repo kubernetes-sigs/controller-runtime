@@ -144,7 +144,7 @@ type Options struct {
 	// wait to force acquire leadership. This is measured against time of
 	// last observed ack. Default is 15 seconds.
 	LeaseDuration *time.Duration
-	// RenewDeadline is the duration that the acting master will retry
+	// RenewDeadline is the duration that the acting controlplane will retry
 	// refreshing leadership before giving up. Default is 10 seconds.
 	RenewDeadline *time.Duration
 	// RetryPeriod is the duration the LeaderElector clients should wait

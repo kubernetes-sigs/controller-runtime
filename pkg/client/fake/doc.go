@@ -17,10 +17,10 @@ limitations under the License.
 /*
 Package fake provides a fake client for testing.
 
-fake client is backed by its simple object store indexed by GroupVersionResource.
+A fake client is backed by its simple object store indexed by GroupVersionResource.
 You can create a fake client with optional objects.
 
-	client := NewFakeClient(initObjs...) // initObjs is a slice of runtime.Object
+	client := NewFakeClientWithScheme(scheme, initObjs...) // initObjs is a slice of runtime.Object
 
 You can invoke the methods defined in the Client interface.
 
@@ -30,11 +30,11 @@ envtest.Environment with a real client and API server.
 Current Limitations / Known Issues with the fake Client:
 - this client does not use reactors so it can not be setup with detailed responses for testing
 - possible locking issues when using fake client and not the actual client
-- by default you are using the wrong scheme
-- there is no support for sub resources which can cause issues with tests if you're trying to update
+- there is some support for sub resources which can cause issues with tests if you're trying to update
   e.g. metadata and status in the same reconcile
-- There is also no OpenAPI validation
-- It does not bump `Generation` or `ResourceVersion` so Patch/Update will not behave properly
+- No OpeanAPI validation is performed when creating or updating objects.
+- ObjectMeta's `Generation` and `ResourceVersion` don't behave properly, Patch or Update
+operations that rely on these fields will fail, or give false positives.
 
 */
 package fake

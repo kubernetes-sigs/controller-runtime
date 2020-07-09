@@ -389,25 +389,6 @@ var _ = Describe("Zap log level flag options setup", func() {
 		})
 
 		It("Should output info, and debug logs with increased verbosity, and with development mode set to true.", func() {
-			args := []string{"--zap-log-level=2", "--zap-devel=true"}
-			fromFlags.BindFlags(&fs)
-			err := fs.Parse(args)
-			Expect(err).ToNot(HaveOccurred())
-			logOut := new(bytes.Buffer)
-
-			logger := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
-			logger.V(0).Info(logInfoLevel0)
-			logger.V(1).Info(logDebugLevel1)
-			logger.V(2).Info(logDebugLevel2)
-
-			outRaw := logOut.Bytes()
-
-			Expect(string(outRaw)).Should(ContainSubstring(logInfoLevel0))
-			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel1))
-			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel2))
-
-		})
-		It("Should output info, and debug logs with increased verbosity, and with production mode set to true.", func() {
 			args := []string{"--zap-log-level=3", "--zap-devel=false"}
 			fromFlags.BindFlags(&fs)
 			err := fs.Parse(args)
@@ -417,12 +398,35 @@ var _ = Describe("Zap log level flag options setup", func() {
 			logger := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
 			logger.V(0).Info(logInfoLevel0)
 			logger.V(1).Info(logDebugLevel1)
+			logger.V(2).Info(logDebugLevel2)
 			logger.V(3).Info(logDebugLevel3)
 
 			outRaw := logOut.Bytes()
 
 			Expect(string(outRaw)).Should(ContainSubstring(logInfoLevel0))
 			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel1))
+			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel2))
+			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel3))
+
+		})
+		It("Should output info, and debug logs with increased verbosity, and with production mode set to true.", func() {
+			args := []string{"--zap-log-level=3", "--zap-devel=true"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+			logOut := new(bytes.Buffer)
+
+			logger := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
+			logger.V(0).Info(logInfoLevel0)
+			logger.V(1).Info(logDebugLevel1)
+			logger.V(2).Info(logDebugLevel2)
+			logger.V(3).Info(logDebugLevel3)
+
+			outRaw := logOut.Bytes()
+
+			Expect(string(outRaw)).Should(ContainSubstring(logInfoLevel0))
+			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel1))
+			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel2))
 			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel3))
 
 		})

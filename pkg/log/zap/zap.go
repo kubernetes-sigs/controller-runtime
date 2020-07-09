@@ -181,11 +181,9 @@ func (o *Options) addDefaults() {
 			lvl := zap.NewAtomicLevelAt(zap.ErrorLevel)
 			o.StacktraceLevel = &lvl
 		}
-		// Disable sampling when we are in debug mode. Otherwise, this will
+		// Disable sampling for increased Debug levels. Otherwise, this will
 		// cause index out of bounds errors in the sampling code.
-		if o.Level.Enabled(zapcore.DebugLevel) {
-			o.ZapOpts = append(o.ZapOpts)
-		} else {
+		if !o.Level.Enabled(zapcore.Level(-2)) {
 			o.ZapOpts = append(o.ZapOpts,
 				zap.WrapCore(func(core zapcore.Core) zapcore.Core {
 					return zapcore.NewSampler(core, time.Second, 100, 100)

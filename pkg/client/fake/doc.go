@@ -28,8 +28,7 @@ When in doubt, it's almost always better not to use this package and instead use
 envtest.Environment with a real client and API server.
 
 Current Limitations / Known Issues with the fake Client:
-- this client does not use reactors so it can not be setup with detailed responses for testing
-- possible locking issues when using fake client and not the actual client
+- this client does not have a way to inject specific errors to test handled vs. unhandled errors
 - there is some support for sub resources which can cause issues with tests if you're trying to update
   e.g. metadata and status in the same reconcile
 - No OpeanAPI validation is performed when creating or updating objects.

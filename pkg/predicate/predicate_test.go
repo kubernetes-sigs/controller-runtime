@@ -438,4 +438,57 @@ var _ = Describe("Predicate", func() {
 		})
 
 	})
+
+	Context("With a boolean predicate", func() {
+		funcs := func(pass bool) predicate.Funcs {
+			return predicate.Funcs{
+				CreateFunc: func(event.CreateEvent) bool {
+					return pass
+				},
+				DeleteFunc: func(event.DeleteEvent) bool {
+					return pass
+				},
+				UpdateFunc: func(event.UpdateEvent) bool {
+					return pass
+				},
+				GenericFunc: func(event.GenericEvent) bool {
+					return pass
+				},
+			}
+		}
+		passFuncs := funcs(true)
+		failFuncs := funcs(false)
+		Describe("When checking an And predicate", func() {
+			It("should return false when one of its predicates returns false", func() {
+				a := predicate.And(passFuncs, failFuncs)
+				Expect(a.Create(event.CreateEvent{})).To(BeFalse())
+				Expect(a.Update(event.UpdateEvent{})).To(BeFalse())
+				Expect(a.Delete(event.DeleteEvent{})).To(BeFalse())
+				Expect(a.Generic(event.GenericEvent{})).To(BeFalse())
+			})
+			It("should return true when all of its predicates return true", func() {
+				a := predicate.And(passFuncs, passFuncs)
+				Expect(a.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(a.Update(event.UpdateEvent{})).To(BeTrue())
+				Expect(a.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(a.Generic(event.GenericEvent{})).To(BeTrue())
+			})
+		})
+		Describe("When checking an Or predicate", func() {
+			It("should return true when one of its predicates returns true", func() {
+				o := predicate.Or(passFuncs, failFuncs)
+				Expect(o.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(o.Update(event.UpdateEvent{})).To(BeTrue())
+				Expect(o.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(o.Generic(event.GenericEvent{})).To(BeTrue())
+			})
+			It("should return false when all of its predicates return false", func() {
+				o := predicate.Or(failFuncs, failFuncs)
+				Expect(o.Create(event.CreateEvent{})).To(BeFalse())
+				Expect(o.Update(event.UpdateEvent{})).To(BeFalse())
+				Expect(o.Delete(event.DeleteEvent{})).To(BeFalse())
+				Expect(o.Generic(event.GenericEvent{})).To(BeFalse())
+			})
+		})
+	})
 })

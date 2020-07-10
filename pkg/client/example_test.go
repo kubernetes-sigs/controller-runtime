@@ -20,12 +20,15 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
@@ -97,8 +100,10 @@ func ExampleClient_create() {
 	// Using a unstructured object.
 	u := &unstructured.Unstructured{}
 	u.Object = map[string]interface{}{
-		"name":      "name",
-		"namespace": "namespace",
+		"metadata": map[string]interface{}{
+			"name":      "name",
+			"namespace": "namespace",
+		},
 		"spec": map[string]interface{}{
 			"replicas": 2,
 			"selector": map[string]interface{}{
@@ -171,6 +176,35 @@ func ExampleClient_update() {
 	}, u)
 	u.SetFinalizers(append(u.GetFinalizers(), "new-finalizer"))
 	_ = c.Update(context.Background(), u)
+}
+
+// This example shows how to use the client with typed and unstructured objects to patch objects.
+func ExampleClient_patch() {
+	patch := []byte(`{"metadata":{"annotations":{"version": "v2"}}}`)
+	_ = c.Patch(context.Background(), &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "namespace",
+			Name:      "name",
+		},
+	}, client.RawPatch(types.StrategicMergePatchType, patch))
+}
+
+// This example shows how to use the client with typed and unstructured objects to patch objects' status.
+func ExampleClient_patchStatus() {
+	u := &unstructured.Unstructured{}
+	u.Object = map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"name":      "foo",
+			"namespace": "namespace",
+		},
+	}
+	u.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "batch",
+		Version: "v1beta1",
+		Kind:    "CronJob",
+	})
+	patch := []byte(fmt.Sprintf(`{"status":{"lastScheduleTime":"%s"}}`, time.Now().Format(time.RFC3339)))
+	_ = c.Status().Patch(context.Background(), u, client.RawPatch(types.MergePatchType, patch))
 }
 
 // This example shows how to use the client with typed and unstructured objects to delete objects.

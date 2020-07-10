@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
+	"sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -66,7 +67,7 @@ var _ = Describe("controller", func() {
 			MaxConcurrentReconciles: 1,
 			Do:                      fakeReconcile,
 			MakeQueue:               func() workqueue.RateLimitingInterface { return queue },
-			Cache:                   informers,
+			Log:                     log.RuntimeLog.WithName("controller").WithName("test"),
 		}
 		Expect(ctrl.InjectFunc(func(interface{}) error { return nil })).To(Succeed())
 	})
@@ -89,7 +90,10 @@ var _ = Describe("controller", func() {
 
 	Describe("Start", func() {
 		It("should return an error if there is an error waiting for the informers", func(done Done) {
-			ctrl.WaitForCacheSync = func(<-chan struct{}) bool { return false }
+			f := false
+			ctrl.watches = []watchDescription{{
+				src: source.NewKindWithCache(&corev1.Pod{}, &informertest.FakeInformers{Synced: &f}),
+			}}
 			ctrl.Name = "foo"
 			err := ctrl.Start(stop)
 			Expect(err).To(HaveOccurred())
@@ -111,8 +115,9 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			_, err = c.GetInformer(context.TODO(), &appsv1.ReplicaSet{})
 			Expect(err).NotTo(HaveOccurred())
-			ctrl.Cache = c
-			ctrl.WaitForCacheSync = func(<-chan struct{}) bool { return true }
+			ctrl.watches = []watchDescription{{
+				src: source.NewKindWithCache(&appsv1.Deployment{}, &informertest.FakeInformers{}),
+			}}
 
 			Expect(ctrl.Start(stopped)).NotTo(HaveOccurred())
 
@@ -162,7 +167,7 @@ var _ = Describe("controller", func() {
 	Describe("Watch", func() {
 		It("should inject dependencies into the Source", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(ctrl.Cache)).To(Succeed())
+			Expect(src.InjectCache(informers)).To(Succeed())
 			evthdl := &handler.EnqueueRequestForObject{}
 			found := false
 			ctrl.SetFields = func(i interface{}) error {
@@ -178,7 +183,7 @@ var _ = Describe("controller", func() {
 
 		It("should return an error if there is an error injecting into the Source", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(ctrl.Cache)).To(Succeed())
+			Expect(src.InjectCache(informers)).To(Succeed())
 			evthdl := &handler.EnqueueRequestForObject{}
 			expected := fmt.Errorf("expect fail source")
 			ctrl.SetFields = func(i interface{}) error {
@@ -193,7 +198,7 @@ var _ = Describe("controller", func() {
 
 		It("should inject dependencies into the EventHandler", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(ctrl.Cache)).To(Succeed())
+			Expect(src.InjectCache(informers)).To(Succeed())
 			evthdl := &handler.EnqueueRequestForObject{}
 			found := false
 			ctrl.SetFields = func(i interface{}) error {
@@ -231,7 +236,7 @@ var _ = Describe("controller", func() {
 
 		It("should inject dependencies into all of the Predicates", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(ctrl.Cache)).To(Succeed())
+			Expect(src.InjectCache(informers)).To(Succeed())
 			evthdl := &handler.EnqueueRequestForObject{}
 			pr1 := &predicate.Funcs{}
 			pr2 := &predicate.Funcs{}
@@ -254,7 +259,7 @@ var _ = Describe("controller", func() {
 
 		It("should return an error if there is an error injecting into any of the Predicates", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(ctrl.Cache)).To(Succeed())
+			Expect(src.InjectCache(informers)).To(Succeed())
 			evthdl := &handler.EnqueueRequestForObject{}
 			pr1 := &predicate.Funcs{}
 			pr2 := &predicate.Funcs{}

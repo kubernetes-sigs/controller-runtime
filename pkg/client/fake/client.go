@@ -96,7 +96,11 @@ func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Ob
 		return apierrors.NewBadRequest("resourceVersion can not be set for Create requests")
 	}
 	accessor.SetResourceVersion("1")
-	return t.ObjectTracker.Create(gvr, obj, ns)
+	if err := t.ObjectTracker.Create(gvr, obj, ns); err != nil {
+		accessor.SetResourceVersion("")
+		return err
+	}
+	return nil
 }
 
 func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Object, ns string) error {
@@ -267,7 +271,7 @@ func (c *fakeClient) Delete(ctx context.Context, obj runtime.Object, opts ...cli
 }
 
 func (c *fakeClient) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...client.DeleteAllOfOption) error {
-	gvk, err := apiutil.GVKForObject(obj, scheme.Scheme)
+	gvk, err := apiutil.GVKForObject(obj, c.scheme)
 	if err != nil {
 		return err
 	}

@@ -8,6 +8,7 @@ require (
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.0
 	github.com/golang/groupcache v0.0.0-20190129154638-5b532d6fd5ef // indirect
+	github.com/google/go-cmp v0.4.1 // indirect
 	github.com/googleapis/gnostic v0.3.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/imdario/mergo v0.3.9 // indirect
@@ -24,11 +25,11 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.0.1
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/fsnotify.v1 v1.4.7
-	k8s.io/api v0.17.7
-	k8s.io/apiextensions-apiserver v0.17.7
-	k8s.io/apimachinery v0.17.7
-	k8s.io/client-go v0.17.7
-	k8s.io/utils v0.0.0-20200603063816-c1c6865ac451
+	k8s.io/api v0.17.8
+	k8s.io/apiextensions-apiserver v0.17.8
+	k8s.io/apimachinery v0.17.8
+	k8s.io/client-go v0.17.8
+	k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
 	sigs.k8s.io/yaml v1.1.0
 )
 

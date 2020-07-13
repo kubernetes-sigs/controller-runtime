@@ -6,6 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
 
@@ -59,13 +60,14 @@ var _ = Describe("ip.objectTypeForListObject", func() {
 
 	It("should find the object type of a list with a slice of pointers items field", func() {
 		By("registering the type", func() {
+			ip.Scheme = runtime.NewScheme()
 			err := (&crscheme.Builder{
 				GroupVersion: schema.GroupVersion{Group: itemPointerSliceTypeGroupName, Version: itemPointerSliceTypeVersion},
 			}).
 				Register(
 					&controllertest.UnconventionalListType{},
 					&controllertest.UnconventionalListTypeList{},
-				).AddToScheme(scheme.Scheme)
+				).AddToScheme(ip.Scheme)
 			Expect(err).To(BeNil())
 		})
 

@@ -216,6 +216,7 @@ var _ = Describe("Start method", func() {
 			processState.StartTimeout = 1 * time.Second
 
 			Expect(processState.Start(stdout, stderr)).To(Succeed())
+			Expect(processState.Session).Should(gexec.Exit())
 
 			Expect(stdout.String()).To(Equal("that is stdout\n"))
 			Expect(stderr.String()).To(Equal("this is stderr\ni started\n"))

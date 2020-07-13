@@ -21,7 +21,9 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	rt "runtime"
+	"runtime/pprof"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
@@ -198,15 +200,18 @@ var _ = Describe("manger.Manager", func() {
 					return nil
 				}))).To(Succeed())
 
-				By("Expect second manager to lose leader election")
+				m2Stop := make(chan struct{})
+				m2done := make(chan struct{})
 				go func() {
 					defer GinkgoRecover()
-					Expect(m2.Start(stop)).NotTo(HaveOccurred())
-					Consistently(m2.Elected()).ShouldNot(Receive())
+					Expect(m2.Start(m2Stop)).NotTo(HaveOccurred())
+					close(m2done)
 				}()
+				Consistently(m2.Elected()).ShouldNot(Receive())
 
-				By("Expect controller on manager without leader lease never to run")
 				Consistently(c2).ShouldNot(Receive())
+				close(m2Stop)
+				<-m2done
 			})
 
 			It("should return an error if namespace not set and not running in cluster", func() {
@@ -845,11 +850,13 @@ var _ = Describe("manger.Manager", func() {
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
 		startGoruntime := rt.NumGoroutine()
+		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 
 		s := make(chan struct{})
 		close(s)
 		Expect(m.Start(s)).NotTo(HaveOccurred())
 
+		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 		Expect(rt.NumGoroutine() - startGoruntime).To(BeNumerically("<=", threshold))
 		close(done)
 	})

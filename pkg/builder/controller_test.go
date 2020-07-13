@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -214,7 +215,7 @@ var _ = Describe("application", func() {
 			var (
 				deployPrctExecuted     = false
 				replicaSetPrctExecuted = false
-				allPrctExecuted        = 0
+				allPrctExecuted        = int64(0)
 			)
 
 			deployPrct := predicate.Funcs{
@@ -246,7 +247,7 @@ var _ = Describe("application", func() {
 						BeAssignableToTypeOf(&appsv1.ReplicaSet{}),
 					))
 
-					allPrctExecuted++
+					atomic.AddInt64(&allPrctExecuted, 1)
 					return true
 				},
 			}

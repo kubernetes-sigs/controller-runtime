@@ -29,7 +29,8 @@ import (
 
 func TestAdmissionWebhook(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "application Suite", []Reporter{printer.NewlineReporter{}})
+	suiteName := "Admission Webhook Suite"
+	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
 var _ = BeforeSuite(func(done Done) {

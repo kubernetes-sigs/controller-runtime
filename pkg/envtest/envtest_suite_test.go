@@ -25,13 +25,15 @@ import (
 	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "EnvTest Suite", []Reporter{NewlineReporter{}})
+	suiteName := "Envtest Suite"
+	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
 var env *Environment

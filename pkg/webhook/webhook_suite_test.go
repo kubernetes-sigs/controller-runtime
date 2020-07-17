@@ -32,7 +32,8 @@ import (
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Webhook Integration Suite", []Reporter{printer.NewlineReporter{}})
+	suiteName := "Webhook Integration Suite"
+	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
 var testenv *envtest.Environment

@@ -23,3 +23,7 @@ setup_envs
 header_text "running go test"
 
 go test -race ${MOD_OPT} ./...
+
+if [[ -n ${ARTIFACTS:-} ]]; then
+  if grep -Rin '<failure type="Failure">' ${ARTIFACTS}/*; then exit 1; fi
+fi

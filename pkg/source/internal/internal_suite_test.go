@@ -28,7 +28,8 @@ import (
 
 func TestInternal(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Internal Suite", []Reporter{printer.NewlineReporter{}})
+	suiteName := "Source Internal Suite"
+	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
 var _ = BeforeSuite(func() {

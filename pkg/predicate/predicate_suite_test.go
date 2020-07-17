@@ -28,7 +28,8 @@ import (
 
 func TestPredicate(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Predicate Suite", []Reporter{printer.NewlineReporter{}})
+	suiteName := "Predicate Suite"
+	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
 var _ = BeforeSuite(func() {

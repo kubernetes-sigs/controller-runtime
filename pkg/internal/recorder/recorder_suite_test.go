@@ -31,7 +31,8 @@ import (
 
 func TestRecorder(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Recorder Integration Suite", []Reporter{printer.NewlineReporter{}})
+	suiteName := "Recorder Integration Suite"
+	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
 var testenv *envtest.Environment

@@ -28,7 +28,8 @@ import (
 
 func TestHealthz(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Healthz Suite", []Reporter{printer.NewlineReporter{}})
+	suiteName := "Healthz Suite"
+	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
 var _ = BeforeSuite(func() {

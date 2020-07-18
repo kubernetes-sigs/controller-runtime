@@ -6,8 +6,8 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/fsnotify/fsnotify v1.4.9
-	github.com/go-logr/logr v0.1.0
-	github.com/go-logr/zapr v0.1.0
+	github.com/go-logr/logr v0.2.0
+	github.com/go-logr/zapr v0.2.0
 	github.com/golang/groupcache v0.0.0-20190129154638-5b532d6fd5ef // indirect
 	github.com/googleapis/gnostic v0.3.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
@@ -29,6 +29,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.18.4
 	k8s.io/apimachinery v0.18.4
 	k8s.io/client-go v0.18.4
+	k8s.io/klog/v2 v2.3.0 // indirect
 	k8s.io/utils v0.0.0-20200603063816-c1c6865ac451
 	sigs.k8s.io/yaml v1.2.0
 )

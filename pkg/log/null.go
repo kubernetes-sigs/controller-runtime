@@ -29,12 +29,12 @@ type NullLogger struct{}
 
 var _ logr.Logger = NullLogger{}
 
-// Info implements logr.InfoLogger
+// Info implements logr.Logger
 func (NullLogger) Info(_ string, _ ...interface{}) {
 	// Do nothing.
 }
 
-// Enabled implements logr.InfoLogger
+// Enabled implements logr.Logger
 func (NullLogger) Enabled() bool {
 	return false
 }
@@ -45,7 +45,7 @@ func (NullLogger) Error(_ error, _ string, _ ...interface{}) {
 }
 
 // V implements logr.Logger
-func (log NullLogger) V(_ int) logr.InfoLogger {
+func (log NullLogger) V(_ int) logr.Logger {
 	return log
 }
 

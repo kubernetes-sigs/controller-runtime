@@ -22,7 +22,7 @@ setup_envs
 
 header_text "running go test"
 
-go test -race ${MOD_OPT} ./... -parallel 4
+go test -race ${MOD_OPT} ./...
 
 header_text "running coverage"
 

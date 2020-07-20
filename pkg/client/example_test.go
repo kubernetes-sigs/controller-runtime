@@ -87,7 +87,7 @@ func ExampleClient_create() {
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
-				corev1.Container{
+				{
 					Image: "nginx",
 					Name:  "nginx",
 				},

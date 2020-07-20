@@ -35,6 +35,11 @@ type dryRunClient struct {
 	client Client
 }
 
+// Scheme returns the scheme this client is using.
+func (c *dryRunClient) Scheme() *runtime.Scheme {
+	return c.client.Scheme()
+}
+
 // Create implements client.Client
 func (c *dryRunClient) Create(ctx context.Context, obj runtime.Object, opts ...CreateOption) error {
 	return c.client.Create(ctx, obj, append(opts, DryRunAll)...)

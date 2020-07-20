@@ -2625,62 +2625,96 @@ var _ = Describe("Client", func() {
 	})
 })
 
-var _ = Describe("DelegatingReader", func() {
+var _ = Describe("DelegatingClient", func() {
 	Describe("Get", func() {
 		It("should call cache reader when structured object", func() {
 			cachedReader := &fakeReader{}
-			clientReader := &fakeReader{}
-			dReader := client.DelegatingReader{
-				CacheReader:  cachedReader,
-				ClientReader: clientReader,
-			}
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			dReader := client.NewDelegatingClient(client.NewDelegatingClientInput{
+				CacheReader: cachedReader,
+				Client:      cl,
+			})
 			var actual appsv1.Deployment
 			key := client.ObjectKey{Namespace: "ns", Name: "name"}
 			Expect(dReader.Get(context.TODO(), key, &actual)).To(Succeed())
 			Expect(1).To(Equal(cachedReader.Called))
-			Expect(0).To(Equal(clientReader.Called))
 		})
-		It("should call client reader when structured object", func() {
+
+		It("should call client reader when unstructured object", func() {
 			cachedReader := &fakeReader{}
-			clientReader := &fakeReader{}
-			dReader := client.DelegatingReader{
-				CacheReader:  cachedReader,
-				ClientReader: clientReader,
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			dReader := client.NewDelegatingClient(client.NewDelegatingClientInput{
+				CacheReader: cachedReader,
+				Client:      cl,
+			})
+			dep := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "deployment1",
+					Labels: map[string]string{"app": "frontend"},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "frontend"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "frontend"}},
+						Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "x", Image: "x"}}},
+					},
+				},
 			}
-			var actual unstructured.Unstructured
-			key := client.ObjectKey{Namespace: "ns", Name: "name"}
-			Expect(dReader.Get(context.TODO(), key, &actual)).To(Succeed())
+			dep, err = clientset.AppsV1().Deployments("default").Create(context.Background(), dep, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			actual := &unstructured.Unstructured{}
+			actual.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "apps",
+				Kind:    "Deployment",
+				Version: "v1",
+			})
+			actual.SetName(dep.Name)
+			key := client.ObjectKey{Namespace: dep.Namespace, Name: dep.Name}
+			Expect(dReader.Get(context.TODO(), key, actual)).To(Succeed())
 			Expect(0).To(Equal(cachedReader.Called))
-			Expect(1).To(Equal(clientReader.Called))
+			Expect(clientset.AppsV1().Deployments("default").Delete(
+				context.Background(),
+				dep.Name,
+				metav1.DeleteOptions{},
+			)).To(Succeed())
 		})
 	})
 	Describe("List", func() {
 		It("should call cache reader when structured object", func() {
 			cachedReader := &fakeReader{}
-			clientReader := &fakeReader{}
-			dReader := client.DelegatingReader{
-				CacheReader:  cachedReader,
-				ClientReader: clientReader,
-			}
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			dReader := client.NewDelegatingClient(client.NewDelegatingClientInput{
+				CacheReader: cachedReader,
+				Client:      cl,
+			})
 			var actual appsv1.DeploymentList
 			Expect(dReader.List(context.Background(), &actual)).To(Succeed())
 			Expect(1).To(Equal(cachedReader.Called))
-			Expect(0).To(Equal(clientReader.Called))
-
 		})
-		It("should call client reader when structured object", func() {
+
+		It("should call client reader when unstructured object", func() {
 			cachedReader := &fakeReader{}
-			clientReader := &fakeReader{}
-			dReader := client.DelegatingReader{
-				CacheReader:  cachedReader,
-				ClientReader: clientReader,
-			}
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			dReader := client.NewDelegatingClient(client.NewDelegatingClientInput{
+				CacheReader: cachedReader,
+				Client:      cl,
+			})
 
-			var actual unstructured.UnstructuredList
-			Expect(dReader.List(context.Background(), &actual)).To(Succeed())
+			actual := &unstructured.UnstructuredList{}
+			actual.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "apps",
+				Kind:    "DeploymentList",
+				Version: "v1",
+			})
+			Expect(dReader.List(context.Background(), actual)).To(Succeed())
 			Expect(0).To(Equal(cachedReader.Called))
-			Expect(1).To(Equal(clientReader.Called))
-
 		})
 	})
 })

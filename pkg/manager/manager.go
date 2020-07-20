@@ -378,14 +378,10 @@ func DefaultNewClient(cache cache.Cache, config *rest.Config, options client.Opt
 		return nil, err
 	}
 
-	return &client.DelegatingClient{
-		Reader: &client.DelegatingReader{
-			CacheReader:  cache,
-			ClientReader: c,
-		},
-		Writer:       c,
-		StatusClient: c,
-	}, nil
+	return client.NewDelegatingClient(client.NewDelegatingClientInput{
+		CacheReader: cache,
+		Client:      c,
+	}), nil
 }
 
 // defaultHealthProbeListener creates the default health probes listener bound to the given address

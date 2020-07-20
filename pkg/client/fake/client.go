@@ -224,6 +224,10 @@ func (c *fakeClient) List(ctx context.Context, obj runtime.Object, opts ...clien
 	return nil
 }
 
+func (c *fakeClient) Scheme() *runtime.Scheme {
+	return c.scheme
+}
+
 func (c *fakeClient) Create(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 	createOptions := &client.CreateOptions{}
 	createOptions.ApplyOptions(opts)

@@ -75,6 +75,9 @@ type Manager interface {
 
 	// Start starts all registered Controllers and blocks until the Stop channel is closed.
 	// Returns an error if there is an error starting any controller.
+	// If LeaderElection is used, the binary must be exited immediately after this returns,
+	// otherwise components that need leader election might continue to run after the leader
+	// lock was lost.
 	Start(<-chan struct{}) error
 
 	// GetConfig returns an initialized Config
@@ -209,6 +212,12 @@ type Options struct {
 	// Use this to customize the event correlator and spam filter
 	EventBroadcaster record.EventBroadcaster
 
+	// GracefulShutdownTimeout is the duration given to runnable to stop before the manager actually returns on stop.
+	// To disable graceful shutdown, set to time.Duration(0)
+	// To use graceful shutdown without timeout, set to a negative duration, e.G. time.Duration(-1)
+	// The graceful shutdown is skipped for safety reasons in case the leadere election lease is lost.
+	GracefulShutdownTimeout *time.Duration
+
 	// Dependency injection for testing
 	newRecorderProvider    func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, broadcaster record.EventBroadcaster) (recorder.Provider, error)
 	newResourceLock        func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
@@ -325,29 +334,30 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	stop := make(chan struct{})
 
 	return &controllerManager{
-		config:                config,
-		scheme:                options.Scheme,
-		cache:                 cache,
-		fieldIndexes:          cache,
-		client:                writeObj,
-		apiReader:             apiReader,
-		recorderProvider:      recorderProvider,
-		resourceLock:          resourceLock,
-		mapper:                mapper,
-		metricsListener:       metricsListener,
-		metricsExtraHandlers:  metricsExtraHandlers,
-		internalStop:          stop,
-		internalStopper:       stop,
-		elected:               make(chan struct{}),
-		port:                  options.Port,
-		host:                  options.Host,
-		certDir:               options.CertDir,
-		leaseDuration:         *options.LeaseDuration,
-		renewDeadline:         *options.RenewDeadline,
-		retryPeriod:           *options.RetryPeriod,
-		healthProbeListener:   healthProbeListener,
-		readinessEndpointName: options.ReadinessEndpointName,
-		livenessEndpointName:  options.LivenessEndpointName,
+		config:                  config,
+		scheme:                  options.Scheme,
+		cache:                   cache,
+		fieldIndexes:            cache,
+		client:                  writeObj,
+		apiReader:               apiReader,
+		recorderProvider:        recorderProvider,
+		resourceLock:            resourceLock,
+		mapper:                  mapper,
+		metricsListener:         metricsListener,
+		metricsExtraHandlers:    metricsExtraHandlers,
+		internalStop:            stop,
+		internalStopper:         stop,
+		elected:                 make(chan struct{}),
+		port:                    options.Port,
+		host:                    options.Host,
+		certDir:                 options.CertDir,
+		leaseDuration:           *options.LeaseDuration,
+		renewDeadline:           *options.RenewDeadline,
+		retryPeriod:             *options.RetryPeriod,
+		healthProbeListener:     healthProbeListener,
+		readinessEndpointName:   options.ReadinessEndpointName,
+		livenessEndpointName:    options.LivenessEndpointName,
+		gracefulShutdownTimeout: *options.GracefulShutdownTimeout,
 	}, nil
 }
 
@@ -445,6 +455,11 @@ func setOptionsDefaults(options Options) Options {
 
 	if options.newHealthProbeListener == nil {
 		options.newHealthProbeListener = defaultHealthProbeListener
+	}
+
+	if options.GracefulShutdownTimeout == nil {
+		gracefulShutdownTimeout := defaultGracefulShutdownPeriod
+		options.GracefulShutdownTimeout = &gracefulShutdownTimeout
 	}
 
 	return options

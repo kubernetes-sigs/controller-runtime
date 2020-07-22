@@ -19,6 +19,7 @@ package controller_test
 import (
 	"fmt"
 	rt "runtime"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -109,10 +110,10 @@ var _ = Describe("controller.Controller", func() {
 			close(s)
 
 			Expect(m.Start(s)).NotTo(HaveOccurred())
-			Expect(rt.NumGoroutine() - startGoroutines).To(BeNumerically("<=", threshold))
+			Eventually(rt.NumGoroutine()-startGoroutines, 10*time.Second).Should(BeNumerically("<=", threshold))
 
 			close(done)
-		})
+		}, 20)
 	})
 })
 

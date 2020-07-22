@@ -1183,9 +1183,9 @@ var _ = Describe("manger.Manager", func() {
 		Expect(m.Start(s)).NotTo(HaveOccurred())
 
 		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-		Expect(rt.NumGoroutine() - startGoruntime).To(BeNumerically("<=", threshold))
+		Eventually(rt.NumGoroutine()-startGoruntime, 10*time.Second).Should(BeNumerically("<=", threshold))
 		close(done)
-	})
+	}, 20)
 
 	It("should provide a function to get the Config", func() {
 		m, err := New(cfg, Options{})

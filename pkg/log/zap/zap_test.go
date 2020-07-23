@@ -19,11 +19,14 @@ package zap
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"io/ioutil"
+	"os"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap/zapcore"
 	kapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -295,4 +298,165 @@ var _ = Describe("Zap logger setup", func() {
 			defineTests()
 		})
 	})
+})
+
+var _ = Describe("Zap log level flag options setup", func() {
+	var (
+		fromFlags      Options
+		fs             flag.FlagSet
+		logInfoLevel0  = "info text"
+		logDebugLevel1 = "debug 1 text"
+		logDebugLevel2 = "debug 2 text"
+		logDebugLevel3 = "debug 3 text"
+	)
+
+	BeforeEach(func() {
+		fromFlags = Options{}
+		fs = *flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	})
+
+	Context("with  zap-log-level options provided", func() {
+		It("Should output logs for info and debug zap-log-level.", func() {
+			args := []string{"--zap-log-level=debug"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+			logOut := new(bytes.Buffer)
+
+			logger := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
+			logger.V(0).Info(logInfoLevel0)
+			logger.V(1).Info(logDebugLevel1)
+
+			outRaw := logOut.Bytes()
+
+			Expect(string(outRaw)).Should(ContainSubstring(logInfoLevel0))
+			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel1))
+
+		})
+
+		It("Should output only error logs, otherwise empty logs", func() {
+			args := []string{"--zap-log-level=error"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+
+			logOut := new(bytes.Buffer)
+
+			logger := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
+			logger.V(0).Info(logInfoLevel0)
+			logger.V(1).Info(logDebugLevel1)
+
+			outRaw := logOut.Bytes()
+
+			Expect(outRaw).To(BeEmpty())
+		})
+
+	})
+
+	Context("with  zap-log-level  with increased verbosity.", func() {
+		It("Should output debug and info log, with default production mode.", func() {
+			args := []string{"--zap-log-level=1"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+			logOut := new(bytes.Buffer)
+
+			logger := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
+			logger.V(0).Info(logInfoLevel0)
+			logger.V(1).Info(logDebugLevel1)
+
+			outRaw := logOut.Bytes()
+
+			Expect(string(outRaw)).Should(ContainSubstring(logInfoLevel0))
+			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel1))
+		})
+
+		It("Should output info and debug logs, with development mode.", func() {
+			args := []string{"--zap-log-level=1", "--zap-devel=true"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+			logOut := new(bytes.Buffer)
+
+			logger := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
+			logger.V(0).Info(logInfoLevel0)
+			logger.V(1).Info(logDebugLevel1)
+
+			outRaw := logOut.Bytes()
+
+			Expect(string(outRaw)).Should(ContainSubstring(logInfoLevel0))
+			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel1))
+		})
+
+		It("Should output info, and debug logs with increased verbosity, and with development mode set to true.", func() {
+			args := []string{"--zap-log-level=3", "--zap-devel=false"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+			logOut := new(bytes.Buffer)
+
+			logger := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
+			logger.V(0).Info(logInfoLevel0)
+			logger.V(1).Info(logDebugLevel1)
+			logger.V(2).Info(logDebugLevel2)
+			logger.V(3).Info(logDebugLevel3)
+
+			outRaw := logOut.Bytes()
+
+			Expect(string(outRaw)).Should(ContainSubstring(logInfoLevel0))
+			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel1))
+			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel2))
+			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel3))
+
+		})
+		It("Should output info, and debug logs with increased verbosity, and with production mode set to true.", func() {
+			args := []string{"--zap-log-level=3", "--zap-devel=true"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+			logOut := new(bytes.Buffer)
+
+			logger := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
+			logger.V(0).Info(logInfoLevel0)
+			logger.V(1).Info(logDebugLevel1)
+			logger.V(2).Info(logDebugLevel2)
+			logger.V(3).Info(logDebugLevel3)
+
+			outRaw := logOut.Bytes()
+
+			Expect(string(outRaw)).Should(ContainSubstring(logInfoLevel0))
+			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel1))
+			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel2))
+			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel3))
+
+		})
+
+	})
+
+	Context("with  zap-stacktrace-level options provided", func() {
+
+		It("Should output stacktrace at info level, with development mode set to true.", func() {
+			args := []string{"--zap-stacktrace-level=info", "--zap-devel=true"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+			out := Options{}
+			UseFlagOptions(&fromFlags)(&out)
+
+			Expect(out.StacktraceLevel.Enabled(zapcore.InfoLevel)).To(BeTrue())
+		})
+
+		It("Should output stacktrace at error level, with development mode set to true.", func() {
+			args := []string{"--zap-stacktrace-level=error", "--zap-devel=true"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+			out := Options{}
+			UseFlagOptions(&fromFlags)(&out)
+
+			Expect(out.StacktraceLevel.Enabled(zapcore.ErrorLevel)).To(BeTrue())
+		})
+
+	})
+
 })

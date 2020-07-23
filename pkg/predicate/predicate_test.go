@@ -21,6 +21,8 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -488,6 +490,56 @@ var _ = Describe("Predicate", func() {
 				Expect(o.Update(event.UpdateEvent{})).To(BeFalse())
 				Expect(o.Delete(event.DeleteEvent{})).To(BeFalse())
 				Expect(o.Generic(event.GenericEvent{})).To(BeFalse())
+			})
+		})
+	})
+
+	Describe("NewPredicateFuncs with a namespace filter function", func() {
+		byNamespaceFilter := func(namespace string) func(m metav1.Object, object runtime.Object) bool {
+			return func(m metav1.Object, object runtime.Object) bool {
+				return m.GetNamespace() == namespace
+			}
+		}
+		byNamespaceFuncs := predicate.NewPredicateFuncs(byNamespaceFilter("biz"))
+		Context("Where the namespace is matching", func() {
+			It("should return true", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+					}}
+				passEvt1 := event.UpdateEvent{MetaOld: old.GetObjectMeta(), ObjectOld: old, MetaNew: new.GetObjectMeta()}
+				Expect(byNamespaceFuncs.Create(event.CreateEvent{Meta: new.GetObjectMeta(), Object: new})).To(BeTrue())
+				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Meta: old.GetObjectMeta(), Object: old})).To(BeTrue())
+				Expect(byNamespaceFuncs.Generic(event.GenericEvent{Meta: new.GetObjectMeta(), Object: new})).To(BeTrue())
+				Expect(byNamespaceFuncs.Update(passEvt1)).To(BeTrue())
+			})
+		})
+
+		Context("Where the namespace is not matching", func() {
+			It("should return false", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "bizz",
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+					}}
+				failEvt1 := event.UpdateEvent{MetaOld: old.GetObjectMeta(), ObjectOld: old, MetaNew: new.GetObjectMeta()}
+				Expect(byNamespaceFuncs.Create(event.CreateEvent{Meta: new.GetObjectMeta(), Object: new})).To(BeFalse())
+				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Meta: new.GetObjectMeta(), Object: new})).To(BeFalse())
+				Expect(byNamespaceFuncs.Generic(event.GenericEvent{Meta: new.GetObjectMeta(), Object: new})).To(BeFalse())
+				Expect(byNamespaceFuncs.Update(failEvt1)).To(BeFalse())
 			})
 		})
 	})

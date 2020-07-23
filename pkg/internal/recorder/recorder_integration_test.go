@@ -58,7 +58,7 @@ var _ = Describe("recorder", func() {
 			recorder := cm.GetEventRecorderFor("test-recorder")
 			instance, err := controller.New("foo-controller", cm, controller.Options{
 				Reconciler: reconcile.Func(
-					func(request reconcile.Request) (reconcile.Result, error) {
+					func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 						dp, err := clientset.AppsV1().Deployments(request.Namespace).Get(ctx, request.Name, metav1.GetOptions{})
 						Expect(err).NotTo(HaveOccurred())
 						recorder.Event(dp, corev1.EventTypeNormal, "test-reason", "test-msg")

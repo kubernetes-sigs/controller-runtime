@@ -130,6 +130,12 @@ func (blder *Builder) WithOptions(options controller.Options) *Builder {
 	return blder
 }
 
+// WithLogger overrides the controller options's logger used.
+func (blder *Builder) WithLogger(log logr.Logger) *Builder {
+	blder.log = log
+	return blder
+}
+
 // Named sets the name of the controller to the given name.  The name shows up
 // in metrics, among other things, and thus should be a prometheus compatible name
 // (underscores and alphanumeric characters only).
@@ -137,12 +143,6 @@ func (blder *Builder) WithOptions(options controller.Options) *Builder {
 // By default, controllers are named using the lowercase version of their kind.
 func (blder *Builder) Named(name string) *Builder {
 	blder.name = name
-	return blder
-}
-
-// WithLogger overrides the controller options's logger used.
-func (blder *Builder) WithLogger(log logr.Logger) *Builder {
-	blder.log = log
 	return blder
 }
 

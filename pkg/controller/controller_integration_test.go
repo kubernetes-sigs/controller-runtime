@@ -62,7 +62,7 @@ var _ = Describe("controller", func() {
 			By("Creating the Controller")
 			instance, err := controller.New("foo-controller", cm, controller.Options{
 				Reconciler: reconcile.Func(
-					func(request reconcile.Request) (reconcile.Result, error) {
+					func(_ context.Context, request reconcile.Request) (reconcile.Result, error) {
 						reconciled <- request
 						return reconcile.Result{}, nil
 					}),

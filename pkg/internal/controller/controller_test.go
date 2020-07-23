@@ -78,10 +78,10 @@ var _ = Describe("controller", func() {
 
 	Describe("Reconciler", func() {
 		It("should call the Reconciler function", func() {
-			ctrl.Do = reconcile.Func(func(reconcile.Request) (reconcile.Result, error) {
+			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 				return reconcile.Result{Requeue: true}, nil
 			})
-			result, err := ctrl.Reconcile(
+			result, err := ctrl.Reconcile(context.Background(),
 				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(reconcile.Result{Requeue: true}))
@@ -304,7 +304,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should continue to process additional queue items after the first", func(done Done) {
-			ctrl.Do = reconcile.Func(func(reconcile.Request) (reconcile.Result, error) {
+			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 				defer GinkgoRecover()
 				Fail("Reconciler should not have been called")
 				return reconcile.Result{}, nil
@@ -766,7 +766,7 @@ func (f *fakeReconciler) AddResult(res reconcile.Result, err error) {
 	f.results <- fakeReconcileResultPair{Result: res, Err: err}
 }
 
-func (f *fakeReconciler) Reconcile(r reconcile.Request) (reconcile.Result, error) {
+func (f *fakeReconciler) Reconcile(_ context.Context, r reconcile.Request) (reconcile.Result, error) {
 	res := <-f.results
 	if f.Requests != nil {
 		f.Requests <- r

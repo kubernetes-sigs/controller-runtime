@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -33,11 +33,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
-var log = logf.Log.WithName("example-controller")
+func init() {
+	log.SetLogger(zap.New())
+}
 
 func main() {
-	logf.SetLogger(zap.New())
-	entryLog := log.WithName("entrypoint")
+	entryLog := log.Log.WithName("entrypoint")
 
 	// Setup a Manager
 	entryLog.Info("setting up manager")
@@ -50,7 +51,7 @@ func main() {
 	// Setup a new controller to reconcile ReplicaSets
 	entryLog.Info("Setting up controller")
 	c, err := controller.New("foo-controller", mgr, controller.Options{
-		Reconciler: &reconcileReplicaSet{client: mgr.GetClient(), log: log.WithName("reconciler")},
+		Reconciler: &reconcileReplicaSet{client: mgr.GetClient()},
 	})
 	if err != nil {
 		entryLog.Error(err, "unable to set up individual controller")

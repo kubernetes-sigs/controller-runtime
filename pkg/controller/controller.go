@@ -43,7 +43,8 @@ type Options struct {
 	// The overall is a token bucket and the per-item is exponential.
 	RateLimiter ratelimiter.RateLimiter
 
-	// Log is the logger used for this controller.
+	// Log is the logger used for this controller and passed to each reconciliation
+	// request via the context field.
 	Log logr.Logger
 }
 
@@ -91,6 +92,10 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 		return nil, fmt.Errorf("must specify Name for Controller")
 	}
 
+	if options.Log == nil {
+		options.Log = mgr.GetLogger()
+	}
+
 	if options.MaxConcurrentReconciles <= 0 {
 		options.MaxConcurrentReconciles = 1
 	}
@@ -117,6 +122,6 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
 		SetFields:               mgr.SetFields,
 		Name:                    name,
-		Log:                     options.Log.WithName("controller").WithValues("controller", name),
+		Log:                     options.Log.WithName("controller").WithName(name),
 	}, nil
 }

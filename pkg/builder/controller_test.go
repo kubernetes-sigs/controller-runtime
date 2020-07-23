@@ -44,7 +44,7 @@ import (
 
 type typedNoop struct{}
 
-func (typedNoop) Reconcile(reconcile.Request) (reconcile.Result, error) {
+func (typedNoop) Reconcile(context.Context, reconcile.Request) (reconcile.Result, error) {
 	return reconcile.Result{}, nil
 }
 
@@ -60,7 +60,9 @@ var _ = Describe("application", func() {
 		close(stop)
 	})
 
-	noop := reconcile.Func(func(req reconcile.Request) (reconcile.Result, error) { return reconcile.Result{}, nil })
+	noop := reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
+		return reconcile.Result{}, nil
+	})
 
 	Describe("New", func() {
 		It("should return success if given valid objects", func() {
@@ -302,7 +304,7 @@ func doReconcileTest(nameSuffix string, stop chan struct{}, blder *Builder, mgr 
 
 	By("Creating the application")
 	ch := make(chan reconcile.Request)
-	fn := reconcile.Func(func(req reconcile.Request) (reconcile.Result, error) {
+	fn := reconcile.Func(func(_ context.Context, req reconcile.Request) (reconcile.Result, error) {
 		defer GinkgoRecover()
 		if !strings.HasSuffix(req.Name, nameSuffix) {
 			// From different test, ignore this request.  Etcd is shared across tests.

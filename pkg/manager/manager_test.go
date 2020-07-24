@@ -1118,6 +1118,11 @@ var _ = Describe("manger.Manager", func() {
 					Expect(f).NotTo(BeNil())
 					return nil
 				},
+				log: func(logger logr.Logger) error {
+					defer GinkgoRecover()
+					Expect(logger).To(Equal(log))
+					return nil
+				},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1256,6 +1261,7 @@ var _ inject.Client = &injectable{}
 var _ inject.Scheme = &injectable{}
 var _ inject.Config = &injectable{}
 var _ inject.Stoppable = &injectable{}
+var _ inject.Logger = &injectable{}
 
 type injectable struct {
 	scheme func(scheme *runtime.Scheme) error
@@ -1264,6 +1270,7 @@ type injectable struct {
 	cache  func(cache.Cache) error
 	f      func(inject.Func) error
 	stop   func(<-chan struct{}) error
+	log    func(logger logr.Logger) error
 }
 
 func (i *injectable) InjectCache(c cache.Cache) error {
@@ -1306,6 +1313,13 @@ func (i *injectable) InjectStopChannel(stop <-chan struct{}) error {
 		return nil
 	}
 	return i.stop(stop)
+}
+
+func (i *injectable) InjectLogger(log logr.Logger) error {
+	if i.log == nil {
+		return nil
+	}
+	return i.log(log)
 }
 
 func (i *injectable) Start(<-chan struct{}) error {

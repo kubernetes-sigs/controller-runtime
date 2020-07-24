@@ -244,6 +244,9 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 	if _, err := inject.MapperInto(cm.mapper, i); err != nil {
 		return err
 	}
+	if _, err := inject.LoggerInto(log, i); err != nil {
+		return err
+	}
 	return nil
 }
 

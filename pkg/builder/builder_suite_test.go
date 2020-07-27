@@ -73,7 +73,7 @@ var _ = AfterSuite(func() {
 	metrics.DefaultBindAddress = ":8080"
 
 	// Change the webhook.DefaultPort back to the original default.
-	webhook.DefaultPort = 443
+	webhook.DefaultPort = 9443
 })
 
 func addCRDToEnvironment(env *envtest.Environment, gvks ...schema.GroupVersionKind) {

@@ -75,11 +75,21 @@ var _ = Describe("Test", func() {
 			close(done)
 		})
 
+		It("should load webhooks from directory", func() {
+			installOptions := WebhookInstallOptions{
+				Paths: []string{filepath.Join("testdata", "webhooks")},
+			}
+			err := parseWebhook(&installOptions)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(installOptions.MutatingWebhooks)).To(Equal(2))
+			Expect(len(installOptions.ValidatingWebhooks)).To(Equal(2))
+		})
+
 		It("should load webhooks from files", func() {
 			installOptions := WebhookInstallOptions{
-				DirectoryPaths: []string{filepath.Join("testdata", "webhooks")},
+				Paths: []string{filepath.Join("testdata", "webhooks", "manifests.yaml")},
 			}
-			err := parseWebhookDirs(&installOptions)
+			err := parseWebhook(&installOptions)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(installOptions.MutatingWebhooks)).To(Equal(2))
 			Expect(len(installOptions.ValidatingWebhooks)).To(Equal(2))

@@ -238,7 +238,7 @@ func mutate(f MutateFn, key client.ObjectKey, obj runtime.Object) error {
 type MutateFn func() error
 
 // AddFinalizer accepts an Object and adds the provided finalizer if not present.
-func AddFinalizer(o Object, finalizer string) {
+func AddFinalizer(o metav1.Object, finalizer string) {
 	f := o.GetFinalizers()
 	for _, e := range f {
 		if e == finalizer {
@@ -257,12 +257,12 @@ func AddFinalizerWithError(o runtime.Object, finalizer string) error {
 	if err != nil {
 		return err
 	}
-	AddFinalizer(m.(Object), finalizer)
+	AddFinalizer(m, finalizer)
 	return nil
 }
 
 // RemoveFinalizer accepts an Object and removes the provided finalizer if present.
-func RemoveFinalizer(o Object, finalizer string) {
+func RemoveFinalizer(o metav1.Object, finalizer string) {
 	f := o.GetFinalizers()
 	for i := 0; i < len(f); i++ {
 		if f[i] == finalizer {
@@ -282,12 +282,12 @@ func RemoveFinalizerWithError(o runtime.Object, finalizer string) error {
 	if err != nil {
 		return err
 	}
-	RemoveFinalizer(m.(Object), finalizer)
+	RemoveFinalizer(m, finalizer)
 	return nil
 }
 
 // ContainsFinalizer checks an Object that the provided finalizer is present.
-func ContainsFinalizer(o Object, finalizer string) bool {
+func ContainsFinalizer(o metav1.Object, finalizer string) bool {
 	f := o.GetFinalizers()
 	for _, e := range f {
 		if e == finalizer {

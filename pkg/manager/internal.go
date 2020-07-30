@@ -39,8 +39,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
-	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
@@ -89,7 +89,7 @@ type controllerManager struct {
 
 	// recorderProvider is used to generate event recorders that will be injected into Controllers
 	// (and EventHandlers, Sources and Predicates).
-	recorderProvider recorder.Provider
+	recorderProvider *intrec.Provider
 
 	// resourceLock forms the basis for leader election
 	resourceLock resourcelock.Interface
@@ -535,6 +535,12 @@ func (cm *controllerManager) engageStopProcedure(stopComplete chan struct{}) err
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 	cm.stopProcedureEngaged = true
+
+	// we want to close this after the other runnables stop, because we don't
+	// want things like leader election to try and emit events on a closed
+	// channel
+	defer cm.recorderProvider.Stop(cm.shutdownCtx)
+
 	return cm.waitForRunnableToEnd(cm.shutdownCtx, cancel)
 }
 

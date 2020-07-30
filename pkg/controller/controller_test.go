@@ -19,7 +19,9 @@ package controller_test
 import (
 	"context"
 	"fmt"
+	"os"
 	rt "runtime"
+	"runtime/pprof"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -94,13 +96,10 @@ var _ = Describe("controller.Controller", func() {
 			close(done)
 		})
 
-		// This test has been marked as pending because it has been causing lots of flakes in CI.
-		// It should be rewritten at some point later in the future.
-		XIt("should not leak goroutines when stop", func(done Done) {
-			// TODO(directxman12): After closing the proper leaks on watch this must be reduced to 0
-			// The leaks currently come from the event-related code (as in corev1.Event).
-			threshold := 3
-
+		It("should not leak goroutines when stopped", func() {
+			// NB(directxman12): this test was flaky before on CI, but my guess
+			// is that the flakiness was caused by an expect on the count.
+			// Eventually should fix it, but if not, consider disabling again.
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -112,9 +111,21 @@ var _ = Describe("controller.Controller", func() {
 			close(s)
 
 			Expect(m.Start(s)).NotTo(HaveOccurred())
-			Expect(rt.NumGoroutine() - startGoroutines).To(BeNumerically("<=", threshold))
+			Eventually(rt.NumGoroutine /* pass the function, don't call it */).Should(Equal(startGoroutines))
+		})
 
-			close(done)
+		It("should not create goroutines if never started", func() {
+			startGoroutines := rt.NumGoroutine()
+			Expect(pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)).To(Succeed())
+
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = controller.New("new-controller", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)).To(Succeed())
+			Eventually(rt.NumGoroutine /* pass func, don't call */).Should(Equal(startGoroutines))
 		})
 	})
 })

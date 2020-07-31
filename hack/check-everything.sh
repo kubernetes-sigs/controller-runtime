@@ -18,21 +18,7 @@ set -e
 
 hack_dir=$(dirname ${BASH_SOURCE})
 source ${hack_dir}/common.sh
-
-k8s_version=1.16.4
-goarch=amd64
-goos="unknown"
-
-if [[ "$OSTYPE" == "linux-gnu" ]]; then
-  goos="linux"
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-  goos="darwin"
-fi
-
-if [[ "$goos" == "unknown" ]]; then
-  echo "OS '$OSTYPE' not supported. Aborting." >&2
-  exit 1
-fi
+source ${hack_dir}/setup-envtest.sh
 
 tmp_root=/tmp
 kb_root_dir=$tmp_root/kubebuilder
@@ -46,40 +32,15 @@ kb_root_dir=$tmp_root/kubebuilder
 # machine, but rebuild the kubebuilder and kubebuilder-bin binaries.
 SKIP_FETCH_TOOLS=${SKIP_FETCH_TOOLS:-""}
 
-# fetch k8s API gen tools and make it available under kb_root_dir/bin.
-function fetch_kb_tools {
-  local dest_dir="${1}"
-
-  # use the pre-existing version in the temporary folder if it matches our k8s version
-  if [[ -x "${dest_dir}/kubebuilder/bin/kube-apiserver" ]]; then
-    version=$("${dest_dir}"/kubebuilder/bin/kube-apiserver --version)
-    if [[ $version == *"${k8s_version}"* ]]; then
-      header_text "Using cached kubebuilder-tools from ${dest_dir}"
-      return 0
-    fi
-  fi
-
-  header_text "fetching tools (into '${dest_dir}')"
-  kb_tools_archive_name="kubebuilder-tools-$k8s_version-$goos-$goarch.tar.gz"
-  kb_tools_download_url="https://storage.googleapis.com/kubebuilder-tools/$kb_tools_archive_name"
-
-  kb_tools_archive_path="$tmp_root/$kb_tools_archive_name"
-  if [ ! -f $kb_tools_archive_path ]; then
-    curl -sL ${kb_tools_download_url} -o "$kb_tools_archive_path"
-  fi
-
-  mkdir -p "${dest_dir}"
-  tar -C "${dest_dir}" --strip-components=1 -zvxf "$kb_tools_archive_path"
-}
-
-header_text "using tools"
 
 if [ -z "$SKIP_FETCH_TOOLS" ]; then
-  fetch_kb_tools "$kb_root_dir"
-  fetch_kb_tools "${hack_dir}/../pkg/internal/testing/integration/assets"
+  header_text "fetching envtest tools"
+  fetch_envtest_tools "$kb_root_dir"
+  fetch_envtest_tools "${hack_dir}/../pkg/internal/testing/integration/assets"
 fi
 
-setup_envs
+header_text "setting up envtest environment"
+setup_envtest_env "$kb_root_dir"
 
 ${hack_dir}/verify.sh
 ${hack_dir}/test-all.sh

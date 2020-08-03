@@ -14,7 +14,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-set -e
+set -o errexit
+set -o nounset
+set -o pipefail
 
 hack_dir=$(dirname ${BASH_SOURCE})
 source ${hack_dir}/common.sh
@@ -23,23 +25,10 @@ source ${hack_dir}/setup-envtest.sh
 tmp_root=/tmp
 kb_root_dir=$tmp_root/kubebuilder
 
-# Skip fetching and untaring the tools by setting the SKIP_FETCH_TOOLS variable
-# in your environment to any value:
-#
-# $ SKIP_FETCH_TOOLS=1 ./check-everything.sh
-#
-# If you skip fetching tools, this script will use the tools already on your
-# machine, but rebuild the kubebuilder and kubebuilder-bin binaries.
-SKIP_FETCH_TOOLS=${SKIP_FETCH_TOOLS:-""}
+ENVTEST_K8S_VERSION=${ENVTEST_K8S_VERSION:-"1.16.4"}
 
-
-if [ -z "$SKIP_FETCH_TOOLS" ]; then
-  header_text "fetching envtest tools"
-  fetch_envtest_tools "$kb_root_dir"
-  fetch_envtest_tools "${hack_dir}/../pkg/internal/testing/integration/assets"
-fi
-
-header_text "setting up envtest environment"
+fetch_envtest_tools "$kb_root_dir"
+fetch_envtest_tools "${hack_dir}/../pkg/internal/testing/integration/assets"
 setup_envtest_env "$kb_root_dir"
 
 ${hack_dir}/verify.sh

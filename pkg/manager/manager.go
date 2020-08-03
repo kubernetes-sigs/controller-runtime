@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	internalrecorder "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -111,6 +112,9 @@ type Manager interface {
 
 	// GetWebhookServer returns a webhook.Server
 	GetWebhookServer() *webhook.Server
+
+	// GetLogger returns this manager's logger.
+	GetLogger() logr.Logger
 }
 
 // Options are the arguments for creating a new Manager
@@ -130,6 +134,10 @@ type Options struct {
 	// there will a 10 percent jitter between the SyncPeriod of all controllers
 	// so that all controllers will not send list requests simultaneously.
 	SyncPeriod *time.Duration
+
+	// Logger is the logger that should be used by this manager.
+	// If none is set, it defaults to log.Log global logger.
+	Logger logr.Logger
 
 	// LeaderElection determines whether or not to use leader election when
 	// starting the manager.
@@ -345,6 +353,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		mapper:                  mapper,
 		metricsListener:         metricsListener,
 		metricsExtraHandlers:    metricsExtraHandlers,
+		logger:                  options.Logger,
 		internalStop:            stop,
 		internalStopper:         stop,
 		elected:                 make(chan struct{}),
@@ -460,6 +469,10 @@ func setOptionsDefaults(options Options) Options {
 	if options.GracefulShutdownTimeout == nil {
 		gracefulShutdownTimeout := defaultGracefulShutdownPeriod
 		options.GracefulShutdownTimeout = &gracefulShutdownTimeout
+	}
+
+	if options.Logger == nil {
+		options.Logger = logf.Log
 	}
 
 	return options

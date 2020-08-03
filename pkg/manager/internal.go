@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -132,6 +133,10 @@ type controllerManager struct {
 	// internalStopper is the write side of the internal stop channel, allowing us to close it.
 	// It and `internalStop` should point to the same channel.
 	internalStopper chan<- struct{}
+
+	// Logger is the logger that should be used by this manager.
+	// If none is set, it defaults to log.Log global logger.
+	logger logr.Logger
 
 	// leaderElectionCancel is used to cancel the leader election. It is distinct from internalStopper,
 	// because for safety reasons we need to os.Exit() when we lose the leader election, meaning that
@@ -355,6 +360,10 @@ func (cm *controllerManager) GetWebhookServer() *webhook.Server {
 		}
 	}
 	return cm.webhookServer
+}
+
+func (cm *controllerManager) GetLogger() logr.Logger {
+	return cm.logger
 }
 
 func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {

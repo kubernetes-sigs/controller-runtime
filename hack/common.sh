@@ -51,12 +51,3 @@ fi
 function header_text {
   echo "$header$*$reset"
 }
-
-function setup_envs {
-  header_text "setting up env vars"
-
-  # Setup env vars
-  if [[ -z "${KUBEBUILDER_ASSETS}" ]]; then
-      export KUBEBUILDER_ASSETS=$kb_root_dir/bin
-  fi
-}

@@ -18,8 +18,6 @@ set -e
 
 source $(dirname ${BASH_SOURCE})/common.sh
 
-setup_envs
-
 header_text "running go test"
 
 go test -race ${MOD_OPT} ./...

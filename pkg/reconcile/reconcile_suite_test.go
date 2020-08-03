@@ -28,7 +28,8 @@ import (
 
 func TestReconcile(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "reconcile Suite", []Reporter{printer.NewlineReporter{}})
+	suiteName := "Reconcile Suite"
+	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
 var _ = BeforeSuite(func() {

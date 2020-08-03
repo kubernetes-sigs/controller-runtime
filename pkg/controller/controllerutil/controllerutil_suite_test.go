@@ -25,11 +25,13 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
 func TestControllerutil(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Controllerutil Suite")
+	suiteName := "Controllerutil Suite"
+	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
 var t *envtest.Environment

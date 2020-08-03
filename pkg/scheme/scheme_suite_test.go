@@ -21,9 +21,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
 func TestScheme(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Scheme Suite")
+	suiteName := "Scheme Suite"
+	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }

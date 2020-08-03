@@ -38,7 +38,8 @@ import (
 
 func TestBuilder(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "application Suite", []Reporter{printer.NewlineReporter{}})
+	suiteName := "application Suite"
+	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
 var testenv *envtest.Environment

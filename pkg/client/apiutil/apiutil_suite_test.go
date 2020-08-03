@@ -30,7 +30,8 @@ import (
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "API Utilities Test Suite", []Reporter{printer.NewlineReporter{}})
+	suiteName := "API Utilities Test Suite"
+	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
 var cfg *rest.Config

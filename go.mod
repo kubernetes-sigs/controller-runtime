@@ -25,12 +25,10 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.0.1
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/fsnotify.v1 v1.4.7
-	k8s.io/api v0.17.8
-	k8s.io/apiextensions-apiserver v0.17.8
-	k8s.io/apimachinery v0.17.8
-	k8s.io/client-go v0.17.8
+	k8s.io/api v0.17.9
+	k8s.io/apiextensions-apiserver v0.17.9
+	k8s.io/apimachinery v0.17.9
+	k8s.io/client-go v0.17.9
 	k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
 	sigs.k8s.io/yaml v1.1.0
 )
-
-replace github.com/evanphx/json-patch => github.com/evanphx/json-patch v0.0.0-20190815234213-e83c0a1c26c8

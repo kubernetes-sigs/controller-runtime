@@ -19,13 +19,13 @@ package client
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // NewDelegatingClientInput encapsulates the input parameters to create a new delegating client.
 type NewDelegatingClientInput struct {
-	Scheme      *runtime.Scheme
 	CacheReader Reader
 	Client      Client
 }
@@ -37,7 +37,8 @@ type NewDelegatingClientInput struct {
 // cache and writes to the API server.
 func NewDelegatingClient(in NewDelegatingClientInput) Client {
 	return &delegatingClient{
-		scheme: in.Scheme,
+		scheme: in.Client.Scheme(),
+		mapper: in.Client.RESTMapper(),
 		Reader: &delegatingReader{
 			CacheReader:  in.CacheReader,
 			ClientReader: in.Client,
@@ -53,11 +54,17 @@ type delegatingClient struct {
 	StatusClient
 
 	scheme *runtime.Scheme
+	mapper meta.RESTMapper
 }
 
 // Scheme returns the scheme this client is using.
 func (d *delegatingClient) Scheme() *runtime.Scheme {
 	return d.scheme
+}
+
+// RESTMapper returns the rest mapper this client is using.
+func (d *delegatingClient) RESTMapper() meta.RESTMapper {
+	return d.mapper
 }
 
 // delegatingReader forms a Reader that will cause Get and List requests for

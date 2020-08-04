@@ -228,6 +228,11 @@ func (c *fakeClient) Scheme() *runtime.Scheme {
 	return c.scheme
 }
 
+func (c *fakeClient) RESTMapper() meta.RESTMapper {
+	// TODO: Implement a fake RESTMapper.
+	return nil
+}
+
 func (c *fakeClient) Create(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 	createOptions := &client.CreateOptions{}
 	createOptions.ApplyOptions(opts)

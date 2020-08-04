@@ -22,7 +22,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -248,19 +247,6 @@ func AddFinalizer(o Object, finalizer string) {
 	o.SetFinalizers(append(f, finalizer))
 }
 
-// AddFinalizerWithError tries to convert a runtime object to a metav1 object and add the provided finalizer.
-// It returns an error if the provided object cannot provide an accessor.
-//
-// Deprecated: Use AddFinalizer instead. Check is performing on compile time.
-func AddFinalizerWithError(o runtime.Object, finalizer string) error {
-	m, err := meta.Accessor(o)
-	if err != nil {
-		return err
-	}
-	AddFinalizer(m.(Object), finalizer)
-	return nil
-}
-
 // RemoveFinalizer accepts an Object and removes the provided finalizer if present.
 func RemoveFinalizer(o Object, finalizer string) {
 	f := o.GetFinalizers()
@@ -271,19 +257,6 @@ func RemoveFinalizer(o Object, finalizer string) {
 		}
 	}
 	o.SetFinalizers(f)
-}
-
-// RemoveFinalizerWithError tries to convert a runtime object to a metav1 object and remove the provided finalizer.
-// It returns an error if the provided object cannot provide an accessor.
-//
-// Deprecated: Use RemoveFinalizer instead. Check is performing on compile time.
-func RemoveFinalizerWithError(o runtime.Object, finalizer string) error {
-	m, err := meta.Accessor(o)
-	if err != nil {
-		return err
-	}
-	RemoveFinalizer(m.(Object), finalizer)
-	return nil
 }
 
 // ContainsFinalizer checks an Object that the provided finalizer is present.

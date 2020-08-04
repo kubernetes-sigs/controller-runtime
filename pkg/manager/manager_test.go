@@ -24,8 +24,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path"
 	rt "runtime"
 	"runtime/pprof"
+	"strings"
 	"sync"
 	"time"
 
@@ -944,7 +946,8 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			res := fmt.Errorf("not ready yet")
-			err = m.AddReadyzCheck("check", func(_ *http.Request) error { return res })
+			namedCheck := "check"
+			err = m.AddReadyzCheck(namedCheck, func(_ *http.Request) error { return res })
 			Expect(err).NotTo(HaveOccurred())
 
 			s := make(chan struct{})
@@ -967,6 +970,20 @@ var _ = Describe("manger.Manager", func() {
 			resp, err = http.Get(readinessEndpoint)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			// Check readiness path without trailing slash
+			readinessEndpoint = fmt.Sprint("http://", listener.Addr().String(), strings.TrimSuffix(defaultReadinessEndpoint, "/"))
+			res = nil
+			resp, err = http.Get(readinessEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			// Check readiness path for individual check
+			readinessEndpoint = fmt.Sprint("http://", listener.Addr().String(), path.Join(defaultReadinessEndpoint, namedCheck))
+			res = nil
+			resp, err = http.Get(readinessEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 		})
 
 		It("should serve liveness endpoint", func(done Done) {
@@ -975,7 +992,8 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			res := fmt.Errorf("not alive")
-			err = m.AddHealthzCheck("check", func(_ *http.Request) error { return res })
+			namedCheck := "check"
+			err = m.AddHealthzCheck(namedCheck, func(_ *http.Request) error { return res })
 			Expect(err).NotTo(HaveOccurred())
 
 			s := make(chan struct{})
@@ -994,6 +1012,20 @@ var _ = Describe("manger.Manager", func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
 
 			// Controller is ready
+			res = nil
+			resp, err = http.Get(livenessEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			// Check liveness path without trailing slash
+			livenessEndpoint = fmt.Sprint("http://", listener.Addr().String(), strings.TrimSuffix(defaultLivenessEndpoint, "/"))
+			res = nil
+			resp, err = http.Get(livenessEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			// Check readiness path for individual check
+			livenessEndpoint = fmt.Sprint("http://", listener.Addr().String(), path.Join(defaultLivenessEndpoint, namedCheck))
 			res = nil
 			resp, err = http.Get(livenessEndpoint)
 			Expect(err).NotTo(HaveOccurred())

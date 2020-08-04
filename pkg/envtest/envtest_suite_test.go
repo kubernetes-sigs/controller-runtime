@@ -39,7 +39,7 @@ func TestSource(t *testing.T) {
 var env *Environment
 
 var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	env = &Environment{}
 	// we're initializing webhook here and not in webhook.go to also test the envtest install code via WebhookOptions
 	initializeWebhookInEnvironment()

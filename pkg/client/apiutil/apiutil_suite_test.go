@@ -37,7 +37,7 @@ func TestSource(t *testing.T) {
 var cfg *rest.Config
 
 var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	// for things that technically need a rest.Config for defaulting, but don't actually use them
 	cfg = &rest.Config{}

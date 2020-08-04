@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"os"
 
 	"github.com/go-logr/logr"
@@ -143,30 +142,6 @@ var _ = Describe("Zap options setup", func() {
 })
 
 var _ = Describe("Zap logger setup", func() {
-	Context("with the default output", func() {
-		It("shouldn't fail when setting up production", func() {
-			Expect(Logger(false)).NotTo(BeNil())
-			Expect(New(UseDevMode(false))).NotTo(BeNil())
-		})
-
-		It("shouldn't fail when setting up development", func() {
-			Expect(Logger(true)).NotTo(BeNil())
-			Expect(New(UseDevMode(true))).NotTo(BeNil())
-		})
-	})
-
-	Context("with custom non-sync output", func() {
-		It("shouldn't fail when setting up production", func() {
-			Expect(LoggerTo(ioutil.Discard, false)).NotTo(BeNil())
-			Expect(New(WriteTo(ioutil.Discard), UseDevMode(false))).NotTo(BeNil())
-		})
-
-		It("shouldn't fail when setting up development", func() {
-			Expect(LoggerTo(ioutil.Discard, true)).NotTo(BeNil())
-			Expect(New(WriteTo(ioutil.Discard), UseDevMode(true))).NotTo(BeNil())
-		})
-	})
-
 	Context("when logging kubernetes objects", func() {
 		var logOut *bytes.Buffer
 		var logger logr.Logger
@@ -287,15 +262,6 @@ var _ = Describe("Zap logger setup", func() {
 			})
 			defineTests()
 
-		})
-		Context("with logger created using LoggerTo", func() {
-			BeforeEach(func() {
-				logOut = new(bytes.Buffer)
-				By("setting up the logger")
-				// use production settings (false) to get just json output
-				logger = LoggerTo(logOut, false)
-			})
-			defineTests()
 		})
 	})
 })

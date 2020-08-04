@@ -516,4 +516,35 @@ var _ = Describe("Predicate", func() {
 			})
 		})
 	})
+
+	Describe("When checking a LabelSelectorPredicate", func() {
+		instance, err := predicate.LabelSelectorPredicate(metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}})
+		if err != nil {
+			Fail("Improper Label Selector passed during predicate instantiation.")
+		}
+
+		Context("When the Selector does not match the event labels", func() {
+			It("should return false", func() {
+				failMatch := &corev1.Pod{}
+				Expect(instance.Create(event.CreateEvent{Object: failMatch})).To(BeFalse())
+				Expect(instance.Delete(event.DeleteEvent{Object: failMatch})).To(BeFalse())
+				Expect(instance.Generic(event.GenericEvent{Object: failMatch})).To(BeFalse())
+				Expect(instance.Update(event.UpdateEvent{ObjectNew: failMatch})).To(BeFalse())
+			})
+		})
+
+		Context("When the Selector matches the event labels", func() {
+			It("should return true", func() {
+				successMatch := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{"foo": "bar"},
+					},
+				}
+				Expect(instance.Create(event.CreateEvent{Object: successMatch})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{Object: successMatch})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{Object: successMatch})).To(BeTrue())
+				Expect(instance.Update(event.UpdateEvent{ObjectNew: successMatch})).To(BeTrue())
+			})
+		})
+	})
 })

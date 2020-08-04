@@ -56,16 +56,6 @@ func ControllerManagedBy(m manager.Manager) *Builder {
 	return &Builder{mgr: m}
 }
 
-// ForType defines the type of Object being *reconciled*, and configures the ControllerManagedBy to respond to create / delete /
-// update events by *reconciling the object*.
-// This is the equivalent of calling
-// Watches(&source.Kind{Type: apiType}, &handler.EnqueueRequestForObject{})
-//
-// Deprecated: Use For
-func (blder *Builder) ForType(apiType runtime.Object) *Builder {
-	return blder.For(apiType)
-}
-
 // ForInput represents the information set by For method.
 type ForInput struct {
 	object     runtime.Object
@@ -122,14 +112,6 @@ func (blder *Builder) Watches(src source.Source, eventhandler handler.EventHandl
 	}
 
 	blder.watchesInput = append(blder.watchesInput, input)
-	return blder
-}
-
-// WithConfig sets the Config to use for configuring clients.  Defaults to the in-cluster config or to ~/.kube/config.
-//
-// Deprecated: Use ControllerManagedBy(Manager) and this isn't needed.
-func (blder *Builder) WithConfig(config *rest.Config) *Builder {
-	blder.config = config
 	return blder
 }
 

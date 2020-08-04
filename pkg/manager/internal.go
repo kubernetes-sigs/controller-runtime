@@ -52,8 +52,8 @@ const (
 	defaultRetryPeriod            = 2 * time.Second
 	defaultGracefulShutdownPeriod = 30 * time.Second
 
-	defaultReadinessEndpoint = "/readyz"
-	defaultLivenessEndpoint  = "/healthz"
+	defaultReadinessEndpoint = "/readyz/"
+	defaultLivenessEndpoint  = "/healthz/"
 	defaultMetricsEndpoint   = "/metrics"
 )
 

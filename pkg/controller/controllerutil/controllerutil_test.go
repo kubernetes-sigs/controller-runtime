@@ -407,20 +407,7 @@ var _ = Describe("Controllerutil", func() {
 	})
 
 	Describe("Finalizers", func() {
-		var obj runtime.Object = &errRuntimeObj{}
 		var deploy *appsv1.Deployment
-
-		Describe("AddFinalizerWithError", func() {
-			It("should return an error if object can't provide accessor", func() {
-				Expect(controllerutil.AddFinalizerWithError(obj, testFinalizer)).To(HaveOccurred())
-			})
-		})
-
-		Describe("RemoveFinalizerWithError", func() {
-			It("should return an error if object can't provide accessor", func() {
-				Expect(controllerutil.RemoveFinalizerWithError(obj, testFinalizer)).To(HaveOccurred())
-			})
-		})
 
 		Describe("AddFinalizer", func() {
 			deploy = &appsv1.Deployment{

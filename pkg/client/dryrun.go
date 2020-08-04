@@ -19,6 +19,7 @@ package client
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -38,6 +39,11 @@ type dryRunClient struct {
 // Scheme returns the scheme this client is using.
 func (c *dryRunClient) Scheme() *runtime.Scheme {
 	return c.client.Scheme()
+}
+
+// RESTMapper returns the rest mapper this client is using.
+func (c *dryRunClient) RESTMapper() meta.RESTMapper {
+	return c.client.RESTMapper()
 }
 
 // Create implements client.Client

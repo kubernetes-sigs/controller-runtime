@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 var instance *testSource
@@ -86,7 +87,7 @@ var _ = Describe("runtime inject", func() {
 	})
 
 	It("should set client", func() {
-		client := client.NewDelegatingClient(client.NewDelegatingClientInput{})
+		client := client.NewDelegatingClient(client.NewDelegatingClientInput{Client: fake.NewFakeClient()})
 
 		By("Validating injecting client")
 		res, err := ClientInto(client, instance)
@@ -151,7 +152,7 @@ var _ = Describe("runtime inject", func() {
 	})
 
 	It("should set api reader", func() {
-		apiReader := client.NewDelegatingClient(client.NewDelegatingClientInput{})
+		apiReader := client.NewDelegatingClient(client.NewDelegatingClientInput{Client: fake.NewFakeClient()})
 
 		By("Validating injecting client")
 		res, err := APIReaderInto(apiReader, instance)

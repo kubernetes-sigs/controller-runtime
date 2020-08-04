@@ -6,8 +6,9 @@ cr_minor_pattern=":sparkles:|$(printf "\xe2\x9c\xa8")"
 cr_patch_pattern=":bug:|$(printf "\xf0\x9f\x90\x9b")"
 cr_docs_pattern=":book:|$(printf "\xf0\x9f\x93\x96")"
 cr_no_release_note_pattern=":ghost:|$(printf "\xf0\x9f\x91\xbb")"
-cr_other_pattern=":running:|$(printf "\xf0\x9f\x8f\x83")"
-cr_all_pattern="${cr_major_pattern}|${cr_minor_pattern}|${cr_patch_pattern}|${cr_docs_pattern}|${cr_other_pattern}"
+cr_other_pattern=":seedling:|$(printf "\xf0\x9f\x8f\x83")"
+cr_other_old_pattern=":running:|$(printf "\xf0\x9f\x8f\x83")"
+cr_all_pattern="${cr_major_pattern}|${cr_minor_pattern}|${cr_patch_pattern}|${cr_docs_pattern}|${cr_other_old_pattern}|${cr_other_pattern}"
 
 # cr::symbol-type-raw turns :xyz: and the corresponding emoji
 # into one of "major", "minor", "patch", "docs", "other", or
@@ -30,6 +31,9 @@ cr::symbol-type-raw() {
             echo "no_release_note"
             ;;
         @(${cr_other_pattern})?('!'))
+            echo "other"
+            ;;
+        @(${cr_other_old_pattern})?('!'))
             echo "other"
             ;;
         *)

@@ -105,6 +105,9 @@ type Client interface {
 	Reader
 	Writer
 	StatusClient
+
+	// Scheme returns the scheme this client is using.
+	Scheme() *runtime.Scheme
 }
 
 // IndexerFunc knows how to take an object and turn it into a series

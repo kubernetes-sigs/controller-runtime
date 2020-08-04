@@ -23,27 +23,55 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// DelegatingClient forms a Client by composing separate reader, writer and
+// NewDelegatingClientInput encapsulates the input parameters to create a new delegating client.
+type NewDelegatingClientInput struct {
+	Scheme      *runtime.Scheme
+	CacheReader Reader
+	Client      Client
+}
+
+// NewDelegatingClient creates a new delegating client.
+//
+// A delegating client forms a Client by composing separate reader, writer and
 // statusclient interfaces.  This way, you can have an Client that reads from a
 // cache and writes to the API server.
-type DelegatingClient struct {
+func NewDelegatingClient(in NewDelegatingClientInput) Client {
+	return &delegatingClient{
+		scheme: in.Scheme,
+		Reader: &delegatingReader{
+			CacheReader:  in.CacheReader,
+			ClientReader: in.Client,
+		},
+		Writer:       in.Client,
+		StatusClient: in.Client,
+	}
+}
+
+type delegatingClient struct {
 	Reader
 	Writer
 	StatusClient
+
+	scheme *runtime.Scheme
 }
 
-// DelegatingReader forms a Reader that will cause Get and List requests for
+// Scheme returns the scheme this client is using.
+func (d *delegatingClient) Scheme() *runtime.Scheme {
+	return d.scheme
+}
+
+// delegatingReader forms a Reader that will cause Get and List requests for
 // unstructured types to use the ClientReader while requests for any other type
 // of object with use the CacheReader.  This avoids accidentally caching the
 // entire cluster in the common case of loading arbitrary unstructured objects
 // (e.g. from OwnerReferences).
-type DelegatingReader struct {
+type delegatingReader struct {
 	CacheReader  Reader
 	ClientReader Reader
 }
 
 // Get retrieves an obj for a given object key from the Kubernetes Cluster.
-func (d *DelegatingReader) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
+func (d *delegatingReader) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
 	_, isUnstructured := obj.(*unstructured.Unstructured)
 	if isUnstructured {
 		return d.ClientReader.Get(ctx, key, obj)
@@ -52,7 +80,7 @@ func (d *DelegatingReader) Get(ctx context.Context, key ObjectKey, obj runtime.O
 }
 
 // List retrieves list of objects for a given namespace and list options.
-func (d *DelegatingReader) List(ctx context.Context, list runtime.Object, opts ...ListOption) error {
+func (d *delegatingReader) List(ctx context.Context, list runtime.Object, opts ...ListOption) error {
 	_, isUnstructured := list.(*unstructured.UnstructuredList)
 	if isUnstructured {
 		return d.ClientReader.List(ctx, list, opts...)

@@ -85,6 +85,7 @@ func New(config *rest.Config, options Options) (Client, error) {
 			cache:      clientcache,
 			paramCodec: noConversionParamCodec{},
 		},
+		scheme: options.Scheme,
 	}
 
 	return c, nil
@@ -97,6 +98,7 @@ var _ Client = &client{}
 type client struct {
 	typedClient        typedClient
 	unstructuredClient unstructuredClient
+	scheme             *runtime.Scheme
 }
 
 // resetGroupVersionKind is a helper function to restore and preserve GroupVersionKind on an object.
@@ -107,6 +109,11 @@ func (c *client) resetGroupVersionKind(obj runtime.Object, gvk schema.GroupVersi
 			v.SetGroupVersionKind(gvk)
 		}
 	}
+}
+
+// Scheme returns the scheme this client is using.
+func (c *client) Scheme() *runtime.Scheme {
+	return c.scheme
 }
 
 // Create implements client.Client

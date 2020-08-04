@@ -37,39 +37,6 @@ func New(opts ...Opts) logr.Logger {
 	return zapr.NewLogger(NewRaw(opts...))
 }
 
-// Logger is a Logger implementation.
-// If development is true, a Zap development config will be used
-// (stacktraces on warnings, no sampling), otherwise a Zap production
-// config will be used (stacktraces on errors, sampling).
-//
-// Deprecated: use New() and the functional opts pattern instead:
-//
-// New(UseDevMode(development))
-func Logger(development bool) logr.Logger {
-	return LoggerTo(os.Stderr, development)
-}
-
-// LoggerTo returns a new Logger implementation using Zap which logs
-// to the given destination, instead of stderr.  It otherwise behaves like
-// ZapLogger.
-//
-// Deprecated: use New() and the functional opts pattern instead:
-//
-// New(UseDevMode(development), WriteTo(writer))
-func LoggerTo(destWriter io.Writer, development bool) logr.Logger {
-	return zapr.NewLogger(RawLoggerTo(destWriter, development))
-}
-
-// RawLoggerTo returns a new zap.Logger configured with KubeAwareEncoder
-// which logs to a given destination
-//
-// Deprecated: use NewRaw() and the functional opts pattern instead:
-//
-// NewRaw(UseDevMode(development), WriteTo(destWriter), RawZapOpts(opts...))
-func RawLoggerTo(destWriter io.Writer, development bool, opts ...zap.Option) *zap.Logger {
-	return NewRaw(UseDevMode(development), WriteTo(destWriter), RawZapOpts(opts...))
-}
-
 // Opts allows to manipulate Options
 type Opts func(*Options)
 

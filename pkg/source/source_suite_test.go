@@ -44,7 +44,7 @@ var stop chan struct{}
 
 var _ = BeforeSuite(func(done Done) {
 	stop = make(chan struct{})
-	logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	testenv = &envtest.Environment{}
 

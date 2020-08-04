@@ -36,7 +36,7 @@ import (
 var log = logf.Log.WithName("example-controller")
 
 func main() {
-	logf.SetLogger(zap.Logger(false))
+	logf.SetLogger(zap.New())
 	entryLog := log.WithName("entrypoint")
 
 	// Setup a Manager

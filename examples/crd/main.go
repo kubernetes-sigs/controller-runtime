@@ -103,7 +103,7 @@ func (r *reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 }
 
 func main() {
-	ctrl.SetLogger(zap.Logger(true))
+	ctrl.SetLogger(zap.New())
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
 	if err != nil {

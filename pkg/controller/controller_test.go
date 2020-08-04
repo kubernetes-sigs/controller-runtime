@@ -93,7 +93,9 @@ var _ = Describe("controller.Controller", func() {
 			close(done)
 		})
 
-		It("should not leak goroutines when stop", func(done Done) {
+		// This test has been marked as pending because it has been causing lots of flakes in CI.
+		// It should be rewritten at some point later in the future.
+		XIt("should not leak goroutines when stop", func(done Done) {
 			// TODO(directxman12): After closing the proper leaks on watch this must be reduced to 0
 			// The leaks currently come from the event-related code (as in corev1.Event).
 			threshold := 3

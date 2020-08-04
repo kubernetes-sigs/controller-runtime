@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -40,6 +41,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
+
+type typedNoop struct{}
+
+func (typedNoop) Reconcile(reconcile.Request) (reconcile.Result, error) {
+	return reconcile.Result{}, nil
+}
 
 var _ = Describe("application", func() {
 	var stop chan struct{}
@@ -151,6 +158,27 @@ var _ = Describe("application", func() {
 			Expect(instance).NotTo(BeNil())
 		})
 
+		It("should prefer reconciler from options during creation of controller", func() {
+			newController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
+				if options.Reconciler != (typedNoop{}) {
+					return nil, fmt.Errorf("Custom reconciler expected %T but found %T", typedNoop{}, options.Reconciler)
+				}
+				return controller.New(name, mgr, options)
+			}
+
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				For(&appsv1.ReplicaSet{}).
+				Owns(&appsv1.ReplicaSet{}).
+				WithOptions(controller.Options{Reconciler: typedNoop{}}).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeNil())
+		})
+
 		It("should allow multiple controllers for the same kind", func() {
 			By("creating a controller manager")
 			m, err := manager.New(cfg, manager.Options{})
@@ -214,7 +242,7 @@ var _ = Describe("application", func() {
 			var (
 				deployPrctExecuted     = false
 				replicaSetPrctExecuted = false
-				allPrctExecuted        = 0
+				allPrctExecuted        = int64(0)
 			)
 
 			deployPrct := predicate.Funcs{
@@ -246,7 +274,7 @@ var _ = Describe("application", func() {
 						BeAssignableToTypeOf(&appsv1.ReplicaSet{}),
 					))
 
-					allPrctExecuted++
+					atomic.AddInt64(&allPrctExecuted, 1)
 					return true
 				},
 			}

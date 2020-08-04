@@ -1,14 +1,17 @@
 package integration_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"testing"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
 func TestIntegration(t *testing.T) {
 	t.Parallel()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Integration Framework Unit Tests")
+	suiteName := "Integration Framework Unit Tests"
+	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }

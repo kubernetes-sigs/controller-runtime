@@ -18,6 +18,7 @@ package reconcile_test
 
 import (
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -26,6 +27,27 @@ import (
 )
 
 var _ = Describe("reconcile", func() {
+	Describe("Result", func() {
+		It("IsZero should return true if empty", func() {
+			var res *reconcile.Result
+			Expect(res.IsZero()).To(BeTrue())
+			res2 := &reconcile.Result{}
+			Expect(res2.IsZero()).To(BeTrue())
+			res3 := reconcile.Result{}
+			Expect(res3.IsZero()).To(BeTrue())
+		})
+
+		It("IsZero should return false if Requeue is set to true", func() {
+			res := reconcile.Result{Requeue: true}
+			Expect(res.IsZero()).To(BeFalse())
+		})
+
+		It("IsZero should return false if RequeueAfter is set to true", func() {
+			res := reconcile.Result{RequeueAfter: 1 * time.Second}
+			Expect(res.IsZero()).To(BeFalse())
+		})
+	})
+
 	Describe("Func", func() {
 		It("should call the function with the request and return a nil error.", func() {
 			request := reconcile.Request{

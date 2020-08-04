@@ -30,7 +30,6 @@ import (
 
 type testCase struct {
 	text           string
-	apiServerURL   string
 	context        string
 	kubeconfigFlag string
 	kubeconfigEnv  []string
@@ -56,7 +55,6 @@ var _ = Describe("Config", func() {
 	AfterEach(func() {
 		os.Unsetenv(clientcmd.RecommendedConfigPathEnvVar)
 		kubeconfig = ""
-		apiServerURL = ""
 		clientcmd.RecommendedHomeFile = origRecommendedHomeFile
 
 		err := os.RemoveAll(dir)
@@ -159,12 +157,6 @@ var _ = Describe("Config", func() {
 					wantHost:      "from-multi-env-1",
 				},
 				{
-					text:          "should allow overriding the API server URL",
-					apiServerURL:  "override",
-					kubeconfigEnv: []string{"kubeconfig-multi-context"},
-					wantHost:      "override",
-				},
-				{
 					text:          "should allow overriding the context",
 					context:       "from-multi-env-2",
 					kubeconfigEnv: []string{"kubeconfig-multi-context"},
@@ -183,9 +175,6 @@ var _ = Describe("Config", func() {
 })
 
 func setConfigs(tc testCase, dir string) {
-	// Set API Server URL
-	apiServerURL = tc.apiServerURL
-
 	// Set kubeconfig flag value
 	if len(tc.kubeconfigFlag) > 0 {
 		kubeconfig = filepath.Join(dir, tc.kubeconfigFlag)

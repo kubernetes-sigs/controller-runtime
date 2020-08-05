@@ -40,8 +40,8 @@ import (
 
 // WebhookInstallOptions are the options for installing mutating or validating webhooks
 type WebhookInstallOptions struct {
-	// Paths is a list of paths to the directories containing the mutating or validating webhooks yaml or json configs.
-	DirectoryPaths []string
+	// Paths is a list of paths to the directories or files containing the mutating or validating webhooks yaml or json configs.
+	Paths []string
 
 	// MutatingWebhooks is a list of MutatingWebhookConfigurations to install
 	MutatingWebhooks []runtime.Object
@@ -149,7 +149,7 @@ func (o *WebhookInstallOptions) Install(config *rest.Config) error {
 	if err != nil {
 		return err
 	}
-	if err := parseWebhookDirs(o); err != nil {
+	if err := parseWebhook(o); err != nil {
 		return err
 	}
 
@@ -319,10 +319,10 @@ func ensureCreated(cs client.Client, obj *unstructured.Unstructured) error {
 	return nil
 }
 
-// parseWebhookDirs reads the directories of Webhooks in options.DirectoryPaths and adds the Webhook structs to options
-func parseWebhookDirs(options *WebhookInstallOptions) error {
-	if len(options.DirectoryPaths) > 0 {
-		for _, path := range options.DirectoryPaths {
+// parseWebhook reads the directories or files of Webhooks in options.Paths and adds the Webhook structs to options
+func parseWebhook(options *WebhookInstallOptions) error {
+	if len(options.Paths) > 0 {
+		for _, path := range options.Paths {
 			_, err := os.Stat(path)
 			if options.IgnoreErrorIfPathMissing && os.IsNotExist(err) {
 				continue // skip this path
@@ -348,8 +348,16 @@ func readWebhooks(path string) ([]runtime.Object, []runtime.Object, error) {
 	var files []os.FileInfo
 	var err error
 	log.V(1).Info("reading Webhooks from path", "path", path)
-	if files, err = ioutil.ReadDir(path); err != nil {
+	info, err := os.Stat(path)
+	if err != nil {
 		return nil, nil, err
+	}
+	if !info.IsDir() {
+		path, files = filepath.Dir(path), []os.FileInfo{info}
+	} else {
+		if files, err = ioutil.ReadDir(path); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	// file extensions that may contain Webhooks

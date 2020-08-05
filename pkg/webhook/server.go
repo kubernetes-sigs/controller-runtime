@@ -37,7 +37,7 @@ import (
 )
 
 // DefaultPort is the default port that the webhook server serves.
-var DefaultPort = 443
+var DefaultPort = 9443
 
 // Server is an admission webhook server that can serve traffic and
 // generates related k8s resources for deploying.
@@ -47,7 +47,7 @@ type Server struct {
 	Host string
 
 	// Port is the port number that the server will serve.
-	// It will be defaulted to 443 if unspecified.
+	// It will be defaulted to 9443 if unspecified.
 	Port int
 
 	// CertDir is the directory that contains the server key and certificate. The

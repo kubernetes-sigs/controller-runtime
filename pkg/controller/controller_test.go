@@ -17,6 +17,7 @@ limitations under the License.
 package controller_test
 
 import (
+	"context"
 	"fmt"
 	rt "runtime"
 
@@ -33,7 +34,7 @@ import (
 var _ = Describe("controller.Controller", func() {
 	var stop chan struct{}
 
-	rec := reconcile.Func(func(reconcile.Request) (reconcile.Result, error) {
+	rec := reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 		return reconcile.Result{}, nil
 	})
 	BeforeEach(func() {
@@ -123,7 +124,7 @@ var _ inject.Client = &failRec{}
 
 type failRec struct{}
 
-func (*failRec) Reconcile(reconcile.Request) (reconcile.Result, error) {
+func (*failRec) Reconcile(context.Context, reconcile.Request) (reconcile.Result, error) {
 	return reconcile.Result{}, nil
 }
 

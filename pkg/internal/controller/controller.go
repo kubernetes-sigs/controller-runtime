@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -86,8 +88,10 @@ type watchDescription struct {
 }
 
 // Reconcile implements reconcile.Reconciler
-func (c *Controller) Reconcile(r reconcile.Request) (reconcile.Result, error) {
-	return c.Do.Reconcile(r)
+func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
+	log := c.Log.WithValues("name", req.Name, "namespace", req.Namespace)
+	ctx = logf.IntoContext(ctx, log)
+	return c.Do.Reconcile(ctx, req)
 }
 
 // Watch implements controller.Controller
@@ -229,12 +233,15 @@ func (c *Controller) reconcileHandler(obj interface{}) bool {
 	}
 
 	log := c.Log.WithValues("name", req.Name, "namespace", req.Namespace)
+	ctx := logf.IntoContext(context.Background(), log)
 
 	// RunInformersAndControllers the syncHandler, passing it the namespace/Name string of the
 	// resource to be synced.
-	if result, err := c.Do.Reconcile(req); err != nil {
+	if result, err := c.Do.Reconcile(ctx, req); err != nil {
 		c.Queue.AddRateLimited(req)
-		log.Error(err, "Reconciler error")
+		if log.V(3).Enabled() {
+			log.Error(err, "Reconciler error")
+		}
 		ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Inc()
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "error").Inc()
 		return false
@@ -258,7 +265,7 @@ func (c *Controller) reconcileHandler(obj interface{}) bool {
 	c.Queue.Forget(obj)
 
 	// TODO(directxman12): What does 1 mean?  Do we want level constants?  Do we want levels at all?
-	log.V(1).Info("Successfully Reconciled")
+	log.V(5).Info("Successfully Reconciled")
 
 	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "success").Inc()
 	// Return true, don't take a break

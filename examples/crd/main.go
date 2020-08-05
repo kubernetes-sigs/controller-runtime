@@ -29,12 +29,12 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	api "sigs.k8s.io/controller-runtime/examples/crd/pkg"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 var (
 	setupLog = ctrl.Log.WithName("setup")
-	recLog   = ctrl.Log.WithName("reconciler")
 )
 
 type reconciler struct {
@@ -42,10 +42,9 @@ type reconciler struct {
 	scheme *runtime.Scheme
 }
 
-func (r *reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	log := recLog.WithValues("chaospod", req.NamespacedName)
+func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := log.FromContext(ctx).WithValues("chaospod", req.NamespacedName)
 	log.V(1).Info("reconciling chaos pod")
-	ctx := context.Background()
 
 	var chaospod api.ChaosPod
 	if err := r.Get(ctx, req.NamespacedName, &chaospod); err != nil {

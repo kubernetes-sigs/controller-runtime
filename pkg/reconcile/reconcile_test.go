@@ -17,6 +17,7 @@ limitations under the License.
 package reconcile_test
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -57,13 +58,13 @@ var _ = Describe("reconcile", func() {
 				Requeue: true,
 			}
 
-			instance := reconcile.Func(func(r reconcile.Request) (reconcile.Result, error) {
+			instance := reconcile.Func(func(_ context.Context, r reconcile.Request) (reconcile.Result, error) {
 				defer GinkgoRecover()
 				Expect(r).To(Equal(request))
 
 				return result, nil
 			})
-			actualResult, actualErr := instance.Reconcile(request)
+			actualResult, actualErr := instance.Reconcile(context.Background(), request)
 			Expect(actualResult).To(Equal(result))
 			Expect(actualErr).NotTo(HaveOccurred())
 		})
@@ -77,13 +78,13 @@ var _ = Describe("reconcile", func() {
 			}
 			err := fmt.Errorf("hello world")
 
-			instance := reconcile.Func(func(r reconcile.Request) (reconcile.Result, error) {
+			instance := reconcile.Func(func(_ context.Context, r reconcile.Request) (reconcile.Result, error) {
 				defer GinkgoRecover()
 				Expect(r).To(Equal(request))
 
 				return result, err
 			})
-			actualResult, actualErr := instance.Reconcile(request)
+			actualResult, actualErr := instance.Reconcile(context.Background(), request)
 			Expect(actualResult).To(Equal(result))
 			Expect(actualErr).To(Equal(err))
 		})

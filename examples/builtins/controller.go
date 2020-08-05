@@ -20,11 +20,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
-
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -32,15 +31,14 @@ import (
 type reconcileReplicaSet struct {
 	// client can be used to retrieve objects from the APIServer.
 	client client.Client
-	log    logr.Logger
 }
 
 // Implement reconcile.Reconciler so the controller can reconcile objects
 var _ reconcile.Reconciler = &reconcileReplicaSet{}
 
-func (r *reconcileReplicaSet) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *reconcileReplicaSet) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	// set up a convenient log object so we don't have to type request over and over again
-	log := r.log.WithValues("request", request)
+	log := log.FromContext(ctx)
 
 	// Fetch the ReplicaSet from the cache
 	rs := &appsv1.ReplicaSet{}

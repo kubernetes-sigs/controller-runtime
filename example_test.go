@@ -116,17 +116,17 @@ type ReplicaSetReconciler struct {
 // * Read the ReplicaSet
 // * Read the Pods
 // * Set a Label on the ReplicaSet with the Pod count
-func (a *ReplicaSetReconciler) Reconcile(req controllers.Request) (controllers.Result, error) {
+func (a *ReplicaSetReconciler) Reconcile(ctx context.Context, req controllers.Request) (controllers.Result, error) {
 	// Read the ReplicaSet
 	rs := &appsv1.ReplicaSet{}
-	err := a.Get(context.TODO(), req.NamespacedName, rs)
+	err := a.Get(ctx, req.NamespacedName, rs)
 	if err != nil {
 		return controllers.Result{}, err
 	}
 
 	// List the Pods matching the PodTemplate Labels
 	pods := &corev1.PodList{}
-	err = a.List(context.TODO(), pods, client.InNamespace(req.Namespace), client.MatchingLabels(rs.Spec.Template.Labels))
+	err = a.List(ctx, pods, client.InNamespace(req.Namespace), client.MatchingLabels(rs.Spec.Template.Labels))
 	if err != nil {
 		return controllers.Result{}, err
 	}

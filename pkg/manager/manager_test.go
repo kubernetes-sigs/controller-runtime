@@ -1275,7 +1275,7 @@ var _ inject.Client = &failRec{}
 
 type failRec struct{}
 
-func (*failRec) Reconcile(reconcile.Request) (reconcile.Result, error) {
+func (*failRec) Reconcile(context.Context, reconcile.Request) (reconcile.Result, error) {
 	return reconcile.Result{}, nil
 }
 

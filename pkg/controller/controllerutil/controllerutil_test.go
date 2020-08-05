@@ -257,6 +257,32 @@ var _ = Describe("Controllerutil", func() {
 		})
 	})
 
+	Describe("IsOwner", func() {
+		It("should get false if validate ownerRef on an empty list", func() {
+			rs := &appsv1.ReplicaSet{}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+			}
+
+			result, err := controllerutil.IsOwner(dep, rs, scheme.Scheme)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(false))
+		})
+
+		It("should get true if ownerRef already set", func() {
+			rs := &appsv1.ReplicaSet{}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+			}
+
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			result, err := controllerutil.IsOwner(dep, rs, scheme.Scheme)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(true))
+
+		})
+	})
+
 	Describe("CreateOrUpdate", func() {
 		var deploy *appsv1.Deployment
 		var deplSpec appsv1.DeploymentSpec

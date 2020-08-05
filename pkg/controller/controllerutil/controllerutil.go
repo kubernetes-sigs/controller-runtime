@@ -119,6 +119,36 @@ func SetOwnerReference(owner, object metav1.Object, scheme *runtime.Scheme) erro
 
 }
 
+// IsOwner is a helper method to validate if existing object has provided owner as reference
+// It prevent objects from unnecessary updates in case of the owner has not changed
+func IsOwner(owner, object Object, scheme *runtime.Scheme) (bool, error) {
+	// Validate the owner.
+	ro, ok := owner.(runtime.Object)
+	if !ok {
+		return false, fmt.Errorf("%T is not a runtime.Object, cannot call SetOwnerReference", owner)
+	}
+	if err := validateOwner(owner, object); err != nil {
+		return false, err
+	}
+	// Create a new owner ref.
+	gvk, err := apiutil.GVKForObject(ro, scheme)
+	if err != nil {
+		return false, err
+	}
+	ref := metav1.OwnerReference{
+		APIVersion: gvk.GroupVersion().String(),
+		Kind:       gvk.Kind,
+		UID:        owner.GetUID(),
+		Name:       owner.GetName(),
+	}
+	owners := object.GetOwnerReferences()
+	idx := indexOwnerRef(owners, ref)
+	if idx == -1 {
+		return false, nil
+	}
+	return true, nil
+}
+
 func upsertOwnerRef(ref metav1.OwnerReference, object metav1.Object) {
 	owners := object.GetOwnerReferences()
 	idx := indexOwnerRef(owners, ref)

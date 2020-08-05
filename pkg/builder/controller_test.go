@@ -251,7 +251,7 @@ var _ = Describe("application", func() {
 				CreateFunc: func(e event.CreateEvent) bool {
 					defer GinkgoRecover()
 					// check that it was called only for deployment
-					Expect(e.Meta).To(BeAssignableToTypeOf(&appsv1.Deployment{}))
+					Expect(e.Object).To(BeAssignableToTypeOf(&appsv1.Deployment{}))
 					deployPrctExecuted = true
 					return true
 				},
@@ -261,7 +261,7 @@ var _ = Describe("application", func() {
 				CreateFunc: func(e event.CreateEvent) bool {
 					defer GinkgoRecover()
 					// check that it was called only for replicaset
-					Expect(e.Meta).To(BeAssignableToTypeOf(&appsv1.ReplicaSet{}))
+					Expect(e.Object).To(BeAssignableToTypeOf(&appsv1.ReplicaSet{}))
 					replicaSetPrctExecuted = true
 					return true
 				},
@@ -271,7 +271,7 @@ var _ = Describe("application", func() {
 				CreateFunc: func(e event.CreateEvent) bool {
 					defer GinkgoRecover()
 					//check that it was called for all registered kinds
-					Expect(e.Meta).Should(Or(
+					Expect(e.Object).Should(Or(
 						BeAssignableToTypeOf(&appsv1.Deployment{}),
 						BeAssignableToTypeOf(&appsv1.ReplicaSet{}),
 					))

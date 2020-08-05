@@ -145,14 +145,12 @@ var _ = Describe("Source", func() {
 				evt := <-c1
 				createEvt, ok := evt.(event.CreateEvent)
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.CreateEvent{}))
-				Expect(createEvt.Meta).To(Equal(created))
 				Expect(createEvt.Object).To(Equal(created))
 
 				// Check second CreateEvent
 				evt = <-c2
 				createEvt, ok = evt.(event.CreateEvent)
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.CreateEvent{}))
-				Expect(createEvt.Meta).To(Equal(created))
 				Expect(createEvt.Object).To(Equal(created))
 
 				By("Updating a Deployment and expecting the UpdateEvent.")
@@ -166,10 +164,8 @@ var _ = Describe("Source", func() {
 				updateEvt, ok := evt.(event.UpdateEvent)
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.UpdateEvent{}))
 
-				Expect(updateEvt.MetaNew).To(Equal(updated))
 				Expect(updateEvt.ObjectNew).To(Equal(updated))
 
-				Expect(updateEvt.MetaOld).To(Equal(created))
 				Expect(updateEvt.ObjectOld).To(Equal(created))
 
 				// Check second UpdateEvent
@@ -177,10 +173,8 @@ var _ = Describe("Source", func() {
 				updateEvt, ok = evt.(event.UpdateEvent)
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.UpdateEvent{}))
 
-				Expect(updateEvt.MetaNew).To(Equal(updated))
 				Expect(updateEvt.ObjectNew).To(Equal(updated))
 
-				Expect(updateEvt.MetaOld).To(Equal(created))
 				Expect(updateEvt.ObjectOld).To(Equal(created))
 
 				By("Deleting a Deployment and expecting the Delete.")
@@ -192,15 +186,13 @@ var _ = Describe("Source", func() {
 				evt = <-c1
 				deleteEvt, ok := evt.(event.DeleteEvent)
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.DeleteEvent{}))
-				deleteEvt.Meta.SetResourceVersion("")
-				Expect(deleteEvt.Meta).To(Equal(deleted))
+				deleteEvt.Object.SetResourceVersion("")
 				Expect(deleteEvt.Object).To(Equal(deleted))
 
 				evt = <-c2
 				deleteEvt, ok = evt.(event.DeleteEvent)
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.DeleteEvent{}))
-				deleteEvt.Meta.SetResourceVersion("")
-				Expect(deleteEvt.Meta).To(Equal(deleted))
+				deleteEvt.Object.SetResourceVersion("")
 				Expect(deleteEvt.Object).To(Equal(deleted))
 
 				close(done)
@@ -271,7 +263,6 @@ var _ = Describe("Source", func() {
 						Expect(err).NotTo(HaveOccurred())
 
 						Expect(q2).To(BeIdenticalTo(q))
-						Expect(evt.Meta).To(Equal(rs))
 						Expect(evt.Object).To(Equal(rs))
 						close(c)
 					},
@@ -316,10 +307,8 @@ var _ = Describe("Source", func() {
 						Expect(err).NotTo(HaveOccurred())
 
 						Expect(q2).To(Equal(q))
-						Expect(evt.MetaOld).To(Equal(rs))
 						Expect(evt.ObjectOld).To(Equal(rs))
 
-						Expect(evt.MetaNew).To(Equal(rs2))
 						Expect(evt.ObjectNew).To(Equal(rs2))
 
 						close(c)
@@ -354,7 +343,7 @@ var _ = Describe("Source", func() {
 					DeleteFunc: func(evt event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Expect(q2).To(Equal(q))
-						Expect(evt.Meta.GetName()).To(Equal(rs.Name))
+						Expect(evt.Object.GetName()).To(Equal(rs.Name))
 						close(c)
 					},
 					GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {

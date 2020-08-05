@@ -69,12 +69,12 @@ func ExampleEnqueueRequestsFromMapFunc() {
 			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 				return []reconcile.Request{
 					{NamespacedName: types.NamespacedName{
-						Name:      a.Meta.GetName() + "-1",
-						Namespace: a.Meta.GetNamespace(),
+						Name:      a.Object.GetName() + "-1",
+						Namespace: a.Object.GetNamespace(),
 					}},
 					{NamespacedName: types.NamespacedName{
-						Name:      a.Meta.GetName() + "-2",
-						Namespace: a.Meta.GetNamespace(),
+						Name:      a.Object.GetName() + "-2",
+						Namespace: a.Object.GetNamespace(),
 					}},
 				}
 			}),
@@ -92,26 +92,26 @@ func ExampleFuncs() {
 		handler.Funcs{
 			CreateFunc: func(e event.CreateEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-					Name:      e.Meta.GetName(),
-					Namespace: e.Meta.GetNamespace(),
+					Name:      e.Object.GetName(),
+					Namespace: e.Object.GetNamespace(),
 				}})
 			},
 			UpdateFunc: func(e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-					Name:      e.MetaNew.GetName(),
-					Namespace: e.MetaNew.GetNamespace(),
+					Name:      e.ObjectNew.GetName(),
+					Namespace: e.ObjectNew.GetNamespace(),
 				}})
 			},
 			DeleteFunc: func(e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-					Name:      e.Meta.GetName(),
-					Namespace: e.Meta.GetNamespace(),
+					Name:      e.Object.GetName(),
+					Namespace: e.Object.GetNamespace(),
 				}})
 			},
 			GenericFunc: func(e event.GenericEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-					Name:      e.Meta.GetName(),
-					Namespace: e.Meta.GetNamespace(),
+					Name:      e.Object.GetName(),
+					Namespace: e.Object.GetNamespace(),
 				}})
 			},
 		},

@@ -21,8 +21,8 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -63,19 +63,16 @@ var _ = Describe("Predicate", func() {
 			instance := failingFuncs
 			instance.CreateFunc = func(evt event.CreateEvent) bool {
 				defer GinkgoRecover()
-				Expect(evt.Meta).To(Equal(pod.GetObjectMeta()))
 				Expect(evt.Object).To(Equal(pod))
 				return false
 			}
 			evt := event.CreateEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			Expect(instance.Create(evt)).To(BeFalse())
 
 			instance.CreateFunc = func(evt event.CreateEvent) bool {
 				defer GinkgoRecover()
-				Expect(evt.Meta).To(Equal(pod.GetObjectMeta()))
 				Expect(evt.Object).To(Equal(pod))
 				return true
 			}
@@ -94,25 +91,19 @@ var _ = Describe("Predicate", func() {
 			instance := failingFuncs
 			instance.UpdateFunc = func(evt event.UpdateEvent) bool {
 				defer GinkgoRecover()
-				Expect(evt.MetaOld).To(Equal(pod.GetObjectMeta()))
 				Expect(evt.ObjectOld).To(Equal(pod))
-				Expect(evt.MetaNew).To(Equal(newPod.GetObjectMeta()))
 				Expect(evt.ObjectNew).To(Equal(newPod))
 				return false
 			}
 			evt := event.UpdateEvent{
 				ObjectOld: pod,
-				MetaOld:   pod.GetObjectMeta(),
 				ObjectNew: newPod,
-				MetaNew:   newPod.GetObjectMeta(),
 			}
 			Expect(instance.Update(evt)).To(BeFalse())
 
 			instance.UpdateFunc = func(evt event.UpdateEvent) bool {
 				defer GinkgoRecover()
-				Expect(evt.MetaOld).To(Equal(pod.GetObjectMeta()))
 				Expect(evt.ObjectOld).To(Equal(pod))
-				Expect(evt.MetaNew).To(Equal(newPod.GetObjectMeta()))
 				Expect(evt.ObjectNew).To(Equal(newPod))
 				return true
 			}
@@ -127,19 +118,16 @@ var _ = Describe("Predicate", func() {
 			instance := failingFuncs
 			instance.DeleteFunc = func(evt event.DeleteEvent) bool {
 				defer GinkgoRecover()
-				Expect(evt.Meta).To(Equal(pod.GetObjectMeta()))
 				Expect(evt.Object).To(Equal(pod))
 				return false
 			}
 			evt := event.DeleteEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			Expect(instance.Delete(evt)).To(BeFalse())
 
 			instance.DeleteFunc = func(evt event.DeleteEvent) bool {
 				defer GinkgoRecover()
-				Expect(evt.Meta).To(Equal(pod.GetObjectMeta()))
 				Expect(evt.Object).To(Equal(pod))
 				return true
 			}
@@ -154,19 +142,16 @@ var _ = Describe("Predicate", func() {
 			instance := failingFuncs
 			instance.GenericFunc = func(evt event.GenericEvent) bool {
 				defer GinkgoRecover()
-				Expect(evt.Meta).To(Equal(pod.GetObjectMeta()))
 				Expect(evt.Object).To(Equal(pod))
 				return false
 			}
 			evt := event.GenericEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			Expect(instance.Generic(evt)).To(BeFalse())
 
 			instance.GenericFunc = func(evt event.GenericEvent) bool {
 				defer GinkgoRecover()
-				Expect(evt.Meta).To(Equal(pod.GetObjectMeta()))
 				Expect(evt.Object).To(Equal(pod))
 				return true
 			}
@@ -191,7 +176,6 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					MetaNew:   new.GetObjectMeta(),
 					ObjectNew: new,
 				}
 				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
@@ -211,7 +195,6 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					MetaOld:   old.GetObjectMeta(),
 					ObjectOld: old,
 				}
 				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
@@ -239,9 +222,7 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					MetaOld:   old.GetObjectMeta(),
 					ObjectOld: old,
-					MetaNew:   new.GetObjectMeta(),
 					ObjectNew: new,
 				}
 				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
@@ -268,9 +249,7 @@ var _ = Describe("Predicate", func() {
 						ResourceVersion: "v2",
 					}}
 				passEvt := event.UpdateEvent{
-					MetaOld:   old.GetObjectMeta(),
 					ObjectOld: old,
-					MetaNew:   new.GetObjectMeta(),
 					ObjectNew: new,
 				}
 				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
@@ -297,9 +276,9 @@ var _ = Describe("Predicate", func() {
 						ResourceVersion: "v1",
 					}}
 
-				failEvt1 := event.UpdateEvent{MetaOld: old.GetObjectMeta(), ObjectOld: old, MetaNew: new.GetObjectMeta()}
-				failEvt2 := event.UpdateEvent{MetaOld: old.GetObjectMeta(), MetaNew: new.GetObjectMeta(), ObjectNew: new}
-				failEvt3 := event.UpdateEvent{MetaOld: old.GetObjectMeta(), ObjectOld: old, ObjectNew: new}
+				failEvt1 := event.UpdateEvent{ObjectOld: old}
+				failEvt2 := event.UpdateEvent{ObjectNew: new}
+				failEvt3 := event.UpdateEvent{ObjectOld: old, ObjectNew: new}
 				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
 				Expect(instance.Generic(event.GenericEvent{})).Should(BeTrue())
@@ -323,7 +302,6 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					MetaNew:   new.GetObjectMeta(),
 					ObjectNew: new,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
@@ -343,7 +321,6 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					MetaOld:   old.GetObjectMeta(),
 					ObjectOld: old,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
@@ -370,9 +347,7 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					MetaOld:   old.GetObjectMeta(),
 					ObjectOld: old,
-					MetaNew:   new.GetObjectMeta(),
 					ObjectNew: new,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
@@ -398,9 +373,7 @@ var _ = Describe("Predicate", func() {
 						Generation: 2,
 					}}
 				passEvt := event.UpdateEvent{
-					MetaOld:   old.GetObjectMeta(),
 					ObjectOld: old,
-					MetaNew:   new.GetObjectMeta(),
 					ObjectNew: new,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
@@ -427,9 +400,9 @@ var _ = Describe("Predicate", func() {
 						Generation: 1,
 					}}
 
-				failEvt1 := event.UpdateEvent{MetaOld: old.GetObjectMeta(), ObjectOld: old, MetaNew: new.GetObjectMeta()}
-				failEvt2 := event.UpdateEvent{MetaOld: old.GetObjectMeta(), MetaNew: new.GetObjectMeta(), ObjectNew: new}
-				failEvt3 := event.UpdateEvent{MetaOld: old.GetObjectMeta(), ObjectOld: old, ObjectNew: new}
+				failEvt1 := event.UpdateEvent{ObjectOld: old}
+				failEvt2 := event.UpdateEvent{ObjectNew: new}
+				failEvt3 := event.UpdateEvent{ObjectOld: old, ObjectNew: new}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
 				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
@@ -495,9 +468,9 @@ var _ = Describe("Predicate", func() {
 	})
 
 	Describe("NewPredicateFuncs with a namespace filter function", func() {
-		byNamespaceFilter := func(namespace string) func(m metav1.Object, object runtime.Object) bool {
-			return func(m metav1.Object, object runtime.Object) bool {
-				return m.GetNamespace() == namespace
+		byNamespaceFilter := func(namespace string) func(object controllerutil.Object) bool {
+			return func(object controllerutil.Object) bool {
+				return object.GetNamespace() == namespace
 			}
 		}
 		byNamespaceFuncs := predicate.NewPredicateFuncs(byNamespaceFilter("biz"))
@@ -514,10 +487,10 @@ var _ = Describe("Predicate", func() {
 						Name:      "baz",
 						Namespace: "biz",
 					}}
-				passEvt1 := event.UpdateEvent{MetaOld: old.GetObjectMeta(), ObjectOld: old, MetaNew: new.GetObjectMeta()}
-				Expect(byNamespaceFuncs.Create(event.CreateEvent{Meta: new.GetObjectMeta(), Object: new})).To(BeTrue())
-				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Meta: old.GetObjectMeta(), Object: old})).To(BeTrue())
-				Expect(byNamespaceFuncs.Generic(event.GenericEvent{Meta: new.GetObjectMeta(), Object: new})).To(BeTrue())
+				passEvt1 := event.UpdateEvent{ObjectOld: old, ObjectNew: new}
+				Expect(byNamespaceFuncs.Create(event.CreateEvent{Object: new})).To(BeTrue())
+				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Object: old})).To(BeTrue())
+				Expect(byNamespaceFuncs.Generic(event.GenericEvent{Object: new})).To(BeTrue())
 				Expect(byNamespaceFuncs.Update(passEvt1)).To(BeTrue())
 			})
 		})
@@ -535,10 +508,10 @@ var _ = Describe("Predicate", func() {
 						Name:      "baz",
 						Namespace: "biz",
 					}}
-				failEvt1 := event.UpdateEvent{MetaOld: old.GetObjectMeta(), ObjectOld: old, MetaNew: new.GetObjectMeta()}
-				Expect(byNamespaceFuncs.Create(event.CreateEvent{Meta: new.GetObjectMeta(), Object: new})).To(BeFalse())
-				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Meta: new.GetObjectMeta(), Object: new})).To(BeFalse())
-				Expect(byNamespaceFuncs.Generic(event.GenericEvent{Meta: new.GetObjectMeta(), Object: new})).To(BeFalse())
+				failEvt1 := event.UpdateEvent{ObjectOld: old, ObjectNew: new}
+				Expect(byNamespaceFuncs.Create(event.CreateEvent{Object: new})).To(BeFalse())
+				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Object: new})).To(BeFalse())
+				Expect(byNamespaceFuncs.Generic(event.GenericEvent{Object: new})).To(BeFalse())
 				Expect(byNamespaceFuncs.Update(failEvt1)).To(BeFalse())
 			})
 		})

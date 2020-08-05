@@ -19,7 +19,6 @@ package internal_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -96,9 +95,6 @@ var _ = Describe("Internal", func() {
 			funcs.CreateFunc = func(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
-				m, err := meta.Accessor(pod)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(evt.Meta).To(Equal(m))
 				Expect(evt.Object).To(Equal(pod))
 			}
 			instance.OnAdd(pod)
@@ -167,14 +163,7 @@ var _ = Describe("Internal", func() {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
 
-				m, err := meta.Accessor(pod)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(evt.MetaOld).To(Equal(m))
 				Expect(evt.ObjectOld).To(Equal(pod))
-
-				m, err = meta.Accessor(newPod)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(evt.MetaNew).To(Equal(m))
 				Expect(evt.ObjectNew).To(Equal(newPod))
 			}
 			instance.OnUpdate(pod, newPod)
@@ -245,9 +234,6 @@ var _ = Describe("Internal", func() {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
 
-				m, err := meta.Accessor(pod)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(evt.Meta).To(Equal(m))
 				Expect(evt.Object).To(Equal(pod))
 			}
 			instance.OnDelete(pod)
@@ -319,9 +305,6 @@ var _ = Describe("Internal", func() {
 			funcs.DeleteFunc = func(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
-				m, err := meta.Accessor(pod)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(evt.Meta).To(Equal(m))
 				Expect(evt.Object).To(Equal(pod))
 			}
 

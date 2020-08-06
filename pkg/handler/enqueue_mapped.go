@@ -24,8 +24,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
-var _ EventHandler = &EnqueueRequestsFromMapFunc{}
-
 // EnqueueRequestsFromMapFunc enqueues Requests by running a transformation function that outputs a collection
 // of reconcile.Requests on each Event.  The reconcile.Requests may be for an arbitrary set of objects
 // defined by some user specified transformation of the source Event.  (e.g. trigger Reconciler for a set of objects
@@ -36,33 +34,41 @@ var _ EventHandler = &EnqueueRequestsFromMapFunc{}
 //
 // For UpdateEvents which contain both a new and old object, the transformation function is run on both
 // objects and both sets of Requests are enqueue.
-type EnqueueRequestsFromMapFunc struct {
+func EnqueueRequestsFromMapFunc(mapFN func(MapObject) []reconcile.Request) EventHandler {
+	return &enqueueRequestsFromMapFunc{
+		ToRequests: toRequestsFunc(mapFN),
+	}
+}
+
+var _ EventHandler = &enqueueRequestsFromMapFunc{}
+
+type enqueueRequestsFromMapFunc struct {
 	// Mapper transforms the argument into a slice of keys to be reconciled
-	ToRequests Mapper
+	ToRequests mapper
 }
 
 // Create implements EventHandler
-func (e *EnqueueRequestsFromMapFunc) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
+func (e *enqueueRequestsFromMapFunc) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
 	e.mapAndEnqueue(q, MapObject{Object: evt.Object})
 }
 
 // Update implements EventHandler
-func (e *EnqueueRequestsFromMapFunc) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+func (e *enqueueRequestsFromMapFunc) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 	e.mapAndEnqueue(q, MapObject{Object: evt.ObjectOld})
 	e.mapAndEnqueue(q, MapObject{Object: evt.ObjectNew})
 }
 
 // Delete implements EventHandler
-func (e *EnqueueRequestsFromMapFunc) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+func (e *enqueueRequestsFromMapFunc) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 	e.mapAndEnqueue(q, MapObject{Object: evt.Object})
 }
 
 // Generic implements EventHandler
-func (e *EnqueueRequestsFromMapFunc) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+func (e *enqueueRequestsFromMapFunc) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
 	e.mapAndEnqueue(q, MapObject{Object: evt.Object})
 }
 
-func (e *EnqueueRequestsFromMapFunc) mapAndEnqueue(q workqueue.RateLimitingInterface, object MapObject) {
+func (e *enqueueRequestsFromMapFunc) mapAndEnqueue(q workqueue.RateLimitingInterface, object MapObject) {
 	for _, req := range e.ToRequests.Map(object) {
 		q.Add(req)
 	}
@@ -71,15 +77,15 @@ func (e *EnqueueRequestsFromMapFunc) mapAndEnqueue(q workqueue.RateLimitingInter
 // EnqueueRequestsFromMapFunc can inject fields into the mapper.
 
 // InjectFunc implements inject.Injector.
-func (e *EnqueueRequestsFromMapFunc) InjectFunc(f inject.Func) error {
+func (e *enqueueRequestsFromMapFunc) InjectFunc(f inject.Func) error {
 	if f == nil {
 		return nil
 	}
 	return f(e.ToRequests)
 }
 
-// Mapper maps an object to a collection of keys to be enqueued
-type Mapper interface {
+// mapper maps an object to a collection of keys to be enqueued
+type mapper interface {
 	// Map maps an object
 	Map(MapObject) []reconcile.Request
 }
@@ -89,12 +95,12 @@ type MapObject struct {
 	Object controllerutil.Object
 }
 
-var _ Mapper = ToRequestsFunc(nil)
+var _ mapper = toRequestsFunc(nil)
 
-// ToRequestsFunc implements Mapper using a function.
-type ToRequestsFunc func(MapObject) []reconcile.Request
+// toRequestsFunc implements Mapper using a function.
+type toRequestsFunc func(MapObject) []reconcile.Request
 
 // Map implements Mapper
-func (m ToRequestsFunc) Map(i MapObject) []reconcile.Request {
+func (m toRequestsFunc) Map(i MapObject) []reconcile.Request {
 	return m(i)
 }

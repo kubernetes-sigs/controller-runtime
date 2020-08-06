@@ -191,21 +191,19 @@ var _ = Describe("Eventhandler", func() {
 	Describe("EnqueueRequestsFromMapFunc", func() {
 		It("should enqueue a Request with the function applied to the CreateEvent.", func() {
 			req := []reconcile.Request{}
-			instance := handler.EnqueueRequestsFromMapFunc{
-				ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-					defer GinkgoRecover()
-					Expect(a.Object).To(Equal(pod))
-					req = []reconcile.Request{
-						{
-							NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
-						},
-						{
-							NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"},
-						},
-					}
-					return req
-				}),
-			}
+			instance := handler.EnqueueRequestsFromMapFunc(func(a handler.MapObject) []reconcile.Request {
+				defer GinkgoRecover()
+				Expect(a.Object).To(Equal(pod))
+				req = []reconcile.Request{
+					{
+						NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
+					},
+					{
+						NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"},
+					},
+				}
+				return req
+			})
 
 			evt := event.CreateEvent{
 				Object: pod,
@@ -224,21 +222,19 @@ var _ = Describe("Eventhandler", func() {
 
 		It("should enqueue a Request with the function applied to the DeleteEvent.", func() {
 			req := []reconcile.Request{}
-			instance := handler.EnqueueRequestsFromMapFunc{
-				ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-					defer GinkgoRecover()
-					Expect(a.Object).To(Equal(pod))
-					req = []reconcile.Request{
-						{
-							NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
-						},
-						{
-							NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"},
-						},
-					}
-					return req
-				}),
-			}
+			instance := handler.EnqueueRequestsFromMapFunc(func(a handler.MapObject) []reconcile.Request {
+				defer GinkgoRecover()
+				Expect(a.Object).To(Equal(pod))
+				req = []reconcile.Request{
+					{
+						NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
+					},
+					{
+						NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"},
+					},
+				}
+				return req
+			})
 
 			evt := event.DeleteEvent{
 				Object: pod,
@@ -262,20 +258,19 @@ var _ = Describe("Eventhandler", func() {
 				newPod.Namespace = pod.Namespace + "2"
 
 				req := []reconcile.Request{}
-				instance := handler.EnqueueRequestsFromMapFunc{
-					ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-						defer GinkgoRecover()
-						req = []reconcile.Request{
-							{
-								NamespacedName: types.NamespacedName{Namespace: "foo", Name: a.Object.GetName() + "-bar"},
-							},
-							{
-								NamespacedName: types.NamespacedName{Namespace: "biz", Name: a.Object.GetName() + "-baz"},
-							},
-						}
-						return req
-					}),
-				}
+
+				instance := handler.EnqueueRequestsFromMapFunc(func(a handler.MapObject) []reconcile.Request {
+					defer GinkgoRecover()
+					req = []reconcile.Request{
+						{
+							NamespacedName: types.NamespacedName{Namespace: "foo", Name: a.Object.GetName() + "-bar"},
+						},
+						{
+							NamespacedName: types.NamespacedName{Namespace: "biz", Name: a.Object.GetName() + "-baz"},
+						},
+					}
+					return req
+				})
 
 				evt := event.UpdateEvent{
 					ObjectOld: pod,
@@ -303,21 +298,19 @@ var _ = Describe("Eventhandler", func() {
 
 		It("should enqueue a Request with the function applied to the GenericEvent.", func() {
 			req := []reconcile.Request{}
-			instance := handler.EnqueueRequestsFromMapFunc{
-				ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-					defer GinkgoRecover()
-					Expect(a.Object).To(Equal(pod))
-					req = []reconcile.Request{
-						{
-							NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
-						},
-						{
-							NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"},
-						},
-					}
-					return req
-				}),
-			}
+			instance := handler.EnqueueRequestsFromMapFunc(func(a handler.MapObject) []reconcile.Request {
+				defer GinkgoRecover()
+				Expect(a.Object).To(Equal(pod))
+				req = []reconcile.Request{
+					{
+						NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
+					},
+					{
+						NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"},
+					},
+				}
+				return req
+			})
 
 			evt := event.GenericEvent{
 				Object: pod,

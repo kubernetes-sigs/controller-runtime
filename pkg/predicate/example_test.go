@@ -27,7 +27,7 @@ var p predicate.Predicate
 func ExampleFuncs() {
 	p = predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()
+			return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
 		},
 	}
 }

@@ -72,7 +72,6 @@ var _ = Describe("Source", func() {
 					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Expect(q2).To(Equal(q))
-						Expect(evt.Meta).To(Equal(p))
 						Expect(evt.Object).To(Equal(p))
 						close(c)
 					},
@@ -117,10 +116,8 @@ var _ = Describe("Source", func() {
 					UpdateFunc: func(evt event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Expect(q2).To(BeIdenticalTo(q))
-						Expect(evt.MetaOld).To(Equal(p))
 						Expect(evt.ObjectOld).To(Equal(p))
 
-						Expect(evt.MetaNew).To(Equal(p2))
 						Expect(evt.ObjectNew).To(Equal(p2))
 
 						close(c)
@@ -171,7 +168,6 @@ var _ = Describe("Source", func() {
 					DeleteFunc: func(evt event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Expect(q2).To(BeIdenticalTo(q))
-						Expect(evt.Meta).To(Equal(p))
 						Expect(evt.Object).To(Equal(p))
 						close(c)
 					},
@@ -306,7 +302,6 @@ var _ = Describe("Source", func() {
 				}
 				evt := event.GenericEvent{
 					Object: p,
-					Meta:   p,
 				}
 				// Event that should be filtered out by predicates
 				invalidEvt := event.GenericEvent{}
@@ -314,7 +309,7 @@ var _ = Describe("Source", func() {
 				// Predicate to filter out empty event
 				prct := predicate.Funcs{
 					GenericFunc: func(e event.GenericEvent) bool {
-						return e.Object != nil && e.Meta != nil
+						return e.Object != nil
 					},
 				}
 
@@ -339,7 +334,6 @@ var _ = Describe("Source", func() {
 						// The empty event should have been filtered out by the predicates,
 						// and will not be passed to the handler.
 						Expect(q2).To(BeIdenticalTo(q))
-						Expect(evt.Meta).To(Equal(p))
 						Expect(evt.Object).To(Equal(p))
 						close(c)
 					},
@@ -436,7 +430,6 @@ var _ = Describe("Source", func() {
 				}
 				evt := event.GenericEvent{
 					Object: p,
-					Meta:   p,
 				}
 
 				var resEvent1, resEvent2 event.GenericEvent
@@ -462,7 +455,6 @@ var _ = Describe("Source", func() {
 					GenericFunc: func(evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Expect(q2).To(BeIdenticalTo(q))
-						Expect(evt.Meta).To(Equal(p))
 						Expect(evt.Object).To(Equal(p))
 						resEvent1 = evt
 						close(c1)
@@ -486,7 +478,6 @@ var _ = Describe("Source", func() {
 					GenericFunc: func(evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Expect(q2).To(BeIdenticalTo(q))
-						Expect(evt.Meta).To(Equal(p))
 						Expect(evt.Object).To(Equal(p))
 						resEvent2 = evt
 						close(c2)

@@ -17,9 +17,7 @@ limitations under the License.
 package predicate
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
@@ -97,19 +95,19 @@ func (p Funcs) Generic(e event.GenericEvent) bool {
 // NewPredicateFuncs returns a predicate funcs that applies the given filter function
 // on CREATE, UPDATE, DELETE and GENERIC events. For UPDATE events, the filter is applied
 // to the new object.
-func NewPredicateFuncs(filter func(meta metav1.Object, object runtime.Object) bool) Funcs {
+func NewPredicateFuncs(filter func(object controllerutil.Object) bool) Funcs {
 	return Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
-			return filter(e.Meta, e.Object)
+			return filter(e.Object)
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			return filter(e.MetaNew, e.ObjectNew)
+			return filter(e.ObjectNew)
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			return filter(e.Meta, e.Object)
+			return filter(e.Object)
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
-			return filter(e.Meta, e.Object)
+			return filter(e.Object)
 		},
 	}
 }
@@ -121,7 +119,7 @@ type ResourceVersionChangedPredicate struct {
 
 // Update implements default UpdateEvent filter for validating resource version change
 func (ResourceVersionChangedPredicate) Update(e event.UpdateEvent) bool {
-	if e.MetaOld == nil {
+	if e.ObjectOld == nil {
 		log.Error(nil, "UpdateEvent has no old metadata", "event", e)
 		return false
 	}
@@ -133,11 +131,11 @@ func (ResourceVersionChangedPredicate) Update(e event.UpdateEvent) bool {
 		log.Error(nil, "GenericEvent has no new runtime object for update", "event", e)
 		return false
 	}
-	if e.MetaNew == nil {
+	if e.ObjectNew == nil {
 		log.Error(nil, "UpdateEvent has no new metadata", "event", e)
 		return false
 	}
-	return e.MetaNew.GetResourceVersion() != e.MetaOld.GetResourceVersion()
+	return e.ObjectNew.GetResourceVersion() != e.ObjectOld.GetResourceVersion()
 }
 
 // GenerationChangedPredicate implements a default update predicate function on Generation change.
@@ -162,7 +160,7 @@ type GenerationChangedPredicate struct {
 
 // Update implements default UpdateEvent filter for validating generation change
 func (GenerationChangedPredicate) Update(e event.UpdateEvent) bool {
-	if e.MetaOld == nil {
+	if e.ObjectOld == nil {
 		log.Error(nil, "Update event has no old metadata", "event", e)
 		return false
 	}
@@ -174,11 +172,11 @@ func (GenerationChangedPredicate) Update(e event.UpdateEvent) bool {
 		log.Error(nil, "Update event has no new runtime object for update", "event", e)
 		return false
 	}
-	if e.MetaNew == nil {
+	if e.ObjectNew == nil {
 		log.Error(nil, "Update event has no new metadata", "event", e)
 		return false
 	}
-	return e.MetaNew.GetGeneration() != e.MetaOld.GetGeneration()
+	return e.ObjectNew.GetGeneration() != e.ObjectOld.GetGeneration()
 }
 
 // And returns a composite predicate that implements a logical AND of the predicates passed to it.

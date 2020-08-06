@@ -56,7 +56,6 @@ var _ = Describe("Eventhandler", func() {
 		It("should enqueue a Request with the Name / Namespace of the object in the CreateEvent.", func(done Done) {
 			evt := event.CreateEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(1))
@@ -73,7 +72,6 @@ var _ = Describe("Eventhandler", func() {
 		It("should enqueue a Request with the Name / Namespace of the object in the DeleteEvent.", func(done Done) {
 			evt := event.DeleteEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Delete(evt, q)
 			Expect(q.Len()).To(Equal(1))
@@ -95,9 +93,7 @@ var _ = Describe("Eventhandler", func() {
 
 				evt := event.UpdateEvent{
 					ObjectOld: pod,
-					MetaOld:   pod.GetObjectMeta(),
 					ObjectNew: newPod,
-					MetaNew:   newPod.GetObjectMeta(),
 				}
 				instance.Update(evt, q)
 				Expect(q.Len()).To(Equal(2))
@@ -120,7 +116,6 @@ var _ = Describe("Eventhandler", func() {
 		It("should enqueue a Request with the Name / Namespace of the object in the GenericEvent.", func(done Done) {
 			evt := event.GenericEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Generic(evt, q)
 			Expect(q.Len()).To(Equal(1))
@@ -133,25 +128,24 @@ var _ = Describe("Eventhandler", func() {
 			close(done)
 		})
 
-		Context("for a runtime.Object without Metadata", func() {
-			It("should do nothing if the Metadata is missing for a CreateEvent.", func(done Done) {
+		Context("for a runtime.Object without Object", func() {
+			It("should do nothing if the Object is missing for a CreateEvent.", func(done Done) {
 				evt := event.CreateEvent{
-					Object: pod,
+					Object: nil,
 				}
 				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
 				close(done)
 			})
 
-			It("should do nothing if the Metadata is missing for a UpdateEvent.", func(done Done) {
+			It("should do nothing if the Object is missing for a UpdateEvent.", func(done Done) {
 				newPod := pod.DeepCopy()
 				newPod.Name = "baz2"
 				newPod.Namespace = "biz2"
 
 				evt := event.UpdateEvent{
 					ObjectNew: newPod,
-					MetaNew:   newPod.GetObjectMeta(),
-					ObjectOld: pod,
+					ObjectOld: nil,
 				}
 				instance.Update(evt, q)
 				Expect(q.Len()).To(Equal(1))
@@ -161,8 +155,8 @@ var _ = Describe("Eventhandler", func() {
 				Expect(ok).To(BeTrue())
 				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz2", Name: "baz2"}))
 
-				evt.MetaNew = nil
-				evt.MetaOld = pod.GetObjectMeta()
+				evt.ObjectNew = nil
+				evt.ObjectOld = pod
 				instance.Update(evt, q)
 				Expect(q.Len()).To(Equal(1))
 				i, _ = q.Get()
@@ -174,18 +168,18 @@ var _ = Describe("Eventhandler", func() {
 				close(done)
 			})
 
-			It("should do nothing if the Metadata is missing for a DeleteEvent.", func(done Done) {
+			It("should do nothing if the Object is missing for a DeleteEvent.", func(done Done) {
 				evt := event.DeleteEvent{
-					Object: pod,
+					Object: nil,
 				}
 				instance.Delete(evt, q)
 				Expect(q.Len()).To(Equal(0))
 				close(done)
 			})
 
-			It("should do nothing if the Metadata is missing for a GenericEvent.", func(done Done) {
+			It("should do nothing if the Object is missing for a GenericEvent.", func(done Done) {
 				evt := event.GenericEvent{
-					Object: pod,
+					Object: nil,
 				}
 				instance.Generic(evt, q)
 				Expect(q.Len()).To(Equal(0))
@@ -200,7 +194,6 @@ var _ = Describe("Eventhandler", func() {
 			instance := handler.EnqueueRequestsFromMapFunc{
 				ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 					defer GinkgoRecover()
-					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
 					Expect(a.Object).To(Equal(pod))
 					req = []reconcile.Request{
 						{
@@ -216,7 +209,6 @@ var _ = Describe("Eventhandler", func() {
 
 			evt := event.CreateEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(2))
@@ -235,7 +227,6 @@ var _ = Describe("Eventhandler", func() {
 			instance := handler.EnqueueRequestsFromMapFunc{
 				ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 					defer GinkgoRecover()
-					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
 					Expect(a.Object).To(Equal(pod))
 					req = []reconcile.Request{
 						{
@@ -251,7 +242,6 @@ var _ = Describe("Eventhandler", func() {
 
 			evt := event.DeleteEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Delete(evt, q)
 			Expect(q.Len()).To(Equal(2))
@@ -277,10 +267,10 @@ var _ = Describe("Eventhandler", func() {
 						defer GinkgoRecover()
 						req = []reconcile.Request{
 							{
-								NamespacedName: types.NamespacedName{Namespace: "foo", Name: a.Meta.GetName() + "-bar"},
+								NamespacedName: types.NamespacedName{Namespace: "foo", Name: a.Object.GetName() + "-bar"},
 							},
 							{
-								NamespacedName: types.NamespacedName{Namespace: "biz", Name: a.Meta.GetName() + "-baz"},
+								NamespacedName: types.NamespacedName{Namespace: "biz", Name: a.Object.GetName() + "-baz"},
 							},
 						}
 						return req
@@ -289,9 +279,7 @@ var _ = Describe("Eventhandler", func() {
 
 				evt := event.UpdateEvent{
 					ObjectOld: pod,
-					MetaOld:   pod.GetObjectMeta(),
 					ObjectNew: newPod,
-					MetaNew:   newPod.GetObjectMeta(),
 				}
 				instance.Update(evt, q)
 				Expect(q.Len()).To(Equal(4))
@@ -318,7 +306,6 @@ var _ = Describe("Eventhandler", func() {
 			instance := handler.EnqueueRequestsFromMapFunc{
 				ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 					defer GinkgoRecover()
-					Expect(a.Meta).To(Equal(pod.GetObjectMeta()))
 					Expect(a.Object).To(Equal(pod))
 					req = []reconcile.Request{
 						{
@@ -334,7 +321,6 @@ var _ = Describe("Eventhandler", func() {
 
 			evt := event.GenericEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Generic(evt, q)
 			Expect(q.Len()).To(Equal(2))
@@ -366,7 +352,6 @@ var _ = Describe("Eventhandler", func() {
 			}
 			evt := event.CreateEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(1))
@@ -392,7 +377,6 @@ var _ = Describe("Eventhandler", func() {
 			}
 			evt := event.DeleteEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Delete(evt, q)
 			Expect(q.Len()).To(Equal(1))
@@ -429,9 +413,7 @@ var _ = Describe("Eventhandler", func() {
 			}
 			evt := event.UpdateEvent{
 				ObjectOld: pod,
-				MetaOld:   pod.GetObjectMeta(),
 				ObjectNew: newPod,
-				MetaNew:   newPod.GetObjectMeta(),
 			}
 			instance.Update(evt, q)
 			Expect(q.Len()).To(Equal(2))
@@ -461,7 +443,6 @@ var _ = Describe("Eventhandler", func() {
 			}
 			evt := event.GenericEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Generic(evt, q)
 			Expect(q.Len()).To(Equal(1))
@@ -492,7 +473,6 @@ var _ = Describe("Eventhandler", func() {
 			}
 			evt := event.CreateEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(0))
@@ -514,7 +494,6 @@ var _ = Describe("Eventhandler", func() {
 			}
 			evt := event.CreateEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(1))
@@ -539,7 +518,6 @@ var _ = Describe("Eventhandler", func() {
 			}
 			evt := event.CreateEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(1))
@@ -558,7 +536,6 @@ var _ = Describe("Eventhandler", func() {
 			Expect(instance.InjectMapper(mapper)).To(Succeed())
 			evt := event.CreateEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(0))
@@ -604,7 +581,6 @@ var _ = Describe("Eventhandler", func() {
 				}
 				evt := event.CreateEvent{
 					Object: pod,
-					Meta:   pod.GetObjectMeta(),
 				}
 				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(1))
@@ -639,7 +615,6 @@ var _ = Describe("Eventhandler", func() {
 				}
 				evt := event.CreateEvent{
 					Object: pod,
-					Meta:   pod.GetObjectMeta(),
 				}
 				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
@@ -654,7 +629,6 @@ var _ = Describe("Eventhandler", func() {
 				Expect(instance.InjectMapper(mapper)).To(Succeed())
 				evt := event.CreateEvent{
 					Object: pod,
-					Meta:   pod.GetObjectMeta(),
 				}
 				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
@@ -687,7 +661,6 @@ var _ = Describe("Eventhandler", func() {
 				}
 				evt := event.CreateEvent{
 					Object: pod,
-					Meta:   pod.GetObjectMeta(),
 				}
 				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(3))
@@ -704,7 +677,7 @@ var _ = Describe("Eventhandler", func() {
 			})
 		})
 
-		Context("with a nil metadata object", func() {
+		Context("with a nil object", func() {
 			It("should do nothing.", func() {
 				instance := handler.EnqueueRequestForOwner{
 					OwnerType: &appsv1.ReplicaSet{},
@@ -719,7 +692,7 @@ var _ = Describe("Eventhandler", func() {
 					},
 				}
 				evt := event.CreateEvent{
-					Object: pod,
+					Object: nil,
 				}
 				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
@@ -742,7 +715,6 @@ var _ = Describe("Eventhandler", func() {
 				}
 				evt := event.CreateEvent{
 					Object: pod,
-					Meta:   pod.GetObjectMeta(),
 				}
 				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
@@ -764,7 +736,6 @@ var _ = Describe("Eventhandler", func() {
 				}
 				evt := event.CreateEvent{
 					Object: pod,
-					Meta:   pod.GetObjectMeta(),
 				}
 				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
@@ -785,7 +756,6 @@ var _ = Describe("Eventhandler", func() {
 				}
 				evt := event.CreateEvent{
 					Object: pod,
-					Meta:   pod.GetObjectMeta(),
 				}
 				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
@@ -808,7 +778,6 @@ var _ = Describe("Eventhandler", func() {
 				}
 				evt := event.CreateEvent{
 					Object: pod,
-					Meta:   pod.GetObjectMeta(),
 				}
 				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
@@ -840,7 +809,6 @@ var _ = Describe("Eventhandler", func() {
 			instance := failingFuncs
 			evt := event.CreateEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.CreateFunc = func(evt2 event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
@@ -856,7 +824,6 @@ var _ = Describe("Eventhandler", func() {
 			instance.CreateFunc = nil
 			evt := event.CreateEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Create(evt, q)
 			close(done)
@@ -868,9 +835,7 @@ var _ = Describe("Eventhandler", func() {
 			newPod.Namespace = pod.Namespace + "2"
 			evt := event.UpdateEvent{
 				ObjectOld: pod,
-				MetaOld:   pod.GetObjectMeta(),
 				ObjectNew: newPod,
-				MetaNew:   newPod.GetObjectMeta(),
 			}
 
 			instance := failingFuncs
@@ -890,9 +855,7 @@ var _ = Describe("Eventhandler", func() {
 			newPod.Namespace = pod.Namespace + "2"
 			evt := event.UpdateEvent{
 				ObjectOld: pod,
-				MetaOld:   pod.GetObjectMeta(),
 				ObjectNew: newPod,
-				MetaNew:   newPod.GetObjectMeta(),
 			}
 			instance.Update(evt, q)
 			close(done)
@@ -902,7 +865,6 @@ var _ = Describe("Eventhandler", func() {
 			instance := failingFuncs
 			evt := event.DeleteEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.DeleteFunc = func(evt2 event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
@@ -918,7 +880,6 @@ var _ = Describe("Eventhandler", func() {
 			instance.DeleteFunc = nil
 			evt := event.DeleteEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Delete(evt, q)
 			close(done)
@@ -928,7 +889,6 @@ var _ = Describe("Eventhandler", func() {
 			instance := failingFuncs
 			evt := event.GenericEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.GenericFunc = func(evt2 event.GenericEvent, q2 workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
@@ -944,7 +904,6 @@ var _ = Describe("Eventhandler", func() {
 			instance.GenericFunc = nil
 			evt := event.GenericEvent{
 				Object: pod,
-				Meta:   pod.GetObjectMeta(),
 			}
 			instance.Generic(evt, q)
 			close(done)

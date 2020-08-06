@@ -17,9 +17,8 @@ limitations under the License.
 package handler
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -44,23 +43,23 @@ type EnqueueRequestsFromMapFunc struct {
 
 // Create implements EventHandler
 func (e *EnqueueRequestsFromMapFunc) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
-	e.mapAndEnqueue(q, MapObject{Meta: evt.Meta, Object: evt.Object})
+	e.mapAndEnqueue(q, MapObject{Object: evt.Object})
 }
 
 // Update implements EventHandler
 func (e *EnqueueRequestsFromMapFunc) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
-	e.mapAndEnqueue(q, MapObject{Meta: evt.MetaOld, Object: evt.ObjectOld})
-	e.mapAndEnqueue(q, MapObject{Meta: evt.MetaNew, Object: evt.ObjectNew})
+	e.mapAndEnqueue(q, MapObject{Object: evt.ObjectOld})
+	e.mapAndEnqueue(q, MapObject{Object: evt.ObjectNew})
 }
 
 // Delete implements EventHandler
 func (e *EnqueueRequestsFromMapFunc) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
-	e.mapAndEnqueue(q, MapObject{Meta: evt.Meta, Object: evt.Object})
+	e.mapAndEnqueue(q, MapObject{Object: evt.Object})
 }
 
 // Generic implements EventHandler
 func (e *EnqueueRequestsFromMapFunc) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
-	e.mapAndEnqueue(q, MapObject{Meta: evt.Meta, Object: evt.Object})
+	e.mapAndEnqueue(q, MapObject{Object: evt.Object})
 }
 
 func (e *EnqueueRequestsFromMapFunc) mapAndEnqueue(q workqueue.RateLimitingInterface, object MapObject) {
@@ -87,11 +86,7 @@ type Mapper interface {
 
 // MapObject contains information from an event to be transformed into a Request.
 type MapObject struct {
-	// Meta is the meta data for an object from an event.
-	Meta metav1.Object
-
-	// Object is the object from an event.
-	Object runtime.Object
+	Object controllerutil.Object
 }
 
 var _ Mapper = ToRequestsFunc(nil)

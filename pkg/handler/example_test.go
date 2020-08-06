@@ -65,20 +65,19 @@ func ExampleEnqueueRequestsFromMapFunc() {
 	// controller is a controller.controller
 	err := c.Watch(
 		&source.Kind{Type: &appsv1.Deployment{}},
-		&handler.EnqueueRequestsFromMapFunc{
-			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-				return []reconcile.Request{
-					{NamespacedName: types.NamespacedName{
-						Name:      a.Object.GetName() + "-1",
-						Namespace: a.Object.GetNamespace(),
-					}},
-					{NamespacedName: types.NamespacedName{
-						Name:      a.Object.GetName() + "-2",
-						Namespace: a.Object.GetNamespace(),
-					}},
-				}
-			}),
-		})
+		handler.EnqueueRequestsFromMapFunc(func(a handler.MapObject) []reconcile.Request {
+			return []reconcile.Request{
+				{NamespacedName: types.NamespacedName{
+					Name:      a.Object.GetName() + "-1",
+					Namespace: a.Object.GetNamespace(),
+				}},
+				{NamespacedName: types.NamespacedName{
+					Name:      a.Object.GetName() + "-2",
+					Namespace: a.Object.GetNamespace(),
+				}},
+			}
+		}),
+	)
 	if err != nil {
 		// handle it
 	}

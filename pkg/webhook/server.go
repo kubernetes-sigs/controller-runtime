@@ -76,6 +76,8 @@ type Server struct {
 
 	// defaultingOnce ensures that the default fields are only ever set once.
 	defaultingOnce sync.Once
+
+	Started bool
 }
 
 // setDefaults does defaulting for the Server.
@@ -226,6 +228,7 @@ func (s *Server) Start(stop <-chan struct{}) error {
 		close(idleConnsClosed)
 	}()
 
+	s.Started = true
 	err = srv.Serve(listener)
 	if err != nil && err != http.ErrServerClosed {
 		return err

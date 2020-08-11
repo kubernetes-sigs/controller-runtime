@@ -17,6 +17,8 @@ limitations under the License.
 package predicate
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
@@ -267,4 +269,16 @@ func (o or) Generic(e event.GenericEvent) bool {
 		}
 	}
 	return false
+}
+
+// LabelSelectorPredicate constructs a Predicate from a LabelSelector.
+// Only objects matching the LabelSelector will be admitted.
+func LabelSelectorPredicate(s metav1.LabelSelector) (Predicate, error) {
+	selector, err := metav1.LabelSelectorAsSelector(&s)
+	if err != nil {
+		return Funcs{}, err
+	}
+	return NewPredicateFuncs(func(o controllerutil.Object) bool {
+		return selector.Matches(labels.Set(o.GetLabels()))
+	}), nil
 }

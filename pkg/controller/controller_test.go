@@ -19,12 +19,10 @@ package controller_test
 import (
 	"context"
 	"fmt"
-	"os"
-	rt "runtime"
-	"runtime/pprof"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"go.uber.org/goleak"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -97,26 +95,27 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should not leak goroutines when stopped", func() {
-			// NB(directxman12): this test was flaky before on CI, but my guess
-			// is that the flakiness was caused by an expect on the count.
-			// Eventually should fix it, but if not, consider disabling again.
+			currentGRs := goleak.IgnoreCurrent()
+
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = controller.New("new-controller", m, controller.Options{Reconciler: rec})
 			Expect(err).NotTo(HaveOccurred())
 
-			startGoroutines := rt.NumGoroutine()
 			s := make(chan struct{})
 			close(s)
 
-			Expect(m.Start(s)).NotTo(HaveOccurred())
-			Eventually(rt.NumGoroutine /* pass the function, don't call it */).Should(Equal(startGoroutines))
+			Expect(m.Start(s)).To(Succeed())
+
+			// force-close keep-alive connections.  These'll time anyway (after
+			// like 30s or so) but force it to speed up the tests.
+			clientTransport.CloseIdleConnections()
+			Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 		})
 
 		It("should not create goroutines if never started", func() {
-			startGoroutines := rt.NumGoroutine()
-			Expect(pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)).To(Succeed())
+			currentGRs := goleak.IgnoreCurrent()
 
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
@@ -124,8 +123,10 @@ var _ = Describe("controller.Controller", func() {
 			_, err = controller.New("new-controller", m, controller.Options{Reconciler: rec})
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)).To(Succeed())
-			Eventually(rt.NumGoroutine /* pass func, don't call */).Should(Equal(startGoroutines))
+			// force-close keep-alive connections.  These'll time anyway (after
+			// like 30s or so) but force it to speed up the tests.
+			clientTransport.CloseIdleConnections()
+			Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 		})
 	})
 })

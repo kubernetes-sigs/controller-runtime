@@ -24,7 +24,6 @@ import (
 	"net"
 	"net/http"
 	"path"
-	rt "runtime"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +32,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/goleak"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1204,25 +1204,24 @@ var _ = Describe("manger.Manager", func() {
 		})
 	})
 
-	// This test has been marked as pending because it has been causing lots of flakes in CI.
-	// It should be rewritten at some point later in the future.
 	It("should not leak goroutines when stopped", func() {
-		// NB(directxman12): this test was flaky before on CI, but my guess
-		// is that the flakiness was caused by an expect on the count.
-		// Eventually should fix it, but if not, consider disabling again.
+		currentGRs := goleak.IgnoreCurrent()
+
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
-		startGoroutines := rt.NumGoroutine()
 
 		s := make(chan struct{})
 		close(s)
 		Expect(m.Start(s)).NotTo(HaveOccurred())
 
-		Eventually(rt.NumGoroutine /* pass the function, don't call it */).Should(Equal(startGoroutines))
+		// force-close keep-alive connections.  These'll time anyway (after
+		// like 30s or so) but force it to speed up the tests.
+		clientTransport.CloseIdleConnections()
+		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 
 	It("should not leak goroutines if the default event broadcaster is used & events are emitted", func() {
-		startGoroutines := rt.NumGoroutine()
+		currentGRs := goleak.IgnoreCurrent()
 
 		m, err := New(cfg, Options{ /* implicit: default setting for EventBroadcaster */ })
 		Expect(err).NotTo(HaveOccurred())
@@ -1261,7 +1260,10 @@ var _ = Describe("manger.Manager", func() {
 		close(stopCh)
 		<-doneCh
 
-		Eventually(rt.NumGoroutine /* pass the function, don't call it */).Should(Equal(startGoroutines))
+		// force-close keep-alive connections.  These'll time anyway (after
+		// like 30s or so) but force it to speed up the tests.
+		clientTransport.CloseIdleConnections()
+		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 
 	It("should provide a function to get the Config", func() {

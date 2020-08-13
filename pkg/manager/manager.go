@@ -154,6 +154,13 @@ type Options struct {
 	// that is used to build the leader election client.
 	LeaderElectionConfig *rest.Config
 
+	// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
+	// when the Manager ends. This requires the binary to immediately end when the
+	// Manager is stopped, otherwise this setting is unsafe. Setting this significantly
+	// speeds up voluntary leader transitions as the new leader doesn't have to wait
+	// LeaseDuration time first.
+	LeaderElectionReleaseOnCancel bool
+
 	// LeaseDuration is the duration that non-leader candidates will
 	// wait to force acquire leadership. This is measured against time of
 	// last observed ack. Default is 15 seconds.

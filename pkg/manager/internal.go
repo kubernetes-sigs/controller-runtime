@@ -94,6 +94,10 @@ type controllerManager struct {
 	// resourceLock forms the basis for leader election
 	resourceLock resourcelock.Interface
 
+	// leaderElectionReleaseOnCancel defines if the manager should step back from the leader lease
+	// on shutdown
+	leaderElectionReleaseOnCancel bool
+
 	// mapper is used to map resources to kind, and map kind and version.
 	mapper meta.RESTMapper
 
@@ -640,6 +644,7 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 			},
 			OnStoppedLeading: cm.onStoppedLeading,
 		},
+		ReleaseOnCancel: cm.leaderElectionReleaseOnCancel,
 	})
 	if err != nil {
 		return err

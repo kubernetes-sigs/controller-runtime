@@ -164,6 +164,9 @@ type Options struct {
 	// RetryPeriod is the duration the LeaderElector clients should wait
 	// between tries of actions. Default is 2 seconds.
 	RetryPeriod *time.Duration
+	// ReleaseOnCancel specifies whether the lock should be released
+	// when the run context is cancelled. Default if False
+	ReleaseOnCancel bool
 
 	// Namespace if specified restricts the manager's cache to watch objects in
 	// the desired namespace Defaults to all namespaces
@@ -362,6 +365,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		leaseDuration:           *options.LeaseDuration,
 		renewDeadline:           *options.RenewDeadline,
 		retryPeriod:             *options.RetryPeriod,
+		releaseOnCancel:         options.ReleaseOnCancel,
 		healthProbeListener:     healthProbeListener,
 		readinessEndpointName:   options.ReadinessEndpointName,
 		livenessEndpointName:    options.LivenessEndpointName,

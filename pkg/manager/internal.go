@@ -173,6 +173,9 @@ type controllerManager struct {
 	// retryPeriod is the duration the LeaderElector clients should wait
 	// between tries of actions.
 	retryPeriod time.Duration
+	// releaseOnCancel specifies whether the lock should be released
+	// when the run context is cancelled.
+	releaseOnCancel bool
 
 	// waitForRunnable is holding the number of runnables currently running so that
 	// we can wait for them to exit before quitting the manager
@@ -629,10 +632,11 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 		}
 	}
 	l, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
-		Lock:          cm.resourceLock,
-		LeaseDuration: cm.leaseDuration,
-		RenewDeadline: cm.renewDeadline,
-		RetryPeriod:   cm.retryPeriod,
+		Lock:            cm.resourceLock,
+		ReleaseOnCancel: cm.releaseOnCancel,
+		LeaseDuration:   cm.leaseDuration,
+		RenewDeadline:   cm.renewDeadline,
+		RetryPeriod:     cm.retryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(_ context.Context) {
 				close(cm.elected)

@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	appsv1 "k8s.io/api/apps/v1"
+	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -284,6 +285,118 @@ var _ = Describe("Fake client", func() {
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
 		})
 
+		It("should allow updates with non-set ResourceVersion for a resource that allows unconditional updates", func() {
+			By("Updating a new configmap")
+			newcm := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cm",
+					Namespace: "ns2",
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+			err := cl.Update(context.Background(), newcm)
+			Expect(err).To(BeNil())
+
+			By("Getting the configmap")
+			namespacedName := types.NamespacedName{
+				Name:      "test-cm",
+				Namespace: "ns2",
+			}
+			obj := &corev1.ConfigMap{}
+			err = cl.Get(context.Background(), namespacedName, obj)
+			Expect(err).To(BeNil())
+			Expect(obj).To(Equal(newcm))
+			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
+		})
+
+		It("should reject updates with non-set ResourceVersion for a resource that doesn't allow unconditional updates", func() {
+			By("Creating a new binding")
+			binding := &corev1.Binding{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Binding",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-binding",
+					Namespace: "ns2",
+				},
+				Target: corev1.ObjectReference{
+					Kind:       "ConfigMap",
+					APIVersion: "v1",
+					Namespace:  cm.Namespace,
+					Name:       cm.Name,
+				},
+			}
+			Expect(cl.Create(context.Background(), binding)).To(Succeed())
+
+			By("Updating the binding with a new resource lacking resource version")
+			newBinding := &corev1.Binding{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Binding",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      binding.Name,
+					Namespace: binding.Namespace,
+				},
+				Target: corev1.ObjectReference{
+					Namespace: binding.Namespace,
+					Name:      "blue",
+				},
+			}
+			Expect(cl.Update(context.Background(), newBinding)).NotTo(Succeed())
+		})
+
+		It("should allow create on update for a resource that allows create on update", func() {
+			By("Creating a new lease with update")
+			lease := &coordinationv1.Lease{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "coordination.k8s.io/v1",
+					Kind:       "Lease",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-lease",
+					Namespace: "ns2",
+				},
+				Spec: coordinationv1.LeaseSpec{},
+			}
+			Expect(cl.Create(context.Background(), lease)).To(Succeed())
+
+			By("Getting the lease")
+			namespacedName := types.NamespacedName{
+				Name:      lease.Name,
+				Namespace: lease.Namespace,
+			}
+			obj := &coordinationv1.Lease{}
+			Expect(cl.Get(context.Background(), namespacedName, obj)).To(Succeed())
+			Expect(obj).To(Equal(lease))
+			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
+		})
+
+		It("should reject create on update for a resource that does not allow create on update", func() {
+			By("Attemping to create a new configmap with update")
+			newcm := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "different-test-cm",
+					Namespace: "ns2",
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+			Expect(cl.Update(context.Background(), newcm)).NotTo(Succeed())
+		})
+
 		It("should reject updates with non-matching ResourceVersion", func() {
 			By("Updating a new configmap")
 			newcm := &corev1.ConfigMap{
@@ -427,6 +540,7 @@ var _ = Describe("Fake client", func() {
 			scheme := runtime.NewScheme()
 			Expect(corev1.AddToScheme(scheme)).To(Succeed())
 			Expect(appsv1.AddToScheme(scheme)).To(Succeed())
+			Expect(coordinationv1.AddToScheme(scheme)).To(Succeed())
 			cl = NewFakeClientWithScheme(scheme, dep, dep2, cm)
 			close(done)
 		})

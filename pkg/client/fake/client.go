@@ -108,19 +108,33 @@ func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Ob
 	if err != nil {
 		return fmt.Errorf("failed to get accessor for object: %v", err)
 	}
+
 	if accessor.GetName() == "" {
 		return apierrors.NewInvalid(
 			obj.GetObjectKind().GroupVersionKind().GroupKind(),
 			accessor.GetName(),
 			field.ErrorList{field.Required(field.NewPath("metadata.name"), "name is required")})
 	}
+
 	oldObject, err := t.ObjectTracker.Get(gvr, ns, accessor.GetName())
 	if err != nil {
+		// If the resource is not found and the resource allows create on update, issue a
+		// create instead.
+		if apierrors.IsNotFound(err) && allowsCreateOnUpdate(obj) {
+			return t.Create(gvr, obj, ns)
+		}
 		return err
 	}
+
 	oldAccessor, err := meta.Accessor(oldObject)
 	if err != nil {
 		return err
+	}
+
+	// If the new object does not have the resource version set and it allows unconditional update,
+	// default it to the resource version of the existing resource
+	if accessor.GetResourceVersion() == "" && allowsUnconditionalUpdate(obj) {
+		accessor.SetResourceVersion(oldAccessor.GetResourceVersion())
 	}
 	if accessor.GetResourceVersion() != oldAccessor.GetResourceVersion() {
 		return apierrors.NewConflict(gvr.GroupResource(), accessor.GetName(), errors.New("object was modified"))
@@ -415,4 +429,103 @@ func (sw *fakeStatusWriter) Patch(ctx context.Context, obj runtime.Object, patch
 	// TODO(droot): This results in full update of the obj (spec + status). Need
 	// a way to update status field only.
 	return sw.client.Patch(ctx, obj, patch, opts...)
+}
+
+func allowsUnconditionalUpdate(obj runtime.Object) bool {
+	gvk := obj.GetObjectKind().GroupVersionKind()
+	switch gvk.Group {
+	case "apps":
+		switch gvk.Kind {
+		case "ControllerRevision", "DaemonSet", "Deployment", "ReplicaSet", "StatefulSet":
+			return true
+		}
+	case "autoscaling":
+		switch gvk.Kind {
+		case "HorizontalPodAutoscaler":
+			return true
+		}
+	case "batch":
+		switch gvk.Kind {
+		case "CronJob", "Job":
+			return true
+		}
+	case "certificates":
+		switch gvk.Kind {
+		case "Certificates":
+			return true
+		}
+	case "flowcontrol":
+		switch gvk.Kind {
+		case "FlowSchema", "PriorityLevelConfiguration":
+			return true
+		}
+	case "networking":
+		switch gvk.Kind {
+		case "Ingress", "IngressClass", "NetworkPolicy":
+			return true
+		}
+	case "policy":
+		switch gvk.Kind {
+		case "PodSecurityPolicy":
+			return true
+		}
+	case "rbac":
+		switch gvk.Kind {
+		case "ClusterRole", "ClusterRoleBinding", "Role", "RoleBinding":
+			return true
+		}
+	case "scheduling":
+		switch gvk.Kind {
+		case "PriorityClass":
+			return true
+		}
+	case "settings":
+		switch gvk.Kind {
+		case "PodPreset":
+			return true
+		}
+	case "storage":
+		switch gvk.Kind {
+		case "StorageClass":
+			return true
+		}
+	case "":
+		switch gvk.Kind {
+		case "ConfigMap", "Endpoint", "Event", "LimitRange", "Namespace", "Node",
+			"PersistentVolume", "PersistentVolumeClaim", "Pod", "PodTemplate",
+			"ReplicationController", "ResourceQuota", "Secret", "Service",
+			"ServiceAccount", "EndpointSlice":
+			return true
+		}
+	}
+
+	return false
+}
+
+func allowsCreateOnUpdate(obj runtime.Object) bool {
+	gvk := obj.GetObjectKind().GroupVersionKind()
+	switch gvk.Group {
+	case "coordination":
+		switch gvk.Kind {
+		case "Lease":
+			return true
+		}
+	case "node":
+		switch gvk.Kind {
+		case "RuntimeClass":
+			return true
+		}
+	case "rbac":
+		switch gvk.Kind {
+		case "ClusterRole", "ClusterRoleBinding", "Role", "RoleBinding":
+			return true
+		}
+	case "":
+		switch gvk.Kind {
+		case "Endpoint", "Event", "LimitRange", "Service":
+			return true
+		}
+	}
+
+	return false
 }

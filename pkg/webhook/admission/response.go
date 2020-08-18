@@ -80,6 +80,17 @@ func ValidationResponse(allowed bool, reason string) Response {
 	return resp
 }
 
+// ValidationResponseFromStatus returns a response for admitting a request with provided Status object.
+func ValidationResponseFromStatus(allowed bool, status *metav1.Status) Response {
+	resp := Response{
+		AdmissionResponse: admissionv1beta1.AdmissionResponse{
+			Allowed: allowed,
+			Result: status,
+		},
+	}
+	return resp
+}
+
 // PatchResponseFromRaw takes 2 byte arrays and returns a new response with json patch.
 // The original object should be passed in as raw bytes to avoid the roundtripping problem
 // described in https://github.com/kubernetes-sigs/kubebuilder/issues/510.

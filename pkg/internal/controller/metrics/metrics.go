@@ -44,6 +44,20 @@ var (
 		Name: "controller_runtime_reconcile_time_seconds",
 		Help: "Length of time per reconciliation per controller",
 	}, []string{"controller"})
+
+	// WorkerCount is a prometheus metric which holds the number of
+	// concurrent reconciles per controller
+	WorkerCount = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "controller_runtime_max_concurrent_reconciles",
+		Help: "Maximum number of concurrent reconciles per controller",
+	}, []string{"controller"})
+
+	// ActiveWorkers is a prometheus metric which holds the number
+	// of active workers per controller
+	ActiveWorkers = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "controller_runtime_active_workers",
+		Help: "Number of currently used workers per controller",
+	}, []string{"controller"})
 )
 
 func init() {
@@ -51,6 +65,8 @@ func init() {
 		ReconcileTotal,
 		ReconcileErrors,
 		ReconcileTime,
+		WorkerCount,
+		ActiveWorkers,
 		// expose process metrics like CPU, Memory, file descriptor usage etc.
 		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
 		// expose Go runtime metrics like GC stats, memory stats etc.

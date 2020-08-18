@@ -169,6 +169,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 
 		// Launch workers to process resources
 		c.Log.Info("Starting workers", "worker count", c.MaxConcurrentReconciles)
+		ctrlmetrics.WorkerCount.WithLabelValues(c.Name).Set(float64(c.MaxConcurrentReconciles))
 		for i := 0; i < c.MaxConcurrentReconciles; i++ {
 			// Process work items
 			go wait.Until(c.worker, c.JitterPeriod, stop)
@@ -209,6 +210,9 @@ func (c *Controller) processNextWorkItem() bool {
 	// put back on the workqueue and attempted again after a back-off
 	// period.
 	defer c.Queue.Done(obj)
+
+	ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(1)
+	defer ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(-1)
 
 	return c.reconcileHandler(obj)
 }

@@ -506,3 +506,13 @@ var _ = Describe("Zap log level flag options setup", func() {
 
 	})
 })
+
+// This Example shows usage of command line arguments
+// to pass options for zap logger options.
+func ExampleUseFlagOptions() {
+	opts := Options{}
+	opts.BindFlags(flag.CommandLine)
+	flag.Parse()
+	log := New(UseFlagOptions(&opts))
+	log.Info("This is a test message")
+}

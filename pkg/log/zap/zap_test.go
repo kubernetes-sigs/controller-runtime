@@ -425,4 +425,84 @@ var _ = Describe("Zap log level flag options setup", func() {
 
 	})
 
+	Context("with only -zap-devel flag provided", func() {
+		It("Should set dev=true.", func() {
+			args := []string{"--zap-devel=true"}
+			fromFlags.BindFlags(&fs)
+			if err := fs.Parse(args); err != nil {
+				Expect(err).ToNot(HaveOccurred())
+			}
+			out := Options{}
+			UseFlagOptions(&fromFlags)(&out)
+
+			Expect(out.Development).To(BeTrue())
+			Expect(out.Encoder).To(BeNil())
+			Expect(out.Level).To(BeNil())
+			Expect(out.StacktraceLevel).To(BeNil())
+			Expect(out.EncoderConfigOptions).To(BeNil())
+		})
+		It("Should set dev=false", func() {
+			args := []string{"--zap-devel=false"}
+			fromFlags.BindFlags(&fs)
+			if err := fs.Parse(args); err != nil {
+				Expect(err).ToNot(HaveOccurred())
+			}
+			out := Options{}
+			UseFlagOptions(&fromFlags)(&out)
+
+			Expect(out.Development).To(BeFalse())
+			Expect(out.Encoder).To(BeNil())
+			Expect(out.Level).To(BeNil())
+			Expect(out.StacktraceLevel).To(BeNil())
+			Expect(out.EncoderConfigOptions).To(BeNil())
+
+		})
+	})
+
+	Context("with encoder options provided programmatically.", func() {
+
+		It("Should set Console Encoder, with given Nanos TimeEncoder option.", func() {
+			logOut := new(bytes.Buffer)
+			f := func(ec *zapcore.EncoderConfig) {
+				if err := ec.EncodeTime.UnmarshalText([]byte("nanos")); err != nil {
+					Expect(err).ToNot(HaveOccurred())
+				}
+			}
+			opts := func(o *Options) {
+				o.EncoderConfigOptions = append(o.EncoderConfigOptions, f)
+			}
+			log := New(UseDevMode(true), WriteTo(logOut), opts)
+			log.Info("This is a test message")
+			outRaw := logOut.Bytes()
+			// Assert for Console Encoder
+			res := map[string]interface{}{}
+			Expect(json.Unmarshal(outRaw, &res)).ToNot(Succeed())
+			// Assert for Epoch Nanos TimeEncoder
+			Expect(string(outRaw)).ShouldNot(ContainSubstring("."))
+
+		})
+		It("Should set JSON Encoder, with given Millis TimeEncoder option, and MessageKey", func() {
+			logOut := new(bytes.Buffer)
+			f := func(ec *zapcore.EncoderConfig) {
+				ec.MessageKey = "MillisTimeFormat"
+				if err := ec.EncodeTime.UnmarshalText([]byte("millis")); err != nil {
+					Expect(err).ToNot(HaveOccurred())
+				}
+			}
+			opts := func(o *Options) {
+				o.EncoderConfigOptions = append(o.EncoderConfigOptions, f)
+			}
+			log := New(UseDevMode(false), WriteTo(logOut), opts)
+			log.Info("This is a test message")
+			outRaw := logOut.Bytes()
+			// Assert for JSON Encoder
+			res := map[string]interface{}{}
+			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+			// Assert for Epoch Nanos TimeEncoder
+			Expect(string(outRaw)).Should(ContainSubstring("."))
+			// Assert for MessageKey
+			Expect(string(outRaw)).Should(ContainSubstring("MillisTimeFormat"))
+		})
+
+	})
 })

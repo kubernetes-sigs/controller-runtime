@@ -107,3 +107,14 @@ func PatchResponseFromRaw(original, current []byte) Response {
 		},
 	}
 }
+
+// validationResponseFromStatus returns a response for admitting a request with provided Status object.
+func validationResponseFromStatus(allowed bool, status metav1.Status) Response {
+	resp := Response{
+		AdmissionResponse: admissionv1beta1.AdmissionResponse{
+			Allowed: allowed,
+			Result:  &status,
+		},
+	}
+	return resp
+}

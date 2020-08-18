@@ -20,9 +20,10 @@ import (
 	"context"
 	"net/http"
 
+	goerrors "errors"
+
 	"k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -69,12 +70,10 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 		}
 
 		err = obj.ValidateCreate()
-
 		if err != nil {
-
-			isStatusError, status := isStatusError(&err)
-			if isStatusError {
-				return ValidationResponseFromStatus(false, status)
+			var apiStatus errors.APIStatus
+			if goerrors.As(err, &apiStatus) {
+				return validationResponseFromStatus(false, apiStatus.Status())
 			}
 			return Denied(err.Error())
 		}
@@ -93,11 +92,10 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 		}
 
 		err = obj.ValidateUpdate(oldObj)
-
 		if err != nil {
-			isStatusError, status := isStatusError(&err)
-			if isStatusError {
-				return ValidationResponseFromStatus(false, status)
+			var apiStatus errors.APIStatus
+			if goerrors.As(err, &apiStatus) {
+				return validationResponseFromStatus(false, apiStatus.Status())
 			}
 			return Denied(err.Error())
 		}
@@ -113,22 +111,13 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 
 		err = obj.ValidateDelete()
 		if err != nil {
-			isStatusError, status := isStatusError(&err)
-			if isStatusError {
-				return ValidationResponseFromStatus(false, status)
+			var apiStatus errors.APIStatus
+			if goerrors.As(err, &apiStatus) {
+				return validationResponseFromStatus(false, apiStatus.Status())
 			}
 			return Denied(err.Error())
 		}
 	}
 
 	return Allowed("")
-}
-
-func isStatusError(err *error) (bool, *metav1.Status) {
-	statusError, isStatusError := (*err).(*errors.StatusError)
-	if isStatusError {
-		return true, &statusError.ErrStatus
-	}
-
-	return false, nil
 }

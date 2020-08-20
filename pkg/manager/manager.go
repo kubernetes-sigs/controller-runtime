@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	internalrecorder "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
+	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -224,6 +224,9 @@ type Options struct {
 
 	// EventBroadcaster records Events emitted by the manager and sends them to the Kubernetes API
 	// Use this to customize the event correlator and spam filter
+	//
+	// Deprecated: using this may cause goroutine leaks if the lifetime of your manager or controllers
+	// is shorter than the lifetime of your process.
 	EventBroadcaster record.EventBroadcaster
 
 	// GracefulShutdownTimeout is the duration given to runnable to stop before the manager actually returns on stop.
@@ -232,8 +235,14 @@ type Options struct {
 	// The graceful shutdown is skipped for safety reasons in case the leadere election lease is lost.
 	GracefulShutdownTimeout *time.Duration
 
+	// makeBroadcaster allows deferring the creation of the broadcaster to
+	// avoid leaking goroutines if we never call Start on this manager.  It also
+	// returns whether or not this is a "owned" broadcaster, and as such should be
+	// stopped with the manager.
+	makeBroadcaster intrec.EventBroadcasterProducer
+
 	// Dependency injection for testing
-	newRecorderProvider    func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, broadcaster record.EventBroadcaster) (recorder.Provider, error)
+	newRecorderProvider    func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error)
 	newResourceLock        func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
 	newMetricsListener     func(addr string) (net.Listener, error)
 	newHealthProbeListener func(addr string) (net.Listener, error)
@@ -309,7 +318,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Create the recorder provider to inject event recorders for the components.
 	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.
-	recorderProvider, err := options.newRecorderProvider(config, options.Scheme, log.WithName("events"), options.EventBroadcaster)
+	recorderProvider, err := options.newRecorderProvider(config, options.Scheme, log.WithName("events"), options.makeBroadcaster)
 	if err != nil {
 		return nil, err
 	}
@@ -428,7 +437,7 @@ func setOptionsDefaults(options Options) Options {
 
 	// Allow newRecorderProvider to be mocked
 	if options.newRecorderProvider == nil {
-		options.newRecorderProvider = internalrecorder.NewProvider
+		options.newRecorderProvider = intrec.NewProvider
 	}
 
 	// Allow newResourceLock to be mocked
@@ -453,7 +462,14 @@ func setOptionsDefaults(options Options) Options {
 	}
 
 	if options.EventBroadcaster == nil {
-		options.EventBroadcaster = record.NewBroadcaster()
+		// defer initialization to avoid leaking by default
+		options.makeBroadcaster = func() (record.EventBroadcaster, bool) {
+			return record.NewBroadcaster(), true
+		}
+	} else {
+		options.makeBroadcaster = func() (record.EventBroadcaster, bool) {
+			return options.EventBroadcaster, false
+		}
 	}
 
 	if options.ReadinessEndpointName == "" {

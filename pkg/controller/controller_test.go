@@ -19,10 +19,10 @@ package controller_test
 import (
 	"context"
 	"fmt"
-	rt "runtime"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"go.uber.org/goleak"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -94,12 +94,8 @@ var _ = Describe("controller.Controller", func() {
 			close(done)
 		})
 
-		// This test has been marked as pending because it has been causing lots of flakes in CI.
-		// It should be rewritten at some point later in the future.
-		XIt("should not leak goroutines when stop", func(done Done) {
-			// TODO(directxman12): After closing the proper leaks on watch this must be reduced to 0
-			// The leaks currently come from the event-related code (as in corev1.Event).
-			threshold := 3
+		It("should not leak goroutines when stopped", func() {
+			currentGRs := goleak.IgnoreCurrent()
 
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
@@ -107,14 +103,30 @@ var _ = Describe("controller.Controller", func() {
 			_, err = controller.New("new-controller", m, controller.Options{Reconciler: rec})
 			Expect(err).NotTo(HaveOccurred())
 
-			startGoroutines := rt.NumGoroutine()
 			s := make(chan struct{})
 			close(s)
 
-			Expect(m.Start(s)).NotTo(HaveOccurred())
-			Expect(rt.NumGoroutine() - startGoroutines).To(BeNumerically("<=", threshold))
+			Expect(m.Start(s)).To(Succeed())
 
-			close(done)
+			// force-close keep-alive connections.  These'll time anyway (after
+			// like 30s or so) but force it to speed up the tests.
+			clientTransport.CloseIdleConnections()
+			Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
+		})
+
+		It("should not create goroutines if never started", func() {
+			currentGRs := goleak.IgnoreCurrent()
+
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = controller.New("new-controller", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+
+			// force-close keep-alive connections.  These'll time anyway (after
+			// like 30s or so) but force it to speed up the tests.
+			clientTransport.CloseIdleConnections()
+			Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 		})
 	})
 })

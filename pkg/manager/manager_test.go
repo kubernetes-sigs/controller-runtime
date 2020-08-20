@@ -23,10 +23,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
 	"path"
-	rt "runtime"
-	"runtime/pprof"
 	"strings"
 	"sync"
 	"time"
@@ -35,15 +32,17 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
-
+	"go.uber.org/goleak"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
-	"k8s.io/client-go/tools/record"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -122,7 +121,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should return an error it can't create a recorder.Provider", func(done Done) {
 			m, err := New(cfg, Options{
-				newRecorderProvider: func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, broadcaster record.EventBroadcaster) (recorder.Provider, error) {
+				newRecorderProvider: func(_ *rest.Config, _ *runtime.Scheme, _ logr.Logger, _ intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
 					return nil, fmt.Errorf("expected error")
 				},
 			})
@@ -1205,25 +1204,66 @@ var _ = Describe("manger.Manager", func() {
 		})
 	})
 
-	// This test has been marked as pending because it has been causing lots of flakes in CI.
-	// It should be rewritten at some point later in the future.
-	XIt("should not leak goroutines when stop", func(done Done) {
-		// TODO(directxman12): After closing the proper leaks on watch this must be reduced to 0
-		// The leaks currently come from the event-related code (as in corev1.Event).
-		threshold := 3
+	It("should not leak goroutines when stopped", func() {
+		currentGRs := goleak.IgnoreCurrent()
 
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
-		startGoruntime := rt.NumGoroutine()
-		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 
 		s := make(chan struct{})
 		close(s)
 		Expect(m.Start(s)).NotTo(HaveOccurred())
 
-		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-		Expect(rt.NumGoroutine() - startGoruntime).To(BeNumerically("<=", threshold))
-		close(done)
+		// force-close keep-alive connections.  These'll time anyway (after
+		// like 30s or so) but force it to speed up the tests.
+		clientTransport.CloseIdleConnections()
+		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
+	})
+
+	It("should not leak goroutines if the default event broadcaster is used & events are emitted", func() {
+		currentGRs := goleak.IgnoreCurrent()
+
+		m, err := New(cfg, Options{ /* implicit: default setting for EventBroadcaster */ })
+		Expect(err).NotTo(HaveOccurred())
+
+		By("adding a runnable that emits an event")
+		ns := corev1.Namespace{}
+		ns.Name = "default"
+
+		recorder := m.GetEventRecorderFor("rock-and-roll")
+		Expect(m.Add(RunnableFunc(func(_ <-chan struct{}) error {
+			recorder.Event(&ns, "Warning", "BallroomBlitz", "yeah, yeah, yeah-yeah-yeah")
+			return nil
+		}))).To(Succeed())
+
+		By("starting the manager & waiting till we've sent our event")
+		stopCh := make(chan struct{})
+		doneCh := make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			defer close(doneCh)
+			Expect(m.Start(stopCh)).To(Succeed())
+		}()
+		Eventually(func() *corev1.Event {
+			evts, err := clientset.CoreV1().Events("").Search(m.GetScheme(), &ns)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i, evt := range evts.Items {
+				if evt.Reason == "BallroomBlitz" {
+					return &evts.Items[i]
+				}
+			}
+			return nil
+		}).ShouldNot(BeNil())
+
+		By("making sure there's no extra go routines still running after we stop")
+		close(stopCh)
+		<-doneCh
+
+		// force-close keep-alive connections.  These'll time anyway (after
+		// like 30s or so) but force it to speed up the tests.
+		clientTransport.CloseIdleConnections()
+		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 
 	It("should provide a function to get the Config", func() {

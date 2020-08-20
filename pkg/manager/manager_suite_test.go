@@ -17,6 +17,7 @@ limitations under the License.
 package manager
 
 import (
+	"net/http"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -40,6 +41,9 @@ var testenv *envtest.Environment
 var cfg *rest.Config
 var clientset *kubernetes.Clientset
 
+// clientTransport is used to force-close keep-alives in tests that check for leaks
+var clientTransport *http.Transport
+
 var _ = BeforeSuite(func(done Done) {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
@@ -48,6 +52,9 @@ var _ = BeforeSuite(func(done Done) {
 	var err error
 	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
+
+	clientTransport = &http.Transport{}
+	cfg.Transport = clientTransport
 
 	clientset, err = kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())

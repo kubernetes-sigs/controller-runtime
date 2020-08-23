@@ -52,8 +52,8 @@ const (
 	defaultRetryPeriod            = 2 * time.Second
 	defaultGracefulShutdownPeriod = 30 * time.Second
 
-	defaultReadinessEndpoint = "/readyz/"
-	defaultLivenessEndpoint  = "/healthz/"
+	defaultReadinessEndpoint = "/readyz"
+	defaultLivenessEndpoint  = "/healthz"
 	defaultMetricsEndpoint   = "/metrics"
 )
 
@@ -414,9 +414,13 @@ func (cm *controllerManager) serveHealthProbes(stop <-chan struct{}) {
 
 	if cm.readyzHandler != nil {
 		mux.Handle(cm.readinessEndpointName, http.StripPrefix(cm.readinessEndpointName, cm.readyzHandler))
+		// Append '/' suffix to handle subpaths
+		mux.Handle(cm.readinessEndpointName+"/", http.StripPrefix(cm.readinessEndpointName, cm.readyzHandler))
 	}
 	if cm.healthzHandler != nil {
 		mux.Handle(cm.livenessEndpointName, http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
+		// Append '/' suffix to handle subpaths
+		mux.Handle(cm.livenessEndpointName+"/", http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
 	}
 
 	server := http.Server{

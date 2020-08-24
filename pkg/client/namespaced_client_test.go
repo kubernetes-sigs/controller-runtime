@@ -29,11 +29,11 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 var _ = Describe("NamespacedClient", func() {
@@ -42,18 +42,19 @@ var _ = Describe("NamespacedClient", func() {
 	ctx := context.Background()
 	var count uint64 = 0
 	var replicaCount int32 = 2
-	var restmapper meta.RESTMapper
 
 	getClient := func() client.Client {
-		var sch runtime.Scheme
-		sch.AddKnownTypes(dep.GroupVersionKind().GroupVersion())
-		nonNamespacedClient, err := client.New(cfg, client.Options{Scheme: &sch})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(&sch).NotTo(BeNil())
-		Expect(nonNamespacedClient).NotTo(BeNil())
-		restmapper, err = apiutil.NewDynamicRESTMapper(cfg)
+		var sch = runtime.NewScheme()
+
+		err := rbacv1.AddToScheme(sch)
 		Expect(err).To(BeNil())
-		return client.NewNamespacedClient(nonNamespacedClient, ns, restmapper, &sch)
+		err = appsv1.AddToScheme(sch)
+		Expect(err).To(BeNil())
+
+		nonNamespacedClient, err := client.New(cfg, client.Options{Scheme: sch})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(nonNamespacedClient).NotTo(BeNil())
+		return client.NewNamespacedClient(nonNamespacedClient, ns)
 	}
 
 	BeforeEach(func() {
@@ -76,391 +77,467 @@ var _ = Describe("NamespacedClient", func() {
 		}
 	})
 
-	// Describe("Get", func() {
+	Describe("Get", func() {
 
-	// 	BeforeEach(func() {
-	// 		var err error
-	// 		dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 	})
+		BeforeEach(func() {
+			var err error
+			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-	// 	AfterEach(func() {
-	// 		deleteDeployment(ctx, dep, ns)
-	// 	})
-	// 	It("should successfully Get a namespace-scoped object", func() {
-	// 		name := types.NamespacedName{Name: dep.Name}
-	// 		result := &appsv1.Deployment{}
+		AfterEach(func() {
+			deleteDeployment(ctx, dep, ns)
+		})
+		It("should successfully Get a namespace-scoped object", func() {
+			name := types.NamespacedName{Name: dep.Name}
+			result := &appsv1.Deployment{}
 
-	// 		Expect(getClient().Get(ctx, name, result)).NotTo(HaveOccurred())
-	// 		Expect(result).To(BeEquivalentTo(dep))
-	// 	})
+			Expect(getClient().Get(ctx, name, result)).NotTo(HaveOccurred())
+			Expect(result).To(BeEquivalentTo(dep))
+		})
 
-	// 	It("should get the objects from namespace specified in the client", func() {
-	// 		name := types.NamespacedName{Name: dep.Name, Namespace: "non-default"}
-	// 		result := &appsv1.Deployment{}
+		It("should get the objects from namespace specified in the client", func() {
+			name := types.NamespacedName{Name: dep.Name, Namespace: "non-default"}
+			result := &appsv1.Deployment{}
 
-	// 		Expect(getClient().Get(ctx, name, result)).NotTo(HaveOccurred())
-	// 		Expect(result).To(BeEquivalentTo(dep))
-	// 	})
-	// })
+			Expect(getClient().Get(ctx, name, result)).NotTo(HaveOccurred())
+			Expect(result).To(BeEquivalentTo(dep))
+		})
+	})
 
-	// Describe("List", func() {
-	// 	BeforeEach(func() {
-	// 		var err error
-	// 		dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 	})
+	Describe("List", func() {
+		BeforeEach(func() {
+			var err error
+			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-	// 	AfterEach(func() {
-	// 		deleteDeployment(ctx, dep, ns)
-	// 	})
+		AfterEach(func() {
+			deleteDeployment(ctx, dep, ns)
+		})
 
-	// 	It("should successfully List objects when namespace is not specified with the object", func() {
-	// 		result := &appsv1.DeploymentList{}
-	// 		opts := client.MatchingLabels(dep.Labels)
+		It("should successfully List objects when namespace is not specified with the object", func() {
+			result := &appsv1.DeploymentList{}
+			opts := client.MatchingLabels(dep.Labels)
 
-	// 		Expect(getClient().List(ctx, result, opts)).NotTo(HaveOccurred())
-	// 		Expect(len(result.Items)).To(BeEquivalentTo(1))
-	// 		Expect(result.Items[0]).To(BeEquivalentTo(*dep))
-	// 	})
+			Expect(getClient().List(ctx, result, opts)).NotTo(HaveOccurred())
+			Expect(len(result.Items)).To(BeEquivalentTo(1))
+			Expect(result.Items[0]).To(BeEquivalentTo(*dep))
+		})
 
-	// 	It("should List objects from the namespace specified in the client", func() {
-	// 		result := &appsv1.DeploymentList{}
-	// 		opts := client.InNamespace("non-default")
+		It("should List objects from the namespace specified in the client", func() {
+			result := &appsv1.DeploymentList{}
+			opts := client.InNamespace("non-default")
 
-	// 		Expect(getClient().List(ctx, result, opts)).NotTo(HaveOccurred())
-	// 		Expect(len(result.Items)).To(BeEquivalentTo(1))
-	// 		Expect(result.Items[0]).To(BeEquivalentTo(*dep))
-	// 	})
-	// })
+			Expect(getClient().List(ctx, result, opts)).NotTo(HaveOccurred())
+			Expect(len(result.Items)).To(BeEquivalentTo(1))
+			Expect(result.Items[0]).To(BeEquivalentTo(*dep))
+		})
+	})
 
 	Describe("Create", func() {
 		AfterEach(func() {
 			deleteDeployment(ctx, dep, ns)
 		})
 
-		// It("should successfully create object in the right namespace", func() {
-		// 	By("creating the object initially")
-		// 	err := getClient().Create(ctx, dep)
-		// 	Expect(err).NotTo(HaveOccurred())
+		It("should successfully create object in the right namespace", func() {
+			By("creating the object initially")
+			err := getClient().Create(ctx, dep)
+			Expect(err).NotTo(HaveOccurred())
 
-		// 	By("checking if the object was created in the right namespace")
-		// 	res, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
-		// 	Expect(err).NotTo(HaveOccurred())
-		// 	Expect(res.GetNamespace()).To(BeEquivalentTo(ns))
-		// })
+			By("checking if the object was created in the right namespace")
+			res, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.GetNamespace()).To(BeEquivalentTo(ns))
+		})
 
 		It("should create an object in the namespace specified with the client", func() {
+			By("creating the object initially")
+
+			err := getClient().Create(ctx, dep)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("checking if the object was created in the right namespace")
+			res, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.GetNamespace()).To(BeEquivalentTo(ns))
+		})
+		It("should create a cluster scoped object", func() {
 			cr := &rbacv1.ClusterRole{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("clusterRole-%v", count),
-					Namespace: ns,
-					Labels:    map[string]string{"name": fmt.Sprintf("clusterRole-%v", count)},
+					Name:   fmt.Sprintf("clusterRole-%v", count),
+					Labels: map[string]string{"name": fmt.Sprintf("clusterRole-%v", count)},
 				},
 			}
+
+			cr.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "rbac.authorization.k8s.io",
+				Version: "v1",
+				Kind:    "ClusterRole",
+			})
 
 			By("creating the object initially")
 			err := getClient().Create(ctx, cr)
 			Expect(err).NotTo(HaveOccurred())
 
-			// By("checking if the object was created in the right namespace")
-			// res, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
-			// Expect(err).NotTo(HaveOccurred())
-			// Expect(res.GetNamespace()).To(BeEquivalentTo(ns))
+			By("checking if the object was created")
+			res, err := clientset.RbacV1().ClusterRoles().Get(ctx, cr.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res).NotTo(BeNil())
+
+			// Delete the clusterRole Resource
+			deleteClusterRole(ctx, cr)
 		})
 	})
 
-	// Describe("Update", func() {
-	// 	var err error
-	// 	BeforeEach(func() {
-	// 		dep.Annotations = map[string]string{"foo": "bar"}
-	// 		dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 	})
-	// 	AfterEach(func() {
-	// 		deleteDeployment(ctx, dep, ns)
-	// 	})
+	Describe("Update", func() {
+		var err error
+		BeforeEach(func() {
+			dep.Annotations = map[string]string{"foo": "bar"}
+			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+		AfterEach(func() {
+			deleteDeployment(ctx, dep, ns)
+		})
 
-	// 	It("should successfully update the provided object", func() {
-	// 		By("updating the Deployment")
-	// 		err = getClient().Update(ctx, dep)
-	// 		Expect(err).NotTo(HaveOccurred())
+		It("should successfully update the provided object", func() {
+			By("updating the Deployment")
+			err = getClient().Update(ctx, dep)
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		By("validating if the updated Deployment has new annotation")
-	// 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 		Expect(actual).NotTo(BeNil())
-	// 		Expect(actual.GetNamespace()).To(Equal(ns))
-	// 		Expect(actual.Annotations["foo"]).To(Equal("bar"))
-	// 	})
+			By("validating if the updated Deployment has new annotation")
+			actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).NotTo(BeNil())
+			Expect(actual.GetNamespace()).To(Equal(ns))
+			Expect(actual.Annotations["foo"]).To(Equal("bar"))
+		})
 
-	// 	It("should update the object in the namespace specified in the client", func() {
-	// 		By("updating the Deployment")
-	// 		dep.SetNamespace("non-default")
-	// 		err = getClient().Update(ctx, dep)
-	// 		Expect(err).NotTo(HaveOccurred())
+		It("should update the object in the namespace specified in the client", func() {
+			By("updating the Deployment")
+			dep.SetNamespace("non-default")
+			err = getClient().Update(ctx, dep)
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		By("validating if the updated Deployment has new annotation")
-	// 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 		Expect(actual).NotTo(BeNil())
-	// 		Expect(actual.GetNamespace()).To(Equal(ns))
-	// 		Expect(actual.Annotations["foo"]).To(Equal("bar"))
-	// 	})
+			By("validating if the updated Deployment has new annotation")
+			actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).NotTo(BeNil())
+			Expect(actual.GetNamespace()).To(Equal(ns))
+			Expect(actual.Annotations["foo"]).To(Equal("bar"))
+		})
 
-	// 	It("should not update any object from other namespace", func() {
-	// 		By("creating a new namespace")
-	// 		tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "non-default-1"}}
-	// 		_, err := clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
+		It("should not update any object from other namespace", func() {
+			By("creating a new namespace")
+			tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "non-default-1"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		changedDep := &appsv1.Deployment{
-	// 			ObjectMeta: metav1.ObjectMeta{
-	// 				Name:      "changed-dep",
-	// 				Namespace: tns.Name,
-	// 				Labels:    map[string]string{"name": "changed-dep"},
-	// 			},
-	// 			Spec: appsv1.DeploymentSpec{
-	// 				Replicas: &replicaCount,
-	// 				Selector: &metav1.LabelSelector{
-	// 					MatchLabels: map[string]string{"foo": "bar"},
-	// 				},
-	// 				Template: corev1.PodTemplateSpec{
-	// 					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
-	// 					Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
-	// 				},
-	// 			},
-	// 		}
-	// 		changedDep.Annotations = map[string]string{"foo": "bar"}
+			changedDep := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "changed-dep",
+					Namespace: tns.Name,
+					Labels:    map[string]string{"name": "changed-dep"},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: &replicaCount,
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
+						Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+					},
+				},
+			}
+			changedDep.Annotations = map[string]string{"foo": "bar"}
 
-	// 		By("creating the object initially")
-	// 		_, err = clientset.AppsV1().Deployments(tns.Name).Create(ctx, changedDep, metav1.CreateOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
+			By("creating the object initially")
+			_, err = clientset.AppsV1().Deployments(tns.Name).Create(ctx, changedDep, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		By("updating the object")
-	// 		err = getClient().Update(ctx, changedDep)
-	// 		Expect(err).To(HaveOccurred())
+			By("updating the object")
+			err = getClient().Update(ctx, changedDep)
+			Expect(err).To(HaveOccurred())
 
-	// 		deleteDeployment(ctx, changedDep, tns.Name)
-	// 		deleteNamespace(ctx, tns)
-	// 	})
+			deleteDeployment(ctx, changedDep, tns.Name)
+			deleteNamespace(ctx, tns)
+		})
 
-	// })
+		It("should update a cluster scoped resource", func() {
+			changedCR := &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   fmt.Sprintf("clusterRole-%v", count),
+					Labels: map[string]string{"name": fmt.Sprintf("clusterRole-%v", count)},
+				},
+			}
 
-	// Describe("Patch", func() {
-	// 	var err error
-	// 	BeforeEach(func() {
-	// 		dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 	})
+			changedCR.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "rbac.authorization.k8s.io",
+				Version: "v1",
+				Kind:    "ClusterRole",
+			})
 
-	// 	AfterEach(func() {
-	// 		deleteDeployment(ctx, dep, ns)
-	// 	})
-	// 	It("should successfully modify the object using Patch", func() {
-	// 		By("Applying Patch")
-	// 		err = getClient().Patch(ctx, dep, client.RawPatch(types.MergePatchType, generatePatch()))
-	// 		Expect(err).NotTo(HaveOccurred())
+			By("Setting annotations and creating the resource")
+			changedCR.Annotations = map[string]string{"foo": "bar"}
+			changedCR, err = clientset.RbacV1().ClusterRoles().Create(ctx, changedCR, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		By("validating patched Deployment has new annotations")
-	// 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 		Expect(actual.Annotations["foo"]).To(Equal("bar"))
-	// 		Expect(actual.GetNamespace()).To(Equal(ns))
-	// 	})
-	// 	It("should successfully modify the object with namespace specified in the client", func() {
-	// 		dep.SetNamespace("non-default")
-	// 		By("Applying Patch")
-	// 		err = getClient().Patch(ctx, dep, client.RawPatch(types.MergePatchType, generatePatch()))
-	// 		Expect(err).NotTo(HaveOccurred())
+			By("updating the deployment")
+			err = getClient().Update(ctx, changedCR)
 
-	// 		By("validating patched Deployment has new annotations")
-	// 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 		Expect(actual.Annotations["foo"]).To(Equal("bar"))
-	// 		Expect(actual.GetNamespace()).To(Equal(ns))
-	// 	})
+			By("validating if the cluster role was update")
+			actual, err := clientset.RbacV1().ClusterRoles().Get(ctx, changedCR.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).NotTo(BeNil())
+			Expect(actual.Annotations["foo"]).To(Equal("bar"))
 
-	// 	It("should not modify an object from a different namespace", func() {
-	// 		By("creating a new namespace")
-	// 		tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "non-default-2"}}
-	// 		_, err := clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
+			// delete cluster role resource
+			deleteClusterRole(ctx, changedCR)
+		})
 
-	// 		changedDep := &appsv1.Deployment{
-	// 			ObjectMeta: metav1.ObjectMeta{
-	// 				Name:      "changed-dep",
-	// 				Namespace: tns.Name,
-	// 				Labels:    map[string]string{"name": "changed-dep"},
-	// 			},
-	// 			Spec: appsv1.DeploymentSpec{
-	// 				Replicas: &replicaCount,
-	// 				Selector: &metav1.LabelSelector{
-	// 					MatchLabels: map[string]string{"foo": "bar"},
-	// 				},
-	// 				Template: corev1.PodTemplateSpec{
-	// 					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
-	// 					Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
-	// 				},
-	// 			},
-	// 		}
+	})
 
-	// 		By("creating the object initially")
-	// 		changedDep, err = clientset.AppsV1().Deployments(tns.Name).Create(ctx, changedDep, metav1.CreateOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
+	Describe("Patch", func() {
+		var err error
+		BeforeEach(func() {
+			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-	// 		err = getClient().Patch(ctx, changedDep, client.RawPatch(types.MergePatchType, generatePatch()))
-	// 		Expect(err).To(HaveOccurred())
+		AfterEach(func() {
+			deleteDeployment(ctx, dep, ns)
+		})
 
-	// 		deleteDeployment(ctx, changedDep, tns.Name)
-	// 		deleteNamespace(ctx, tns)
-	// 	})
-	// })
+		It("should successfully modify the object using Patch", func() {
+			By("Applying Patch")
+			err = getClient().Patch(ctx, dep, client.RawPatch(types.MergePatchType, generatePatch()))
+			Expect(err).NotTo(HaveOccurred())
 
-	// Describe("Delete and DeleteAllOf", func() {
-	// 	var err error
-	// 	BeforeEach(func() {
-	// 		dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 	})
+			By("validating patched Deployment has new annotations")
+			actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual.Annotations["foo"]).To(Equal("bar"))
+			Expect(actual.GetNamespace()).To(Equal(ns))
+		})
+		It("should successfully modify the object with namespace specified in the client", func() {
+			dep.SetNamespace("non-default")
+			By("Applying Patch")
+			err = getClient().Patch(ctx, dep, client.RawPatch(types.MergePatchType, generatePatch()))
+			Expect(err).NotTo(HaveOccurred())
 
-	// 	AfterEach(func() {
-	// 		deleteDeployment(ctx, dep, ns)
-	// 	})
-	// 	It("should successfully delete an object when namespace is not specified", func() {
-	// 		By("deleting the object")
-	// 		dep.SetNamespace("")
-	// 		err = getClient().Delete(ctx, dep)
-	// 		Expect(err).NotTo(HaveOccurred())
+			By("validating patched Deployment has new annotations")
+			actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual.Annotations["foo"]).To(Equal("bar"))
+			Expect(actual.GetNamespace()).To(Equal(ns))
+		})
 
-	// 		By("validating the Deployment no longer exists")
-	// 		_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
-	// 		Expect(err).To(HaveOccurred())
-	// 	})
+		It("should not modify an object from a different namespace", func() {
+			By("creating a new namespace")
+			tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "non-default-2"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-	// 	It("should successfully delete all of the deployments in the given namespace", func() {
-	// 		By("Deleting all objects in the namespace")
-	// 		err = getClient().DeleteAllOf(ctx, dep)
-	// 		Expect(err).NotTo(HaveOccurred())
+			changedDep := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "changed-dep",
+					Namespace: tns.Name,
+					Labels:    map[string]string{"name": "changed-dep"},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: &replicaCount,
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
+						Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+					},
+				},
+			}
 
-	// 		By("validating the Deployment no longer exists")
-	// 		_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
-	// 		Expect(err).To(HaveOccurred())
-	// 	})
+			By("creating the object initially")
+			changedDep, err = clientset.AppsV1().Deployments(tns.Name).Create(ctx, changedDep, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-	// 	It("should not delete deployments in other namespaces", func() {
-	// 		tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "non-default-3"}}
-	// 		_, err = clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
+			err = getClient().Patch(ctx, changedDep, client.RawPatch(types.MergePatchType, generatePatch()))
+			Expect(err).To(HaveOccurred())
 
-	// 		changedDep := &appsv1.Deployment{
-	// 			ObjectMeta: metav1.ObjectMeta{
-	// 				Name:      "changed-dep",
-	// 				Namespace: tns.Name,
-	// 				Labels:    map[string]string{"name": "changed-dep"},
-	// 			},
-	// 			Spec: appsv1.DeploymentSpec{
-	// 				Replicas: &replicaCount,
-	// 				Selector: &metav1.LabelSelector{
-	// 					MatchLabels: map[string]string{"foo": "bar"},
-	// 				},
-	// 				Template: corev1.PodTemplateSpec{
-	// 					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
-	// 					Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
-	// 				},
-	// 			},
-	// 		}
+			deleteDeployment(ctx, changedDep, tns.Name)
+			deleteNamespace(ctx, tns)
+		})
 
-	// 		By("creating the object initially in other namespace")
-	// 		changedDep, err = clientset.AppsV1().Deployments(tns.Name).Create(ctx, changedDep, metav1.CreateOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
+		It("should successfully modify cluster scoped resource", func() {
+			cr := &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   fmt.Sprintf("clusterRole-%v", count),
+					Labels: map[string]string{"name": fmt.Sprintf("clusterRole-%v", count)},
+				},
+			}
 
-	// 		err = getClient().DeleteAllOf(ctx, dep)
-	// 		Expect(err).NotTo(HaveOccurred())
+			cr.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "rbac.authorization.k8s.io",
+				Version: "v1",
+				Kind:    "ClusterRole",
+			})
 
-	// 		By("validating the Deployment exists")
-	// 		actual, err := clientset.AppsV1().Deployments(tns.Name).Get(ctx, changedDep.Name, metav1.GetOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 		Expect(actual).To(BeEquivalentTo(changedDep))
+			By("creating the resource")
+			cr, err = clientset.RbacV1().ClusterRoles().Create(ctx, cr, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
 
-	// 		deleteDeployment(ctx, changedDep, tns.Name)
-	// 		deleteNamespace(ctx, tns)
-	// 	})
-	// })
+			By("Applying Patch")
+			err = getClient().Patch(ctx, cr, client.RawPatch(types.MergePatchType, generatePatch()))
+			Expect(err).NotTo(HaveOccurred())
 
-	// Describe("StatusWriter", func() {
-	// 	var err error
-	// 	BeforeEach(func() {
-	// 		dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 	})
+			By("Validating the patch")
+			actual, err := clientset.RbacV1().ClusterRoles().Get(ctx, cr.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual.Annotations["foo"]).To(Equal("bar"))
 
-	// 	AfterEach(func() {
-	// 		deleteDeployment(ctx, dep, ns)
-	// 	})
+			// delete the resource
+			deleteClusterRole(ctx, cr)
+		})
+	})
 
-	// 	It("should change objects via update status", func() {
-	// 		changedDep := dep.DeepCopy()
-	// 		changedDep.SetNamespace("test")
-	// 		changedDep.Status.Replicas = 99
+	Describe("Delete and DeleteAllOf", func() {
+		var err error
+		BeforeEach(func() {
+			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-	// 		Expect(getClient().Status().Update(ctx, changedDep)).NotTo(HaveOccurred())
+		AfterEach(func() {
+			deleteDeployment(ctx, dep, ns)
+		})
+		It("should successfully delete an object when namespace is not specified", func() {
+			By("deleting the object")
+			dep.SetNamespace("")
+			err = getClient().Delete(ctx, dep)
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 		Expect(actual).NotTo(BeNil())
-	// 		Expect(actual.GetNamespace()).To(BeEquivalentTo(ns))
-	// 		Expect(actual.Status.Replicas).To(BeEquivalentTo(99))
-	// 	})
+			By("validating the Deployment no longer exists")
+			_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).To(HaveOccurred())
+		})
 
-	// 	It("should change objects via status patch", func() {
-	// 		changedDep := dep.DeepCopy()
-	// 		changedDep.Status.Replicas = 99
-	// 		changedDep.SetNamespace("test")
+		It("should successfully delete all of the deployments in the given namespace", func() {
+			By("Deleting all objects in the namespace")
+			err = getClient().DeleteAllOf(ctx, dep)
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		Expect(getClient().Status().Patch(ctx, changedDep, client.MergeFrom(dep))).ToNot(HaveOccurred())
+			By("validating the Deployment no longer exists")
+			_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).To(HaveOccurred())
+		})
 
-	// 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 		Expect(actual).NotTo(BeNil())
-	// 		Expect(actual.GetNamespace()).To(BeEquivalentTo(ns))
-	// 		Expect(actual.Status.Replicas).To(BeEquivalentTo(99))
-	// 	})
-	// })
+		It("should not delete deployments in other namespaces", func() {
+			tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "non-default-3"}}
+			_, err = clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-	// Describe("Test on invalid objects", func() {
-	// 	It("should refuse to perform operations on invalid object", func() {
-	// 		err := getClient().Create(ctx, nil)
-	// 		Expect(err).To(HaveOccurred())
+			changedDep := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "changed-dep",
+					Namespace: tns.Name,
+					Labels:    map[string]string{"name": "changed-dep"},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: &replicaCount,
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
+						Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+					},
+				},
+			}
 
-	// 		name := types.NamespacedName{Name: dep.Name}
-	// 		err = getClient().Get(ctx, name, nil)
-	// 		Expect(err).To(HaveOccurred())
+			By("creating the object initially in other namespace")
+			changedDep, err = clientset.AppsV1().Deployments(tns.Name).Create(ctx, changedDep, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		err = getClient().List(ctx, nil)
-	// 		Expect(err).To(HaveOccurred())
+			err = getClient().DeleteAllOf(ctx, dep)
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		err = getClient().Patch(ctx, nil, client.MergeFrom(dep))
-	// 		Expect(err).To(HaveOccurred())
+			By("validating the Deployment exists")
+			actual, err := clientset.AppsV1().Deployments(tns.Name).Get(ctx, changedDep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).To(BeEquivalentTo(changedDep))
 
-	// 		err = getClient().Update(ctx, nil)
-	// 		Expect(err).To(HaveOccurred())
+			deleteDeployment(ctx, changedDep, tns.Name)
+			deleteNamespace(ctx, tns)
+		})
+	})
 
-	// 		err = getClient().Delete(ctx, nil)
-	// 		Expect(err).To(HaveOccurred())
+	Describe("StatusWriter", func() {
+		var err error
+		BeforeEach(func() {
+			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-	// 		err = getClient().DeleteAllOf(ctx, nil)
-	// 		Expect(err).To(HaveOccurred())
+		AfterEach(func() {
+			deleteDeployment(ctx, dep, ns)
+		})
 
-	// 		err = getClient().Status().Patch(ctx, nil, client.MergeFrom(dep))
-	// 		Expect(err).To(HaveOccurred())
+		It("should change objects via update status", func() {
+			changedDep := dep.DeepCopy()
+			changedDep.SetNamespace("test")
+			changedDep.Status.Replicas = 99
 
-	// 		err = getClient().Status().Update(ctx, nil)
-	// 		Expect(err).To(HaveOccurred())
+			Expect(getClient().Status().Update(ctx, changedDep)).NotTo(HaveOccurred())
 
-	// 	})
+			actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).NotTo(BeNil())
+			Expect(actual.GetNamespace()).To(BeEquivalentTo(ns))
+			Expect(actual.Status.Replicas).To(BeEquivalentTo(99))
+		})
 
-	// })
+		It("should change objects via status patch", func() {
+			changedDep := dep.DeepCopy()
+			changedDep.Status.Replicas = 99
+			changedDep.SetNamespace("test")
+
+			Expect(getClient().Status().Patch(ctx, changedDep, client.MergeFrom(dep))).ToNot(HaveOccurred())
+
+			actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).NotTo(BeNil())
+			Expect(actual.GetNamespace()).To(BeEquivalentTo(ns))
+			Expect(actual.Status.Replicas).To(BeEquivalentTo(99))
+		})
+	})
+
+	Describe("Test on invalid objects", func() {
+		It("should refuse to perform operations on invalid object", func() {
+			err := getClient().Create(ctx, nil)
+			Expect(err).To(HaveOccurred())
+
+			err = getClient().List(ctx, nil)
+			Expect(err).To(HaveOccurred())
+
+			err = getClient().Patch(ctx, nil, client.MergeFrom(dep))
+			Expect(err).To(HaveOccurred())
+
+			err = getClient().Update(ctx, nil)
+			Expect(err).To(HaveOccurred())
+
+			err = getClient().Delete(ctx, nil)
+			Expect(err).To(HaveOccurred())
+
+			err = getClient().Status().Patch(ctx, nil, client.MergeFrom(dep))
+			Expect(err).To(HaveOccurred())
+
+			err = getClient().Status().Update(ctx, nil)
+			Expect(err).To(HaveOccurred())
+
+		})
+
+	})
 })
 
 func generatePatch() []byte {
@@ -473,4 +550,12 @@ func generatePatch() []byte {
 	})
 	Expect(err).NotTo(HaveOccurred())
 	return mergePatch
+}
+
+func deleteClusterRole(ctx context.Context, cr *rbacv1.ClusterRole) {
+	_, err := clientset.RbacV1().ClusterRoles().Get(ctx, cr.Name, metav1.GetOptions{})
+	if err == nil {
+		err = clientset.RbacV1().ClusterRoles().Delete(ctx, cr.Name, metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}
 }

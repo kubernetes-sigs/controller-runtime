@@ -21,18 +21,18 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // NewNamespacedClient wraps an existing client enforcing the namespace value.
 // All functions using this client will have the same namespace declared here.
-func NewNamespacedClient(c Client, ns string, rmp meta.RESTMapper, sch *runtime.Scheme) Client {
+func NewNamespacedClient(c Client, ns string) Client {
 	return &namespacedClient{
-		client:     c,
-		namespace:  ns,
-		restmapper: rmp,
-		scheme:     *sch,
+		client:    c,
+		namespace: ns,
 	}
 }
 
@@ -40,39 +40,54 @@ var _ Client = &namespacedClient{}
 
 // namespacedClient is a Client that wraps another Client in order to enforce the specified namespace value.
 type namespacedClient struct {
-	namespace  string
-	client     Client
-	restmapper meta.RESTMapper
-	scheme     runtime.Scheme
+	namespace string
+	client    Client
 }
 
-func getNamespace(restmapper meta.RESTMapper, obj runtime.Object, sch *runtime.Scheme) (bool, error) {
-	// var sch = runtime.NewScheme()
-	// // appsv1.AddToScheme(sch)
-	// rbacv1.AddToScheme(sch)
-	gvk, err := apiutil.GVKForObject(obj, sch)
-	if err != nil {
-		return false, err
-	}
-	if restmapper == nil {
-		return false, err
+// Scheme returns the scheme this client is using.
+func (n *namespacedClient) Scheme() *runtime.Scheme {
+	return n.client.Scheme()
+}
+
+// RESTMapper returns the scheme this client is using.
+func (n *namespacedClient) RESTMapper() meta.RESTMapper {
+	return n.client.RESTMapper()
+}
+
+// isNamespaced returns true if the object is namespace scoped.
+// For unstructured objects the gvk is found from the object itself.
+func isNamespaced(c Client, obj runtime.Object) (bool, error) {
+	var gvk schema.GroupVersionKind
+	var err error
+
+	_, isUnstructured := obj.(*unstructured.Unstructured)
+	_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
+
+	isUnstructured = isUnstructured || isUnstructuredList
+	if isUnstructured {
+		gvk = obj.GetObjectKind().GroupVersionKind()
+	} else {
+		gvk, err = apiutil.GVKForObject(obj, c.Scheme())
+		if err != nil {
+			return false, err
+		}
 	}
 
-	// gvk := schema.GroupKind{
-	// 	Group: obj.GetObjectKind().GroupVersionKind().Group,
-	// 	Kind:  obj.GetObjectKind().GroupVersionKind().Kind,
-	// }
-	restmapping, err := restmapper.RESTMapping(gvk.GroupKind())
+	gk := schema.GroupKind{
+		Group: gvk.Group,
+		Kind:  gvk.Kind,
+	}
+	restmapping, err := c.RESTMapper().RESTMapping(gk)
 	if err != nil {
-		return false, fmt.Errorf("error here restmapping %v", obj)
+		return false, fmt.Errorf("failed to get restmapping: %w", err)
 	}
 	scope := restmapping.Scope.Name()
 
 	if scope == "" {
-		return false, nil
+		return false, fmt.Errorf("Scope cannot be identified. Empty scope returned")
 	}
 
-	if scope != meta.RESTScopeNameNamespace {
+	if scope != meta.RESTScopeNameRoot {
 		return true, nil
 	}
 	return false, nil
@@ -85,9 +100,9 @@ func (n *namespacedClient) Create(ctx context.Context, obj runtime.Object, opts 
 		return err
 	}
 
-	isNamespaceScoped, err := getNamespace(n.restmapper, obj, &n.scheme)
+	isNamespaceScoped, err := isNamespaced(n.client, obj)
 	if err != nil {
-		return fmt.Errorf("erroring Here, %v", err)
+		return fmt.Errorf("error finding the scope of the object %v", err)
 	}
 	if isNamespaceScoped {
 		metaObj.SetNamespace(n.namespace)
@@ -102,7 +117,12 @@ func (n *namespacedClient) Update(ctx context.Context, obj runtime.Object, opts 
 		return err
 	}
 
-	if n.namespace != "" && metaObj.GetNamespace() != n.namespace {
+	isNamespaceScoped, err := isNamespaced(n.client, obj)
+	if err != nil {
+		return fmt.Errorf("error finding the scope of the object %v", err)
+	}
+
+	if isNamespaceScoped && metaObj.GetNamespace() != n.namespace {
 		metaObj.SetNamespace(n.namespace)
 	}
 	return n.client.Update(ctx, obj, opts...)
@@ -115,7 +135,12 @@ func (n *namespacedClient) Delete(ctx context.Context, obj runtime.Object, opts 
 		return err
 	}
 
-	if n.namespace != "" && metaObj.GetNamespace() != n.namespace {
+	isNamespaceScoped, err := isNamespaced(n.client, obj)
+	if err != nil {
+		return fmt.Errorf("error finding the scope of the object %v", err)
+	}
+
+	if isNamespaceScoped && metaObj.GetNamespace() != n.namespace {
 		metaObj.SetNamespace(n.namespace)
 	}
 	return n.client.Delete(ctx, obj, opts...)
@@ -123,7 +148,12 @@ func (n *namespacedClient) Delete(ctx context.Context, obj runtime.Object, opts 
 
 // DeleteAllOf implements client.Client
 func (n *namespacedClient) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...DeleteAllOfOption) error {
-	if n.namespace != "" {
+	isNamespaceScoped, err := isNamespaced(n.client, obj)
+	if err != nil {
+		return fmt.Errorf("error finding the scope of the object %v", err)
+	}
+
+	if isNamespaceScoped {
 		opts = append(opts, InNamespace(n.namespace))
 	}
 	return n.client.DeleteAllOf(ctx, obj, opts...)
@@ -136,7 +166,12 @@ func (n *namespacedClient) Patch(ctx context.Context, obj runtime.Object, patch 
 		return err
 	}
 
-	if n.namespace != "" && metaObj.GetNamespace() != n.namespace {
+	isNamespaceScoped, err := isNamespaced(n.client, obj)
+	if err != nil {
+		return fmt.Errorf("error finding the scope of the object %v", err)
+	}
+
+	if isNamespaceScoped && metaObj.GetNamespace() != n.namespace {
 		metaObj.SetNamespace(n.namespace)
 	}
 	return n.client.Patch(ctx, obj, patch, opts...)
@@ -144,9 +179,9 @@ func (n *namespacedClient) Patch(ctx context.Context, obj runtime.Object, patch 
 
 // Get implements client.Client
 func (n *namespacedClient) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
-	isNamespaceScoped, err := getNamespace(n.restmapper, obj, &n.scheme)
+	isNamespaceScoped, err := isNamespaced(n.client, obj)
 	if err != nil {
-		return fmt.Errorf("erroring Here, %v %v", err, obj.GetObjectKind())
+		return fmt.Errorf("error finding the scope of the object %v", err)
 	}
 	if isNamespaceScoped {
 		key.Namespace = n.namespace
@@ -164,15 +199,16 @@ func (n *namespacedClient) List(ctx context.Context, obj runtime.Object, opts ..
 
 // Status implements client.StatusClient
 func (n *namespacedClient) Status() StatusWriter {
-	return &namespacedClientStatusWriter{client: n.client.Status(), namespace: n.namespace}
+	return &namespacedClientStatusWriter{StatusClient: n.client.Status(), namespace: n.namespace, namespacedclient: n}
 }
 
 // ensure namespacedClientStatusWriter implements client.StatusWriter
 var _ StatusWriter = &namespacedClientStatusWriter{}
 
 type namespacedClientStatusWriter struct {
-	client    StatusWriter
-	namespace string
+	StatusClient     StatusWriter
+	namespace        string
+	namespacedclient Client
 }
 
 // Update implements client.StatusWriter
@@ -182,10 +218,15 @@ func (nsw *namespacedClientStatusWriter) Update(ctx context.Context, obj runtime
 		return err
 	}
 
-	if nsw.namespace != "" && metaObj.GetNamespace() != nsw.namespace {
+	isNamespaceScoped, err := isNamespaced(nsw.namespacedclient, obj)
+	if err != nil {
+		return fmt.Errorf("error finding the scope of the object %v", err)
+	}
+
+	if isNamespaceScoped && metaObj.GetNamespace() != nsw.namespace {
 		metaObj.SetNamespace(nsw.namespace)
 	}
-	return nsw.client.Update(ctx, obj, opts...)
+	return nsw.StatusClient.Update(ctx, obj, opts...)
 }
 
 // Patch implements client.StatusWriter
@@ -195,8 +236,13 @@ func (nsw *namespacedClientStatusWriter) Patch(ctx context.Context, obj runtime.
 		return err
 	}
 
-	if nsw.namespace != "" && metaObj.GetNamespace() != nsw.namespace {
+	isNamespaceScoped, err := isNamespaced(nsw.namespacedclient, obj)
+	if err != nil {
+		return fmt.Errorf("error finding the scope of the object %v", err)
+	}
+
+	if isNamespaceScoped && metaObj.GetNamespace() != nsw.namespace {
 		metaObj.SetNamespace(nsw.namespace)
 	}
-	return nsw.client.Patch(ctx, obj, patch, opts...)
+	return nsw.StatusClient.Patch(ctx, obj, patch, opts...)
 }

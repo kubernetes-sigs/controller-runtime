@@ -24,7 +24,6 @@ import (
 	"net"
 	"net/http"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -970,10 +969,15 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
-			// Check readiness path without trailing slash
-			readinessEndpoint = fmt.Sprint("http://", listener.Addr().String(), strings.TrimSuffix(defaultReadinessEndpoint, "/"))
+			// Check readiness path without trailing slash without redirect
+			readinessEndpoint = fmt.Sprint("http://", listener.Addr().String(), defaultReadinessEndpoint)
 			res = nil
-			resp, err = http.Get(readinessEndpoint)
+			httpClient := http.Client{
+				CheckRedirect: func(req *http.Request, via []*http.Request) error {
+					return http.ErrUseLastResponse // Do not follow redirect
+				},
+			}
+			resp, err = httpClient.Get(readinessEndpoint)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
@@ -1016,10 +1020,15 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
-			// Check liveness path without trailing slash
-			livenessEndpoint = fmt.Sprint("http://", listener.Addr().String(), strings.TrimSuffix(defaultLivenessEndpoint, "/"))
+			// Check liveness path without trailing slash without redirect
+			livenessEndpoint = fmt.Sprint("http://", listener.Addr().String(), defaultLivenessEndpoint)
 			res = nil
-			resp, err = http.Get(livenessEndpoint)
+			httpClient := http.Client{
+				CheckRedirect: func(req *http.Request, via []*http.Request) error {
+					return http.ErrUseLastResponse // Do not follow redirect
+				},
+			}
+			resp, err = httpClient.Get(livenessEndpoint)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 

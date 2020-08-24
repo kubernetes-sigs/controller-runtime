@@ -16,7 +16,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
-var _ = FDescribe("validatingHandler", func() {
+var _ = Describe("validatingHandler", func() {
 	Describe("Handle", func() {
 
 		When("create succeeds", func() {

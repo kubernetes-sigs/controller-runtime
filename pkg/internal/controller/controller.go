@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -126,6 +127,9 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 	// use an IIFE to get proper lock handling
 	// but lock outside to get proper handling of the queue shutdown
 	c.mu.Lock()
+	if c.Started {
+		return errors.New("controller was started more than once. This is likely to be caused by being added to a manager multiple times")
+	}
 
 	c.Queue = c.MakeQueue()
 	defer c.Queue.ShutDown() // needs to be outside the iife so that we shutdown after the stop channel is closed

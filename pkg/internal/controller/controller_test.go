@@ -162,6 +162,17 @@ var _ = Describe("controller", func() {
 			close(stopped)
 			Expect(ctrl.Start(stopped)).To(Equal(err))
 		})
+
+		It("should return an error if it gets started more than once", func() {
+			// Use a stopped channel so Start doesn't block
+			stopped := make(chan struct{})
+			close(stopped)
+			Expect(ctrl.Start(stopped)).To(BeNil())
+			err := ctrl.Start(stopped)
+			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(Equal("controller was started more than once. This is likely to be caused by being added to a manager multiple times"))
+		})
+
 	})
 
 	Describe("Watch", func() {

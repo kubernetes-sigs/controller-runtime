@@ -17,6 +17,8 @@ limitations under the License.
 package log
 
 import (
+	"context"
+
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -214,4 +216,44 @@ var _ = Describe("logging", func() {
 			))
 		})
 	})
+
+	Describe("logger from context", func() {
+		It("should return default logger when context is empty", func() {
+			gotLog := FromContext(context.Background())
+			Expect(gotLog).To(Not(BeNil()))
+		})
+
+		It("should return existing logger", func() {
+			root := &fakeLoggerRoot{}
+			baseLog := &fakeLogger{root: root}
+
+			wantLog := baseLog.WithName("my-logger")
+			ctx := IntoContext(context.Background(), wantLog)
+
+			gotLog := FromContext(ctx)
+			Expect(gotLog).To(Not(BeNil()))
+
+			gotLog.Info("test message")
+			Expect(root.messages).To(ConsistOf(
+				logInfo{name: []string{"my-logger"}, msg: "test message"},
+			))
+		})
+
+		It("should have added key-values", func() {
+			root := &fakeLoggerRoot{}
+			baseLog := &fakeLogger{root: root}
+
+			wantLog := baseLog.WithName("my-logger")
+			ctx := IntoContext(context.Background(), wantLog)
+
+			gotLog := FromContext(ctx, "tag1", "value1")
+			Expect(gotLog).To(Not(BeNil()))
+
+			gotLog.Info("test message")
+			Expect(root.messages).To(ConsistOf(
+				logInfo{name: []string{"my-logger"}, tags: []interface{}{"tag1", "value1"}, msg: "test message"},
+			))
+		})
+	})
+
 })

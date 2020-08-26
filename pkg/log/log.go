@@ -55,15 +55,15 @@ var Log = NewDelegatingLogger(NullLogger{})
 
 // FromContext returns a logger with predefined values from a context.Context.
 func FromContext(ctx context.Context, keysAndValues ...interface{}) logr.Logger {
-	var log logr.Logger
-	if ctx == nil {
-		log = Log
-	} else {
-		lv := ctx.Value(contextKey)
-		log = lv.(logr.Logger)
+	var log logr.Logger = Log
+
+	if ctx != nil {
+		if lv := ctx.Value(contextKey); lv != nil {
+			log = lv.(logr.Logger)
+		}
 	}
-	log.WithValues(keysAndValues...)
-	return log
+
+	return log.WithValues(keysAndValues...)
 }
 
 // IntoContext takes a context and sets the logger as one of its keys.

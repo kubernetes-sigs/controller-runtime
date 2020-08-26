@@ -17,15 +17,40 @@ import (
 )
 
 var _ = Describe("validatingHandler", func() {
-	Describe("Handle", func() {
-		It("should return 200 in response when create succeeds", func() {
 
-			handler := createSucceedingValidatingHandler()
+	decoder, _ := NewDecoder(scheme.Scheme)
+
+	Context("when dealing with successful results", func() {
+
+		f := &fakeValidator{ErrorToReturn: nil}
+		handler := validatingHandler{validator: f, decoder: decoder}
+
+		It("should return 200 in response when create succeeds", func() {
 
 			response := handler.Handle(context.TODO(), Request{
 				AdmissionRequest: v1beta1.AdmissionRequest{
 					Operation: v1beta1.Create,
 					Object: runtime.RawExtension{
+						Raw:    []byte("{}"),
+						Object: handler.validator,
+					},
+				},
+			})
+
+			Expect(response.Allowed).Should(BeTrue())
+			Expect(response.Result.Code).Should(Equal(int32(http.StatusOK)))
+		})
+
+		It("should return 200 in response when update succeeds", func() {
+
+			response := handler.Handle(context.TODO(), Request{
+				AdmissionRequest: v1beta1.AdmissionRequest{
+					Operation: v1beta1.Update,
+					Object: runtime.RawExtension{
+						Raw:    []byte("{}"),
+						Object: handler.validator,
+					},
+					OldObject: runtime.RawExtension{
 						Raw:    []byte("{}"),
 						Object: handler.validator,
 					},
@@ -35,13 +60,35 @@ var _ = Describe("validatingHandler", func() {
 			Expect(response.Result.Code).Should(Equal(int32(http.StatusOK)))
 		})
 
-		It("should return 400 in response when create fails on decode", func() {
-			//TODO
+		It("should return 200 in response when delete succeeds", func() {
+
+			response := handler.Handle(context.TODO(), Request{
+				AdmissionRequest: v1beta1.AdmissionRequest{
+					Operation: v1beta1.Delete,
+					OldObject: runtime.RawExtension{
+						Raw:    []byte("{}"),
+						Object: handler.validator,
+					},
+				},
+			})
+			Expect(response.Allowed).Should(BeTrue())
+			Expect(response.Result.Code).Should(Equal(int32(http.StatusOK)))
 		})
 
-		It("should return response built with the Status object when ValidateCreate returns APIStatus error", func() {
+	})
 
-			handler, expectedError := createValidatingHandlerWhichReturnsStatusError()
+	Context("when dealing with Status errors", func() {
+
+		expectedError := &apierrs.StatusError{
+			ErrStatus: v1.Status{
+				Message: "some message",
+				Code:    http.StatusUnprocessableEntity,
+			},
+		}
+		f := &fakeValidator{ErrorToReturn: expectedError}
+		handler := validatingHandler{validator: f, decoder: decoder}
+
+		It("should propagate the Status from ValidateCreate's return value to the HTTP response", func() {
 
 			response := handler.Handle(context.TODO(), Request{
 				AdmissionRequest: v1beta1.AdmissionRequest{
@@ -52,18 +99,61 @@ var _ = Describe("validatingHandler", func() {
 					},
 				},
 			})
-			Expect(response.Allowed).Should(BeFalse())
 
-			apiStatus, ok := expectedError.(apierrs.APIStatus)
-			Expect(ok).Should(BeTrue())
-			Expect(response.Result.Code).Should(Equal(apiStatus.Status().Code))
-			Expect(*response.Result).Should(Equal(apiStatus.Status()))
+			Expect(response.Allowed).Should(BeFalse())
+			Expect(response.Result.Code).Should(Equal(expectedError.Status().Code))
+			Expect(*response.Result).Should(Equal(expectedError.Status()))
 
 		})
 
-		It("should return 403 response when ValidateCreate returns non-APIStatus error", func() {
+		It("should propagate the Status from ValidateUpdate's return value to the HTTP response", func() {
 
-			handler, expectedError := createValidatingHandlerWhichReturnsRegularError()
+			response := handler.Handle(context.TODO(), Request{
+				AdmissionRequest: v1beta1.AdmissionRequest{
+					Operation: v1beta1.Update,
+					Object: runtime.RawExtension{
+						Raw:    []byte("{}"),
+						Object: handler.validator,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    []byte("{}"),
+						Object: handler.validator,
+					},
+				},
+			})
+
+			Expect(response.Allowed).Should(BeFalse())
+			Expect(response.Result.Code).Should(Equal(expectedError.Status().Code))
+			Expect(*response.Result).Should(Equal(expectedError.Status()))
+
+		})
+
+		It("should propagate the Status from ValidateDelete's return value to the HTTP response", func() {
+
+			response := handler.Handle(context.TODO(), Request{
+				AdmissionRequest: v1beta1.AdmissionRequest{
+					Operation: v1beta1.Delete,
+					OldObject: runtime.RawExtension{
+						Raw:    []byte("{}"),
+						Object: handler.validator,
+					},
+				},
+			})
+
+			Expect(response.Allowed).Should(BeFalse())
+			Expect(response.Result.Code).Should(Equal(expectedError.Status().Code))
+			Expect(*response.Result).Should(Equal(expectedError.Status()))
+
+		})
+
+	})
+	Context("when dealing with non-status errors", func() {
+
+		expectedError := goerrors.New("some error")
+		f := &fakeValidator{ErrorToReturn: expectedError}
+		handler := validatingHandler{validator: f, decoder: decoder}
+
+		It("should return 403 response when ValidateCreate with error message embedded", func() {
 
 			response := handler.Handle(context.TODO(), Request{
 				AdmissionRequest: v1beta1.AdmissionRequest{
@@ -77,68 +167,11 @@ var _ = Describe("validatingHandler", func() {
 			Expect(response.Allowed).Should(BeFalse())
 			Expect(response.Result.Code).Should(Equal(int32(http.StatusForbidden)))
 			Expect(string(response.Result.Reason)).Should(Equal(expectedError.Error()))
-
-		})
-
-		It("should return 200 in response when update succeeds", func() {
-
-			handler := createSucceedingValidatingHandler()
-
-			response := handler.Handle(context.TODO(), Request{
-				AdmissionRequest: v1beta1.AdmissionRequest{
-					Operation: v1beta1.Update,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: handler.validator,
-					},
-					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: handler.validator,
-					},
-				},
-			})
-			Expect(response.Allowed).Should(BeTrue())
-			Expect(response.Result.Code).Should(Equal(int32(http.StatusOK)))
-		})
-
-		It("should return 400 in response when update fails on decoding new object", func() {
-			//TODO
-		})
-
-		It("should return 400 in response when update fails on decoding old object", func() {
-			//TODO
-		})
-
-		It("should return response built with the Status object when ValidateUpdate returns APIStatus error", func() {
-
-			handler, expectedError := createValidatingHandlerWhichReturnsStatusError()
-
-			response := handler.Handle(context.TODO(), Request{
-				AdmissionRequest: v1beta1.AdmissionRequest{
-					Operation: v1beta1.Update,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: handler.validator,
-					},
-					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: handler.validator,
-					},
-				},
-			})
-			Expect(response.Allowed).Should(BeFalse())
-
-			apiStatus, ok := expectedError.(apierrs.APIStatus)
-			Expect(ok).Should(BeTrue())
-			Expect(response.Result.Code).Should(Equal(apiStatus.Status().Code))
-			Expect(*response.Result).Should(Equal(apiStatus.Status()))
 
 		})
 
 		It("should return 403 response when ValidateUpdate returns non-APIStatus error", func() {
 
-			handler, expectedError := createValidatingHandlerWhichReturnsRegularError()
-
 			response := handler.Handle(context.TODO(), Request{
 				AdmissionRequest: v1beta1.AdmissionRequest{
 					Operation: v1beta1.Update,
@@ -158,52 +191,7 @@ var _ = Describe("validatingHandler", func() {
 
 		})
 
-		It("should return 200 in response when delete succeeds", func() {
-
-			handler := createSucceedingValidatingHandler()
-
-			response := handler.Handle(context.TODO(), Request{
-				AdmissionRequest: v1beta1.AdmissionRequest{
-					Operation: v1beta1.Delete,
-					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: handler.validator,
-					},
-				},
-			})
-			Expect(response.Allowed).Should(BeTrue())
-			Expect(response.Result.Code).Should(Equal(int32(http.StatusOK)))
-		})
-
-		It("should return 400 in response when delete fails on decode", func() {
-			//TODO
-		})
-
-		It("should return response built with the Status object when ValidateDelete returns APIStatus error", func() {
-
-			handler, expectedError := createValidatingHandlerWhichReturnsStatusError()
-
-			response := handler.Handle(context.TODO(), Request{
-				AdmissionRequest: v1beta1.AdmissionRequest{
-					Operation: v1beta1.Delete,
-					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: handler.validator,
-					},
-				},
-			})
-			Expect(response.Allowed).Should(BeFalse())
-
-			apiStatus, ok := expectedError.(apierrs.APIStatus)
-			Expect(ok).Should(BeTrue())
-			Expect(response.Result.Code).Should(Equal(apiStatus.Status().Code))
-			Expect(*response.Result).Should(Equal(apiStatus.Status()))
-
-		})
-
 		It("should return 403 response when ValidateDelete returns non-APIStatus error", func() {
-
-			handler, expectedError := createValidatingHandlerWhichReturnsRegularError()
 
 			response := handler.Handle(context.TODO(), Request{
 				AdmissionRequest: v1beta1.AdmissionRequest{
@@ -219,7 +207,17 @@ var _ = Describe("validatingHandler", func() {
 			Expect(string(response.Result.Reason)).Should(Equal(expectedError.Error()))
 
 		})
+
 	})
+
+	PIt("should return 400 in response when create fails on decode", func() {})
+
+	PIt("should return 400 in response when update fails on decoding new object", func() {})
+
+	PIt("should return 400 in response when update fails on decoding old object", func() {})
+
+	PIt("should return 400 in response when delete fails on decode", func() {})
+
 })
 
 type fakeValidator struct {
@@ -253,28 +251,3 @@ func (v *fakeValidator) GroupVersionKind() schema.GroupVersionKind {
 }
 
 func (v *fakeValidator) SetGroupVersionKind(gvk schema.GroupVersionKind) {}
-
-func createSucceedingValidatingHandler() *validatingHandler {
-	decoder, _ := NewDecoder(scheme.Scheme)
-	f := &fakeValidator{ErrorToReturn: nil}
-	return &validatingHandler{f, decoder}
-}
-
-func createValidatingHandlerWhichReturnsRegularError() (validatingHandler, error) {
-	decoder, _ := NewDecoder(scheme.Scheme)
-	errToReturn := goerrors.New("some error")
-	f := &fakeValidator{ErrorToReturn: errToReturn}
-	return validatingHandler{f, decoder}, errToReturn
-}
-
-func createValidatingHandlerWhichReturnsStatusError() (validatingHandler, error) {
-	decoder, _ := NewDecoder(scheme.Scheme)
-	errToReturn := &apierrs.StatusError{
-		ErrStatus: v1.Status{
-			Message: "some message",
-			Code:    http.StatusUnprocessableEntity,
-		},
-	}
-	f := &fakeValidator{ErrorToReturn: errToReturn}
-	return validatingHandler{f, decoder}, errToReturn
-}

@@ -20,7 +20,10 @@ import (
 	"context"
 	"net/http"
 
+	goerrors "errors"
+
 	"k8s.io/api/admission/v1beta1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -68,6 +71,10 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 
 		err = obj.ValidateCreate()
 		if err != nil {
+			var apiStatus errors.APIStatus
+			if goerrors.As(err, &apiStatus) {
+				return validationResponseFromStatus(false, apiStatus.Status())
+			}
 			return Denied(err.Error())
 		}
 	}
@@ -86,6 +93,10 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 
 		err = obj.ValidateUpdate(oldObj)
 		if err != nil {
+			var apiStatus errors.APIStatus
+			if goerrors.As(err, &apiStatus) {
+				return validationResponseFromStatus(false, apiStatus.Status())
+			}
 			return Denied(err.Error())
 		}
 	}
@@ -100,6 +111,10 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 
 		err = obj.ValidateDelete()
 		if err != nil {
+			var apiStatus errors.APIStatus
+			if goerrors.As(err, &apiStatus) {
+				return validationResponseFromStatus(false, apiStatus.Status())
+			}
 			return Denied(err.Error())
 		}
 	}

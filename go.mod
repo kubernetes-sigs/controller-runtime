@@ -20,10 +20,10 @@ require (
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e
 	gomodules.xyz/jsonpatch/v2 v2.1.0
 	google.golang.org/appengine v1.6.6 // indirect
-	k8s.io/api v0.19.0-rc.3
-	k8s.io/apiextensions-apiserver v0.19.0-rc.3
-	k8s.io/apimachinery v0.19.0-rc.3
-	k8s.io/client-go v0.19.0-rc.3
-	k8s.io/utils v0.0.0-20200720150651-0bdb4ca86cbc
+	k8s.io/api v0.19.0
+	k8s.io/apiextensions-apiserver v0.19.0
+	k8s.io/apimachinery v0.19.0
+	k8s.io/client-go v0.19.0
+	k8s.io/utils v0.0.0-20200729134348-d5654de09c73
 	sigs.k8s.io/yaml v1.2.0
 )

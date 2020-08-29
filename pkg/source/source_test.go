@@ -405,6 +405,43 @@ var _ = Describe("Source", func() {
 
 				close(done)
 			})
+			It("should be able to cope with events in the channel before the source is started", func(done Done) {
+				ch := make(chan event.GenericEvent, 1)
+				processed := make(chan struct{})
+				evt := event.GenericEvent{}
+				ch <- evt
+
+				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
+				// Add a handler to get distribution blocked
+				instance := &source.Channel{Source: ch}
+				instance.DestBufferSize = 1
+				Expect(inject.StopChannelInto(stop, instance)).To(BeTrue())
+
+				err := instance.Start(handler.Funcs{
+					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						Fail("Unexpected CreateEvent")
+					},
+					UpdateFunc: func(event.UpdateEvent, workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						Fail("Unexpected UpdateEvent")
+					},
+					DeleteFunc: func(event.DeleteEvent, workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						Fail("Unexpected DeleteEvent")
+					},
+					GenericFunc: func(evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+
+						close(processed)
+					},
+				}, q)
+				Expect(err).NotTo(HaveOccurred())
+
+				<-processed
+
+				close(done)
+			})
 			It("should get error if no source specified", func(done Done) {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{ /*no source specified*/ }

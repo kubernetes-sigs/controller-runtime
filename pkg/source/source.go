@@ -213,12 +213,14 @@ func (cs *Channel) Start(
 		cs.DestBufferSize = defaultBufferSize
 	}
 
+	dst := make(chan event.GenericEvent, cs.DestBufferSize)
+	cs.dest = append(cs.dest, dst)
+
 	cs.once.Do(func() {
 		// Distribute GenericEvents to all EventHandler / Queue pairs Watching this source
 		go cs.syncLoop()
 	})
 
-	dst := make(chan event.GenericEvent, cs.DestBufferSize)
 	go func() {
 		for evt := range dst {
 			shouldHandle := true
@@ -237,8 +239,6 @@ func (cs *Channel) Start(
 
 	cs.destLock.Lock()
 	defer cs.destLock.Unlock()
-
-	cs.dest = append(cs.dest, dst)
 
 	return nil
 }

@@ -302,6 +302,24 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unable to find leader election namespace: not running in-cluster, please specify LeaderElectionNamespace"))
 			})
+
+			// We must keep this default until we are sure all controller-runtime users have upgraded from the original default
+			// ConfigMap lock to a controller-runtime version that has this new default. Many users of controller-runtime skip
+			// versions, so we should be extremely conservative here.
+			It("should default to ConfigMapsLeasesResourceLock", func() {
+				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime", LeaderElectionNamespace: "my-ns"})
+				Expect(m).ToNot(BeNil())
+				Expect(err).ToNot(HaveOccurred())
+				cm, ok := m.(*controllerManager)
+				Expect(ok).To(BeTrue())
+				multilock, isMultiLock := cm.resourceLock.(*resourcelock.MultiLock)
+				Expect(isMultiLock).To(BeTrue())
+				_, primaryIsConfigMapLock := multilock.Primary.(*resourcelock.ConfigMapLock)
+				Expect(primaryIsConfigMapLock).To(BeTrue())
+				_, secondaryIsLeaseLock := multilock.Secondary.(*resourcelock.LeaseLock)
+				Expect(secondaryIsLeaseLock).To(BeTrue())
+
+			})
 		})
 
 		It("should create a listener for the metrics if a valid address is provided", func() {

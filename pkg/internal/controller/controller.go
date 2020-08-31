@@ -27,6 +27,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -122,7 +123,8 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	}
 
 	c.Log.Info("Starting EventSource", "source", src)
-	return src.Start(evthdler, c.Queue, prct...)
+	ctx := cache.OwnedContext(context.TODO(), c.Name)
+	return src.Start(ctx, evthdler, c.Queue, prct...)
 }
 
 // Start implements controller.Controller
@@ -148,7 +150,8 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 		// caches.
 		for _, watch := range c.startWatches {
 			c.Log.Info("Starting EventSource", "source", watch.src)
-			if err := watch.src.Start(watch.handler, c.Queue, watch.predicates...); err != nil {
+			ctx := cache.OwnedContext(context.TODO(), c.Name)
+			if err := watch.src.Start(ctx, watch.handler, c.Queue, watch.predicates...); err != nil {
 				return err
 			}
 		}

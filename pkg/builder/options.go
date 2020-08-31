@@ -17,6 +17,7 @@ limitations under the License.
 package builder
 
 import (
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
@@ -44,16 +45,20 @@ type WatchesOption interface {
 
 // {{{ Multi-Type Options
 
+var _ ForOption = &Predicates{}
+var _ OwnsOption = &Predicates{}
+var _ WatchesOption = &Predicates{}
+
+// Predicates filters events before enqueuing the keys.
+type Predicates struct {
+	predicates []predicate.Predicate
+}
+
 // WithPredicates sets the given predicates list.
 func WithPredicates(predicates ...predicate.Predicate) Predicates {
 	return Predicates{
 		predicates: predicates,
 	}
-}
-
-// Predicates filters events before enqueuing the keys.
-type Predicates struct {
-	predicates []predicate.Predicate
 }
 
 // ApplyToFor applies this configuration to the given ForInput options.
@@ -71,8 +76,29 @@ func (w Predicates) ApplyToWatches(opts *WatchesInput) {
 	opts.predicates = w.predicates
 }
 
-var _ ForOption = &Predicates{}
-var _ OwnsOption = &Predicates{}
-var _ WatchesOption = &Predicates{}
+var _ ForOption = &ListWatchFilters{}
+var _ OwnsOption = &ListWatchFilters{}
+
+// ListWatchFilters adds listWatch filters to the controller's cache.
+type ListWatchFilters struct {
+	options []client.ListOption
+}
+
+// WithListWatchFilters sets the given options list.
+func WithListWatchFilters(options ...client.ListOption) ListWatchFilters {
+	return ListWatchFilters{
+		options: options,
+	}
+}
+
+// ApplyToFor applies this configuration to the given ForInput options.
+func (w ListWatchFilters) ApplyToFor(opts *ForInput) {
+	opts.filters = w.options
+}
+
+// ApplyToOwns applies this configuration to the given OwnsInput options.
+func (w ListWatchFilters) ApplyToOwns(opts *OwnsInput) {
+	opts.filters = w.options
+}
 
 // }}}

@@ -17,6 +17,7 @@ limitations under the License.
 package source_test
 
 import (
+	"context"
 	"fmt"
 
 	. "github.com/onsi/ginkgo"
@@ -38,6 +39,7 @@ var _ = Describe("Source", func() {
 		var c chan struct{}
 		var p *corev1.Pod
 		var ic *informertest.FakeInformers
+		var ctx context.Context
 
 		BeforeEach(func(done Done) {
 			ic = &informertest.FakeInformers{}
@@ -49,6 +51,7 @@ var _ = Describe("Source", func() {
 					},
 				},
 			}
+			ctx = context.TODO()
 			close(done)
 		})
 
@@ -68,7 +71,7 @@ var _ = Describe("Source", func() {
 					Type: &corev1.Pod{},
 				}
 				Expect(inject.CacheInto(ic, instance)).To(BeTrue())
-				err := instance.Start(handler.Funcs{
+				err := instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Expect(q2).To(Equal(q))
@@ -108,7 +111,7 @@ var _ = Describe("Source", func() {
 					Type: &corev1.Pod{},
 				}
 				Expect(instance.InjectCache(ic)).To(Succeed())
-				err := instance.Start(handler.Funcs{
+				err := instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Fail("Unexpected CreateEvent")
@@ -156,7 +159,7 @@ var _ = Describe("Source", func() {
 					Type: &corev1.Pod{},
 				}
 				Expect(inject.CacheInto(ic, instance)).To(BeTrue())
-				err := instance.Start(handler.Funcs{
+				err := instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Fail("Unexpected DeleteEvent")
@@ -189,7 +192,7 @@ var _ = Describe("Source", func() {
 
 		It("should return an error from Start if informers were not injected", func(done Done) {
 			instance := source.Kind{Type: &corev1.Pod{}}
-			err := instance.Start(nil, nil)
+			err := instance.Start(ctx, nil, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("must call CacheInto on Kind before calling Start"))
 
@@ -199,7 +202,7 @@ var _ = Describe("Source", func() {
 		It("should return an error from Start if a type was not provided", func(done Done) {
 			instance := source.Kind{}
 			Expect(instance.InjectCache(&informertest.FakeInformers{})).To(Succeed())
-			err := instance.Start(nil, nil)
+			err := instance.Start(ctx, nil, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("must specify Kind.Type"))
 
@@ -227,7 +230,7 @@ var _ = Describe("Source", func() {
 					Type: &corev1.Pod{},
 				}
 				Expect(instance.InjectCache(ic)).To(Succeed())
-				err := instance.Start(handler.Funcs{}, q)
+				err := instance.Start(ctx, handler.Funcs{}, q)
 				Expect(err).To(HaveOccurred())
 
 				close(done)
@@ -256,24 +259,28 @@ var _ = Describe("Source", func() {
 	})
 
 	Describe("Func", func() {
+
 		It("should be called from Start", func(done Done) {
+			ctx := context.TODO()
 			run := false
 			instance := source.Func(func(
+				context.Context,
 				handler.EventHandler,
 				workqueue.RateLimitingInterface, ...predicate.Predicate) error {
 				run = true
 				return nil
 			})
-			Expect(instance.Start(nil, nil)).NotTo(HaveOccurred())
+			Expect(instance.Start(ctx, nil, nil)).NotTo(HaveOccurred())
 			Expect(run).To(BeTrue())
 
 			expected := fmt.Errorf("expected error: Func")
 			instance = source.Func(func(
+				context.Context,
 				handler.EventHandler,
 				workqueue.RateLimitingInterface, ...predicate.Predicate) error {
 				return expected
 			})
-			Expect(instance.Start(nil, nil)).To(Equal(expected))
+			Expect(instance.Start(ctx, nil, nil)).To(Equal(expected))
 
 			close(done)
 		})
@@ -282,10 +289,12 @@ var _ = Describe("Source", func() {
 	Describe("Channel", func() {
 		var stop chan struct{}
 		var ch chan event.GenericEvent
+		var ctx context.Context
 
 		BeforeEach(func() {
 			stop = make(chan struct{})
 			ch = make(chan event.GenericEvent)
+			ctx = context.TODO()
 		})
 
 		AfterEach(func() {
@@ -316,7 +325,7 @@ var _ = Describe("Source", func() {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{Source: ch}
 				Expect(inject.StopChannelInto(stop, instance)).To(BeTrue())
-				err := instance.Start(handler.Funcs{
+				err := instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Fail("Unexpected CreateEvent")
@@ -357,7 +366,7 @@ var _ = Describe("Source", func() {
 				instance := &source.Channel{Source: ch}
 				instance.DestBufferSize = 1
 				Expect(inject.StopChannelInto(stop, instance)).To(BeTrue())
-				err := instance.Start(handler.Funcs{
+				err := instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Fail("Unexpected CreateEvent")
@@ -446,14 +455,14 @@ var _ = Describe("Source", func() {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{ /*no source specified*/ }
 				Expect(inject.StopChannelInto(stop, instance)).To(BeTrue())
-				err := instance.Start(handler.Funcs{}, q)
+				err := instance.Start(ctx, handler.Funcs{}, q)
 				Expect(err).To(Equal(fmt.Errorf("must specify Channel.Source")))
 				close(done)
 			})
 			It("should get error if no stop channel injected", func(done Done) {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{Source: ch}
-				err := instance.Start(handler.Funcs{}, q)
+				err := instance.Start(ctx, handler.Funcs{}, q)
 				Expect(err).To(Equal(fmt.Errorf("must call InjectStop on Channel before calling Start")))
 				close(done)
 			})
@@ -476,7 +485,7 @@ var _ = Describe("Source", func() {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{Source: ch}
 				Expect(inject.StopChannelInto(stop, instance)).To(BeTrue())
-				err := instance.Start(handler.Funcs{
+				err := instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Fail("Unexpected CreateEvent")
@@ -499,7 +508,7 @@ var _ = Describe("Source", func() {
 				}, q)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = instance.Start(handler.Funcs{
+				err = instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Fail("Unexpected CreateEvent")

@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	toolscache "k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/internal"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -70,20 +69,28 @@ type Informers interface {
 }
 
 // Informer - informer allows you interact with the underlying informer
-type Informer interface {
-	// AddEventHandler adds an event handler to the shared informer using the shared informer's resync
-	// period.  Events to a single handler are delivered sequentially, but there is no coordination
-	// between different handlers.
-	AddEventHandler(handler toolscache.ResourceEventHandler)
-	// AddEventHandlerWithResyncPeriod adds an event handler to the shared informer using the
-	// specified resync period.  Events to a single handler are delivered sequentially, but there is
-	// no coordination between different handlers.
-	AddEventHandlerWithResyncPeriod(handler toolscache.ResourceEventHandler, resyncPeriod time.Duration)
-	// AddIndexers adds more indexers to this store.  If you call this after you already have data
-	// in the store, the results are undefined.
-	AddIndexers(indexers toolscache.Indexers) error
-	//HasSynced return true if the informers underlying store has synced
-	HasSynced() bool
+type Informer = internal.Informer
+
+// Filter can filter a cache.
+type Filter interface {
+	// AddFilter adds a typed cache filter defined by a set of client.ListOption using a runtime.Object
+	// for type data.
+	AddFilter(context.Context, runtime.Object, []client.ListOption) error
+	// AddFilterForKind adds a typed cache filter defined by a set of client.ListOption using a
+	// group-version-kind for type data.
+	AddFilterForKind(context.Context, schema.GroupVersionKind, []client.ListOption) error
+}
+
+// OwnedContext returns a copy of parent in which the informer owner name is ownerName.
+// Use this function if using filtered caches.
+func OwnedContext(parent context.Context, ownerName string) context.Context {
+	return context.WithValue(parent, internal.InformerOwnerNameKey{}, ownerName)
+}
+
+// GlobalContext returns a copy of parent in which the informer owner name is global.
+// Use this function to create a context for unfiltered caches.
+func GlobalContext(parent context.Context) context.Context {
+	return context.WithValue(parent, internal.InformerOwnerNameKey{}, "")
 }
 
 // Options are the optional arguments for creating a new InformersMap object

@@ -26,7 +26,29 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// Informer - informer allows you interact with the underlying informer
+type Informer interface {
+	// AddEventHandler adds an event handler to the shared informer using the shared informer's resync
+	// period.  Events to a single handler are delivered sequentially, but there is no coordination
+	// between different handlers.
+	AddEventHandler(handler cache.ResourceEventHandler)
+	// AddEventHandlerWithResyncPeriod adds an event handler to the shared informer using the
+	// specified resync period.  Events to a single handler are delivered sequentially, but there is
+	// no coordination between different handlers.
+	AddEventHandlerWithResyncPeriod(handler cache.ResourceEventHandler, resyncPeriod time.Duration)
+	// AddIndexers adds more indexers to this store.  If you call this after you already have data
+	// in the store, the results are undefined.
+	AddIndexers(indexers cache.Indexers) error
+	//HasSynced return true if the informers underlying store has synced
+	HasSynced() bool
+}
+
+// InformerOwnerNameKey is a key for a context.Context value denoting what owns an informer.
+// This value is only relevant for filtered informers
+type InformerOwnerNameKey struct{}
 
 // InformersMap create and caches Informers for (runtime.Object, schema.GroupVersionKind) pairs.
 // It uses a standard parameter codec constructed based on the given generated Scheme.
@@ -78,18 +100,18 @@ func (m *InformersMap) WaitForCacheSync(stop <-chan struct{}) bool {
 	return cache.WaitForCacheSync(stop, syncedFuncs...)
 }
 
-// Get will create a new Informer and add it to the map of InformersMap if none exists.  Returns
+// Get will create a new Informer and add it to the map of InformersMap if none exists. Returns
 // the Informer from the map.
-func (m *InformersMap) Get(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object) (bool, *MapEntry, error) {
+func (m *InformersMap) Get(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object, listOpts ...client.ListOption) (InformerReader, bool, error) {
 	_, isUnstructured := obj.(*unstructured.Unstructured)
 	_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
 	isUnstructured = isUnstructured || isUnstructuredList
 
 	if isUnstructured {
-		return m.unstructured.Get(ctx, gvk, obj)
+		return m.unstructured.Get(ctx, gvk, obj, listOpts...)
 	}
 
-	return m.structured.Get(ctx, gvk, obj)
+	return m.structured.Get(ctx, gvk, obj, listOpts...)
 }
 
 // newStructuredInformersMap creates a new InformersMap for structured objects.

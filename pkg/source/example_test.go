@@ -18,6 +18,7 @@ package source_test
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -26,10 +27,11 @@ import (
 
 var ctrl controller.Controller
 
-// This example Watches for Pod Events (e.g. Create / Update / Delete) and enqueues a reconcile.Request
-// with the Name and Namespace of the Pod.
+// This example Watches for Events (e.g. Create / Update / Delete) on Pods with label "foo=bar"
+// and enqueues a reconcile.Request with the Name and Namespace of the Pod.
 func ExampleKind() {
-	err := ctrl.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForObject{})
+	opts := []client.ListOption{client.MatchingLabels{"foo": "bar"}}
+	err := ctrl.Watch(&source.Kind{Type: &corev1.Pod{}, Filters: opts}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		// handle it
 	}

@@ -74,9 +74,11 @@ func deletePod(pod runtime.Object) {
 
 var _ = Describe("Informer Cache", func() {
 	CacheTest(cache.New)
+	FilteredCacheTest(cache.New)
 })
 var _ = Describe("Multi-Namespace Informer Cache", func() {
 	CacheTest(cache.MultiNamespacedCacheBuilder([]string{testNamespaceOne, testNamespaceTwo, "default"}))
+	FilteredCacheTest(cache.MultiNamespacedCacheBuilder([]string{testNamespaceOne, testNamespaceTwo, "default"}))
 })
 
 // nolint: gocyclo
@@ -742,6 +744,103 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
 					Expect(errors.IsTimeout(err)).To(BeTrue())
+				})
+			})
+		})
+	})
+}
+
+func FilteredCacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error)) {
+	Describe("Cache test", func() {
+		var (
+			err           error
+			informerCache cache.Cache
+			stop          chan struct{}
+			knownPod1     runtime.Object
+			knownPod2     runtime.Object
+			knownPod3     runtime.Object
+			knownPod4     runtime.Object
+		)
+
+		BeforeEach(func() {
+			stop = make(chan struct{})
+			Expect(cfg).NotTo(BeNil())
+
+			By("creating three pods")
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			err = ensureNamespace(testNamespaceOne, cl)
+			Expect(err).NotTo(HaveOccurred())
+			err = ensureNamespace(testNamespaceTwo, cl)
+			Expect(err).NotTo(HaveOccurred())
+			err = ensureNamespace(testNamespaceThree, cl)
+			Expect(err).NotTo(HaveOccurred())
+			// Includes restart policy since these objects are indexed on this field.
+			knownPod1 = createPod("test-pod-1", testNamespaceOne, kcorev1.RestartPolicyNever)
+			knownPod2 = createPod("test-pod-2", testNamespaceTwo, kcorev1.RestartPolicyAlways)
+			knownPod3 = createPod("test-pod-3", testNamespaceTwo, kcorev1.RestartPolicyOnFailure)
+			knownPod4 = createPod("test-pod-4", testNamespaceThree, kcorev1.RestartPolicyNever)
+			podGVK := schema.GroupVersionKind{
+				Kind:    "Pod",
+				Version: "v1",
+			}
+			knownPod1.GetObjectKind().SetGroupVersionKind(podGVK)
+			knownPod2.GetObjectKind().SetGroupVersionKind(podGVK)
+			knownPod3.GetObjectKind().SetGroupVersionKind(podGVK)
+			knownPod4.GetObjectKind().SetGroupVersionKind(podGVK)
+		})
+
+		AfterEach(func() {
+			By("cleaning up created pods")
+			deletePod(knownPod1)
+			deletePod(knownPod2)
+			deletePod(knownPod3)
+			deletePod(knownPod4)
+
+			close(stop)
+		})
+
+		Describe("as a Reader", func() {
+			Context("with structured objects", func() {
+				It("should be able to list server-side-filtered objects", func() {
+					By("creating a pod with labels")
+					labelledPod1 := createPod("filtered-pod-1", testNamespaceOne, kcorev1.RestartPolicyAlways)
+					defer deletePod(labelledPod1)
+					labelledPod2 := createPod("filtered-pod-2", testNamespaceOne, kcorev1.RestartPolicyAlways)
+					defer deletePod(labelledPod2)
+
+					By("creating the informer cache")
+					informerCache, err = createCacheFunc(cfg, cache.Options{})
+					Expect(err).NotTo(HaveOccurred())
+
+					By("adding pod label filters")
+					ctx := cache.OwnedContext(context.Background(), "test-owner")
+					// TODO(estroz): this currently hangs because not all informers start for some reason. Needs debugging.
+					//
+					// opts := []client.ListOption{client.MatchingLabels(labelledPod1.(*kcorev1.Pod).GetLabels())}
+					// Expect(informerCache.(cache.Filter).AddFilter(ctx, &kcorev1.Pod{}, opts)).To(Succeed())
+					// opts = []client.ListOption{client.MatchingLabels(labelledPod2.(*kcorev1.Pod).GetLabels())}
+					// Expect(informerCache.(cache.Filter).AddFilter(ctx, &kcorev1.Pod{}, opts)).To(Succeed())
+
+					By("running the cache and waiting for it to sync")
+					go func(stopCh chan struct{}) {
+						defer GinkgoRecover()
+						Expect(informerCache.Start(stopCh)).To(Succeed())
+					}(stop)
+					Expect(informerCache.WaitForCacheSync(stop)).To(BeTrue())
+
+					By("listing all pods in the cluster")
+					out := &kcorev1.PodList{}
+					Expect(informerCache.List(ctx, out)).To(Succeed())
+
+					By("verifying the returned pods have the correct label")
+					Expect(out.Items).NotTo(BeEmpty())
+					Expect(out.Items).Should(HaveLen(2))
+					for _, item := range out.Items {
+						testLabel, ok := item.Labels["test-label"]
+						Expect(ok).To(BeTrue(), "pod %s does not have label \"test-label\"", item.GetName())
+						Expect(testLabel).To(Equal(item.GetName()))
+					}
 				})
 			})
 		})

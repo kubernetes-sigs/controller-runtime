@@ -23,6 +23,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -37,8 +38,8 @@ var _ client.Reader = &CacheReader{}
 
 // CacheReader wraps a cache.Index to implement the client.CacheReader interface for a single type
 type CacheReader struct {
-	// indexer is the underlying indexer wrapped by this cache.
-	indexer cache.Indexer
+	// indexers are the underlying indexers wrapped by this cache.
+	indexers []cache.Indexer
 
 	// groupVersionKind is the group-version-kind of the resource.
 	groupVersionKind schema.GroupVersionKind
@@ -48,14 +49,33 @@ type CacheReader struct {
 func (c *CacheReader) Get(_ context.Context, key client.ObjectKey, out runtime.Object) error {
 	storeKey := objectKeyToStoreKey(key)
 
-	// Lookup the object from the indexer cache
-	obj, exists, err := c.indexer.GetByKey(storeKey)
+	// Lookup the latest object from the indexer caches using its resourceVersion.
+	// TODO(estroz): ensure c was set up with at least one indexer. Perhaps unexport CacheReader
+	// and export NewCacheReader()?
+	latest, latestExists, err := c.indexers[0].GetByKey(storeKey)
 	if err != nil {
 		return err
 	}
+	if len(c.indexers) > 1 {
+		for _, indexer := range c.indexers[1:] {
+			obj, exists, err := indexer.GetByKey(storeKey)
+			if err != nil {
+				return err
+			}
+			// TODO(estroz): check either resourceVersion or generation and use the "latest" object.
+			// This will be a little nondeterministic because resourceVersion is supposed to be an
+			// opaque string used for equality comparison, and generation is not set on all objects,
+			// so we'd just return the first object found if no generation is available *unless*
+			// we want to make a monotonicity assumption about resourceVersion.
+			if exists {
+				latest = obj
+				latestExists = exists
+			}
+		}
+	}
 
 	// Not found, return an error
-	if !exists {
+	if !latestExists {
 		// Resource gets transformed into Kind in the error anyway, so this is fine
 		return errors.NewNotFound(schema.GroupResource{
 			Group:    c.groupVersionKind.Group,
@@ -64,19 +84,19 @@ func (c *CacheReader) Get(_ context.Context, key client.ObjectKey, out runtime.O
 	}
 
 	// Verify the result is a runtime.Object
-	if _, isObj := obj.(runtime.Object); !isObj {
+	if _, isObj := latest.(runtime.Object); !isObj {
 		// This should never happen
-		return fmt.Errorf("cache contained %T, which is not an Object", obj)
+		return fmt.Errorf("cache contained %T, which is not an Object", latest)
 	}
 
 	// deep copy to avoid mutating cache
 	// TODO(directxman12): revisit the decision to always deepcopy
-	obj = obj.(runtime.Object).DeepCopyObject()
+	latest = latest.(runtime.Object).DeepCopyObject()
 
 	// Copy the value of the item in the cache to the returned value
 	// TODO(directxman12): this is a terrible hack, pls fix (we should have deepcopyinto)
 	outVal := reflect.ValueOf(out)
-	objVal := reflect.ValueOf(obj)
+	objVal := reflect.ValueOf(latest)
 	if !objVal.Type().AssignableTo(outVal.Type()) {
 		return fmt.Errorf("cache had type %s, but %s was asked for", objVal.Type(), outVal.Type())
 	}
@@ -88,12 +108,10 @@ func (c *CacheReader) Get(_ context.Context, key client.ObjectKey, out runtime.O
 
 // List lists items out of the indexer and writes them to out
 func (c *CacheReader) List(_ context.Context, out runtime.Object, opts ...client.ListOption) error {
-	var objs []interface{}
-	var err error
-
 	listOpts := client.ListOptions{}
 	listOpts.ApplyOptions(opts)
 
+	var listFor func(cache.Indexer) ([]interface{}, error)
 	if listOpts.FieldSelector != nil {
 		// TODO(directxman12): support more complicated field selectors by
 		// combining multiple indices, GetIndexers, etc
@@ -104,25 +122,54 @@ func (c *CacheReader) List(_ context.Context, out runtime.Object, opts ...client
 		// list all objects by the field selector.  If this is namespaced and we have one, ask for the
 		// namespaced index key.  Otherwise, ask for the non-namespaced variant by using the fake "all namespaces"
 		// namespace.
-		objs, err = c.indexer.ByIndex(FieldIndexName(field), KeyToNamespacedKey(listOpts.Namespace, val))
+		listFor = func(in cache.Indexer) ([]interface{}, error) {
+			return in.ByIndex(FieldIndexName(field), KeyToNamespacedKey(listOpts.Namespace, val))
+		}
 	} else if listOpts.Namespace != "" {
-		objs, err = c.indexer.ByIndex(cache.NamespaceIndex, listOpts.Namespace)
+		listFor = func(in cache.Indexer) ([]interface{}, error) {
+			return in.ByIndex(cache.NamespaceIndex, listOpts.Namespace)
+		}
 	} else {
-		objs = c.indexer.List()
+		listFor = func(in cache.Indexer) ([]interface{}, error) {
+			return in.List(), nil
+		}
 	}
-	if err != nil {
-		return err
+
+	// TODO(estroz): ensure c was set up with at least one indexer. Perhaps unexport CacheReader
+	// and export NewCacheReader()?
+	latestObjSet := make(map[string]interface{})
+	for _, indexer := range c.indexers {
+		objs, err := listFor(indexer)
+		if err != nil {
+			return err
+		}
+		for i := range objs {
+			obj, isObj := objs[i].(v1.Object)
+			if !isObj {
+				return fmt.Errorf("cache contained %T, which is not a runtime.Object", objs[i])
+			}
+			key := KeyToNamespacedKey(obj.GetNamespace(), obj.GetName())
+			if _, hasKey := latestObjSet[key]; !hasKey {
+				// TODO(estroz): check either resourceVersion or generation and use the "latest" object.
+				// This will be a little nondeterministic because resourceVersion is supposed to be an
+				// opaque string used for equality comparison, and generation is not set on all objects,
+				// so we'd just return the first object found if no generation is available *unless*
+				// we want to make a monotonicity assumption about resourceVersion.
+				latestObjSet[key] = objs[i]
+			}
+		}
 	}
+
 	var labelSel labels.Selector
 	if listOpts.LabelSelector != nil {
 		labelSel = listOpts.LabelSelector
 	}
 
-	runtimeObjs := make([]runtime.Object, 0, len(objs))
-	for _, item := range objs {
+	runtimeObjs := make([]runtime.Object, 0, len(latestObjSet))
+	for _, item := range latestObjSet {
 		obj, isObj := item.(runtime.Object)
 		if !isObj {
-			return fmt.Errorf("cache contained %T, which is not an Object", obj)
+			return fmt.Errorf("cache contained %T, which is not an Object", item)
 		}
 		meta, err := apimeta.Accessor(obj)
 		if err != nil {

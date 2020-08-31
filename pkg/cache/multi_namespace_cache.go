@@ -18,6 +18,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -67,7 +68,12 @@ type multiNamespaceCache struct {
 	Scheme           *runtime.Scheme
 }
 
-var _ Cache = &multiNamespaceCache{}
+var (
+	_ Informers     = &multiNamespaceCache{}
+	_ client.Reader = &multiNamespaceCache{}
+	_ Cache         = &multiNamespaceCache{}
+	_ Filter        = &multiNamespaceCache{}
+)
 
 // Methods for multiNamespaceCache to conform to the Informers interface
 func (c *multiNamespaceCache) GetInformer(ctx context.Context, obj runtime.Object) (Informer, error) {
@@ -177,6 +183,66 @@ func (c *multiNamespaceCache) List(ctx context.Context, list runtime.Object, opt
 	listAccessor.SetResourceVersion(resourceVersion)
 
 	return apimeta.SetList(list, allItems)
+}
+
+// TODO(estroz): opts could be abstracted so namespaced sets of filters can be passed. For now this only adds
+// filters to one namespace.
+func (c *multiNamespaceCache) AddFilterForKind(ctx context.Context, gvk schema.GroupVersionKind, opts []client.ListOption) error {
+	ns, nsOpts, err := getNamespacedOptions(opts)
+	if err != nil {
+		return err
+	}
+	cache, hasCache := c.namespaceToCache[ns]
+	if !hasCache {
+		return fmt.Errorf("namespace %q does not exist multi-namespaced cache", ns)
+	}
+	if f, isFilter := cache.(Filter); isFilter {
+		return f.AddFilterForKind(ctx, gvk, nsOpts)
+	}
+	return fmt.Errorf("cache for namespace %q is not a filtered cache", ns)
+}
+
+func (c *multiNamespaceCache) AddFilter(ctx context.Context, obj runtime.Object, opts []client.ListOption) error {
+	ns, nsOpts, err := getNamespacedOptions(opts)
+	if err != nil {
+		return err
+	}
+	cache, hasCache := c.namespaceToCache[ns]
+	if !hasCache {
+		return fmt.Errorf("namespace %q does not exist multi-namespaced cache", ns)
+	}
+	if f, isFilter := cache.(Filter); isFilter {
+		return f.AddFilter(ctx, obj, nsOpts)
+	}
+	return fmt.Errorf("cache for namespace %q is not a filtered cache", ns)
+}
+
+func getNamespacedOptions(opts []client.ListOption) (namespace string, nsOpts []client.ListOption, _ error) {
+	namespace, nsOpts, err := splitNamespaceFromOptions(opts)
+	if err != nil {
+		return "", nil, err
+	}
+	if namespace == "" {
+		return "", nil, errors.New("no namespace option found in cache filter")
+	}
+	if len(nsOpts) == 0 {
+		return "", nil, errors.New("cache filter options must contain at least one label or field selector")
+	}
+	return namespace, nsOpts, nil
+}
+
+func splitNamespaceFromOptions(opts []client.ListOption) (namespace string, nsOpts []client.ListOption, _ error) {
+	for _, opt := range opts {
+		if ns, isNS := opt.(client.InNamespace); isNS {
+			if namespace != "" {
+				return "", nil, errors.New("multiple namespaces in cache filter not allowed")
+			}
+			namespace = string(ns)
+		} else {
+			nsOpts = append(nsOpts, opt)
+		}
+	}
+	return namespace, nsOpts, nil
 }
 
 // multiNamespaceInformer knows how to handle interacting with the underlying informer across multiple namespaces

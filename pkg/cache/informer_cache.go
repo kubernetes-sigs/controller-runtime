@@ -36,6 +36,7 @@ var (
 	_ Informers     = &informerCache{}
 	_ client.Reader = &informerCache{}
 	_ Cache         = &informerCache{}
+	_ Filter        = &informerCache{}
 )
 
 // ErrCacheNotStarted is returned when trying to read from the cache that wasn't started.
@@ -57,7 +58,7 @@ func (ip *informerCache) Get(ctx context.Context, key client.ObjectKey, out runt
 		return err
 	}
 
-	started, cache, err := ip.InformersMap.Get(ctx, gvk, out)
+	cache, started, err := ip.InformersMap.Get(ctx, gvk, out)
 	if err != nil {
 		return err
 	}
@@ -65,7 +66,7 @@ func (ip *informerCache) Get(ctx context.Context, key client.ObjectKey, out runt
 	if !started {
 		return &ErrCacheNotStarted{}
 	}
-	return cache.Reader.Get(ctx, key, out)
+	return cache.GetReader().Get(ctx, key, out)
 }
 
 // List implements Reader
@@ -76,7 +77,7 @@ func (ip *informerCache) List(ctx context.Context, out runtime.Object, opts ...c
 		return err
 	}
 
-	started, cache, err := ip.InformersMap.Get(ctx, *gvk, cacheTypeObj)
+	cache, started, err := ip.InformersMap.Get(ctx, *gvk, cacheTypeObj, opts...)
 	if err != nil {
 		return err
 	}
@@ -85,7 +86,7 @@ func (ip *informerCache) List(ctx context.Context, out runtime.Object, opts ...c
 		return &ErrCacheNotStarted{}
 	}
 
-	return cache.Reader.List(ctx, out, opts...)
+	return cache.GetReader().List(ctx, out, opts...)
 }
 
 // objectTypeForListObject tries to find the runtime.Object and associated GVK
@@ -138,11 +139,11 @@ func (ip *informerCache) GetInformerForKind(ctx context.Context, gvk schema.Grou
 		return nil, err
 	}
 
-	_, i, err := ip.InformersMap.Get(ctx, gvk, obj)
+	cache, _, err := ip.InformersMap.Get(ctx, gvk, obj)
 	if err != nil {
 		return nil, err
 	}
-	return i.Informer, err
+	return cache.GetInformer(), nil
 }
 
 // GetInformer returns the informer for the obj
@@ -152,11 +153,41 @@ func (ip *informerCache) GetInformer(ctx context.Context, obj runtime.Object) (I
 		return nil, err
 	}
 
-	_, i, err := ip.InformersMap.Get(ctx, gvk, obj)
+	cache, _, err := ip.InformersMap.Get(ctx, gvk, obj)
 	if err != nil {
 		return nil, err
 	}
-	return i.Informer, err
+	return cache.GetInformer(), nil
+}
+
+func (ip *informerCache) AddFilterForKind(ctx context.Context, gvk schema.GroupVersionKind, opts []client.ListOption) (err error) {
+	var namespace string
+	if namespace, opts, err = splitNamespaceFromOptions(opts); err != nil || namespace != "" {
+		return fmt.Errorf("namespace list option not permitted in AddFilterForKind")
+	}
+
+	obj, err := ip.Scheme.New(gvk)
+	if err != nil {
+		return err
+	}
+
+	_, _, err = ip.InformersMap.Get(ctx, gvk, obj, opts...)
+	return err
+}
+
+func (ip *informerCache) AddFilter(ctx context.Context, obj runtime.Object, opts []client.ListOption) (err error) {
+	var namespace string
+	if namespace, opts, err = splitNamespaceFromOptions(opts); err != nil || namespace != "" {
+		return fmt.Errorf("namespace list option not permitted in AddFilter")
+	}
+
+	gvk, err := apiutil.GVKForObject(obj, ip.Scheme)
+	if err != nil {
+		return err
+	}
+
+	_, _, err = ip.InformersMap.Get(ctx, gvk, obj, opts...)
+	return err
 }
 
 // NeedLeaderElection implements the LeaderElectionRunnable interface

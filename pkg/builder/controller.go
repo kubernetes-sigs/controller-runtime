@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -59,6 +60,7 @@ func ControllerManagedBy(m manager.Manager) *Builder {
 type ForInput struct {
 	object     runtime.Object
 	predicates []predicate.Predicate
+	filters    []client.ListOption
 	err        error
 }
 
@@ -84,6 +86,7 @@ func (blder *Builder) For(object runtime.Object, opts ...ForOption) *Builder {
 type OwnsInput struct {
 	object     runtime.Object
 	predicates []predicate.Predicate
+	filters    []client.ListOption
 }
 
 // Owns defines types of Objects being *generated* by the ControllerManagedBy, and configures the ControllerManagedBy to respond to
@@ -186,7 +189,7 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 
 func (blder *Builder) doWatch() error {
 	// Reconcile type
-	src := &source.Kind{Type: blder.forInput.object}
+	src := &source.Kind{Type: blder.forInput.object, Filters: blder.forInput.filters}
 	hdler := &handler.EnqueueRequestForObject{}
 	allPredicates := append(blder.globalPredicates, blder.forInput.predicates...)
 	err := blder.ctrl.Watch(src, hdler, allPredicates...)
@@ -196,7 +199,7 @@ func (blder *Builder) doWatch() error {
 
 	// Watches the managed types
 	for _, own := range blder.ownsInput {
-		src := &source.Kind{Type: own.object}
+		src := &source.Kind{Type: own.object, Filters: own.filters}
 		hdler := &handler.EnqueueRequestForOwner{
 			OwnerType:    blder.forInput.object,
 			IsController: true,

@@ -129,7 +129,7 @@ var _ = Describe("controller", func() {
 			pr2 := &predicate.Funcs{}
 			evthdl := &handler.EnqueueRequestForObject{}
 			started := false
-			src := source.Func(func(e handler.EventHandler, q workqueue.RateLimitingInterface, p ...predicate.Predicate) error {
+			src := source.Func(func(ctx context.Context, e handler.EventHandler, q workqueue.RateLimitingInterface, p ...predicate.Predicate) error {
 				defer GinkgoRecover()
 				Expect(e).To(Equal(evthdl))
 				Expect(q).To(Equal(ctrl.Queue))
@@ -149,7 +149,8 @@ var _ = Describe("controller", func() {
 
 		It("should return an error if there is an error starting sources", func() {
 			err := fmt.Errorf("Expected Error: could not start source")
-			src := source.Func(func(handler.EventHandler,
+			src := source.Func(func(context.Context,
+				handler.EventHandler,
 				workqueue.RateLimitingInterface,
 				...predicate.Predicate) error {
 				defer GinkgoRecover()

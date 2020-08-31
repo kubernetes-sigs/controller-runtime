@@ -81,7 +81,7 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 	}
 
 	// TODO(JoelSpeed): switch to leaderelection object in 1.12
-	return resourcelock.New(resourcelock.ConfigMapsResourceLock,
+	return resourcelock.New(resourcelock.ConfigMapsLeasesResourceLock,
 		options.LeaderElectionNamespace,
 		options.LeaderElectionID,
 		client.CoreV1(),

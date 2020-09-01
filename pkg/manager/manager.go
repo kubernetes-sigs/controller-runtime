@@ -142,11 +142,26 @@ type Options struct {
 	// starting the manager.
 	LeaderElection bool
 
+	// LeaderElectionResourceLock determines which resource lock to use for leader election,
+	// defaults to "configmapsleases". Change this value only if you know what you are doing.
+	// Otherwise, users of your controller might end up with multiple running instances that
+	// each acquired leadership through different resource locks during upgrades and thus
+	// act on the same resources concurrently.
+	// If you want to migrate to the "leases" resource lock, you might do so by migrating to the
+	// respective multilock first ("configmapsleases" or "endpointsleases"), which will acquire a
+	// leader lock on both resources. After all your users have migrated to the multilock, you can
+	// go ahead and migrate to "leases". Please also keep in mind, that users might skip versions
+	// of your controller.
+	//
+	// Note: before controller-runtime version v0.7, the resource lock was set to "configmaps".
+	// Please keep this in mind, when planning a proper migration path for your controller.
+	LeaderElectionResourceLock string
+
 	// LeaderElectionNamespace determines the namespace in which the leader
-	// election configmap will be created.
+	// election resource will be created.
 	LeaderElectionNamespace string
 
-	// LeaderElectionID determines the name of the configmap that leader election
+	// LeaderElectionID determines the name of the resource that leader election
 	// will use for holding the leader lock.
 	LeaderElectionID string
 
@@ -329,9 +344,10 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		leaderConfig = options.LeaderElectionConfig
 	}
 	resourceLock, err := options.newResourceLock(leaderConfig, recorderProvider, leaderelection.Options{
-		LeaderElection:          options.LeaderElection,
-		LeaderElectionID:        options.LeaderElectionID,
-		LeaderElectionNamespace: options.LeaderElectionNamespace,
+		LeaderElection:             options.LeaderElection,
+		LeaderElectionResourceLock: options.LeaderElectionResourceLock,
+		LeaderElectionID:           options.LeaderElectionID,
+		LeaderElectionNamespace:    options.LeaderElectionNamespace,
 	})
 	if err != nil {
 		return nil, err

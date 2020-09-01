@@ -296,6 +296,15 @@ var _ = Describe("manger.Manager", func() {
 				<-m2done
 			})
 
+			It("should return an error if it can't create a ResourceLock", func() {
+				m, err := New(cfg, Options{
+					newResourceLock: func(_ *rest.Config, _ recorder.Provider, _ leaderelection.Options) (resourcelock.Interface, error) {
+						return nil, fmt.Errorf("expected error")
+					},
+				})
+				Expect(m).To(BeNil())
+				Expect(err).To(MatchError(ContainSubstring("expected error")))
+			})
 			It("should return an error if namespace not set and not running in cluster", func() {
 				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime"})
 				Expect(m).To(BeNil())
@@ -319,6 +328,20 @@ var _ = Describe("manger.Manager", func() {
 				_, secondaryIsLeaseLock := multilock.Secondary.(*resourcelock.LeaseLock)
 				Expect(secondaryIsLeaseLock).To(BeTrue())
 
+			})
+			It("should use the specified ResourceLock", func() {
+				m, err := New(cfg, Options{
+					LeaderElection:             true,
+					LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
+					LeaderElectionID:           "controller-runtime",
+					LeaderElectionNamespace:    "my-ns",
+				})
+				Expect(m).ToNot(BeNil())
+				Expect(err).ToNot(HaveOccurred())
+				cm, ok := m.(*controllerManager)
+				Expect(ok).To(BeTrue())
+				_, isLeaseLock := cm.resourceLock.(*resourcelock.LeaseLock)
+				Expect(isLeaseLock).To(BeTrue())
 			})
 		})
 

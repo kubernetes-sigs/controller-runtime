@@ -54,6 +54,11 @@ type Server struct {
 	// server key and certificate.
 	CertDir string
 
+	// TLSConfig is a *tls.Config object that will be used in place of
+	// the one normally created by reading certs in the CertDir.  If both
+	// CertDir and this are specified CertDir will be ignored
+	TLSConfig *tls.Config
+
 	// CertName is the server certificate name. Defaults to tls.crt.
 	CertName string
 
@@ -169,24 +174,29 @@ func (s *Server) Start(stop <-chan struct{}) error {
 	certPath := filepath.Join(s.CertDir, s.CertName)
 	keyPath := filepath.Join(s.CertDir, s.KeyName)
 
-	certWatcher, err := certwatcher.New(certPath, keyPath)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		if err := certWatcher.Start(stop); err != nil {
-			log.Error(err, "certificate watcher error")
+	var cfg *tls.Config
+	if s.TLSConfig != nil {
+		cfg = s.TLSConfig
+	} else {
+		certWatcher, err := certwatcher.New(certPath, keyPath)
+		if err != nil {
+			return err
 		}
-	}()
 
-	cfg := &tls.Config{
-		NextProtos:     []string{"h2"},
-		GetCertificate: certWatcher.GetCertificate,
+		go func() {
+			if err := certWatcher.Start(stop); err != nil {
+				log.Error(err, "certificate watcher error")
+			}
+		}()
+
+		cfg = &tls.Config{
+			NextProtos:     []string{"h2"},
+			GetCertificate: certWatcher.GetCertificate,
+		}
 	}
 
 	// load CA to verify client certificate
-	if s.ClientCAName != "" {
+	if s.ClientCAName != "" && s.TLSConfig == nil {
 		certPool := x509.NewCertPool()
 		clientCABytes, err := ioutil.ReadFile(filepath.Join(s.CertDir, s.ClientCAName))
 		if err != nil {

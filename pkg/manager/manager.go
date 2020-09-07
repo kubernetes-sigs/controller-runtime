@@ -17,6 +17,7 @@ limitations under the License.
 package manager
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -224,6 +225,11 @@ type Options struct {
 	CertDir string
 	// Functions to all for a user to customize the values that will be injected.
 
+	// WebhookTLSConfig is a *tls.Config object that will be used in place of
+	// the one normally created by reading certs in the CertDir.  If both
+	// CertDir and this are specified CertDir will be ignored
+	WebhookTLSConfig *tls.Config
+
 	// NewCache is the function that will create the cache to be used
 	// by the manager. If not set this will use the default new cache function.
 	NewCache cache.NewCacheFunc
@@ -391,6 +397,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		port:                    options.Port,
 		host:                    options.Host,
 		certDir:                 options.CertDir,
+		webhookTLSConfig:        options.WebhookTLSConfig,
 		leaseDuration:           *options.LeaseDuration,
 		renewDeadline:           *options.RenewDeadline,
 		retryPeriod:             *options.RetryPeriod,

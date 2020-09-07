@@ -15,6 +15,7 @@ package envtest
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -63,6 +64,11 @@ type WebhookInstallOptions struct {
 	// LocalServingCertDir is the allocated directory for serving certificates.
 	// it will be automatically populated by the local temp dir
 	LocalServingCertDir string
+
+	// CustomTLSConfig is a *tls.Config object that will be used in place of
+	// the one normally created by reading certs in the CertDir.  If both
+	// CertDir and this are specified CertDir will be ignored
+	CustomTLSConfig *tls.Config
 
 	// MaxTime is the max time to wait
 	MaxTime time.Duration
@@ -428,4 +434,26 @@ func runtimeListToUnstructured(l []runtime.Object) []*unstructured.Unstructured 
 		})
 	}
 	return res
+}
+
+// InstallWithCustomTLS installs specified webhooks to the API server but
+// doesn't setup a CA/cert via tinyca
+func (o *WebhookInstallOptions) InstallWithCustomTLS(config *rest.Config) error {
+	if err := parseWebhook(o); err != nil {
+		return err
+	}
+
+	err := o.ModifyWebhookDefinitions([]byte{})
+	if err != nil {
+		return err
+	}
+
+	if err := createWebhooks(config, o.MutatingWebhooks, o.ValidatingWebhooks); err != nil {
+		return err
+	}
+
+	if err := WaitForWebhooks(config, o.MutatingWebhooks, o.ValidatingWebhooks, *o); err != nil {
+		return err
+	}
+	return nil
 }

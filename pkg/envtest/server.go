@@ -262,9 +262,22 @@ func (te *Environment) Start() (*rest.Config, error) {
 	te.CRDs = crds
 
 	log.V(1).Info("installing webhooks")
-	err = te.WebhookInstallOptions.Install(te.Config)
 
+	if te.WebhookInstallOptions.CustomTLSConfig != nil && te.WebhookInstallOptions.LocalServingCertDir != "" {
+		return nil, fmt.Errorf("Both Custom TLS Config and CertDir is provided in the test configuration")
+	}
+
+	if te.WebhookInstallOptions.CustomTLSConfig != nil {
+		err = te.WebhookInstallOptions.InstallWithCustomTLS(te.Config)
+	} else {
+		err = te.WebhookInstallOptions.Install(te.Config)
+	}
+
+	if err != nil {
+		return nil, err
+	}
 	return te.Config, err
+
 }
 
 func (te *Environment) startControlPlane() error {

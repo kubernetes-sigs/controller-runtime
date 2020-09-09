@@ -216,4 +216,30 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 			Expect(resp).To(Equal(expected))
 		})
 	})
+
+	Describe("WithWarnings", func() {
+		It("should add the warnings to the existing response without removing any existing warnings", func() {
+			initialResponse := Response{
+				AdmissionResponse: admissionv1beta1.AdmissionResponse{
+					Allowed: true,
+					Result: &metav1.Status{
+						Code: http.StatusOK,
+					},
+					Warnings: []string{"existing-warning"},
+				},
+			}
+			warnings := []string{"additional-warning-1", "additional-warning-2"}
+			expectedResponse := Response{
+				AdmissionResponse: admissionv1beta1.AdmissionResponse{
+					Allowed: true,
+					Result: &metav1.Status{
+						Code: http.StatusOK,
+					},
+					Warnings: []string{"existing-warning", "additional-warning-1", "additional-warning-2"},
+				},
+			}
+
+			Expect(initialResponse.WithWarnings(warnings...)).To(Equal(expectedResponse))
+		})
+	})
 })

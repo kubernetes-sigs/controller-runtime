@@ -91,7 +91,7 @@ var _ = Describe("controller", func() {
 	Describe("Start", func() {
 		It("should return an error if there is an error waiting for the informers", func(done Done) {
 			f := false
-			ctrl.watches = []watchDescription{{
+			ctrl.startWatches = []watchDescription{{
 				src: source.NewKindWithCache(&corev1.Pod{}, &informertest.FakeInformers{Synced: &f}),
 			}}
 			ctrl.Name = "foo"
@@ -115,7 +115,7 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			_, err = c.GetInformer(context.TODO(), &appsv1.ReplicaSet{})
 			Expect(err).NotTo(HaveOccurred())
-			ctrl.watches = []watchDescription{{
+			ctrl.startWatches = []watchDescription{{
 				src: source.NewKindWithCache(&appsv1.Deployment{}, &informertest.FakeInformers{}),
 			}}
 

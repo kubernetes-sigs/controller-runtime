@@ -17,7 +17,7 @@ limitations under the License.
 package webhook
 
 import (
-	"gomodules.xyz/jsonpatch/v2"
+	"github.com/mattbaird/jsonpatch"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -55,7 +55,7 @@ type AdmissionHandler = admission.Handler
 type AdmissionDecoder = admission.Decoder
 
 // JSONPatchOp represents a single JSONPatch patch operation.
-type JSONPatchOp = jsonpatch.Operation
+type JSONPatchOp = jsonpatch.JsonPatchOperation
 
 var (
 	// Allowed indicates that the admission request should be allowed for the given reason.

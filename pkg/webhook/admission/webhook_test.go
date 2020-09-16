@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"gomodules.xyz/jsonpatch/v2"
+	"github.com/mattbaird/jsonpatch"
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -111,7 +111,7 @@ var _ = Describe("Admission Webhooks", func() {
 		By("setting up a webhook with a patching handler")
 		webhook := &Webhook{
 			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
-				return Patched("", jsonpatch.Operation{Operation: "add", Path: "/a", Value: 2}, jsonpatch.Operation{Operation: "replace", Path: "/b", Value: 4})
+				return Patched("", jsonpatch.JsonPatchOperation{Operation: "add", Path: "/a", Value: 2}, jsonpatch.JsonPatchOperation{Operation: "replace", Path: "/b", Value: 4})
 			}),
 			log: logf.RuntimeLog.WithName("webhook"),
 		}

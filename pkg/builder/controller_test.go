@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -46,6 +47,17 @@ type typedNoop struct{}
 
 func (typedNoop) Reconcile(context.Context, reconcile.Request) (reconcile.Result, error) {
 	return reconcile.Result{}, nil
+}
+
+type testLogger struct {
+	logr.Logger
+}
+
+func (l *testLogger) WithName(_ string) logr.Logger {
+	return l
+}
+func (l *testLogger) WithValues(_ ...interface{}) logr.Logger {
+	return l
 }
 
 var _ = Describe("application", func() {
@@ -155,6 +167,29 @@ var _ = Describe("application", func() {
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{RateLimiter: rateLimiter}).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeNil())
+		})
+
+		It("should override logger during creation of controller", func() {
+
+			logger := &testLogger{}
+			newController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
+				if options.Log == logger {
+					return controller.New(name, mgr, options)
+				}
+				return nil, fmt.Errorf("logger expected %T but found %T", logger, options.Log)
+			}
+
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				For(&appsv1.ReplicaSet{}).
+				Owns(&appsv1.ReplicaSet{}).
+				WithLogger(logger).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())

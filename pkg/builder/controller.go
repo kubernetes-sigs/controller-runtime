@@ -47,7 +47,6 @@ type Builder struct {
 	config           *rest.Config
 	ctrl             controller.Controller
 	ctrlOptions      controller.Options
-	log              logr.Logger
 	name             string
 }
 
@@ -132,7 +131,7 @@ func (blder *Builder) WithOptions(options controller.Options) *Builder {
 
 // WithLogger overrides the controller options's logger used.
 func (blder *Builder) WithLogger(log logr.Logger) *Builder {
-	blder.log = log
+	blder.ctrlOptions.Log = log
 	return blder
 }
 

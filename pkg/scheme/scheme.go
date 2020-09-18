@@ -66,7 +66,7 @@ type Builder struct {
 	runtime.SchemeBuilder
 }
 
-// Register adds one or objects to the SchemeBuilder so they can be added to a Scheme.  Register mutates bld.
+// Register adds one or more objects to the SchemeBuilder so they can be added to a Scheme.  Register mutates bld.
 func (bld *Builder) Register(object ...runtime.Object) *Builder {
 	bld.SchemeBuilder.Register(func(scheme *runtime.Scheme) error {
 		scheme.AddKnownTypes(bld.GroupVersion, object...)

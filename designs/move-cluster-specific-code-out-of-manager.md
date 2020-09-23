@@ -203,7 +203,7 @@ func NewSecretMirrorReconciler(mgr manager.Manager, mirrorCluster cluster.Cluste
 
 func main(){
 
-	mgr, err := manager.New(cfg1, manager.Options{})
+	mgr, err := manager.New(context.Background(), cfg1, manager.Options{})
 	if err != nil {
 		panic(err)
 	}

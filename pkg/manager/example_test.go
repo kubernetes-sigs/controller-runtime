@@ -17,6 +17,7 @@ limitations under the License.
 package manager_test
 
 import (
+	"context"
 	"os"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -40,7 +41,7 @@ func ExampleNew() {
 		os.Exit(1)
 	}
 
-	mgr, err := manager.New(cfg, manager.Options{})
+	mgr, err := manager.New(context.Background(), cfg, manager.Options{})
 	if err != nil {
 		log.Error(err, "unable to set up manager")
 		os.Exit(1)
@@ -56,7 +57,7 @@ func ExampleNew_multinamespaceCache() {
 		os.Exit(1)
 	}
 
-	mgr, err := manager.New(cfg, manager.Options{
+	mgr, err := manager.New(context.Background(), cfg, manager.Options{
 		NewCache: cache.MultiNamespacedCacheBuilder([]string{"namespace1", "namespace2"}),
 	})
 	if err != nil {
@@ -68,7 +69,7 @@ func ExampleNew_multinamespaceCache() {
 
 // This example adds a Runnable for the Manager to Start.
 func ExampleManager_add() {
-	err := mgr.Add(manager.RunnableFunc(func(<-chan struct{}) error {
+	err := mgr.Add(manager.RunnableFunc(func(context.Context) error {
 		// Do something
 		return nil
 	}))
@@ -80,8 +81,7 @@ func ExampleManager_add() {
 
 // This example starts a Manager that has had Runnables added.
 func ExampleManager_start() {
-	err := mgr.Start(signals.SetupSignalHandler())
-	if err != nil {
+	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
 		log.Error(err, "unable start the manager")
 		os.Exit(1)
 	}

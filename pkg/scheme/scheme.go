@@ -46,7 +46,7 @@ limitations under the License.
 //  }
 //
 //  func main() {
-//  	mgr := controllers.NewManager(controllers.GetConfigOrDie(), manager.Options{
+//  	mgr := controllers.NewManager(context.Background(), controllers.GetConfigOrDie(), manager.Options{
 //  		Scheme: scheme,
 //  	})
 //  	// ...

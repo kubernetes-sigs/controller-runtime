@@ -17,7 +17,6 @@ limitations under the License.
 package source_test
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -44,7 +43,6 @@ var _ = Describe("Source", func() {
 	var c1, c2 chan interface{}
 	var ns string
 	count := 0
-	ctx := context.TODO()
 
 	BeforeEach(func(done Done) {
 		// Create the namespace for the test
@@ -133,8 +131,8 @@ var _ = Describe("Source", func() {
 				handler2 := newHandler(c2)
 
 				// Create 2 instances
-				Expect(instance1.Start(handler1, q)).To(Succeed())
-				Expect(instance2.Start(handler2, q)).To(Succeed())
+				Expect(instance1.Start(ctx, handler1, q)).To(Succeed())
+				Expect(instance2.Start(ctx, handler2, q)).To(Succeed())
 
 				By("Creating a Deployment and expecting the CreateEvent.")
 				created, err = client.Create(ctx, deployment, metav1.CreateOptions{})
@@ -255,7 +253,7 @@ var _ = Describe("Source", func() {
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Informer{Informer: depInformer}
-				err := instance.Start(handler.Funcs{
+				err := instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						var err error
@@ -297,7 +295,7 @@ var _ = Describe("Source", func() {
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Informer{Informer: depInformer}
-				err = instance.Start(handler.Funcs{
+				err = instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 					},
 					UpdateFunc: func(evt event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
@@ -335,7 +333,7 @@ var _ = Describe("Source", func() {
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Informer{Informer: depInformer}
-				err := instance.Start(handler.Funcs{
+				err := instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 					},
 					UpdateFunc: func(event.UpdateEvent, workqueue.RateLimitingInterface) {

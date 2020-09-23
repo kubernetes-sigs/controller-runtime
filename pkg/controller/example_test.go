@@ -144,9 +144,7 @@ func ExampleNewUnmanaged() {
 		os.Exit(1)
 	}
 
-	// Create a stop channel for our controller. The controller will stop when
-	// this channel is closed.
-	stop := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
 
 	// Start our controller in a goroutine so that we do not block.
 	go func() {
@@ -155,13 +153,13 @@ func ExampleNewUnmanaged() {
 		// to handle that.
 		<-mgr.Elected()
 
-		// Start our controller. This will block until the stop channel is
+		// Start our controller. This will block until the context is
 		// closed, or the controller returns an error.
-		if err := c.Start(stop); err != nil {
+		if err := c.Start(ctx); err != nil {
 			log.Error(err, "cannot run experiment controller")
 		}
 	}()
 
 	// Stop our controller.
-	close(stop)
+	cancel()
 }

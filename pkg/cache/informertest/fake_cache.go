@@ -80,7 +80,7 @@ func (c *FakeInformers) GetInformer(ctx context.Context, obj runtime.Object) (ca
 }
 
 // WaitForCacheSync implements Informers
-func (c *FakeInformers) WaitForCacheSync(stop <-chan struct{}) bool {
+func (c *FakeInformers) WaitForCacheSync(ctx context.Context) bool {
 	if c.Synced == nil {
 		return true
 	}
@@ -121,7 +121,7 @@ func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, _ runtime.Objec
 }
 
 // Start implements Informers
-func (c *FakeInformers) Start(stopCh <-chan struct{}) error {
+func (c *FakeInformers) Start(ctx context.Context) error {
 	return c.Error
 }
 

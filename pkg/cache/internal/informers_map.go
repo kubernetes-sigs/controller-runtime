@@ -121,33 +121,33 @@ type specificInformersMap struct {
 	namespace string
 }
 
-// Start calls Run on each of the informers and sets started to true.  Blocks on the stop channel.
+// Start calls Run on each of the informers and sets started to true.  Blocks on the context.
 // It doesn't return start because it can't return an error, and it's not a runnable directly.
-func (ip *specificInformersMap) Start(stop <-chan struct{}) {
+func (ip *specificInformersMap) Start(ctx context.Context) {
 	func() {
 		ip.mu.Lock()
 		defer ip.mu.Unlock()
 
 		// Set the stop channel so it can be passed to informers that are added later
-		ip.stop = stop
+		ip.stop = ctx.Done()
 
 		// Start each informer
 		for _, informer := range ip.informersByGVK {
-			go informer.Informer.Run(stop)
+			go informer.Informer.Run(ctx.Done())
 		}
 
 		// Set started to true so we immediately start any informers added later.
 		ip.started = true
 		close(ip.startWait)
 	}()
-	<-stop
+	<-ctx.Done()
 }
 
-func (ip *specificInformersMap) waitForStarted(stop <-chan struct{}) bool {
+func (ip *specificInformersMap) waitForStarted(ctx context.Context) bool {
 	select {
 	case <-ip.startWait:
 		return true
-	case <-stop:
+	case <-ctx.Done():
 		return false
 	}
 }

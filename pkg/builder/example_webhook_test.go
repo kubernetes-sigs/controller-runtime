@@ -17,6 +17,7 @@ limitations under the License.
 package builder_test
 
 import (
+	"context"
 	"os"
 
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -39,7 +40,7 @@ var _ admission.Validator = &examplegroup.ChaosPod{}
 func ExampleWebhookBuilder() {
 	var log = logf.Log.WithName("webhookbuilder-example")
 
-	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
+	mgr, err := manager.New(context.Background(), config.GetConfigOrDie(), manager.Options{})
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)

@@ -79,7 +79,7 @@ var _ = Describe("application", func() {
 	Describe("New", func() {
 		It("should return success if given valid objects", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -92,7 +92,7 @@ var _ = Describe("application", func() {
 
 		It("should return error if given two apiType objects in For function", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -106,7 +106,7 @@ var _ = Describe("application", func() {
 
 		It("should return an error if For function is not called", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -118,7 +118,7 @@ var _ = Describe("application", func() {
 
 		It("should return an error if there is no GVK for an object, and thus we can't default the controller name", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("creating a controller with a bad For type")
@@ -141,7 +141,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -164,7 +164,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -186,7 +186,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -209,7 +209,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -230,7 +230,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -244,7 +244,7 @@ var _ = Describe("application", func() {
 
 		It("should allow multiple controllers for the same kind", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -273,7 +273,7 @@ var _ = Describe("application", func() {
 
 	Describe("Start with ControllerManagedBy", func() {
 		It("should Reconcile Owns objects", func(done Done) {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			bldr := ControllerManagedBy(m).
@@ -284,7 +284,7 @@ var _ = Describe("application", func() {
 		}, 10)
 
 		It("should Reconcile Watches objects", func(done Done) {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			bldr := ControllerManagedBy(m).
@@ -299,7 +299,7 @@ var _ = Describe("application", func() {
 
 	Describe("Set custom predicates", func() {
 		It("should execute registered predicates only for assigned kind", func(done Done) {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			var (

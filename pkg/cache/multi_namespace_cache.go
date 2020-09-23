@@ -94,23 +94,23 @@ func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema
 	return &multiNamespaceInformer{namespaceToInformer: informers}, nil
 }
 
-func (c *multiNamespaceCache) Start(stopCh <-chan struct{}) error {
+func (c *multiNamespaceCache) Start(ctx context.Context) error {
 	for ns, cache := range c.namespaceToCache {
 		go func(ns string, cache Cache) {
-			err := cache.Start(stopCh)
+			err := cache.Start(ctx)
 			if err != nil {
 				log.Error(err, "multinamespace cache failed to start namespaced informer", "namespace", ns)
 			}
 		}(ns, cache)
 	}
-	<-stopCh
+	<-ctx.Done()
 	return nil
 }
 
-func (c *multiNamespaceCache) WaitForCacheSync(stop <-chan struct{}) bool {
+func (c *multiNamespaceCache) WaitForCacheSync(ctx context.Context) bool {
 	synced := true
 	for _, cache := range c.namespaceToCache {
-		if s := cache.WaitForCacheSync(stop); !s {
+		if s := cache.WaitForCacheSync(ctx); !s {
 			synced = s
 		}
 	}

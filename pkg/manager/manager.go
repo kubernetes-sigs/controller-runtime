@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -33,12 +35,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -398,6 +403,104 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		gracefulShutdownTimeout: *options.GracefulShutdownTimeout,
 		internalProceduresStop:  make(chan struct{}),
 	}, nil
+}
+
+// AndFrom will use a supplied type and convert to Options
+// any options already set on Options will be ignored, this is used to allow
+// cli flags to override anything specified in the config file
+func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options, error) {
+	if inj, wantsScheme := loader.(inject.Scheme); wantsScheme {
+		err := inj.InjectScheme(o.Scheme)
+		if err != nil {
+			return o, err
+		}
+	}
+
+	newObj, err := loader.GetControllerManagerConfiguration()
+	if err != nil {
+		return o, err
+	}
+
+	o = o.setLeaderElectionConfig(newObj)
+
+	if o.SyncPeriod == nil && newObj.SyncPeriod != nil {
+		o.SyncPeriod = &newObj.SyncPeriod.Duration
+	}
+
+	if o.Namespace == "" && newObj.CacheNamespace != "" {
+		o.Namespace = newObj.CacheNamespace
+	}
+
+	if o.MetricsBindAddress == "" && newObj.Metrics.BindAddress != "" {
+		o.MetricsBindAddress = newObj.Metrics.BindAddress
+	}
+
+	if o.HealthProbeBindAddress == "" && newObj.Health.HealthProbeBindAddress != "" {
+		o.HealthProbeBindAddress = newObj.Health.HealthProbeBindAddress
+	}
+
+	if o.ReadinessEndpointName == "" && newObj.Health.ReadinessEndpointName != "" {
+		o.ReadinessEndpointName = newObj.Health.ReadinessEndpointName
+	}
+
+	if o.LivenessEndpointName == "" && newObj.Health.LivenessEndpointName != "" {
+		o.LivenessEndpointName = newObj.Health.LivenessEndpointName
+	}
+
+	if o.Port == 0 && newObj.Webhook.Port != nil {
+		o.Port = *newObj.Webhook.Port
+	}
+
+	if o.Host == "" && newObj.Webhook.Host != "" {
+		o.Host = newObj.Webhook.Host
+	}
+
+	if o.CertDir == "" && newObj.Webhook.CertDir != "" {
+		o.CertDir = newObj.Webhook.CertDir
+	}
+
+	return o, nil
+}
+
+// AndFromOrDie will use options.AndFrom() and will panic if there are errors
+func (o Options) AndFromOrDie(loader config.ControllerManagerConfiguration) Options {
+	o, err := o.AndFrom(loader)
+	if err != nil {
+		panic(fmt.Sprintf("could not parse config file: %v", err))
+	}
+	return o
+}
+
+func (o Options) setLeaderElectionConfig(obj v1alpha1.ControllerManagerConfigurationSpec) Options {
+	if o.LeaderElection == false && obj.LeaderElection.LeaderElect != nil {
+		o.LeaderElection = *obj.LeaderElection.LeaderElect
+	}
+
+	if o.LeaderElectionResourceLock == "" && obj.LeaderElection.ResourceLock != "" {
+		o.LeaderElectionResourceLock = obj.LeaderElection.ResourceLock
+	}
+
+	if o.LeaderElectionNamespace == "" && obj.LeaderElection.ResourceNamespace != "" {
+		o.LeaderElectionNamespace = obj.LeaderElection.ResourceNamespace
+	}
+
+	if o.LeaderElectionID == "" && obj.LeaderElection.ResourceName != "" {
+		o.LeaderElectionID = obj.LeaderElection.ResourceName
+	}
+
+	if o.LeaseDuration == nil && !reflect.DeepEqual(obj.LeaderElection.LeaseDuration, metav1.Duration{}) {
+		o.LeaseDuration = &obj.LeaderElection.LeaseDuration.Duration
+	}
+
+	if o.RenewDeadline == nil && !reflect.DeepEqual(obj.LeaderElection.RenewDeadline, metav1.Duration{}) {
+		o.RenewDeadline = &obj.LeaderElection.RenewDeadline.Duration
+	}
+
+	if o.RetryPeriod == nil && !reflect.DeepEqual(obj.LeaderElection.RetryPeriod, metav1.Duration{}) {
+		o.RetryPeriod = &obj.LeaderElection.RetryPeriod.Duration
+	}
+
+	return o
 }
 
 // DefaultNewClient creates the default caching client

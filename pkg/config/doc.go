@@ -1,7 +1,5 @@
-// +build tools
-
 /*
-Copyright 2019 The Kubernetes Authors.
+Copyright 2020 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,11 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// This package imports things required by build scripts, to force `go mod` to see them as dependencies
-package tools
-
-import (
-	_ "github.com/golangci/golangci-lint/cmd/golangci-lint"
-	_ "github.com/joelanford/go-apidiff"
-	_ "sigs.k8s.io/controller-tools/cmd/controller-gen"
-)
+// Package config contains functionality for interacting with ComponentConfig
+// files
+//
+// DeferredFileLoader
+//
+// This uses a deferred file decoding allowing you to chain your configuration
+// setup. You can pass this into manager.Options#File and it will load your
+// config.
+package config

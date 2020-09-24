@@ -53,7 +53,7 @@ This change is important because:
 
 - Provide an interface for pulling configuration data out of exposed `ComponentConfig` types (see below for implementation)
 - Provide a new `ctrl.NewFromComponentConfig()` function for initializing a manager
-- Provide an embeddable `ControllerConfiguration` type for easily authoring `ComponentConfig` types
+- Provide an embeddable `ControllerManagerConfiguration` type for easily authoring `ComponentConfig` types
 - Provide an `DefaultControllerConfig` to make the switching easier for clients
 
 ### Non-Goals/Future Work
@@ -137,8 +137,8 @@ import (
 	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
 )
 
-// ControllerConfiguration defines the embedded RuntimeConfiguration for controller-runtime clients.
-type ControllerConfiguration struct {
+// ControllerManagerConfiguration defines the embedded RuntimeConfiguration for controller-runtime clients.
+type ControllerManagerConfiguration struct {
 	Namespace string `json:"namespace,omitempty"` 
 
 	SyncPeriod *time.Duration `json:"syncPeriod,omitempty"`
@@ -147,7 +147,7 @@ type ControllerConfiguration struct {
 
 	MetricsBindAddress string `json:"metricsBindAddress,omitempty"`
 
-	Health ControllerConfigurationHealth `json:"health,omitempty"`
+	Health ControllerManagerConfigurationHealth `json:"health,omitempty"`
 
 	Port *int   `json:"port,omitempty"`
 	Host string `json:"host,omitempty"`
@@ -155,8 +155,8 @@ type ControllerConfiguration struct {
 	CertDir string `json:"certDir,omitempty"`
 }
 
-// ControllerConfigurationHealth defines the health configs
-type ControllerConfigurationHealth struct {
+// ControllerManagerConfigurationHealth defines the health configs
+type ControllerManagerConfigurationHealth struct {
 	HealthProbeBindAddress string `json:"healthProbeBindAddress,omitempty"`
 
 	ReadinessEndpointName string `json:"readinessEndpointName,omitempty"`
@@ -181,11 +181,11 @@ import (
 	configv1alpha1 "sigs.k8s.io/controller-runtime/pkg/apis/config/v1alpha1"
 )
 
-// DefaultControllerConfiguration is the Schema for the DefaultControllerConfigurations API
-type DefaultControllerConfiguration struct {
+// DefaultControllerManagerConfiguration is the Schema for the DefaultControllerManagerConfigurations API
+type DefaultControllerManagerConfiguration struct {
 	metav1.TypeMeta `json:",inline"`
 
-	Spec   configv1alpha1.ControllerConfiguration   `json:"spec,omitempty"`
+	Spec   configv1alpha1.ControllerManagerConfiguration   `json:"spec,omitempty"`
 }
 ```
 
@@ -194,7 +194,7 @@ This would allow a controller author to use this struct with any config that sup
 ```yaml
 # config.yaml
 apiVersion: config.somedomain.io/v1alpha1
-kind: FoobarControllerConfiguration
+kind: FoobarControllerManagerConfiguration
 spec:
   port: 9443
   metricsBindAddress: ":8080"
@@ -202,11 +202,11 @@ spec:
     leaderElect: false
 ```
 
-Given the following config and `DefaultControllerConfiguration` we'd be able to initialize the controller using the following.
+Given the following config and `DefaultControllerManagerConfiguration` we'd be able to initialize the controller using the following.
 
 
 ```golang
-mgr, err := ctrl.NewManagerFromComponentConfig(ctrl.GetConfigOrDie(), scheme, configname, &defaultv1alpha1.DefaultControllerConfiguration{})
+mgr, err := ctrl.NewManagerFromComponentConfig(ctrl.GetConfigOrDie(), scheme, configname, &defaultv1alpha1.DefaultControllerManagerConfiguration{})
 if err != nil {
 	// ...
 }
@@ -222,8 +222,8 @@ Since this design still requires setting up the initial `ComponentConfig` type a
 ```golang
 leaderElect := true
 
-config := &defaultv1alpha1.DefaultControllerConfiguration{
-	Spec: configv1alpha1.ControllerConfiguration{
+config := &defaultv1alpha1.DefaultControllerManagerConfiguration{
+	Spec: configv1alpha1.ControllerManagerConfiguration{
 		LeaderElection: configv1alpha1.LeaderElectionConfiguration{
 			LeaderElect: &leaderElect,
 		},
@@ -250,7 +250,7 @@ import (
 ) 
 
 type ControllerNameConfigurationSpec struct {
-	configv1alpha1.ControllerConfiguration `json:",inline"`
+	configv1alpha1.ControllerManagerConfiguration `json:",inline"`
 }
 
 type ControllerNameConfiguration struct {
@@ -260,20 +260,20 @@ type ControllerNameConfiguration struct {
 }
 ```
 
-Usage of this custom `ComponentConfig` type would require then changing the `ctrl.NewFromComponentConfig()` to use the new struct vs the `DefaultControllerConfiguration`.
+Usage of this custom `ComponentConfig` type would require then changing the `ctrl.NewFromComponentConfig()` to use the new struct vs the `DefaultControllerManagerConfiguration`.
 
 ## User Stories
 
 ### Controller Author with `controller-runtime` and default type
 
 - Mount `ConfigMap`
-- Initialize `ctrl.Manager` with `NewFromComponentConfig` with config name and `DefaultControllerConfiguration` type
+- Initialize `ctrl.Manager` with `NewFromComponentConfig` with config name and `DefaultControllerManagerConfiguration` type
 - Build custom controller as usual
 
 ### Controller Author with `controller-runtime` and custom type
 
 - Implement `ComponentConfig` type
-- Embed `ControllerConfiguration` type
+- Embed `ControllerManagerConfiguration` type
 - Mount `ConfigMap`
 - Initialize `ctrl.Manager` with `NewFromComponentConfig` with config name and `ComponentConfig` type
 - Build custom controller as usual
@@ -311,9 +311,9 @@ _Provided that the controller provides manifests_
 
 - [x] 02/19/2020: Proposed idea in an issue or [community meeting]
 - [x] 02/24/2020: Proposal submitted to `controller-runtime`
-- [x] 03/02/2020: Updated with default `DefaultControllerConfiguration`
+- [x] 03/02/2020: Updated with default `DefaultControllerManagerConfiguration`
 - [x] 03/04/2020: Updated with embeddable `RuntimeConfig`
-- [x] 03/10/2020: Updated embeddable name to `ControllerConfiguration`
+- [x] 03/10/2020: Updated embeddable name to `ControllerManagerConfiguration`
 
 
 <!-- Links -->

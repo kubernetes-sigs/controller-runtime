@@ -59,6 +59,7 @@ func ControllerManagedBy(m manager.Manager) *Builder {
 type ForInput struct {
 	object     runtime.Object
 	predicates []predicate.Predicate
+	err        error
 }
 
 // For defines the type of Object being *reconciled*, and configures the ControllerManagedBy to respond to create / delete /
@@ -66,6 +67,10 @@ type ForInput struct {
 // This is the equivalent of calling
 // Watches(&source.Kind{Type: apiType}, &handler.EnqueueRequestForObject{})
 func (blder *Builder) For(object runtime.Object, opts ...ForOption) *Builder {
+	if blder.forInput.object != nil {
+		blder.forInput.err = fmt.Errorf("For(...) should only be called once, could not assign multiple objects for reconciliation")
+		return blder
+	}
 	input := ForInput{object: object}
 	for _, opt := range opts {
 		opt.ApplyToFor(&input)
@@ -158,6 +163,9 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 	}
 	if blder.mgr == nil {
 		return nil, fmt.Errorf("must provide a non-nil Manager")
+	}
+	if blder.forInput.err != nil {
+		return nil, blder.forInput.err
 	}
 
 	// Set the Config

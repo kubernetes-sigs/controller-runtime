@@ -90,6 +90,20 @@ var _ = Describe("application", func() {
 			Expect(instance).NotTo(BeNil())
 		})
 
+		It("should return error if given two apiType objects in For function", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				For(&appsv1.ReplicaSet{}).
+				For(&appsv1.Deployment{}).
+				Owns(&appsv1.ReplicaSet{}).
+				Build(noop)
+			Expect(err).To(MatchError(ContainSubstring("For(...) should only be called once, could not assign multiple objects for reconciliation")))
+			Expect(instance).To(BeNil())
+		})
+
 		It("should return an error if there is no GVK for an object, and thus we can't default the controller name", func() {
 			By("creating a controller manager")
 			m, err := manager.New(cfg, manager.Options{})

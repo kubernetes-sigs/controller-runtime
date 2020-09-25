@@ -406,6 +406,213 @@ var _ = Describe("Controllerutil", func() {
 		})
 	})
 
+	Describe("CreateOrPatch", func() {
+		var deploy *appsv1.Deployment
+		var deplSpec appsv1.DeploymentSpec
+		var deplKey types.NamespacedName
+		var specr controllerutil.MutateFn
+
+		BeforeEach(func() {
+			deploy = &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("deploy-%d", rand.Int31()),
+					Namespace: "default",
+				},
+			}
+
+			deplSpec = appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"foo": "bar"},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"foo": "bar",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "busybox",
+								Image: "busybox",
+							},
+						},
+					},
+				},
+			}
+
+			deplKey = types.NamespacedName{
+				Name:      deploy.Name,
+				Namespace: deploy.Namespace,
+			}
+
+			specr = deploymentSpecr(deploy, deplSpec)
+		})
+
+		assertLocalDeployWasUpdated := func(fetched *appsv1.Deployment) {
+			By("local deploy object was updated during patch & has same spec, status, resource version as fetched")
+			if fetched == nil {
+				fetched = &appsv1.Deployment{}
+				ExpectWithOffset(1, c.Get(context.TODO(), deplKey, fetched)).To(Succeed())
+			}
+			ExpectWithOffset(1, fetched.ResourceVersion).To(Equal(deploy.ResourceVersion))
+			ExpectWithOffset(1, fetched.Spec).To(BeEquivalentTo(deploy.Spec))
+			ExpectWithOffset(1, fetched.Status).To(BeEquivalentTo(deploy.Status))
+		}
+
+		It("creates a new object if one doesn't exists", func() {
+			op, err := controllerutil.CreateOrPatch(context.TODO(), c, deploy, specr)
+
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultCreated")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
+
+			By("actually having the deployment created")
+			fetched := &appsv1.Deployment{}
+			Expect(c.Get(context.TODO(), deplKey, fetched)).To(Succeed())
+
+			By("being mutated by MutateFn")
+			Expect(fetched.Spec.Template.Spec.Containers).To(HaveLen(1))
+			Expect(fetched.Spec.Template.Spec.Containers[0].Name).To(Equal(deplSpec.Template.Spec.Containers[0].Name))
+			Expect(fetched.Spec.Template.Spec.Containers[0].Image).To(Equal(deplSpec.Template.Spec.Containers[0].Image))
+		})
+
+		It("patches existing object", func() {
+			var scale int32 = 2
+			op, err := controllerutil.CreateOrPatch(context.TODO(), c, deploy, specr)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
+
+			op, err = controllerutil.CreateOrPatch(context.TODO(), c, deploy, deploymentScaler(deploy, scale))
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultUpdated")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultUpdated))
+
+			By("actually having the deployment scaled")
+			fetched := &appsv1.Deployment{}
+			Expect(c.Get(context.TODO(), deplKey, fetched)).To(Succeed())
+			Expect(*fetched.Spec.Replicas).To(Equal(scale))
+			assertLocalDeployWasUpdated(fetched)
+		})
+
+		It("patches only changed objects", func() {
+			op, err := controllerutil.CreateOrPatch(context.TODO(), c, deploy, specr)
+
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
+			Expect(err).NotTo(HaveOccurred())
+
+			op, err = controllerutil.CreateOrPatch(context.TODO(), c, deploy, deploymentIdentity)
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultNone")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
+
+			assertLocalDeployWasUpdated(nil)
+		})
+
+		It("patches only changed status", func() {
+			op, err := controllerutil.CreateOrPatch(context.TODO(), c, deploy, specr)
+
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
+			Expect(err).NotTo(HaveOccurred())
+
+			deployStatus := appsv1.DeploymentStatus{
+				ReadyReplicas: 1,
+				Replicas:      3,
+			}
+			op, err = controllerutil.CreateOrPatch(context.TODO(), c, deploy, deploymentStatusr(deploy, deployStatus))
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultUpdatedStatusOnly")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultUpdatedStatusOnly))
+
+			assertLocalDeployWasUpdated(nil)
+		})
+
+		It("patches resource and status", func() {
+			op, err := controllerutil.CreateOrPatch(context.TODO(), c, deploy, specr)
+
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
+			Expect(err).NotTo(HaveOccurred())
+
+			replicas := int32(3)
+			deployStatus := appsv1.DeploymentStatus{
+				ReadyReplicas: 1,
+				Replicas:      replicas,
+			}
+			op, err = controllerutil.CreateOrPatch(context.TODO(), c, deploy, func() error {
+				Expect(deploymentScaler(deploy, replicas)()).To(Succeed())
+				return deploymentStatusr(deploy, deployStatus)()
+			})
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultUpdatedStatus")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultUpdatedStatus))
+
+			assertLocalDeployWasUpdated(nil)
+		})
+
+		It("errors when MutateFn changes object name on creation", func() {
+			op, err := controllerutil.CreateOrPatch(context.TODO(), c, deploy, func() error {
+				Expect(specr()).To(Succeed())
+				return deploymentRenamer(deploy)()
+			})
+
+			By("returning error")
+			Expect(err).To(HaveOccurred())
+
+			By("returning OperationResultNone")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
+		})
+
+		It("errors when MutateFn renames an object", func() {
+			op, err := controllerutil.CreateOrPatch(context.TODO(), c, deploy, specr)
+
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
+			Expect(err).NotTo(HaveOccurred())
+
+			op, err = controllerutil.CreateOrPatch(context.TODO(), c, deploy, deploymentRenamer(deploy))
+
+			By("returning error")
+			Expect(err).To(HaveOccurred())
+
+			By("returning OperationResultNone")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
+		})
+
+		It("errors when object namespace changes", func() {
+			op, err := controllerutil.CreateOrPatch(context.TODO(), c, deploy, specr)
+
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
+			Expect(err).NotTo(HaveOccurred())
+
+			op, err = controllerutil.CreateOrPatch(context.TODO(), c, deploy, deploymentNamespaceChanger(deploy))
+
+			By("returning error")
+			Expect(err).To(HaveOccurred())
+
+			By("returning OperationResultNone")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
+		})
+
+		It("aborts immediately if there was an error initially retrieving the object", func() {
+			op, err := controllerutil.CreateOrPatch(context.TODO(), errorReader{c}, deploy, func() error {
+				Fail("Mutation method should not run")
+				return nil
+			})
+
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
 	Describe("Finalizers", func() {
 		var deploy *appsv1.Deployment
 
@@ -474,6 +681,13 @@ type errMetaObj struct {
 func deploymentSpecr(deploy *appsv1.Deployment, spec appsv1.DeploymentSpec) controllerutil.MutateFn {
 	return func() error {
 		deploy.Spec = spec
+		return nil
+	}
+}
+
+func deploymentStatusr(deploy *appsv1.Deployment, status appsv1.DeploymentStatus) controllerutil.MutateFn {
+	return func() error {
+		deploy.Status = status
 		return nil
 	}
 }

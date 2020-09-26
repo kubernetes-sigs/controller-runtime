@@ -167,6 +167,10 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 	if blder.forInput.err != nil {
 		return nil, blder.forInput.err
 	}
+	// Checking the reconcile type exist or not
+	if blder.forInput.object == nil {
+		return nil, fmt.Errorf("must provide an object for reconciliation")
+	}
 
 	// Set the Config
 	blder.loadRestConfig()

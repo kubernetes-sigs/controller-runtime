@@ -1,11 +1,12 @@
 package apiutil_test
 
 import (
-	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/format"
+	"github.com/onsi/gomega/types"
 	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -57,11 +58,19 @@ var _ = Describe("Dynamic REST Mapper", func() {
 		})
 
 		It("should reload if not present in the cache", func() {
-			By("reading successfully once")
+			By("reading target successfully once")
 			Expect(callWithTarget()).To(Succeed())
-			Expect(callWithOther()).NotTo(Succeed())
 
-			By("asking for a something that didn't exist previously after adding it to the mapper")
+			By("reading other not successfully")
+			count := 0
+			addToMapper = func(baseMapper *meta.DefaultRESTMapper) {
+				count++
+				baseMapper.Add(targetGVK, meta.RESTScopeNamespace)
+			}
+			Expect(callWithOther()).To(beNoMatchError())
+			Expect(count).To(Equal(1), "should reload exactly once")
+
+			By("reading both successfully now")
 			addToMapper = func(baseMapper *meta.DefaultRESTMapper) {
 				baseMapper.Add(targetGVK, meta.RESTScopeNamespace)
 				baseMapper.Add(secondGVK, meta.RESTScopeNamespace)
@@ -70,9 +79,9 @@ var _ = Describe("Dynamic REST Mapper", func() {
 			Expect(callWithTarget()).To(Succeed())
 		})
 
-		It("should rate-limit reloads so that we don't get more than a certain number per second", func() {
+		It("should rate-limit then allow more at configured rate", func() {
 			By("setting a small limit")
-			*lim = *rate.NewLimiter(rate.Limit(1), 1)
+			*lim = *rate.NewLimiter(rate.Every(100*time.Millisecond), 1)
 
 			By("forcing a reload after changing the mapper")
 			addToMapper = func(baseMapper *meta.DefaultRESTMapper) {
@@ -80,30 +89,18 @@ var _ = Describe("Dynamic REST Mapper", func() {
 			}
 			Expect(callWithOther()).To(Succeed())
 
-			By("calling another time that would need a requery and failing")
-			Eventually(func() bool {
-				return errors.As(callWithTarget(), &apiutil.ErrRateLimited{})
-			}, "10s").Should(BeTrue())
-		})
-
-		It("should rate-limit then allow more at 1rps", func() {
-			By("setting a small limit")
-			*lim = *rate.NewLimiter(rate.Limit(1), 1)
-
-			By("forcing a reload after changing the mapper")
+			By("calling another time to trigger rate limiting")
 			addToMapper = func(baseMapper *meta.DefaultRESTMapper) {
-				baseMapper.Add(secondGVK, meta.RESTScopeNamespace)
+				baseMapper.Add(targetGVK, meta.RESTScopeNamespace)
 			}
+			// if call consistently fails, we are sure, that it was rate-limited,
+			// otherwise it would have reloaded and succeeded
+			Consistently(callWithTarget, "90ms", "10ms").Should(beNoMatchError())
 
-			By("calling twice to trigger rate limiting")
-			Expect(callWithOther()).To(Succeed())
-			Expect(callWithTarget()).NotTo(Succeed())
-
-			// by 2nd call loop should succeed because we canceled our 1st rate-limited token, then waited a full second
-			By("calling until no longer rate-limited, 2nd call should succeed")
-			Eventually(func() bool {
-				return errors.As(callWithTarget(), &apiutil.ErrRateLimited{})
-			}, "2.5s", "1s").Should(BeFalse())
+			By("calling until no longer rate-limited")
+			// once call succeeds, we are sure, that it was no longer rate-limited,
+			// as it was allowed to reload and found matching kind/resource
+			Eventually(callWithTarget, "30ms", "10ms").Should(And(Succeed(), Not(beNoMatchError())))
 		})
 
 		It("should avoid reloading twice if two requests for the same thing come in", func() {
@@ -251,3 +248,25 @@ var _ = Describe("Dynamic REST Mapper", func() {
 		})
 	})
 })
+
+func beNoMatchError() types.GomegaMatcher {
+	return noMatchErrorMatcher{}
+}
+
+type noMatchErrorMatcher struct{}
+
+func (k noMatchErrorMatcher) Match(actual interface{}) (success bool, err error) {
+	actualErr, actualOk := actual.(error)
+	if !actualOk {
+		return false, nil
+	}
+
+	return meta.IsNoMatchError(actualErr), nil
+}
+
+func (k noMatchErrorMatcher) FailureMessage(actual interface{}) (message string) {
+	return format.Message(actual, "to be a NoMatchError")
+}
+func (k noMatchErrorMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	return format.Message(actual, "not to be a NoMatchError")
+}

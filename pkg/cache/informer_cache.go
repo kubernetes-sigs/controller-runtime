@@ -237,7 +237,7 @@ func indexByField(indexer Informer, field string, extractor client.IndexerFunc) 
 }
 
 // Remove removes an informer specified by the obj argument from the cache and stops it if it existed.
-func (ip *informerCache) Remove(obj runtime.Object) error {
+func (ip *informerCache) Remove(ctx context.Context, obj runtime.Object) error {
 	gvk, err := apiutil.GVKForObject(obj, ip.Scheme)
 	if err != nil {
 		return err

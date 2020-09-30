@@ -94,6 +94,15 @@ func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema
 	return &multiNamespaceInformer{namespaceToInformer: informers}, nil
 }
 
+func (c *multiNamespaceCache) Remove(ctx context.Context, obj runtime.Object) error {
+	for _, cache := range c.namespaceToCache {
+		if err := cache.Remove(ctx, obj); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (c *multiNamespaceCache) Start(ctx context.Context) error {
 	for ns, cache := range c.namespaceToCache {
 		go func(ns string, cache Cache) {

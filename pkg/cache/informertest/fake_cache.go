@@ -125,6 +125,11 @@ func (c *FakeInformers) Start(ctx context.Context) error {
 	return c.Error
 }
 
+// Remove implements Cache
+func (c *FakeInformers) Remove(ctx context.Context, obj runtime.Object) error {
+	return c.Error
+}
+
 // IndexField implements Cache
 func (c *FakeInformers) IndexField(ctx context.Context, obj client.Object, field string, extractValue client.IndexerFunc) error {
 	return nil

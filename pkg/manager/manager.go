@@ -17,6 +17,7 @@ limitations under the License.
 package manager
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -271,19 +272,19 @@ type NewClientFunc func(cache cache.Cache, config *rest.Config, options client.O
 // it's done running.
 type Runnable interface {
 	// Start starts running the component.  The component will stop running
-	// when the channel is closed.  Start blocks until the channel is closed or
+	// when the context is closed. Start blocks until the context is closed or
 	// an error occurs.
-	Start(<-chan struct{}) error
+	Start(context.Context) error
 }
 
 // RunnableFunc implements Runnable using a function.
 // It's very important that the given function block
 // until it's done running.
-type RunnableFunc func(<-chan struct{}) error
+type RunnableFunc func(context.Context) error
 
 // Start implements Runnable
-func (r RunnableFunc) Start(s <-chan struct{}) error {
-	return r(s)
+func (r RunnableFunc) Start(ctx context.Context) error {
+	return r(ctx)
 }
 
 // LeaderElectionRunnable knows if a Runnable needs to be run in the leader election mode.
@@ -294,7 +295,7 @@ type LeaderElectionRunnable interface {
 }
 
 // New returns a new Manager for creating Controllers.
-func New(config *rest.Config, options Options) (Manager, error) {
+func New(ctx context.Context, config *rest.Config, options Options) (Manager, error) {
 	// Initialize a rest.config if none was specified
 	if config == nil {
 		return nil, fmt.Errorf("must specify Config")
@@ -370,7 +371,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
-	stop := make(chan struct{})
+	internalCtx, internalCancel := context.WithCancel(ctx)
 
 	return &controllerManager{
 		config:                  config,
@@ -385,8 +386,6 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		metricsListener:         metricsListener,
 		metricsExtraHandlers:    metricsExtraHandlers,
 		logger:                  options.Logger,
-		internalStop:            stop,
-		internalStopper:         stop,
 		elected:                 make(chan struct{}),
 		port:                    options.Port,
 		host:                    options.Host,
@@ -398,6 +397,8 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		readinessEndpointName:   options.ReadinessEndpointName,
 		livenessEndpointName:    options.LivenessEndpointName,
 		gracefulShutdownTimeout: *options.GracefulShutdownTimeout,
+		internalCtx:             internalCtx,
+		internalCancel:          internalCancel,
 	}, nil
 }
 

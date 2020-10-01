@@ -37,7 +37,7 @@ import (
 
 var _ = Describe("recorder", func() {
 	var stop chan struct{}
-	ctx := context.TODO()
+	ctx := context.Background()
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
@@ -51,7 +51,7 @@ var _ = Describe("recorder", func() {
 	Describe("recorder", func() {
 		It("should publish events", func(done Done) {
 			By("Creating the Manager")
-			cm, err := manager.New(cfg, manager.Options{})
+			cm, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")

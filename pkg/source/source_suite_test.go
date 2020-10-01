@@ -17,6 +17,7 @@ limitations under the License.
 package source_test
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -40,10 +41,11 @@ var testenv *envtest.Environment
 var config *rest.Config
 var clientset *kubernetes.Clientset
 var icache cache.Cache
-var stop chan struct{}
+var ctx context.Context
+var cancel context.CancelFunc
 
 var _ = BeforeSuite(func(done Done) {
-	stop = make(chan struct{})
+	ctx, cancel = context.WithCancel(context.Background())
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	testenv = &envtest.Environment{}
@@ -60,14 +62,14 @@ var _ = BeforeSuite(func(done Done) {
 
 	go func() {
 		defer GinkgoRecover()
-		Expect(icache.Start(stop)).NotTo(HaveOccurred())
+		Expect(icache.Start(ctx)).NotTo(HaveOccurred())
 	}()
 
 	close(done)
 }, 60)
 
 var _ = AfterSuite(func(done Done) {
-	close(stop)
+	cancel()
 	Expect(testenv.Stop()).To(Succeed())
 
 	close(done)

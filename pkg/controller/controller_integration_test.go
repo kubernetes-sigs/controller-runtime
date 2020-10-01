@@ -56,7 +56,7 @@ var _ = Describe("controller", func() {
 
 		It("should reconcile", func(done Done) {
 			By("Creating the Manager")
-			cm, err := manager.New(cfg, manager.Options{})
+			cm, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
@@ -78,9 +78,9 @@ var _ = Describe("controller", func() {
 			err = instance.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForObject{})
 			Expect(err).NotTo(HaveOccurred())
 
-			err = cm.GetClient().Get(context.Background(), types.NamespacedName{Name: "foo"}, &corev1.Namespace{})
+			err = cm.GetClient().Get(ctx, types.NamespacedName{Name: "foo"}, &corev1.Namespace{})
 			Expect(err).To(Equal(&cache.ErrCacheNotStarted{}))
-			err = cm.GetClient().List(context.Background(), &corev1.NamespaceList{})
+			err = cm.GetClient().List(ctx, &corev1.NamespaceList{})
 			Expect(err).To(Equal(&cache.ErrCacheNotStarted{}))
 
 			By("Starting the Manager")

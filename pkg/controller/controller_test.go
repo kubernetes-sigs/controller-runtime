@@ -32,22 +32,13 @@ import (
 )
 
 var _ = Describe("controller.Controller", func() {
-	var stop chan struct{}
-
 	rec := reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 		return reconcile.Result{}, nil
-	})
-	BeforeEach(func() {
-		stop = make(chan struct{})
-	})
-
-	AfterEach(func() {
-		close(stop)
 	})
 
 	Describe("New", func() {
 		It("should return an error if Name is not Specified", func(done Done) {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c, err := controller.New("", m, controller.Options{Reconciler: rec})
 			Expect(c).To(BeNil())
@@ -57,7 +48,7 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should return an error if Reconciler is not Specified", func(done Done) {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("foo", m, controller.Options{})
@@ -68,7 +59,7 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("NewController should return an error if injecting Reconciler fails", func(done Done) {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("foo", m, controller.Options{Reconciler: &failRec{}})
@@ -80,7 +71,7 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should not return an error if two controllers are registered with different names", func(done Done) {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c1, err := controller.New("c1", m, controller.Options{Reconciler: rec})
@@ -97,7 +88,7 @@ var _ = Describe("controller.Controller", func() {
 		It("should not leak goroutines when stopped", func() {
 			currentGRs := goleak.IgnoreCurrent()
 
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = controller.New("new-controller", m, controller.Options{Reconciler: rec})
@@ -117,7 +108,7 @@ var _ = Describe("controller.Controller", func() {
 		It("should not create goroutines if never started", func() {
 			currentGRs := goleak.IgnoreCurrent()
 
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = controller.New("new-controller", m, controller.Options{Reconciler: rec})

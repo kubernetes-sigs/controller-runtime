@@ -58,12 +58,12 @@ type Informers interface {
 	// of the underlying object.
 	GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (Informer, error)
 
-	// Start runs all the informers known to this cache until the given channel is closed.
+	// Start runs all the informers known to this cache until the context is closed.
 	// It blocks.
-	Start(stopCh <-chan struct{}) error
+	Start(ctx context.Context) error
 
 	// WaitForCacheSync waits for all the caches to sync.  Returns false if it could not sync a cache.
-	WaitForCacheSync(stop <-chan struct{}) bool
+	WaitForCacheSync(ctx context.Context) bool
 
 	// Informers knows how to add indices to the caches (informers) that it manages.
 	client.FieldIndexer

@@ -17,6 +17,7 @@ limitations under the License.
 package webhook_test
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -31,14 +32,15 @@ import (
 
 var _ = Describe("Webhook Server", func() {
 	var (
-		stop         chan struct{}
+		ctx          context.Context
+		ctxCancel    context.CancelFunc
 		testHostPort string
 		client       *http.Client
 		server       *webhook.Server
 	)
 
 	BeforeEach(func() {
-		stop = make(chan struct{})
+		ctx, ctxCancel = context.WithCancel(context.Background())
 		// closed in indivual tests differently
 
 		servingOpts := envtest.WebhookInstallOptions{}
@@ -69,7 +71,7 @@ var _ = Describe("Webhook Server", func() {
 		go func() {
 			defer GinkgoRecover()
 			defer close(doneCh)
-			Expect(server.Start(stop)).To(Succeed())
+			Expect(server.Start(ctx)).To(Succeed())
 		}()
 		// wait till we can ping the server to start the test
 		Eventually(func() error {
@@ -109,7 +111,7 @@ var _ = Describe("Webhook Server", func() {
 
 		Expect(func() { server.Register("/somepath", &testHandler{}) }).To(Panic())
 
-		close(stop)
+		ctxCancel()
 		Eventually(doneCh, "4s").Should(BeClosed())
 	})
 
@@ -126,7 +128,7 @@ var _ = Describe("Webhook Server", func() {
 				return ioutil.ReadAll(resp.Body)
 			}).Should(Equal([]byte("gadzooks!")))
 
-			close(stop)
+			ctxCancel()
 			Eventually(doneCh, "4s").Should(BeClosed())
 		})
 
@@ -137,7 +139,7 @@ var _ = Describe("Webhook Server", func() {
 
 			Eventually(func() bool { return handler.injectedField }).Should(BeTrue())
 
-			close(stop)
+			ctxCancel()
 			Eventually(doneCh, "4s").Should(BeClosed())
 		})
 	})
@@ -151,7 +153,7 @@ var _ = Describe("Webhook Server", func() {
 		})
 		AfterEach(func() {
 			// wait for cleanup to happen
-			close(stop)
+			ctxCancel()
 			Eventually(doneCh, "4s").Should(BeClosed())
 		})
 

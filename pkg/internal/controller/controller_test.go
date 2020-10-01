@@ -46,14 +46,12 @@ var _ = Describe("controller", func() {
 	var ctrl *Controller
 	var queue *controllertest.Queue
 	var informers *informertest.FakeInformers
-	var stop chan struct{}
 	var reconciled chan reconcile.Request
 	var request = reconcile.Request{
 		NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
 	}
 
 	BeforeEach(func() {
-		stop = make(chan struct{})
 		reconciled = make(chan reconcile.Request)
 		fakeReconcile = &fakeReconciler{
 			Requests: reconciled,
@@ -72,16 +70,15 @@ var _ = Describe("controller", func() {
 		Expect(ctrl.InjectFunc(func(interface{}) error { return nil })).To(Succeed())
 	})
 
-	AfterEach(func() {
-		close(stop)
-	})
-
 	Describe("Reconciler", func() {
 		It("should call the Reconciler function", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 				return reconcile.Result{Requeue: true}, nil
 			})
-			result, err := ctrl.Reconcile(context.Background(),
+			result, err := ctrl.Reconcile(ctx,
 				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(reconcile.Result{Requeue: true}))
@@ -95,7 +92,9 @@ var _ = Describe("controller", func() {
 				src: source.NewKindWithCache(&corev1.Pod{}, &informertest.FakeInformers{Synced: &f}),
 			}}
 			ctrl.Name = "foo"
-			err := ctrl.Start(stop)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			err := ctrl.Start(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to wait for foo caches to sync"))
 
@@ -104,10 +103,6 @@ var _ = Describe("controller", func() {
 
 		It("should wait for each informer to sync", func(done Done) {
 			// TODO(directxman12): this test doesn't do what it says it does
-
-			// Use a stopped channel so Start doesn't block
-			stopped := make(chan struct{})
-			close(stopped)
 
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
@@ -119,7 +114,10 @@ var _ = Describe("controller", func() {
 				src: source.NewKindWithCache(&appsv1.Deployment{}, &informertest.FakeInformers{}),
 			}}
 
-			Expect(ctrl.Start(stopped)).NotTo(HaveOccurred())
+			// Use a cancelled context so Start doesn't block
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 
 			close(done)
 		})
@@ -129,7 +127,7 @@ var _ = Describe("controller", func() {
 			pr2 := &predicate.Funcs{}
 			evthdl := &handler.EnqueueRequestForObject{}
 			started := false
-			src := source.Func(func(e handler.EventHandler, q workqueue.RateLimitingInterface, p ...predicate.Predicate) error {
+			src := source.Func(func(ctx context.Context, e handler.EventHandler, q workqueue.RateLimitingInterface, p ...predicate.Predicate) error {
 				defer GinkgoRecover()
 				Expect(e).To(Equal(evthdl))
 				Expect(q).To(Equal(ctrl.Queue))
@@ -140,16 +138,16 @@ var _ = Describe("controller", func() {
 			})
 			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).NotTo(HaveOccurred())
 
-			// Use a stopped channel so Start doesn't block
-			stopped := make(chan struct{})
-			close(stopped)
-			Expect(ctrl.Start(stopped)).To(Succeed())
+			// Use a cancelled context so Start doesn't block
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			Expect(ctrl.Start(ctx)).To(Succeed())
 			Expect(started).To(BeTrue())
 		})
 
 		It("should return an error if there is an error starting sources", func() {
 			err := fmt.Errorf("Expected Error: could not start source")
-			src := source.Func(func(handler.EventHandler,
+			src := source.Func(func(context.Context, handler.EventHandler,
 				workqueue.RateLimitingInterface,
 				...predicate.Predicate) error {
 				defer GinkgoRecover()
@@ -157,18 +155,17 @@ var _ = Describe("controller", func() {
 			})
 			Expect(ctrl.Watch(src, &handler.EnqueueRequestForObject{})).To(Succeed())
 
-			// Use a stopped channel so Start doesn't block
-			stopped := make(chan struct{})
-			close(stopped)
-			Expect(ctrl.Start(stopped)).To(Equal(err))
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			Expect(ctrl.Start(ctx)).To(Equal(err))
 		})
 
 		It("should return an error if it gets started more than once", func() {
-			// Use a stopped channel so Start doesn't block
-			stopped := make(chan struct{})
-			close(stopped)
-			Expect(ctrl.Start(stopped)).To(BeNil())
-			err := ctrl.Start(stopped)
+			// Use a cancelled context so Start doesn't block
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			Expect(ctrl.Start(ctx)).To(BeNil())
+			err := ctrl.Start(ctx)
 			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(Equal("controller was started more than once. This is likely to be caused by being added to a manager multiple times"))
 		})
@@ -297,9 +294,11 @@ var _ = Describe("controller", func() {
 
 	Describe("Processing queue items from a Controller", func() {
 		It("should call Reconciler if an item is enqueued", func(done Done) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			go func() {
 				defer GinkgoRecover()
-				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 			queue.Add(request)
 
@@ -320,9 +319,11 @@ var _ = Describe("controller", func() {
 				Fail("Reconciler should not have been called")
 				return reconcile.Result{}, nil
 			})
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			go func() {
 				defer GinkgoRecover()
-				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
 			By("adding two bad items to the queue")
@@ -344,9 +345,11 @@ var _ = Describe("controller", func() {
 			// Reduce the jitterperiod so we don't have to wait a second before the reconcile function is rerun.
 			ctrl.JitterPeriod = time.Millisecond
 
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			go func() {
 				defer GinkgoRecover()
-				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
 			queue.Add(request)
@@ -371,9 +374,12 @@ var _ = Describe("controller", func() {
 		It("should not reset backoff until there's a non-error result", func() {
 			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
 			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			go func() {
 				defer GinkgoRecover()
-				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
 			dq.Add(request)
@@ -404,9 +410,12 @@ var _ = Describe("controller", func() {
 		It("should requeue a Request with rate limiting if the Result sets Requeue:true and continue processing items", func() {
 			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
 			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			go func() {
 				defer GinkgoRecover()
-				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
 			dq.Add(request)
@@ -431,9 +440,12 @@ var _ = Describe("controller", func() {
 		It("should requeue a Request after a duration (but not rate-limitted) if the Result sets RequeueAfter (regardless of Requeue)", func() {
 			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
 			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			go func() {
 				defer GinkgoRecover()
-				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
 			dq.Add(request)
@@ -459,9 +471,12 @@ var _ = Describe("controller", func() {
 			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
 			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
 			ctrl.JitterPeriod = time.Millisecond
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			go func() {
 				defer GinkgoRecover()
-				Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
 			dq.Add(request)
@@ -511,9 +526,11 @@ var _ = Describe("controller", func() {
 					return nil
 				}()).Should(Succeed())
 
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
 				go func() {
 					defer GinkgoRecover()
-					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+					Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				By("Invoking Reconciler which will succeed")
 				queue.Add(request)
@@ -540,9 +557,11 @@ var _ = Describe("controller", func() {
 					return nil
 				}()).Should(Succeed())
 
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
 				go func() {
 					defer GinkgoRecover()
-					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+					Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				By("Invoking Reconciler which will give an error")
 				queue.Add(request)
@@ -569,9 +588,11 @@ var _ = Describe("controller", func() {
 					return nil
 				}()).Should(Succeed())
 
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
 				go func() {
 					defer GinkgoRecover()
-					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+					Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 				}()
 
 				By("Invoking Reconciler which will return result with Requeue enabled")
@@ -599,9 +620,11 @@ var _ = Describe("controller", func() {
 					return nil
 				}()).Should(Succeed())
 
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
 				go func() {
 					defer GinkgoRecover()
-					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+					Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				By("Invoking Reconciler which will return result with requeueAfter enabled")
 				queue.Add(request)
@@ -632,9 +655,11 @@ var _ = Describe("controller", func() {
 					return nil
 				}()).Should(Succeed())
 
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
 				go func() {
 					defer GinkgoRecover()
-					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+					Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				queue.Add(request)
 
@@ -677,9 +702,11 @@ var _ = Describe("controller", func() {
 					return nil
 				}()).Should(Succeed())
 
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
 				go func() {
 					defer GinkgoRecover()
-					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+					Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				queue.Add(request)
 

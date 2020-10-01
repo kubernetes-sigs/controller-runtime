@@ -72,7 +72,12 @@ type Controller struct {
 	// Started is true if the Controller has been Started
 	Started bool
 
-	// TODO(community): Consider initializing a logger with the Controller Name as the tag
+	// ctx is the context that was passed to Start() and used when starting watches.
+	//
+	// According to the docs, contexts should not be stored in a struct: https://golang.org/pkg/context,
+	// while we usually always strive to follow best practices, we consider this a legacy case and it should
+	// undergo a major refactoring and redesign to allow for context to not be stored in a struct.
+	ctx context.Context
 
 	// startWatches maintains a list of sources, handlers, and predicates to start when the controller is started.
 	startWatches []watchDescription
@@ -122,17 +127,20 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	}
 
 	c.Log.Info("Starting EventSource", "source", src)
-	return src.Start(evthdler, c.Queue, prct...)
+	return src.Start(c.ctx, evthdler, c.Queue, prct...)
 }
 
 // Start implements controller.Controller
-func (c *Controller) Start(stop <-chan struct{}) error {
+func (c *Controller) Start(ctx context.Context) error {
 	// use an IIFE to get proper lock handling
 	// but lock outside to get proper handling of the queue shutdown
 	c.mu.Lock()
 	if c.Started {
 		return errors.New("controller was started more than once. This is likely to be caused by being added to a manager multiple times")
 	}
+
+	// Set the internal context.
+	c.ctx = ctx
 
 	c.Queue = c.MakeQueue()
 	defer c.Queue.ShutDown() // needs to be outside the iife so that we shutdown after the stop channel is closed
@@ -148,7 +156,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 		// caches.
 		for _, watch := range c.startWatches {
 			c.Log.Info("Starting EventSource", "source", watch.src)
-			if err := watch.src.Start(watch.handler, c.Queue, watch.predicates...); err != nil {
+			if err := watch.src.Start(ctx, watch.handler, c.Queue, watch.predicates...); err != nil {
 				return err
 			}
 		}
@@ -161,7 +169,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 			if !ok {
 				continue
 			}
-			if err := syncingSource.WaitForSync(stop); err != nil {
+			if err := syncingSource.WaitForSync(ctx); err != nil {
 				// This code is unreachable in case of kube watches since WaitForCacheSync will never return an error
 				// Leaving it here because that could happen in the future
 				err := fmt.Errorf("failed to wait for %s caches to sync: %w", c.Name, err)
@@ -184,8 +192,12 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 		c.Log.Info("Starting workers", "worker count", c.MaxConcurrentReconciles)
 		ctrlmetrics.WorkerCount.WithLabelValues(c.Name).Set(float64(c.MaxConcurrentReconciles))
 		for i := 0; i < c.MaxConcurrentReconciles; i++ {
-			// Process work items
-			go wait.Until(c.worker, c.JitterPeriod, stop)
+			go wait.UntilWithContext(ctx, func(ctx context.Context) {
+				// Run a worker thread that just dequeues items, processes them, and marks them done.
+				// It enforces that the reconcileHandler is never invoked concurrently with the same object.
+				for c.processNextWorkItem(ctx) {
+				}
+			}, c.JitterPeriod)
 		}
 
 		c.Started = true
@@ -195,21 +207,14 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 		return err
 	}
 
-	<-stop
+	<-ctx.Done()
 	c.Log.Info("Stopping workers")
 	return nil
 }
 
-// worker runs a worker thread that just dequeues items, processes them, and marks them done.
-// It enforces that the reconcileHandler is never invoked concurrently with the same object.
-func (c *Controller) worker() {
-	for c.processNextWorkItem() {
-	}
-}
-
 // processNextWorkItem will read a single work item off the workqueue and
 // attempt to process it, by calling the reconcileHandler.
-func (c *Controller) processNextWorkItem() bool {
+func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 	obj, shutdown := c.Queue.Get()
 	if shutdown {
 		// Stop working
@@ -227,10 +232,10 @@ func (c *Controller) processNextWorkItem() bool {
 	ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(1)
 	defer ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(-1)
 
-	return c.reconcileHandler(obj)
+	return c.reconcileHandler(ctx, obj)
 }
 
-func (c *Controller) reconcileHandler(obj interface{}) bool {
+func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) bool {
 	// Update metrics after processing each item
 	reconcileStartTS := time.Now()
 	defer func() {
@@ -250,7 +255,7 @@ func (c *Controller) reconcileHandler(obj interface{}) bool {
 	}
 
 	log := c.Log.WithValues("name", req.Name, "namespace", req.Namespace)
-	ctx := logf.IntoContext(context.Background(), log)
+	ctx = logf.IntoContext(ctx, log)
 
 	// RunInformersAndControllers the syncHandler, passing it the namespace/Name string of the
 	// resource to be synced.

@@ -83,16 +83,17 @@ var _ = Describe("Multi-Namespace Informer Cache", func() {
 func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error)) {
 	Describe("Cache test", func() {
 		var (
-			informerCache cache.Cache
-			stop          chan struct{}
-			knownPod1     runtime.Object
-			knownPod2     runtime.Object
-			knownPod3     runtime.Object
-			knownPod4     runtime.Object
+			informerCache       cache.Cache
+			informerCacheCtx    context.Context
+			informerCacheCancel context.CancelFunc
+			knownPod1           runtime.Object
+			knownPod2           runtime.Object
+			knownPod3           runtime.Object
+			knownPod4           runtime.Object
 		)
 
 		BeforeEach(func() {
-			stop = make(chan struct{})
+			informerCacheCtx, informerCacheCancel = context.WithCancel(context.Background())
 			Expect(cfg).NotTo(BeNil())
 
 			By("creating three pods")
@@ -123,11 +124,11 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			Expect(err).NotTo(HaveOccurred())
 			By("running the cache and waiting for it to sync")
 			// pass as an arg so that we don't race between close and re-assign
-			go func(stopCh chan struct{}) {
+			go func(ctx context.Context) {
 				defer GinkgoRecover()
-				Expect(informerCache.Start(stopCh)).To(Succeed())
-			}(stop)
-			Expect(informerCache.WaitForCacheSync(stop)).To(BeTrue())
+				Expect(informerCache.Start(ctx)).To(Succeed())
+			}(informerCacheCtx)
+			Expect(informerCache.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
 		})
 
 		AfterEach(func() {
@@ -137,7 +138,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			deletePod(knownPod3)
 			deletePod(knownPod4)
 
-			close(stop)
+			informerCacheCancel()
 		})
 
 		Describe("as a Reader", func() {
@@ -270,13 +271,12 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				})
 
 				It("should return an error when context is cancelled", func() {
-					By("creating a context and cancelling it")
-					ctx, cancel := context.WithCancel(context.Background())
-					cancel()
+					By("cancelling the context")
+					informerCacheCancel()
 
 					By("listing pods in test-namespace-1 with a cancelled context")
 					listObj := &kcorev1.PodList{}
-					err := informerCache.List(ctx, listObj, client.InNamespace(testNamespaceOne))
+					err := informerCache.List(informerCacheCtx, listObj, client.InNamespace(testNamespaceOne))
 
 					By("verifying that an error is returned")
 					Expect(err).To(HaveOccurred())
@@ -396,9 +396,9 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("running the cache and waiting for it to sync")
 					go func() {
 						defer GinkgoRecover()
-						Expect(namespacedCache.Start(stop)).To(Succeed())
+						Expect(namespacedCache.Start(informerCacheCtx)).To(Succeed())
 					}()
-					Expect(namespacedCache.WaitForCacheSync(stop)).NotTo(BeFalse())
+					Expect(namespacedCache.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
 
 					By("listing pods in all namespaces")
 					out := &unstructured.UnstructuredList{}
@@ -574,9 +574,9 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("running the cache and waiting for it to sync")
 					go func() {
 						defer GinkgoRecover()
-						Expect(informer.Start(stop)).To(Succeed())
+						Expect(informer.Start(informerCacheCtx)).To(Succeed())
 					}()
-					Expect(informer.WaitForCacheSync(stop)).NotTo(BeFalse())
+					Expect(informer.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
 
 					By("listing Pods with restartPolicyOnFailure")
 					listObj := &kcorev1.PodList{}
@@ -591,8 +591,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should allow for get informer to be cancelled", func() {
 					By("creating a context and cancelling it")
-					ctx, cancel := context.WithCancel(context.Background())
-					cancel()
+					informerCacheCancel()
 
 					By("getting a shared index informer for a pod with a cancelled context")
 					pod := &kcorev1.Pod{
@@ -609,7 +608,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 							},
 						},
 					}
-					sii, err := informerCache.GetInformer(ctx, pod)
+					sii, err := informerCache.GetInformer(informerCacheCtx, pod)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
 					Expect(errors.IsTimeout(err)).To(BeTrue())
@@ -617,12 +616,11 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should allow getting an informer by group/version/kind to be cancelled", func() {
 					By("creating a context and cancelling it")
-					ctx, cancel := context.WithCancel(context.Background())
-					cancel()
+					informerCacheCancel()
 
 					By("getting an shared index informer for gvk = core/v1/pod with a cancelled context")
 					gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
-					sii, err := informerCache.GetInformerForKind(ctx, gvk)
+					sii, err := informerCache.GetInformerForKind(informerCacheCtx, gvk)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
 					Expect(errors.IsTimeout(err)).To(BeTrue())
@@ -636,7 +634,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						Object: map[string]interface{}{
 							"spec": map[string]interface{}{
 								"containers": []map[string]interface{}{
-									map[string]interface{}{
+									{
 										"name":  "nginx",
 										"image": "nginx",
 									},
@@ -702,9 +700,9 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("running the cache and waiting for it to sync")
 					go func() {
 						defer GinkgoRecover()
-						Expect(informer.Start(stop)).To(Succeed())
+						Expect(informer.Start(informerCacheCtx)).To(Succeed())
 					}()
-					Expect(informer.WaitForCacheSync(stop)).NotTo(BeFalse())
+					Expect(informer.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
 
 					By("listing Pods with restartPolicyOnFailure")
 					listObj := &unstructured.UnstructuredList{}
@@ -725,9 +723,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				}, 3)
 
 				It("should allow for get informer to be cancelled", func() {
-					By("creating a context and cancelling it")
-					ctx, cancel := context.WithCancel(context.Background())
-					cancel()
+					By("cancelling the context")
+					informerCacheCancel()
 
 					By("getting a shared index informer for a pod with a cancelled context")
 					pod := &unstructured.Unstructured{}
@@ -738,7 +735,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						Version: "v1",
 						Kind:    "Pod",
 					})
-					sii, err := informerCache.GetInformer(ctx, pod)
+					sii, err := informerCache.GetInformer(informerCacheCtx, pod)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
 					Expect(errors.IsTimeout(err)).To(BeTrue())

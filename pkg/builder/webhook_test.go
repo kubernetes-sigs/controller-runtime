@@ -17,6 +17,7 @@ limitations under the License.
 package builder
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -49,7 +50,7 @@ var _ = Describe("webhook", func() {
 	Describe("New", func() {
 		It("should scaffold a defaulting webhook if the type implements the Defaulter interface", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -89,11 +90,11 @@ var _ = Describe("webhook", func() {
   }
 }`)
 
-			stopCh := make(chan struct{})
-			close(stopCh)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
 			// TODO: we may want to improve it to make it be able to inject dependencies,
 			// but not always try to load certs and return not found error.
-			err = svr.Start(stopCh)
+			err = svr.Start(ctx)
 			if err != nil && !os.IsNotExist(err) {
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -121,7 +122,7 @@ var _ = Describe("webhook", func() {
 
 		It("should scaffold a validating webhook if the type implements the Validator interface", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -163,11 +164,11 @@ var _ = Describe("webhook", func() {
   }
 }`)
 
-			stopCh := make(chan struct{})
-			close(stopCh)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
 			// TODO: we may want to improve it to make it be able to inject dependencies,
 			// but not always try to load certs and return not found error.
-			err = svr.Start(stopCh)
+			err = svr.Start(ctx)
 			if err != nil && !os.IsNotExist(err) {
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -194,7 +195,7 @@ var _ = Describe("webhook", func() {
 
 		It("should scaffold defaulting and validating webhooks if the type implements both Defaulter and Validator interfaces", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(context.Background(), cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -234,11 +235,11 @@ var _ = Describe("webhook", func() {
   }
 }`)
 
-			stopCh := make(chan struct{})
-			close(stopCh)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
 			// TODO: we may want to improve it to make it be able to inject dependencies,
 			// but not always try to load certs and return not found error.
-			err = svr.Start(stopCh)
+			err = svr.Start(ctx)
 			if err != nil && !os.IsNotExist(err) {
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -269,7 +270,9 @@ var _ = Describe("webhook", func() {
 
 		It("should scaffold a validating webhook if the type implements the Validator interface to validate deletes", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			ctx, cancel := context.WithCancel(context.Background())
+
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -308,11 +311,11 @@ var _ = Describe("webhook", func() {
     }
   }
 }`)
-			stopCh := make(chan struct{})
-			close(stopCh)
+
+			cancel()
 			// TODO: we may want to improve it to make it be able to inject dependencies,
 			// but not always try to load certs and return not found error.
-			err = svr.Start(stopCh)
+			err = svr.Start(ctx)
 			if err != nil && !os.IsNotExist(err) {
 				Expect(err).NotTo(HaveOccurred())
 			}

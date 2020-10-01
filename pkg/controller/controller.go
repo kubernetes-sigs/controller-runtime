@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/go-logr/logr"
@@ -64,9 +65,9 @@ type Controller interface {
 	// EventHandler if all provided Predicates evaluate to true.
 	Watch(src source.Source, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error
 
-	// Start starts the controller.  Start blocks until stop is closed or a
+	// Start starts the controller.  Start blocks until the context is closed or a
 	// controller has an error starting.
-	Start(stop <-chan struct{}) error
+	Start(ctx context.Context) error
 }
 
 // New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have

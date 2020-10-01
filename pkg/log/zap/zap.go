@@ -220,7 +220,7 @@ func NewRaw(opts ...Opts) *zap.Logger {
 func (o *Options) BindFlags(fs *flag.FlagSet) {
 
 	// Set Development mode value
-	fs.BoolVar(&o.Development, "zap-devel", false,
+	fs.BoolVar(&o.Development, "zap-devel", o.Development,
 		"Development Mode defaults(encoder=consoleEncoder,logLevel=Debug,stackTraceLevel=Warn). "+
 			"Production Mode defaults(encoder=jsonEncoder,logLevel=Info,stackTraceLevel=Error)")
 

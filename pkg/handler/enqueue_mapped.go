@@ -24,6 +24,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
+// MapFunc is the signature required for enqueueing requests from a generic function.
+// This type is usually used with EnqueueRequestsFromMapFunc when registering an event handler.
+type MapFunc func(MapObject) []reconcile.Request
+
 // EnqueueRequestsFromMapFunc enqueues Requests by running a transformation function that outputs a collection
 // of reconcile.Requests on each Event.  The reconcile.Requests may be for an arbitrary set of objects
 // defined by some user specified transformation of the source Event.  (e.g. trigger Reconciler for a set of objects
@@ -34,9 +38,9 @@ import (
 //
 // For UpdateEvents which contain both a new and old object, the transformation function is run on both
 // objects and both sets of Requests are enqueue.
-func EnqueueRequestsFromMapFunc(mapFN func(MapObject) []reconcile.Request) EventHandler {
+func EnqueueRequestsFromMapFunc(fn MapFunc) EventHandler {
 	return &enqueueRequestsFromMapFunc{
-		ToRequests: toRequestsFunc(mapFN),
+		toRequests: fn,
 	}
 }
 
@@ -44,7 +48,7 @@ var _ EventHandler = &enqueueRequestsFromMapFunc{}
 
 type enqueueRequestsFromMapFunc struct {
 	// Mapper transforms the argument into a slice of keys to be reconciled
-	ToRequests mapper
+	toRequests MapFunc
 }
 
 // Create implements EventHandler
@@ -69,7 +73,7 @@ func (e *enqueueRequestsFromMapFunc) Generic(evt event.GenericEvent, q workqueue
 }
 
 func (e *enqueueRequestsFromMapFunc) mapAndEnqueue(q workqueue.RateLimitingInterface, object MapObject) {
-	for _, req := range e.ToRequests.Map(object) {
+	for _, req := range e.toRequests(object) {
 		q.Add(req)
 	}
 }
@@ -81,26 +85,10 @@ func (e *enqueueRequestsFromMapFunc) InjectFunc(f inject.Func) error {
 	if f == nil {
 		return nil
 	}
-	return f(e.ToRequests)
-}
-
-// mapper maps an object to a collection of keys to be enqueued
-type mapper interface {
-	// Map maps an object
-	Map(MapObject) []reconcile.Request
+	return f(e.toRequests)
 }
 
 // MapObject contains information from an event to be transformed into a Request.
 type MapObject struct {
 	Object controllerutil.Object
-}
-
-var _ mapper = toRequestsFunc(nil)
-
-// toRequestsFunc implements Mapper using a function.
-type toRequestsFunc func(MapObject) []reconcile.Request
-
-// Map implements Mapper
-func (m toRequestsFunc) Map(i MapObject) []reconcile.Request {
-	return m(i)
 }

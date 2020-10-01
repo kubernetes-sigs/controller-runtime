@@ -232,10 +232,11 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 	ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(1)
 	defer ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(-1)
 
-	return c.reconcileHandler(ctx, obj)
+	c.reconcileHandler(ctx, obj)
+	return true
 }
 
-func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) bool {
+func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 	// Update metrics after processing each item
 	reconcileStartTS := time.Now()
 	defer func() {
@@ -251,7 +252,7 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) bool
 		c.Queue.Forget(obj)
 		c.Log.Error(nil, "Queue item was not a Request", "type", fmt.Sprintf("%T", obj), "value", obj)
 		// Return true, don't take a break
-		return true
+		return
 	}
 
 	log := c.Log.WithValues("name", req.Name, "namespace", req.Namespace)
@@ -263,7 +264,7 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) bool
 		c.Queue.AddRateLimited(req)
 		ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Inc()
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "error").Inc()
-		return false
+		return
 	} else if result.RequeueAfter > 0 {
 		// The result.RequeueAfter request will be lost, if it is returned
 		// along with a non-nil error. But this is intended as
@@ -272,11 +273,11 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) bool
 		c.Queue.Forget(obj)
 		c.Queue.AddAfter(req, result.RequeueAfter)
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "requeue_after").Inc()
-		return true
+		return
 	} else if result.Requeue {
 		c.Queue.AddRateLimited(req)
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "requeue").Inc()
-		return true
+		return
 	}
 
 	// Finally, if no error occurs we Forget this item so it does not
@@ -284,8 +285,6 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) bool
 	c.Queue.Forget(obj)
 
 	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "success").Inc()
-	// Return true, don't take a break
-	return true
 }
 
 // InjectFunc implement SetFields.Injector

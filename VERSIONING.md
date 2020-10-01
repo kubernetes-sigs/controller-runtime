@@ -75,12 +75,23 @@ filters and checks for changes tagged as breaking (see below).
 
 ### Tooling
 
-* [release-notes.sh](hack/release/release-notes.sh): generate release notes
-  for a range of commits, and check for next version type (***TODO***)
+Tooling for releases lives in the [kubebuilder-release-tools
+repository][rel-tools].
 
-* [verify-emoji.sh](hack/release/verify-emoji.sh): check that
-  your PR and/or commit messages have the right versioning icon
-  (***TODO***).
+* `go run sigs.k8s.io/kubebuilder-release-tools/notes` from a `release-X`
+  (or `release-0.Y`) branch will generate release notes based on the emoji
+  described below.
+  
+  You can generally paste the stdout output directly into the release,
+  unless the tool mentions needing manual edits.
+
+* the [GitHub actions workflow][actions-wf] in this repo will verify PRs
+  using the verifier action from the [release-tools][rel-tools] mentioned
+  above.  If you want to add new checks, you can do it there.
+
+[rel-tools]: https://sigs.k8s.io/kubebuilder-release-tools
+
+[actions-wf]: /.github/workflows/verify.yml
 
 ## PR Process
 

@@ -723,6 +723,6 @@ type errorReader struct {
 	client.Client
 }
 
-func (e errorReader) Get(ctx context.Context, key client.ObjectKey, into runtime.Object) error {
+func (e errorReader) Get(ctx context.Context, key client.ObjectKey, into client.Object) error {
 	return fmt.Errorf("unexpected error")
 }

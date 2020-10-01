@@ -22,7 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -468,8 +468,8 @@ var _ = Describe("Predicate", func() {
 	})
 
 	Describe("NewPredicateFuncs with a namespace filter function", func() {
-		byNamespaceFilter := func(namespace string) func(object controllerutil.Object) bool {
-			return func(object controllerutil.Object) bool {
+		byNamespaceFilter := func(namespace string) func(object client.Object) bool {
+			return func(object client.Object) bool {
 				return object.GetNamespace() == namespace
 			}
 		}

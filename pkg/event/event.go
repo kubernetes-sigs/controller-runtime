@@ -16,32 +16,30 @@ limitations under the License.
 
 package event
 
-import (
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-)
+import "sigs.k8s.io/controller-runtime/pkg/client"
 
 // CreateEvent is an event where a Kubernetes object was created.  CreateEvent should be generated
 // by a source.Source and transformed into a reconcile.Request by an handler.EventHandler.
 type CreateEvent struct {
 	// Object is the object from the event
-	Object controllerutil.Object
+	Object client.Object
 }
 
 // UpdateEvent is an event where a Kubernetes object was updated.  UpdateEvent should be generated
 // by a source.Source and transformed into a reconcile.Request by an handler.EventHandler.
 type UpdateEvent struct {
 	// ObjectOld is the object from the event
-	ObjectOld controllerutil.Object
+	ObjectOld client.Object
 
 	// ObjectNew is the object from the event
-	ObjectNew controllerutil.Object
+	ObjectNew client.Object
 }
 
 // DeleteEvent is an event where a Kubernetes object was deleted.  DeleteEvent should be generated
 // by a source.Source and transformed into a reconcile.Request by an handler.EventHandler.
 type DeleteEvent struct {
 	// Object is the object from the event
-	Object controllerutil.Object
+	Object client.Object
 
 	// DeleteStateUnknown is true if the Delete event was missed but we identified the object
 	// as having been deleted.
@@ -53,5 +51,5 @@ type DeleteEvent struct {
 // handler.EventHandler.
 type GenericEvent struct {
 	// Object is the object from the event
-	Object controllerutil.Object
+	Object client.Object
 }

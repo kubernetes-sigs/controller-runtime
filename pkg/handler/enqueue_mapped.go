@@ -18,7 +18,7 @@ package handler
 
 import (
 	"k8s.io/client-go/util/workqueue"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -90,5 +90,5 @@ func (e *enqueueRequestsFromMapFunc) InjectFunc(f inject.Func) error {
 
 // MapObject contains information from an event to be transformed into a Request.
 type MapObject struct {
-	Object controllerutil.Object
+	Object client.Object
 }

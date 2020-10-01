@@ -19,7 +19,7 @@ package predicate
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
@@ -97,7 +97,7 @@ func (p Funcs) Generic(e event.GenericEvent) bool {
 // NewPredicateFuncs returns a predicate funcs that applies the given filter function
 // on CREATE, UPDATE, DELETE and GENERIC events. For UPDATE events, the filter is applied
 // to the new object.
-func NewPredicateFuncs(filter func(object controllerutil.Object) bool) Funcs {
+func NewPredicateFuncs(filter func(object client.Object) bool) Funcs {
 	return Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
 			return filter(e.Object)
@@ -278,7 +278,7 @@ func LabelSelectorPredicate(s metav1.LabelSelector) (Predicate, error) {
 	if err != nil {
 		return Funcs{}, err
 	}
-	return NewPredicateFuncs(func(o controllerutil.Object) bool {
+	return NewPredicateFuncs(func(o client.Object) bool {
 		return selector.Matches(labels.Set(o.GetLabels()))
 	}), nil
 }

@@ -21,9 +21,9 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -57,7 +57,7 @@ func ControllerManagedBy(m manager.Manager) *Builder {
 
 // ForInput represents the information set by For method.
 type ForInput struct {
-	object     runtime.Object
+	object     client.Object
 	predicates []predicate.Predicate
 	err        error
 }
@@ -66,7 +66,7 @@ type ForInput struct {
 // update events by *reconciling the object*.
 // This is the equivalent of calling
 // Watches(&source.Kind{Type: apiType}, &handler.EnqueueRequestForObject{})
-func (blder *Builder) For(object runtime.Object, opts ...ForOption) *Builder {
+func (blder *Builder) For(object client.Object, opts ...ForOption) *Builder {
 	if blder.forInput.object != nil {
 		blder.forInput.err = fmt.Errorf("For(...) should only be called once, could not assign multiple objects for reconciliation")
 		return blder
@@ -82,14 +82,14 @@ func (blder *Builder) For(object runtime.Object, opts ...ForOption) *Builder {
 
 // OwnsInput represents the information set by Owns method.
 type OwnsInput struct {
-	object     runtime.Object
+	object     client.Object
 	predicates []predicate.Predicate
 }
 
 // Owns defines types of Objects being *generated* by the ControllerManagedBy, and configures the ControllerManagedBy to respond to
 // create / delete / update events by *reconciling the owner object*.  This is the equivalent of calling
 // Watches(&source.Kind{Type: <ForType-forInput>}, &handler.EnqueueRequestForOwner{OwnerType: apiType, IsController: true})
-func (blder *Builder) Owns(object runtime.Object, opts ...OwnsOption) *Builder {
+func (blder *Builder) Owns(object client.Object, opts ...OwnsOption) *Builder {
 	input := OwnsInput{object: object}
 	for _, opt := range opts {
 		opt.ApplyToOwns(&input)

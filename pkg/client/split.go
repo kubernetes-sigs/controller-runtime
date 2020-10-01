@@ -78,7 +78,7 @@ type delegatingReader struct {
 }
 
 // Get retrieves an obj for a given object key from the Kubernetes Cluster.
-func (d *delegatingReader) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
+func (d *delegatingReader) Get(ctx context.Context, key ObjectKey, obj Object) error {
 	_, isUnstructured := obj.(*unstructured.Unstructured)
 	if isUnstructured {
 		return d.ClientReader.Get(ctx, key, obj)
@@ -87,7 +87,7 @@ func (d *delegatingReader) Get(ctx context.Context, key ObjectKey, obj runtime.O
 }
 
 // List retrieves list of objects for a given namespace and list options.
-func (d *delegatingReader) List(ctx context.Context, list runtime.Object, opts ...ListOption) error {
+func (d *delegatingReader) List(ctx context.Context, list ObjectList, opts ...ListOption) error {
 	_, isUnstructured := list.(*unstructured.UnstructuredList)
 	if isUnstructured {
 		return d.ClientReader.List(ctx, list, opts...)

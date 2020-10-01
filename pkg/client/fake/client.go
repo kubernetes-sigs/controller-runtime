@@ -58,14 +58,14 @@ const (
 
 // NewFakeClient creates a new fake client for testing.
 // You can choose to initialize it with a slice of runtime.Object.
-func NewFakeClient(initObjs ...runtime.Object) client.Client {
+func NewFakeClient(initObjs ...client.Object) client.Client {
 	return NewFakeClientWithScheme(scheme.Scheme, initObjs...)
 }
 
 // NewFakeClientWithScheme creates a new fake client with the given scheme
 // for testing.
 // You can choose to initialize it with a slice of runtime.Object.
-func NewFakeClientWithScheme(clientScheme *runtime.Scheme, initObjs ...runtime.Object) client.Client {
+func NewFakeClientWithScheme(clientScheme *runtime.Scheme, initObjs ...client.Object) client.Client {
 	tracker := testing.NewObjectTracker(clientScheme, scheme.Codecs.UniversalDecoder())
 	for _, obj := range initObjs {
 		err := tracker.Add(obj)
@@ -149,7 +149,7 @@ func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Ob
 	return t.ObjectTracker.Update(gvr, obj, ns)
 }
 
-func (c *fakeClient) Get(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+func (c *fakeClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 	gvr, err := getGVRFromObject(obj, c.scheme)
 	if err != nil {
 		return err
@@ -179,7 +179,7 @@ func (c *fakeClient) Get(ctx context.Context, key client.ObjectKey, obj runtime.
 	return err
 }
 
-func (c *fakeClient) List(ctx context.Context, obj runtime.Object, opts ...client.ListOption) error {
+func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...client.ListOption) error {
 	gvk, err := apiutil.GVKForObject(obj, c.scheme)
 	if err != nil {
 		return err
@@ -245,7 +245,7 @@ func (c *fakeClient) RESTMapper() meta.RESTMapper {
 	return nil
 }
 
-func (c *fakeClient) Create(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
+func (c *fakeClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 	createOptions := &client.CreateOptions{}
 	createOptions.ApplyOptions(opts)
 
@@ -275,7 +275,7 @@ func (c *fakeClient) Create(ctx context.Context, obj runtime.Object, opts ...cli
 	return c.tracker.Create(gvr, obj, accessor.GetNamespace())
 }
 
-func (c *fakeClient) Delete(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+func (c *fakeClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 	gvr, err := getGVRFromObject(obj, c.scheme)
 	if err != nil {
 		return err
@@ -291,7 +291,7 @@ func (c *fakeClient) Delete(ctx context.Context, obj runtime.Object, opts ...cli
 	return c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
 }
 
-func (c *fakeClient) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...client.DeleteAllOfOption) error {
+func (c *fakeClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
 	gvk, err := apiutil.GVKForObject(obj, c.scheme)
 	if err != nil {
 		return err
@@ -327,7 +327,7 @@ func (c *fakeClient) DeleteAllOf(ctx context.Context, obj runtime.Object, opts .
 	return nil
 }
 
-func (c *fakeClient) Update(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+func (c *fakeClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 	updateOptions := &client.UpdateOptions{}
 	updateOptions.ApplyOptions(opts)
 
@@ -348,7 +348,7 @@ func (c *fakeClient) Update(ctx context.Context, obj runtime.Object, opts ...cli
 	return c.tracker.Update(gvr, obj, accessor.GetNamespace())
 }
 
-func (c *fakeClient) Patch(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOption) error {
+func (c *fakeClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 	patchOptions := &client.PatchOptions{}
 	patchOptions.ApplyOptions(opts)
 
@@ -417,13 +417,13 @@ type fakeStatusWriter struct {
 	client *fakeClient
 }
 
-func (sw *fakeStatusWriter) Update(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+func (sw *fakeStatusWriter) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 	// TODO(droot): This results in full update of the obj (spec + status). Need
 	// a way to update status field only.
 	return sw.client.Update(ctx, obj, opts...)
 }
 
-func (sw *fakeStatusWriter) Patch(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOption) error {
+func (sw *fakeStatusWriter) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 	// TODO(droot): This results in full update of the obj (spec + status). Need
 	// a way to update status field only.
 	return sw.client.Patch(ctx, obj, patch, opts...)

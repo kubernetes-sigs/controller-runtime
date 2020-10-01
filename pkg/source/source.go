@@ -23,8 +23,8 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
@@ -67,7 +67,7 @@ type SyncingSource interface {
 // NewKindWithCache creates a Source without InjectCache, so that it is assured that the given cache is used
 // and not overwritten. It can be used to watch objects in a different cluster by passing the cache
 // from that other cluster
-func NewKindWithCache(object runtime.Object, cache cache.Cache) SyncingSource {
+func NewKindWithCache(object client.Object, cache cache.Cache) SyncingSource {
 	return &kindWithCache{kind: Kind{Type: object, cache: cache}}
 }
 
@@ -87,7 +87,7 @@ func (ks *kindWithCache) WaitForSync(ctx context.Context) error {
 // Kind is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create)
 type Kind struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
-	Type runtime.Object
+	Type client.Object
 
 	// cache used to watch APIs
 	cache cache.Cache

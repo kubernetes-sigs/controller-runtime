@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -42,7 +41,7 @@ const testNamespaceThree = "test-namespace-3"
 
 // TODO(community): Pull these helper functions into testenv.
 // Restart policy is included to allow indexing on that field.
-func createPod(name, namespace string, restartPolicy kcorev1.RestartPolicy) runtime.Object {
+func createPod(name, namespace string, restartPolicy kcorev1.RestartPolicy) client.Object {
 	three := int64(3)
 	pod := &kcorev1.Pod{
 		ObjectMeta: kmetav1.ObjectMeta{
@@ -65,7 +64,7 @@ func createPod(name, namespace string, restartPolicy kcorev1.RestartPolicy) runt
 	return pod
 }
 
-func deletePod(pod runtime.Object) {
+func deletePod(pod client.Object) {
 	cl, err := client.New(cfg, client.Options{})
 	Expect(err).NotTo(HaveOccurred())
 	err = cl.Delete(context.Background(), pod)
@@ -86,10 +85,10 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			informerCache       cache.Cache
 			informerCacheCtx    context.Context
 			informerCacheCancel context.CancelFunc
-			knownPod1           runtime.Object
-			knownPod2           runtime.Object
-			knownPod3           runtime.Object
-			knownPod4           runtime.Object
+			knownPod1           client.Object
+			knownPod2           client.Object
+			knownPod3           client.Object
+			knownPod4           client.Object
 		)
 
 		BeforeEach(func() {
@@ -566,7 +565,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 					By("indexing the restartPolicy field of the Pod object before starting")
 					pod := &kcorev1.Pod{}
-					indexFunc := func(obj runtime.Object) []string {
+					indexFunc := func(obj client.Object) []string {
 						return []string{string(obj.(*kcorev1.Pod).Spec.RestartPolicy)}
 					}
 					Expect(informer.IndexField(context.TODO(), pod, "spec.restartPolicy", indexFunc)).To(Succeed())
@@ -684,7 +683,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						Version: "v1",
 						Kind:    "Pod",
 					})
-					indexFunc := func(obj runtime.Object) []string {
+					indexFunc := func(obj client.Object) []string {
 						s, ok := obj.(*unstructured.Unstructured).Object["spec"]
 						if !ok {
 							return []string{}

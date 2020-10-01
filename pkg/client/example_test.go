@@ -25,7 +25,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -238,7 +237,7 @@ func ExampleClient_deleteAllOf() {
 	_ = c.DeleteAllOf(context.Background(), &corev1.Pod{}, client.InNamespace("foo"), client.MatchingLabels{"app": "foo"})
 
 	// Using an unstructured Object
-	u := &unstructured.UnstructuredList{}
+	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "apps",
 		Kind:    "Deployment",
@@ -250,7 +249,7 @@ func ExampleClient_deleteAllOf() {
 // This example shows how to set up and consume a field selector over a pod's volumes' secretName field.
 func ExampleFieldIndexer_secretName() {
 	// someIndexer is a FieldIndexer over a Cache
-	_ = someIndexer.IndexField(context.TODO(), &corev1.Pod{}, "spec.volumes.secret.secretName", func(o runtime.Object) []string {
+	_ = someIndexer.IndexField(context.TODO(), &corev1.Pod{}, "spec.volumes.secret.secretName", func(o client.Object) []string {
 		var res []string
 		for _, vol := range o.(*corev1.Pod).Spec.Volumes {
 			if vol.Secret == nil {

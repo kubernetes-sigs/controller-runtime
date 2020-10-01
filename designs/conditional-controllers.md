@@ -61,8 +61,8 @@ enable the restarting of controllers
 
 The second goal of a solution for running controllers conditionally is addressed
 by creating a wrapper around a controller called a ConditionalController that
-within its Start() function, it polls the discovery doc for the existence of the
-watched object and starts/stops/restarts the underlying controller as necessary 
+within its Start() function, polls the discovery doc for the existence of the
+watched object and starts/stops/restarts the underlying controller as necessary.
 
 The third goal of an ergonomic mechanism to use ConditionalControllers is a
 small modification to the controller builder to enable running a controller as a
@@ -116,6 +116,11 @@ mitigation is to clear out the slices upon ConditionalController shutdown.
 
 #### Alternatives
 
+* A metacontroller or CRD controller could start and stop controllers based on
+the existence of their corresponding CRDs. This requires no changes to made to
+controller-runtime. It does put the complexity of designing such a controller
+onto the end user, but there are potentially ways to provide end users with
+default, pluggable CRD controllers.
 * Instead of exposing ResetStart and SaveWatches on the internal controller struct
 it might be better to expose it on the controller interface. This is more public
 and creates more potential for abuse, but it prevents some hacky solutions

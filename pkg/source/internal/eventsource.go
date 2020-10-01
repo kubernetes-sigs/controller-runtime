@@ -21,11 +21,11 @@ import (
 
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
@@ -45,7 +45,7 @@ func (e EventHandler) OnAdd(obj interface{}) {
 	c := event.CreateEvent{}
 
 	// Pull Object out of the object
-	if o, ok := obj.(controllerutil.Object); ok {
+	if o, ok := obj.(client.Object); ok {
 		c.Object = o
 	} else {
 		log.Error(nil, "OnAdd missing Object",
@@ -67,7 +67,7 @@ func (e EventHandler) OnAdd(obj interface{}) {
 func (e EventHandler) OnUpdate(oldObj, newObj interface{}) {
 	u := event.UpdateEvent{}
 
-	if o, ok := oldObj.(controllerutil.Object); ok {
+	if o, ok := oldObj.(client.Object); ok {
 		u.ObjectOld = o
 	} else {
 		log.Error(nil, "OnUpdate missing ObjectOld",
@@ -76,7 +76,7 @@ func (e EventHandler) OnUpdate(oldObj, newObj interface{}) {
 	}
 
 	// Pull Object out of the object
-	if o, ok := newObj.(controllerutil.Object); ok {
+	if o, ok := newObj.(client.Object); ok {
 		u.ObjectNew = o
 	} else {
 		log.Error(nil, "OnUpdate missing ObjectNew",
@@ -104,7 +104,7 @@ func (e EventHandler) OnDelete(obj interface{}) {
 	// This should never happen if we aren't missing events, which we have concluded that we are not
 	// and made decisions off of this belief.  Maybe this shouldn't be here?
 	var ok bool
-	if _, ok = obj.(controllerutil.Object); !ok {
+	if _, ok = obj.(client.Object); !ok {
 		// If the object doesn't have Metadata, assume it is a tombstone object of type DeletedFinalStateUnknown
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
@@ -119,7 +119,7 @@ func (e EventHandler) OnDelete(obj interface{}) {
 	}
 
 	// Pull Object out of the object
-	if o, ok := obj.(controllerutil.Object); ok {
+	if o, ok := obj.(client.Object); ok {
 		d.Object = o
 	} else {
 		log.Error(nil, "OnDelete missing Object",

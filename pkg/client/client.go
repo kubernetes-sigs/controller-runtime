@@ -124,7 +124,7 @@ func (c *client) RESTMapper() meta.RESTMapper {
 }
 
 // Create implements client.Client
-func (c *client) Create(ctx context.Context, obj runtime.Object, opts ...CreateOption) error {
+func (c *client) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return c.unstructuredClient.Create(ctx, obj, opts...)
@@ -133,7 +133,7 @@ func (c *client) Create(ctx context.Context, obj runtime.Object, opts ...CreateO
 }
 
 // Update implements client.Client
-func (c *client) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOption) error {
+func (c *client) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
@@ -143,7 +143,7 @@ func (c *client) Update(ctx context.Context, obj runtime.Object, opts ...UpdateO
 }
 
 // Delete implements client.Client
-func (c *client) Delete(ctx context.Context, obj runtime.Object, opts ...DeleteOption) error {
+func (c *client) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return c.unstructuredClient.Delete(ctx, obj, opts...)
@@ -152,7 +152,7 @@ func (c *client) Delete(ctx context.Context, obj runtime.Object, opts ...DeleteO
 }
 
 // DeleteAllOf implements client.Client
-func (c *client) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...DeleteAllOfOption) error {
+func (c *client) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllOfOption) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return c.unstructuredClient.DeleteAllOf(ctx, obj, opts...)
@@ -161,7 +161,7 @@ func (c *client) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...De
 }
 
 // Patch implements client.Client
-func (c *client) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOption) error {
+func (c *client) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
 	defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
@@ -171,7 +171,7 @@ func (c *client) Patch(ctx context.Context, obj runtime.Object, patch Patch, opt
 }
 
 // Get implements client.Client
-func (c *client) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
+func (c *client) Get(ctx context.Context, key ObjectKey, obj Object) error {
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
 		return c.unstructuredClient.Get(ctx, key, obj)
@@ -180,7 +180,7 @@ func (c *client) Get(ctx context.Context, key ObjectKey, obj runtime.Object) err
 }
 
 // List implements client.Client
-func (c *client) List(ctx context.Context, obj runtime.Object, opts ...ListOption) error {
+func (c *client) List(ctx context.Context, obj ObjectList, opts ...ListOption) error {
 	_, ok := obj.(*unstructured.UnstructuredList)
 	if ok {
 		return c.unstructuredClient.List(ctx, obj, opts...)
@@ -202,7 +202,7 @@ type statusWriter struct {
 var _ StatusWriter = &statusWriter{}
 
 // Update implements client.StatusWriter
-func (sw *statusWriter) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOption) error {
+func (sw *statusWriter) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	defer sw.client.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {
@@ -212,7 +212,7 @@ func (sw *statusWriter) Update(ctx context.Context, obj runtime.Object, opts ...
 }
 
 // Patch implements client.Client
-func (sw *statusWriter) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOption) error {
+func (sw *statusWriter) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
 	defer sw.client.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	_, ok := obj.(*unstructured.Unstructured)
 	if ok {

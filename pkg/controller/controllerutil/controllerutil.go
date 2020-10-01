@@ -194,7 +194,7 @@ const ( // They should complete the sentence "Deployment default/foo has been ..
 // The MutateFn is called regardless of creating or updating an object.
 //
 // It returns the executed operation and an error.
-func CreateOrUpdate(ctx context.Context, c client.Client, obj runtime.Object, f MutateFn) (OperationResult, error) {
+func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
 	key, err := client.ObjectKeyFromObject(obj)
 	if err != nil {
 		return OperationResultNone, err
@@ -235,7 +235,7 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj runtime.Object, f 
 // The MutateFn is called regardless of creating or updating an object.
 //
 // It returns the executed operation and an error.
-func CreateOrPatch(ctx context.Context, c client.Client, obj runtime.Object, f MutateFn) (OperationResult, error) {
+func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
 	key, err := client.ObjectKeyFromObject(obj)
 	if err != nil {
 		return OperationResultNone, err
@@ -345,7 +345,7 @@ func mutate(f MutateFn, key client.ObjectKey, obj runtime.Object) error {
 type MutateFn func() error
 
 // AddFinalizer accepts an Object and adds the provided finalizer if not present.
-func AddFinalizer(o Object, finalizer string) {
+func AddFinalizer(o client.Object, finalizer string) {
 	f := o.GetFinalizers()
 	for _, e := range f {
 		if e == finalizer {
@@ -356,7 +356,7 @@ func AddFinalizer(o Object, finalizer string) {
 }
 
 // RemoveFinalizer accepts an Object and removes the provided finalizer if present.
-func RemoveFinalizer(o Object, finalizer string) {
+func RemoveFinalizer(o client.Object, finalizer string) {
 	f := o.GetFinalizers()
 	for i := 0; i < len(f); i++ {
 		if f[i] == finalizer {
@@ -368,7 +368,7 @@ func RemoveFinalizer(o Object, finalizer string) {
 }
 
 // ContainsFinalizer checks an Object that the provided finalizer is present.
-func ContainsFinalizer(o Object, finalizer string) bool {
+func ContainsFinalizer(o client.Object, finalizer string) bool {
 	f := o.GetFinalizers()
 	for _, e := range f {
 		if e == finalizer {
@@ -380,7 +380,6 @@ func ContainsFinalizer(o Object, finalizer string) bool {
 
 // Object allows functions to work indistinctly with any resource that
 // implements both Object interfaces.
-type Object interface {
-	metav1.Object
-	runtime.Object
-}
+//
+// Deprecated: Use client.Object instead.
+type Object = client.Object

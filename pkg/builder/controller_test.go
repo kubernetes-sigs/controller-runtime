@@ -458,7 +458,10 @@ func doReconcileTest(nameSuffix string, stop chan struct{}, blder *Builder, mgr 
 
 var _ runtime.Object = &fakeType{}
 
-type fakeType struct{}
+type fakeType struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+}
 
 func (*fakeType) GetObjectKind() schema.ObjectKind { return nil }
 func (*fakeType) DeepCopyObject() runtime.Object   { return nil }

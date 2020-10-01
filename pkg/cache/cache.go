@@ -52,7 +52,7 @@ type Cache interface {
 type Informers interface {
 	// GetInformer fetches or constructs an informer for the given object that corresponds to a single
 	// API kind and resource.
-	GetInformer(ctx context.Context, obj runtime.Object) (Informer, error)
+	GetInformer(ctx context.Context, obj client.Object) (Informer, error)
 
 	// GetInformerForKind is similar to GetInformer, except that it takes a group-version-kind, instead
 	// of the underlying object.

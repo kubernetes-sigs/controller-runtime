@@ -25,12 +25,6 @@ var _ = Describe("ip.objectTypeForListObject", func() {
 		InformersMap: &internal.InformersMap{Scheme: scheme.Scheme},
 	}
 
-	It("should error on non-list types", func() {
-		_, _, err := ip.objectTypeForListObject(&corev1.Pod{})
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(Equal(`non-list type *v1.Pod (kind "/v1, Kind=Pod") passed as output`))
-	})
-
 	It("should find the object type for unstructured lists", func() {
 		unstructuredList := &unstructured.UnstructuredList{}
 		unstructuredList.SetAPIVersion("v1")

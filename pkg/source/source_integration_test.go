@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -30,7 +31,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	kubeinformers "k8s.io/client-go/informers"
 	toolscache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -38,7 +38,7 @@ import (
 
 var _ = Describe("Source", func() {
 	var instance1, instance2 *source.Kind
-	var obj runtime.Object
+	var obj client.Object
 	var q workqueue.RateLimitingInterface
 	var c1, c2 chan interface{}
 	var ns string

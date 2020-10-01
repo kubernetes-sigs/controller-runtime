@@ -2815,12 +2815,12 @@ type fakeReader struct {
 	Called int
 }
 
-func (f *fakeReader) Get(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+func (f *fakeReader) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 	f.Called = f.Called + 1
 	return nil
 }
 
-func (f *fakeReader) List(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+func (f *fakeReader) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 	f.Called = f.Called + 1
 	return nil
 }

@@ -38,7 +38,7 @@ import (
 func Example() {
 	var log = controllers.Log.WithName("builder-examples")
 
-	manager, err := controllers.NewManager(context.Background(), controllers.GetConfigOrDie(), controllers.Options{})
+	manager, err := controllers.NewManager(controllers.GetConfigOrDie(), controllers.Options{})
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)
@@ -79,7 +79,6 @@ func Example_updateLeaderElectionDurations() {
 	renewDeadline := 80 * time.Second
 	retryPeriod := 20 * time.Second
 	manager, err := controllers.NewManager(
-		context.Background(),
 		controllers.GetConfigOrDie(),
 		controllers.Options{
 			LeaseDuration: &leaseDuration,

@@ -38,17 +38,11 @@ import (
 
 var _ = Describe("controller", func() {
 	var reconciled chan reconcile.Request
-	var stop chan struct{}
 	ctx := context.Background()
 
 	BeforeEach(func() {
-		stop = make(chan struct{})
 		reconciled = make(chan reconcile.Request)
 		Expect(cfg).NotTo(BeNil())
-	})
-
-	AfterEach(func() {
-		close(stop)
 	})
 
 	Describe("controller", func() {
@@ -56,7 +50,7 @@ var _ = Describe("controller", func() {
 
 		It("should reconcile", func(done Done) {
 			By("Creating the Manager")
-			cm, err := manager.New(ctx, cfg, manager.Options{})
+			cm, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
@@ -84,9 +78,11 @@ var _ = Describe("controller", func() {
 			Expect(err).To(Equal(&cache.ErrCacheNotStarted{}))
 
 			By("Starting the Manager")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			go func() {
 				defer GinkgoRecover()
-				Expect(cm.Start(stop)).NotTo(HaveOccurred())
+				Expect(cm.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
 			deployment := &appsv1.Deployment{

@@ -22,7 +22,7 @@ var _ = Describe("Test", func() {
 
 	Describe("Webhook", func() {
 		It("should reject create request for webhook that rejects all requests", func(done Done) {
-			m, err := manager.New(context.Background(), env.Config, manager.Options{
+			m, err := manager.New(env.Config, manager.Options{
 				Port:    env.WebhookInstallOptions.LocalServingPort,
 				Host:    env.WebhookInstallOptions.LocalServingHost,
 				CertDir: env.WebhookInstallOptions.LocalServingCertDir,

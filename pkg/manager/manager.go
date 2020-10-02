@@ -74,12 +74,13 @@ type Manager interface {
 	// AddReadyzCheck allows you to add Readyz checker
 	AddReadyzCheck(name string, check healthz.Checker) error
 
-	// Start starts all registered Controllers and blocks until the Stop channel is closed.
+	// Start starts all registered Controllers and blocks until the context is cancelled.
 	// Returns an error if there is an error starting any controller.
+	//
 	// If LeaderElection is used, the binary must be exited immediately after this returns,
 	// otherwise components that need leader election might continue to run after the leader
 	// lock was lost.
-	Start(<-chan struct{}) error
+	Start(ctx context.Context) error
 
 	// GetConfig returns an initialized Config
 	GetConfig() *rest.Config
@@ -295,7 +296,7 @@ type LeaderElectionRunnable interface {
 }
 
 // New returns a new Manager for creating Controllers.
-func New(ctx context.Context, config *rest.Config, options Options) (Manager, error) {
+func New(config *rest.Config, options Options) (Manager, error) {
 	// Initialize a rest.config if none was specified
 	if config == nil {
 		return nil, fmt.Errorf("must specify Config")
@@ -371,8 +372,6 @@ func New(ctx context.Context, config *rest.Config, options Options) (Manager, er
 		return nil, err
 	}
 
-	internalCtx, internalCancel := context.WithCancel(ctx)
-
 	return &controllerManager{
 		config:                  config,
 		scheme:                  options.Scheme,
@@ -397,8 +396,7 @@ func New(ctx context.Context, config *rest.Config, options Options) (Manager, er
 		readinessEndpointName:   options.ReadinessEndpointName,
 		livenessEndpointName:    options.LivenessEndpointName,
 		gracefulShutdownTimeout: *options.GracefulShutdownTimeout,
-		internalCtx:             internalCtx,
-		internalCancel:          internalCancel,
+		internalProceduresStop:  make(chan struct{}),
 	}, nil
 }
 

@@ -32,7 +32,7 @@ var _ = Describe("runtime signal", func() {
 	Context("SignalHandler Test", func() {
 
 		It("test signal handler", func() {
-			stop := SetupSignalHandler()
+			ctx := SetupSignalHandler()
 			task := &Task{
 				ticker: time.NewTicker(time.Second * 2),
 			}
@@ -47,7 +47,7 @@ var _ = Describe("runtime signal", func() {
 			select {
 			case sig := <-c:
 				fmt.Printf("Got %s signal. Aborting...\n", sig)
-			case _, ok := <-stop:
+			case _, ok := <-ctx.Done():
 				Expect(ok).To(BeFalse())
 			}
 		})

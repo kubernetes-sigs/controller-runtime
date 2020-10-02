@@ -21,6 +21,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -65,15 +66,15 @@ func ExampleEnqueueRequestsFromMapFunc() {
 	// controller is a controller.controller
 	err := c.Watch(
 		&source.Kind{Type: &appsv1.Deployment{}},
-		handler.EnqueueRequestsFromMapFunc(func(a handler.MapObject) []reconcile.Request {
+		handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
 			return []reconcile.Request{
 				{NamespacedName: types.NamespacedName{
-					Name:      a.Object.GetName() + "-1",
-					Namespace: a.Object.GetNamespace(),
+					Name:      a.GetName() + "-1",
+					Namespace: a.GetNamespace(),
 				}},
 				{NamespacedName: types.NamespacedName{
-					Name:      a.Object.GetName() + "-2",
-					Namespace: a.Object.GetNamespace(),
+					Name:      a.GetName() + "-2",
+					Namespace: a.GetNamespace(),
 				}},
 			}
 		}),

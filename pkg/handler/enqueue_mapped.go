@@ -26,7 +26,7 @@ import (
 
 // MapFunc is the signature required for enqueueing requests from a generic function.
 // This type is usually used with EnqueueRequestsFromMapFunc when registering an event handler.
-type MapFunc func(MapObject) []reconcile.Request
+type MapFunc func(client.Object) []reconcile.Request
 
 // EnqueueRequestsFromMapFunc enqueues Requests by running a transformation function that outputs a collection
 // of reconcile.Requests on each Event.  The reconcile.Requests may be for an arbitrary set of objects
@@ -53,26 +53,26 @@ type enqueueRequestsFromMapFunc struct {
 
 // Create implements EventHandler
 func (e *enqueueRequestsFromMapFunc) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
-	e.mapAndEnqueue(q, MapObject{Object: evt.Object})
+	e.mapAndEnqueue(q, evt.Object)
 }
 
 // Update implements EventHandler
 func (e *enqueueRequestsFromMapFunc) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
-	e.mapAndEnqueue(q, MapObject{Object: evt.ObjectOld})
-	e.mapAndEnqueue(q, MapObject{Object: evt.ObjectNew})
+	e.mapAndEnqueue(q, evt.ObjectOld)
+	e.mapAndEnqueue(q, evt.ObjectNew)
 }
 
 // Delete implements EventHandler
 func (e *enqueueRequestsFromMapFunc) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
-	e.mapAndEnqueue(q, MapObject{Object: evt.Object})
+	e.mapAndEnqueue(q, evt.Object)
 }
 
 // Generic implements EventHandler
 func (e *enqueueRequestsFromMapFunc) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
-	e.mapAndEnqueue(q, MapObject{Object: evt.Object})
+	e.mapAndEnqueue(q, evt.Object)
 }
 
-func (e *enqueueRequestsFromMapFunc) mapAndEnqueue(q workqueue.RateLimitingInterface, object MapObject) {
+func (e *enqueueRequestsFromMapFunc) mapAndEnqueue(q workqueue.RateLimitingInterface, object client.Object) {
 	for _, req := range e.toRequests(object) {
 		q.Add(req)
 	}
@@ -86,9 +86,4 @@ func (e *enqueueRequestsFromMapFunc) InjectFunc(f inject.Func) error {
 		return nil
 	}
 	return f(e.toRequests)
-}
-
-// MapObject contains information from an event to be transformed into a Request.
-type MapObject struct {
-	Object client.Object
 }

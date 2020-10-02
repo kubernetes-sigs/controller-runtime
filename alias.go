@@ -125,10 +125,15 @@ var (
 	// get any actual logging.
 	Log = log.Log
 
-	// LoggerFromContext returns a logger with predefined values from a context.Context.
+	// LoggerFrom returns a logger with predefined values from a context.Context.
 	//
 	// This is meant to be used with the context supplied in a struct that satisfies the Reconciler interface.
-	LoggerFromContext = log.FromContext
+	LoggerFrom = log.FromContext
+
+	// LoggerInto takes a context and sets the logger as one of its keys.
+	//
+	// This is meant to be used in reconcilers to enrich the logger within a context with additional values.
+	LoggerInto = log.IntoContext
 
 	// SetLogger sets a concrete logging implementation for all deferred Loggers.
 	SetLogger = log.SetLogger

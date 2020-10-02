@@ -17,28 +17,28 @@ limitations under the License.
 package predicate
 
 import (
+	"context"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
-
-var log = logf.RuntimeLog.WithName("predicate").WithName("eventFilters")
 
 // Predicate filters events before enqueuing the keys.
 type Predicate interface {
 	// Create returns true if the Create event should be processed
-	Create(event.CreateEvent) bool
+	Create(context.Context, event.CreateEvent) bool
 
 	// Delete returns true if the Delete event should be processed
-	Delete(event.DeleteEvent) bool
+	Delete(context.Context, event.DeleteEvent) bool
 
 	// Update returns true if the Update event should be processed
-	Update(event.UpdateEvent) bool
+	Update(context.Context, event.UpdateEvent) bool
 
 	// Generic returns true if the Generic event should be processed
-	Generic(event.GenericEvent) bool
+	Generic(context.Context, event.GenericEvent) bool
 }
 
 var _ Predicate = Funcs{}
@@ -50,46 +50,46 @@ var _ Predicate = and{}
 // Funcs is a function that implements Predicate.
 type Funcs struct {
 	// Create returns true if the Create event should be processed
-	CreateFunc func(event.CreateEvent) bool
+	CreateFunc func(context.Context, event.CreateEvent) bool
 
 	// Delete returns true if the Delete event should be processed
-	DeleteFunc func(event.DeleteEvent) bool
+	DeleteFunc func(context.Context, event.DeleteEvent) bool
 
 	// Update returns true if the Update event should be processed
-	UpdateFunc func(event.UpdateEvent) bool
+	UpdateFunc func(context.Context, event.UpdateEvent) bool
 
 	// Generic returns true if the Generic event should be processed
-	GenericFunc func(event.GenericEvent) bool
+	GenericFunc func(context.Context, event.GenericEvent) bool
 }
 
 // Create implements Predicate
-func (p Funcs) Create(e event.CreateEvent) bool {
+func (p Funcs) Create(ctx context.Context, e event.CreateEvent) bool {
 	if p.CreateFunc != nil {
-		return p.CreateFunc(e)
+		return p.CreateFunc(ctx, e)
 	}
 	return true
 }
 
 // Delete implements Predicate
-func (p Funcs) Delete(e event.DeleteEvent) bool {
+func (p Funcs) Delete(ctx context.Context, e event.DeleteEvent) bool {
 	if p.DeleteFunc != nil {
-		return p.DeleteFunc(e)
+		return p.DeleteFunc(ctx, e)
 	}
 	return true
 }
 
 // Update implements Predicate
-func (p Funcs) Update(e event.UpdateEvent) bool {
+func (p Funcs) Update(ctx context.Context, e event.UpdateEvent) bool {
 	if p.UpdateFunc != nil {
-		return p.UpdateFunc(e)
+		return p.UpdateFunc(ctx, e)
 	}
 	return true
 }
 
 // Generic implements Predicate
-func (p Funcs) Generic(e event.GenericEvent) bool {
+func (p Funcs) Generic(ctx context.Context, e event.GenericEvent) bool {
 	if p.GenericFunc != nil {
-		return p.GenericFunc(e)
+		return p.GenericFunc(ctx, e)
 	}
 	return true
 }
@@ -97,19 +97,19 @@ func (p Funcs) Generic(e event.GenericEvent) bool {
 // NewPredicateFuncs returns a predicate funcs that applies the given filter function
 // on CREATE, UPDATE, DELETE and GENERIC events. For UPDATE events, the filter is applied
 // to the new object.
-func NewPredicateFuncs(filter func(object client.Object) bool) Funcs {
+func NewPredicateFuncs(filter func(ctx context.Context, object client.Object) bool) Funcs {
 	return Funcs{
-		CreateFunc: func(e event.CreateEvent) bool {
-			return filter(e.Object)
+		CreateFunc: func(ctx context.Context, e event.CreateEvent) bool {
+			return filter(ctx, e.Object)
 		},
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			return filter(e.ObjectNew)
+		UpdateFunc: func(ctx context.Context, e event.UpdateEvent) bool {
+			return filter(ctx, e.ObjectNew)
 		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			return filter(e.Object)
+		DeleteFunc: func(ctx context.Context, e event.DeleteEvent) bool {
+			return filter(ctx, e.Object)
 		},
-		GenericFunc: func(e event.GenericEvent) bool {
-			return filter(e.Object)
+		GenericFunc: func(ctx context.Context, e event.GenericEvent) bool {
+			return filter(ctx, e.Object)
 		},
 	}
 }
@@ -120,7 +120,9 @@ type ResourceVersionChangedPredicate struct {
 }
 
 // Update implements default UpdateEvent filter for validating resource version change
-func (ResourceVersionChangedPredicate) Update(e event.UpdateEvent) bool {
+func (ResourceVersionChangedPredicate) Update(ctx context.Context, e event.UpdateEvent) bool {
+	log := log.FromContext(ctx)
+
 	if e.ObjectOld == nil {
 		log.Error(nil, "UpdateEvent has no old metadata", "event", e)
 		return false
@@ -161,7 +163,9 @@ type GenerationChangedPredicate struct {
 }
 
 // Update implements default UpdateEvent filter for validating generation change
-func (GenerationChangedPredicate) Update(e event.UpdateEvent) bool {
+func (GenerationChangedPredicate) Update(ctx context.Context, e event.UpdateEvent) bool {
+	log := log.FromContext(ctx)
+
 	if e.ObjectOld == nil {
 		log.Error(nil, "Update event has no old metadata", "event", e)
 		return false
@@ -190,36 +194,36 @@ type and struct {
 	predicates []Predicate
 }
 
-func (a and) Create(e event.CreateEvent) bool {
+func (a and) Create(ctx context.Context, e event.CreateEvent) bool {
 	for _, p := range a.predicates {
-		if !p.Create(e) {
+		if !p.Create(ctx, e) {
 			return false
 		}
 	}
 	return true
 }
 
-func (a and) Update(e event.UpdateEvent) bool {
+func (a and) Update(ctx context.Context, e event.UpdateEvent) bool {
 	for _, p := range a.predicates {
-		if !p.Update(e) {
+		if !p.Update(ctx, e) {
 			return false
 		}
 	}
 	return true
 }
 
-func (a and) Delete(e event.DeleteEvent) bool {
+func (a and) Delete(ctx context.Context, e event.DeleteEvent) bool {
 	for _, p := range a.predicates {
-		if !p.Delete(e) {
+		if !p.Delete(ctx, e) {
 			return false
 		}
 	}
 	return true
 }
 
-func (a and) Generic(e event.GenericEvent) bool {
+func (a and) Generic(ctx context.Context, e event.GenericEvent) bool {
 	for _, p := range a.predicates {
-		if !p.Generic(e) {
+		if !p.Generic(ctx, e) {
 			return false
 		}
 	}
@@ -235,36 +239,36 @@ type or struct {
 	predicates []Predicate
 }
 
-func (o or) Create(e event.CreateEvent) bool {
+func (o or) Create(ctx context.Context, e event.CreateEvent) bool {
 	for _, p := range o.predicates {
-		if p.Create(e) {
+		if p.Create(ctx, e) {
 			return true
 		}
 	}
 	return false
 }
 
-func (o or) Update(e event.UpdateEvent) bool {
+func (o or) Update(ctx context.Context, e event.UpdateEvent) bool {
 	for _, p := range o.predicates {
-		if p.Update(e) {
+		if p.Update(ctx, e) {
 			return true
 		}
 	}
 	return false
 }
 
-func (o or) Delete(e event.DeleteEvent) bool {
+func (o or) Delete(ctx context.Context, e event.DeleteEvent) bool {
 	for _, p := range o.predicates {
-		if p.Delete(e) {
+		if p.Delete(ctx, e) {
 			return true
 		}
 	}
 	return false
 }
 
-func (o or) Generic(e event.GenericEvent) bool {
+func (o or) Generic(ctx context.Context, e event.GenericEvent) bool {
 	for _, p := range o.predicates {
-		if p.Generic(e) {
+		if p.Generic(ctx, e) {
 			return true
 		}
 	}
@@ -278,7 +282,7 @@ func LabelSelectorPredicate(s metav1.LabelSelector) (Predicate, error) {
 	if err != nil {
 		return Funcs{}, err
 	}
-	return NewPredicateFuncs(func(o client.Object) bool {
+	return NewPredicateFuncs(func(ctx context.Context, o client.Object) bool {
 		return selector.Matches(labels.Set(o.GetLabels()))
 	}), nil
 }

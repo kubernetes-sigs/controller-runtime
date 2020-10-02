@@ -309,7 +309,7 @@ var _ = Describe("application", func() {
 			)
 
 			deployPrct := predicate.Funcs{
-				CreateFunc: func(e event.CreateEvent) bool {
+				CreateFunc: func(ctx context.Context, e event.CreateEvent) bool {
 					defer GinkgoRecover()
 					// check that it was called only for deployment
 					Expect(e.Object).To(BeAssignableToTypeOf(&appsv1.Deployment{}))
@@ -319,7 +319,7 @@ var _ = Describe("application", func() {
 			}
 
 			replicaSetPrct := predicate.Funcs{
-				CreateFunc: func(e event.CreateEvent) bool {
+				CreateFunc: func(ctx context.Context, e event.CreateEvent) bool {
 					defer GinkgoRecover()
 					// check that it was called only for replicaset
 					Expect(e.Object).To(BeAssignableToTypeOf(&appsv1.ReplicaSet{}))
@@ -329,7 +329,7 @@ var _ = Describe("application", func() {
 			}
 
 			allPrct := predicate.Funcs{
-				CreateFunc: func(e event.CreateEvent) bool {
+				CreateFunc: func(ctx context.Context, e event.CreateEvent) bool {
 					defer GinkgoRecover()
 					//check that it was called for all registered kinds
 					Expect(e.Object).Should(Or(

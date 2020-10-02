@@ -17,6 +17,8 @@ limitations under the License.
 package internal_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/tools/cache"
@@ -40,35 +42,35 @@ var _ = Describe("Internal", func() {
 	var set bool
 	BeforeEach(func() {
 		funcs = &handler.Funcs{
-			CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
+			CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect CreateEvent to be called.")
 			},
-			DeleteFunc: func(e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect DeleteEvent to be called.")
 			},
-			UpdateFunc: func(event.UpdateEvent, workqueue.RateLimitingInterface) {
+			UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect UpdateEvent to be called.")
 			},
-			GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {
+			GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect GenericEvent to be called.")
 			},
 		}
 
 		setfuncs = &handler.Funcs{
-			CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
+			CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
 				set = true
 			},
-			DeleteFunc: func(e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				set = true
 			},
-			UpdateFunc: func(event.UpdateEvent, workqueue.RateLimitingInterface) {
+			UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
 				set = true
 			},
-			GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {
+			GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
 				set = true
 			},
 		}
@@ -92,7 +94,7 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should create a CreateEvent", func(done Done) {
-			funcs.CreateFunc = func(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
+			funcs.CreateFunc = func(ctx context.Context, evt event.CreateEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
 				Expect(evt.Object).To(Equal(pod))
@@ -109,38 +111,38 @@ var _ = Describe("Internal", func() {
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
+				predicate.Funcs{CreateFunc: func(context.Context, event.CreateEvent) bool { return false }},
 			}
 			instance.OnAdd(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+				predicate.Funcs{CreateFunc: func(context.Context, event.CreateEvent) bool { return true }},
 			}
 			instance.OnAdd(pod)
 			Expect(set).To(BeTrue())
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
-				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
+				predicate.Funcs{CreateFunc: func(context.Context, event.CreateEvent) bool { return true }},
+				predicate.Funcs{CreateFunc: func(context.Context, event.CreateEvent) bool { return false }},
 			}
 			instance.OnAdd(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
-				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+				predicate.Funcs{CreateFunc: func(context.Context, event.CreateEvent) bool { return false }},
+				predicate.Funcs{CreateFunc: func(context.Context, event.CreateEvent) bool { return true }},
 			}
 			instance.OnAdd(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
-				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+				predicate.Funcs{CreateFunc: func(context.Context, event.CreateEvent) bool { return true }},
+				predicate.Funcs{CreateFunc: func(context.Context, event.CreateEvent) bool { return true }},
 			}
 			instance.OnAdd(pod)
 			Expect(set).To(BeTrue())
@@ -159,7 +161,7 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should create an UpdateEvent", func(done Done) {
-			funcs.UpdateFunc = func(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+			funcs.UpdateFunc = func(ctx context.Context, evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
 
@@ -178,38 +180,38 @@ var _ = Describe("Internal", func() {
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{UpdateFunc: func(updateEvent event.UpdateEvent) bool { return false }},
+				predicate.Funcs{UpdateFunc: func(ctx context.Context, updateEvent event.UpdateEvent) bool { return false }},
 			}
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeFalse())
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
+				predicate.Funcs{UpdateFunc: func(context.Context, event.UpdateEvent) bool { return true }},
 			}
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeTrue())
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
-				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return false }},
+				predicate.Funcs{UpdateFunc: func(context.Context, event.UpdateEvent) bool { return true }},
+				predicate.Funcs{UpdateFunc: func(context.Context, event.UpdateEvent) bool { return false }},
 			}
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeFalse())
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return false }},
-				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
+				predicate.Funcs{UpdateFunc: func(context.Context, event.UpdateEvent) bool { return false }},
+				predicate.Funcs{UpdateFunc: func(context.Context, event.UpdateEvent) bool { return true }},
 			}
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeFalse())
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
-				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+				predicate.Funcs{CreateFunc: func(context.Context, event.CreateEvent) bool { return true }},
+				predicate.Funcs{CreateFunc: func(context.Context, event.CreateEvent) bool { return true }},
 			}
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeTrue())
@@ -230,7 +232,7 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should create a DeleteEvent", func(done Done) {
-			funcs.DeleteFunc = func(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			funcs.DeleteFunc = func(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
 
@@ -248,38 +250,38 @@ var _ = Describe("Internal", func() {
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
+				predicate.Funcs{DeleteFunc: func(context.Context, event.DeleteEvent) bool { return false }},
 			}
 			instance.OnDelete(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
+				predicate.Funcs{DeleteFunc: func(context.Context, event.DeleteEvent) bool { return true }},
 			}
 			instance.OnDelete(pod)
 			Expect(set).To(BeTrue())
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
-				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
+				predicate.Funcs{DeleteFunc: func(context.Context, event.DeleteEvent) bool { return true }},
+				predicate.Funcs{DeleteFunc: func(context.Context, event.DeleteEvent) bool { return false }},
 			}
 			instance.OnDelete(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
-				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
+				predicate.Funcs{DeleteFunc: func(context.Context, event.DeleteEvent) bool { return false }},
+				predicate.Funcs{DeleteFunc: func(context.Context, event.DeleteEvent) bool { return true }},
 			}
 			instance.OnDelete(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
 			instance.Predicates = []predicate.Predicate{
-				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
-				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
+				predicate.Funcs{DeleteFunc: func(context.Context, event.DeleteEvent) bool { return true }},
+				predicate.Funcs{DeleteFunc: func(context.Context, event.DeleteEvent) bool { return true }},
 			}
 			instance.OnDelete(pod)
 			Expect(set).To(BeTrue())
@@ -302,7 +304,7 @@ var _ = Describe("Internal", func() {
 			tombstone := cache.DeletedFinalStateUnknown{
 				Obj: pod,
 			}
-			funcs.DeleteFunc = func(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			funcs.DeleteFunc = func(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
 				Expect(evt.Object).To(Equal(pod))

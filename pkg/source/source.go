@@ -226,14 +226,14 @@ func (cs *Channel) Start(
 		for evt := range dst {
 			shouldHandle := true
 			for _, p := range prct {
-				if !p.Generic(evt) {
+				if !p.Generic(ctx, evt) {
 					shouldHandle = false
 					break
 				}
 			}
 
 			if shouldHandle {
-				handler.Generic(evt, queue)
+				handler.Generic(ctx, evt, queue)
 			}
 		}
 	}()
@@ -298,7 +298,7 @@ func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, que
 		return fmt.Errorf("must specify Informer.Informer")
 	}
 
-	is.Informer.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
+	is.Informer.AddEventHandler(internal.EventHandler{Context: ctx, Queue: queue, EventHandler: handler, Predicates: prct})
 	return nil
 }
 

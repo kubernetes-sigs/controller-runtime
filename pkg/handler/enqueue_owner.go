@@ -17,6 +17,7 @@ limitations under the License.
 package handler
 
 import (
+	"context"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -58,14 +59,14 @@ type EnqueueRequestForOwner struct {
 }
 
 // Create implements EventHandler
-func (e *EnqueueRequestForOwner) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
+func (e *EnqueueRequestForOwner) Create(ctx context.Context, evt event.CreateEvent, q workqueue.RateLimitingInterface) {
 	for _, req := range e.getOwnerReconcileRequest(evt.Object) {
 		q.Add(req)
 	}
 }
 
 // Update implements EventHandler
-func (e *EnqueueRequestForOwner) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+func (e *EnqueueRequestForOwner) Update(ctx context.Context, evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 	for _, req := range e.getOwnerReconcileRequest(evt.ObjectOld) {
 		q.Add(req)
 	}
@@ -75,14 +76,14 @@ func (e *EnqueueRequestForOwner) Update(evt event.UpdateEvent, q workqueue.RateL
 }
 
 // Delete implements EventHandler
-func (e *EnqueueRequestForOwner) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+func (e *EnqueueRequestForOwner) Delete(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 	for _, req := range e.getOwnerReconcileRequest(evt.Object) {
 		q.Add(req)
 	}
 }
 
 // Generic implements EventHandler
-func (e *EnqueueRequestForOwner) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+func (e *EnqueueRequestForOwner) Generic(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
 	for _, req := range e.getOwnerReconcileRequest(evt.Object) {
 		q.Add(req)
 	}

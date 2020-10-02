@@ -17,6 +17,7 @@ limitations under the License.
 package internal
 
 import (
+	"context"
 	"fmt"
 
 	"k8s.io/client-go/tools/cache"
@@ -35,6 +36,8 @@ var _ cache.ResourceEventHandler = EventHandler{}
 
 // EventHandler adapts a handler.EventHandler interface to a cache.ResourceEventHandler interface
 type EventHandler struct {
+	Context context.Context
+
 	EventHandler handler.EventHandler
 	Queue        workqueue.RateLimitingInterface
 	Predicates   []predicate.Predicate
@@ -54,13 +57,13 @@ func (e EventHandler) OnAdd(obj interface{}) {
 	}
 
 	for _, p := range e.Predicates {
-		if !p.Create(c) {
+		if !p.Create(e.Context, c) {
 			return
 		}
 	}
 
 	// Invoke create handler
-	e.EventHandler.Create(c, e.Queue)
+	e.EventHandler.Create(e.Context, c, e.Queue)
 }
 
 // OnUpdate creates UpdateEvent and calls Update on EventHandler
@@ -85,13 +88,13 @@ func (e EventHandler) OnUpdate(oldObj, newObj interface{}) {
 	}
 
 	for _, p := range e.Predicates {
-		if !p.Update(u) {
+		if !p.Update(e.Context, u) {
 			return
 		}
 	}
 
 	// Invoke update handler
-	e.EventHandler.Update(u, e.Queue)
+	e.EventHandler.Update(e.Context, u, e.Queue)
 }
 
 // OnDelete creates DeleteEvent and calls Delete on EventHandler
@@ -128,11 +131,11 @@ func (e EventHandler) OnDelete(obj interface{}) {
 	}
 
 	for _, p := range e.Predicates {
-		if !p.Delete(d) {
+		if !p.Delete(e.Context, d) {
 			return
 		}
 	}
 
 	// Invoke delete handler
-	e.EventHandler.Delete(d, e.Queue)
+	e.EventHandler.Delete(e.Context, d, e.Queue)
 }

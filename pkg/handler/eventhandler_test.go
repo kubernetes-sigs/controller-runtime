@@ -19,6 +19,7 @@ package handler_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"golang.org/x/net/context"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -39,6 +40,7 @@ var _ = Describe("Eventhandler", func() {
 	var instance handler.EnqueueRequestForObject
 	var pod *corev1.Pod
 	var mapper meta.RESTMapper
+	var ctx = context.Background()
 	t := true
 	BeforeEach(func() {
 		q = controllertest.Queue{Interface: workqueue.New()}
@@ -57,7 +59,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
-			instance.Create(evt, q)
+			instance.Create(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
@@ -73,7 +75,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.DeleteEvent{
 				Object: pod,
 			}
-			instance.Delete(evt, q)
+			instance.Delete(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
@@ -95,7 +97,7 @@ var _ = Describe("Eventhandler", func() {
 					ObjectOld: pod,
 					ObjectNew: newPod,
 				}
-				instance.Update(evt, q)
+				instance.Update(ctx, evt, q)
 				Expect(q.Len()).To(Equal(2))
 
 				i, _ := q.Get()
@@ -117,7 +119,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.GenericEvent{
 				Object: pod,
 			}
-			instance.Generic(evt, q)
+			instance.Generic(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
 			i, _ := q.Get()
 			Expect(i).NotTo(BeNil())
@@ -133,7 +135,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.CreateEvent{
 					Object: nil,
 				}
-				instance.Create(evt, q)
+				instance.Create(ctx, evt, q)
 				Expect(q.Len()).To(Equal(0))
 				close(done)
 			})
@@ -147,7 +149,7 @@ var _ = Describe("Eventhandler", func() {
 					ObjectNew: newPod,
 					ObjectOld: nil,
 				}
-				instance.Update(evt, q)
+				instance.Update(ctx, evt, q)
 				Expect(q.Len()).To(Equal(1))
 				i, _ := q.Get()
 				Expect(i).NotTo(BeNil())
@@ -157,7 +159,7 @@ var _ = Describe("Eventhandler", func() {
 
 				evt.ObjectNew = nil
 				evt.ObjectOld = pod
-				instance.Update(evt, q)
+				instance.Update(ctx, evt, q)
 				Expect(q.Len()).To(Equal(1))
 				i, _ = q.Get()
 				Expect(i).NotTo(BeNil())
@@ -172,7 +174,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.DeleteEvent{
 					Object: nil,
 				}
-				instance.Delete(evt, q)
+				instance.Delete(ctx, evt, q)
 				Expect(q.Len()).To(Equal(0))
 				close(done)
 			})
@@ -181,7 +183,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.GenericEvent{
 					Object: nil,
 				}
-				instance.Generic(evt, q)
+				instance.Generic(ctx, evt, q)
 				Expect(q.Len()).To(Equal(0))
 				close(done)
 			})
@@ -191,7 +193,7 @@ var _ = Describe("Eventhandler", func() {
 	Describe("EnqueueRequestsFromMapFunc", func() {
 		It("should enqueue a Request with the function applied to the CreateEvent.", func() {
 			req := []reconcile.Request{}
-			instance := handler.EnqueueRequestsFromMapFunc(func(a handler.MapObject) []reconcile.Request {
+			instance := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a handler.MapObject) []reconcile.Request {
 				defer GinkgoRecover()
 				Expect(a.Object).To(Equal(pod))
 				req = []reconcile.Request{
@@ -208,7 +210,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
-			instance.Create(evt, q)
+			instance.Create(ctx, evt, q)
 			Expect(q.Len()).To(Equal(2))
 
 			i, _ := q.Get()
@@ -222,7 +224,7 @@ var _ = Describe("Eventhandler", func() {
 
 		It("should enqueue a Request with the function applied to the DeleteEvent.", func() {
 			req := []reconcile.Request{}
-			instance := handler.EnqueueRequestsFromMapFunc(func(a handler.MapObject) []reconcile.Request {
+			instance := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a handler.MapObject) []reconcile.Request {
 				defer GinkgoRecover()
 				Expect(a.Object).To(Equal(pod))
 				req = []reconcile.Request{
@@ -239,7 +241,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.DeleteEvent{
 				Object: pod,
 			}
-			instance.Delete(evt, q)
+			instance.Delete(ctx, evt, q)
 			Expect(q.Len()).To(Equal(2))
 
 			i, _ := q.Get()
@@ -259,7 +261,7 @@ var _ = Describe("Eventhandler", func() {
 
 				req := []reconcile.Request{}
 
-				instance := handler.EnqueueRequestsFromMapFunc(func(a handler.MapObject) []reconcile.Request {
+				instance := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a handler.MapObject) []reconcile.Request {
 					defer GinkgoRecover()
 					req = []reconcile.Request{
 						{
@@ -276,7 +278,7 @@ var _ = Describe("Eventhandler", func() {
 					ObjectOld: pod,
 					ObjectNew: newPod,
 				}
-				instance.Update(evt, q)
+				instance.Update(ctx, evt, q)
 				Expect(q.Len()).To(Equal(4))
 
 				i, _ := q.Get()
@@ -298,7 +300,7 @@ var _ = Describe("Eventhandler", func() {
 
 		It("should enqueue a Request with the function applied to the GenericEvent.", func() {
 			req := []reconcile.Request{}
-			instance := handler.EnqueueRequestsFromMapFunc(func(a handler.MapObject) []reconcile.Request {
+			instance := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a handler.MapObject) []reconcile.Request {
 				defer GinkgoRecover()
 				Expect(a.Object).To(Equal(pod))
 				req = []reconcile.Request{
@@ -315,7 +317,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.GenericEvent{
 				Object: pod,
 			}
-			instance.Generic(evt, q)
+			instance.Generic(ctx, evt, q)
 			Expect(q.Len()).To(Equal(2))
 
 			i, _ := q.Get()
@@ -346,7 +348,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
-			instance.Create(evt, q)
+			instance.Create(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
@@ -371,7 +373,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.DeleteEvent{
 				Object: pod,
 			}
-			instance.Delete(evt, q)
+			instance.Delete(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
@@ -408,7 +410,7 @@ var _ = Describe("Eventhandler", func() {
 				ObjectOld: pod,
 				ObjectNew: newPod,
 			}
-			instance.Update(evt, q)
+			instance.Update(ctx, evt, q)
 			Expect(q.Len()).To(Equal(2))
 
 			i, _ := q.Get()
@@ -437,7 +439,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.GenericEvent{
 				Object: pod,
 			}
-			instance.Generic(evt, q)
+			instance.Generic(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
@@ -467,7 +469,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
-			instance.Create(evt, q)
+			instance.Create(ctx, evt, q)
 			Expect(q.Len()).To(Equal(0))
 		})
 
@@ -488,7 +490,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
-			instance.Create(evt, q)
+			instance.Create(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
@@ -512,7 +514,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
-			instance.Create(evt, q)
+			instance.Create(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
@@ -530,7 +532,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
-			instance.Create(evt, q)
+			instance.Create(ctx, evt, q)
 			Expect(q.Len()).To(Equal(0))
 		})
 
@@ -575,7 +577,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.CreateEvent{
 					Object: pod,
 				}
-				instance.Create(evt, q)
+				instance.Create(ctx, evt, q)
 				Expect(q.Len()).To(Equal(1))
 				i, _ := q.Get()
 				Expect(i).To(Equal(reconcile.Request{
@@ -609,7 +611,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.CreateEvent{
 					Object: pod,
 				}
-				instance.Create(evt, q)
+				instance.Create(ctx, evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 
@@ -623,7 +625,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.CreateEvent{
 					Object: pod,
 				}
-				instance.Create(evt, q)
+				instance.Create(ctx, evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 		})
@@ -655,7 +657,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.CreateEvent{
 					Object: pod,
 				}
-				instance.Create(evt, q)
+				instance.Create(ctx, evt, q)
 				Expect(q.Len()).To(Equal(3))
 
 				i, _ := q.Get()
@@ -687,7 +689,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.CreateEvent{
 					Object: nil,
 				}
-				instance.Create(evt, q)
+				instance.Create(ctx, evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 		})
@@ -709,7 +711,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.CreateEvent{
 					Object: pod,
 				}
-				instance.Create(evt, q)
+				instance.Create(ctx, evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 		})
@@ -730,7 +732,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.CreateEvent{
 					Object: pod,
 				}
-				instance.Create(evt, q)
+				instance.Create(ctx, evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 		})
@@ -750,7 +752,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.CreateEvent{
 					Object: pod,
 				}
-				instance.Create(evt, q)
+				instance.Create(ctx, evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 		})
@@ -772,7 +774,7 @@ var _ = Describe("Eventhandler", func() {
 				evt := event.CreateEvent{
 					Object: pod,
 				}
-				instance.Create(evt, q)
+				instance.Create(ctx, evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
 		})
@@ -780,19 +782,19 @@ var _ = Describe("Eventhandler", func() {
 
 	Describe("Funcs", func() {
 		failingFuncs := handler.Funcs{
-			CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
+			CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect CreateEvent to be called.")
 			},
-			DeleteFunc: func(event.DeleteEvent, workqueue.RateLimitingInterface) {
+			DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect DeleteEvent to be called.")
 			},
-			UpdateFunc: func(event.UpdateEvent, workqueue.RateLimitingInterface) {
+			UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect UpdateEvent to be called.")
 			},
-			GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {
+			GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect GenericEvent to be called.")
 			},
@@ -803,12 +805,12 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
-			instance.CreateFunc = func(evt2 event.CreateEvent, q2 workqueue.RateLimitingInterface) {
+			instance.CreateFunc = func(ctx context.Context, evt2 event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q2).To(Equal(q))
 				Expect(evt2).To(Equal(evt))
 			}
-			instance.Create(evt, q)
+			instance.Create(ctx, evt, q)
 			close(done)
 		})
 
@@ -818,7 +820,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
-			instance.Create(evt, q)
+			instance.Create(ctx, evt, q)
 			close(done)
 		})
 
@@ -832,13 +834,13 @@ var _ = Describe("Eventhandler", func() {
 			}
 
 			instance := failingFuncs
-			instance.UpdateFunc = func(evt2 event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
+			instance.UpdateFunc = func(ctx context.Context, evt2 event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q2).To(Equal(q))
 				Expect(evt2).To(Equal(evt))
 			}
 
-			instance.Update(evt, q)
+			instance.Update(ctx, evt, q)
 			close(done)
 		})
 
@@ -850,7 +852,7 @@ var _ = Describe("Eventhandler", func() {
 				ObjectOld: pod,
 				ObjectNew: newPod,
 			}
-			instance.Update(evt, q)
+			instance.Update(ctx, evt, q)
 			close(done)
 		})
 
@@ -859,12 +861,12 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.DeleteEvent{
 				Object: pod,
 			}
-			instance.DeleteFunc = func(evt2 event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
+			instance.DeleteFunc = func(ctx context.Context, evt2 event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q2).To(Equal(q))
 				Expect(evt2).To(Equal(evt))
 			}
-			instance.Delete(evt, q)
+			instance.Delete(ctx, evt, q)
 			close(done)
 		})
 
@@ -874,7 +876,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.DeleteEvent{
 				Object: pod,
 			}
-			instance.Delete(evt, q)
+			instance.Delete(ctx, evt, q)
 			close(done)
 		})
 
@@ -883,12 +885,12 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.GenericEvent{
 				Object: pod,
 			}
-			instance.GenericFunc = func(evt2 event.GenericEvent, q2 workqueue.RateLimitingInterface) {
+			instance.GenericFunc = func(ctx context.Context, evt2 event.GenericEvent, q2 workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q2).To(Equal(q))
 				Expect(evt2).To(Equal(evt))
 			}
-			instance.Generic(evt, q)
+			instance.Generic(ctx, evt, q)
 			close(done)
 		})
 
@@ -898,7 +900,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.GenericEvent{
 				Object: pod,
 			}
-			instance.Generic(evt, q)
+			instance.Generic(ctx, evt, q)
 			close(done)
 		})
 	})

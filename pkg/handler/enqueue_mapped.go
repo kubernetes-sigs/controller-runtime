@@ -17,6 +17,8 @@ limitations under the License.
 package handler
 
 import (
+	"context"
+
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -26,7 +28,7 @@ import (
 
 // MapFunc is the signature required for enqueueing requests from a generic function.
 // This type is usually used with EnqueueRequestsFromMapFunc when registering an event handler.
-type MapFunc func(MapObject) []reconcile.Request
+type MapFunc func(context.Context, MapObject) []reconcile.Request
 
 // EnqueueRequestsFromMapFunc enqueues Requests by running a transformation function that outputs a collection
 // of reconcile.Requests on each Event.  The reconcile.Requests may be for an arbitrary set of objects
@@ -52,28 +54,28 @@ type enqueueRequestsFromMapFunc struct {
 }
 
 // Create implements EventHandler
-func (e *enqueueRequestsFromMapFunc) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
-	e.mapAndEnqueue(q, MapObject{Object: evt.Object})
+func (e *enqueueRequestsFromMapFunc) Create(ctx context.Context, evt event.CreateEvent, q workqueue.RateLimitingInterface) {
+	e.mapAndEnqueue(ctx, q, MapObject{Object: evt.Object})
 }
 
 // Update implements EventHandler
-func (e *enqueueRequestsFromMapFunc) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
-	e.mapAndEnqueue(q, MapObject{Object: evt.ObjectOld})
-	e.mapAndEnqueue(q, MapObject{Object: evt.ObjectNew})
+func (e *enqueueRequestsFromMapFunc) Update(ctx context.Context, evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+	e.mapAndEnqueue(ctx, q, MapObject{Object: evt.ObjectOld})
+	e.mapAndEnqueue(ctx, q, MapObject{Object: evt.ObjectNew})
 }
 
 // Delete implements EventHandler
-func (e *enqueueRequestsFromMapFunc) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
-	e.mapAndEnqueue(q, MapObject{Object: evt.Object})
+func (e *enqueueRequestsFromMapFunc) Delete(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+	e.mapAndEnqueue(ctx, q, MapObject{Object: evt.Object})
 }
 
 // Generic implements EventHandler
-func (e *enqueueRequestsFromMapFunc) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
-	e.mapAndEnqueue(q, MapObject{Object: evt.Object})
+func (e *enqueueRequestsFromMapFunc) Generic(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+	e.mapAndEnqueue(ctx, q, MapObject{Object: evt.Object})
 }
 
-func (e *enqueueRequestsFromMapFunc) mapAndEnqueue(q workqueue.RateLimitingInterface, object MapObject) {
-	for _, req := range e.toRequests(object) {
+func (e *enqueueRequestsFromMapFunc) mapAndEnqueue(ctx context.Context, q workqueue.RateLimitingInterface, object MapObject) {
+	for _, req := range e.toRequests(ctx, object) {
 		q.Add(req)
 	}
 }

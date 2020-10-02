@@ -17,6 +17,8 @@ limitations under the License.
 package predicate_test
 
 import (
+	"context"
+
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -26,7 +28,7 @@ var p predicate.Predicate
 // This example creates a new Predicate to drop Update Events where the Generation has not changed.
 func ExampleFuncs() {
 	p = predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
+		UpdateFunc: func(ctx context.Context, e event.UpdateEvent) bool {
 			return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
 		},
 	}

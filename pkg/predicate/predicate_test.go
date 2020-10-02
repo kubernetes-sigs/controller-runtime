@@ -17,6 +17,8 @@ limitations under the License.
 package predicate_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -29,6 +31,7 @@ import (
 
 var _ = Describe("Predicate", func() {
 	var pod *corev1.Pod
+	var ctx = context.Background()
 	BeforeEach(func() {
 		pod = &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "biz", Name: "baz"},
@@ -37,22 +40,22 @@ var _ = Describe("Predicate", func() {
 
 	Describe("Funcs", func() {
 		failingFuncs := predicate.Funcs{
-			CreateFunc: func(event.CreateEvent) bool {
+			CreateFunc: func(context.Context, event.CreateEvent) bool {
 				defer GinkgoRecover()
 				Fail("Did not expect CreateFunc to be called.")
 				return false
 			},
-			DeleteFunc: func(event.DeleteEvent) bool {
+			DeleteFunc: func(context.Context, event.DeleteEvent) bool {
 				defer GinkgoRecover()
 				Fail("Did not expect DeleteFunc to be called.")
 				return false
 			},
-			UpdateFunc: func(event.UpdateEvent) bool {
+			UpdateFunc: func(context.Context, event.UpdateEvent) bool {
 				defer GinkgoRecover()
 				Fail("Did not expect UpdateFunc to be called.")
 				return false
 			},
-			GenericFunc: func(event.GenericEvent) bool {
+			GenericFunc: func(context.Context, event.GenericEvent) bool {
 				defer GinkgoRecover()
 				Fail("Did not expect GenericFunc to be called.")
 				return false
@@ -61,7 +64,7 @@ var _ = Describe("Predicate", func() {
 
 		It("should call Create", func(done Done) {
 			instance := failingFuncs
-			instance.CreateFunc = func(evt event.CreateEvent) bool {
+			instance.CreateFunc = func(ctx context.Context, evt event.CreateEvent) bool {
 				defer GinkgoRecover()
 				Expect(evt.Object).To(Equal(pod))
 				return false
@@ -69,17 +72,17 @@ var _ = Describe("Predicate", func() {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
-			Expect(instance.Create(evt)).To(BeFalse())
+			Expect(instance.Create(ctx, evt)).To(BeFalse())
 
-			instance.CreateFunc = func(evt event.CreateEvent) bool {
+			instance.CreateFunc = func(ctx context.Context, evt event.CreateEvent) bool {
 				defer GinkgoRecover()
 				Expect(evt.Object).To(Equal(pod))
 				return true
 			}
-			Expect(instance.Create(evt)).To(BeTrue())
+			Expect(instance.Create(ctx, evt)).To(BeTrue())
 
 			instance.CreateFunc = nil
-			Expect(instance.Create(evt)).To(BeTrue())
+			Expect(instance.Create(ctx, evt)).To(BeTrue())
 			close(done)
 		})
 
@@ -89,7 +92,7 @@ var _ = Describe("Predicate", func() {
 			newPod.Namespace = "biz2"
 
 			instance := failingFuncs
-			instance.UpdateFunc = func(evt event.UpdateEvent) bool {
+			instance.UpdateFunc = func(ctx context.Context, evt event.UpdateEvent) bool {
 				defer GinkgoRecover()
 				Expect(evt.ObjectOld).To(Equal(pod))
 				Expect(evt.ObjectNew).To(Equal(newPod))
@@ -99,24 +102,24 @@ var _ = Describe("Predicate", func() {
 				ObjectOld: pod,
 				ObjectNew: newPod,
 			}
-			Expect(instance.Update(evt)).To(BeFalse())
+			Expect(instance.Update(ctx, evt)).To(BeFalse())
 
-			instance.UpdateFunc = func(evt event.UpdateEvent) bool {
+			instance.UpdateFunc = func(ctx context.Context, evt event.UpdateEvent) bool {
 				defer GinkgoRecover()
 				Expect(evt.ObjectOld).To(Equal(pod))
 				Expect(evt.ObjectNew).To(Equal(newPod))
 				return true
 			}
-			Expect(instance.Update(evt)).To(BeTrue())
+			Expect(instance.Update(ctx, evt)).To(BeTrue())
 
 			instance.UpdateFunc = nil
-			Expect(instance.Update(evt)).To(BeTrue())
+			Expect(instance.Update(ctx, evt)).To(BeTrue())
 			close(done)
 		})
 
 		It("should call Delete", func(done Done) {
 			instance := failingFuncs
-			instance.DeleteFunc = func(evt event.DeleteEvent) bool {
+			instance.DeleteFunc = func(ctx context.Context, evt event.DeleteEvent) bool {
 				defer GinkgoRecover()
 				Expect(evt.Object).To(Equal(pod))
 				return false
@@ -124,23 +127,23 @@ var _ = Describe("Predicate", func() {
 			evt := event.DeleteEvent{
 				Object: pod,
 			}
-			Expect(instance.Delete(evt)).To(BeFalse())
+			Expect(instance.Delete(ctx, evt)).To(BeFalse())
 
-			instance.DeleteFunc = func(evt event.DeleteEvent) bool {
+			instance.DeleteFunc = func(ctx context.Context, evt event.DeleteEvent) bool {
 				defer GinkgoRecover()
 				Expect(evt.Object).To(Equal(pod))
 				return true
 			}
-			Expect(instance.Delete(evt)).To(BeTrue())
+			Expect(instance.Delete(ctx, evt)).To(BeTrue())
 
 			instance.DeleteFunc = nil
-			Expect(instance.Delete(evt)).To(BeTrue())
+			Expect(instance.Delete(ctx, evt)).To(BeTrue())
 			close(done)
 		})
 
 		It("should call Generic", func(done Done) {
 			instance := failingFuncs
-			instance.GenericFunc = func(evt event.GenericEvent) bool {
+			instance.GenericFunc = func(ctx context.Context, evt event.GenericEvent) bool {
 				defer GinkgoRecover()
 				Expect(evt.Object).To(Equal(pod))
 				return false
@@ -148,17 +151,17 @@ var _ = Describe("Predicate", func() {
 			evt := event.GenericEvent{
 				Object: pod,
 			}
-			Expect(instance.Generic(evt)).To(BeFalse())
+			Expect(instance.Generic(ctx, evt)).To(BeFalse())
 
-			instance.GenericFunc = func(evt event.GenericEvent) bool {
+			instance.GenericFunc = func(ctx context.Context, evt event.GenericEvent) bool {
 				defer GinkgoRecover()
 				Expect(evt.Object).To(Equal(pod))
 				return true
 			}
-			Expect(instance.Generic(evt)).To(BeTrue())
+			Expect(instance.Generic(ctx, evt)).To(BeTrue())
 
 			instance.GenericFunc = nil
-			Expect(instance.Generic(evt)).To(BeTrue())
+			Expect(instance.Generic(ctx, evt)).To(BeTrue())
 			close(done)
 		})
 	})
@@ -178,10 +181,10 @@ var _ = Describe("Predicate", func() {
 				failEvnt := event.UpdateEvent{
 					ObjectNew: new,
 				}
-				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
-				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
-				Expect(instance.Generic(event.GenericEvent{})).Should(BeTrue())
-				Expect(instance.Update(failEvnt)).Should(BeFalse())
+				Expect(instance.Create(ctx, event.CreateEvent{})).Should(BeTrue())
+				Expect(instance.Delete(ctx, event.DeleteEvent{})).Should(BeTrue())
+				Expect(instance.Generic(ctx, event.GenericEvent{})).Should(BeTrue())
+				Expect(instance.Update(ctx, failEvnt)).Should(BeFalse())
 			})
 		})
 
@@ -197,11 +200,11 @@ var _ = Describe("Predicate", func() {
 				failEvnt := event.UpdateEvent{
 					ObjectOld: old,
 				}
-				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
-				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
-				Expect(instance.Generic(event.GenericEvent{})).Should(BeTrue())
-				Expect(instance.Update(failEvnt)).Should(BeFalse())
-				Expect(instance.Update(failEvnt)).Should(BeFalse())
+				Expect(instance.Create(ctx, event.CreateEvent{})).Should(BeTrue())
+				Expect(instance.Delete(ctx, event.DeleteEvent{})).Should(BeTrue())
+				Expect(instance.Generic(ctx, event.GenericEvent{})).Should(BeTrue())
+				Expect(instance.Update(ctx, failEvnt)).Should(BeFalse())
+				Expect(instance.Update(ctx, failEvnt)).Should(BeFalse())
 			})
 		})
 
@@ -225,11 +228,11 @@ var _ = Describe("Predicate", func() {
 					ObjectOld: old,
 					ObjectNew: new,
 				}
-				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
-				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
-				Expect(instance.Generic(event.GenericEvent{})).Should(BeTrue())
-				Expect(instance.Update(failEvnt)).Should(BeFalse())
-				Expect(instance.Update(failEvnt)).Should(BeFalse())
+				Expect(instance.Create(ctx, event.CreateEvent{})).Should(BeTrue())
+				Expect(instance.Delete(ctx, event.DeleteEvent{})).Should(BeTrue())
+				Expect(instance.Generic(ctx, event.GenericEvent{})).Should(BeTrue())
+				Expect(instance.Update(ctx, failEvnt)).Should(BeFalse())
+				Expect(instance.Update(ctx, failEvnt)).Should(BeFalse())
 			})
 		})
 
@@ -252,10 +255,10 @@ var _ = Describe("Predicate", func() {
 					ObjectOld: old,
 					ObjectNew: new,
 				}
-				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
-				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
-				Expect(instance.Generic(event.GenericEvent{})).Should(BeTrue())
-				Expect(instance.Update(passEvt)).Should(BeTrue())
+				Expect(instance.Create(ctx, event.CreateEvent{})).Should(BeTrue())
+				Expect(instance.Delete(ctx, event.DeleteEvent{})).Should(BeTrue())
+				Expect(instance.Generic(ctx, event.GenericEvent{})).Should(BeTrue())
+				Expect(instance.Update(ctx, passEvt)).Should(BeTrue())
 			})
 		})
 
@@ -279,12 +282,12 @@ var _ = Describe("Predicate", func() {
 				failEvt1 := event.UpdateEvent{ObjectOld: old}
 				failEvt2 := event.UpdateEvent{ObjectNew: new}
 				failEvt3 := event.UpdateEvent{ObjectOld: old, ObjectNew: new}
-				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
-				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
-				Expect(instance.Generic(event.GenericEvent{})).Should(BeTrue())
-				Expect(instance.Update(failEvt1)).Should(BeFalse())
-				Expect(instance.Update(failEvt2)).Should(BeFalse())
-				Expect(instance.Update(failEvt3)).Should(BeFalse())
+				Expect(instance.Create(ctx, event.CreateEvent{})).Should(BeTrue())
+				Expect(instance.Delete(ctx, event.DeleteEvent{})).Should(BeTrue())
+				Expect(instance.Generic(ctx, event.GenericEvent{})).Should(BeTrue())
+				Expect(instance.Update(ctx, failEvt1)).Should(BeFalse())
+				Expect(instance.Update(ctx, failEvt2)).Should(BeFalse())
+				Expect(instance.Update(ctx, failEvt3)).Should(BeFalse())
 			})
 		})
 
@@ -304,10 +307,10 @@ var _ = Describe("Predicate", func() {
 				failEvnt := event.UpdateEvent{
 					ObjectNew: new,
 				}
-				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
-				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
-				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
-				Expect(instance.Update(failEvnt)).To(BeFalse())
+				Expect(instance.Create(ctx, event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(ctx, event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(ctx, event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(ctx, failEvnt)).To(BeFalse())
 			})
 		})
 
@@ -323,10 +326,10 @@ var _ = Describe("Predicate", func() {
 				failEvnt := event.UpdateEvent{
 					ObjectOld: old,
 				}
-				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
-				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
-				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
-				Expect(instance.Update(failEvnt)).To(BeFalse())
+				Expect(instance.Create(ctx, event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(ctx, event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(ctx, event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(ctx, failEvnt)).To(BeFalse())
 			})
 		})
 
@@ -350,10 +353,10 @@ var _ = Describe("Predicate", func() {
 					ObjectOld: old,
 					ObjectNew: new,
 				}
-				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
-				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
-				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
-				Expect(instance.Update(failEvnt)).To(BeFalse())
+				Expect(instance.Create(ctx, event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(ctx, event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(ctx, event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(ctx, failEvnt)).To(BeFalse())
 			})
 		})
 
@@ -376,10 +379,10 @@ var _ = Describe("Predicate", func() {
 					ObjectOld: old,
 					ObjectNew: new,
 				}
-				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
-				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
-				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
-				Expect(instance.Update(passEvt)).To(BeTrue())
+				Expect(instance.Create(ctx, event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(ctx, event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(ctx, event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(ctx, passEvt)).To(BeTrue())
 			})
 		})
 
@@ -403,12 +406,12 @@ var _ = Describe("Predicate", func() {
 				failEvt1 := event.UpdateEvent{ObjectOld: old}
 				failEvt2 := event.UpdateEvent{ObjectNew: new}
 				failEvt3 := event.UpdateEvent{ObjectOld: old, ObjectNew: new}
-				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
-				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
-				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
-				Expect(instance.Update(failEvt1)).To(BeFalse())
-				Expect(instance.Update(failEvt2)).To(BeFalse())
-				Expect(instance.Update(failEvt3)).To(BeFalse())
+				Expect(instance.Create(ctx, event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(ctx, event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(ctx, event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(ctx, failEvt1)).To(BeFalse())
+				Expect(instance.Update(ctx, failEvt2)).To(BeFalse())
+				Expect(instance.Update(ctx, failEvt3)).To(BeFalse())
 			})
 		})
 
@@ -417,16 +420,16 @@ var _ = Describe("Predicate", func() {
 	Context("With a boolean predicate", func() {
 		funcs := func(pass bool) predicate.Funcs {
 			return predicate.Funcs{
-				CreateFunc: func(event.CreateEvent) bool {
+				CreateFunc: func(context.Context, event.CreateEvent) bool {
 					return pass
 				},
-				DeleteFunc: func(event.DeleteEvent) bool {
+				DeleteFunc: func(context.Context, event.DeleteEvent) bool {
 					return pass
 				},
-				UpdateFunc: func(event.UpdateEvent) bool {
+				UpdateFunc: func(context.Context, event.UpdateEvent) bool {
 					return pass
 				},
-				GenericFunc: func(event.GenericEvent) bool {
+				GenericFunc: func(context.Context, event.GenericEvent) bool {
 					return pass
 				},
 			}
@@ -436,40 +439,40 @@ var _ = Describe("Predicate", func() {
 		Describe("When checking an And predicate", func() {
 			It("should return false when one of its predicates returns false", func() {
 				a := predicate.And(passFuncs, failFuncs)
-				Expect(a.Create(event.CreateEvent{})).To(BeFalse())
-				Expect(a.Update(event.UpdateEvent{})).To(BeFalse())
-				Expect(a.Delete(event.DeleteEvent{})).To(BeFalse())
-				Expect(a.Generic(event.GenericEvent{})).To(BeFalse())
+				Expect(a.Create(ctx, event.CreateEvent{})).To(BeFalse())
+				Expect(a.Update(ctx, event.UpdateEvent{})).To(BeFalse())
+				Expect(a.Delete(ctx, event.DeleteEvent{})).To(BeFalse())
+				Expect(a.Generic(ctx, event.GenericEvent{})).To(BeFalse())
 			})
 			It("should return true when all of its predicates return true", func() {
 				a := predicate.And(passFuncs, passFuncs)
-				Expect(a.Create(event.CreateEvent{})).To(BeTrue())
-				Expect(a.Update(event.UpdateEvent{})).To(BeTrue())
-				Expect(a.Delete(event.DeleteEvent{})).To(BeTrue())
-				Expect(a.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(a.Create(ctx, event.CreateEvent{})).To(BeTrue())
+				Expect(a.Update(ctx, event.UpdateEvent{})).To(BeTrue())
+				Expect(a.Delete(ctx, event.DeleteEvent{})).To(BeTrue())
+				Expect(a.Generic(ctx, event.GenericEvent{})).To(BeTrue())
 			})
 		})
 		Describe("When checking an Or predicate", func() {
 			It("should return true when one of its predicates returns true", func() {
 				o := predicate.Or(passFuncs, failFuncs)
-				Expect(o.Create(event.CreateEvent{})).To(BeTrue())
-				Expect(o.Update(event.UpdateEvent{})).To(BeTrue())
-				Expect(o.Delete(event.DeleteEvent{})).To(BeTrue())
-				Expect(o.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(o.Create(ctx, event.CreateEvent{})).To(BeTrue())
+				Expect(o.Update(ctx, event.UpdateEvent{})).To(BeTrue())
+				Expect(o.Delete(ctx, event.DeleteEvent{})).To(BeTrue())
+				Expect(o.Generic(ctx, event.GenericEvent{})).To(BeTrue())
 			})
 			It("should return false when all of its predicates return false", func() {
 				o := predicate.Or(failFuncs, failFuncs)
-				Expect(o.Create(event.CreateEvent{})).To(BeFalse())
-				Expect(o.Update(event.UpdateEvent{})).To(BeFalse())
-				Expect(o.Delete(event.DeleteEvent{})).To(BeFalse())
-				Expect(o.Generic(event.GenericEvent{})).To(BeFalse())
+				Expect(o.Create(ctx, event.CreateEvent{})).To(BeFalse())
+				Expect(o.Update(ctx, event.UpdateEvent{})).To(BeFalse())
+				Expect(o.Delete(ctx, event.DeleteEvent{})).To(BeFalse())
+				Expect(o.Generic(ctx, event.GenericEvent{})).To(BeFalse())
 			})
 		})
 	})
 
 	Describe("NewPredicateFuncs with a namespace filter function", func() {
-		byNamespaceFilter := func(namespace string) func(object client.Object) bool {
-			return func(object client.Object) bool {
+		byNamespaceFilter := func(namespace string) func(ctx context.Context, object client.Object) bool {
+			return func(ctx context.Context, object client.Object) bool {
 				return object.GetNamespace() == namespace
 			}
 		}
@@ -488,10 +491,10 @@ var _ = Describe("Predicate", func() {
 						Namespace: "biz",
 					}}
 				passEvt1 := event.UpdateEvent{ObjectOld: old, ObjectNew: new}
-				Expect(byNamespaceFuncs.Create(event.CreateEvent{Object: new})).To(BeTrue())
-				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Object: old})).To(BeTrue())
-				Expect(byNamespaceFuncs.Generic(event.GenericEvent{Object: new})).To(BeTrue())
-				Expect(byNamespaceFuncs.Update(passEvt1)).To(BeTrue())
+				Expect(byNamespaceFuncs.Create(ctx, event.CreateEvent{Object: new})).To(BeTrue())
+				Expect(byNamespaceFuncs.Delete(ctx, event.DeleteEvent{Object: old})).To(BeTrue())
+				Expect(byNamespaceFuncs.Generic(ctx, event.GenericEvent{Object: new})).To(BeTrue())
+				Expect(byNamespaceFuncs.Update(ctx, passEvt1)).To(BeTrue())
 			})
 		})
 
@@ -509,10 +512,10 @@ var _ = Describe("Predicate", func() {
 						Namespace: "biz",
 					}}
 				failEvt1 := event.UpdateEvent{ObjectOld: old, ObjectNew: new}
-				Expect(byNamespaceFuncs.Create(event.CreateEvent{Object: new})).To(BeFalse())
-				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Object: new})).To(BeFalse())
-				Expect(byNamespaceFuncs.Generic(event.GenericEvent{Object: new})).To(BeFalse())
-				Expect(byNamespaceFuncs.Update(failEvt1)).To(BeFalse())
+				Expect(byNamespaceFuncs.Create(ctx, event.CreateEvent{Object: new})).To(BeFalse())
+				Expect(byNamespaceFuncs.Delete(ctx, event.DeleteEvent{Object: new})).To(BeFalse())
+				Expect(byNamespaceFuncs.Generic(ctx, event.GenericEvent{Object: new})).To(BeFalse())
+				Expect(byNamespaceFuncs.Update(ctx, failEvt1)).To(BeFalse())
 			})
 		})
 	})
@@ -526,10 +529,10 @@ var _ = Describe("Predicate", func() {
 		Context("When the Selector does not match the event labels", func() {
 			It("should return false", func() {
 				failMatch := &corev1.Pod{}
-				Expect(instance.Create(event.CreateEvent{Object: failMatch})).To(BeFalse())
-				Expect(instance.Delete(event.DeleteEvent{Object: failMatch})).To(BeFalse())
-				Expect(instance.Generic(event.GenericEvent{Object: failMatch})).To(BeFalse())
-				Expect(instance.Update(event.UpdateEvent{ObjectNew: failMatch})).To(BeFalse())
+				Expect(instance.Create(ctx, event.CreateEvent{Object: failMatch})).To(BeFalse())
+				Expect(instance.Delete(ctx, event.DeleteEvent{Object: failMatch})).To(BeFalse())
+				Expect(instance.Generic(ctx, event.GenericEvent{Object: failMatch})).To(BeFalse())
+				Expect(instance.Update(ctx, event.UpdateEvent{ObjectNew: failMatch})).To(BeFalse())
 			})
 		})
 
@@ -540,10 +543,10 @@ var _ = Describe("Predicate", func() {
 						Labels: map[string]string{"foo": "bar"},
 					},
 				}
-				Expect(instance.Create(event.CreateEvent{Object: successMatch})).To(BeTrue())
-				Expect(instance.Delete(event.DeleteEvent{Object: successMatch})).To(BeTrue())
-				Expect(instance.Generic(event.GenericEvent{Object: successMatch})).To(BeTrue())
-				Expect(instance.Update(event.UpdateEvent{ObjectNew: successMatch})).To(BeTrue())
+				Expect(instance.Create(ctx, event.CreateEvent{Object: successMatch})).To(BeTrue())
+				Expect(instance.Delete(ctx, event.DeleteEvent{Object: successMatch})).To(BeTrue())
+				Expect(instance.Generic(ctx, event.GenericEvent{Object: successMatch})).To(BeTrue())
+				Expect(instance.Update(ctx, event.UpdateEvent{ObjectNew: successMatch})).To(BeTrue())
 			})
 		})
 	})

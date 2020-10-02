@@ -126,6 +126,10 @@ var (
 	Log = log.Log
 
 	// LoggerFrom returns a logger with predefined values from a context.Context.
+	// The logger, when used with controllers, can be expected to contain basic information about the object
+	// that's being reconciled like:
+	// - `reconcilerGroup` and `reconcilerKind` coming from the For(...) object passed in when building a controller.
+	// - `name` and `namespace` injected from the reconciliation request.
 	//
 	// This is meant to be used with the context supplied in a struct that satisfies the Reconciler interface.
 	LoggerFrom = log.FromContext

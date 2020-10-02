@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"context"
 	"os"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -43,7 +42,7 @@ func main() {
 
 	// Setup a Manager
 	entryLog.Info("setting up manager")
-	mgr, err := manager.New(context.Background(), config.GetConfigOrDie(), manager.Options{})
+	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
 	if err != nil {
 		entryLog.Error(err, "unable to set up overall controller manager")
 		os.Exit(1)

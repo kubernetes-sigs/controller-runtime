@@ -61,15 +61,8 @@ func (l *testLogger) WithValues(_ ...interface{}) logr.Logger {
 }
 
 var _ = Describe("application", func() {
-	var stop chan struct{}
-
 	BeforeEach(func() {
-		stop = make(chan struct{})
 		newController = controller.New
-	})
-
-	AfterEach(func() {
-		close(stop)
 	})
 
 	noop := reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
@@ -79,7 +72,7 @@ var _ = Describe("application", func() {
 	Describe("New", func() {
 		It("should return success if given valid objects", func() {
 			By("creating a controller manager")
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -92,7 +85,7 @@ var _ = Describe("application", func() {
 
 		It("should return error if given two apiType objects in For function", func() {
 			By("creating a controller manager")
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -106,7 +99,7 @@ var _ = Describe("application", func() {
 
 		It("should return an error if For function is not called", func() {
 			By("creating a controller manager")
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -118,7 +111,7 @@ var _ = Describe("application", func() {
 
 		It("should return an error if there is no GVK for an object, and thus we can't default the controller name", func() {
 			By("creating a controller manager")
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("creating a controller with a bad For type")
@@ -141,7 +134,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -164,7 +157,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -186,7 +179,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -209,7 +202,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -230,7 +223,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -244,7 +237,7 @@ var _ = Describe("application", func() {
 
 		It("should allow multiple controllers for the same kind", func() {
 			By("creating a controller manager")
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -273,18 +266,21 @@ var _ = Describe("application", func() {
 
 	Describe("Start with ControllerManagedBy", func() {
 		It("should Reconcile Owns objects", func(done Done) {
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			bldr := ControllerManagedBy(m).
 				For(&appsv1.Deployment{}).
 				Owns(&appsv1.ReplicaSet{})
-			doReconcileTest("3", stop, bldr, m, false)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			doReconcileTest(ctx, "3", bldr, m, false)
 			close(done)
 		}, 10)
 
 		It("should Reconcile Watches objects", func(done Done) {
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			bldr := ControllerManagedBy(m).
@@ -292,14 +288,17 @@ var _ = Describe("application", func() {
 				Watches( // Equivalent of Owns
 					&source.Kind{Type: &appsv1.ReplicaSet{}},
 					&handler.EnqueueRequestForOwner{OwnerType: &appsv1.Deployment{}, IsController: true})
-			doReconcileTest("4", stop, bldr, m, true)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			doReconcileTest(ctx, "4", bldr, m, true)
 			close(done)
 		}, 10)
 	})
 
 	Describe("Set custom predicates", func() {
 		It("should execute registered predicates only for assigned kind", func(done Done) {
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			var (
@@ -347,7 +346,9 @@ var _ = Describe("application", func() {
 				Owns(&appsv1.ReplicaSet{}, WithPredicates(replicaSetPrct)).
 				WithEventFilter(allPrct)
 
-			doReconcileTest("5", stop, bldr, m, true)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			doReconcileTest(ctx, "5", bldr, m, true)
 
 			Expect(deployPrctExecuted).To(BeTrue(), "Deploy predicated should be called at least once")
 			Expect(replicaSetPrctExecuted).To(BeTrue(), "ReplicaSet predicated should be called at least once")
@@ -359,7 +360,7 @@ var _ = Describe("application", func() {
 
 })
 
-func doReconcileTest(nameSuffix string, stop chan struct{}, blder *Builder, mgr manager.Manager, complete bool) {
+func doReconcileTest(ctx context.Context, nameSuffix string, blder *Builder, mgr manager.Manager, complete bool) {
 	deployName := "deploy-name-" + nameSuffix
 	rsName := "rs-name-" + nameSuffix
 
@@ -389,7 +390,7 @@ func doReconcileTest(nameSuffix string, stop chan struct{}, blder *Builder, mgr 
 	By("Starting the application")
 	go func() {
 		defer GinkgoRecover()
-		Expect(mgr.Start(stop)).NotTo(HaveOccurred())
+		Expect(mgr.Start(ctx)).NotTo(HaveOccurred())
 		By("Stopping the application")
 	}()
 

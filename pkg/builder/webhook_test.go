@@ -51,7 +51,7 @@ var _ = Describe("webhook", func() {
 	Describe("New", func() {
 		It("should scaffold a defaulting webhook if the type implements the Defaulter interface", func() {
 			By("creating a controller manager")
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -123,7 +123,7 @@ var _ = Describe("webhook", func() {
 
 		It("should scaffold a validating webhook if the type implements the Validator interface", func() {
 			By("creating a controller manager")
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -196,7 +196,7 @@ var _ = Describe("webhook", func() {
 
 		It("should scaffold defaulting and validating webhooks if the type implements both Defaulter and Validator interfaces", func() {
 			By("creating a controller manager")
-			m, err := manager.New(context.Background(), cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -273,7 +273,7 @@ var _ = Describe("webhook", func() {
 			By("creating a controller manager")
 			ctx, cancel := context.WithCancel(context.Background())
 
-			m, err := manager.New(ctx, cfg, manager.Options{})
+			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")

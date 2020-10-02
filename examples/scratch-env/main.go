@@ -3,10 +3,11 @@ package main
 import (
 	goflag "flag"
 	"fmt"
-	flag "github.com/spf13/pflag"
 	"io"
 	"io/ioutil"
 	"os"
+
+	flag "github.com/spf13/pflag"
 
 	"k8s.io/client-go/tools/clientcmd"
 	kcapi "k8s.io/client-go/tools/clientcmd/api"
@@ -102,7 +103,8 @@ func runMain() int {
 		log.Info("Wrote kubeconfig")
 	}
 
-	<-ctrl.SetupSignalHandler()
+	ctx := ctrl.SetupSignalHandler()
+	<-ctx.Done()
 
 	log.Info("Shutting down apiserver & etcd")
 	err = env.Stop()

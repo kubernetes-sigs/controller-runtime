@@ -57,6 +57,7 @@ const (
 	defaultMetricsEndpoint   = "/metrics"
 )
 
+var _ Runnable = &controllerManager{}
 var log = logf.RuntimeLog.WithName("manager")
 
 type controllerManager struct {
@@ -187,6 +188,10 @@ type controllerManager struct {
 
 	internalCtx    context.Context
 	internalCancel context.CancelFunc
+
+	// internalProceduresStop channel is used internally to the manager when coordinating
+	// the proper shutdown of servers. This channel is also used for dependency injection.
+	internalProceduresStop chan struct{}
 }
 
 // Add sets dependencies on i, and adds it to the list of Runnables to start.
@@ -240,7 +245,7 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 	if _, err := inject.InjectorInto(cm.SetFields, i); err != nil {
 		return err
 	}
-	if _, err := inject.StopChannelInto(cm.internalCtx.Done(), i); err != nil {
+	if _, err := inject.StopChannelInto(cm.internalProceduresStop, i); err != nil {
 		return err
 	}
 	if _, err := inject.MapperInto(cm.mapper, i); err != nil {
@@ -408,7 +413,7 @@ func (cm *controllerManager) serveMetrics() {
 	}))
 
 	// Shutdown the server when stop is closed
-	<-cm.internalCtx.Done()
+	<-cm.internalProceduresStop
 	if err := server.Shutdown(cm.shutdownCtx); err != nil {
 		cm.errChan <- err
 	}
@@ -445,13 +450,15 @@ func (cm *controllerManager) serveHealthProbes() {
 	cm.mu.Unlock()
 
 	// Shutdown the server when stop is closed
-	<-cm.internalCtx.Done()
+	<-cm.internalProceduresStop
 	if err := server.Shutdown(cm.shutdownCtx); err != nil {
 		cm.errChan <- err
 	}
 }
 
-func (cm *controllerManager) Start(stop <-chan struct{}) (err error) {
+func (cm *controllerManager) Start(ctx context.Context) (err error) {
+	cm.internalCtx, cm.internalCancel = context.WithCancel(ctx)
+
 	// This chan indicates that stop is complete, in other words all runnables have returned or timeout on stop request
 	stopComplete := make(chan struct{})
 	defer close(stopComplete)
@@ -506,7 +513,7 @@ func (cm *controllerManager) Start(stop <-chan struct{}) (err error) {
 	}()
 
 	select {
-	case <-stop:
+	case <-ctx.Done():
 		// We are done
 		return nil
 	case err := <-cm.errChan:
@@ -527,7 +534,8 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 	}
 	defer shutdownCancel()
 
-	// Cancel the internal context and wait for the stop procedures to complete.
+	// Cancel the internal stop channel and wait for the procedures to stop and complete.
+	close(cm.internalProceduresStop)
 	cm.internalCancel()
 
 	// Start draining the errors before acquiring the lock to make sure we don't deadlock

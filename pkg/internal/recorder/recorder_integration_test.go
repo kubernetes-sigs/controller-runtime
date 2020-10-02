@@ -36,22 +36,10 @@ import (
 )
 
 var _ = Describe("recorder", func() {
-	var stop chan struct{}
-	ctx := context.Background()
-
-	BeforeEach(func() {
-		stop = make(chan struct{})
-		Expect(cfg).NotTo(BeNil())
-	})
-
-	AfterEach(func() {
-		close(stop)
-	})
-
 	Describe("recorder", func() {
 		It("should publish events", func(done Done) {
 			By("Creating the Manager")
-			cm, err := manager.New(ctx, cfg, manager.Options{})
+			cm, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
@@ -72,9 +60,11 @@ var _ = Describe("recorder", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting the Manager")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			go func() {
 				defer GinkgoRecover()
-				Expect(cm.Start(stop)).NotTo(HaveOccurred())
+				Expect(cm.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
 			deployment := &appsv1.Deployment{

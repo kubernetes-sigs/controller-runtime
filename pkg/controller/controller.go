@@ -68,6 +68,9 @@ type Controller interface {
 	// Start starts the controller.  Start blocks until the context is closed or a
 	// controller has an error starting.
 	Start(ctx context.Context) error
+
+	// GetLogger returns this controller logger prefilled with basic information.
+	GetLogger() logr.Logger
 }
 
 // New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have

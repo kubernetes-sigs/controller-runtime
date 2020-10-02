@@ -287,6 +287,11 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "success").Inc()
 }
 
+// GetLogger returns this controller's logger.
+func (c *Controller) GetLogger() logr.Logger {
+	return c.Log
+}
+
 // InjectFunc implement SetFields.Injector
 func (c *Controller) InjectFunc(f inject.Func) error {
 	c.SetFields = f

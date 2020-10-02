@@ -23,8 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration"
 
@@ -106,7 +106,7 @@ type Environment struct {
 	// CRDs is a list of CRDs to install.
 	// If both this field and CRDs field in CRDInstallOptions are specified, the
 	// values are merged.
-	CRDs []runtime.Object
+	CRDs []client.Object
 
 	// CRDDirectoryPaths is a list of paths containing CRD yaml or json configs.
 	// If both this field and Paths field in CRDInstallOptions are specified, the

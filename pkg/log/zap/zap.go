@@ -71,12 +71,26 @@ func Encoder(encoder zapcore.Encoder) func(o *Options) {
 	}
 }
 
+// JSONEncoder configures the logger to use a JSON Encoder
+func JSONEncoder(opts ...EncoderConfigOption) func(o *Options) {
+	return func(o *Options) {
+		o.Encoder = newJSONEncoder(opts...)
+	}
+}
+
 func newJSONEncoder(opts ...EncoderConfigOption) zapcore.Encoder {
 	encoderConfig := zap.NewProductionEncoderConfig()
 	for _, opt := range opts {
 		opt(&encoderConfig)
 	}
 	return zapcore.NewJSONEncoder(encoderConfig)
+}
+
+// ConsoleEncoder configures the logger to use a Console encoder
+func ConsoleEncoder(opts ...EncoderConfigOption) func(o *Options) {
+	return func(o *Options) {
+		o.Encoder = newConsoleEncoder(opts...)
+	}
 }
 
 func newConsoleEncoder(opts ...EncoderConfigOption) zapcore.Encoder {

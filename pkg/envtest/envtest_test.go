@@ -32,7 +32,7 @@ import (
 )
 
 var _ = Describe("Test", func() {
-	var crds []runtime.Object
+	var crds []client.Object
 	var err error
 	var s *runtime.Scheme
 	var c client.Client
@@ -44,7 +44,7 @@ var _ = Describe("Test", func() {
 
 	// Initialize the client
 	BeforeEach(func(done Done) {
-		crds = []runtime.Object{}
+		crds = []client.Object{}
 		s = runtime.NewScheme()
 		err = v1beta1.AddToScheme(s)
 		Expect(err).NotTo(HaveOccurred())
@@ -114,7 +114,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
-			err = WaitForCRDs(env.Config, []runtime.Object{
+			err = WaitForCRDs(env.Config, []client.Object{
 				&apiextensionsv1.CustomResourceDefinition{
 					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 						Group: "bar.example.com",
@@ -196,7 +196,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Config"))
 
-			err = WaitForCRDs(env.Config, []runtime.Object{
+			err = WaitForCRDs(env.Config, []client.Object{
 				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "foo.example.com",
@@ -240,7 +240,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Foo"))
 
-			err = WaitForCRDs(env.Config, []runtime.Object{
+			err = WaitForCRDs(env.Config, []client.Object{
 				&apiextensionsv1.CustomResourceDefinition{
 					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 						Group: "bar.example.com",
@@ -296,7 +296,7 @@ var _ = Describe("Test", func() {
 		It("should return an error if the resource group version isn't found", func(done Done) {
 			// Wait for a CRD where the Group and Version don't exist
 			err := WaitForCRDs(env.Config,
-				[]runtime.Object{
+				[]client.Object{
 					&v1beta1.CustomResourceDefinition{
 						Spec: v1beta1.CustomResourceDefinitionSpec{
 							Version: "v1",
@@ -319,7 +319,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Wait for a CRD that doesn't exist, but the Group and Version do
-			err = WaitForCRDs(env.Config, []runtime.Object{
+			err = WaitForCRDs(env.Config, []client.Object{
 				&v1beta1.CustomResourceDefinition{
 					Spec: v1beta1.CustomResourceDefinitionSpec{
 						Group:   "qux.example.com",
@@ -377,7 +377,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
-			err = WaitForCRDs(env.Config, []runtime.Object{
+			err = WaitForCRDs(env.Config, []client.Object{
 				&apiextensionsv1.CustomResourceDefinition{
 					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 						Group: "bar.example.com",
@@ -479,7 +479,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
-			err = WaitForCRDs(env.Config, []runtime.Object{
+			err = WaitForCRDs(env.Config, []client.Object{
 				&apiextensionsv1.CustomResourceDefinition{
 					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 						Group: "bar.example.com",
@@ -570,7 +570,7 @@ var _ = Describe("Test", func() {
 		// Store resource version for comparison later on
 		firstRV := crd.ResourceVersion
 
-		err = WaitForCRDs(env.Config, []runtime.Object{
+		err = WaitForCRDs(env.Config, []client.Object{
 			&v1beta1.CustomResourceDefinition{
 				Spec: v1beta1.CustomResourceDefinitionSpec{
 					Group: "crew.example.com",
@@ -610,7 +610,7 @@ var _ = Describe("Test", func() {
 		Expect(len(crd.Spec.Versions)).To(BeEquivalentTo(3))
 		Expect(crd.ResourceVersion).NotTo(BeEquivalentTo(firstRV))
 
-		err = WaitForCRDs(env.Config, []runtime.Object{
+		err = WaitForCRDs(env.Config, []client.Object{
 			&v1beta1.CustomResourceDefinition{
 				Spec: v1beta1.CustomResourceDefinitionSpec{
 					Group: "crew.example.com",
@@ -678,7 +678,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
-			err = WaitForCRDs(env.Config, []runtime.Object{
+			err = WaitForCRDs(env.Config, []client.Object{
 				&apiextensionsv1.CustomResourceDefinition{
 					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 						Group: "bar.example.com",

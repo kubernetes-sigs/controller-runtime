@@ -24,7 +24,7 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -61,7 +61,7 @@ func initializeWebhookInEnvironment() {
 	webhookPathV1 := "/failing"
 
 	env.WebhookInstallOptions = WebhookInstallOptions{
-		ValidatingWebhooks: []runtime.Object{
+		ValidatingWebhooks: []client.Object{
 			&admissionv1beta1.ValidatingWebhookConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "deployment-validation-webhook-config",

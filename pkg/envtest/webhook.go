@@ -44,10 +44,10 @@ type WebhookInstallOptions struct {
 	Paths []string
 
 	// MutatingWebhooks is a list of MutatingWebhookConfigurations to install
-	MutatingWebhooks []runtime.Object
+	MutatingWebhooks []client.Object
 
 	// ValidatingWebhooks is a list of ValidatingWebhookConfigurations to install
-	ValidatingWebhooks []runtime.Object
+	ValidatingWebhooks []client.Object
 
 	// IgnoreErrorIfPathMissing will ignore an error if a DirectoryPath does not exist when set to true
 	IgnoreErrorIfPathMissing bool
@@ -195,8 +195,8 @@ func (o *WebhookInstallOptions) Cleanup() error {
 
 // WaitForWebhooks waits for the Webhooks to be available through API server
 func WaitForWebhooks(config *rest.Config,
-	mutatingWebhooks []runtime.Object,
-	validatingWebhooks []runtime.Object,
+	mutatingWebhooks []client.Object,
+	validatingWebhooks []client.Object,
 	options WebhookInstallOptions) error {
 
 	waitingFor := map[schema.GroupVersionKind]*sets.String{}
@@ -293,7 +293,7 @@ func (o *WebhookInstallOptions) setupCA() ([]byte, error) {
 	return certData, nil
 }
 
-func createWebhooks(config *rest.Config, mutHooks []runtime.Object, valHooks []runtime.Object) error {
+func createWebhooks(config *rest.Config, mutHooks []client.Object, valHooks []client.Object) error {
 	cs, err := client.New(config, client.Options{})
 	if err != nil {
 		return err
@@ -360,7 +360,7 @@ func parseWebhook(options *WebhookInstallOptions) error {
 
 // readWebhooks reads the Webhooks from files and Unmarshals them into structs
 // returns slice of mutating and validating webhook configurations
-func readWebhooks(path string) ([]runtime.Object, []runtime.Object, error) {
+func readWebhooks(path string) ([]client.Object, []client.Object, error) {
 	// Get the webhook files
 	var files []os.FileInfo
 	var err error
@@ -380,8 +380,8 @@ func readWebhooks(path string) ([]runtime.Object, []runtime.Object, error) {
 	// file extensions that may contain Webhooks
 	resourceExtensions := sets.NewString(".json", ".yaml", ".yml")
 
-	var mutHooks []runtime.Object
-	var valHooks []runtime.Object
+	var mutHooks []client.Object
+	var valHooks []client.Object
 	for _, file := range files {
 		// Only parse allowlisted file types
 		if !resourceExtensions.Has(filepath.Ext(file.Name())) {
@@ -433,7 +433,7 @@ func readWebhooks(path string) ([]runtime.Object, []runtime.Object, error) {
 	return mutHooks, valHooks, nil
 }
 
-func runtimeListToUnstructured(l []runtime.Object) []*unstructured.Unstructured {
+func runtimeListToUnstructured(l []client.Object) []*unstructured.Unstructured {
 	res := []*unstructured.Unstructured{}
 	for _, obj := range l {
 		m, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj.DeepCopyObject())

@@ -2,9 +2,14 @@ package tracing
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 
+	"github.com/go-logr/logr"
 	ot "github.com/opentracing/opentracing-go"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 // TraceAnnotationKey is where we store span contexts in Kubernetes annotations
@@ -19,14 +24,27 @@ func GenerateEmbeddableSpanContext(span ot.Span) (string, error) {
 	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 
-// SpanFromAnnotations takes a map as found in Kubernetes objects and
-// returns a Span from the context found there, or nil if not found.
-func SpanFromAnnotations(name string, annotations map[string]string) (ot.Span, error) {
-	value, found := annotations[TraceAnnotationKey]
-	if !found {
-		return nil, nil
+// FromObject takes a Kubernetes objects and returns a Span from the
+// context found in its annotations, or nil if not found;
+// also a logger connected to the span and a new Context set up with both.
+func FromObject(ctx context.Context, operationName string, obj runtime.Object) (context.Context, ot.Span, logr.Logger) {
+	log := ctrl.LoggerFrom(ctx)
+	m, err := meta.Accessor(obj)
+	if err != nil {
+		return nil, nil, log
 	}
-	return spanFromEmbeddableSpanContext(name, value)
+	value, found := m.GetAnnotations()[TraceAnnotationKey]
+	if !found {
+		return nil, nil, log
+	}
+	sp, err := spanFromEmbeddableSpanContext(operationName, value)
+	if err != nil || sp == nil {
+		return nil, nil, log
+	}
+	sp.SetTag("objectKey", m.GetNamespace()+"/"+m.GetName())
+	log = tracingLogger{Logger: log, Span: sp}
+	ctx = ctrl.LoggerInto(ot.ContextWithSpan(ctx, sp), log)
+	return ctx, sp, log
 }
 
 func spanFromEmbeddableSpanContext(name, value string) (ot.Span, error) {

@@ -16,18 +16,19 @@ cache, but there is no way to remove either of these.
 
 Additionally there are restrictions that prevent a controller from running
 multiple times such as the clearing the watches slice for a controller after it
-has started.
+has started. The effect of this is that users have no clean way of restarting controllers
+after they have stopped them.
 
-The effect of this is that users have no clean way of restarting controllers
-after they have stopped them. This would be useful for a number of use-cases
-around when controllers have little control over the installation or
-uninstallation on the of the resources that these controllers are responsible
-for watching.
+Greater detail is given in the "Future Work / Use Cases" section, but a summary
+of the motivating use-cases for the proposal is anytime a controller's watched resource
+can be installed/uninstalled unexpectedly or whenever the administrator of a
+controller is different from the administrator of the cluster (and thus has no
+control over which resources are installed).
 
 ## Goals
 
 An implementation of the minimally viable hooks needed in controller-runtime to
-enable users to start, stop, and restart controllers and their caches.
+enable controller adminstrators to start, stop, and restart controllers and their caches.
 
 ## Non-Goals
 
@@ -68,7 +69,7 @@ summarization of these discussions are presented below.
   controller-runtime such that an informer is aware of any and all outstanding
   references when its removal is called.
 
-* Safety of stopping individual informers. There is concern that stopping
+* The safety of stopping individual informers is unclear. There is concern that stopping
   individual informers will leak go routines or memory. We should be able to use
   pprof tooling and exisiting leak tooling in controller-runtime to identify and
   mitigate any leaks
@@ -81,14 +82,22 @@ summarization of these discussions are presented below.
   for each informer) and breaks the clean design of the cache.
 
 * Adding support to de-register EventHandlers from informers in apimachinery.
-  This along with ref counting would be cleanest way to free us of the concern
+  This along with ref counting would be the cleanest way to free us of the concern
   of controllers silently failing when their watch is removed.
   The downside is that we are ultimately at the mercy of whether apimachinery
   wants to support these changes, and even if they were on board, it could take
   a long time to land these changes upstream.
 
-* TODO: Bubbling up errors from apimachinery.
-
+* Surfacing the watch error handler from the reflector in client-go through the
+  informer. Controller-runtime could then look for specific errors and decide how to
+  handle it from there, such as terminating the informer if a specific error was
+  thrown indicating that the informer will no longer be viable (for example when
+  the resource is uninstalled). The advantage is that we'd be pushing updates
+  from the informer to the manager when errors arise (such as when the resource
+  disappears) and this would lead to more responsive informer shutdown that doesn't
+  require a separate watch mechanism to determine whether to remove informers. Like
+  de-registering EventHandlers, the downside is that we would need api-machinery to
+  support these changes and might take a long time to coordinate and implement.
 
 ### Minimal hooks needed to use informer removal externally
 
@@ -103,13 +112,18 @@ The proposal to do this is:
 or not and use this field to not empty the controller’s `startWatches` when the
 controller is stopped.
 
+A proof of concept for PR is here at
+[#1180](https://github.com/kubernetes-sigs/controller-runtime/pull/1180)
+
 #### Risks and Mitigations
 
 * We lack a consistent story around multi-cluster support and introducing
   changes such as this without fully thinking through the multi-cluster story
-  might bind us for future designs. We think that restarting
-  controllers is a valid use-case even for single cluster regardless of the
-  multi-cluster use case.
+  might bind us for future designs. We think gracefully handling degraded
+  functionality in informers we start as end users modify the cluster is a valid
+  use case that exists whenever the cluster administrator is different from the
+  controller administrator and should be handled irregardless of its application
+  in multi-cluster envrionments.
 
 * [#1139](https://github.com/kubernetes-sigs/controller-runtime/pull/1139) discusses why
 the ability to start a controller more than once was taken away. It's a little

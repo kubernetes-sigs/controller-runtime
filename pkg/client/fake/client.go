@@ -41,6 +41,7 @@ import (
 
 type versionedTracker struct {
 	testing.ObjectTracker
+	scheme *runtime.Scheme
 }
 
 type fakeClient struct {
@@ -74,7 +75,7 @@ func NewFakeClientWithScheme(clientScheme *runtime.Scheme, initObjs ...client.Ob
 		}
 	}
 	return &fakeClient{
-		tracker: versionedTracker{tracker},
+		tracker: versionedTracker{ObjectTracker: tracker, scheme: clientScheme},
 		scheme:  clientScheme,
 	}
 }
@@ -82,7 +83,7 @@ func NewFakeClientWithScheme(clientScheme *runtime.Scheme, initObjs ...client.Ob
 func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Object, ns string) error {
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get accessor for object: %v", err)
 	}
 	if accessor.GetName() == "" {
 		return apierrors.NewInvalid(
@@ -114,11 +115,19 @@ func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Ob
 			field.ErrorList{field.Required(field.NewPath("metadata.name"), "name is required")})
 	}
 
+	gvk := obj.GetObjectKind().GroupVersionKind()
+	if gvk.Empty() {
+		gvk, err = apiutil.GVKForObject(obj, t.scheme)
+		if err != nil {
+			return err
+		}
+	}
+
 	oldObject, err := t.ObjectTracker.Get(gvr, ns, accessor.GetName())
 	if err != nil {
 		// If the resource is not found and the resource allows create on update, issue a
 		// create instead.
-		if apierrors.IsNotFound(err) && allowsCreateOnUpdate(obj) {
+		if apierrors.IsNotFound(err) && allowsCreateOnUpdate(gvk) {
 			return t.Create(gvr, obj, ns)
 		}
 		return err
@@ -131,7 +140,7 @@ func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Ob
 
 	// If the new object does not have the resource version set and it allows unconditional update,
 	// default it to the resource version of the existing resource
-	if accessor.GetResourceVersion() == "" && allowsUnconditionalUpdate(obj) {
+	if accessor.GetResourceVersion() == "" && allowsUnconditionalUpdate(gvk) {
 		accessor.SetResourceVersion(oldAccessor.GetResourceVersion())
 	}
 	if accessor.GetResourceVersion() != oldAccessor.GetResourceVersion() {
@@ -429,8 +438,7 @@ func (sw *fakeStatusWriter) Patch(ctx context.Context, obj client.Object, patch 
 	return sw.client.Patch(ctx, obj, patch, opts...)
 }
 
-func allowsUnconditionalUpdate(obj runtime.Object) bool {
-	gvk := obj.GetObjectKind().GroupVersionKind()
+func allowsUnconditionalUpdate(gvk schema.GroupVersionKind) bool {
 	switch gvk.Group {
 	case "apps":
 		switch gvk.Kind {
@@ -500,8 +508,7 @@ func allowsUnconditionalUpdate(obj runtime.Object) bool {
 	return false
 }
 
-func allowsCreateOnUpdate(obj runtime.Object) bool {
-	gvk := obj.GetObjectKind().GroupVersionKind()
+func allowsCreateOnUpdate(gvk schema.GroupVersionKind) bool {
 	switch gvk.Group {
 	case "coordination":
 		switch gvk.Kind {

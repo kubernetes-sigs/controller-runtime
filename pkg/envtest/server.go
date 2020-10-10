@@ -62,14 +62,22 @@ const (
 	defaultKubebuilderControlPlaneStopTimeout  = 20 * time.Second
 )
 
-// Default binary path for test framework
-func defaultAssetPath(binary string) string {
-	assetPath := os.Getenv(envKubebuilderPath)
-	if assetPath == "" {
-		assetPath = defaultKubebuilderPath
+// getBinAssetPath returns a path for binary from the following list of locations,
+// ordered by precedence:
+// 0. KUBEBUILDER_ASSETS
+// 1. Environment.BinaryAssetsDirectory
+// 2. The default path, "/usr/local/kubebuilder/bin"
+func (te *Environment) getBinAssetPath(binary string) string {
+	valueFromEnvVar := os.Getenv(envKubebuilderPath)
+	if valueFromEnvVar != "" {
+		return filepath.Join(valueFromEnvVar, binary)
 	}
-	return filepath.Join(assetPath, binary)
 
+	if te.BinaryAssetsDirectory != "" {
+		return filepath.Join(te.BinaryAssetsDirectory, binary)
+	}
+
+	return filepath.Join(defaultKubebuilderPath, binary)
 }
 
 // ControlPlane is the re-exported ControlPlane type from the internal integration package
@@ -112,6 +120,10 @@ type Environment struct {
 	// If both this field and Paths field in CRDInstallOptions are specified, the
 	// values are merged.
 	CRDDirectoryPaths []string
+
+	// BinaryAssetsDirectory is the path where the binaries required for the envtest are
+	// located in the local environment. This field can be overridden by setting KUBEBUILDER_ASSETS.
+	BinaryAssetsDirectory string
 
 	// UseExisting indicates that this environments should use an
 	// existing kubeconfig, instead of trying to stand up a new control plane.
@@ -217,14 +229,14 @@ func (te *Environment) Start() (*rest.Config, error) {
 		}
 
 		if os.Getenv(envKubeAPIServerBin) == "" {
-			te.ControlPlane.APIServer.Path = defaultAssetPath("kube-apiserver")
+			te.ControlPlane.APIServer.Path = te.getBinAssetPath("kube-apiserver")
 		}
 		if os.Getenv(envEtcdBin) == "" {
-			te.ControlPlane.Etcd.Path = defaultAssetPath("etcd")
+			te.ControlPlane.Etcd.Path = te.getBinAssetPath("etcd")
 		}
 		if os.Getenv(envKubectlBin) == "" {
 			// we can't just set the path manually (it's behind a function), so set the environment variable instead
-			if err := os.Setenv(envKubectlBin, defaultAssetPath("kubectl")); err != nil {
+			if err := os.Setenv(envKubectlBin, te.getBinAssetPath("kubectl")); err != nil {
 				return nil, err
 			}
 		}

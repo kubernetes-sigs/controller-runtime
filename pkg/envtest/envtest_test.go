@@ -81,6 +81,44 @@ var _ = Describe("Test", func() {
 	}, teardownTimeoutSeconds)
 
 	Describe("InstallCRDs", func() {
+		It("should install the unserved CRDs into the cluster", func() {
+			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
+				Paths: []string{filepath.Join(".", "testdata", "crds", "examplecrd_unserved.yaml")},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Expect to find the CRDs
+
+			crdv1 := &apiextensionsv1.CustomResourceDefinition{}
+			err = c.Get(context.TODO(), types.NamespacedName{Name: "frigates.ship.example.com"}, crdv1)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crdv1.Spec.Names.Kind).To(Equal("Frigate"))
+
+			err = WaitForCRDs(env.Config, []client.Object{
+				&v1beta1.CustomResourceDefinition{
+					Spec: v1beta1.CustomResourceDefinitionSpec{
+						Group: "ship.example.com",
+						Names: v1beta1.CustomResourceDefinitionNames{
+							Plural: "frigates",
+						},
+						Versions: []v1beta1.CustomResourceDefinitionVersion{
+							{
+								Name:    "v1",
+								Storage: true,
+								Served:  false,
+							},
+							{
+								Name:    "v1beta1",
+								Storage: false,
+								Served:  false,
+							},
+						}},
+				},
+			},
+				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
+			)
+			Expect(err).NotTo(HaveOccurred())
+		})
 		It("should install the CRDs into the cluster using directory", func(done Done) {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{validDirectory},

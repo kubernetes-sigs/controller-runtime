@@ -127,14 +127,17 @@ func WaitForCRDs(config *rest.Config, crds []client.Object, options CRDInstallOp
 		if err != nil {
 			return err
 		}
-		if crdVersion != "" {
-			gvs = append(gvs, schema.GroupVersion{Group: crdGroup, Version: crdVersion})
-		}
-
-		versions, _, err := unstructured.NestedSlice(crd.Object, "spec", "versions")
+		versions, found, err := unstructured.NestedSlice(crd.Object, "spec", "versions")
 		if err != nil {
 			return err
 		}
+
+		// gvs should be added here only if single version is found. If multiple version is found we will add those version
+		// based on the version is served or not.
+		if crdVersion != "" && !found {
+			gvs = append(gvs, schema.GroupVersion{Group: crdGroup, Version: crdVersion})
+		}
+
 		for _, version := range versions {
 			versionMap, ok := version.(map[string]interface{})
 			if !ok {

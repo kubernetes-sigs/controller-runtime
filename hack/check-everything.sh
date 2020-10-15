@@ -20,16 +20,12 @@ set -o pipefail
 
 hack_dir=$(dirname ${BASH_SOURCE})
 source ${hack_dir}/common.sh
-source ${hack_dir}/setup-envtest.sh
 
-tmp_root=/tmp
-kb_root_dir=$tmp_root/kubebuilder
+kb_root_dir=/tmp/kubebuilder/bin
 
-ENVTEST_K8S_VERSION=${ENVTEST_K8S_VERSION:-"1.16.4"}
-
-fetch_envtest_tools "$kb_root_dir"
-fetch_envtest_tools "${hack_dir}/../pkg/internal/testing/integration/assets"
-setup_envtest_env "$kb_root_dir"
+${hack_dir}/setup-envtest.sh "$kb_root_dir" >/dev/null
+${hack_dir}/setup-envtest.sh "${hack_dir}/../pkg/internal/testing/integration/assets/bin" >/dev/null
+export KUBEBUILDER_ASSETS="${kb_root_dir}"
 
 ${hack_dir}/verify.sh
 ${hack_dir}/test-all.sh

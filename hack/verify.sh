@@ -21,6 +21,9 @@ source $(dirname ${BASH_SOURCE})/common.sh
 REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 cd "${REPO_ROOT}"
 
+header_text "running generate"
+make generate
+
 header_text "running golangci-lint"
 make lint
 

@@ -1,4 +1,4 @@
-Informer Removal / Controller Lifecycle Management
+Controller Lifecycle Management
 ==========================
 
 ## Summary
@@ -27,26 +27,32 @@ control over which resources are installed).
 
 ## Goals
 
-An implementation of the minimally viable hooks needed in controller-runtime to
-enable controller adminstrators to start, stop, and restart controllers and their caches.
+controller-runtime should support starting/stopping/restarting controllers and
+their caches on arbitrary conditions.
 
 ## Non-Goals
 
-A complete and ergonomic solution for automatically starting/stopping/restarting
-controllers upon arbitrary conditions.
+* An implementation of starting/stopping a controller based on a specific
+condition (e.g. the existence of a CRD in discovery) does not need to be
+implemented in controller-runtime (but the end consumer of controller-runtime
+should be able to build it on their own).
+
+* No further guarantees of multi-cluster support beyond what is already provided
+  by controller-runtime.
 
 ## Proposal
 
 The following proposal offers a solution for controller/cache restarting by:
 1. Enabling the removal of individual informers.
-2. Publically exposing the informer removal and adding hooks into the internal
-   controller implementation to allow for restarting controllers that have been
-   stopped.
+2. Tracking the number of event handlers on an Informer.
 
 This proposal focuses on solutions that are entirely contained in
 controller-runtime. In the alternatives section, we discuss potential ways that
 changes can be added to api-machinery code in core kubernetes to enable a
-possibly cleaner interface of accomplishing our goals.
+possibly cleaner SharedInformer interface for accomplishing our goals.
+
+A proof-of-concept exists at
+[#1180](https://github.com/kubernetes-sigs/controller-runtime/pull/1180).
 
 ### Informer Removal
 
@@ -54,116 +60,235 @@ The starting point for this proposal is Shomron’s proposed implementation of
 individual informer removal.
 [#936](https://github.com/kubernetes-sigs/controller-runtime/pull/936).
 
-A discussion of risks/mitigations and alternatives are discussed in the linked PR as well as the
-corresponding issue
-[#935](https://github.com/kubernetes-sigs/controller-runtime/issues/935). A
-summarization of these discussions are presented below.
+It extends the informer cache to expose a remove method:
+```
+// Remove removes an informer specified by the obj argument from the cache and
+// stops it if it existed.
+Remove(ctx context.Context, obj runtime.Object) error
+```
 
-#### Risks and Mitigations
+This gets plumbed through to the informers map, where we remove an informer
+entry from the informersByGVK
 
-* Controllers will silently degrade if the given informer for their watch is
-  removed. Most likely this issue is mitigated by the fact that it's the
-  controller responsible for removing the informer that will be the one impacted
-  by the informer's removal and thus will be expected. If this is insufficient
-  for all cases, a potnential mitigation is to implement reference counting in
-  controller-runtime such that an informer is aware of any and all outstanding
-  references when its removal is called.
+```
+// Remove removes an informer entry and stops it if it was running.
+func (ip *specificInformersMap) Remove(gvk schema.GroupVersionKind) {
+  ...
+  entry, ok := ip.informersByGVK[gvk]
+  close(entry.stop)
+  delete(ip.informersByGVK, gvk)
+}
+```
 
-* The safety of stopping individual informers is unclear. There is concern that stopping
-  individual informers will leak go routines or memory. We should be able to use
-  pprof tooling and exisiting leak tooling in controller-runtime to identify and
-  mitigate any leaks
+We support this by modifying the Start method to run the informer with 
+a stop channel that can be stopped individually
+or globally (as opposed to just globally).
 
-#### Alternatives
+```
+// Start calls Run on each of the informers...
+func (ip *specificInformersMap) Start(ctx context) {
+...
+for _, entry := range ip.informersByGVK{
+  go entry.Start(ctx.Done())
+}
+...
+}
 
-* Creating a cache per watch (i.e. cache of caches) as the end user. The advantage
-  of this is that it prevents having to modify any code in controller-runtime.
-  The main drawback is that it's very clunky to maintain multiple caches (one
-  for each informer) and breaks the clean design of the cache.
+// Start starts the informer managed by a MapEntry.
+// Blocks until the informer stops. The informer can be stopped
+// either individually (via the entry's stop channel) or globally
+// via the provided stop argument.
+func (e *MapEntry) Start(stop <-chan struct{}) {
+  // Stop on either the whole map stopping or just this informer being removed.
+  internalStop, cancel := anoyOf(stop, e.stop)
+  defer cancel()
+  e.Informer.Run(internalStop)
+}
+```
 
-* Adding support to de-register EventHandlers from informers in apimachinery.
-  This along with ref counting would be the cleanest way to free us of the concern
-  of controllers silently failing when their watch is removed.
-  The downside is that we are ultimately at the mercy of whether apimachinery
-  wants to support these changes, and even if they were on board, it could take
-  a long time to land these changes upstream.
+### EventHandler reference counting
 
-* Surfacing the watch error handler from the reflector in client-go through the
-  informer. Controller-runtime could then look for specific errors and decide how to
-  handle it from there, such as terminating the informer if a specific error was
-  thrown indicating that the informer will no longer be viable (for example when
-  the resource is uninstalled). The advantage is that we'd be pushing updates
-  from the informer to the manager when errors arise (such as when the resource
-  disappears) and this would lead to more responsive informer shutdown that doesn't
-  require a separate watch mechanism to determine whether to remove informers. Like
-  de-registering EventHandlers, the downside is that we would need api-machinery to
-  support these changes and might take a long time to coordinate and implement.
+The primary concern with adding individual informer removal is that it exposes
+the risk of silently degrading controllers that are using the informer being
+removed.
 
-### Minimal hooks needed to use informer removal externally
+To mitigate this we need a way to track the number of EventHandlers added to a
+given informer and ensure that the are none remaining when an informer is
+removed.
 
-Given that a mechanism exists to remove individual informers, the next step is
-to expose this removal functionality and enable safely
-starting/stopping/restarting controllers and their caches.
+The proposal here is to expand the informer interface used by the `MapEntry` in
+the informers map:
+```
+// CountingInformer exposes a way to track the number of EventHandlers
+//registered on an informer.
 
-The proposal to do this is:
-1. Expose the `informerCache.Remove()` functionality on the cache interface.
-2. Expose the ability to reset the internal controller’s `Started` field.
-3. Expose a field on the internal controller to determine whether to `saveWatches`
-or not and use this field to not empty the controller’s `startWatches` when the
-controller is stopped.
+// The implementation of this should store a count that gets incremented every
+// time AddEventHandler is called and decremented every time RemoveEventHandler is
+// called.
+type CountingInformer interface {
+  cache.SharedIndexInformer
+  CountEventHandlers() int
+  RemoveEventHandler()
+}
+```
 
-A proof of concept for PR is here at
-[#1180](https://github.com/kubernetes-sigs/controller-runtime/pull/1180)
+Now, we need a way to run a controller, such that the starting the controller
+increments the EventHandler counts on the informer and stopping the controller
+decrements it.
 
-#### Risks and Mitigations
+We can modify/expand the `Source` interface, such that we can call
+`Start()` with a context that blocks on ctx.Done() and calls RemoveEventHandler
+on the informer once the context is closed, because the controller has been
+stopped so the EventHandler no longer exists on the informer.
 
-* We lack a consistent story around multi-cluster support and introducing
-  changes such as this without fully thinking through the multi-cluster story
-  might bind us for future designs. We think gracefully handling degraded
-  functionality in informers we start as end users modify the cluster is a valid
-  use case that exists whenever the cluster administrator is different from the
-  controller administrator and should be handled irregardless of its application
-  in multi-cluster envrionments.
+```
+// StoppableSource expands the Source interface to add a start function that
+// blocks on the context's Done channel, so that we know when the controller has
+// been stopped and can remove/decrement the EventHandler count on the informer
+// appropriately
+type StoppableSource interface {
+  Source
+  StartStoppable(context.Context, handler.EventHandler,
+  workqueue.RateLimitingInterface, ...predicate.Predicate) error
+}
 
-* [#1139](https://github.com/kubernetes-sigs/controller-runtime/pull/1139) discusses why
-the ability to start a controller more than once was taken away. It's a little
-unclear what effect explicitly enabling multiple starts in the case of
-conditional controllers will have on the number of workers and workqueues
-relative to expectations and metrics.
+// StartStoppable blocks for start to finish and then calls RemoveEventHandler
+// on the kind's informer.
+func (ks *Kind) StartStoppable(ctx, handler, queue, prct) {
+  informer := ks.cache.GetInformer(ctx, ks.Type)
+  ks.Start(ctx, handler, queue, prct)
+  <-ctx.Done()
+  i.RemoveEventHandler()
+}
 
-* [#1163](https://github.com/kubernetes-sigs/controller-runtime/pull/1163) discusses the
-memory leak caused by no clearing out the watches internal slice. A possible
-mitigation is to clear out the slices upon ConditionalController shutdown.
+```
 
-#### Alternatives
+A simpler alternative is to all of this is to bake the `EventHandler` tracking into the underlying
+client-go `SharedIndexInformer`. This involves modifying client-go and is
+discussed below in the alternatives section.
 
-* A metacontroller or CRD controller could start and stop controllers based on
-the existence of their corresponding CRDs. This puts the complexity of designing such a controller
-onto the end user, but there are potentially ways to provide end users with
-default, pluggable CRD controllers. More importantly, this probably is not even
-be sufficient for enabling controller restarting, because informers are shared
-between all controllers so restarting the controller will still try to use the
-informer that is erroring out if the CRD it is watching goes away. Some hooks
-into removing informers is sitll required in order to use a metacontroller.
+## Alternatives
 
-* Instead of exposing ResetStart and SaveWatches on the internal controller struct
-it might be better to expose it on the controller interface. This is more public
-and creates more potential for abuse, but it prevents some hacky solutions
-discussed below around needing to cast to the internal controller or create
-extra interfaces.
+A couple alternatives to what we propose, one that offloads all the
+responsibility to the consumer requiring no changes to controller-runtime and
+one that moves the event handler reference counting upstream into client-go.
 
-## Future Work / Motivating Use-Cases
+### Cache of Caches
+
+One alternative is to create a separate cache per watch (i.e. cache of caches)
+as the end user consuming controller-runtime. The advantage is that it prevents
+us from having to modify any code in controller-runtime. The main drawback is
+that it's very clunky to maintain multiple caches (one for each informer) and
+breaks the clean design of the cache.
+
+### Stoppable Informers and EventHandler removal natively in client-go
+
+A few changes to the underlying SharedInformer interface in client-go could save
+us from a lot of work in controller-runtime.
+
+One is to add a second `Run` method on the `SharedInformer` interface such as
+```
+// RunWithStopOptions runs the informer and provides options to be checked that
+// would indicate under what conditions the informer should stop
+RunWithStopOptions(stopOptions StopOptions) StopReason
+
+// StopOptions let the caller specifcy which conditions to stop the informer.
+type StopOptions struct {
+  // StopChannel stops the Informer when it receives a close signal
+  StopChannel <-chan struct{}
+
+  // OnListError inspects errors returned from the informer's underlying
+  // reflector, and based on the error determines whether or not to stop the
+  // informer.
+  OnListError func(err) bool
+}
+
+// StopReason is a custom typed error that indicates how the informer was
+// stopped
+type StopReason error
+```
+
+This could be plumbed through controller-runtime allowing users to pass informer
+`StopOptions` when they create a controller.
+
+Another potential change to `SharedInformer` is to have it be responsible for
+tracking the count of event handlers and allowing consumers to remove
+EventHandlers from a `SharedInformer.
+
+similar to the `EventHandler` reference counting interface we discussed above the
+`SharedInformer` could add methods:
+
+```
+type SharedInformer interface {
+...
+  CountEventHandlers() int
+  RemoveEventHandler(id) error
+}
+```
+(where `id`` is a to be determined identifer of the specific handler to be
+removed).
+
+This would remove the need to track it ourselves in controller-runtime.
+
+TODO: Bring this design up (potentially with a proof-of-concept branch) at an
+upcoming sig-api-machinery meeting to begin getting feedback and see whether it
+is feasible to land the changes in client-go.
+
+## Open Questions
+
+### Multiple Restarts
+
+The ability to start a controller more than once was recently removed over
+concerns around data races from workqueue recreation and starting too many
+workers ([#1139](https://github.com/kubernetes-sigs/controller-runtime/pull/1139))
+
+Previously there was never a valid reason to start a controller more than once,
+now we want to support that. The simplest workaround is to expose a
+`ResetStart()` method on the controller interface that simply resets the
+'Started' on the controller. This allows restarts but doesn't address the
+initial data race/excess worker concerns that drove the removal of this
+functionality in the first place.
+
+### Persisting controller watches
+
+The list of start watches store don the controller currently gets cleared out
+once the controller is started in order to prevent memory leak([#1163](https://github.com/kubernetes-sigs/controller-runtime/pull/1163))
+
+We need to retain references to these watches in order to restart controllers.
+The simplest workaround is maintain a boolean `SaveWatches` field on the
+controller that determines whether or not the watches slice should me retained
+after starting a controller. We can then expose a method on the controller for
+setting this field and enabling watches to be saved. We will still have a memory
+leak, but only on controllers that are expected to be restart. There might be a
+better way clear out the watches list that fits with the restartable controllers
+paradigm.
+
+### Multi-Cluster Support
+
+A multi-cluster environment where a single controller operates across multiple
+clusters will likely be a heavy user of these new features because the
+multi-cluster frequently results in a situation where the
+cluster administrator is different from the controller administrator.
+
+We lack a consistent story around multi-cluster support and introducing changes
+such as these without fully thinking through the mult-cluster story might bind
+us for future designs.
+
+
+## Future Work / Use Cases
 
 Were this to move forward, it unlocks a number of potential use-cases.
 
-1. OPA/Gatekeeper can simplify it's dynamic watch management by having greater
+1. We can support a "metacontroller" or controller of controllers that could
+   start and stop controllers based on the existence of their corresponding
+   CRDs.
+
+2. OPA/Gatekeeper can simplify it's dynamic watch management by having greater
    controller over the lifecycle of a controller. See [this
    doc](https://docs.google.com/document/d/1Wi3LM3sG6Qgfzm--bWb6R0SEKCkQCCt-ene6cO62FlM/edit)
 
-2. We can support controllers that can conditionally start/stop/restart based on
-   the installation/uninstallation of its CRD. See [this proof-of-concept branch](https://github.com/kevindelgado/controller-runtime/tree/experimental/conditional-runnables)
-
 ## Timeline of Events
+
 * 9/30/2020: Propose idea in design doc and proof-of-concept PR to
 controller-runtime
 * 10/7/2020: Design doc and proof-of-concept distilled to focus only on minimal
@@ -171,4 +296,6 @@ controller-runtime
   Alternatives added to discuss opportunities to push some of the implementation
   to the api-machinery level.
 * 10/8/2020: Discuss idea in community meeting
+* 10/19/2020: Proposal updated to add EventHandler count tracking and client-go
+  based alternative.
 

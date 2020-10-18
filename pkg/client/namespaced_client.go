@@ -18,6 +18,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -84,7 +85,7 @@ func isNamespaced(c Client, obj runtime.Object) (bool, error) {
 	scope := restmapping.Scope.Name()
 
 	if scope == "" {
-		return false, fmt.Errorf("Scope cannot be identified. Empty scope returned")
+		return false, errors.New("Scope cannot be identified. Empty scope returned")
 	}
 
 	if scope != meta.RESTScopeNameRoot {
@@ -94,63 +95,64 @@ func isNamespaced(c Client, obj runtime.Object) (bool, error) {
 }
 
 // Create implements clinet.Client
-func (n *namespacedClient) Create(ctx context.Context, obj runtime.Object, opts ...CreateOption) error {
-	metaObj, err := meta.Accessor(obj)
-	if err != nil {
-		return err
-	}
-
+func (n *namespacedClient) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
 	isNamespaceScoped, err := isNamespaced(n.client, obj)
 	if err != nil {
-		return fmt.Errorf("error finding the scope of the object %v", err)
+		return fmt.Errorf("error finding the scope of the object: %v", err)
 	}
-	if isNamespaceScoped {
-		metaObj.SetNamespace(n.namespace)
+
+	objectNamespace := obj.GetNamespace()
+	if objectNamespace != n.namespace && objectNamespace != "" {
+		return fmt.Errorf("Namespace %s of the object %s does not match the namespace %s on the client", objectNamespace, obj.GetName(), n.namespace)
+	}
+
+	if isNamespaceScoped && objectNamespace == "" {
+		obj.SetNamespace(n.namespace)
 	}
 	return n.client.Create(ctx, obj, opts...)
 }
 
 // Update implements client.Client
-func (n *namespacedClient) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOption) error {
-	metaObj, err := meta.Accessor(obj)
-	if err != nil {
-		return err
-	}
-
+func (n *namespacedClient) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	isNamespaceScoped, err := isNamespaced(n.client, obj)
 	if err != nil {
-		return fmt.Errorf("error finding the scope of the object %v", err)
+		return fmt.Errorf("error finding the scope of the object: %v", err)
 	}
 
-	if isNamespaceScoped && metaObj.GetNamespace() != n.namespace {
-		metaObj.SetNamespace(n.namespace)
+	objectNamespace := obj.GetNamespace()
+	if objectNamespace != n.namespace && objectNamespace != "" {
+		return fmt.Errorf("Namespace %s of the object %s does not match the namespace %s on the client", objectNamespace, obj.GetName(), n.namespace)
+	}
+
+	if isNamespaceScoped && objectNamespace == "" {
+		obj.SetNamespace(n.namespace)
 	}
 	return n.client.Update(ctx, obj, opts...)
 }
 
 // Delete implements client.Client
-func (n *namespacedClient) Delete(ctx context.Context, obj runtime.Object, opts ...DeleteOption) error {
-	metaObj, err := meta.Accessor(obj)
-	if err != nil {
-		return err
-	}
-
+func (n *namespacedClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
 	isNamespaceScoped, err := isNamespaced(n.client, obj)
 	if err != nil {
-		return fmt.Errorf("error finding the scope of the object %v", err)
+		return fmt.Errorf("error finding the scope of the object: %v", err)
 	}
 
-	if isNamespaceScoped && metaObj.GetNamespace() != n.namespace {
-		metaObj.SetNamespace(n.namespace)
+	objectNamespace := obj.GetNamespace()
+	if objectNamespace != n.namespace && objectNamespace != "" {
+		return fmt.Errorf("Namespace %s of the object %s does not match the namespace %s on the client", objectNamespace, obj.GetName(), n.namespace)
+	}
+
+	if isNamespaceScoped && objectNamespace == "" {
+		obj.SetNamespace(n.namespace)
 	}
 	return n.client.Delete(ctx, obj, opts...)
 }
 
 // DeleteAllOf implements client.Client
-func (n *namespacedClient) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...DeleteAllOfOption) error {
+func (n *namespacedClient) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllOfOption) error {
 	isNamespaceScoped, err := isNamespaced(n.client, obj)
 	if err != nil {
-		return fmt.Errorf("error finding the scope of the object %v", err)
+		return fmt.Errorf("error finding the scope of the object: %v", err)
 	}
 
 	if isNamespaceScoped {
@@ -160,37 +162,40 @@ func (n *namespacedClient) DeleteAllOf(ctx context.Context, obj runtime.Object, 
 }
 
 // Patch implements client.Client
-func (n *namespacedClient) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOption) error {
-	metaObj, err := meta.Accessor(obj)
-	if err != nil {
-		return err
-	}
-
+func (n *namespacedClient) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
 	isNamespaceScoped, err := isNamespaced(n.client, obj)
 	if err != nil {
-		return fmt.Errorf("error finding the scope of the object %v", err)
+		return fmt.Errorf("error finding the scope of the object: %v", err)
 	}
 
-	if isNamespaceScoped && metaObj.GetNamespace() != n.namespace {
-		metaObj.SetNamespace(n.namespace)
+	objectNamespace := obj.GetNamespace()
+	if objectNamespace != n.namespace && objectNamespace != "" {
+		return fmt.Errorf("Namespace %s of the object %s does not match the namespace %s on the client", objectNamespace, obj.GetName(), n.namespace)
+	}
+
+	if isNamespaceScoped && objectNamespace == "" {
+		obj.SetNamespace(n.namespace)
 	}
 	return n.client.Patch(ctx, obj, patch, opts...)
 }
 
 // Get implements client.Client
-func (n *namespacedClient) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
+func (n *namespacedClient) Get(ctx context.Context, key ObjectKey, obj Object) error {
 	isNamespaceScoped, err := isNamespaced(n.client, obj)
 	if err != nil {
-		return fmt.Errorf("error finding the scope of the object %v", err)
+		return fmt.Errorf("error finding the scope of the object: %v", err)
 	}
 	if isNamespaceScoped {
+		if key.Namespace != "" && key.Namespace != n.namespace {
+			return fmt.Errorf("Namespace %s provided for the object %s does not match the namesapce %s on the client", key.Namespace, obj.GetName(), n.namespace)
+		}
 		key.Namespace = n.namespace
 	}
 	return n.client.Get(ctx, key, obj)
 }
 
 // List implements client.Client
-func (n *namespacedClient) List(ctx context.Context, obj runtime.Object, opts ...ListOption) error {
+func (n *namespacedClient) List(ctx context.Context, obj ObjectList, opts ...ListOption) error {
 	if n.namespace != "" {
 		opts = append(opts, InNamespace(n.namespace))
 	}
@@ -212,37 +217,37 @@ type namespacedClientStatusWriter struct {
 }
 
 // Update implements client.StatusWriter
-func (nsw *namespacedClientStatusWriter) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOption) error {
-	metaObj, err := meta.Accessor(obj)
-	if err != nil {
-		return err
-	}
-
+func (nsw *namespacedClientStatusWriter) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	isNamespaceScoped, err := isNamespaced(nsw.namespacedclient, obj)
 	if err != nil {
-		return fmt.Errorf("error finding the scope of the object %v", err)
+		return fmt.Errorf("error finding the scope of the object: %v", err)
 	}
 
-	if isNamespaceScoped && metaObj.GetNamespace() != nsw.namespace {
-		metaObj.SetNamespace(nsw.namespace)
+	objectNamespace := obj.GetNamespace()
+	if objectNamespace != nsw.namespace && objectNamespace != "" {
+		return fmt.Errorf("Namespace %s of the object %s does not match the namespace %s on the client", objectNamespace, obj.GetName(), nsw.namespace)
+	}
+
+	if isNamespaceScoped && objectNamespace == "" {
+		obj.SetNamespace(nsw.namespace)
 	}
 	return nsw.StatusClient.Update(ctx, obj, opts...)
 }
 
 // Patch implements client.StatusWriter
-func (nsw *namespacedClientStatusWriter) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOption) error {
-	metaObj, err := meta.Accessor(obj)
-	if err != nil {
-		return err
-	}
-
+func (nsw *namespacedClientStatusWriter) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
 	isNamespaceScoped, err := isNamespaced(nsw.namespacedclient, obj)
 	if err != nil {
-		return fmt.Errorf("error finding the scope of the object %v", err)
+		return fmt.Errorf("error finding the scope of the object: %v", err)
 	}
 
-	if isNamespaceScoped && metaObj.GetNamespace() != nsw.namespace {
-		metaObj.SetNamespace(nsw.namespace)
+	objectNamespace := obj.GetNamespace()
+	if objectNamespace != nsw.namespace && objectNamespace != "" {
+		return fmt.Errorf("Namespace %s of the object %s does not match the namespace %s on the client", objectNamespace, obj.GetName(), nsw.namespace)
+	}
+
+	if isNamespaceScoped && objectNamespace == "" {
+		obj.SetNamespace(nsw.namespace)
 	}
 	return nsw.StatusClient.Patch(ctx, obj, patch, opts...)
 }

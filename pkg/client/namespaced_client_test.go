@@ -96,12 +96,12 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(result).To(BeEquivalentTo(dep))
 		})
 
-		It("should get the objects from namespace specified in the client", func() {
+		It("should error when namespace provided in the object is different than the one "+
+			"specified in client", func() {
 			name := types.NamespacedName{Name: dep.Name, Namespace: "non-default"}
 			result := &appsv1.Deployment{}
 
-			Expect(getClient().Get(ctx, name, result)).NotTo(HaveOccurred())
-			Expect(result).To(BeEquivalentTo(dep))
+			Expect(getClient().Get(ctx, name, result)).To(HaveOccurred())
 		})
 	})
 
@@ -151,16 +151,11 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(res.GetNamespace()).To(BeEquivalentTo(ns))
 		})
 
-		It("should create an object in the namespace specified with the client", func() {
+		It("should not create object if the namespace of the object is different", func() {
 			By("creating the object initially")
-
+			dep.SetNamespace("non-default")
 			err := getClient().Create(ctx, dep)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("checking if the object was created in the right namespace")
-			res, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(res.GetNamespace()).To(BeEquivalentTo(ns))
+			Expect(err).To(HaveOccurred())
 		})
 		It("should create a cluster scoped object", func() {
 			cr := &rbacv1.ClusterRole{
@@ -169,7 +164,6 @@ var _ = Describe("NamespacedClient", func() {
 					Labels: map[string]string{"name": fmt.Sprintf("clusterRole-%v", count)},
 				},
 			}
-
 			cr.SetGroupVersionKind(schema.GroupVersionKind{
 				Group:   "rbac.authorization.k8s.io",
 				Version: "v1",
@@ -193,8 +187,8 @@ var _ = Describe("NamespacedClient", func() {
 	Describe("Update", func() {
 		var err error
 		BeforeEach(func() {
-			dep.Annotations = map[string]string{"foo": "bar"}
 			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+			dep.Annotations = map[string]string{"foo": "bar"}
 			Expect(err).NotTo(HaveOccurred())
 		})
 		AfterEach(func() {
@@ -214,9 +208,9 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(actual.Annotations["foo"]).To(Equal("bar"))
 		})
 
-		It("should update the object in the namespace specified in the client", func() {
+		It("should successfully update the provided object when namespace is not provided", func() {
 			By("updating the Deployment")
-			dep.SetNamespace("non-default")
+			dep.SetNamespace("")
 			err = getClient().Update(ctx, dep)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -226,6 +220,13 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(actual).NotTo(BeNil())
 			Expect(actual.GetNamespace()).To(Equal(ns))
 			Expect(actual.Annotations["foo"]).To(Equal("bar"))
+		})
+
+		It("should not update when object namespace is different", func() {
+			By("updating the Deployment")
+			dep.SetNamespace("non-default")
+			err = getClient().Update(ctx, dep)
+			Expect(err).To(HaveOccurred())
 		})
 
 		It("should not update any object from other namespace", func() {
@@ -321,9 +322,10 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(actual.Annotations["foo"]).To(Equal("bar"))
 			Expect(actual.GetNamespace()).To(Equal(ns))
 		})
-		It("should successfully modify the object with namespace specified in the client", func() {
-			dep.SetNamespace("non-default")
+
+		It("should successfully modify the object using Patch when namespace is not provided", func() {
 			By("Applying Patch")
+			dep.SetNamespace("")
 			err = getClient().Patch(ctx, dep, client.RawPatch(types.MergePatchType, generatePatch()))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -332,6 +334,12 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(actual.Annotations["foo"]).To(Equal("bar"))
 			Expect(actual.GetNamespace()).To(Equal(ns))
+		})
+
+		It("should not modify the object when namespace of the object is different", func() {
+			dep.SetNamespace("non-default")
+			err = getClient().Patch(ctx, dep, client.RawPatch(types.MergePatchType, generatePatch()))
+			Expect(err).To(HaveOccurred())
 		})
 
 		It("should not modify an object from a different namespace", func() {
@@ -485,7 +493,6 @@ var _ = Describe("NamespacedClient", func() {
 
 		It("should change objects via update status", func() {
 			changedDep := dep.DeepCopy()
-			changedDep.SetNamespace("test")
 			changedDep.Status.Replicas = 99
 
 			Expect(getClient().Status().Update(ctx, changedDep)).NotTo(HaveOccurred())
@@ -497,18 +504,33 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(actual.Status.Replicas).To(BeEquivalentTo(99))
 		})
 
+		It("should not change objects via update status when object namespace is different", func() {
+			changedDep := dep.DeepCopy()
+			changedDep.SetNamespace("test")
+			changedDep.Status.Replicas = 99
+
+			Expect(getClient().Status().Update(ctx, changedDep)).To(HaveOccurred())
+		})
+
 		It("should change objects via status patch", func() {
 			changedDep := dep.DeepCopy()
 			changedDep.Status.Replicas = 99
-			changedDep.SetNamespace("test")
 
-			Expect(getClient().Status().Patch(ctx, changedDep, client.MergeFrom(dep))).ToNot(HaveOccurred())
+			Expect(getClient().Status().Patch(ctx, changedDep, client.MergeFrom(dep))).NotTo(HaveOccurred())
 
 			actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(actual).NotTo(BeNil())
 			Expect(actual.GetNamespace()).To(BeEquivalentTo(ns))
 			Expect(actual.Status.Replicas).To(BeEquivalentTo(99))
+		})
+
+		It("should not change objects via status patch when object namespace is different", func() {
+			changedDep := dep.DeepCopy()
+			changedDep.Status.Replicas = 99
+			changedDep.SetNamespace("test")
+
+			Expect(getClient().Status().Patch(ctx, changedDep, client.MergeFrom(dep))).To(HaveOccurred())
 		})
 	})
 

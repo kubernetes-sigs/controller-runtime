@@ -195,6 +195,23 @@ type multiNamespaceInformer struct {
 
 var _ Informer = &multiNamespaceInformer{}
 
+func (i *multiNamespaceInformer) CountEventHandlers() int {
+	total := 0
+	for _, informer := range i.namespaceToInformer {
+		total += informer.CountEventHandlers()
+	}
+	return total
+}
+
+func (i *multiNamespaceInformer) RemoveEventHandler(id int) error {
+	for _, informer := range i.namespaceToInformer {
+		if err := informer.RemoveEventHandler(id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // AddEventHandler adds the handler to each namespaced informer
 func (i *multiNamespaceInformer) AddEventHandler(handler toolscache.ResourceEventHandler) {
 	for _, informer := range i.namespaceToInformer {

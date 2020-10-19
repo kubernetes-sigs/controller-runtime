@@ -87,6 +87,14 @@ type Informer interface {
 	AddIndexers(indexers toolscache.Indexers) error
 	//HasSynced return true if the informers underlying store has synced
 	HasSynced() bool
+
+	// RemoveEventHandler currently just decrements a the count of event handlers
+	// The goals it to have SharedInformer support RemoveEventHandler (and actually remove
+	// the handler instead of just decrementing a count).
+	RemoveEventHandler(id int) error
+
+	// CountEventHandlers returns the number of event handlers added to an informer.
+	CountEventHandlers() int
 }
 
 // Options are the optional arguments for creating a new InformersMap object

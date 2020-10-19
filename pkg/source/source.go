@@ -64,6 +64,14 @@ type SyncingSource interface {
 	WaitForSync(ctx context.Context) error
 }
 
+// StoppableSource expands the Source interface to add a start method that
+// blocks on the context's Done channel, so that we know when the controller has
+// been stopped and can remove/decremnt the EventHandler count on the informer appropriately.
+type StoppableSource interface {
+	Source
+	StartStoppable(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+}
+
 // NewKindWithCache creates a Source without InjectCache, so that it is assured that the given cache is used
 // and not overwritten. It can be used to watch objects in a different cluster by passing the cache
 // from that other cluster
@@ -120,6 +128,21 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 		return err
 	}
 	i.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
+	return nil
+}
+
+// StartStoppable blocks for start to finish and then calls RemoveEventHandler on the kind's informer.
+func (ks *Kind) StartStoppable(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
+	prct ...predicate.Predicate) error {
+	i, err := ks.cache.GetInformer(ctx, ks.Type)
+	if err != nil {
+		return err
+	}
+	if err := ks.Start(ctx, handler, queue, prct...); err != nil {
+		return err
+	}
+	<-ctx.Done()
+	i.RemoveEventHandler(-1)
 	return nil
 }
 

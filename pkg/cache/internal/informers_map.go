@@ -65,8 +65,8 @@ func newSpecificInformersMap(config *rest.Config,
 
 // MapEntry contains the cached data for an Informer
 type MapEntry struct {
-	// Informer is the cached informer
-	Informer cache.SharedIndexInformer
+	// Informer is a SharedIndexInformer with addition count and remove event handler functionality.
+	Informer CountingInformer
 
 	// CacheReader wraps Informer and implements the CacheReader interface for a single type
 	Reader CacheReader
@@ -230,7 +230,7 @@ func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, ob
 		cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 	})
 	i := &MapEntry{
-		Informer: ni,
+		Informer: &HandlerCountingInformer{ni, 0},
 		Reader:   CacheReader{indexer: ni.GetIndexer(), groupVersionKind: gvk},
 		stop:     make(chan struct{}),
 	}
@@ -241,21 +241,34 @@ func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, ob
 	// can you add eventhandlers?
 	if ip.started {
 		go i.Start(ip.stop)
+		//go i.Start(StopOptions{
+		//	StopChannel: ip.stop,
+		//})
 	}
 	return i, ip.started, nil
 }
 
 // Remove removes an informer entry and stops it if it was running.
-func (ip *specificInformersMap) Remove(gvk schema.GroupVersionKind) {
+func (ip *specificInformersMap) Remove(gvk schema.GroupVersionKind) error {
 	ip.mu.Lock()
 	defer ip.mu.Unlock()
 
 	entry, ok := ip.informersByGVK[gvk]
 	if !ok {
-		return
+		return nil
 	}
+
+	chInformer, ok := entry.Informer.(*HandlerCountingInformer)
+	if !ok {
+		return fmt.Errorf("entry informer is not a HandlerCountingInformer")
+	}
+	if chInformer.CountEventHandlers() != 0 {
+		return fmt.Errorf("attempting to remove informer with %d references", chInformer.CountEventHandlers())
+	}
+
 	close(entry.stop)
 	delete(ip.informersByGVK, gvk)
+	return nil
 }
 
 // newListWatch returns a new ListWatch object that can be used to create a SharedIndexInformer.

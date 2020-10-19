@@ -158,9 +158,17 @@ func (c *Controller) Start(ctx context.Context) error {
 		// caches to sync so that they have a chance to register their intendeded
 		// caches.
 		for _, watch := range c.startWatches {
-			c.Log.Info("Starting EventSource", "source", watch.src)
-			if err := watch.src.Start(ctx, watch.handler, c.Queue, watch.predicates...); err != nil {
-				return err
+			stoppableSource, ok := watch.src.(source.StoppableSource)
+			if ok {
+				// TODO: use errgroup or waitgroup to not return until all goros have exited
+				// (or something else to prevent leaks)
+				go stoppableSource.StartStoppable(ctx, watch.handler, c.Queue, watch.predicates...)
+				c.Log.Info("Starting STOPPABLE EventSource", "source", watch.src)
+			} else {
+				c.Log.Info("Starting EventSource", "source", watch.src)
+				if err := watch.src.Start(ctx, watch.handler, c.Queue, watch.predicates...); err != nil {
+					return err
+				}
 			}
 		}
 

@@ -243,6 +243,5 @@ func (ip *informerCache) Remove(ctx context.Context, obj runtime.Object) error {
 		return err
 	}
 
-	ip.InformersMap.Remove(gvk, obj)
-	return nil
+	return ip.InformersMap.Remove(gvk, obj)
 }

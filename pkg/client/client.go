@@ -21,12 +21,15 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
+
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
@@ -76,6 +79,11 @@ func New(config *rest.Config, options Options) (Client, error) {
 		resourceByType: make(map[schema.GroupVersionKind]*resourceMeta),
 	}
 
+	rawMetaClient, err := metadata.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("unable to construct metadata-only client for use as part of client: %w", err)
+	}
+
 	c := &client{
 		typedClient: typedClient{
 			cache:      clientcache,
@@ -84,6 +92,10 @@ func New(config *rest.Config, options Options) (Client, error) {
 		unstructuredClient: unstructuredClient{
 			cache:      clientcache,
 			paramCodec: noConversionParamCodec{},
+		},
+		metadataClient: metadataClient{
+			client:     rawMetaClient,
+			restMapper: options.Mapper,
 		},
 		scheme: options.Scheme,
 		mapper: options.Mapper,
@@ -99,6 +111,7 @@ var _ Client = &client{}
 type client struct {
 	typedClient        typedClient
 	unstructuredClient unstructuredClient
+	metadataClient     metadataClient
 	scheme             *runtime.Scheme
 	mapper             meta.RESTMapper
 }
@@ -125,67 +138,88 @@ func (c *client) RESTMapper() meta.RESTMapper {
 
 // Create implements client.Client
 func (c *client) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
-	_, ok := obj.(*unstructured.Unstructured)
-	if ok {
+	switch obj.(type) {
+	case *unstructured.Unstructured:
 		return c.unstructuredClient.Create(ctx, obj, opts...)
+	case *metav1.PartialObjectMetadata:
+		return fmt.Errorf("cannot create using only metadata")
+	default:
+		return c.typedClient.Create(ctx, obj, opts...)
 	}
-	return c.typedClient.Create(ctx, obj, opts...)
 }
 
 // Update implements client.Client
 func (c *client) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
-	_, ok := obj.(*unstructured.Unstructured)
-	if ok {
+	switch obj.(type) {
+	case *unstructured.Unstructured:
 		return c.unstructuredClient.Update(ctx, obj, opts...)
+	case *metav1.PartialObjectMetadata:
+		return fmt.Errorf("cannot update using only metadata -- did you mean to patch?")
+	default:
+		return c.typedClient.Update(ctx, obj, opts...)
 	}
-	return c.typedClient.Update(ctx, obj, opts...)
 }
 
 // Delete implements client.Client
 func (c *client) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
-	_, ok := obj.(*unstructured.Unstructured)
-	if ok {
+	switch obj.(type) {
+	case *unstructured.Unstructured:
 		return c.unstructuredClient.Delete(ctx, obj, opts...)
+	case *metav1.PartialObjectMetadata:
+		return c.metadataClient.Delete(ctx, obj, opts...)
+	default:
+		return c.typedClient.Delete(ctx, obj, opts...)
 	}
-	return c.typedClient.Delete(ctx, obj, opts...)
 }
 
 // DeleteAllOf implements client.Client
 func (c *client) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllOfOption) error {
-	_, ok := obj.(*unstructured.Unstructured)
-	if ok {
+	switch obj.(type) {
+	case *unstructured.Unstructured:
 		return c.unstructuredClient.DeleteAllOf(ctx, obj, opts...)
+	case *metav1.PartialObjectMetadata:
+		return c.metadataClient.DeleteAllOf(ctx, obj, opts...)
+	default:
+		return c.typedClient.DeleteAllOf(ctx, obj, opts...)
 	}
-	return c.typedClient.DeleteAllOf(ctx, obj, opts...)
 }
 
 // Patch implements client.Client
 func (c *client) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
 	defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
-	_, ok := obj.(*unstructured.Unstructured)
-	if ok {
+	switch obj.(type) {
+	case *unstructured.Unstructured:
 		return c.unstructuredClient.Patch(ctx, obj, patch, opts...)
+	case *metav1.PartialObjectMetadata:
+		return c.metadataClient.Patch(ctx, obj, patch, opts...)
+	default:
+		return c.typedClient.Patch(ctx, obj, patch, opts...)
 	}
-	return c.typedClient.Patch(ctx, obj, patch, opts...)
 }
 
 // Get implements client.Client
 func (c *client) Get(ctx context.Context, key ObjectKey, obj Object) error {
-	_, ok := obj.(*unstructured.Unstructured)
-	if ok {
+	switch obj.(type) {
+	case *unstructured.Unstructured:
 		return c.unstructuredClient.Get(ctx, key, obj)
+	case *metav1.PartialObjectMetadata:
+		return c.metadataClient.Get(ctx, key, obj)
+	default:
+		return c.typedClient.Get(ctx, key, obj)
 	}
-	return c.typedClient.Get(ctx, key, obj)
 }
 
 // List implements client.Client
 func (c *client) List(ctx context.Context, obj ObjectList, opts ...ListOption) error {
-	_, ok := obj.(*unstructured.UnstructuredList)
-	if ok {
+	switch obj.(type) {
+	case *unstructured.Unstructured:
 		return c.unstructuredClient.List(ctx, obj, opts...)
+	case *metav1.PartialObjectMetadataList:
+		return c.metadataClient.List(ctx, obj, opts...)
+	default:
+		return c.typedClient.List(ctx, obj, opts...)
 	}
-	return c.typedClient.List(ctx, obj, opts...)
 }
 
 // Status implements client.StatusClient
@@ -204,19 +238,25 @@ var _ StatusWriter = &statusWriter{}
 // Update implements client.StatusWriter
 func (sw *statusWriter) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	defer sw.client.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
-	_, ok := obj.(*unstructured.Unstructured)
-	if ok {
+	switch obj.(type) {
+	case *unstructured.Unstructured:
 		return sw.client.unstructuredClient.UpdateStatus(ctx, obj, opts...)
+	case *metav1.PartialObjectMetadata:
+		return fmt.Errorf("cannot update status using only metadata -- did you mean to patch?")
+	default:
+		return sw.client.typedClient.UpdateStatus(ctx, obj, opts...)
 	}
-	return sw.client.typedClient.UpdateStatus(ctx, obj, opts...)
 }
 
 // Patch implements client.Client
 func (sw *statusWriter) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
 	defer sw.client.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
-	_, ok := obj.(*unstructured.Unstructured)
-	if ok {
+	switch obj.(type) {
+	case *unstructured.Unstructured:
 		return sw.client.unstructuredClient.PatchStatus(ctx, obj, patch, opts...)
+	case *metav1.PartialObjectMetadata:
+		return sw.client.metadataClient.PatchStatus(ctx, obj, patch, opts...)
+	default:
+		return sw.client.typedClient.PatchStatus(ctx, obj, patch, opts...)
 	}
-	return sw.client.typedClient.PatchStatus(ctx, obj, patch, opts...)
 }

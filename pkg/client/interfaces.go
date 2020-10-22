@@ -30,12 +30,8 @@ import (
 type ObjectKey = types.NamespacedName
 
 // ObjectKeyFromObject returns the ObjectKey given a runtime.Object
-func ObjectKeyFromObject(obj runtime.Object) (ObjectKey, error) {
-	accessor, err := meta.Accessor(obj)
-	if err != nil {
-		return ObjectKey{}, err
-	}
-	return ObjectKey{Namespace: accessor.GetNamespace(), Name: accessor.GetName()}, nil
+func ObjectKeyFromObject(obj Object) ObjectKey {
+	return ObjectKey{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 }
 
 // Patch is a patch that can be applied to a Kubernetes object.

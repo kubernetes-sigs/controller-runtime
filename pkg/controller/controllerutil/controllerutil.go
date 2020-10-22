@@ -195,11 +195,7 @@ const ( // They should complete the sentence "Deployment default/foo has been ..
 //
 // It returns the executed operation and an error.
 func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
-	key, err := client.ObjectKeyFromObject(obj)
-	if err != nil {
-		return OperationResultNone, err
-	}
-
+	key := client.ObjectKeyFromObject(obj)
 	if err := c.Get(ctx, key, obj); err != nil {
 		if !errors.IsNotFound(err) {
 			return OperationResultNone, err
@@ -236,11 +232,7 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f M
 //
 // It returns the executed operation and an error.
 func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
-	key, err := client.ObjectKeyFromObject(obj)
-	if err != nil {
-		return OperationResultNone, err
-	}
-
+	key := client.ObjectKeyFromObject(obj)
 	if err := c.Get(ctx, key, obj); err != nil {
 		if !errors.IsNotFound(err) {
 			return OperationResultNone, err
@@ -331,11 +323,11 @@ func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f Mu
 }
 
 // mutate wraps a MutateFn and applies validation to its result
-func mutate(f MutateFn, key client.ObjectKey, obj runtime.Object) error {
+func mutate(f MutateFn, key client.ObjectKey, obj client.Object) error {
 	if err := f(); err != nil {
 		return err
 	}
-	if newKey, err := client.ObjectKeyFromObject(obj); err != nil || key != newKey {
+	if newKey := client.ObjectKeyFromObject(obj); key != newKey {
 		return fmt.Errorf("MutateFn cannot mutate object name and/or object namespace")
 	}
 	return nil

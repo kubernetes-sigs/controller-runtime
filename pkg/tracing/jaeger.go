@@ -1,39 +1,39 @@
 package tracing
 
 import (
-	"fmt"
 	"io"
 
-	ot "github.com/opentracing/opentracing-go"
-	"github.com/uber/jaeger-client-go"
-	jaegercfg "github.com/uber/jaeger-client-go/config"
+	"go.opentelemetry.io/otel/api/global"
+	"go.opentelemetry.io/otel/exporters/trace/jaeger"
+	"go.opentelemetry.io/otel/propagators"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
-// SetupJaeger sets up Jaeger with some defaults and config taken from the environment
+// SetupJaeger sets up Jaeger with some defaults
 func SetupJaeger(serviceName string) (io.Closer, error) {
-	jcfg := &jaegercfg.Configuration{
-		ServiceName: serviceName,
-		Sampler: &jaegercfg.SamplerConfig{
-			Type:  jaeger.SamplerTypeConst,
-			Param: 1,
-		},
-		Reporter: &jaegercfg.ReporterConfig{
-			// This name chosen so you can create a Service in your cluster
-			// pointing to wherever Jager is running; override by env JAEGER_AGENT_HOST
-			LocalAgentHostPort: "jaeger-agent.default:6831",
-		},
-	}
-	jcfg, err := jcfg.FromEnv()
-	if err != nil {
-		return nil, fmt.Errorf("failed read config from environment: %w", err)
-	}
-
-	// Initialize tracer with a logger and a metrics factory
-	tracer, closer, err := jcfg.NewTracer()
+	// Create and install Jaeger export pipeline
+	flush, err := jaeger.InstallNewPipeline(
+		jaeger.WithCollectorEndpoint("http://jaeger-agent.default:14268/api/traces"), // FIXME name?
+		jaeger.WithProcess(jaeger.Process{
+			ServiceName: serviceName,
+		}),
+		jaeger.WithSDK(&sdktrace.Config{DefaultSampler: sdktrace.AlwaysSample()}),
+	)
 	if err != nil {
 		return nil, err
 	}
-	// Set the singleton opentracing.Tracer with the Jaeger tracer.
-	ot.SetGlobalTracer(tracer)
-	return closer, nil
+
+	// set global propagator to tracecontext (the default is no-op).
+	global.SetTextMapPropagator(propagators.TraceContext{})
+
+	return funcCloser{f: flush}, nil
+}
+
+type funcCloser struct {
+	f func()
+}
+
+func (c funcCloser) Close() error {
+	c.f()
+	return nil
 }

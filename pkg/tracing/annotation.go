@@ -3,26 +3,57 @@ package tracing
 import (
 	"context"
 
-	ot "github.com/opentracing/opentracing-go"
+	"go.opentelemetry.io/otel/api/global"
+	"go.opentelemetry.io/otel/api/trace"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// AddTraceAnnotationToUnstructured adds an annotation encoding span's context to all objects
-// Objects are modified in-place.
-func AddTraceAnnotationToUnstructured(span ot.Span, objs []unstructured.Unstructured) error {
-	spanContext, err := GenerateEmbeddableSpanContext(span)
-	if err != nil {
-		return err
-	}
+// TraceAnnotationPrefix is where we store span contexts in Kubernetes annotations
+const TraceAnnotationPrefix string = "trace.kubernetes.io/"
 
+// Store tracing propagation inside Kubernetes annotations
+type annotationsCarrier map[string]string
+
+// Get implements otel.TextMapCarrier
+func (a annotationsCarrier) Get(key string) string {
+	return a[TraceAnnotationPrefix+key]
+}
+
+// Set implements otel.TextMapCarrier
+func (a annotationsCarrier) Set(key string, value string) {
+	a[TraceAnnotationPrefix+key] = value
+}
+
+// SpanFromAnnotations takes a map as found in Kubernetes objects and
+// makes a new Span parented on the context found there, or nil if not found.
+func SpanFromAnnotations(ctx context.Context, name string, annotations map[string]string) (context.Context, trace.Span) {
+	innerCtx := spanContextFromAnnotations(ctx, annotations)
+	if innerCtx == ctx {
+		return ctx, nil
+	}
+	return global.Tracer(libName).Start(innerCtx, name)
+}
+
+func spanContextFromAnnotations(ctx context.Context, annotations map[string]string) context.Context {
+	return global.TextMapPropagator().Extract(ctx, annotationsCarrier(annotations))
+}
+
+// AddTraceAnnotation adds an annotation encoding current span ID
+func AddTraceAnnotation(ctx context.Context, annotations map[string]string) {
+	global.TextMapPropagator().Inject(ctx, annotationsCarrier(annotations))
+}
+
+// AddTraceAnnotationToUnstructured adds an annotation encoding current span ID to all objects
+// Objects are modified in-place.
+func AddTraceAnnotationToUnstructured(ctx context.Context, objs []unstructured.Unstructured) error {
 	for _, o := range objs {
 		a := o.GetAnnotations()
 		if a == nil {
 			a = make(map[string]string)
 		}
-		a[TraceAnnotationKey] = spanContext
+		AddTraceAnnotation(ctx, a)
 		o.SetAnnotations(a)
 	}
 
@@ -32,27 +63,22 @@ func AddTraceAnnotationToUnstructured(span ot.Span, objs []unstructured.Unstruct
 // AddTraceAnnotationToObject - if there is a span for the current context, and
 // the object doesn't already have one set, adds it as an annotation
 func AddTraceAnnotationToObject(ctx context.Context, obj runtime.Object) error {
-	sp := ot.SpanFromContext(ctx)
-	if sp == nil {
-		return nil
-	}
-	spanContext, err := GenerateEmbeddableSpanContext(sp)
-	if err != nil {
-		return err
-	}
 	m, err := meta.Accessor(obj)
 	if err != nil {
 		return err
 	}
 	annotations := m.GetAnnotations()
 	if annotations == nil {
-		annotations = map[string]string{TraceAnnotationKey: spanContext}
+		annotations = make(map[string]string)
 	} else {
-		// Don't overwrite if the caller already set one.
-		if _, exists := annotations[TraceAnnotationKey]; !exists {
-			annotations[TraceAnnotationKey] = spanContext
+		// Check if the object already has some context set.
+		for _, key := range global.TextMapPropagator().Fields() {
+			if annotationsCarrier(annotations).Get(key) != "" {
+				return nil // Don't override
+			}
 		}
 	}
+	AddTraceAnnotation(ctx, annotations)
 	m.SetAnnotations(annotations)
 	return nil
 }

@@ -18,6 +18,10 @@ limitations under the License.
 Package webhook provides methods to build and bootstrap a webhook server.
 
 Currently, it only supports admission webhooks. It will support CRD conversion webhooks in the near future.
+
+NOTE: there are some functions and files with `legacy` suffix, which are used to support `k8s.io/api/admission.k8s.io/v1beta1` api.
+Since `k8s.io/api/admission.k8s.io/v1beta1` is deprecated in kubernetes v1.16 in favor of admission.k8s.io/v1, please consider
+to upgrade if possible.
 */
 package webhook
 

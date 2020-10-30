@@ -19,6 +19,10 @@ limitations under the License.
 //
 // Projects built with the builder package can trivially be rebased on top of the underlying
 // packages if the project requires more customized behavior in the future.
+//
+// NOTE: there are some functions and files with `legacy` suffix, which are used to support `k8s.io/api/admission.k8s.io/v1beta1` api.
+// Since `k8s.io/api/admission.k8s.io/v1beta1` is deprecated in kubernetes v1.16 in favor of admission.k8s.io/v1, please consider
+// to upgrade if possible.
 package builder
 
 import (

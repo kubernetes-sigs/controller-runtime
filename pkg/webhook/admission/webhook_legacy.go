@@ -18,12 +18,11 @@ package admission
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/go-logr/logr"
 	"gomodules.xyz/jsonpatch/v2"
-	admissionv1 "k8s.io/api/admission/v1"
+	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -31,38 +30,34 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
-var (
-	errUnableToEncodeResponse = errors.New("unable to encode response")
-)
-
-// Request defines the input for an admission handler.
+// RequestLegacy defines the input for an admission handler.
 // It contains information to identify the object in
 // question (group, version, kind, resource, subresource,
 // name, namespace), as well as the operation in question
 // (e.g. Get, Create, etc), and the object itself.
-type Request struct {
-	admissionv1.AdmissionRequest
+type RequestLegacy struct {
+	admissionv1beta1.AdmissionRequest
 }
 
-// Response is the output of an admission handler.
+// ResponseLegacy is the output of an admission handler.
 // It contains a response indicating if a given
 // operation is allowed, as well as a set of patches
 // to mutate the object in the case of a mutating admission handler.
-type Response struct {
+type ResponseLegacy struct {
 	// Patches are the JSON patches for mutating webhooks.
-	// Using this instead of setting Response.Patch to minimize
+	// Using this instead of setting ResponseLegacy.Patch to minimize
 	// overhead of serialization and deserialization.
 	// Patches set here will override any patches in the response,
 	// so leave this empty if you want to set the patch response directly.
 	Patches []jsonpatch.JsonPatchOperation
-	// AdmissionResponse is the raw admission response.
+	// AdmissionResponseLegacy is the raw admission response.
 	// The Patch field in it will be overwritten by the listed patches.
-	admissionv1.AdmissionResponse
+	admissionv1beta1.AdmissionResponse
 }
 
 // Complete populates any fields that are yet to be set in
-// the underlying AdmissionResponse, It mutates the response.
-func (r *Response) Complete(req Request) error {
+// the underlying AdmissionResponseLegacy, It mutates the response.
+func (r *ResponseLegacy) Complete(req RequestLegacy) error {
 	r.UID = req.UID
 
 	// ensure that we have a valid status code
@@ -84,36 +79,36 @@ func (r *Response) Complete(req Request) error {
 	if err != nil {
 		return err
 	}
-	patchType := admissionv1.PatchTypeJSONPatch
+	patchType := admissionv1beta1.PatchTypeJSONPatch
 	r.PatchType = &patchType
 
 	return nil
 }
 
-// Handler can handle an AdmissionRequest.
-type Handler interface {
-	// Handle yields a response to an AdmissionRequest.
+// HandlerLegacy can handle an AdmissionRequestLegacy.
+type HandlerLegacy interface {
+	// Handle yields a response to an AdmissionRequestLegacy.
 	//
 	// The supplied context is extracted from the received http.Request, allowing wrapping
 	// http.Handlers to inject values into and control cancelation of downstream request processing.
-	Handle(context.Context, Request) Response
+	Handle(context.Context, RequestLegacy) ResponseLegacy
 }
 
-// HandlerFunc implements Handler interface using a single function.
-type HandlerFunc func(context.Context, Request) Response
+// HandlerFuncLegacy implements Handler interface using a single function.
+type HandlerFuncLegacy func(context.Context, RequestLegacy) ResponseLegacy
 
-var _ Handler = HandlerFunc(nil)
+var _ HandlerLegacy = HandlerFuncLegacy(nil)
 
-// Handle process the AdmissionRequest by invoking the underlying function.
-func (f HandlerFunc) Handle(ctx context.Context, req Request) Response {
+// Handle process the AdmissionRequestLegacy by invoking the underlying function.
+func (f HandlerFuncLegacy) Handle(ctx context.Context, req RequestLegacy) ResponseLegacy {
 	return f(ctx, req)
 }
 
-// Webhook represents each individual webhook.
-type Webhook struct {
+// WebhookLegacy represents each individual webhook.
+type WebhookLegacy struct {
 	// Handler actually processes an admission request returning whether it was allowed or denied,
 	// and potentially patches to apply to the handler.
-	Handler Handler
+	Handler HandlerLegacy
 
 	// decoder is constructed on receiving a scheme and passed down to then handler
 	decoder *Decoder
@@ -122,27 +117,27 @@ type Webhook struct {
 }
 
 // InjectLogger gets a handle to a logging instance, hopefully with more info about this particular webhook.
-func (w *Webhook) InjectLogger(l logr.Logger) error {
+func (w *WebhookLegacy) InjectLogger(l logr.Logger) error {
 	w.log = l
 	return nil
 }
 
-// Handle processes AdmissionRequest.
-// If the webhook is mutating type, it delegates the AdmissionRequest to each handler and merge the patches.
-// If the webhook is validating type, it delegates the AdmissionRequest to each handler and
+// Handle processes AdmissionRequestLegacy.
+// If the webhook is mutating type, it delegates the AdmissionRequestLegacy to each handler and merge the patches.
+// If the webhook is validating type, it delegates the AdmissionRequestLegacy to each handler and
 // deny the request if anyone denies.
-func (w *Webhook) Handle(ctx context.Context, req Request) Response {
+func (w *WebhookLegacy) Handle(ctx context.Context, req RequestLegacy) ResponseLegacy {
 	resp := w.Handler.Handle(ctx, req)
 	if err := resp.Complete(req); err != nil {
 		w.log.Error(err, "unable to encode response")
-		return Errored(http.StatusInternalServerError, errUnableToEncodeResponse)
+		return ErroredLegacy(http.StatusInternalServerError, errUnableToEncodeResponse)
 	}
 
 	return resp
 }
 
 // InjectScheme injects a scheme into the webhook, in order to construct a Decoder.
-func (w *Webhook) InjectScheme(s *runtime.Scheme) error {
+func (w *WebhookLegacy) InjectScheme(s *runtime.Scheme) error {
 	// TODO(directxman12): we should have a better way to pass this down
 
 	var err error
@@ -164,12 +159,12 @@ func (w *Webhook) InjectScheme(s *runtime.Scheme) error {
 
 // GetDecoder returns a decoder to decode the objects embedded in admission requests.
 // It may be nil if we haven't received a scheme to use to determine object types yet.
-func (w *Webhook) GetDecoder() *Decoder {
+func (w *WebhookLegacy) GetDecoder() *Decoder {
 	return w.decoder
 }
 
 // InjectFunc injects the field setter into the webhook.
-func (w *Webhook) InjectFunc(f inject.Func) error {
+func (w *WebhookLegacy) InjectFunc(f inject.Func) error {
 	// inject directly into the handlers.  It would be more correct
 	// to do this in a sync.Once in Handle (since we don't have some
 	// other start/finalize-type method), but it's more efficient to

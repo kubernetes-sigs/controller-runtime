@@ -21,7 +21,7 @@ import (
 
 	"gomodules.xyz/jsonpatch/v2"
 
-	admissionv1beta1 "k8s.io/api/admission/v1beta1"
+	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -50,7 +50,7 @@ func Patched(reason string, patches ...jsonpatch.JsonPatchOperation) Response {
 // Errored creates a new Response for error-handling a request.
 func Errored(code int32, err error) Response {
 	return Response{
-		AdmissionResponse: admissionv1beta1.AdmissionResponse{
+		AdmissionResponse: admissionv1.AdmissionResponse{
 			Allowed: false,
 			Result: &metav1.Status{
 				Code:    code,
@@ -67,7 +67,7 @@ func ValidationResponse(allowed bool, reason string) Response {
 		code = http.StatusOK
 	}
 	resp := Response{
-		AdmissionResponse: admissionv1beta1.AdmissionResponse{
+		AdmissionResponse: admissionv1.AdmissionResponse{
 			Allowed: allowed,
 			Result: &metav1.Status{
 				Code: int32(code),
@@ -90,9 +90,9 @@ func PatchResponseFromRaw(original, current []byte) Response {
 	}
 	return Response{
 		Patches: patches,
-		AdmissionResponse: admissionv1beta1.AdmissionResponse{
+		AdmissionResponse: admissionv1.AdmissionResponse{
 			Allowed:   true,
-			PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
+			PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
 		},
 	}
 }
@@ -100,7 +100,7 @@ func PatchResponseFromRaw(original, current []byte) Response {
 // validationResponseFromStatus returns a response for admitting a request with provided Status object.
 func validationResponseFromStatus(allowed bool, status metav1.Status) Response {
 	resp := Response{
-		AdmissionResponse: admissionv1beta1.AdmissionResponse{
+		AdmissionResponse: admissionv1.AdmissionResponse{
 			Allowed: allowed,
 			Result:  &status,
 		},

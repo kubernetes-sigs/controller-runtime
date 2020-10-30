@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 
@@ -29,7 +28,8 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 
-	admissionv1 "k8s.io/api/admission/v1"
+	admissionv1beta1 "k8s.io/api/admission/v1beta1"
+
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
 
@@ -37,7 +37,7 @@ var _ = Describe("Admission Webhooks", func() {
 
 	Describe("HTTP Handler", func() {
 		var respRecorder *httptest.ResponseRecorder
-		webhook := &Webhook{
+		webhook := &WebhookLegacy{
 			Handler: nil,
 		}
 		BeforeEach(func() {
@@ -87,8 +87,8 @@ var _ = Describe("Admission Webhooks", func() {
 				Header: http.Header{"Content-Type": []string{"application/json"}},
 				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
 			}
-			webhook := &Webhook{
-				Handler: &fakeHandler{},
+			webhook := &WebhookLegacy{
+				Handler: &fakeHandlerLegacy{},
 				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
@@ -106,11 +106,11 @@ var _ = Describe("Admission Webhooks", func() {
 			type ctxkey int
 			const key ctxkey = 1
 			const value = "from-ctx"
-			webhook := &Webhook{
-				Handler: &fakeHandler{
-					fn: func(ctx context.Context, req Request) Response {
+			webhook := &WebhookLegacy{
+				Handler: &fakeHandlerLegacy{
+					fn: func(ctx context.Context, req RequestLegacy) ResponseLegacy {
 						<-ctx.Done()
-						return Allowed(ctx.Value(key).(string))
+						return AllowedLegacy(ctx.Value(key).(string))
 					},
 				},
 				log: logf.RuntimeLog.WithName("webhook"),
@@ -127,35 +127,29 @@ var _ = Describe("Admission Webhooks", func() {
 	})
 })
 
-type nopCloser struct {
-	io.Reader
-}
-
-func (nopCloser) Close() error { return nil }
-
-type fakeHandler struct {
+type fakeHandlerLegacy struct {
 	invoked        bool
-	fn             func(context.Context, Request) Response
+	fn             func(context.Context, RequestLegacy) ResponseLegacy
 	decoder        *Decoder
 	injectedString string
 }
 
-func (h *fakeHandler) InjectDecoder(d *Decoder) error {
+func (h *fakeHandlerLegacy) InjectDecoder(d *Decoder) error {
 	h.decoder = d
 	return nil
 }
 
-func (h *fakeHandler) InjectString(s string) error {
+func (h *fakeHandlerLegacy) InjectString(s string) error {
 	h.injectedString = s
 	return nil
 }
 
-func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {
+func (h *fakeHandlerLegacy) Handle(ctx context.Context, req RequestLegacy) ResponseLegacy {
 	h.invoked = true
 	if h.fn != nil {
 		return h.fn(ctx, req)
 	}
-	return Response{AdmissionResponse: admissionv1.AdmissionResponse{
+	return ResponseLegacy{AdmissionResponse: admissionv1beta1.AdmissionResponse{
 		Allowed: true,
 	}}
 }

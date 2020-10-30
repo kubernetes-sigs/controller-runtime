@@ -62,6 +62,17 @@ func (blder *WebhookBuilder) Complete() error {
 	return blder.registerWebhooks()
 }
 
+// CompleteLegacy builds the webhook to support `k8s.io/api/admission.k8s.io/v1beta1` api.
+// Since `k8s.io/api/admission.k8s.io/v1beta1` is deprecated in kubernetes v1.16 in favor of admission.k8s.io/v1, please consider
+// to upgrade if possible.
+func (blder *WebhookBuilder) CompleteLegacy() error {
+	// Set the Config
+	blder.loadRestConfig()
+
+	// Set the Webhook if needed
+	return blder.registerWebhooksLegacy()
+}
+
 func (blder *WebhookBuilder) loadRestConfig() {
 	if blder.config == nil {
 		blder.config = blder.mgr.GetConfig()
@@ -143,6 +154,67 @@ func (blder *WebhookBuilder) registerConversionWebhook() error {
 	}
 
 	return nil
+}
+
+func (blder *WebhookBuilder) registerWebhooksLegacy() error {
+	// Create webhook(s) for each type
+	var err error
+	blder.gvk, err = apiutil.GVKForObject(blder.apiType, blder.mgr.GetScheme())
+	if err != nil {
+		return err
+	}
+
+	blder.registerDefaultingWebhookLegacy()
+	blder.registerValidatingWebhookLegacy()
+
+	err = blder.registerConversionWebhook()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// registerDefaultingWebhook registers a defaulting webhook if th
+func (blder *WebhookBuilder) registerDefaultingWebhookLegacy() {
+	defaulter, isDefaulter := blder.apiType.(admission.Defaulter)
+	if !isDefaulter {
+		log.Info("skip registering a mutating webhook, admission.Defaulter interface is not implemented", "GVK", blder.gvk)
+		return
+	}
+	mwh := admission.DefaultingWebhookForLegacy(defaulter)
+	if mwh != nil {
+		path := generateMutatePath(blder.gvk)
+
+		// Checking if the path is already registered.
+		// If so, just skip it.
+		if !blder.isAlreadyHandled(path) {
+			log.Info("Registering a mutating webhook",
+				"GVK", blder.gvk,
+				"path", path)
+			blder.mgr.GetWebhookServer().Register(path, mwh)
+		}
+	}
+}
+
+func (blder *WebhookBuilder) registerValidatingWebhookLegacy() {
+	validator, isValidator := blder.apiType.(admission.Validator)
+	if !isValidator {
+		log.Info("skip registering a validating webhook, admission.Validator interface is not implemented", "GVK", blder.gvk)
+		return
+	}
+	vwh := admission.ValidatingWebhookForLegacy(validator)
+	if vwh != nil {
+		path := generateValidatePath(blder.gvk)
+
+		// Checking if the path is already registered.
+		// If so, just skip it.
+		if !blder.isAlreadyHandled(path) {
+			log.Info("Registering a validating webhook",
+				"GVK", blder.gvk,
+				"path", path)
+			blder.mgr.GetWebhookServer().Register(path, vwh)
+		}
+	}
 }
 
 func (blder *WebhookBuilder) isAlreadyHandled(path string) bool {

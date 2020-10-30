@@ -24,16 +24,16 @@ import (
 	. "github.com/onsi/gomega"
 	"gomodules.xyz/jsonpatch/v2"
 
-	admissionv1 "k8s.io/api/admission/v1"
+	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("Admission Webhook Response Helpers", func() {
 	Describe("Allowed", func() {
 		It("should return an 'allowed' response", func() {
-			Expect(Allowed("")).To(Equal(
-				Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
+			Expect(AllowedLegacy("")).To(Equal(
+				ResponseLegacy{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed: true,
 						Result: &metav1.Status{
 							Code: http.StatusOK,
@@ -44,9 +44,9 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 		})
 
 		It("should populate a status with a reason when a reason is given", func() {
-			Expect(Allowed("acceptable")).To(Equal(
-				Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
+			Expect(AllowedLegacy("acceptable")).To(Equal(
+				ResponseLegacy{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed: true,
 						Result: &metav1.Status{
 							Code:   http.StatusOK,
@@ -60,9 +60,9 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 
 	Describe("Denied", func() {
 		It("should return a 'not allowed' response", func() {
-			Expect(Denied("")).To(Equal(
-				Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
+			Expect(DeniedLegacy("")).To(Equal(
+				ResponseLegacy{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed: false,
 						Result: &metav1.Status{
 							Code: http.StatusForbidden,
@@ -73,9 +73,9 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 		})
 
 		It("should populate a status with a reason when a reason is given", func() {
-			Expect(Denied("UNACCEPTABLE!")).To(Equal(
-				Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
+			Expect(DeniedLegacy("UNACCEPTABLE!")).To(Equal(
+				ResponseLegacy{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed: false,
 						Result: &metav1.Status{
 							Code:   http.StatusForbidden,
@@ -100,9 +100,9 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 			},
 		}
 		It("should return an 'allowed' response with the given patches", func() {
-			Expect(Patched("", ops...)).To(Equal(
-				Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
+			Expect(PatchedLegacy("", ops...)).To(Equal(
+				ResponseLegacy{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed: true,
 						Result: &metav1.Status{
 							Code: http.StatusOK,
@@ -113,9 +113,9 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 			))
 		})
 		It("should populate a status with a reason when a reason is given", func() {
-			Expect(Patched("some changes", ops...)).To(Equal(
-				Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
+			Expect(PatchedLegacy("some changes", ops...)).To(Equal(
+				ResponseLegacy{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed: true,
 						Result: &metav1.Status{
 							Code:   http.StatusOK,
@@ -131,8 +131,8 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 	Describe("Errored", func() {
 		It("should return a denied response with an error", func() {
 			err := errors.New("this is an error")
-			expected := Response{
-				AdmissionResponse: admissionv1.AdmissionResponse{
+			expected := ResponseLegacy{
+				AdmissionResponse: admissionv1beta1.AdmissionResponse{
 					Allowed: false,
 					Result: &metav1.Status{
 						Code:    http.StatusBadRequest,
@@ -140,7 +140,7 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 					},
 				},
 			}
-			resp := Errored(http.StatusBadRequest, err)
+			resp := ErroredLegacy(http.StatusBadRequest, err)
 			Expect(resp).To(Equal(expected))
 		})
 	})
@@ -148,9 +148,9 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 	Describe("ValidationResponse", func() {
 		It("should populate a status with a reason when a reason is given", func() {
 			By("checking that a message is populated for 'allowed' responses")
-			Expect(ValidationResponse(true, "acceptable")).To(Equal(
-				Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
+			Expect(ValidationResponseLegacy(true, "acceptable")).To(Equal(
+				ResponseLegacy{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed: true,
 						Result: &metav1.Status{
 							Code:   http.StatusOK,
@@ -161,9 +161,9 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 			))
 
 			By("checking that a message is populated for 'denied' responses")
-			Expect(ValidationResponse(false, "UNACCEPTABLE!")).To(Equal(
-				Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
+			Expect(ValidationResponseLegacy(false, "UNACCEPTABLE!")).To(Equal(
+				ResponseLegacy{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed: false,
 						Result: &metav1.Status{
 							Code:   http.StatusForbidden,
@@ -176,9 +176,9 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 
 		It("should return an admission decision", func() {
 			By("checking that it returns an 'allowed' response when allowed is true")
-			Expect(ValidationResponse(true, "")).To(Equal(
-				Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
+			Expect(ValidationResponseLegacy(true, "")).To(Equal(
+				ResponseLegacy{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed: true,
 						Result: &metav1.Status{
 							Code: http.StatusOK,
@@ -188,9 +188,9 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 			))
 
 			By("checking that it returns an 'denied' response when allowed is false")
-			Expect(ValidationResponse(false, "")).To(Equal(
-				Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
+			Expect(ValidationResponseLegacy(false, "")).To(Equal(
+				ResponseLegacy{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed: false,
 						Result: &metav1.Status{
 							Code: http.StatusForbidden,
@@ -203,24 +203,24 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 
 	Describe("PatchResponseFromRaw", func() {
 		It("should return an 'allowed' response with a patch of the diff between two sets of serialized JSON", func() {
-			expected := Response{
+			expected := ResponseLegacy{
 				Patches: []jsonpatch.JsonPatchOperation{
 					{Operation: "replace", Path: "/a", Value: "bar"},
 				},
-				AdmissionResponse: admissionv1.AdmissionResponse{
+				AdmissionResponse: admissionv1beta1.AdmissionResponse{
 					Allowed:   true,
-					PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
+					PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
 				},
 			}
-			resp := PatchResponseFromRaw([]byte(`{"a": "foo"}`), []byte(`{"a": "bar"}`))
+			resp := PatchResponseFromRawLegacy([]byte(`{"a": "foo"}`), []byte(`{"a": "bar"}`))
 			Expect(resp).To(Equal(expected))
 		})
 	})
 
 	Describe("WithWarnings", func() {
 		It("should add the warnings to the existing response without removing any existing warnings", func() {
-			initialResponse := Response{
-				AdmissionResponse: admissionv1.AdmissionResponse{
+			initialResponse := ResponseLegacy{
+				AdmissionResponse: admissionv1beta1.AdmissionResponse{
 					Allowed: true,
 					Result: &metav1.Status{
 						Code: http.StatusOK,
@@ -229,8 +229,8 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 				},
 			}
 			warnings := []string{"additional-warning-1", "additional-warning-2"}
-			expectedResponse := Response{
-				AdmissionResponse: admissionv1.AdmissionResponse{
+			expectedResponse := ResponseLegacy{
+				AdmissionResponse: admissionv1beta1.AdmissionResponse{
 					Allowed: true,
 					Result: &metav1.Status{
 						Code: http.StatusOK,

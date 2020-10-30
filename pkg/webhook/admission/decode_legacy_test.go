@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	admissionv1 "k8s.io/api/admission/v1"
+	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -38,8 +38,8 @@ var _ = Describe("Admission Webhook Decoder", func() {
 		Expect(decoder).NotTo(BeNil())
 	})
 
-	req := Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
+	req := RequestLegacy{
+		AdmissionRequest: admissionv1beta1.AdmissionRequest{
 			Object: runtime.RawExtension{
 				Raw: []byte(`{
     "apiVersion": "v1",
@@ -82,7 +82,7 @@ var _ = Describe("Admission Webhook Decoder", func() {
 	It("should decode a valid admission request", func() {
 		By("extracting the object from the request")
 		var actualObj corev1.Pod
-		Expect(decoder.Decode(req, &actualObj)).To(Succeed())
+		Expect(decoder.DecodeLegacy(req, &actualObj)).To(Succeed())
 
 		By("verifying that all data is present in the object")
 		Expect(actualObj).To(Equal(corev1.Pod{
@@ -127,7 +127,7 @@ var _ = Describe("Admission Webhook Decoder", func() {
 
 	It("should fail to decode if the object in the request doesn't match the passed-in type", func() {
 		By("trying to extract a pod from the quest into a node")
-		Expect(decoder.Decode(req, &corev1.Node{})).NotTo(Succeed())
+		Expect(decoder.DecodeLegacy(req, &corev1.Node{})).NotTo(Succeed())
 
 		By("trying to extract a pod in RawExtension format into a node")
 		Expect(decoder.DecodeRaw(req.OldObject, &corev1.Node{})).NotTo(Succeed())
@@ -136,7 +136,7 @@ var _ = Describe("Admission Webhook Decoder", func() {
 	It("should be able to decode into an unstructured object", func() {
 		By("decoding the request into an unstructured object")
 		var target unstructured.Unstructured
-		Expect(decoder.Decode(req, &target)).To(Succeed())
+		Expect(decoder.DecodeLegacy(req, &target)).To(Succeed())
 
 		By("sanity-checking the metadata on the output object")
 		Expect(target.Object["metadata"]).To(Equal(map[string]interface{}{

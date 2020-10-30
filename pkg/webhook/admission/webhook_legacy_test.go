@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"gomodules.xyz/jsonpatch/v2"
-	admissionv1 "k8s.io/api/admission/v1"
+	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	machinerytypes "k8s.io/apimachinery/pkg/types"
@@ -34,17 +34,17 @@ import (
 )
 
 var _ = Describe("Admission Webhooks", func() {
-	allowHandler := func() *Webhook {
-		handler := &fakeHandler{
-			fn: func(ctx context.Context, req Request) Response {
-				return Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
+	allowHandler := func() *WebhookLegacy {
+		handler := &fakeHandlerLegacy{
+			fn: func(ctx context.Context, req RequestLegacy) ResponseLegacy {
+				return ResponseLegacy{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed: true,
 					},
 				}
 			},
 		}
-		webhook := &Webhook{
+		webhook := &WebhookLegacy{
 			Handler: handler,
 			log:     logf.RuntimeLog.WithName("webhook"),
 		}
@@ -57,7 +57,7 @@ var _ = Describe("Admission Webhooks", func() {
 		webhook := allowHandler()
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{})
+		resp := webhook.Handle(context.Background(), RequestLegacy{})
 
 		By("checking that it allowed the request")
 		Expect(resp.Allowed).To(BeTrue())
@@ -68,7 +68,7 @@ var _ = Describe("Admission Webhooks", func() {
 		webhook := allowHandler()
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{AdmissionRequest: admissionv1.AdmissionRequest{UID: "foobar"}})
+		resp := webhook.Handle(context.Background(), RequestLegacy{AdmissionRequest: admissionv1beta1.AdmissionRequest{UID: "foobar"}})
 
 		By("checking that the response share's the request's UID")
 		Expect(resp.UID).To(Equal(machinerytypes.UID("foobar")))
@@ -79,7 +79,7 @@ var _ = Describe("Admission Webhooks", func() {
 		webhook := allowHandler()
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{})
+		resp := webhook.Handle(context.Background(), RequestLegacy{})
 
 		By("checking that the response share's the request's UID")
 		Expect(resp.Result).To(Equal(&metav1.Status{Code: http.StatusOK}))
@@ -87,10 +87,10 @@ var _ = Describe("Admission Webhooks", func() {
 
 	It("shouldn't overwrite the status on a response", func() {
 		By("setting up a webhook that sets a status")
-		webhook := &Webhook{
-			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
-				return Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
+		webhook := &WebhookLegacy{
+			Handler: HandlerFuncLegacy(func(ctx context.Context, req RequestLegacy) ResponseLegacy {
+				return ResponseLegacy{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed: true,
 						Result:  &metav1.Status{Message: "Ground Control to Major Tom"},
 					},
@@ -100,7 +100,7 @@ var _ = Describe("Admission Webhooks", func() {
 		}
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{})
+		resp := webhook.Handle(context.Background(), RequestLegacy{})
 
 		By("checking that the message is intact")
 		Expect(resp.Result).NotTo(BeNil())
@@ -109,18 +109,18 @@ var _ = Describe("Admission Webhooks", func() {
 
 	It("should serialize patch operations into a single jsonpatch blob", func() {
 		By("setting up a webhook with a patching handler")
-		webhook := &Webhook{
-			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
-				return Patched("", jsonpatch.Operation{Operation: "add", Path: "/a", Value: 2}, jsonpatch.Operation{Operation: "replace", Path: "/b", Value: 4})
+		webhook := &WebhookLegacy{
+			Handler: HandlerFuncLegacy(func(ctx context.Context, req RequestLegacy) ResponseLegacy {
+				return PatchedLegacy("", jsonpatch.Operation{Operation: "add", Path: "/a", Value: 2}, jsonpatch.Operation{Operation: "replace", Path: "/b", Value: 4})
 			}),
 			log: logf.RuntimeLog.WithName("webhook"),
 		}
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{})
+		resp := webhook.Handle(context.Background(), RequestLegacy{})
 
 		By("checking that a JSON patch is populated on the response")
-		patchType := admissionv1.PatchTypeJSONPatch
+		patchType := admissionv1beta1.PatchTypeJSONPatch
 		Expect(resp.PatchType).To(Equal(&patchType))
 		Expect(resp.Patch).To(Equal([]byte(`[{"op":"add","path":"/a","value":2},{"op":"replace","path":"/b","value":4}]`)))
 	})
@@ -136,8 +136,8 @@ var _ = Describe("Admission Webhooks", func() {
 
 				return inj.InjectString("something")
 			}
-			handler := &fakeHandler{}
-			webhook := &Webhook{
+			handler := &fakeHandlerLegacy{}
+			webhook := &WebhookLegacy{
 				Handler: handler,
 				log:     logf.RuntimeLog.WithName("webhook"),
 			}
@@ -156,8 +156,8 @@ var _ = Describe("Admission Webhooks", func() {
 				}
 				return nil
 			}
-			handler := &fakeHandler{}
-			webhook := &Webhook{
+			handler := &fakeHandlerLegacy{}
+			webhook := &WebhookLegacy{
 				Handler: handler,
 				log:     logf.RuntimeLog.WithName("webhook"),
 			}
@@ -176,13 +176,13 @@ var _ = Describe("Admission Webhooks", func() {
 				}
 				return nil
 			}
-			handler := &handlerWithSubDependencies{
-				Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
-					return Response{}
+			handler := &handlerWithSubDependenciesLegacy{
+				HandlerLegacy: HandlerFuncLegacy(func(ctx context.Context, req RequestLegacy) ResponseLegacy {
+					return ResponseLegacy{}
 				}),
 				dep: &subDep{},
 			}
-			webhook := &Webhook{
+			webhook := &WebhookLegacy{
 				Handler: handler,
 			}
 			Expect(setFields(webhook)).To(Succeed())
@@ -194,24 +194,11 @@ var _ = Describe("Admission Webhooks", func() {
 	})
 })
 
-type stringInjector interface {
-	InjectString(s string) error
-}
-
-type handlerWithSubDependencies struct {
-	Handler
+type handlerWithSubDependenciesLegacy struct {
+	HandlerLegacy
 	dep *subDep
 }
 
-func (h *handlerWithSubDependencies) InjectFunc(f inject.Func) error {
+func (h *handlerWithSubDependenciesLegacy) InjectFunc(f inject.Func) error {
 	return f(h.dep)
-}
-
-type subDep struct {
-	decoder *Decoder
-}
-
-func (d *subDep) InjectDecoder(dec *Decoder) error {
-	d.decoder = dec
-	return nil
 }

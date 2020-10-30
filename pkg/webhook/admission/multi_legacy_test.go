@@ -23,23 +23,23 @@ import (
 	. "github.com/onsi/gomega"
 
 	"gomodules.xyz/jsonpatch/v2"
-	admissionv1 "k8s.io/api/admission/v1"
+	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 )
 
 var _ = Describe("Multi-Handler Admission Webhooks", func() {
-	alwaysAllow := &fakeHandler{
-		fn: func(ctx context.Context, req Request) Response {
-			return Response{
-				AdmissionResponse: admissionv1.AdmissionResponse{
+	alwaysAllow := &fakeHandlerLegacy{
+		fn: func(ctx context.Context, req RequestLegacy) ResponseLegacy {
+			return ResponseLegacy{
+				AdmissionResponse: admissionv1beta1.AdmissionResponse{
 					Allowed: true,
 				},
 			}
 		},
 	}
-	alwaysDeny := &fakeHandler{
-		fn: func(ctx context.Context, req Request) Response {
-			return Response{
-				AdmissionResponse: admissionv1.AdmissionResponse{
+	alwaysDeny := &fakeHandlerLegacy{
+		fn: func(ctx context.Context, req RequestLegacy) ResponseLegacy {
+			return ResponseLegacy{
+				AdmissionResponse: admissionv1beta1.AdmissionResponse{
 					Allowed: false,
 				},
 			}
@@ -49,27 +49,27 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 	Context("with validating handlers", func() {
 		It("should deny the request if any handler denies the request", func() {
 			By("setting up a handler with accept and deny")
-			handler := MultiValidatingHandler(alwaysAllow, alwaysDeny)
+			handler := MultiValidatingHandlerLegacy(alwaysAllow, alwaysDeny)
 
 			By("checking that the handler denies the request")
-			resp := handler.Handle(context.Background(), Request{})
+			resp := handler.Handle(context.Background(), RequestLegacy{})
 			Expect(resp.Allowed).To(BeFalse())
 		})
 
 		It("should allow the request if all handlers allow the request", func() {
 			By("setting up a handler with only accept")
-			handler := MultiValidatingHandler(alwaysAllow, alwaysAllow)
+			handler := MultiValidatingHandlerLegacy(alwaysAllow, alwaysAllow)
 
 			By("checking that the handler allows the request")
-			resp := handler.Handle(context.Background(), Request{})
+			resp := handler.Handle(context.Background(), RequestLegacy{})
 			Expect(resp.Allowed).To(BeTrue())
 		})
 	})
 
 	Context("with mutating handlers", func() {
-		patcher1 := &fakeHandler{
-			fn: func(ctx context.Context, req Request) Response {
-				return Response{
+		patcher1 := &fakeHandlerLegacy{
+			fn: func(ctx context.Context, req RequestLegacy) ResponseLegacy {
+				return ResponseLegacy{
 					Patches: []jsonpatch.JsonPatchOperation{
 						{
 							Operation: "add",
@@ -82,16 +82,16 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 							Value:     "2",
 						},
 					},
-					AdmissionResponse: admissionv1.AdmissionResponse{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed:   true,
-						PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
+						PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
 					},
 				}
 			},
 		}
-		patcher2 := &fakeHandler{
-			fn: func(ctx context.Context, req Request) Response {
-				return Response{
+		patcher2 := &fakeHandlerLegacy{
+			fn: func(ctx context.Context, req RequestLegacy) ResponseLegacy {
+				return ResponseLegacy{
 					Patches: []jsonpatch.JsonPatchOperation{
 						{
 							Operation: "add",
@@ -99,9 +99,9 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 							Value:     "world",
 						},
 					},
-					AdmissionResponse: admissionv1.AdmissionResponse{
+					AdmissionResponse: admissionv1beta1.AdmissionResponse{
 						Allowed:   true,
-						PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
+						PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
 					},
 				}
 			},
@@ -109,20 +109,20 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 
 		It("should not return any patches if the request is denied", func() {
 			By("setting up a webhook with some patches and a deny")
-			handler := MultiMutatingHandler(patcher1, patcher2, alwaysDeny)
+			handler := MultiMutatingHandlerLegacy(patcher1, patcher2, alwaysDeny)
 
 			By("checking that the handler denies the request and produces no patches")
-			resp := handler.Handle(context.Background(), Request{})
+			resp := handler.Handle(context.Background(), RequestLegacy{})
 			Expect(resp.Allowed).To(BeFalse())
 			Expect(resp.Patches).To(BeEmpty())
 		})
 
 		It("should produce all patches if the requests are all allowed", func() {
 			By("setting up a webhook with some patches")
-			handler := MultiMutatingHandler(patcher1, patcher2, alwaysAllow)
+			handler := MultiMutatingHandlerLegacy(patcher1, patcher2, alwaysAllow)
 
 			By("checking that the handler accepts the request and returns all patches")
-			resp := handler.Handle(context.Background(), Request{})
+			resp := handler.Handle(context.Background(), RequestLegacy{})
 			Expect(resp.Allowed).To(BeTrue())
 			Expect(resp.Patch).To(Equal([]byte(
 				`[{"op":"add","path":"/metadata/annotation/new-key","value":"new-value"},` +

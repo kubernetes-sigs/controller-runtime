@@ -18,8 +18,6 @@ package builder
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -27,13 +25,10 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var _ = Describe("webhook", func() {
@@ -62,14 +57,14 @@ var _ = Describe("webhook", func() {
 
 			err = WebhookManagedBy(m).
 				For(&TestDefaulter{}).
-				Complete()
+				CompleteLegacy()
 			Expect(err).NotTo(HaveOccurred())
 			svr := m.GetWebhookServer()
 			Expect(svr).NotTo(BeNil())
 
 			reader := strings.NewReader(`{
   "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/v1",
+  "apiVersion":"admission.k8s.io/v1beta1",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -134,14 +129,14 @@ var _ = Describe("webhook", func() {
 
 			err = WebhookManagedBy(m).
 				For(&TestValidator{}).
-				Complete()
+				CompleteLegacy()
 			Expect(err).NotTo(HaveOccurred())
 			svr := m.GetWebhookServer()
 			Expect(svr).NotTo(BeNil())
 
 			reader := strings.NewReader(`{
   "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/v1",
+  "apiVersion":"admission.k8s.io/v1beta1",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -207,14 +202,14 @@ var _ = Describe("webhook", func() {
 
 			err = WebhookManagedBy(m).
 				For(&TestDefaultValidator{}).
-				Complete()
+				CompleteLegacy()
 			Expect(err).NotTo(HaveOccurred())
 			svr := m.GetWebhookServer()
 			Expect(svr).NotTo(BeNil())
 
 			reader := strings.NewReader(`{
   "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/v1",
+  "apiVersion":"admission.k8s.io/v1beta1",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -284,14 +279,14 @@ var _ = Describe("webhook", func() {
 
 			err = WebhookManagedBy(m).
 				For(&TestValidator{}).
-				Complete()
+				CompleteLegacy()
 			Expect(err).NotTo(HaveOccurred())
 			svr := m.GetWebhookServer()
 			Expect(svr).NotTo(BeNil())
 
 			reader := strings.NewReader(`{
   "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/v1",
+  "apiVersion":"admission.k8s.io/v1beta1",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -334,7 +329,7 @@ var _ = Describe("webhook", func() {
 
 			reader = strings.NewReader(`{
   "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/v1",
+  "apiVersion":"admission.k8s.io/v1beta1",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -369,156 +364,3 @@ var _ = Describe("webhook", func() {
 		})
 	})
 })
-
-// TestDefaulter
-var _ runtime.Object = &TestDefaulter{}
-
-type TestDefaulter struct {
-	Replica int `json:"replica,omitempty"`
-}
-
-var testDefaulterGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: "TestDefaulter"}
-
-func (d *TestDefaulter) GetObjectKind() schema.ObjectKind { return d }
-func (d *TestDefaulter) DeepCopyObject() runtime.Object {
-	return &TestDefaulter{
-		Replica: d.Replica,
-	}
-}
-
-func (d *TestDefaulter) GroupVersionKind() schema.GroupVersionKind {
-	return testDefaulterGVK
-}
-
-func (d *TestDefaulter) SetGroupVersionKind(gvk schema.GroupVersionKind) {}
-
-var _ runtime.Object = &TestDefaulterList{}
-
-type TestDefaulterList struct{}
-
-func (*TestDefaulterList) GetObjectKind() schema.ObjectKind { return nil }
-func (*TestDefaulterList) DeepCopyObject() runtime.Object   { return nil }
-
-func (d *TestDefaulter) Default() {
-	if d.Replica < 2 {
-		d.Replica = 2
-	}
-}
-
-// TestValidator
-var _ runtime.Object = &TestValidator{}
-
-type TestValidator struct {
-	Replica int `json:"replica,omitempty"`
-}
-
-var testValidatorGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: "TestValidator"}
-
-func (v *TestValidator) GetObjectKind() schema.ObjectKind { return v }
-func (v *TestValidator) DeepCopyObject() runtime.Object {
-	return &TestValidator{
-		Replica: v.Replica,
-	}
-}
-
-func (v *TestValidator) GroupVersionKind() schema.GroupVersionKind {
-	return testValidatorGVK
-}
-
-func (v *TestValidator) SetGroupVersionKind(gvk schema.GroupVersionKind) {}
-
-var _ runtime.Object = &TestValidatorList{}
-
-type TestValidatorList struct{}
-
-func (*TestValidatorList) GetObjectKind() schema.ObjectKind { return nil }
-func (*TestValidatorList) DeepCopyObject() runtime.Object   { return nil }
-
-var _ admission.Validator = &TestValidator{}
-
-func (v *TestValidator) ValidateCreate() error {
-	if v.Replica < 0 {
-		return errors.New("number of replica should be greater than or equal to 0")
-	}
-	return nil
-}
-
-func (v *TestValidator) ValidateUpdate(old runtime.Object) error {
-	if v.Replica < 0 {
-		return errors.New("number of replica should be greater than or equal to 0")
-	}
-	if oldObj, ok := old.(*TestValidator); !ok {
-		return fmt.Errorf("the old object is expected to be %T", oldObj)
-	} else if v.Replica < oldObj.Replica {
-		return fmt.Errorf("new replica %v should not be fewer than old replica %v", v.Replica, oldObj.Replica)
-	}
-	return nil
-}
-
-func (v *TestValidator) ValidateDelete() error {
-	if v.Replica > 0 {
-		return errors.New("number of replica should be less than or equal to 0 to delete")
-	}
-	return nil
-}
-
-// TestDefaultValidator
-var _ runtime.Object = &TestDefaultValidator{}
-
-type TestDefaultValidator struct {
-	metav1.TypeMeta
-	metav1.ObjectMeta
-
-	Replica int `json:"replica,omitempty"`
-}
-
-var testDefaultValidatorGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: "TestDefaultValidator"}
-
-func (dv *TestDefaultValidator) GetObjectKind() schema.ObjectKind { return dv }
-func (dv *TestDefaultValidator) DeepCopyObject() runtime.Object {
-	return &TestDefaultValidator{
-		Replica: dv.Replica,
-	}
-}
-
-func (dv *TestDefaultValidator) GroupVersionKind() schema.GroupVersionKind {
-	return testDefaultValidatorGVK
-}
-
-func (dv *TestDefaultValidator) SetGroupVersionKind(gvk schema.GroupVersionKind) {}
-
-var _ runtime.Object = &TestDefaultValidatorList{}
-
-type TestDefaultValidatorList struct{}
-
-func (*TestDefaultValidatorList) GetObjectKind() schema.ObjectKind { return nil }
-func (*TestDefaultValidatorList) DeepCopyObject() runtime.Object   { return nil }
-
-func (dv *TestDefaultValidator) Default() {
-	if dv.Replica < 2 {
-		dv.Replica = 2
-	}
-}
-
-var _ admission.Validator = &TestDefaultValidator{}
-
-func (dv *TestDefaultValidator) ValidateCreate() error {
-	if dv.Replica < 0 {
-		return errors.New("number of replica should be greater than or equal to 0")
-	}
-	return nil
-}
-
-func (dv *TestDefaultValidator) ValidateUpdate(old runtime.Object) error {
-	if dv.Replica < 0 {
-		return errors.New("number of replica should be greater than or equal to 0")
-	}
-	return nil
-}
-
-func (dv *TestDefaultValidator) ValidateDelete() error {
-	if dv.Replica > 0 {
-		return errors.New("number of replica should be less than or equal to 0 to delete")
-	}
-	return nil
-}

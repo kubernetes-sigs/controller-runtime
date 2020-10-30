@@ -22,102 +22,93 @@ import (
 
 	goerrors "errors"
 
-	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// Validator defines functions for validating an operation
-type Validator interface {
-	runtime.Object
-	ValidateCreate() error
-	ValidateUpdate(old runtime.Object) error
-	ValidateDelete() error
-}
-
-// ValidatingWebhookFor creates a new Webhook for validating the provided type.
-func ValidatingWebhookFor(validator Validator) *Webhook {
-	return &Webhook{
-		Handler: &validatingHandler{validator: validator},
+// ValidatingWebhookForLegacy creates a new Webhook for validating the provided type.
+func ValidatingWebhookForLegacy(validator Validator) *WebhookLegacy {
+	return &WebhookLegacy{
+		Handler: &validatingHandlerLegacy{validator: validator},
 	}
 }
 
-type validatingHandler struct {
+type validatingHandlerLegacy struct {
 	validator Validator
 	decoder   *Decoder
 }
 
-var _ DecoderInjector = &validatingHandler{}
+var _ DecoderInjector = &validatingHandlerLegacy{}
 
 // InjectDecoder injects the decoder into a validatingHandler.
-func (h *validatingHandler) InjectDecoder(d *Decoder) error {
+func (h *validatingHandlerLegacy) InjectDecoder(d *Decoder) error {
 	h.decoder = d
 	return nil
 }
 
 // Handle handles admission requests.
-func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
+func (h *validatingHandlerLegacy) Handle(ctx context.Context, req RequestLegacy) ResponseLegacy {
 	if h.validator == nil {
 		panic("validator should never be nil")
 	}
 
 	// Get the object in the request
 	obj := h.validator.DeepCopyObject().(Validator)
-	if req.Operation == admissionv1.Create {
-		err := h.decoder.Decode(req, obj)
+	if req.Operation == v1beta1.Create {
+		err := h.decoder.DecodeLegacy(req, obj)
 		if err != nil {
-			return Errored(http.StatusBadRequest, err)
+			return ErroredLegacy(http.StatusBadRequest, err)
 		}
 
 		err = obj.ValidateCreate()
 		if err != nil {
 			var apiStatus errors.APIStatus
 			if goerrors.As(err, &apiStatus) {
-				return validationResponseFromStatus(false, apiStatus.Status())
+				return validationResponseFromStatusLegacy(false, apiStatus.Status())
 			}
-			return Denied(err.Error())
+			return DeniedLegacy(err.Error())
 		}
 	}
 
-	if req.Operation == admissionv1.Update {
+	if req.Operation == v1beta1.Update {
 		oldObj := obj.DeepCopyObject()
 
 		err := h.decoder.DecodeRaw(req.Object, obj)
 		if err != nil {
-			return Errored(http.StatusBadRequest, err)
+			return ErroredLegacy(http.StatusBadRequest, err)
 		}
 		err = h.decoder.DecodeRaw(req.OldObject, oldObj)
 		if err != nil {
-			return Errored(http.StatusBadRequest, err)
+			return ErroredLegacy(http.StatusBadRequest, err)
 		}
 
 		err = obj.ValidateUpdate(oldObj)
 		if err != nil {
 			var apiStatus errors.APIStatus
 			if goerrors.As(err, &apiStatus) {
-				return validationResponseFromStatus(false, apiStatus.Status())
+				return validationResponseFromStatusLegacy(false, apiStatus.Status())
 			}
-			return Denied(err.Error())
+			return DeniedLegacy(err.Error())
 		}
 	}
 
-	if req.Operation == admissionv1.Delete {
+	if req.Operation == v1beta1.Delete {
 		// In reference to PR: https://github.com/kubernetes/kubernetes/pull/76346
 		// OldObject contains the object being deleted
 		err := h.decoder.DecodeRaw(req.OldObject, obj)
 		if err != nil {
-			return Errored(http.StatusBadRequest, err)
+			return ErroredLegacy(http.StatusBadRequest, err)
 		}
 
 		err = obj.ValidateDelete()
 		if err != nil {
 			var apiStatus errors.APIStatus
 			if goerrors.As(err, &apiStatus) {
-				return validationResponseFromStatus(false, apiStatus.Status())
+				return validationResponseFromStatusLegacy(false, apiStatus.Status())
 			}
-			return Denied(err.Error())
+			return DeniedLegacy(err.Error())
 		}
 	}
 
-	return Allowed("")
+	return AllowedLegacy("")
 }

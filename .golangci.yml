@@ -4,7 +4,10 @@ linters-settings:
   lll:
     line-length: 170
   dupl:
-    threshold: 400
+#    The threshold is increased because we have some duplicated test code for pkg/webhook to support
+#    k8s.io/api/admission/v1beta1, we can change this back when we drop the support and remove the legacy code completely.
+#    threshold: 400
+    threshold: 1500
 issues:
   # don't skip warning about doc comments
   exclude-use-default: false

@@ -254,7 +254,7 @@ type Options struct {
 	// GracefulShutdownTimeout is the duration given to runnable to stop before the manager actually returns on stop.
 	// To disable graceful shutdown, set to time.Duration(0)
 	// To use graceful shutdown without timeout, set to a negative duration, e.G. time.Duration(-1)
-	// The graceful shutdown is skipped for safety reasons in case the leadere election lease is lost.
+	// The graceful shutdown is skipped for safety reasons in case the leader election lease is lost.
 	GracefulShutdownTimeout *time.Duration
 
 	// makeBroadcaster allows deferring the creation of the broadcaster to

@@ -371,14 +371,61 @@ var _ = Describe("application", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should support watching For & Owns as metadata", func() {
+		It("should support watching For, Owns, and Watch as metadata", func() {
+			statefulSetMaps := make(chan *metav1.PartialObjectMetadata)
+
 			bldr := ControllerManagedBy(mgr).
 				For(&appsv1.Deployment{}, OnlyMetadata).
-				Owns(&appsv1.ReplicaSet{}, OnlyMetadata)
+				Owns(&appsv1.ReplicaSet{}, OnlyMetadata).
+				Watches(&source.Kind{Type: &appsv1.StatefulSet{}},
+					handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
+						ometa := o.(*metav1.PartialObjectMetadata)
+						statefulSetMaps <- ometa
+						return nil
+					}),
+					OnlyMetadata)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			doReconcileTest(ctx, "8", bldr, mgr, true)
+
+			By("Creating a new stateful set")
+			set := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "test1",
+					Labels: map[string]string{
+						"foo": "bar",
+					},
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx",
+								},
+							},
+						},
+					},
+				},
+			}
+			err := mgr.GetClient().Create(context.TODO(), set)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking that the mapping function has been called")
+			Eventually(func() bool {
+				metaSet := <-statefulSetMaps
+				Expect(metaSet.Name).To(Equal(set.Name))
+				Expect(metaSet.Namespace).To(Equal(set.Namespace))
+				Expect(metaSet.Labels).To(Equal(set.Labels))
+				return true
+			}).Should(BeTrue())
 		})
 	})
 })

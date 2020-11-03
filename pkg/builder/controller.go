@@ -116,9 +116,10 @@ func (blder *Builder) Owns(object client.Object, opts ...OwnsOption) *Builder {
 
 // WatchesInput represents the information set by Watches method.
 type WatchesInput struct {
-	src          source.Source
-	eventhandler handler.EventHandler
-	predicates   []predicate.Predicate
+	src              source.Source
+	eventhandler     handler.EventHandler
+	predicates       []predicate.Predicate
+	objectProjection objectProjection
 }
 
 // Watches exposes the lower-level ControllerManagedBy Watches functions through the builder.  Consider using
@@ -255,10 +256,19 @@ func (blder *Builder) doWatch() error {
 	for _, w := range blder.watchesInput {
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)
+
+		// If the source of this watch is of type *source.Kind, project it.
+		if srckind, ok := w.src.(*source.Kind); ok {
+			typeForSrc, err := blder.project(srckind.Type, w.objectProjection)
+			if err != nil {
+				return err
+			}
+			srckind.Type = typeForSrc
+		}
+
 		if err := blder.ctrl.Watch(w.src, w.eventhandler, allPredicates...); err != nil {
 			return err
 		}
-
 	}
 	return nil
 }

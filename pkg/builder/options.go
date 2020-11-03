@@ -94,6 +94,11 @@ func (p projectAs) ApplyToOwns(opts *OwnsInput) {
 	opts.objectProjection = objectProjection(p)
 }
 
+// ApplyToWatches applies this configuration to the given WatchesInput options.
+func (p projectAs) ApplyToWatches(opts *WatchesInput) {
+	opts.objectProjection = objectProjection(p)
+}
+
 var (
 	// OnlyMetadata tells the controller to *only* cache metadata, and to watch
 	// the the API server in metadata-only form.  This is useful when watching
@@ -104,8 +109,9 @@ var (
 	// unstructured cache.
 	OnlyMetadata = projectAs(projectAsMetadata)
 
-	_ ForOption  = OnlyMetadata
-	_ OwnsOption = OnlyMetadata
+	_ ForOption     = OnlyMetadata
+	_ OwnsOption    = OnlyMetadata
+	_ WatchesOption = OnlyMetadata
 )
 
 // }}}

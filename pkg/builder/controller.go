@@ -201,10 +201,17 @@ func (blder *Builder) doWatch() error {
 
 	// Do the watch requests
 	for _, w := range blder.watchRequest {
+		// If the source of this watch is of type *source.Kind, project it.
+		if srckind, ok := w.src.(*source.Kind); ok {
+			typeForSrc, err := blder.project(srckind.Type)
+			if err != nil {
+				return err
+			}
+			srckind.Type = typeForSrc
+		}
 		if err := blder.ctrl.Watch(w.src, w.eventhandler, blder.predicates...); err != nil {
 			return err
 		}
-
 	}
 	return nil
 }

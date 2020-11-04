@@ -264,6 +264,7 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 		c.Queue.AddRateLimited(req)
 		ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Inc()
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "error").Inc()
+		log.Error(err, "Reconciler error")
 		return
 	} else if result.RequeueAfter > 0 {
 		// The result.RequeueAfter request will be lost, if it is returned

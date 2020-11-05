@@ -87,7 +87,8 @@ var _ = Describe("runtime inject", func() {
 	})
 
 	It("should set client", func() {
-		client := client.NewDelegatingClient(client.NewDelegatingClientInput{Client: fake.NewFakeClient()})
+		client, err := client.NewDelegatingClient(client.NewDelegatingClientInput{Client: fake.NewFakeClient()})
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Validating injecting client")
 		res, err := ClientInto(client, instance)
@@ -152,7 +153,8 @@ var _ = Describe("runtime inject", func() {
 	})
 
 	It("should set api reader", func() {
-		apiReader := client.NewDelegatingClient(client.NewDelegatingClientInput{Client: fake.NewFakeClient()})
+		apiReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{Client: fake.NewFakeClient()})
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Validating injecting client")
 		res, err := APIReaderInto(apiReader, instance)

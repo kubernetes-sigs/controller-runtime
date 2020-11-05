@@ -235,10 +235,14 @@ type Options struct {
 	// by the manager. If not set this will use the default new cache function.
 	NewCache cache.NewCacheFunc
 
-	// NewClient will create the client to be used by the manager.
+	// ClientBuilder is the builder that creates the client to be used by the manager.
 	// If not set this will create the default DelegatingClient that will
 	// use the cache for reads and the client for writes.
-	NewClient NewClientFunc
+	ClientBuilder ClientBuilder
+
+	// ClientDisableCacheFor tells the client that, if any cache is used, to bypass it
+	// for the given objects.
+	ClientDisableCacheFor []client.Object
 
 	// DryRunClient specifies whether the client should be configured to enforce
 	// dryRun mode.
@@ -269,9 +273,6 @@ type Options struct {
 	newMetricsListener     func(addr string) (net.Listener, error)
 	newHealthProbeListener func(addr string) (net.Listener, error)
 }
-
-// NewClientFunc allows a user to define how to create a client
-type NewClientFunc func(cache cache.Cache, config *rest.Config, options client.Options) (client.Client, error)
 
 // Runnable allows a component to be started.
 // It's very important that Start blocks until
@@ -323,12 +324,16 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
-	apiReader, err := client.New(config, client.Options{Scheme: options.Scheme, Mapper: mapper})
+	clientOptions := client.Options{Scheme: options.Scheme, Mapper: mapper}
+
+	apiReader, err := client.New(config, clientOptions)
 	if err != nil {
 		return nil, err
 	}
 
-	writeObj, err := options.NewClient(cache, config, client.Options{Scheme: options.Scheme, Mapper: mapper})
+	writeObj, err := options.ClientBuilder.
+		WithUncached(options.ClientDisableCacheFor...).
+		Build(cache, config, clientOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -503,20 +508,6 @@ func (o Options) setLeaderElectionConfig(obj v1alpha1.ControllerManagerConfigura
 	return o
 }
 
-// DefaultNewClient creates the default caching client
-func DefaultNewClient(cache cache.Cache, config *rest.Config, options client.Options) (client.Client, error) {
-	// Create the Client for Write operations.
-	c, err := client.New(config, options)
-	if err != nil {
-		return nil, err
-	}
-
-	return client.NewDelegatingClient(client.NewDelegatingClientInput{
-		CacheReader: cache,
-		Client:      c,
-	}), nil
-}
-
 // defaultHealthProbeListener creates the default health probes listener bound to the given address
 func defaultHealthProbeListener(addr string) (net.Listener, error) {
 	if addr == "" || addr == "0" {
@@ -543,9 +534,9 @@ func setOptionsDefaults(options Options) Options {
 		}
 	}
 
-	// Allow newClient to be mocked
-	if options.NewClient == nil {
-		options.NewClient = DefaultNewClient
+	// Allow the client builder to be mocked
+	if options.ClientBuilder == nil {
+		options.ClientBuilder = NewClientBuilder()
 	}
 
 	// Allow newCache to be mocked

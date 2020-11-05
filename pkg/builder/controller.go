@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -155,20 +156,42 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 	return blder.ctrl, nil
 }
 
+func (blder *Builder) project(obj runtime.Object) (runtime.Object, error) {
+	switch o := obj.(type) {
+	case *onlyMetadataWrapper:
+		metaObj := &metav1.PartialObjectMetadata{}
+		gvk, err := getGvk(o.Object, blder.mgr.GetScheme())
+		if err != nil {
+			return nil, fmt.Errorf("unable to determine GVK of %T for a metadata-only watch: %w", obj, err)
+		}
+		metaObj.SetGroupVersionKind(gvk)
+		return metaObj, nil
+	default:
+		return obj, nil
+	}
+}
+
 func (blder *Builder) doWatch() error {
 	// Reconcile type
-	src := &source.Kind{Type: blder.apiType}
-	hdler := &handler.EnqueueRequestForObject{}
-	err := blder.ctrl.Watch(src, hdler, blder.predicates...)
+	apiType, err := blder.project(blder.apiType)
 	if err != nil {
+		return err
+	}
+	src := &source.Kind{Type: apiType}
+	hdler := &handler.EnqueueRequestForObject{}
+	if err := blder.ctrl.Watch(src, hdler, blder.predicates...); err != nil {
 		return err
 	}
 
 	// Watches the managed types
 	for _, obj := range blder.managedObjects {
-		src := &source.Kind{Type: obj}
+		typeForSrc, err := blder.project(obj)
+		if err != nil {
+			return err
+		}
+		src := &source.Kind{Type: typeForSrc}
 		hdler := &handler.EnqueueRequestForOwner{
-			OwnerType:    blder.apiType,
+			OwnerType:    apiType,
 			IsController: true,
 		}
 		if err := blder.ctrl.Watch(src, hdler, blder.predicates...); err != nil {
@@ -196,7 +219,11 @@ func (blder *Builder) getControllerName() (string, error) {
 	if blder.name != "" {
 		return blder.name, nil
 	}
-	gvk, err := getGvk(blder.apiType, blder.mgr.GetScheme())
+	obj, err := blder.project(blder.apiType)
+	if err != nil {
+		return "", err
+	}
+	gvk, err := getGvk(obj, blder.mgr.GetScheme())
 	if err != nil {
 		return "", err
 	}

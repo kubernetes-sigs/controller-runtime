@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -33,6 +34,60 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+func ExampleBuilder_metadata_only() {
+	logf.SetLogger(zap.New())
+
+	var log = logf.Log.WithName("builder-examples")
+
+	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
+	if err != nil {
+		log.Error(err, "could not create manager")
+		os.Exit(1)
+	}
+
+	cl := mgr.GetClient()
+	err = builder.
+		ControllerManagedBy(mgr).                  // Create the ControllerManagedBy
+		For(&appsv1.ReplicaSet{}).                 // ReplicaSet is the Application API
+		Owns(builder.OnlyMetadata(&corev1.Pod{})). // ReplicaSet owns Pods created by it, and caches them as metadata only
+		Complete(reconcile.Func(func(req reconcile.Request) (reconcile.Result, error) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Read the ReplicaSet
+			rs := &appsv1.ReplicaSet{}
+			err := cl.Get(ctx, req.NamespacedName, rs)
+			if err != nil {
+				return reconcile.Result{}, client.IgnoreNotFound(err)
+			}
+
+			// List the Pods matching the PodTemplate Labels, but only their metadata
+			var podsMeta metav1.PartialObjectMetadataList
+			err = cl.List(ctx, &podsMeta, client.InNamespace(req.Namespace), client.MatchingLabels(rs.Spec.Template.Labels))
+			if err != nil {
+				return reconcile.Result{}, client.IgnoreNotFound(err)
+			}
+
+			// Update the ReplicaSet
+			rs.Labels["pod-count"] = fmt.Sprintf("%v", len(podsMeta.Items))
+			err = cl.Update(ctx, rs)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+
+			return reconcile.Result{}, nil
+		}))
+	if err != nil {
+		log.Error(err, "could not create controller")
+		os.Exit(1)
+	}
+
+	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+		log.Error(err, "could not start manager")
+		os.Exit(1)
+	}
+}
 
 // This example creates a simple application ControllerManagedBy that is configured for ReplicaSets and Pods.
 //

@@ -183,6 +183,10 @@ breaks the clean design of the cache.
 
 ### Stoppable Informers and EventHandler removal natively in client-go
 
+*This proposal was discussed with sig-api-machinery on 11/5 and has been
+tentatively accepted. See the [design
+doc](https://docs.google.com/document/d/17QrTaxfIEUNOEAt61Za3Mu0M76x-iEkcmR51q0a5lis/edit) and [WIP implementation](https://github.com/kevindelgado/kubernetes/pull/1) for more detail.*
+
 A few changes to the underlying SharedInformer interface in client-go could save
 us from a lot of work in controller-runtime.
 
@@ -190,22 +194,18 @@ One is to add a second `Run` method on the `SharedInformer` interface such as
 ```
 // RunWithStopOptions runs the informer and provides options to be checked that
 // would indicate under what conditions the informer should stop
-RunWithStopOptions(stopOptions StopOptions) StopReason
+RunWithStopOptions(stopOptions StopOptions)
 
 // StopOptions let the caller specifcy which conditions to stop the informer.
 type StopOptions struct {
-  // StopChannel stops the Informer when it receives a close signal
-  StopChannel <-chan struct{}
+  // ExternalStop stops the Informer when it receives a close signal
+  ExternalStop <-chan struct{}
 
   // OnListError inspects errors returned from the informer's underlying
   // reflector, and based on the error determines whether or not to stop the
   // informer.
   OnListError func(err) bool
 }
-
-// StopReason is a custom typed error that indicates how the informer was
-// stopped
-type StopReason error
 ```
 
 This could be plumbed through controller-runtime allowing users to pass informer
@@ -221,18 +221,12 @@ similar to the `EventHandler` reference counting interface we discussed above th
 ```
 type SharedInformer interface {
 ...
-  CountEventHandlers() int
-  RemoveEventHandler(id) error
+  RemoveEventHandler(handler ResourceEventHandler) bool
+  EventHandlerCount() int
 }
 ```
-(where `id`` is a to be determined identifer of the specific handler to be
-removed).
 
 This would remove the need to track it ourselves in controller-runtime.
-
-TODO: Bring this design up (potentially with a proof-of-concept branch) at an
-upcoming sig-api-machinery meeting to begin getting feedback and see whether it
-is feasible to land the changes in client-go.
 
 ## Open Questions
 
@@ -298,4 +292,7 @@ controller-runtime
 * 10/8/2020: Discuss idea in community meeting
 * 10/19/2020: Proposal updated to add EventHandler count tracking and client-go
   based alternative.
+* 11/4/2020: Propopsal to add RunWithStopOptions, RemoveEventHandler, and
+  EventHandlerCount discussed at sig-api-machinery meeting and was tentatively
+  accepted. See the [design doc](https://docs.google.com/document/d/17QrTaxfIEUNOEAt61Za3Mu0M76x-iEkcmR51q0a5lis/edit) and [WIP implementation](https://github.com/kevindelgado/kubernetes/pull/1) for more detail.
 

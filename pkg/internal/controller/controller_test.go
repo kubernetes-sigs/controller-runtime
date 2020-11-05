@@ -122,6 +122,60 @@ var _ = Describe("controller", func() {
 			close(done)
 		})
 
+		It("should error when cache sync timeout occurs", func(done Done) {
+			ctrl.CacheSyncTimeout = 10 * time.Nanosecond
+			c, err := cache.New(cfg, cache.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = c.GetInformer(context.TODO(), &appsv1.Deployment{})
+			Expect(err).NotTo(HaveOccurred())
+			sync := false
+			ctrl.startWatches = []watchDescription{{
+				src: source.NewKindWithCache(&appsv1.Deployment{}, &informertest.FakeInformers{
+					Synced: &sync,
+				}),
+			}}
+
+			err = ctrl.Start(context.TODO())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cache did not sync"))
+
+			close(done)
+		})
+
+		It("should not error when cache sync time out is of reasonable value", func(done Done) {
+			ctrl.CacheSyncTimeout = 1 * time.Second
+			c, err := cache.New(cfg, cache.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			ctrl.startWatches = []watchDescription{{
+				src: source.NewKindWithCache(&appsv1.Deployment{}, c),
+			}}
+
+			By("running the cache and waiting for it to sync")
+			go func() {
+				defer GinkgoRecover()
+				Expect(c.Start(context.TODO())).To(Succeed())
+			}()
+			close(done)
+		})
+
+		It("should error when timeout is set to a very low value such that cache cannot sync", func(done Done) {
+			ctrl.CacheSyncTimeout = 1 * time.Nanosecond
+			c, err := cache.New(cfg, cache.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			ctrl.startWatches = []watchDescription{{
+				src: source.NewKindWithCache(&appsv1.Deployment{}, c),
+			}}
+
+			By("running the cache and waiting for it to sync")
+			go func() {
+				defer GinkgoRecover()
+				err = ctrl.Start(context.TODO())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("cache did not sync"))
+			}()
+			close(done)
+		})
+
 		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {
 			pr1 := &predicate.Funcs{}
 			pr2 := &predicate.Funcs{}

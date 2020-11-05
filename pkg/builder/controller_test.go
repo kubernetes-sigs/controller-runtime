@@ -24,6 +24,8 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -294,8 +296,58 @@ var _ = Describe("application", func() {
 		})
 	})
 
+	Describe("watching with projections", func() {
+		var mgr manager.Manager
+		BeforeEach(func() {
+			// use a cache that intercepts requests for fully typed objects to
+			// ensure we use the projected versions
+			var err error
+			mgr, err = manager.New(cfg, manager.Options{NewCache: newNonTypedOnlyCache})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should support watching For & Owns as metadata", func() {
+			bldr := ControllerManagedBy(mgr).
+				For(&appsv1.Deployment{}, OnlyMetadata).
+				Owns(&appsv1.ReplicaSet{}, OnlyMetadata)
+
+			doReconcileTest("8", stop, bldr, mgr, true)
+		})
+	})
 })
 
+// newNonTypedOnlyCache returns a new cache that wraps the normal cache,
+// returning an error if normal, typed objects have informers requested.
+func newNonTypedOnlyCache(config *rest.Config, opts cache.Options) (cache.Cache, error) {
+	normalCache, err := cache.New(config, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &nonTypedOnlyCache{
+		Cache: normalCache,
+	}, nil
+}
+
+// nonTypedOnlyCache is a cache.Cache that only provides metadata &
+// unstructured informers.
+type nonTypedOnlyCache struct {
+	cache.Cache
+}
+
+func (c *nonTypedOnlyCache) GetInformer(ctx context.Context, obj runtime.Object) (cache.Informer, error) {
+	switch obj.(type) {
+	case (*metav1.PartialObjectMetadata):
+		return c.Cache.GetInformer(ctx, obj)
+	default:
+		return nil, fmt.Errorf("did not want to provide an informer for normal type %T", obj)
+	}
+}
+func (c *nonTypedOnlyCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (cache.Informer, error) {
+	return nil, fmt.Errorf("don't try to sidestep the restriction on informer types by calling GetInformerForKind")
+}
+
+// TODO(directxman12): this function has too many arguments, and the whole
+// "nameSuffix" think is a bit of a hack It should be cleaned up significantly by someone with a bit of time
 func doReconcileTest(nameSuffix string, stop chan struct{}, blder *Builder, mgr manager.Manager, complete bool) {
 	deployName := "deploy-name-" + nameSuffix
 	rsName := "rs-name-" + nameSuffix
@@ -358,8 +410,8 @@ func doReconcileTest(nameSuffix string, stop chan struct{}, blder *Builder, mgr 
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Waiting for the Deployment Reconcile")
-	Expect(<-ch).To(Equal(reconcile.Request{
-		NamespacedName: types.NamespacedName{Namespace: "default", Name: deployName}}))
+	Eventually(ch).Should(Receive(Equal(reconcile.Request{
+		NamespacedName: types.NamespacedName{Namespace: "default", Name: deployName}})))
 
 	By("Creating a ReplicaSet")
 	// Expect a Reconcile when an Owned object is managedObjects.
@@ -388,8 +440,8 @@ func doReconcileTest(nameSuffix string, stop chan struct{}, blder *Builder, mgr 
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Waiting for the ReplicaSet Reconcile")
-	Expect(<-ch).To(Equal(reconcile.Request{
-		NamespacedName: types.NamespacedName{Namespace: "default", Name: deployName}}))
+	Eventually(ch).Should(Receive(Equal(reconcile.Request{
+		NamespacedName: types.NamespacedName{Namespace: "default", Name: deployName}})))
 
 }
 

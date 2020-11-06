@@ -108,10 +108,6 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 		options.RateLimiter = workqueue.DefaultControllerRateLimiter()
 	}
 
-	if options.Log == nil {
-		options.Log = mgr.GetLogger()
-	}
-
 	// Inject dependencies into Reconciler
 	if err := mgr.SetFields(options.Reconciler); err != nil {
 		return nil, err

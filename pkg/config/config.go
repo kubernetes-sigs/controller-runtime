@@ -98,7 +98,7 @@ func (d *DeferredFileLoader) loadFile() {
 
 	content, err := ioutil.ReadFile(d.path)
 	if err != nil {
-		d.err = fmt.Errorf("file could not be read from filesystem")
+		d.err = fmt.Errorf("could not read file at %s", d.path)
 		return
 	}
 

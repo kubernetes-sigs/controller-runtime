@@ -28,7 +28,7 @@ var _ = Describe("config", func() {
 
 		It("should error loading from non existent file", func() {
 			loader := config.File()
-			_, err := loader.GetControllerManagerConfiguration()
+			_, err := loader.Complete()
 			Expect(err).ToNot(BeNil())
 		})
 
@@ -37,7 +37,7 @@ var _ = Describe("config", func() {
 			loader := config.File().AtPath("./testdata/config.yaml").OfKind(&conf)
 			Expect(conf.CacheNamespace).To(Equal(""))
 
-			_, err := loader.GetControllerManagerConfiguration()
+			_, err := loader.Complete()
 			Expect(err).To(BeNil())
 
 			Expect(*conf.LeaderElection.LeaderElect).To(Equal(true))

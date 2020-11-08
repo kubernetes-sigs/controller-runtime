@@ -416,7 +416,7 @@ func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options,
 		}
 	}
 
-	newObj, err := loader.GetControllerManagerConfiguration()
+	newObj, err := loader.Complete()
 	if err != nil {
 		return o, err
 	}

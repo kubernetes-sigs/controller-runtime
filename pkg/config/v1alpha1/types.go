@@ -121,7 +121,7 @@ type ControllerManagerConfiguration struct {
 	ControllerManagerConfigurationSpec `json:",inline"`
 }
 
-// GetControllerManagerConfiguration returns the configuration for controller-runtime
-func (c *ControllerManagerConfigurationSpec) GetControllerManagerConfiguration() (ControllerManagerConfigurationSpec, error) {
+// Complete returns the configuration for controller-runtime
+func (c *ControllerManagerConfigurationSpec) Complete() (ControllerManagerConfigurationSpec, error) {
 	return *c, nil
 }

@@ -414,6 +414,202 @@ var _ = Describe("Predicate", func() {
 
 	})
 
+	Describe("When checking an AnnotationChangedPredicate", func() {
+		instance := predicate.AnnotationChangedPredicate{}
+		Context("Where the old object is missing", func() {
+			It("should return false", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Annotations: map[string]string{
+							"booz": "wooz",
+						},
+					}}
+
+				failEvnt := event.UpdateEvent{
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(failEvnt)).To(BeFalse())
+			})
+		})
+
+		Context("Where the new object is missing", func() {
+			It("should return false", func() {
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Annotations: map[string]string{
+							"booz": "wooz",
+						},
+					}}
+
+				failEvnt := event.UpdateEvent{
+					ObjectOld: old,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(failEvnt)).To(BeFalse())
+			})
+		})
+
+		Context("Where the annotations are empty", func() {
+			It("should return false", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+					}}
+
+				failEvnt := event.UpdateEvent{
+					ObjectOld: old,
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(failEvnt)).To(BeFalse())
+			})
+		})
+
+		Context("Where the annotations haven't changed", func() {
+			It("should return false", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Annotations: map[string]string{
+							"booz": "wooz",
+						},
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Annotations: map[string]string{
+							"booz": "wooz",
+						},
+					}}
+
+				failEvnt := event.UpdateEvent{
+					ObjectOld: old,
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(failEvnt)).To(BeFalse())
+			})
+		})
+
+		Context("Where an annotation value has changed", func() {
+			It("should return true", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Annotations: map[string]string{
+							"booz": "wooz",
+						},
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Annotations: map[string]string{
+							"booz": "weez",
+						},
+					}}
+
+				passEvt := event.UpdateEvent{
+					ObjectOld: old,
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(passEvt)).To(BeTrue())
+			})
+		})
+
+		Context("Where an annotation has been added", func() {
+			It("should return true", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Annotations: map[string]string{
+							"booz": "wooz",
+						},
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Annotations: map[string]string{
+							"booz": "wooz",
+							"zooz": "qooz",
+						},
+					}}
+
+				passEvt := event.UpdateEvent{
+					ObjectOld: old,
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(passEvt)).To(BeTrue())
+			})
+		})
+
+		Context("Where an annotation has been removed", func() {
+			It("should return true", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Annotations: map[string]string{
+							"booz": "wooz",
+							"zooz": "qooz",
+						},
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Annotations: map[string]string{
+							"booz": "wooz",
+						},
+					}}
+
+				passEvt := event.UpdateEvent{
+					ObjectOld: old,
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(passEvt)).To(BeTrue())
+			})
+		})
+	})
+
 	Context("With a boolean predicate", func() {
 		funcs := func(pass bool) predicate.Funcs {
 			return predicate.Funcs{

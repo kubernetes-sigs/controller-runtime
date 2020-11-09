@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-var _ = Describe("application", func() {
+var _ = Describe("webhook", func() {
 	var stop chan struct{}
 
 	BeforeEach(func() {

@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -36,6 +37,17 @@ import (
 // Supporting mocking out functions for testing
 var newController = controller.New
 var getGvk = apiutil.GVKForObject
+
+// project represents other forms that the we can use to
+// send/receive a given resource (metadata-only, unstructured, etc)
+type objectProjection int
+
+const (
+	// projectAsNormal doesn't change the object from the form given
+	projectAsNormal objectProjection = iota
+	// projectAsMetadata turns this into an metadata-only watch
+	projectAsMetadata
+)
 
 // Builder builds a Controller.
 type Builder struct {
@@ -68,8 +80,9 @@ func (blder *Builder) ForType(apiType runtime.Object) *Builder {
 
 // ForInput represents the information set by For method.
 type ForInput struct {
-	object     runtime.Object
-	predicates []predicate.Predicate
+	object           runtime.Object
+	predicates       []predicate.Predicate
+	objectProjection objectProjection
 }
 
 // For defines the type of Object being *reconciled*, and configures the ControllerManagedBy to respond to create / delete /
@@ -88,8 +101,9 @@ func (blder *Builder) For(object runtime.Object, opts ...ForOption) *Builder {
 
 // OwnsInput represents the information set by Owns method.
 type OwnsInput struct {
-	object     runtime.Object
-	predicates []predicate.Predicate
+	object           runtime.Object
+	predicates       []predicate.Predicate
+	objectProjection objectProjection
 }
 
 // Owns defines types of Objects being *generated* by the ControllerManagedBy, and configures the ControllerManagedBy to respond to
@@ -107,9 +121,10 @@ func (blder *Builder) Owns(object runtime.Object, opts ...OwnsOption) *Builder {
 
 // WatchesInput represents the information set by Watches method.
 type WatchesInput struct {
-	src          source.Source
-	eventhandler handler.EventHandler
-	predicates   []predicate.Predicate
+	src              source.Source
+	eventhandler     handler.EventHandler
+	predicates       []predicate.Predicate
+	objectProjection objectProjection
 }
 
 // Watches exposes the lower-level ControllerManagedBy Watches functions through the builder.  Consider using
@@ -195,19 +210,43 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 	return blder.ctrl, nil
 }
 
+func (blder *Builder) project(obj runtime.Object, proj objectProjection) (runtime.Object, error) {
+	switch proj {
+	case projectAsNormal:
+		return obj, nil
+	case projectAsMetadata:
+		metaObj := &metav1.PartialObjectMetadata{}
+		gvk, err := getGvk(obj, blder.mgr.GetScheme())
+		if err != nil {
+			return nil, fmt.Errorf("unable to determine GVK of %T for a metadata-only watch: %w", obj, err)
+		}
+		metaObj.SetGroupVersionKind(gvk)
+		return metaObj, nil
+	default:
+		panic(fmt.Sprintf("unexpected projection type %v on type %T, should not be possible since this is an internal field", proj, obj))
+	}
+}
+
 func (blder *Builder) doWatch() error {
 	// Reconcile type
-	src := &source.Kind{Type: blder.forInput.object}
+	typeForSrc, err := blder.project(blder.forInput.object, blder.forInput.objectProjection)
+	if err != nil {
+		return err
+	}
+	src := &source.Kind{Type: typeForSrc}
 	hdler := &handler.EnqueueRequestForObject{}
 	allPredicates := append(blder.globalPredicates, blder.forInput.predicates...)
-	err := blder.ctrl.Watch(src, hdler, allPredicates...)
-	if err != nil {
+	if err := blder.ctrl.Watch(src, hdler, allPredicates...); err != nil {
 		return err
 	}
 
 	// Watches the managed types
 	for _, own := range blder.ownsInput {
-		src := &source.Kind{Type: own.object}
+		typeForSrc, err := blder.project(own.object, own.objectProjection)
+		if err != nil {
+			return err
+		}
+		src := &source.Kind{Type: typeForSrc}
 		hdler := &handler.EnqueueRequestForOwner{
 			OwnerType:    blder.forInput.object,
 			IsController: true,
@@ -223,10 +262,19 @@ func (blder *Builder) doWatch() error {
 	for _, w := range blder.watchesInput {
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)
+
+		// If the source of this watch is of type *source.Kind, project it.
+		if srckind, ok := w.src.(*source.Kind); ok {
+			typeForSrc, err := blder.project(srckind.Type, w.objectProjection)
+			if err != nil {
+				return err
+			}
+			srckind.Type = typeForSrc
+		}
+
 		if err := blder.ctrl.Watch(w.src, w.eventhandler, allPredicates...); err != nil {
 			return err
 		}
-
 	}
 	return nil
 }

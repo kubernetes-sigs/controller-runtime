@@ -541,7 +541,7 @@ var _ = Describe("Fake client", func() {
 			Expect(corev1.AddToScheme(scheme)).To(Succeed())
 			Expect(appsv1.AddToScheme(scheme)).To(Succeed())
 			Expect(coordinationv1.AddToScheme(scheme)).To(Succeed())
-			cl = NewFakeClientWithScheme(scheme, dep, dep2, cm)
+			cl = NewFakeClientWithScheme(scheme, &appsv1.DeploymentList{Items: []appsv1.Deployment{*dep, *dep2}}, cm)
 			close(done)
 		})
 		AssertClientBehavior()

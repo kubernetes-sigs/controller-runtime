@@ -1610,7 +1610,7 @@ type fakeDeferredLoader struct {
 	*v1alpha1.ControllerManagerConfiguration
 }
 
-func (f *fakeDeferredLoader) GetControllerManagerConfiguration() (v1alpha1.ControllerManagerConfigurationSpec, error) {
+func (f *fakeDeferredLoader) Complete() (v1alpha1.ControllerManagerConfigurationSpec, error) {
 	return f.ControllerManagerConfiguration.ControllerManagerConfigurationSpec, nil
 }
 

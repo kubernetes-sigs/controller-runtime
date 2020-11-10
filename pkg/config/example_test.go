@@ -32,12 +32,12 @@ func init() {
 	_ = v1alpha1.AddToScheme(scheme)
 }
 
-// This example will load a file using GetControllerManagerConfiguration with only
+// This example will load a file using Complete with only
 // defaults set.
 func ExampleFile() {
 	// This will load a config file from ./config.yaml
 	loader := config.File()
-	_, err := loader.GetControllerManagerConfiguration()
+	_, err := loader.Complete()
 	if err != nil {
 		fmt.Println("failed to load config")
 		os.Exit(1)
@@ -47,7 +47,7 @@ func ExampleFile() {
 // This example will load the file from a custom path
 func ExampleDeferredFileLoader_atPath() {
 	loader := config.File().AtPath("/var/run/controller-runtime/config.yaml")
-	_, err := loader.GetControllerManagerConfiguration()
+	_, err := loader.Complete()
 	if err != nil {
 		fmt.Println("failed to load config")
 		os.Exit(1)
@@ -63,7 +63,7 @@ func ExampleDeferredFileLoader_injectScheme() {
 		os.Exit(1)
 	}
 
-	_, err = loader.GetControllerManagerConfiguration()
+	_, err = loader.Complete()
 	if err != nil {
 		fmt.Println("failed to load config")
 		os.Exit(1)
@@ -78,7 +78,7 @@ func ExampleDeferredFileLoader_ofKind() {
 		fmt.Println("failed to inject scheme")
 		os.Exit(1)
 	}
-	_, err = loader.GetControllerManagerConfiguration()
+	_, err = loader.Complete()
 	if err != nil {
 		fmt.Println("failed to load config")
 		os.Exit(1)

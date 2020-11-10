@@ -32,8 +32,8 @@ import (
 type ControllerManagerConfiguration interface {
 	runtime.Object
 
-	// GetControllerManagerConfiguration returns the versioned configuration
-	GetControllerManagerConfiguration() (v1alpha1.ControllerManagerConfigurationSpec, error)
+	// Complete returns the versioned configuration
+	Complete() (v1alpha1.ControllerManagerConfigurationSpec, error)
 }
 
 // DeferredFileLoader is used to configure the decoder for loading controller
@@ -62,13 +62,13 @@ func File() *DeferredFileLoader {
 	}
 }
 
-// GetControllerManagerConfiguration will use sync.Once to set the scheme
-func (d *DeferredFileLoader) GetControllerManagerConfiguration() (v1alpha1.ControllerManagerConfigurationSpec, error) {
+// Complete will use sync.Once to set the scheme
+func (d *DeferredFileLoader) Complete() (v1alpha1.ControllerManagerConfigurationSpec, error) {
 	d.once.Do(d.loadFile)
 	if d.err != nil {
 		return v1alpha1.ControllerManagerConfigurationSpec{}, d.err
 	}
-	return d.ControllerManagerConfiguration.GetControllerManagerConfiguration()
+	return d.ControllerManagerConfiguration.Complete()
 }
 
 // AtPath will set the path to load the file for the decoder

@@ -19,7 +19,8 @@ set -e
 export TRACE=1
 
 # Not included or existing by default in Prow
-export PATH=$(go env GOPATH)/bin:$PATH
-mkdir -p $(go env GOPATH)/bin
+PATH=$(go env GOPATH)/bin:$PATH
+export PATH
+mkdir -p "$(go env GOPATH)"/bin
 
-$(dirname ${BASH_SOURCE})/check-everything.sh
+"$(dirname "${BASH_SOURCE[0]}")"/check-everything.sh

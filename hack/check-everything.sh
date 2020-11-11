@@ -18,9 +18,11 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-hack_dir=$(dirname ${BASH_SOURCE})
-source ${hack_dir}/common.sh
-source ${hack_dir}/setup-envtest.sh
+hack_dir=$(dirname "${BASH_SOURCE[0]}")
+# shellcheck source=/dev/null
+source "${hack_dir}"/common.sh
+# shellcheck source=/dev/null
+source "${hack_dir}"/setup-envtest.sh
 
 tmp_root=/tmp
 kb_root_dir=$tmp_root/kubebuilder
@@ -31,12 +33,12 @@ fetch_envtest_tools "$kb_root_dir"
 fetch_envtest_tools "${hack_dir}/../pkg/internal/testing/integration/assets"
 setup_envtest_env "$kb_root_dir"
 
-${hack_dir}/verify.sh
-${hack_dir}/test-all.sh
+"${hack_dir}"/verify.sh
+"${hack_dir}"/test-all.sh
 
 header_text "confirming examples compile (via go install)"
-go install ${MOD_OPT} ./examples/builtins
-go install ${MOD_OPT} ./examples/crd
+go install "${MOD_OPT}" ./examples/builtins
+go install "${MOD_OPT}" ./examples/crd
 
 echo "passed"
 exit 0

@@ -60,7 +60,6 @@ function fetch_envtest_tools {
   fi
 
   tmp_root=/tmp
-  envtest_root_dir=$tmp_root/envtest
 
   k8s_version="${ENVTEST_K8S_VERSION:-1.16.4}"
   goarch="$(go env GOARCH)"
@@ -87,8 +86,8 @@ function fetch_envtest_tools {
   envtest_tools_download_url="https://storage.googleapis.com/kubebuilder-tools/$envtest_tools_archive_name"
 
   envtest_tools_archive_path="$tmp_root/$envtest_tools_archive_name"
-  if [ ! -f $envtest_tools_archive_path ]; then
-    curl -sL ${envtest_tools_download_url} -o "$envtest_tools_archive_path"
+  if [ ! -f "$envtest_tools_archive_path" ]; then
+    curl -sL "${envtest_tools_download_url}" -o "$envtest_tools_archive_path"
   fi
 
   mkdir -p "${dest_dir}"

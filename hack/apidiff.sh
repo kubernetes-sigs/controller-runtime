@@ -18,7 +18,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-source $(dirname ${BASH_SOURCE})/common.sh
+# shellcheck source=/dev/null
+source "$( dirname "${BASH_SOURCE[0]}" )"/common.sh
 
 REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 cd "${REPO_ROOT}"

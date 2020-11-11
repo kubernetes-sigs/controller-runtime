@@ -16,12 +16,13 @@
 
 set -e
 
-source $(dirname ${BASH_SOURCE})/common.sh
+# shellcheck source=/dev/null
+source "$( dirname "${BASH_SOURCE[0]}" )"/common.sh
 
 header_text "running go test"
 
-go test -race ${MOD_OPT} ./...
+go test -race "${MOD_OPT}" ./...
 
 if [[ -n ${ARTIFACTS:-} ]]; then
-  if grep -Rin '<failure type="Failure">' ${ARTIFACTS}/*; then exit 1; fi
+  if grep -Rin '<failure type="Failure">' "${ARTIFACTS}"/*; then exit 1; fi
 fi

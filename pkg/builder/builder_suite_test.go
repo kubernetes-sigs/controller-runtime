@@ -61,7 +61,7 @@ var _ = BeforeSuite(func(done Done) {
 	// Prevent the metrics listener being created
 	metrics.DefaultBindAddress = "0"
 
-	webhook.DefaultPort, _, err = addr.Suggest()
+	webhook.DefaultPort, _, err = addr.Suggest("")
 	Expect(err).NotTo(HaveOccurred())
 
 	close(done)

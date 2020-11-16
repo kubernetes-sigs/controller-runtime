@@ -124,15 +124,12 @@ var _ = Describe("controller", func() {
 
 		It("should error when cache sync timeout occurs", func(done Done) {
 			ctrl.CacheSyncTimeout = 10 * time.Nanosecond
+
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = c.GetInformer(context.TODO(), &appsv1.Deployment{})
-			Expect(err).NotTo(HaveOccurred())
-			sync := false
+
 			ctrl.startWatches = []watchDescription{{
-				src: source.NewKindWithCache(&appsv1.Deployment{}, &informertest.FakeInformers{
-					Synced: &sync,
-				}),
+				src: source.NewKindWithCache(&appsv1.Deployment{}, c),
 			}}
 
 			err = ctrl.Start(context.TODO())
@@ -142,39 +139,35 @@ var _ = Describe("controller", func() {
 			close(done)
 		})
 
-		It("should not error when cache sync time out is of reasonable value", func(done Done) {
+		It("should not error when cache sync timeout is of sufficiently high", func(done Done) {
 			ctrl.CacheSyncTimeout = 1 * time.Second
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			sourceSynced := make(chan struct{})
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			ctrl.startWatches = []watchDescription{{
-				src: source.NewKindWithCache(&appsv1.Deployment{}, c),
+				src: &singnallingSourceWrapper{
+					SyncingSource: source.NewKindWithCache(&appsv1.Deployment{}, c),
+					cacheSyncDone: sourceSynced,
+				},
 			}}
 
-			By("running the cache and waiting for it to sync")
 			go func() {
 				defer GinkgoRecover()
-				Expect(c.Start(context.TODO())).To(Succeed())
+				Expect(c.Start(ctx)).To(Succeed())
 			}()
-			close(done)
-		})
 
-		It("should error when timeout is set to a very low value such that cache cannot sync", func(done Done) {
-			ctrl.CacheSyncTimeout = 1 * time.Nanosecond
-			c, err := cache.New(cfg, cache.Options{})
-			Expect(err).NotTo(HaveOccurred())
-			ctrl.startWatches = []watchDescription{{
-				src: source.NewKindWithCache(&appsv1.Deployment{}, c),
-			}}
-
-			By("running the cache and waiting for it to sync")
 			go func() {
 				defer GinkgoRecover()
-				err = ctrl.Start(context.TODO())
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("cache did not sync"))
+				Expect(ctrl.Start(ctx)).To(Succeed())
 			}()
+
+			<-sourceSynced
 			close(done)
-		})
+		}, 10.0)
 
 		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {
 			pr1 := &predicate.Funcs{}
@@ -864,4 +857,16 @@ func (f *fakeReconciler) Reconcile(_ context.Context, r reconcile.Request) (reco
 		f.Requests <- r
 	}
 	return res.Result, res.Err
+}
+
+type singnallingSourceWrapper struct {
+	cacheSyncDone chan struct{}
+	source.SyncingSource
+}
+
+func (s *singnallingSourceWrapper) WaitForSync(ctx context.Context) error {
+	defer func() {
+		close(s.cacheSyncDone)
+	}()
+	return s.SyncingSource.WaitForSync(ctx)
 }

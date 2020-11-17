@@ -5,8 +5,8 @@ go 1.15
 require (
 	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/fsnotify/fsnotify v1.4.9
-	github.com/go-logr/logr v0.2.1
-	github.com/go-logr/zapr v0.2.0
+	github.com/go-logr/logr v0.3.0
+	github.com/go-logr/zapr v0.3.0
 	github.com/google/go-cmp v0.5.2 // indirect
 	github.com/googleapis/gnostic v0.5.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect

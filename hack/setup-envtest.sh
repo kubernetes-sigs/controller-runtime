@@ -62,7 +62,7 @@ function fetch_envtest_tools {
   tmp_root=/tmp
   envtest_root_dir=$tmp_root/envtest
 
-  k8s_version="${ENVTEST_K8S_VERSION:-1.16.4}"
+  k8s_version="${ENVTEST_K8S_VERSION:-1.19.2}"
   goarch="$(go env GOARCH)"
   goos="$(go env GOOS)"
 

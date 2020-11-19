@@ -58,7 +58,7 @@ var _ = Describe("Etcd", func() {
 		// for on StdErr
 		Expect(etcd.Start()).To(MatchError(ContainSubstring("timeout")))
 
-		Expect(stdout.String()).To(ContainSubstring("member flags"))
-		Expect(stderr.String()).To(ContainSubstring("usage: etcd"))
+		Expect(stdout.String()).To(ContainSubstring("Member:"))
+		Expect(stderr.String()).To(ContainSubstring("Usage:"))
 	})
 })

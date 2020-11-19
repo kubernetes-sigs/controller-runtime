@@ -25,7 +25,7 @@ source ${hack_dir}/setup-envtest.sh
 tmp_root=/tmp
 kb_root_dir=$tmp_root/kubebuilder
 
-ENVTEST_K8S_VERSION=${ENVTEST_K8S_VERSION:-"1.16.4"}
+ENVTEST_K8S_VERSION=${ENVTEST_K8S_VERSION:-"1.19.2"}
 
 fetch_envtest_tools "$kb_root_dir"
 fetch_envtest_tools "${hack_dir}/../pkg/internal/testing/integration/assets"

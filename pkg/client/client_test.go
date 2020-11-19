@@ -3065,10 +3065,11 @@ var _ = Describe("DelegatingClient", func() {
 			cachedReader := &fakeReader{}
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
-			dReader := client.NewDelegatingClient(client.NewDelegatingClientInput{
+			dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
 				CacheReader: cachedReader,
 				Client:      cl,
 			})
+			Expect(err).NotTo(HaveOccurred())
 			var actual appsv1.Deployment
 			key := client.ObjectKey{Namespace: "ns", Name: "name"}
 			Expect(dReader.Get(context.TODO(), key, &actual)).To(Succeed())
@@ -3079,10 +3080,11 @@ var _ = Describe("DelegatingClient", func() {
 			cachedReader := &fakeReader{}
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
-			dReader := client.NewDelegatingClient(client.NewDelegatingClientInput{
+			dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
 				CacheReader: cachedReader,
 				Client:      cl,
 			})
+			Expect(err).NotTo(HaveOccurred())
 			dep := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "deployment1",
@@ -3123,10 +3125,11 @@ var _ = Describe("DelegatingClient", func() {
 			cachedReader := &fakeReader{}
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
-			dReader := client.NewDelegatingClient(client.NewDelegatingClientInput{
+			dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
 				CacheReader: cachedReader,
 				Client:      cl,
 			})
+			Expect(err).NotTo(HaveOccurred())
 			var actual appsv1.DeploymentList
 			Expect(dReader.List(context.Background(), &actual)).To(Succeed())
 			Expect(1).To(Equal(cachedReader.Called))
@@ -3136,10 +3139,11 @@ var _ = Describe("DelegatingClient", func() {
 			cachedReader := &fakeReader{}
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
-			dReader := client.NewDelegatingClient(client.NewDelegatingClientInput{
+			dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
 				CacheReader: cachedReader,
 				Client:      cl,
 			})
+			Expect(err).NotTo(HaveOccurred())
 
 			actual := &unstructured.UnstructuredList{}
 			actual.SetGroupVersionKind(schema.GroupVersionKind{

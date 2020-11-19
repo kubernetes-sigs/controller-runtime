@@ -22,12 +22,15 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // NewDelegatingClientInput encapsulates the input parameters to create a new delegating client.
 type NewDelegatingClientInput struct {
-	CacheReader Reader
-	Client      Client
+	CacheReader     Reader
+	Client          Client
+	UncachedObjects []Object
 }
 
 // NewDelegatingClient creates a new delegating client.
@@ -35,17 +38,28 @@ type NewDelegatingClientInput struct {
 // A delegating client forms a Client by composing separate reader, writer and
 // statusclient interfaces.  This way, you can have an Client that reads from a
 // cache and writes to the API server.
-func NewDelegatingClient(in NewDelegatingClientInput) Client {
+func NewDelegatingClient(in NewDelegatingClientInput) (Client, error) {
+	uncachedGVKs := map[schema.GroupVersionKind]struct{}{}
+	for _, obj := range in.UncachedObjects {
+		gvk, err := apiutil.GVKForObject(obj, in.Client.Scheme())
+		if err != nil {
+			return nil, err
+		}
+		uncachedGVKs[gvk] = struct{}{}
+	}
+
 	return &delegatingClient{
 		scheme: in.Client.Scheme(),
 		mapper: in.Client.RESTMapper(),
 		Reader: &delegatingReader{
 			CacheReader:  in.CacheReader,
 			ClientReader: in.Client,
+			scheme:       in.Client.Scheme(),
+			uncachedGVKs: uncachedGVKs,
 		},
 		Writer:       in.Client,
 		StatusClient: in.Client,
-	}
+	}, nil
 }
 
 type delegatingClient struct {
@@ -75,12 +89,27 @@ func (d *delegatingClient) RESTMapper() meta.RESTMapper {
 type delegatingReader struct {
 	CacheReader  Reader
 	ClientReader Reader
+
+	uncachedGVKs map[schema.GroupVersionKind]struct{}
+	scheme       *runtime.Scheme
+}
+
+func (d *delegatingReader) shouldBypassCache(obj runtime.Object) (bool, error) {
+	gvk, err := apiutil.GVKForObject(obj, d.scheme)
+	if err != nil {
+		return false, err
+	}
+	_, isUncached := d.uncachedGVKs[gvk]
+	_, isUnstructured := obj.(*unstructured.Unstructured)
+	_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
+	return isUncached || isUnstructured || isUnstructuredList, nil
 }
 
 // Get retrieves an obj for a given object key from the Kubernetes Cluster.
 func (d *delegatingReader) Get(ctx context.Context, key ObjectKey, obj Object) error {
-	_, isUnstructured := obj.(*unstructured.Unstructured)
-	if isUnstructured {
+	if isUncached, err := d.shouldBypassCache(obj); err != nil {
+		return err
+	} else if isUncached {
 		return d.ClientReader.Get(ctx, key, obj)
 	}
 	return d.CacheReader.Get(ctx, key, obj)
@@ -88,8 +117,9 @@ func (d *delegatingReader) Get(ctx context.Context, key ObjectKey, obj Object) e
 
 // List retrieves list of objects for a given namespace and list options.
 func (d *delegatingReader) List(ctx context.Context, list ObjectList, opts ...ListOption) error {
-	_, isUnstructured := list.(*unstructured.UnstructuredList)
-	if isUnstructured {
+	if isUncached, err := d.shouldBypassCache(list); err != nil {
+		return err
+	} else if isUncached {
 		return d.ClientReader.List(ctx, list, opts...)
 	}
 	return d.CacheReader.List(ctx, list, opts...)

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"k8s.io/apimachinery/pkg/types"
 
@@ -48,12 +49,73 @@ func deleteDeployment(dep *appsv1.Deployment, ns string) {
 	}
 }
 
-func deleteNamespace(ns *corev1.Namespace) {
-	_, err := clientset.CoreV1().Namespaces().Get(ns.Name, metav1.GetOptions{})
-	if err == nil {
-		err = clientset.CoreV1().Namespaces().Delete(ns.Name, &metav1.DeleteOptions{})
-		Expect(err).NotTo(HaveOccurred())
+func deleteNamespace(ctx context.Context, ns *corev1.Namespace) {
+	ns, err := clientset.CoreV1().Namespaces().Get(ns.Name, metav1.GetOptions{})
+	if err != nil {
+		return
 	}
+
+	err = clientset.CoreV1().Namespaces().Delete(ns.Name, &metav1.DeleteOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	// finalize if necessary
+	pos := -1
+	finalizers := ns.Spec.Finalizers
+	for i, fin := range finalizers {
+		if fin == "kubernetes" {
+			pos = i
+			break
+		}
+	}
+	if pos == -1 {
+		// no need to finalize
+		return
+	}
+
+	// re-get in order to finalize
+	ns, err = clientset.CoreV1().Namespaces().Get(ns.Name, metav1.GetOptions{})
+	if err != nil {
+		return
+	}
+
+	ns.Spec.Finalizers = append(finalizers[:pos], finalizers[pos+1:]...)
+	_, err = clientset.CoreV1().Namespaces().Finalize(ns)
+	Expect(err).NotTo(HaveOccurred())
+
+WAIT_LOOP:
+	for i := 0; i < 10; i++ {
+		ns, err = clientset.CoreV1().Namespaces().Get(ns.Name, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			// success!
+			return
+		}
+		select {
+		case <-ctx.Done():
+			break WAIT_LOOP
+			// failed to delete in time, see failure below
+		case <-time.After(100 * time.Millisecond):
+			// do nothing, try again
+		}
+	}
+	Fail(fmt.Sprintf("timed out waiting for namespace %q to be deleted", ns.Name))
+}
+
+// metaOnlyFromObj returns PartialObjectMetadata from a concrete Go struct that
+// returns a concrete *metav1.ObjectMeta from GetObjectMeta (yes, that plays a
+// bit fast and loose, but the only other options are serializing and then
+// deserializing, or manually calling all the accessor funcs, which are both a bit annoying).
+func metaOnlyFromObj(obj interface {
+	runtime.Object
+	metav1.ObjectMetaAccessor
+}, scheme *runtime.Scheme) *metav1.PartialObjectMetadata {
+	metaObj := metav1.PartialObjectMetadata{}
+	obj.GetObjectMeta().(*metav1.ObjectMeta).DeepCopyInto(&metaObj.ObjectMeta)
+	kinds, _, err := scheme.ObjectKinds(obj)
+	if err != nil {
+		panic(err)
+	}
+	metaObj.SetGroupVersionKind(kinds[0])
+	return &metaObj
 }
 
 var _ = Describe("Client", func() {
@@ -67,6 +129,7 @@ var _ = Describe("Client", func() {
 	var replicaCount int32 = 2
 	var ns = "default"
 	var mergePatch []byte
+	ctx := context.TODO()
 
 	BeforeEach(func(done Done) {
 		atomic.AddUint64(&count, 1)
@@ -273,6 +336,16 @@ var _ = Describe("Client", func() {
 			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 				// TODO(seans3): implement these
 				// Example: ListOptions
+			})
+
+			Context("with metadata objects", func() {
+				It("should fail with an error", func() {
+					cl, err := client.New(cfg, client.Options{})
+					Expect(err).NotTo(HaveOccurred())
+
+					obj := metaOnlyFromObj(dep, scheme)
+					Expect(cl.Create(context.TODO(), obj)).NotTo(Succeed())
+				})
 			})
 
 			Context("with the DryRun option", func() {
@@ -642,6 +715,17 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 		})
+
+		Context("with metadata objects", func() {
+			It("should fail with an error", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				obj := metaOnlyFromObj(dep, scheme)
+
+				Expect(cl.Update(context.TODO(), obj)).NotTo(Succeed())
+			})
+		})
 	})
 
 	Describe("StatusClient", func() {
@@ -953,6 +1037,44 @@ var _ = Describe("Client", func() {
 			})
 
 		})
+
+		Context("with metadata objects", func() {
+			It("should fail to update with an error", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				obj := metaOnlyFromObj(dep, scheme)
+				Expect(cl.Status().Update(context.TODO(), obj)).NotTo(Succeed())
+			})
+
+			It("should patch status and preserve type information", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("patching the status of Deployment")
+				objPatch := client.MergeFrom(metaOnlyFromObj(dep, scheme))
+				dep.Annotations = map[string]string{"some-new-annotation": "some-new-value"}
+				obj := metaOnlyFromObj(dep, scheme)
+				err = cl.Status().Patch(context.TODO(), obj, objPatch)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating updated Deployment has type information")
+				Expect(obj.GroupVersionKind()).To(Equal(depGvk))
+
+				By("validating patched Deployment has new status")
+				actual, err := clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Annotations).To(HaveKeyWithValue("some-new-annotation", "some-new-value"))
+
+				close(done)
+			})
+		})
 	})
 
 	Describe("Delete", func() {
@@ -1182,6 +1304,95 @@ var _ = Describe("Client", func() {
 
 				close(done)
 			})
+		})
+
+		Context("with metadata objects", func() {
+			It("should delete an existing object from a go struct", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("deleting the Deployment")
+				metaObj := metaOnlyFromObj(dep, scheme)
+				err = cl.Delete(context.TODO(), metaObj)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating the Deployment no longer exists")
+				_, err = clientset.AppsV1().Deployments(ns).Get(dep.Name, metav1.GetOptions{})
+				Expect(err).To(HaveOccurred())
+
+				close(done)
+			})
+
+			It("should delete an existing object non-namespace object from a go struct", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Node")
+				node, err := clientset.CoreV1().Nodes().Create(node)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("deleting the Node")
+				metaObj := metaOnlyFromObj(node, scheme)
+				err = cl.Delete(context.TODO(), metaObj)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating the Node no longer exists")
+				_, err = clientset.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+				Expect(err).To(HaveOccurred())
+
+				close(done)
+			})
+
+			It("should fail if the object does not exist", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Deleting node before it is ever created")
+				metaObj := metaOnlyFromObj(node, scheme)
+				err = cl.Delete(context.TODO(), metaObj)
+				Expect(err).To(HaveOccurred())
+
+				close(done)
+			})
+
+			It("should delete a collection of object", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating two Deployments")
+
+				dep2 := dep.DeepCopy()
+				dep2.Name = dep2.Name + "-2"
+
+				dep, err = clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+				dep2, err = clientset.AppsV1().Deployments(ns).Create(dep2)
+				Expect(err).NotTo(HaveOccurred())
+
+				depName := dep.Name
+				dep2Name := dep2.Name
+
+				By("deleting Deployments")
+				metaObj := metaOnlyFromObj(dep, scheme)
+				err = cl.DeleteAllOf(context.TODO(), metaObj, client.InNamespace(ns), client.MatchingLabels(dep.ObjectMeta.Labels))
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating the Deployment no longer exists")
+				_, err = clientset.AppsV1().Deployments(ns).Get(depName, metav1.GetOptions{})
+				Expect(err).To(HaveOccurred())
+				_, err = clientset.AppsV1().Deployments(ns).Get(dep2Name, metav1.GetOptions{})
+				Expect(err).To(HaveOccurred())
+
+				close(done)
+			})
+
 		})
 	})
 
@@ -1645,6 +1856,77 @@ var _ = Describe("Client", func() {
 				close(done)
 			})
 		})
+
+		Context("with metadata objects", func() {
+			It("should fetch an existing object for a go struct", func(done Done) {
+				By("first creating the Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("fetching the created Deployment")
+				var actual metav1.PartialObjectMetadata
+				actual.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+				})
+				key := client.ObjectKey{Namespace: ns, Name: dep.Name}
+				err = cl.Get(context.TODO(), key, &actual)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+
+				By("validating the fetched deployment equals the created one")
+				Expect(metaOnlyFromObj(dep, scheme)).To(Equal(&actual))
+
+				close(done)
+			})
+
+			It("should fetch an existing non-namespace object for a go struct", func(done Done) {
+				By("first creating the object")
+				node, err := clientset.CoreV1().Nodes().Create(node)
+				Expect(err).NotTo(HaveOccurred())
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("retrieving node through client")
+				var actual metav1.PartialObjectMetadata
+				actual.SetGroupVersionKind(schema.GroupVersionKind{
+					Version: "v1",
+					Kind:    "Node",
+				})
+				key := client.ObjectKey{Namespace: ns, Name: node.Name}
+				err = cl.Get(context.TODO(), key, &actual)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+
+				Expect(metaOnlyFromObj(node, scheme)).To(Equal(&actual))
+
+				close(done)
+			})
+
+			It("should fail if the object does not exist", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("fetching object that has not been created yet")
+				key := client.ObjectKey{Namespace: ns, Name: dep.Name}
+				var actual metav1.PartialObjectMetadata
+				actual.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+				})
+				err = cl.Get(context.TODO(), key, &actual)
+				Expect(err).To(HaveOccurred())
+
+				close(done)
+			})
+		})
 	})
 
 	Describe("List", func() {
@@ -1836,8 +2118,8 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(depFrontend, "test-namespace-1")
 				deleteDeployment(depBackend, "test-namespace-2")
-				deleteNamespace(tns1)
-				deleteNamespace(tns2)
+				deleteNamespace(ctx, tns1)
+				deleteNamespace(ctx, tns2)
 
 				close(done)
 			}, serverSideTimeoutSeconds)
@@ -1985,8 +2267,8 @@ var _ = Describe("Client", func() {
 				deleteDeployment(depFrontend3, "test-namespace-3")
 				deleteDeployment(depBackend3, "test-namespace-3")
 				deleteDeployment(depFrontend4, "test-namespace-4")
-				deleteNamespace(tns3)
-				deleteNamespace(tns4)
+				deleteNamespace(ctx, tns3)
+				deleteNamespace(ctx, tns4)
 
 				close(done)
 			}, serverSideTimeoutSeconds)
@@ -2197,8 +2479,8 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(depFrontend, "test-namespace-5")
 				deleteDeployment(depBackend, "test-namespace-6")
-				deleteNamespace(tns1)
-				deleteNamespace(tns2)
+				deleteNamespace(ctx, tns1)
+				deleteNamespace(ctx, tns2)
 
 				close(done)
 			}, serverSideTimeoutSeconds)
@@ -2354,8 +2636,8 @@ var _ = Describe("Client", func() {
 				deleteDeployment(depFrontend3, "test-namespace-7")
 				deleteDeployment(depBackend3, "test-namespace-7")
 				deleteDeployment(depFrontend4, "test-namespace-8")
-				deleteNamespace(tns3)
-				deleteNamespace(tns4)
+				deleteNamespace(ctx, tns3)
+				deleteNamespace(ctx, tns4)
 
 				close(done)
 			}, serverSideTimeoutSeconds)
@@ -2365,6 +2647,460 @@ var _ = Describe("Client", func() {
 			})
 
 			PIt("should filter results by namespace selector", func() {
+
+			})
+		})
+
+		Context("with metadata objects", func() {
+			It("should fetch collection of objects", func(done Done) {
+				By("creating an initial object")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("listing all objects of that type in the cluster")
+				metaList := &metav1.PartialObjectMetadataList{}
+				metaList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "DeploymentList",
+				})
+				Expect(cl.List(context.Background(), metaList)).NotTo(HaveOccurred())
+
+				Expect(metaList.Items).NotTo(BeEmpty())
+				hasDep := false
+				for _, item := range metaList.Items {
+					if item.Name == dep.Name && item.Namespace == dep.Namespace {
+						hasDep = true
+						break
+					}
+				}
+				Expect(hasDep).To(BeTrue())
+
+				close(done)
+			}, serverSideTimeoutSeconds)
+
+			It("should return an empty list if there are no matching objects", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("listing all Deployments in the cluster")
+				metaList := &metav1.PartialObjectMetadataList{}
+				metaList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "DeploymentList",
+				})
+				Expect(cl.List(context.Background(), metaList)).NotTo(HaveOccurred())
+
+				By("validating no Deployments are returned")
+				Expect(metaList.Items).To(BeEmpty())
+
+				close(done)
+			}, serverSideTimeoutSeconds)
+
+			// TODO(seans): get label selector test working
+			It("should filter results by label selector", func(done Done) {
+				By("creating a Deployment with the app=frontend label")
+				depFrontend := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "deployment-frontend",
+						Namespace: ns,
+						Labels:    map[string]string{"app": "frontend"},
+					},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "frontend"},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "frontend"}},
+							Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+						},
+					},
+				}
+				depFrontend, err := clientset.AppsV1().Deployments(ns).Create(depFrontend)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("creating a Deployment with the app=backend label")
+				depBackend := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "deployment-backend",
+						Namespace: ns,
+						Labels:    map[string]string{"app": "backend"},
+					},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "backend"},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "backend"}},
+							Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+						},
+					},
+				}
+				depBackend, err = clientset.AppsV1().Deployments(ns).Create(depBackend)
+				Expect(err).NotTo(HaveOccurred())
+
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("listing all Deployments with label app=backend")
+				metaList := &metav1.PartialObjectMetadataList{}
+				metaList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "DeploymentList",
+				})
+				labels := map[string]string{"app": "backend"}
+				err = cl.List(context.Background(), metaList, client.MatchingLabels(labels))
+				Expect(err).NotTo(HaveOccurred())
+
+				By("only the Deployment with the backend label is returned")
+				Expect(metaList.Items).NotTo(BeEmpty())
+				Expect(1).To(Equal(len(metaList.Items)))
+				actual := metaList.Items[0]
+				Expect(actual.Name).To(Equal("deployment-backend"))
+
+				deleteDeployment(depFrontend, ns)
+				deleteDeployment(depBackend, ns)
+
+				close(done)
+			}, serverSideTimeoutSeconds)
+
+			It("should filter results by namespace selector", func(done Done) {
+				By("creating a Deployment in test-namespace-1")
+				tns1 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-1"}}
+				_, err := clientset.CoreV1().Namespaces().Create(tns1)
+				Expect(err).NotTo(HaveOccurred())
+				depFrontend := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: "test-namespace-1"},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "frontend"},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "frontend"}},
+							Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+						},
+					},
+				}
+				depFrontend, err = clientset.AppsV1().Deployments("test-namespace-1").Create(depFrontend)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("creating a Deployment in test-namespace-2")
+				tns2 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-2"}}
+				_, err = clientset.CoreV1().Namespaces().Create(tns2)
+				Expect(err).NotTo(HaveOccurred())
+				depBackend := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "deployment-backend", Namespace: "test-namespace-2"},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "backend"},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "backend"}},
+							Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+						},
+					},
+				}
+				depBackend, err = clientset.AppsV1().Deployments("test-namespace-2").Create(depBackend)
+				Expect(err).NotTo(HaveOccurred())
+
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("listing all Deployments in test-namespace-1")
+				metaList := &metav1.PartialObjectMetadataList{}
+				metaList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "DeploymentList",
+				})
+				err = cl.List(context.Background(), metaList, client.InNamespace("test-namespace-1"))
+				Expect(err).NotTo(HaveOccurred())
+
+				By("only the Deployment in test-namespace-1 is returned")
+				Expect(metaList.Items).NotTo(BeEmpty())
+				Expect(1).To(Equal(len(metaList.Items)))
+				actual := metaList.Items[0]
+				Expect(actual.Name).To(Equal("deployment-frontend"))
+
+				deleteDeployment(depFrontend, "test-namespace-1")
+				deleteDeployment(depBackend, "test-namespace-2")
+				deleteNamespace(ctx, tns1)
+				deleteNamespace(ctx, tns2)
+
+				close(done)
+			}, serverSideTimeoutSeconds)
+
+			It("should filter results by field selector", func(done Done) {
+				By("creating a Deployment with name deployment-frontend")
+				depFrontend := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: ns},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "frontend"},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "frontend"}},
+							Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+						},
+					},
+				}
+				depFrontend, err := clientset.AppsV1().Deployments(ns).Create(depFrontend)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("creating a Deployment with name deployment-backend")
+				depBackend := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "deployment-backend", Namespace: ns},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "backend"},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "backend"}},
+							Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+						},
+					},
+				}
+				depBackend, err = clientset.AppsV1().Deployments(ns).Create(depBackend)
+				Expect(err).NotTo(HaveOccurred())
+
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("listing all Deployments with field metadata.name=deployment-backend")
+				metaList := &metav1.PartialObjectMetadataList{}
+				metaList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "DeploymentList",
+				})
+				err = cl.List(context.Background(), metaList,
+					client.MatchingFields{"metadata.name": "deployment-backend"})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("only the Deployment with the backend field is returned")
+				Expect(metaList.Items).NotTo(BeEmpty())
+				Expect(1).To(Equal(len(metaList.Items)))
+				actual := metaList.Items[0]
+				Expect(actual.Name).To(Equal("deployment-backend"))
+
+				deleteDeployment(depFrontend, ns)
+				deleteDeployment(depBackend, ns)
+
+				close(done)
+			}, serverSideTimeoutSeconds)
+
+			It("should filter results by namespace selector and label selector", func(done Done) {
+				By("creating a Deployment in test-namespace-3 with the app=frontend label")
+				tns3 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-3"}}
+				_, err := clientset.CoreV1().Namespaces().Create(tns3)
+				Expect(err).NotTo(HaveOccurred())
+				depFrontend3 := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "deployment-frontend",
+						Namespace: "test-namespace-3",
+						Labels:    map[string]string{"app": "frontend"},
+					},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "frontend"},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "frontend"}},
+							Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+						},
+					},
+				}
+				depFrontend3, err = clientset.AppsV1().Deployments("test-namespace-3").Create(depFrontend3)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("creating a Deployment in test-namespace-3 with the app=backend label")
+				depBackend3 := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "deployment-backend",
+						Namespace: "test-namespace-3",
+						Labels:    map[string]string{"app": "backend"},
+					},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "backend"},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "backend"}},
+							Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+						},
+					},
+				}
+				depBackend3, err = clientset.AppsV1().Deployments("test-namespace-3").Create(depBackend3)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("creating a Deployment in test-namespace-4 with the app=frontend label")
+				tns4 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-4"}}
+				_, err = clientset.CoreV1().Namespaces().Create(tns4)
+				Expect(err).NotTo(HaveOccurred())
+				depFrontend4 := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "deployment-frontend",
+						Namespace: "test-namespace-4",
+						Labels:    map[string]string{"app": "frontend"},
+					},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "frontend"},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "frontend"}},
+							Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+						},
+					},
+				}
+				depFrontend4, err = clientset.AppsV1().Deployments("test-namespace-4").Create(depFrontend4)
+				Expect(err).NotTo(HaveOccurred())
+
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("listing all Deployments in test-namespace-3 with label app=frontend")
+				metaList := &metav1.PartialObjectMetadataList{}
+				metaList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "DeploymentList",
+				})
+				labels := map[string]string{"app": "frontend"}
+				err = cl.List(context.Background(), metaList,
+					client.InNamespace("test-namespace-3"),
+					client.MatchingLabels(labels),
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("only the Deployment in test-namespace-3 with label app=frontend is returned")
+				Expect(metaList.Items).NotTo(BeEmpty())
+				Expect(1).To(Equal(len(metaList.Items)))
+				actual := metaList.Items[0]
+				Expect(actual.Name).To(Equal("deployment-frontend"))
+				Expect(actual.Namespace).To(Equal("test-namespace-3"))
+
+				deleteDeployment(depFrontend3, "test-namespace-3")
+				deleteDeployment(depBackend3, "test-namespace-3")
+				deleteDeployment(depFrontend4, "test-namespace-4")
+				deleteNamespace(ctx, tns3)
+				deleteNamespace(ctx, tns4)
+
+				close(done)
+			}, serverSideTimeoutSeconds)
+
+			It("should filter results using limit and continue options", func() {
+
+				makeDeployment := func(suffix string) *appsv1.Deployment {
+					return &appsv1.Deployment{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: fmt.Sprintf("deployment-%s", suffix),
+						},
+						Spec: appsv1.DeploymentSpec{
+							Selector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo": "bar"},
+							},
+							Template: corev1.PodTemplateSpec{
+								ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
+								Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+							},
+						},
+					}
+				}
+
+				By("creating 4 deployments")
+				dep1 := makeDeployment("1")
+				dep1, err := clientset.AppsV1().Deployments(ns).Create(dep1)
+				Expect(err).NotTo(HaveOccurred())
+				defer deleteDeployment(dep1, ns)
+
+				dep2 := makeDeployment("2")
+				dep2, err = clientset.AppsV1().Deployments(ns).Create(dep2)
+				Expect(err).NotTo(HaveOccurred())
+				defer deleteDeployment(dep2, ns)
+
+				dep3 := makeDeployment("3")
+				dep3, err = clientset.AppsV1().Deployments(ns).Create(dep3)
+				Expect(err).NotTo(HaveOccurred())
+				defer deleteDeployment(dep3, ns)
+
+				dep4 := makeDeployment("4")
+				dep4, err = clientset.AppsV1().Deployments(ns).Create(dep4)
+				Expect(err).NotTo(HaveOccurred())
+				defer deleteDeployment(dep4, ns)
+
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("listing 1 deployment when limit=1 is used")
+				metaList := &metav1.PartialObjectMetadataList{}
+				metaList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "DeploymentList",
+				})
+				err = cl.List(context.Background(), metaList,
+					client.Limit(1),
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(metaList.Items).To(HaveLen(1))
+				Expect(metaList.Continue).NotTo(BeEmpty())
+				Expect(metaList.Items[0].Name).To(Equal(dep1.Name))
+
+				continueToken := metaList.Continue
+
+				By("listing the next deployment when previous continuation token is used and limit=1")
+				metaList = &metav1.PartialObjectMetadataList{}
+				metaList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "DeploymentList",
+				})
+				err = cl.List(context.Background(), metaList,
+					client.Limit(1),
+					client.Continue(continueToken),
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(metaList.Items).To(HaveLen(1))
+				Expect(metaList.Continue).NotTo(BeEmpty())
+				Expect(metaList.Items[0].Name).To(Equal(dep2.Name))
+
+				continueToken = metaList.Continue
+
+				By("listing the 2 remaining deployments when previous continuation token is used without a limit")
+				metaList = &metav1.PartialObjectMetadataList{}
+				metaList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "DeploymentList",
+				})
+				err = cl.List(context.Background(), metaList,
+					client.Continue(continueToken),
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(metaList.Items).To(HaveLen(2))
+				Expect(metaList.Continue).To(BeEmpty())
+				Expect(metaList.Items[0].Name).To(Equal(dep3.Name))
+				Expect(metaList.Items[1].Name).To(Equal(dep4.Name))
+			}, serverSideTimeoutSeconds)
+
+			PIt("should fail if the object doesn't have meta", func() {
+
+			})
+
+			PIt("should fail if the object cannot be mapped to a GVK", func() {
+
+			})
+
+			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 			})
 		})

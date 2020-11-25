@@ -73,6 +73,7 @@ func (m *InformersMap) Start(ctx context.Context) error {
 func (m *InformersMap) WaitForCacheSync(ctx context.Context) bool {
 	syncedFuncs := append([]cache.InformerSynced(nil), m.structured.HasSyncedFuncs()...)
 	syncedFuncs = append(syncedFuncs, m.unstructured.HasSyncedFuncs()...)
+	syncedFuncs = append(syncedFuncs, m.metadata.HasSyncedFuncs()...)
 
 	if !m.structured.waitForStarted(ctx) {
 		return false

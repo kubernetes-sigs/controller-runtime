@@ -345,6 +345,9 @@ type ListOptions struct {
 	// that these may not be respected by all implementations of interface,
 	// and the LabelSelector, FieldSelector, Limit and Continue fields are ignored.
 	Raw *metav1.ListOptions
+
+	// UnsafeDisableCacheDeepCopy allows users to list objects without deep copy.
+	UnsafeDisableCacheDeepCopy *UnsafeDisableCacheDeepCopy
 }
 
 var _ ListOption = &ListOptions{}
@@ -519,6 +522,17 @@ type Continue string
 // ApplyToList applies this configuration to the given an List options.
 func (c Continue) ApplyToList(opts *ListOptions) {
 	opts.Continue = string(c)
+}
+
+// UnsafeDisableCacheDeepCopy indicates not to deep copy objects during list objects in cache reader.
+type UnsafeDisableCacheDeepCopy struct {
+	// if IgnoreGVK is true, cache reader will always list without deep copy.
+	// Otherwise, it will only avoid deep copy for objects that already have correct groupVersionKind.
+	IgnoreGVK bool
+}
+
+func (d UnsafeDisableCacheDeepCopy) ApplyToList(opts *ListOptions) {
+	opts.UnsafeDisableCacheDeepCopy = &d
 }
 
 // }}}

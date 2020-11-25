@@ -135,11 +135,29 @@ func (c *CacheReader) List(_ context.Context, out client.ObjectList, opts ...cli
 			}
 		}
 
-		outObj := obj.DeepCopyObject()
-		outObj.GetObjectKind().SetGroupVersionKind(c.groupVersionKind)
+		var outObj runtime.Object
+		if c.disableDeepCopy(obj, listOpts) {
+			outObj = obj
+		} else {
+			outObj = obj.DeepCopyObject()
+			outObj.GetObjectKind().SetGroupVersionKind(c.groupVersionKind)
+		}
 		runtimeObjs = append(runtimeObjs, outObj)
 	}
 	return apimeta.SetList(out, runtimeObjs)
+}
+
+// disableDeepCopy checks if this object need to skip deep copy.
+func (c *CacheReader) disableDeepCopy(obj runtime.Object, listOpts client.ListOptions) bool {
+	var disableDeepCopy bool
+	if listOpts.UnsafeDisableCacheDeepCopy != nil {
+		if listOpts.UnsafeDisableCacheDeepCopy.IgnoreGVK {
+			disableDeepCopy = true
+		} else if obj.GetObjectKind().GroupVersionKind() == c.groupVersionKind {
+			disableDeepCopy = true
+		}
+	}
+	return disableDeepCopy
 }
 
 // objectKeyToStorageKey converts an object key to store key.

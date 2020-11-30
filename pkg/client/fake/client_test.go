@@ -529,7 +529,9 @@ var _ = Describe("Fake client", func() {
 
 	Context("with default scheme.Scheme", func() {
 		BeforeEach(func(done Done) {
-			cl = NewFakeClient(dep, dep2, cm)
+			cl = NewClientBuilder().
+				WithObjects(dep, dep2, cm).
+				Build()
 			close(done)
 		})
 		AssertClientBehavior()
@@ -541,7 +543,11 @@ var _ = Describe("Fake client", func() {
 			Expect(corev1.AddToScheme(scheme)).To(Succeed())
 			Expect(appsv1.AddToScheme(scheme)).To(Succeed())
 			Expect(coordinationv1.AddToScheme(scheme)).To(Succeed())
-			cl = NewFakeClientWithScheme(scheme, &appsv1.DeploymentList{Items: []appsv1.Deployment{*dep, *dep2}}, cm)
+			cl = NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(cm).
+				WithLists(&appsv1.DeploymentList{Items: []appsv1.Deployment{*dep, *dep2}}).
+				Build()
 			close(done)
 		})
 		AssertClientBehavior()

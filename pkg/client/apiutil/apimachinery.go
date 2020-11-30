@@ -50,10 +50,10 @@ func init() {
 
 // AddToProtobufScheme add the given SchemeBuilder into protobufScheme, which should
 // be additional types that do support protobuf.
-func AddToProtobufScheme(builder runtime.SchemeBuilder) error {
+func AddToProtobufScheme(addToScheme func(*runtime.Scheme) error) error {
 	protobufSchemeLock.Lock()
 	defer protobufSchemeLock.Unlock()
-	return builder.AddToScheme(protobufScheme)
+	return addToScheme(protobufScheme)
 }
 
 // NewDiscoveryRESTMapper constructs a new RESTMapper based on discovery

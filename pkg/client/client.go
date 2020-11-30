@@ -72,11 +72,13 @@ func New(config *rest.Config, options Options) (Client, error) {
 	}
 
 	clientcache := &clientCache{
-		config:         config,
-		scheme:         options.Scheme,
-		mapper:         options.Mapper,
-		codecs:         serializer.NewCodecFactory(options.Scheme),
-		resourceByType: make(map[schema.GroupVersionKind]*resourceMeta),
+		config: config,
+		scheme: options.Scheme,
+		mapper: options.Mapper,
+		codecs: serializer.NewCodecFactory(options.Scheme),
+
+		structuredResourceByType:   make(map[schema.GroupVersionKind]*resourceMeta),
+		unstructuredResourceByType: make(map[schema.GroupVersionKind]*resourceMeta),
 	}
 
 	rawMetaClient, err := metadata.NewForConfig(config)

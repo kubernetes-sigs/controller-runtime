@@ -73,6 +73,7 @@ func (m *InformersMap) Start(stop <-chan struct{}) error {
 func (m *InformersMap) WaitForCacheSync(stop <-chan struct{}) bool {
 	syncedFuncs := append([]cache.InformerSynced(nil), m.structured.HasSyncedFuncs()...)
 	syncedFuncs = append(syncedFuncs, m.unstructured.HasSyncedFuncs()...)
+	syncedFuncs = append(syncedFuncs, m.metadata.HasSyncedFuncs()...)
 
 	if !m.structured.waitForStarted(stop) {
 		return false

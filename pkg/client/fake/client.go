@@ -59,24 +59,84 @@ const (
 
 // NewFakeClient creates a new fake client for testing.
 // You can choose to initialize it with a slice of runtime.Object.
+//
+// Deprecated: Please use NewClientBuilder instead.
 func NewFakeClient(initObjs ...runtime.Object) client.Client {
-	return NewFakeClientWithScheme(scheme.Scheme, initObjs...)
+	return NewClientBuilder().WithRuntimeObjects(initObjs...).Build()
 }
 
 // NewFakeClientWithScheme creates a new fake client with the given scheme
 // for testing.
 // You can choose to initialize it with a slice of runtime.Object.
+//
+// Deprecated: Please use NewClientBuilder instead.
 func NewFakeClientWithScheme(clientScheme *runtime.Scheme, initObjs ...runtime.Object) client.Client {
-	tracker := testing.NewObjectTracker(clientScheme, scheme.Codecs.UniversalDecoder())
-	for _, obj := range initObjs {
-		err := tracker.Add(obj)
-		if err != nil {
+	return NewClientBuilder().WithScheme(clientScheme).WithRuntimeObjects(initObjs...).Build()
+}
+
+// NewClientBuilder returns a new builder to create a fake client.
+func NewClientBuilder() *ClientBuilder {
+	return &ClientBuilder{}
+}
+
+// ClientBuilder builds a fake client.
+type ClientBuilder struct {
+	scheme             *runtime.Scheme
+	initObject         []client.Object
+	initLists          []client.ObjectList
+	initRuntimeObjects []runtime.Object
+}
+
+// WithScheme sets this builder's internal scheme.
+// If not set, defaults to client-go's global scheme.Scheme.
+func (f *ClientBuilder) WithScheme(scheme *runtime.Scheme) *ClientBuilder {
+	f.scheme = scheme
+	return f
+}
+
+// WithObjects can be optionally used to initialize this fake client with client.Object(s).
+func (f *ClientBuilder) WithObjects(initObjs ...client.Object) *ClientBuilder {
+	f.initObject = append(f.initObject, initObjs...)
+	return f
+}
+
+// WithLists can be optionally used to initialize this fake client with client.ObjectList(s).
+func (f *ClientBuilder) WithLists(initLists ...client.ObjectList) *ClientBuilder {
+	f.initLists = append(f.initLists, initLists...)
+	return f
+}
+
+// WithRuntimeObjects can be optionally used to initialize this fake client with runtime.Object(s).
+func (f *ClientBuilder) WithRuntimeObjects(initRuntimeObjs ...runtime.Object) *ClientBuilder {
+	f.initRuntimeObjects = append(f.initRuntimeObjects, initRuntimeObjs...)
+	return f
+}
+
+// Build builds and returns a new fake client.
+func (f *ClientBuilder) Build() client.Client {
+	if f.scheme == nil {
+		f.scheme = scheme.Scheme
+	}
+
+	tracker := testing.NewObjectTracker(f.scheme, scheme.Codecs.UniversalDecoder())
+	for _, obj := range f.initObject {
+		if err := tracker.Add(obj); err != nil {
 			panic(fmt.Errorf("failed to add object %v to fake client: %w", obj, err))
 		}
 	}
+	for _, obj := range f.initLists {
+		if err := tracker.Add(obj); err != nil {
+			panic(fmt.Errorf("failed to add list %v to fake client: %w", obj, err))
+		}
+	}
+	for _, obj := range f.initRuntimeObjects {
+		if err := tracker.Add(obj); err != nil {
+			panic(fmt.Errorf("failed to add runtime object %v to fake client: %w", obj, err))
+		}
+	}
 	return &fakeClient{
-		tracker: versionedTracker{ObjectTracker: tracker, scheme: clientScheme},
-		scheme:  clientScheme,
+		tracker: versionedTracker{ObjectTracker: tracker, scheme: f.scheme},
+		scheme:  f.scheme,
 	}
 }
 

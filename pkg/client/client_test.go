@@ -1986,6 +1986,36 @@ var _ = Describe("Client", func() {
 				close(done)
 			}, serverSideTimeoutSeconds)
 
+			It("should fetch unstructured collection of objects, even if scheme is empty", func(done Done) {
+				By("create an initial object")
+				_, err := clientset.AppsV1().Deployments(ns).Create(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("listing all objects of that type in the cluster")
+				deps := &unstructured.UnstructuredList{}
+				deps.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Kind:    "DeploymentList",
+					Version: "v1",
+				})
+				err = cl.List(context.Background(), deps)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(deps.Items).NotTo(BeEmpty())
+				hasDep := false
+				for _, item := range deps.Items {
+					if item.GetName() == dep.Name && item.GetNamespace() == dep.Namespace {
+						hasDep = true
+						break
+					}
+				}
+				Expect(hasDep).To(BeTrue())
+				close(done)
+			}, serverSideTimeoutSeconds)
+
 			It("should return an empty list if there are no matching objects", func(done Done) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())

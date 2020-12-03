@@ -8,9 +8,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"k8s.io/api/admission/v1beta1"
+	admissionv1 "k8s.io/api/admission/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -28,8 +28,8 @@ var _ = Describe("validatingHandler", func() {
 		It("should return 200 in response when create succeeds", func() {
 
 			response := handler.Handle(context.TODO(), Request{
-				AdmissionRequest: v1beta1.AdmissionRequest{
-					Operation: v1beta1.Create,
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Create,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
 						Object: handler.validator,
@@ -44,8 +44,8 @@ var _ = Describe("validatingHandler", func() {
 		It("should return 200 in response when update succeeds", func() {
 
 			response := handler.Handle(context.TODO(), Request{
-				AdmissionRequest: v1beta1.AdmissionRequest{
-					Operation: v1beta1.Update,
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
 						Object: handler.validator,
@@ -63,8 +63,8 @@ var _ = Describe("validatingHandler", func() {
 		It("should return 200 in response when delete succeeds", func() {
 
 			response := handler.Handle(context.TODO(), Request{
-				AdmissionRequest: v1beta1.AdmissionRequest{
-					Operation: v1beta1.Delete,
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Delete,
 					OldObject: runtime.RawExtension{
 						Raw:    []byte("{}"),
 						Object: handler.validator,
@@ -80,7 +80,7 @@ var _ = Describe("validatingHandler", func() {
 	Context("when dealing with Status errors", func() {
 
 		expectedError := &apierrs.StatusError{
-			ErrStatus: v1.Status{
+			ErrStatus: metav1.Status{
 				Message: "some message",
 				Code:    http.StatusUnprocessableEntity,
 			},
@@ -91,8 +91,8 @@ var _ = Describe("validatingHandler", func() {
 		It("should propagate the Status from ValidateCreate's return value to the HTTP response", func() {
 
 			response := handler.Handle(context.TODO(), Request{
-				AdmissionRequest: v1beta1.AdmissionRequest{
-					Operation: v1beta1.Create,
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Create,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
 						Object: handler.validator,
@@ -109,8 +109,8 @@ var _ = Describe("validatingHandler", func() {
 		It("should propagate the Status from ValidateUpdate's return value to the HTTP response", func() {
 
 			response := handler.Handle(context.TODO(), Request{
-				AdmissionRequest: v1beta1.AdmissionRequest{
-					Operation: v1beta1.Update,
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
 						Object: handler.validator,
@@ -131,8 +131,8 @@ var _ = Describe("validatingHandler", func() {
 		It("should propagate the Status from ValidateDelete's return value to the HTTP response", func() {
 
 			response := handler.Handle(context.TODO(), Request{
-				AdmissionRequest: v1beta1.AdmissionRequest{
-					Operation: v1beta1.Delete,
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Delete,
 					OldObject: runtime.RawExtension{
 						Raw:    []byte("{}"),
 						Object: handler.validator,
@@ -156,8 +156,8 @@ var _ = Describe("validatingHandler", func() {
 		It("should return 403 response when ValidateCreate with error message embedded", func() {
 
 			response := handler.Handle(context.TODO(), Request{
-				AdmissionRequest: v1beta1.AdmissionRequest{
-					Operation: v1beta1.Create,
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Create,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
 						Object: handler.validator,
@@ -173,8 +173,8 @@ var _ = Describe("validatingHandler", func() {
 		It("should return 403 response when ValidateUpdate returns non-APIStatus error", func() {
 
 			response := handler.Handle(context.TODO(), Request{
-				AdmissionRequest: v1beta1.AdmissionRequest{
-					Operation: v1beta1.Update,
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
 						Object: handler.validator,
@@ -194,8 +194,8 @@ var _ = Describe("validatingHandler", func() {
 		It("should return 403 response when ValidateDelete returns non-APIStatus error", func() {
 
 			response := handler.Handle(context.TODO(), Request{
-				AdmissionRequest: v1beta1.AdmissionRequest{
-					Operation: v1beta1.Delete,
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Delete,
 					OldObject: runtime.RawExtension{
 						Raw:    []byte("{}"),
 						Object: handler.validator,

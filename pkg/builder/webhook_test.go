@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
@@ -37,6 +38,17 @@ import (
 )
 
 var _ = Describe("webhook", func() {
+	Describe("New", func() {
+		Context("v1 AdmissionReview", func() {
+			runTests("v1")
+		})
+		Context("v1beta1 AdmissionReview", func() {
+			runTests("v1beta1")
+		})
+	})
+})
+
+func runTests(admissionReviewVersion string) {
 	var stop chan struct{}
 
 	BeforeEach(func() {
@@ -48,28 +60,27 @@ var _ = Describe("webhook", func() {
 		close(stop)
 	})
 
-	Describe("New", func() {
-		It("should scaffold a defaulting webhook if the type implements the Defaulter interface", func() {
-			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
-			Expect(err).NotTo(HaveOccurred())
+	It("should scaffold a defaulting webhook if the type implements the Defaulter interface", func() {
+		By("creating a controller manager")
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
-			builder.Register(&TestDefaulter{}, &TestDefaulterList{})
-			err = builder.AddToScheme(m.GetScheme())
-			Expect(err).NotTo(HaveOccurred())
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
+		builder.Register(&TestDefaulter{}, &TestDefaulterList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-			err = WebhookManagedBy(m).
-				For(&TestDefaulter{}).
-				Complete()
-			Expect(err).NotTo(HaveOccurred())
-			svr := m.GetWebhookServer()
-			Expect(svr).NotTo(BeNil())
+		err = WebhookManagedBy(m).
+			For(&TestDefaulter{}).
+			Complete()
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		svr := m.GetWebhookServer()
+		ExpectWithOffset(1, svr).NotTo(BeNil())
 
-			reader := strings.NewReader(`{
+		reader := strings.NewReader(`{
   "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/v1beta1",
+  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -91,57 +102,59 @@ var _ = Describe("webhook", func() {
   }
 }`)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-			// TODO: we may want to improve it to make it be able to inject dependencies,
-			// but not always try to load certs and return not found error.
-			err = svr.Start(ctx)
-			if err != nil && !os.IsNotExist(err) {
-				Expect(err).NotTo(HaveOccurred())
-			}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		// TODO: we may want to improve it to make it be able to inject dependencies,
+		// but not always try to load certs and return not found error.
+		err = svr.Start(ctx)
+		if err != nil && !os.IsNotExist(err) {
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		}
 
-			By("sending a request to a mutating webhook path")
-			path := generateMutatePath(testDefaulterGVK)
-			req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
-			w := httptest.NewRecorder()
-			svr.WebhookMux.ServeHTTP(w, req)
-			Expect(w.Code).To(Equal(http.StatusOK))
-			By("sanity checking the response contains reasonable fields")
-			Expect(w.Body).To(ContainSubstring(`"allowed":true`))
-			Expect(w.Body).To(ContainSubstring(`"patch":`))
-			Expect(w.Body).To(ContainSubstring(`"code":200`))
+		By("sending a request to a mutating webhook path")
+		path := generateMutatePath(testDefaulterGVK)
+		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		w := httptest.NewRecorder()
+		svr.WebhookMux.ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable fields")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":true`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"patch":`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":200`))
 
-			By("sending a request to a validating webhook path that doesn't exist")
-			path = generateValidatePath(testDefaulterGVK)
-			req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
-			w = httptest.NewRecorder()
-			svr.WebhookMux.ServeHTTP(w, req)
-			Expect(w.Code).To(Equal(http.StatusNotFound))
-		})
+		By("sending a request to a validating webhook path that doesn't exist")
+		path = generateValidatePath(testDefaulterGVK)
+		_, err = reader.Seek(0, 0)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		w = httptest.NewRecorder()
+		svr.WebhookMux.ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
+	})
 
-		It("should scaffold a validating webhook if the type implements the Validator interface", func() {
-			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
-			Expect(err).NotTo(HaveOccurred())
+	It("should scaffold a validating webhook if the type implements the Validator interface", func() {
+		By("creating a controller manager")
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-			builder.Register(&TestValidator{}, &TestValidatorList{})
-			err = builder.AddToScheme(m.GetScheme())
-			Expect(err).NotTo(HaveOccurred())
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+		builder.Register(&TestValidator{}, &TestValidatorList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-			err = WebhookManagedBy(m).
-				For(&TestValidator{}).
-				Complete()
-			Expect(err).NotTo(HaveOccurred())
-			svr := m.GetWebhookServer()
-			Expect(svr).NotTo(BeNil())
+		err = WebhookManagedBy(m).
+			For(&TestValidator{}).
+			Complete()
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		svr := m.GetWebhookServer()
+		ExpectWithOffset(1, svr).NotTo(BeNil())
 
-			reader := strings.NewReader(`{
+		reader := strings.NewReader(`{
   "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/v1beta1",
+  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -165,56 +178,58 @@ var _ = Describe("webhook", func() {
   }
 }`)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-			// TODO: we may want to improve it to make it be able to inject dependencies,
-			// but not always try to load certs and return not found error.
-			err = svr.Start(ctx)
-			if err != nil && !os.IsNotExist(err) {
-				Expect(err).NotTo(HaveOccurred())
-			}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		// TODO: we may want to improve it to make it be able to inject dependencies,
+		// but not always try to load certs and return not found error.
+		err = svr.Start(ctx)
+		if err != nil && !os.IsNotExist(err) {
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		}
 
-			By("sending a request to a mutating webhook path that doesn't exist")
-			path := generateMutatePath(testValidatorGVK)
-			req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
-			w := httptest.NewRecorder()
-			svr.WebhookMux.ServeHTTP(w, req)
-			Expect(w.Code).To(Equal(http.StatusNotFound))
+		By("sending a request to a mutating webhook path that doesn't exist")
+		path := generateMutatePath(testValidatorGVK)
+		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		w := httptest.NewRecorder()
+		svr.WebhookMux.ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
 
-			By("sending a request to a validating webhook path")
-			path = generateValidatePath(testValidatorGVK)
-			req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
-			w = httptest.NewRecorder()
-			svr.WebhookMux.ServeHTTP(w, req)
-			Expect(w.Code).To(Equal(http.StatusOK))
-			By("sanity checking the response contains reasonable field")
-			Expect(w.Body).To(ContainSubstring(`"allowed":false`))
-			Expect(w.Body).To(ContainSubstring(`"code":403`))
-		})
+		By("sending a request to a validating webhook path")
+		path = generateValidatePath(testValidatorGVK)
+		_, err = reader.Seek(0, 0)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		w = httptest.NewRecorder()
+		svr.WebhookMux.ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable field")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":403`))
+	})
 
-		It("should scaffold defaulting and validating webhooks if the type implements both Defaulter and Validator interfaces", func() {
-			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
-			Expect(err).NotTo(HaveOccurred())
+	It("should scaffold defaulting and validating webhooks if the type implements both Defaulter and Validator interfaces", func() {
+		By("creating a controller manager")
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testDefaultValidatorGVK.GroupVersion()}
-			builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
-			err = builder.AddToScheme(m.GetScheme())
-			Expect(err).NotTo(HaveOccurred())
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testDefaultValidatorGVK.GroupVersion()}
+		builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-			err = WebhookManagedBy(m).
-				For(&TestDefaultValidator{}).
-				Complete()
-			Expect(err).NotTo(HaveOccurred())
-			svr := m.GetWebhookServer()
-			Expect(svr).NotTo(BeNil())
+		err = WebhookManagedBy(m).
+			For(&TestDefaultValidator{}).
+			Complete()
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		svr := m.GetWebhookServer()
+		ExpectWithOffset(1, svr).NotTo(BeNil())
 
-			reader := strings.NewReader(`{
+		reader := strings.NewReader(`{
   "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/v1beta1",
+  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -236,62 +251,64 @@ var _ = Describe("webhook", func() {
   }
 }`)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-			// TODO: we may want to improve it to make it be able to inject dependencies,
-			// but not always try to load certs and return not found error.
-			err = svr.Start(ctx)
-			if err != nil && !os.IsNotExist(err) {
-				Expect(err).NotTo(HaveOccurred())
-			}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		// TODO: we may want to improve it to make it be able to inject dependencies,
+		// but not always try to load certs and return not found error.
+		err = svr.Start(ctx)
+		if err != nil && !os.IsNotExist(err) {
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		}
 
-			By("sending a request to a mutating webhook path")
-			path := generateMutatePath(testDefaultValidatorGVK)
-			req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
-			w := httptest.NewRecorder()
-			svr.WebhookMux.ServeHTTP(w, req)
-			Expect(w.Code).To(Equal(http.StatusOK))
-			By("sanity checking the response contains reasonable field")
-			Expect(w.Body).To(ContainSubstring(`"allowed":true`))
-			Expect(w.Body).To(ContainSubstring(`"patch":`))
-			Expect(w.Body).To(ContainSubstring(`"code":200`))
+		By("sending a request to a mutating webhook path")
+		path := generateMutatePath(testDefaultValidatorGVK)
+		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		w := httptest.NewRecorder()
+		svr.WebhookMux.ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable field")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":true`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"patch":`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":200`))
 
-			By("sending a request to a validating webhook path")
-			path = generateValidatePath(testDefaultValidatorGVK)
-			req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
-			w = httptest.NewRecorder()
-			svr.WebhookMux.ServeHTTP(w, req)
-			Expect(w.Code).To(Equal(http.StatusOK))
-			By("sanity checking the response contains reasonable field")
-			Expect(w.Body).To(ContainSubstring(`"allowed":true`))
-			Expect(w.Body).To(ContainSubstring(`"code":200`))
-		})
+		By("sending a request to a validating webhook path")
+		path = generateValidatePath(testDefaultValidatorGVK)
+		_, err = reader.Seek(0, 0)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		w = httptest.NewRecorder()
+		svr.WebhookMux.ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable field")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":true`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":200`))
+	})
 
-		It("should scaffold a validating webhook if the type implements the Validator interface to validate deletes", func() {
-			By("creating a controller manager")
-			ctx, cancel := context.WithCancel(context.Background())
+	It("should scaffold a validating webhook if the type implements the Validator interface to validate deletes", func() {
+		By("creating a controller manager")
+		ctx, cancel := context.WithCancel(context.Background())
 
-			m, err := manager.New(cfg, manager.Options{})
-			Expect(err).NotTo(HaveOccurred())
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-			builder.Register(&TestValidator{}, &TestValidatorList{})
-			err = builder.AddToScheme(m.GetScheme())
-			Expect(err).NotTo(HaveOccurred())
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+		builder.Register(&TestValidator{}, &TestValidatorList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-			err = WebhookManagedBy(m).
-				For(&TestValidator{}).
-				Complete()
-			Expect(err).NotTo(HaveOccurred())
-			svr := m.GetWebhookServer()
-			Expect(svr).NotTo(BeNil())
+		err = WebhookManagedBy(m).
+			For(&TestValidator{}).
+			Complete()
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		svr := m.GetWebhookServer()
+		ExpectWithOffset(1, svr).NotTo(BeNil())
 
-			reader := strings.NewReader(`{
+		reader := strings.NewReader(`{
   "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/v1beta1",
+  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -313,28 +330,28 @@ var _ = Describe("webhook", func() {
   }
 }`)
 
-			cancel()
-			// TODO: we may want to improve it to make it be able to inject dependencies,
-			// but not always try to load certs and return not found error.
-			err = svr.Start(ctx)
-			if err != nil && !os.IsNotExist(err) {
-				Expect(err).NotTo(HaveOccurred())
-			}
+		cancel()
+		// TODO: we may want to improve it to make it be able to inject dependencies,
+		// but not always try to load certs and return not found error.
+		err = svr.Start(ctx)
+		if err != nil && !os.IsNotExist(err) {
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		}
 
-			By("sending a request to a validating webhook path to check for failed delete")
-			path := generateValidatePath(testValidatorGVK)
-			req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
-			w := httptest.NewRecorder()
-			svr.WebhookMux.ServeHTTP(w, req)
-			Expect(w.Code).To(Equal(http.StatusOK))
-			By("sanity checking the response contains reasonable field")
-			Expect(w.Body).To(ContainSubstring(`"allowed":false`))
-			Expect(w.Body).To(ContainSubstring(`"code":403`))
+		By("sending a request to a validating webhook path to check for failed delete")
+		path := generateValidatePath(testValidatorGVK)
+		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		w := httptest.NewRecorder()
+		svr.WebhookMux.ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable field")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":403`))
 
-			reader = strings.NewReader(`{
+		reader = strings.NewReader(`{
   "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/v1beta1",
+  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -355,20 +372,18 @@ var _ = Describe("webhook", func() {
     }
   }
 }`)
-			By("sending a request to a validating webhook path with correct request")
-			path = generateValidatePath(testValidatorGVK)
-			req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-			req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
-			w = httptest.NewRecorder()
-			svr.WebhookMux.ServeHTTP(w, req)
-			Expect(w.Code).To(Equal(http.StatusOK))
-			By("sanity checking the response contains reasonable field")
-			Expect(w.Body).To(ContainSubstring(`"allowed":true`))
-			Expect(w.Body).To(ContainSubstring(`"code":200`))
-
-		})
+		By("sending a request to a validating webhook path with correct request")
+		path = generateValidatePath(testValidatorGVK)
+		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		w = httptest.NewRecorder()
+		svr.WebhookMux.ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable field")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":true`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":200`))
 	})
-})
+}
 
 // TestDefaulter
 var _ runtime.Object = &TestDefaulter{}

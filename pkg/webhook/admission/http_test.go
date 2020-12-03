@@ -27,10 +27,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	admissionv1 "k8s.io/api/admission/v1"
 
-	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 var _ = Describe("Admission Webhooks", func() {
@@ -155,7 +155,7 @@ func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {
 	if h.fn != nil {
 		return h.fn(ctx, req)
 	}
-	return Response{AdmissionResponse: admissionv1beta1.AdmissionResponse{
+	return Response{AdmissionResponse: admissionv1.AdmissionResponse{
 		Allowed: true,
 	}}
 }

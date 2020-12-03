@@ -24,8 +24,8 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	v1 "k8s.io/api/admission/v1"
 	"k8s.io/api/admission/v1beta1"
-	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -35,7 +35,8 @@ var admissionScheme = runtime.NewScheme()
 var admissionCodecs = serializer.NewCodecFactory(admissionScheme)
 
 func init() {
-	utilruntime.Must(admissionv1beta1.AddToScheme(admissionScheme))
+	utilruntime.Must(v1.AddToScheme(admissionScheme))
+	utilruntime.Must(v1beta1.AddToScheme(admissionScheme))
 }
 
 var _ http.Handler = &Webhook{}
@@ -70,11 +71,15 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Both v1 and v1beta1 AdmissionReview types are exactly the same, so the v1beta1 type can
+	// be decoded into the v1 type. However the runtime codec's decoder guesses which type to
+	// decode into by type name if an Object's TypeMeta isn't set. By setting TypeMeta of an`
+	// unregistered type to the v1 GVK, the decoder will coerce a v1beta1 AdmissionReview to v1.
 	req := Request{}
-	ar := v1beta1.AdmissionReview{
-		// avoid an extra copy
-		Request: &req.AdmissionRequest,
-	}
+	ar := unversionedAdmissionReview{}
+	// avoid an extra copy
+	ar.Request = &req.AdmissionRequest
+	ar.SetGroupVersionKind(v1.SchemeGroupVersion.WithKind("AdmissionReview"))
 	if _, _, err := admissionCodecs.UniversalDeserializer().Decode(body, nil, &ar); err != nil {
 		wh.log.Error(err, "unable to decode the request")
 		reviewResponse = Errored(http.StatusBadRequest, err)
@@ -90,7 +95,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (wh *Webhook) writeResponse(w io.Writer, response Response) {
 	encoder := json.NewEncoder(w)
-	responseAdmissionReview := v1beta1.AdmissionReview{
+	responseAdmissionReview := v1.AdmissionReview{
 		Response: &response.AdmissionResponse,
 	}
 	err := encoder.Encode(responseAdmissionReview)
@@ -107,3 +112,10 @@ func (wh *Webhook) writeResponse(w io.Writer, response Response) {
 		}
 	}
 }
+
+// unversionedAdmissionReview is used to decode both v1 and v1beta1 AdmissionReview types.
+type unversionedAdmissionReview struct {
+	v1.AdmissionReview
+}
+
+var _ runtime.Object = &unversionedAdmissionReview{}

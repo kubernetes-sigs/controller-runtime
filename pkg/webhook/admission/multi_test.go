@@ -22,15 +22,15 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"gomodules.xyz/jsonpatch/v2"
-	admissionv1beta1 "k8s.io/api/admission/v1beta1"
+	jsonpatch "gomodules.xyz/jsonpatch/v2"
+	admissionv1 "k8s.io/api/admission/v1"
 )
 
 var _ = Describe("Multi-Handler Admission Webhooks", func() {
 	alwaysAllow := &fakeHandler{
 		fn: func(ctx context.Context, req Request) Response {
 			return Response{
-				AdmissionResponse: admissionv1beta1.AdmissionResponse{
+				AdmissionResponse: admissionv1.AdmissionResponse{
 					Allowed: true,
 				},
 			}
@@ -39,7 +39,7 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 	alwaysDeny := &fakeHandler{
 		fn: func(ctx context.Context, req Request) Response {
 			return Response{
-				AdmissionResponse: admissionv1beta1.AdmissionResponse{
+				AdmissionResponse: admissionv1.AdmissionResponse{
 					Allowed: false,
 				},
 			}
@@ -82,9 +82,9 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 							Value:     "2",
 						},
 					},
-					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+					AdmissionResponse: admissionv1.AdmissionResponse{
 						Allowed:   true,
-						PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
+						PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
 					},
 				}
 			},
@@ -99,9 +99,9 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 							Value:     "world",
 						},
 					},
-					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+					AdmissionResponse: admissionv1.AdmissionResponse{
 						Allowed:   true,
-						PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
+						PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
 					},
 				}
 			},

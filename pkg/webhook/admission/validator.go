@@ -18,11 +18,10 @@ package admission
 
 import (
 	"context"
+	goerrors "errors"
 	"net/http"
 
-	goerrors "errors"
-
-	"k8s.io/api/admission/v1beta1"
+	v1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -63,7 +62,7 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 
 	// Get the object in the request
 	obj := h.validator.DeepCopyObject().(Validator)
-	if req.Operation == v1beta1.Create {
+	if req.Operation == v1.Create {
 		err := h.decoder.Decode(req, obj)
 		if err != nil {
 			return Errored(http.StatusBadRequest, err)
@@ -79,7 +78,7 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 		}
 	}
 
-	if req.Operation == v1beta1.Update {
+	if req.Operation == v1.Update {
 		oldObj := obj.DeepCopyObject()
 
 		err := h.decoder.DecodeRaw(req.Object, obj)
@@ -101,7 +100,7 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 		}
 	}
 
-	if req.Operation == v1beta1.Delete {
+	if req.Operation == v1.Delete {
 		// In reference to PR: https://github.com/kubernetes/kubernetes/pull/76346
 		// OldObject contains the object being deleted
 		err := h.decoder.DecodeRaw(req.OldObject, obj)

@@ -198,7 +198,7 @@ func (c *client) Get(ctx context.Context, key ObjectKey, obj runtime.Object) err
 // List implements client.Client
 func (c *client) List(ctx context.Context, obj runtime.Object, opts ...ListOption) error {
 	switch obj.(type) {
-	case *unstructured.Unstructured:
+	case *unstructured.UnstructuredList:
 		return c.unstructuredClient.List(ctx, obj, opts...)
 	case *metav1.PartialObjectMetadataList:
 		return c.metadataClient.List(ctx, obj, opts...)

@@ -23,8 +23,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"gomodules.xyz/jsonpatch/v2"
-	admissionv1beta1 "k8s.io/api/admission/v1beta1"
+	jsonpatch "gomodules.xyz/jsonpatch/v2"
+	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	machinerytypes "k8s.io/apimachinery/pkg/types"
@@ -38,7 +38,7 @@ var _ = Describe("Admission Webhooks", func() {
 		handler := &fakeHandler{
 			fn: func(ctx context.Context, req Request) Response {
 				return Response{
-					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+					AdmissionResponse: admissionv1.AdmissionResponse{
 						Allowed: true,
 					},
 				}
@@ -68,7 +68,7 @@ var _ = Describe("Admission Webhooks", func() {
 		webhook := allowHandler()
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{AdmissionRequest: admissionv1beta1.AdmissionRequest{UID: "foobar"}})
+		resp := webhook.Handle(context.Background(), Request{AdmissionRequest: admissionv1.AdmissionRequest{UID: "foobar"}})
 
 		By("checking that the response share's the request's UID")
 		Expect(resp.UID).To(Equal(machinerytypes.UID("foobar")))
@@ -90,7 +90,7 @@ var _ = Describe("Admission Webhooks", func() {
 		webhook := &Webhook{
 			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
 				return Response{
-					AdmissionResponse: admissionv1beta1.AdmissionResponse{
+					AdmissionResponse: admissionv1.AdmissionResponse{
 						Allowed: true,
 						Result:  &metav1.Status{Message: "Ground Control to Major Tom"},
 					},
@@ -120,7 +120,7 @@ var _ = Describe("Admission Webhooks", func() {
 		resp := webhook.Handle(context.Background(), Request{})
 
 		By("checking that a JSON patch is populated on the response")
-		patchType := admissionv1beta1.PatchTypeJSONPatch
+		patchType := admissionv1.PatchTypeJSONPatch
 		Expect(resp.PatchType).To(Equal(&patchType))
 		Expect(resp.Patch).To(Equal([]byte(`[{"op":"add","path":"/a","value":2},{"op":"replace","path":"/b","value":4}]`)))
 	})

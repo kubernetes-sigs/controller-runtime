@@ -38,9 +38,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -314,7 +314,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Create the mapper provider
 	mapper, err := options.MapperProvider(config)
 	if err != nil {
-		log.Error(err, "Failed to get API Group-Resources")
+		options.Logger.Error(err, "Failed to get API Group-Resources")
 		return nil, err
 	}
 
@@ -345,7 +345,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Create the recorder provider to inject event recorders for the components.
 	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.
-	recorderProvider, err := options.newRecorderProvider(config, options.Scheme, log.WithName("events"), options.makeBroadcaster)
+	recorderProvider, err := options.newRecorderProvider(config, options.Scheme, options.Logger.WithName("events"), options.makeBroadcaster)
 	if err != nil {
 		return nil, err
 	}
@@ -599,7 +599,7 @@ func setOptionsDefaults(options Options) Options {
 	}
 
 	if options.Logger == nil {
-		options.Logger = logf.Log
+		options.Logger = logf.RuntimeLog.WithName("manager")
 	}
 
 	return options

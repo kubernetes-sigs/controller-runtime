@@ -40,11 +40,11 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
-
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
@@ -1359,7 +1359,7 @@ var _ = Describe("manger.Manager", func() {
 				},
 				log: func(logger logr.Logger) error {
 					defer GinkgoRecover()
-					Expect(logger).To(Equal(log))
+					Expect(logger).To(Equal(logf.RuntimeLog.WithName("manager")))
 					return nil
 				},
 			})

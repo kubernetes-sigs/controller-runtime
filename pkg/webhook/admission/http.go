@@ -27,6 +27,7 @@ import (
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
@@ -73,14 +74,17 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Both v1 and v1beta1 AdmissionReview types are exactly the same, so the v1beta1 type can
 	// be decoded into the v1 type. However the runtime codec's decoder guesses which type to
-	// decode into by type name if an Object's TypeMeta isn't set. By setting TypeMeta of an`
+	// decode into by type name if an Object's TypeMeta isn't set. By setting TypeMeta of an
 	// unregistered type to the v1 GVK, the decoder will coerce a v1beta1 AdmissionReview to v1.
+	// The actual AdmissionReview GVK will be used to write a typed response in case the
+	// webhook config permits multiple versions, otherwise this response will fail.
 	req := Request{}
 	ar := unversionedAdmissionReview{}
 	// avoid an extra copy
 	ar.Request = &req.AdmissionRequest
 	ar.SetGroupVersionKind(v1.SchemeGroupVersion.WithKind("AdmissionReview"))
-	if _, _, err := admissionCodecs.UniversalDeserializer().Decode(body, nil, &ar); err != nil {
+	_, actualAdmRevGVK, err := admissionCodecs.UniversalDeserializer().Decode(body, nil, &ar)
+	if err != nil {
 		wh.log.Error(err, "unable to decode the request")
 		reviewResponse = Errored(http.StatusBadRequest, err)
 		wh.writeResponse(w, reviewResponse)
@@ -90,20 +94,39 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: add panic-recovery for Handle
 	reviewResponse = wh.Handle(r.Context(), req)
-	wh.writeResponse(w, reviewResponse)
+	wh.writeResponseTyped(w, reviewResponse, actualAdmRevGVK)
 }
 
+// writeResponse writes response to w generically, i.e. without encoding GVK information.
 func (wh *Webhook) writeResponse(w io.Writer, response Response) {
-	encoder := json.NewEncoder(w)
-	responseAdmissionReview := v1.AdmissionReview{
+	wh.writeAdmissionResponse(w, v1.AdmissionReview{Response: &response.AdmissionResponse})
+}
+
+// writeResponseTyped writes response to w with GVK set to admRevGVK, which is necessary
+// if multiple AdmissionReview versions are permitted by the webhook.
+func (wh *Webhook) writeResponseTyped(w io.Writer, response Response, admRevGVK *schema.GroupVersionKind) {
+	ar := v1.AdmissionReview{
 		Response: &response.AdmissionResponse,
 	}
-	err := encoder.Encode(responseAdmissionReview)
+	// Default to a v1 AdmissionReview, otherwise the API server may not recognize the request
+	// if multiple AdmissionReview versions are permitted by the webhook config.
+	// TODO(estroz): this should be configurable since older API servers won't know about v1.
+	if admRevGVK == nil || *admRevGVK == (schema.GroupVersionKind{}) {
+		ar.SetGroupVersionKind(v1.SchemeGroupVersion.WithKind("AdmissionReview"))
+	} else {
+		ar.SetGroupVersionKind(*admRevGVK)
+	}
+	wh.writeAdmissionResponse(w, ar)
+}
+
+// writeAdmissionResponse writes ar to w.
+func (wh *Webhook) writeAdmissionResponse(w io.Writer, ar v1.AdmissionReview) {
+	err := json.NewEncoder(w).Encode(ar)
 	if err != nil {
 		wh.log.Error(err, "unable to encode the response")
 		wh.writeResponse(w, Errored(http.StatusInternalServerError, err))
 	} else {
-		res := responseAdmissionReview.Response
+		res := ar.Response
 		if log := wh.log; log.V(1).Enabled() {
 			if res.Result != nil {
 				log = log.WithValues("code", res.Result.Code, "reason", res.Result.Reason)

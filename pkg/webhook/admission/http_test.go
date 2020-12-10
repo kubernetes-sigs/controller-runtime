@@ -35,6 +35,11 @@ import (
 
 var _ = Describe("Admission Webhooks", func() {
 
+	const (
+		gvkJSONv1      = `"kind":"AdmissionReview","apiVersion":"admission.k8s.io/v1"`
+		gvkJSONv1beta1 = `"kind":"AdmissionReview","apiVersion":"admission.k8s.io/v1beta1"`
+	)
+
 	Describe("HTTP Handler", func() {
 		var respRecorder *httptest.ResponseRecorder
 		webhook := &Webhook{
@@ -51,10 +56,10 @@ var _ = Describe("Admission Webhooks", func() {
 		It("should return bad-request when given an empty body", func() {
 			req := &http.Request{Body: nil}
 
-			expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"request body is empty","code":400}}}
-`)
+			expected := `{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"request body is empty","code":400}}}
+`
 			webhook.ServeHTTP(respRecorder, req)
-			Expect(respRecorder.Body.Bytes()).To(Equal(expected))
+			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
 
 		It("should return bad-request when given the wrong content-type", func() {
@@ -63,10 +68,11 @@ var _ = Describe("Admission Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBuffer(nil)},
 			}
 
-			expected := []byte(`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"contentType=application/foo, expected application/json","code":400}}}
-`)
+			expected :=
+				`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"contentType=application/foo, expected application/json","code":400}}}
+`
 			webhook.ServeHTTP(respRecorder, req)
-			Expect(respRecorder.Body.Bytes()).To(Equal(expected))
+			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
 
 		It("should return bad-request when given an undecodable body", func() {
@@ -75,14 +81,14 @@ var _ = Describe("Admission Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBufferString("{")},
 			}
 
-			expected := []byte(
+			expected :=
 				`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"couldn't get version/kind; json parse error: unexpected end of JSON input","code":400}}}
-`)
+`
 			webhook.ServeHTTP(respRecorder, req)
-			Expect(respRecorder.Body.Bytes()).To(Equal(expected))
+			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
 
-		It("should return the response given by the handler", func() {
+		It("should return the response given by the handler with version defaulted to v1", func() {
 			req := &http.Request{
 				Header: http.Header{"Content-Type": []string{"application/json"}},
 				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
@@ -92,10 +98,42 @@ var _ = Describe("Admission Webhooks", func() {
 				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
-			expected := []byte(`{"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
-`)
+			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
+`, gvkJSONv1)
 			webhook.ServeHTTP(respRecorder, req)
-			Expect(respRecorder.Body.Bytes()).To(Equal(expected))
+			Expect(respRecorder.Body.String()).To(Equal(expected))
+		})
+
+		It("should return the v1 response given by the handler", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Body:   nopCloser{Reader: bytes.NewBufferString(fmt.Sprintf(`{%s,"request":{}}`, gvkJSONv1))},
+			}
+			webhook := &Webhook{
+				Handler: &fakeHandler{},
+				log:     logf.RuntimeLog.WithName("webhook"),
+			}
+
+			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
+`, gvkJSONv1)
+			webhook.ServeHTTP(respRecorder, req)
+			Expect(respRecorder.Body.String()).To(Equal(expected))
+		})
+
+		It("should return the v1beta1 response given by the handler", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Body:   nopCloser{Reader: bytes.NewBufferString(fmt.Sprintf(`{%s,"request":{}}`, gvkJSONv1beta1))},
+			}
+			webhook := &Webhook{
+				Handler: &fakeHandler{},
+				log:     logf.RuntimeLog.WithName("webhook"),
+			}
+
+			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
+`, gvkJSONv1beta1)
+			webhook.ServeHTTP(respRecorder, req)
+			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
 
 		It("should present the Context from the HTTP request, if any", func() {
@@ -116,13 +154,13 @@ var _ = Describe("Admission Webhooks", func() {
 				log: logf.RuntimeLog.WithName("webhook"),
 			}
 
-			expected := []byte(fmt.Sprintf(`{"response":{"uid":"","allowed":true,"status":{"metadata":{},"reason":%q,"code":200}}}
-`, value))
+			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"reason":%q,"code":200}}}
+`, gvkJSONv1, value)
 
 			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), key, value))
 			cancel()
 			webhook.ServeHTTP(respRecorder, req.WithContext(ctx))
-			Expect(respRecorder.Body.Bytes()).To(Equal(expected))
+			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
 	})
 })

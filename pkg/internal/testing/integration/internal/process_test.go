@@ -97,7 +97,7 @@ var _ = Describe("Start method", func() {
 				processState.HealthCheckEndpoint = healthURLPath
 				processState.StartTimeout = 500 * time.Millisecond
 
-				port, host, err := addr.Suggest()
+				port, host, err := addr.Suggest("")
 				Expect(err).NotTo(HaveOccurred())
 
 				processState.URL = url.URL{

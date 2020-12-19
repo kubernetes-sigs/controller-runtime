@@ -19,6 +19,7 @@ aliases:
   - shawn-hurley
   - joelanford
   - alvaroaleman
+  - coderanger
 
   # folks who can review and LGTM any PRs in the repo (doesn't
   # include approvers & admins -- those count too via the OWNERS

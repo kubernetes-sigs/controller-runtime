@@ -418,34 +418,35 @@ func (cm *controllerManager) serveMetrics() {
 }
 
 func (cm *controllerManager) serveHealthProbes() {
-	// TODO(hypnoglow): refactor locking to use anonymous func in the similar way
-	// it's done in serveMetrics.
-	cm.mu.Lock()
 	mux := http.NewServeMux()
-
-	if cm.readyzHandler != nil {
-		mux.Handle(cm.readinessEndpointName, http.StripPrefix(cm.readinessEndpointName, cm.readyzHandler))
-		// Append '/' suffix to handle subpaths
-		mux.Handle(cm.readinessEndpointName+"/", http.StripPrefix(cm.readinessEndpointName, cm.readyzHandler))
-	}
-	if cm.healthzHandler != nil {
-		mux.Handle(cm.livenessEndpointName, http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
-		// Append '/' suffix to handle subpaths
-		mux.Handle(cm.livenessEndpointName+"/", http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
-	}
-
 	server := http.Server{
 		Handler: mux,
 	}
-	// Run server
-	cm.startRunnable(RunnableFunc(func(_ context.Context) error {
-		if err := server.Serve(cm.healthProbeListener); err != nil && err != http.ErrServerClosed {
-			return err
+
+	func() {
+		cm.mu.Lock()
+		defer cm.mu.Unlock()
+
+		if cm.readyzHandler != nil {
+			mux.Handle(cm.readinessEndpointName, http.StripPrefix(cm.readinessEndpointName, cm.readyzHandler))
+			// Append '/' suffix to handle subpaths
+			mux.Handle(cm.readinessEndpointName+"/", http.StripPrefix(cm.readinessEndpointName, cm.readyzHandler))
 		}
-		return nil
-	}))
-	cm.healthzStarted = true
-	cm.mu.Unlock()
+		if cm.healthzHandler != nil {
+			mux.Handle(cm.livenessEndpointName, http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
+			// Append '/' suffix to handle subpaths
+			mux.Handle(cm.livenessEndpointName+"/", http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
+		}
+
+		// Run server
+		cm.startRunnable(RunnableFunc(func(_ context.Context) error {
+			if err := server.Serve(cm.healthProbeListener); err != nil && err != http.ErrServerClosed {
+				return err
+			}
+			return nil
+		}))
+		cm.healthzStarted = true
+	}()
 
 	// Shutdown the server when stop is closed
 	<-cm.internalProceduresStop

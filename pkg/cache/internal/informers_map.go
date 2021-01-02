@@ -320,7 +320,7 @@ func createMetadataListWatch(gvk schema.GroupVersionKind, ip *specificInformersM
 	//  pass in their own contexts instead of relying on this fixed one here.
 	ctx := context.TODO()
 
-	// create the relevant listwaatch
+	// create the relevant listwatch
 	return &cache.ListWatch{
 		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 			if ip.namespace != "" && mapping.Scope.Name() != meta.RESTScopeNameRoot {

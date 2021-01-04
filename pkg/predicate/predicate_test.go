@@ -414,6 +414,9 @@ var _ = Describe("Predicate", func() {
 
 	})
 
+	// AnnotationChangedPredicate has almost identical test cases as LabelChangedPredicates,
+	// so the duplication linter should be muted on both two test suites.
+	// nolint:dupl
 	Describe("When checking an AnnotationChangedPredicate", func() {
 		instance := predicate.AnnotationChangedPredicate{}
 		Context("Where the old object is missing", func() {
@@ -610,6 +613,9 @@ var _ = Describe("Predicate", func() {
 		})
 	})
 
+	// LabelChangedPredicates has almost identical test cases as AnnotationChangedPredicates,
+	// so the duplication linter should be muted on both two test suites.
+	// nolint:dupl
 	Describe("When checking a LabelChangedPredicate", func() {
 		instance := predicate.LabelChangedPredicate{}
 		Context("Where the old object is missing", func() {

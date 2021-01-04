@@ -610,6 +610,202 @@ var _ = Describe("Predicate", func() {
 		})
 	})
 
+	Describe("When checking a LabelChangedPredicate", func() {
+		instance := predicate.LabelChangedPredicate{}
+		Context("Where the old object is missing", func() {
+			It("should return false", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Labels: map[string]string{
+							"foo": "bar",
+						},
+					}}
+
+				evt := event.UpdateEvent{
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(evt)).To(BeFalse())
+			})
+		})
+
+		Context("Where the new object is missing", func() {
+			It("should return false", func() {
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Labels: map[string]string{
+							"foo": "bar",
+						},
+					}}
+
+				evt := event.UpdateEvent{
+					ObjectOld: old,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(evt)).To(BeFalse())
+			})
+		})
+
+		Context("Where the labels are empty", func() {
+			It("should return false", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+					}}
+
+				evt := event.UpdateEvent{
+					ObjectOld: old,
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(evt)).To(BeFalse())
+			})
+		})
+
+		Context("Where the labels haven't changed", func() {
+			It("should return false", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Labels: map[string]string{
+							"foo": "bar",
+						},
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Labels: map[string]string{
+							"foo": "bar",
+						},
+					}}
+
+				evt := event.UpdateEvent{
+					ObjectOld: old,
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(evt)).To(BeFalse())
+			})
+		})
+
+		Context("Where a label value has changed", func() {
+			It("should return true", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Labels: map[string]string{
+							"foo": "bar",
+						},
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Labels: map[string]string{
+							"foo": "bee",
+						},
+					}}
+
+				evt := event.UpdateEvent{
+					ObjectOld: old,
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(evt)).To(BeTrue())
+			})
+		})
+
+		Context("Where a label has been added", func() {
+			It("should return true", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Labels: map[string]string{
+							"foo": "bar",
+						},
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Labels: map[string]string{
+							"foo": "bar",
+							"faa": "bor",
+						},
+					}}
+
+				evt := event.UpdateEvent{
+					ObjectOld: old,
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(evt)).To(BeTrue())
+			})
+		})
+
+		Context("Where a label has been removed", func() {
+			It("should return true", func() {
+				new := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Labels: map[string]string{
+							"foo": "bar",
+							"faa": "bor",
+						},
+					}}
+
+				old := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "baz",
+						Namespace: "biz",
+						Labels: map[string]string{
+							"foo": "bar",
+						},
+					}}
+
+				evt := event.UpdateEvent{
+					ObjectOld: old,
+					ObjectNew: new,
+				}
+				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
+				Expect(instance.Update(evt)).To(BeTrue())
+			})
+		})
+	})
+
 	Context("With a boolean predicate", func() {
 		funcs := func(pass bool) predicate.Funcs {
 			return predicate.Funcs{

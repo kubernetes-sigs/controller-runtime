@@ -48,8 +48,9 @@ var _ = Describe("Fake client", func() {
 				Kind:       "Deployment",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-deployment",
-				Namespace: "ns1",
+				Name:            "test-deployment",
+				Namespace:       "ns1",
+				ResourceVersion: trackerAddResourceVersion,
 			},
 		}
 		dep2 = &appsv1.Deployment{
@@ -63,6 +64,7 @@ var _ = Describe("Fake client", func() {
 				Labels: map[string]string{
 					"test-label": "label-value",
 				},
+				ResourceVersion: trackerAddResourceVersion,
 			},
 		}
 		cm = &corev1.ConfigMap{
@@ -71,8 +73,9 @@ var _ = Describe("Fake client", func() {
 				Kind:       "ConfigMap",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-cm",
-				Namespace: "ns2",
+				Name:            "test-cm",
+				Namespace:       "ns2",
+				ResourceVersion: trackerAddResourceVersion,
 			},
 			Data: map[string]string{
 				"test-key": "test-value",
@@ -190,9 +193,12 @@ var _ = Describe("Fake client", func() {
 		It("should not change the submitted object if Create failed", func() {
 			By("Trying to create an existing configmap")
 			submitted := cm.DeepCopy()
+			submitted.ResourceVersion = ""
+			submittedReference := submitted.DeepCopy()
 			err := cl.Create(context.Background(), submitted)
+			Expect(err).ToNot(BeNil())
 			Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
-			Expect(submitted).To(Equal(cm))
+			Expect(submitted).To(Equal(submittedReference))
 		})
 
 		It("should error on Create with empty Name", func() {
@@ -282,7 +288,7 @@ var _ = Describe("Fake client", func() {
 			err = cl.Get(context.Background(), namespacedName, obj)
 			Expect(err).To(BeNil())
 			Expect(obj).To(Equal(newcm))
-			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
+			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1000"))
 		})
 
 		It("should allow updates with non-set ResourceVersion for a resource that allows unconditional updates", func() {
@@ -312,7 +318,7 @@ var _ = Describe("Fake client", func() {
 			err = cl.Get(context.Background(), namespacedName, obj)
 			Expect(err).To(BeNil())
 			Expect(obj).To(Equal(newcm))
-			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
+			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1000"))
 		})
 
 		It("should reject updates with non-set ResourceVersion for a resource that doesn't allow unconditional updates", func() {
@@ -421,7 +427,7 @@ var _ = Describe("Fake client", func() {
 			err = cl.Get(context.Background(), namespacedName, obj)
 			Expect(err).To(BeNil())
 			Expect(obj).To(Equal(cm))
-			Expect(obj.ObjectMeta.ResourceVersion).To(Equal(""))
+			Expect(obj.ObjectMeta.ResourceVersion).To(Equal(trackerAddResourceVersion))
 		})
 
 		It("should be able to Delete", func() {
@@ -497,7 +503,7 @@ var _ = Describe("Fake client", func() {
 				err = cl.Get(context.Background(), namespacedName, obj)
 				Expect(err).To(BeNil())
 				Expect(obj).To(Equal(cm))
-				Expect(obj.ObjectMeta.ResourceVersion).To(Equal(""))
+				Expect(obj.ObjectMeta.ResourceVersion).To(Equal(trackerAddResourceVersion))
 			})
 		})
 
@@ -523,7 +529,7 @@ var _ = Describe("Fake client", func() {
 			err = cl.Get(context.Background(), namespacedName, obj)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(obj.Annotations["foo"]).To(Equal("bar"))
-			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
+			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1000"))
 		})
 	}
 
@@ -551,5 +557,24 @@ var _ = Describe("Fake client", func() {
 			close(done)
 		})
 		AssertClientBehavior()
+	})
+
+	It("should set the ResourceVersion to 999 when adding an object to the tracker", func() {
+		cl := NewClientBuilder().WithObjects(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "cm"}}).Build()
+
+		retrieved := &corev1.Secret{}
+		Expect(cl.Get(context.Background(), types.NamespacedName{Name: "cm"}, retrieved)).To(Succeed())
+
+		reference := &corev1.Secret{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "Secret",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "cm",
+				ResourceVersion: "999",
+			},
+		}
+		Expect(retrieved).To(Equal(reference))
 	})
 })

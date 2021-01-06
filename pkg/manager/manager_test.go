@@ -1318,12 +1318,12 @@ var _ = Describe("manger.Manager", func() {
 	})
 	Describe("SetFields", func() {
 		It("should inject field values", func(done Done) {
-			m, err := New(cfg, Options{})
+			m, err := New(cfg, Options{
+				NewCache: func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+					return &informertest.FakeInformers{}, nil
+				},
+			})
 			Expect(err).NotTo(HaveOccurred())
-			mgr, ok := m.(*controllerManager)
-			Expect(ok).To(BeTrue())
-
-			mgr.cache = &informertest.FakeInformers{}
 
 			By("Injecting the dependencies")
 			err = m.SetFields(&injectable{
@@ -1480,7 +1480,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetConfig()).To(Equal(mgr.config))
+		Expect(m.GetConfig()).To(Equal(mgr.cluster.GetConfig()))
 	})
 
 	It("should provide a function to get the Client", func() {
@@ -1488,7 +1488,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetClient()).To(Equal(mgr.client))
+		Expect(m.GetClient()).To(Equal(mgr.cluster.GetClient()))
 	})
 
 	It("should provide a function to get the Scheme", func() {
@@ -1496,7 +1496,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetScheme()).To(Equal(mgr.scheme))
+		Expect(m.GetScheme()).To(Equal(mgr.cluster.GetScheme()))
 	})
 
 	It("should provide a function to get the FieldIndexer", func() {
@@ -1504,7 +1504,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetFieldIndexer()).To(Equal(mgr.fieldIndexes))
+		Expect(m.GetFieldIndexer()).To(Equal(mgr.cluster.GetFieldIndexer()))
 	})
 
 	It("should provide a function to get the EventRecorder", func() {

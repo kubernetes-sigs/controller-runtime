@@ -212,9 +212,13 @@ func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, ob
 	ni := cache.NewSharedIndexInformer(lw, obj, resyncPeriod(ip.resync)(), cache.Indexers{
 		cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 	})
+	rm, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	if err != nil {
+		return nil, false, err
+	}
 	i := &MapEntry{
 		Informer: ni,
-		Reader:   CacheReader{indexer: ni.GetIndexer(), groupVersionKind: gvk},
+		Reader:   CacheReader{indexer: ni.GetIndexer(), groupVersionKind: gvk, scopeName: rm.Scope.Name()},
 	}
 	ip.informersByGVK[gvk] = i
 

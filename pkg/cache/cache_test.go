@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const testNodeOne = "test-node-1"
 const testNamespaceOne = "test-namespace-1"
 const testNamespaceTwo = "test-namespace-2"
 const testNamespaceThree = "test-namespace-3"
@@ -97,6 +98,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 			By("creating three pods")
 			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			err = ensureNode(testNodeOne, cl)
 			Expect(err).NotTo(HaveOccurred())
 			err = ensureNamespace(testNamespaceOne, cl)
 			Expect(err).NotTo(HaveOccurred())
@@ -413,17 +416,33 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(out.Items).Should(HaveLen(1))
 					Expect(out.Items[0].GetNamespace()).To(Equal(testNamespaceOne))
 
-					By("listing all namespaces - should still be able to get a cluster-scoped resource")
-					namespaceList := &unstructured.UnstructuredList{}
-					namespaceList.SetGroupVersionKind(schema.GroupVersionKind{
+					By("listing all nodes - should still be able to list a cluster-scoped resource")
+					nodeList := &unstructured.UnstructuredList{}
+					nodeList.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
-						Kind:    "NamespaceList",
+						Kind:    "NodeList",
 					})
-					Expect(namespacedCache.List(context.Background(), namespaceList)).To(Succeed())
+					Expect(namespacedCache.List(context.Background(), nodeList)).To(Succeed())
 
-					By("verifying the namespace list is not empty")
-					Expect(namespaceList.Items).NotTo(BeEmpty())
+					By("verifying the node list is not empty")
+					Expect(nodeList.Items).NotTo(BeEmpty())
+
+					By("getting a node - should still be able to get a cluster-scoped resource")
+					node := &unstructured.Unstructured{}
+					node.SetGroupVersionKind(schema.GroupVersionKind{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Node",
+					})
+
+					By("verifying that getting the node works with an empty namespace")
+					key1 := client.ObjectKey{Namespace: "", Name: testNodeOne}
+					Expect(namespacedCache.Get(context.Background(), key1, node)).To(Succeed())
+
+					By("verifying that the namespace is ignored when getting a cluster-scoped resource")
+					key2 := client.ObjectKey{Namespace: "random", Name: testNodeOne}
+					Expect(namespacedCache.Get(context.Background(), key2, node)).To(Succeed())
 				})
 
 				It("should deep copy the object unless told otherwise", func() {
@@ -607,17 +626,33 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(out.Items).Should(HaveLen(1))
 					Expect(out.Items[0].GetNamespace()).To(Equal(testNamespaceOne))
 
-					By("listing all namespaces - should still be able to get a cluster-scoped resource")
-					namespaceList := &kmetav1.PartialObjectMetadataList{}
-					namespaceList.SetGroupVersionKind(schema.GroupVersionKind{
+					By("listing all nodes - should still be able to list a cluster-scoped resource")
+					nodeList := &kmetav1.PartialObjectMetadataList{}
+					nodeList.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
-						Kind:    "NamespaceList",
+						Kind:    "NodeList",
 					})
-					Expect(namespacedCache.List(context.Background(), namespaceList)).To(Succeed())
+					Expect(namespacedCache.List(context.Background(), nodeList)).To(Succeed())
 
-					By("verifying the namespace list is not empty")
-					Expect(namespaceList.Items).NotTo(BeEmpty())
+					By("verifying the node list is not empty")
+					Expect(nodeList.Items).NotTo(BeEmpty())
+
+					By("getting a node - should still be able to get a cluster-scoped resource")
+					node := &kmetav1.PartialObjectMetadata{}
+					node.SetGroupVersionKind(schema.GroupVersionKind{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Node",
+					})
+
+					By("verifying that getting the node works with an empty namespace")
+					key1 := client.ObjectKey{Namespace: "", Name: testNodeOne}
+					Expect(namespacedCache.Get(context.Background(), key1, node)).To(Succeed())
+
+					By("verifying that the namespace is ignored when getting a cluster-scoped resource")
+					key2 := client.ObjectKey{Namespace: "random", Name: testNodeOne}
+					Expect(namespacedCache.Get(context.Background(), key2, node)).To(Succeed())
 				})
 
 				It("should deep copy the object unless told otherwise", func() {
@@ -1073,6 +1108,23 @@ func ensureNamespace(namespace string, client client.Client) error {
 		},
 	}
 	err := client.Create(context.TODO(), &ns)
+	if errors.IsAlreadyExists(err) {
+		return nil
+	}
+	return err
+}
+
+func ensureNode(name string, client client.Client) error {
+	node := kcorev1.Node{
+		ObjectMeta: kmetav1.ObjectMeta{
+			Name: name,
+		},
+		TypeMeta: kmetav1.TypeMeta{
+			Kind:       "Node",
+			APIVersion: "v1",
+		},
+	}
+	err := client.Create(context.TODO(), &node)
 	if errors.IsAlreadyExists(err) {
 		return nil
 	}

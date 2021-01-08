@@ -79,6 +79,10 @@ type Controller struct {
 	// undergo a major refactoring and redesign to allow for context to not be stored in a struct.
 	ctx context.Context
 
+	// CacheSyncTimeout refers to the time limit set on waiting for cache to sync
+	// Defaults to 2 minutes if not set.
+	CacheSyncTimeout time.Duration
+
 	// startWatches maintains a list of sources, handlers, and predicates to start when the controller is started.
 	startWatches []watchDescription
 
@@ -156,7 +160,10 @@ func (c *Controller) Start(ctx context.Context) error {
 		// caches.
 		for _, watch := range c.startWatches {
 			c.Log.Info("Starting EventSource", "source", watch.src)
-			if err := watch.src.Start(ctx, watch.handler, c.Queue, watch.predicates...); err != nil {
+
+			watchStartCtx, cancel := context.WithTimeout(ctx, c.CacheSyncTimeout)
+			defer cancel()
+			if err := watch.src.Start(watchStartCtx, watch.handler, c.Queue, watch.predicates...); err != nil {
 				return err
 			}
 		}
@@ -169,9 +176,14 @@ func (c *Controller) Start(ctx context.Context) error {
 			if !ok {
 				continue
 			}
-			if err := syncingSource.WaitForSync(ctx); err != nil {
-				// This code is unreachable in case of kube watches since WaitForCacheSync will never return an error
-				// Leaving it here because that could happen in the future
+
+			// use a context with timeout for launching sources and syncing caches.
+			sourceStartCtx, cancel := context.WithTimeout(ctx, c.CacheSyncTimeout)
+			defer cancel()
+
+			// WaitForSync waits for a definitive timeout, and returns if there
+			// is an error or a timeout
+			if err := syncingSource.WaitForSync(sourceStartCtx); err != nil {
 				err := fmt.Errorf("failed to wait for %s caches to sync: %w", c.Name, err)
 				c.Log.Error(err, "Could not wait for Cache to sync")
 				return err

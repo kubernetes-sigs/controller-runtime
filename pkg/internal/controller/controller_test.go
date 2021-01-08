@@ -122,6 +122,53 @@ var _ = Describe("controller", func() {
 			close(done)
 		})
 
+		It("should error when cache sync timeout occurs", func(done Done) {
+			ctrl.CacheSyncTimeout = 10 * time.Nanosecond
+
+			c, err := cache.New(cfg, cache.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl.startWatches = []watchDescription{{
+				src: source.NewKindWithCache(&appsv1.Deployment{}, c),
+			}}
+
+			err = ctrl.Start(context.TODO())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cache did not sync"))
+
+			close(done)
+		})
+
+		It("should not error when cache sync timeout is of sufficiently high", func(done Done) {
+			ctrl.CacheSyncTimeout = 1 * time.Second
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			sourceSynced := make(chan struct{})
+			c, err := cache.New(cfg, cache.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			ctrl.startWatches = []watchDescription{{
+				src: &singnallingSourceWrapper{
+					SyncingSource: source.NewKindWithCache(&appsv1.Deployment{}, c),
+					cacheSyncDone: sourceSynced,
+				},
+			}}
+
+			go func() {
+				defer GinkgoRecover()
+				Expect(c.Start(ctx)).To(Succeed())
+			}()
+
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(ctx)).To(Succeed())
+			}()
+
+			<-sourceSynced
+			close(done)
+		}, 10.0)
+
 		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {
 			pr1 := &predicate.Funcs{}
 			pr2 := &predicate.Funcs{}
@@ -810,4 +857,16 @@ func (f *fakeReconciler) Reconcile(_ context.Context, r reconcile.Request) (reco
 		f.Requests <- r
 	}
 	return res.Result, res.Err
+}
+
+type singnallingSourceWrapper struct {
+	cacheSyncDone chan struct{}
+	source.SyncingSource
+}
+
+func (s *singnallingSourceWrapper) WaitForSync(ctx context.Context) error {
+	defer func() {
+		close(s.cacheSyncDone)
+	}()
+	return s.SyncingSource.WaitForSync(ctx)
 }

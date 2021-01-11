@@ -125,7 +125,7 @@ type controllerManager struct {
 	// election was configured.
 	elected chan struct{}
 
-	startCache func(ctx context.Context) error
+	caches []hasCache
 
 	// port is the port that the webhook server serves at.
 	port int
@@ -173,6 +173,11 @@ type controllerManager struct {
 	internalProceduresStop chan struct{}
 }
 
+type hasCache interface {
+	Runnable
+	GetCache() cache.Cache
+}
+
 // Add sets dependencies on i, and adds it to the list of Runnables to start.
 func (cm *controllerManager) Add(r Runnable) error {
 	cm.mu.Lock()
@@ -192,6 +197,8 @@ func (cm *controllerManager) Add(r Runnable) error {
 	if leRunnable, ok := r.(LeaderElectionRunnable); ok && !leRunnable.NeedLeaderElection() {
 		shouldStart = cm.started
 		cm.nonLeaderElectionRunnables = append(cm.nonLeaderElectionRunnables, r)
+	} else if hasCache, ok := r.(hasCache); ok {
+		cm.caches = append(cm.caches, hasCache)
 	} else {
 		shouldStart = cm.startedLeader
 		cm.leaderElectionRunnables = append(cm.leaderElectionRunnables, r)
@@ -423,6 +430,9 @@ func (cm *controllerManager) serveHealthProbes() {
 }
 
 func (cm *controllerManager) Start(ctx context.Context) (err error) {
+	if err := cm.Add(cm.cluster); err != nil {
+		return fmt.Errorf("failed to add cluster to runnables: %w", err)
+	}
 	cm.internalCtx, cm.internalCancel = context.WithCancel(ctx)
 
 	// This chan indicates that stop is complete, in other words all runnables have returned or timeout on stop request
@@ -590,17 +600,15 @@ func (cm *controllerManager) waitForCache(ctx context.Context) {
 		return
 	}
 
-	// Start the Cache. Allow the function to start the cache to be mocked out for testing
-	if cm.startCache == nil {
-		cm.startCache = cm.cluster.Start
+	for _, cache := range cm.caches {
+		cm.startRunnable(cache)
 	}
-	cm.startRunnable(RunnableFunc(func(ctx context.Context) error {
-		return cm.startCache(ctx)
-	}))
 
 	// Wait for the caches to sync.
 	// TODO(community): Check the return value and write a test
-	cm.cluster.GetCache().WaitForCacheSync(ctx)
+	for _, cache := range cm.caches {
+		cache.GetCache().WaitForCacheSync(ctx)
+	}
 	// TODO: This should be the return value of cm.cache.WaitForCacheSync but we abuse
 	// cm.started as check if we already started the cache so it must always become true.
 	// Making sure that the cache doesn't get started twice is needed to not get a "close

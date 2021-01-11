@@ -43,6 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
@@ -612,14 +613,88 @@ var _ = Describe("manger.Manager", func() {
 				}
 				mgr, ok := m.(*controllerManager)
 				Expect(ok).To(BeTrue())
-				mgr.startCache = func(context.Context) error {
-					return fmt.Errorf("expected error")
-				}
+				mgr.caches = []hasCache{&cacheProvider{cache: &informertest.FakeInformers{Error: fmt.Errorf("expected error")}}}
 
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				Expect(m.Start(ctx)).To(MatchError(ContainSubstring("expected error")))
 
+				close(done)
+			})
+
+			It("should start the cache before starting anything else", func(done Done) {
+				fakeCache := &startSignalingInformer{Cache: &informertest.FakeInformers{}}
+				options.NewCache = func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+					return fakeCache, nil
+				}
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+
+				runnableWasStarted := make(chan struct{})
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					defer GinkgoRecover()
+					if !fakeCache.wasSynced {
+						return errors.New("runnable got started before cache was synced")
+					}
+					close(runnableWasStarted)
+					return nil
+				}))).To(Succeed())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(ctx)).ToNot(HaveOccurred())
+				}()
+
+				<-runnableWasStarted
+				close(done)
+			})
+
+			It("should start additional clusters before anything else", func(done Done) {
+				fakeCache := &startSignalingInformer{Cache: &informertest.FakeInformers{}}
+				options.NewCache = func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+					return fakeCache, nil
+				}
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+
+				additionalClusterCache := &startSignalingInformer{Cache: &informertest.FakeInformers{}}
+				additionalCluster, err := cluster.New(cfg, func(o *cluster.Options) {
+					o.NewCache = func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+						return additionalClusterCache, nil
+					}
+				})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(m.Add(additionalCluster)).NotTo(HaveOccurred())
+
+				runnableWasStarted := make(chan struct{})
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					defer GinkgoRecover()
+					if !fakeCache.wasSynced {
+						return errors.New("WaitForCacheSyncCalled wasn't called before Runnable got started")
+					}
+					if !additionalClusterCache.wasSynced {
+						return errors.New("the additional clusters WaitForCacheSync wasn't called before Runnable got started")
+					}
+					close(runnableWasStarted)
+					return nil
+				}))).To(Succeed())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(ctx)).ToNot(HaveOccurred())
+				}()
+
+				<-runnableWasStarted
 				close(done)
 			})
 
@@ -1624,4 +1699,53 @@ func (f *fakeDeferredLoader) Complete() (v1alpha1.ControllerManagerConfiguration
 
 func (f *fakeDeferredLoader) InjectScheme(scheme *runtime.Scheme) error {
 	return nil
+}
+
+var _ Runnable = &cacheProvider{}
+
+type cacheProvider struct {
+	cache cache.Cache
+}
+
+func (c *cacheProvider) GetCache() cache.Cache {
+	return c.cache
+}
+
+func (c *cacheProvider) Start(ctx context.Context) error {
+	return c.cache.Start(ctx)
+}
+
+type startSignalingInformer struct {
+	// The manager calls Start and WaitForCacheSync in
+	// parallel, so we have to protect wasStarted with a Mutex
+	// and block in WaitForCacheSync until it is true.
+	wasStartedLock sync.Mutex
+	wasStarted     bool
+	// was synced will be true once Start was called and
+	// WaitForCacheSync returned, just like a real cache.
+	wasSynced bool
+	cache.Cache
+}
+
+func (c *startSignalingInformer) started() bool {
+	c.wasStartedLock.Lock()
+	defer c.wasStartedLock.Unlock()
+	return c.wasStarted
+}
+
+func (c *startSignalingInformer) Start(ctx context.Context) error {
+	c.wasStartedLock.Lock()
+	c.wasStarted = true
+	c.wasStartedLock.Unlock()
+	return c.Cache.Start(ctx)
+}
+
+func (c *startSignalingInformer) WaitForCacheSync(ctx context.Context) bool {
+	defer func() {
+		for !c.started() {
+			continue
+		}
+		c.wasSynced = true
+	}()
+	return c.Cache.WaitForCacheSync(ctx)
 }

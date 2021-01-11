@@ -143,6 +143,8 @@ func (c *Controller) Start(ctx context.Context) error {
 		return errors.New("controller was started more than once. This is likely to be caused by being added to a manager multiple times")
 	}
 
+	c.initMetrics()
+
 	// Set the internal context.
 	c.ctx = ctx
 
@@ -202,7 +204,6 @@ func (c *Controller) Start(ctx context.Context) error {
 
 		// Launch workers to process resources
 		c.Log.Info("Starting workers", "worker count", c.MaxConcurrentReconciles)
-		ctrlmetrics.WorkerCount.WithLabelValues(c.Name).Set(float64(c.MaxConcurrentReconciles))
 		for i := 0; i < c.MaxConcurrentReconciles; i++ {
 			go wait.UntilWithContext(ctx, func(ctx context.Context) {
 				// Run a worker thread that just dequeues items, processes them, and marks them done.
@@ -248,6 +249,23 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 	return true
 }
 
+const (
+	labelError        = "error"
+	labelRequeueAfter = "requeue_after"
+	labelRequeue      = "requeue"
+	labelSuccess      = "success"
+)
+
+func (c *Controller) initMetrics() {
+	ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Set(0)
+	ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Add(0)
+	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelError).Add(0)
+	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeueAfter).Add(0)
+	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeue).Add(0)
+	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelSuccess).Add(0)
+	ctrlmetrics.WorkerCount.WithLabelValues(c.Name).Set(float64(c.MaxConcurrentReconciles))
+}
+
 func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 	// Update metrics after processing each item
 	reconcileStartTS := time.Now()
@@ -275,7 +293,7 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 	if result, err := c.Do.Reconcile(ctx, req); err != nil {
 		c.Queue.AddRateLimited(req)
 		ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Inc()
-		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "error").Inc()
+		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelError).Inc()
 		log.Error(err, "Reconciler error")
 		return
 	} else if result.RequeueAfter > 0 {
@@ -285,11 +303,11 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 		// to result.RequestAfter
 		c.Queue.Forget(obj)
 		c.Queue.AddAfter(req, result.RequeueAfter)
-		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "requeue_after").Inc()
+		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeueAfter).Inc()
 		return
 	} else if result.Requeue {
 		c.Queue.AddRateLimited(req)
-		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "requeue").Inc()
+		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeue).Inc()
 		return
 	}
 
@@ -297,7 +315,7 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 	// get queued again until another change happens.
 	c.Queue.Forget(obj)
 
-	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, "success").Inc()
+	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelSuccess).Inc()
 }
 
 // GetLogger returns this controller's logger.

@@ -2,11 +2,10 @@ package testingclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -92,56 +91,66 @@ func NewReactiveClient(delegate client.Client) *Reactive {
 }
 
 func (r *Reactive) gvrForObject(obj runtime.Object) schema.GroupVersionResource {
-	defer GinkgoRecover()
 	kinds, _, err := r.Scheme().ObjectKinds(obj)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(kinds).To(HaveLen(1))
+	if err != nil {
+		panic(fmt.Errorf("getting ObjectKinds: %w", err))
+	}
+	if len(kinds) != 1 {
+		panic(errors.New("expected exactly one Kind for obj"))
+	}
 	gvk := kinds[0]
 
 	rm, err := r.RESTMapper().RESTMapping(gvk.GroupKind())
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		panic(fmt.Errorf("getting REST mapping for %s: %w", gvk.GroupKind(), err))
+	}
 	gvr := rm.Resource
 
 	return gvr
 }
 
 func (r *Reactive) kindForResource(resource schema.GroupVersionResource) schema.GroupVersionKind {
-	defer GinkgoRecover()
 	kind, err := r.RESTMapper().KindFor(resource)
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		panic(fmt.Errorf("getting Kind for resource %s: %w", resource, err))
+	}
 	return kind
 }
 
 func (r *Reactive) newNamedObject(kind schema.GroupVersionKind, namespace, name string) client.Object {
-	defer GinkgoRecover()
 	rObj := r.newRuntimeObject(kind)
 	cObj, ok := rObj.(client.Object)
-	Expect(ok).To(BeTrue(), "Expected object to implement client.Object. Does it implement metav1.Object?")
+	if !ok {
+		panic("expected object to implement client.Object. Does it implement metav1.Object?")
+	}
 	cObj.SetNamespace(namespace)
 	cObj.SetName(name)
 	return cObj
 }
 
 func (r *Reactive) newObjectList(kind schema.GroupVersionKind) client.ObjectList {
-	defer GinkgoRecover()
 	rObj := r.newRuntimeObject(kind)
 	cObj, ok := rObj.(client.ObjectList)
-	Expect(ok).To(BeTrue(), "Expected object to implement client.ObjectList. Does it implement metav1.ListInterface?")
+	if !ok {
+		panic("expected object to implement client.ObjectList. Does it implement metav1.ListInterface?")
+	}
 	return cObj
 }
 
 func (r *Reactive) newRuntimeObject(kind schema.GroupVersionKind) runtime.Object {
-	defer GinkgoRecover()
 	rObj, err := r.Scheme().New(kind)
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		panic(fmt.Errorf("could not create a new %s (Is it registered with the Scheme?)", kind))
+	}
 	return rObj
 }
 
 func (r *Reactive) populateGVK(obj runtime.Object) {
-	defer GinkgoRecover()
 	// Set GVK using reflection. Normally the apiserver would populate this, but we need it earlier.
 	gvk, err := apiutil.GVKForObject(obj, r.Scheme())
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		panic(fmt.Errorf("getting GVK for obj: %w", err))
+	}
 	obj.GetObjectKind().SetGroupVersionKind(gvk)
 }
 
@@ -155,8 +164,6 @@ func (r *Reactive) Get(ctx context.Context, key client.ObjectKey, obj client.Obj
 }
 
 func (r *Reactive) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
-	defer GinkgoRecover()
-
 	listOpts := client.ListOptions{}
 	listOpts.ApplyOptions(opts)
 
@@ -183,8 +190,9 @@ func (r *Reactive) List(ctx context.Context, list client.ObjectList, opts ...cli
 }
 
 func (r *Reactive) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
-	defer GinkgoRecover()
-	Expect(opts).To(BeEmpty(), "we can't handle opts")
+	if len(opts) != 0 {
+		panic("testingclient.Reactive doesn't currently handle Create opts")
+	}
 	object, err := meta.Accessor(obj)
 	if err != nil {
 		return fmt.Errorf("failed creating object: %w", err)
@@ -198,8 +206,6 @@ func (r *Reactive) Create(ctx context.Context, obj client.Object, opts ...client
 }
 
 func (r *Reactive) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-	defer GinkgoRecover()
-
 	// TODO: We are just dropping these options on the floor... this is the same thing
 	//       that the controller-runtime fake client does, so it doesn't seem too unusual
 	//       but is that really the right thing to do here?
@@ -216,8 +222,9 @@ func (r *Reactive) DeleteAllOf(ctx context.Context, obj client.Object, opts ...c
 }
 
 func (r *Reactive) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-	defer GinkgoRecover()
-	Expect(opts).To(BeEmpty(), "we can't handle opts")
+	if len(opts) != 0 {
+		panic("testingclient.Reactive doesn't currently handle Update opts")
+	}
 
 	r.populateGVK(obj)
 
@@ -227,8 +234,9 @@ func (r *Reactive) Update(ctx context.Context, obj client.Object, opts ...client
 }
 
 func (r *Reactive) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-	defer GinkgoRecover()
-	Expect(opts).To(BeEmpty(), "we can't handle opts")
+	if len(opts) != 0 {
+		panic("testingclient.Reactive doesn't currently handle Patch opts")
+	}
 	p, err := patch.Data(obj)
 	if err != nil {
 		return fmt.Errorf("failed patching object: %w", err)

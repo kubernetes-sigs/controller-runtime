@@ -45,7 +45,7 @@ func (s Spy) Get(ctx context.Context, key client.ObjectKey, obj client.Object) e
 		GVK:  mustGVKForObject(obj, s.Scheme()),
 		Verb: "get",
 		Key:  key,
-		Obj:  obj,
+		Obj:  obj.DeepCopyObject().(client.Object),
 	}
 	return err
 }
@@ -60,7 +60,7 @@ func (s Spy) List(ctx context.Context, list client.ObjectList, opts ...client.Li
 	s.Calls <- SpyCall{
 		GVK:  gvk,
 		Verb: "list",
-		List: list,
+		List: list.DeepCopyObject().(client.ObjectList),
 	}
 	return listErr
 }
@@ -70,7 +70,7 @@ func (s Spy) Create(ctx context.Context, obj client.Object, opts ...client.Creat
 	s.Calls <- SpyCall{
 		GVK:  mustGVKForObject(obj, s.Scheme()),
 		Verb: "create",
-		Obj:  obj,
+		Obj:  obj.DeepCopyObject().(client.Object),
 	}
 	return err
 }
@@ -80,7 +80,7 @@ func (s Spy) Delete(ctx context.Context, obj client.Object, opts ...client.Delet
 	s.Calls <- SpyCall{
 		GVK:  mustGVKForObject(obj, s.Scheme()),
 		Verb: "delete",
-		Obj:  obj,
+		Obj:  obj.DeepCopyObject().(client.Object),
 	}
 	return err
 }
@@ -91,7 +91,7 @@ func (s Spy) Update(ctx context.Context, obj client.Object, opts ...client.Updat
 		GVK:      mustGVKForObject(obj, s.Scheme()),
 		IsStatus: s.isStatus,
 		Verb:     "update",
-		Obj:      obj,
+		Obj:      obj.DeepCopyObject().(client.Object),
 	}
 	return err
 }
@@ -102,7 +102,7 @@ func (s Spy) Patch(ctx context.Context, obj client.Object, patch client.Patch, o
 		GVK:      mustGVKForObject(obj, s.Scheme()),
 		IsStatus: s.isStatus,
 		Verb:     "patch",
-		Obj:      obj,
+		Obj:      obj.DeepCopyObject().(client.Object),
 		Patch:    patch,
 	}
 	return err

@@ -57,6 +57,8 @@ var _ = Describe("Etcd", func() {
 		// it will timeout, as we'll never see the "startup message" we are waiting
 		// for on StdErr
 		Expect(etcd.Start()).To(MatchError(ContainSubstring("timeout")))
+		// Stop is required to cleanup the temporary directory
+		Expect(etcd.Stop()).To(Succeed())
 
 		Expect(stdout.String()).To(ContainSubstring("Member:"))
 		Expect(stderr.String()).To(ContainSubstring("Usage:"))

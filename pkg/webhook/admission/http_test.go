@@ -162,6 +162,34 @@ var _ = Describe("Admission Webhooks", func() {
 			webhook.ServeHTTP(respRecorder, req.WithContext(ctx))
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
+
+		It("should mutate the Context from the HTTP request, if func supplied", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Body:   nopCloser{Reader: bytes.NewBufferString(`{"request":{}}`)},
+			}
+			type ctxkey int
+			const key ctxkey = 1
+			webhook := &Webhook{
+				Handler: &fakeHandler{
+					fn: func(ctx context.Context, req Request) Response {
+						return Allowed(ctx.Value(key).(string))
+					},
+				},
+				WithContextFunc: func(ctx context.Context, r *http.Request) context.Context {
+					return context.WithValue(ctx, key, r.Header["Content-Type"][0])
+				},
+				log: logf.RuntimeLog.WithName("webhook"),
+			}
+
+			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"reason":%q,"code":200}}}
+`, gvkJSONv1, "application/json")
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			webhook.ServeHTTP(respRecorder, req.WithContext(ctx))
+			Expect(respRecorder.Body.String()).To(Equal(expected))
+		})
 	})
 })
 

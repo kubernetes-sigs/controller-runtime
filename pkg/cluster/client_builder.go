@@ -29,6 +29,10 @@ type ClientBuilder interface {
 	// for this client. This function can be called multiple times, it should append to an internal slice.
 	WithUncached(objs ...client.Object) ClientBuilder
 
+	// CacheUnstructured tells the client whether or not to cache unstructured objects and lists. By default,
+	// unstructured objects and list are not cached.
+	CacheUnstructured(v bool) ClientBuilder
+
 	// Build returns a new client.
 	Build(cache cache.Cache, config *rest.Config, options client.Options) (client.Client, error)
 }
@@ -39,11 +43,17 @@ func NewClientBuilder() ClientBuilder {
 }
 
 type newClientBuilder struct {
-	uncached []client.Object
+	uncached          []client.Object
+	cacheUnstructured bool
 }
 
 func (n *newClientBuilder) WithUncached(objs ...client.Object) ClientBuilder {
 	n.uncached = append(n.uncached, objs...)
+	return n
+}
+
+func (n *newClientBuilder) CacheUnstructured(v bool) ClientBuilder {
+	n.cacheUnstructured = v
 	return n
 }
 
@@ -55,8 +65,9 @@ func (n *newClientBuilder) Build(cache cache.Cache, config *rest.Config, options
 	}
 
 	return client.NewDelegatingClient(client.NewDelegatingClientInput{
-		CacheReader:     cache,
-		Client:          c,
-		UncachedObjects: n.uncached,
+		CacheReader:       cache,
+		Client:            c,
+		UncachedObjects:   n.uncached,
+		CacheUnstructured: n.cacheUnstructured,
 	})
 }

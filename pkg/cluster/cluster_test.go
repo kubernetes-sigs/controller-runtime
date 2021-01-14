@@ -43,6 +43,10 @@ func (e *fakeClientBuilder) WithUncached(objs ...client.Object) ClientBuilder {
 	return e
 }
 
+func (e *fakeClientBuilder) CacheUnstructured(_ bool) ClientBuilder {
+	return e
+}
+
 func (e *fakeClientBuilder) Build(cache cache.Cache, config *rest.Config, options client.Options) (client.Client, error) {
 	return nil, e.err
 }

@@ -213,6 +213,10 @@ type Options struct {
 	// for the given objects.
 	ClientDisableCacheFor []client.Object
 
+	// ClientCacheUnstructured tells the client that, if any cache is used, to use it
+	// for unstructured and unstructured list objects.
+	ClientCacheUnstructured bool
+
 	// DryRunClient specifies whether the client should be configured to enforce
 	// dryRun mode.
 	DryRunClient bool
@@ -284,6 +288,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		clusterOptions.NewCache = options.NewCache
 		clusterOptions.ClientBuilder = options.ClientBuilder
 		clusterOptions.ClientDisableCacheFor = options.ClientDisableCacheFor
+		clusterOptions.ClientCacheUnstructured = options.ClientCacheUnstructured
 		clusterOptions.DryRunClient = options.DryRunClient
 		clusterOptions.EventBroadcaster = options.EventBroadcaster
 	})

@@ -162,6 +162,44 @@ var _ = Describe("logging", func() {
 			))
 		})
 
+		// This test in itself will always succeed, a failure will be indicated by the
+		// race detector going off
+		It("should be threadsafe", func() {
+			fulfillDone := make(chan struct{})
+			withNameDone := make(chan struct{})
+			withValuesDone := make(chan struct{})
+			grandChildDone := make(chan struct{})
+
+			// Constructing the child in the goroutine does not reliably
+			// trigger the race detector
+			child := delegLog.WithName("child")
+			go func() {
+				defer GinkgoRecover()
+				delegLog.Fulfill(NullLogger{})
+				close(fulfillDone)
+			}()
+			go func() {
+				defer GinkgoRecover()
+				delegLog.WithName("with-name")
+				close(withNameDone)
+			}()
+			go func() {
+				defer GinkgoRecover()
+				delegLog.WithValues("with-value")
+				close(withValuesDone)
+			}()
+			go func() {
+				defer GinkgoRecover()
+				child.WithValues("grandchild")
+				close(grandChildDone)
+			}()
+
+			<-fulfillDone
+			<-withNameDone
+			<-withValuesDone
+			<-grandChildDone
+		})
+
 		It("should delegate with tags", func() {
 			By("asking for a logger with a name before fulfill, and logging")
 			befFulfill1 := delegLog.WithValues("tag1", "val1")

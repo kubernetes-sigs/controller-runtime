@@ -72,8 +72,10 @@ func (p *loggerPromise) Fulfill(parentLogger logr.Logger) {
 		logger = logger.WithValues(p.tags...)
 	}
 
+	p.logger.lock.Lock()
 	p.logger.Logger = logger
 	p.logger.promise = nil
+	p.logger.lock.Unlock()
 
 	for _, childPromise := range p.childPromises {
 		childPromise.Fulfill(logger)
@@ -86,12 +88,16 @@ func (p *loggerPromise) Fulfill(parentLogger logr.Logger) {
 // logger.  It expects to have *some* logr.Logger set at all times (generally
 // a no-op logger before the promises are fulfilled).
 type DelegatingLogger struct {
+	lock sync.Mutex
 	logr.Logger
 	promise *loggerPromise
 }
 
 // WithName provides a new Logger with the name appended
 func (l *DelegatingLogger) WithName(name string) logr.Logger {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
 	if l.promise == nil {
 		return l.Logger.WithName(name)
 	}
@@ -105,6 +111,9 @@ func (l *DelegatingLogger) WithName(name string) logr.Logger {
 
 // WithValues provides a new Logger with the tags appended
 func (l *DelegatingLogger) WithValues(tags ...interface{}) logr.Logger {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
 	if l.promise == nil {
 		return l.Logger.WithValues(tags...)
 	}

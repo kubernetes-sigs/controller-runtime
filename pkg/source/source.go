@@ -215,7 +215,10 @@ func (cs *Channel) Start(
 	}
 
 	dst := make(chan event.GenericEvent, cs.DestBufferSize)
+
+	cs.destLock.Lock()
 	cs.dest = append(cs.dest, dst)
+	cs.destLock.Unlock()
 
 	cs.once.Do(func() {
 		// Distribute GenericEvents to all EventHandler / Queue pairs Watching this source
@@ -237,9 +240,6 @@ func (cs *Channel) Start(
 			}
 		}
 	}()
-
-	cs.destLock.Lock()
-	defer cs.destLock.Unlock()
 
 	return nil
 }

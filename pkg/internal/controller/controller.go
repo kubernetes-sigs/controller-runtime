@@ -163,9 +163,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		for _, watch := range c.startWatches {
 			c.Log.Info("Starting EventSource", "source", watch.src)
 
-			watchStartCtx, cancel := context.WithTimeout(ctx, c.CacheSyncTimeout)
-			defer cancel()
-			if err := watch.src.Start(watchStartCtx, watch.handler, c.Queue, watch.predicates...); err != nil {
+			if err := watch.src.Start(ctx, watch.handler, c.Queue, watch.predicates...); err != nil {
 				return err
 			}
 		}
@@ -179,15 +177,21 @@ func (c *Controller) Start(ctx context.Context) error {
 				continue
 			}
 
-			// use a context with timeout for launching sources and syncing caches.
-			sourceStartCtx, cancel := context.WithTimeout(ctx, c.CacheSyncTimeout)
-			defer cancel()
+			if err := func() error {
+				// use a context with timeout for launching sources and syncing caches.
+				sourceStartCtx, cancel := context.WithTimeout(ctx, c.CacheSyncTimeout)
+				defer cancel()
 
-			// WaitForSync waits for a definitive timeout, and returns if there
-			// is an error or a timeout
-			if err := syncingSource.WaitForSync(sourceStartCtx); err != nil {
-				err := fmt.Errorf("failed to wait for %s caches to sync: %w", c.Name, err)
-				c.Log.Error(err, "Could not wait for Cache to sync")
+				// WaitForSync waits for a definitive timeout, and returns if there
+				// is an error or a timeout
+				if err := syncingSource.WaitForSync(sourceStartCtx); err != nil {
+					err := fmt.Errorf("failed to wait for %s caches to sync: %w", c.Name, err)
+					c.Log.Error(err, "Could not wait for Cache to sync")
+					return err
+				}
+
+				return nil
+			}(); err != nil {
 				return err
 			}
 		}

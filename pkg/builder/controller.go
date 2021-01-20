@@ -204,6 +204,27 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 	return blder.ctrl, nil
 }
 
+// BuildInterface builds a controller interface that can watch a source later.
+// It is copied from the Build function but doesn't watch anything now.
+func (blder *Builder) BuildInterface(r reconcile.Reconciler) (controller.Controller, error) {
+	if r == nil {
+		return nil, fmt.Errorf("must provide a non-nil Reconciler")
+	}
+	if blder.mgr == nil {
+		return nil, fmt.Errorf("must provide a non-nil Manager")
+	}
+
+	// Set the Config
+	blder.loadRestConfig()
+
+	// Set the ControllerManagedBy
+	if err := blder.doController(r); err != nil {
+		return nil, err
+	}
+
+	return blder.ctrl, nil
+}
+
 func (blder *Builder) project(obj client.Object, proj objectProjection) (client.Object, error) {
 	switch proj {
 	case projectAsNormal:

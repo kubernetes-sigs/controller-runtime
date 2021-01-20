@@ -230,7 +230,7 @@ func NewRaw(opts ...Opts) *zap.Logger {
 //  zap-encoder: Zap log encoding (one of 'json' or 'console')
 //  zap-log-level:  Zap Level to configure the verbosity of logging. Can be one of 'debug', 'info', 'error',
 //			       or any integer value > 0 which corresponds to custom debug levels of increasing verbosity")
-//  zap-stacktrace-level: Zap Level at and above which stacktraces are captured (one of 'info' or 'error')
+//  zap-stacktrace-level: Zap Level at and above which stacktraces are captured (one of 'info', 'error' or 'panic')
 func (o *Options) BindFlags(fs *flag.FlagSet) {
 
 	// Set Development mode value
@@ -260,7 +260,7 @@ func (o *Options) BindFlags(fs *flag.FlagSet) {
 		o.StacktraceLevel = fromFlag
 	}
 	fs.Var(&stackVal, "zap-stacktrace-level",
-		"Zap Level at and above which stacktraces are captured (one of 'info', 'error').")
+		"Zap Level at and above which stacktraces are captured (one of 'info', 'error', 'panic').")
 }
 
 // UseFlagOptions configures the logger to use the Options set by parsing zap option flags from the CLI.

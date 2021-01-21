@@ -473,8 +473,8 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 			}
 		} else {
 			// Treat not having leader election enabled the same as being elected.
+			cm.startLeaderElectionRunnables()
 			close(cm.elected)
-			go cm.startLeaderElectionRunnables()
 		}
 	}()
 
@@ -632,8 +632,8 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 		RetryPeriod:   cm.retryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(_ context.Context) {
-				close(cm.elected)
 				cm.startLeaderElectionRunnables()
+				close(cm.elected)
 			},
 			OnStoppedLeading: cm.onStoppedLeading,
 		},

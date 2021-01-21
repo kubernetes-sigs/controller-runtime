@@ -42,7 +42,7 @@ func (r *reconcileReplicaSet) Reconcile(ctx context.Context, request reconcile.R
 
 	// Fetch the ReplicaSet from the cache
 	rs := &appsv1.ReplicaSet{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, rs)
+	err := r.client.Get(ctx, request.NamespacedName, rs)
 	if errors.IsNotFound(err) {
 		log.Error(nil, "Could not find ReplicaSet")
 		return reconcile.Result{}, nil
@@ -65,7 +65,7 @@ func (r *reconcileReplicaSet) Reconcile(ctx context.Context, request reconcile.R
 
 	// Update the ReplicaSet
 	rs.Labels["hello"] = "world"
-	err = r.client.Update(context.TODO(), rs)
+	err = r.client.Update(ctx, rs)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("could not write ReplicaSet: %+v", err)
 	}

@@ -137,7 +137,7 @@ var _ = Describe("Zap options setup", func() {
 	It("should set a custom writer", func() {
 		var w fakeSyncWriter
 		WriteTo(&w)(opts)
-		Expect(opts.DestWritter).To(Equal(&w))
+		Expect(opts.DestWriter).To(Equal(&w))
 	})
 })
 

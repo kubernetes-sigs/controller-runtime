@@ -423,6 +423,19 @@ var _ = Describe("Zap log level flag options setup", func() {
 			Expect(out.StacktraceLevel.Enabled(zapcore.ErrorLevel)).To(BeTrue())
 		})
 
+		It("Should output stacktrace at panic level, with development mode set to true.", func() {
+			args := []string{"--zap-stacktrace-level=panic", "--zap-devel=true"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+			out := Options{}
+			UseFlagOptions(&fromFlags)(&out)
+
+			Expect(out.StacktraceLevel.Enabled(zapcore.PanicLevel)).To(BeTrue())
+			Expect(out.StacktraceLevel.Enabled(zapcore.ErrorLevel)).To(BeFalse())
+			Expect(out.StacktraceLevel.Enabled(zapcore.InfoLevel)).To(BeFalse())
+		})
+
 	})
 
 	Context("with only -zap-devel flag provided", func() {

@@ -50,7 +50,19 @@ var _ = Describe("ErrorInjector", func() {
 		Expect(subject.Get(nil, key, &obj)).To(MatchError("injected error"))
 	})
 
-	// TODO: test falling through to the delegate.
+	It("calls the delegate client if no errors match", func() {
+		subject.InjectError("get", &corev1.Service{}, testingclient.AnyObject, exampleError)
+
+		key := types.NamespacedName{Namespace: "ns", Name: "pod1"}
+		var obj corev1.Pod
+		Expect(subject.Get(nil, key, &obj)).To(Succeed())
+
+		var objInDelegate corev1.Pod
+		Expect(fakeClient.Get(nil, key, &objInDelegate)).To(Succeed())
+
+		Expect(obj).To(Equal(objInDelegate), "obj should be the retrieved object")
+	})
+
 	// TODO: test more functions.
 	// TODO: test prefers specific matches over general matches.
 })

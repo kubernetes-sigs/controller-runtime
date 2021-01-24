@@ -55,6 +55,13 @@ type Reader interface {
 	// successful call, Items field in the list will be populated with the
 	// result returned from the server.
 	List(ctx context.Context, list ObjectList, opts ...ListOption) error
+
+	// Retrieves a list of objects in "chunks" (of size one hundred by default)
+	// for a given namespace and list options.
+	// One can pass a callback function to process each chunk recieved from the server.
+	// On a successful call, Items field in the list will be populated with the
+	// result returned from the server.
+	ListPages(ctx context.Context, obj ObjectList, callback func(obj ObjectList) error, opts ...ListOption) error
 }
 
 // Writer knows how to create, delete, and update Kubernetes objects.

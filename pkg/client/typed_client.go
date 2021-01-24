@@ -19,6 +19,7 @@ package client
 import (
 	"context"
 
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -141,6 +142,72 @@ func (c *typedClient) Get(ctx context.Context, key ObjectKey, obj Object) error 
 		NamespaceIfScoped(key.Namespace, r.isNamespaced()).
 		Resource(r.resource()).
 		Name(key.Name).Do(ctx).Into(obj)
+}
+
+func (c *typedClient) ListPages(ctx context.Context, obj ObjectList,
+	callback func(obj ObjectList) error, opts ...ListOption) error {
+	r, err := c.cache.getResource(obj)
+	if err != nil {
+		return err
+	}
+	listOpts := ListOptions{}
+	listOpts.ApplyOptions(opts)
+
+	// Fetch items at chunks of one hundred if not specified differently.
+	if listOpts.Limit == 0 {
+		Limit(DefaultPageLimit).ApplyToList(&listOpts)
+	}
+
+	// Retrieve initial chunck of data.
+	var allItems []runtime.Object
+	var interimResult ObjectList
+	err = r.Get().
+		NamespaceIfScoped(listOpts.Namespace, r.isNamespaced()).
+		Resource(r.resource()).
+		VersionedParams(listOpts.AsListOptions(), c.paramCodec).
+		Do(ctx).Into(interimResult)
+	if err != nil {
+		return err
+	}
+
+	if err := callback(interimResult); err != nil {
+		return err
+	}
+
+	items, err := apimeta.ExtractList(interimResult)
+	if err != nil {
+		return err
+	}
+	allItems = append(allItems, items...)
+
+	// Continue while there are more chunks.
+	for {
+		if interimResult.GetContinue() == "" {
+			break
+		}
+
+		Continue(interimResult.GetContinue()).ApplyToList(&listOpts)
+		err = r.Get().
+			NamespaceIfScoped(listOpts.Namespace, r.isNamespaced()).
+			Resource(r.resource()).
+			VersionedParams(listOpts.AsListOptions(), c.paramCodec).
+			Do(ctx).Into(interimResult)
+		if err != nil {
+			return err
+		}
+
+		if err := callback(interimResult); err != nil {
+			return err
+		}
+
+		items, err = apimeta.ExtractList(interimResult)
+		if err != nil {
+			return err
+		}
+		allItems = append(allItems, items...)
+	}
+
+	return apimeta.SetList(obj, allItems)
 }
 
 // List implements client.Client

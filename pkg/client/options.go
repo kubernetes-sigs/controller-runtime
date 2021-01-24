@@ -23,6 +23,12 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 )
 
+const (
+	// DefaultPageLimit represents the default limit used for ListPaging when no "Limit"
+	// is specified as ListOption.
+	DefaultPageLimit = 100
+)
+
 // {{{ "Functional" Option Interfaces
 
 // CreateOption is some configuration that modifies options for a create request.

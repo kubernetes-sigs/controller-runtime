@@ -19,6 +19,7 @@ package client_test
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -43,6 +44,14 @@ func deleteDeployment(ctx context.Context, dep *appsv1.Deployment, ns string) {
 	_, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 	if err == nil {
 		err = clientset.AppsV1().Deployments(ns).Delete(ctx, dep.Name, metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+func deletePod(ctx context.Context, pod *corev1.Pod, ns string) {
+	_, err := clientset.CoreV1().Pods(ns).Get(ctx, pod.Name, metav1.GetOptions{})
+	if err == nil {
+		err = clientset.CoreV1().Pods(ns).Delete(ctx, pod.Name, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	}
 }
@@ -2083,6 +2092,45 @@ var _ = Describe("Client", func() {
 				Expect(deps.Continue).To(BeEmpty())
 				Expect(deps.Items[0].Name).To(Equal(dep3.Name))
 				Expect(deps.Items[1].Name).To(Equal(dep4.Name))
+			}, serverSideTimeoutSeconds)
+
+			It("should list in pages large sets of objects using ListPages", func() {
+				buildPod := func(suffix string) *corev1.Pod {
+					return &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: fmt.Sprintf("pod-%s", suffix),
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}},
+						},
+					}
+				}
+
+				By("creating 150 pods")
+				workLoad := 150
+				for workLoad > 0 {
+					pod := buildPod(strconv.Itoa(workLoad))
+					defer deletePod(ctx, pod, ns)
+					pod, err := clientset.
+						CoreV1().
+						Pods(ns).
+						Create(ctx, pod, metav1.CreateOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					workLoad--
+					defer deletePod(ctx, pod, ns)
+				}
+
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("listing all pods with ListPages")
+				pods := &corev1.PodList{}
+				err = cl.ListPages(context.Background(), pods, func(obj client.ObjectList) error { return nil })
+				Expect(err).NotTo(HaveOccurred())
+				Expect(pods.Items).To(HaveLen(150))
+				Expect(pods.Continue).NotTo(BeEmpty())
+				Expect(pods.Items[0].Name).To(Equal("pod-1"))
+
 			}, serverSideTimeoutSeconds)
 
 			PIt("should fail if the object doesn't have meta", func() {

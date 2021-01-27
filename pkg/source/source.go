@@ -274,7 +274,13 @@ func (cs *Channel) syncLoop(ctx context.Context) {
 			// Close destination channels
 			cs.doStop()
 			return
-		case evt := <-cs.Source:
+		case evt, stillOpen := <-cs.Source:
+			if !stillOpen {
+				// if the source channel is closed, we're never gonna get
+				// anything more on it, so stop & bail
+				cs.doStop()
+				return
+			}
 			cs.distribute(evt)
 		}
 	}

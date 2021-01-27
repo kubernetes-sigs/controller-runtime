@@ -18,11 +18,14 @@ package log
 
 import (
 	"context"
+	"errors"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+var _ logr.Logger = &DelegatingLogger{}
 
 // logInfo is the information for a particular fakeLogger message
 type logInfo struct {
@@ -169,6 +172,10 @@ var _ = Describe("logging", func() {
 			withNameDone := make(chan struct{})
 			withValuesDone := make(chan struct{})
 			grandChildDone := make(chan struct{})
+			logEnabledDone := make(chan struct{})
+			logInfoDone := make(chan struct{})
+			logErrorDone := make(chan struct{})
+			logVDone := make(chan struct{})
 
 			// Constructing the child in the goroutine does not reliably
 			// trigger the race detector
@@ -193,11 +200,35 @@ var _ = Describe("logging", func() {
 				child.WithValues("grandchild")
 				close(grandChildDone)
 			}()
+			go func() {
+				defer GinkgoRecover()
+				delegLog.Enabled()
+				close(logEnabledDone)
+			}()
+			go func() {
+				defer GinkgoRecover()
+				delegLog.Info("hello world")
+				close(logInfoDone)
+			}()
+			go func() {
+				defer GinkgoRecover()
+				delegLog.Error(errors.New("err"), "hello world")
+				close(logErrorDone)
+			}()
+			go func() {
+				defer GinkgoRecover()
+				delegLog.V(1)
+				close(logVDone)
+			}()
 
 			<-fulfillDone
 			<-withNameDone
 			<-withValuesDone
 			<-grandChildDone
+			<-logEnabledDone
+			<-logInfoDone
+			<-logErrorDone
+			<-logVDone
 		})
 
 		It("should delegate with tags", func() {

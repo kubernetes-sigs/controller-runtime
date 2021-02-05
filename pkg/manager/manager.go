@@ -90,6 +90,9 @@ type Manager interface {
 
 	// GetLogger returns this manager's logger.
 	GetLogger() logr.Logger
+
+	// GetControllerOptions returns controller global configuration options.
+	GetControllerOptions() v1alpha1.ControllerConfigurationSpec
 }
 
 // Options are the arguments for creating a new Manager
@@ -230,6 +233,11 @@ type Options struct {
 	// The graceful shutdown is skipped for safety reasons in case the leader election lease is lost.
 	GracefulShutdownTimeout *time.Duration
 
+	// Controller contains global configuration options for controllers
+	// registered within this manager.
+	// +optional
+	Controller v1alpha1.ControllerConfigurationSpec
+
 	// makeBroadcaster allows deferring the creation of the broadcaster to
 	// avoid leaking goroutines if we never call Start on this manager.  It also
 	// returns whether or not this is a "owned" broadcaster, and as such should be
@@ -337,6 +345,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		resourceLock:            resourceLock,
 		metricsListener:         metricsListener,
 		metricsExtraHandlers:    metricsExtraHandlers,
+		controllerOptions:       options.Controller,
 		logger:                  options.Logger,
 		elected:                 make(chan struct{}),
 		port:                    options.Port,
@@ -405,6 +414,16 @@ func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options,
 
 	if o.CertDir == "" && newObj.Webhook.CertDir != "" {
 		o.CertDir = newObj.Webhook.CertDir
+	}
+
+	if newObj.Controller != nil {
+		if o.Controller.CacheSyncTimeout == nil && newObj.Controller.CacheSyncTimeout != nil {
+			o.Controller.CacheSyncTimeout = newObj.Controller.CacheSyncTimeout
+		}
+
+		if len(o.Controller.GroupKindConcurrency) == 0 && len(newObj.Controller.GroupKindConcurrency) > 0 {
+			o.Controller.GroupKindConcurrency = newObj.Controller.GroupKindConcurrency
+		}
 	}
 
 	return o, nil

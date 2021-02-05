@@ -287,6 +287,8 @@ func (blder *Builder) getControllerName(gvk schema.GroupVersionKind) string {
 }
 
 func (blder *Builder) doController(r reconcile.Reconciler) error {
+	globalOpts := blder.mgr.GetControllerOptions()
+
 	ctrlOptions := blder.ctrlOptions
 	if ctrlOptions.Reconciler == nil {
 		ctrlOptions.Reconciler = r
@@ -297,6 +299,20 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 	gvk, err := getGvk(blder.forInput.object, blder.mgr.GetScheme())
 	if err != nil {
 		return err
+	}
+
+	// Setup concurrency.
+	if ctrlOptions.MaxConcurrentReconciles == 0 {
+		groupKind := gvk.GroupKind().String()
+
+		if concurrency, ok := globalOpts.GroupKindConcurrency[groupKind]; ok && concurrency > 0 {
+			ctrlOptions.MaxConcurrentReconciles = concurrency
+		}
+	}
+
+	// Setup cache sync timeout.
+	if ctrlOptions.CacheSyncTimeout == 0 && globalOpts.CacheSyncTimeout != nil {
+		ctrlOptions.CacheSyncTimeout = *globalOpts.CacheSyncTimeout
 	}
 
 	// Setup the logger.

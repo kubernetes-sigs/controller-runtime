@@ -36,6 +36,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -167,6 +168,34 @@ var _ = Describe("application", func() {
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeNil())
+		})
+
+		It("should override max concurrent reconcilers during creation of controller, when using", func() {
+			const maxConcurrentReconciles = 10
+			newController = func(name string, mgr manager.Manager, options controller.Options) (
+				controller.Controller, error) {
+				if options.MaxConcurrentReconciles == maxConcurrentReconciles {
+					return controller.New(name, mgr, options)
+				}
+				return nil, fmt.Errorf("max concurrent reconcilers expected %d but found %d", maxConcurrentReconciles, options.MaxConcurrentReconciles)
+			}
+
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{
+				Controller: v1alpha1.ControllerConfigurationSpec{
+					GroupKindConcurrency: map[string]int{
+						"ReplicaSet.apps": maxConcurrentReconciles,
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				For(&appsv1.ReplicaSet{}).
+				Owns(&appsv1.ReplicaSet{}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())

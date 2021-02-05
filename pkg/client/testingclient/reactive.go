@@ -17,7 +17,7 @@ import (
 )
 
 type Reactive struct {
-	testing.Fake
+	Fake testing.Fake
 	delegate client.Client
 }
 
@@ -42,7 +42,7 @@ func NewReactiveClient(delegate client.Client) *Reactive {
 		delegate: delegate,
 	}
 
-	r.PrependReactor("*", "*", func(action testing.Action) (bool, runtime.Object, error) {
+	r.Fake.PrependReactor("*", "*", func(action testing.Action) (bool, runtime.Object, error) {
 		ctx := context.TODO()
 		switch action.GetVerb() {
 		case "get":
@@ -156,7 +156,7 @@ func (r *Reactive) populateGVK(obj runtime.Object) {
 
 func (r *Reactive) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 	action := testing.NewGetAction(r.gvrForObject(obj), key.Namespace, key.Name)
-	retrievedObj, err := r.Invokes(action, nil)
+	retrievedObj, err := r.Fake.Invokes(action, nil)
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func (r *Reactive) List(ctx context.Context, list client.ObjectList, opts ...cli
 	gvr, _ := meta.UnsafeGuessKindToResource(gvk)
 
 	action := testing.NewListAction(gvr, listGvk, listOpts.Namespace, *listOpts.AsListOptions())
-	retrievedObj, err := r.Invokes(action, nil)
+	retrievedObj, err := r.Fake.Invokes(action, nil)
 	if err != nil {
 		return err
 	}
@@ -201,7 +201,7 @@ func (r *Reactive) Create(ctx context.Context, obj client.Object, opts ...client
 	r.populateGVK(obj)
 
 	action := testing.NewCreateAction(r.gvrForObject(obj), object.GetNamespace(), obj)
-	_, err = r.Invokes(action, nil)
+	_, err = r.Fake.Invokes(action, nil)
 	return err
 }
 
@@ -213,7 +213,7 @@ func (r *Reactive) Delete(ctx context.Context, obj client.Object, opts ...client
 	deleteOpts.ApplyOptions(opts)
 
 	action := testing.NewDeleteAction(r.gvrForObject(obj), obj.GetNamespace(), obj.GetName())
-	_, err := r.Invokes(action, nil)
+	_, err := r.Fake.Invokes(action, nil)
 	return err
 }
 
@@ -229,7 +229,7 @@ func (r *Reactive) Update(ctx context.Context, obj client.Object, opts ...client
 	r.populateGVK(obj)
 
 	action := testing.NewUpdateAction(r.gvrForObject(obj), obj.GetNamespace(), obj)
-	_, err := r.Invokes(action, nil)
+	_, err := r.Fake.Invokes(action, nil)
 	return err
 }
 
@@ -242,7 +242,7 @@ func (r *Reactive) Patch(ctx context.Context, obj client.Object, patch client.Pa
 		return fmt.Errorf("failed patching object: %w", err)
 	}
 	action := testing.NewPatchAction(r.gvrForObject(obj), obj.GetNamespace(), obj.GetName(), patch.Type(), p)
-	_, err = r.Invokes(action, nil)
+	_, err = r.Fake.Invokes(action, nil)
 	return err
 }
 

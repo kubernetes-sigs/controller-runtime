@@ -193,5 +193,98 @@ var _ = Describe("ErrorInjector", func() {
 		})
 	})
 
-	// TODO: test prefers specific matches over general matches.
+	It("works with all combinations of wildcards", func() {
+		pod1Key := types.NamespacedName{Namespace: "ns", Name: "pod1"}
+		var pod1 corev1.Pod
+		Expect(subject.Get(nil, pod1Key, &pod1)).To(Succeed())
+		pod2Key := types.NamespacedName{Namespace: "ns", Name: "pod2"}
+		var pod2 corev1.Pod
+		Expect(subject.Get(nil, pod2Key, &pod2)).To(Succeed())
+
+		subject.InjectError("get", &corev1.Pod{}, pod1Key, errors.New("error 1"))
+		subject.InjectError("get", &corev1.Pod{}, testingclient.AnyObject, errors.New("error 2"))
+		subject.InjectError(testingclient.AnyAction, &corev1.Pod{}, pod1Key, errors.New("error 3"))
+		subject.InjectError("get", testingclient.AnyKind, pod1Key, errors.New("error 4"))
+		subject.InjectError(testingclient.AnyAction, &corev1.Pod{}, testingclient.AnyObject, errors.New("error 5"))
+		subject.InjectError("get", testingclient.AnyKind, testingclient.AnyObject, errors.New("error 6"))
+		subject.InjectError(testingclient.AnyAction, testingclient.AnyKind, pod1Key, errors.New("error 7"))
+		subject.InjectError(testingclient.AnyAction, testingclient.AnyKind, testingclient.AnyObject, errors.New("error 8"))
+
+		var p corev1.Pod
+		var c corev1.ConfigMap
+		Expect(subject.Get(nil, pod2Key, &p)).To(MatchError("error 2"))
+		Expect(subject.Get(nil, pod1Key, &p)).To(MatchError("error 1"))
+		Expect(subject.Delete(nil, &pod1)).To(MatchError("error 3"))
+		Expect(subject.Get(nil, pod1Key, &c)).To(MatchError("error 4"))
+		Expect(subject.Delete(nil, &pod2)).To(MatchError("error 5"))
+		Expect(subject.Get(nil, pod2Key, &c)).To(MatchError("error 6"))
+		c.SetNamespace(pod1Key.Namespace)
+		c.SetName(pod1Key.Name)
+		Expect(subject.Delete(nil, &c)).To(MatchError("error 7"))
+		c.SetNamespace(pod2Key.Namespace)
+		c.SetName(pod2Key.Name)
+		Expect(subject.Delete(nil, &c)).To(MatchError("error 8"))
+	})
+
+	Describe("preferences between wildcard injections", func() {
+		type injection struct {
+			action        string
+			kind          client.Object
+			objectKey     client.ObjectKey
+			injectedError error
+		}
+		ItPrefers := func(desc string, preferred, demoted injection) {
+			It("prefers "+desc, func() {
+				pod1Key := types.NamespacedName{Namespace: "ns", Name: "pod1"}
+				var pod1 corev1.Pod
+				Expect(subject.Get(nil, pod1Key, &pod1)).To(Succeed())
+
+				subject.InjectError(demoted.action, demoted.kind, demoted.objectKey, demoted.injectedError)
+
+				var p corev1.Pod
+				Expect(subject.Get(nil, pod1Key, &p)).To(Equal(demoted.injectedError))
+
+				subject.InjectError(preferred.action, preferred.kind, preferred.objectKey, preferred.injectedError)
+
+				Expect(subject.Get(nil, pod1Key, &p)).To(Equal(preferred.injectedError))
+			})
+		}
+
+		pod1Key := types.NamespacedName{Namespace: "ns", Name: "pod1"}
+
+		ItPrefers("AnyObject(2) matches over AnyAction(3) matches",
+			injection{"get", &corev1.Pod{}, testingclient.AnyObject, errors.New("error 2")},
+			injection{testingclient.AnyAction, &corev1.Pod{}, pod1Key, errors.New("error 3")},
+		)
+
+		ItPrefers("AnyObject(2) matches over AnyKind(4) matches",
+			injection{"get", &corev1.Pod{}, testingclient.AnyObject, errors.New("error 2")},
+			injection{"get", testingclient.AnyKind, pod1Key, errors.New("error 4")},
+		)
+
+		ItPrefers("AnyAction(3) matches over AnyKind(4) matches",
+			injection{testingclient.AnyAction, &corev1.Pod{}, pod1Key, errors.New("error 3")},
+			injection{"get", testingclient.AnyKind, pod1Key, errors.New("error 4")},
+		)
+
+		ItPrefers("AnyKind(4) matches over AnyAction,AnyObject(5) matches",
+			injection{"get", testingclient.AnyKind, pod1Key, errors.New("error 4")},
+			injection{testingclient.AnyAction, &corev1.Pod{}, testingclient.AnyObject, errors.New("error 5")},
+		)
+
+		ItPrefers("AnyAction,AnyObject(5) matches over AnyKind,AnyObject(6)",
+			injection{testingclient.AnyAction, &corev1.Pod{}, testingclient.AnyObject, errors.New("error 5")},
+			injection{"get", testingclient.AnyKind, testingclient.AnyObject, errors.New("error 6")},
+		)
+
+		ItPrefers("AnyAction,AnyObject(5) matches over AnyAction,AnyKind(7)",
+			injection{testingclient.AnyAction, &corev1.Pod{}, testingclient.AnyObject, errors.New("error 5")},
+			injection{testingclient.AnyAction, testingclient.AnyKind, pod1Key, errors.New("error 7")},
+		)
+
+		ItPrefers("AnyKind,AnyObject(6) matches over AnyAction,AnyKind(7)",
+			injection{"get", testingclient.AnyKind, testingclient.AnyObject, errors.New("error 6")},
+			injection{testingclient.AnyAction, testingclient.AnyKind, pod1Key, errors.New("error 7")},
+		)
+	})
 })

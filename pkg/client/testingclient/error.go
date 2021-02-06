@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -17,9 +18,10 @@ type resourceActionKey struct {
 }
 
 var (
-	AnyAction = "*"
-	AnyKind   = schema.GroupVersionKind{Kind: "*"}
-	AnyObject = client.ObjectKey{}
+	AnyAction  = "*"
+	AnyKind    = &unstructured.Unstructured{}
+	AnyObject  = client.ObjectKey{}
+	anyKindGVK = schema.GroupVersionKind{Kind: "*"}
 )
 
 type ErrorInjector struct {
@@ -107,12 +109,14 @@ func (c ErrorInjector) getStubbedError(action string, kind client.Object, object
 	gvk := mustGVKForObject(kind, c.Scheme())
 
 	for _, k := range []resourceActionKey{
-		{action, gvk, objectKey},
-		{action, gvk, AnyObject},
-		{AnyAction, gvk, objectKey},
-		{AnyAction, gvk, AnyObject},
-		{action, AnyKind, AnyObject},
-		{AnyAction, AnyKind, AnyObject},
+		{action, gvk, objectKey},           // (1) 0 wildcards
+		{action, gvk, AnyObject},           // (2) 1 wildcard
+		{AnyAction, gvk, objectKey},        // (3) 1 wildcard
+		{action, anyKindGVK, objectKey},    // (4) 1 wildcard
+		{AnyAction, gvk, AnyObject},        // (5) 2 wildcards
+		{action, anyKindGVK, AnyObject},    // (6) 2 wildcards
+		{AnyAction, anyKindGVK, objectKey}, // (7) 2 wildcards
+		{AnyAction, anyKindGVK, AnyObject}, // (8) 3 wildcards
 	} {
 		if err, ok := c.errorsToReturn[k]; ok {
 			return err
@@ -122,10 +126,14 @@ func (c ErrorInjector) getStubbedError(action string, kind client.Object, object
 }
 
 // InjectError will cause ErrorInjector to return an error for the given (action, kind, objectKey) tuple.
-// To inject an error for all calls with `(action,kind)`, pass objectKey = AnyObject.
-// To inject an error for all calls with `action`, pass kind = "*" and objectKey = AnyObject.
-// To inject an error for any `action`, pass action = "*",  kind = "*" and objectKey = AnyObject.
+// Wildcards are supported for each part of the tuple:
+// Pass objectKey = AnyObject to match any object identity.
+// Pass kind = AnyKind to match any type of object.
+// Pass action = AnyAction to match any client action.
 func (c *ErrorInjector) InjectError(action string, kind client.Object, objectKey client.ObjectKey, injectedError error) {
-	gvk := mustGVKForObject(kind, c.Scheme())
+	gvk := anyKindGVK
+	if kind != AnyKind {
+		gvk = mustGVKForObject(kind, c.Scheme())
+	}
 	c.errorsToReturn[resourceActionKey{action, gvk, objectKey}] = injectedError
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package builder
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -44,8 +45,10 @@ func TestBuilder(t *testing.T) {
 
 var testenv *envtest.Environment
 var cfg *rest.Config
+var ctx context.Context
 
 var _ = BeforeSuite(func(done Done) {
+	ctx = context.Background()
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	testenv = &envtest.Environment{}
@@ -55,7 +58,7 @@ var _ = BeforeSuite(func(done Done) {
 		testDefaultValidatorGVK)
 
 	var err error
-	cfg, err = testenv.Start()
+	cfg, err = testenv.Start(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
 	// Prevent the metrics listener being created
@@ -68,7 +71,7 @@ var _ = BeforeSuite(func(done Done) {
 }, 60)
 
 var _ = AfterSuite(func() {
-	Expect(testenv.Stop()).To(Succeed())
+	Expect(testenv.Stop(ctx)).To(Succeed())
 
 	// Put the DefaultBindAddress back
 	metrics.DefaultBindAddress = ":8080"

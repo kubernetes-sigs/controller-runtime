@@ -17,6 +17,7 @@ limitations under the License.
 package envtest
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -152,9 +153,9 @@ type Environment struct {
 // Stop stops a running server.
 // Previously installed CRDs, as listed in CRDInstallOptions.CRDs, will be uninstalled
 // if CRDInstallOptions.CleanUpAfterUse are set to true.
-func (te *Environment) Stop() error {
+func (te *Environment) Stop(ctx context.Context) error {
 	if te.CRDInstallOptions.CleanUpAfterUse {
-		if err := UninstallCRDs(te.Config, te.CRDInstallOptions); err != nil {
+		if err := UninstallCRDs(ctx, te.Config, te.CRDInstallOptions); err != nil {
 			return err
 		}
 	}
@@ -190,7 +191,7 @@ func (te Environment) getAPIServerFlags() []string {
 }
 
 // Start starts a local Kubernetes server and updates te.ApiserverPort with the port it is listening on
-func (te *Environment) Start() (*rest.Config, error) {
+func (te *Environment) Start(ctx context.Context) (*rest.Config, error) {
 	if te.useExistingCluster() {
 		log.V(1).Info("using existing cluster")
 		if te.Config == nil {
@@ -267,7 +268,7 @@ func (te *Environment) Start() (*rest.Config, error) {
 	te.CRDInstallOptions.CRDs = mergeCRDs(te.CRDInstallOptions.CRDs, te.CRDs)
 	te.CRDInstallOptions.Paths = mergePaths(te.CRDInstallOptions.Paths, te.CRDDirectoryPaths)
 	te.CRDInstallOptions.ErrorIfPathMissing = te.ErrorIfCRDPathMissing
-	crds, err := InstallCRDs(te.Config, te.CRDInstallOptions)
+	crds, err := InstallCRDs(ctx, te.Config, te.CRDInstallOptions)
 	if err != nil {
 		return te.Config, err
 	}

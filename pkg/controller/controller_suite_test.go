@@ -17,6 +17,7 @@ limitations under the License.
 package controller_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
@@ -45,11 +46,13 @@ func TestSource(t *testing.T) {
 var testenv *envtest.Environment
 var cfg *rest.Config
 var clientset *kubernetes.Clientset
+var ctx context.Context
 
 // clientTransport is used to force-close keep-alives in tests that check for leaks
 var clientTransport *http.Transport
 
 var _ = BeforeSuite(func(done Done) {
+	ctx = context.Background()
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	err := (&crscheme.Builder{
@@ -65,7 +68,7 @@ var _ = BeforeSuite(func(done Done) {
 		CRDDirectoryPaths: []string{"testdata/crds"},
 	}
 
-	cfg, err = testenv.Start()
+	cfg, err = testenv.Start(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
 	clientTransport = &http.Transport{}
@@ -81,7 +84,7 @@ var _ = BeforeSuite(func(done Done) {
 }, 60)
 
 var _ = AfterSuite(func() {
-	Expect(testenv.Stop()).To(Succeed())
+	Expect(testenv.Stop(ctx)).To(Succeed())
 
 	// Put the DefaultBindAddress back
 	metrics.DefaultBindAddress = ":8080"

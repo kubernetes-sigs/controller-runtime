@@ -39,7 +39,7 @@ import (
 )
 
 // clientListWatcherFunc knows how to create a ListWatcher
-type createListWatcherFunc func(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error)
+type createListWatcherFunc func(ctx context.Context, gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error)
 
 // newSpecificInformersMap returns a new specificInformersMap (like
 // the generical InformersMap, except that it doesn't implement WaitForCacheSync).
@@ -177,7 +177,7 @@ func (ip *specificInformersMap) Get(ctx context.Context, gvk schema.GroupVersion
 
 	if !ok {
 		var err error
-		if i, started, err = ip.addInformerToMap(gvk, obj); err != nil {
+		if i, started, err = ip.addInformerToMap(ctx, gvk, obj); err != nil {
 			return started, nil, err
 		}
 	}
@@ -192,7 +192,7 @@ func (ip *specificInformersMap) Get(ctx context.Context, gvk schema.GroupVersion
 	return started, i, nil
 }
 
-func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.Object) (*MapEntry, bool, error) {
+func (ip *specificInformersMap) addInformerToMap(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object) (*MapEntry, bool, error) {
 	ip.mu.Lock()
 	defer ip.mu.Unlock()
 
@@ -205,7 +205,7 @@ func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, ob
 
 	// Create a NewSharedIndexInformer and add it to the map.
 	var lw *cache.ListWatch
-	lw, err := ip.createListWatcher(gvk, ip)
+	lw, err := ip.createListWatcher(ctx, gvk, ip)
 	if err != nil {
 		return nil, false, err
 	}
@@ -232,7 +232,7 @@ func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, ob
 }
 
 // newListWatch returns a new ListWatch object that can be used to create a SharedIndexInformer.
-func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
+func createStructuredListWatch(ctx context.Context, gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
 	// Kubernetes APIs work against Resources, not GroupVersionKinds.  Map the
 	// groupVersionKind to the Resource API we will use.
 	mapping, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
@@ -250,9 +250,6 @@ func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformer
 		return nil, err
 	}
 
-	// TODO: the functions that make use of this ListWatch should be adapted to
-	//  pass in their own contexts instead of relying on this fixed one here.
-	ctx := context.TODO()
 	// Create a new ListWatch for the obj
 	return &cache.ListWatch{
 		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
@@ -271,7 +268,7 @@ func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformer
 	}, nil
 }
 
-func createUnstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
+func createUnstructuredListWatch(ctx context.Context, gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
 	// Kubernetes APIs work against Resources, not GroupVersionKinds.  Map the
 	// groupVersionKind to the Resource API we will use.
 	mapping, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
@@ -283,9 +280,6 @@ func createUnstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInform
 		return nil, err
 	}
 
-	// TODO: the functions that make use of this ListWatch should be adapted to
-	//  pass in their own contexts instead of relying on this fixed one here.
-	ctx := context.TODO()
 	// Create a new ListWatch for the obj
 	return &cache.ListWatch{
 		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
@@ -306,7 +300,7 @@ func createUnstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInform
 	}, nil
 }
 
-func createMetadataListWatch(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
+func createMetadataListWatch(ctx context.Context, gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
 	// Kubernetes APIs work against Resources, not GroupVersionKinds.  Map the
 	// groupVersionKind to the Resource API we will use.
 	mapping, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
@@ -319,10 +313,6 @@ func createMetadataListWatch(gvk schema.GroupVersionKind, ip *specificInformersM
 	if err != nil {
 		return nil, err
 	}
-
-	// TODO: the functions that make use of this ListWatch should be adapted to
-	//  pass in their own contexts instead of relying on this fixed one here.
-	ctx := context.TODO()
 
 	// create the relevant listwatch
 	return &cache.ListWatch{

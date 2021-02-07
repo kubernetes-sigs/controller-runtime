@@ -135,7 +135,7 @@ func (a *ReplicaSetReconciler) Reconcile(ctx context.Context, req controllers.Re
 
 	// Update the ReplicaSet
 	rs.Labels["pod-count"] = fmt.Sprintf("%v", len(pods.Items))
-	err = a.Update(context.TODO(), rs)
+	err = a.Update(ctx, rs)
 	if err != nil {
 		return controllers.Result{}, err
 	}

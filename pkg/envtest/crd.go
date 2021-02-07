@@ -65,7 +65,7 @@ const defaultPollInterval = 100 * time.Millisecond
 const defaultMaxWait = 10 * time.Second
 
 // InstallCRDs installs a collection of CRDs into a cluster by reading the crd yaml files from a directory
-func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]client.Object, error) {
+func InstallCRDs(ctx context.Context, config *rest.Config, options CRDInstallOptions) ([]client.Object, error) {
 	defaultCRDOptions(&options)
 
 	// Read the CRD yamls into options.CRDs
@@ -74,12 +74,12 @@ func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]client.Objec
 	}
 
 	// Create the CRDs in the apiserver
-	if err := CreateCRDs(config, options.CRDs); err != nil {
+	if err := CreateCRDs(ctx, config, options.CRDs); err != nil {
 		return options.CRDs, err
 	}
 
 	// Wait for the CRDs to appear as Resources in the apiserver
-	if err := WaitForCRDs(config, options.CRDs, options); err != nil {
+	if err := WaitForCRDs(ctx, config, options.CRDs, options); err != nil {
 		return options.CRDs, err
 	}
 
@@ -110,7 +110,7 @@ func defaultCRDOptions(o *CRDInstallOptions) {
 }
 
 // WaitForCRDs waits for the CRDs to appear in discovery
-func WaitForCRDs(config *rest.Config, crds []client.Object, options CRDInstallOptions) error {
+func WaitForCRDs(ctx context.Context, config *rest.Config, crds []client.Object, options CRDInstallOptions) error {
 	// Add each CRD to a map of GroupVersion to Resource
 	waitingFor := map[schema.GroupVersion]*sets.String{}
 	for _, crd := range runtimeCRDListToUnstructured(crds) {
@@ -218,7 +218,7 @@ func (p *poller) poll() (done bool, err error) {
 }
 
 // UninstallCRDs uninstalls a collection of CRDs by reading the crd yaml files from a directory
-func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
+func UninstallCRDs(ctx context.Context, config *rest.Config, options CRDInstallOptions) error {
 
 	// Read the CRD yamls into options.CRDs
 	if err := readCRDFiles(&options); err != nil {
@@ -234,7 +234,7 @@ func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
 	// Uninstall each CRD
 	for _, crd := range runtimeCRDListToUnstructured(options.CRDs) {
 		log.V(1).Info("uninstalling CRD", "crd", crd.GetName())
-		if err := cs.Delete(context.TODO(), crd); err != nil {
+		if err := cs.Delete(ctx, crd); err != nil {
 			// If CRD is not found, we can consider success
 			if !apierrors.IsNotFound(err) {
 				return err
@@ -246,7 +246,7 @@ func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
 }
 
 // CreateCRDs creates the CRDs
-func CreateCRDs(config *rest.Config, crds []client.Object) error {
+func CreateCRDs(ctx context.Context, config *rest.Config, crds []client.Object) error {
 	cs, err := client.New(config, client.Options{})
 	if err != nil {
 		return err
@@ -256,10 +256,10 @@ func CreateCRDs(config *rest.Config, crds []client.Object) error {
 	for _, crd := range runtimeCRDListToUnstructured(crds) {
 		log.V(1).Info("installing CRD", "crd", crd.GetName())
 		existingCrd := crd.DeepCopy()
-		err := cs.Get(context.TODO(), client.ObjectKey{Name: crd.GetName()}, existingCrd)
+		err := cs.Get(ctx, client.ObjectKey{Name: crd.GetName()}, existingCrd)
 		switch {
 		case apierrors.IsNotFound(err):
-			if err := cs.Create(context.TODO(), crd); err != nil {
+			if err := cs.Create(ctx, crd); err != nil {
 				return err
 			}
 		case err != nil:
@@ -267,7 +267,7 @@ func CreateCRDs(config *rest.Config, crds []client.Object) error {
 		default:
 			log.V(1).Info("CRD already exists, updating", "crd", crd.GetName())
 			crd.SetResourceVersion(existingCrd.GetResourceVersion())
-			if err := cs.Update(context.TODO(), crd); err != nil {
+			if err := cs.Update(ctx, crd); err != nil {
 				return err
 			}
 		}

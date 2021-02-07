@@ -51,7 +51,7 @@ var _ = BeforeSuite(func(done Done) {
 	testenv = &envtest.Environment{}
 
 	var err error
-	config, err = testenv.Start()
+	config, err = testenv.Start(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
 	clientset, err = kubernetes.NewForConfig(config)
@@ -70,7 +70,7 @@ var _ = BeforeSuite(func(done Done) {
 
 var _ = AfterSuite(func(done Done) {
 	cancel()
-	Expect(testenv.Stop()).To(Succeed())
+	Expect(testenv.Stop(ctx)).To(Succeed())
 
 	close(done)
 }, 5)

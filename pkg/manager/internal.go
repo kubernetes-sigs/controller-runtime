@@ -117,6 +117,10 @@ type controllerManager struct {
 	// it must be deferred until after gracefulShutdown is done.
 	leaderElectionCancel context.CancelFunc
 
+	// leaderElectionStopped is an internal channel used to signal the stopping procedure that the
+	// LeaderElection.Run(...) function has returned and the shutdown can proceed.
+	leaderElectionStopped chan struct{}
+
 	// stop procedure engaged. In other words, we should not add anything else to the manager
 	stopProcedureEngaged bool
 
@@ -549,7 +553,12 @@ func (cm *controllerManager) waitForRunnableToEnd(shutdownCancel context.CancelF
 	// Cancel leader election only after we waited. It will os.Exit() the app for safety.
 	defer func() {
 		if cm.leaderElectionCancel != nil {
+			// After asking the context to be cancelled, make sure
+			// we wait for the leader stopped channel to be closed, otherwise
+			// we might encounter race conditions between this code
+			// and the event recorder, which is used within leader election code.
 			cm.leaderElectionCancel()
+			<-cm.leaderElectionStopped
 		}
 	}()
 
@@ -652,7 +661,11 @@ func (cm *controllerManager) startLeaderElection() (err error) {
 	}
 
 	// Start the leader elector process
-	go l.Run(ctx)
+	go func() {
+		l.Run(ctx)
+		<-ctx.Done()
+		close(cm.leaderElectionStopped)
+	}()
 	return nil
 }
 

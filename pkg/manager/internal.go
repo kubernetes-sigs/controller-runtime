@@ -549,10 +549,10 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 
 // waitForRunnableToEnd blocks until all runnables ended or the
 // tearDownTimeout was reached. In the latter case, an error is returned.
-func (cm *controllerManager) waitForRunnableToEnd(shutdownCancel context.CancelFunc) error {
+func (cm *controllerManager) waitForRunnableToEnd(shutdownCancel context.CancelFunc) (retErr error) {
 	// Cancel leader election only after we waited. It will os.Exit() the app for safety.
 	defer func() {
-		if cm.leaderElectionCancel != nil {
+		if retErr == nil && cm.leaderElectionCancel != nil {
 			// After asking the context to be cancelled, make sure
 			// we wait for the leader stopped channel to be closed, otherwise
 			// we might encounter race conditions between this code

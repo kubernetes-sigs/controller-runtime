@@ -18,6 +18,7 @@ package reconcile
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -47,6 +48,68 @@ func (r *Result) IsZero() bool {
 type Request struct {
 	// NamespacedName is the name and namespace of the object to reconcile.
 	types.NamespacedName
+}
+
+// RequestSet is an ordered set of requests, implemented via slice and designed to
+// collect and deduplicate multi requests.
+type RequestSet struct {
+	sync.Mutex
+
+	set []Request
+}
+
+// NewRequestSet creates a RequestSet from a list of requests.
+func NewRequestSet(requests ...Request) *RequestSet {
+	rs := &RequestSet{}
+	for i := range requests {
+		rs.Insert(requests[i])
+	}
+	return rs
+}
+
+// Insert adds a request to the set, if already exists,
+// just ignore it.
+func (s *RequestSet) Insert(request Request) {
+	s.Lock()
+	defer s.Unlock()
+
+	for i := range s.set {
+		if s.set[i] == request {
+			return
+		}
+	}
+	s.set = append(s.set, request)
+}
+
+// Delete removes a request from the set.
+func (s *RequestSet) Delete(request Request) {
+	s.Lock()
+	defer s.Unlock()
+
+	foundIndex := -1
+	for i := range s.set {
+		if s.set[i] == request {
+			foundIndex = i
+			break
+		}
+	}
+
+	if foundIndex >= 0 {
+		s.set = append(s.set[:foundIndex], s.set[foundIndex+1:]...)
+	}
+}
+
+// List returns an ordered slice with all requests in set.
+func (s RequestSet) List() []Request {
+	s.Lock()
+	defer s.Unlock()
+
+	res := make([]Request, len(s.set))
+	for i, request := range s.set {
+		res[i] = request
+	}
+
+	return res
 }
 
 /*

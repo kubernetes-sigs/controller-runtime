@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
+
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -87,6 +88,108 @@ var _ = Describe("reconcile", func() {
 			actualResult, actualErr := instance.Reconcile(context.Background(), request)
 			Expect(actualResult).To(Equal(result))
 			Expect(actualErr).To(Equal(err))
+		})
+	})
+
+	Describe("RequestSet", func() {
+		newRequest := func(ns, name string) reconcile.Request {
+			return reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: ns,
+					Name:      name,
+				},
+			}
+		}
+
+		Context("Insert", func() {
+			var rs *reconcile.RequestSet
+
+			BeforeEach(func() {
+				rs = reconcile.NewRequestSet()
+			})
+
+			It("should contain request after inserting", func() {
+				rs.Insert(newRequest("test", "dummy1"))
+
+				rsList := rs.List()
+				Expect(len(rsList)).To(Equal(1))
+				Expect(rsList[0].Namespace).To(Equal("test"))
+				Expect(rsList[0].Name).To(Equal("dummy1"))
+			})
+
+			It("should deduplicate requests when same requests are inserted repeatedly", func() {
+				rs.Insert(newRequest("test", "dummy1"))
+				rs.Insert(newRequest("test", "dummy1"))
+
+				rsList := rs.List()
+				Expect(len(rsList)).To(Equal(1))
+				Expect(rsList[0].Namespace).To(Equal("test"))
+				Expect(rsList[0].Name).To(Equal("dummy1"))
+			})
+		})
+
+		Context("Delete", func() {
+			var rs *reconcile.RequestSet
+
+			BeforeEach(func() {
+				rs = reconcile.NewRequestSet(
+					newRequest("test", "dummy1"),
+					newRequest("test", "dummy2"),
+				)
+			})
+
+			It("should do nothing when deleting a request which is not in set", func() {
+				rs.Delete(newRequest("test", "dummy3"))
+				Expect(len(rs.List())).To(Equal(2))
+			})
+
+			It("should remove the request from set after deleting", func() {
+				rs.Delete(newRequest("test", "dummy1"))
+
+				rsList := rs.List()
+				Expect(len(rsList)).To(Equal(1))
+				Expect(rsList[0].Namespace).To(Equal("test"))
+				Expect(rsList[0].Name).To(Equal("dummy2"))
+			})
+		})
+
+		Context("List", func() {
+			var rs *reconcile.RequestSet
+
+			BeforeEach(func() {
+				rs = reconcile.NewRequestSet()
+			})
+
+			It("should return an empty slice when set contains no requests", func() {
+				rsList := rs.List()
+				Expect(len(rsList)).To(Equal(0))
+			})
+
+			It("should return an ordered slice with all requests from set", func() {
+				rs.Insert(newRequest("test", "dummy1"))
+				rs.Insert(newRequest("test", "dummy2"))
+
+				rsList := rs.List()
+				Expect(len(rsList)).To(Equal(2))
+				Expect(rsList[0].Namespace).To(Equal("test"))
+				Expect(rsList[0].Name).To(Or(Equal("dummy1"), Equal("dummy2")))
+				Expect(rsList[1].Namespace).To(Equal("test"))
+				Expect(rsList[1].Name).To(Or(Equal("dummy1"), Equal("dummy2")))
+			})
+
+			It("should keep ordered if same requests are inserted into set repeatedly", func() {
+				rs.Insert(newRequest("test", "dummy1"))
+				rs.Insert(newRequest("test", "dummy2"))
+				rs.Insert(newRequest("test", "dummy1"))
+				rs.Insert(newRequest("test", "dummy2"))
+
+				rsList := rs.List()
+				Expect(len(rsList)).To(Equal(2))
+				Expect(rsList[0].Namespace).To(Equal("test"))
+				Expect(rsList[0].Name).To(Equal("dummy1"))
+				Expect(rsList[1].Namespace).To(Equal("test"))
+				Expect(rsList[1].Name).To(Equal("dummy2"))
+			})
 		})
 	})
 })

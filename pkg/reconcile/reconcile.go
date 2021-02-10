@@ -100,7 +100,7 @@ func (s *RequestSet) Delete(request Request) {
 }
 
 // List returns an ordered slice with all requests in set.
-func (s RequestSet) List() []Request {
+func (s *RequestSet) List() []Request {
 	s.Lock()
 	defer s.Unlock()
 

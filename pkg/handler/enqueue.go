@@ -19,6 +19,7 @@ package handler
 import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -47,8 +48,11 @@ func (e *EnqueueRequestForObject) Create(evt event.CreateEvent, q workqueue.Rate
 
 // Update implements EventHandler
 func (e *EnqueueRequestForObject) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+	// requestSet will help to deduplicate requests in a single event
+	requestSet := reconcile.NewRequestSet()
+
 	if evt.ObjectOld != nil {
-		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+		requestSet.Insert(reconcile.Request{NamespacedName: types.NamespacedName{
 			Name:      evt.ObjectOld.GetName(),
 			Namespace: evt.ObjectOld.GetNamespace(),
 		}})
@@ -57,12 +61,17 @@ func (e *EnqueueRequestForObject) Update(evt event.UpdateEvent, q workqueue.Rate
 	}
 
 	if evt.ObjectNew != nil {
-		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+		requestSet.Insert(reconcile.Request{NamespacedName: types.NamespacedName{
 			Name:      evt.ObjectNew.GetName(),
 			Namespace: evt.ObjectNew.GetNamespace(),
 		}})
 	} else {
 		enqueueLog.Error(nil, "UpdateEvent received with no new metadata", "event", evt)
+	}
+
+	requests := requestSet.List()
+	for i := range requests {
+		q.Add(requests[i])
 	}
 }
 

@@ -114,6 +114,26 @@ var _ = Describe("Eventhandler", func() {
 				close(done)
 			})
 
+		It("should enqueue a single Request if both objects have same Name and Namespace in the UpdateEvent.",
+			func(done Done) {
+				newPod := pod.DeepCopy()
+
+				evt := event.UpdateEvent{
+					ObjectOld: pod,
+					ObjectNew: newPod,
+				}
+				instance.Update(evt, q)
+				Expect(q.Len()).To(Equal(1))
+
+				i, _ := q.Get()
+				Expect(i).NotTo(BeNil())
+				req, ok := i.(reconcile.Request)
+				Expect(ok).To(BeTrue())
+				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
+
+				close(done)
+			})
+
 		It("should enqueue a Request with the Name / Namespace of the object in the GenericEvent.", func(done Done) {
 			evt := event.GenericEvent{
 				Object: pod,

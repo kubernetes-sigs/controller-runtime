@@ -11,14 +11,24 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+type Verb string
+
+const (
+	GetVerb    Verb = "get"
+	CreateVerb Verb = "create"
+	DeleteVerb Verb = "delete"
+	UpdateVerb Verb = "update"
+	PatchVerb  Verb = "patch"
+	AnyVerb    Verb = "*"
+)
+
 type resourceActionKey struct {
-	action    string
+	verb      Verb
 	kind      schema.GroupVersionKind
 	objectKey client.ObjectKey
 }
 
 var (
-	AnyAction  = "*"
 	AnyKind    = &unstructured.Unstructured{}
 	AnyObject  = client.ObjectKey{}
 	anyKindGVK = schema.GroupVersionKind{Kind: "*"}
@@ -49,7 +59,7 @@ func (c ErrorInjector) RESTMapper() meta.RESTMapper {
 }
 
 func (c ErrorInjector) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-	err := c.getStubbedError("get", obj, key)
+	err := c.getStubbedError(GetVerb, obj, key)
 	if err != nil {
 		return err
 	}
@@ -62,7 +72,7 @@ func (c ErrorInjector) List(ctx context.Context, list client.ObjectList, opts ..
 }
 
 func (c ErrorInjector) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
-	err := c.getStubbedError("create", obj, client.ObjectKeyFromObject(obj))
+	err := c.getStubbedError(CreateVerb, obj, client.ObjectKeyFromObject(obj))
 	if err != nil {
 		return err
 	}
@@ -71,7 +81,7 @@ func (c ErrorInjector) Create(ctx context.Context, obj client.Object, opts ...cl
 }
 
 func (c ErrorInjector) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-	err := c.getStubbedError("delete", obj, client.ObjectKeyFromObject(obj))
+	err := c.getStubbedError(DeleteVerb, obj, client.ObjectKeyFromObject(obj))
 	if err != nil {
 		return err
 	}
@@ -80,7 +90,7 @@ func (c ErrorInjector) Delete(ctx context.Context, obj client.Object, opts ...cl
 }
 
 func (c ErrorInjector) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-	err := c.getStubbedError("update", obj, client.ObjectKeyFromObject(obj))
+	err := c.getStubbedError(UpdateVerb, obj, client.ObjectKeyFromObject(obj))
 	if err != nil {
 		return err
 	}
@@ -89,7 +99,7 @@ func (c ErrorInjector) Update(ctx context.Context, obj client.Object, opts ...cl
 }
 
 func (c ErrorInjector) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-	err := c.getStubbedError("patch", obj, client.ObjectKeyFromObject(obj))
+	err := c.getStubbedError(PatchVerb, obj, client.ObjectKeyFromObject(obj))
 	if err != nil {
 		return err
 	}
@@ -105,18 +115,18 @@ func (c ErrorInjector) Status() client.StatusWriter {
 	return c
 }
 
-func (c ErrorInjector) getStubbedError(action string, kind client.Object, objectKey client.ObjectKey) error {
+func (c ErrorInjector) getStubbedError(action Verb, kind client.Object, objectKey client.ObjectKey) error {
 	gvk := mustGVKForObject(kind, c.Scheme())
 
 	for _, k := range []resourceActionKey{
-		{action, gvk, objectKey},           // (1) 0 wildcards
-		{action, gvk, AnyObject},           // (2) 1 wildcard
-		{AnyAction, gvk, objectKey},        // (3) 1 wildcard
-		{action, anyKindGVK, objectKey},    // (4) 1 wildcard
-		{AnyAction, gvk, AnyObject},        // (5) 2 wildcards
-		{action, anyKindGVK, AnyObject},    // (6) 2 wildcards
-		{AnyAction, anyKindGVK, objectKey}, // (7) 2 wildcards
-		{AnyAction, anyKindGVK, AnyObject}, // (8) 3 wildcards
+		{action, gvk, objectKey},         // (1) 0 wildcards
+		{action, gvk, AnyObject},         // (2) 1 wildcard
+		{AnyVerb, gvk, objectKey},        // (3) 1 wildcard
+		{action, anyKindGVK, objectKey},  // (4) 1 wildcard
+		{AnyVerb, gvk, AnyObject},        // (5) 2 wildcards
+		{action, anyKindGVK, AnyObject},  // (6) 2 wildcards
+		{AnyVerb, anyKindGVK, objectKey}, // (7) 2 wildcards
+		{AnyVerb, anyKindGVK, AnyObject}, // (8) 3 wildcards
 	} {
 		if err, ok := c.errorsToReturn[k]; ok {
 			return err
@@ -125,12 +135,12 @@ func (c ErrorInjector) getStubbedError(action string, kind client.Object, object
 	return nil
 }
 
-// InjectError will cause ErrorInjector to return an error for the given (action, kind, objectKey) tuple.
+// InjectError will cause ErrorInjector to return an error for the given (verb, kind, objectKey) tuple.
 // Wildcards are supported for each part of the tuple:
 // Pass objectKey = AnyObject to match any object identity.
 // Pass kind = AnyKind to match any type of object.
-// Pass action = AnyAction to match any client action.
-func (c *ErrorInjector) InjectError(action string, kind client.Object, objectKey client.ObjectKey, injectedError error) {
+// Pass verb = AnyVerb to match any client verb.
+func (c *ErrorInjector) InjectError(action Verb, kind client.Object, objectKey client.ObjectKey, injectedError error) {
 	gvk := anyKindGVK
 	if kind != AnyKind {
 		gvk = mustGVKForObject(kind, c.Scheme())

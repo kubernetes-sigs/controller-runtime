@@ -103,6 +103,10 @@ func runMain() int {
 		log.Info("Wrote kubeconfig")
 	}
 
+	if opts := env.WebhookInstallOptions; opts.LocalServingPort != 0 {
+		log.Info("webhooks configured for", "host", opts.LocalServingHost, "port", opts.LocalServingPort, "dir", opts.LocalServingCertDir)
+	}
+
 	ctx := ctrl.SetupSignalHandler()
 	<-ctx.Done()
 

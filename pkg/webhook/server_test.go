@@ -37,13 +37,14 @@ var _ = Describe("Webhook Server", func() {
 		testHostPort string
 		client       *http.Client
 		server       *webhook.Server
+		servingOpts  envtest.WebhookInstallOptions
 	)
 
 	BeforeEach(func() {
 		ctx, ctxCancel = context.WithCancel(context.Background())
 		// closed in indivual tests differently
 
-		servingOpts := envtest.WebhookInstallOptions{}
+		servingOpts = envtest.WebhookInstallOptions{}
 		Expect(servingOpts.PrepWithoutInstalling()).To(Succeed())
 
 		testHostPort = net.JoinHostPort(servingOpts.LocalServingHost, fmt.Sprintf("%d", servingOpts.LocalServingPort))
@@ -62,8 +63,9 @@ var _ = Describe("Webhook Server", func() {
 			Port:    servingOpts.LocalServingPort,
 			CertDir: servingOpts.LocalServingCertDir,
 		}
-
-		// TODO(directxman12): cleanup generated certificate dir, etc
+	})
+	AfterEach(func() {
+		Expect(servingOpts.Cleanup()).To(Succeed())
 	})
 
 	startServer := func() (done <-chan struct{}) {

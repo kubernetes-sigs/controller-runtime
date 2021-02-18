@@ -87,6 +87,13 @@ func DoDefaulting(
 		defaults.URL = *listenURL
 	}
 
+	if path == "" {
+		if name == "" {
+			return DefaultedProcessInput{}, fmt.Errorf("must have at least one of name or path")
+		}
+		defaults.Path = BinPathFinder(name)
+	}
+
 	if dir == "" {
 		newDir, err := ioutil.TempDir("", "k8s_test_framework_")
 		if err != nil {
@@ -94,13 +101,6 @@ func DoDefaulting(
 		}
 		defaults.Dir = newDir
 		defaults.DirNeedsCleaning = true
-	}
-
-	if path == "" {
-		if name == "" {
-			return DefaultedProcessInput{}, fmt.Errorf("must have at least one of name or path")
-		}
-		defaults.Path = BinPathFinder(name)
 	}
 
 	if startTimeout == 0 {

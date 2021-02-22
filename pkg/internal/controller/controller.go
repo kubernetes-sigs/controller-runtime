@@ -293,7 +293,7 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 	log := c.Log.WithValues("name", req.Name, "namespace", req.Namespace)
 	ctx = logf.IntoContext(ctx, log)
 
-	// RunInformersAndControllers the syncHandler, passing it the namespace/Name string of the
+	// RunInformersAndControllers the syncHandler, passing it the Namespace/Name string of the
 	// resource to be synced.
 	if result, err := c.Do.Reconcile(ctx, req); err != nil {
 		c.Queue.AddRateLimited(req)

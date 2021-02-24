@@ -96,8 +96,42 @@ func (s *mergeFromPatch) Type() types.PatchType {
 	return types.MergePatchType
 }
 
+func (*mergeFromPatch) data(original, modified Object, opts MergeFromOptions) ([]byte, error) {
+	if opts.OptimisticLock {
+		version := original.GetResourceVersion()
+		if len(version) == 0 {
+			return nil, fmt.Errorf("cannot use OptimisticLock, object %q does not have any resource version we can use", original)
+		}
+
+		original = original.DeepCopyObject().(Object)
+		original.SetResourceVersion("")
+
+		modified = modified.DeepCopyObject().(Object)
+		modified.SetResourceVersion(version)
+	}
+
+	originalJSON, err := json.Marshal(original)
+	if err != nil {
+		return nil, err
+	}
+
+	modifiedJSON, err := json.Marshal(modified)
+	if err != nil {
+		return nil, err
+	}
+
+	return jsonpatch.CreateMergePatch(originalJSON, modifiedJSON)
+}
+
 // Data implements Patch.
 func (s *mergeFromPatch) Data(obj runtime.Object) ([]byte, error) {
+	fromObject, fromOk := s.from.(Object)
+	objObject, objOk := obj.(Object)
+
+	if fromOk && objOk {
+		return s.data(fromObject, objObject, s.opts)
+	}
+
 	originalJSON, err := json.Marshal(s.from)
 	if err != nil {
 		return nil, err

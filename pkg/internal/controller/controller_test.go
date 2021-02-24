@@ -28,16 +28,19 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -168,6 +171,83 @@ var _ = Describe("controller", func() {
 			<-sourceSynced
 			close(done)
 		}, 10.0)
+
+		It("should process events from source.Channel", func(done Done) {
+			// channel to be closed when event is processed
+			processed := make(chan struct{})
+			// source channel to be injected
+			ch := make(chan event.GenericEvent, 1)
+
+			ctx, cancel := context.WithCancel(context.TODO())
+			defer cancel()
+
+			// event to be sent to the channel
+			p := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			}
+			evt := event.GenericEvent{
+				Object: p,
+			}
+
+			ins := &source.Channel{Source: ch}
+			ins.DestBufferSize = 1
+			Expect(inject.StopChannelInto(ctx.Done(), ins)).To(BeTrue())
+
+			// send the event to the channel
+			ch <- evt
+
+			ctrl.startWatches = []watchDescription{{
+				src: ins,
+				handler: handler.Funcs{
+					GenericFunc: func(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						close(processed)
+					},
+				},
+			}}
+
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(ctx)).To(Succeed())
+			}()
+			<-processed
+			close(done)
+		})
+
+		It("should error when channel is passed as a source but stop channel is not injected", func(done Done) {
+			ch := make(chan event.GenericEvent)
+			ctx, cancel := context.WithCancel(context.TODO())
+			defer cancel()
+
+			ins := &source.Channel{Source: ch}
+			ctrl.startWatches = []watchDescription{{
+				src: ins,
+			}}
+
+			e := ctrl.Start(ctx)
+
+			Expect(e).NotTo(BeNil())
+			Expect(e.Error()).To(ContainSubstring("must call InjectStop on Channel before calling Start"))
+			close(done)
+		})
+
+		It("should error when channel source is not specified", func(done Done) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ins := &source.Channel{}
+			Expect(inject.StopChannelInto(make(<-chan struct{}), ins)).To(BeTrue())
+
+			ctrl.startWatches = []watchDescription{{
+				src: &source.Channel{},
+			}}
+
+			e := ctrl.Start(ctx)
+			Expect(e).NotTo(BeNil())
+			Expect(e.Error()).To(ContainSubstring("must specify Channel.Source"))
+
+			close(done)
+		})
 
 		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {
 			pr1 := &predicate.Funcs{}

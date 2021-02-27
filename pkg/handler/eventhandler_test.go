@@ -276,20 +276,17 @@ var _ = Describe("Eventhandler", func() {
 				instance.Update(evt, q)
 				Expect(q.Len()).To(Equal(4))
 
-				i1, _ := q.Get()
-				i2, _ := q.Get()
-				i3, _ := q.Get()
-				i4, _ := q.Get()
-				Expect([]interface{}{i1, i2, i3, i4}).To(ConsistOf(
-					reconcile.Request{
-						NamespacedName: types.NamespacedName{Namespace: "foo", Name: "baz-bar"}},
-					reconcile.Request{
-						NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz-baz"}},
-					reconcile.Request{
-						NamespacedName: types.NamespacedName{Namespace: "foo", Name: "baz2-bar"}},
-					reconcile.Request{
-						NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz2-baz"}},
-				))
+				i, _ := q.Get()
+				Expect(i).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "baz-bar"}}))
+
+				i, _ = q.Get()
+				Expect(i).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz-baz"}}))
+
+				i, _ = q.Get()
+				Expect(i).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "baz2-bar"}}))
+
+				i, _ = q.Get()
+				Expect(i).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz2-baz"}}))
 			})
 
 		It("should enqueue a Request with the function applied to the GenericEvent.", func() {

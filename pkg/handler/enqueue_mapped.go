@@ -73,12 +73,13 @@ func (e *enqueueRequestsFromMapFunc) Generic(evt event.GenericEvent, q workqueue
 }
 
 func (e *enqueueRequestsFromMapFunc) mapAndEnqueue(q workqueue.RateLimitingInterface, object client.Object) {
-	reqs := map[reconcile.Request]bool{}
+	reqs := map[reconcile.Request]empty{}
 	for _, req := range e.toRequests(object) {
-		reqs[req] = true
-	}
-	for req := range reqs {
-		q.Add(req)
+		_, ok := reqs[req]
+		if !ok {
+			q.Add(req)
+			reqs[req] = empty{}
+		}
 	}
 }
 

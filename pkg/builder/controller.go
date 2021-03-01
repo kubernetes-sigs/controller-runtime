@@ -23,7 +23,6 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -57,7 +56,6 @@ type Builder struct {
 	watchesInput     []WatchesInput
 	mgr              manager.Manager
 	globalPredicates []predicate.Predicate
-	config           *rest.Config
 	ctrl             controller.Controller
 	ctrlOptions      controller.Options
 	name             string
@@ -188,9 +186,6 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 		return nil, fmt.Errorf("must provide an object for reconciliation")
 	}
 
-	// Set the Config
-	blder.loadRestConfig()
-
 	// Set the ControllerManagedBy
 	if err := blder.doController(r); err != nil {
 		return nil, err
@@ -271,12 +266,6 @@ func (blder *Builder) doWatch() error {
 		}
 	}
 	return nil
-}
-
-func (blder *Builder) loadRestConfig() {
-	if blder.config == nil {
-		blder.config = blder.mgr.GetConfig()
-	}
 }
 
 func (blder *Builder) getControllerName(gvk schema.GroupVersionKind) string {

@@ -592,6 +592,20 @@ var _ = Describe("manger.Manager", func() {
 				close(done)
 			})
 
+			It("should not manipulate the provided config", func() {
+				originalCfg := rest.CopyConfig(cfg)
+				// The options object is shared by multiple tests, copy it
+				// into our scope so we manipulate it for this testcase only
+				options := options
+				options.newResourceLock = nil
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+				Expect(m.GetConfig()).To(Equal(originalCfg))
+			})
+
 			It("should stop when context is cancelled", func(done Done) {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())

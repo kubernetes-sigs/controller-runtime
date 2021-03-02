@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -789,7 +790,79 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Eventually(out).Should(Receive(Equal(pod)))
 					close(done)
 				})
+				It("should be able to filter informers at list watch level by field", func() {
+					By("creating the cache")
+					builder := cache.BuilderWithFieldSelectors(
+						map[schema.GroupResource]fields.Selector{
+							{Group: "", Resource: "pods"}: fields.SelectorFromSet(fields.Set{"metadata.name": "foo"}),
+						},
+					)
+					informer, err := builder(cfg, cache.Options{})
+					Expect(err).NotTo(HaveOccurred())
 
+					By("running the cache and waiting for it to sync")
+					go func() {
+						defer GinkgoRecover()
+						Expect(informer.Start(informerCacheCtx)).To(Succeed())
+					}()
+					Expect(informer.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
+
+					gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
+					sii, err := informer.GetInformerForKind(context.TODO(), gvk)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(sii).NotTo(BeNil())
+					Expect(sii.HasSynced()).To(BeTrue())
+
+					By("adding an event handler listening for object creation which sends the object to a channel")
+					out := make(chan interface{})
+					addFunc := func(obj interface{}) {
+						out <- obj
+					}
+					sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+
+					By("adding a pair of objects")
+					cl, err := client.New(cfg, client.Options{})
+					Expect(err).NotTo(HaveOccurred())
+					podFoo := &kcorev1.Pod{
+						ObjectMeta: kmetav1.ObjectMeta{
+							Name:      "foo",
+							Namespace: "default",
+						},
+						Spec: kcorev1.PodSpec{
+							Containers: []kcorev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx",
+								},
+							},
+						},
+					}
+					Expect(cl.Create(context.Background(), podFoo)).To(Succeed())
+					defer deletePod(podFoo)
+
+					podBar := &kcorev1.Pod{
+						ObjectMeta: kmetav1.ObjectMeta{
+							Name:      "bar",
+							Namespace: "default",
+						},
+						Spec: kcorev1.PodSpec{
+							Containers: []kcorev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx",
+								},
+							},
+						},
+					}
+					Expect(cl.Create(context.Background(), podBar)).To(Succeed())
+					defer deletePod(podBar)
+
+					By("verifying the filter out object is not received on the channel")
+					var obtainedObj interface{}
+					Expect(out).Should(Receive(&obtainedObj), "should receive something")
+					Expect(obtainedObj).Should(Equal(podFoo), "should receive the pod 'foo'")
+					Consistently(out).ShouldNot(Receive(), "should not receive anything else")
+				})
 				It("should be able to index an object field then retrieve objects by that field", func() {
 					By("creating the cache")
 					informer, err := cache.New(cfg, cache.Options{})

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -103,6 +104,13 @@ type Options struct {
 	// Namespace restricts the cache's ListWatch to the desired namespace
 	// Default watches all namespaces
 	Namespace string
+
+	// FieldSelectorByResource restricts the cache's ListWatch to the desired
+	// fields per resource, the map's value must implement Selector [1] using
+	// for example a Set [2]
+	// [1] https://pkg.go.dev/k8s.io/apimachinery/pkg/fields#Selector
+	// [2] https://pkg.go.dev/k8s.io/apimachinery/pkg/fields#Set
+	FieldSelectorByResource map[schema.GroupResource]fields.Selector
 }
 
 var defaultResyncTime = 10 * time.Hour
@@ -113,8 +121,18 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 	if err != nil {
 		return nil, err
 	}
-	im := internal.NewInformersMap(config, opts.Scheme, opts.Mapper, *opts.Resync, opts.Namespace)
+	im := internal.NewInformersMap(config, opts.Scheme, opts.Mapper, *opts.Resync, opts.Namespace, opts.FieldSelectorByResource)
 	return &informerCache{InformersMap: im}, nil
+}
+
+// BuilderWithFieldSelectors returns a Cache constructor that will filter
+// contents using fieldSelectorByResource
+// WARNING: filtered out resources are not returned.
+func BuilderWithFieldSelectors(fieldSelectorByResource map[schema.GroupResource]fields.Selector) NewCacheFunc {
+	return func(config *rest.Config, opts Options) (Cache, error) {
+		opts.FieldSelectorByResource = fieldSelectorByResource
+		return New(config, opts)
+	}
 }
 
 func defaultOpts(config *rest.Config, opts Options) (Options, error) {

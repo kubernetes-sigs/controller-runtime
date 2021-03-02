@@ -21,11 +21,15 @@ import (
 	"fmt"
 
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
 	kcorev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -42,15 +46,17 @@ const testNamespaceThree = "test-namespace-3"
 
 // TODO(community): Pull these helper functions into testenv.
 // Restart policy is included to allow indexing on that field.
-func createPod(name, namespace string, restartPolicy kcorev1.RestartPolicy) client.Object {
+func createPodWithLabels(name, namespace string, restartPolicy kcorev1.RestartPolicy, labels map[string]string) client.Object {
 	three := int64(3)
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labels["test-label"] = name
 	pod := &kcorev1.Pod{
 		ObjectMeta: kmetav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
-			Labels: map[string]string{
-				"test-label": name,
-			},
+			Labels:    labels,
 		},
 		Spec: kcorev1.PodSpec{
 			Containers:            []kcorev1.Container{{Name: "nginx", Image: "nginx"}},
@@ -63,6 +69,10 @@ func createPod(name, namespace string, restartPolicy kcorev1.RestartPolicy) clie
 	err = cl.Create(context.Background(), pod)
 	Expect(err).NotTo(HaveOccurred())
 	return pod
+}
+
+func createPod(name, namespace string, restartPolicy kcorev1.RestartPolicy) client.Object {
+	return createPodWithLabels(name, namespace, restartPolicy, nil)
 }
 
 func deletePod(pod client.Object) {
@@ -110,8 +120,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			// Includes restart policy since these objects are indexed on this field.
 			knownPod1 = createPod("test-pod-1", testNamespaceOne, kcorev1.RestartPolicyNever)
 			knownPod2 = createPod("test-pod-2", testNamespaceTwo, kcorev1.RestartPolicyAlways)
-			knownPod3 = createPod("test-pod-3", testNamespaceTwo, kcorev1.RestartPolicyOnFailure)
-			knownPod4 = createPod("test-pod-4", testNamespaceThree, kcorev1.RestartPolicyNever)
+			knownPod3 = createPodWithLabels("test-pod-3", testNamespaceTwo, kcorev1.RestartPolicyOnFailure, map[string]string{"common-label": "common"})
+			knownPod4 = createPodWithLabels("test-pod-4", testNamespaceThree, kcorev1.RestartPolicyNever, map[string]string{"common-label": "common"})
 			podGVK := schema.GroupVersionKind{
 				Kind:    "Pod",
 				Version: "v1",
@@ -789,7 +799,97 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Eventually(out).Should(Receive(Equal(pod)))
 					close(done)
 				})
+				type selectorsTestCase struct {
+					fieldSelectors map[string]string
+					labelSelectors map[string]string
+					expectedPods   []string
+				}
+				DescribeTable("filter informers at list watch with selectors", func(tc selectorsTestCase) {
+					By("creating the cache")
+					builder := cache.BuilderWithOptions(
+						cache.Options{
+							SelectorsByObject: cache.SelectorsByObject{
+								&kcorev1.Pod{}: {
+									Field: fields.Set(tc.fieldSelectors).AsSelector(),
+									Label: labels.Set(tc.labelSelectors).AsSelector(),
+								},
+							},
+						},
+					)
+					informer, err := builder(cfg, cache.Options{})
+					Expect(err).NotTo(HaveOccurred())
 
+					By("running the cache and waiting for it to sync")
+					go func() {
+						defer GinkgoRecover()
+						Expect(informer.Start(informerCacheCtx)).To(Succeed())
+					}()
+					Expect(informer.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
+
+					gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
+					sii, err := informer.GetInformerForKind(context.TODO(), gvk)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(sii).NotTo(BeNil())
+					Expect(sii.HasSynced()).To(BeTrue())
+
+					By("adding an event handler listening for object creation which sends the object to a channel")
+					out := make(chan interface{})
+					addFunc := func(obj interface{}) {
+						out <- obj
+					}
+					sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+
+					By("verifying the filter out object is not received on the channel")
+					obtainedObjs := []interface{}{}
+					for range tc.expectedPods {
+						var obtainedObj interface{}
+						Eventually(out).Should(Receive(&obtainedObj), "should receive something")
+						obtainedObjs = append(obtainedObjs, obtainedObj)
+					}
+					Consistently(out).ShouldNot(Receive(), "should not receive anything else")
+					Expect(obtainedObjs).Should(WithTransform(func(objs []interface{}) []string {
+						obtainedPodNames := []string{}
+						for _, obj := range objs {
+							obtainedPodNames = append(obtainedPodNames, obj.(client.Object).GetName())
+						}
+						return obtainedPodNames
+					}, ConsistOf(tc.expectedPods)))
+				},
+					Entry("when selectors are empty it has to inform about all the pods", selectorsTestCase{
+						fieldSelectors: map[string]string{},
+						labelSelectors: map[string]string{},
+						expectedPods:   []string{"test-pod-1", "test-pod-2", "test-pod-3", "test-pod-4"},
+					}),
+					Entry("when field matches one pod it has to inform about it", selectorsTestCase{
+						fieldSelectors: map[string]string{"metadata.name": "test-pod-2"},
+						expectedPods:   []string{"test-pod-2"},
+					}),
+					Entry("when field matches multiple pods it has to infor about all of them", selectorsTestCase{
+						fieldSelectors: map[string]string{"metadata.namespace": testNamespaceTwo},
+						expectedPods:   []string{"test-pod-2", "test-pod-3"},
+					}),
+					Entry("when label matches one pod it has to inform about it", selectorsTestCase{
+						labelSelectors: map[string]string{"test-label": "test-pod-4"},
+						expectedPods:   []string{"test-pod-4"},
+					}),
+					Entry("when label matches multiple pods it has to infor about all of them", selectorsTestCase{
+						labelSelectors: map[string]string{"common-label": "common"},
+						expectedPods:   []string{"test-pod-3", "test-pod-4"},
+					}),
+					Entry("when label and field matches one pod it has to infor about about it", selectorsTestCase{
+						labelSelectors: map[string]string{"common-label": "common"},
+						fieldSelectors: map[string]string{"metadata.namespace": testNamespaceTwo},
+						expectedPods:   []string{"test-pod-3"},
+					}),
+					Entry("when label does not match it does not has to inform", selectorsTestCase{
+						labelSelectors: map[string]string{"new-label": "new"},
+						expectedPods:   []string{},
+					}),
+					Entry("when field does not match it does not has to inform", selectorsTestCase{
+						fieldSelectors: map[string]string{"metadata.namespace": "new"},
+						expectedPods:   []string{},
+					}),
+				)
 				It("should be able to index an object field then retrieve objects by that field", func() {
 					By("creating the cache")
 					informer, err := cache.New(cfg, cache.Options{})

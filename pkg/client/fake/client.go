@@ -392,20 +392,7 @@ func (c *fakeClient) Delete(ctx context.Context, obj client.Object, opts ...clie
 	delOptions := client.DeleteOptions{}
 	delOptions.ApplyOptions(opts)
 
-	old, err := c.tracker.Get(gvr, accessor.GetNamespace(), accessor.GetName())
-	if err == nil {
-		oldAccessor, err := meta.Accessor(old)
-		if err == nil {
-			if len(oldAccessor.GetFinalizers()) > 0 {
-				now := metav1.Now()
-				oldAccessor.SetDeletionTimestamp(&now)
-				return c.tracker.Update(gvr, old, accessor.GetNamespace())
-			}
-		}
-	}
-
-	//TODO: implement propagation
-	return c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
+	return c.deleteObject(gvr, accessor)
 }
 
 func (c *fakeClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
@@ -436,7 +423,7 @@ func (c *fakeClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ..
 		if err != nil {
 			return err
 		}
-		err = c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
+		err = c.deleteObject(gvr, accessor)
 		if err != nil {
 			return err
 		}
@@ -519,6 +506,23 @@ func (c *fakeClient) Patch(ctx context.Context, obj client.Object, patch client.
 
 func (c *fakeClient) Status() client.StatusWriter {
 	return &fakeStatusWriter{client: c}
+}
+
+func (c *fakeClient) deleteObject(gvr schema.GroupVersionResource, accessor metav1.Object) error {
+	old, err := c.tracker.Get(gvr, accessor.GetNamespace(), accessor.GetName())
+	if err == nil {
+		oldAccessor, err := meta.Accessor(old)
+		if err == nil {
+			if len(oldAccessor.GetFinalizers()) > 0 {
+				now := metav1.Now()
+				oldAccessor.SetDeletionTimestamp(&now)
+				return c.tracker.Update(gvr, old, accessor.GetNamespace())
+			}
+		}
+	}
+
+	//TODO: implement propagation
+	return c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
 }
 
 func getGVRFromObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionResource, error) {

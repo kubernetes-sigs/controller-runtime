@@ -19,6 +19,7 @@ package fake
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -493,6 +494,41 @@ var _ = Describe("Fake client", func() {
 			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(BeEmpty())
+		})
+
+		It("should handle finalizers deleting a collection", func() {
+			for i := 0; i < 5; i++ {
+				namespacedName := types.NamespacedName{
+					Name:      fmt.Sprintf("test-cm-%d", i),
+					Namespace: "delete-collection-with-finalizers",
+				}
+				By("Creating a new object")
+				newObj := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       namespacedName.Name,
+						Namespace:  namespacedName.Namespace,
+						Finalizers: []string{"finalizers.sigs.k8s.io/test"},
+					},
+					Data: map[string]string{
+						"test-key": "new-value",
+					},
+				}
+				err := cl.Create(context.Background(), newObj)
+				Expect(err).To(BeNil())
+			}
+
+			By("Deleting the object")
+			err := cl.DeleteAllOf(context.Background(), &corev1.ConfigMap{}, client.InNamespace("delete-collection-with-finalizers"))
+			Expect(err).To(BeNil())
+
+			configmaps := corev1.ConfigMapList{}
+			err = cl.List(context.Background(), &configmaps, client.InNamespace("delete-collection-with-finalizers"))
+			Expect(err).To(BeNil())
+
+			Expect(len(configmaps.Items)).To(Equal(5))
+			for _, cm := range configmaps.Items {
+				Expect(cm.DeletionTimestamp).NotTo(BeNil())
+			}
 		})
 
 		Context("with the DryRun option", func() {

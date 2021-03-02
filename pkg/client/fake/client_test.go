@@ -19,6 +19,7 @@ package fake
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -443,6 +444,46 @@ var _ = Describe("Fake client", func() {
 			Expect(list.Items).To(ConsistOf(*dep2))
 		})
 
+		It("should handle finalizers on Update", func() {
+			namespacedName := types.NamespacedName{
+				Name:      "test-cm",
+				Namespace: "delete-with-finalizers",
+			}
+			By("Updating a new object")
+			newObj := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       namespacedName.Name,
+					Namespace:  namespacedName.Namespace,
+					Finalizers: []string{"finalizers.sigs.k8s.io/test"},
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+			err := cl.Create(context.Background(), newObj)
+			Expect(err).To(BeNil())
+
+			By("Deleting the object")
+			err = cl.Delete(context.Background(), newObj)
+			Expect(err).To(BeNil())
+
+			By("Getting the object")
+			obj := &corev1.ConfigMap{}
+			err = cl.Get(context.Background(), namespacedName, obj)
+			Expect(err).To(BeNil())
+			Expect(obj.DeletionTimestamp).NotTo(BeNil())
+
+			By("Removing the finalizer")
+			obj.Finalizers = []string{}
+			err = cl.Update(context.Background(), obj)
+			Expect(err).To(BeNil())
+
+			By("Getting the object")
+			obj = &corev1.ConfigMap{}
+			err = cl.Get(context.Background(), namespacedName, obj)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
+
 		It("should be able to Delete a Collection", func() {
 			By("Deleting a deploymentList")
 			err := cl.DeleteAllOf(context.Background(), &appsv1.Deployment{}, client.InNamespace("ns1"))
@@ -453,6 +494,41 @@ var _ = Describe("Fake client", func() {
 			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(BeEmpty())
+		})
+
+		It("should handle finalizers deleting a collection", func() {
+			for i := 0; i < 5; i++ {
+				namespacedName := types.NamespacedName{
+					Name:      fmt.Sprintf("test-cm-%d", i),
+					Namespace: "delete-collection-with-finalizers",
+				}
+				By("Creating a new object")
+				newObj := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       namespacedName.Name,
+						Namespace:  namespacedName.Namespace,
+						Finalizers: []string{"finalizers.sigs.k8s.io/test"},
+					},
+					Data: map[string]string{
+						"test-key": "new-value",
+					},
+				}
+				err := cl.Create(context.Background(), newObj)
+				Expect(err).To(BeNil())
+			}
+
+			By("Deleting the object")
+			err := cl.DeleteAllOf(context.Background(), &corev1.ConfigMap{}, client.InNamespace("delete-collection-with-finalizers"))
+			Expect(err).To(BeNil())
+
+			configmaps := corev1.ConfigMapList{}
+			err = cl.List(context.Background(), &configmaps, client.InNamespace("delete-collection-with-finalizers"))
+			Expect(err).To(BeNil())
+
+			Expect(len(configmaps.Items)).To(Equal(5))
+			for _, cm := range configmaps.Items {
+				Expect(cm.DeletionTimestamp).NotTo(BeNil())
+			}
 		})
 
 		Context("with the DryRun option", func() {
@@ -530,6 +606,46 @@ var _ = Describe("Fake client", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(obj.Annotations["foo"]).To(Equal("bar"))
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1000"))
+		})
+
+		It("should handle finalizers on Patch", func() {
+			namespacedName := types.NamespacedName{
+				Name:      "test-cm",
+				Namespace: "delete-with-finalizers",
+			}
+			By("Updating a new object")
+			now := metav1.Now()
+			newObj := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              namespacedName.Name,
+					Namespace:         namespacedName.Namespace,
+					Finalizers:        []string{"finalizers.sigs.k8s.io/test"},
+					DeletionTimestamp: &now,
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+			err := cl.Create(context.Background(), newObj)
+			Expect(err).To(BeNil())
+
+			By("Removing the finalizer")
+			obj := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              namespacedName.Name,
+					Namespace:         namespacedName.Namespace,
+					Finalizers:        []string{},
+					DeletionTimestamp: &now,
+				},
+			}
+			obj.Finalizers = []string{}
+			err = cl.Patch(context.Background(), obj, client.MergeFrom(newObj))
+			Expect(err).To(BeNil())
+
+			By("Getting the object")
+			obj = &corev1.ConfigMap{}
+			err = cl.Get(context.Background(), namespacedName, obj)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 	}
 

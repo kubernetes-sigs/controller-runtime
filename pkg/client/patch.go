@@ -20,8 +20,6 @@ import (
 	"fmt"
 
 	jsonpatch "github.com/evanphx/json-patch"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -47,7 +45,7 @@ func (s *patch) Type() types.PatchType {
 }
 
 // Data implements Patch.
-func (s *patch) Data(obj runtime.Object) ([]byte, error) {
+func (s *patch) Data(obj Object) ([]byte, error) {
 	return s.data, nil
 }
 
@@ -87,7 +85,7 @@ type MergeFromOptions struct {
 }
 
 type mergeFromPatch struct {
-	from runtime.Object
+	from Object
 	opts MergeFromOptions
 }
 
@@ -97,13 +95,29 @@ func (s *mergeFromPatch) Type() types.PatchType {
 }
 
 // Data implements Patch.
-func (s *mergeFromPatch) Data(obj runtime.Object) ([]byte, error) {
-	originalJSON, err := json.Marshal(s.from)
+func (s *mergeFromPatch) Data(obj Object) ([]byte, error) {
+	original := s.from
+	modified := obj
+
+	if s.opts.OptimisticLock {
+		version := original.GetResourceVersion()
+		if len(version) == 0 {
+			return nil, fmt.Errorf("cannot use OptimisticLock, object %q does not have any resource version we can use", original)
+		}
+
+		original = original.DeepCopyObject().(Object)
+		original.SetResourceVersion("")
+
+		modified = modified.DeepCopyObject().(Object)
+		modified.SetResourceVersion(version)
+	}
+
+	originalJSON, err := json.Marshal(original)
 	if err != nil {
 		return nil, err
 	}
 
-	modifiedJSON, err := json.Marshal(obj)
+	modifiedJSON, err := json.Marshal(modified)
 	if err != nil {
 		return nil, err
 	}
@@ -113,37 +127,16 @@ func (s *mergeFromPatch) Data(obj runtime.Object) ([]byte, error) {
 		return nil, err
 	}
 
-	if s.opts.OptimisticLock {
-		dataMap := map[string]interface{}{}
-		if err := json.Unmarshal(data, &dataMap); err != nil {
-			return nil, err
-		}
-		fromMeta, ok := s.from.(metav1.Object)
-		if !ok {
-			return nil, fmt.Errorf("cannot use OptimisticLock, from object %q is not a valid metav1.Object", s.from)
-		}
-		resourceVersion := fromMeta.GetResourceVersion()
-		if len(resourceVersion) == 0 {
-			return nil, fmt.Errorf("cannot use OptimisticLock, from object %q does not have any resource version we can use", s.from)
-		}
-		u := &unstructured.Unstructured{Object: dataMap}
-		u.SetResourceVersion(resourceVersion)
-		data, err = json.Marshal(u)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return data, nil
 }
 
 // MergeFrom creates a Patch that patches using the merge-patch strategy with the given object as base.
-func MergeFrom(obj runtime.Object) Patch {
+func MergeFrom(obj Object) Patch {
 	return &mergeFromPatch{from: obj}
 }
 
 // MergeFromWithOptions creates a Patch that patches using the merge-patch strategy with the given object as base.
-func MergeFromWithOptions(obj runtime.Object, opts ...MergeFromOption) Patch {
+func MergeFromWithOptions(obj Object, opts ...MergeFromOption) Patch {
 	options := &MergeFromOptions{}
 	for _, opt := range opts {
 		opt.ApplyToMergeFrom(options)

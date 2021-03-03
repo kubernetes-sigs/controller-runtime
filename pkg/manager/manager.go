@@ -145,7 +145,7 @@ type Options struct {
 	// A period sync happens for two reasons:
 	// 1. To insure against a bug in the controller that causes an object to not
 	// be requeued, when it otherwise should be requeued.
-	// 2. To insure against a bug in controller-runtime, or its dependencies,
+	// 2. To insure against an unknown bug in controller-runtime, or its dependencies,
 	// that causes an object to not be requeued, when it otherwise should be
 	// requeued, or to be removed from the queue, when it otherwise should not
 	// be removed.

@@ -140,6 +140,8 @@ type Options struct {
 	// there will a 10 percent jitter between the SyncPeriod of all controllers
 	// so that all controllers will not send list requests simultaneously.
 	//
+	// This applies to all controllers.
+	//
 	// A period sync happens for two reasons:
 	// 1. To insure against a bug in the controller that causes an object to not
 	// be requeued, when it otherwise should be requeued.

@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/go-logr/logr"
@@ -34,18 +35,6 @@ import (
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
-
-type fakeClientBuilder struct {
-	err error
-}
-
-func (e *fakeClientBuilder) WithUncached(objs ...client.Object) ClientBuilder {
-	return e
-}
-
-func (e *fakeClientBuilder) Build(cache cache.Cache, config *rest.Config, options client.Options) (client.Client, error) {
-	return nil, e.err
-}
 
 var _ = Describe("cluster.Cluster", func() {
 	Describe("New", func() {
@@ -68,7 +57,9 @@ var _ = Describe("cluster.Cluster", func() {
 
 		It("should return an error it can't create a client.Client", func(done Done) {
 			c, err := New(cfg, func(o *Options) {
-				o.ClientBuilder = &fakeClientBuilder{err: fmt.Errorf("expected error")}
+				o.NewClient = func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
+					return nil, errors.New("expected error")
+				}
 			})
 			Expect(c).To(BeNil())
 			Expect(err).To(HaveOccurred())
@@ -92,7 +83,9 @@ var _ = Describe("cluster.Cluster", func() {
 
 		It("should create a client defined in by the new client function", func(done Done) {
 			c, err := New(cfg, func(o *Options) {
-				o.ClientBuilder = &fakeClientBuilder{}
+				o.NewClient = func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
+					return nil, nil
+				}
 			})
 			Expect(c).ToNot(BeNil())
 			Expect(err).ToNot(HaveOccurred())

@@ -207,10 +207,10 @@ type Options struct {
 	// by the manager. If not set this will use the default new cache function.
 	NewCache cache.NewCacheFunc
 
-	// ClientBuilder is the builder that creates the client to be used by the manager.
+	// NewClient is the func that creates the client to be used by the manager.
 	// If not set this will create the default DelegatingClient that will
 	// use the cache for reads and the client for writes.
-	ClientBuilder ClientBuilder
+	NewClient cluster.NewClientFunc
 
 	// ClientDisableCacheFor tells the client that, if any cache is used, to bypass it
 	// for the given objects.
@@ -290,7 +290,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		clusterOptions.SyncPeriod = options.SyncPeriod
 		clusterOptions.Namespace = options.Namespace
 		clusterOptions.NewCache = options.NewCache
-		clusterOptions.ClientBuilder = options.ClientBuilder
+		clusterOptions.NewClient = options.NewClient
 		clusterOptions.ClientDisableCacheFor = options.ClientDisableCacheFor
 		clusterOptions.DryRunClient = options.DryRunClient
 		clusterOptions.EventBroadcaster = options.EventBroadcaster

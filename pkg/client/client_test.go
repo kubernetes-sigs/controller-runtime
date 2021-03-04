@@ -3240,7 +3240,7 @@ var _ = Describe("DelegatingClient", func() {
 })
 
 var _ = Describe("Patch", func() {
-	Describe("CreateMergePatch", func() {
+	Describe("MergeFrom", func() {
 		var cm *corev1.ConfigMap
 
 		BeforeEach(func() {
@@ -3301,6 +3301,84 @@ var _ = Describe("Patch", func() {
 
 			By("returning a patch with data containing the annotation change and the resourceVersion change")
 			Expect(data).To(Equal([]byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"},"resourceVersion":"%s"}}`, annotationKey, annotationValue, cm.ResourceVersion))))
+		})
+	})
+
+	Describe("StrategicMergeFrom", func() {
+		var dep *appsv1.Deployment
+
+		BeforeEach(func() {
+			dep = &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace:       metav1.NamespaceDefault,
+					Name:            "dep",
+					ResourceVersion: "10",
+				},
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{Containers: []corev1.Container{{
+							Name:  "main",
+							Image: "foo:v1",
+						}, {
+							Name:  "sidecar",
+							Image: "bar:v1",
+						}}},
+					},
+				},
+			}
+		})
+
+		It("creates a strategic merge patch with the modifications applied during the mutation", func() {
+			By("creating a strategic merge patch")
+			patch := client.StrategicMergeFrom(dep.DeepCopy())
+
+			By("returning a patch with type StrategicMergePatchType")
+			Expect(patch.Type()).To(Equal(types.StrategicMergePatchType))
+
+			By("updating the main container's image")
+			for i, c := range dep.Spec.Template.Spec.Containers {
+				if c.Name == "main" {
+					c.Image = "foo:v2"
+				}
+				dep.Spec.Template.Spec.Containers[i] = c
+			}
+
+			By("computing the patch data")
+			data, err := patch.Data(dep)
+
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning a patch with data only containing the image change")
+			Expect(data).To(Equal([]byte(`{"spec":{"template":{"spec":{"$setElementOrder/containers":[{"name":"main"},` +
+				`{"name":"sidecar"}],"containers":[{"image":"foo:v2","name":"main"}]}}}}`)))
+		})
+
+		It("creates a strategic merge patch with the modifications applied during the mutation, using optimistic locking", func() {
+			By("creating a strategic merge patch")
+			patch := client.StrategicMergeFrom(dep.DeepCopy(), client.MergeFromWithOptimisticLock{})
+
+			By("returning a patch with type StrategicMergePatchType")
+			Expect(patch.Type()).To(Equal(types.StrategicMergePatchType))
+
+			By("updating the main container's image")
+			for i, c := range dep.Spec.Template.Spec.Containers {
+				if c.Name == "main" {
+					c.Image = "foo:v2"
+				}
+				dep.Spec.Template.Spec.Containers[i] = c
+			}
+
+			By("computing the patch data")
+			data, err := patch.Data(dep)
+
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning a patch with data containing the image change and the resourceVersion change")
+			Expect(data).To(Equal([]byte(fmt.Sprintf(`{"metadata":{"resourceVersion":"%s"},`+
+				`"spec":{"template":{"spec":{"$setElementOrder/containers":[{"name":"main"},{"name":"sidecar"}],"containers":[{"image":"foo:v2","name":"main"}]}}}}`,
+				dep.ResourceVersion))))
 		})
 	})
 })

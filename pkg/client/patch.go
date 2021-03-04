@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	jsonpatch "github.com/evanphx/json-patch"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
@@ -28,11 +27,11 @@ import (
 
 var (
 	// Apply uses server-side apply to patch the given object.
-	Apply = applyPatch{}
+	Apply Patch = applyPatch{}
 
 	// Merge uses the raw object as a merge patch, without modifications.
 	// Use MergeFrom if you wish to compute a diff instead.
-	Merge = mergePatch{}
+	Merge Patch = mergePatch{}
 )
 
 type patch struct {
@@ -92,7 +91,7 @@ type mergeFromPatch struct {
 	opts        MergeFromOptions
 }
 
-// Type implements patch.
+// Type implements Patch.
 func (s *mergeFromPatch) Type() types.PatchType {
 	return s.patchType
 }
@@ -188,7 +187,7 @@ func (p mergePatch) Type() types.PatchType {
 }
 
 // Data implements Patch.
-func (p mergePatch) Data(obj runtime.Object) ([]byte, error) {
+func (p mergePatch) Data(obj Object) ([]byte, error) {
 	// NB(directxman12): we might technically want to be using an actual encoder
 	// here (in case some more performant encoder is introduced) but this is
 	// correct and sufficient for our uses (it's what the JSON serializer in
@@ -205,7 +204,7 @@ func (p applyPatch) Type() types.PatchType {
 }
 
 // Data implements Patch.
-func (p applyPatch) Data(obj runtime.Object) ([]byte, error) {
+func (p applyPatch) Data(obj Object) ([]byte, error) {
 	// NB(directxman12): we might technically want to be using an actual encoder
 	// here (in case some more performant encoder is introduced) but this is
 	// correct and sufficient for our uses (it's what the JSON serializer in

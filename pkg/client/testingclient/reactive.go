@@ -44,8 +44,8 @@ func NewReactiveClient(delegate client.Client) *Reactive {
 
 	r.Fake.PrependReactor("*", "*", func(action testing.Action) (bool, runtime.Object, error) {
 		ctx := context.TODO()
-		switch action.GetVerb() {
-		case "get":
+		switch Verb(action.GetVerb()) {
+		case GetVerb:
 			a := action.(testing.GetAction)
 			key := types.NamespacedName{
 				Name:      a.GetName(),
@@ -54,26 +54,26 @@ func NewReactiveClient(delegate client.Client) *Reactive {
 			obj := r.newNamedObject(r.kindForResource(a.GetResource()), a.GetNamespace(), a.GetName())
 			err := r.delegate.Get(ctx, key, obj)
 			return true, obj, err
-		case "create":
+		case CreateVerb:
 			a := action.(testing.CreateAction)
 			err := r.delegate.Create(ctx, a.GetObject().(client.Object))
 			return true, nil, err
-		case "delete":
+		case DeleteVerb:
 			a := action.(testing.DeleteAction)
 			obj := r.newNamedObject(r.kindForResource(a.GetResource()), a.GetNamespace(), a.GetName())
 			err := r.delegate.Delete(ctx, obj)
 			return true, nil, err
-		case "update":
+		case UpdateVerb:
 			a := action.(testing.UpdateAction)
 			err := r.delegate.Update(ctx, a.GetObject().(client.Object))
 			return true, nil, err
-		case "patch":
+		case PatchVerb:
 			a := action.(testing.PatchAction)
 			obj := r.newNamedObject(r.kindForResource(a.GetResource()), a.GetNamespace(), a.GetName())
 			patch := client.RawPatch(a.GetPatchType(), a.GetPatch())
 			err := r.delegate.Patch(ctx, obj, patch)
 			return true, nil, err
-		case "list":
+		case ListVerb:
 			a := action.(workaroundListAction)
 			obj := r.newObjectList(a.GetKind())
 			err := r.delegate.List(ctx, obj,

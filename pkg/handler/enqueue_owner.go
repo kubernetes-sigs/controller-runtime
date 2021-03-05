@@ -66,10 +66,19 @@ func (e *EnqueueRequestForOwner) Create(evt event.CreateEvent, q workqueue.RateL
 
 // Update implements EventHandler
 func (e *EnqueueRequestForOwner) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+	// requestSet will help to deduplicate requests in a single event
+	requestSet := reconcile.NewRequestSet()
+
+	// squash requests from both old and new objects with ordered set
 	for _, req := range e.getOwnerReconcileRequest(evt.ObjectOld) {
-		q.Add(req)
+		requestSet.Insert(req)
 	}
 	for _, req := range e.getOwnerReconcileRequest(evt.ObjectNew) {
+		requestSet.Insert(req)
+	}
+
+	// enqueue all deduplicated requests
+	for _, req := range requestSet.List() {
 		q.Add(req)
 	}
 }

@@ -58,8 +58,21 @@ func (e *enqueueRequestsFromMapFunc) Create(evt event.CreateEvent, q workqueue.R
 
 // Update implements EventHandler
 func (e *enqueueRequestsFromMapFunc) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
-	e.mapAndEnqueue(q, evt.ObjectOld)
-	e.mapAndEnqueue(q, evt.ObjectNew)
+	// requestSet will help to deduplicate requests in a single event
+	requestSet := reconcile.NewRequestSet()
+
+	// squash requests from both old and new objects with ordered set
+	for _, req := range e.toRequests(evt.ObjectOld) {
+		requestSet.Insert(req)
+	}
+	for _, req := range e.toRequests(evt.ObjectNew) {
+		requestSet.Insert(req)
+	}
+
+	// enqueue all deduplicated requests
+	for _, req := range requestSet.List() {
+		q.Add(req)
+	}
 }
 
 // Delete implements EventHandler

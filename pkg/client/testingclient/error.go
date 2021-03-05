@@ -4,34 +4,9 @@ import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
-)
-
-type Verb string
-
-const (
-	GetVerb    Verb = "get"
-	CreateVerb Verb = "create"
-	DeleteVerb Verb = "delete"
-	UpdateVerb Verb = "update"
-	PatchVerb  Verb = "patch"
-	AnyVerb    Verb = "*"
-)
-
-type resourceActionKey struct {
-	verb      Verb
-	kind      schema.GroupVersionKind
-	objectKey client.ObjectKey
-}
-
-var (
-	AnyKind    = &unstructured.Unstructured{}
-	AnyObject  = client.ObjectKey{}
-	anyKindGVK = schema.GroupVersionKind{Kind: "*"}
 )
 
 type ErrorInjector struct {

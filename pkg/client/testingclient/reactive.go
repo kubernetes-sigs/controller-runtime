@@ -145,6 +145,16 @@ func (r *Reactive) newRuntimeObject(kind schema.GroupVersionKind) runtime.Object
 	return rObj
 }
 
+// PrependReactor adds a reactor to the beginning of the chain.
+func (r *Reactive) PrependReactor(verb Verb, kind client.Object, reaction testing.ReactionFunc) {
+	resource := "*"
+	if kind != AnyKind {
+		gvr := r.gvrForObject(kind)
+		resource = gvr.Resource
+	}
+	r.Fake.PrependReactor(string(verb), resource, reaction)
+}
+
 func (r *Reactive) populateGVK(obj runtime.Object) {
 	// Set GVK using reflection. Normally the apiserver would populate this, but we need it earlier.
 	gvk, err := apiutil.GVKForObject(obj, r.Scheme())

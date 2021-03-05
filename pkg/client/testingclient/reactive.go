@@ -155,6 +155,16 @@ func (r *Reactive) PrependReactor(verb Verb, kind client.Object, reaction testin
 	r.Fake.PrependReactor(string(verb), resource, reaction)
 }
 
+// Actions returns a chronologically ordered slice of actions called on the fake client.
+func (r *Reactive) Actions() []testing.Action {
+	return r.Fake.Actions()
+}
+
+// ClearActions clears the history of actions called on the fake client.
+func (r *Reactive) ClearActions() {
+	r.Fake.ClearActions()
+}
+
 func (r *Reactive) populateGVK(obj runtime.Object) {
 	// Set GVK using reflection. Normally the apiserver would populate this, but we need it earlier.
 	gvk, err := apiutil.GVKForObject(obj, r.Scheme())

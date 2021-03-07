@@ -251,8 +251,6 @@ var _ = Describe("Eventhandler", func() {
 		It("should enqueue a Request with the function applied to both objects in the UpdateEvent.",
 			func() {
 				newPod := pod.DeepCopy()
-				newPod.Name = pod.Name + "2"
-				newPod.Namespace = pod.Namespace + "2"
 
 				req := []reconcile.Request{}
 
@@ -274,19 +272,13 @@ var _ = Describe("Eventhandler", func() {
 					ObjectNew: newPod,
 				}
 				instance.Update(evt, q)
-				Expect(q.Len()).To(Equal(4))
+				Expect(q.Len()).To(Equal(2))
 
 				i, _ := q.Get()
 				Expect(i).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "baz-bar"}}))
 
 				i, _ = q.Get()
 				Expect(i).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz-baz"}}))
-
-				i, _ = q.Get()
-				Expect(i).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "baz2-bar"}}))
-
-				i, _ = q.Get()
-				Expect(i).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz2-baz"}}))
 			})
 
 		It("should enqueue a Request with the function applied to the GenericEvent.", func() {

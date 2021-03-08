@@ -34,9 +34,13 @@ import (
 // NewCacheFunc - Function for creating a new cache from the options and a rest config
 type NewCacheFunc func(config *rest.Config, opts Options) (Cache, error)
 
+// a new global namespaced cache to handle cluster scoped resources
+var globalCache = ""
+
 // MultiNamespacedCacheBuilder - Builder function to create a new multi-namespaced cache.
 // This will scope the cache to a list of namespaces. Listing for all namespaces
-// will list for all the namespaces that this knows about. Note that this is not intended
+// will list for all the namespaces that this knows about. By default this will create
+// a global cache for cluster scoped resource (having empty namespace). Note that this is not intended
 // to be used for excluding namespaces, this is better done via a Predicate. Also note that
 // you may face performance issues when using this with a high number of namespaces.
 func MultiNamespacedCacheBuilder(namespaces []string) NewCacheFunc {
@@ -45,6 +49,8 @@ func MultiNamespacedCacheBuilder(namespaces []string) NewCacheFunc {
 		if err != nil {
 			return nil, err
 		}
+		// create a cache for cluster scoped resources
+		namespaces = append(namespaces, globalCache)
 		caches := map[string]Cache{}
 		for _, ns := range namespaces {
 			opts.Namespace = ns
@@ -143,7 +149,16 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 		if !ok {
 			return fmt.Errorf("unable to get: %v because of unknown namespace for the cache", listOpts.Namespace)
 		}
-		return cache.List(ctx, list, opts...)
+		err := cache.List(ctx, list, opts...)
+		if err != nil {
+			return err
+		}
+		items, err := apimeta.ExtractList(list)
+		if err != nil {
+			return err
+		}
+		uniqueItems := removeDuplicates(items)
+		return apimeta.SetList(list, uniqueItems)
 	}
 
 	listAccessor, err := meta.ListAccessor(list)
@@ -174,9 +189,28 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 		// The last list call should have the most correct resource version.
 		resourceVersion = accessor.GetResourceVersion()
 	}
+
+	uniqueItems := removeDuplicates(allItems)
 	listAccessor.SetResourceVersion(resourceVersion)
 
-	return apimeta.SetList(list, allItems)
+	return apimeta.SetList(list, uniqueItems)
+}
+
+// removeDuplicates removes the duplicate objects obtained from all namespaces so that
+// the resulting list has objects with unique name and namespace.
+func removeDuplicates(items []runtime.Object) []runtime.Object {
+	objects := make(map[string]bool)
+	unique := []runtime.Object{}
+
+	for _, obj := range items {
+		metaObj, _ := meta.Accessor(obj)
+		key := metaObj.GetName() + " " + metaObj.GetNamespace()
+		if _, value := objects[key]; !value {
+			objects[key] = true
+			unique = append(unique, obj)
+		}
+	}
+	return unique
 }
 
 // multiNamespaceInformer knows how to handle interacting with the underlying informer across multiple namespaces

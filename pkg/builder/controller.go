@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/selector"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -69,6 +70,7 @@ func ControllerManagedBy(m manager.Manager) *Builder {
 // ForInput represents the information set by For method.
 type ForInput struct {
 	object           client.Object
+	selector         selector.Selector
 	predicates       []predicate.Predicate
 	objectProjection objectProjection
 	err              error
@@ -95,6 +97,7 @@ func (blder *Builder) For(object client.Object, opts ...ForOption) *Builder {
 // OwnsInput represents the information set by Owns method.
 type OwnsInput struct {
 	object           client.Object
+	selector         selector.Selector
 	predicates       []predicate.Predicate
 	objectProjection objectProjection
 }
@@ -116,6 +119,7 @@ func (blder *Builder) Owns(object client.Object, opts ...OwnsOption) *Builder {
 type WatchesInput struct {
 	src              source.Source
 	eventhandler     handler.EventHandler
+	selector         selector.Selector
 	predicates       []predicate.Predicate
 	objectProjection objectProjection
 }
@@ -222,7 +226,7 @@ func (blder *Builder) doWatch() error {
 	if err != nil {
 		return err
 	}
-	src := &source.Kind{Type: typeForSrc}
+	src := &source.Kind{Type: typeForSrc, Selector: blder.forInput.selector}
 	hdler := &handler.EnqueueRequestForObject{}
 	allPredicates := append(blder.globalPredicates, blder.forInput.predicates...)
 	if err := blder.ctrl.Watch(src, hdler, allPredicates...); err != nil {
@@ -235,7 +239,7 @@ func (blder *Builder) doWatch() error {
 		if err != nil {
 			return err
 		}
-		src := &source.Kind{Type: typeForSrc}
+		src := &source.Kind{Type: typeForSrc, Selector: own.selector}
 		hdler := &handler.EnqueueRequestForOwner{
 			OwnerType:    blder.forInput.object,
 			IsController: true,
@@ -259,6 +263,7 @@ func (blder *Builder) doWatch() error {
 				return err
 			}
 			srckind.Type = typeForSrc
+			srckind.Selector = w.selector
 		}
 
 		if err := blder.ctrl.Watch(w.src, w.eventhandler, allPredicates...); err != nil {

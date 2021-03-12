@@ -27,6 +27,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+
+	"sigs.k8s.io/controller-runtime/pkg/selector"
 )
 
 // InformersMap create and caches Informers for (runtime.Object, schema.GroupVersionKind) pairs.
@@ -57,6 +59,22 @@ func NewInformersMap(config *rest.Config,
 		metadata:     newMetadataInformersMap(config, scheme, mapper, resync, namespace),
 
 		Scheme: scheme,
+	}
+}
+
+// SetSelectorForKind set the field/label selector for the Informer ListWatch
+func (m *InformersMap) SetSelectorForKind(gvk schema.GroupVersionKind, obj runtime.Object, selector selector.Selector) {
+	switch obj.(type) {
+	case *unstructured.Unstructured:
+		m.unstructured.setSelectorForKind(gvk, selector)
+	case *unstructured.UnstructuredList:
+		m.unstructured.setSelectorForKind(gvk, selector)
+	case *metav1.PartialObjectMetadata:
+		m.metadata.setSelectorForKind(gvk, selector)
+	case *metav1.PartialObjectMetadataList:
+		m.metadata.setSelectorForKind(gvk, selector)
+	default:
+		m.structured.setSelectorForKind(gvk, selector)
 	}
 }
 

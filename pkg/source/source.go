@@ -33,6 +33,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/selector"
 )
 
 var log = logf.RuntimeLog.WithName("source")
@@ -89,6 +90,9 @@ type Kind struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
 	Type client.Object
 
+	// Selector add labels and fields selector to the cache
+	Selector selector.Selector
+
 	// cache used to watch APIs
 	cache cache.Cache
 }
@@ -108,6 +112,11 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 	// cache should have been injected before Start was called
 	if ks.cache == nil {
 		return fmt.Errorf("must call CacheInto on Kind before calling Start")
+	}
+
+	err := ks.cache.SetSelector(ks.Type, ks.Selector)
+	if err != nil {
+		return err
 	}
 
 	// Lookup the Informer from the Cache and add an EventHandler which populates the Queue

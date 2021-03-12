@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
+	"sigs.k8s.io/controller-runtime/pkg/selector"
 )
 
 var _ cache.Cache = &FakeInformers{}
@@ -77,6 +78,13 @@ func (c *FakeInformers) GetInformer(ctx context.Context, obj client.Object) (cac
 	}
 	gvk := gvks[0]
 	return c.informerFor(gvk, obj)
+}
+
+// SetSelector specify the field/label selector to apply to obj ListWatch at
+// cache
+func (c *FakeInformers) SetSelector(obj client.Object, selector selector.Selector) error {
+	// TODO
+	return nil
 }
 
 // WaitForCacheSync implements Informers

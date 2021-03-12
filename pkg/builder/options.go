@@ -18,6 +18,7 @@ package builder
 
 import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/selector"
 )
 
 // {{{ "Functional" Option Interfaces
@@ -113,5 +114,40 @@ var (
 	_ OwnsOption    = OnlyMetadata
 	_ WatchesOption = OnlyMetadata
 )
+
+// }}}
+
+// {{{ Selector Options
+
+// WithSelector the given predicates list.
+func WithSelector(selector selector.Selector) Selector {
+	return Selector{
+		selector: selector,
+	}
+}
+
+// Selector filters events before enqueuing the keys.
+type Selector struct {
+	selector selector.Selector
+}
+
+// ApplyToFor applies this configuration to the given ForInput options.
+func (w Selector) ApplyToFor(opts *ForInput) {
+	opts.selector = w.selector
+}
+
+// ApplyToOwns applies this configuration to the given OwnsInput options.
+func (w Selector) ApplyToOwns(opts *OwnsInput) {
+	opts.selector = w.selector
+}
+
+// ApplyToWatches applies this configuration to the given WatchesInput options.
+func (w Selector) ApplyToWatches(opts *WatchesInput) {
+	opts.selector = w.selector
+}
+
+var _ ForOption = &Selector{}
+var _ OwnsOption = &Selector{}
+var _ WatchesOption = &Selector{}
 
 // }}}

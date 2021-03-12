@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/rest"
 	toolscache "k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/selector"
 )
 
 // NewCacheFunc - Function for creating a new cache from the options and a rest config
@@ -92,6 +93,16 @@ func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema
 		informers[ns] = informer
 	}
 	return &multiNamespaceInformer{namespaceToInformer: informers}, nil
+}
+
+func (c *multiNamespaceCache) SetSelector(obj client.Object, selector selector.Selector) error {
+	for _, cache := range c.namespaceToCache {
+		err := cache.SetSelector(obj, selector)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *multiNamespaceCache) Start(ctx context.Context) error {

@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/controller-runtime/pkg/selector"
 )
 
 var log = logf.RuntimeLog.WithName("object-cache")
@@ -57,6 +58,10 @@ type Informers interface {
 	// GetInformerForKind is similar to GetInformer, except that it takes a group-version-kind, instead
 	// of the underlying object.
 	GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (Informer, error)
+
+	// SetSelector apply a selector at informer ListWatch to fillter in the
+	// the cache
+	SetSelector(obj client.Object, selector selector.Selector) error
 
 	// Start runs all the informers known to this cache until the context is closed.
 	// It blocks.

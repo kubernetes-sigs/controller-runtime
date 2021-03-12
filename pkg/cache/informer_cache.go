@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache/internal"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/selector"
 )
 
 var (
@@ -157,6 +158,15 @@ func (ip *informerCache) GetInformer(ctx context.Context, obj client.Object) (In
 		return nil, err
 	}
 	return i.Informer, err
+}
+
+func (ip *informerCache) SetSelector(obj client.Object, selector selector.Selector) error {
+	gvk, err := apiutil.GVKForObject(obj, ip.Scheme)
+	if err != nil {
+		return err
+	}
+	ip.InformersMap.SetSelectorForKind(gvk, obj, selector)
+	return nil
 }
 
 // NeedLeaderElection implements the LeaderElectionRunnable interface

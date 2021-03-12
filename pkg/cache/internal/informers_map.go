@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/selector"
 )
 
 // clientListWatcherFunc knows how to create a ListWatcher
@@ -54,6 +55,7 @@ func newSpecificInformersMap(config *rest.Config,
 		Scheme:            scheme,
 		mapper:            mapper,
 		informersByGVK:    make(map[schema.GroupVersionKind]*MapEntry),
+		selectorsByGVK:    make(map[schema.GroupVersionKind]selector.Selector),
 		codecs:            serializer.NewCodecFactory(scheme),
 		paramCodec:        runtime.NewParameterCodec(scheme),
 		resync:            resync,
@@ -120,6 +122,8 @@ type specificInformersMap struct {
 	// namespace is the namespace that all ListWatches are restricted to
 	// default or empty string means all namespaces
 	namespace string
+
+	selectorsByGVK map[schema.GroupVersionKind]selector.Selector
 }
 
 // Start calls Run on each of the informers and sets started to true.  Blocks on the context.
@@ -192,6 +196,18 @@ func (ip *specificInformersMap) Get(ctx context.Context, gvk schema.GroupVersion
 	return started, i, nil
 }
 
+func (ip *specificInformersMap) setSelectorForKind(gvk schema.GroupVersionKind, selector selector.Selector) {
+	ip.mu.Lock()
+	defer ip.mu.Unlock()
+	ip.selectorsByGVK[gvk] = selector
+}
+
+func (ip *specificInformersMap) findSelectorByKind(gvk schema.GroupVersionKind) selector.Selector {
+	ip.mu.RLock()
+	defer ip.mu.RUnlock()
+	return ip.selectorsByGVK[gvk]
+}
+
 func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.Object) (*MapEntry, bool, error) {
 	ip.mu.Lock()
 	defer ip.mu.Unlock()
@@ -256,6 +272,7 @@ func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformer
 	// Create a new ListWatch for the obj
 	return &cache.ListWatch{
 		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
+			ip.findSelectorByKind(gvk).FillInListOpts(&opts)
 			res := listObj.DeepCopyObject()
 			isNamespaceScoped := ip.namespace != "" && mapping.Scope.Name() != meta.RESTScopeNameRoot
 			err := client.Get().NamespaceIfScoped(ip.namespace, isNamespaceScoped).Resource(mapping.Resource.Resource).VersionedParams(&opts, ip.paramCodec).Do(ctx).Into(res)
@@ -263,6 +280,7 @@ func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformer
 		},
 		// Setup the watch function
 		WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
+			ip.findSelectorByKind(gvk).FillInListOpts(&opts)
 			// Watch needs to be set to true separately
 			opts.Watch = true
 			isNamespaceScoped := ip.namespace != "" && mapping.Scope.Name() != meta.RESTScopeNameRoot
@@ -289,6 +307,7 @@ func createUnstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInform
 	// Create a new ListWatch for the obj
 	return &cache.ListWatch{
 		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
+			ip.findSelectorByKind(gvk).FillInListOpts(&opts)
 			if ip.namespace != "" && mapping.Scope.Name() != meta.RESTScopeNameRoot {
 				return dynamicClient.Resource(mapping.Resource).Namespace(ip.namespace).List(ctx, opts)
 			}
@@ -296,6 +315,7 @@ func createUnstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInform
 		},
 		// Setup the watch function
 		WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
+			ip.findSelectorByKind(gvk).FillInListOpts(&opts)
 			// Watch needs to be set to true separately
 			opts.Watch = true
 			if ip.namespace != "" && mapping.Scope.Name() != meta.RESTScopeNameRoot {
@@ -327,6 +347,7 @@ func createMetadataListWatch(gvk schema.GroupVersionKind, ip *specificInformersM
 	// create the relevant listwatch
 	return &cache.ListWatch{
 		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
+			ip.findSelectorByKind(gvk).FillInListOpts(&opts)
 			if ip.namespace != "" && mapping.Scope.Name() != meta.RESTScopeNameRoot {
 				return client.Resource(mapping.Resource).Namespace(ip.namespace).List(ctx, opts)
 			}
@@ -334,6 +355,7 @@ func createMetadataListWatch(gvk schema.GroupVersionKind, ip *specificInformersM
 		},
 		// Setup the watch function
 		WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
+			ip.findSelectorByKind(gvk).FillInListOpts(&opts)
 			// Watch needs to be set to true separately
 			opts.Watch = true
 			if ip.namespace != "" && mapping.Scope.Name() != meta.RESTScopeNameRoot {

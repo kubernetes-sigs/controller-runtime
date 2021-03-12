@@ -28,6 +28,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -44,6 +45,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/selector"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -387,6 +389,32 @@ var _ = Describe("application", func() {
 			Expect(allPrctExecuted).To(BeNumerically(">=", 2), "Global Predicated should be called at least twice")
 
 			close(done)
+		})
+	})
+	Describe("Set selector", func() {
+		It("should instruct cache to use selector", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			bldr := ControllerManagedBy(m).
+				For(&appsv1.Deployment{}, WithSelector(
+					selector.Selector{
+						Field: fields.SelectorFromSet(fields.Set{
+							"metadata.name": "deploy-name-6",
+						}),
+					},
+				)).
+				Owns(&appsv1.ReplicaSet{}, WithSelector(
+					selector.Selector{
+						Field: fields.SelectorFromSet(fields.Set{
+							"metadata.name": "rs-name-6",
+						}),
+					},
+				))
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			doReconcileTest(ctx, "6", bldr, m, true)
 		})
 	})
 

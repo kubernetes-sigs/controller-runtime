@@ -174,6 +174,34 @@ var _ = Describe("Webhook Server", func() {
 			Expect(handler.injectedField).To(BeTrue())
 		})
 	})
+
+	Context("when using an unmanaged webhook server", func() {
+		It("should serve a webhook on the requested path", func() {
+			opts := webhook.Options{
+				Host:    servingOpts.LocalServingHost,
+				Port:    servingOpts.LocalServingPort,
+				CertDir: servingOpts.LocalServingCertDir,
+			}
+			var err error
+			// overwrite the server so that startServer() starts it
+			server, err = webhook.NewUnmanaged(opts)
+
+			Expect(err).NotTo(HaveOccurred())
+			server.Register("/somepath", &testHandler{})
+			doneCh := startServer()
+
+			Eventually(func() ([]byte, error) {
+				resp, err := client.Get(fmt.Sprintf("https://%s/somepath", testHostPort))
+				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
+				return ioutil.ReadAll(resp.Body)
+			}).Should(Equal([]byte("gadzooks!")))
+
+			ctxCancel()
+			Eventually(doneCh, "4s").Should(BeClosed())
+		})
+
+	})
 })
 
 type testHandler struct {

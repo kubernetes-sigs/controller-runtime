@@ -31,6 +31,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
@@ -103,6 +105,67 @@ func (s *Server) setDefaults() {
 	if len(s.KeyName) == 0 {
 		s.KeyName = "tls.key"
 	}
+}
+
+// Options are the subset of fields on the controller that can be
+// configured when running an unmanaged webhook server (i.e. webhook.NewUnmanaged())
+type Options struct {
+	// Host is the address that the server will listen on.
+	// Defaults to "" - all addresses.
+	Host string
+
+	// Port is the port number that the server will serve.
+	// It will be defaulted to 9443 if unspecified.
+	Port int
+
+	// CertDir is the directory that contains the server key and certificate. The
+	// server key and certificate.
+	CertDir string
+
+	// CertName is the server certificate name. Defaults to tls.crt.
+	CertName string
+
+	// KeyName is the server key name. Defaults to tls.key.
+	KeyName string
+
+	// ClientCAName is the CA certificate name which server used to verify remote(client)'s certificate.
+	// Defaults to "", which means server does not verify client's certificate.
+	ClientCAName string
+
+	// WebhookMux is the multiplexer that handles different webhooks.
+	WebhookMux *http.ServeMux
+
+	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
+	// Defaults to the kubernetes/client-go scheme.Scheme, but it's almost always better
+	// idea to pass your own scheme in.  See the documentation in pkg/scheme for more information.
+	Scheme *runtime.Scheme
+}
+
+// NewUnmanaged provides a webhook server that can be ran without
+// a controller manager.
+func NewUnmanaged(options Options) (*Server, error) {
+	server := &Server{
+		Host:       options.Host,
+		Port:       options.Port,
+		CertDir:    options.CertDir,
+		CertName:   options.CertName,
+		KeyName:    options.KeyName,
+		WebhookMux: options.WebhookMux,
+	}
+	server.setDefaults()
+	// Use the Kubernetes client-go scheme if none is specified
+	if options.Scheme == nil {
+		options.Scheme = scheme.Scheme
+	}
+
+	// TODO: can we do this without dep injection?
+	server.InjectFunc(func(i interface{}) error {
+		if _, err := inject.SchemeInto(options.Scheme, i); err != nil {
+			return err
+		}
+		return nil
+	})
+	return server, nil
 }
 
 // NeedLeaderElection implements the LeaderElectionRunnable interface, which indicates

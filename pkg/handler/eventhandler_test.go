@@ -86,7 +86,7 @@ var _ = Describe("Eventhandler", func() {
 			close(done)
 		})
 
-		It("should enqueue a Request with the Name / Namespace of both objects in the UpdateEvent.",
+		It("should enqueue a Request with the Name / Namespace of one object in the UpdateEvent.",
 			func(done Done) {
 				newPod := pod.DeepCopy()
 				newPod.Name = "baz2"
@@ -97,17 +97,11 @@ var _ = Describe("Eventhandler", func() {
 					ObjectNew: newPod,
 				}
 				instance.Update(evt, q)
-				Expect(q.Len()).To(Equal(2))
+				Expect(q.Len()).To(Equal(1))
 
 				i, _ := q.Get()
 				Expect(i).NotTo(BeNil())
 				req, ok := i.(reconcile.Request)
-				Expect(ok).To(BeTrue())
-				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
-
-				i, _ = q.Get()
-				Expect(i).NotTo(BeNil())
-				req, ok = i.(reconcile.Request)
 				Expect(ok).To(BeTrue())
 				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz2", Name: "baz2"}))
 
@@ -212,13 +206,14 @@ var _ = Describe("Eventhandler", func() {
 			instance.Create(evt, q)
 			Expect(q.Len()).To(Equal(2))
 
-			i, _ := q.Get()
-			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}}))
-
-			i, _ = q.Get()
-			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"}}))
+			i1, _ := q.Get()
+			i2, _ := q.Get()
+			Expect([]interface{}{i1, i2}).To(ConsistOf(
+				reconcile.Request{
+					NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}},
+				reconcile.Request{
+					NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"}},
+			))
 		})
 
 		It("should enqueue a Request with the function applied to the DeleteEvent.", func() {
@@ -243,20 +238,19 @@ var _ = Describe("Eventhandler", func() {
 			instance.Delete(evt, q)
 			Expect(q.Len()).To(Equal(2))
 
-			i, _ := q.Get()
-			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}}))
-
-			i, _ = q.Get()
-			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"}}))
+			i1, _ := q.Get()
+			i2, _ := q.Get()
+			Expect([]interface{}{i1, i2}).To(ConsistOf(
+				reconcile.Request{
+					NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}},
+				reconcile.Request{
+					NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"}},
+			))
 		})
 
 		It("should enqueue a Request with the function applied to both objects in the UpdateEvent.",
 			func() {
 				newPod := pod.DeepCopy()
-				newPod.Name = pod.Name + "2"
-				newPod.Namespace = pod.Namespace + "2"
 
 				req := []reconcile.Request{}
 
@@ -278,23 +272,13 @@ var _ = Describe("Eventhandler", func() {
 					ObjectNew: newPod,
 				}
 				instance.Update(evt, q)
-				Expect(q.Len()).To(Equal(4))
+				Expect(q.Len()).To(Equal(2))
 
 				i, _ := q.Get()
-				Expect(i).To(Equal(reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: "foo", Name: "baz-bar"}}))
+				Expect(i).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "baz-bar"}}))
 
 				i, _ = q.Get()
-				Expect(i).To(Equal(reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz-baz"}}))
-
-				i, _ = q.Get()
-				Expect(i).To(Equal(reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: "foo", Name: "baz2-bar"}}))
-
-				i, _ = q.Get()
-				Expect(i).To(Equal(reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz2-baz"}}))
+				Expect(i).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz-baz"}}))
 			})
 
 		It("should enqueue a Request with the function applied to the GenericEvent.", func() {
@@ -319,13 +303,14 @@ var _ = Describe("Eventhandler", func() {
 			instance.Generic(evt, q)
 			Expect(q.Len()).To(Equal(2))
 
-			i, _ := q.Get()
-			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}}))
-
-			i, _ = q.Get()
-			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"}}))
+			i1, _ := q.Get()
+			i2, _ := q.Get()
+			Expect([]interface{}{i1, i2}).To(ConsistOf(
+				reconcile.Request{
+					NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}},
+				reconcile.Request{
+					NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"}},
+			))
 		})
 	})
 
@@ -412,13 +397,50 @@ var _ = Describe("Eventhandler", func() {
 			instance.Update(evt, q)
 			Expect(q.Len()).To(Equal(2))
 
+			i1, _ := q.Get()
+			i2, _ := q.Get()
+			Expect([]interface{}{i1, i2}).To(ConsistOf(
+				reconcile.Request{
+					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo1-parent"}},
+				reconcile.Request{
+					NamespacedName: types.NamespacedName{Namespace: newPod.GetNamespace(), Name: "foo2-parent"}},
+			))
+		})
+
+		It("should enqueue a Request with the one duplicate Owner of both objects in the UpdateEvent.", func() {
+			newPod := pod.DeepCopy()
+			newPod.Name = pod.Name + "2"
+
+			instance := handler.EnqueueRequestForOwner{
+				OwnerType: &appsv1.ReplicaSet{},
+			}
+			Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
+			Expect(instance.InjectMapper(mapper)).To(Succeed())
+
+			pod.OwnerReferences = []metav1.OwnerReference{
+				{
+					Name:       "foo-parent",
+					Kind:       "ReplicaSet",
+					APIVersion: "apps/v1",
+				},
+			}
+			newPod.OwnerReferences = []metav1.OwnerReference{
+				{
+					Name:       "foo-parent",
+					Kind:       "ReplicaSet",
+					APIVersion: "apps/v1",
+				},
+			}
+			evt := event.UpdateEvent{
+				ObjectOld: pod,
+				ObjectNew: newPod,
+			}
+			instance.Update(evt, q)
+			Expect(q.Len()).To(Equal(1))
+
 			i, _ := q.Get()
 			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo1-parent"}}))
-
-			i, _ = q.Get()
-			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: newPod.GetNamespace(), Name: "foo2-parent"}}))
+				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
 		})
 
 		It("should enqueue a Request with the Owner of the object in the GenericEvent.", func() {
@@ -659,15 +681,17 @@ var _ = Describe("Eventhandler", func() {
 				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(3))
 
-				i, _ := q.Get()
-				Expect(i).To(Equal(reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo1-parent"}}))
-				i, _ = q.Get()
-				Expect(i).To(Equal(reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo2-parent"}}))
-				i, _ = q.Get()
-				Expect(i).To(Equal(reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo3-parent"}}))
+				i1, _ := q.Get()
+				i2, _ := q.Get()
+				i3, _ := q.Get()
+				Expect([]interface{}{i1, i2, i3}).To(ConsistOf(
+					reconcile.Request{
+						NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo1-parent"}},
+					reconcile.Request{
+						NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo2-parent"}},
+					reconcile.Request{
+						NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo3-parent"}},
+				))
 			})
 		})
 

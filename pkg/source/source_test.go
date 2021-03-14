@@ -90,6 +90,7 @@ var _ = Describe("Source", func() {
 					},
 				}, q)
 				Expect(err).NotTo(HaveOccurred())
+				Expect(instance.WaitForSync(context.Background())).NotTo(HaveOccurred())
 
 				i, err := ic.FakeInformerFor(&corev1.Pod{})
 				Expect(err).NotTo(HaveOccurred())
@@ -133,6 +134,7 @@ var _ = Describe("Source", func() {
 					},
 				}, q)
 				Expect(err).NotTo(HaveOccurred())
+				Expect(instance.WaitForSync(context.Background())).NotTo(HaveOccurred())
 
 				i, err := ic.FakeInformerFor(&corev1.Pod{})
 				Expect(err).NotTo(HaveOccurred())
@@ -178,6 +180,7 @@ var _ = Describe("Source", func() {
 					},
 				}, q)
 				Expect(err).NotTo(HaveOccurred())
+				Expect(instance.WaitForSync(context.Background())).NotTo(HaveOccurred())
 
 				i, err := ic.FakeInformerFor(&corev1.Pod{})
 				Expect(err).NotTo(HaveOccurred())
@@ -208,10 +211,11 @@ var _ = Describe("Source", func() {
 		})
 
 		It("should return an error if syncing fails", func(done Done) {
-			instance := source.Kind{}
+			instance := source.Kind{Type: &corev1.Pod{}}
 			f := false
 			Expect(instance.InjectCache(&informertest.FakeInformers{Synced: &f})).To(Succeed())
-			err := instance.WaitForSync(nil)
+			Expect(instance.Start(context.Background(), nil, nil)).NotTo(HaveOccurred())
+			err := instance.WaitForSync(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("cache did not sync"))
 
@@ -220,7 +224,7 @@ var _ = Describe("Source", func() {
 		})
 
 		Context("for a Kind not in the cache", func() {
-			It("should return an error when Start is called", func(done Done) {
+			It("should return an error when WaitForSync is called", func(done Done) {
 				ic.Error = fmt.Errorf("test error")
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 
@@ -229,7 +233,8 @@ var _ = Describe("Source", func() {
 				}
 				Expect(instance.InjectCache(ic)).To(Succeed())
 				err := instance.Start(ctx, handler.Funcs{}, q)
-				Expect(err).To(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(instance.WaitForSync(context.Background())).To(HaveOccurred())
 
 				close(done)
 			})
@@ -246,8 +251,9 @@ var _ = Describe("Source", func() {
 
 		It("should return an error if syncing fails", func(done Done) {
 			f := false
-			instance := source.NewKindWithCache(nil, &informertest.FakeInformers{Synced: &f})
-			err := instance.WaitForSync(nil)
+			instance := source.NewKindWithCache(&corev1.Pod{}, &informertest.FakeInformers{Synced: &f})
+			Expect(instance.Start(context.Background(), nil, nil)).NotTo(HaveOccurred())
+			err := instance.WaitForSync(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("cache did not sync"))
 

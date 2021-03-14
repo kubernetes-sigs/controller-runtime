@@ -469,8 +469,6 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should requeue a Request if there is an error and continue processing items", func(done Done) {
-			// Reduce the jitterperiod so we don't have to wait a second before the reconcile function is rerun.
-			ctrl.JitterPeriod = time.Millisecond
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -597,7 +595,6 @@ var _ = Describe("controller", func() {
 		It("should perform error behavior if error is not nil, regardless of RequeueAfter", func() {
 			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
 			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
-			ctrl.JitterPeriod = time.Millisecond
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -789,9 +786,6 @@ var _ = Describe("controller", func() {
 					Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				queue.Add(request)
-
-				// Reduce the jitterperiod so we don't have to wait a second before the reconcile function is rerun.
-				ctrl.JitterPeriod = time.Millisecond
 
 				By("Invoking Reconciler which will give an error")
 				fakeReconcile.AddResult(reconcile.Result{}, fmt.Errorf("expected error: reconcile"))

@@ -19,16 +19,21 @@ package controller_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"go.uber.org/goleak"
+	corev1 "k8s.io/api/core/v1"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 var _ = Describe("controller.Controller", func() {
@@ -88,15 +93,42 @@ var _ = Describe("controller.Controller", func() {
 		It("should not leak goroutines when stopped", func() {
 			currentGRs := goleak.IgnoreCurrent()
 
+			watchChan := make(chan event.GenericEvent, 1)
+			watch := &source.Channel{Source: watchChan}
+			watchChan <- event.GenericEvent{Object: &corev1.Pod{}}
+
+			reconcileStarted := make(chan struct{})
+			controllerFinished := make(chan struct{})
+			rec := reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
+				defer GinkgoRecover()
+				close(reconcileStarted)
+				// Make sure reconciliation takes a moment and is not quicker than the controllers
+				// shutdown.
+				time.Sleep(50 * time.Millisecond)
+				// Explicitly test this on top of the leakdetection, as the latter uses Eventually
+				// so might succeed even when the controller does not wait for all reconciliations
+				// to finish.
+				Expect(controllerFinished).NotTo(BeClosed())
+				return reconcile.Result{}, nil
+			})
+
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = controller.New("new-controller", m, controller.Options{Reconciler: rec})
+			c, err := controller.New("new-controller", m, controller.Options{Reconciler: rec})
+			Expect(c.Watch(watch, &handler.EnqueueRequestForObject{})).To(Succeed())
 			Expect(err).NotTo(HaveOccurred())
 
 			ctx, cancel := context.WithCancel(context.Background())
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(ctx)).To(Succeed())
+				close(controllerFinished)
+			}()
+
+			<-reconcileStarted
 			cancel()
-			Expect(m.Start(ctx)).To(Succeed())
+			<-controllerFinished
 
 			// force-close keep-alive connections.  These'll time anyway (after
 			// like 30s or so) but force it to speed up the tests.

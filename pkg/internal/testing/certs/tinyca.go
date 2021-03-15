@@ -1,4 +1,4 @@
-package internal
+package certs
 
 // NB(directxman12): nothing has verified that this has good settings.  In fact,
 // the setting generated here are probably terrible, but they're fine for integration

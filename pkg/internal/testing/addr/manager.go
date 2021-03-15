@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+// TODO(directxman12): interface / release functionality for external port managers
+
 const (
 	portReserveTime   = 1 * time.Minute
 	portConflictRetry = 100

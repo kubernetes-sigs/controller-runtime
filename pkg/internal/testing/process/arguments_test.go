@@ -1,4 +1,4 @@
-package internal_test
+package process_test
 
 import (
 	"net/url"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration"
-	. "sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/internal"
+	. "sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
 )
 
 var _ = Describe("Arguments", func() {

@@ -1,4 +1,4 @@
-package internal_test
+package process_test
 
 import (
 	"bytes"
@@ -15,8 +15,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	"github.com/onsi/gomega/ghttp"
-	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/addr"
-	. "sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/internal"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
+	. "sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
 )
 
 const (

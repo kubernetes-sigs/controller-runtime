@@ -1,4 +1,4 @@
-package internal
+package process
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
 
-	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/addr"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
 )
 
 // ProcessState define the state of the process.

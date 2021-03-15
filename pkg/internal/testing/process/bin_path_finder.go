@@ -1,4 +1,4 @@
-package internal
+package process
 
 import (
 	"os"
@@ -17,6 +17,8 @@ func init() {
 	}
 	assetsPath = filepath.Join(filepath.Dir(thisFile), "..", "assets", "bin")
 }
+
+// TODO(directxman12): unify this with the logic from envtest
 
 // BinPathFinder checks the an environment variable, derived from the symbolic name,
 // and falls back to a default assets location when this variable is not set

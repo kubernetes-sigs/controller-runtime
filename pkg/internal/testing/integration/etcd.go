@@ -7,6 +7,7 @@ import (
 	"net/url"
 
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/internal"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
 )
 
 // Etcd knows how to run an etcd server.
@@ -55,7 +56,7 @@ type Etcd struct {
 	Out io.Writer
 	Err io.Writer
 
-	processState *internal.ProcessState
+	processState *process.ProcessState
 }
 
 // Start starts the etcd, waits for it to come up, and returns an error, if one
@@ -72,9 +73,9 @@ func (e *Etcd) Start() error {
 func (e *Etcd) setProcessState() error {
 	var err error
 
-	e.processState = &internal.ProcessState{}
+	e.processState = &process.ProcessState{}
 
-	e.processState.DefaultedProcessInput, err = internal.DoDefaulting(
+	e.processState.DefaultedProcessInput, err = process.DoDefaulting(
 		"etcd",
 		e.URL,
 		e.DataDir,
@@ -94,7 +95,7 @@ func (e *Etcd) setProcessState() error {
 	e.StartTimeout = e.processState.StartTimeout
 	e.StopTimeout = e.processState.StopTimeout
 
-	e.processState.Args, err = internal.RenderTemplates(
+	e.processState.Args, err = process.RenderTemplates(
 		internal.DoEtcdArgDefaulting(e.Args), e,
 	)
 	return err

@@ -9,8 +9,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/addr"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/certs"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/internal"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
 )
 
 // APIServer knows how to run a kubernetes apiserver.
@@ -68,7 +70,7 @@ type APIServer struct {
 	Out io.Writer
 	Err io.Writer
 
-	processState *internal.ProcessState
+	processState *process.ProcessState
 }
 
 // Start starts the apiserver, waits for it to come up, and returns an error,
@@ -89,9 +91,9 @@ func (s *APIServer) setProcessState() error {
 
 	var err error
 
-	s.processState = &internal.ProcessState{}
+	s.processState = &process.ProcessState{}
 
-	s.processState.DefaultedProcessInput, err = internal.DoDefaulting(
+	s.processState.DefaultedProcessInput, err = process.DoDefaulting(
 		"kube-apiserver",
 		s.URL,
 		s.CertDir,
@@ -123,7 +125,7 @@ func (s *APIServer) setProcessState() error {
 		return err
 	}
 
-	s.processState.Args, err = internal.RenderTemplates(
+	s.processState.Args, err = process.RenderTemplates(
 		internal.DoAPIServerArgDefaulting(s.Args), s,
 	)
 	return err
@@ -135,7 +137,7 @@ func (s *APIServer) populateAPIServerCerts() error {
 		return statErr
 	}
 
-	ca, err := internal.NewTinyCA()
+	ca, err := certs.NewTinyCA()
 	if err != nil {
 		return err
 	}

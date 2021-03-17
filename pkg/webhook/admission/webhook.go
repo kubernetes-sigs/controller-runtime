@@ -156,10 +156,29 @@ func (w *Webhook) InjectScheme(s *runtime.Scheme) error {
 		return err
 	}
 
-	// inject the decoder here too, just in case the order of calling this is not
-	// scheme first, then inject func
+	// inject directly into the handlers.  It would be more correct
+	// to do this in a sync.Once in Handle (since we don't have some
+	// other start/finalize-type method), but it's more efficient to
+	// do it here, presumably.
+
+	// also inject a decoder, and wrap this so that we get a setFields
+	// that injects a decoder (hopefully things don't ignore the duplicate
+	// InjectorInto call).
 	if w.Handler != nil {
-		if _, err := InjectDecoderInto(w.GetDecoder(), w.Handler); err != nil {
+		var setFields inject.Func
+		setFields = func(target interface{}) error {
+			if _, err := inject.InjectorInto(setFields, target); err != nil {
+				return err
+			}
+
+			if _, err := InjectDecoderInto(w.GetDecoder(), target); err != nil {
+				return err
+			}
+
+			return nil
+		}
+
+		if err := setFields(w.Handler); err != nil {
 			return err
 		}
 	}
@@ -175,31 +194,9 @@ func (w *Webhook) GetDecoder() *Decoder {
 
 // InjectFunc injects the field setter into the webhook.
 func (w *Webhook) InjectFunc(f inject.Func) error {
-	// inject directly into the handlers.  It would be more correct
-	// to do this in a sync.Once in Handle (since we don't have some
-	// other start/finalize-type method), but it's more efficient to
-	// do it here, presumably.
-
-	// also inject a decoder, and wrap this so that we get a setFields
-	// that injects a decoder (hopefully things don't ignore the duplicate
-	// InjectorInto call).
-
-	var setFields inject.Func
-	setFields = func(target interface{}) error {
-		if err := f(target); err != nil {
-			return err
-		}
-
-		if _, err := inject.InjectorInto(setFields, target); err != nil {
-			return err
-		}
-
-		if _, err := InjectDecoderInto(w.GetDecoder(), target); err != nil {
-			return err
-		}
-
-		return nil
+	if w.Handler != nil {
+		return f(w.Handler)
 	}
 
-	return setFields(w.Handler)
+	return nil
 }

@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 var _ = Describe("validatingHandler", func() {
@@ -71,6 +72,31 @@ var _ = Describe("validatingHandler", func() {
 					},
 				},
 			})
+			Expect(response.Allowed).Should(BeTrue())
+			Expect(response.Result.Code).Should(Equal(int32(http.StatusOK)))
+		})
+
+	})
+
+	Context("when wrapped in a multi handler", func() {
+
+		f := &fakeValidator{ErrorToReturn: nil}
+
+		It("should return 200 in response when create succeeds", func() {
+
+			handler := MultiValidatingHandler(ValidatingHandlerFor(f))
+			Expect(inject.SchemeInto(scheme.Scheme, &Webhook{Handler: handler})).Should(BeTrue())
+
+			response := handler.Handle(context.TODO(), Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Create,
+					Object: runtime.RawExtension{
+						Raw:    []byte("{}"),
+						Object: f,
+					},
+				},
+			})
+
 			Expect(response.Allowed).Should(BeTrue())
 			Expect(response.Result.Code).Should(Equal(int32(http.StatusOK)))
 		})

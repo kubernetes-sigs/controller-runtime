@@ -33,8 +33,13 @@ type Defaulter interface {
 // DefaultingWebhookFor creates a new Webhook for Defaulting the provided type.
 func DefaultingWebhookFor(defaulter Defaulter) *Webhook {
 	return &Webhook{
-		Handler: &mutatingHandler{defaulter: defaulter},
+		Handler: DefaultingHandlerFor(defaulter),
 	}
+}
+
+// DefaultingHandlerFor creates a new Handler for defaulting the provided type.
+func DefaultingHandlerFor(defaulter Defaulter) Handler {
+	return &mutatingHandler{defaulter: defaulter}
 }
 
 type mutatingHandler struct {

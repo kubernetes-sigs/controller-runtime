@@ -168,7 +168,7 @@ var _ = Describe("Admission Webhooks", func() {
 			Expect(handler.decoder).NotTo(BeNil())
 		})
 
-		It("should pass a setFields that also injects a decoder into sub-dependencies", func() {
+		It("should pass a setFields that also injects a decoder into sub-dependencies when the scheme is injected first", func() {
 			By("setting up a webhook and injecting it with a injection func that injects a scheme")
 			setFields := func(target interface{}) error {
 				if _, err := inject.SchemeInto(runtime.NewScheme(), target); err != nil {
@@ -187,6 +187,30 @@ var _ = Describe("Admission Webhooks", func() {
 			}
 			Expect(setFields(webhook)).To(Succeed())
 			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
+
+			By("checking that setFields sets the decoder as well")
+			Expect(handler.dep.decoder).NotTo(BeNil())
+		})
+
+		It("should pass a setFields that also injects a decoder into sub-dependencies when the injector is injected first", func() {
+			By("setting up a webhook and injecting it with a injection func that injects a scheme")
+			setFields := func(target interface{}) error {
+				if _, err := inject.SchemeInto(runtime.NewScheme(), target); err != nil {
+					return err
+				}
+				return nil
+			}
+			handler := &handlerWithSubDependencies{
+				Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
+					return Response{}
+				}),
+				dep: &subDep{},
+			}
+			webhook := &Webhook{
+				Handler: handler,
+			}
+			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
+			Expect(setFields(webhook)).To(Succeed())
 
 			By("checking that setFields sets the decoder as well")
 			Expect(handler.dep.decoder).NotTo(BeNil())

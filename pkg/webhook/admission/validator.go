@@ -37,8 +37,13 @@ type Validator interface {
 // ValidatingWebhookFor creates a new Webhook for validating the provided type.
 func ValidatingWebhookFor(validator Validator) *Webhook {
 	return &Webhook{
-		Handler: &validatingHandler{validator: validator},
+		Handler: ValidatingHandlerFor(validator),
 	}
+}
+
+// ValidatingHandlerFor creates a new Handler for validating the provided type.
+func ValidatingHandlerFor(validator Validator) Handler {
+	return &validatingHandler{validator: validator}
 }
 
 type validatingHandler struct {

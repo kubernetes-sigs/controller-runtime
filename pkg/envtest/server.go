@@ -125,7 +125,7 @@ type Environment struct {
 	// located in the local environment. This field can be overridden by setting KUBEBUILDER_ASSETS.
 	BinaryAssetsDirectory string
 
-	// UseExisting indicates that this environments should use an
+	// UseExistingCluster indicates that this environments should use an
 	// existing kubeconfig, instead of trying to stand up a new control plane.
 	// This is useful in cases that need aggregated API servers and the like.
 	UseExistingCluster *bool

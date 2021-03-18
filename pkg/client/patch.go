@@ -84,11 +84,15 @@ type MergeFromOptions struct {
 	OptimisticLock bool
 }
 
+type patchHandler interface {
+	createPatch(originalJSON, modifiedJSON []byte, dataStruct interface{}) ([]byte, error)
+}
+
 type mergeFromPatch struct {
-	patchType   types.PatchType
-	createPatch func(originalJSON, modifiedJSON []byte, dataStruct interface{}) ([]byte, error)
-	from        Object
-	opts        MergeFromOptions
+	patchType    types.PatchType
+	patchHandler patchHandler
+	from         Object
+	opts         MergeFromOptions
 }
 
 // Type implements Patch.
@@ -124,7 +128,7 @@ func (s *mergeFromPatch) Data(obj Object) ([]byte, error) {
 		return nil, err
 	}
 
-	data, err := s.createPatch(originalJSON, modifiedJSON, obj)
+	data, err := s.patchHandler.createPatch(originalJSON, modifiedJSON, obj)
 	if err != nil {
 		return nil, err
 	}
@@ -132,11 +136,15 @@ func (s *mergeFromPatch) Data(obj Object) ([]byte, error) {
 	return data, nil
 }
 
-func createMergePatch(originalJSON, modifiedJSON []byte, _ interface{}) ([]byte, error) {
+type mergePatchHandler struct{}
+
+func (mergePatchHandler) createPatch(originalJSON, modifiedJSON []byte, dataStruct interface{}) ([]byte, error) {
 	return jsonpatch.CreateMergePatch(originalJSON, modifiedJSON)
 }
 
-func createStrategicMergePatch(originalJSON, modifiedJSON []byte, dataStruct interface{}) ([]byte, error) {
+type strategicMergePatchHandler struct{}
+
+func (strategicMergePatchHandler) createPatch(originalJSON, modifiedJSON []byte, dataStruct interface{}) ([]byte, error) {
 	return strategicpatch.CreateTwoWayMergePatch(originalJSON, modifiedJSON, dataStruct)
 }
 
@@ -148,7 +156,7 @@ func createStrategicMergePatch(originalJSON, modifiedJSON []byte, dataStruct int
 // See https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/ for more details on
 // the difference between merge-patch and strategic-merge-patch.
 func MergeFrom(obj Object) Patch {
-	return &mergeFromPatch{patchType: types.MergePatchType, createPatch: createMergePatch, from: obj}
+	return &mergeFromPatch{patchType: types.MergePatchType, patchHandler: mergePatchHandler{}, from: obj}
 }
 
 // MergeFromWithOptions creates a Patch that patches using the merge-patch strategy with the given object as base.
@@ -158,7 +166,7 @@ func MergeFromWithOptions(obj Object, opts ...MergeFromOption) Patch {
 	for _, opt := range opts {
 		opt.ApplyToMergeFrom(options)
 	}
-	return &mergeFromPatch{patchType: types.MergePatchType, createPatch: createMergePatch, from: obj, opts: *options}
+	return &mergeFromPatch{patchType: types.MergePatchType, patchHandler: mergePatchHandler{}, from: obj, opts: *options}
 }
 
 // StrategicMergeFrom creates a Patch that patches using the strategic-merge-patch strategy with the given object as base.
@@ -175,7 +183,7 @@ func StrategicMergeFrom(obj Object, opts ...MergeFromOption) Patch {
 	for _, opt := range opts {
 		opt.ApplyToMergeFrom(options)
 	}
-	return &mergeFromPatch{patchType: types.StrategicMergePatchType, createPatch: createStrategicMergePatch, from: obj, opts: *options}
+	return &mergeFromPatch{patchType: types.StrategicMergePatchType, patchHandler: strategicMergePatchHandler{}, from: obj, opts: *options}
 }
 
 // mergePatch uses a raw merge strategy to patch the object.

@@ -19,6 +19,7 @@ package client_test
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync/atomic"
 	"time"
 
@@ -3302,6 +3303,12 @@ var _ = Describe("Patch", func() {
 			By("returning a patch with data containing the annotation change and the resourceVersion change")
 			Expect(data).To(Equal([]byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"},"resourceVersion":"%s"}}`, annotationKey, annotationValue, cm.ResourceVersion))))
 		})
+
+		It("deeply equals to the same patch", func() {
+			patch1 := client.MergeFrom(cm)
+			patch2 := client.MergeFrom(cm)
+			Expect(reflect.DeepEqual(patch1, patch2)).To(BeTrue())
+		})
 	})
 
 	Describe("StrategicMergeFrom", func() {
@@ -3379,6 +3386,12 @@ var _ = Describe("Patch", func() {
 			Expect(data).To(Equal([]byte(fmt.Sprintf(`{"metadata":{"resourceVersion":"%s"},`+
 				`"spec":{"template":{"spec":{"$setElementOrder/containers":[{"name":"main"},{"name":"sidecar"}],"containers":[{"image":"foo:v2","name":"main"}]}}}}`,
 				dep.ResourceVersion))))
+		})
+
+		It("deeply equals to the same patch", func() {
+			patch1 := client.StrategicMergeFrom(dep)
+			patch2 := client.StrategicMergeFrom(dep)
+			Expect(reflect.DeepEqual(patch1, patch2)).To(BeTrue())
 		})
 	})
 })

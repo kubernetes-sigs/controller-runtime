@@ -2,7 +2,12 @@ package webhook_test
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net"
+	"net/http"
+	"path/filepath"
+	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -11,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -78,7 +84,7 @@ var _ = Describe("Webhook", func() {
 			close(done)
 		})
 	})
-	Context("when running a webhook server without a manager ", func() {
+	Context("when running a webhook server without a manager", func() {
 		It("should reject create request for webhook that rejects all requests", func(done Done) {
 			opts := webhook.Options{
 				Port:    testenv.WebhookInstallOptions.LocalServingPort,
@@ -92,6 +98,55 @@ var _ = Describe("Webhook", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
 				_ = server.Start(ctx)
+			}()
+
+			Eventually(func() bool {
+				err = c.Create(context.TODO(), obj)
+				return errors.ReasonForError(err) == metav1.StatusReason("Always denied")
+			}, 1*time.Second).Should(BeTrue())
+
+			cancel()
+			close(done)
+		})
+	})
+	Context("when running a standalone webhook", func() {
+		It("should reject create request for webhook that rejects all requests", func(done Done) {
+			ctx, cancel := context.WithCancel(context.Background())
+			// generate tls cfg
+			certPath := filepath.Join(testenv.WebhookInstallOptions.LocalServingCertDir, "tls.crt")
+			keyPath := filepath.Join(testenv.WebhookInstallOptions.LocalServingCertDir, "tls.key")
+
+			certWatcher, err := certwatcher.New(certPath, keyPath)
+			Expect(err).NotTo(HaveOccurred())
+			go func() {
+				Expect(certWatcher.Start(ctx)).NotTo(HaveOccurred())
+			}()
+
+			cfg := &tls.Config{
+				NextProtos:     []string{"h2"},
+				GetCertificate: certWatcher.GetCertificate,
+			}
+
+			// generate listener
+			listener, err := tls.Listen("tcp", net.JoinHostPort(testenv.WebhookInstallOptions.LocalServingHost, strconv.Itoa(int(testenv.WebhookInstallOptions.LocalServingPort))), cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			// create and register the standalone webhook
+			hook, err := admission.StandaloneWebhook(&webhook.Admission{Handler: &rejectingValidator{}}, admission.StandaloneOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			http.Handle("/failing", hook)
+
+			// run the http server
+			srv := &http.Server{}
+			go func() {
+				idleConnsClosed := make(chan struct{})
+				go func() {
+					<-ctx.Done()
+					Expect(srv.Shutdown(context.Background())).NotTo(HaveOccurred())
+					close(idleConnsClosed)
+				}()
+				srv.Serve(listener)
+				<-idleConnsClosed
 			}()
 
 			Eventually(func() bool {

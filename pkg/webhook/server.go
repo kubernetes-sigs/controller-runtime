@@ -29,13 +29,11 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // DefaultPort is the default port that the webhook server serves.
@@ -187,7 +185,7 @@ func (s *Server) Register(path string, hook http.Handler) {
 	}
 	// TODO(directxman12): call setfields if we've already started the server
 	s.webhooks[path] = hook
-	s.WebhookMux.Handle(path, instrumentedHook(path, hook))
+	s.WebhookMux.Handle(path, admission.InstrumentedHook(path, hook))
 
 	regLog := log.WithValues("path", path)
 	regLog.Info("registering webhook")
@@ -210,27 +208,6 @@ func (s *Server) Register(path string, hook http.Handler) {
 			regLog.Error(err, "unable to logger into webhook during registration")
 		}
 	}
-}
-
-// instrumentedHook adds some instrumentation on top of the given webhook.
-func instrumentedHook(path string, hookRaw http.Handler) http.Handler {
-	lbl := prometheus.Labels{"webhook": path}
-
-	lat := metrics.RequestLatency.MustCurryWith(lbl)
-	cnt := metrics.RequestTotal.MustCurryWith(lbl)
-	gge := metrics.RequestInFlight.With(lbl)
-
-	// Initialize the most likely HTTP status codes.
-	cnt.WithLabelValues("200")
-	cnt.WithLabelValues("500")
-
-	return promhttp.InstrumentHandlerDuration(
-		lat,
-		promhttp.InstrumentHandlerCounter(
-			cnt,
-			promhttp.InstrumentHandlerInFlight(gge, hookRaw),
-		),
-	)
 }
 
 // Start runs the server.

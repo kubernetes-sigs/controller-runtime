@@ -22,13 +22,18 @@ import (
 	"net/http"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	jsonpatch "gomodules.xyz/jsonpatch/v2"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/client-go/kubernetes/scheme"
 
+	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
 var (
@@ -202,4 +207,63 @@ func (w *Webhook) InjectFunc(f inject.Func) error {
 	}
 
 	return setFields(w.Handler)
+}
+
+// InstrumentedHook adds some instrumentation on top of the given webhook.
+func InstrumentedHook(path string, hookRaw http.Handler) http.Handler {
+	lbl := prometheus.Labels{"webhook": path}
+
+	lat := metrics.RequestLatency.MustCurryWith(lbl)
+	cnt := metrics.RequestTotal.MustCurryWith(lbl)
+	gge := metrics.RequestInFlight.With(lbl)
+
+	// Initialize the most likely HTTP status codes.
+	cnt.WithLabelValues("200")
+	cnt.WithLabelValues("500")
+
+	return promhttp.InstrumentHandlerDuration(
+		lat,
+		promhttp.InstrumentHandlerCounter(
+			cnt,
+			promhttp.InstrumentHandlerInFlight(gge, hookRaw),
+		),
+	)
+}
+
+// StandaloneOptions let you configure a StandaloneWebhook.
+type StandaloneOptions struct {
+	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
+	// Defaults to the kubernetes/client-go scheme.Scheme, but it's almost always better
+	// idea to pass your own scheme in.  See the documentation in pkg/scheme for more information.
+	Scheme *runtime.Scheme
+	// Logger to be used by the webhook.
+	// If none is set, it defaults to log.Log global logger.
+	Logger logr.Logger
+	// Path the webhook will be served at.
+	// Used for labelling prometheus metrics.
+	Path string
+}
+
+// StandaloneWebhook transforms a Webhook that needs to be registered
+// on a webhook.Server into one that can be ran on any arbitrary mux.
+func StandaloneWebhook(hook *Webhook, opts StandaloneOptions) (http.Handler, error) {
+	if opts.Scheme == nil {
+		opts.Scheme = scheme.Scheme
+	}
+
+	var err error
+	hook.decoder, err = NewDecoder(opts.Scheme)
+	if err != nil {
+		return nil, err
+	}
+
+	if opts.Logger == nil {
+		opts.Logger = logf.RuntimeLog.WithName("webhook")
+	}
+	hook.log = opts.Logger
+
+	if opts.Path == "" {
+		return hook, nil
+	}
+	return InstrumentedHook(opts.Path, hook), nil
 }

@@ -114,7 +114,7 @@ func (e *Etcd) setProcessState() error {
 	e.StopTimeout = e.processState.StopTimeout
 
 	var err error
-	e.processState.Args, err = process.TemplateAndArguments(e.Args, e.Configure(), process.TemplateDefaults{
+	e.processState.Args, e.Args, err = process.TemplateAndArguments(e.Args, e.Configure(), process.TemplateDefaults{
 		Data:     e,
 		Defaults: e.defaultArgs(),
 	})

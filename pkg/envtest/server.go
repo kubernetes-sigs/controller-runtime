@@ -91,6 +91,12 @@ type APIServer = controlplane.APIServer
 // Etcd is the re-exported Etcd type from the internal testing package
 type Etcd = controlplane.Etcd
 
+// User represents a Kubernetes user to provision for auth purposes.
+type User = controlplane.User
+
+// AuthenticatedUser represets a Kubernetes user that's been provisioned.
+type AuthenticatedUser = controlplane.AuthenticatedUser
+
 // Environment creates a Kubernetes test environment that will start / stop the Kubernetes control plane and
 // install extension APIs
 type Environment struct {
@@ -181,27 +187,6 @@ func (te *Environment) Stop() error {
 	return te.ControlPlane.Stop()
 }
 
-// getAPIServerFlags returns flags to be used with the Kubernetes API server.
-// it returns empty slice for api server defined defaults to be applied if no args specified
-func (te Environment) getAPIServerFlags() []string {
-	// Set default API server flags if not set.
-	if len(te.KubeAPIServerFlags) == 0 {
-		return []string{}
-	}
-	// Check KubeAPIServerFlags contains service-cluster-ip-range, if not, set default value to service-cluster-ip-range
-	containServiceClusterIPRange := false
-	for _, flag := range te.KubeAPIServerFlags {
-		if strings.Contains(flag, "service-cluster-ip-range") {
-			containServiceClusterIPRange = true
-			break
-		}
-	}
-	if !containServiceClusterIPRange {
-		te.KubeAPIServerFlags = append(te.KubeAPIServerFlags, "--service-cluster-ip-range=10.0.0.0/24")
-	}
-	return te.KubeAPIServerFlags
-}
-
 // Start starts a local Kubernetes server and updates te.ApiserverPort with the port it is listening on
 func (te *Environment) Start() (*rest.Config, error) {
 	if te.useExistingCluster() {
@@ -214,12 +199,23 @@ func (te *Environment) Start() (*rest.Config, error) {
 			var err error
 			te.Config, err = config.GetConfig()
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("unable to get configuration for existing cluster: %w", err)
 			}
 		}
 	} else {
-		if te.ControlPlane.APIServer == nil {
-			te.ControlPlane.APIServer = &controlplane.APIServer{Args: te.getAPIServerFlags()}
+		apiServer := te.ControlPlane.GetAPIServer()
+		if len(apiServer.Args) == 0 {
+			// pass these through separately from above in case something like
+			// AddUser defaults APIServer.
+			//
+			// TODO(directxman12): if/when we feel like making a bigger
+			// breaking change here, just make APIServer and Etcd non-pointers
+			// in ControlPlane.
+
+			// NB(directxman12): we still pass these in so that things work if the
+			// user manually specifies them, but in most cases we expect them to
+			// be nil so that we use the new .Configure() logic.
+			apiServer.Args = te.KubeAPIServerFlags
 		}
 		if te.ControlPlane.Etcd == nil {
 			te.ControlPlane.Etcd = &controlplane.Etcd{}
@@ -228,11 +224,11 @@ func (te *Environment) Start() (*rest.Config, error) {
 		if os.Getenv(envAttachOutput) == "true" {
 			te.AttachControlPlaneOutput = true
 		}
-		if te.ControlPlane.APIServer.Out == nil && te.AttachControlPlaneOutput {
-			te.ControlPlane.APIServer.Out = os.Stdout
+		if apiServer.Out == nil && te.AttachControlPlaneOutput {
+			apiServer.Out = os.Stdout
 		}
-		if te.ControlPlane.APIServer.Err == nil && te.AttachControlPlaneOutput {
-			te.ControlPlane.APIServer.Err = os.Stderr
+		if apiServer.Err == nil && te.AttachControlPlaneOutput {
+			apiServer.Err = os.Stderr
 		}
 		if te.ControlPlane.Etcd.Out == nil && te.AttachControlPlaneOutput {
 			te.ControlPlane.Etcd.Out = os.Stdout
@@ -242,15 +238,16 @@ func (te *Environment) Start() (*rest.Config, error) {
 		}
 
 		if os.Getenv(envKubeAPIServerBin) == "" {
-			te.ControlPlane.APIServer.Path = te.getBinAssetPath("kube-apiserver")
+			apiServer.Path = te.getBinAssetPath("kube-apiserver")
 		}
 		if os.Getenv(envEtcdBin) == "" {
 			te.ControlPlane.Etcd.Path = te.getBinAssetPath("etcd")
 		}
 		if os.Getenv(envKubectlBin) == "" {
 			// we can't just set the path manually (it's behind a function), so set the environment variable instead
+			// TODO(directxman12): re-evaluate this post pkg/internal/testing refactor
 			if err := os.Setenv(envKubectlBin, te.getBinAssetPath("kubectl")); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("unable to override kubectl environment path: %w", err)
 			}
 		}
 
@@ -259,21 +256,27 @@ func (te *Environment) Start() (*rest.Config, error) {
 		}
 		te.ControlPlane.Etcd.StartTimeout = te.ControlPlaneStartTimeout
 		te.ControlPlane.Etcd.StopTimeout = te.ControlPlaneStopTimeout
-		te.ControlPlane.APIServer.StartTimeout = te.ControlPlaneStartTimeout
-		te.ControlPlane.APIServer.StopTimeout = te.ControlPlaneStopTimeout
+		apiServer.StartTimeout = te.ControlPlaneStartTimeout
+		apiServer.StopTimeout = te.ControlPlaneStopTimeout
 
-		log.V(1).Info("starting control plane", "api server flags", te.ControlPlane.APIServer.Args)
+		log.V(1).Info("starting control plane", "api server flags", apiServer.Args)
 		if err := te.startControlPlane(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unable to start control plane itself: %w", err)
 		}
 
 		// Create the *rest.Config for creating new clients
-		te.Config = &rest.Config{
-			Host: te.ControlPlane.APIURL().Host,
+		baseConfig := &rest.Config{
 			// gotta go fast during tests -- we don't really care about overwhelming our test API server
 			QPS:   1000.0,
 			Burst: 2000.0,
 		}
+
+		adminInfo := User{Name: "admin", Groups: []string{"system:masters"}}
+		adminUser, err := te.ControlPlane.AddUser(adminInfo, baseConfig)
+		if err != nil {
+			return te.Config, fmt.Errorf("unable to provision admin user: %w", err)
+		}
+		te.Config = adminUser.Config()
 	}
 
 	// Set the default scheme if nil.
@@ -294,15 +297,28 @@ func (te *Environment) Start() (*rest.Config, error) {
 	te.CRDInstallOptions.WebhookOptions = te.WebhookInstallOptions
 	crds, err := InstallCRDs(te.Config, te.CRDInstallOptions)
 	if err != nil {
-		return te.Config, err
+		return te.Config, fmt.Errorf("unable to install CRDs onto control plane: %w", err)
 	}
 	te.CRDs = crds
 
 	log.V(1).Info("installing webhooks")
 	if err := te.WebhookInstallOptions.Install(te.Config); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to install webhooks onto control plane: %w", err)
 	}
 	return te.Config, nil
+}
+
+// AddUser provisions a new user for connecting to this Environment.  The user will
+// have the specified name & belong to the specified groups.
+//
+// If you specify a "base" config, the returned REST Config will contain those
+// settings as well as any required by the authentication method.  You can use
+// this to easily specify options like QPS.
+//
+// This is effectively a convinience alias for ControlPlane.AddUser -- see that
+// for more low-level details.
+func (te *Environment) AddUser(user User, baseConfig *rest.Config) (*AuthenticatedUser, error) {
+	return te.ControlPlane.AddUser(user, baseConfig)
 }
 
 func (te *Environment) startControlPlane() error {

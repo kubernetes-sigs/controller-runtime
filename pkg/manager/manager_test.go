@@ -633,6 +633,11 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should not manipulate the provided config", func() {
+				// strip WrapTransport, cause func values are PartialEq, not Eq --
+				// specifically, for reflect.DeepEqual, for all functions F,
+				// F != nil implies F != F, which means no full equivalence relation.
+				cfg := rest.CopyConfig(cfg)
+				cfg.WrapTransport = nil
 				originalCfg := rest.CopyConfig(cfg)
 				// The options object is shared by multiple tests, copy it
 				// into our scope so we manipulate it for this testcase only

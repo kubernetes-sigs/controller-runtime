@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"sync"
 	"syscall"
 	"time"
@@ -111,6 +112,23 @@ func (ps *State) Init(name string) error {
 }
 
 type stopChannel chan struct{}
+
+// CheckFlag checks the help output of this command for the presence of the given flag, specified
+// without the leading `--` (e.g. `CheckFlag("insecure-port")` checks for `--insecure-port`),
+// returning true if the flag is present.
+func (ps *State) CheckFlag(flag string) (bool, error) {
+	cmd := exec.Command(ps.Path, "--help")
+	outContents, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("unable to run command %q to check for flag %q: %w", ps.Path, flag, err)
+	}
+	pat := `(?m)^\s*--` + flag + `\b` // (m --> multi-line --> ^ matches start of line)
+	matched, err := regexp.Match(pat, outContents)
+	if err != nil {
+		return false, fmt.Errorf("unable to check command %q for flag %q in help output: %w", ps.Path, flag, err)
+	}
+	return matched, nil
+}
 
 // Start starts the apiserver, waits for it to come up, and returns an error,
 // if occurred.

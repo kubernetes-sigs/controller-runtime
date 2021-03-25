@@ -108,14 +108,18 @@ var _ = Describe("Arguments Templates", func() {
 
 		Context("when a template is given", func() {
 			It("should use minimal defaults", func() {
-				Expect(TemplateAndArguments(templ, args, data)).To(SatisfyAll(
+				all, _, err := TemplateAndArguments(templ, args, data)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(all).To(SatisfyAll(
 					Not(ContainElement("--cracker=ritz")),
 					ContainElement("--pickle=kosher-dill"),
 				))
 			})
 
 			It("should render the template against the data", func() {
-				Expect(TemplateAndArguments(templ, args, data)).To(ContainElements(
+				all, _, err := TemplateAndArguments(templ, args, data)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(all).To(ContainElements(
 					"--sharpness=extra",
 				))
 			})
@@ -123,7 +127,9 @@ var _ = Describe("Arguments Templates", func() {
 			It("should append the rendered template to structured arguments", func() {
 				args.Append("cheese", "cheddar")
 
-				Expect(TemplateAndArguments(templ, args, data)).To(Equal([]string{
+				all, _, err := TemplateAndArguments(templ, args, data)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(all).To(Equal([]string{
 					"--cheese=cheddar",
 					"--cheese=parmesean",
 					"--pickle=kosher-dill",
@@ -131,6 +137,13 @@ var _ = Describe("Arguments Templates", func() {
 					"-om",
 					"nom nom nom",
 				}))
+			})
+
+			It("should indicate which arguments were not able to be converted to structured flags", func() {
+				_, rest, err := TemplateAndArguments(templ, args, data)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(rest).To(Equal([]string{"-om", "nom nom nom"}))
+
 			})
 		})
 

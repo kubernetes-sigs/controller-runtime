@@ -2,15 +2,11 @@ package main
 
 import (
 	goflag "flag"
-	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 
 	flag "github.com/spf13/pflag"
 
-	"k8s.io/client-go/tools/clientcmd"
-	kcapi "k8s.io/client-go/tools/clientcmd/api"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -21,25 +17,6 @@ var (
 	webhookPaths          = flag.StringSlice("webhook-paths", nil, "paths to files or directories containing webhook configurations to install on start")
 	attachControlPlaneOut = flag.Bool("debug-env", false, "attach to test env (apiserver & etcd) output -- just a convinience flag to force KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT=true")
 )
-
-func writeKubeConfig(kubeConfig *kcapi.Config, kubeconfigFile *os.File) error {
-	defer kubeconfigFile.Close()
-
-	contents, err := clientcmd.Write(*kubeConfig)
-	if err != nil {
-		return fmt.Errorf("unable to serialize kubeconfig file: %w", err)
-	}
-
-	amt, err := kubeconfigFile.Write(contents)
-	if err != nil {
-		return fmt.Errorf("unable to write kubeconfig file: %w", err)
-	}
-	if amt != len(contents) {
-		fmt.Errorf("unable to write all of the kubeconfig file: %w", io.ErrShortWrite)
-	}
-
-	return nil
-}
 
 // have a separate function so we can return an exit code w/o skipping defers
 func runMain() int {
@@ -68,34 +45,45 @@ func runMain() int {
 	cfg, err := env.Start()
 	if err != nil {
 		log.Error(err, "unable to start the test environment")
+		// shut down the environment in case we started it and failed while
+		// installing CRDs or provisioning users.
+		if err := env.Stop(); err != nil {
+			log.Error(err, "unable to stop the test environment after an error (this might be expected, but just though you should know)")
+		}
 		return 1
 	}
 
 	log.Info("apiserver running", "host", cfg.Host)
 
+	// NB(directxman12): this group is unfortunately named, but various
+	// kubernetes versions require us to use it to get "admin" access.
+	user, err := env.ControlPlane.AddUser(envtest.User{
+		Name:   "envtest-admin",
+		Groups: []string{"system:masters"},
+	}, nil)
+	if err != nil {
+		log.Error(err, "unable to provision admin user, continuing on without it")
+		return 1
+	}
+
 	// TODO(directxman12): add support for writing to a new context in an existing file
 	kubeconfigFile, err := ioutil.TempFile("", "scratch-env-kubeconfig-")
 	if err != nil {
 		log.Error(err, "unable to create kubeconfig file, continuing on without it")
-	} else {
-		defer os.Remove(kubeconfigFile.Name())
+		return 1
+	}
+	defer os.Remove(kubeconfigFile.Name())
 
+	{
 		log := log.WithValues("path", kubeconfigFile.Name())
 		log.V(1).Info("Writing kubeconfig")
 
-		// TODO(directxman12): this config isn't quite fully specified, but I
-		// think it's the best we can do for now -- I don't see any obvious
-		// "rest.Config --> clientcmdapi.Config" helper
-		kubeConfig := kcapi.NewConfig()
-		kubeConfig.Clusters["scratch-env"] = &kcapi.Cluster{
-			Server: fmt.Sprintf("http://%s", cfg.Host),
+		kubeConfig, err := user.KubeConfig()
+		if err != nil {
+			log.Error(err, "unable to create kubeconfig")
 		}
-		kcCtx := kcapi.NewContext()
-		kcCtx.Cluster = "scratch-env"
-		kubeConfig.Contexts["scratch-env"] = kcCtx
-		kubeConfig.CurrentContext = "scratch-env"
 
-		if err := writeKubeConfig(kubeConfig, kubeconfigFile); err != nil {
+		if _, err := kubeconfigFile.Write(kubeConfig); err != nil {
 			log.Error(err, "unable to save kubeconfig")
 			return 1
 		}

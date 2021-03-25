@@ -24,7 +24,6 @@ linters:
   - deadcode
   - errcheck
   - varcheck
-  - goconst
   - unparam
   - ineffassign
   - nakedret
@@ -33,3 +32,5 @@ linters:
   - dupl
   - goimports
   - golint
+  # disabled:
+  # - goconst is overly aggressive

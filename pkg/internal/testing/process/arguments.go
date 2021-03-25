@@ -3,11 +3,13 @@ package process
 import (
 	"bytes"
 	"html/template"
+	"sort"
+	"strings"
 )
 
 // RenderTemplates returns an []string to render the templates
 //
-// Deprecated: this should be removed when we remove APIServer.Args.
+// Deprecated: will be removed in favor of Arguments
 func RenderTemplates(argTemplates []string, data interface{}) (args []string, err error) {
 	var t *template.Template
 
@@ -28,6 +30,81 @@ func RenderTemplates(argTemplates []string, data interface{}) (args []string, er
 	}
 
 	return
+}
+
+// SliceToArguments converts a slice of arguments to structured arguments,
+// appending each argument that starts with `--` and contains an `=` to the
+// argument set, returning the rest.
+//
+// Deprecated: will be removed when RenderTemplates is removed
+func SliceToArguments(sliceArgs []string, args *Arguments) []string {
+	var rest []string
+	for i, arg := range sliceArgs {
+		if arg == "--" {
+			rest = append(rest, sliceArgs[i:]...)
+			return rest
+		}
+		// skip non-flag arguments, skip arguments w/o equals because we
+		// can't tell if the next argument should take a value
+		if !strings.HasPrefix(arg, "--") || !strings.Contains(arg, "=") {
+			rest = append(rest, arg)
+			continue
+		}
+
+		parts := strings.SplitN(arg[2:], "=", 2)
+		name := parts[0]
+		val := parts[1]
+
+		args.AppendNoDefaults(name, val)
+	}
+
+	return rest
+}
+
+// TemplateDefaults specifies defaults to be used for joining structured arguments with templates.
+//
+// Deprecated: will be removed when RenderTemplates is removed
+type TemplateDefaults struct {
+	// Data will be used to render the template.
+	Data interface{}
+	// Defaults will be used to default structured arguments if no template is passed.
+	Defaults map[string][]string
+	// MinimalDefaults will be used to default structured arguments if a template is passed.
+	// Use this for flags which *must* be present.
+	MinimalDefaults map[string][]string // for api server service-cluster-ip-range
+}
+
+// TemplateAndArguments joins structured arguments and non-structured arguments, preserving existing
+// behavior.  Namely:
+//
+// 1. if templ has len > 0, it will be rendered against data
+// 2. the rendered template values that look like `--foo=bar` will be split
+//    and appended to args, the rest will be kept around
+// 3. the given args will be rendered as string form.  If a template is given,
+//    no defaults will be used, otherwise defaults will be used
+// 4. a result of [args..., rest...] will be returned
+//
+// Deprecated: will be removed when RenderTemplates is removed
+func TemplateAndArguments(templ []string, args *Arguments, data TemplateDefaults) ([]string, error) {
+	if len(templ) == 0 { // 3 & 4 (no template case)
+		return args.AsStrings(data.Defaults), nil
+	}
+
+	// 1: render the template
+	rendered, err := RenderTemplates(templ, data.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2: filter out structured args and add them to args
+	rest := SliceToArguments(rendered, args)
+
+	// 3 (template case): render structured args, no defaults (matching the
+	// legacy case where if Args was specified, no defaults were used)
+	res := args.AsStrings(data.MinimalDefaults)
+
+	// 4: return the rendered structured args + all non-structured args
+	return append(res, rest...), nil
 }
 
 // EmptyArguments constructs an empty set of flags with no defaults.

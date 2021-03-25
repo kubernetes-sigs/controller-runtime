@@ -81,6 +81,119 @@ var _ = Describe("Arguments Templates", func() {
 			ContainSubstring("can't evaluate field"),
 		))
 	})
+
+	Context("when joining with structured Arguments", func() {
+		var (
+			args  *Arguments
+			templ = []string{
+				"--cheese=parmesean",
+				"-om",
+				"nom nom nom",
+				"--sharpness={{ .sharpness }}",
+			}
+			data = TemplateDefaults{
+				Data: map[string]string{"sharpness": "extra"},
+				Defaults: map[string][]string{
+					"cracker": []string{"ritz"},
+					"pickle":  []string{"kosher-dill"},
+				},
+				MinimalDefaults: map[string][]string{
+					"pickle": []string{"kosher-dill"},
+				},
+			}
+		)
+		BeforeEach(func() {
+			args = EmptyArguments()
+		})
+
+		Context("when a template is given", func() {
+			It("should use minimal defaults", func() {
+				Expect(TemplateAndArguments(templ, args, data)).To(SatisfyAll(
+					Not(ContainElement("--cracker=ritz")),
+					ContainElement("--pickle=kosher-dill"),
+				))
+			})
+
+			It("should render the template against the data", func() {
+				Expect(TemplateAndArguments(templ, args, data)).To(ContainElements(
+					"--sharpness=extra",
+				))
+			})
+
+			It("should append the rendered template to structured arguments", func() {
+				args.Append("cheese", "cheddar")
+
+				Expect(TemplateAndArguments(templ, args, data)).To(Equal([]string{
+					"--cheese=cheddar",
+					"--cheese=parmesean",
+					"--pickle=kosher-dill",
+					"--sharpness=extra",
+					"-om",
+					"nom nom nom",
+				}))
+			})
+		})
+
+		Context("when no template is given", func() {
+			It("should render the structured arguments with the given defaults", func() {
+				args.
+					Append("cheese", "cheddar", "parmesean").
+					Append("cracker", "triscuit")
+
+				Expect(TemplateAndArguments(nil, args, data)).To(Equal([]string{
+					"--cheese=cheddar",
+					"--cheese=parmesean",
+					"--cracker=ritz",
+					"--cracker=triscuit",
+					"--pickle=kosher-dill",
+				}))
+			})
+		})
+	})
+
+	Context("when converting to structured Arguments", func() {
+		var args *Arguments
+		BeforeEach(func() {
+			args = EmptyArguments()
+		})
+
+		It("should skip arguments that don't start with `--`", func() {
+			rest := SliceToArguments([]string{"-first", "second", "--foo=bar"}, args)
+			Expect(rest).To(Equal([]string{"-first", "second"}))
+			Expect(args.AsStrings(nil)).To(Equal([]string{"--foo=bar"}))
+		})
+
+		It("should skip arguments that don't contain an `=` because they're ambiguous", func() {
+			rest := SliceToArguments([]string{"--first", "--second", "--foo=bar"}, args)
+			Expect(rest).To(Equal([]string{"--first", "--second"}))
+			Expect(args.AsStrings(nil)).To(Equal([]string{"--foo=bar"}))
+		})
+
+		It("should stop at the flag terminator (`--`)", func() {
+			rest := SliceToArguments([]string{"--first", "--second", "--", "--foo=bar"}, args)
+			Expect(rest).To(Equal([]string{"--first", "--second", "--", "--foo=bar"}))
+			Expect(args.AsStrings(nil)).To(BeEmpty())
+		})
+
+		It("should split --foo=bar into Append(foo, bar)", func() {
+			rest := SliceToArguments([]string{"--foo=bar1", "--foo=bar2"}, args)
+			Expect(rest).To(BeEmpty())
+			Expect(args.Get("foo").Get(nil)).To(Equal([]string{"bar1", "bar2"}))
+		})
+
+		It("should split --foo=bar=baz into Append(foo, bar=baz)", func() {
+			rest := SliceToArguments([]string{"--vmodule=file.go=3", "--vmodule=other.go=4"}, args)
+			Expect(rest).To(BeEmpty())
+			Expect(args.Get("vmodule").Get(nil)).To(Equal([]string{"file.go=3", "other.go=4"}))
+		})
+
+		It("should append to existing arguments", func() {
+			args.Append("foo", "barA")
+			rest := SliceToArguments([]string{"--foo=bar1", "--foo=bar2"}, args)
+			Expect(rest).To(BeEmpty())
+			Expect(args.Get("foo").Get([]string{"barI"})).To(Equal([]string{"barI", "barA", "bar1", "bar2"}))
+		})
+	})
 })
 
 type plainDefaults map[string][]string

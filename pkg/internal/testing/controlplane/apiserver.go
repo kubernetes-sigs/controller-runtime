@@ -44,6 +44,11 @@ type APIServer struct {
 	//
 	// If not specified, the minimal set of arguments to run the APIServer will
 	// be used.
+	//
+	// They will be loaded into the same argument set as Configure.  Each flag
+	// will be Append-ed to the configured arguments just before launch.
+	//
+	// Deprecated: use Configure instead.
 	Args []string
 
 	// CertDir is a path to a directory containing whatever certificates the
@@ -72,20 +77,34 @@ type APIServer struct {
 	Err io.Writer
 
 	processState *process.State
+
+	// args contains the structured arguments to use for running the API server
+	// Lazily initialized by .Configure(), Defaulted eventually with .defaultArgs()
+	args *process.Arguments
+}
+
+// Configure returns Arguments that may be used to customize the
+// flags used to launch the API server.  A set of defaults will
+// be applied underneath.
+func (s *APIServer) Configure() *process.Arguments {
+	if s.args == nil {
+		s.args = process.EmptyArguments()
+	}
+	return s.args
 }
 
 // Start starts the apiserver, waits for it to come up, and returns an error,
 // if occurred.
 func (s *APIServer) Start() error {
 	if s.processState == nil {
-		if err := s.setState(); err != nil {
+		if err := s.setProcessState(); err != nil {
 			return err
 		}
 	}
 	return s.processState.Start(s.Out, s.Err)
 }
 
-func (s *APIServer) setState() error {
+func (s *APIServer) setProcessState() error {
 	if s.EtcdURL == nil {
 		return fmt.Errorf("expected EtcdURL to be configured")
 	}
@@ -133,13 +152,40 @@ func (s *APIServer) setState() error {
 		return err
 	}
 
-	args := s.Args
-	if len(args) == 0 {
-		args = APIServerDefaultArgs
-	}
-
-	s.processState.Args, err = process.RenderTemplates(args, s)
+	s.processState.Args, err = process.TemplateAndArguments(s.Args, s.Configure(), process.TemplateDefaults{
+		Data:     s,
+		Defaults: s.defaultArgs(),
+		// as per kubernetes-sigs/controller-runtime#641, we need this (we
+		// probably need other stuff too, but this is the only thing that was
+		// previously considered a "minimal default")
+		MinimalDefaults: map[string][]string{
+			"service-cluster-ip-range": []string{"10.0.0.0/24"},
+		},
+	})
 	return err
+}
+
+func (s *APIServer) defaultArgs() map[string][]string {
+	args := map[string][]string{
+		"advertise-address":        []string{"127.0.0.1"},
+		"service-cluster-ip-range": []string{"10.0.0.0/24"},
+		"allow-privileged":         []string{"true"},
+		// we're keeping this disabled because if enabled, default SA is
+		// missing which would force all tests to create one in normal
+		// apiserver operation this SA is created by controller, but that is
+		// not run in integration environment
+		"disable-admission-plugins": []string{"ServiceAccount"},
+		"cert-dir":                  []string{s.CertDir},
+		"secure-port":               []string{strconv.Itoa(s.SecurePort)},
+	}
+	if s.EtcdURL != nil {
+		args["etcd-servers"] = []string{s.EtcdURL.String()}
+	}
+	if s.URL != nil {
+		args["insecure-port"] = []string{s.URL.Port()}
+		args["insecure-bind-address"] = []string{s.URL.Hostname()}
+	}
+	return args
 }
 
 func (s *APIServer) populateAPIServerCerts() error {

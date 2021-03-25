@@ -1,4 +1,4 @@
-package integration
+package controlplane
 
 import (
 	"io"
@@ -6,7 +6,6 @@ import (
 
 	"net/url"
 
-	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/internal"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
 )
 
@@ -87,7 +86,7 @@ func (e *Etcd) setProcessState() error {
 		return err
 	}
 
-	e.processState.StartMessage = internal.GetEtcdStartMessage(e.processState.URL)
+	e.processState.StartMessage = getEtcdStartMessage(e.processState.URL)
 
 	e.URL = &e.processState.URL
 	e.DataDir = e.processState.Dir
@@ -95,9 +94,12 @@ func (e *Etcd) setProcessState() error {
 	e.StartTimeout = e.processState.StartTimeout
 	e.StopTimeout = e.processState.StopTimeout
 
-	e.processState.Args, err = process.RenderTemplates(
-		internal.DoEtcdArgDefaulting(e.Args), e,
-	)
+	args := e.Args
+	if len(args) == 0 {
+		args = EtcdDefaultArgs
+	}
+
+	e.processState.Args, err = process.RenderTemplates(args, e)
 	return err
 }
 
@@ -109,7 +111,30 @@ func (e *Etcd) Stop() error {
 
 // EtcdDefaultArgs exposes the default args for Etcd so that you
 // can use those to append your own additional arguments.
-//
-// The internal default arguments are explicitly copied here, we don't want to
-// allow users to change the internal ones.
-var EtcdDefaultArgs = append([]string{}, internal.EtcdDefaultArgs...)
+var EtcdDefaultArgs = []string{
+	"--listen-peer-urls=http://localhost:0",
+	"--advertise-client-urls={{ if .URL }}{{ .URL.String }}{{ end }}",
+	"--listen-client-urls={{ if .URL }}{{ .URL.String }}{{ end }}",
+	"--data-dir={{ .DataDir }}",
+}
+
+// isSecureScheme returns false when the schema is insecure.
+func isSecureScheme(scheme string) bool {
+	// https://github.com/coreos/etcd/blob/d9deeff49a080a88c982d328ad9d33f26d1ad7b6/pkg/transport/listener.go#L53
+	if scheme == "https" || scheme == "unixs" {
+		return true
+	}
+	return false
+}
+
+// getEtcdStartMessage returns an start message to inform if the client is or not insecure.
+// It will return true when the URL informed has the scheme == "https" || scheme == "unixs"
+func getEtcdStartMessage(listenURL url.URL) string {
+	if isSecureScheme(listenURL.Scheme) {
+		// https://github.com/coreos/etcd/blob/a7f1fbe00ec216fcb3a1919397a103b41dca8413/embed/serve.go#L167
+		return "serving client requests on "
+	}
+
+	// https://github.com/coreos/etcd/blob/a7f1fbe00ec216fcb3a1919397a103b41dca8413/embed/serve.go#L124
+	return "serving insecure client requests on "
+}

@@ -1,4 +1,4 @@
-package integration
+package controlplane
 
 import (
 	"bytes"

@@ -1,4 +1,4 @@
-package integration_test
+package controlplane_test
 
 import (
 	"io/ioutil"
@@ -6,7 +6,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "sigs.k8s.io/controller-runtime/pkg/internal/testing/integration"
+	. "sigs.k8s.io/controller-runtime/pkg/internal/testing/controlplane"
 )
 
 var _ = Describe("Kubectl", func() {

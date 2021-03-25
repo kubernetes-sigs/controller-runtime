@@ -2,10 +2,12 @@ package controlplane
 
 import (
 	"io"
+	"net"
+	"net/url"
+	"strconv"
 	"time"
 
-	"net/url"
-
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
 )
 
@@ -55,40 +57,50 @@ type Etcd struct {
 	Out io.Writer
 	Err io.Writer
 
-	processState *process.ProcessState
+	// processState contains the actual details about this running process
+	processState *process.State
 }
 
 // Start starts the etcd, waits for it to come up, and returns an error, if one
 // occoured.
 func (e *Etcd) Start() error {
 	if e.processState == nil {
-		if err := e.setProcessState(); err != nil {
+		if err := e.setState(); err != nil {
 			return err
 		}
 	}
 	return e.processState.Start(e.Out, e.Err)
 }
 
-func (e *Etcd) setProcessState() error {
+func (e *Etcd) setState() error {
 	var err error
 
-	e.processState = &process.ProcessState{}
+	e.processState = &process.State{
+		Dir:          e.DataDir,
+		Path:         e.Path,
+		StartTimeout: e.StartTimeout,
+		StopTimeout:  e.StopTimeout,
+	}
 
-	e.processState.DefaultedProcessInput, err = process.DoDefaulting(
-		"etcd",
-		e.URL,
-		e.DataDir,
-		e.Path,
-		e.StartTimeout,
-		e.StopTimeout,
-	)
-	if err != nil {
+	if err := e.processState.Init("etcd"); err != nil {
 		return err
 	}
 
-	e.processState.StartMessage = getEtcdStartMessage(e.processState.URL)
+	if e.URL == nil {
+		port, host, err := addr.Suggest("")
+		if err != nil {
+			return err
+		}
+		e.URL = &url.URL{
+			Scheme: "http",
+			Host:   net.JoinHostPort(host, strconv.Itoa(port)),
+		}
+	}
 
-	e.URL = &e.processState.URL
+	// can use /health as of etcd 3.3.0
+	e.processState.HealthCheck.URL = *e.URL
+	e.processState.HealthCheck.Path = "/health"
+
 	e.DataDir = e.processState.Dir
 	e.Path = e.processState.Path
 	e.StartTimeout = e.processState.StartTimeout
@@ -116,25 +128,4 @@ var EtcdDefaultArgs = []string{
 	"--advertise-client-urls={{ if .URL }}{{ .URL.String }}{{ end }}",
 	"--listen-client-urls={{ if .URL }}{{ .URL.String }}{{ end }}",
 	"--data-dir={{ .DataDir }}",
-}
-
-// isSecureScheme returns false when the schema is insecure.
-func isSecureScheme(scheme string) bool {
-	// https://github.com/coreos/etcd/blob/d9deeff49a080a88c982d328ad9d33f26d1ad7b6/pkg/transport/listener.go#L53
-	if scheme == "https" || scheme == "unixs" {
-		return true
-	}
-	return false
-}
-
-// getEtcdStartMessage returns an start message to inform if the client is or not insecure.
-// It will return true when the URL informed has the scheme == "https" || scheme == "unixs"
-func getEtcdStartMessage(listenURL url.URL) string {
-	if isSecureScheme(listenURL.Scheme) {
-		// https://github.com/coreos/etcd/blob/a7f1fbe00ec216fcb3a1919397a103b41dca8413/embed/serve.go#L167
-		return "serving client requests on "
-	}
-
-	// https://github.com/coreos/etcd/blob/a7f1fbe00ec216fcb3a1919397a103b41dca8413/embed/serve.go#L124
-	return "serving insecure client requests on "
 }

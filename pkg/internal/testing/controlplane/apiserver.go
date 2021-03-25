@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
@@ -69,38 +71,34 @@ type APIServer struct {
 	Out io.Writer
 	Err io.Writer
 
-	processState *process.ProcessState
+	processState *process.State
 }
 
 // Start starts the apiserver, waits for it to come up, and returns an error,
 // if occurred.
 func (s *APIServer) Start() error {
 	if s.processState == nil {
-		if err := s.setProcessState(); err != nil {
+		if err := s.setState(); err != nil {
 			return err
 		}
 	}
 	return s.processState.Start(s.Out, s.Err)
 }
 
-func (s *APIServer) setProcessState() error {
+func (s *APIServer) setState() error {
 	if s.EtcdURL == nil {
 		return fmt.Errorf("expected EtcdURL to be configured")
 	}
 
 	var err error
 
-	s.processState = &process.ProcessState{}
-
-	s.processState.DefaultedProcessInput, err = process.DoDefaulting(
-		"kube-apiserver",
-		s.URL,
-		s.CertDir,
-		s.Path,
-		s.StartTimeout,
-		s.StopTimeout,
-	)
-	if err != nil {
+	s.processState = &process.State{
+		Dir:          s.CertDir,
+		Path:         s.Path,
+		StartTimeout: s.StartTimeout,
+		StopTimeout:  s.StopTimeout,
+	}
+	if err := s.processState.Init("kube-apiserver"); err != nil {
 		return err
 	}
 
@@ -112,9 +110,20 @@ func (s *APIServer) setProcessState() error {
 		}
 	}
 
-	s.processState.HealthCheckEndpoint = "/healthz"
+	if s.URL == nil {
+		port, host, err := addr.Suggest("")
+		if err != nil {
+			return err
+		}
+		s.URL = &url.URL{
+			Scheme: "http",
+			Host:   net.JoinHostPort(host, strconv.Itoa(port)),
+		}
+	}
 
-	s.URL = &s.processState.URL
+	s.processState.HealthCheck.URL = *s.URL
+	s.processState.HealthCheck.Path = "/healthz"
+
 	s.CertDir = s.processState.Dir
 	s.Path = s.processState.Path
 	s.StartTimeout = s.processState.StartTimeout

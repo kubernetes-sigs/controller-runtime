@@ -1,6 +1,7 @@
 package process
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,172 +11,190 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"strconv"
+	"sync"
+	"syscall"
 	"time"
-
-	"github.com/onsi/gomega/gbytes"
-	"github.com/onsi/gomega/gexec"
-
-	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
 )
 
-// ProcessState define the state of the process.
-type ProcessState struct {
-	DefaultedProcessInput
-	Session *gexec.Session
-	// Healthcheck Endpoint. If we get http.StatusOK from this endpoint, we
-	// assume the process is ready to operate. E.g. "/healthz". If this is set,
-	// we ignore StartMessage.
-	HealthCheckEndpoint string
+// ListenAddr represents some listening address and port
+type ListenAddr struct {
+	Address string
+	Port    string
+}
+
+// URL returns a URL for this address with the given scheme and subpath
+func (l *ListenAddr) URL(scheme string, path string) *url.URL {
+	return &url.URL{
+		Scheme: scheme,
+		Host:   l.HostPort(),
+		Path:   path,
+	}
+}
+
+// HostPort returns the joined host-port pair for this address
+func (l *ListenAddr) HostPort() string {
+	return net.JoinHostPort(l.Address, l.Port)
+}
+
+// HealthCheck describes the information needed to health-check a process via
+// some health-check URL.
+type HealthCheck struct {
+	url.URL
+
 	// HealthCheckPollInterval is the interval which will be used for polling the
-	// HealthCheckEndpoint.
+	// endpoint described by Host, Port, and Path.
+	//
 	// If left empty it will default to 100 Milliseconds.
-	HealthCheckPollInterval time.Duration
-	// StartMessage is the message to wait for on stderr. If we receive this
-	// message, we assume the process is ready to operate. Ignored if
-	// HealthCheckEndpoint is specified.
+	PollInterval time.Duration
+}
+
+// State define the state of the process.
+type State struct {
+	Cmd *exec.Cmd
+
+	// HealthCheck describes how to check if this process is up.  If we get an http.StatusOK,
+	// we assume the process is ready to operate.
 	//
-	// The usage of StartMessage is discouraged, favour HealthCheckEndpoint
-	// instead!
-	//
-	// Deprecated: Use HealthCheckEndpoint in favour of StartMessage
-	StartMessage string
-	Args         []string
+	// For example, the /healthz endpoint of the k8s API server, or the /health endpoint of etcd.
+	HealthCheck HealthCheck
+
+	Args []string
+
+	StopTimeout  time.Duration
+	StartTimeout time.Duration
+
+	Dir              string
+	DirNeedsCleaning bool
+	Path             string
 
 	// ready holds wether the process is currently in ready state (hit the ready condition) or not.
 	// It will be set to true on a successful `Start()` and set to false on a successful `Stop()`
 	ready bool
+
+	// waitDone is closed when our call to wait finishes up, and indicates that
+	// our process has terminated.
+	waitDone chan struct{}
+	errMu    sync.Mutex
+	exitErr  error
+	exited   bool
 }
 
-// DefaultedProcessInput defines the default process input required to perform the test.
-type DefaultedProcessInput struct {
-	URL              url.URL
-	Dir              string
-	DirNeedsCleaning bool
-	Path             string
-	StopTimeout      time.Duration
-	StartTimeout     time.Duration
-}
-
-// DoDefaulting sets the default configuration according to the data informed and return an DefaultedProcessInput
-// and an error if some requirement was not informed.
-func DoDefaulting(
-	name string,
-	listenURL *url.URL,
-	dir string,
-	path string,
-	startTimeout time.Duration,
-	stopTimeout time.Duration,
-) (DefaultedProcessInput, error) {
-	defaults := DefaultedProcessInput{
-		Dir:          dir,
-		Path:         path,
-		StartTimeout: startTimeout,
-		StopTimeout:  stopTimeout,
-	}
-
-	if listenURL == nil {
-		port, host, err := addr.Suggest("")
-		if err != nil {
-			return DefaultedProcessInput{}, err
-		}
-		defaults.URL = url.URL{
-			Scheme: "http",
-			Host:   net.JoinHostPort(host, strconv.Itoa(port)),
-		}
-	} else {
-		defaults.URL = *listenURL
-	}
-
-	if path == "" {
+// Init sets up this process, configuring binary paths if missing, initializing
+// temporary directories, etc.
+//
+// This defaults all defaultable fields.
+func (ps *State) Init(name string) error {
+	if ps.Path == "" {
 		if name == "" {
-			return DefaultedProcessInput{}, fmt.Errorf("must have at least one of name or path")
+			return fmt.Errorf("must have at least one of name or path")
 		}
-		defaults.Path = BinPathFinder(name)
+		ps.Path = BinPathFinder(name)
 	}
 
-	if dir == "" {
+	if ps.Dir == "" {
 		newDir, err := ioutil.TempDir("", "k8s_test_framework_")
 		if err != nil {
-			return DefaultedProcessInput{}, err
+			return err
 		}
-		defaults.Dir = newDir
-		defaults.DirNeedsCleaning = true
+		ps.Dir = newDir
+		ps.DirNeedsCleaning = true
 	}
 
-	if startTimeout == 0 {
-		defaults.StartTimeout = 20 * time.Second
+	if ps.StartTimeout == 0 {
+		ps.StartTimeout = 20 * time.Second
 	}
 
-	if stopTimeout == 0 {
-		defaults.StopTimeout = 20 * time.Second
+	if ps.StopTimeout == 0 {
+		ps.StopTimeout = 20 * time.Second
 	}
-
-	return defaults, nil
+	return nil
 }
 
 type stopChannel chan struct{}
 
 // Start starts the apiserver, waits for it to come up, and returns an error,
 // if occurred.
-func (ps *ProcessState) Start(stdout, stderr io.Writer) (err error) {
+func (ps *State) Start(stdout, stderr io.Writer) (err error) {
 	if ps.ready {
 		return nil
 	}
 
-	command := exec.Command(ps.Path, ps.Args...)
+	ps.Cmd = exec.Command(ps.Path, ps.Args...)
+	ps.Cmd.Stdout = stdout
+	ps.Cmd.Stderr = stderr
 
 	ready := make(chan bool)
 	timedOut := time.After(ps.StartTimeout)
 	var pollerStopCh stopChannel
+	pollerStopCh = make(stopChannel)
+	go pollURLUntilOK(ps.HealthCheck.URL, ps.HealthCheck.PollInterval, ready, pollerStopCh)
 
-	if ps.HealthCheckEndpoint != "" {
-		healthCheckURL := ps.URL
-		healthCheckURL.Path = ps.HealthCheckEndpoint
-		pollerStopCh = make(stopChannel)
-		go pollURLUntilOK(healthCheckURL, ps.HealthCheckPollInterval, ready, pollerStopCh)
-	} else {
-		startDetectStream := gbytes.NewBuffer()
-		ready = startDetectStream.Detect(ps.StartMessage)
-		stderr = safeMultiWriter(stderr, startDetectStream)
-	}
+	ps.waitDone = make(chan struct{})
 
-	ps.Session, err = gexec.Start(command, stdout, stderr)
-	if err != nil {
+	if err := ps.Cmd.Start(); err != nil {
+		ps.errMu.Lock()
+		defer ps.errMu.Unlock()
+		ps.exited = true
 		return err
 	}
+	go func() {
+		defer close(ps.waitDone)
+		err := ps.Cmd.Wait()
+
+		ps.errMu.Lock()
+		defer ps.errMu.Unlock()
+		ps.exitErr = err
+		ps.exited = true
+	}()
 
 	select {
 	case <-ready:
 		ps.ready = true
 		return nil
+	case <-ps.waitDone:
+		if pollerStopCh != nil {
+			close(pollerStopCh)
+		}
+		return fmt.Errorf("timeout waiting for process %s to start successfully "+
+			"(it may have failed to start, or stopped unexpectedly before becoming ready)",
+			path.Base(ps.Path))
 	case <-timedOut:
 		if pollerStopCh != nil {
 			close(pollerStopCh)
 		}
-		if ps.Session != nil {
-			ps.Session.Terminate()
+		if ps.Cmd != nil {
+			// intentionally ignore this -- we might've crashed, failed to start, etc
+			ps.Cmd.Process.Signal(syscall.SIGTERM) //nolint errcheck
 		}
 		return fmt.Errorf("timeout waiting for process %s to start", path.Base(ps.Path))
 	}
 }
 
-func safeMultiWriter(writers ...io.Writer) io.Writer {
-	safeWriters := []io.Writer{}
-	for _, w := range writers {
-		if w != nil {
-			safeWriters = append(safeWriters, w)
-		}
-	}
-	return io.MultiWriter(safeWriters...)
+// Exited returns true if the process exited, and may also
+// return an error (as per Cmd.Wait) if the process did not
+// exit with error code 0.
+func (ps *State) Exited() (bool, error) {
+	ps.errMu.Lock()
+	defer ps.errMu.Unlock()
+	return ps.exited, ps.exitErr
 }
 
 func pollURLUntilOK(url url.URL, interval time.Duration, ready chan bool, stopCh stopChannel) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				// there's probably certs *somewhere*,
+				// but it's fine to just skip validating
+				// them for health checks during testing
+				InsecureSkipVerify: true,
+			},
+		},
+	}
 	if interval <= 0 {
 		interval = 100 * time.Millisecond
 	}
 	for {
-		res, err := http.Get(url.String())
+		res, err := client.Get(url.String())
 		if err == nil {
 			res.Body.Close()
 			if res.StatusCode == http.StatusOK {
@@ -195,23 +214,21 @@ func pollURLUntilOK(url url.URL, interval time.Duration, ready chan bool, stopCh
 
 // Stop stops this process gracefully, waits for its termination, and cleans up
 // the CertDir if necessary.
-func (ps *ProcessState) Stop() error {
-	if ps.Session == nil {
+func (ps *State) Stop() error {
+	if ps.Cmd == nil {
 		return nil
 	}
-
-	// gexec's Session methods (Signal, Kill, ...) do not check if the Process is
-	// nil, so we are doing this here for now.
-	// This should probably be fixed in gexec.
-	if ps.Session.Command.Process == nil {
+	if done, _ := ps.Exited(); done {
 		return nil
 	}
+	if err := ps.Cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		return fmt.Errorf("unable to signal for process %s to stop: %w", ps.Path, err)
+	}
 
-	detectedStop := ps.Session.Terminate().Exited
 	timedOut := time.After(ps.StopTimeout)
 
 	select {
-	case <-detectedStop:
+	case <-ps.waitDone:
 		break
 	case <-timedOut:
 		return fmt.Errorf("timeout waiting for process %s to stop", path.Base(ps.Path))

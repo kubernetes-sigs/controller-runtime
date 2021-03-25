@@ -7,13 +7,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gexec"
 	"github.com/onsi/gomega/ghttp"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
 	. "sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
@@ -25,159 +23,73 @@ const (
 
 var _ = Describe("Start method", func() {
 	var (
-		processState *ProcessState
+		processState *State
+		server       *ghttp.Server
 	)
 	BeforeEach(func() {
-		processState = &ProcessState{}
+		server = ghttp.NewServer()
+
+		processState = &State{
+			Path: "bash",
+			Args: simpleBashScript,
+			HealthCheck: HealthCheck{
+				URL: getServerURL(server),
+			},
+		}
 		processState.Path = "bash"
 		processState.Args = simpleBashScript
+
+	})
+	AfterEach(func() {
+		server.Close()
 	})
 
-	It("can start a process", func() {
-		processState.StartTimeout = 10 * time.Second
-		processState.StartMessage = "loop 5"
-
-		err := processState.Start(nil, nil)
-		Expect(err).NotTo(HaveOccurred())
-
-		Consistently(processState.Session.ExitCode).Should(BeNumerically("==", -1))
-	})
-
-	Context("when a health check endpoint is provided", func() {
-		var server *ghttp.Server
+	Context("when process takes too long to start", func() {
 		BeforeEach(func() {
-			server = ghttp.NewServer()
-		})
-		AfterEach(func() {
-			server.Close()
-		})
-
-		Context("when the healthcheck returns ok", func() {
-			BeforeEach(func() {
-				server.RouteToHandler("GET", healthURLPath, ghttp.RespondWith(http.StatusOK, ""))
-			})
-
-			It("hits the endpoint, and successfully starts", func() {
-				processState.HealthCheckEndpoint = healthURLPath
-				processState.StartTimeout = 100 * time.Millisecond
-				processState.URL = getServerURL(server)
-
-				err := processState.Start(nil, nil)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(server.ReceivedRequests()).To(HaveLen(1))
-				Consistently(processState.Session.ExitCode).Should(BeNumerically("==", -1))
+			server.RouteToHandler("GET", healthURLPath, func(resp http.ResponseWriter, _ *http.Request) {
+				time.Sleep(250 * time.Millisecond)
+				resp.WriteHeader(http.StatusOK)
 			})
 		})
+		It("returns a timeout error", func() {
+			processState.StartTimeout = 200 * time.Millisecond
 
-		Context("when the healthcheck always returns failure", func() {
-			BeforeEach(func() {
-				server.RouteToHandler("GET", healthURLPath, ghttp.RespondWith(http.StatusInternalServerError, ""))
-			})
-			It("returns a timeout error and stops health API checker", func() {
-				processState.HealthCheckEndpoint = healthURLPath
-				processState.StartTimeout = 500 * time.Millisecond
-				processState.URL = getServerURL(server)
+			err := processState.Start(nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("timeout")))
 
-				err := processState.Start(nil, nil)
-				Expect(err).To(MatchError(ContainSubstring("timeout")))
-
-				nrReceivedRequests := len(server.ReceivedRequests())
-				Expect(nrReceivedRequests).To(Equal(5))
-				time.Sleep(200 * time.Millisecond)
-				Expect(nrReceivedRequests).To(Equal(5))
-			})
-		})
-
-		Context("when the healthcheck isn't even listening", func() {
-			BeforeEach(func() {
-				server.Close()
-			})
-
-			It("returns a timeout error", func() {
-				processState.HealthCheckEndpoint = healthURLPath
-				processState.StartTimeout = 500 * time.Millisecond
-
-				port, host, err := addr.Suggest("")
-				Expect(err).NotTo(HaveOccurred())
-
-				processState.URL = url.URL{
-					Scheme: "http",
-					Host:   net.JoinHostPort(host, strconv.Itoa(port)),
-				}
-
-				err = processState.Start(nil, nil)
-				Expect(err).To(MatchError(ContainSubstring("timeout")))
-			})
-		})
-
-		Context("when the healthcheck fails initially but succeeds eventually", func() {
-			BeforeEach(func() {
-				server.AppendHandlers(
-					ghttp.RespondWith(http.StatusInternalServerError, ""),
-					ghttp.RespondWith(http.StatusInternalServerError, ""),
-					ghttp.RespondWith(http.StatusInternalServerError, ""),
-					ghttp.RespondWith(http.StatusOK, ""),
-				)
-			})
-
-			It("hits the endpoint repeatedly, and successfully starts", func() {
-				processState.HealthCheckEndpoint = healthURLPath
-				processState.StartTimeout = 20 * time.Second
-				processState.URL = getServerURL(server)
-
-				err := processState.Start(nil, nil)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(server.ReceivedRequests()).To(HaveLen(4))
-				Consistently(processState.Session.ExitCode).Should(BeNumerically("==", -1))
-			})
-
-			Context("when the polling interval is not configured", func() {
-				It("uses the default interval for polling", func() {
-					processState.HealthCheckEndpoint = "/helathz"
-					processState.StartTimeout = 300 * time.Millisecond
-					processState.URL = getServerURL(server)
-
-					Expect(processState.Start(nil, nil)).To(MatchError(ContainSubstring("timeout")))
-					Expect(server.ReceivedRequests()).To(HaveLen(3))
-				})
-			})
-
-			Context("when the polling interval is configured", func() {
-				BeforeEach(func() {
-					processState.HealthCheckPollInterval = time.Millisecond * 150
-				})
-
-				It("hits the endpoint in the configured interval", func() {
-					processState.HealthCheckEndpoint = healthURLPath
-					processState.StartTimeout = 3 * processState.HealthCheckPollInterval
-					processState.URL = getServerURL(server)
-
-					Expect(processState.Start(nil, nil)).To(MatchError(ContainSubstring("timeout")))
-					Expect(server.ReceivedRequests()).To(HaveLen(3))
-				})
-			})
+			Eventually(func() bool { done, _ := processState.Exited(); return done }).Should(BeTrue())
 		})
 	})
 
-	Context("when a health check endpoint is not provided", func() {
+	Context("when the healthcheck returns ok", func() {
+		BeforeEach(func() {
 
-		Context("when process takes too long to start", func() {
-			It("returns a timeout error", func() {
-				processState.StartTimeout = 200 * time.Millisecond
-				processState.StartMessage = "loop 5000"
+			server.RouteToHandler("GET", healthURLPath, ghttp.RespondWith(http.StatusOK, ""))
+		})
 
-				err := processState.Start(nil, nil)
-				Expect(err).To(MatchError(ContainSubstring("timeout")))
+		It("can start a process", func() {
+			processState.StartTimeout = 10 * time.Second
 
-				Eventually(processState.Session.ExitCode).Should(Equal(143))
-			})
+			err := processState.Start(nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			Consistently(processState.Exited).Should(BeFalse())
+		})
+
+		It("hits the endpoint, and successfully starts", func() {
+			processState.StartTimeout = 100 * time.Millisecond
+
+			err := processState.Start(nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(server.ReceivedRequests()).To(HaveLen(1))
+			Consistently(processState.Exited).Should(BeFalse())
 		})
 
 		Context("when the command cannot be started", func() {
 			var err error
 
 			BeforeEach(func() {
-				processState = &ProcessState{}
+				processState = &State{}
 				processState.Path = "/nonexistent"
 
 				err = processState.Start(nil, nil)
@@ -197,43 +109,145 @@ var _ = Describe("Start method", func() {
 				})
 			})
 		})
+
+		Context("when IO is configured", func() {
+			It("can inspect stdout & stderr", func() {
+				stdout := &bytes.Buffer{}
+				stderr := &bytes.Buffer{}
+
+				processState.Args = []string{
+					"-c",
+					`
+						echo 'this is stderr' >&2
+						echo 'that is stdout'
+						echo 'i started' >&2
+					`,
+				}
+				processState.StartTimeout = 1 * time.Second
+
+				Expect(processState.Start(stdout, stderr)).To(Succeed())
+				Eventually(processState.Exited).Should(BeTrue())
+
+				Expect(stdout.String()).To(Equal("that is stdout\n"))
+				Expect(stderr.String()).To(Equal("this is stderr\ni started\n"))
+			})
+		})
 	})
 
-	Context("when IO is configured", func() {
-		It("can inspect stdout & stderr", func() {
-			stdout := &bytes.Buffer{}
-			stderr := &bytes.Buffer{}
+	Context("when the healthcheck always returns failure", func() {
+		BeforeEach(func() {
+			server.RouteToHandler("GET", healthURLPath, ghttp.RespondWith(http.StatusInternalServerError, ""))
+		})
+		It("returns a timeout error and stops health API checker", func() {
+			processState.HealthCheck.URL = getServerURL(server)
+			processState.HealthCheck.Path = healthURLPath
+			processState.StartTimeout = 500 * time.Millisecond
 
-			processState.Args = []string{
-				"-c",
-				`
-					echo 'this is stderr' >&2
-					echo 'that is stdout'
-					echo 'i started' >&2
-				`,
+			err := processState.Start(nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("timeout")))
+
+			nrReceivedRequests := len(server.ReceivedRequests())
+			Expect(nrReceivedRequests).To(Equal(5))
+			time.Sleep(200 * time.Millisecond)
+			Expect(nrReceivedRequests).To(Equal(5))
+		})
+	})
+
+	Context("when the healthcheck isn't even listening", func() {
+		BeforeEach(func() {
+			server.Close()
+		})
+
+		It("returns a timeout error", func() {
+			processState.HealthCheck.Path = healthURLPath
+			processState.StartTimeout = 500 * time.Millisecond
+
+			port, host, err := addr.Suggest("")
+			Expect(err).NotTo(HaveOccurred())
+
+			processState.HealthCheck.URL = url.URL{
+				Scheme: "http",
+				Host:   net.JoinHostPort(host, strconv.Itoa(port)),
 			}
-			processState.StartMessage = "i started"
-			processState.StartTimeout = 1 * time.Second
 
-			Expect(processState.Start(stdout, stderr)).To(Succeed())
-			Eventually(processState.Session).Should(gexec.Exit())
+			err = processState.Start(nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("timeout")))
+		})
+	})
 
-			Expect(stdout.String()).To(Equal("that is stdout\n"))
-			Expect(stderr.String()).To(Equal("this is stderr\ni started\n"))
+	Context("when the healthcheck fails initially but succeeds eventually", func() {
+		BeforeEach(func() {
+			server.AppendHandlers(
+				ghttp.RespondWith(http.StatusInternalServerError, ""),
+				ghttp.RespondWith(http.StatusInternalServerError, ""),
+				ghttp.RespondWith(http.StatusInternalServerError, ""),
+				ghttp.RespondWith(http.StatusOK, ""),
+			)
+		})
+
+		It("hits the endpoint repeatedly, and successfully starts", func() {
+			processState.HealthCheck.URL = getServerURL(server)
+			processState.HealthCheck.Path = healthURLPath
+			processState.StartTimeout = 20 * time.Second
+
+			err := processState.Start(nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(server.ReceivedRequests()).To(HaveLen(4))
+			Consistently(processState.Exited).Should(BeFalse())
+		})
+
+		Context("when the polling interval is not configured", func() {
+			It("uses the default interval for polling", func() {
+				processState.HealthCheck.URL = getServerURL(server)
+				processState.HealthCheck.Path = "/helathz"
+				processState.StartTimeout = 300 * time.Millisecond
+
+				Expect(processState.Start(nil, nil)).To(MatchError(ContainSubstring("timeout")))
+				Expect(server.ReceivedRequests()).To(HaveLen(3))
+			})
+		})
+
+		Context("when the polling interval is configured", func() {
+			BeforeEach(func() {
+				processState.HealthCheck.URL = getServerURL(server)
+				processState.HealthCheck.Path = healthURLPath
+				processState.HealthCheck.PollInterval = time.Millisecond * 150
+			})
+
+			It("hits the endpoint in the configured interval", func() {
+				processState.StartTimeout = 3 * processState.HealthCheck.PollInterval
+
+				Expect(processState.Start(nil, nil)).To(MatchError(ContainSubstring("timeout")))
+				Expect(server.ReceivedRequests()).To(HaveLen(3))
+			})
 		})
 	})
 })
 
 var _ = Describe("Stop method", func() {
+	var (
+		server       *ghttp.Server
+		processState *State
+	)
+	BeforeEach(func() {
+		server = ghttp.NewServer()
+		server.RouteToHandler("GET", healthURLPath, ghttp.RespondWith(http.StatusOK, ""))
+		processState = &State{
+			Path: "bash",
+			Args: simpleBashScript,
+			HealthCheck: HealthCheck{
+				URL: getServerURL(server),
+			},
+		}
+		processState.StartTimeout = 10 * time.Second
+	})
+
+	AfterEach(func() {
+		server.Close()
+	})
 	Context("when Stop() is called", func() {
-		var (
-			processState *ProcessState
-		)
 		BeforeEach(func() {
-			var err error
-			processState = &ProcessState{}
-			processState.Session, err = gexec.Start(getSimpleCommand(), nil, nil)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(processState.Start(nil, nil)).To(Succeed())
 			processState.StopTimeout = 10 * time.Second
 		})
 
@@ -255,13 +269,8 @@ var _ = Describe("Stop method", func() {
 
 	Context("when the command cannot be stopped", func() {
 		It("returns a timeout error", func() {
-			var err error
-
-			processState := &ProcessState{}
-			processState.Session, err = gexec.Start(getSimpleCommand(), nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			processState.Session.Exited = make(chan struct{})
-			processState.StopTimeout = 200 * time.Millisecond
+			Expect(processState.Start(nil, nil)).To(Succeed())
+			processState.StopTimeout = 1 * time.Nanosecond // much shorter than the sleep in the script
 
 			Expect(processState.Stop()).To(MatchError(ContainSubstring("timeout")))
 		})
@@ -271,9 +280,7 @@ var _ = Describe("Stop method", func() {
 		It("removes the directory", func() {
 			var err error
 
-			processState := &ProcessState{}
-			processState.Session, err = gexec.Start(getSimpleCommand(), nil, nil)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(processState.Start(nil, nil)).To(Succeed())
 			processState.Dir, err = ioutil.TempDir("", "k8s_test_framework_")
 			Expect(err).NotTo(HaveOccurred())
 			processState.DirNeedsCleaning = true
@@ -285,67 +292,46 @@ var _ = Describe("Stop method", func() {
 	})
 })
 
-var _ = Describe("DoDefaulting", func() {
+var _ = Describe("Init", func() {
 	Context("when all inputs are provided", func() {
 		It("passes them through", func() {
-			defaults, err := DoDefaulting(
-				"some name",
-				&url.URL{Host: "some.host.to.listen.on"},
-				"/some/dir",
-				"/some/path/to/some/bin",
-				20*time.Hour,
-				65537*time.Millisecond,
-			)
-			Expect(err).NotTo(HaveOccurred())
+			ps := &State{
+				Dir:          "/some/dir",
+				Path:         "/some/path/to/some/bin",
+				StartTimeout: 20 * time.Hour,
+				StopTimeout:  65537 * time.Millisecond,
+			}
 
-			Expect(defaults.URL).To(Equal(url.URL{Host: "some.host.to.listen.on"}))
-			Expect(defaults.Dir).To(Equal("/some/dir"))
-			Expect(defaults.DirNeedsCleaning).To(BeFalse())
-			Expect(defaults.Path).To(Equal("/some/path/to/some/bin"))
-			Expect(defaults.StartTimeout).To(Equal(20 * time.Hour))
-			Expect(defaults.StopTimeout).To(Equal(65537 * time.Millisecond))
+			Expect(ps.Init("some name")).To(Succeed())
+
+			Expect(ps.Dir).To(Equal("/some/dir"))
+			Expect(ps.DirNeedsCleaning).To(BeFalse())
+			Expect(ps.Path).To(Equal("/some/path/to/some/bin"))
+			Expect(ps.StartTimeout).To(Equal(20 * time.Hour))
+			Expect(ps.StopTimeout).To(Equal(65537 * time.Millisecond))
 		})
 	})
 
 	Context("when inputs are empty", func() {
-		It("defaults them", func() {
-			defaults, err := DoDefaulting(
-				"some name",
-				nil,
-				"",
-				"",
-				0,
-				0,
-			)
-			Expect(err).NotTo(HaveOccurred())
+		It("ps them", func() {
+			ps := &State{}
+			Expect(ps.Init("some name")).To(Succeed())
 
-			Expect(defaults.Dir).To(BeADirectory())
-			Expect(os.RemoveAll(defaults.Dir)).To(Succeed())
-			Expect(defaults.DirNeedsCleaning).To(BeTrue())
+			Expect(ps.Dir).To(BeADirectory())
+			Expect(os.RemoveAll(ps.Dir)).To(Succeed())
+			Expect(ps.DirNeedsCleaning).To(BeTrue())
 
-			Expect(defaults.URL).NotTo(BeZero())
-			Expect(defaults.URL.Scheme).To(Equal("http"))
-			Expect(defaults.URL.Hostname()).NotTo(BeEmpty())
-			Expect(defaults.URL.Port()).NotTo(BeEmpty())
+			Expect(ps.Path).NotTo(BeEmpty())
 
-			Expect(defaults.Path).NotTo(BeEmpty())
-
-			Expect(defaults.StartTimeout).NotTo(BeZero())
-			Expect(defaults.StopTimeout).NotTo(BeZero())
+			Expect(ps.StartTimeout).NotTo(BeZero())
+			Expect(ps.StopTimeout).NotTo(BeZero())
 		})
 	})
 
 	Context("when neither name nor path are provided", func() {
 		It("returns an error", func() {
-			_, err := DoDefaulting(
-				"",
-				nil,
-				"",
-				"",
-				0,
-				0,
-			)
-			Expect(err).To(MatchError("must have at least one of name or path"))
+			ps := &State{}
+			Expect(ps.Init("")).To(MatchError("must have at least one of name or path"))
 		})
 	})
 })
@@ -363,12 +349,9 @@ var simpleBashScript = []string{
 	`,
 }
 
-func getSimpleCommand() *exec.Cmd {
-	return exec.Command("bash", simpleBashScript...)
-}
-
 func getServerURL(server *ghttp.Server) url.URL {
 	url, err := url.Parse(server.URL())
 	Expect(err).NotTo(HaveOccurred())
+	url.Path = healthURLPath
 	return *url
 }

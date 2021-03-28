@@ -53,6 +53,10 @@ type Options struct {
 // case of unstructured types, the group, version, and kind will be extracted
 // from the corresponding fields on the object.
 func New(config *rest.Config, options Options) (Client, error) {
+	return newClient(config, options)
+}
+
+func newClient(config *rest.Config, options Options) (*client, error) {
 	if config == nil {
 		return nil, fmt.Errorf("must provide non-nil rest.Config to client.New")
 	}

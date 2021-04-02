@@ -217,7 +217,7 @@ func (r *Reactive) List(ctx context.Context, list client.ObjectList, opts ...cli
 	if err != nil {
 		return err
 	}
-	return r.Scheme().Convert(retrievedObj, list, nil)
+	return r.convertWithTypeMeta(retrievedObj, list)
 }
 
 func (r *Reactive) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {

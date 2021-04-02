@@ -98,6 +98,61 @@ var _ = Describe("Reactive", func() {
 			})
 		})
 	})
+
+	Describe("List", func() {
+		var (
+			list   *corev1.PodList
+			apiErr error
+		)
+		JustBeforeEach(func() {
+			list = new(corev1.PodList)
+			apiErr = subject.List(nil, list)
+		})
+
+		When("the reactor 'handles' the action", func() {
+			var reactorCalled bool
+			BeforeEach(func() {
+				reactorCalled = false
+				subject.PrependReactor(testingclient.ListVerb, &corev1.Pod{}, func(action testing.Action) (handled bool, ret runtime.Object, err error) {
+					reactorCalled = true
+					return true, nil, errors.New("reactor error")
+				})
+			})
+
+			It("calls the reactor", func() {
+				Expect(reactorCalled).To(BeTrue())
+				Expect(apiErr).To(MatchError("reactor error"))
+			})
+
+			It("doesn't call the delegate", func() {
+				Expect(list.Items).To(BeEmpty())
+			})
+		})
+
+		When("the reactor doesn't 'handle' the action", func() {
+			var reactorCalled bool
+			BeforeEach(func() {
+				reactorCalled = false
+				subject.PrependReactor(testingclient.ListVerb, &corev1.Pod{}, func(action testing.Action) (handled bool, ret runtime.Object, err error) {
+					reactorCalled = true
+					return false, nil, nil
+				})
+			})
+
+			It("calls the reactor", func() {
+				Expect(reactorCalled).To(BeTrue())
+			})
+
+			It("calls the delegate client", func() {
+				Expect(apiErr).NotTo(HaveOccurred())
+
+				var listInDelegate corev1.PodList
+				Expect(fakeClient.List(nil, &listInDelegate)).To(Succeed())
+
+				Expect(list).To(gstruct.PointTo(Equal(listInDelegate)), "list should be the retrieved list")
+			})
+		})
+	})
 })
 
 // TODO: test for assertion failure if List isn't passed something that implements client.ObjectList / metav1.ListInterface

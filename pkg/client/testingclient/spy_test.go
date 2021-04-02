@@ -22,7 +22,7 @@ var _ = Describe("Spy", func() {
 	)
 	BeforeEach(func() {
 		calls = make(chan testingclient.SpyCall, 1)
-		fakeClient = testingclient.NewFakeClientWithScheme(scheme.Scheme)
+		fakeClient = testingclient.NewFakeClientBuilder().WithScheme(scheme.Scheme).Build()
 
 		examplePod := corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{

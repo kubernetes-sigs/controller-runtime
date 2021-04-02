@@ -23,7 +23,7 @@ var _ = Describe("ErrorInjector", func() {
 		fakeClient client.Client
 	)
 	BeforeEach(func() {
-		fakeClient = testingclient.NewFakeClientWithScheme(scheme.Scheme)
+		fakeClient = testingclient.NewFakeClientBuilder().WithScheme(scheme.Scheme).Build()
 
 		examplePod := corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{

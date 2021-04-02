@@ -174,13 +174,24 @@ func (r *Reactive) populateGVK(obj runtime.Object) {
 	obj.GetObjectKind().SetGroupVersionKind(gvk)
 }
 
+func (r *Reactive) convertWithTypeMeta(in, out runtime.Object) error {
+	if err := r.Scheme().Convert(in, out, nil); err != nil {
+		return err
+	}
+	// Scheme().Convert() intentionally "clear[s] TypeMeta to match legacy reflective conversion".
+	// We want to keep it to match controller-runtime Clients' behavior.
+	out.GetObjectKind().SetGroupVersionKind(in.GetObjectKind().GroupVersionKind())
+	return nil
+
+}
+
 func (r *Reactive) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 	action := testing.NewGetAction(r.gvrForObject(obj), key.Namespace, key.Name)
 	retrievedObj, err := r.Fake.Invokes(action, nil)
 	if err != nil {
 		return err
 	}
-	return r.Scheme().Convert(retrievedObj, obj, nil)
+	return r.convertWithTypeMeta(retrievedObj, obj)
 }
 
 func (r *Reactive) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {

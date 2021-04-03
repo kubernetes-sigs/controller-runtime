@@ -231,6 +231,28 @@ var _ = Describe("ErrorInjector", func() {
 		})
 	})
 
+	Describe("DeleteAllOf", func() {
+		It("can inject errors on calls to DeleteAllOf", func() {
+			subject.InjectError(testingclient.DeleteAllVerb, &corev1.Pod{}, testingclient.AnyObject, exampleError)
+
+			Expect(subject.DeleteAllOf(nil, &corev1.Pod{})).To(MatchError("injected error"))
+		})
+
+		It("calls the delegate client if no errors match", func() {
+			subject.InjectError(testingclient.DeleteAllVerb, &corev1.Service{}, testingclient.AnyObject, exampleError)
+
+			var listInDelegate corev1.PodList
+			Expect(fakeClient.List(nil, &listInDelegate)).To(Succeed())
+			Expect(listInDelegate.Items).To(HaveLen(2), "consistency check: there are two pods before")
+
+			Expect(subject.DeleteAllOf(nil, &corev1.Pod{})).To(Succeed())
+
+			Expect(fakeClient.List(nil, &listInDelegate)).To(Succeed())
+			Expect(listInDelegate.Items).To(HaveLen(0), "should have deleted all pods")
+		})
+
+	})
+
 	It("works with all combinations of wildcards", func() {
 		pod1Key := types.NamespacedName{Namespace: "ns", Name: "pod1"}
 		var pod1 corev1.Pod

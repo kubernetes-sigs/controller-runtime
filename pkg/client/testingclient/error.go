@@ -93,8 +93,14 @@ func (c ErrorInjector) Patch(ctx context.Context, obj client.Object, patch clien
 	return c.delegate.Patch(ctx, obj, patch, opts...)
 }
 
+// DeleteAllOf will only match against errors injected for AnyObject.
 func (c ErrorInjector) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
-	panic("implement me")
+	err := c.getStubbedError(DeleteAllVerb, mustGVKForObject(obj, c.Scheme()), client.ObjectKeyFromObject(obj))
+	if err != nil {
+		return err
+	}
+
+	return c.delegate.DeleteAllOf(ctx, obj, opts...)
 }
 
 func (c ErrorInjector) Status() client.StatusWriter {

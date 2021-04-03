@@ -45,7 +45,7 @@ func (c ErrorInjector) Get(ctx context.Context, key client.ObjectKey, obj client
 
 // List will only match against errors injected for AnyObject.
 func (c ErrorInjector) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
-	gvk, err := listGVK(list, c.Scheme())
+	gvk, _, err := listGVK(list, c.Scheme())
 	if err != nil {
 		return err
 	}

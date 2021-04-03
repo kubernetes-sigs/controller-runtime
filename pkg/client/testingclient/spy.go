@@ -51,7 +51,7 @@ func (s Spy) Get(ctx context.Context, key client.ObjectKey, obj client.Object) e
 }
 
 func (s Spy) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
-	gvk, err := listGVK(list, s.Scheme())
+	gvk, _, err := listGVK(list, s.Scheme())
 	if err != nil {
 		return err
 	}
@@ -130,14 +130,15 @@ func mustGVKForObject(obj runtime.Object, scheme *runtime.Scheme) schema.GroupVe
 	return gvk
 }
 
-func listGVK(list client.ObjectList, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
-	listGvk := mustGVKForObject(list, scheme)
+func listGVK(list client.ObjectList, scheme *runtime.Scheme) (objGvk, listGvk schema.GroupVersionKind, err error) {
+	listGvk = mustGVKForObject(list, scheme)
 
 	if !strings.HasSuffix(listGvk.Kind, "List") {
-		return schema.GroupVersionKind{}, fmt.Errorf("non-list type %T (kind %q) passed as output", list, listGvk)
+		err = fmt.Errorf("non-list type %T (kind %q) passed as output", list, listGvk)
+		return
 	}
 	// we need the non-list GVK, so chop off the "List" from the end of the kind
-	gvk := listGvk
-	gvk.Kind = gvk.Kind[:len(gvk.Kind)-len("List")]
-	return gvk, nil
+	objGvk = listGvk
+	objGvk.Kind = objGvk.Kind[:len(objGvk.Kind)-len("List")]
+	return
 }

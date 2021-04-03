@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -198,18 +197,7 @@ func (r *Reactive) List(ctx context.Context, list client.ObjectList, opts ...cli
 	listOpts := client.ListOptions{}
 	listOpts.ApplyOptions(opts)
 
-	listGvk, err := apiutil.GVKForObject(list, r.Scheme())
-	if err != nil {
-		return err
-	}
-
-	if !strings.HasSuffix(listGvk.Kind, "List") {
-		return fmt.Errorf("non-list type %T (kind %q) passed as output", list, listGvk)
-	}
-	// we need the non-list GVK, so chop off the "List" from the end of the kind
-	gvk := listGvk
-	gvk.Kind = gvk.Kind[:len(gvk.Kind)-len("List")]
-
+	gvk, listGvk, err := listGVK(list, r.Scheme())
 	gvr, _ := meta.UnsafeGuessKindToResource(gvk)
 
 	action := testing.NewListAction(gvr, listGvk, listOpts.Namespace, *listOpts.AsListOptions())

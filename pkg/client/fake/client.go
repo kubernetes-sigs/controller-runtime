@@ -290,13 +290,11 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 		return err
 	}
 
-	OriginalKind := gvk.Kind
+	originalKind := gvk.Kind
 
-	if !strings.HasSuffix(gvk.Kind, "List") {
-		return fmt.Errorf("non-list type %T (kind %q) passed as output", obj, gvk)
+	if strings.HasSuffix(gvk.Kind, "List") {
+		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 	}
-	// we need the non-list GVK, so chop off the "List" from the end of the kind
-	gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 
 	listOpts := client.ListOptions{}
 	listOpts.ApplyOptions(opts)
@@ -311,7 +309,7 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 	if err != nil {
 		return err
 	}
-	ta.SetKind(OriginalKind)
+	ta.SetKind(originalKind)
 	ta.SetAPIVersion(gvk.GroupVersion().String())
 
 	j, err := json.Marshal(o)

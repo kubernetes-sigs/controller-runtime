@@ -5,6 +5,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -34,7 +35,7 @@ func (c ErrorInjector) RESTMapper() meta.RESTMapper {
 }
 
 func (c ErrorInjector) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-	err := c.getStubbedError(GetVerb, obj, key)
+	err := c.getStubbedError(GetVerb, mustGVKForObject(obj, c.Scheme()), key)
 	if err != nil {
 		return err
 	}
@@ -42,12 +43,22 @@ func (c ErrorInjector) Get(ctx context.Context, key client.ObjectKey, obj client
 	return c.delegate.Get(ctx, key, obj)
 }
 
+// List will only match against errors injected for AnyObject.
 func (c ErrorInjector) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
-	panic("implement me")
+	gvk, err := listGVK(list, c.Scheme())
+	if err != nil {
+		return err
+	}
+
+	err = c.getStubbedError(ListVerb, gvk, AnyObject)
+	if err != nil {
+		return err
+	}
+	return c.delegate.List(ctx, list, opts...)
 }
 
 func (c ErrorInjector) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
-	err := c.getStubbedError(CreateVerb, obj, client.ObjectKeyFromObject(obj))
+	err := c.getStubbedError(CreateVerb, mustGVKForObject(obj, c.Scheme()), client.ObjectKeyFromObject(obj))
 	if err != nil {
 		return err
 	}
@@ -56,7 +67,7 @@ func (c ErrorInjector) Create(ctx context.Context, obj client.Object, opts ...cl
 }
 
 func (c ErrorInjector) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-	err := c.getStubbedError(DeleteVerb, obj, client.ObjectKeyFromObject(obj))
+	err := c.getStubbedError(DeleteVerb, mustGVKForObject(obj, c.Scheme()), client.ObjectKeyFromObject(obj))
 	if err != nil {
 		return err
 	}
@@ -65,7 +76,7 @@ func (c ErrorInjector) Delete(ctx context.Context, obj client.Object, opts ...cl
 }
 
 func (c ErrorInjector) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-	err := c.getStubbedError(UpdateVerb, obj, client.ObjectKeyFromObject(obj))
+	err := c.getStubbedError(UpdateVerb, mustGVKForObject(obj, c.Scheme()), client.ObjectKeyFromObject(obj))
 	if err != nil {
 		return err
 	}
@@ -74,7 +85,7 @@ func (c ErrorInjector) Update(ctx context.Context, obj client.Object, opts ...cl
 }
 
 func (c ErrorInjector) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-	err := c.getStubbedError(PatchVerb, obj, client.ObjectKeyFromObject(obj))
+	err := c.getStubbedError(PatchVerb, mustGVKForObject(obj, c.Scheme()), client.ObjectKeyFromObject(obj))
 	if err != nil {
 		return err
 	}
@@ -90,9 +101,7 @@ func (c ErrorInjector) Status() client.StatusWriter {
 	return c
 }
 
-func (c ErrorInjector) getStubbedError(action Verb, kind client.Object, objectKey client.ObjectKey) error {
-	gvk := mustGVKForObject(kind, c.Scheme())
-
+func (c ErrorInjector) getStubbedError(action Verb, gvk schema.GroupVersionKind, objectKey client.ObjectKey) error {
 	for _, k := range []resourceActionKey{
 		{action, gvk, objectKey},         // (1) 0 wildcards
 		{action, gvk, AnyObject},         // (2) 1 wildcard

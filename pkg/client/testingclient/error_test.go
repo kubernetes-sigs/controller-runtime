@@ -82,6 +82,28 @@ var _ = Describe("ErrorInjector", func() {
 		})
 	})
 
+	Describe("List", func() {
+		It("can inject errors on calls to List", func() {
+			subject.InjectError(testingclient.ListVerb, &corev1.Pod{}, testingclient.AnyObject, exampleError)
+
+			var list corev1.PodList
+			Expect(subject.List(nil, &list)).To(MatchError("injected error"))
+		})
+
+		It("calls the delegate client if no errors match", func() {
+			subject.InjectError(testingclient.ListVerb, &corev1.Service{}, testingclient.AnyObject, exampleError)
+
+			var list corev1.PodList
+			Expect(subject.List(nil, &list)).To(Succeed())
+
+			var listInDelegate corev1.PodList
+			Expect(fakeClient.List(nil, &listInDelegate)).To(Succeed())
+
+			//Expect(list.Items).To(HaveLen(2))
+			Expect(list).To(Equal(listInDelegate), "obj should be the retrieved object")
+		})
+	})
+
 	Describe("Create", func() {
 		pod3 := corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{

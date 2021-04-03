@@ -16,6 +16,9 @@ import (
 )
 
 type Reactive struct {
+	// Fake exposes the underlying client-go testing.Fake used for reaction chains. Be cautious accessing this directly.
+	// In particular, emptying Fake.ReactionChain will remove the default reactor, and may result in falling off the
+	// end of the ReactionChain, resulting in returning nil objects rather than calling the delegate client.
 	Fake testing.Fake
 	delegate client.Client
 }
@@ -145,6 +148,7 @@ func (r *Reactive) newRuntimeObject(kind schema.GroupVersionKind) runtime.Object
 }
 
 // PrependReactor adds a reactor to the beginning of the chain.
+// (testing.Fake's AddReactor is not exposed because it is not useful as long as the default Reactor is in place.)
 func (r *Reactive) PrependReactor(verb Verb, kind client.Object, reaction testing.ReactionFunc) {
 	resource := "*"
 	if kind != AnyKind {

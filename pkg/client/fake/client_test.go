@@ -129,6 +129,16 @@ var _ = Describe("Fake client", func() {
 			Expect(list.Items).To(HaveLen(2))
 		})
 
+		It("should be able to List using unstructured list when setting a non-list kind", func() {
+			By("Listing all deployments in a namespace")
+			list := &unstructured.UnstructuredList{}
+			list.SetAPIVersion("apps/v1")
+			list.SetKind("Deployment")
+			err := cl.List(context.Background(), list, client.InNamespace("ns1"))
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(2))
+		})
+
 		It("should support filtering by labels and their values", func() {
 			By("Listing deployments with a particular label and value")
 			list := &appsv1.DeploymentList{}

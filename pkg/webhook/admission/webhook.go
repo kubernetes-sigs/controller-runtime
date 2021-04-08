@@ -219,9 +219,10 @@ type StandaloneOptions struct {
 	// Logger to be used by the webhook.
 	// If none is set, it defaults to log.Log global logger.
 	Logger logr.Logger
-	// Path the webhook will be served at.
-	// Used for labelling prometheus metrics.
-	Path string
+	// MetricsPath is used for labelling prometheus metrics
+	// by the path is served on.
+	// If none is set, prometheus metrics will not be generated.
+	MetricsPath string
 }
 
 // StandaloneWebhook prepares a webhook for use without a webhook.Server,
@@ -245,8 +246,8 @@ func StandaloneWebhook(hook *Webhook, opts StandaloneOptions) (http.Handler, err
 	}
 	hook.log = opts.Logger
 
-	if opts.Path == "" {
+	if opts.MetricsPath == "" {
 		return hook, nil
 	}
-	return metrics.InstrumentedHook(opts.Path, hook), nil
+	return metrics.InstrumentedHook(opts.MetricsPath, hook), nil
 }

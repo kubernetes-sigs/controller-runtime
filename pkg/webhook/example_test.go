@@ -18,18 +18,24 @@ package webhook_test
 
 import (
 	"context"
+	"net/http"
 
+	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	. "sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-func Example() {
-	// Build webhooks
+var (
+	// Build webhooks used for the various server
+	// configuration options
+	//
 	// These handlers could be also be implementations
 	// of the AdmissionHandler interface for more complex
 	// implementations.
-	mutatingHook := &Admission{
+	mutatingHook = &Admission{
 		Handler: admission.HandlerFunc(func(ctx context.Context, req AdmissionRequest) AdmissionResponse {
 			return Patched("some changes",
 				JSONPatchOp{Operation: "add", Path: "/metadata/annotations/access", Value: "granted"},
@@ -38,12 +44,16 @@ func Example() {
 		}),
 	}
 
-	validatingHook := &Admission{
+	validatingHook = &Admission{
 		Handler: admission.HandlerFunc(func(ctx context.Context, req AdmissionRequest) AdmissionResponse {
 			return Denied("none shall pass!")
 		}),
 	}
+)
 
+// This example registers a webhooks to a webhook server
+// that gets ran by a controller manager.
+func Example() {
 	// Create a manager
 	// Note: GetConfigOrDie will os.Exit(1) w/o any message if no kube-config can be found
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
@@ -69,4 +79,71 @@ func Example() {
 		// handle error
 		panic(err)
 	}
+}
+
+// This example creates a webhook server that can be
+// ran without a controller manager.
+func ExampleStandaloneServer() {
+	// Create a webhook server
+	hookServer := &Server{
+		Port: 8443,
+	}
+
+	// Register the webhooks in the server.
+	hookServer.Register("/mutating", mutatingHook)
+	hookServer.Register("/validating", validatingHook)
+
+	// Start the server without a manger
+	err := hookServer.StartStandalone(signals.SetupSignalHandler(), scheme.Scheme)
+	if err != nil {
+		// handle error
+		panic(err)
+	}
+}
+
+// This example creates a standalone webhook handler
+// and runs it on a vanilla go HTTP server to demonstrate
+// how you could run a webhook on an existing server
+// without a controller manager.
+func ExampleArbitraryHTTPServer() {
+	// Assume you have an existing HTTP server at your disposal
+	// configured as desired (e.g. with TLS).
+	// For this example just create a basic http.ServeMux
+	mux := http.NewServeMux()
+	port := ":8000"
+
+	// Create the standalone HTTP handlers from our webhooks
+	mutatingHookHandler, err := admission.StandaloneWebhook(mutatingHook, admission.StandaloneOptions{
+		Scheme: scheme.Scheme,
+		// Logger let's you optionally pass
+		// a custom logger (defaults to log.Log global Logger)
+		Logger: logf.RuntimeLog.WithName("mutating-webhook"),
+		// MetricsPath let's you optionally
+		// provide the path it will be served on
+		// to be used for labelling prometheus metrics
+		// If none is set, prometheus metrics will not be generated.
+		MetricsPath: "/mutating",
+	})
+	if err != nil {
+		// handle error
+		panic(err)
+	}
+
+	validatingHookHandler, err := admission.StandaloneWebhook(validatingHook, admission.StandaloneOptions{
+		Scheme:      scheme.Scheme,
+		Logger:      logf.RuntimeLog.WithName("validating-webhook"),
+		MetricsPath: "/validating",
+	})
+	if err != nil {
+		// handle error
+		panic(err)
+	}
+
+	// Register the webhook handlers to your server
+	mux.Handle("/mutating", mutatingHookHandler)
+	mux.Handle("/validating", validatingHookHandler)
+
+	// Run your handler
+	http.ListenAndServe(port, mux)
+
 }

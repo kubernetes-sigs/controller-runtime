@@ -22,8 +22,6 @@ import (
 	"net/http"
 
 	"github.com/go-logr/logr"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	jsonpatch "gomodules.xyz/jsonpatch/v2"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -209,27 +207,6 @@ func (w *Webhook) InjectFunc(f inject.Func) error {
 	return setFields(w.Handler)
 }
 
-// InstrumentedHook adds some instrumentation on top of the given webhook.
-func InstrumentedHook(path string, hookRaw http.Handler) http.Handler {
-	lbl := prometheus.Labels{"webhook": path}
-
-	lat := metrics.RequestLatency.MustCurryWith(lbl)
-	cnt := metrics.RequestTotal.MustCurryWith(lbl)
-	gge := metrics.RequestInFlight.With(lbl)
-
-	// Initialize the most likely HTTP status codes.
-	cnt.WithLabelValues("200")
-	cnt.WithLabelValues("500")
-
-	return promhttp.InstrumentHandlerDuration(
-		lat,
-		promhttp.InstrumentHandlerCounter(
-			cnt,
-			promhttp.InstrumentHandlerInFlight(gge, hookRaw),
-		),
-	)
-}
-
 // StandaloneOptions let you configure a StandaloneWebhook.
 type StandaloneOptions struct {
 	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
@@ -265,5 +242,5 @@ func StandaloneWebhook(hook *Webhook, opts StandaloneOptions) (http.Handler, err
 	if opts.Path == "" {
 		return hook, nil
 	}
-	return InstrumentedHook(opts.Path, hook), nil
+	return metrics.InstrumentedHook(opts.Path, hook), nil
 }

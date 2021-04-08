@@ -127,7 +127,9 @@ var _ = Describe("Webhook", func() {
 			}
 
 			// generate listener
-			listener, err := tls.Listen("tcp", net.JoinHostPort(testenv.WebhookInstallOptions.LocalServingHost, strconv.Itoa(int(testenv.WebhookInstallOptions.LocalServingPort))), cfg)
+			listener, err := tls.Listen("tcp",
+				net.JoinHostPort(testenv.WebhookInstallOptions.LocalServingHost,
+					strconv.Itoa(int(testenv.WebhookInstallOptions.LocalServingPort))), cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			// create and register the standalone webhook
@@ -144,7 +146,7 @@ var _ = Describe("Webhook", func() {
 					Expect(srv.Shutdown(context.Background())).NotTo(HaveOccurred())
 					close(idleConnsClosed)
 				}()
-				srv.Serve(listener)
+				_ = srv.Serve(listener)
 				<-idleConnsClosed
 			}()
 

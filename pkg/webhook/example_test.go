@@ -83,7 +83,7 @@ func Example() {
 
 // This example creates a webhook server that can be
 // ran without a controller manager.
-func ExampleStandaloneServer() {
+func ExampleServer_StartStandalone() {
 	// Create a webhook server
 	hookServer := &Server{
 		Port: 8443,
@@ -105,7 +105,7 @@ func ExampleStandaloneServer() {
 // and runs it on a vanilla go HTTP server to demonstrate
 // how you could run a webhook on an existing server
 // without a controller manager.
-func ExampleArbitraryHTTPServer() {
+func ExampleStandaloneWebhook() {
 	// Assume you have an existing HTTP server at your disposal
 	// configured as desired (e.g. with TLS).
 	// For this example just create a basic http.ServeMux
@@ -144,6 +144,8 @@ func ExampleArbitraryHTTPServer() {
 	mux.Handle("/validating", validatingHookHandler)
 
 	// Run your handler
-	http.ListenAndServe(port, mux)
+	if err := http.ListenAndServe(port, mux); err != nil {
+		panic(err)
+	}
 
 }

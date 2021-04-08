@@ -25,6 +25,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -68,12 +69,12 @@ var _ = Describe("Webhook Server", func() {
 		Expect(servingOpts.Cleanup()).To(Succeed())
 	})
 
-	startServer := func() (done <-chan struct{}) {
+	genericStartServer := func(f func(ctx context.Context)) (done <-chan struct{}) {
 		doneCh := make(chan struct{})
 		go func() {
 			defer GinkgoRecover()
 			defer close(doneCh)
-			Expect(server.Start(ctx)).To(Succeed())
+			f(ctx)
 		}()
 		// wait till we can ping the server to start the test
 		Eventually(func() error {
@@ -91,6 +92,12 @@ var _ = Describe("Webhook Server", func() {
 		})).To(Succeed())
 
 		return doneCh
+	}
+
+	startServer := func() (done <-chan struct{}) {
+		return genericStartServer(func(ctx context.Context) {
+			Expect(server.Start(ctx)).To(Succeed())
+		})
 	}
 
 	// TODO(directxman12): figure out a good way to test all the serving setup
@@ -175,32 +182,26 @@ var _ = Describe("Webhook Server", func() {
 		})
 	})
 
-	Context("when using an unmanaged webhook server", func() {
-		It("should serve a webhook on the requested path", func() {
-			opts := webhook.Options{
-				Host:    servingOpts.LocalServingHost,
-				Port:    servingOpts.LocalServingPort,
-				CertDir: servingOpts.LocalServingCertDir,
-			}
-			var err error
-			// overwrite the server so that startServer() starts it
-			server, err = webhook.NewUnmanaged(opts)
-
-			Expect(err).NotTo(HaveOccurred())
-			server.Register("/somepath", &testHandler{})
-			doneCh := startServer()
-
-			Eventually(func() ([]byte, error) {
-				resp, err := client.Get(fmt.Sprintf("https://%s/somepath", testHostPort))
-				Expect(err).NotTo(HaveOccurred())
-				defer resp.Body.Close()
-				return ioutil.ReadAll(resp.Body)
-			}).Should(Equal([]byte("gadzooks!")))
-
-			ctxCancel()
-			Eventually(doneCh, "4s").Should(BeClosed())
+	It("should serve be able to serve in unmanaged mode", func() {
+		server = &webhook.Server{
+			Host:    servingOpts.LocalServingHost,
+			Port:    servingOpts.LocalServingPort,
+			CertDir: servingOpts.LocalServingCertDir,
+		}
+		server.Register("/somepath", &testHandler{})
+		doneCh := genericStartServer(func(ctx context.Context) {
+			Expect(server.StartStandalone(ctx, scheme.Scheme))
 		})
 
+		Eventually(func() ([]byte, error) {
+			resp, err := client.Get(fmt.Sprintf("https://%s/somepath", testHostPort))
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			return ioutil.ReadAll(resp.Body)
+		}).Should(Equal([]byte("gadzooks!")))
+
+		ctxCancel()
+		Eventually(doneCh, "4s").Should(BeClosed())
 	})
 })
 

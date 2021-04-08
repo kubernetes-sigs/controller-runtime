@@ -30,10 +30,10 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes/scheme"
+	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
 // DefaultPort is the default port that the webhook server serves.
@@ -105,67 +105,6 @@ func (s *Server) setDefaults() {
 	}
 }
 
-// Options are the subset of fields on the controller that can be
-// configured when running an unmanaged webhook server (i.e. webhook.NewUnmanaged())
-type Options struct {
-	// Host is the address that the server will listen on.
-	// Defaults to "" - all addresses.
-	Host string
-
-	// Port is the port number that the server will serve.
-	// It will be defaulted to 9443 if unspecified.
-	Port int
-
-	// CertDir is the directory that contains the server key and certificate. The
-	// server key and certificate.
-	CertDir string
-
-	// CertName is the server certificate name. Defaults to tls.crt.
-	CertName string
-
-	// KeyName is the server key name. Defaults to tls.key.
-	KeyName string
-
-	// ClientCAName is the CA certificate name which server used to verify remote(client)'s certificate.
-	// Defaults to "", which means server does not verify client's certificate.
-	ClientCAName string
-
-	// WebhookMux is the multiplexer that handles different webhooks.
-	WebhookMux *http.ServeMux
-
-	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
-	// Defaults to the kubernetes/client-go scheme.Scheme, but it's almost always better
-	// idea to pass your own scheme in.  See the documentation in pkg/scheme for more information.
-	Scheme *runtime.Scheme
-}
-
-// NewUnmanaged provides a webhook server that can be ran without
-// a controller manager.
-func NewUnmanaged(options Options) (*Server, error) {
-	server := &Server{
-		Host:       options.Host,
-		Port:       options.Port,
-		CertDir:    options.CertDir,
-		CertName:   options.CertName,
-		KeyName:    options.KeyName,
-		WebhookMux: options.WebhookMux,
-	}
-	server.setDefaults()
-	// Use the Kubernetes client-go scheme if none is specified
-	if options.Scheme == nil {
-		options.Scheme = scheme.Scheme
-	}
-
-	// TODO: can we do this without dep injection?
-	server.InjectFunc(func(i interface{}) error {
-		if _, err := inject.SchemeInto(options.Scheme, i); err != nil {
-			return err
-		}
-		return nil
-	})
-	return server, nil
-}
-
 // NeedLeaderElection implements the LeaderElectionRunnable interface, which indicates
 // the webhook server doesn't need leader election.
 func (*Server) NeedLeaderElection() bool {
@@ -185,7 +124,7 @@ func (s *Server) Register(path string, hook http.Handler) {
 	}
 	// TODO(directxman12): call setfields if we've already started the server
 	s.webhooks[path] = hook
-	s.WebhookMux.Handle(path, admission.InstrumentedHook(path, hook))
+	s.WebhookMux.Handle(path, metrics.InstrumentedHook(path, hook))
 
 	regLog := log.WithValues("path", path)
 	regLog.Info("registering webhook")
@@ -208,6 +147,26 @@ func (s *Server) Register(path string, hook http.Handler) {
 			regLog.Error(err, "unable to logger into webhook during registration")
 		}
 	}
+}
+
+// StartStandalone runs a webhook server without
+// a controller manager.
+func (s *Server) StartStandalone(ctx context.Context, scheme *runtime.Scheme) error {
+	// Use the Kubernetes client-go scheme if none is specified
+	if scheme == nil {
+		scheme = kscheme.Scheme
+	}
+
+	if err := s.InjectFunc(func(i interface{}) error {
+		if _, err := inject.SchemeInto(scheme, i); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return s.Start(ctx)
 }
 
 // Start runs the server.

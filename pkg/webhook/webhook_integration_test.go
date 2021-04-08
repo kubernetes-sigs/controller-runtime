@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -86,22 +87,20 @@ var _ = Describe("Webhook", func() {
 	})
 	Context("when running a webhook server without a manager", func() {
 		It("should reject create request for webhook that rejects all requests", func(done Done) {
-			opts := webhook.Options{
+			server := webhook.Server{
 				Port:    testenv.WebhookInstallOptions.LocalServingPort,
 				Host:    testenv.WebhookInstallOptions.LocalServingHost,
 				CertDir: testenv.WebhookInstallOptions.LocalServingCertDir,
 			}
-			server, err := webhook.NewUnmanaged(opts)
-			Expect(err).NotTo(HaveOccurred())
 			server.Register("/failing", &webhook.Admission{Handler: &rejectingValidator{}})
 
 			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
-				_ = server.Start(ctx)
+				_ = server.StartStandalone(ctx, scheme.Scheme)
 			}()
 
 			Eventually(func() bool {
-				err = c.Create(context.TODO(), obj)
+				err := c.Create(context.TODO(), obj)
 				return errors.ReasonForError(err) == metav1.StatusReason("Always denied")
 			}, 1*time.Second).Should(BeTrue())
 

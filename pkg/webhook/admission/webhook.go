@@ -113,6 +113,9 @@ func (f HandlerFunc) Handle(ctx context.Context, req Request) Response {
 }
 
 // Webhook represents each individual webhook.
+//
+// It must be registered with a webhook.Server or
+// populated by StandaloneWebhook to be ran on an arbitrary HTTP server.
 type Webhook struct {
 	// Handler actually processes an admission request returning whether it was allowed or denied,
 	// and potentially patches to apply to the handler.
@@ -221,8 +224,11 @@ type StandaloneOptions struct {
 	Path string
 }
 
-// StandaloneWebhook transforms a Webhook that needs to be registered
-// on a webhook.Server into one that can be ran on any arbitrary mux.
+// StandaloneWebhook prepares a webhook for use without a webhook.Server,
+// passing in the information normally populated by webhook.Server
+// and instrumenting the webhook with metrics.
+//
+// Use this to attach your webhook to an arbitrary HTTP server or mux.
 func StandaloneWebhook(hook *Webhook, opts StandaloneOptions) (http.Handler, error) {
 	if opts.Scheme == nil {
 		opts.Scheme = scheme.Scheme

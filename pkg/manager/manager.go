@@ -111,6 +111,25 @@ type Options struct {
 	// value only if you know what you are doing. Defaults to 10 hours if unset.
 	// there will a 10 percent jitter between the SyncPeriod of all controllers
 	// so that all controllers will not send list requests simultaneously.
+	//
+	// This applies to all controllers.
+	//
+	// A period sync happens for two reasons:
+	// 1. To insure against a bug in the controller that causes an object to not
+	// be requeued, when it otherwise should be requeued.
+	// 2. To insure against an unknown bug in controller-runtime, or its dependencies,
+	// that causes an object to not be requeued, when it otherwise should be
+	// requeued, or to be removed from the queue, when it otherwise should not
+	// be removed.
+	//
+	// If you want
+	// 1. to insure against missed watch events, or
+	// 2. to poll services that cannot be watched,
+	// then we recommend that, instead of changing the default period, the
+	// controller requeue, with a constant duration `t`, whenever the controller
+	// is "done" with an object, and would otherwise not requeue it, i.e., we
+	// recommend the `Reconcile` function return `reconcile.Result{RequeueAfter: t}`,
+	// instead of `reconcile.Result{}`.
 	SyncPeriod *time.Duration
 
 	// Logger is the logger that should be used by this manager.
@@ -207,10 +226,10 @@ type Options struct {
 	// by the manager. If not set this will use the default new cache function.
 	NewCache cache.NewCacheFunc
 
-	// ClientBuilder is the builder that creates the client to be used by the manager.
+	// NewClient is the func that creates the client to be used by the manager.
 	// If not set this will create the default DelegatingClient that will
 	// use the cache for reads and the client for writes.
-	ClientBuilder ClientBuilder
+	NewClient cluster.NewClientFunc
 
 	// ClientDisableCacheFor tells the client that, if any cache is used, to bypass it
 	// for the given objects.
@@ -290,7 +309,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		clusterOptions.SyncPeriod = options.SyncPeriod
 		clusterOptions.Namespace = options.Namespace
 		clusterOptions.NewCache = options.NewCache
-		clusterOptions.ClientBuilder = options.ClientBuilder
+		clusterOptions.NewClient = options.NewClient
 		clusterOptions.ClientDisableCacheFor = options.ClientDisableCacheFor
 		clusterOptions.DryRunClient = options.DryRunClient
 		clusterOptions.EventBroadcaster = options.EventBroadcaster
@@ -308,9 +327,9 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}
 
 	// Create the resource lock to enable leader election)
-	leaderConfig := config
-	if options.LeaderElectionConfig != nil {
-		leaderConfig = options.LeaderElectionConfig
+	leaderConfig := options.LeaderElectionConfig
+	if leaderConfig == nil {
+		leaderConfig = rest.CopyConfig(config)
 	}
 	resourceLock, err := options.newResourceLock(leaderConfig, recorderProvider, leaderelection.Options{
 		LeaderElection:             options.LeaderElection,
@@ -359,6 +378,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		livenessEndpointName:    options.LivenessEndpointName,
 		gracefulShutdownTimeout: *options.GracefulShutdownTimeout,
 		internalProceduresStop:  make(chan struct{}),
+		leaderElectionStopped:   make(chan struct{}),
 	}, nil
 }
 

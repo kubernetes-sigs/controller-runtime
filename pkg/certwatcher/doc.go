@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Kubernetes Authors.
+Copyright 2021 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,16 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package manager
-
-import (
-	"sigs.k8s.io/controller-runtime/pkg/cluster"
-)
-
-// ClientBuilder builder is the interface for the client builder.
-type ClientBuilder = cluster.ClientBuilder
-
-// NewClientBuilder returns a builder to build new clients to be passed when creating a Manager.
-func NewClientBuilder() ClientBuilder {
-	return cluster.NewClientBuilder()
-}
+/*
+Package certwatcher is a helper for reloading Certificates from disk to be used
+with tls servers. It provides a helper func `GetCertificate` which can be
+called from `tls.Config` and passed into your tls.Listener. For a detailed
+example server view pkg/webhook/server.go.
+*/
+package certwatcher

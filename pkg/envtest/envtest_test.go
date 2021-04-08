@@ -77,7 +77,7 @@ var _ = Describe("Test", func() {
 			Eventually(func() bool {
 				err := c.Get(ctx, crdObjectKey, &placeholder)
 				return apierrors.IsNotFound(err)
-			}, 1*time.Second).Should(BeTrue())
+			}, 5*time.Second).Should(BeTrue())
 		}
 		close(done)
 	}, teardownTimeoutSeconds)

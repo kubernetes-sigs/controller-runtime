@@ -55,18 +55,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
-type fakeClientBuilder struct {
-	err error
-}
-
-func (e *fakeClientBuilder) WithUncached(objs ...client.Object) ClientBuilder {
-	return e
-}
-
-func (e *fakeClientBuilder) Build(cache cache.Cache, config *rest.Config, options client.Options) (client.Client, error) {
-	return nil, e.err
-}
-
 var _ = Describe("manger.Manager", func() {
 	Describe("New", func() {
 		It("should return an error if there is no Config", func() {
@@ -88,7 +76,9 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should return an error it can't create a client.Client", func(done Done) {
 			m, err := New(cfg, Options{
-				ClientBuilder: &fakeClientBuilder{err: fmt.Errorf("expected error")},
+				NewClient: func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
+					return nil, errors.New("expected error")
+				},
 			})
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
@@ -112,7 +102,9 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should create a client defined in by the new client function", func(done Done) {
 			m, err := New(cfg, Options{
-				ClientBuilder: &fakeClientBuilder{},
+				NewClient: func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
+					return nil, nil
+				},
 			})
 			Expect(m).ToNot(BeNil())
 			Expect(err).ToNot(HaveOccurred())
@@ -590,6 +582,20 @@ var _ = Describe("manger.Manager", func() {
 
 				wgRunnableStarted.Wait()
 				close(done)
+			})
+
+			It("should not manipulate the provided config", func() {
+				originalCfg := rest.CopyConfig(cfg)
+				// The options object is shared by multiple tests, copy it
+				// into our scope so we manipulate it for this testcase only
+				options := options
+				options.newResourceLock = nil
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+				Expect(m.GetConfig()).To(Equal(originalCfg))
 			})
 
 			It("should stop when context is cancelled", func(done Done) {

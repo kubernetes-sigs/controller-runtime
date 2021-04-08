@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -266,8 +267,13 @@ func CreateCRDs(ctx context.Context, config *rest.Config, crds []client.Object) 
 			return err
 		default:
 			log.V(1).Info("CRD already exists, updating", "crd", crd.GetName())
-			crd.SetResourceVersion(existingCrd.GetResourceVersion())
-			if err := cs.Update(ctx, crd); err != nil {
+			if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+				if err := cs.Get(ctx, client.ObjectKey{Name: crd.GetName()}, existingCrd); err != nil {
+					return err
+				}
+				crd.SetResourceVersion(existingCrd.GetResourceVersion())
+				return cs.Update(ctx, crd)
+			}); err != nil {
 				return err
 			}
 		}

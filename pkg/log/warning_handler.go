@@ -22,21 +22,23 @@ import (
 	"github.com/go-logr/logr"
 )
 
-// WarningLoggerOptions controls the behavior of a rest.WarningHandler constructed using NewWarningLogger()
-type WarningLoggerOptions struct {
+// KubeAPIWarningLoggerOptions controls the behavior
+// of a rest.WarningHandler constructed using NewKubeAPIWarningLogger()
+type KubeAPIWarningLoggerOptions struct {
 	// Deduplicate indicates a given warning message should only be written once.
 	// Setting this to true in a long-running process handling many warnings can
 	// result in increased memory use.
 	Deduplicate bool
 }
 
-// WarningLogger is a wrapper around DelegatingLogger that implements the
+// KubeAPIWarningLogger is a wrapper around
+// a provided logr.Logger that implements the
 // rest.WarningHandler interface.
-type WarningLogger struct {
+type KubeAPIWarningLogger struct {
 	// logger is used to log responses with the warning header
 	logger logr.Logger
 	// opts contain options controlling warning output
-	opts WarningLoggerOptions
+	opts KubeAPIWarningLoggerOptions
 	// writtenLock gurads written
 	writtenLock sync.Mutex
 	// used to keep track of already logged messages
@@ -46,7 +48,7 @@ type WarningLogger struct {
 
 // HandleWarningHeader handles logging for responses from API server that are
 // warnings with code being 299 and uses a logr.Logger for it's logging purposes.
-func (l *WarningLogger) HandleWarningHeader(code int, agent string, message string) {
+func (l *KubeAPIWarningLogger) HandleWarningHeader(code int, agent string, message string) {
 	if code != 299 || len(message) == 0 {
 		return
 	}
@@ -63,10 +65,10 @@ func (l *WarningLogger) HandleWarningHeader(code int, agent string, message stri
 	l.logger.Info(message)
 }
 
-// NewWarningLogger returns an implementation of rest.WarningHandler that logs warnings
-// with code = 299 using a DelegatingLogger.
-func NewWarningLogger(l logr.Logger, opts WarningLoggerOptions) *WarningLogger {
-	h := &WarningLogger{logger: l, opts: opts}
+// NewKubeAPIWarningLogger returns an implementation of rest.WarningHandler that logs warnings
+// with code = 299 to the provided logr.Logger.
+func NewKubeAPIWarningLogger(l logr.Logger, opts KubeAPIWarningLoggerOptions) *KubeAPIWarningLogger {
+	h := &KubeAPIWarningLogger{logger: l, opts: opts}
 	if opts.Deduplicate {
 		h.written = map[string]struct{}{}
 	}

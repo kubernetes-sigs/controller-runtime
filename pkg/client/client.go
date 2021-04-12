@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -76,27 +75,23 @@ func New(config *rest.Config, options Options) (Client, error) {
 	if config == nil {
 		return nil, fmt.Errorf("must provide non-nil rest.Config to client.New")
 	}
-	var logger logr.Logger
 
 	if !options.Opts.SuppressWarnings {
 		// surface warnings
-		logger = log.Log.WithName("KubeAPIWarningLogger")
-	} else {
-		// suppress warnings
-		logger = log.NullLogger{}
+		logger := log.Log.WithName("KubeAPIWarningLogger")
+		// Set a WarningHandler, the default WarningHandler
+		// is log.KubeAPIWarningLogger with deduplication enabled.
+		// See log.KubeAPIWarningLoggerOptions for considerations
+		// regarding deduplication.
+		rest.SetDefaultWarningHandler(
+			log.NewKubeAPIWarningLogger(
+				logger,
+				log.KubeAPIWarningLoggerOptions{
+					Deduplicate: !options.Opts.AllowDuplicateLogs,
+				},
+			),
+		)
 	}
-
-	// Set a WarningHandler, the default WarningHandler is log.WarningLogger with
-	// deduplication enabled. See log.WarningLoggerOptions for considerations regarding
-	// deduplication.
-	rest.SetDefaultWarningHandler(
-		log.NewWarningLogger(
-			logger,
-			log.WarningLoggerOptions{
-				Deduplicate: !options.Opts.AllowDuplicateLogs,
-			},
-		),
-	)
 
 	// Init a scheme if none provided
 	if options.Scheme == nil {
@@ -150,7 +145,6 @@ func New(config *rest.Config, options Options) (Client, error) {
 var _ Client = &client{}
 
 // client is a client.Client that reads and writes directly from/to an API server.  It lazily initializes
-// new clients at the time they are used, and caches the client.
 // new clients at the time they are used, and caches the client.
 type client struct {
 	typedClient        typedClient

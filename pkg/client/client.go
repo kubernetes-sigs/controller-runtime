@@ -31,7 +31,22 @@ import (
 	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+// WarningHandlerOptions are options for configuring a
+// warning handler for the client which is responsible
+// for surfacing API Server warnings.
+type WarningHandlerOptions struct {
+	// SuppressWarnings decides if the warnings from the
+	// API server are suppressed or surfaced in the client.
+	SuppressWarnings bool
+	// AllowDuplicateLogs does not deduplicate the to-be
+	// logged surfaced warnings messages. See
+	// log.WarningHandlerOptions for considerations
+	// regarding deuplication
+	AllowDuplicateLogs bool
+}
 
 // Options are creation options for a Client
 type Options struct {
@@ -40,6 +55,10 @@ type Options struct {
 
 	// Mapper, if provided, will be used to map GroupVersionKinds to Resources
 	Mapper meta.RESTMapper
+
+	// Opts is used to configure the warning handler responsible for
+	// surfacing and handling warnings messages sent by the API server.
+	Opts WarningHandlerOptions
 }
 
 // New returns a new Client using the provided config and Options.
@@ -59,6 +78,23 @@ func New(config *rest.Config, options Options) (Client, error) {
 func newClient(config *rest.Config, options Options) (*client, error) {
 	if config == nil {
 		return nil, fmt.Errorf("must provide non-nil rest.Config to client.New")
+	}
+
+	if !options.Opts.SuppressWarnings {
+		// surface warnings
+		logger := log.Log.WithName("KubeAPIWarningLogger")
+		// Set a WarningHandler, the default WarningHandler
+		// is log.KubeAPIWarningLogger with deduplication enabled.
+		// See log.KubeAPIWarningLoggerOptions for considerations
+		// regarding deduplication.
+		rest.SetDefaultWarningHandler(
+			log.NewKubeAPIWarningLogger(
+				logger,
+				log.KubeAPIWarningLoggerOptions{
+					Deduplicate: !options.Opts.AllowDuplicateLogs,
+				},
+			),
+		)
 	}
 
 	// Init a scheme if none provided

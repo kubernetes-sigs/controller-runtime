@@ -237,10 +237,8 @@ func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f Mu
 		if !errors.IsNotFound(err) {
 			return OperationResultNone, err
 		}
-		if f != nil {
-			if err := mutate(f, key, obj); err != nil {
-				return OperationResultNone, err
-			}
+		if err := mutate(f, key, obj); err != nil {
+			return OperationResultNone, err
 		}
 		if err := c.Create(ctx, obj); err != nil {
 			return OperationResultNone, err
@@ -324,12 +322,17 @@ func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f Mu
 
 // mutate wraps a MutateFn and applies validation to its result
 func mutate(f MutateFn, key client.ObjectKey, obj client.Object) error {
-	if err := f(); err != nil {
-		return err
+	// if f is nil, there is no mutate operation to be done, in which case just return
+	if f != nil {
+
+		if err := f(); err != nil {
+			return err
+		}
+		if newKey := client.ObjectKeyFromObject(obj); key != newKey {
+			return fmt.Errorf("MutateFn cannot mutate object name and/or object namespace")
+		}
 	}
-	if newKey := client.ObjectKeyFromObject(obj); key != newKey {
-		return fmt.Errorf("MutateFn cannot mutate object name and/or object namespace")
-	}
+
 	return nil
 }
 

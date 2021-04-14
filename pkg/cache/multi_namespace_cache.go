@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/rest"
 	toolscache "k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/internal/objectutil"
 )
 
 // NewCacheFunc - Function for creating a new cache from the options and a rest config
@@ -134,13 +135,16 @@ func (c *multiNamespaceCache) IndexField(ctx context.Context, obj client.Object,
 }
 
 func (c *multiNamespaceCache) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-	// gvk := obj.GetObjectKind().GroupVersionKind()
-	// mapping, _ := c.RESTMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-	// if mapping.Scope.Name() == meta.RESTScopeNameRoot {
-	// 	// Look into the global cache to fetch the object
-	// 	cache := c.namespaceToCache[globalCache]
-	// 	return cache.Get(ctx, key, obj)
-	// }
+	isNamespaced, err := objectutil.IsNamespacedObject(obj, c.Scheme, c.RESTMapper)
+	if err != nil {
+		return err
+	}
+
+	if !isNamespaced {
+		// Look into the global cache to fetch the object
+		cache := c.namespaceToCache[globalCache]
+		return cache.Get(ctx, key, obj)
+	}
 
 	cache, ok := c.namespaceToCache[key.Namespace]
 	if !ok {
@@ -154,32 +158,23 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 	listOpts := client.ListOptions{}
 	listOpts.ApplyOptions(opts)
 
-	// handle cluster scoped objects by looking into global cache
-	// gvk := list.GetObjectKind().GroupVersionKind()
-	// mapping, _ := c.RESTMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-	// if mapping.Scope.Name() == meta.RESTScopeNameRoot {
-	// 	// Look at the global cache to get the objects with the specified GVK
-	// 	cache := c.namespaceToCache[globalCache]
-	// 	err := cache.List(ctx, list, opts...)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
+	isNamespaced, err := objectutil.IsNamespacedObject(list, c.Scheme, c.RESTMapper)
+	if err != nil {
+		return err
+	}
+
+	if !isNamespaced {
+		// Look at the global cache to get the objects with the specified GVK
+		cache := c.namespaceToCache[globalCache]
+		return cache.List(ctx, list, opts...)
+	}
+
 	if listOpts.Namespace != corev1.NamespaceAll {
 		cache, ok := c.namespaceToCache[listOpts.Namespace]
 		if !ok {
 			return fmt.Errorf("unable to get: %v because of unknown namespace for the cache", listOpts.Namespace)
 		}
-		err := cache.List(ctx, list, opts...)
-		if err != nil {
-			return err
-		}
-		items, err := apimeta.ExtractList(list)
-		if err != nil {
-			return err
-		}
-		uniqueItems := removeDuplicates(items)
-		return apimeta.SetList(list, uniqueItems)
+		return cache.List(ctx, list, opts...)
 	}
 
 	listAccessor, err := meta.ListAccessor(list)
@@ -210,28 +205,9 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 		// The last list call should have the most correct resource version.
 		resourceVersion = accessor.GetResourceVersion()
 	}
-
-	uniqueItems := removeDuplicates(allItems)
 	listAccessor.SetResourceVersion(resourceVersion)
 
-	return apimeta.SetList(list, uniqueItems)
-}
-
-// removeDuplicates removes the duplicate objects obtained from all namespaces so that
-// the resulting list has objects with unique name and namespace.
-func removeDuplicates(items []runtime.Object) []runtime.Object {
-	objects := make(map[string]bool)
-	unique := []runtime.Object{}
-
-	for _, obj := range items {
-		metaObj, _ := meta.Accessor(obj)
-		key := metaObj.GetName() + " " + metaObj.GetNamespace()
-		if _, value := objects[key]; !value {
-			objects[key] = true
-			unique = append(unique, obj)
-		}
-	}
-	return unique
+	return apimeta.SetList(list, allItems)
 }
 
 // multiNamespaceInformer knows how to handle interacting with the underlying informer across multiple namespaces

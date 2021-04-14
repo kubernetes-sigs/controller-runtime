@@ -22,7 +22,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -48,24 +47,12 @@ func FilterWithLabels(objs []runtime.Object, labelSel labels.Selector) ([]runtim
 	return outItems, nil
 }
 
-// IsNamespacedObject returns true if the object is namespace scoped.
+// IsAPINamespaced returns true if the object is namespace scoped.
 // For unstructured objects the gvk is found from the object itself.
-func IsNamespacedObject(obj runtime.Object, scheme *runtime.Scheme, restmapper apimeta.RESTMapper) (bool, error) {
-	var gvk schema.GroupVersionKind
-	var err error
-
-	_, isUnstructured := obj.(*unstructured.Unstructured)
-	_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
-
-	isUnstructured = isUnstructured || isUnstructuredList
-
-	if isUnstructured {
-		gvk = obj.GetObjectKind().GroupVersionKind()
-	} else {
-		gvk, err = apiutil.GVKForObject(obj, scheme)
-		if err != nil {
-			return false, err
-		}
+func IsAPINamespaced(obj runtime.Object, scheme *runtime.Scheme, restmapper apimeta.RESTMapper) (bool, error) {
+	gvk, err := apiutil.GVKForObject(obj, scheme)
+	if err != nil {
+		return false, err
 	}
 
 	restmapping, err := restmapper.RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind})

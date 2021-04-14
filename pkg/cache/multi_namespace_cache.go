@@ -36,7 +36,7 @@ import (
 type NewCacheFunc func(config *rest.Config, opts Options) (Cache, error)
 
 // a new global namespaced cache to handle cluster scoped resources
-var globalCache = "cluster-scope"
+const globalCache = "_cluster-scope"
 
 // MultiNamespacedCacheBuilder - Builder function to create a new multi-namespaced cache.
 // This will scope the cache to a list of namespaces. Listing for all namespaces
@@ -135,7 +135,7 @@ func (c *multiNamespaceCache) IndexField(ctx context.Context, obj client.Object,
 }
 
 func (c *multiNamespaceCache) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-	isNamespaced, err := objectutil.IsNamespacedObject(obj, c.Scheme, c.RESTMapper)
+	isNamespaced, err := objectutil.IsAPINamespaced(obj, c.Scheme, c.RESTMapper)
 	if err != nil {
 		return err
 	}
@@ -158,7 +158,7 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 	listOpts := client.ListOptions{}
 	listOpts.ApplyOptions(opts)
 
-	isNamespaced, err := objectutil.IsNamespacedObject(list, c.Scheme, c.RESTMapper)
+	isNamespaced, err := objectutil.IsAPINamespaced(list, c.Scheme, c.RESTMapper)
 	if err != nil {
 		return err
 	}

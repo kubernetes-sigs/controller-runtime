@@ -35,7 +35,7 @@ import (
 type NewCacheFunc func(config *rest.Config, opts Options) (Cache, error)
 
 // a new global namespaced cache to handle cluster scoped resources
-var globalCache = ""
+var globalCache = "cluster-scope"
 
 // MultiNamespacedCacheBuilder - Builder function to create a new multi-namespaced cache.
 // This will scope the cache to a list of namespaces. Listing for all namespaces
@@ -60,7 +60,7 @@ func MultiNamespacedCacheBuilder(namespaces []string) NewCacheFunc {
 			}
 			caches[ns] = c
 		}
-		return &multiNamespaceCache{namespaceToCache: caches, Scheme: opts.Scheme}, nil
+		return &multiNamespaceCache{namespaceToCache: caches, Scheme: opts.Scheme, RESTMapper: opts.Mapper}, nil
 	}
 }
 
@@ -71,6 +71,7 @@ func MultiNamespacedCacheBuilder(namespaces []string) NewCacheFunc {
 type multiNamespaceCache struct {
 	namespaceToCache map[string]Cache
 	Scheme           *runtime.Scheme
+	RESTMapper       meta.RESTMapper
 }
 
 var _ Cache = &multiNamespaceCache{}
@@ -133,6 +134,14 @@ func (c *multiNamespaceCache) IndexField(ctx context.Context, obj client.Object,
 }
 
 func (c *multiNamespaceCache) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+	// gvk := obj.GetObjectKind().GroupVersionKind()
+	// mapping, _ := c.RESTMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	// if mapping.Scope.Name() == meta.RESTScopeNameRoot {
+	// 	// Look into the global cache to fetch the object
+	// 	cache := c.namespaceToCache[globalCache]
+	// 	return cache.Get(ctx, key, obj)
+	// }
+
 	cache, ok := c.namespaceToCache[key.Namespace]
 	if !ok {
 		return fmt.Errorf("unable to get: %v because of unknown namespace for the cache", key)
@@ -144,6 +153,18 @@ func (c *multiNamespaceCache) Get(ctx context.Context, key client.ObjectKey, obj
 func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 	listOpts := client.ListOptions{}
 	listOpts.ApplyOptions(opts)
+
+	// handle cluster scoped objects by looking into global cache
+	// gvk := list.GetObjectKind().GroupVersionKind()
+	// mapping, _ := c.RESTMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	// if mapping.Scope.Name() == meta.RESTScopeNameRoot {
+	// 	// Look at the global cache to get the objects with the specified GVK
+	// 	cache := c.namespaceToCache[globalCache]
+	// 	err := cache.List(ctx, list, opts...)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
 	if listOpts.Namespace != corev1.NamespaceAll {
 		cache, ok := c.namespaceToCache[listOpts.Namespace]
 		if !ok {

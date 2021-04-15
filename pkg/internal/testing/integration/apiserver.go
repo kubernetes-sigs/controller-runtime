@@ -9,11 +9,23 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/google/uuid"
 	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/addr"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/internal"
 )
+
+// DefaultUserName username for user which populated by default while APIServer starting
+const DefaultUserName = "kubeadmin"
+
+// User represents user entry in token-auth-file
+type User struct {
+	Token  string
+	Name   string
+	UID    string
+	Groups []string
+}
 
 // APIServer knows how to run a kubernetes apiserver.
 type APIServer struct {
@@ -55,6 +67,16 @@ type APIServer struct {
 	// directory, and the Stop() method will clean it up.
 	CertDir string
 
+	// AuthFiletDir is a path to a directory containing token-auth-file which is needed to setup
+	// authentication for APIServer
+	//
+	// If left unspecified, then the Start() method will create a fresh temporary
+	// directory, and the Stop() method will clean it up.
+	AuthFileDir string
+
+	// Map with users to be populated on APIServer startup. User's name using as key there.
+	Users map[string]*User
+
 	// EtcdURL is the URL of the Etcd the APIServer should use.
 	//
 	// If this is not specified, the Start() method will return an error.
@@ -84,7 +106,19 @@ func (s *APIServer) Start() error {
 			return err
 		}
 	}
+	if !s.dirExists() {
+		s.processState.Dir = ""
+		if err := s.setProcessState(); err != nil {
+			return err
+		}
+	}
+
 	return s.processState.Start(s.Out, s.Err)
+}
+
+func (s *APIServer) dirExists() bool {
+	_, err := os.Stat(s.processState.Dir)
+	return os.IsExist(err)
 }
 
 func (s *APIServer) setProcessState() error {
@@ -120,11 +154,16 @@ func (s *APIServer) setProcessState() error {
 
 	s.URL = &s.processState.URL
 	s.CertDir = s.processState.Dir
+	s.AuthFileDir = s.processState.Dir
 	s.Path = s.processState.Path
 	s.StartTimeout = s.processState.StartTimeout
 	s.StopTimeout = s.processState.StopTimeout
 
 	if err := s.populateAPIServerCerts(); err != nil {
+		return err
+	}
+
+	if err := s.populateTokenAuthFile(); err != nil {
 		return err
 	}
 
@@ -166,6 +205,31 @@ func (s *APIServer) populateAPIServerCerts() error {
 		CAData: ca.CA.CertBytes(),
 	}
 
+	return nil
+}
+
+func (s *APIServer) populateTokenAuthFile() error {
+	_, statErr := os.Stat(filepath.Join(s.CertDir, "token-auth-file"))
+	if !os.IsNotExist(statErr) {
+		return statErr
+	}
+	if s.Users == nil {
+		s.Users = make(map[string]*User)
+	}
+	defaultUser := User{
+		Token:  uuid.New().String(),
+		Name:   DefaultUserName,
+		UID:    DefaultUserName,
+		Groups: []string{"system:masters"},
+	}
+	s.Users[DefaultUserName] = &defaultUser
+	authTokenFileContent, err := internal.RenderTemplate(internal.TokenAuthFileTemplate, s)
+	if err != nil {
+		return err
+	}
+	if err := ioutil.WriteFile(filepath.Join(s.AuthFileDir, "token-auth-file"), []byte(authTokenFileContent), 0640); err != nil {
+		return err
+	}
 	return nil
 }
 

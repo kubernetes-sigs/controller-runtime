@@ -82,6 +82,18 @@ var _ = Describe("Arguments", func() {
 		))
 	})
 
+	It("templating single string", func() {
+		template := "one: {{ .One }}, two: {{.Two}}"
+		data := struct {
+			One string
+			Two string
+		}{"one", "two"}
+
+		out, err := RenderTemplate(template, data)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(out).To(BeEquivalentTo("one: one, two: two"))
+	})
+
 	Context("When overriding external default args", func() {
 		It("does not change the internal default args for APIServer", func() {
 			integration.APIServerDefaultArgs[0] = "oh no!"

@@ -5,6 +5,15 @@ import (
 	"html/template"
 )
 
+// RenderTemplate renders single string template
+func RenderTemplate(tmplStr string, data interface{}) (rendered string, err error) {
+	renderedArray, err := RenderTemplates([]string{tmplStr}, data)
+	if err != nil {
+		return "", err
+	}
+	return renderedArray[0], nil
+}
+
 // RenderTemplates returns an []string to render the templates
 func RenderTemplates(argTemplates []string, data interface{}) (args []string, err error) {
 	var t *template.Template

@@ -23,11 +23,16 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	authv1 "k8s.io/api/authentication/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	kubeclient "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -844,5 +849,107 @@ var _ = Describe("Test", func() {
 			Expect(env.Stop()).To(Succeed())
 			close(done)
 		}, 30)
+	})
+
+	Describe("SecureConfig", func() {
+
+		It("should be populated during envtest start", func(done Done) {
+			Expect(env.Config.CAData).To(BeNil())
+			Expect(env.Config.BearerToken).To(BeEmpty())
+
+			Expect(env.SecureConfig).NotTo(BeNil())
+			Expect(env.SecureConfig.BearerToken).NotTo(BeEmpty())
+			Expect(env.SecureConfig.CAData).NotTo(BeNil())
+			close(done)
+		})
+
+		It("client should work with credentials and authorize successfully", func(done Done) {
+			c, err := kubeclient.NewForConfig(env.SecureConfig)
+			Expect(err).NotTo(HaveOccurred())
+
+			tokenReview := &authv1.TokenReview{Spec: authv1.TokenReviewSpec{Token: env.SecureConfig.BearerToken}}
+			result, err := c.AuthenticationV1().TokenReviews().Create(context.TODO(), tokenReview, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			user := result.Status.User
+			Expect(user.Username).To(Equal("kubeadmin"))
+			Expect(user.Groups).To(ContainElement("system:masters"))
+			Expect(user.Groups).To(ContainElement("system:authenticated"))
+			close(done)
+		})
+
+		It("should be refreshed after ApiServer restart", func(done Done) {
+			env := &Environment{}
+			_, err := env.Start()
+			Expect(err).NotTo(HaveOccurred())
+			copiedConfig := rest.CopyConfig(env.SecureConfig)
+			Expect(env.Stop()).To(Succeed())
+			_, err = env.Start()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(copiedConfig).NotTo(Equal(env.SecureConfig.CAData))
+			Expect(copiedConfig).NotTo(Equal(env.SecureConfig.BearerToken))
+
+			close(done)
+		}, 30)
+	})
+
+	Describe("User related helper methods", func() {
+		It("should throw error on attempt to create user while apiserver running", func(done Done) {
+			_, err := env.AddAPIServerUser("test", []string{"test", "test2"})
+			Expect(err).Should(HaveOccurred())
+			Expect(err.Error()).Should(Equal("users cannot be added while ControlPlane running"))
+			close(done)
+		})
+
+		It("should throw error on attempt get config for non existent user", func(done Done) {
+			_, err := env.GetConfigForUser("test")
+			Expect(err).Should(HaveOccurred())
+			Expect(err.Error()).Should(Equal("user test not found"))
+			close(done)
+		})
+
+		It("should throw error on attempt get config on stopped ControlPlane", func(done Done) {
+			env := &Environment{}
+			_, err := env.GetConfigForUser("test")
+			Expect(err).Should(HaveOccurred())
+			Expect(err.Error()).Should(Equal("control plane not started"))
+			close(done)
+		})
+
+		It("should successfully add user and be able to get valid config if ControlPlane not yet running", func(done Done) {
+			env := &Environment{}
+			_, err := env.AddAPIServerUser("test", []string{"one", "two", "system:masters"})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			_, err = env.AddAPIServerUser("secondtest", []string{"three", "four"})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			_, err = env.Start()
+			Expect(err).ShouldNot(HaveOccurred())
+
+			clConfig1, err := env.GetConfigForUser("test")
+			Expect(err).ShouldNot(HaveOccurred())
+			testC1, err := kubeclient.NewForConfig(clConfig1)
+			Expect(err).NotTo(HaveOccurred())
+			tr := &authv1.TokenReview{Spec: authv1.TokenReviewSpec{Token: clConfig1.BearerToken}}
+			result, err := testC1.AuthenticationV1().TokenReviews().Create(context.TODO(), tr, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			user := result.Status.User
+			Expect(user.Username).To(Equal("test"))
+			Expect(user.Groups).To(ContainElement("one"))
+			Expect(user.Groups).To(ContainElement("two"))
+			Expect(user.Groups).To(ContainElement("system:masters"))
+
+			clConfig2, err := env.GetConfigForUser("secondtest")
+			Expect(err).ShouldNot(HaveOccurred())
+			testC2, err := kubeclient.NewForConfig(clConfig2)
+			Expect(err).NotTo(HaveOccurred())
+			tr = &authv1.TokenReview{Spec: authv1.TokenReviewSpec{Token: clConfig2.BearerToken}}
+			_, err = testC2.AuthenticationV1().TokenReviews().Create(context.TODO(), tr, metav1.CreateOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("User \"secondtest\" cannot create resource \"tokenreviews\" in API group \"authentication.k8s.io\" at the cluster scope"))
+
+			close(done)
+		}, 20)
 	})
 })

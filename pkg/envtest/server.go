@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -86,6 +87,9 @@ type ControlPlane = integration.ControlPlane
 // APIServer is the re-exported APIServer type from the internal integration package
 type APIServer = integration.APIServer
 
+// APIServerUser is the re-exported User type from the internal integration package
+type APIServerUser = integration.User
+
 // Etcd is the re-exported Etcd type from the internal integration package
 type Etcd = integration.Etcd
 
@@ -102,25 +106,7 @@ type Environment struct {
 
 	// SecureConfig can be used to talk to the apiserver (secure endpoint).
 	// It's automatically populated if not set using the standard controller-runtime config
-	// loading.  This just contains secure endpoint and tlsconfig (no authn info).
-	// To use this config, you have to configure kube-apiserver with some authn module(static token, basic auth, etc.)
-	// and set your authentication info to this config.  For example:
-	//
-	// // basic authn plugin case
-	// te := &envtest.Environment{
-	//   KubeAPIServerFlags: append(
-	//     envtest.DefaultKubeAPIServerFlags,
-	//     "--basic-auth-file=my-file", "--authorization-mode=RBAC",
-	//   ),
-	// }
-	// te.Start()
-	//
-	// cfg := rest.CopyConfig(te.SecureConfig)
-	// cfg.Username = "myname"
-	// cfg.Password = "mypassword"
-	//
-	// // This client can send a request as "myname" user.
-	// cli := client.New(cfg)
+	// loading. Using `kubeadmin` user BearerToken for auth (populating automatically during controlplane startup)
 	SecureConfig *rest.Config
 
 	// CRDInstallOptions are the options for installing CRDs.
@@ -165,6 +151,9 @@ type Environment struct {
 
 	// KubeAPIServerFlags is the set of flags passed while starting the api server.
 	KubeAPIServerFlags []string
+
+	// KubeAPIServerUsers is the set of users for populate while starting the api server.
+	KubeAPIServerUsers map[string]*integration.User
 
 	// AttachControlPlaneOutput indicates if control plane output will be attached to os.Stdout and os.Stderr.
 	// Enable this to get more visibility of the testing control plane.
@@ -229,7 +218,10 @@ func (te *Environment) Start() (*rest.Config, error) {
 		}
 	} else {
 		if te.ControlPlane.APIServer == nil {
-			te.ControlPlane.APIServer = &integration.APIServer{Args: te.getAPIServerFlags()}
+			te.ControlPlane.APIServer = &integration.APIServer{
+				Args:  te.getAPIServerFlags(),
+				Users: te.KubeAPIServerUsers,
+			}
 		}
 		if te.ControlPlane.Etcd == nil {
 			te.ControlPlane.Etcd = &integration.Etcd{}
@@ -287,6 +279,7 @@ func (te *Environment) Start() (*rest.Config, error) {
 		te.SecureConfig = &rest.Config{
 			Host:            fmt.Sprintf("%s:%d", te.ControlPlane.APIURL().Hostname(), te.ControlPlane.APIServer.SecurePort),
 			TLSClientConfig: te.ControlPlane.APIServer.TLSClientConfig,
+			BearerToken:     te.ControlPlane.APIServer.Users[integration.DefaultUserName].Token,
 			// gotta go fast during tests -- we don't really care about overwhelming our test API server
 			QPS:   1000.0,
 			Burst: 2000.0,
@@ -307,6 +300,39 @@ func (te *Environment) Start() (*rest.Config, error) {
 	err = te.WebhookInstallOptions.Install(te.Config)
 
 	return te.Config, err
+}
+
+//AddAPIServerUser helper function for adding APIServer user. Should be used while ControlPlane NOT running
+func (te *Environment) AddAPIServerUser(username string, groups []string) (*integration.User, error) {
+	if te.ControlPlane.IsStarted() {
+		return nil, fmt.Errorf("users cannot be added while ControlPlane running")
+	}
+
+	if te.KubeAPIServerUsers == nil {
+		te.KubeAPIServerUsers = make(map[string]*integration.User)
+	}
+	newUser := integration.User{
+		Token:  uuid.New().String(),
+		Name:   username,
+		UID:    username,
+		Groups: groups,
+	}
+	te.KubeAPIServerUsers[username] = &newUser
+	return &newUser, nil
+}
+
+// GetConfigForUser returns *rest.Config for given username if user exists. Should be used while ControlPlane IS running
+func (te *Environment) GetConfigForUser(username string) (*rest.Config, error) {
+	if !te.ControlPlane.IsStarted() {
+		return nil, fmt.Errorf("control plane not started")
+	}
+	copiedConfig := rest.CopyConfig(te.SecureConfig)
+	user, ok := te.KubeAPIServerUsers[username]
+	if !ok {
+		return nil, fmt.Errorf("user %s not found", username)
+	}
+	copiedConfig.BearerToken = user.Token
+	return copiedConfig, nil
 }
 
 func (te *Environment) startControlPlane() error {

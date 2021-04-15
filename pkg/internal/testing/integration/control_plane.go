@@ -23,6 +23,7 @@ var NewTinyCA = internal.NewTinyCA
 type ControlPlane struct {
 	APIServer *APIServer
 	Etcd      *Etcd
+	started   bool
 }
 
 // Start will start your control plane processes. To stop them, call Stop().
@@ -38,7 +39,12 @@ func (f *ControlPlane) Start() error {
 		f.APIServer = &APIServer{}
 	}
 	f.APIServer.EtcdURL = f.Etcd.URL
-	return f.APIServer.Start()
+
+	if err := f.APIServer.Start(); err != nil {
+		return err
+	}
+	f.started = true
+	return nil
 }
 
 // Stop will stop your control plane processes, and clean up their data.
@@ -55,8 +61,15 @@ func (f *ControlPlane) Stop() error {
 			errList = append(errList, err)
 		}
 	}
-
+	if len(errList) == 0 {
+		f.started = false
+	}
 	return utilerrors.NewAggregate(errList)
+}
+
+// IsStarted returns controlplane running status, true - if controlplane running, false otherwise
+func (f *ControlPlane) IsStarted() bool {
+	return f.started
 }
 
 // APIURL returns the URL you should connect to to talk to your API.

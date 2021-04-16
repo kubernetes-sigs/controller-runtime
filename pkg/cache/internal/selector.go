@@ -2,26 +2,27 @@ package internal
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // SelectorsByGVK associate a GroupVersionKind to a field/label selector
-type SelectorsByGVK map[schema.GroupVersionKind]Selector
+type SelectorsByGVK map[schema.GroupVersionKind]Selectors
 
-// Selector specify the label/field selector to fill in ListOptions
-type Selector struct {
-	Label labels.Selector
-	Field fields.Selector
-}
+// Selectors specify the label/field selector to fill in ListOptions
+type Selectors []client.Selector
 
 // ApplyToList fill in ListOptions LabelSelector and FieldSelector if needed
-func (s Selector) ApplyToList(listOpts *metav1.ListOptions) {
-	if s.Label != nil {
-		listOpts.LabelSelector = s.Label.String()
+func (s Selectors) ApplyToList(listOpts *metav1.ListOptions) {
+	opts := &client.ListOptions{}
+	for _, selector := range s {
+		selector.ApplyToList(opts)
 	}
-	if s.Field != nil {
-		listOpts.FieldSelector = s.Field.String()
+
+	if opts.LabelSelector != nil {
+		listOpts.LabelSelector = opts.LabelSelector.String()
+	}
+	if opts.FieldSelector != nil {
+		listOpts.FieldSelector = opts.FieldSelector.String()
 	}
 }

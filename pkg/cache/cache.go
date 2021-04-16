@@ -87,7 +87,7 @@ type Informer interface {
 }
 
 // SelectorsByObject associate a client.Object's GVK to a field/label selector
-type SelectorsByObject map[client.Object]internal.Selector
+type SelectorsByObject map[client.Object]internal.Selectors
 
 // Options are the optional arguments for creating a new InformersMap object
 type Options struct {

@@ -402,6 +402,15 @@ func (o *ListOptions) ApplyOptions(opts []ListOption) *ListOptions {
 	return o
 }
 
+// Selector is specialized client.ListOption to distinguish from other ListOptions
+// that cannot be applied to the cache's ListWatch.
+type Selector interface {
+	ListOption
+
+	// to distinguish from other ListOptions.
+	IsSelector()
+}
+
 // MatchingLabels filters the list/delete operation on the given set of labels.
 type MatchingLabels map[string]string
 
@@ -416,6 +425,10 @@ func (m MatchingLabels) ApplyToList(opts *ListOptions) {
 func (m MatchingLabels) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	m.ApplyToList(&opts.ListOptions)
 }
+
+// IsSelector mark the receiver type as a Selector interface at compile
+// time
+func (m MatchingLabels) IsSelector() {}
 
 // HasLabels filters the list/delete operation checking if the set of labels exists
 // without checking their values.
@@ -438,6 +451,10 @@ func (m HasLabels) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	m.ApplyToList(&opts.ListOptions)
 }
 
+// IsSelector mark the receiver type as a Selector interface at compile
+// time
+func (m HasLabels) IsSelector() {}
+
 // MatchingLabelsSelector filters the list/delete operation on the given label
 // selector (or index in the case of cached lists). A struct is used because
 // labels.Selector is an interface, which cannot be aliased.
@@ -455,6 +472,10 @@ func (m MatchingLabelsSelector) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	m.ApplyToList(&opts.ListOptions)
 }
 
+// IsSelector mark the receiver type as a Selector interface at compile
+// time
+func (m MatchingLabelsSelector) IsSelector() {}
+
 // MatchingFields filters the list/delete operation on the given field Set
 // (or index in the case of cached lists).
 type MatchingFields fields.Set
@@ -470,6 +491,10 @@ func (m MatchingFields) ApplyToList(opts *ListOptions) {
 func (m MatchingFields) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	m.ApplyToList(&opts.ListOptions)
 }
+
+// IsSelector mark the receiver type as a Selector interface at compile
+// time
+func (m MatchingFields) IsSelector() {}
 
 // MatchingFieldsSelector filters the list/delete operation on the given field
 // selector (or index in the case of cached lists). A struct is used because
@@ -487,6 +512,10 @@ func (m MatchingFieldsSelector) ApplyToList(opts *ListOptions) {
 func (m MatchingFieldsSelector) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	m.ApplyToList(&opts.ListOptions)
 }
+
+// IsSelector mark the receiver type as a Selector interface at compile
+// time
+func (m MatchingFieldsSelector) IsSelector() {}
 
 // InNamespace restricts the list/delete operation to the given namespace.
 type InNamespace string

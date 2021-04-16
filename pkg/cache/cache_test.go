@@ -28,8 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -810,8 +808,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						cache.Options{
 							SelectorsByObject: cache.SelectorsByObject{
 								&kcorev1.Pod{}: {
-									Field: fields.Set(tc.fieldSelectors).AsSelector(),
-									Label: labels.Set(tc.labelSelectors).AsSelector(),
+									client.MatchingLabels(tc.labelSelectors),
+									client.MatchingFields(tc.fieldSelectors),
 								},
 							},
 						},

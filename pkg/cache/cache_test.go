@@ -284,6 +284,22 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(err).To(HaveOccurred())
 					Expect(errors.IsTimeout(err)).To(BeTrue())
 				})
+
+				It("should limit number of objects listed to 1", func() {
+					By("setting the Limit option to 1")
+					opts := &client.ListOptions{Limit: int64(1)}
+					limitListOpts := &client.ListOptions{}
+					opts.ApplyToList(limitListOpts)
+					Expect(limitListOpts).To(Equal(opts))
+
+					By("verifying that only Limit (1) number of objects are retrieved from the cache")
+					listObj := &kcorev1.PodList{}
+					Expect(informerCache.List(context.Background(), listObj, limitListOpts)).To(Succeed())
+					Expect(listObj.Items).Should(HaveLen(1))
+
+					By("verifying the Continue field is set")
+					Expect(listObj.ListMeta.Continue).ShouldNot(HaveLen(0))
+				})
 			})
 			Context("with unstructured objects", func() {
 				It("should be able to list objects that haven't been watched previously", func() {

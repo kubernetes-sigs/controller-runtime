@@ -472,7 +472,7 @@ var _ = Describe("Zap log level flag options setup", func() {
 		})
 	})
 
-	Context("with encoder options provided programmatically.", func() {
+	Context("with encoder options provided programmatically", func() {
 
 		It("Should set Console Encoder, with given Nanos TimeEncoder option.", func() {
 			logOut := new(bytes.Buffer)
@@ -517,5 +517,35 @@ var _ = Describe("Zap log level flag options setup", func() {
 			Expect(string(outRaw)).Should(ContainSubstring("MillisTimeFormat"))
 		})
 
+		Context("using Level()", func() {
+			var logOut *bytes.Buffer
+
+			BeforeEach(func() {
+				logOut = new(bytes.Buffer)
+			})
+
+			It("logs with negative logr level", func() {
+				By("setting up the logger")
+				logger := New(WriteTo(logOut), Level(zapcore.Level(-3)))
+				logger.V(3).Info("test 3") // Should be logged
+				Expect(string(logOut.Bytes())).To(ContainSubstring(`"msg":"test 3"`))
+				logOut.Truncate(0)
+				logger.V(1).Info("test 1") // Should be logged
+				Expect(string(logOut.Bytes())).To(ContainSubstring(`"msg":"test 1"`))
+				logOut.Truncate(0)
+				logger.V(4).Info("test 4") // Should not be logged
+				Expect(string(logOut.Bytes())).To(BeEmpty())
+				logger.V(-3).Info("test -3") // Log a panic, since V(-1*N) for all N > 0 is not permitted.
+				Expect(string(logOut.Bytes())).To(ContainSubstring(`"level":"dpanic"`))
+			})
+			It("does not log with positive logr level", func() {
+				By("setting up the logger")
+				logger := New(WriteTo(logOut), Level(zapcore.Level(1)))
+				logger.V(1).Info("test 1")
+				Expect(string(logOut.Bytes())).To(BeEmpty())
+				logger.V(3).Info("test 3")
+				Expect(string(logOut.Bytes())).To(BeEmpty())
+			})
+		})
 	})
 })

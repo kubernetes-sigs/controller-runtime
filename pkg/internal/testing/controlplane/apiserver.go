@@ -15,8 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
 )
 
-// TODO: listenaddr needs to be exposes publically so we can set insecureserving
-
 const (
 	// saKeyFile is the name of the service account signing private key file
 	saKeyFile = "sa-signer.key"

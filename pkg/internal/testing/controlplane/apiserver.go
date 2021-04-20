@@ -151,10 +151,8 @@ func (s *APIServer) Start() error {
 }
 
 func (s *APIServer) prepare() error {
-	if s.processState == nil {
-		if err := s.setProcessState(); err != nil {
-			return err
-		}
+	if err := s.setProcessState(); err != nil {
+		return err
 	}
 	if err := s.Authn.Start(); err != nil {
 		return err
@@ -220,6 +218,10 @@ func (s *APIServer) setProcessState() error {
 
 	var err error
 
+	// unconditionally re-set this so we can successfully restart
+	// TODO(directxman12): we supported this in the past, but do we actually
+	// want to support re-using an API server object to restart?  The loss
+	// of provisioned users is surprising to say the least.
 	s.processState = &process.State{
 		Dir:          s.CertDir,
 		Path:         s.Path,
@@ -404,6 +406,9 @@ func (s *APIServer) populateAPIServerCerts() error {
 // Stop stops this process gracefully, waits for its termination, and cleans up
 // the CertDir if necessary.
 func (s *APIServer) Stop() error {
+	if s.processState.DirNeedsCleaning {
+		s.CertDir = "" // reset the directory if it was randomly allocated, so that we can safely restart
+	}
 	if s.processState != nil {
 		if err := s.processState.Stop(); err != nil {
 			return err

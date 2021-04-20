@@ -31,6 +31,18 @@ var _ = Describe("Control Plane", func() {
 		Expect(plane.Etcd).To(BeIdenticalTo(etcd))
 	})
 
+	It("should be able to restart", func() {
+		// NB(directxman12): currently restarting invalidates all current users
+		// when using CertAuthn.  We need to support restarting as per our previous
+		// contract, but it's not clear how much else we actually need to handle, or
+		// whether or not this is a safe operation.
+		plane := &ControlPlane{}
+		Expect(plane.Start()).To(Succeed())
+		Expect(plane.Stop()).To(Succeed())
+		Expect(plane.Start()).To(Succeed())
+		Expect(plane.Stop()).To(Succeed())
+	})
+
 	Context("after having started", func() {
 		var plane *ControlPlane
 		BeforeEach(func() {

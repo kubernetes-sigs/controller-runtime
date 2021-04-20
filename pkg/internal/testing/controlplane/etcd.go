@@ -73,10 +73,8 @@ type Etcd struct {
 // Start starts the etcd, waits for it to come up, and returns an error, if one
 // occoured.
 func (e *Etcd) Start() error {
-	if e.processState == nil {
-		if err := e.setProcessState(); err != nil {
-			return err
-		}
+	if err := e.setProcessState(); err != nil {
+		return err
 	}
 	return e.processState.Start(e.Out, e.Err)
 }
@@ -89,6 +87,10 @@ func (e *Etcd) setProcessState() error {
 		StopTimeout:  e.StopTimeout,
 	}
 
+	// unconditionally re-set this so we can successfully restart
+	// TODO(directxman12): we supported this in the past, but do we actually
+	// want to support re-using an API server object to restart?  The loss
+	// of provisioned users is surprising to say the least.
 	if err := e.processState.Init("etcd"); err != nil {
 		return err
 	}
@@ -124,6 +126,9 @@ func (e *Etcd) setProcessState() error {
 // Stop stops this process gracefully, waits for its termination, and cleans up
 // the DataDir if necessary.
 func (e *Etcd) Stop() error {
+	if e.processState.DirNeedsCleaning {
+		e.DataDir = "" // reset the directory if it was randomly allocated, so that we can safely restart
+	}
 	return e.processState.Stop()
 }
 

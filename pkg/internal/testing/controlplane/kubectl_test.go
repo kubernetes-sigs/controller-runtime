@@ -51,7 +51,7 @@ var _ = Describe("KubeConfigFromREST", func() {
 
 	BeforeEach(func() {
 		restCfg = &rest.Config{
-			Host:    "some-host:8675",
+			Host:    "https://some-host:8675",
 			APIPath: "/some-prefix",
 			TLSClientConfig: rest.TLSClientConfig{
 				CertData: []byte("cert"),
@@ -91,6 +91,7 @@ var _ = Describe("KubeConfigFromREST", func() {
 
 	Context("when no TLS is enabled", func() {
 		BeforeEach(func() {
+			restCfg.Host = "http://some-host:8675"
 			restCfg.TLSClientConfig = rest.TLSClientConfig{}
 		})
 

@@ -15,6 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
 )
 
+// TODO: listenaddr needs to be exposes publically so we can set insecureserving
+
 const (
 	// saKeyFile is the name of the service account signing private key file
 	saKeyFile = "sa-signer.key"
@@ -144,6 +146,13 @@ func (s *APIServer) Configure() *process.Arguments {
 // Start starts the apiserver, waits for it to come up, and returns an error,
 // if occurred.
 func (s *APIServer) Start() error {
+	if err := s.prepare(); err != nil {
+		return err
+	}
+	return s.processState.Start(s.Out, s.Err)
+}
+
+func (s *APIServer) prepare() error {
 	if s.processState == nil {
 		if err := s.setProcessState(); err != nil {
 			return err
@@ -152,7 +161,7 @@ func (s *APIServer) Start() error {
 	if err := s.Authn.Start(); err != nil {
 		return err
 	}
-	return s.processState.Start(s.Out, s.Err)
+	return nil
 }
 
 // configurePorts configures the serving ports for this API server.
@@ -398,7 +407,9 @@ func (s *APIServer) populateAPIServerCerts() error {
 // the CertDir if necessary.
 func (s *APIServer) Stop() error {
 	if s.processState != nil {
-		return s.processState.Stop()
+		if err := s.processState.Stop(); err != nil {
+			return err
+		}
 	}
 	return s.Authn.Stop()
 }
@@ -424,4 +435,24 @@ var APIServerDefaultArgs = []string{
 	"--service-cluster-ip-range=10.0.0.0/24",
 	"--allow-privileged=true",
 	// NB(directxman12): we also enable RBAC if nothing else was enabled
+}
+
+// PrepareAPIServer is an internal-only (NEVER SHOULD BE EXPOSED)
+// function that sets up the API server just before starting it,
+// without actually starting it.  This saves time on tests.
+//
+// NB(directxman12): do not expose this outside of internal -- it's unsafe to
+// use, because things like port allocation could race even more than they
+// currently do if you later call start!
+func PrepareAPIServer(s *APIServer) error {
+	return s.prepare()
+}
+
+// APIServerArguments is an internal-only (NEVER SHOULD BE EXPOSED)
+// function that sets up the API server just before starting it,
+// without actually starting it.  It's public to make testing easier.
+//
+// NB(directxman12): do not expose this outside of internal
+func APIServerArguments(s *APIServer) []string {
+	return s.processState.Args
 }

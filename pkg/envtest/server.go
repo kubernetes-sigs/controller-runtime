@@ -19,7 +19,6 @@ package envtest
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/controlplane"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
@@ -48,39 +48,16 @@ It's possible to override some defaults, by setting the following environment va
 
 */
 const (
-	envUseExistingCluster  = "USE_EXISTING_CLUSTER"
-	envKubeAPIServerBin    = "TEST_ASSET_KUBE_APISERVER"
-	envEtcdBin             = "TEST_ASSET_ETCD"
-	envKubectlBin          = "TEST_ASSET_KUBECTL"
-	envKubebuilderPath     = "KUBEBUILDER_ASSETS"
-	envStartTimeout        = "KUBEBUILDER_CONTROLPLANE_START_TIMEOUT"
-	envStopTimeout         = "KUBEBUILDER_CONTROLPLANE_STOP_TIMEOUT"
-	envAttachOutput        = "KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT"
-	defaultKubebuilderPath = "/usr/local/kubebuilder/bin"
-	StartTimeout           = 60
-	StopTimeout            = 60
+	envUseExistingCluster = "USE_EXISTING_CLUSTER"
+	envStartTimeout       = "KUBEBUILDER_CONTROLPLANE_START_TIMEOUT"
+	envStopTimeout        = "KUBEBUILDER_CONTROLPLANE_STOP_TIMEOUT"
+	envAttachOutput       = "KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT"
+	StartTimeout          = 60
+	StopTimeout           = 60
 
 	defaultKubebuilderControlPlaneStartTimeout = 20 * time.Second
 	defaultKubebuilderControlPlaneStopTimeout  = 20 * time.Second
 )
-
-// getBinAssetPath returns a path for binary from the following list of locations,
-// ordered by precedence:
-// 0. KUBEBUILDER_ASSETS
-// 1. Environment.BinaryAssetsDirectory
-// 2. The default path, "/usr/local/kubebuilder/bin"
-func (te *Environment) getBinAssetPath(binary string) string {
-	valueFromEnvVar := os.Getenv(envKubebuilderPath)
-	if valueFromEnvVar != "" {
-		return filepath.Join(valueFromEnvVar, binary)
-	}
-
-	if te.BinaryAssetsDirectory != "" {
-		return filepath.Join(te.BinaryAssetsDirectory, binary)
-	}
-
-	return filepath.Join(defaultKubebuilderPath, binary)
-}
 
 // ControlPlane is the re-exported ControlPlane type from the internal testing package
 type ControlPlane = controlplane.ControlPlane
@@ -237,19 +214,9 @@ func (te *Environment) Start() (*rest.Config, error) {
 			te.ControlPlane.Etcd.Err = os.Stderr
 		}
 
-		if os.Getenv(envKubeAPIServerBin) == "" {
-			apiServer.Path = te.getBinAssetPath("kube-apiserver")
-		}
-		if os.Getenv(envEtcdBin) == "" {
-			te.ControlPlane.Etcd.Path = te.getBinAssetPath("etcd")
-		}
-		if os.Getenv(envKubectlBin) == "" {
-			// we can't just set the path manually (it's behind a function), so set the environment variable instead
-			// TODO(directxman12): re-evaluate this post pkg/internal/testing refactor
-			if err := os.Setenv(envKubectlBin, te.getBinAssetPath("kubectl")); err != nil {
-				return nil, fmt.Errorf("unable to override kubectl environment path: %w", err)
-			}
-		}
+		apiServer.Path = process.BinPathFinder("kube-apiserver", te.BinaryAssetsDirectory)
+		te.ControlPlane.Etcd.Path = process.BinPathFinder("etcd", te.BinaryAssetsDirectory)
+		te.ControlPlane.KubectlPath = process.BinPathFinder("kubectl", te.BinaryAssetsDirectory)
 
 		if err := te.defaultTimeouts(); err != nil {
 			return nil, fmt.Errorf("failed to default controlplane timeouts: %w", err)

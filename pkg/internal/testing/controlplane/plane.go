@@ -23,6 +23,9 @@ type ControlPlane struct {
 	APIServer *APIServer
 	Etcd      *Etcd
 
+	// Kubectl will override the default asset search path for kubectl
+	KubectlPath string
+
 	// for the deprecated methods (Kubectl, etc)
 	defaultUserCfg     *rest.Config
 	defaultUserKubectl *KubeCtl
@@ -121,7 +124,7 @@ type AuthenticatedUser struct {
 
 	// apiServer is a handle to the APIServer that's used when finalizing cfg
 	// and producing the kubectl instance.
-	apiServer *APIServer
+	plane *ControlPlane
 
 	// kubectl is our existing, provisioned kubectl.  We don't provision one
 	// till someone actually asks for it.
@@ -139,12 +142,12 @@ func (u *AuthenticatedUser) Config() *rest.Config {
 	if u.cfgIsComplete {
 		return u.cfg
 	}
-	if len(u.apiServer.SecureServing.CA) == 0 {
+	if len(u.plane.APIServer.SecureServing.CA) == 0 {
 		panic("the API server has not yet been started, please do that before accessing connection details")
 	}
 
-	u.cfg.CAData = u.apiServer.SecureServing.CA
-	u.cfg.Host = u.apiServer.SecureServing.URL("https", "/").String()
+	u.cfg.CAData = u.plane.APIServer.SecureServing.CA
+	u.cfg.Host = u.plane.APIServer.SecureServing.URL("https", "/").String()
 	u.cfgIsComplete = true
 	return u.cfg
 }
@@ -168,12 +171,12 @@ func (u *AuthenticatedUser) Kubectl() (*KubeCtl, error) {
 	if u.kubectl != nil {
 		return u.kubectl, nil
 	}
-	if len(u.apiServer.CertDir) == 0 {
+	if len(u.plane.APIServer.CertDir) == 0 {
 		panic("the API server has not yet been started, please do that before accessing connection details")
 	}
 
 	// cleaning this up is handled when our tmpDir is deleted
-	out, err := os.CreateTemp(u.apiServer.CertDir, "*.kubecfg")
+	out, err := os.CreateTemp(u.plane.APIServer.CertDir, "*.kubecfg")
 	if err != nil {
 		return nil, fmt.Errorf("unable to create file for kubeconfig: %w", err)
 	}
@@ -185,7 +188,9 @@ func (u *AuthenticatedUser) Kubectl() (*KubeCtl, error) {
 	if _, err := out.Write(contents); err != nil {
 		return nil, fmt.Errorf("unable to write kubeconfig to disk at %s: %w", out.Name(), err)
 	}
-	k := &KubeCtl{}
+	k := &KubeCtl{
+		Path: u.plane.KubectlPath,
+	}
 	k.Opts = append(k.Opts, fmt.Sprintf("--kubeconfig=%s", out.Name()))
 	u.kubectl = k
 	return k, nil
@@ -214,8 +219,8 @@ func (f *ControlPlane) AddUser(user User, baseConfig *rest.Config) (*Authenticat
 	}
 
 	return &AuthenticatedUser{
-		cfg:       cfg,
-		apiServer: f.APIServer,
+		cfg:   cfg,
+		plane: f,
 	}, nil
 }
 

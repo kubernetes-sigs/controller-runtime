@@ -89,7 +89,7 @@ func (ps *State) Init(name string) error {
 		if name == "" {
 			return fmt.Errorf("must have at least one of name or path")
 		}
-		ps.Path = BinPathFinder(name)
+		ps.Path = BinPathFinder(name, "")
 	}
 
 	if ps.Dir == "" {

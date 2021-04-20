@@ -82,7 +82,7 @@ type KubeCtl struct {
 // stderr.
 func (k *KubeCtl) Run(args ...string) (stdout, stderr io.Reader, err error) {
 	if k.Path == "" {
-		k.Path = process.BinPathFinder("kubectl")
+		k.Path = process.BinPathFinder("kubectl", "")
 	}
 
 	stdoutBuffer := &bytes.Buffer{}

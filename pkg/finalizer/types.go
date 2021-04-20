@@ -19,21 +19,26 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// Registerer holds Register that will check if a key is already registered
+// and error out and it does; and if not registered, it will add the finalizer
+// to the finalizers map as the value for the provided key
 type Registerer interface {
 	Register(key string, f Finalizer) error
 }
 
+// Finalizer holds Finalize that will add/remove a finalizer based on the
+// deletion timestamp being set and return an indication of whether the
+// obj needs an update or not
 type Finalizer interface {
 	Finalize(context.Context, client.Object) (needsUpdate bool, err error)
 }
 
 type finalizers map[string]Finalizer
 
+// Finalizers implements Registerer and Finalizer to finalize all registered
+// finalizers if the provided object has a deletion timestamp or set all
+// registered finalizers if it does not
 type Finalizers interface {
-	// implements Registerer and Finalizer to finalize
-	// all registered finalizers if the provided object
-	// has a deletion timestamp or set all registered
-	// finalizers if it doesn't
 	Registerer
 	Finalizer
 }

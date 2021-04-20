@@ -21,8 +21,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-func NewFinalizers() (Finalizers, error) {
-	return finalizers(map[string]Finalizer{}), nil
+// NewFinalizers returns the Finalizers interface
+func NewFinalizers() Finalizers {
+	return finalizers(map[string]Finalizer{})
 }
 
 func (f finalizers) Register(key string, finalizer Finalizer) error {
@@ -36,13 +37,13 @@ func (f finalizers) Register(key string, finalizer Finalizer) error {
 func (f finalizers) Finalize(ctx context.Context, obj client.Object) (bool, error) {
 	needsUpdate := false
 	for key, finalizer := range f {
-		if obj.GetDeletionTimestamp() == nil && !controllerutil.ContainsFinalizer(obj, key) {
+		if obj.GetDeletionTimestamp().IsZero() && !controllerutil.ContainsFinalizer(obj, key) {
 			controllerutil.AddFinalizer(obj, key)
 			needsUpdate = true
 		} else if obj.GetDeletionTimestamp() != nil && controllerutil.ContainsFinalizer(obj, key) {
-			_, err := finalizer.Finalize(ctx, obj)
+			ret, err := finalizer.Finalize(ctx, obj)
 			if err != nil {
-				return true, fmt.Errorf("finalize failed for key %q: %v", key, err)
+				return ret, fmt.Errorf("finalize failed for key %q: %v", key, err)
 			}
 			controllerutil.RemoveFinalizer(obj, key)
 			needsUpdate = true

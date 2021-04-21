@@ -17,11 +17,17 @@ limitations under the License.
 package webhook_test
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	admissionv1 "k8s.io/api/admissionregistration/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -33,8 +39,70 @@ func TestSource(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
+var testenv *envtest.Environment
+var cfg *rest.Config
+
 var _ = BeforeSuite(func(done Done) {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
+	testenv = &envtest.Environment{}
+	// we're initializing webhook here and not in webhook.go to also test the envtest install code via WebhookOptions
+	initializeWebhookInEnvironment()
+	var err error
+	cfg, err = testenv.Start()
+	Expect(err).NotTo(HaveOccurred())
 	close(done)
 }, 60)
+
+var _ = AfterSuite(func() {
+	fmt.Println("stopping?")
+	Expect(testenv.Stop()).To(Succeed())
+}, 60)
+
+func initializeWebhookInEnvironment() {
+	namespacedScopeV1 := admissionv1.NamespacedScope
+	failedTypeV1 := admissionv1.Fail
+	equivalentTypeV1 := admissionv1.Equivalent
+	noSideEffectsV1 := admissionv1.SideEffectClassNone
+	webhookPathV1 := "/failing"
+
+	testenv.WebhookInstallOptions = envtest.WebhookInstallOptions{
+		ValidatingWebhooks: []client.Object{
+			&admissionv1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "deployment-validation-webhook-config",
+				},
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "ValidatingWebhookConfiguration",
+					APIVersion: "admissionregistration.k8s.io/v1beta1",
+				},
+				Webhooks: []admissionv1.ValidatingWebhook{
+					{
+						Name: "deployment-validation.kubebuilder.io",
+						Rules: []admissionv1.RuleWithOperations{
+							{
+								Operations: []admissionv1.OperationType{"CREATE", "UPDATE"},
+								Rule: admissionv1.Rule{
+									APIGroups:   []string{"apps"},
+									APIVersions: []string{"v1"},
+									Resources:   []string{"deployments"},
+									Scope:       &namespacedScopeV1,
+								},
+							},
+						},
+						FailurePolicy: &failedTypeV1,
+						MatchPolicy:   &equivalentTypeV1,
+						SideEffects:   &noSideEffectsV1,
+						ClientConfig: admissionv1.WebhookClientConfig{
+							Service: &admissionv1.ServiceReference{
+								Name:      "deployment-validation-service",
+								Namespace: "default",
+								Path:      &webhookPathV1,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}

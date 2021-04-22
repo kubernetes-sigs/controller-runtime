@@ -33,8 +33,6 @@ type Finalizer interface {
 	Finalize(context.Context, client.Object) (needsUpdate bool, err error)
 }
 
-type finalizers map[string]Finalizer
-
 // Finalizers implements Registerer and Finalizer to finalize all registered
 // finalizers if the provided object has a deletion timestamp or set all
 // registered finalizers if it does not

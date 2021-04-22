@@ -43,13 +43,13 @@ var _ = Describe("TestFinalizer", func() {
 		Expect(f).NotTo(BeNil())
 
 	})
-	Describe("Finalizer helper library", func() {
-		It("Register should successfully register a finalizer", func() {
+	Describe("Register", func() {
+		It("successfully registers a finalizer", func() {
 			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer", f)
 			Expect(err).To(BeNil())
 		})
 
-		It("Register should return an error when it is called twice with the same key", func() {
+		It("should fail when trying to register a finalizer that was already registered", func() {
 			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer", f)
 			Expect(err).To(BeNil())
 
@@ -59,30 +59,71 @@ var _ = Describe("TestFinalizer", func() {
 			Expect(err.Error()).To(ContainSubstring("already registered"))
 
 		})
-
-		It("Finalize should return no error and indicate false for needsUpdate if a finalizer is not registered", func() {
+	})
+	Describe("Finalize", func() {
+		It("should return no error and return false for needsUpdate if a finalizer is not registered", func() {
 			ret, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
 			Expect(ret).To(BeFalse())
 		})
 
-		It("Finalize should return no error when deletion timestamp is not nil and the finalizer exists", func() {
+		It("successfully finalizes and returns true for needsUpdate when deletion timestamp is nil and finalizer does not exist", func() {
+			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer", f)
+			Expect(err).To(BeNil())
+
+			pod.DeletionTimestamp = nil
+			pod.Finalizers = []string{}
+
+			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
+			Expect(err).To(BeNil())
+			Expect(needsUpdate).To(BeTrue())
+		})
+
+		It("successfully finalizes and returns true for needsUpdate when deletion timestamp is not nil and the finalizer exists", func() {
 			now := metav1.Now()
 			pod.DeletionTimestamp = &now
 
 			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer", f)
 			Expect(err).To(BeNil())
 
-			_, err := finalizers.Finalize(context.TODO(), pod)
+			pod.Finalizers = []string{"finalizers.sigs.k8s.io/testfinalizer"}
+
+			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
+			Expect(needsUpdate).To(BeTrue())
 		})
 
-		It("Finalize should return no error when deletion timestamp is nil and finalizer does not exist", func() {
+		It("should return no error and return false for needsUpdate when deletion timestamp is nil and finalizer doesn't exist", func() {
+			pod.DeletionTimestamp = nil
+			pod.Finalizers = []string{}
+
+			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
+			Expect(err).To(BeNil())
+			Expect(needsUpdate).To(BeFalse())
+		})
+
+		It("should return no error and return false for needsUpdate when deletion timestamp is not nil and the finalizer doesn't exist", func() {
+			now := metav1.Now()
+			pod.DeletionTimestamp = &now
+			pod.Finalizers = []string{}
+
+			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
+			Expect(err).To(BeNil())
+			Expect(needsUpdate).To(BeFalse())
+
+		})
+
+		It("successfully finalizes multiple finalizers and returns true for needsUpdate when deletion timestamp is not nil and the finalizer exists", func() {
+			now := metav1.Now()
+			pod.DeletionTimestamp = &now
+
 			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer", f)
 			Expect(err).To(BeNil())
 
-			pod.DeletionTimestamp = nil
-			pod.Finalizers = []string{}
+			err = finalizers.Register("finalizers.sigs.k8s.io/newtestfinalizer", f)
+			Expect(err).To(BeNil())
+
+			pod.Finalizers = []string{"finalizers.sigs.k8s.io/testfinalizer", "finalizers.sigs.k8s.io/newtestfinalizer"}
 
 			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())

@@ -3,6 +3,7 @@ package webhook_test
 import (
 	"context"
 	"crypto/tls"
+	goerrors "errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -16,12 +17,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/admissiontest"
 )
 
 var _ = Describe("Webhook", func() {
@@ -111,7 +114,8 @@ var _ = Describe("Webhook", func() {
 	Context("when running a standalone webhook", func() {
 		It("should reject create request for webhook that rejects all requests", func(done Done) {
 			ctx, cancel := context.WithCancel(context.Background())
-			// generate tls cfg
+
+			By("generating the TLS config")
 			certPath := filepath.Join(testenv.WebhookInstallOptions.LocalServingCertDir, "tls.crt")
 			keyPath := filepath.Join(testenv.WebhookInstallOptions.LocalServingCertDir, "tls.key")
 
@@ -126,18 +130,22 @@ var _ = Describe("Webhook", func() {
 				GetCertificate: certWatcher.GetCertificate,
 			}
 
-			// generate listener
+			By("generating the listener")
 			listener, err := tls.Listen("tcp",
 				net.JoinHostPort(testenv.WebhookInstallOptions.LocalServingHost,
 					strconv.Itoa(int(testenv.WebhookInstallOptions.LocalServingPort))), cfg)
 			Expect(err).NotTo(HaveOccurred())
 
-			// create and register the standalone webhook
-			hook, err := admission.StandaloneWebhook(&webhook.Admission{Handler: &rejectingValidator{}}, admission.StandaloneOptions{})
+			By("creating and registering the standalone webhook")
+			hook, err := admission.StandaloneWebhook(admission.ValidatingWebhookFor(
+				&admissiontest.FakeValidator{
+					ErrorToReturn: goerrors.New("Always denied"),
+					GVKToReturn:   schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
+				}), admission.StandaloneOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			http.Handle("/failing", hook)
 
-			// run the http server
+			By("running the http server")
 			srv := &http.Server{}
 			go func() {
 				idleConnsClosed := make(chan struct{})

@@ -235,9 +235,7 @@ func StandaloneWebhook(hook *Webhook, opts StandaloneOptions) (http.Handler, err
 		opts.Scheme = scheme.Scheme
 	}
 
-	var err error
-	hook.decoder, err = NewDecoder(opts.Scheme)
-	if err != nil {
+	if err := hook.InjectScheme(opts.Scheme); err != nil {
 		return nil, err
 	}
 

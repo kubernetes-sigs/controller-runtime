@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
@@ -138,7 +139,7 @@ type Options struct {
 
 	// LeaderElection determines whether or not to use leader election when
 	// starting the manager.
-	LeaderElection bool
+	LeaderElection *bool
 
 	// LeaderElectionResourceLock determines which resource lock to use for leader election,
 	// defaults to "configmapsleases". Change this value only if you know what you are doing.
@@ -338,12 +339,18 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	if leaderConfig == nil {
 		leaderConfig = rest.CopyConfig(config)
 	}
-	resourceLock, err := options.newResourceLock(leaderConfig, recorderProvider, leaderelection.Options{
-		LeaderElection:             options.LeaderElection,
+
+	leaderOpt := leaderelection.Options{
 		LeaderElectionResourceLock: options.LeaderElectionResourceLock,
 		LeaderElectionID:           options.LeaderElectionID,
 		LeaderElectionNamespace:    options.LeaderElectionNamespace,
-	})
+	}
+
+	if options.LeaderElection != nil {
+		leaderOpt.LeaderElection = *options.LeaderElection
+	}
+
+	resourceLock, err := options.newResourceLock(leaderConfig, recorderProvider, leaderOpt)
 	if err != nil {
 		return nil, err
 	}
@@ -468,8 +475,8 @@ func (o Options) AndFromOrDie(loader config.ControllerManagerConfiguration) Opti
 }
 
 func (o Options) setLeaderElectionConfig(obj v1alpha1.ControllerManagerConfigurationSpec) Options {
-	if o.LeaderElection == false && obj.LeaderElection.LeaderElect != nil {
-		o.LeaderElection = *obj.LeaderElection.LeaderElect
+	if o.LeaderElection == nil && obj.LeaderElection.LeaderElect != nil {
+		o.LeaderElection = obj.LeaderElection.LeaderElect
 	}
 
 	if o.LeaderElectionResourceLock == "" && obj.LeaderElection.ResourceLock != "" {

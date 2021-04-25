@@ -28,9 +28,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/goleak"
 	corev1 "k8s.io/api/core/v1"
@@ -40,6 +41,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
+	"k8s.io/utils/pointer"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -129,7 +132,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should be able to load Options from cfg.ControllerManagerConfiguration type", func(done Done) {
 			duration := metav1.Duration{Duration: 48 * time.Hour}
-			port := int(6090)
+			port := 6090
 			leaderElect := false
 
 			ccfg := &v1alpha1.ControllerManagerConfiguration{
@@ -165,7 +168,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err).To(BeNil())
 
 			Expect(*m.SyncPeriod).To(Equal(duration.Duration))
-			Expect(m.LeaderElection).To(Equal(leaderElect))
+			Expect(*m.LeaderElection).To(Equal(leaderElect))
 			Expect(m.LeaderElectionResourceLock).To(Equal("leases"))
 			Expect(m.LeaderElectionNamespace).To(Equal("default"))
 			Expect(m.LeaderElectionID).To(Equal("ctrl-lease"))
@@ -219,9 +222,10 @@ var _ = Describe("manger.Manager", func() {
 				},
 			}
 
+			leaderElectOp := true
 			m, err := Options{
 				SyncPeriod:                 &optDuration,
-				LeaderElection:             true,
+				LeaderElection:             &leaderElectOp,
 				LeaderElectionResourceLock: "configmaps",
 				LeaderElectionNamespace:    "ctrl",
 				LeaderElectionID:           "ctrl-configmap",
@@ -240,7 +244,83 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err).To(BeNil())
 
 			Expect(m.SyncPeriod.String()).To(Equal(optDuration.String()))
-			Expect(m.LeaderElection).To(Equal(true))
+			Expect(*m.LeaderElection).To(Equal(true))
+			Expect(m.LeaderElectionResourceLock).To(Equal("configmaps"))
+			Expect(m.LeaderElectionNamespace).To(Equal("ctrl"))
+			Expect(m.LeaderElectionID).To(Equal("ctrl-configmap"))
+			Expect(m.LeaseDuration.String()).To(Equal(optDuration.String()))
+			Expect(m.RenewDeadline.String()).To(Equal(optDuration.String()))
+			Expect(m.RetryPeriod.String()).To(Equal(optDuration.String()))
+			Expect(m.Namespace).To(Equal("ctrl"))
+			Expect(m.MetricsBindAddress).To(Equal(":7000"))
+			Expect(m.HealthProbeBindAddress).To(Equal("5000"))
+			Expect(m.ReadinessEndpointName).To(Equal("/readiness"))
+			Expect(m.LivenessEndpointName).To(Equal("/liveness"))
+			Expect(m.Port).To(Equal(8080))
+			Expect(m.Host).To(Equal("example.com"))
+			Expect(m.CertDir).To(Equal("/pki"))
+
+			close(done)
+		})
+
+		It("should be able to keep Options leaderElection false when cfg.ControllerManagerConfiguration set to true", func(done Done) {
+			optDuration := time.Duration(2)
+			duration := metav1.Duration{Duration: 48 * time.Hour}
+			port := 6090
+			leaderElect := true
+
+			ccfg := &v1alpha1.ControllerManagerConfiguration{
+				ControllerManagerConfigurationSpec: v1alpha1.ControllerManagerConfigurationSpec{
+					SyncPeriod: &duration,
+					LeaderElection: &configv1alpha1.LeaderElectionConfiguration{
+						LeaderElect:       &leaderElect,
+						ResourceLock:      "leases",
+						ResourceNamespace: "default",
+						ResourceName:      "ctrl-lease",
+						LeaseDuration:     duration,
+						RenewDeadline:     duration,
+						RetryPeriod:       duration,
+					},
+					CacheNamespace: "default",
+					Metrics: v1alpha1.ControllerMetrics{
+						BindAddress: ":6000",
+					},
+					Health: v1alpha1.ControllerHealth{
+						HealthProbeBindAddress: "6060",
+						ReadinessEndpointName:  "/readyz",
+						LivenessEndpointName:   "/livez",
+					},
+					Webhook: v1alpha1.ControllerWebhook{
+						Port:    &port,
+						Host:    "localhost",
+						CertDir: "/certs",
+					},
+				},
+			}
+
+			leaderElectOp := false
+			m, err := Options{
+				SyncPeriod:                 &optDuration,
+				LeaderElection:             &leaderElectOp,
+				LeaderElectionResourceLock: "configmaps",
+				LeaderElectionNamespace:    "ctrl",
+				LeaderElectionID:           "ctrl-configmap",
+				LeaseDuration:              &optDuration,
+				RenewDeadline:              &optDuration,
+				RetryPeriod:                &optDuration,
+				Namespace:                  "ctrl",
+				MetricsBindAddress:         ":7000",
+				HealthProbeBindAddress:     "5000",
+				ReadinessEndpointName:      "/readiness",
+				LivenessEndpointName:       "/liveness",
+				Port:                       8080,
+				Host:                       "example.com",
+				CertDir:                    "/pki",
+			}.AndFrom(&fakeDeferredLoader{ccfg})
+			Expect(err).To(BeNil())
+
+			Expect(m.SyncPeriod.String()).To(Equal(optDuration.String()))
+			Expect(*m.LeaderElection).To(Equal(leaderElectOp))
 			Expect(m.LeaderElectionResourceLock).To(Equal("configmaps"))
 			Expect(m.LeaderElectionNamespace).To(Equal("ctrl"))
 			Expect(m.LeaderElectionID).To(Equal("ctrl-configmap"))
@@ -290,8 +370,9 @@ var _ = Describe("manger.Manager", func() {
 
 		Context("with leader election enabled", func() {
 			It("should only cancel the leader election after all runnables are done", func() {
+				leaderElectOpt := true
 				m, err := New(cfg, Options{
-					LeaderElection:          true,
+					LeaderElection:          &leaderElectOpt,
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id-2",
 					HealthProbeBindAddress:  "0",
@@ -335,8 +416,9 @@ var _ = Describe("manger.Manager", func() {
 
 			})
 			It("should disable gracefulShutdown when stopping to lead", func() {
+				leaderElectOpt := true
 				m, err := New(cfg, Options{
-					LeaderElection:          true,
+					LeaderElection:          &leaderElectOpt,
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id-3",
 					HealthProbeBindAddress:  "0",
@@ -364,8 +446,9 @@ var _ = Describe("manger.Manager", func() {
 			})
 			It("should default ID to controller-runtime if ID is not set", func() {
 				var rl resourcelock.Interface
+				leaderElectOpt := true
 				m1, err := New(cfg, Options{
-					LeaderElection:          true,
+					LeaderElection:          &leaderElectOpt,
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id",
 					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
@@ -383,9 +466,10 @@ var _ = Describe("manger.Manager", func() {
 				m1cm, ok := m1.(*controllerManager)
 				Expect(ok).To(BeTrue())
 				m1cm.onStoppedLeading = func() {}
+				leaderElectOpt = true
 
 				m2, err := New(cfg, Options{
-					LeaderElection:          true,
+					LeaderElection:          &leaderElectOpt,
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id",
 					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
@@ -452,7 +536,8 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).To(MatchError(ContainSubstring("expected error")))
 			})
 			It("should return an error if namespace not set and not running in cluster", func() {
-				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime"})
+				leaderElectOpt := true
+				m, err := New(cfg, Options{LeaderElection: &leaderElectOpt, LeaderElectionID: "controller-runtime"})
 				Expect(m).To(BeNil())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unable to find leader election namespace: not running in-cluster, please specify LeaderElectionNamespace"))
@@ -462,7 +547,8 @@ var _ = Describe("manger.Manager", func() {
 			// ConfigMap lock to a controller-runtime version that has this new default. Many users of controller-runtime skip
 			// versions, so we should be extremely conservative here.
 			It("should default to ConfigMapsLeasesResourceLock", func() {
-				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime", LeaderElectionNamespace: "my-ns"})
+				leaderElectOpt := true
+				m, err := New(cfg, Options{LeaderElection: &leaderElectOpt, LeaderElectionID: "controller-runtime", LeaderElectionNamespace: "my-ns"})
 				Expect(m).ToNot(BeNil())
 				Expect(err).ToNot(HaveOccurred())
 				cm, ok := m.(*controllerManager)
@@ -476,8 +562,9 @@ var _ = Describe("manger.Manager", func() {
 
 			})
 			It("should use the specified ResourceLock", func() {
+				leaderElectOpt := true
 				m, err := New(cfg, Options{
-					LeaderElection:             true,
+					LeaderElection:             &leaderElectOpt,
 					LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 					LeaderElectionID:           "controller-runtime",
 					LeaderElectionNamespace:    "my-ns",
@@ -492,7 +579,7 @@ var _ = Describe("manger.Manager", func() {
 			It("should release lease if ElectionReleaseOnCancel is true", func() {
 				var rl resourcelock.Interface
 				m, err := New(cfg, Options{
-					LeaderElection:                true,
+					LeaderElection:                pointer.BoolPtr(true),
 					LeaderElectionResourceLock:    resourcelock.LeasesResourceLock,
 					LeaderElectionID:              "controller-runtime",
 					LeaderElectionNamespace:       "my-ns",
@@ -1043,9 +1130,10 @@ var _ = Describe("manger.Manager", func() {
 		})
 
 		Context("with leaderelection enabled", func() {
+			leaderElectOpt := true
 			startSuite(
 				Options{
-					LeaderElection:          true,
+					LeaderElection:          &leaderElectOpt,
 					LeaderElectionID:        "controller-runtime",
 					LeaderElectionNamespace: "default",
 					newResourceLock:         fakeleaderelection.NewResourceLock,

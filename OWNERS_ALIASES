@@ -34,6 +34,15 @@ aliases:
   - apelisse
   - hoegaarden
 
+  # folks who can approve things related to the fake client
+  fake-client-approvers:
+  - detiber
+
+  # folks wo can review and LGTM any PRs related to the fake client
+  fake-client-reviewers:
+  - detiber
+  - sbueringer
+
   # folks who may have context on ancient history,
   # but are no longer directly involved
   # controller-runtime-emeritus-maintainers:

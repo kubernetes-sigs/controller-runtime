@@ -128,7 +128,7 @@ var _ = Describe("logging", func() {
 		BeforeEach(func() {
 			root = &fakeLoggerRoot{}
 			baseLog = &fakeLogger{root: root}
-			delegLog = NewDelegatingLogger(NullLogger{})
+			delegLog = NewDelegatingLogger(DefaultNullLogger())
 		})
 
 		It("should delegate with name", func() {
@@ -182,7 +182,7 @@ var _ = Describe("logging", func() {
 			child := delegLog.WithName("child")
 			go func() {
 				defer GinkgoRecover()
-				delegLog.Fulfill(NullLogger{})
+				delegLog.Fulfill(DefaultNullLogger())
 				close(fulfillDone)
 			}()
 			go func() {

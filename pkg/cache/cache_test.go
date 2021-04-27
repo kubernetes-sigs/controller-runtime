@@ -1018,11 +1018,6 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					defer deletePod(pod)
 					// re-copy the result in so that we can match on it properly
 					pod.ObjectMeta.DeepCopyInto(&podMeta.ObjectMeta)
-					// NB(directxman12): proto doesn't care typemeta, and
-					// partialobjectmetadata is proto, so no typemeta
-					// TODO(directxman12): we should paper over this in controller-runtime
-					podMeta.APIVersion = ""
-					podMeta.Kind = ""
 
 					By("verifying the object's metadata is received on the channel")
 					Eventually(out).Should(Receive(Equal(podMeta)))
@@ -1056,20 +1051,31 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 					By("listing Pods with restartPolicyOnFailure")
 					listObj := &kmetav1.PartialObjectMetadataList{}
-					listObj.SetGroupVersionKind(schema.GroupVersionKind{
+					gvk := schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
 						Kind:    "PodList",
-					})
+					}
+					listObj.SetGroupVersionKind(gvk)
 					err = informer.List(context.Background(), listObj,
 						client.MatchingFields{"metadata.labels.test-label": "test-pod-3"})
 					Expect(err).To(Succeed())
+
+					By("verifying that the GVK has been preserved for the list object")
+					Expect(listObj.GroupVersionKind()).To(Equal(gvk))
 
 					By("verifying that the returned pods have correct restart policy")
 					Expect(listObj.Items).NotTo(BeEmpty())
 					Expect(listObj.Items).Should(HaveLen(1))
 					actual := listObj.Items[0]
 					Expect(actual.GetName()).To(Equal("test-pod-3"))
+
+					By("verifying that the GVK has been preserved for the item in the list")
+					Expect(actual.GroupVersionKind()).To(Equal(schema.GroupVersionKind{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Pod",
+					}))
 				}, 3)
 
 				It("should allow for get informer to be cancelled", func() {

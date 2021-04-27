@@ -34,7 +34,6 @@ import (
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
@@ -216,6 +215,13 @@ func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, ob
 	if err != nil {
 		return nil, false, err
 	}
+
+	switch obj.(type) {
+	case *metav1.PartialObjectMetadata, *metav1.PartialObjectMetadataList:
+		ni = metadataSharedIndexInformerPreserveGVK(gvk, ni)
+	default:
+	}
+
 	i := &MapEntry{
 		Informer: ni,
 		Reader:   CacheReader{indexer: ni.GetIndexer(), groupVersionKind: gvk, scopeName: rm.Scope.Name()},
@@ -278,7 +284,12 @@ func createUnstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInform
 	if err != nil {
 		return nil, err
 	}
-	dynamicClient, err := dynamic.NewForConfig(ip.config)
+
+	// If the rest configuration has a negotiated serializer passed in,
+	// we should remove it and use the one that the dynamic client sets for us.
+	cfg := rest.CopyConfig(ip.config)
+	cfg.NegotiatedSerializer = nil
+	dynamicClient, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -314,8 +325,13 @@ func createMetadataListWatch(gvk schema.GroupVersionKind, ip *specificInformersM
 		return nil, err
 	}
 
+	// Always clear the negotiated serializer and use the one
+	// set from the metadata client.
+	cfg := rest.CopyConfig(ip.config)
+	cfg.NegotiatedSerializer = nil
+
 	// grab the metadata client
-	client, err := metadata.NewForConfig(ip.config)
+	client, err := metadata.NewForConfig(cfg)
 	if err != nil {
 		return nil, err
 	}

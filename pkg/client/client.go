@@ -19,6 +19,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -159,7 +160,6 @@ type client struct {
 }
 
 // resetGroupVersionKind is a helper function to restore and preserve GroupVersionKind on an object.
-// TODO(vincepri): Remove this function and its calls once controller-runtime dependencies are upgraded to 1.16?
 func (c *client) resetGroupVersionKind(obj runtime.Object, gvk schema.GroupVersionKind) {
 	if gvk != schema.EmptyObjectKind.GroupVersionKind() {
 		if v, ok := obj.(schema.ObjectKind); ok {
@@ -246,6 +246,8 @@ func (c *client) Get(ctx context.Context, key ObjectKey, obj Object) error {
 	case *unstructured.Unstructured:
 		return c.unstructuredClient.Get(ctx, key, obj)
 	case *metav1.PartialObjectMetadata:
+		// Metadata only object should always preserve the GVK coming in from the caller.
+		defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 		return c.metadataClient.Get(ctx, key, obj)
 	default:
 		return c.typedClient.Get(ctx, key, obj)
@@ -254,11 +256,33 @@ func (c *client) Get(ctx context.Context, key ObjectKey, obj Object) error {
 
 // List implements client.Client
 func (c *client) List(ctx context.Context, obj ObjectList, opts ...ListOption) error {
-	switch obj.(type) {
+	switch x := obj.(type) {
 	case *unstructured.UnstructuredList:
 		return c.unstructuredClient.List(ctx, obj, opts...)
 	case *metav1.PartialObjectMetadataList:
-		return c.metadataClient.List(ctx, obj, opts...)
+		// Metadata only object should always preserve the GVK.
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		defer c.resetGroupVersionKind(obj, gvk)
+
+		// Call the list client.
+		if err := c.metadataClient.List(ctx, obj, opts...); err != nil {
+			return err
+		}
+
+		// Restore the GVK for each item in the list.
+		itemGVK := schema.GroupVersionKind{
+			Group:   gvk.Group,
+			Version: gvk.Version,
+			// TODO: this is producing unsafe guesses that don't actually work,
+			// but it matches ~99% of the cases out there.
+			Kind: strings.TrimSuffix(gvk.Kind, "List"),
+		}
+		for i := range x.Items {
+			item := &x.Items[i]
+			item.SetGroupVersionKind(itemGVK)
+		}
+
+		return nil
 	default:
 		return c.typedClient.List(ctx, obj, opts...)
 	}

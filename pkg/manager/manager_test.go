@@ -280,12 +280,6 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m).NotTo(BeNil())
 
-			By("checking the webhook server was added to non-leader-election runnables")
-			Expect(m).To(BeAssignableToTypeOf(&controllerManager{}))
-			nonLERunnables := m.(*controllerManager).nonLeaderElectionRunnables
-			Expect(nonLERunnables).To(HaveLen(1))
-			Expect(nonLERunnables[0]).To(BeAssignableToTypeOf(&webhook.Server{}))
-
 			By("checking the server contains the Port set on the webhook server and not passed to Options")
 			svr := m.GetWebhookServer()
 			Expect(svr).NotTo(BeNil())

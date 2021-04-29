@@ -365,7 +365,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
-	cm := &controllerManager{
+	return &controllerManager{
 		cluster:                 cluster,
 		recorderProvider:        recorderProvider,
 		resourceLock:            resourceLock,
@@ -387,17 +387,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		gracefulShutdownTimeout: *options.GracefulShutdownTimeout,
 		internalProceduresStop:  make(chan struct{}),
 		leaderElectionStopped:   make(chan struct{}),
-	}
-
-	// A webhook server set by New's caller should be added now
-	// so GetWebhookServer can construct a new one if unset and add it only once.
-	if cm.webhookServer != nil {
-		if err := cm.Add(cm.webhookServer); err != nil {
-			return nil, err
-		}
-	}
-
-	return cm, nil
+	}, nil
 }
 
 // AndFrom will use a supplied type and convert to Options

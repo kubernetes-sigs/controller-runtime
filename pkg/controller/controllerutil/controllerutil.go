@@ -18,11 +18,14 @@ package controllerutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"reflect"
+	"sync"
 
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,6 +34,91 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
+
+var (
+	// Will store memoized controller namespace
+	inClusterNamespace      string
+	inClusterNamespacePath  = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	inClusterNamespaceMutex sync.Mutex
+	// ErrNotRunningInCluster is the error for when the controller is not running in cluster
+	ErrNotRunningInCluster = &NotRunningInClusterError{}
+	// ErrNamespaceReadError is the error when the controller cannot read its namespace
+	ErrNamespaceReadError = &NamespaceReadError{}
+)
+
+// ReadInClusterNamespace returns the namespace by which the controller is running under.
+// read from "/var/run/secrets/kubernetes.io/serviceaccount/namespace".
+func ReadInClusterNamespace() (string, error) {
+	data, err := os.ReadFile(inClusterNamespacePath)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", &NotRunningInClusterError{cause: err}
+	} else if err != nil {
+		return "", &NamespaceReadError{cause: err}
+	}
+
+	return string(data), nil
+}
+
+// ReadInClusterNamespaceCached returns the namespace by which the controller is running under.
+// read from "/var/run/secrets/kubernetes.io/serviceaccount/namespace".
+// Note that the resolved namespace is cached after it is successfully read from disk.
+func ReadInClusterNamespaceCached() (string, error) {
+	inClusterNamespaceMutex.Lock()
+	ns := inClusterNamespace
+	if ns != "" {
+		inClusterNamespaceMutex.Unlock()
+		return ns, nil
+	}
+	ns, err := ReadInClusterNamespace()
+	if err != nil {
+		inClusterNamespaceMutex.Unlock()
+		return "", err
+	}
+	// memoize result for next call
+	inClusterNamespace = ns
+	inClusterNamespaceMutex.Unlock()
+	return ns, nil
+}
+
+// NotRunningInClusterError is an error returned if the controller is not running in the cluster
+// determined by "/var/run/secrets/kubernetes.io/serviceaccount/namespace" not existing.
+type NotRunningInClusterError struct {
+	cause error
+}
+
+func (e *NotRunningInClusterError) Error() string {
+	return "not running in-cluster"
+}
+
+// Unwrap returns the error cause
+func (e *NotRunningInClusterError) Unwrap() error {
+	return e.cause
+}
+
+// Is determines if the target error is a NotRunningInClusterError
+func (e *NotRunningInClusterError) Is(target error) bool {
+	return target.Error() == e.Error()
+}
+
+// NamespaceReadError is an error returned if the controller cannot read
+// from "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+type NamespaceReadError struct {
+	cause error
+}
+
+func (e *NamespaceReadError) Error() string {
+	return fmt.Sprintf("error reading namespace file at %q", inClusterNamespacePath)
+}
+
+// Unwrap returns the error cause
+func (e *NamespaceReadError) Unwrap() error {
+	return e.cause
+}
+
+// Is determines if the target error is a NamespaceReadError
+func (e *NamespaceReadError) Is(target error) bool {
+	return target.Error() == e.Error()
+}
 
 // AlreadyOwnedError is an error returned if the object you are trying to assign
 // a controller reference is already owned by another controller Object is the
@@ -197,7 +285,7 @@ const ( // They should complete the sentence "Deployment default/foo has been ..
 func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
 	key := client.ObjectKeyFromObject(obj)
 	if err := c.Get(ctx, key, obj); err != nil {
-		if !errors.IsNotFound(err) {
+		if !apierrors.IsNotFound(err) {
 			return OperationResultNone, err
 		}
 		if err := mutate(f, key, obj); err != nil {
@@ -234,7 +322,7 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f M
 func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
 	key := client.ObjectKeyFromObject(obj)
 	if err := c.Get(ctx, key, obj); err != nil {
-		if !errors.IsNotFound(err) {
+		if !apierrors.IsNotFound(err) {
 			return OperationResultNone, err
 		}
 		if f != nil {

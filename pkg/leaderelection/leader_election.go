@@ -19,17 +19,15 @@ package leaderelection
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
-
-const inClusterNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 
 // Options provides the required configuration to create a new resource lock
 type Options struct {
@@ -71,9 +69,9 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 	// Default the namespace (if running in cluster)
 	if options.LeaderElectionNamespace == "" {
 		var err error
-		options.LeaderElectionNamespace, err = getInClusterNamespace()
+		options.LeaderElectionNamespace, err = controllerutil.ReadInClusterNamespace()
 		if err != nil {
-			return nil, fmt.Errorf("unable to find leader election namespace: %w", err)
+			return nil, fmt.Errorf("unable to find leader election namespace, please specify LeaderElectionNamespace: %w", err)
 		}
 	}
 
@@ -99,22 +97,4 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 			Identity:      id,
 			EventRecorder: recorderProvider.GetEventRecorderFor(id),
 		})
-}
-
-func getInClusterNamespace() (string, error) {
-	// Check whether the namespace file exists.
-	// If not, we are not running in cluster so can't guess the namespace.
-	_, err := os.Stat(inClusterNamespacePath)
-	if os.IsNotExist(err) {
-		return "", fmt.Errorf("not running in-cluster, please specify LeaderElectionNamespace")
-	} else if err != nil {
-		return "", fmt.Errorf("error checking namespace file: %w", err)
-	}
-
-	// Load the namespace file and return its content
-	namespace, err := ioutil.ReadFile(inClusterNamespacePath)
-	if err != nil {
-		return "", fmt.Errorf("error reading namespace file: %w", err)
-	}
-	return string(namespace), nil
 }

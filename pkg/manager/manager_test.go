@@ -440,7 +440,7 @@ var _ = Describe("manger.Manager", func() {
 				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime"})
 				Expect(m).To(BeNil())
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unable to find leader election namespace: not running in-cluster, please specify LeaderElectionNamespace"))
+				Expect(err.Error()).To(ContainSubstring("unable to find leader election namespace, please specify LeaderElectionNamespace"))
 			})
 
 			// We must keep this default until we are sure all controller-runtime users have upgraded from the original default

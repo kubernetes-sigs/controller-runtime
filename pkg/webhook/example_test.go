@@ -83,6 +83,10 @@ func Example() {
 
 // This example creates a webhook server that can be
 // ran without a controller manager.
+//
+// Note that this assumes and requires a valid TLS
+// cert and key at the default locations
+// tls.crt and tls.key
 func ExampleServer_StartStandalone() {
 	// Create a webhook server
 	hookServer := &Server{

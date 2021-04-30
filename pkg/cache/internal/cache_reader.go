@@ -130,8 +130,8 @@ func (c *CacheReader) List(_ context.Context, out client.ObjectList, opts ...cli
 	runtimeObjs := make([]runtime.Object, 0, len(objs))
 	for i, item := range objs {
 		// if the Limit option is set and the number of items
-		// read exceeds this limit, then stop reading.
-		if limitSet && int64(i+1) > listOpts.Limit {
+		// listed exceeds this limit, then stop reading.
+		if limitSet && int64(i) >= listOpts.Limit {
 			break
 		}
 		obj, isObj := item.(runtime.Object)

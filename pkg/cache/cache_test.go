@@ -505,6 +505,39 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					err := informerCache.Get(context.Background(), svcKey, svc)
 					Expect(err).To(HaveOccurred())
 				})
+				It("test multinamespaced cache for cluster scoped resources", func() {
+					By("creating a multinamespaced cache to watch specific namespaces")
+					multi := cache.MultiNamespacedCacheBuilder([]string{"default", testNamespaceOne})
+					m, err := multi(cfg, cache.Options{})
+					Expect(err).NotTo(HaveOccurred())
+
+					By("running the cache and waiting it for sync")
+					go func() {
+						defer GinkgoRecover()
+						Expect(m.Start(informerCacheCtx)).To(Succeed())
+					}()
+					Expect(m.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
+
+					By("should be able to fetch cluster scoped resource")
+					node := &kcorev1.Node{}
+
+					By("verifying that getting the node works with an empty namespace")
+					key1 := client.ObjectKey{Namespace: "", Name: testNodeOne}
+					Expect(m.Get(context.Background(), key1, node)).To(Succeed())
+
+					By("verifying if the cluster scoped resources are not duplicated")
+					nodeList := &unstructured.UnstructuredList{}
+					nodeList.SetGroupVersionKind(schema.GroupVersionKind{
+						Group:   "",
+						Version: "v1",
+						Kind:    "NodeList",
+					})
+					Expect(m.List(context.Background(), nodeList)).To(Succeed())
+
+					By("verifying the node list is not empty")
+					Expect(nodeList.Items).NotTo(BeEmpty())
+					Expect(len(nodeList.Items)).To(BeEquivalentTo(1))
+				})
 			})
 			Context("with metadata-only objects", func() {
 				It("should be able to list objects that haven't been watched previously", func() {

@@ -17,9 +17,15 @@ limitations under the License.
 package objectutil
 
 import (
+	"errors"
+	"fmt"
+
+	"k8s.io/apimachinery/pkg/api/meta"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // FilterWithLabels returns a copy of the items in objs matching labelSel
@@ -39,4 +45,29 @@ func FilterWithLabels(objs []runtime.Object, labelSel labels.Selector) ([]runtim
 		outItems = append(outItems, obj.DeepCopyObject())
 	}
 	return outItems, nil
+}
+
+// IsAPINamespaced returns true if the object is namespace scoped.
+// For unstructured objects the gvk is found from the object itself.
+func IsAPINamespaced(obj runtime.Object, scheme *runtime.Scheme, restmapper apimeta.RESTMapper) (bool, error) {
+	gvk, err := apiutil.GVKForObject(obj, scheme)
+	if err != nil {
+		return false, err
+	}
+
+	restmapping, err := restmapper.RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind})
+	if err != nil {
+		return false, fmt.Errorf("failed to get restmapping: %w", err)
+	}
+
+	scope := restmapping.Scope.Name()
+
+	if scope == "" {
+		return false, errors.New("Scope cannot be identified. Empty scope returned")
+	}
+
+	if scope != meta.RESTScopeNameRoot {
+		return true, nil
+	}
+	return false, nil
 }

@@ -20,16 +20,27 @@ set -o pipefail
 
 hack_dir=$(dirname ${BASH_SOURCE})
 source ${hack_dir}/common.sh
-source ${hack_dir}/setup-envtest.sh
 
 tmp_root=/tmp
 kb_root_dir=$tmp_root/kubebuilder
 
 ENVTEST_K8S_VERSION=${ENVTEST_K8S_VERSION:-"1.19.2"}
 
-fetch_envtest_tools "$kb_root_dir"
-fetch_envtest_tools "${hack_dir}/../pkg/internal/testing/integration/assets"
-setup_envtest_env "$kb_root_dir"
+# set up envtest tools if necessary
+
+header_text "installing envtest tools@${ENVTEST_K8S_VERSION} with setup-envtest if necessary"
+tmp_bin=/tmp/cr-tests-bin
+(
+    # don't presume to install for the user
+    cd ${hack_dir}/../tools/setup-envtest
+    GOBIN=${tmp_bin} go install .
+)
+source <(${tmp_bin}/setup-envtest use --use-env -p env ${ENVTEST_K8S_VERSION})
+
+# link the assets into integration
+for tool in kube-apiserver etcd kubectl; do
+    ln -f -s "${KUBEBUILDER_ASSETS:?unable find envtest assets}/${tool}" "${hack_dir}/../pkg/internal/testing/integration/assets/bin/${tool}"
+done
 
 ${hack_dir}/verify.sh
 ${hack_dir}/test-all.sh

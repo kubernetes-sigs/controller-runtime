@@ -209,17 +209,24 @@ type Options struct {
 	LivenessEndpointName string
 
 	// Port is the port that the webhook server serves at.
-	// It is used to set webhook.Server.Port.
+	// It is used to set webhook.Server.Port if WebhookServer is not set.
 	Port int
 	// Host is the hostname that the webhook server binds to.
-	// It is used to set webhook.Server.Host.
+	// It is used to set webhook.Server.Host if WebhookServer is not set.
 	Host string
 
 	// CertDir is the directory that contains the server key and certificate.
-	// if not set, webhook server would look up the server key and certificate in
+	// If not set, webhook server would look up the server key and certificate in
 	// {TempDir}/k8s-webhook-server/serving-certs. The server key and certificate
 	// must be named tls.key and tls.crt, respectively.
+	// It is used to set webhook.Server.CertDir if WebhookServer is not set.
 	CertDir string
+
+	// WebhookServer is an externally configured webhook.Server. By default,
+	// a Manager will create a default server using Port, Host, and CertDir;
+	// if this is set, the Manager will use this server instead.
+	WebhookServer *webhook.Server
+
 	// Functions to all for a user to customize the values that will be injected.
 
 	// NewCache is the function that will create the cache to be used
@@ -370,6 +377,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		port:                    options.Port,
 		host:                    options.Host,
 		certDir:                 options.CertDir,
+		webhookServer:           options.WebhookServer,
 		leaseDuration:           *options.LeaseDuration,
 		renewDeadline:           *options.RenewDeadline,
 		retryPeriod:             *options.RetryPeriod,

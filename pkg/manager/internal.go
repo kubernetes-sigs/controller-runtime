@@ -145,6 +145,9 @@ type controllerManager struct {
 	certDir string
 
 	webhookServer *webhook.Server
+	// webhookServerOnce will be called in GetWebhookServer() to optionally initialize
+	// webhookServer if unset, and Add() it to controllerManager.
+	webhookServerOnce sync.Once
 
 	// leaseDuration is the duration that non-leader candidates will
 	// wait to force acquire leadership.
@@ -332,32 +335,19 @@ func (cm *controllerManager) GetAPIReader() client.Reader {
 }
 
 func (cm *controllerManager) GetWebhookServer() *webhook.Server {
-	server, wasNew := func() (*webhook.Server, bool) {
-		cm.mu.Lock()
-		defer cm.mu.Unlock()
-
-		if cm.webhookServer != nil {
-			return cm.webhookServer, false
+	cm.webhookServerOnce.Do(func() {
+		if cm.webhookServer == nil {
+			cm.webhookServer = &webhook.Server{
+				Port:    cm.port,
+				Host:    cm.host,
+				CertDir: cm.certDir,
+			}
 		}
-
-		cm.webhookServer = &webhook.Server{
-			Port:    cm.port,
-			Host:    cm.host,
-			CertDir: cm.certDir,
-		}
-		return cm.webhookServer, true
-	}()
-
-	// only add the server if *we ourselves* just registered it.
-	// Add has its own lock, so just do this separately -- there shouldn't
-	// be a "race" in this lock gap because the condition is the population
-	// of cm.webhookServer, not anything to do with Add.
-	if wasNew {
-		if err := cm.Add(server); err != nil {
+		if err := cm.Add(cm.webhookServer); err != nil {
 			panic("unable to add webhook server to the controller manager")
 		}
-	}
-	return server
+	})
+	return cm.webhookServer
 }
 
 func (cm *controllerManager) GetLogger() logr.Logger {

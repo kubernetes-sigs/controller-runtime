@@ -53,6 +53,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 var _ = Describe("manger.Manager", func() {
@@ -269,6 +270,20 @@ var _ = Describe("manger.Manager", func() {
 			Expect(svr).NotTo(BeNil())
 			Expect(svr.Port).To(Equal(9440))
 			Expect(svr.Host).To(Equal("foo.com"))
+
+			close(done)
+		})
+
+		It("should not initialize a webhook server if Options.WebhookServer is set", func(done Done) {
+			By("creating a manager with options")
+			m, err := New(cfg, Options{Port: 9441, WebhookServer: &webhook.Server{Port: 9440}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(m).NotTo(BeNil())
+
+			By("checking the server contains the Port set on the webhook server and not passed to Options")
+			svr := m.GetWebhookServer()
+			Expect(svr).NotTo(BeNil())
+			Expect(svr.Port).To(Equal(9440))
 
 			close(done)
 		})

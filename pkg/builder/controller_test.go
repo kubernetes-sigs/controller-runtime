@@ -408,8 +408,17 @@ var _ = Describe("application", func() {
 				Owns(&appsv1.ReplicaSet{}, OnlyMetadata).
 				Watches(&source.Kind{Type: &appsv1.StatefulSet{}},
 					handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
+						defer GinkgoRecover()
+
 						ometa := o.(*metav1.PartialObjectMetadata)
 						statefulSetMaps <- ometa
+
+						// Validate that the GVK is not empty when dealing with PartialObjectMetadata objects.
+						Expect(o.GetObjectKind().GroupVersionKind()).To(Equal(schema.GroupVersionKind{
+							Group:   "apps",
+							Version: "v1",
+							Kind:    "StatefulSet",
+						}))
 						return nil
 					}),
 					OnlyMetadata)

@@ -66,8 +66,8 @@ function fetch_envtest_tools {
   goarch="$(go env GOARCH)"
   goos="$(go env GOOS)"
 
-  if [[ "$goos" != "linux" && "$goos" != "darwin" ]]; then
-    echo "OS '$goos' not supported. Aborting." >&2
+  if [[ ("$goos" != "linux" && "$goos" != "darwin") || ("$goos" == "darwin" && "$goarch" != "amd64") ]]; then
+    echo "OS '$goos' with '$goarch' arch is not supported. Aborting." >&2
     return 1
   fi
 

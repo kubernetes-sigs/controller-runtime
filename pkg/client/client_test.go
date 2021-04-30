@@ -1558,15 +1558,19 @@ var _ = Describe("Client", func() {
 
 				By("fetching the created Deployment")
 				var actual metav1.PartialObjectMetadata
-				actual.SetGroupVersionKind(schema.GroupVersionKind{
+				gvk := schema.GroupVersionKind{
 					Group:   "apps",
 					Version: "v1",
 					Kind:    "Deployment",
-				})
+				}
+				actual.SetGroupVersionKind(gvk)
 				key := client.ObjectKey{Namespace: ns, Name: dep.Name}
 				err = cl.Get(context.TODO(), key, &actual)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
+
+				By("validating that the GVK has been preserved")
+				Expect(actual.GroupVersionKind()).To(Equal(gvk))
 
 				By("validating the fetched deployment equals the created one")
 				Expect(metaOnlyFromObj(dep, scheme)).To(Equal(&actual))
@@ -1676,6 +1680,11 @@ var _ = Describe("Client", func() {
 				Expect(deps.Items).NotTo(BeEmpty())
 				hasDep := false
 				for _, item := range deps.Items {
+					Expect(item.GroupVersionKind()).To(Equal(schema.GroupVersionKind{
+						Group:   "apps",
+						Kind:    "Deployment",
+						Version: "v1",
+					}))
 					if item.GetName() == dep.Name && item.GetNamespace() == dep.Namespace {
 						hasDep = true
 						break
@@ -2389,17 +2398,28 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("listing all objects of that type in the cluster")
-				metaList := &metav1.PartialObjectMetadataList{}
-				metaList.SetGroupVersionKind(schema.GroupVersionKind{
+				gvk := schema.GroupVersionKind{
 					Group:   "apps",
 					Version: "v1",
 					Kind:    "DeploymentList",
-				})
+				}
+				metaList := &metav1.PartialObjectMetadataList{}
+				metaList.SetGroupVersionKind(gvk)
 				Expect(cl.List(context.Background(), metaList)).NotTo(HaveOccurred())
 
+				By("validating that the list GVK has been preserved")
+				Expect(metaList.GroupVersionKind()).To(Equal(gvk))
+
+				By("validating that the list has the expected deployment")
 				Expect(metaList.Items).NotTo(BeEmpty())
 				hasDep := false
 				for _, item := range metaList.Items {
+					Expect(item.GroupVersionKind()).To(Equal(schema.GroupVersionKind{
+						Group:   "apps",
+						Version: "v1",
+						Kind:    "Deployment",
+					}))
+
 					if item.Name == dep.Name && item.Namespace == dep.Namespace {
 						hasDep = true
 						break

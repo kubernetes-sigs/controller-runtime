@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -460,6 +461,18 @@ var _ = Describe("Controllerutil", func() {
 			ExpectWithOffset(1, fetched.Status).To(BeEquivalentTo(deploy.Status))
 		}
 
+		assertLocalDeployStatusWasUpdated := func(fetched *appsv1.Deployment) {
+			By("local deploy object was updated during patch & has same spec, status, resource version as fetched")
+			if fetched == nil {
+				fetched = &appsv1.Deployment{}
+				ExpectWithOffset(1, c.Get(context.TODO(), deplKey, fetched)).To(Succeed())
+			}
+			ExpectWithOffset(1, fetched.ResourceVersion).To(Equal(deploy.ResourceVersion))
+			ExpectWithOffset(1, *fetched.Spec.Replicas).To(BeEquivalentTo(int32(5)))
+			ExpectWithOffset(1, fetched.Status).To(BeEquivalentTo(deploy.Status))
+			ExpectWithOffset(1, len(fetched.Status.Conditions)).To(BeEquivalentTo(1))
+		}
+
 		It("creates a new object if one doesn't exists", func() {
 			op, err := controllerutil.CreateOrPatch(context.TODO(), c, deploy, specr)
 
@@ -557,6 +570,46 @@ var _ = Describe("Controllerutil", func() {
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultUpdatedStatus))
 
 			assertLocalDeployWasUpdated(nil)
+		})
+
+		It("patches resource and not empty status", func() {
+			op, err := controllerutil.CreateOrPatch(context.TODO(), c, deploy, specr)
+
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
+			Expect(err).NotTo(HaveOccurred())
+
+			replicas := int32(3)
+			deployStatus := appsv1.DeploymentStatus{
+				ReadyReplicas: 1,
+				Replicas:      replicas,
+			}
+			op, err = controllerutil.CreateOrPatch(context.TODO(), c, deploy, func() error {
+				Expect(deploymentScaler(deploy, replicas)()).To(Succeed())
+				return deploymentStatusr(deploy, deployStatus)()
+			})
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultUpdatedStatus")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultUpdatedStatus))
+
+			assertLocalDeployWasUpdated(nil)
+
+			op, err = controllerutil.CreateOrPatch(context.TODO(), c, deploy, func() error {
+				deploy.Spec.Replicas = pointer.Int32Ptr(5)
+				deploy.Status.Conditions = []appsv1.DeploymentCondition{{
+					Type:   appsv1.DeploymentProgressing,
+					Status: corev1.ConditionTrue,
+				}}
+				return nil
+			})
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultUpdatedStatus")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultUpdatedStatus))
+
+			assertLocalDeployStatusWasUpdated(nil)
 		})
 
 		It("errors when MutateFn changes object name on creation", func() {

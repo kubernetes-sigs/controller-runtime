@@ -76,7 +76,32 @@ var _ = Describe("Webhook", func() {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
-				_ = server.Start(ctx)
+				err = server.Start(ctx)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+			Eventually(func() bool {
+				err = c.Create(context.TODO(), obj)
+				return errors.ReasonForError(err) == metav1.StatusReason("Always denied")
+			}, 1*time.Second).Should(BeTrue())
+
+			cancel()
+			close(done)
+		})
+		It("should reject create request for multi-webhook that rejects all requests", func(done Done) {
+			m, err := manager.New(cfg, manager.Options{
+				Port:    testenv.WebhookInstallOptions.LocalServingPort,
+				Host:    testenv.WebhookInstallOptions.LocalServingHost,
+				CertDir: testenv.WebhookInstallOptions.LocalServingCertDir,
+			}) // we need manager here just to leverage manager.SetFields
+			Expect(err).NotTo(HaveOccurred())
+			server := m.GetWebhookServer()
+			server.Register("/failing", &webhook.Admission{Handler: admission.MultiValidatingHandler(&rejectingValidator{})})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			go func() {
+				err = server.Start(ctx)
+				Expect(err).NotTo(HaveOccurred())
 			}()
 
 			Eventually(func() bool {
@@ -99,7 +124,8 @@ var _ = Describe("Webhook", func() {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
-				_ = server.StartStandalone(ctx, scheme.Scheme)
+				err := server.StartStandalone(ctx, scheme.Scheme)
+				Expect(err).NotTo(HaveOccurred())
 			}()
 
 			Eventually(func() bool {
@@ -170,8 +196,18 @@ var _ = Describe("Webhook", func() {
 })
 
 type rejectingValidator struct {
+	d *admission.Decoder
+}
+
+func (v *rejectingValidator) InjectDecoder(d *admission.Decoder) error {
+	v.d = d
+	return nil
 }
 
 func (v *rejectingValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+	var obj appsv1.Deployment
+	if err := v.d.Decode(req, &obj); err != nil {
+		return admission.Denied(err.Error())
+	}
 	return admission.Denied(fmt.Sprint("Always denied"))
 }

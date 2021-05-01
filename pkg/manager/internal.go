@@ -225,6 +225,9 @@ func (cm *controllerManager) Add(r Runnable) error {
 
 // Deprecated: use the equivalent Options field to set a field. This method will be removed in v0.10.
 func (cm *controllerManager) SetFields(i interface{}) error {
+	if err := cm.cluster.SetFields(i); err != nil {
+		return err
+	}
 	if _, err := inject.InjectorInto(cm.SetFields, i); err != nil {
 		return err
 	}
@@ -232,9 +235,6 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 		return err
 	}
 	if _, err := inject.LoggerInto(cm.logger, i); err != nil {
-		return err
-	}
-	if err := cm.cluster.SetFields(i); err != nil {
 		return err
 	}
 

@@ -100,6 +100,6 @@ var _ = Describe("Test", func() {
 type rejectingValidator struct {
 }
 
-func (v *rejectingValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+func (v *rejectingValidator) Handle(_ context.Context, _ admission.Request) admission.Response {
 	return admission.Denied(fmt.Sprint("Always denied"))
 }

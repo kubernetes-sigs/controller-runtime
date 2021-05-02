@@ -43,7 +43,7 @@ var _ = Describe("Webhook Server", func() {
 
 	BeforeEach(func() {
 		ctx, ctxCancel = context.WithCancel(context.Background())
-		// closed in indivual tests differently
+		// closed in individual tests differently
 
 		servingOpts = envtest.WebhookInstallOptions{}
 		Expect(servingOpts.PrepWithoutInstalling()).To(Succeed())

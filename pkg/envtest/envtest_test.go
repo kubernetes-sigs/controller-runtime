@@ -23,11 +23,13 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -65,8 +67,8 @@ var _ = Describe("Test", func() {
 				Name: crd.GetName(),
 			}
 			var placeholder v1beta1.CustomResourceDefinition
-			err := c.Get(context.TODO(), crdObjectKey, &placeholder)
-			if err != nil && apierrors.IsNotFound(err) {
+			if err = c.Get(context.TODO(), crdObjectKey, &placeholder); err != nil &&
+				apierrors.IsNotFound(err) {
 				// CRD doesn't need to be deleted.
 				continue
 			}
@@ -842,6 +844,19 @@ var _ = Describe("Test", func() {
 			_, err := env.Start()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(env.Stop()).To(Succeed())
+			close(done)
+		}, 30)
+	})
+
+	Describe("Stop", func() {
+		It("should cleanup webhook /tmp folder with no error when using existing cluster", func(done Done) {
+			env := &Environment{}
+			_, err := env.Start()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(env.Stop()).To(Succeed())
+
+			// check if the /tmp/envtest-serving-certs-* dir doesnt exists any more
+			Expect(env.WebhookInstallOptions.LocalServingCertDir).ShouldNot(BeADirectory())
 			close(done)
 		}, 30)
 	})

@@ -158,13 +158,15 @@ func (te *Environment) Stop() error {
 			return err
 		}
 	}
+
+	if err := te.WebhookInstallOptions.Cleanup(); err != nil {
+		return err
+	}
+
 	if te.useExistingCluster() {
 		return nil
 	}
-	err := te.WebhookInstallOptions.Cleanup()
-	if err != nil {
-		return err
-	}
+
 	return te.ControlPlane.Stop()
 }
 

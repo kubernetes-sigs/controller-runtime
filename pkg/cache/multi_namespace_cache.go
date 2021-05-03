@@ -186,10 +186,13 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 	if err != nil {
 		return err
 	}
+
+	limitSet := listOpts.Limit > 0
+
 	var resourceVersion string
 	for _, cache := range c.namespaceToCache {
 		listObj := list.DeepCopyObject().(client.ObjectList)
-		err = cache.List(ctx, listObj, opts...)
+		err = cache.List(ctx, listObj, &listOpts)
 		if err != nil {
 			return err
 		}
@@ -204,6 +207,17 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 		allItems = append(allItems, items...)
 		// The last list call should have the most correct resource version.
 		resourceVersion = accessor.GetResourceVersion()
+		if limitSet {
+			// decrement Limit by the number of items
+			// fetched from the current namespace.
+			listOpts.Limit -= int64(len(items))
+			// if a Limit was set and the number of
+			// items read has reached this set limit,
+			// then stop reading.
+			if listOpts.Limit == 0 {
+				break
+			}
+		}
 	}
 	listAccessor.SetResourceVersion(resourceVersion)
 

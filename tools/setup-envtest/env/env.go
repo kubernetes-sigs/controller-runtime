@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"sort"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/go-logr/logr"
@@ -372,7 +373,14 @@ func (e *Env) PrintInfo(printFmt PrintFormat) {
 	case PrintPath:
 		fmt.Fprint(e.Out, path) // NB(directxman12): no newline -- want the bare path here
 	case PrintEnv:
-		fmt.Fprintf(e.Out, "export KUBEBUILDER_ASSETS=%s\n", path)
+		// quote in case there are spaces, etc in the path
+		// the weird string below works like this:
+		// - you can't escape quotes in shell
+		// - shell strings that are next to each other are concatenated (so "a""b""c" == "abc")
+		// - you can intermix quote styles using the above
+		// - so `'"'"'` --> CLOSE_QUOTE + "'" + OPEN_QUOTE
+		shellQuoted := strings.ReplaceAll(path, "'", `'"'"'`)
+		fmt.Fprintf(e.Out, "export KUBEBUILDER_ASSETS='%s'\n", shellQuoted)
 	default:
 		panic(fmt.Sprintf("unexpected print format %v", printFmt))
 	}

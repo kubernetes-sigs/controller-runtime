@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/testing"
 
@@ -49,7 +50,7 @@ type fakeClient struct {
 	scheme  *runtime.Scheme
 }
 
-var _ client.Client = &fakeClient{}
+var _ client.WithWatch = &fakeClient{}
 
 const (
 	maxNameLength          = 63
@@ -61,7 +62,7 @@ const (
 // You can choose to initialize it with a slice of runtime.Object.
 //
 // Deprecated: Please use NewClientBuilder instead.
-func NewFakeClient(initObjs ...runtime.Object) client.Client {
+func NewFakeClient(initObjs ...runtime.Object) client.WithWatch {
 	return NewClientBuilder().WithRuntimeObjects(initObjs...).Build()
 }
 
@@ -70,7 +71,7 @@ func NewFakeClient(initObjs ...runtime.Object) client.Client {
 // You can choose to initialize it with a slice of runtime.Object.
 //
 // Deprecated: Please use NewClientBuilder instead.
-func NewFakeClientWithScheme(clientScheme *runtime.Scheme, initObjs ...runtime.Object) client.Client {
+func NewFakeClientWithScheme(clientScheme *runtime.Scheme, initObjs ...runtime.Object) client.WithWatch {
 	return NewClientBuilder().WithScheme(clientScheme).WithRuntimeObjects(initObjs...).Build()
 }
 
@@ -113,7 +114,7 @@ func (f *ClientBuilder) WithRuntimeObjects(initRuntimeObjs ...runtime.Object) *C
 }
 
 // Build builds and returns a new fake client.
-func (f *ClientBuilder) Build() client.Client {
+func (f *ClientBuilder) Build() client.WithWatch {
 	if f.scheme == nil {
 		f.scheme = scheme.Scheme
 	}
@@ -282,6 +283,23 @@ func (c *fakeClient) Get(ctx context.Context, key client.ObjectKey, obj client.O
 	decoder := scheme.Codecs.UniversalDecoder()
 	_, _, err = decoder.Decode(j, nil, obj)
 	return err
+}
+
+func (c *fakeClient) Watch(ctx context.Context, list client.ObjectList, opts ...client.ListOption) (watch.Interface, error) {
+	gvk, err := apiutil.GVKForObject(list, c.scheme)
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.HasSuffix(gvk.Kind, "List") {
+		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
+	}
+
+	listOpts := client.ListOptions{}
+	listOpts.ApplyOptions(opts)
+
+	gvr, _ := meta.UnsafeGuessKindToResource(gvk)
+	return c.tracker.Watch(gvr, listOpts.Namespace)
 }
 
 func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...client.ListOption) error {

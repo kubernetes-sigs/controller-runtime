@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -33,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -40,7 +42,7 @@ var _ = Describe("Fake client", func() {
 	var dep *appsv1.Deployment
 	var dep2 *appsv1.Deployment
 	var cm *corev1.ConfigMap
-	var cl client.Client
+	var cl client.WithWatch
 
 	BeforeEach(func() {
 		dep = &appsv1.Deployment{
@@ -539,6 +541,32 @@ var _ = Describe("Fake client", func() {
 			for _, cm := range configmaps.Items {
 				Expect(cm.DeletionTimestamp).NotTo(BeNil())
 			}
+		})
+
+		It("should be able to watch", func() {
+			By("Creating a watch")
+			objWatch, err := cl.Watch(context.Background(), &corev1.ServiceList{})
+			Expect(err).NotTo(HaveOccurred())
+
+			defer objWatch.Stop()
+
+			go func() {
+				defer GinkgoRecover()
+				// It is likely starting a new goroutine is slower than progressing
+				// in the outer routine, sleep to make sure this is always true
+				time.Sleep(100 * time.Millisecond)
+
+				err := cl.Create(context.Background(), &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "for-watch"}})
+				Expect(err).ToNot(HaveOccurred())
+			}()
+
+			event, ok := <-objWatch.ResultChan()
+			Expect(ok).To(BeTrue())
+			Expect(event.Type).To(Equal(watch.Added))
+
+			service, ok := event.Object.(*corev1.Service)
+			Expect(ok).To(BeTrue())
+			Expect(service.Name).To(Equal("for-watch"))
 		})
 
 		Context("with the DryRun option", func() {

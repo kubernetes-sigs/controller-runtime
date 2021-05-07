@@ -98,6 +98,14 @@ WAIT_LOOP:
 	Fail(fmt.Sprintf("timed out waiting for namespace %q to be deleted", ns.Name))
 }
 
+type mockPatchOption struct {
+	applied bool
+}
+
+func (o *mockPatchOption) ApplyToPatch(_ *client.PatchOptions) {
+	o.applied = true
+}
+
 // metaOnlyFromObj returns PartialObjectMetadata from a concrete Go struct that
 // returns a concrete *metav1.ObjectMeta from GetObjectMeta (yes, that plays a
 // bit fast and loose, but the only other options are serializing and then
@@ -711,6 +719,39 @@ var _ = Describe("Client", func() {
 				obj := metaOnlyFromObj(dep, scheme)
 
 				Expect(cl.Update(context.TODO(), obj)).NotTo(Succeed())
+			})
+		})
+	})
+
+	Describe("Patch", func() {
+		Context("Metadata Client", func() {
+			It("should merge patch with options", func(done Done) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				metadata := metaOnlyFromObj(dep, scheme)
+				if metadata.Labels == nil {
+					metadata.Labels = make(map[string]string)
+				}
+				metadata.Labels["foo"] = "bar"
+
+				testOption := &mockPatchOption{}
+				Expect(cl.Patch(context.TODO(), metadata, client.Merge, testOption)).To(Succeed())
+
+				By("validating that patched metadata has new labels")
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Labels["foo"]).To(Equal("bar"))
+
+				By("validating patch options were applied")
+				Expect(testOption.applied).To(Equal(true))
+				close(done)
 			})
 		})
 	})

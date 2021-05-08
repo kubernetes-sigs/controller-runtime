@@ -281,7 +281,7 @@ func (o *WebhookInstallOptions) setupCA() ([]byte, error) {
 		return nil, fmt.Errorf("unable to set up webhook serving certs: %v", err)
 	}
 
-	localServingCertsDir, err := ioutil.TempDir("", "envtest-serving-certs-")
+	localServingCertsDir, err := os.MkdirTemp("", "envtest-serving-certs-")
 	o.LocalServingCertDir = localServingCertsDir
 	if err != nil {
 		return nil, fmt.Errorf("unable to create directory for webhook serving certs: %v", err)
@@ -292,10 +292,10 @@ func (o *WebhookInstallOptions) setupCA() ([]byte, error) {
 		return nil, fmt.Errorf("unable to marshal webhook serving certs: %v", err)
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(localServingCertsDir, "tls.crt"), certData, 0640); err != nil {
+	if err := os.WriteFile(filepath.Join(localServingCertsDir, "tls.crt"), certData, 0640); err != nil {
 		return nil, fmt.Errorf("unable to write webhook serving cert to disk: %v", err)
 	}
-	if err := ioutil.WriteFile(filepath.Join(localServingCertsDir, "tls.key"), keyData, 0640); err != nil {
+	if err := os.WriteFile(filepath.Join(localServingCertsDir, "tls.key"), keyData, 0640); err != nil {
 		return nil, fmt.Errorf("unable to write webhook serving key to disk: %v", err)
 	}
 
@@ -382,6 +382,8 @@ func readWebhooks(path string) ([]client.Object, []client.Object, error) {
 	if !info.IsDir() {
 		path, files = filepath.Dir(path), []os.FileInfo{info}
 	} else {
+		// TODO: Migrate to os.ReadDir
+		// information: https://go-review.googlesource.com/c/go/+/293649/
 		if files, err = ioutil.ReadDir(path); err != nil {
 			return nil, nil, err
 		}

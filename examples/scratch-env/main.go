@@ -4,7 +4,6 @@ import (
 	goflag "flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
 	flag "github.com/spf13/pflag"
@@ -74,7 +73,7 @@ func runMain() int {
 	log.Info("apiserver running", "host", cfg.Host)
 
 	// TODO(directxman12): add support for writing to a new context in an existing file
-	kubeconfigFile, err := ioutil.TempFile("", "scratch-env-kubeconfig-")
+	kubeconfigFile, err := os.CreateTemp("", "scratch-env-kubeconfig-")
 	if err != nil {
 		log.Error(err, "unable to create kubeconfig file, continuing on without it")
 	} else {

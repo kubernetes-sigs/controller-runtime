@@ -2,7 +2,6 @@ package internal_test
 
 import (
 	"bytes"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -274,8 +273,9 @@ var _ = Describe("Stop method", func() {
 			processState := &ProcessState{}
 			processState.Session, err = gexec.Start(getSimpleCommand(), nil, nil)
 			Expect(err).NotTo(HaveOccurred())
-			processState.Dir, err = ioutil.TempDir("", "k8s_test_framework_")
+			tmp, err := os.MkdirTemp("", "k8s_test_framework_")
 			Expect(err).NotTo(HaveOccurred())
+			processState.Dir = tmp
 			processState.DirNeedsCleaning = true
 			processState.StopTimeout = 400 * time.Millisecond
 

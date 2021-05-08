@@ -50,9 +50,18 @@ func MultiNamespacedCacheBuilder(namespaces []string) NewCacheFunc {
 		if err != nil {
 			return nil, err
 		}
-		// create a cache for cluster scoped resources
-		namespaces = append(namespaces, globalCache)
+
 		caches := map[string]Cache{}
+
+		// create a cache for cluster scoped resources
+		gCache, err := New(config, opts)
+		if err != nil {
+			return nil, fmt.Errorf("error creating global cache %v", err)
+		}
+
+		// add global cache to the cacheMap
+		caches[globalCache] = gCache
+
 		for _, ns := range namespaces {
 			opts.Namespace = ns
 			c, err := New(config, opts)
@@ -190,7 +199,10 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 	limitSet := listOpts.Limit > 0
 
 	var resourceVersion string
-	for _, cache := range c.namespaceToCache {
+	for ns, cache := range c.namespaceToCache {
+		if ns == globalCache {
+			continue
+		}
 		listObj := list.DeepCopyObject().(client.ObjectList)
 		err = cache.List(ctx, listObj, &listOpts)
 		if err != nil {

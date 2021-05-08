@@ -19,7 +19,7 @@ package conversion
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 
@@ -70,7 +70,7 @@ var _ = Describe("Conversion Webhook", func() {
 
 		convReview := &apix.ConversionReview{}
 		req := &http.Request{
-			Body: ioutil.NopCloser(bytes.NewReader(payload.Bytes())),
+			Body: io.NopCloser(bytes.NewReader(payload.Bytes())),
 		}
 		webhook.ServeHTTP(respRecorder, req)
 		Expect(json.NewDecoder(respRecorder.Result().Body).Decode(convReview)).To(Succeed())

@@ -339,6 +339,9 @@ func renderCRDs(options *CRDInstallOptions) ([]client.Object, error) {
 
 		if !info.IsDir() {
 			filePath, files = filepath.Dir(path), []os.FileInfo{info}
+
+			// TODO: Migrate to os.ReadDir
+			// information: https://go-review.googlesource.com/c/go/+/293649/
 		} else if files, err = ioutil.ReadDir(path); err != nil {
 			return nil, err
 		}
@@ -602,7 +605,7 @@ func readCRDs(basePath string, files []os.FileInfo) ([]*unstructured.Unstructure
 
 // readDocuments reads documents from file.
 func readDocuments(fp string) ([][]byte, error) {
-	b, err := ioutil.ReadFile(fp) //nolint:gosec
+	b, err := os.ReadFile(fp)
 	if err != nil {
 		return nil, err
 	}

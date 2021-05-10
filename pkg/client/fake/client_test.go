@@ -141,6 +141,132 @@ var _ = Describe("Fake client", func() {
 			Expect(list.Items).To(HaveLen(2))
 		})
 
+		It("should be able to Create an unregistered type using unstructured", func() {
+			item := &unstructured.Unstructured{}
+			item.SetAPIVersion("custom/v1")
+			item.SetKind("Image")
+			item.SetName("my-item")
+			err := cl.Create(context.Background(), item)
+			Expect(err).To(BeNil())
+		})
+
+		It("should be able to Get an unregisted type using unstructured", func() {
+			By("Creating an object of an unregistered type")
+			item := &unstructured.Unstructured{}
+			item.SetAPIVersion("custom/v2")
+			item.SetKind("Image")
+			item.SetName("my-item")
+			err := cl.Create(context.Background(), item)
+			Expect(err).To(BeNil())
+
+			By("Getting and the object")
+			item = &unstructured.Unstructured{}
+			item.SetAPIVersion("custom/v2")
+			item.SetKind("Image")
+			item.SetName("my-item")
+			err = cl.Get(context.Background(), client.ObjectKeyFromObject(item), item)
+			Expect(err).To(BeNil())
+		})
+
+		It("should be able to List an unregistered type using unstructured", func() {
+			list := &unstructured.UnstructuredList{}
+			list.SetAPIVersion("custom/v3")
+			list.SetKind("ImageList")
+			err := cl.List(context.Background(), list)
+			Expect(err).To(BeNil())
+		})
+
+		It("should be able to List an unregistered type using unstructured", func() {
+			list := &unstructured.UnstructuredList{}
+			list.SetAPIVersion("custom/v4")
+			list.SetKind("Image")
+			err := cl.List(context.Background(), list)
+			Expect(err).To(BeNil())
+		})
+
+		It("should be able to Update an unregistered type using unstructured", func() {
+			By("Creating an object of an unregistered type")
+			item := &unstructured.Unstructured{}
+			item.SetAPIVersion("custom/v5")
+			item.SetKind("Image")
+			item.SetName("my-item")
+			err := cl.Create(context.Background(), item)
+			Expect(err).To(BeNil())
+
+			By("Updating the object")
+			err = unstructured.SetNestedField(item.Object, int64(2), "spec", "replicas")
+			Expect(err).To(BeNil())
+			err = cl.Update(context.Background(), item)
+			Expect(err).To(BeNil())
+
+			By("Getting the object")
+			item = &unstructured.Unstructured{}
+			item.SetAPIVersion("custom/v5")
+			item.SetKind("Image")
+			item.SetName("my-item")
+			err = cl.Get(context.Background(), client.ObjectKeyFromObject(item), item)
+			Expect(err).To(BeNil())
+
+			By("Inspecting the object")
+			value, found, err := unstructured.NestedInt64(item.Object, "spec", "replicas")
+			Expect(err).To(BeNil())
+			Expect(found).To(BeTrue())
+			Expect(value).To(Equal(int64(2)))
+		})
+
+		It("should be able to Patch an unregistered type using unstructured", func() {
+			By("Creating an object of an unregistered type")
+			item := &unstructured.Unstructured{}
+			item.SetAPIVersion("custom/v6")
+			item.SetKind("Image")
+			item.SetName("my-item")
+			err := cl.Create(context.Background(), item)
+			Expect(err).To(BeNil())
+
+			By("Updating the object")
+			original := item.DeepCopy()
+			err = unstructured.SetNestedField(item.Object, int64(2), "spec", "replicas")
+			Expect(err).To(BeNil())
+			err = cl.Patch(context.Background(), item, client.MergeFrom(original))
+			Expect(err).To(BeNil())
+
+			By("Getting the object")
+			item = &unstructured.Unstructured{}
+			item.SetAPIVersion("custom/v6")
+			item.SetKind("Image")
+			item.SetName("my-item")
+			err = cl.Get(context.Background(), client.ObjectKeyFromObject(item), item)
+			Expect(err).To(BeNil())
+
+			By("Inspecting the object")
+			value, found, err := unstructured.NestedInt64(item.Object, "spec", "replicas")
+			Expect(err).To(BeNil())
+			Expect(found).To(BeTrue())
+			Expect(value).To(Equal(int64(2)))
+		})
+
+		It("should be able to Delete an unregistered type using unstructured", func() {
+			By("Creating an object of an unregistered type")
+			item := &unstructured.Unstructured{}
+			item.SetAPIVersion("custom/v7")
+			item.SetKind("Image")
+			item.SetName("my-item")
+			err := cl.Create(context.Background(), item)
+			Expect(err).To(BeNil())
+
+			By("Deleting the object")
+			err = cl.Delete(context.Background(), item)
+			Expect(err).To(BeNil())
+
+			By("Getting the object")
+			item = &unstructured.Unstructured{}
+			item.SetAPIVersion("custom/v7")
+			item.SetKind("Image")
+			item.SetName("my-item")
+			err = cl.Get(context.Background(), client.ObjectKeyFromObject(item), item)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
+
 		It("should support filtering by labels and their values", func() {
 			By("Listing deployments with a particular label and value")
 			list := &appsv1.DeploymentList{}

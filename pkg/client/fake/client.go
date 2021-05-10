@@ -23,10 +23,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
@@ -46,8 +48,9 @@ type versionedTracker struct {
 }
 
 type fakeClient struct {
-	tracker versionedTracker
-	scheme  *runtime.Scheme
+	tracker         versionedTracker
+	scheme          *runtime.Scheme
+	schemeWriteLock sync.Mutex
 }
 
 var _ client.WithWatch = &fakeClient{}
@@ -312,6 +315,14 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 
 	if strings.HasSuffix(gvk.Kind, "List") {
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
+	}
+
+	if _, isUnstructuredList := obj.(*unstructured.UnstructuredList); isUnstructuredList && !c.scheme.Recognizes(gvk) {
+		// We need tor register the ListKind with UnstructuredList:
+		// https://github.com/kubernetes/kubernetes/blob/7b2776b89fb1be28d4e9203bdeec079be903c103/staging/src/k8s.io/client-go/dynamic/fake/simple.go#L44-L51
+		c.schemeWriteLock.Lock()
+		c.scheme.AddKnownTypeWithName(gvk.GroupVersion().WithKind(gvk.Kind+"List"), &unstructured.UnstructuredList{})
+		c.schemeWriteLock.Unlock()
 	}
 
 	listOpts := client.ListOptions{}

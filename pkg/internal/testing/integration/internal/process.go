@@ -3,7 +3,6 @@ package internal
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -95,7 +94,7 @@ func DoDefaulting(
 	}
 
 	if dir == "" {
-		newDir, err := ioutil.TempDir("", "k8s_test_framework_")
+		newDir, err := os.MkdirTemp("", "k8s_test_framework_")
 		if err != nil {
 			return DefaultedProcessInput{}, err
 		}

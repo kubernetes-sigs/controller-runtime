@@ -489,6 +489,39 @@ var _ = Describe("manger.Manager", func() {
 				_, isLeaseLock := cm.resourceLock.(*resourcelock.LeaseLock)
 				Expect(isLeaseLock).To(BeTrue())
 			})
+			It("should release lease if ElectionReleaseOnCancel is true", func() {
+				var rl resourcelock.Interface
+				m, err := New(cfg, Options{
+					LeaderElection:                true,
+					LeaderElectionResourceLock:    resourcelock.LeasesResourceLock,
+					LeaderElectionID:              "controller-runtime",
+					LeaderElectionNamespace:       "my-ns",
+					LeaderElectionReleaseOnCancel: true,
+					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+						var err error
+						rl, err = fakeleaderelection.NewResourceLock(config, recorderProvider, options)
+						return rl, err
+					},
+				})
+				Expect(err).To(BeNil())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				doneCh := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					defer close(doneCh)
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+				}()
+				<-m.(*controllerManager).elected
+				cancel()
+				<-doneCh
+
+				ctx, cancel = context.WithCancel(context.Background())
+				defer cancel()
+				record, _, err := rl.Get(ctx)
+				Expect(err).To(BeNil())
+				Expect(record.HolderIdentity).To(BeEmpty())
+			})
 		})
 
 		It("should create a listener for the metrics if a valid address is provided", func() {

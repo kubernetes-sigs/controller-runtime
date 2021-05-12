@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -35,8 +36,9 @@ import (
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // CRDInstallOptions are the options for installing CRDs
@@ -62,8 +64,10 @@ type CRDInstallOptions struct {
 	CleanUpAfterUse bool
 }
 
-const defaultPollInterval = 100 * time.Millisecond
-const defaultMaxWait = 10 * time.Second
+const (
+	defaultPollInterval = 100 * time.Millisecond
+	defaultMaxWait      = 10 * time.Second
+)
 
 // InstallCRDs installs a collection of CRDs into a cluster by reading the crd yaml files from a directory
 func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]client.Object, error) {
@@ -220,7 +224,6 @@ func (p *poller) poll() (done bool, err error) {
 
 // UninstallCRDs uninstalls a collection of CRDs by reading the crd yaml files from a directory
 func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
-
 	// Read the CRD yamls into options.CRDs
 	if err := readCRDFiles(&options); err != nil {
 		return err
@@ -297,7 +300,7 @@ func renderCRDs(options *CRDInstallOptions) ([]client.Object, error) {
 	crds := map[GVKN]*unstructured.Unstructured{}
 
 	for _, path := range options.Paths {
-		var filePath = path
+		filePath := path
 
 		// Return the error if ErrorIfPathMissing exists
 		if info, err = os.Stat(path); os.IsNotExist(err) {
@@ -347,9 +350,18 @@ func readCRDs(basePath string, files []os.FileInfo) ([]*unstructured.Unstructure
 	// White list the file extensions that may contain CRDs
 	crdExts := sets.NewString(".json", ".yaml", ".yml")
 
+	// Files that related to Kubernetes but are not Kubernetes resources.
+	nonResourceFiles := sets.NewString("kustomization")
+
 	for _, file := range files {
 		// Only parse allowlisted file types
-		if !crdExts.Has(filepath.Ext(file.Name())) {
+		ext := filepath.Ext(file.Name())
+		if !crdExts.Has(ext) {
+			continue
+		}
+
+		// Ignore non Kubernetes resource files
+		if nonResourceFiles.Has(strings.TrimSuffix(filepath.Base(file.Name()), ext)) {
 			continue
 		}
 

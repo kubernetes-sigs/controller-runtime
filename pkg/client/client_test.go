@@ -1442,6 +1442,13 @@ var _ = Describe("Client", func() {
 				Expect(actual).NotTo(BeNil())
 
 				By("validating the fetched deployment equals the created one")
+				gvk := schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+				}
+				dep.SetGroupVersionKind(gvk)
+
 				Expect(dep).To(Equal(&actual))
 
 				close(done)
@@ -1462,7 +1469,11 @@ var _ = Describe("Client", func() {
 				err = cl.Get(context.TODO(), key, &actual)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
-
+				node.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Node",
+				})
 				Expect(node).To(Equal(&actual))
 
 				close(done)

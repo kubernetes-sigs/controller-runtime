@@ -93,6 +93,11 @@ var _ = Describe("NamespacedClient", func() {
 			result := &appsv1.Deployment{}
 
 			Expect(getClient().Get(ctx, name, result)).NotTo(HaveOccurred())
+			Expect(result.TypeMeta).To(BeEquivalentTo(metav1.TypeMeta{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+			}))
+			result.SetGroupVersionKind(schema.GroupVersionKind{})
 			Expect(result).To(BeEquivalentTo(dep))
 		})
 
@@ -121,7 +126,16 @@ var _ = Describe("NamespacedClient", func() {
 			opts := client.MatchingLabels(dep.Labels)
 
 			Expect(getClient().List(ctx, result, opts)).NotTo(HaveOccurred())
+			Expect(result.TypeMeta).To(BeEquivalentTo(metav1.TypeMeta{
+				APIVersion: "apps/v1",
+				Kind:       "DeploymentList",
+			}))
 			Expect(len(result.Items)).To(BeEquivalentTo(1))
+			Expect(result.Items[0].TypeMeta).To(BeEquivalentTo(metav1.TypeMeta{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+			}))
+			result.Items[0].SetGroupVersionKind(schema.GroupVersionKind{})
 			Expect(result.Items[0]).To(BeEquivalentTo(*dep))
 		})
 
@@ -130,7 +144,16 @@ var _ = Describe("NamespacedClient", func() {
 			opts := client.InNamespace("non-default")
 
 			Expect(getClient().List(ctx, result, opts)).NotTo(HaveOccurred())
+			Expect(result.TypeMeta).To(BeEquivalentTo(metav1.TypeMeta{
+				APIVersion: "apps/v1",
+				Kind:       "DeploymentList",
+			}))
 			Expect(len(result.Items)).To(BeEquivalentTo(1))
+			Expect(result.Items[0].TypeMeta).To(BeEquivalentTo(metav1.TypeMeta{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+			}))
+			result.Items[0].SetGroupVersionKind(schema.GroupVersionKind{})
 			Expect(result.Items[0]).To(BeEquivalentTo(*dep))
 		})
 	})

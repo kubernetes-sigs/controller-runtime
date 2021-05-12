@@ -250,6 +250,17 @@ func (c *client) Get(ctx context.Context, key ObjectKey, obj Object) error {
 		defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 		return c.metadataClient.Get(ctx, key, obj)
 	default:
+		// Metadata only object should always preserve the GVK coming in from the caller.
+		if obj != nil {
+			gvks, _, err := c.scheme.ObjectKinds(obj)
+			if err != nil {
+				return err
+			}
+			// The GVK obtained by reflect.Type, there is only one
+			if len(gvks) == 1 {
+				defer c.resetGroupVersionKind(obj, gvks[0])
+			}
+		}
 		return c.typedClient.Get(ctx, key, obj)
 	}
 }
@@ -284,7 +295,43 @@ func (c *client) List(ctx context.Context, obj ObjectList, opts ...ListOption) e
 
 		return nil
 	default:
-		return c.typedClient.List(ctx, obj, opts...)
+		var gvk schema.GroupVersionKind
+		if obj != nil {
+			gvks, _, err := c.scheme.ObjectKinds(obj)
+			if err != nil {
+				return err
+			}
+			// The GVK obtained by reflect.Type, there is only one
+			if len(gvks) == 1 {
+				gvk = gvks[0]
+			}
+		}
+
+		if err := c.typedClient.List(ctx, obj, opts...); err != nil {
+			return err
+		}
+
+		if gvk != schema.EmptyObjectKind.GroupVersionKind() {
+			c.resetGroupVersionKind(obj, gvk)
+			// Restore the GVK for each item in the list.
+			itemGVK := schema.GroupVersionKind{
+				Group:   gvk.Group,
+				Version: gvk.Version,
+				// TODO: this is producing unsafe guesses that don't actually work,
+				// but it matches ~99% of the cases out there.
+				Kind: strings.TrimSuffix(gvk.Kind, "List"),
+			}
+
+			err := meta.EachListItem(obj, func(o runtime.Object) error {
+				o.GetObjectKind().SetGroupVersionKind(itemGVK)
+				return nil
+			})
+
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 }
 

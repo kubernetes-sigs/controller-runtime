@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -80,6 +81,11 @@ var _ = Describe("DryRunClient", func() {
 		result := &appsv1.Deployment{}
 
 		Expect(getClient().Get(ctx, name, result)).NotTo(HaveOccurred())
+		Expect(result.TypeMeta).To(BeEquivalentTo(metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		}))
+		result.SetGroupVersionKind(schema.GroupVersionKind{})
 		Expect(result).To(BeEquivalentTo(dep))
 	})
 
@@ -88,8 +94,16 @@ var _ = Describe("DryRunClient", func() {
 		opts := client.MatchingLabels(dep.Labels)
 
 		Expect(getClient().List(ctx, result, opts)).NotTo(HaveOccurred())
-
+		Expect(result.TypeMeta).To(BeEquivalentTo(metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "DeploymentList",
+		}))
 		Expect(len(result.Items)).To(BeEquivalentTo(1))
+		Expect(result.Items[0].TypeMeta).To(BeEquivalentTo(metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		}))
+		result.Items[0].SetGroupVersionKind(schema.GroupVersionKind{})
 		Expect(result.Items[0]).To(BeEquivalentTo(*dep))
 	})
 

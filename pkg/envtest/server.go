@@ -263,6 +263,12 @@ func (te *Environment) Start() (*rest.Config, error) {
 		}
 	}
 
+	// Call PrepWithoutInstalling to setup certificates first
+	// and have them available to patch CRD conversion webhook as well.
+	if err := te.WebhookInstallOptions.PrepWithoutInstalling(); err != nil {
+		return nil, err
+	}
+
 	log.V(1).Info("installing CRDs")
 	te.CRDInstallOptions.CRDs = mergeCRDs(te.CRDInstallOptions.CRDs, te.CRDs)
 	te.CRDInstallOptions.Paths = mergePaths(te.CRDInstallOptions.Paths, te.CRDDirectoryPaths)
@@ -274,9 +280,10 @@ func (te *Environment) Start() (*rest.Config, error) {
 	te.CRDs = crds
 
 	log.V(1).Info("installing webhooks")
-	err = te.WebhookInstallOptions.Install(te.Config)
-
-	return te.Config, err
+	if err := te.WebhookInstallOptions.Install(te.Config); err != nil {
+		return nil, err
+	}
+	return te.Config, nil
 }
 
 func (te *Environment) startControlPlane() error {

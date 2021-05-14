@@ -20,12 +20,15 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -35,6 +38,7 @@ import (
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -60,6 +64,13 @@ type CRDInstallOptions struct {
 	// uninstalled when terminating the test environment.
 	// Defaults to false.
 	CleanUpAfterUse bool
+
+	// WebhookOptions contains the conversion webhook information to install
+	// on the CRDs. This field is usually inherited by the EnvTest options.
+	//
+	// If you're passing this field manually, you need to make sure that
+	// the CA information and host port is filled in properly.
+	WebhookOptions WebhookInstallOptions
 }
 
 const defaultPollInterval = 100 * time.Millisecond
@@ -71,6 +82,10 @@ func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]client.Objec
 
 	// Read the CRD yamls into options.CRDs
 	if err := readCRDFiles(&options); err != nil {
+		return nil, err
+	}
+
+	if err := modifyConversionWebhooks(options.CRDs, options.WebhookOptions); err != nil {
 		return nil, err
 	}
 
@@ -338,6 +353,37 @@ func renderCRDs(options *CRDInstallOptions) ([]client.Object, error) {
 		res = append(res, obj)
 	}
 	return res, nil
+}
+
+func modifyConversionWebhooks(crds []client.Object, webhookOptions WebhookInstallOptions) error {
+	if len(webhookOptions.LocalServingCAData) == 0 {
+		return nil
+	}
+
+	// generate host port.
+	hostPort, err := webhookOptions.generateHostPort()
+	if err != nil {
+		return err
+	}
+	url := pointer.StringPtr(fmt.Sprintf("https://%s/convert", hostPort))
+
+	for _, crd := range crds {
+		switch c := crd.(type) {
+		case *apiextensionsv1beta1.CustomResourceDefinition:
+			c.Spec.Conversion.WebhookClientConfig.Service = nil
+			c.Spec.Conversion.WebhookClientConfig = &apiextensionsv1beta1.WebhookClientConfig{
+				CABundle: webhookOptions.LocalServingCAData,
+			}
+		case *apiextensionsv1.CustomResourceDefinition:
+			c.Spec.Conversion.Webhook.ClientConfig.Service = nil
+			c.Spec.Conversion.Webhook.ClientConfig = &apiextensionsv1.WebhookClientConfig{
+				URL:      url,
+				CABundle: webhookOptions.LocalServingCAData,
+			}
+		}
+	}
+
+	return nil
 }
 
 // readCRDs reads the CRDs from files and Unmarshals them into structs

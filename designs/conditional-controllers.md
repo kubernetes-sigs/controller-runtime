@@ -5,8 +5,8 @@ Controller Lifecycle Management
 
 Enable fine-grained control over the lifecycle of a controller, including the
 ability to start/stop/restart controllers and their caches by exposing a way to
-remove individual informers from the cache and working around restrictions that
-currently prevent controllers from starting multiple times.
+detect when the resource a controller is watching is uninstalled/reinstalled on
+the cluster.
 
 ## Background/Motivation
 
@@ -28,14 +28,12 @@ control over which resources are installed).
 ## Goals
 
 controller-runtime should support starting/stopping/restarting controllers and
-their caches on arbitrary conditions.
+their caches based on whether or not a CRD is installed in the cluster.
 
 ## Non-Goals
 
-* An implementation of starting/stopping a controller based on a specific
-condition (e.g. the existence of a CRD in discovery) does not need to be
-implemented in controller-runtime (but the end consumer of controller-runtime
-should be able to build it on their own).
+* controller-runtime does not need to support starting/stopping/restarting controllers and
+their caches on arbitrary conditions.
 
 * No further guarantees of multi-cluster support beyond what is already provided
   by controller-runtime.
@@ -43,135 +41,207 @@ should be able to build it on their own).
 ## Proposal
 
 The following proposal offers a solution for controller/cache restarting by:
-1. Enabling the removal of individual informers.
-2. Tracking the number of event handlers on an Informer.
 
-This proposal focuses on solutions that are entirely contained in
-controller-runtime. In the alternatives section, we discuss potential ways that
-changes can be added to api-machinery code in core kubernetes to enable a
-possibly cleaner SharedInformer interface for accomplishing our goals.
+1. Implementing a stop channel on the informers map `MapEntry` that can be
+   retrieved from the cache's `Informers` interface that fires when the informer has
+   stopped.
+2. A new Source is created called `ConditionalSource` that is implemented by a
+   `ConditionalKind` that has a `Ready()` method that blocks until the kind's
+   type is installed on the cluster and ready to be controlled, and a
+   `StartNotifyDone()` that starts the underlying source with a channel that
+   fires when the source (and its underlying informer have stopped).
+3. Controllers maintain a list of `ConditonalSource`s known as
+   `conditionalWatches` that can be added like regular watches via the
+   controllers `Watch` method. For any `ConditionalSource` that `Watch()` is
+   called with, it uses `Ready()` to determine when to `StartNotifyDone()` it
+   and uses the done channel returned by `StartNotifyDone()` to determine when
+   the watch has started and that it should wait on `Ready()` again.
+4. The manager recognize a special type or `Runnable` known as a
+   `ConditionalRunnable` that has a `Ready()` method to indicate when the
+   underlying `Runnable` can be ran.
+5. The controller builder enables users supply a boolean `conditional` option to
+   the builder's `For`, `Owns`, and `Watches` inputs that creates
+   `ConditionalRunnables` to be ran by the manager.
 
-A proof-of-concept exists at
-[#1180](https://github.com/kubernetes-sigs/controller-runtime/pull/1180).
+### Informer Stop Channel
 
-### Informer Removal
+The cache's `Informers` interface adds a new method that gives a stop channel
+that fires when an informer is stopped:
 
-The starting point for this proposal is Shomron’s proposed implementation of
-individual informer removal.
-[#936](https://github.com/kubernetes-sigs/controller-runtime/pull/936).
-
-It extends the informer cache to expose a remove method:
 ```
-// Remove removes an informer specified by the obj argument from the cache and
-// stops it if it existed.
-Remove(ctx context.Context, obj runtime.Object) error
-```
+type Informers interface {
+	// GetInformerStop fetches the stop channel for the informer for the given object (constructing
+	// the informer if necessary). This stop channel fires when the controller has stopped.
+	GetInformerStop(ctx context.Context, obj client.Object) (<-chan struct{}, error)
 
-This gets plumbed through to the informers map, where we remove an informer
-entry from the informersByGVK
-
-```
-// Remove removes an informer entry and stops it if it was running.
-func (ip *specificInformersMap) Remove(gvk schema.GroupVersionKind) {
-  ...
-  entry, ok := ip.informersByGVK[gvk]
-  close(entry.stop)
-  delete(ip.informersByGVK, gvk)
+        // ... other existing methods
 }
 ```
 
-We support this by modifying the Start method to run the informer with 
-a stop channel that can be stopped individually
-or globally (as opposed to just globally).
+This is implemented by adding a stop channel to the informer cache's `MapEntry`
+which gets populated when the informer is constructed and started in
+`specificInformersMap#addInformerToMap`:
 
 ```
-// Start calls Run on each of the informers...
-func (ip *specificInformersMap) Start(ctx context) {
-...
-for _, entry := range ip.informersByGVK{
-  go entry.Start(ctx.Done())
-}
-...
-}
+type MapEntry struct {
+	// StopCh is a channel that is closed after
+	// the informer stops
+	StopCh <-chan struct{}
 
-// Start starts the informer managed by a MapEntry.
-// Blocks until the informer stops. The informer can be stopped
-// either individually (via the entry's stop channel) or globally
-// via the provided stop argument.
-func (e *MapEntry) Start(stop <-chan struct{}) {
-  // Stop on either the whole map stopping or just this informer being removed.
-  internalStop, cancel := anoyOf(stop, e.stop)
-  defer cancel()
-  e.Informer.Run(internalStop)
+        // ... other existing methods
 }
 ```
 
-### EventHandler reference counting
+### ConditionalSource
 
-The primary concern with adding individual informer removal is that it exposes
-the risk of silently degrading controllers that are using the informer being
-removed.
+A special type of Source called a `ConditionalSource` provides mechanisms for
+determing when the Source can be started (`Ready()`) and when it is done
+(`StartNotifyDone()`)
 
-To mitigate this we need a way to track the number of EventHandlers added to a
-given informer and ensure that the are none remaining when an informer is
-removed.
-
-The proposal here is to expand the informer interface used by the `MapEntry` in
-the informers map:
 ```
-// CountingInformer exposes a way to track the number of EventHandlers
-//registered on an informer.
+// ConditionalSource is a Source of events that additionally offer the ability to see when the Source is ready to be
+// started as well as offering a wrapper around the Source's Start method that returns a channel the fires when an
+// already started Source has stopped.
+type ConditionalSource interface {
+	Source
 
-// The implementation of this should store a count that gets incremented every
-// time AddEventHandler is called and decremented every time RemoveEventHandler is
-// called.
-type CountingInformer interface {
-  cache.SharedIndexInformer
-  CountEventHandlers() int
-  RemoveEventHandler()
+	// StartNotifyDone runs the underlying Source's Start method and provides a channel that fires when
+	// the Source has stopped.
+	StartNotifyDone(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) (<-chan struct{}, error)
+
+	// Ready blocks until it is safe to call StartNotifyDone, meaning the Source's Kind's type has been
+	// successfully installed on the cluster  and is ready to have its events watched and handled.
+	Ready(ctx context.Context, wg *sync.WaitGroup)
 }
 ```
 
-Now, we need a way to run a controller, such that the starting the controller
-increments the EventHandler counts on the informer and stopping the controller
-decrements it.
+### ConditionalWatches (Controller)
 
-We can modify/expand the `Source` interface, such that we can call
-`Start()` with a context that blocks on ctx.Done() and calls RemoveEventHandler
-on the informer once the context is closed, because the controller has been
-stopped so the EventHandler no longer exists on the informer.
-
-```
-// StoppableSource expands the Source interface to add a start function that
-// blocks on the context's Done channel, so that we know when the controller has
-// been stopped and can remove/decrement the EventHandler count on the informer
-// appropriately
-type StoppableSource interface {
-  Source
-  StartStoppable(context.Context, handler.EventHandler,
-  workqueue.RateLimitingInterface, ...predicate.Predicate) error
-}
-
-// StartStoppable blocks for start to finish and then calls RemoveEventHandler
-// on the kind's informer.
-func (ks *Kind) StartStoppable(ctx, handler, queue, prct) {
-  informer := ks.cache.GetInformer(ctx, ks.Type)
-  ks.Start(ctx, handler, queue, prct)
-  <-ctx.Done()
-  i.RemoveEventHandler()
-}
-
+Controllers maintain a list of `ConditonalSource`s known as `conditionalWatches`.
 ```
 
-A simpler alternative is to all of this is to bake the `EventHandler` tracking into the underlying
-client-go `SharedIndexInformer`. This involves modifying client-go and is
-discussed below in the alternatives section.
+type Controller struct {
+	// startWatches maintains a list of sources, handlers, and predicates to start when the controller is started.
+	startWatches       []watchDescription
+
+	// conditionalWatches maintains a list of conditional sources that provide information on when the source is ready to be started/restarted and when the source has stopped.
+	conditionalWatches []conditionalWatchDescription
+
+        // ... existing fields
+}
+```
+
+This is list is populated just like the existing startWatches method by passing
+a `ConditionalSource` to the controller's `Watch()` method
+
+```
+func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prct ...predicate.Predicate) error {
+        // ... existing code
+
+	if conditionalSource, ok := src.(source.ConditionalSource); ok && !c.Started {
+		c.conditionalWatches = append(c.conditionalWatches, conditionalWatchDescription{src: conditionalSource, handler: evthdler, predicates: prct})
+		return nil
+	}
+
+        // ... existing code
+```
+
+Controllers now expose a `Ready` method that is called by the controller manager
+to determine when the controller can be started.
+```
+func (c *Controller) Ready(ctx context.Context) <-chan struct{} {
+	ready := make(chan struct{})
+	if len(c.conditionalWatches) == 0 {
+		close(ready)
+		return ready
+	}
+
+	var wg sync.WaitGroup
+	for _, w := range c.conditionalWatches {
+		wg.Add(1)
+		go w.src.Ready(ctx, &wg)
+	}
+
+	go func() {
+		defer close(ready)
+		wg.Wait()
+	}()
+	return ready
+}
+```
+
+The controller's `Start()` method now runs the conditionalWatches with
+`StartNotifyDone` and cancels the controller with the watch stops.
+
+### ConditionalRunnable (Manager)
+
+The manager recognizes a special type or `Runnable` known as a
+`ConditionalRunnable` that has a `Ready()` method to indicate when the
+underlying `Runnable` can be ran.
+
+```
+// ConditionalRunnable wraps Runnable with an additonal Ready method
+// that returns a channel that fires when the underlying Runnable can
+// be started.
+type ConditionalRunnable interface {
+	Runnable
+	Ready(ctx context.Context) <-chan struct{}
+}
+```
+
+Now when the controller starts all the conditional runnables, it runs in a loop
+starting the runnable only when it is ready, looping and waiting for ready again
+whenever it is stopped.
+
+```
+// startConditionalRunnable fires off a goroutine that
+// blocks on the runnable's Ready (or the shutdown context).
+//
+// Once ready, call a version of start runnable that blocks
+// until the runnable is terminated.
+//
+// Once the runnable stops, loop back and wait for ready again.
+func (cm *controllerManager) startConditionalRunnable(cr ConditionalRunnable) {
+	go func() {
+		for {
+			select {
+			case <-cm.internalCtx.Done():
+				return
+			case <-cr.Ready(cm.internalCtx):
+				cm.waitForRunnable.Add(1)
+				defer cm.waitForRunnable.Done()
+				if err := cr.Start(cm.internalCtx); err != nil {
+					cm.errChan <- err
+				}
+				return
+			}
+		}
+	}()
+}
+```
+
+### Conditional Builder Option
+
+The controller builder enables users supply a boolean `conditional` option to
+the builder's `For`, `Owns`, and `Watches` inputs that creates
+`ConditionalRunnables` to be ran by the manager.
+
+```
+func (blder *Builder) doWatch() error {
+	if blder.forInput.conditional {
+		gvk, err := getGvk(blder.forInput.object, blder.mgr.GetScheme())
+		if err != nil {
+			return err
+		}
+		existsInDiscovery := // function to determine whether the gvk
+                exists in discovery
+		src = &source.ConditionalKind{Kind: source.Kind{Type: typeForSrc}, DiscoveryCheck: existsInDiscovery}
+	} else {
+		src = &source.Kind{Type: typeForSrc}
+	}
+```
 
 ## Alternatives
-
-A couple alternatives to what we propose, one that offloads all the
-responsibility to the consumer requiring no changes to controller-runtime and
-one that moves the event handler reference counting upstream into client-go.
 
 ### Cache of Caches
 
@@ -183,79 +253,28 @@ breaks the clean design of the cache.
 
 ### Stoppable Informers and EventHandler removal natively in client-go
 
-*This proposal was discussed with sig-api-machinery on 11/5 and has been
-tentatively accepted. See the [design
-doc](https://docs.google.com/document/d/17QrTaxfIEUNOEAt61Za3Mu0M76x-iEkcmR51q0a5lis/edit) and [WIP implementation](https://github.com/kevindelgado/kubernetes/pull/1) for more detail.*
+Currently, there is no way to stop a client-go `SharedInformer`. Therefore, the
+current proposal suggests that we use the shared informer's `SetErrorHandler()`
+method to determine when a CRD has been uninstalled (by inspecting listAndWatch
+errors).
 
-A few changes to the underlying SharedInformer interface in client-go could save
-us from a lot of work in controller-runtime.
-
-One is to add a second `Run` method on the `SharedInformer` interface such as
-```
-// RunWithStopOptions runs the informer and provides options to be checked that
-// would indicate under what conditions the informer should stop
-RunWithStopOptions(stopOptions StopOptions)
-
-// StopOptions let the caller specifcy which conditions to stop the informer.
-type StopOptions struct {
-  // ExternalStop stops the Informer when it receives a close signal
-  ExternalStop <-chan struct{}
-
-  // OnListError inspects errors returned from the informer's underlying
-  // reflector, and based on the error determines whether or not to stop the
-  // informer.
-  OnListError func(err) bool
-}
-```
-
-This could be plumbed through controller-runtime allowing users to pass informer
-`StopOptions` when they create a controller.
-
-Another potential change to `SharedInformer` is to have it be responsible for
-tracking the count of event handlers and allowing consumers to remove
-EventHandlers from a `SharedInformer.
-
-similar to the `EventHandler` reference counting interface we discussed above the
-`SharedInformer` could add methods:
-
-```
-type SharedInformer interface {
-...
-  RemoveEventHandler(handler ResourceEventHandler) bool
-  EventHandlerCount() int
-}
-```
-
-This would remove the need to track it ourselves in controller-runtime.
+A cleaner approach is to offload this work to client-go. Then we can run the
+informer such that it knows to stop itself when the CRD has been uninstalled.
+This has been proposed to the client-go maintainers and a WIP implementation
+exists [here](https://github.com/kubernetes/kubernetes/pull/97214).
 
 ## Open Questions
 
-### Multiple Restarts
+### Discovery Client usage in DiscoveryCheck
 
-The ability to start a controller more than once was recently removed over
-concerns around data races from workqueue recreation and starting too many
-workers ([#1139](https://github.com/kubernetes-sigs/controller-runtime/pull/1139))
+The current proposal stores a user provided function on the `ConditionalKind`
+called a `DiscoveryCheck` that determines whether a kind exists in discovery or
+not.
 
-Previously there was never a valid reason to start a controller more than once,
-now we want to support that. The simplest workaround is to expose a
-`ResetStart()` method on the controller interface that simply resets the
-'Started' on the controller. This allows restarts but doesn't address the
-initial data race/excess worker concerns that drove the removal of this
-functionality in the first place.
-
-### Persisting controller watches
-
-The list of start watches store don the controller currently gets cleared out
-once the controller is started in order to prevent memory leak([#1163](https://github.com/kubernetes-sigs/controller-runtime/pull/1163))
-
-We need to retain references to these watches in order to restart controllers.
-The simplest workaround is maintain a boolean `SaveWatches` field on the
-controller that determines whether or not the watches slice should me retained
-after starting a controller. We can then expose a method on the controller for
-setting this field and enabling watches to be saved. We will still have a memory
-leak, but only on controllers that are expected to be restart. There might be a
-better way clear out the watches list that fits with the restartable controllers
-paradigm.
+This is a little clunky and calls out to the discovery client are slow.
+Alternatively, the RESTMapper could theoretically be used to determine whether a
+kind exists in discovery, but the current RESTMapper implementation doesn't
+remove a type from the map when its resource is uninstalled from the cluster.
 
 ### Multi-Cluster Support
 
@@ -295,4 +314,6 @@ controller-runtime
 * 11/4/2020: Propopsal to add RunWithStopOptions, RemoveEventHandler, and
   EventHandlerCount discussed at sig-api-machinery meeting and was tentatively
   accepted. See the [design doc](https://docs.google.com/document/d/17QrTaxfIEUNOEAt61Za3Mu0M76x-iEkcmR51q0a5lis/edit) and [WIP implementation](https://github.com/kevindelgado/kubernetes/pull/1) for more detail.
+* 5/14/2021: Proposal updated to be fully self-contained in controller-runtime
+  and modifies the proposed mechanism using Ready/StartNotifyDone mechanics.
 

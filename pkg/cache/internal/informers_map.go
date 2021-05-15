@@ -72,6 +72,10 @@ type MapEntry struct {
 
 	// CacheReader wraps Informer and implements the CacheReader interface for a single type
 	Reader CacheReader
+
+	// StopCh is a channel that is closed after
+	// the informer stops
+	StopCh <-chan struct{}
 }
 
 // specificInformersMap create and caches Informers for (runtime.Object, schema.GroupVersionKind) pairs.
@@ -171,7 +175,7 @@ func (ip *specificInformersMap) HasSyncedFuncs() []cache.InformerSynced {
 
 // Get will create a new Informer and add it to the map of specificInformersMap if none exists.  Returns
 // the Informer from the map.
-func (ip *specificInformersMap) Get(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object) (bool, *MapEntry, error) {
+func (ip *specificInformersMap) Get(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object, stopOnError bool) (bool, *MapEntry, error) {
 	// Return the informer if it is found
 	i, started, ok := func() (*MapEntry, bool, bool) {
 		ip.mu.RLock()
@@ -182,7 +186,7 @@ func (ip *specificInformersMap) Get(ctx context.Context, gvk schema.GroupVersion
 
 	if !ok {
 		var err error
-		if i, started, err = ip.addInformerToMap(gvk, obj); err != nil {
+		if i, started, err = ip.addInformerToMap(gvk, obj, stopOnError); err != nil {
 			return started, nil, err
 		}
 	}
@@ -197,7 +201,7 @@ func (ip *specificInformersMap) Get(ctx context.Context, gvk schema.GroupVersion
 	return started, i, nil
 }
 
-func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.Object) (*MapEntry, bool, error) {
+func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.Object, stopOnError bool) (*MapEntry, bool, error) {
 	ip.mu.Lock()
 	defer ip.mu.Unlock()
 
@@ -228,17 +232,34 @@ func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, ob
 	default:
 	}
 
+	informerStop := make(chan struct{})
 	i := &MapEntry{
 		Informer: ni,
 		Reader:   CacheReader{indexer: ni.GetIndexer(), groupVersionKind: gvk, scopeName: rm.Scope.Name()},
+		StopCh:   informerStop,
 	}
 	ip.informersByGVK[gvk] = i
+
+	go func() {
+		<-ip.stop
+		close(informerStop)
+	}()
+
+	i.Informer.SetWatchErrorHandler(func(r *cache.Reflector, err error) {
+		// TODO: ensure the error is a kind not found error before stopping
+		if stopOnError {
+			close(informerStop)
+		}
+	})
 
 	// Start the Informer if need by
 	// TODO(seans): write thorough tests and document what happens here - can you add indexers?
 	// can you add eventhandlers?
 	if ip.started {
-		go i.Informer.Run(ip.stop)
+		go func() {
+			i.Informer.Run(informerStop)
+			delete(ip.informersByGVK, gvk)
+		}()
 	}
 	return i, ip.started, nil
 }

@@ -91,18 +91,18 @@ func (m *InformersMap) WaitForCacheSync(ctx context.Context) bool {
 
 // Get will create a new Informer and add it to the map of InformersMap if none exists.  Returns
 // the Informer from the map.
-func (m *InformersMap) Get(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object) (bool, *MapEntry, error) {
+func (m *InformersMap) Get(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object, stopOnError bool) (bool, *MapEntry, error) {
 	switch obj.(type) {
 	case *unstructured.Unstructured:
-		return m.unstructured.Get(ctx, gvk, obj)
+		return m.unstructured.Get(ctx, gvk, obj, stopOnError)
 	case *unstructured.UnstructuredList:
-		return m.unstructured.Get(ctx, gvk, obj)
+		return m.unstructured.Get(ctx, gvk, obj, stopOnError)
 	case *metav1.PartialObjectMetadata:
-		return m.metadata.Get(ctx, gvk, obj)
+		return m.metadata.Get(ctx, gvk, obj, stopOnError)
 	case *metav1.PartialObjectMetadataList:
-		return m.metadata.Get(ctx, gvk, obj)
+		return m.metadata.Get(ctx, gvk, obj, stopOnError)
 	default:
-		return m.structured.Get(ctx, gvk, obj)
+		return m.structured.Get(ctx, gvk, obj, stopOnError)
 	}
 }
 

@@ -418,6 +418,7 @@ func (cm *controllerManager) serveHealthProbes() {
 
 		// Run server
 		cm.startRunnable(RunnableFunc(func(_ context.Context) error {
+			cm.logger.Info("starting health probes")
 			if err := server.Serve(cm.healthProbeListener); err != nil && err != http.ErrServerClosed {
 				return err
 			}
@@ -500,6 +501,7 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 		// Error starting or running a runnable
 		return err
 	}
+	return nil
 }
 
 // engageStopProcedure signals all runnables to stop, reads potential errors
@@ -691,11 +693,39 @@ func (cm *controllerManager) Elected() <-chan struct{} {
 }
 
 func (cm *controllerManager) startRunnable(r Runnable) {
-	cm.waitForRunnable.Add(1)
+	if conditionalRunnable, ok := r.(ConditionalRunnable); ok {
+		cm.startConditionalRunnable(conditionalRunnable)
+	} else {
+		cm.waitForRunnable.Add(1)
+		go func() {
+			defer cm.waitForRunnable.Done()
+			if err := r.Start(cm.internalCtx); err != nil {
+				cm.errChan <- err
+			}
+		}()
+	}
+}
+
+// startConditionalRunnable fires off a goroutine that
+// blocks on the runnable's Ready (or the shutdown context).
+//
+// Once ready, call a version of start runnable that blocks
+// until the runnable is terminated.
+//
+// Once the runnable stops, loop back and wait for ready again.
+func (cm *controllerManager) startConditionalRunnable(cr ConditionalRunnable) {
 	go func() {
-		defer cm.waitForRunnable.Done()
-		if err := r.Start(cm.internalCtx); err != nil {
-			cm.errChan <- err
+		for {
+			select {
+			case <-cm.internalCtx.Done():
+				return
+			case <-cr.Ready(cm.internalCtx):
+				cm.waitForRunnable.Add(1)
+				defer cm.waitForRunnable.Done()
+				if err := cr.Start(cm.internalCtx); err != nil {
+					cm.errChan <- err
+				}
+			}
 		}
 	}()
 }

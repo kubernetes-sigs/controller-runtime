@@ -83,6 +83,9 @@ type Controller struct {
 	// startWatches maintains a list of sources, handlers, and predicates to start when the controller is started.
 	startWatches []watchDescription
 
+	// conditionalWatches maintains a list of conditional sources that provide information on when the source is ready to be started/restarted and when the source has stopped.
+	conditionalWatches []conditionalWatchDescription
+
 	// Log is used to log messages to users during reconciliation, or for example when a watch is started.
 	Log logr.Logger
 }
@@ -90,6 +93,12 @@ type Controller struct {
 // watchDescription contains all the information necessary to start a watch.
 type watchDescription struct {
 	src        source.Source
+	handler    handler.EventHandler
+	predicates []predicate.Predicate
+}
+
+type conditionalWatchDescription struct {
+	src        source.ConditionalSource
 	handler    handler.EventHandler
 	predicates []predicate.Predicate
 }
@@ -119,6 +128,12 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 		}
 	}
 
+	// these get held on indefinitely
+	if conditionalSource, ok := src.(source.ConditionalSource); ok && !c.Started {
+		c.conditionalWatches = append(c.conditionalWatches, conditionalWatchDescription{src: conditionalSource, handler: evthdler, predicates: prct})
+		return nil
+	}
+
 	// Controller hasn't started yet, store the watches locally and return.
 	//
 	// These watches are going to be held on the controller struct until the manager or user calls Start(...).
@@ -129,6 +144,28 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 
 	c.Log.Info("Starting EventSource", "source", src)
 	return src.Start(c.ctx, evthdler, c.Queue, prct...)
+}
+
+// Ready is called by the controller manager to determine when all the conditionalWatches
+// can be started. It blocks until ready.
+func (c *Controller) Ready(ctx context.Context) <-chan struct{} {
+	ready := make(chan struct{})
+	if len(c.conditionalWatches) == 0 {
+		close(ready)
+		return ready
+	}
+
+	var wg sync.WaitGroup
+	for _, w := range c.conditionalWatches {
+		wg.Add(1)
+		go w.src.Ready(ctx, &wg)
+	}
+
+	go func() {
+		defer close(ready)
+		wg.Wait()
+	}()
+	return ready
 }
 
 // Start implements controller.Controller
@@ -142,12 +179,17 @@ func (c *Controller) Start(ctx context.Context) error {
 
 	c.initMetrics()
 
+	// wrap the given context in a cancellable one so that we can
+	// stop conditional watches when their done signal fires
+	ctrlCtx, ctrlCancel := context.WithCancel(ctx)
+	defer ctrlCancel()
+
 	// Set the internal context.
-	c.ctx = ctx
+	c.ctx = ctrlCtx
 
 	c.Queue = c.MakeQueue()
 	go func() {
-		<-ctx.Done()
+		<-ctrlCtx.Done()
 		c.Queue.ShutDown()
 	}()
 
@@ -164,9 +206,29 @@ func (c *Controller) Start(ctx context.Context) error {
 		for _, watch := range c.startWatches {
 			c.Log.Info("Starting EventSource", "source", watch.src)
 
-			if err := watch.src.Start(ctx, watch.handler, c.Queue, watch.predicates...); err != nil {
+			if err := watch.src.Start(ctrlCtx, watch.handler, c.Queue, watch.predicates...); err != nil {
 				return err
 			}
+		}
+
+		c.Log.Info("conditional watches", "len", len(c.conditionalWatches))
+		// TODO: do we need a waitgroup here so that we only clear c.Started once all the watches are done
+		// or should a single done watch trigger all the others to stop, or something else?
+		for _, watch := range c.conditionalWatches {
+			c.Log.Info("conditional Starting EventSource", "source", watch.src)
+
+			// call a version of the Start method specific to ConditionalSource that returns
+			// a done signal that fires when the CRD is no longer installed (and the informer gets shut down)
+			done, err := watch.src.StartNotifyDone(ctrlCtx, watch.handler, c.Queue, watch.predicates...)
+			if err != nil {
+				return err
+			}
+			// wait for done to fire and when it does, shut down the controller and reset c.Started
+			go func() {
+				defer ctrlCancel()
+				<-done
+				c.Started = false
+			}()
 		}
 
 		// Start the SharedIndexInformer factories to begin populating the SharedIndexInformer caches
@@ -180,7 +242,7 @@ func (c *Controller) Start(ctx context.Context) error {
 
 			if err := func() error {
 				// use a context with timeout for launching sources and syncing caches.
-				sourceStartCtx, cancel := context.WithTimeout(ctx, c.CacheSyncTimeout)
+				sourceStartCtx, cancel := context.WithTimeout(ctrlCtx, c.CacheSyncTimeout)
 				defer cancel()
 
 				// WaitForSync waits for a definitive timeout, and returns if there
@@ -211,7 +273,7 @@ func (c *Controller) Start(ctx context.Context) error {
 				defer wg.Done()
 				// Run a worker thread that just dequeues items, processes them, and marks them done.
 				// It enforces that the reconcileHandler is never invoked concurrently with the same object.
-				for c.processNextWorkItem(ctx) {
+				for c.processNextWorkItem(ctrlCtx) {
 				}
 			}()
 		}
@@ -223,7 +285,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		return err
 	}
 
-	<-ctx.Done()
+	<-ctrlCtx.Done()
 	c.Log.Info("Shutdown signal received, waiting for all workers to finish")
 	wg.Wait()
 	c.Log.Info("All workers finished")

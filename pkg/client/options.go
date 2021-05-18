@@ -652,9 +652,6 @@ type PatchOptions struct {
 
 	// Raw represents raw PatchOptions, as passed to the API server.
 	Raw *metav1.PatchOptions
-
-	// ApplyConfiguration represents a typed object for use with Server Side Apply
-	ApplyConfiguration interface{}
 }
 
 // ApplyOptions applies the given patch options on these options,
@@ -698,23 +695,6 @@ func (o *PatchOptions) ApplyToPatch(po *PatchOptions) {
 	if o.Raw != nil {
 		po.Raw = o.Raw
 	}
-}
-
-// ApplyFrom provides the ApplyConfiguration for use with client Patch Apply
-// and server side apply.
-func ApplyFrom(ac interface{}) *ApplyConfiguration {
-	return &ApplyConfiguration{ac: ac}
-}
-
-// ApplyConfiguration implements ApplyToPatch and contains the
-// applyconfiguration for use with client Patch Apply.
-type ApplyConfiguration struct {
-	ac interface{}
-}
-
-// ApplyToPatch applies this configuration to the given patch options.
-func (ac *ApplyConfiguration) ApplyToPatch(ops *PatchOptions) {
-	ops.ApplyConfiguration = ac.ac
 }
 
 // ForceOwnership indicates that in case of conflicts with server-side apply,

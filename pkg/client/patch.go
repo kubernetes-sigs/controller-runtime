@@ -18,6 +18,7 @@ package client
 
 import (
 	"fmt"
+	"reflect"
 
 	jsonpatch "github.com/evanphx/json-patch/v5"
 	"k8s.io/apimachinery/pkg/types"
@@ -210,4 +211,35 @@ func (p applyPatch) Data(obj Object) ([]byte, error) {
 	// correct and sufficient for our uses (it's what the JSON serializer in
 	// client-go does, more-or-less).
 	return json.Marshal(obj)
+}
+
+//applyFromPatch uses server-side-apply with a ApplyConfiguration object.
+type applyFromPatch struct {
+	patch interface{}
+}
+
+// Type implements Patch.
+func (p applyFromPatch) Type() types.PatchType {
+	return types.ApplyPatchType
+}
+
+// Sets the name and namespace for the returned object if an ApplyConfiguration was supplied
+func setNameNamespace(obj Object, ac interface{}) {
+	obj.SetName(reflect.ValueOf(ac).Elem().FieldByName("Name").Elem().String())
+	obj.SetNamespace(reflect.ValueOf(ac).Elem().FieldByName("Namespace").Elem().String())
+}
+
+// Data implements Patch.
+func (p applyFromPatch) Data(o Object) ([]byte, error) {
+	// If an ApplyConfiguration is provided, use that as the data to send
+	if p.patch == nil {
+		return nil, fmt.Errorf("ApplyConfiguration must be specified when using ApplyFrom Patch")
+	}
+	setNameNamespace(o, p.patch)
+	return json.Marshal(p.patch)
+}
+
+// ApplyFrom creates an applyFromPatch object with the provided ApplyConfiguration
+func ApplyFrom(ac interface{}) Patch {
+	return applyFromPatch{patch: ac}
 }

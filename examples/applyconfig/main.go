@@ -25,10 +25,6 @@ import (
 
 var sch *runtime.Scheme
 
-func makePtrForString(s string) *string {
-	return &s
-}
-
 func runMain() int {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
@@ -112,27 +108,23 @@ func runMain() int {
 	fooObj := &v1.Foo{}
 
 	// To use the SSA typed client, use the ApplyConfiguration generated types instead of the types defined in v1
-	applyConfig1 := &ac.FooApplyConfiguration{
-		TypeMetaApplyConfiguration:   metav1ac.TypeMetaApplyConfiguration{Kind: makePtrForString("Foo"), APIVersion: makePtrForString("applytest.kubebuilder.io/v1")},
+	applyConfig1 := (&ac.FooApplyConfiguration{
+		TypeMetaApplyConfiguration:   *metav1ac.TypeMeta().WithKind("Foo").WithAPIVersion("applytest.kubebuilder.io/v1"),
 		ObjectMetaApplyConfiguration: metav1ac.ObjectMeta().WithName("acdefault").WithNamespace("default"),
-	}
-
-	applyConfig1 = applyConfig1.WithNonNullableField("value1")
+	}).WithNonNullableField("value1")
 
 	// Without ApplyConfiguration, NonNullableField is not an optional field so it must be specified if Foo{} was used instead of the ApplyConfiguration
-	// The ApplyConfiguration uses pointers for all objects, so we can set a nil value to indicate that a field is not of interest in the Apply
-	applyConfig2 := &ac.FooApplyConfiguration{
-		TypeMetaApplyConfiguration:   metav1ac.TypeMetaApplyConfiguration{Kind: makePtrForString("Foo"), APIVersion: makePtrForString("applytest.kubebuilder.io/v1")},
+	// The ApplyConfiguration uses pointers for all objects, so omitting a field is equivalent to saying that it is not of interest in this Apply
+	applyConfig2 := (&ac.FooApplyConfiguration{
+		TypeMetaApplyConfiguration: *metav1ac.TypeMeta().WithKind("Foo").WithAPIVersion("applytest.kubebuilder.io/v1"),
 		ObjectMetaApplyConfiguration: metav1ac.ObjectMeta().WithName("acdefault").WithNamespace("default"),
-		NonNullableField:             nil,
-		NullableField:                makePtrForString("value2"),
-	}
+	}).WithNullableField("value2")
 
-	if err := cl.Patch(context.TODO(), fooObj, client.Apply, owner, client.ApplyFrom(applyConfig1)); err != nil {
+	if err := cl.Patch(context.TODO(), fooObj, client.ApplyFrom(applyConfig1), owner); err != nil {
 		panic(err)
 	}
 
-	if err := cl.Patch(context.TODO(), fooObj, client.Apply, owner2, client.ApplyFrom(applyConfig2)); err != nil {
+	if err := cl.Patch(context.TODO(), fooObj, client.ApplyFrom(applyConfig2), owner2); err != nil {
 		panic(err)
 	}
 	fooObj = &v1.Foo{}

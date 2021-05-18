@@ -18,9 +18,6 @@ package client
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"reflect"
 
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -111,45 +108,24 @@ func (c *typedClient) DeleteAllOf(ctx context.Context, obj Object, opts ...Delet
 		Error()
 }
 
-// Sets the name and namespace for the returned object if an ApplyConfiguration was supplied
-func setNameNamespace(obj Object, ac interface{}) {
-	obj.SetName(reflect.ValueOf(ac).Elem().FieldByName("Name").Elem().String())
-	obj.SetNamespace(reflect.ValueOf(ac).Elem().FieldByName("Namespace").Elem().String())
-}
-
 // Patch implements client.Client
 func (c *typedClient) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
-	patchOpts := &PatchOptions{}
-	patchOpts.ApplyOptions(opts)
-
-	if patchOpts.ApplyConfiguration != nil && patch != Apply {
-		return fmt.Errorf("ApplyConfiguration may only be specified on Apply patch type")
-	}
-
-	if patchOpts.ApplyConfiguration != nil {
-		setNameNamespace(obj, patchOpts.ApplyConfiguration)
-	}
-
 	o, err := c.cache.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
 
-	var data []byte
-	if patchOpts.ApplyConfiguration != nil {
-		data, err = json.Marshal(patchOpts.ApplyConfiguration)
-	} else {
-		data, err = patch.Data(obj)
-	}
+	data, err := patch.Data(obj)
 	if err != nil {
 		return err
 	}
 
+	patchOpts := &PatchOptions{}
 	return o.Patch(patch.Type()).
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		VersionedParams(patchOpts.AsPatchOptions(), c.paramCodec).
+		VersionedParams(patchOpts.ApplyOptions(opts).AsPatchOptions(), c.paramCodec).
 		Body(data).
 		Do(ctx).
 		Into(obj)

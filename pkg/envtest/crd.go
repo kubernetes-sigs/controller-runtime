@@ -372,13 +372,38 @@ func modifyConversionWebhooks(crds []client.Object, webhookOptions WebhookInstal
 		case *apiextensionsv1beta1.CustomResourceDefinition:
 			c.Spec.Conversion.WebhookClientConfig.Service = nil
 			c.Spec.Conversion.WebhookClientConfig = &apiextensionsv1beta1.WebhookClientConfig{
+				Service:  nil,
+				URL:      url,
 				CABundle: webhookOptions.LocalServingCAData,
 			}
 		case *apiextensionsv1.CustomResourceDefinition:
 			c.Spec.Conversion.Webhook.ClientConfig.Service = nil
 			c.Spec.Conversion.Webhook.ClientConfig = &apiextensionsv1.WebhookClientConfig{
+				Service:  nil,
 				URL:      url,
 				CABundle: webhookOptions.LocalServingCAData,
+			}
+		case *unstructured.Unstructured:
+			webhookClientConfig := map[string]interface{}{
+				"url":      *url,
+				"caBundle": webhookOptions.LocalServingCAData,
+			}
+
+			switch c.GroupVersionKind().Version {
+			case "v1beta1":
+				if err := unstructured.SetNestedMap(
+					c.Object,
+					webhookClientConfig,
+					"spec", "conversion", "webhookClientConfig"); err != nil {
+					return err
+				}
+			case "v1":
+				if err := unstructured.SetNestedMap(
+					c.Object,
+					webhookClientConfig,
+					"spec", "conversion", "webhook", "clientConfig"); err != nil {
+					return err
+				}
 			}
 		}
 	}

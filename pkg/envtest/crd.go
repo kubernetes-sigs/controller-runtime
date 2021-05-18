@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -370,6 +371,11 @@ func modifyConversionWebhooks(crds []client.Object, webhookOptions WebhookInstal
 	for _, crd := range crds {
 		switch c := crd.(type) {
 		case *apiextensionsv1beta1.CustomResourceDefinition:
+			// preserveUnknownFields defaults to true if `nil` in v1beta1.
+			if c.Spec.PreserveUnknownFields == nil || *c.Spec.PreserveUnknownFields {
+				continue
+			}
+			c.Spec.Conversion.Strategy = apiextensionsv1beta1.WebhookConverter
 			c.Spec.Conversion.WebhookClientConfig.Service = nil
 			c.Spec.Conversion.WebhookClientConfig = &apiextensionsv1beta1.WebhookClientConfig{
 				Service:  nil,
@@ -377,6 +383,10 @@ func modifyConversionWebhooks(crds []client.Object, webhookOptions WebhookInstal
 				CABundle: webhookOptions.LocalServingCAData,
 			}
 		case *apiextensionsv1.CustomResourceDefinition:
+			if c.Spec.PreserveUnknownFields {
+				continue
+			}
+			c.Spec.Conversion.Strategy = apiextensionsv1.WebhookConverter
 			c.Spec.Conversion.Webhook.ClientConfig.Service = nil
 			c.Spec.Conversion.Webhook.ClientConfig = &apiextensionsv1.WebhookClientConfig{
 				Service:  nil,
@@ -386,11 +396,31 @@ func modifyConversionWebhooks(crds []client.Object, webhookOptions WebhookInstal
 		case *unstructured.Unstructured:
 			webhookClientConfig := map[string]interface{}{
 				"url":      *url,
-				"caBundle": webhookOptions.LocalServingCAData,
+				"caBundle": base64.StdEncoding.EncodeToString(webhookOptions.LocalServingCAData),
 			}
 
 			switch c.GroupVersionKind().Version {
 			case "v1beta1":
+				// preserveUnknownFields defaults to true if `nil` in v1beta1.
+				if preserve, found, _ := unstructured.NestedBool(c.Object, "spec", "preserveUnknownFields"); preserve || !found {
+					continue
+				}
+
+				// Set the strategy.
+				if err := unstructured.SetNestedField(
+					c.Object,
+					string(apiextensionsv1beta1.WebhookConverter),
+					"spec", "conversion", "strategy"); err != nil {
+					return err
+				}
+				// Set the conversion review versions.
+				if err := unstructured.SetNestedStringSlice(
+					c.Object,
+					[]string{"v1beta1"},
+					"spec", "conversion", "webhook", "clientConfig"); err != nil {
+					return err
+				}
+				// Set the client configuration.
 				if err := unstructured.SetNestedMap(
 					c.Object,
 					webhookClientConfig,
@@ -398,6 +428,25 @@ func modifyConversionWebhooks(crds []client.Object, webhookOptions WebhookInstal
 					return err
 				}
 			case "v1":
+				if preserve, _, _ := unstructured.NestedBool(c.Object, "spec", "preserveUnknownFields"); preserve {
+					continue
+				}
+
+				// Set the strategy.
+				if err := unstructured.SetNestedField(
+					c.Object,
+					string(apiextensionsv1.WebhookConverter),
+					"spec", "conversion", "strategy"); err != nil {
+					return err
+				}
+				// Set the conversion review versions.
+				if err := unstructured.SetNestedStringSlice(
+					c.Object,
+					[]string{"v1", "v1beta1"},
+					"spec", "conversion", "webhook", "conversionReviewVersions"); err != nil {
+					return err
+				}
+				// Set the client configuration.
 				if err := unstructured.SetNestedMap(
 					c.Object,
 					webhookClientConfig,

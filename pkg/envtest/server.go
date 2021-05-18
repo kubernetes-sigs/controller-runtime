@@ -273,6 +273,7 @@ func (te *Environment) Start() (*rest.Config, error) {
 	te.CRDInstallOptions.CRDs = mergeCRDs(te.CRDInstallOptions.CRDs, te.CRDs)
 	te.CRDInstallOptions.Paths = mergePaths(te.CRDInstallOptions.Paths, te.CRDDirectoryPaths)
 	te.CRDInstallOptions.ErrorIfPathMissing = te.ErrorIfCRDPathMissing
+	te.CRDInstallOptions.WebhookOptions = te.WebhookInstallOptions
 	crds, err := InstallCRDs(te.Config, te.CRDInstallOptions)
 	if err != nil {
 		return te.Config, err

@@ -17,6 +17,7 @@ limitations under the License.
 package controllerutil_test
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -37,13 +38,15 @@ func TestControllerutil(t *testing.T) {
 var t *envtest.Environment
 var cfg *rest.Config
 var c client.Client
+var ctx context.Context
 
 var _ = BeforeSuite(func() {
 	var err error
 
+	ctx = context.Background()
 	t = &envtest.Environment{}
 
-	cfg, err = t.Start()
+	cfg, err = t.Start(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
 	c, err = client.New(cfg, client.Options{})
@@ -51,5 +54,5 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	Expect(t.Stop()).To(Succeed())
+	Expect(t.Stop(ctx)).To(Succeed())
 })

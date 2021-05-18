@@ -17,6 +17,7 @@ limitations under the License.
 package handler_test
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -36,16 +37,18 @@ func TestEventhandler(t *testing.T) {
 
 var testenv *envtest.Environment
 var cfg *rest.Config
+var ctx context.Context
 
 var _ = BeforeSuite(func() {
+	ctx = context.Background()
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	testenv = &envtest.Environment{}
 	var err error
-	cfg, err = testenv.Start()
+	cfg, err = testenv.Start(ctx)
 	Expect(err).NotTo(HaveOccurred())
 })
 
 var _ = AfterSuite(func() {
-	Expect(testenv.Stop()).To(Succeed())
+	Expect(testenv.Stop(ctx)).To(Succeed())
 })

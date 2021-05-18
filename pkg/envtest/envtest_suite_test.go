@@ -17,6 +17,7 @@ limitations under the License.
 package envtest
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -37,13 +38,15 @@ func TestSource(t *testing.T) {
 }
 
 var env *Environment
+var ctx context.Context
 
 var _ = BeforeSuite(func(done Done) {
+	ctx = context.Background()
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	env = &Environment{}
 	// we're initializing webhook here and not in webhook.go to also test the envtest install code via WebhookOptions
 	initializeWebhookInEnvironment()
-	_, err := env.Start()
+	_, err := env.Start(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
 	close(done)
@@ -137,7 +140,7 @@ func initializeWebhookInEnvironment() {
 }
 
 var _ = AfterSuite(func(done Done) {
-	Expect(env.Stop()).NotTo(HaveOccurred())
+	Expect(env.Stop(ctx)).NotTo(HaveOccurred())
 
 	close(done)
 }, StopTimeout)

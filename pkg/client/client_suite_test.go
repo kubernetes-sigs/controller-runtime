@@ -17,6 +17,7 @@ limitations under the License.
 package client_test
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -39,14 +40,16 @@ func TestSource(t *testing.T) {
 var testenv *envtest.Environment
 var cfg *rest.Config
 var clientset *kubernetes.Clientset
+var ctx context.Context
 
 var _ = BeforeSuite(func(done Done) {
+	ctx = context.Background()
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	testenv = &envtest.Environment{}
 
 	var err error
-	cfg, err = testenv.Start()
+	cfg, err = testenv.Start(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
 	clientset, err = kubernetes.NewForConfig(cfg)
@@ -56,5 +59,5 @@ var _ = BeforeSuite(func(done Done) {
 }, 60)
 
 var _ = AfterSuite(func() {
-	Expect(testenv.Stop()).To(Succeed())
+	Expect(testenv.Stop(ctx)).To(Succeed())
 })

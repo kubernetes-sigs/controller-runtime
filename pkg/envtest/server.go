@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -94,6 +96,15 @@ type Etcd = integration.Etcd
 type Environment struct {
 	// ControlPlane is the ControlPlane including the apiserver and etcd
 	ControlPlane integration.ControlPlane
+
+	// Scheme is used to determine if conversion webhooks should be enabled
+	// for a particular CRD / object.
+	//
+	// Conversion webhooks are going to be enabled if an object in the scheme
+	// implements Hub and Spoke conversions.
+	//
+	// If nil, scheme.Scheme is used.
+	Scheme *runtime.Scheme
 
 	// Config can be used to talk to the apiserver.  It's automatically
 	// populated if not set using the standard controller-runtime config
@@ -261,6 +272,11 @@ func (te *Environment) Start() (*rest.Config, error) {
 			QPS:   1000.0,
 			Burst: 2000.0,
 		}
+	}
+
+	// Set the default scheme if nil.
+	if te.Scheme == nil {
+		te.Scheme = scheme.Scheme
 	}
 
 	// Call PrepWithoutInstalling to setup certificates first

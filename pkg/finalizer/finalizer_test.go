@@ -2,6 +2,7 @@ package finalizer
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -12,10 +13,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
-type mockFinalizer struct{}
+type mockFinalizer struct {
+	needsUpdate bool
+	err         error
+}
 
 func (f mockFinalizer) Finalize(context.Context, client.Object) (needsUpdate bool, err error) {
-	return true, nil
+	return f.needsUpdate, f.err
 }
 func TestFinalizer(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -128,6 +132,66 @@ var _ = Describe("TestFinalizer", func() {
 			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
 			Expect(needsUpdate).To(BeTrue())
+		})
+
+		It("should return needsUpdate as false and a non-nil error", func() {
+			now := metav1.Now()
+			pod.DeletionTimestamp = &now
+			pod.Finalizers = []string{"finalizers.sigs.k8s.io/testfinalizer"}
+
+			f.needsUpdate = false
+			f.err = fmt.Errorf("finalizer failed for %q", pod.Finalizers[0])
+
+			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer", f)
+			Expect(err).To(BeNil())
+
+			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
+			Expect(err).ToNot(BeNil())
+			Expect(err.Error()).To(ContainSubstring("finalizer failed"))
+			Expect(needsUpdate).To(BeFalse())
+		})
+
+		It("should return expected needsUpdate and error values when registering multiple finalizers", func() {
+			now := metav1.Now()
+			pod.DeletionTimestamp = &now
+			pod.Finalizers = []string{
+				"finalizers.sigs.k8s.io/testfinalizer1",
+				"finalizers.sigs.k8s.io/testfinalizer2",
+				"finalizers.sigs.k8s.io/testfinalizer3",
+			}
+
+			// registering multiple finalizers with different return values
+			// test for needsUpdate as true, and nil error
+			f.needsUpdate = true
+			f.err = nil
+			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer1", f)
+			Expect(err).To(BeNil())
+
+			result, err := finalizers.Finalize(context.TODO(), pod)
+			Expect(err).To(BeNil())
+			Expect(result).To(BeTrue())
+
+			// test for needsUpdate as false, and non-nil error
+			f.needsUpdate = false
+			f.err = fmt.Errorf("finalizer failed")
+			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer2", f)
+			Expect(err).To(BeNil())
+
+			result, err = finalizers.Finalize(context.TODO(), pod)
+			Expect(err).ToNot(BeNil())
+			Expect(err.Error()).To(ContainSubstring("finalizer failed"))
+			Expect(result).To(BeFalse())
+
+			// test for needsUpdate as true, and non-nil error
+			f.needsUpdate = true
+			f.err = fmt.Errorf("finalizer failed")
+			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer3", f)
+			Expect(err).To(BeNil())
+
+			result, err = finalizers.Finalize(context.TODO(), pod)
+			Expect(err).ToNot(BeNil())
+			Expect(err.Error()).To(ContainSubstring("finalizer failed"))
+			Expect(result).To(BeTrue())
 		})
 	})
 })

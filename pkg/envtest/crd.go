@@ -33,19 +33,31 @@ import (
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 	"sigs.k8s.io/yaml"
 )
 
 // CRDInstallOptions are the options for installing CRDs
 type CRDInstallOptions struct {
+	// Scheme is used to determine if conversion webhooks should be enabled
+	// for a particular CRD / object.
+	//
+	// Conversion webhooks are going to be enabled if an object in the scheme
+	// implements Hub and Spoke conversions.
+	//
+	// If nil, scheme.Scheme is used.
+	Scheme *runtime.Scheme
+
 	// Paths is a list of paths to the directories or files containing CRDs
 	Paths []string
 
@@ -86,7 +98,7 @@ func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]client.Objec
 		return nil, err
 	}
 
-	if err := modifyConversionWebhooks(options.CRDs, options.WebhookOptions); err != nil {
+	if err := modifyConversionWebhooks(options.CRDs, options.Scheme, options.WebhookOptions); err != nil {
 		return nil, err
 	}
 
@@ -118,6 +130,9 @@ func readCRDFiles(options *CRDInstallOptions) error {
 
 // defaultCRDOptions sets the default values for CRDs
 func defaultCRDOptions(o *CRDInstallOptions) {
+	if o.Scheme == nil {
+		o.Scheme = scheme.Scheme
+	}
 	if o.MaxTime == 0 {
 		o.MaxTime = defaultMaxWait
 	}
@@ -356,9 +371,28 @@ func renderCRDs(options *CRDInstallOptions) ([]client.Object, error) {
 	return res, nil
 }
 
-func modifyConversionWebhooks(crds []client.Object, webhookOptions WebhookInstallOptions) error {
+// modifyConversionWebhooks takes all the registered CustomResourceDefinitions and applies modifications
+// to conditionally enable webhooks if the type is registered within the scheme.
+//
+// The complexity of this function is high mostly due to all the edge cases that we need to handle:
+// CRDv1beta1, CRDv1, and their unstructured counterpart.
+//
+// We should be able to simplify this code once we drop support for v1beta1 and standardize around the typed CRDv1 object.
+func modifyConversionWebhooks(crds []client.Object, scheme *runtime.Scheme, webhookOptions WebhookInstallOptions) error { //nolint:gocyclo
 	if len(webhookOptions.LocalServingCAData) == 0 {
 		return nil
+	}
+
+	// Determine all registered convertible types.
+	convertibles := map[schema.GroupKind]struct{}{}
+	for gvk := range scheme.AllKnownTypes() {
+		obj, err := scheme.New(gvk)
+		if err != nil {
+			return err
+		}
+		if ok, err := conversion.IsConvertible(scheme, obj); ok && err == nil {
+			convertibles[gvk.GroupKind()] = struct{}{}
+		}
 	}
 
 	// generate host port.
@@ -371,8 +405,17 @@ func modifyConversionWebhooks(crds []client.Object, webhookOptions WebhookInstal
 	for _, crd := range crds {
 		switch c := crd.(type) {
 		case *apiextensionsv1beta1.CustomResourceDefinition:
+			// Continue if we're preserving unknown fields.
+			//
 			// preserveUnknownFields defaults to true if `nil` in v1beta1.
 			if c.Spec.PreserveUnknownFields == nil || *c.Spec.PreserveUnknownFields {
+				continue
+			}
+			// Continue if the GroupKind isn't registered as being convertible.
+			if _, ok := convertibles[schema.GroupKind{
+				Group: c.Spec.Group,
+				Kind:  c.Spec.Names.Kind,
+			}]; !ok {
 				continue
 			}
 			c.Spec.Conversion.Strategy = apiextensionsv1beta1.WebhookConverter
@@ -383,7 +426,15 @@ func modifyConversionWebhooks(crds []client.Object, webhookOptions WebhookInstal
 				CABundle: webhookOptions.LocalServingCAData,
 			}
 		case *apiextensionsv1.CustomResourceDefinition:
+			// Continue if we're preserving unknown fields.
 			if c.Spec.PreserveUnknownFields {
+				continue
+			}
+			// Continue if the GroupKind isn't registered as being convertible.
+			if _, ok := convertibles[schema.GroupKind{
+				Group: c.Spec.Group,
+				Kind:  c.Spec.Names.Kind,
+			}]; !ok {
 				continue
 			}
 			c.Spec.Conversion.Strategy = apiextensionsv1.WebhookConverter
@@ -401,8 +452,32 @@ func modifyConversionWebhooks(crds []client.Object, webhookOptions WebhookInstal
 
 			switch c.GroupVersionKind().Version {
 			case "v1beta1":
+				// Continue if we're preserving unknown fields.
+				//
 				// preserveUnknownFields defaults to true if `nil` in v1beta1.
-				if preserve, found, _ := unstructured.NestedBool(c.Object, "spec", "preserveUnknownFields"); preserve || !found {
+				if preserve, found, err := unstructured.NestedBool(c.Object, "spec", "preserveUnknownFields"); preserve || !found {
+					continue
+				} else if err != nil {
+					return err
+				}
+
+				// Continue if the GroupKind isn't registered as being convertible.
+				group, found, err := unstructured.NestedString(c.Object, "spec", "group")
+				if !found {
+					continue
+				} else if err != nil {
+					return err
+				}
+				kind, found, err := unstructured.NestedString(c.Object, "spec", "names", "kind")
+				if !found {
+					continue
+				} else if err != nil {
+					return err
+				}
+				if _, ok := convertibles[schema.GroupKind{
+					Group: group,
+					Kind:  kind,
+				}]; !ok {
 					continue
 				}
 
@@ -428,7 +503,29 @@ func modifyConversionWebhooks(crds []client.Object, webhookOptions WebhookInstal
 					return err
 				}
 			case "v1":
-				if preserve, _, _ := unstructured.NestedBool(c.Object, "spec", "preserveUnknownFields"); preserve {
+				if preserve, _, err := unstructured.NestedBool(c.Object, "spec", "preserveUnknownFields"); preserve {
+					continue
+				} else if err != nil {
+					return err
+				}
+
+				// Continue if the GroupKind isn't registered as being convertible.
+				group, found, err := unstructured.NestedString(c.Object, "spec", "group")
+				if !found {
+					continue
+				} else if err != nil {
+					return err
+				}
+				kind, found, err := unstructured.NestedString(c.Object, "spec", "names", "kind")
+				if !found {
+					continue
+				} else if err != nil {
+					return err
+				}
+				if _, ok := convertibles[schema.GroupKind{
+					Group: group,
+					Kind:  kind,
+				}]; !ok {
 					continue
 				}
 

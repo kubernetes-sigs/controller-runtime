@@ -117,7 +117,7 @@ func runMain() int {
 		return 1
 	}
 
-	log.Info("Shutdown succesful")
+	log.Info("Shutdown successful")
 	return 0
 }
 

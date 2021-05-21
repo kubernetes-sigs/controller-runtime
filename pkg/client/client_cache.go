@@ -82,13 +82,13 @@ func (c *clientCache) getResource(obj runtime.Object) (*resourceMeta, error) {
 	_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
 	isUnstructured = isUnstructured || isUnstructuredList
 
-	// It's better to do creation work twice than to not let multiple
-	// people make requests at once
-	c.mu.RLock()
-	resourceByType := c.structuredResourceByType
+	var resourceByType map[schema.GroupVersionKind]*resourceMeta
 	if isUnstructured {
 		resourceByType = c.unstructuredResourceByType
+	} else {
+		resourceByType = c.structuredResourceByType
 	}
+	c.mu.RLock()
 	r, known := resourceByType[gvk]
 	c.mu.RUnlock()
 
@@ -99,6 +99,10 @@ func (c *clientCache) getResource(obj runtime.Object) (*resourceMeta, error) {
 	// Initialize a new Client
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	r, known = resourceByType[gvk] // check again to handle potential race
+	if known {
+		return r, nil
+	}
 	r, err = c.newResource(gvk, meta.IsListType(obj), isUnstructured)
 	if err != nil {
 		return nil, err

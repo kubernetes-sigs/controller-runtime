@@ -34,18 +34,10 @@ var _ = Describe("TestFinalizer", func() {
 	var f mockFinalizer
 	BeforeEach(func() {
 		pod = &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Finalizers: []string{"finalizers.sigs.k8s.io/testfinalizer"},
-			},
+			ObjectMeta: metav1.ObjectMeta{},
 		}
-		Expect(pod).NotTo(BeNil())
-
 		finalizers = NewFinalizers()
-		Expect(finalizers).NotTo(BeNil())
-
-		f := mockFinalizer{}
-		Expect(f).NotTo(BeNil())
-
+		f = mockFinalizer{}
 	})
 	Describe("Register", func() {
 		It("successfully registers a finalizer", func() {
@@ -65,12 +57,6 @@ var _ = Describe("TestFinalizer", func() {
 		})
 	})
 	Describe("Finalize", func() {
-		It("should return no error and return false for needsUpdate if a finalizer is not registered", func() {
-			ret, err := finalizers.Finalize(context.TODO(), pod)
-			Expect(err).To(BeNil())
-			Expect(ret).To(BeFalse())
-		})
-
 		It("successfully finalizes and returns true for needsUpdate when deletion timestamp is nil and finalizer does not exist", func() {
 			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer", f)
 			Expect(err).To(BeNil())
@@ -81,6 +67,10 @@ var _ = Describe("TestFinalizer", func() {
 			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
 			Expect(needsUpdate).To(BeTrue())
+			// when deletion timestamp is nil and finalizer is not present, the registered finalizer would be added to the obj
+			Expect(len(pod.Finalizers)).To(Equal(1))
+			Expect(pod.Finalizers[0]).To(Equal("finalizers.sigs.k8s.io/testfinalizer"))
+
 		})
 
 		It("successfully finalizes and returns true for needsUpdate when deletion timestamp is not nil and the finalizer exists", func() {
@@ -95,6 +85,8 @@ var _ = Describe("TestFinalizer", func() {
 			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
 			Expect(needsUpdate).To(BeTrue())
+			// finalizer will be removed from the obj upon successful finalization
+			Expect(len(pod.Finalizers)).To(Equal(0))
 		})
 
 		It("should return no error and return false for needsUpdate when deletion timestamp is nil and finalizer doesn't exist", func() {
@@ -104,6 +96,8 @@ var _ = Describe("TestFinalizer", func() {
 			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
 			Expect(needsUpdate).To(BeFalse())
+			Expect(len(pod.Finalizers)).To(Equal(0))
+
 		})
 
 		It("should return no error and return false for needsUpdate when deletion timestamp is not nil and the finalizer doesn't exist", func() {
@@ -114,6 +108,7 @@ var _ = Describe("TestFinalizer", func() {
 			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
 			Expect(needsUpdate).To(BeFalse())
+			Expect(len(pod.Finalizers)).To(Equal(0))
 
 		})
 
@@ -132,6 +127,7 @@ var _ = Describe("TestFinalizer", func() {
 			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
 			Expect(needsUpdate).To(BeTrue())
+			Expect(len(pod.Finalizers)).To(Equal(0))
 		})
 
 		It("should return needsUpdate as false and a non-nil error", func() {
@@ -149,6 +145,8 @@ var _ = Describe("TestFinalizer", func() {
 			Expect(err).ToNot(BeNil())
 			Expect(err.Error()).To(ContainSubstring("finalizer failed"))
 			Expect(needsUpdate).To(BeFalse())
+			Expect(len(pod.Finalizers)).To(Equal(1))
+			Expect(pod.Finalizers[0]).To(Equal("finalizers.sigs.k8s.io/testfinalizer"))
 		})
 
 		It("should return expected needsUpdate and error values when registering multiple finalizers", func() {
@@ -170,6 +168,11 @@ var _ = Describe("TestFinalizer", func() {
 			result, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
 			Expect(result).To(BeTrue())
+			// `finalizers.sigs.k8s.io/testfinalizer1` will be removed from the list
+			// of finalizers, so length will be 2.
+			Expect(len(pod.Finalizers)).To(Equal(2))
+			Expect(pod.Finalizers[0]).To(Equal("finalizers.sigs.k8s.io/testfinalizer2"))
+			Expect(pod.Finalizers[1]).To(Equal("finalizers.sigs.k8s.io/testfinalizer3"))
 
 			// test for needsUpdate as false, and non-nil error
 			f.needsUpdate = false
@@ -181,6 +184,9 @@ var _ = Describe("TestFinalizer", func() {
 			Expect(err).ToNot(BeNil())
 			Expect(err.Error()).To(ContainSubstring("finalizer failed"))
 			Expect(result).To(BeFalse())
+			Expect(len(pod.Finalizers)).To(Equal(2))
+			Expect(pod.Finalizers[0]).To(Equal("finalizers.sigs.k8s.io/testfinalizer2"))
+			Expect(pod.Finalizers[1]).To(Equal("finalizers.sigs.k8s.io/testfinalizer3"))
 
 			// test for needsUpdate as true, and non-nil error
 			f.needsUpdate = true
@@ -192,6 +198,9 @@ var _ = Describe("TestFinalizer", func() {
 			Expect(err).ToNot(BeNil())
 			Expect(err.Error()).To(ContainSubstring("finalizer failed"))
 			Expect(result).To(BeTrue())
+			Expect(len(pod.Finalizers)).To(Equal(2))
+			Expect(pod.Finalizers[0]).To(Equal("finalizers.sigs.k8s.io/testfinalizer2"))
+			Expect(pod.Finalizers[1]).To(Equal("finalizers.sigs.k8s.io/testfinalizer3"))
 		})
 	})
 })

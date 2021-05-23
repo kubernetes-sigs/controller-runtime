@@ -19,6 +19,7 @@ package envtest
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -83,7 +84,7 @@ var _ = Describe("Test", func() {
 
 			Eventually(func() bool {
 				err = c.Create(context.TODO(), obj)
-				return apierrors.ReasonForError(err) == metav1.StatusReason("Always denied")
+				return err != nil && strings.HasSuffix(err.Error(), "Always denied") && apierrors.ReasonForError(err) == metav1.StatusReasonForbidden
 			}, 1*time.Second).Should(BeTrue())
 
 			cancel()

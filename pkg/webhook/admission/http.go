@@ -131,7 +131,7 @@ func (wh *Webhook) writeAdmissionResponse(w io.Writer, ar v1.AdmissionReview) {
 		res := ar.Response
 		if log := wh.log; log.V(1).Enabled() {
 			if res.Result != nil {
-				log = log.WithValues("code", res.Result.Code, "reason", res.Result.Reason)
+				log = log.WithValues("code", res.Result.Code, "reason", res.Result.Reason, "message", res.Result.Message)
 			}
 			log.V(1).Info("wrote response", "UID", res.UID, "allowed", res.Allowed)
 		}

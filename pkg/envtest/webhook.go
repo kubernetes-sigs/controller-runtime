@@ -167,6 +167,7 @@ func (o *WebhookInstallOptions) PrepWithoutInstalling() error {
 	if err := o.setupCA(); err != nil {
 		return err
 	}
+
 	if err := parseWebhook(o); err != nil {
 		return err
 	}

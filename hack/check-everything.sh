@@ -37,11 +37,6 @@ tmp_bin=/tmp/cr-tests-bin
 )
 source <(${tmp_bin}/setup-envtest use --use-env -p env ${ENVTEST_K8S_VERSION})
 
-# link the assets into integration
-for tool in kube-apiserver etcd kubectl; do
-    ln -f -s "${KUBEBUILDER_ASSETS:?unable find envtest assets}/${tool}" "${hack_dir}/../pkg/internal/testing/integration/assets/bin/${tool}"
-done
-
 ${hack_dir}/verify.sh
 ${hack_dir}/test-all.sh
 

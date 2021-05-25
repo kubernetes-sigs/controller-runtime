@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/controlplane"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
@@ -82,20 +82,20 @@ func (te *Environment) getBinAssetPath(binary string) string {
 	return filepath.Join(defaultKubebuilderPath, binary)
 }
 
-// ControlPlane is the re-exported ControlPlane type from the internal integration package
-type ControlPlane = integration.ControlPlane
+// ControlPlane is the re-exported ControlPlane type from the internal testing package
+type ControlPlane = controlplane.ControlPlane
 
-// APIServer is the re-exported APIServer type from the internal integration package
-type APIServer = integration.APIServer
+// APIServer is the re-exported APIServer type from the internal testing package
+type APIServer = controlplane.APIServer
 
-// Etcd is the re-exported Etcd type from the internal integration package
-type Etcd = integration.Etcd
+// Etcd is the re-exported Etcd type from the internal testing package
+type Etcd = controlplane.Etcd
 
 // Environment creates a Kubernetes test environment that will start / stop the Kubernetes control plane and
 // install extension APIs
 type Environment struct {
 	// ControlPlane is the ControlPlane including the apiserver and etcd
-	ControlPlane integration.ControlPlane
+	ControlPlane controlplane.ControlPlane
 
 	// Scheme is used to determine if conversion webhooks should be enabled
 	// for a particular CRD / object.
@@ -219,10 +219,10 @@ func (te *Environment) Start() (*rest.Config, error) {
 		}
 	} else {
 		if te.ControlPlane.APIServer == nil {
-			te.ControlPlane.APIServer = &integration.APIServer{Args: te.getAPIServerFlags()}
+			te.ControlPlane.APIServer = &controlplane.APIServer{Args: te.getAPIServerFlags()}
 		}
 		if te.ControlPlane.Etcd == nil {
-			te.ControlPlane.Etcd = &integration.Etcd{}
+			te.ControlPlane.Etcd = &controlplane.Etcd{}
 		}
 
 		if os.Getenv(envAttachOutput) == "true" {
@@ -357,4 +357,4 @@ func (te *Environment) useExistingCluster() bool {
 
 // DefaultKubeAPIServerFlags exposes the default args for the APIServer so that
 // you can use those to append your own additional arguments.
-var DefaultKubeAPIServerFlags = integration.APIServerDefaultArgs
+var DefaultKubeAPIServerFlags = controlplane.APIServerDefaultArgs

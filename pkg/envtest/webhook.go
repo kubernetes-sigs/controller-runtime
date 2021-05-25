@@ -33,8 +33,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration"
-	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/addr"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/certs"
 	"sigs.k8s.io/yaml"
 )
 
@@ -274,7 +274,7 @@ func (p *webhookPoller) poll() (done bool, err error) {
 
 // setupCA creates CA for testing and writes them to disk
 func (o *WebhookInstallOptions) setupCA() error {
-	hookCA, err := integration.NewTinyCA()
+	hookCA, err := certs.NewTinyCA()
 	if err != nil {
 		return fmt.Errorf("unable to set up webhook CA: %v", err)
 	}

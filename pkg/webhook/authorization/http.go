@@ -68,8 +68,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// verify the content type is accurate
-	contentType := r.Header.Get("Content-Type")
-	if contentType != "application/json" {
+	if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
 		err = fmt.Errorf("contentType=%s, expected application/json", contentType)
 		wh.log.Error(err, "unable to process a request with an unknown content type", "content type", contentType)
 		reviewResponse = Errored(err)
@@ -117,11 +116,7 @@ func (wh *Webhook) writeSubjectAccessReviewResponse(w io.Writer, ar authorizatio
 		wh.log.Error(err, "unable to encode the response")
 		wh.writeResponse(w, Errored(err))
 	}
-	res := ar
-	if log := wh.log; log.V(1).Enabled() {
-		log.V(1).Info("wrote response", "UID", res.UID, "authorized", res.Status.Allowed)
-	}
-	return
+	log.V(1).Info("wrote response", "UID", ar.UID, "authorized", ar.Status.Allowed)
 }
 
 func (wh *Webhook) decodeRequestBody(body []byte) (unversionedSubjectAccessReview, *schema.GroupVersionKind, error) {

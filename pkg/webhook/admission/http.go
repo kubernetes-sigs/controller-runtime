@@ -127,15 +127,13 @@ func (wh *Webhook) writeAdmissionResponse(w io.Writer, ar v1.AdmissionReview) {
 	if err := json.NewEncoder(w).Encode(ar); err != nil {
 		wh.log.Error(err, "unable to encode the response")
 		wh.writeResponse(w, Errored(http.StatusInternalServerError, err))
-	} else {
-		res := ar.Response
-		if log := wh.log; log.V(1).Enabled() {
-			if res.Result != nil {
-				log = log.WithValues("code", res.Result.Code, "reason", res.Result.Reason)
-			}
-			log.V(1).Info("wrote response", "UID", res.UID, "allowed", res.Allowed)
-		}
 	}
+
+	log := wh.log.V(1)
+	if result := ar.Response.Result; result != nil {
+		log = log.WithValues("code", result.Code, "reason", result.Reason)
+	}
+	log.V(1).Info("wrote response", "UID", ar.Response.UID, "allowed", ar.Response.Allowed)
 }
 
 // unversionedAdmissionReview is used to decode both v1 and v1beta1 AdmissionReview types.

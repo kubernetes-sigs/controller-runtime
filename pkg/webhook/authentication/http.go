@@ -135,10 +135,7 @@ func (wh *Webhook) writeTokenResponse(w io.Writer, ar authenticationv1.TokenRevi
 		wh.log.Error(err, "unable to encode the response")
 		wh.writeResponse(w, Errored(err))
 	}
-	res := ar
-	if log := wh.log; log.V(1).Enabled() {
-		log.V(1).Info("wrote response", "UID", res.UID, "authenticated", res.Status.Authenticated)
-	}
+	log.V(1).Info("wrote response", "UID", ar.UID, "authenticated", ar.Status.Authenticated)
 }
 
 // unversionedTokenReview is used to decode both v1 and v1beta1 TokenReview types.

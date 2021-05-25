@@ -55,8 +55,9 @@ var _ = Describe("Authentication Webhooks", func() {
 		It("should return bad-request when given an empty body", func() {
 			req := &http.Request{Body: nil}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":false,"evaluationError":"request body is empty"}}
-`
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":false,"evaluationError":"request body is empty"}}
+`, gvkJSONv1)
+
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
@@ -68,8 +69,10 @@ var _ = Describe("Authentication Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBuffer(nil)},
 			}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":false,"evaluationError":"contentType=application/foo, expected application/json"}}
-`
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":false,`+
+				`"evaluationError":"contentType=application/foo, expected application/json"}}
+`, gvkJSONv1)
+
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
@@ -81,9 +84,10 @@ var _ = Describe("Authentication Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBufferString("{")},
 			}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":false,` +
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":false,`+
 				`"evaluationError":"couldn't get version/kind; json parse error: unexpected end of JSON input"}}
-`
+`, gvkJSONv1)
+
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})

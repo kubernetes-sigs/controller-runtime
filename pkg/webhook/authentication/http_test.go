@@ -55,8 +55,10 @@ var _ = Describe("Authentication Webhooks", func() {
 		It("should return bad-request when given an empty body", func() {
 			req := &http.Request{Body: nil}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"request body is empty"}}
-`
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},`+
+				`"error":"request body is empty"}}
+`, gvkJSONv1)
+
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
@@ -68,8 +70,10 @@ var _ = Describe("Authentication Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBuffer(nil)},
 			}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"contentType=application/foo, expected application/json"}}
-`
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},`+
+				`"error":"contentType=application/foo, expected application/json"}}
+`, gvkJSONv1)
+
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
@@ -81,8 +85,10 @@ var _ = Describe("Authentication Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBufferString("{")},
 			}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"couldn't get version/kind; json parse error: unexpected end of JSON input"}}
-`
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},`+
+				`"error":"couldn't get version/kind; json parse error: unexpected end of JSON input"}}
+`, gvkJSONv1)
+
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
@@ -94,8 +100,9 @@ var _ = Describe("Authentication Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBufferString(`{"spec":{"token":""}}`)},
 			}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"token is empty"}}
-`
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"token is empty"}}
+`, gvkJSONv1)
+
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})

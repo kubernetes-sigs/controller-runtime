@@ -55,7 +55,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err = errors.New("request body is empty")
 		wh.log.Error(err, "bad request")
 		reviewResponse = Errored(http.StatusBadRequest, err)
-		wh.writeResponse(w, reviewResponse)
+		wh.writeResponse(w, nil, reviewResponse)
 		return
 	}
 
@@ -63,7 +63,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if body, err = ioutil.ReadAll(r.Body); err != nil {
 		wh.log.Error(err, "unable to read the body from the incoming request")
 		reviewResponse = Errored(http.StatusBadRequest, err)
-		wh.writeResponse(w, reviewResponse)
+		wh.writeResponse(w, nil, reviewResponse)
 		return
 	}
 
@@ -72,7 +72,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err = fmt.Errorf("contentType=%s, expected application/json", contentType)
 		wh.log.Error(err, "unable to process a request with an unknown content type", "content type", contentType)
 		reviewResponse = Errored(http.StatusBadRequest, err)
-		wh.writeResponse(w, reviewResponse)
+		wh.writeResponse(w, nil, reviewResponse)
 		return
 	}
 
@@ -91,49 +91,38 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		wh.log.Error(err, "unable to decode the request")
 		reviewResponse = Errored(http.StatusBadRequest, err)
-		wh.writeResponse(w, reviewResponse)
+		wh.writeResponse(w, actualAdmRevGVK, reviewResponse)
 		return
 	}
 	wh.log.V(1).Info("received request", "UID", req.UID, "kind", req.Kind, "resource", req.Resource)
 
 	reviewResponse = wh.Handle(ctx, req)
-	wh.writeResponseTyped(w, reviewResponse, actualAdmRevGVK)
+	wh.writeResponse(w, actualAdmRevGVK, reviewResponse)
 }
 
-// writeResponse writes response to w generically, i.e. without encoding GVK information.
-func (wh *Webhook) writeResponse(w io.Writer, response Response) {
-	wh.writeAdmissionResponse(w, v1.AdmissionReview{Response: &response.AdmissionResponse})
-}
-
-// writeResponseTyped writes response to w with GVK set to admRevGVK, which is necessary
-// if multiple AdmissionReview versions are permitted by the webhook.
-func (wh *Webhook) writeResponseTyped(w io.Writer, response Response, admRevGVK *schema.GroupVersionKind) {
+func (wh *Webhook) writeResponse(w io.Writer, gvk *schema.GroupVersionKind, response Response) {
 	ar := v1.AdmissionReview{
 		Response: &response.AdmissionResponse,
 	}
 	// Default to a v1 AdmissionReview, otherwise the API server may not recognize the request
 	// if multiple AdmissionReview versions are permitted by the webhook config.
 	// TODO(estroz): this should be configurable since older API servers won't know about v1.
-	if admRevGVK == nil || *admRevGVK == (schema.GroupVersionKind{}) {
+	if gvk == nil || *gvk == (schema.GroupVersionKind{}) {
 		ar.SetGroupVersionKind(v1.SchemeGroupVersion.WithKind("AdmissionReview"))
 	} else {
-		ar.SetGroupVersionKind(*admRevGVK)
+		ar.SetGroupVersionKind(*gvk)
 	}
-	wh.writeAdmissionResponse(w, ar)
-}
 
-// writeAdmissionResponse writes ar to w.
-func (wh *Webhook) writeAdmissionResponse(w io.Writer, ar v1.AdmissionReview) {
 	if err := json.NewEncoder(w).Encode(ar); err != nil {
 		wh.log.Error(err, "unable to encode the response")
-		wh.writeResponse(w, Errored(http.StatusInternalServerError, err))
+		wh.writeResponse(w, gvk, Errored(http.StatusInternalServerError, err))
 	}
 
-	log := wh.log.V(1)
+	logger := wh.log.V(1)
 	if result := ar.Response.Result; result != nil {
-		log = log.WithValues("code", result.Code, "reason", result.Reason)
+		logger = logger.WithValues("code", result.Code, "reason", result.Reason)
 	}
-	log.V(1).Info("wrote response", "UID", ar.Response.UID, "allowed", ar.Response.Allowed)
+	logger.V(1).Info("wrote response", "UID", ar.Response.UID, "allowed", ar.Response.Allowed)
 }
 
 // unversionedAdmissionReview is used to decode both v1 and v1beta1 AdmissionReview types.

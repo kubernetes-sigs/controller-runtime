@@ -55,7 +55,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err = errors.New("request body is empty")
 		wh.log.Error(err, "bad request")
 		reviewResponse = Errored(err)
-		wh.writeResponse(w, reviewResponse)
+		wh.writeResponse(w, nil, reviewResponse)
 		return
 	}
 
@@ -63,7 +63,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if body, err = ioutil.ReadAll(r.Body); err != nil {
 		wh.log.Error(err, "unable to read the body from the incoming request")
 		reviewResponse = Errored(err)
-		wh.writeResponse(w, reviewResponse)
+		wh.writeResponse(w, nil, reviewResponse)
 		return
 	}
 
@@ -72,7 +72,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err = fmt.Errorf("contentType=%s, expected application/json", contentType)
 		wh.log.Error(err, "unable to process a request with an unknown content type", "content type", contentType)
 		reviewResponse = Errored(err)
-		wh.writeResponse(w, reviewResponse)
+		wh.writeResponse(w, nil, reviewResponse)
 		return
 	}
 
@@ -92,7 +92,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		wh.log.Error(err, "unable to decode the request")
 		reviewResponse = Errored(err)
-		wh.writeResponse(w, reviewResponse)
+		wh.writeResponse(w, actualTokRevGVK, reviewResponse)
 		return
 	}
 	wh.log.V(1).Info("received request", "UID", req.UID, "kind", req.Kind)
@@ -101,41 +101,38 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err = errors.New("token is empty")
 		wh.log.Error(err, "bad request")
 		reviewResponse = Errored(err)
-		wh.writeResponse(w, reviewResponse)
+		wh.writeResponse(w, actualTokRevGVK, reviewResponse)
 		return
 	}
 
 	reviewResponse = wh.Handle(ctx, req)
-	wh.writeResponseTyped(w, reviewResponse, actualTokRevGVK)
+	wh.writeResponse(w, actualTokRevGVK, reviewResponse)
 }
 
-// writeResponse writes response to w generically, i.e. without encoding GVK information.
-func (wh *Webhook) writeResponse(w io.Writer, response Response) {
-	wh.writeTokenResponse(w, response.TokenReview)
-}
-
-// writeResponseTyped writes response to w with GVK set to tokRevGVK, which is necessary
-// if multiple TokenReview versions are permitted by the webhook.
-func (wh *Webhook) writeResponseTyped(w io.Writer, response Response, tokRevGVK *schema.GroupVersionKind) {
+func (wh *Webhook) writeResponse(w io.Writer, gvk *schema.GroupVersionKind, response Response) {
 	ar := response.TokenReview
 
 	// Default to a v1 TokenReview, otherwise the API server may not recognize the request
 	// if multiple TokenReview versions are permitted by the webhook config.
-	if tokRevGVK == nil || *tokRevGVK == (schema.GroupVersionKind{}) {
+	if gvk == nil || *gvk == (schema.GroupVersionKind{}) {
 		ar.SetGroupVersionKind(authenticationv1.SchemeGroupVersion.WithKind("TokenReview"))
 	} else {
-		ar.SetGroupVersionKind(*tokRevGVK)
+		ar.SetGroupVersionKind(*gvk)
 	}
-	wh.writeTokenResponse(w, ar)
-}
 
-// writeTokenResponse writes ar to w.
-func (wh *Webhook) writeTokenResponse(w io.Writer, ar authenticationv1.TokenReview) {
 	if err := json.NewEncoder(w).Encode(ar); err != nil {
 		wh.log.Error(err, "unable to encode the response")
-		wh.writeResponse(w, Errored(err))
+		wh.writeResponse(w, gvk, Errored(err))
 	}
-	log.V(1).Info("wrote response", "UID", ar.UID, "authenticated", ar.Status.Authenticated)
+
+	wh.log.
+		V(1).
+		WithValues(
+			"uid", ar.UID,
+			"authenticated", ar.Status.Authenticated,
+			"error", ar.Status.Error,
+		).
+		Info("wrote response")
 }
 
 // unversionedTokenReview is used to decode both v1 and v1beta1 TokenReview types.

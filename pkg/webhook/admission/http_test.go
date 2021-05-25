@@ -56,8 +56,9 @@ var _ = Describe("Admission Webhooks", func() {
 		It("should return bad-request when given an empty body", func() {
 			req := &http.Request{Body: nil}
 
-			expected := `{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"request body is empty","code":400}}}
-`
+			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"request body is empty","code":400}}}
+`, gvkJSONv1)
+
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
@@ -68,9 +69,10 @@ var _ = Describe("Admission Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBuffer(nil)},
 			}
 
-			expected :=
-				`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"contentType=application/foo, expected application/json","code":400}}}
-`
+			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":false,"status":{"metadata":{},`+
+				`"message":"contentType=application/foo, expected application/json","code":400}}}
+`, gvkJSONv1)
+
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
@@ -81,9 +83,10 @@ var _ = Describe("Admission Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBufferString("{")},
 			}
 
-			expected :=
-				`{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"couldn't get version/kind; json parse error: unexpected end of JSON input","code":400}}}
-`
+			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":false,"status":{"metadata":{},`+
+				`"message":"couldn't get version/kind; json parse error: unexpected end of JSON input","code":400}}}
+`, gvkJSONv1)
+
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})

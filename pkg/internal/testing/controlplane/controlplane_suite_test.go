@@ -1,4 +1,4 @@
-package internal_test
+package controlplane_test
 
 import (
 	"testing"
@@ -9,9 +9,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
-func TestInternal(t *testing.T) {
+func TestIntegration(t *testing.T) {
 	t.Parallel()
 	RegisterFailHandler(Fail)
-	suiteName := "Internal Suite"
+	suiteName := "Control Plane Standup Unit Tests"
 	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }

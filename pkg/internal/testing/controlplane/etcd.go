@@ -1,12 +1,14 @@
-package integration
+package controlplane
 
 import (
 	"io"
+	"net"
+	"net/url"
+	"strconv"
 	"time"
 
-	"net/url"
-
-	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/internal"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
 )
 
 // Etcd knows how to run an etcd server.
@@ -55,48 +57,61 @@ type Etcd struct {
 	Out io.Writer
 	Err io.Writer
 
-	processState *internal.ProcessState
+	// processState contains the actual details about this running process
+	processState *process.State
 }
 
 // Start starts the etcd, waits for it to come up, and returns an error, if one
 // occoured.
 func (e *Etcd) Start() error {
 	if e.processState == nil {
-		if err := e.setProcessState(); err != nil {
+		if err := e.setState(); err != nil {
 			return err
 		}
 	}
 	return e.processState.Start(e.Out, e.Err)
 }
 
-func (e *Etcd) setProcessState() error {
+func (e *Etcd) setState() error {
 	var err error
 
-	e.processState = &internal.ProcessState{}
+	e.processState = &process.State{
+		Dir:          e.DataDir,
+		Path:         e.Path,
+		StartTimeout: e.StartTimeout,
+		StopTimeout:  e.StopTimeout,
+	}
 
-	e.processState.DefaultedProcessInput, err = internal.DoDefaulting(
-		"etcd",
-		e.URL,
-		e.DataDir,
-		e.Path,
-		e.StartTimeout,
-		e.StopTimeout,
-	)
-	if err != nil {
+	if err := e.processState.Init("etcd"); err != nil {
 		return err
 	}
 
-	e.processState.StartMessage = internal.GetEtcdStartMessage(e.processState.URL)
+	if e.URL == nil {
+		port, host, err := addr.Suggest("")
+		if err != nil {
+			return err
+		}
+		e.URL = &url.URL{
+			Scheme: "http",
+			Host:   net.JoinHostPort(host, strconv.Itoa(port)),
+		}
+	}
 
-	e.URL = &e.processState.URL
+	// can use /health as of etcd 3.3.0
+	e.processState.HealthCheck.URL = *e.URL
+	e.processState.HealthCheck.Path = "/health"
+
 	e.DataDir = e.processState.Dir
 	e.Path = e.processState.Path
 	e.StartTimeout = e.processState.StartTimeout
 	e.StopTimeout = e.processState.StopTimeout
 
-	e.processState.Args, err = internal.RenderTemplates(
-		internal.DoEtcdArgDefaulting(e.Args), e,
-	)
+	args := e.Args
+	if len(args) == 0 {
+		args = EtcdDefaultArgs
+	}
+
+	e.processState.Args, err = process.RenderTemplates(args, e)
 	return err
 }
 
@@ -108,7 +123,9 @@ func (e *Etcd) Stop() error {
 
 // EtcdDefaultArgs exposes the default args for Etcd so that you
 // can use those to append your own additional arguments.
-//
-// The internal default arguments are explicitly copied here, we don't want to
-// allow users to change the internal ones.
-var EtcdDefaultArgs = append([]string{}, internal.EtcdDefaultArgs...)
+var EtcdDefaultArgs = []string{
+	"--listen-peer-urls=http://localhost:0",
+	"--advertise-client-urls={{ if .URL }}{{ .URL.String }}{{ end }}",
+	"--listen-client-urls={{ if .URL }}{{ .URL.String }}{{ end }}",
+	"--data-dir={{ .DataDir }}",
+}

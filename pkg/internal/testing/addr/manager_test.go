@@ -1,13 +1,13 @@
 package addr_test
 
 import (
-	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/addr"
-
 	"net"
 	"strconv"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
 )
 
 var _ = Describe("SuggestAddress", func() {

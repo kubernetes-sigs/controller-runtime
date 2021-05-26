@@ -1,16 +1,19 @@
-package integration
+package controlplane
 
 import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/addr"
-	"sigs.k8s.io/controller-runtime/pkg/internal/testing/integration/internal"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/certs"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
 )
 
 // APIServer knows how to run a kubernetes apiserver.
@@ -68,38 +71,34 @@ type APIServer struct {
 	Out io.Writer
 	Err io.Writer
 
-	processState *internal.ProcessState
+	processState *process.State
 }
 
 // Start starts the apiserver, waits for it to come up, and returns an error,
 // if occurred.
 func (s *APIServer) Start() error {
 	if s.processState == nil {
-		if err := s.setProcessState(); err != nil {
+		if err := s.setState(); err != nil {
 			return err
 		}
 	}
 	return s.processState.Start(s.Out, s.Err)
 }
 
-func (s *APIServer) setProcessState() error {
+func (s *APIServer) setState() error {
 	if s.EtcdURL == nil {
 		return fmt.Errorf("expected EtcdURL to be configured")
 	}
 
 	var err error
 
-	s.processState = &internal.ProcessState{}
-
-	s.processState.DefaultedProcessInput, err = internal.DoDefaulting(
-		"kube-apiserver",
-		s.URL,
-		s.CertDir,
-		s.Path,
-		s.StartTimeout,
-		s.StopTimeout,
-	)
-	if err != nil {
+	s.processState = &process.State{
+		Dir:          s.CertDir,
+		Path:         s.Path,
+		StartTimeout: s.StartTimeout,
+		StopTimeout:  s.StopTimeout,
+	}
+	if err := s.processState.Init("kube-apiserver"); err != nil {
 		return err
 	}
 
@@ -111,9 +110,20 @@ func (s *APIServer) setProcessState() error {
 		}
 	}
 
-	s.processState.HealthCheckEndpoint = "/healthz"
+	if s.URL == nil {
+		port, host, err := addr.Suggest("")
+		if err != nil {
+			return err
+		}
+		s.URL = &url.URL{
+			Scheme: "http",
+			Host:   net.JoinHostPort(host, strconv.Itoa(port)),
+		}
+	}
 
-	s.URL = &s.processState.URL
+	s.processState.HealthCheck.URL = *s.URL
+	s.processState.HealthCheck.Path = "/healthz"
+
 	s.CertDir = s.processState.Dir
 	s.Path = s.processState.Path
 	s.StartTimeout = s.processState.StartTimeout
@@ -123,9 +133,12 @@ func (s *APIServer) setProcessState() error {
 		return err
 	}
 
-	s.processState.Args, err = internal.RenderTemplates(
-		internal.DoAPIServerArgDefaulting(s.Args), s,
-	)
+	args := s.Args
+	if len(args) == 0 {
+		args = APIServerDefaultArgs
+	}
+
+	s.processState.Args, err = process.RenderTemplates(args, s)
 	return err
 }
 
@@ -135,7 +148,7 @@ func (s *APIServer) populateAPIServerCerts() error {
 		return statErr
 	}
 
-	ca, err := internal.NewTinyCA()
+	ca, err := certs.NewTinyCA()
 	if err != nil {
 		return err
 	}
@@ -171,7 +184,16 @@ func (s *APIServer) Stop() error {
 
 // APIServerDefaultArgs exposes the default args for the APIServer so that you
 // can use those to append your own additional arguments.
-//
-// The internal default arguments are explicitly copied here, we don't want to
-// allow users to change the internal ones.
-var APIServerDefaultArgs = append([]string{}, internal.APIServerDefaultArgs...)
+var APIServerDefaultArgs = []string{
+	"--advertise-address=127.0.0.1",
+	"--etcd-servers={{ if .EtcdURL }}{{ .EtcdURL.String }}{{ end }}",
+	"--cert-dir={{ .CertDir }}",
+	"--insecure-port={{ if .URL }}{{ .URL.Port }}{{ end }}",
+	"--insecure-bind-address={{ if .URL }}{{ .URL.Hostname }}{{ end }}",
+	"--secure-port={{ if .SecurePort }}{{ .SecurePort }}{{ end }}",
+	// we're keeping this disabled because if enabled, default SA is missing which would force all tests to create one
+	// in normal apiserver operation this SA is created by controller, but that is not run in integration environment
+	"--disable-admission-plugins=ServiceAccount",
+	"--service-cluster-ip-range=10.0.0.0/24",
+	"--allow-privileged=true",
+}

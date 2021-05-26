@@ -36,6 +36,11 @@ type Etcd struct {
 	//
 	// If not specified, the minimal set of arguments to run the Etcd will be
 	// used.
+	//
+	// They will be loaded into the same argument set as Configure.  Each flag
+	// will be Append-ed to the configured arguments just before launch.
+	//
+	// Deprecated: use Configure instead.
 	Args []string
 
 	// DataDir is a path to a directory in which etcd can store its state.
@@ -59,22 +64,24 @@ type Etcd struct {
 
 	// processState contains the actual details about this running process
 	processState *process.State
+
+	// args contains the structured arguments to use for running etcd.
+	// Lazily initialized by .Configure(), Defaulted eventually with .defaultArgs()
+	args *process.Arguments
 }
 
 // Start starts the etcd, waits for it to come up, and returns an error, if one
 // occoured.
 func (e *Etcd) Start() error {
 	if e.processState == nil {
-		if err := e.setState(); err != nil {
+		if err := e.setProcessState(); err != nil {
 			return err
 		}
 	}
 	return e.processState.Start(e.Out, e.Err)
 }
 
-func (e *Etcd) setState() error {
-	var err error
-
+func (e *Etcd) setProcessState() error {
 	e.processState = &process.State{
 		Dir:          e.DataDir,
 		Path:         e.Path,
@@ -106,12 +113,11 @@ func (e *Etcd) setState() error {
 	e.StartTimeout = e.processState.StartTimeout
 	e.StopTimeout = e.processState.StopTimeout
 
-	args := e.Args
-	if len(args) == 0 {
-		args = EtcdDefaultArgs
-	}
-
-	e.processState.Args, err = process.RenderTemplates(args, e)
+	var err error
+	e.processState.Args, err = process.TemplateAndArguments(e.Args, e.Configure(), process.TemplateDefaults{
+		Data:     e,
+		Defaults: e.defaultArgs(),
+	})
 	return err
 }
 
@@ -119,6 +125,28 @@ func (e *Etcd) setState() error {
 // the DataDir if necessary.
 func (e *Etcd) Stop() error {
 	return e.processState.Stop()
+}
+
+func (e *Etcd) defaultArgs() map[string][]string {
+	args := map[string][]string{
+		"listen-peer-urls": []string{"http://localhost:0"},
+		"data-dir":         []string{e.DataDir},
+	}
+	if e.URL != nil {
+		args["advertise-client-urls"] = []string{e.URL.String()}
+		args["listen-client-urls"] = []string{e.URL.String()}
+	}
+	return args
+}
+
+// Configure returns Arguments that may be used to customize the
+// flags used to launch etcd.  A set of defaults will
+// be applied underneath.
+func (e *Etcd) Configure() *process.Arguments {
+	if e.args == nil {
+		e.args = process.EmptyArguments()
+	}
+	return e.args
 }
 
 // EtcdDefaultArgs exposes the default args for Etcd so that you

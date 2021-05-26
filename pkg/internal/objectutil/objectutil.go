@@ -55,7 +55,13 @@ func IsAPINamespaced(obj runtime.Object, scheme *runtime.Scheme, restmapper apim
 		return false, err
 	}
 
-	restmapping, err := restmapper.RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind})
+	return IsAPINamespacedWithGVK(gvk, scheme, restmapper)
+}
+
+// IsAPINamespacedWithGVK returns true if the object having the provided
+// GVK is namespace scoped.
+func IsAPINamespacedWithGVK(gk schema.GroupVersionKind, scheme *runtime.Scheme, restmapper apimeta.RESTMapper) (bool, error) {
+	restmapping, err := restmapper.RESTMapping(schema.GroupKind{Group: gk.Group, Kind: gk.Kind})
 	if err != nil {
 		return false, fmt.Errorf("failed to get restmapping: %w", err)
 	}

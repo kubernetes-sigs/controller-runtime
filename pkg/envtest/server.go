@@ -19,7 +19,6 @@ package envtest
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/controlplane"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
@@ -48,48 +48,59 @@ It's possible to override some defaults, by setting the following environment va
 
 */
 const (
-	envUseExistingCluster  = "USE_EXISTING_CLUSTER"
-	envKubeAPIServerBin    = "TEST_ASSET_KUBE_APISERVER"
-	envEtcdBin             = "TEST_ASSET_ETCD"
-	envKubectlBin          = "TEST_ASSET_KUBECTL"
-	envKubebuilderPath     = "KUBEBUILDER_ASSETS"
-	envStartTimeout        = "KUBEBUILDER_CONTROLPLANE_START_TIMEOUT"
-	envStopTimeout         = "KUBEBUILDER_CONTROLPLANE_STOP_TIMEOUT"
-	envAttachOutput        = "KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT"
-	defaultKubebuilderPath = "/usr/local/kubebuilder/bin"
-	StartTimeout           = 60
-	StopTimeout            = 60
+	envUseExistingCluster = "USE_EXISTING_CLUSTER"
+	envStartTimeout       = "KUBEBUILDER_CONTROLPLANE_START_TIMEOUT"
+	envStopTimeout        = "KUBEBUILDER_CONTROLPLANE_STOP_TIMEOUT"
+	envAttachOutput       = "KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT"
+	StartTimeout          = 60
+	StopTimeout           = 60
 
 	defaultKubebuilderControlPlaneStartTimeout = 20 * time.Second
 	defaultKubebuilderControlPlaneStopTimeout  = 20 * time.Second
 )
 
-// getBinAssetPath returns a path for binary from the following list of locations,
-// ordered by precedence:
-// 0. KUBEBUILDER_ASSETS
-// 1. Environment.BinaryAssetsDirectory
-// 2. The default path, "/usr/local/kubebuilder/bin"
-func (te *Environment) getBinAssetPath(binary string) string {
-	valueFromEnvVar := os.Getenv(envKubebuilderPath)
-	if valueFromEnvVar != "" {
-		return filepath.Join(valueFromEnvVar, binary)
-	}
+// internal types we expose as part of our public API
+type (
+	// ControlPlane is the re-exported ControlPlane type from the internal testing package
+	ControlPlane = controlplane.ControlPlane
 
-	if te.BinaryAssetsDirectory != "" {
-		return filepath.Join(te.BinaryAssetsDirectory, binary)
-	}
+	// APIServer is the re-exported APIServer from the internal testing package
+	APIServer = controlplane.APIServer
 
-	return filepath.Join(defaultKubebuilderPath, binary)
-}
+	// Etcd is the re-exported Etcd from the internal testing package
+	Etcd = controlplane.Etcd
 
-// ControlPlane is the re-exported ControlPlane type from the internal testing package
-type ControlPlane = controlplane.ControlPlane
+	// User represents a Kubernetes user to provision for auth purposes.
+	User = controlplane.User
 
-// APIServer is the re-exported APIServer type from the internal testing package
-type APIServer = controlplane.APIServer
+	// AuthenticatedUser represets a Kubernetes user that's been provisioned.
+	AuthenticatedUser = controlplane.AuthenticatedUser
 
-// Etcd is the re-exported Etcd type from the internal testing package
-type Etcd = controlplane.Etcd
+	// ListenAddr indicates the address and port that the API server should listen on.
+	ListenAddr = process.ListenAddr
+
+	// SecureServing contains details describing how the API server should serve
+	// its secure endpoint.
+	SecureServing = controlplane.SecureServing
+
+	// Authn is an authentication method that can be used with the control plane to
+	// provision users.
+	Authn = controlplane.Authn
+
+	// Arguments allows configuring a process's flags.
+	Arguments = process.Arguments
+
+	// Arg is a single flag with one or more values.
+	Arg = process.Arg
+)
+
+var (
+	// EmptyArguments constructs a new set of flags with nothing set.
+	//
+	// This is mostly useful for testing helper methods -- you'll want to call
+	// Configure on the APIServer (or etcd) to configure their arguments.
+	EmptyArguments = process.EmptyArguments
+)
 
 // Environment creates a Kubernetes test environment that will start / stop the Kubernetes control plane and
 // install extension APIs
@@ -181,27 +192,6 @@ func (te *Environment) Stop() error {
 	return te.ControlPlane.Stop()
 }
 
-// getAPIServerFlags returns flags to be used with the Kubernetes API server.
-// it returns empty slice for api server defined defaults to be applied if no args specified
-func (te Environment) getAPIServerFlags() []string {
-	// Set default API server flags if not set.
-	if len(te.KubeAPIServerFlags) == 0 {
-		return []string{}
-	}
-	// Check KubeAPIServerFlags contains service-cluster-ip-range, if not, set default value to service-cluster-ip-range
-	containServiceClusterIPRange := false
-	for _, flag := range te.KubeAPIServerFlags {
-		if strings.Contains(flag, "service-cluster-ip-range") {
-			containServiceClusterIPRange = true
-			break
-		}
-	}
-	if !containServiceClusterIPRange {
-		te.KubeAPIServerFlags = append(te.KubeAPIServerFlags, "--service-cluster-ip-range=10.0.0.0/24")
-	}
-	return te.KubeAPIServerFlags
-}
-
 // Start starts a local Kubernetes server and updates te.ApiserverPort with the port it is listening on
 func (te *Environment) Start() (*rest.Config, error) {
 	if te.useExistingCluster() {
@@ -214,12 +204,23 @@ func (te *Environment) Start() (*rest.Config, error) {
 			var err error
 			te.Config, err = config.GetConfig()
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("unable to get configuration for existing cluster: %w", err)
 			}
 		}
 	} else {
-		if te.ControlPlane.APIServer == nil {
-			te.ControlPlane.APIServer = &controlplane.APIServer{Args: te.getAPIServerFlags()}
+		apiServer := te.ControlPlane.GetAPIServer()
+		if len(apiServer.Args) == 0 {
+			// pass these through separately from above in case something like
+			// AddUser defaults APIServer.
+			//
+			// TODO(directxman12): if/when we feel like making a bigger
+			// breaking change here, just make APIServer and Etcd non-pointers
+			// in ControlPlane.
+
+			// NB(directxman12): we still pass these in so that things work if the
+			// user manually specifies them, but in most cases we expect them to
+			// be nil so that we use the new .Configure() logic.
+			apiServer.Args = te.KubeAPIServerFlags
 		}
 		if te.ControlPlane.Etcd == nil {
 			te.ControlPlane.Etcd = &controlplane.Etcd{}
@@ -228,11 +229,11 @@ func (te *Environment) Start() (*rest.Config, error) {
 		if os.Getenv(envAttachOutput) == "true" {
 			te.AttachControlPlaneOutput = true
 		}
-		if te.ControlPlane.APIServer.Out == nil && te.AttachControlPlaneOutput {
-			te.ControlPlane.APIServer.Out = os.Stdout
+		if apiServer.Out == nil && te.AttachControlPlaneOutput {
+			apiServer.Out = os.Stdout
 		}
-		if te.ControlPlane.APIServer.Err == nil && te.AttachControlPlaneOutput {
-			te.ControlPlane.APIServer.Err = os.Stderr
+		if apiServer.Err == nil && te.AttachControlPlaneOutput {
+			apiServer.Err = os.Stderr
 		}
 		if te.ControlPlane.Etcd.Out == nil && te.AttachControlPlaneOutput {
 			te.ControlPlane.Etcd.Out = os.Stdout
@@ -241,39 +242,36 @@ func (te *Environment) Start() (*rest.Config, error) {
 			te.ControlPlane.Etcd.Err = os.Stderr
 		}
 
-		if os.Getenv(envKubeAPIServerBin) == "" {
-			te.ControlPlane.APIServer.Path = te.getBinAssetPath("kube-apiserver")
-		}
-		if os.Getenv(envEtcdBin) == "" {
-			te.ControlPlane.Etcd.Path = te.getBinAssetPath("etcd")
-		}
-		if os.Getenv(envKubectlBin) == "" {
-			// we can't just set the path manually (it's behind a function), so set the environment variable instead
-			if err := os.Setenv(envKubectlBin, te.getBinAssetPath("kubectl")); err != nil {
-				return nil, err
-			}
-		}
+		apiServer.Path = process.BinPathFinder("kube-apiserver", te.BinaryAssetsDirectory)
+		te.ControlPlane.Etcd.Path = process.BinPathFinder("etcd", te.BinaryAssetsDirectory)
+		te.ControlPlane.KubectlPath = process.BinPathFinder("kubectl", te.BinaryAssetsDirectory)
 
 		if err := te.defaultTimeouts(); err != nil {
 			return nil, fmt.Errorf("failed to default controlplane timeouts: %w", err)
 		}
 		te.ControlPlane.Etcd.StartTimeout = te.ControlPlaneStartTimeout
 		te.ControlPlane.Etcd.StopTimeout = te.ControlPlaneStopTimeout
-		te.ControlPlane.APIServer.StartTimeout = te.ControlPlaneStartTimeout
-		te.ControlPlane.APIServer.StopTimeout = te.ControlPlaneStopTimeout
+		apiServer.StartTimeout = te.ControlPlaneStartTimeout
+		apiServer.StopTimeout = te.ControlPlaneStopTimeout
 
-		log.V(1).Info("starting control plane", "api server flags", te.ControlPlane.APIServer.Args)
+		log.V(1).Info("starting control plane", "api server flags", apiServer.Args)
 		if err := te.startControlPlane(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unable to start control plane itself: %w", err)
 		}
 
 		// Create the *rest.Config for creating new clients
-		te.Config = &rest.Config{
-			Host: te.ControlPlane.APIURL().Host,
+		baseConfig := &rest.Config{
 			// gotta go fast during tests -- we don't really care about overwhelming our test API server
 			QPS:   1000.0,
 			Burst: 2000.0,
 		}
+
+		adminInfo := User{Name: "admin", Groups: []string{"system:masters"}}
+		adminUser, err := te.ControlPlane.AddUser(adminInfo, baseConfig)
+		if err != nil {
+			return te.Config, fmt.Errorf("unable to provision admin user: %w", err)
+		}
+		te.Config = adminUser.Config()
 	}
 
 	// Set the default scheme if nil.
@@ -294,15 +292,28 @@ func (te *Environment) Start() (*rest.Config, error) {
 	te.CRDInstallOptions.WebhookOptions = te.WebhookInstallOptions
 	crds, err := InstallCRDs(te.Config, te.CRDInstallOptions)
 	if err != nil {
-		return te.Config, err
+		return te.Config, fmt.Errorf("unable to install CRDs onto control plane: %w", err)
 	}
 	te.CRDs = crds
 
 	log.V(1).Info("installing webhooks")
 	if err := te.WebhookInstallOptions.Install(te.Config); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to install webhooks onto control plane: %w", err)
 	}
 	return te.Config, nil
+}
+
+// AddUser provisions a new user for connecting to this Environment.  The user will
+// have the specified name & belong to the specified groups.
+//
+// If you specify a "base" config, the returned REST Config will contain those
+// settings as well as any required by the authentication method.  You can use
+// this to easily specify options like QPS.
+//
+// This is effectively a convinience alias for ControlPlane.AddUser -- see that
+// for more low-level details.
+func (te *Environment) AddUser(user User, baseConfig *rest.Config) (*AuthenticatedUser, error) {
+	return te.ControlPlane.AddUser(user, baseConfig)
 }
 
 func (te *Environment) startControlPlane() error {

@@ -8,59 +8,53 @@ import (
 )
 
 var _ = Describe("BinPathFinder", func() {
-	Context("when relying on the default assets path", func() {
-		var (
-			previousAssetsPath string
-		)
+	var prevAssetPath string
+	BeforeEach(func() {
+		prevAssetPath = os.Getenv(EnvAssetsPath)
+		Expect(os.Unsetenv(EnvAssetsPath)).To(Succeed())
+		Expect(os.Unsetenv(EnvAssetOverridePrefix + "_SOME_FAKE"))
+		Expect(os.Unsetenv(EnvAssetOverridePrefix + "OTHERFAKE"))
+	})
+	AfterEach(func() {
+		if prevAssetPath != "" {
+			Expect(os.Setenv(EnvAssetsPath, prevAssetPath))
+		}
+	})
+	Context("when individual overrides are present", func() {
 		BeforeEach(func() {
-			previousAssetsPath = assetsPath
-			assetsPath = "/some/path/assets/bin"
+			Expect(os.Setenv(EnvAssetOverridePrefix+"OTHERFAKE", "/other/path")).To(Succeed())
+			Expect(os.Setenv(EnvAssetOverridePrefix+"_SOME_FAKE", "/some/path")).To(Succeed())
+			// set the global path to make sure we don't prefer it
+			Expect(os.Setenv(EnvAssetsPath, "/global/path")).To(Succeed())
 		})
-		AfterEach(func() {
-			assetsPath = previousAssetsPath
+
+		It("should prefer individual overrides, using them unmodified", func() {
+			Expect(BinPathFinder("otherfake", "/hardcoded/path")).To(Equal("/other/path"))
 		})
-		It("returns the default path when no env var is configured", func() {
-			binPath := BinPathFinder("some_bin")
-			Expect(binPath).To(Equal("/some/path/assets/bin/some_bin"))
+
+		It("should convert lowercase to uppercase, remove leading numbers, and replace punctuation with underscores when resolving the env var name", func() {
+			Expect(BinPathFinder("123.some-fake", "/hardcoded/path")).To(Equal("/some/path"))
 		})
 	})
 
-	Context("when environment is configured", func() {
-		var (
-			previousValue string
-			wasSet        bool
-		)
+	Context("when individual overrides are missing but the global override is present", func() {
 		BeforeEach(func() {
-			envVarName := "TEST_ASSET_ANOTHER_SYMBOLIC_NAME"
-			if val, ok := os.LookupEnv(envVarName); ok {
-				previousValue = val
-				wasSet = true
-			}
-			os.Setenv(envVarName, "/path/to/some_bin.exe")
+			Expect(os.Setenv(EnvAssetsPath, "/global/path")).To(Succeed())
 		})
-		AfterEach(func() {
-			if wasSet {
-				os.Setenv("TEST_ASSET_ANOTHER_SYMBOLIC_NAME", previousValue)
-			} else {
-				os.Unsetenv("TEST_ASSET_ANOTHER_SYMBOLIC_NAME")
-			}
+		It("should prefer the global override, appending the name to that path", func() {
+			Expect(BinPathFinder("some-fake", "/hardcoded/path")).To(Equal("/global/path/some-fake"))
 		})
-		It("returns the path from the env", func() {
-			binPath := BinPathFinder("another_symbolic_name")
-			Expect(binPath).To(Equal("/path/to/some_bin.exe"))
-		})
+	})
 
-		It("sanitizes the environment variable name", func() {
-			By("cleaning all non-underscore punctuation")
-			binPath := BinPathFinder("another-symbolic name")
-			Expect(binPath).To(Equal("/path/to/some_bin.exe"))
-			binPath = BinPathFinder("another+symbolic\\name")
-			Expect(binPath).To(Equal("/path/to/some_bin.exe"))
-			binPath = BinPathFinder("another=symbolic.name")
-			Expect(binPath).To(Equal("/path/to/some_bin.exe"))
-			By("removing numbers from the beginning of the name")
-			binPath = BinPathFinder("12another_symbolic_name")
-			Expect(binPath).To(Equal("/path/to/some_bin.exe"))
+	Context("when an asset directory is given and no overrides are present", func() {
+		It("should use the asset directory, appending the name to that path", func() {
+			Expect(BinPathFinder("some-fake", "/hardcoded/path")).To(Equal("/hardcoded/path/some-fake"))
+		})
+	})
+
+	Context("when no path configuration is given", func() {
+		It("should just use the default path", func() {
+			Expect(BinPathFinder("some-fake", "")).To(Equal("/usr/local/kubebuilder/bin/some-fake"))
 		})
 	})
 })

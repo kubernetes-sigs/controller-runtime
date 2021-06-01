@@ -158,6 +158,26 @@ func (c *TinyCA) NewServingCert(names ...string) (CertPair, error) {
 	})
 }
 
+// ClientInfo describes some Kubernetes user for the purposes of creating
+// client certificates.
+type ClientInfo struct {
+	// Name is the user name (embedded as the cert's CommonName)
+	Name string
+	// Groups are the groups to which this user belongs (embedded as the cert's
+	// Organization)
+	Groups []string
+}
+
+// NewClientCert produces a new CertPair suitable for use with Kubernetes
+// client cert auth with an API server validating based on this CA.
+func (c *TinyCA) NewClientCert(user ClientInfo) (CertPair, error) {
+	return c.makeCert(certutil.Config{
+		CommonName:   user.Name,
+		Organization: user.Groups,
+		Usages:       []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	})
+}
+
 func resolveNames(names []string) ([]string, []net.IP, error) {
 	dnsNames := []string{}
 	ips := []net.IP{}

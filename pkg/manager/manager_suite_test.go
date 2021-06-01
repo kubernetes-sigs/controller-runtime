@@ -17,6 +17,7 @@ limitations under the License.
 package manager
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -53,8 +54,18 @@ var _ = BeforeSuite(func(done Done) {
 	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
 
-	clientTransport = &http.Transport{}
-	cfg.Transport = clientTransport
+	cfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+		// NB(directxman12): we can't set Transport *and* use TLS options,
+		// so we grab the transport right after it gets created so that we can
+		// type-assert on it (hopefully)?
+		// hopefully this doesn't break 🤞
+		transport, isTransport := rt.(*http.Transport)
+		if !isTransport {
+			panic(fmt.Sprintf("wasn't able to grab underlying transport from REST client's RoundTripper, can't figure out how to close keep-alives: expected an *http.Transport, got %#v", rt))
+		}
+		clientTransport = transport
+		return rt
+	}
 
 	clientset, err = kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())

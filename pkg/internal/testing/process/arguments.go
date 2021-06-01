@@ -34,7 +34,7 @@ func RenderTemplates(argTemplates []string, data interface{}) (args []string, er
 
 // SliceToArguments converts a slice of arguments to structured arguments,
 // appending each argument that starts with `--` and contains an `=` to the
-// argument set, returning the rest.
+// argument set (ignoring defaults), returning the rest.
 //
 // Deprecated: will be removed when RenderTemplates is removed
 func SliceToArguments(sliceArgs []string, args *Arguments) []string {
@@ -84,16 +84,19 @@ type TemplateDefaults struct {
 //    no defaults will be used, otherwise defaults will be used
 // 4. a result of [args..., rest...] will be returned
 //
+// It returns the resulting rendered arguments, plus the arguments that were
+// not transferred to `args` during rendering.
+//
 // Deprecated: will be removed when RenderTemplates is removed
-func TemplateAndArguments(templ []string, args *Arguments, data TemplateDefaults) ([]string, error) {
+func TemplateAndArguments(templ []string, args *Arguments, data TemplateDefaults) (allArgs []string, nonFlagishArgs []string, err error) {
 	if len(templ) == 0 { // 3 & 4 (no template case)
-		return args.AsStrings(data.Defaults), nil
+		return args.AsStrings(data.Defaults), nil, nil
 	}
 
 	// 1: render the template
 	rendered, err := RenderTemplates(templ, data.Data)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// 2: filter out structured args and add them to args
@@ -104,7 +107,7 @@ func TemplateAndArguments(templ []string, args *Arguments, data TemplateDefaults
 	res := args.AsStrings(data.MinimalDefaults)
 
 	// 4: return the rendered structured args + all non-structured args
-	return append(res, rest...), nil
+	return append(res, rest...), rest, nil
 }
 
 // EmptyArguments constructs an empty set of flags with no defaults.

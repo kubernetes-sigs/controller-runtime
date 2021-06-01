@@ -95,7 +95,7 @@ func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]client.Objec
 
 	// Read the CRD yamls into options.CRDs
 	if err := readCRDFiles(&options); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to read CRD files: %w", err)
 	}
 
 	if err := modifyConversionWebhooks(options.CRDs, options.Scheme, options.WebhookOptions); err != nil {
@@ -104,12 +104,12 @@ func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]client.Objec
 
 	// Create the CRDs in the apiserver
 	if err := CreateCRDs(config, options.CRDs); err != nil {
-		return options.CRDs, err
+		return options.CRDs, fmt.Errorf("unable to create CRD instances: %w", err)
 	}
 
 	// Wait for the CRDs to appear as Resources in the apiserver
 	if err := WaitForCRDs(config, options.CRDs, options); err != nil {
-		return options.CRDs, err
+		return options.CRDs, fmt.Errorf("something went wrong waiting for CRDs to appear as API resources: %w", err)
 	}
 
 	return options.CRDs, nil
@@ -281,7 +281,7 @@ func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
 func CreateCRDs(config *rest.Config, crds []client.Object) error {
 	cs, err := client.New(config, client.Options{})
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to create client: %w", err)
 	}
 
 	// Create each CRD
@@ -292,10 +292,10 @@ func CreateCRDs(config *rest.Config, crds []client.Object) error {
 		switch {
 		case apierrors.IsNotFound(err):
 			if err := cs.Create(context.TODO(), crd); err != nil {
-				return err
+				return fmt.Errorf("unable to create CRD %q: %w", crd.GetName(), err)
 			}
 		case err != nil:
-			return err
+			return fmt.Errorf("unable to get CRD %q to check if it exists: %w", crd.GetName(), err)
 		default:
 			log.V(1).Info("CRD already exists, updating", "crd", crd.GetName())
 			if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {

@@ -28,9 +28,9 @@ linters:
   - ineffassign
   - nakedret
   - gocyclo
-  - lll
   - dupl
   - goimports
   - golint
   # disabled:
   # - goconst is overly aggressive
+  # - lll generally just complains about flag help & error strings that are human-readable

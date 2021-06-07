@@ -24,9 +24,13 @@ import (
 
 type finalizers map[string]Finalizer
 
-// Result struct holds Updated and StatusUpdated fields
+// Result struct holds information about what parts of an object were updated by finalizer(s).
 type Result struct {
-	Updated       bool
+	// Updated will be true if at least one of the object's non-status field
+	// was updated by some registered finalizer.
+	Updated bool
+	// StatusUpdated will be true if at least one of the object's status' fields
+	// was updated by some registered finalizer.
 	StatusUpdated bool
 }
 
@@ -66,6 +70,8 @@ func (f finalizers) Finalize(ctx context.Context, obj client.Object) (Result, er
 				// object's metadata, so we know it will need an update.
 				res.Updated = true
 				controllerutil.RemoveFinalizer(obj, key)
+				// The finalizer may have updated the status too.
+				res.StatusUpdated = res.StatusUpdated || finalizerRes.StatusUpdated
 			}
 		}
 	}

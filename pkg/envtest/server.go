@@ -163,6 +163,8 @@ type Environment struct {
 	ControlPlaneStopTimeout time.Duration
 
 	// KubeAPIServerFlags is the set of flags passed while starting the api server.
+	//
+	// Deprecated: use ControlPlane.GetAPIServer().Configure() instead.
 	KubeAPIServerFlags []string
 
 	// AttachControlPlaneOutput indicates if control plane output will be attached to os.Stdout and os.Stderr.
@@ -368,4 +370,6 @@ func (te *Environment) useExistingCluster() bool {
 
 // DefaultKubeAPIServerFlags exposes the default args for the APIServer so that
 // you can use those to append your own additional arguments.
+//
+// Deprecated: use APIServer.Configure() instead.
 var DefaultKubeAPIServerFlags = controlplane.APIServerDefaultArgs

@@ -70,12 +70,20 @@ type Server struct {
 	// Defaults to "", which means server does not verify client's certificate.
 	ClientCAName string
 
+	// TLSVersion is the minimum version of TLS supported. Accepts
+	// "1.1", "1.2" and "1.3" - anything else will result in "1.0"
+	TLSMinVersion string
+
 	// WebhookMux is the multiplexer that handles different webhooks.
 	WebhookMux *http.ServeMux
 
 	// webhooks keep track of all registered webhooks for dependency injection,
 	// and to provide better panic messages on duplicate webhook registration.
 	webhooks map[string]http.Handler
+
+	// tlsMinVersion is the result of the conversion from human-readable TLS version (for example "1.1")
+	// to the values accepted by tls.Config (for example 0x301)
+	tlsMinVersion uint16
 
 	// setFields allows injecting dependencies from an external source
 	setFields inject.Func
@@ -108,6 +116,17 @@ func (s *Server) setDefaults() {
 
 	if len(s.KeyName) == 0 {
 		s.KeyName = "tls.key"
+	}
+
+	switch s.TLSMinVersion {
+	case "1.1":
+		s.tlsMinVersion = tls.VersionTLS11
+	case "1.2":
+		s.tlsMinVersion = tls.VersionTLS12
+	case "1.3":
+		s.tlsMinVersion = tls.VersionTLS13
+	default:
+		s.tlsMinVersion = tls.VersionTLS10
 	}
 }
 
@@ -200,6 +219,7 @@ func (s *Server) Start(ctx context.Context) error {
 	cfg := &tls.Config{
 		NextProtos:     []string{"h2"},
 		GetCertificate: certWatcher.GetCertificate,
+		MinVersion:     s.tlsMinVersion,
 	}
 
 	// load CA to verify client certificate

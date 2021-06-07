@@ -30,7 +30,7 @@ type Registerer interface {
 // deletion timestamp being set and return an indication of whether the
 // obj needs an update or not
 type Finalizer interface {
-	Finalize(context.Context, client.Object) (needsUpdate bool, err error)
+	Finalize(context.Context, client.Object) (Result, error)
 }
 
 // Finalizers implements Registerer and Finalizer to finalize all registered

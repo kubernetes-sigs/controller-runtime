@@ -24,6 +24,12 @@ import (
 
 type finalizers map[string]Finalizer
 
+// Result struct holds Updated and StatusUpdated fields
+type Result struct {
+	Updated       bool
+	StatusUpdated bool
+}
+
 // NewFinalizers returns the Finalizers interface
 func NewFinalizers() Finalizers {
 	return finalizers{}
@@ -37,27 +43,31 @@ func (f finalizers) Register(key string, finalizer Finalizer) error {
 	return nil
 }
 
-func (f finalizers) Finalize(ctx context.Context, obj client.Object) (bool, error) {
-	var errList []error
-	needsUpdate := false
+func (f finalizers) Finalize(ctx context.Context, obj client.Object) (Result, error) {
+	var (
+		res     Result
+		errList []error
+	)
+	res.Updated = false
 	for key, finalizer := range f {
 		if dt := obj.GetDeletionTimestamp(); dt.IsZero() && !controllerutil.ContainsFinalizer(obj, key) {
 			controllerutil.AddFinalizer(obj, key)
-			needsUpdate = true
+			res.Updated = true
 		} else if !dt.IsZero() && controllerutil.ContainsFinalizer(obj, key) {
-			finalizerNeedsUpdate, err := finalizer.Finalize(ctx, obj)
+			finalizerRes, err := finalizer.Finalize(ctx, obj)
 			if err != nil {
 				// Even when the finalizer fails, it may need to signal to update the primary
 				// object (e.g. it may set a condition and need a status update).
-				needsUpdate = needsUpdate || finalizerNeedsUpdate
+				res.Updated = res.Updated || finalizerRes.Updated
+				res.StatusUpdated = res.StatusUpdated || finalizerRes.StatusUpdated
 				errList = append(errList, fmt.Errorf("finalizer %q failed: %v", key, err))
 			} else {
 				// If the finalizer succeeds, we remove the finalizer from the primary
 				// object's metadata, so we know it will need an update.
-				needsUpdate = true
+				res.Updated = true
 				controllerutil.RemoveFinalizer(obj, key)
 			}
 		}
 	}
-	return needsUpdate, utilerrors.NewAggregate(errList)
+	return res, utilerrors.NewAggregate(errList)
 }

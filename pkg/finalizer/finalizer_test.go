@@ -14,12 +14,12 @@ import (
 )
 
 type mockFinalizer struct {
-	needsUpdate bool
-	err         error
+	result Result
+	err    error
 }
 
-func (f mockFinalizer) Finalize(context.Context, client.Object) (needsUpdate bool, err error) {
-	return f.needsUpdate, f.err
+func (f mockFinalizer) Finalize(context.Context, client.Object) (Result, error) {
+	return f.result, f.err
 }
 func TestFinalizer(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -56,24 +56,25 @@ var _ = Describe("TestFinalizer", func() {
 
 		})
 	})
+
 	Describe("Finalize", func() {
-		It("successfully finalizes and returns true for needsUpdate when deletion timestamp is nil and finalizer does not exist", func() {
+		It("successfully finalizes and returns true for Updated when deletion timestamp is nil and finalizer does not exist", func() {
 			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer", f)
 			Expect(err).To(BeNil())
 
 			pod.DeletionTimestamp = nil
 			pod.Finalizers = []string{}
 
-			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
+			result, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
-			Expect(needsUpdate).To(BeTrue())
+			Expect(result.Updated).To(BeTrue())
 			// when deletion timestamp is nil and finalizer is not present, the registered finalizer would be added to the obj
 			Expect(len(pod.Finalizers)).To(Equal(1))
 			Expect(pod.Finalizers[0]).To(Equal("finalizers.sigs.k8s.io/testfinalizer"))
 
 		})
 
-		It("successfully finalizes and returns true for needsUpdate when deletion timestamp is not nil and the finalizer exists", func() {
+		It("successfully finalizes and returns true for Updated when deletion timestamp is not nil and the finalizer exists", func() {
 			now := metav1.Now()
 			pod.DeletionTimestamp = &now
 
@@ -82,37 +83,37 @@ var _ = Describe("TestFinalizer", func() {
 
 			pod.Finalizers = []string{"finalizers.sigs.k8s.io/testfinalizer"}
 
-			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
+			result, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
-			Expect(needsUpdate).To(BeTrue())
+			Expect(result.Updated).To(BeTrue())
 			// finalizer will be removed from the obj upon successful finalization
 			Expect(len(pod.Finalizers)).To(Equal(0))
 		})
 
-		It("should return no error and return false for needsUpdate when deletion timestamp is nil and finalizer doesn't exist", func() {
+		It("should return no error and return false for Updated when deletion timestamp is nil and finalizer doesn't exist", func() {
 			pod.DeletionTimestamp = nil
 			pod.Finalizers = []string{}
 
-			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
+			result, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
-			Expect(needsUpdate).To(BeFalse())
+			Expect(result.Updated).To(BeFalse())
 			Expect(len(pod.Finalizers)).To(Equal(0))
 
 		})
 
-		It("should return no error and return false for needsUpdate when deletion timestamp is not nil and the finalizer doesn't exist", func() {
+		It("should return no error and return false for Updated when deletion timestamp is not nil and the finalizer doesn't exist", func() {
 			now := metav1.Now()
 			pod.DeletionTimestamp = &now
 			pod.Finalizers = []string{}
 
-			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
+			result, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
-			Expect(needsUpdate).To(BeFalse())
+			Expect(result.Updated).To(BeFalse())
 			Expect(len(pod.Finalizers)).To(Equal(0))
 
 		})
 
-		It("successfully finalizes multiple finalizers and returns true for needsUpdate when deletion timestamp is not nil and the finalizer exists", func() {
+		It("successfully finalizes multiple finalizers and returns true for Updated when deletion timestamp is not nil and the finalizer exists", func() {
 			now := metav1.Now()
 			pod.DeletionTimestamp = &now
 
@@ -124,32 +125,35 @@ var _ = Describe("TestFinalizer", func() {
 
 			pod.Finalizers = []string{"finalizers.sigs.k8s.io/testfinalizer", "finalizers.sigs.k8s.io/newtestfinalizer"}
 
-			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
+			result, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
-			Expect(needsUpdate).To(BeTrue())
+			Expect(result.Updated).To(BeTrue())
+			Expect(result.StatusUpdated).To(BeFalse())
 			Expect(len(pod.Finalizers)).To(Equal(0))
 		})
 
-		It("should return needsUpdate as false and a non-nil error", func() {
+		It("should return result as false and a non-nil error", func() {
 			now := metav1.Now()
 			pod.DeletionTimestamp = &now
 			pod.Finalizers = []string{"finalizers.sigs.k8s.io/testfinalizer"}
 
-			f.needsUpdate = false
+			f.result.Updated = false
+			f.result.StatusUpdated = false
 			f.err = fmt.Errorf("finalizer failed for %q", pod.Finalizers[0])
 
 			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer", f)
 			Expect(err).To(BeNil())
 
-			needsUpdate, err := finalizers.Finalize(context.TODO(), pod)
+			result, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).ToNot(BeNil())
 			Expect(err.Error()).To(ContainSubstring("finalizer failed"))
-			Expect(needsUpdate).To(BeFalse())
+			Expect(result.Updated).To(BeFalse())
+			Expect(result.StatusUpdated).To(BeFalse())
 			Expect(len(pod.Finalizers)).To(Equal(1))
 			Expect(pod.Finalizers[0]).To(Equal("finalizers.sigs.k8s.io/testfinalizer"))
 		})
 
-		It("should return expected needsUpdate and error values when registering multiple finalizers", func() {
+		It("should return expected result values and error values when registering multiple finalizers", func() {
 			now := metav1.Now()
 			pod.DeletionTimestamp = &now
 			pod.Finalizers = []string{
@@ -159,23 +163,26 @@ var _ = Describe("TestFinalizer", func() {
 			}
 
 			// registering multiple finalizers with different return values
-			// test for needsUpdate as true, and nil error
-			f.needsUpdate = true
+			// test for Updated as true, and nil error
+			f.result.Updated = true
+			f.result.StatusUpdated = false
 			f.err = nil
 			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer1", f)
 			Expect(err).To(BeNil())
 
 			result, err := finalizers.Finalize(context.TODO(), pod)
 			Expect(err).To(BeNil())
-			Expect(result).To(BeTrue())
+			Expect(result.Updated).To(BeTrue())
+			Expect(result.StatusUpdated).To(BeFalse())
 			// `finalizers.sigs.k8s.io/testfinalizer1` will be removed from the list
 			// of finalizers, so length will be 2.
 			Expect(len(pod.Finalizers)).To(Equal(2))
 			Expect(pod.Finalizers[0]).To(Equal("finalizers.sigs.k8s.io/testfinalizer2"))
 			Expect(pod.Finalizers[1]).To(Equal("finalizers.sigs.k8s.io/testfinalizer3"))
 
-			// test for needsUpdate as false, and non-nil error
-			f.needsUpdate = false
+			// test for Updated and StatusUpdated as false, and non-nil error
+			f.result.Updated = false
+			f.result.StatusUpdated = false
 			f.err = fmt.Errorf("finalizer failed")
 			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer2", f)
 			Expect(err).To(BeNil())
@@ -183,13 +190,15 @@ var _ = Describe("TestFinalizer", func() {
 			result, err = finalizers.Finalize(context.TODO(), pod)
 			Expect(err).ToNot(BeNil())
 			Expect(err.Error()).To(ContainSubstring("finalizer failed"))
-			Expect(result).To(BeFalse())
+			Expect(result.Updated).To(BeFalse())
+			Expect(result.StatusUpdated).To(BeFalse())
 			Expect(len(pod.Finalizers)).To(Equal(2))
 			Expect(pod.Finalizers[0]).To(Equal("finalizers.sigs.k8s.io/testfinalizer2"))
 			Expect(pod.Finalizers[1]).To(Equal("finalizers.sigs.k8s.io/testfinalizer3"))
 
-			// test for needsUpdate as true, and non-nil error
-			f.needsUpdate = true
+			// test for result as true, and non-nil error
+			f.result.Updated = true
+			f.result.StatusUpdated = true
 			f.err = fmt.Errorf("finalizer failed")
 			err = finalizers.Register("finalizers.sigs.k8s.io/testfinalizer3", f)
 			Expect(err).To(BeNil())
@@ -197,7 +206,8 @@ var _ = Describe("TestFinalizer", func() {
 			result, err = finalizers.Finalize(context.TODO(), pod)
 			Expect(err).ToNot(BeNil())
 			Expect(err.Error()).To(ContainSubstring("finalizer failed"))
-			Expect(result).To(BeTrue())
+			Expect(result.Updated).To(BeTrue())
+			Expect(result.StatusUpdated).To(BeTrue())
 			Expect(len(pod.Finalizers)).To(Equal(2))
 			Expect(pod.Finalizers[0]).To(Equal("finalizers.sigs.k8s.io/testfinalizer2"))
 			Expect(pod.Finalizers[1]).To(Equal("finalizers.sigs.k8s.io/testfinalizer3"))

@@ -71,7 +71,7 @@ type Server struct {
 	ClientCAName string
 
 	// TLSVersion is the minimum version of TLS supported. Accepts
-	// "1.1", "1.2" and "1.3" - anything else will result in "1.0"
+	// "", "1.0", "1.1", "1.2" and "1.3" only ("" is equivalent to "1.0" for backwards compatibility)
 	TLSMinVersion string
 
 	// WebhookMux is the multiplexer that handles different webhooks.
@@ -80,10 +80,6 @@ type Server struct {
 	// webhooks keep track of all registered webhooks for dependency injection,
 	// and to provide better panic messages on duplicate webhook registration.
 	webhooks map[string]http.Handler
-
-	// tlsMinVersion is the result of the conversion from human-readable TLS version (for example "1.1")
-	// to the values accepted by tls.Config (for example 0x301)
-	tlsMinVersion uint16
 
 	// setFields allows injecting dependencies from an external source
 	setFields inject.Func
@@ -116,17 +112,6 @@ func (s *Server) setDefaults() {
 
 	if len(s.KeyName) == 0 {
 		s.KeyName = "tls.key"
-	}
-
-	switch s.TLSMinVersion {
-	case "1.1":
-		s.tlsMinVersion = tls.VersionTLS11
-	case "1.2":
-		s.tlsMinVersion = tls.VersionTLS12
-	case "1.3":
-		s.tlsMinVersion = tls.VersionTLS13
-	default:
-		s.tlsMinVersion = tls.VersionTLS10
 	}
 }
 
@@ -194,6 +179,26 @@ func (s *Server) StartStandalone(ctx context.Context, scheme *runtime.Scheme) er
 	return s.Start(ctx)
 }
 
+// tlsVersion converts from human-readable TLS version (for example "1.1")
+// to the values accepted by tls.Config (for example 0x301)
+func tlsVersion(version string) (uint16, error) {
+	switch version {
+	// default is previous behaviour
+	case "":
+		return tls.VersionTLS10, nil
+	case "1.0":
+		return tls.VersionTLS10, nil
+	case "1.1":
+		return tls.VersionTLS11, nil
+	case "1.2":
+		return tls.VersionTLS12, nil
+	case "1.3":
+		return tls.VersionTLS13, nil
+	default:
+		return 0, fmt.Errorf("Invalid TLSMinVersion %v: expects 1.0, 1.1, 1.2, 1.3 or empty", version)
+	}
+}
+
 // Start runs the server.
 // It will install the webhook related resources depend on the server configuration.
 func (s *Server) Start(ctx context.Context) error {
@@ -216,10 +221,15 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}()
 
+	tlsMinVersion, err := tlsVersion(s.TLSMinVersion)
+	if err != nil {
+		return err
+	}
+
 	cfg := &tls.Config{
 		NextProtos:     []string{"h2"},
 		GetCertificate: certWatcher.GetCertificate,
-		MinVersion:     s.tlsMinVersion,
+		MinVersion:     tlsMinVersion,
 	}
 
 	// load CA to verify client certificate

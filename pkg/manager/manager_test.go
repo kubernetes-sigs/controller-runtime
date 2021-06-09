@@ -370,9 +370,8 @@ var _ = Describe("manger.Manager", func() {
 
 		Context("with leader election enabled", func() {
 			It("should only cancel the leader election after all runnables are done", func() {
-				leaderElectOpt := true
 				m, err := New(cfg, Options{
-					LeaderElection:          &leaderElectOpt,
+					LeaderElection:          pointer.BoolPtr(true),
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id-2",
 					HealthProbeBindAddress:  "0",
@@ -416,9 +415,8 @@ var _ = Describe("manger.Manager", func() {
 
 			})
 			It("should disable gracefulShutdown when stopping to lead", func() {
-				leaderElectOpt := true
 				m, err := New(cfg, Options{
-					LeaderElection:          &leaderElectOpt,
+					LeaderElection:          pointer.BoolPtr(true),
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id-3",
 					HealthProbeBindAddress:  "0",
@@ -446,9 +444,8 @@ var _ = Describe("manger.Manager", func() {
 			})
 			It("should default ID to controller-runtime if ID is not set", func() {
 				var rl resourcelock.Interface
-				leaderElectOpt := true
 				m1, err := New(cfg, Options{
-					LeaderElection:          &leaderElectOpt,
+					LeaderElection:          pointer.BoolPtr(true),
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id",
 					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
@@ -466,10 +463,9 @@ var _ = Describe("manger.Manager", func() {
 				m1cm, ok := m1.(*controllerManager)
 				Expect(ok).To(BeTrue())
 				m1cm.onStoppedLeading = func() {}
-				leaderElectOpt = true
 
 				m2, err := New(cfg, Options{
-					LeaderElection:          &leaderElectOpt,
+					LeaderElection:          pointer.BoolPtr(true),
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id",
 					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
@@ -536,8 +532,7 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).To(MatchError(ContainSubstring("expected error")))
 			})
 			It("should return an error if namespace not set and not running in cluster", func() {
-				leaderElectOpt := true
-				m, err := New(cfg, Options{LeaderElection: &leaderElectOpt, LeaderElectionID: "controller-runtime"})
+				m, err := New(cfg, Options{LeaderElection: pointer.BoolPtr(true), LeaderElectionID: "controller-runtime"})
 				Expect(m).To(BeNil())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unable to find leader election namespace: not running in-cluster, please specify LeaderElectionNamespace"))
@@ -547,8 +542,7 @@ var _ = Describe("manger.Manager", func() {
 			// ConfigMap lock to a controller-runtime version that has this new default. Many users of controller-runtime skip
 			// versions, so we should be extremely conservative here.
 			It("should default to ConfigMapsLeasesResourceLock", func() {
-				leaderElectOpt := true
-				m, err := New(cfg, Options{LeaderElection: &leaderElectOpt, LeaderElectionID: "controller-runtime", LeaderElectionNamespace: "my-ns"})
+				m, err := New(cfg, Options{LeaderElection: pointer.BoolPtr(true), LeaderElectionID: "controller-runtime", LeaderElectionNamespace: "my-ns"})
 				Expect(m).ToNot(BeNil())
 				Expect(err).ToNot(HaveOccurred())
 				cm, ok := m.(*controllerManager)
@@ -562,9 +556,8 @@ var _ = Describe("manger.Manager", func() {
 
 			})
 			It("should use the specified ResourceLock", func() {
-				leaderElectOpt := true
 				m, err := New(cfg, Options{
-					LeaderElection:             &leaderElectOpt,
+					LeaderElection:             pointer.BoolPtr(true),
 					LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 					LeaderElectionID:           "controller-runtime",
 					LeaderElectionNamespace:    "my-ns",
@@ -1130,10 +1123,9 @@ var _ = Describe("manger.Manager", func() {
 		})
 
 		Context("with leaderelection enabled", func() {
-			leaderElectOpt := true
 			startSuite(
 				Options{
-					LeaderElection:          &leaderElectOpt,
+					LeaderElection:          pointer.BoolPtr(true),
 					LeaderElectionID:        "controller-runtime",
 					LeaderElectionNamespace: "default",
 					newResourceLock:         fakeleaderelection.NewResourceLock,

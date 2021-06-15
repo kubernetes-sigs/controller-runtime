@@ -213,7 +213,7 @@ func (p applyPatch) Data(obj Object) ([]byte, error) {
 	return json.Marshal(obj)
 }
 
-//applyFromPatch uses server-side-apply with a ApplyConfiguration object.
+// applyFromPatch uses server-side-apply with a ApplyConfiguration object.
 type applyFromPatch struct {
 	patch interface{}
 }
@@ -223,10 +223,27 @@ func (p applyFromPatch) Type() types.PatchType {
 	return types.ApplyPatchType
 }
 
-// Sets the name and namespace for the returned object if an ApplyConfiguration was supplied
-func setNameNamespace(obj Object, ac interface{}) {
+// setNameNamespace sets name and namespace for the returned object if an ApplyConfiguration was supplied.
+func setNameNamespace(obj Object, ac interface{}) error {
+	if !reflect.ValueOf(ac).Elem().IsValid() || reflect.ValueOf(ac).Elem().Kind() != reflect.Struct {
+		return fmt.Errorf("ApplyConfiguration is not a valid struct")
+	}
+	// Since Name and Namespace are embedded objects, nil checks must be
+	// performed against the embedded ObjectMeta object first.
+	if reflect.ValueOf(ac).Elem().FieldByName("ObjectMetaApplyConfiguration").IsNil() {
+		return fmt.Errorf("ApplyConfiguration must include ObjectMetaApplyConfiguration")
+	}
+	if reflect.ValueOf(ac).Elem().FieldByName("Name").Elem().IsZero() {
+		return fmt.Errorf("ApplyConfiguration must have a non-empty Name in ObjectMetaApplyConfiguration")
+	}
 	obj.SetName(reflect.ValueOf(ac).Elem().FieldByName("Name").Elem().String())
-	obj.SetNamespace(reflect.ValueOf(ac).Elem().FieldByName("Namespace").Elem().String())
+	// Only set the namespace if the object provides a namespace. This value
+	// is omitted for cluster scoped objects.
+	if !reflect.ValueOf(ac).Elem().FieldByName("Namespace").Elem().IsZero() {
+		obj.SetNamespace(reflect.ValueOf(ac).Elem().FieldByName("Namespace").Elem().String())
+	}
+
+	return nil
 }
 
 // Data implements Patch.
@@ -235,11 +252,15 @@ func (p applyFromPatch) Data(o Object) ([]byte, error) {
 	if p.patch == nil {
 		return nil, fmt.Errorf("ApplyConfiguration must be specified when using ApplyFrom Patch")
 	}
-	setNameNamespace(o, p.patch)
+
+	if err := setNameNamespace(o, p.patch); err != nil {
+		return nil, err
+	}
+
 	return json.Marshal(p.patch)
 }
 
-// ApplyFrom creates an applyFromPatch object with the provided ApplyConfiguration
+// ApplyFrom creates an applyFromPatch object with the provided ApplyConfiguration.
 func ApplyFrom(ac interface{}) Patch {
 	return applyFromPatch{patch: ac}
 }

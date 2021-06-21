@@ -24,7 +24,7 @@ source ${hack_dir}/common.sh
 tmp_root=/tmp
 kb_root_dir=$tmp_root/kubebuilder
 
-ENVTEST_K8S_VERSION=${ENVTEST_K8S_VERSION:-"1.19.2"}
+ENVTEST_K8S_VERSION=${ENVTEST_K8S_VERSION:-"1.21.2"}
 
 # set up envtest tools if necessary
 

@@ -48,6 +48,7 @@ func Example() {
 	// Setup TLS listener using GetCertficate for fetching the cert when changes
 	listener, err := tls.Listen("tcp", "localhost:9443", &tls.Config{
 		GetCertificate: watcher.GetCertificate,
+		MinVersion:     tls.VersionTLS12,
 	})
 	if err != nil {
 		panic(err)

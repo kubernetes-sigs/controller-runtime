@@ -32,8 +32,7 @@ func ver(major, minor, patch int) versions.Concrete {
 func shouldHaveError() {
 	var err error
 	var code int
-	cause := recover()
-	if envp.CheckRecover(cause, func(caughtCode int, caughtErr error) {
+	if cause := recover(); envp.CheckRecover(cause, func(caughtCode int, caughtErr error) {
 		err = caughtErr
 		code = caughtCode
 	}) {

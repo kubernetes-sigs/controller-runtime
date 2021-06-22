@@ -172,7 +172,7 @@ var _ = Describe("Store", func() {
 })
 
 var (
-	// keep this sorted
+	// keep this sorted.
 	localVersions = []store.Item{
 		{Version: ver(1, 17, 9), Platform: versions.Platform{OS: "linux", Arch: "amd64"}},
 		{Version: ver(1, 16, 2), Platform: versions.Platform{OS: "linux", Arch: "yourimagination"}},
@@ -191,7 +191,7 @@ var (
 	newName = "kubebuilder-tools-1.16.3-linux-amd64.tar.gz"
 )
 
-func ver(major, minor, patch int) versions.Concrete { //nolint unparam
+func ver(major, minor, patch int) versions.Concrete {
 	return versions.Concrete{
 		Major: major,
 		Minor: minor,
@@ -211,10 +211,10 @@ func makeFakeArchive(magic string) io.Reader {
 	for _, fileName := range []string{"some-file", "other-file"} {
 		// create fake file contents: magic+fileName+randomBytes()
 		var chunk [1024 * 48]byte // 1.5 times our chunk read size in GetVersion
-		copy(chunk[:], []byte(magic))
+		copy(chunk[:], magic)
 		copy(chunk[len(magic):], fileName)
 		start := len(magic) + len(fileName)
-		if _, err := rand.Read(chunk[start:]); err != nil {
+		if _, err := rand.Read(chunk[start:]); err != nil { //nolint:gosec
 			panic(err)
 		}
 

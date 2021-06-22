@@ -42,7 +42,7 @@ type Request struct {
 
 // Response is the output of an authentication handler.
 // It contains a response indicating if a given
-// operation is allowed
+// operation is allowed.
 type Response struct {
 	authenticationv1.TokenReview
 }
@@ -89,16 +89,16 @@ type Webhook struct {
 }
 
 // InjectLogger gets a handle to a logging instance, hopefully with more info about this particular webhook.
-func (w *Webhook) InjectLogger(l logr.Logger) error {
-	w.log = l
+func (wh *Webhook) InjectLogger(l logr.Logger) error {
+	wh.log = l
 	return nil
 }
 
 // Handle processes TokenReview.
-func (w *Webhook) Handle(ctx context.Context, req Request) Response {
-	resp := w.Handler.Handle(ctx, req)
+func (wh *Webhook) Handle(ctx context.Context, req Request) Response {
+	resp := wh.Handler.Handle(ctx, req)
 	if err := resp.Complete(req); err != nil {
-		w.log.Error(err, "unable to encode response")
+		wh.log.Error(err, "unable to encode response")
 		return Errored(errUnableToEncodeResponse)
 	}
 
@@ -106,7 +106,7 @@ func (w *Webhook) Handle(ctx context.Context, req Request) Response {
 }
 
 // InjectFunc injects the field setter into the webhook.
-func (w *Webhook) InjectFunc(f inject.Func) error {
+func (wh *Webhook) InjectFunc(f inject.Func) error {
 	// inject directly into the handlers.  It would be more correct
 	// to do this in a sync.Once in Handle (since we don't have some
 	// other start/finalize-type method), but it's more efficient to
@@ -125,5 +125,5 @@ func (w *Webhook) InjectFunc(f inject.Func) error {
 		return nil
 	}
 
-	return setFields(w.Handler)
+	return setFields(wh.Handler)
 }

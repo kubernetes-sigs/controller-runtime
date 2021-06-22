@@ -362,7 +362,7 @@ var _ = Describe("application", func() {
 			allPrct := predicate.Funcs{
 				CreateFunc: func(e event.CreateEvent) bool {
 					defer GinkgoRecover()
-					//check that it was called for all registered kinds
+					// check that it was called for all registered kinds
 					Expect(e.Object).Should(Or(
 						BeAssignableToTypeOf(&appsv1.Deployment{}),
 						BeAssignableToTypeOf(&appsv1.ReplicaSet{}),
@@ -499,7 +499,7 @@ func (c *nonTypedOnlyCache) GetInformerForKind(ctx context.Context, gvk schema.G
 }
 
 // TODO(directxman12): this function has too many arguments, and the whole
-// "nameSuffix" think is a bit of a hack It should be cleaned up significantly by someone with a bit of time
+// "nameSuffix" think is a bit of a hack It should be cleaned up significantly by someone with a bit of time.
 func doReconcileTest(ctx context.Context, nameSuffix string, blder *Builder, mgr manager.Manager, complete bool) {
 	deployName := "deploy-name-" + nameSuffix
 	rsName := "rs-name-" + nameSuffix
@@ -594,7 +594,6 @@ func doReconcileTest(ctx context.Context, nameSuffix string, blder *Builder, mgr
 	By("Waiting for the ReplicaSet Reconcile")
 	Eventually(ch).Should(Receive(Equal(reconcile.Request{
 		NamespacedName: types.NamespacedName{Namespace: "default", Name: deployName}})))
-
 }
 
 var _ runtime.Object = &fakeType{}

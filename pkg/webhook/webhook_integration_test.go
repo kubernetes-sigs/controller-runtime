@@ -19,8 +19,7 @@ package webhook_test
 import (
 	"context"
 	"crypto/tls"
-	goerrors "errors"
-	"fmt"
+	"errors"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -31,7 +30,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -98,7 +97,7 @@ var _ = Describe("Webhook", func() {
 
 			Eventually(func() bool {
 				err = c.Create(context.TODO(), obj)
-				return errors.ReasonForError(err) == metav1.StatusReason("Always denied")
+				return apierrors.ReasonForError(err) == metav1.StatusReason("Always denied")
 			}, 1*time.Second).Should(BeTrue())
 
 			cancel()
@@ -122,7 +121,7 @@ var _ = Describe("Webhook", func() {
 
 			Eventually(func() bool {
 				err = c.Create(context.TODO(), obj)
-				return errors.ReasonForError(err) == metav1.StatusReason("Always denied")
+				return apierrors.ReasonForError(err) == metav1.StatusReason("Always denied")
 			}, 1*time.Second).Should(BeTrue())
 
 			cancel()
@@ -146,7 +145,7 @@ var _ = Describe("Webhook", func() {
 
 			Eventually(func() bool {
 				err := c.Create(context.TODO(), obj)
-				return errors.ReasonForError(err) == metav1.StatusReason("Always denied")
+				return apierrors.ReasonForError(err) == metav1.StatusReason("Always denied")
 			}, 1*time.Second).Should(BeTrue())
 
 			cancel()
@@ -170,18 +169,19 @@ var _ = Describe("Webhook", func() {
 			cfg := &tls.Config{
 				NextProtos:     []string{"h2"},
 				GetCertificate: certWatcher.GetCertificate,
+				MinVersion:     tls.VersionTLS12,
 			}
 
 			By("generating the listener")
 			listener, err := tls.Listen("tcp",
 				net.JoinHostPort(testenv.WebhookInstallOptions.LocalServingHost,
-					strconv.Itoa(int(testenv.WebhookInstallOptions.LocalServingPort))), cfg)
+					strconv.Itoa(testenv.WebhookInstallOptions.LocalServingPort)), cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("creating and registering the standalone webhook")
 			hook, err := admission.StandaloneWebhook(admission.ValidatingWebhookFor(
 				&admissiontest.FakeValidator{
-					ErrorToReturn: goerrors.New("Always denied"),
+					ErrorToReturn: errors.New("Always denied"),
 					GVKToReturn:   schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
 				}), admission.StandaloneOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -202,7 +202,7 @@ var _ = Describe("Webhook", func() {
 
 			Eventually(func() bool {
 				err = c.Create(context.TODO(), obj)
-				return errors.ReasonForError(err) == metav1.StatusReason("Always denied")
+				return apierrors.ReasonForError(err) == metav1.StatusReason("Always denied")
 			}, 1*time.Second).Should(BeTrue())
 
 			cancel()
@@ -225,5 +225,5 @@ func (v *rejectingValidator) Handle(ctx context.Context, req admission.Request) 
 	if err := v.d.Decode(req, &obj); err != nil {
 		return admission.Denied(err.Error())
 	}
-	return admission.Denied(fmt.Sprint("Always denied"))
+	return admission.Denied("Always denied")
 }

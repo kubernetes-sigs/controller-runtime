@@ -132,7 +132,7 @@ func (e *Etcd) setProcessState() error {
 	e.StopTimeout = e.processState.StopTimeout
 
 	var err error
-	e.processState.Args, e.Args, err = process.TemplateAndArguments(e.Args, e.Configure(), process.TemplateDefaults{
+	e.processState.Args, e.Args, err = process.TemplateAndArguments(e.Args, e.Configure(), process.TemplateDefaults{ //nolint:staticcheck
 		Data:     e,
 		Defaults: e.defaultArgs(),
 	})
@@ -150,8 +150,8 @@ func (e *Etcd) Stop() error {
 
 func (e *Etcd) defaultArgs() map[string][]string {
 	args := map[string][]string{
-		"listen-peer-urls": []string{"http://localhost:0"},
-		"data-dir":         []string{e.DataDir},
+		"listen-peer-urls": {"http://localhost:0"},
+		"data-dir":         {e.DataDir},
 	}
 	if e.URL != nil {
 		args["advertise-client-urls"] = []string{e.URL.String()}

@@ -128,8 +128,7 @@ func (s *Server) Register(path string, hook http.Handler) {
 	defer s.mu.Unlock()
 
 	s.defaultingOnce.Do(s.setDefaults)
-	_, found := s.webhooks[path]
-	if found {
+	if _, found := s.webhooks[path]; found {
 		panic(fmt.Errorf("can't register duplicate path: %v", path))
 	}
 	// TODO(directxman12): call setfields if we've already started the server
@@ -180,7 +179,7 @@ func (s *Server) StartStandalone(ctx context.Context, scheme *runtime.Scheme) er
 }
 
 // tlsVersion converts from human-readable TLS version (for example "1.1")
-// to the values accepted by tls.Config (for example 0x301)
+// to the values accepted by tls.Config (for example 0x301).
 func tlsVersion(version string) (uint16, error) {
 	switch version {
 	// default is previous behaviour
@@ -195,7 +194,7 @@ func tlsVersion(version string) (uint16, error) {
 	case "1.3":
 		return tls.VersionTLS13, nil
 	default:
-		return 0, fmt.Errorf("Invalid TLSMinVersion %v: expects 1.0, 1.1, 1.2, 1.3 or empty", version)
+		return 0, fmt.Errorf("invalid TLSMinVersion %v: expects 1.0, 1.1, 1.2, 1.3 or empty", version)
 	}
 }
 
@@ -226,7 +225,7 @@ func (s *Server) Start(ctx context.Context) error {
 		return err
 	}
 
-	cfg := &tls.Config{
+	cfg := &tls.Config{ //nolint:gosec
 		NextProtos:     []string{"h2"},
 		GetCertificate: certWatcher.GetCertificate,
 		MinVersion:     tlsMinVersion,
@@ -249,7 +248,7 @@ func (s *Server) Start(ctx context.Context) error {
 		cfg.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
-	listener, err := tls.Listen("tcp", net.JoinHostPort(s.Host, strconv.Itoa(int(s.Port))), cfg)
+	listener, err := tls.Listen("tcp", net.JoinHostPort(s.Host, strconv.Itoa(s.Port)), cfg)
 	if err != nil {
 		return err
 	}

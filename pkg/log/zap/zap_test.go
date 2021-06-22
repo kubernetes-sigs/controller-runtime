@@ -26,19 +26,19 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap/zapcore"
-	kapi "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// testStringer is a fmt.Stringer
+// testStringer is a fmt.Stringer.
 type testStringer struct{}
 
 func (testStringer) String() string {
 	return "value"
 }
 
-// fakeSyncWriter is a fake zap.SyncerWriter that lets us test if sync was called
+// fakeSyncWriter is a fake zap.SyncerWriter that lets us test if sync was called.
 type fakeSyncWriter bool
 
 func (w *fakeSyncWriter) Write(p []byte) (int, error) {
@@ -49,7 +49,7 @@ func (w *fakeSyncWriter) Sync() error {
 	return nil
 }
 
-// logInfo is the information for a particular fakeLogger message
+// logInfo is the information for a particular fakeLogger message.
 type logInfo struct {
 	name []string
 	tags []interface{}
@@ -114,8 +114,8 @@ func (f *fakeLogger) Info(msg string, vals ...interface{}) {
 	})
 }
 
-func (f *fakeLogger) Enabled() bool             { return true }
-func (f *fakeLogger) V(lvl int) logr.InfoLogger { return f }
+func (f *fakeLogger) Enabled() bool         { return true }
+func (f *fakeLogger) V(lvl int) logr.Logger { return f }
 
 var _ = Describe("Zap options setup", func() {
 	var opts *Options
@@ -148,7 +148,7 @@ var _ = Describe("Zap logger setup", func() {
 
 		defineTests := func() {
 			It("should log a standard namespaced Kubernetes object name and namespace", func() {
-				pod := &kapi.Pod{}
+				pod := &corev1.Pod{}
 				pod.Name = "some-pod"
 				pod.Namespace = "some-ns"
 				logger.Info("here's a kubernetes object", "thing", pod)
@@ -173,7 +173,7 @@ var _ = Describe("Zap logger setup", func() {
 			})
 
 			It("should log a standard non-namespaced Kubernetes object name", func() {
-				node := &kapi.Node{}
+				node := &corev1.Node{}
 				node.Name = "some-node"
 				logger.Info("here's a kubernetes object", "thing", node)
 
@@ -187,7 +187,7 @@ var _ = Describe("Zap logger setup", func() {
 			})
 
 			It("should log a standard Kubernetes object's kind, if set", func() {
-				node := &kapi.Node{}
+				node := &corev1.Node{}
 				node.Name = "some-node"
 				node.APIVersion = "v1"
 				node.Kind = "Node"
@@ -528,23 +528,23 @@ var _ = Describe("Zap log level flag options setup", func() {
 				By("setting up the logger")
 				logger := New(WriteTo(logOut), Level(zapcore.Level(-3)))
 				logger.V(3).Info("test 3") // Should be logged
-				Expect(string(logOut.Bytes())).To(ContainSubstring(`"msg":"test 3"`))
+				Expect(logOut.String()).To(ContainSubstring(`"msg":"test 3"`))
 				logOut.Truncate(0)
 				logger.V(1).Info("test 1") // Should be logged
-				Expect(string(logOut.Bytes())).To(ContainSubstring(`"msg":"test 1"`))
+				Expect(logOut.String()).To(ContainSubstring(`"msg":"test 1"`))
 				logOut.Truncate(0)
 				logger.V(4).Info("test 4") // Should not be logged
-				Expect(string(logOut.Bytes())).To(BeEmpty())
+				Expect(logOut.String()).To(BeEmpty())
 				logger.V(-3).Info("test -3") // Log a panic, since V(-1*N) for all N > 0 is not permitted.
-				Expect(string(logOut.Bytes())).To(ContainSubstring(`"level":"dpanic"`))
+				Expect(logOut.String()).To(ContainSubstring(`"level":"dpanic"`))
 			})
 			It("does not log with positive logr level", func() {
 				By("setting up the logger")
 				logger := New(WriteTo(logOut), Level(zapcore.Level(1)))
 				logger.V(1).Info("test 1")
-				Expect(string(logOut.Bytes())).To(BeEmpty())
+				Expect(logOut.String()).To(BeEmpty())
 				logger.V(3).Info("test 3")
-				Expect(string(logOut.Bytes())).To(BeEmpty())
+				Expect(logOut.String()).To(BeEmpty())
 			})
 		})
 	})

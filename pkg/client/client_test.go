@@ -3475,11 +3475,11 @@ type fakeReader struct {
 }
 
 func (f *fakeReader) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-	f.Called = f.Called + 1
+	f.Called++
 	return nil
 }
 
 func (f *fakeReader) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
-	f.Called = f.Called + 1
+	f.Called++
 	return nil
 }

@@ -125,9 +125,7 @@ func writeCerts(certPath, keyPath, ip string) error {
 		keyUsage |= x509.KeyUsageKeyEncipherment
 	}
 
-	var notBefore time.Time
-	notBefore = time.Now()
-
+	notBefore := time.Now()
 	notAfter := notBefore.Add(1 * time.Hour)
 
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
@@ -169,7 +167,7 @@ func writeCerts(certPath, keyPath, ip string) error {
 		return err
 	}
 
-	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600) //nolint:gosec
 	if err != nil {
 		return err
 	}
@@ -180,8 +178,5 @@ func writeCerts(certPath, keyPath, ip string) error {
 	if err := pem.Encode(keyOut, &pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}); err != nil {
 		return err
 	}
-	if err := keyOut.Close(); err != nil {
-		return err
-	}
-	return nil
+	return keyOut.Close()
 }

@@ -68,8 +68,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// verify the content type is accurate
-	contentType := r.Header.Get("Content-Type")
-	if contentType != "application/json" {
+	if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
 		err = fmt.Errorf("contentType=%s, expected application/json", contentType)
 		wh.log.Error(err, "unable to process a request with an unknown content type", "content type", contentType)
 		reviewResponse = Errored(err)
@@ -140,7 +139,6 @@ func (wh *Webhook) writeTokenResponse(w io.Writer, ar authenticationv1.TokenRevi
 	if log := wh.log; log.V(1).Enabled() {
 		log.V(1).Info("wrote response", "UID", res.UID, "authenticated", res.Status.Authenticated)
 	}
-	return
 }
 
 // unversionedTokenReview is used to decode both v1 and v1beta1 TokenReview types.

@@ -18,7 +18,6 @@ package envtest
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"time"
 
@@ -26,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -84,7 +83,7 @@ var _ = Describe("Test", func() {
 
 			Eventually(func() bool {
 				err = c.Create(context.TODO(), obj)
-				return errors.ReasonForError(err) == metav1.StatusReason("Always denied")
+				return apierrors.ReasonForError(err) == metav1.StatusReason("Always denied")
 			}, 1*time.Second).Should(BeTrue())
 
 			cancel()
@@ -117,5 +116,5 @@ type rejectingValidator struct {
 }
 
 func (v *rejectingValidator) Handle(_ context.Context, _ admission.Request) admission.Response {
-	return admission.Denied(fmt.Sprint("Always denied"))
+	return admission.Denied("Always denied")
 }

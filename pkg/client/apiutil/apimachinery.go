@@ -21,6 +21,7 @@ package apiutil
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -168,4 +169,26 @@ func createRestConfig(gvk schema.GroupVersionKind, isUnstructured bool, baseConf
 	}
 
 	return cfg
+}
+
+// BoolPointerFlagFunc returns a function to be associated with the custom bool flag func
+//
+// Example:
+//
+// var fooPtr *bool
+// flag.Func("foo", "foo usage", apiutil.BoolPointerFlagFunc(fooPtr))
+func BoolPointerFlagFunc(ptr *bool) func(flagVal string) error {
+	return func(flagVal string) error {
+		// flagVal is empty, consider flag as not passed
+		if flagVal == "" {
+			return nil
+		}
+
+		boolVal, err := strconv.ParseBool(flagVal)
+		if err != nil {
+			return err
+		}
+		ptr = &boolVal
+		return nil
+	}
 }

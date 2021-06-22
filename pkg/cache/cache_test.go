@@ -24,9 +24,9 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
-	kcorev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -46,20 +46,20 @@ const testNamespaceThree = "test-namespace-3"
 
 // TODO(community): Pull these helper functions into testenv.
 // Restart policy is included to allow indexing on that field.
-func createPodWithLabels(name, namespace string, restartPolicy kcorev1.RestartPolicy, labels map[string]string) client.Object {
+func createPodWithLabels(name, namespace string, restartPolicy corev1.RestartPolicy, labels map[string]string) client.Object {
 	three := int64(3)
 	if labels == nil {
 		labels = map[string]string{}
 	}
 	labels["test-label"] = name
-	pod := &kcorev1.Pod{
-		ObjectMeta: kmetav1.ObjectMeta{
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 			Labels:    labels,
 		},
-		Spec: kcorev1.PodSpec{
-			Containers:            []kcorev1.Container{{Name: "nginx", Image: "nginx"}},
+		Spec: corev1.PodSpec{
+			Containers:            []corev1.Container{{Name: "nginx", Image: "nginx"}},
 			RestartPolicy:         restartPolicy,
 			ActiveDeadlineSeconds: &three,
 		},
@@ -71,7 +71,7 @@ func createPodWithLabels(name, namespace string, restartPolicy kcorev1.RestartPo
 	return pod
 }
 
-func createPod(name, namespace string, restartPolicy kcorev1.RestartPolicy) client.Object {
+func createPod(name, namespace string, restartPolicy corev1.RestartPolicy) client.Object {
 	return createPodWithLabels(name, namespace, restartPolicy, nil)
 }
 
@@ -89,7 +89,6 @@ var _ = Describe("Multi-Namespace Informer Cache", func() {
 	CacheTest(cache.MultiNamespacedCacheBuilder([]string{testNamespaceOne, testNamespaceTwo, "default"}))
 })
 
-// nolint: gocyclo
 func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error)) {
 	Describe("Cache test", func() {
 		var (
@@ -120,12 +119,12 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			err = ensureNamespace(testNamespaceThree, cl)
 			Expect(err).NotTo(HaveOccurred())
 			// Includes restart policy since these objects are indexed on this field.
-			knownPod1 = createPod("test-pod-1", testNamespaceOne, kcorev1.RestartPolicyNever)
-			knownPod2 = createPod("test-pod-2", testNamespaceTwo, kcorev1.RestartPolicyAlways)
-			knownPod3 = createPodWithLabels("test-pod-3", testNamespaceTwo, kcorev1.RestartPolicyOnFailure, map[string]string{"common-label": "common"})
-			knownPod4 = createPodWithLabels("test-pod-4", testNamespaceThree, kcorev1.RestartPolicyNever, map[string]string{"common-label": "common"})
-			knownPod5 = createPod("test-pod-5", testNamespaceOne, kcorev1.RestartPolicyNever)
-			knownPod6 = createPod("test-pod-6", testNamespaceTwo, kcorev1.RestartPolicyAlways)
+			knownPod1 = createPod("test-pod-1", testNamespaceOne, corev1.RestartPolicyNever)
+			knownPod2 = createPod("test-pod-2", testNamespaceTwo, corev1.RestartPolicyAlways)
+			knownPod3 = createPodWithLabels("test-pod-3", testNamespaceTwo, corev1.RestartPolicyOnFailure, map[string]string{"common-label": "common"})
+			knownPod4 = createPodWithLabels("test-pod-4", testNamespaceThree, corev1.RestartPolicyNever, map[string]string{"common-label": "common"})
+			knownPod5 = createPod("test-pod-5", testNamespaceOne, corev1.RestartPolicyNever)
+			knownPod6 = createPod("test-pod-6", testNamespaceTwo, corev1.RestartPolicyAlways)
 
 			podGVK := schema.GroupVersionKind{
 				Kind:    "Pod",
@@ -165,18 +164,18 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 		Describe("as a Reader", func() {
 			Context("with structured objects", func() {
-
 				It("should be able to list objects that haven't been watched previously", func() {
 					By("listing all services in the cluster")
-					listObj := &kcorev1.ServiceList{}
+					listObj := &corev1.ServiceList{}
 					Expect(informerCache.List(context.Background(), listObj)).To(Succeed())
 
 					By("verifying that the returned list contains the Kubernetes service")
 					// NB: kubernetes default service is automatically created in testenv.
 					Expect(listObj.Items).NotTo(BeEmpty())
 					hasKubeService := false
-					for _, svc := range listObj.Items {
-						if isKubeService(&svc) {
+					for i := range listObj.Items {
+						svc := &listObj.Items[i]
+						if isKubeService(svc) {
 							hasKubeService = true
 							break
 						}
@@ -186,7 +185,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to get objects that haven't been watched previously", func() {
 					By("getting the Kubernetes service")
-					svc := &kcorev1.Service{}
+					svc := &corev1.Service{}
 					svcKey := client.ObjectKey{Namespace: "default", Name: "kubernetes"}
 					Expect(informerCache.Get(context.Background(), svcKey, svc)).To(Succeed())
 
@@ -198,7 +197,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				It("should support filtering by labels in a single namespace", func() {
 					By("listing pods with a particular label")
 					// NB: each pod has a "test-label": <pod-name>
-					out := kcorev1.PodList{}
+					out := corev1.PodList{}
 					Expect(informerCache.List(context.Background(), &out,
 						client.InNamespace(testNamespaceTwo),
 						client.MatchingLabels(map[string]string{"test-label": "test-pod-2"}))).To(Succeed())
@@ -212,12 +211,12 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should support filtering by labels from multiple namespaces", func() {
 					By("creating another pod with the same label but different namespace")
-					anotherPod := createPod("test-pod-2", testNamespaceOne, kcorev1.RestartPolicyAlways)
+					anotherPod := createPod("test-pod-2", testNamespaceOne, corev1.RestartPolicyAlways)
 					defer deletePod(anotherPod)
 
 					By("listing pods with a particular label")
 					// NB: each pod has a "test-label": <pod-name>
-					out := kcorev1.PodList{}
+					out := corev1.PodList{}
 					labels := map[string]string{"test-label": "test-pod-2"}
 					Expect(informerCache.List(context.Background(), &out, client.MatchingLabels(labels))).To(Succeed())
 
@@ -231,20 +230,20 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to list objects with GVK populated", func() {
 					By("listing pods")
-					out := &kcorev1.PodList{}
+					out := &corev1.PodList{}
 					Expect(informerCache.List(context.Background(), out)).To(Succeed())
 
 					By("verifying that the returned pods have GVK populated")
 					Expect(out.Items).NotTo(BeEmpty())
 					Expect(out.Items).Should(SatisfyAny(HaveLen(5), HaveLen(6)))
 					for _, p := range out.Items {
-						Expect(p.GroupVersionKind()).To(Equal(kcorev1.SchemeGroupVersion.WithKind("Pod")))
+						Expect(p.GroupVersionKind()).To(Equal(corev1.SchemeGroupVersion.WithKind("Pod")))
 					}
 				})
 
 				It("should be able to list objects by namespace", func() {
 					By("listing pods in test-namespace-1")
-					listObj := &kcorev1.PodList{}
+					listObj := &corev1.PodList{}
 					Expect(informerCache.List(context.Background(), listObj,
 						client.InNamespace(testNamespaceOne))).To(Succeed())
 
@@ -258,7 +257,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should deep copy the object unless told otherwise", func() {
 					By("retrieving a specific pod from the cache")
-					out := &kcorev1.Pod{}
+					out := &corev1.Pod{}
 					podKey := client.ObjectKey{Name: "test-pod-2", Namespace: testNamespaceTwo}
 					Expect(informerCache.Get(context.Background(), podKey, out)).To(Succeed())
 
@@ -274,18 +273,18 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should return an error if the object is not found", func() {
 					By("getting a service that does not exists")
-					svc := &kcorev1.Service{}
+					svc := &corev1.Service{}
 					svcKey := client.ObjectKey{Namespace: testNamespaceOne, Name: "unknown"}
 
 					By("verifying that an error is returned")
 					err := informerCache.Get(context.Background(), svcKey, svc)
 					Expect(err).To(HaveOccurred())
-					Expect(errors.IsNotFound(err)).To(BeTrue())
+					Expect(apierrors.IsNotFound(err)).To(BeTrue())
 				})
 
 				It("should return an error if getting object in unwatched namespace", func() {
 					By("getting a service that does not exists")
-					svc := &kcorev1.Service{}
+					svc := &corev1.Service{}
 					svcKey := client.ObjectKey{Namespace: "unknown", Name: "unknown"}
 
 					By("verifying that an error is returned")
@@ -298,18 +297,18 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					informerCacheCancel()
 
 					By("listing pods in test-namespace-1 with a cancelled context")
-					listObj := &kcorev1.PodList{}
+					listObj := &corev1.PodList{}
 					err := informerCache.List(informerCacheCtx, listObj, client.InNamespace(testNamespaceOne))
 
 					By("verifying that an error is returned")
 					Expect(err).To(HaveOccurred())
-					Expect(errors.IsTimeout(err)).To(BeTrue())
+					Expect(apierrors.IsTimeout(err)).To(BeTrue())
 				})
 
 				It("should set the Limit option and limit number of objects to Limit when List is called", func() {
 					opts := &client.ListOptions{Limit: int64(3)}
 					By("verifying that only Limit (3) number of objects are retrieved from the cache")
-					listObj := &kcorev1.PodList{}
+					listObj := &corev1.PodList{}
 					Expect(informerCache.List(context.Background(), listObj, opts)).To(Succeed())
 					Expect(listObj.Items).Should(HaveLen(3))
 				})
@@ -331,8 +330,9 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					// NB: kubernetes default service is automatically created in testenv.
 					Expect(listObj.Items).NotTo(BeEmpty())
 					hasKubeService := false
-					for _, svc := range listObj.Items {
-						if isKubeService(&svc) {
+					for i := range listObj.Items {
+						svc := &listObj.Items[i]
+						if isKubeService(svc) {
 							hasKubeService = true
 							break
 						}
@@ -378,7 +378,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should support filtering by labels from multiple namespaces", func() {
 					By("creating another pod with the same label but different namespace")
-					anotherPod := createPod("test-pod-2", testNamespaceOne, kcorev1.RestartPolicyAlways)
+					anotherPod := createPod("test-pod-2", testNamespaceOne, corev1.RestartPolicyAlways)
 					defer deletePod(anotherPod)
 
 					By("listing pods with a particular label")
@@ -399,7 +399,6 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					for _, actual := range out.Items {
 						Expect(actual.GetLabels()["test-label"]).To(Equal("test-pod-2"))
 					}
-
 				})
 
 				It("should be able to list objects by namespace", func() {
@@ -515,11 +514,11 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("verifying that an error is returned")
 					err := informerCache.Get(context.Background(), svcKey, svc)
 					Expect(err).To(HaveOccurred())
-					Expect(errors.IsNotFound(err)).To(BeTrue())
+					Expect(apierrors.IsNotFound(err)).To(BeTrue())
 				})
 				It("should return an error if getting object in unwatched namespace", func() {
 					By("getting a service that does not exists")
-					svc := &kcorev1.Service{}
+					svc := &corev1.Service{}
 					svcKey := client.ObjectKey{Namespace: "unknown", Name: "unknown"}
 
 					By("verifying that an error is returned")
@@ -540,7 +539,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(m.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
 
 					By("should be able to fetch cluster scoped resource")
-					node := &kcorev1.Node{}
+					node := &corev1.Node{}
 
 					By("verifying that getting the node works with an empty namespace")
 					key1 := client.ObjectKey{Namespace: "", Name: testNodeOne}
@@ -563,7 +562,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			Context("with metadata-only objects", func() {
 				It("should be able to list objects that haven't been watched previously", func() {
 					By("listing all services in the cluster")
-					listObj := &kmetav1.PartialObjectMetadataList{}
+					listObj := &metav1.PartialObjectMetadataList{}
 					listObj.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
@@ -576,8 +575,9 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					// NB: kubernetes default service is automatically created in testenv.
 					Expect(listObj.Items).NotTo(BeEmpty())
 					hasKubeService := false
-					for _, svc := range listObj.Items {
-						if isKubeService(&svc) {
+					for i := range listObj.Items {
+						svc := &listObj.Items[i]
+						if isKubeService(svc) {
 							hasKubeService = true
 							break
 						}
@@ -586,7 +586,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				})
 				It("should be able to get objects that haven't been watched previously", func() {
 					By("getting the Kubernetes service")
-					svc := &kmetav1.PartialObjectMetadata{}
+					svc := &metav1.PartialObjectMetadata{}
 					svc.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
@@ -603,7 +603,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				It("should support filtering by labels in a single namespace", func() {
 					By("listing pods with a particular label")
 					// NB: each pod has a "test-label": <pod-name>
-					out := kmetav1.PartialObjectMetadataList{}
+					out := metav1.PartialObjectMetadataList{}
 					out.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
@@ -623,12 +623,12 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should support filtering by labels from multiple namespaces", func() {
 					By("creating another pod with the same label but different namespace")
-					anotherPod := createPod("test-pod-2", testNamespaceOne, kcorev1.RestartPolicyAlways)
+					anotherPod := createPod("test-pod-2", testNamespaceOne, corev1.RestartPolicyAlways)
 					defer deletePod(anotherPod)
 
 					By("listing pods with a particular label")
 					// NB: each pod has a "test-label": <pod-name>
-					out := kmetav1.PartialObjectMetadataList{}
+					out := metav1.PartialObjectMetadataList{}
 					out.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
@@ -644,12 +644,11 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					for _, actual := range out.Items {
 						Expect(actual.GetLabels()["test-label"]).To(Equal("test-pod-2"))
 					}
-
 				})
 
 				It("should be able to list objects by namespace", func() {
 					By("listing pods in test-namespace-1")
-					listObj := &kmetav1.PartialObjectMetadataList{}
+					listObj := &metav1.PartialObjectMetadataList{}
 					listObj.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
@@ -679,7 +678,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(namespacedCache.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
 
 					By("listing pods in all namespaces")
-					out := &kmetav1.PartialObjectMetadataList{}
+					out := &metav1.PartialObjectMetadataList{}
 					out.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
@@ -694,7 +693,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						Expect(item.Namespace).To(Equal(testNamespaceOne))
 					}
 					By("listing all nodes - should still be able to list a cluster-scoped resource")
-					nodeList := &kmetav1.PartialObjectMetadataList{}
+					nodeList := &metav1.PartialObjectMetadataList{}
 					nodeList.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
@@ -706,7 +705,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(nodeList.Items).NotTo(BeEmpty())
 
 					By("getting a node - should still be able to get a cluster-scoped resource")
-					node := &kmetav1.PartialObjectMetadata{}
+					node := &metav1.PartialObjectMetadata{}
 					node.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
@@ -724,14 +723,14 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should deep copy the object unless told otherwise", func() {
 					By("retrieving a specific pod from the cache")
-					out := &kmetav1.PartialObjectMetadata{}
+					out := &metav1.PartialObjectMetadata{}
 					out.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
 						Kind:    "Pod",
 					})
-					uKnownPod2 := &kmetav1.PartialObjectMetadata{}
-					knownPod2.(*kcorev1.Pod).ObjectMeta.DeepCopyInto(&uKnownPod2.ObjectMeta)
+					uKnownPod2 := &metav1.PartialObjectMetadata{}
+					knownPod2.(*corev1.Pod).ObjectMeta.DeepCopyInto(&uKnownPod2.ObjectMeta)
 					uKnownPod2.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
@@ -753,7 +752,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should return an error if the object is not found", func() {
 					By("getting a service that does not exists")
-					svc := &kmetav1.PartialObjectMetadata{}
+					svc := &metav1.PartialObjectMetadata{}
 					svc.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
@@ -764,11 +763,11 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("verifying that an error is returned")
 					err := informerCache.Get(context.Background(), svcKey, svc)
 					Expect(err).To(HaveOccurred())
-					Expect(errors.IsNotFound(err)).To(BeTrue())
+					Expect(apierrors.IsNotFound(err)).To(BeTrue())
 				})
 				It("should return an error if getting object in unwatched namespace", func() {
 					By("getting a service that does not exists")
-					svc := &kcorev1.Service{}
+					svc := &corev1.Service{}
 					svcKey := client.ObjectKey{Namespace: "unknown", Name: "unknown"}
 
 					By("verifying that an error is returned")
@@ -786,7 +785,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				builder := cache.BuilderWithOptions(
 					cache.Options{
 						SelectorsByObject: cache.SelectorsByObject{
-							&kcorev1.Pod{}: {
+							&corev1.Pod{}: {
 								Label: labels.Set(tc.labelSelectors).AsSelector(),
 								Field: fields.Set(tc.fieldSelectors).AsSelector(),
 							},
@@ -804,9 +803,9 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				Expect(informer.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
 
 				By("Checking with structured")
-				obtainedStructuredPodList := kcorev1.PodList{}
+				obtainedStructuredPodList := corev1.PodList{}
 				Expect(informer.List(context.Background(), &obtainedStructuredPodList)).To(Succeed())
-				Expect(obtainedStructuredPodList.Items).Should(WithTransform(func(pods []kcorev1.Pod) []string {
+				Expect(obtainedStructuredPodList.Items).Should(WithTransform(func(pods []corev1.Pod) []string {
 					obtainedPodNames := []string{}
 					for _, pod := range pods {
 						obtainedPodNames = append(obtainedPodNames, pod.Name)
@@ -832,7 +831,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				}, ConsistOf(tc.expectedPods)))
 
 				By("Checking with metadata")
-				obtainedMetadataPodList := kmetav1.PartialObjectMetadataList{}
+				obtainedMetadataPodList := metav1.PartialObjectMetadataList{}
 				obtainedMetadataPodList.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "",
 					Version: "v1",
@@ -840,7 +839,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				})
 				err = informer.List(context.Background(), &obtainedMetadataPodList)
 				Expect(err).To(Succeed())
-				Expect(obtainedMetadataPodList.Items).Should(WithTransform(func(pods []kmetav1.PartialObjectMetadata) []string {
+				Expect(obtainedMetadataPodList.Items).Should(WithTransform(func(pods []metav1.PartialObjectMetadata) []string {
 					obtainedPodNames := []string{}
 					for _, pod := range pods {
 						obtainedPodNames = append(obtainedPodNames, pod.Name)
@@ -888,13 +887,13 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			Context("with structured objects", func() {
 				It("should be able to get informer for the object", func(done Done) {
 					By("getting a shared index informer for a pod")
-					pod := &kcorev1.Pod{
-						ObjectMeta: kmetav1.ObjectMeta{
+					pod := &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
 							Name:      "informer-obj",
 							Namespace: "default",
 						},
-						Spec: kcorev1.PodSpec{
-							Containers: []kcorev1.Container{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
 								{
 									Name:  "nginx",
 									Image: "nginx",
@@ -942,13 +941,13 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("adding an object")
 					cl, err := client.New(cfg, client.Options{})
 					Expect(err).NotTo(HaveOccurred())
-					pod := &kcorev1.Pod{
-						ObjectMeta: kmetav1.ObjectMeta{
+					pod := &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
 							Name:      "informer-gvk",
 							Namespace: "default",
 						},
-						Spec: kcorev1.PodSpec{
-							Containers: []kcorev1.Container{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
 								{
 									Name:  "nginx",
 									Image: "nginx",
@@ -969,9 +968,9 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(err).NotTo(HaveOccurred())
 
 					By("indexing the restartPolicy field of the Pod object before starting")
-					pod := &kcorev1.Pod{}
+					pod := &corev1.Pod{}
 					indexFunc := func(obj client.Object) []string {
-						return []string{string(obj.(*kcorev1.Pod).Spec.RestartPolicy)}
+						return []string{string(obj.(*corev1.Pod).Spec.RestartPolicy)}
 					}
 					Expect(informer.IndexField(context.TODO(), pod, "spec.restartPolicy", indexFunc)).To(Succeed())
 
@@ -983,7 +982,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(informer.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
 
 					By("listing Pods with restartPolicyOnFailure")
-					listObj := &kcorev1.PodList{}
+					listObj := &corev1.PodList{}
 					Expect(informer.List(context.Background(), listObj,
 						client.MatchingFields{"spec.restartPolicy": "OnFailure"})).To(Succeed())
 					By("verifying that the returned pods have correct restart policy")
@@ -998,13 +997,13 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					informerCacheCancel()
 
 					By("getting a shared index informer for a pod with a cancelled context")
-					pod := &kcorev1.Pod{
-						ObjectMeta: kmetav1.ObjectMeta{
+					pod := &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
 							Name:      "informer-obj",
 							Namespace: "default",
 						},
-						Spec: kcorev1.PodSpec{
-							Containers: []kcorev1.Container{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
 								{
 									Name:  "nginx",
 									Image: "nginx",
@@ -1015,7 +1014,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					sii, err := informerCache.GetInformer(informerCacheCtx, pod)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
-					Expect(errors.IsTimeout(err)).To(BeTrue())
+					Expect(apierrors.IsTimeout(err)).To(BeTrue())
 				})
 
 				It("should allow getting an informer by group/version/kind to be cancelled", func() {
@@ -1027,7 +1026,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					sii, err := informerCache.GetInformerForKind(informerCacheCtx, gvk)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
-					Expect(errors.IsTimeout(err)).To(BeTrue())
+					Expect(apierrors.IsTimeout(err)).To(BeTrue())
 				})
 			})
 			Context("with unstructured objects", func() {
@@ -1142,20 +1141,20 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					sii, err := informerCache.GetInformer(informerCacheCtx, pod)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
-					Expect(errors.IsTimeout(err)).To(BeTrue())
+					Expect(apierrors.IsTimeout(err)).To(BeTrue())
 				})
 			})
 			Context("with metadata-only objects", func() {
 				It("should be able to get informer for the object", func(done Done) {
 					By("getting a shared index informer for a pod")
 
-					pod := &kcorev1.Pod{
-						ObjectMeta: kmetav1.ObjectMeta{
+					pod := &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
 							Name:      "informer-obj",
 							Namespace: "default",
 						},
-						Spec: kcorev1.PodSpec{
-							Containers: []kcorev1.Container{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
 								{
 									Name:  "nginx",
 									Image: "nginx",
@@ -1164,7 +1163,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						},
 					}
 
-					podMeta := &kmetav1.PartialObjectMetadata{}
+					podMeta := &metav1.PartialObjectMetadata{}
 					pod.ObjectMeta.DeepCopyInto(&podMeta.ObjectMeta)
 					podMeta.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
@@ -1203,14 +1202,14 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(err).NotTo(HaveOccurred())
 
 					By("indexing the restartPolicy field of the Pod object before starting")
-					pod := &kmetav1.PartialObjectMetadata{}
+					pod := &metav1.PartialObjectMetadata{}
 					pod.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
 						Kind:    "Pod",
 					})
 					indexFunc := func(obj client.Object) []string {
-						metadata := obj.(*kmetav1.PartialObjectMetadata)
+						metadata := obj.(*metav1.PartialObjectMetadata)
 						return []string{metadata.Labels["test-label"]}
 					}
 					Expect(informer.IndexField(context.TODO(), pod, "metadata.labels.test-label", indexFunc)).To(Succeed())
@@ -1223,7 +1222,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(informer.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
 
 					By("listing Pods with restartPolicyOnFailure")
-					listObj := &kmetav1.PartialObjectMetadataList{}
+					listObj := &metav1.PartialObjectMetadataList{}
 					gvk := schema.GroupVersionKind{
 						Group:   "",
 						Version: "v1",
@@ -1257,7 +1256,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					cancel()
 
 					By("getting a shared index informer for a pod with a cancelled context")
-					pod := &kmetav1.PartialObjectMetadata{}
+					pod := &metav1.PartialObjectMetadata{}
 					pod.SetName("informer-obj2")
 					pod.SetNamespace("default")
 					pod.SetGroupVersionKind(schema.GroupVersionKind{
@@ -1268,50 +1267,50 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					sii, err := informerCache.GetInformer(ctx, pod)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
-					Expect(errors.IsTimeout(err)).To(BeTrue())
+					Expect(apierrors.IsTimeout(err)).To(BeTrue())
 				})
 			})
 		})
 	})
 }
 
-// ensureNamespace installs namespace of a given name if not exists
+// ensureNamespace installs namespace of a given name if not exists.
 func ensureNamespace(namespace string, client client.Client) error {
-	ns := kcorev1.Namespace{
-		ObjectMeta: kmetav1.ObjectMeta{
+	ns := corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
 			Name: namespace,
 		},
-		TypeMeta: kmetav1.TypeMeta{
+		TypeMeta: metav1.TypeMeta{
 			Kind:       "Namespace",
 			APIVersion: "v1",
 		},
 	}
 	err := client.Create(context.TODO(), &ns)
-	if errors.IsAlreadyExists(err) {
+	if apierrors.IsAlreadyExists(err) {
 		return nil
 	}
 	return err
 }
 
 func ensureNode(name string, client client.Client) error {
-	node := kcorev1.Node{
-		ObjectMeta: kmetav1.ObjectMeta{
+	node := corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		TypeMeta: kmetav1.TypeMeta{
+		TypeMeta: metav1.TypeMeta{
 			Kind:       "Node",
 			APIVersion: "v1",
 		},
 	}
 	err := client.Create(context.TODO(), &node)
-	if errors.IsAlreadyExists(err) {
+	if apierrors.IsAlreadyExists(err) {
 		return nil
 	}
 	return err
 }
 
 //nolint:interfacer
-func isKubeService(svc kmetav1.Object) bool {
+func isKubeService(svc metav1.Object) bool {
 	// grumble grumble linters grumble grumble
 	return svc.GetNamespace() == "default" && svc.GetName() == "kubernetes"
 }

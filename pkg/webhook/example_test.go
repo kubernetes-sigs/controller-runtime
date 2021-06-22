@@ -86,7 +86,7 @@ func Example() {
 //
 // Note that this assumes and requires a valid TLS
 // cert and key at the default locations
-// tls.crt and tls.key
+// tls.crt and tls.key.
 func ExampleServer_StartStandalone() {
 	// Create a webhook server
 	hookServer := &Server{
@@ -151,5 +151,4 @@ func ExampleStandaloneWebhook() {
 	if err := http.ListenAndServe(port, mux); err != nil {
 		panic(err)
 	}
-
 }

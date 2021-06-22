@@ -17,7 +17,7 @@ import (
 	"context"
 	"fmt"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -34,7 +34,7 @@ type Result struct {
 	StatusUpdated bool
 }
 
-// NewFinalizers returns the Finalizers interface
+// NewFinalizers returns the Finalizers interface.
 func NewFinalizers() Finalizers {
 	return finalizers{}
 }
@@ -75,5 +75,5 @@ func (f finalizers) Finalize(ctx context.Context, obj client.Object) (Result, er
 			}
 		}
 	}
-	return res, utilerrors.NewAggregate(errList)
+	return res, kerrors.NewAggregate(errList)
 }

@@ -819,7 +819,7 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					defer runnableDoneFunc()
 					<-ctx.Done()
-					time.Sleep(300 * time.Millisecond) //slow closure simulation
+					time.Sleep(300 * time.Millisecond) // slow closure simulation
 					return nil
 				}))).To(Succeed())
 

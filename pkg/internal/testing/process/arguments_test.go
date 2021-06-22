@@ -110,11 +110,11 @@ var _ = Describe("Arguments Templates", func() {
 			data = TemplateDefaults{
 				Data: map[string]string{"sharpness": "extra"},
 				Defaults: map[string][]string{
-					"cracker": []string{"ritz"},
-					"pickle":  []string{"kosher-dill"},
+					"cracker": {"ritz"},
+					"pickle":  {"kosher-dill"},
 				},
 				MinimalDefaults: map[string][]string{
-					"pickle": []string{"kosher-dill"},
+					"pickle": {"kosher-dill"},
 				},
 			}
 		)
@@ -300,8 +300,8 @@ var _ = Describe("Arguments", func() {
 	Context("when rendering flags", func() {
 		It("should not render defaults for disabled flags", func() {
 			defs := map[string][]string{
-				"some-key":  []string{"val1", "val2"},
-				"other-key": []string{"val"},
+				"some-key":  {"val1", "val2"},
+				"other-key": {"val"},
 			}
 			args := EmptyArguments().
 				Disable("some-key")
@@ -323,7 +323,7 @@ var _ = Describe("Arguments", func() {
 
 		It("should read from defaults if the user hasn't set a value for a flag", func() {
 			defs := map[string][]string{
-				"some-key": []string{"val1", "val2"},
+				"some-key": {"val1", "val2"},
 			}
 			args := EmptyArguments().
 				Append("other-key", "vala", "valb")
@@ -332,7 +332,7 @@ var _ = Describe("Arguments", func() {
 
 		It("should not render defaults if the user has set a value for a flag", func() {
 			defs := map[string][]string{
-				"some-key": []string{"val1", "val2"},
+				"some-key": {"val1", "val2"},
 			}
 			args := EmptyArguments().
 				Set("some-key", "vala")
@@ -348,5 +348,5 @@ func (a commaArg) Get(defs []string) []string {
 	return []string{strings.Join(defs, ",") + "," + strings.Join(a, ",")}
 }
 func (a commaArg) Append(vals ...string) Arg {
-	return commaArg(append(a, vals...))
+	return commaArg(append(a, vals...)) //nolint:unconvert
 }

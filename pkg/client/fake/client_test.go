@@ -29,7 +29,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -282,7 +281,7 @@ var _ = Describe("Fake client", func() {
 		It("should support filtering by label existence", func() {
 			By("Listing deployments with a particular label")
 			list := &appsv1.DeploymentList{}
-			err := cl.List(nil, list, client.InNamespace("ns1"),
+			err := cl.List(context.Background(), list, client.InNamespace("ns1"),
 				client.HasLabels{"test-label"})
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(HaveLen(1))
@@ -385,12 +384,12 @@ var _ = Describe("Fake client", func() {
 					},
 				},
 			}
-			err := cl.Create(nil, newcm)
+			err := cl.Create(context.Background(), newcm)
 			Expect(err).To(BeNil())
 
 			By("Listing configmaps with a particular label")
 			list := &corev1.ConfigMapList{}
-			err = cl.List(nil, list, client.InNamespace("ns2"),
+			err = cl.List(context.Background(), list, client.InNamespace("ns2"),
 				client.MatchingLabels(map[string]string{
 					"test-label": "label-value",
 				}))
@@ -715,7 +714,7 @@ var _ = Describe("Fake client", func() {
 				obj := &corev1.ConfigMap{}
 				err = cl.Get(context.Background(), namespacedName, obj)
 				Expect(err).To(HaveOccurred())
-				Expect(errors.IsNotFound(err)).To(BeTrue())
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
 				Expect(obj).NotTo(Equal(newcm))
 			})
 

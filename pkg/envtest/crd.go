@@ -47,7 +47,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// CRDInstallOptions are the options for installing CRDs
+// CRDInstallOptions are the options for installing CRDs.
 type CRDInstallOptions struct {
 	// Scheme is used to determine if conversion webhooks should be enabled
 	// for a particular CRD / object.
@@ -89,7 +89,7 @@ type CRDInstallOptions struct {
 const defaultPollInterval = 100 * time.Millisecond
 const defaultMaxWait = 10 * time.Second
 
-// InstallCRDs installs a collection of CRDs into a cluster by reading the crd yaml files from a directory
+// InstallCRDs installs a collection of CRDs into a cluster by reading the crd yaml files from a directory.
 func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]client.Object, error) {
 	defaultCRDOptions(&options)
 
@@ -115,7 +115,7 @@ func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]client.Objec
 	return options.CRDs, nil
 }
 
-// readCRDFiles reads the directories of CRDs in options.Paths and adds the CRD structs to options.CRDs
+// readCRDFiles reads the directories of CRDs in options.Paths and adds the CRD structs to options.CRDs.
 func readCRDFiles(options *CRDInstallOptions) error {
 	if len(options.Paths) > 0 {
 		crdList, err := renderCRDs(options)
@@ -128,7 +128,7 @@ func readCRDFiles(options *CRDInstallOptions) error {
 	return nil
 }
 
-// defaultCRDOptions sets the default values for CRDs
+// defaultCRDOptions sets the default values for CRDs.
 func defaultCRDOptions(o *CRDInstallOptions) {
 	if o.Scheme == nil {
 		o.Scheme = scheme.Scheme
@@ -141,7 +141,7 @@ func defaultCRDOptions(o *CRDInstallOptions) {
 	}
 }
 
-// WaitForCRDs waits for the CRDs to appear in discovery
+// WaitForCRDs waits for the CRDs to appear in discovery.
 func WaitForCRDs(config *rest.Config, crds []client.Object, options CRDInstallOptions) error {
 	// Add each CRD to a map of GroupVersion to Resource
 	waitingFor := map[schema.GroupVersion]*sets.String{}
@@ -204,7 +204,7 @@ func WaitForCRDs(config *rest.Config, crds []client.Object, options CRDInstallOp
 	return wait.PollImmediate(options.PollInterval, options.MaxTime, p.poll)
 }
 
-// poller checks if all the resources have been found in discovery, and returns false if not
+// poller checks if all the resources have been found in discovery, and returns false if not.
 type poller struct {
 	// config is used to get discovery
 	config *rest.Config
@@ -213,7 +213,7 @@ type poller struct {
 	waitingFor map[schema.GroupVersion]*sets.String
 }
 
-// poll checks if all the resources have been found in discovery, and returns false if not
+// poll checks if all the resources have been found in discovery, and returns false if not.
 func (p *poller) poll() (done bool, err error) {
 	// Create a new clientset to avoid any client caching of discovery
 	cs, err := clientset.NewForConfig(p.config)
@@ -233,7 +233,7 @@ func (p *poller) poll() (done bool, err error) {
 		// TODO: Maybe the controller-runtime client should be able to do this...
 		resourceList, err := cs.Discovery().ServerResourcesForGroupVersion(gv.Group + "/" + gv.Version)
 		if err != nil {
-			return false, nil
+			return false, nil //nolint:nilerr
 		}
 
 		// Remove each found resource from the resources set that we are waiting for
@@ -249,9 +249,8 @@ func (p *poller) poll() (done bool, err error) {
 	return allFound, nil
 }
 
-// UninstallCRDs uninstalls a collection of CRDs by reading the crd yaml files from a directory
+// UninstallCRDs uninstalls a collection of CRDs by reading the crd yaml files from a directory.
 func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
-
 	// Read the CRD yamls into options.CRDs
 	if err := readCRDFiles(&options); err != nil {
 		return err
@@ -277,7 +276,7 @@ func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
 	return nil
 }
 
-// CreateCRDs creates the CRDs
+// CreateCRDs creates the CRDs.
 func CreateCRDs(config *rest.Config, crds []client.Object) error {
 	cs, err := client.New(config, client.Options{})
 	if err != nil {
@@ -340,10 +339,8 @@ func renderCRDs(options *CRDInstallOptions) ([]client.Object, error) {
 
 		if !info.IsDir() {
 			filePath, files = filepath.Dir(path), []os.FileInfo{info}
-		} else {
-			if files, err = ioutil.ReadDir(path); err != nil {
-				return nil, err
-			}
+		} else if files, err = ioutil.ReadDir(path); err != nil {
+			return nil, err
 		}
 
 		log.V(1).Info("reading CRDs from path", "path", path)
@@ -364,7 +361,7 @@ func renderCRDs(options *CRDInstallOptions) ([]client.Object, error) {
 	}
 
 	// Converting map to a list to return
-	var res []client.Object
+	res := []client.Object{}
 	for _, obj := range crds {
 		res = append(res, obj)
 	}
@@ -557,7 +554,7 @@ func modifyConversionWebhooks(crds []client.Object, scheme *runtime.Scheme, webh
 	return nil
 }
 
-// readCRDs reads the CRDs from files and Unmarshals them into structs
+// readCRDs reads the CRDs from files and Unmarshals them into structs.
 func readCRDs(basePath string, files []os.FileInfo) ([]*unstructured.Unstructured, error) {
 	var crds []*unstructured.Unstructured
 
@@ -603,9 +600,9 @@ func readCRDs(basePath string, files []os.FileInfo) ([]*unstructured.Unstructure
 	return crds, nil
 }
 
-// readDocuments reads documents from file
+// readDocuments reads documents from file.
 func readDocuments(fp string) ([][]byte, error) {
-	b, err := ioutil.ReadFile(fp)
+	b, err := ioutil.ReadFile(fp) //nolint:gosec
 	if err != nil {
 		return nil, err
 	}

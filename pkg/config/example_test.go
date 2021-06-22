@@ -37,24 +37,22 @@ func init() {
 func ExampleFile() {
 	// This will load a config file from ./config.yaml
 	loader := config.File()
-	_, err := loader.Complete()
-	if err != nil {
+	if _, err := loader.Complete(); err != nil {
 		fmt.Println("failed to load config")
 		os.Exit(1)
 	}
 }
 
-// This example will load the file from a custom path
+// This example will load the file from a custom path.
 func ExampleDeferredFileLoader_atPath() {
 	loader := config.File().AtPath("/var/run/controller-runtime/config.yaml")
-	_, err := loader.Complete()
-	if err != nil {
+	if _, err := loader.Complete(); err != nil {
 		fmt.Println("failed to load config")
 		os.Exit(1)
 	}
 }
 
-// This example sets up loader with a custom scheme
+// This example sets up loader with a custom scheme.
 func ExampleDeferredFileLoader_injectScheme() {
 	loader := config.File()
 	err := loader.InjectScheme(scheme)
@@ -70,7 +68,7 @@ func ExampleDeferredFileLoader_injectScheme() {
 	}
 }
 
-// This example sets up the loader with a custom scheme and custom type
+// This example sets up the loader with a custom scheme and custom type.
 func ExampleDeferredFileLoader_ofKind() {
 	loader := config.File().OfKind(&v1alpha1.CustomControllerManagerConfiguration{})
 	err := loader.InjectScheme(scheme)

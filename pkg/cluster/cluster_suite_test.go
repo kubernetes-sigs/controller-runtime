@@ -40,7 +40,7 @@ var testenv *envtest.Environment
 var cfg *rest.Config
 var clientset *kubernetes.Clientset
 
-// clientTransport is used to force-close keep-alives in tests that check for leaks
+// clientTransport is used to force-close keep-alives in tests that check for leaks.
 var clientTransport *http.Transport
 
 var _ = BeforeSuite(func(done Done) {

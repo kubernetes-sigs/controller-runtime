@@ -130,7 +130,7 @@ type ReplicaSetReconciler struct {
 //
 // * Read the ReplicaSet
 // * Read the Pods
-// * Set a Label on the ReplicaSet with the Pod count
+// * Set a Label on the ReplicaSet with the Pod count.
 func (a *ReplicaSetReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	// Read the ReplicaSet
 	rs := &appsv1.ReplicaSet{}

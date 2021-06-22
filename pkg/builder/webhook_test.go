@@ -114,7 +114,7 @@ func runTests(admissionReviewVersion string) {
 		By("sending a request to a mutating webhook path")
 		path := generateMutatePath(testDefaulterGVK)
 		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		req.Header.Add("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		svr.WebhookMux.ServeHTTP(w, req)
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
@@ -128,7 +128,7 @@ func runTests(admissionReviewVersion string) {
 		_, err = reader.Seek(0, 0)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		req.Header.Add("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		svr.WebhookMux.ServeHTTP(w, req)
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
@@ -190,7 +190,7 @@ func runTests(admissionReviewVersion string) {
 		By("sending a request to a mutating webhook path that doesn't exist")
 		path := generateMutatePath(testValidatorGVK)
 		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		req.Header.Add("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		svr.WebhookMux.ServeHTTP(w, req)
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
@@ -200,7 +200,7 @@ func runTests(admissionReviewVersion string) {
 		_, err = reader.Seek(0, 0)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		req.Header.Add("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		svr.WebhookMux.ServeHTTP(w, req)
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
@@ -263,7 +263,7 @@ func runTests(admissionReviewVersion string) {
 		By("sending a request to a mutating webhook path")
 		path := generateMutatePath(testDefaultValidatorGVK)
 		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		req.Header.Add("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		svr.WebhookMux.ServeHTTP(w, req)
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
@@ -277,7 +277,7 @@ func runTests(admissionReviewVersion string) {
 		_, err = reader.Seek(0, 0)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		req.Header.Add("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		svr.WebhookMux.ServeHTTP(w, req)
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
@@ -341,7 +341,7 @@ func runTests(admissionReviewVersion string) {
 		By("sending a request to a validating webhook path to check for failed delete")
 		path := generateValidatePath(testValidatorGVK)
 		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		req.Header.Add("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		svr.WebhookMux.ServeHTTP(w, req)
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
@@ -375,7 +375,7 @@ func runTests(admissionReviewVersion string) {
 		By("sending a request to a validating webhook path with correct request")
 		path = generateValidatePath(testValidatorGVK)
 		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
-		req.Header.Add(http.CanonicalHeaderKey("Content-Type"), "application/json")
+		req.Header.Add("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		svr.WebhookMux.ServeHTTP(w, req)
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
@@ -385,7 +385,7 @@ func runTests(admissionReviewVersion string) {
 	})
 }
 
-// TestDefaulter
+// TestDefaulter.
 var _ runtime.Object = &TestDefaulter{}
 
 type TestDefaulter struct {
@@ -420,7 +420,7 @@ func (d *TestDefaulter) Default() {
 	}
 }
 
-// TestValidator
+// TestValidator.
 var _ runtime.Object = &TestValidator{}
 
 type TestValidator struct {
@@ -477,7 +477,7 @@ func (v *TestValidator) ValidateDelete() error {
 	return nil
 }
 
-// TestDefaultValidator
+// TestDefaultValidator.
 var _ runtime.Object = &TestDefaultValidator{}
 
 type TestDefaultValidator struct {

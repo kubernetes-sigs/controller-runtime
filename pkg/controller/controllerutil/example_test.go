@@ -31,7 +31,7 @@ var (
 	log = logf.Log.WithName("controllerutil-examples")
 )
 
-// This example creates or updates an existing deployment
+// This example creates or updates an existing deployment.
 func ExampleCreateOrUpdate() {
 	// c is client.Client
 
@@ -39,7 +39,6 @@ func ExampleCreateOrUpdate() {
 	deploy := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"}}
 
 	op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, func() error {
-
 		// Deployment selector is immutable so we set this value only if
 		// a new object is going to be created
 		if deploy.ObjectMeta.CreationTimestamp.IsZero() {

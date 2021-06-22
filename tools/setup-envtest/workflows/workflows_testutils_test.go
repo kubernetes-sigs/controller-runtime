@@ -7,7 +7,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec
 	"encoding/base64"
 	"math/rand"
 	"net/http"
@@ -62,7 +62,7 @@ var (
 
 	remoteVersions = makeContents(remoteNames)
 
-	// keep this sorted
+	// keep this sorted.
 	localVersions = []versions.Set{
 		{Version: ver(1, 17, 9), Platforms: []versions.PlatformItem{
 			{Platform: versions.Platform{OS: "linux", Arch: "amd64"}},
@@ -113,8 +113,8 @@ func makeContents(names []string) []item {
 	res := make([]item, len(names))
 	for i, name := range names {
 		var chunk [1024 * 48]byte // 1.5 times our chunk read size in GetVersion
-		copy(chunk[:], []byte(name))
-		if _, err := rand.Read(chunk[len(name):]); err != nil {
+		copy(chunk[:], name)
+		if _, err := rand.Read(chunk[len(name):]); err != nil { //nolint:gosec
 			panic(err)
 		}
 		res[i] = verWith(name, chunk[:])
@@ -144,7 +144,7 @@ func verWith(name string, contents []byte) item {
 		meta:     bucketObject{Name: name},
 		contents: out.Bytes(),
 	}
-	hash := md5.Sum(res.contents)
+	hash := md5.Sum(res.contents) //nolint:gosec
 	res.meta.Hash = base64.StdEncoding.EncodeToString(hash[:])
 	return res
 }

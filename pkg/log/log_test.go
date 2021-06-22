@@ -27,7 +27,7 @@ import (
 
 var _ logr.Logger = &DelegatingLogger{}
 
-// logInfo is the information for a particular fakeLogger message
+// logInfo is the information for a particular fakeLogger message.
 type logInfo struct {
 	name []string
 	tags []interface{}
@@ -90,8 +90,8 @@ func (f *fakeLogger) Info(msg string, vals ...interface{}) {
 	})
 }
 
-func (f *fakeLogger) Enabled() bool             { return true }
-func (f *fakeLogger) V(lvl int) logr.InfoLogger { return f }
+func (f *fakeLogger) Enabled() bool         { return true }
+func (f *fakeLogger) V(lvl int) logr.Logger { return f }
 
 var _ = Describe("logging", func() {
 

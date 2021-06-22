@@ -32,35 +32,35 @@ type FakeValidator struct {
 	GVKToReturn schema.GroupVersionKind
 }
 
-// ValidateCreate implements admission.Validator
+// ValidateCreate implements admission.Validator.
 func (v *FakeValidator) ValidateCreate() error {
 	return v.ErrorToReturn
 }
 
-// ValidateUpdate implements admission.Validator
+// ValidateUpdate implements admission.Validator.
 func (v *FakeValidator) ValidateUpdate(old runtime.Object) error {
 	return v.ErrorToReturn
 }
 
-// ValidateDelete implements admission.Validator
+// ValidateDelete implements admission.Validator.
 func (v *FakeValidator) ValidateDelete() error {
 	return v.ErrorToReturn
 }
 
-// GetObjectKind implements admission.Validator
+// GetObjectKind implements admission.Validator.
 func (v *FakeValidator) GetObjectKind() schema.ObjectKind { return v }
 
-// DeepCopyObject implements admission.Validator
+// DeepCopyObject implements admission.Validator.
 func (v *FakeValidator) DeepCopyObject() runtime.Object {
 	return &FakeValidator{ErrorToReturn: v.ErrorToReturn, GVKToReturn: v.GVKToReturn}
 }
 
-// GroupVersionKind implements admission.Validator
+// GroupVersionKind implements admission.Validator.
 func (v *FakeValidator) GroupVersionKind() schema.GroupVersionKind {
 	return v.GVKToReturn
 }
 
-// SetGroupVersionKind implements admission.Validator
+// SetGroupVersionKind implements admission.Validator.
 func (v *FakeValidator) SetGroupVersionKind(gvk schema.GroupVersionKind) {
 	v.GVKToReturn = gvk
 }

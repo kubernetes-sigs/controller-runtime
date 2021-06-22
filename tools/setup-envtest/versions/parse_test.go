@@ -24,15 +24,15 @@ import (
 	. "sigs.k8s.io/controller-runtime/tools/setup-envtest/versions"
 )
 
-func patchSel(x, y int, z PointVersion) PatchSelector { //nolint unparam
+func patchSel(x, y int, z PointVersion) PatchSelector {
 	return PatchSelector{Major: x, Minor: y, Patch: z}
 }
 
-func patchSpec(x, y int, z PointVersion) Spec { //nolint unparam
+func patchSpec(x, y int, z PointVersion) Spec {
 	return Spec{Selector: patchSel(x, y, z)}
 }
 
-func tildeSel(x, y, z int) TildeSelector { //nolint unparam
+func tildeSel(x, y, z int) TildeSelector {
 	return TildeSelector{
 		Concrete: Concrete{
 			Major: x, Minor: y, Patch: z,
@@ -40,16 +40,16 @@ func tildeSel(x, y, z int) TildeSelector { //nolint unparam
 	}
 }
 
-func tildeSpec(x, y, z int) Spec { //nolint unparam
+func tildeSpec(x, y, z int) Spec {
 	return Spec{Selector: tildeSel(x, y, z)}
 }
-func ltSpec(x, y int, z PointVersion) Spec { //nolint unparam
+func ltSpec(x, y int, z PointVersion) Spec {
 	// this just keeps the table a bit shorter
 	return Spec{Selector: LessThanSelector{
 		PatchSelector: patchSel(x, y, z),
 	}}
 }
-func lteSpec(x, y int, z PointVersion) Spec { //nolint unparam
+func lteSpec(x, y int, z PointVersion) Spec {
 	// this just keeps the table a bit shorter
 	return Spec{Selector: LessThanSelector{
 		PatchSelector: patchSel(x, y, z),

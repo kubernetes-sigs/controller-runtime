@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/admissiontest"
 
 	admissionv1 "k8s.io/api/admission/v1"
-	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -98,7 +98,7 @@ var _ = Describe("validatingHandler", func() {
 
 	Context("when dealing with Status errors", func() {
 
-		expectedError := &apierrs.StatusError{
+		expectedError := &apierrors.StatusError{
 			ErrStatus: metav1.Status{
 				Message: "some message",
 				Code:    http.StatusUnprocessableEntity,

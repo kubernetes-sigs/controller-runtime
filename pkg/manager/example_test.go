@@ -89,11 +89,10 @@ func ExampleManager_start() {
 }
 
 // This example will populate Options from a custom config file
-// using defaults
+// using defaults.
 func ExampleOptions_andFrom() {
 	opts := manager.Options{}
-	_, err := opts.AndFrom(conf.File())
-	if err != nil {
+	if _, err := opts.AndFrom(conf.File()); err != nil {
 		log.Error(err, "unable to load config")
 		os.Exit(1)
 	}
@@ -113,7 +112,7 @@ func ExampleOptions_andFrom() {
 }
 
 // This example will populate Options from a custom config file
-// using defaults and will panic if there are errors
+// using defaults and will panic if there are errors.
 func ExampleOptions_andFromOrDie() {
 	cfg, err := config.GetConfig()
 	if err != nil {

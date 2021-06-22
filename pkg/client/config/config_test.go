@@ -192,7 +192,7 @@ func setConfigs(tc testCase, dir string) {
 
 func createFiles(files map[string]string, dir string) error {
 	for path, data := range files {
-		if err := ioutil.WriteFile(filepath.Join(dir, path), []byte(data), 0644); err != nil {
+		if err := ioutil.WriteFile(filepath.Join(dir, path), []byte(data), 0600); err != nil {
 			return err
 		}
 	}

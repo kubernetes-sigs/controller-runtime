@@ -80,7 +80,7 @@ var _ = Describe("TinyCA", func() {
 			cert, err := ca.NewServingCert()
 			Expect(err).NotTo(HaveOccurred(), "should be able to generate the serving certs")
 
-			duration := cert.Cert.NotAfter.Sub(time.Now())
+			duration := time.Until(cert.Cert.NotAfter)
 			Expect(duration).To(BeNumerically("<=", 168*time.Hour), "not-after should be short-ish (<= 1 week)")
 			Expect(duration).To(BeNumerically(">=", 2*time.Hour), "not-after should be enough for long tests (couple of hours)")
 		})
@@ -166,7 +166,7 @@ var _ = Describe("TinyCA", func() {
 		})
 
 		It("should be valid for short enough to avoid production usage, but long enough for long-running tests", func() {
-			duration := cert.Cert.NotAfter.Sub(time.Now())
+			duration := time.Until(cert.Cert.NotAfter)
 			Expect(duration).To(BeNumerically("<=", 168*time.Hour), "not-after should be short-ish (<= 1 week)")
 			Expect(duration).To(BeNumerically(">=", 2*time.Hour), "not-after should be enough for long tests (couple of hours)")
 		})

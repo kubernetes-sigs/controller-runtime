@@ -23,6 +23,7 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -72,6 +73,7 @@ type ForInput struct {
 	predicates       []predicate.Predicate
 	objectProjection objectProjection
 	err              error
+	conditional      bool
 }
 
 // For defines the type of Object being *reconciled*, and configures the ControllerManagedBy to respond to create / delete /
@@ -97,6 +99,7 @@ type OwnsInput struct {
 	object           client.Object
 	predicates       []predicate.Predicate
 	objectProjection objectProjection
+	conditional      bool
 }
 
 // Owns defines types of Objects being *generated* by the ControllerManagedBy, and configures the ControllerManagedBy to respond to
@@ -118,6 +121,7 @@ type WatchesInput struct {
 	eventhandler     handler.EventHandler
 	predicates       []predicate.Predicate
 	objectProjection objectProjection
+	conditional      bool
 }
 
 // Watches exposes the lower-level ControllerManagedBy Watches functions through the builder.  Consider using
@@ -216,13 +220,48 @@ func (blder *Builder) project(obj client.Object, proj objectProjection) (client.
 	}
 }
 
+func (blder *Builder) generateConditionalSource(typeForSrc client.Object) (source.Source, error) {
+	gvk, err := getGvk(blder.forInput.object, blder.mgr.GetScheme())
+	if err != nil {
+		return nil, err
+	}
+	dc, err := discovery.NewDiscoveryClientForConfig(blder.mgr.GetConfig())
+	if err != nil {
+		return nil, err
+	}
+	existsInDiscovery := func() bool {
+		resources, err := dc.ServerResourcesForGroupVersion(gvk.GroupVersion().String())
+		if err != nil {
+			return false
+		}
+		for _, res := range resources.APIResources {
+			if res.Kind == gvk.Kind {
+				return true
+			}
+		}
+		return false
+	}
+	return &source.ConditionalKind{Kind: source.Kind{Type: typeForSrc}, DiscoveryCheck: existsInDiscovery}, nil
+
+}
+
 func (blder *Builder) doWatch() error {
 	// Reconcile type
 	typeForSrc, err := blder.project(blder.forInput.object, blder.forInput.objectProjection)
 	if err != nil {
 		return err
 	}
-	src := &source.Kind{Type: typeForSrc}
+
+	var src source.Source
+	if blder.forInput.conditional {
+		var err error
+		src, err = blder.generateConditionalSource(typeForSrc)
+		if err != nil {
+			return err
+		}
+	} else {
+		src = &source.Kind{Type: typeForSrc}
+	}
 	hdler := &handler.EnqueueRequestForObject{}
 	allPredicates := append(blder.globalPredicates, blder.forInput.predicates...)
 	if err := blder.ctrl.Watch(src, hdler, allPredicates...); err != nil {
@@ -235,7 +274,17 @@ func (blder *Builder) doWatch() error {
 		if err != nil {
 			return err
 		}
-		src := &source.Kind{Type: typeForSrc}
+
+		var src source.Source
+		if own.conditional {
+			var err error
+			src, err = blder.generateConditionalSource(typeForSrc)
+			if err != nil {
+				return err
+			}
+		} else {
+			src = &source.Kind{Type: typeForSrc}
+		}
 		hdler := &handler.EnqueueRequestForOwner{
 			OwnerType:    blder.forInput.object,
 			IsController: true,

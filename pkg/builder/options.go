@@ -99,6 +99,19 @@ func (p projectAs) ApplyToWatches(opts *WatchesInput) {
 	opts.objectProjection = objectProjection(p)
 }
 
+// Conditional confirms that it should configure a ConditionalSource
+// that can be started/stopped/restarted based on the existence of
+// the input's type in discovery.
+type Conditional struct{}
+
+func (s Conditional) ApplyToFor(opts *ForInput) {
+	opts.conditional = true
+}
+
+func (s Conditional) ApplyToOwns(opts *OwnsInput) {
+	opts.conditional = true
+}
+
 var (
 	// OnlyMetadata tells the controller to *only* cache metadata, and to watch
 	// the the API server in metadata-only form.  This is useful when watching

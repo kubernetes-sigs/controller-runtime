@@ -19,6 +19,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -113,6 +114,29 @@ func (c *multiNamespaceCache) GetInformer(ctx context.Context, obj client.Object
 	}
 
 	return &multiNamespaceInformer{namespaceToInformer: informers}, nil
+}
+
+func (c *multiNamespaceCache) GetInformerStop(ctx context.Context, obj client.Object) (<-chan struct{}, error) {
+	multiStopCh := make(chan struct{})
+	var wg sync.WaitGroup
+	for _, cache := range c.namespaceToCache {
+		stopCh, err := cache.GetInformerStop(ctx, obj)
+		if err != nil {
+			return nil, err
+		}
+		wg.Add(1)
+		go func(stopCh <-chan struct{}) {
+			defer wg.Done()
+			<-stopCh
+
+		}(stopCh)
+	}
+
+	go func() {
+		defer close(multiStopCh)
+		wg.Done()
+	}()
+	return multiStopCh, nil
 }
 
 func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (Informer, error) {

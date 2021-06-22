@@ -297,6 +297,14 @@ func (r RunnableFunc) Start(ctx context.Context) error {
 	return r(ctx)
 }
 
+// ConditionalRunnable wraps Runnable with an additonal Ready method
+// that returns a channel that fires when the underlying Runnable can
+// be started.
+type ConditionalRunnable interface {
+	Runnable
+	Ready(ctx context.Context) <-chan struct{}
+}
+
 // LeaderElectionRunnable knows if a Runnable needs to be run in the leader election mode.
 type LeaderElectionRunnable interface {
 	// NeedLeaderElection returns true if the Runnable needs to be run in the leader election mode.

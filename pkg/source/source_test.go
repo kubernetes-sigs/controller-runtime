@@ -35,6 +35,7 @@ import (
 )
 
 var _ = Describe("Source", func() {
+	// TODO: test ConditionalKind as well
 	Describe("Kind", func() {
 		var c chan struct{}
 		var p *corev1.Pod

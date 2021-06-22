@@ -332,7 +332,6 @@ func (s *APIServer) discoverFlags() error {
 
 func (s *APIServer) defaultArgs() map[string][]string {
 	args := map[string][]string{
-		"advertise-address":        {"127.0.0.1"},
 		"service-cluster-ip-range": {"10.0.0.0/24"},
 		"allow-privileged":         {"true"},
 		// we're keeping this disabled because if enabled, default SA is

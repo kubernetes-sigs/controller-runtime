@@ -64,7 +64,12 @@ func init() {
 		loggerWasSetLock.Lock()
 		defer loggerWasSetLock.Unlock()
 		if !loggerWasSet {
-			Log.Fulfill(NullLogger{})
+			w := warnOnce{
+				once:      &sync.Once{},
+				warnPrint: "warning: log.SetLogger was not called within 30s, will use NullLogger through whole lifetime",
+			}
+			w.do()
+			Log.Fulfill(&NullLogger{warnOnce: w})
 		}
 	}()
 }
@@ -79,7 +84,7 @@ var (
 // get any actual logging. If SetLogger is not called within
 // the first 30 seconds of a binaries lifetime, it will get
 // set to a NullLogger.
-var Log = NewDelegatingLogger(NullLogger{})
+var Log = NewDelegatingLogger(DefaultNullLogger())
 
 // FromContext returns a logger with predefined values from a context.Context.
 func FromContext(ctx context.Context, keysAndValues ...interface{}) logr.Logger {

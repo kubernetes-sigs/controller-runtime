@@ -17,6 +17,10 @@ limitations under the License.
 package log
 
 import (
+	"fmt"
+	"os"
+	"sync"
+
 	"github.com/go-logr/logr"
 )
 
@@ -25,23 +29,46 @@ import (
 // all binaries.
 
 // NullLogger is a logr.Logger that does nothing.
-type NullLogger struct{}
+type NullLogger struct {
+	warnOnce
+}
+
+// warnOnce warn once when NullLogger is called
+type warnOnce struct {
+	once      *sync.Once
+	warnPrint string
+}
+
+func (w warnOnce) do() {
+	w.once.Do(func() {
+		fmt.Fprintln(os.Stdin, w.warnPrint)
+	})
+}
 
 var _ logr.Logger = NullLogger{}
 
+// DefaultNullLogger a default NullLogger with specified warn print
+func DefaultNullLogger() NullLogger {
+	w := warnOnce{
+		once:      &sync.Once{},
+		warnPrint: "warning: log.SetLogger was not called.",
+	}
+	return NullLogger{warnOnce: w}
+}
+
 // Info implements logr.InfoLogger
-func (NullLogger) Info(_ string, _ ...interface{}) {
-	// Do nothing.
+func (log NullLogger) Info(_ string, _ ...interface{}) {
+	log.do()
 }
 
 // Enabled implements logr.InfoLogger
-func (NullLogger) Enabled() bool {
+func (log NullLogger) Enabled() bool {
 	return false
 }
 
 // Error implements logr.Logger
-func (NullLogger) Error(_ error, _ string, _ ...interface{}) {
-	// Do nothing.
+func (log NullLogger) Error(_ error, _ string, _ ...interface{}) {
+	log.do()
 }
 
 // V implements logr.Logger

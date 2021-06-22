@@ -91,17 +91,16 @@ var _ = Describe("Internal", func() {
 			newPod.Labels = map[string]string{"foo": "bar"}
 		})
 
-		It("should create a CreateEvent", func(done Done) {
+		It("should create a CreateEvent", func() {
 			funcs.CreateFunc = func(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
 				Expect(evt.Object).To(Equal(pod))
 			}
 			instance.OnAdd(pod)
-			close(done)
 		})
 
-		It("should used Predicates to filter CreateEvents", func(done Done) {
+		It("should used Predicates to filter CreateEvents", func() {
 			instance = internal.EventHandler{
 				Queue:        controllertest.Queue{},
 				EventHandler: setfuncs,
@@ -144,21 +143,17 @@ var _ = Describe("Internal", func() {
 			}
 			instance.OnAdd(pod)
 			Expect(set).To(BeTrue())
-
-			close(done)
 		})
 
-		It("should not call Create EventHandler if the object is not a runtime.Object", func(done Done) {
+		It("should not call Create EventHandler if the object is not a runtime.Object", func() {
 			instance.OnAdd(&metav1.ObjectMeta{})
-			close(done)
 		})
 
-		It("should not call Create EventHandler if the object does not have metadata", func(done Done) {
+		It("should not call Create EventHandler if the object does not have metadata", func() {
 			instance.OnAdd(FooRuntimeObject{})
-			close(done)
 		})
 
-		It("should create an UpdateEvent", func(done Done) {
+		It("should create an UpdateEvent", func() {
 			funcs.UpdateFunc = func(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
@@ -167,10 +162,9 @@ var _ = Describe("Internal", func() {
 				Expect(evt.ObjectNew).To(Equal(newPod))
 			}
 			instance.OnUpdate(pod, newPod)
-			close(done)
 		})
 
-		It("should used Predicates to filter UpdateEvents", func(done Done) {
+		It("should used Predicates to filter UpdateEvents", func() {
 			instance = internal.EventHandler{
 				Queue:        controllertest.Queue{},
 				EventHandler: setfuncs,
@@ -213,23 +207,19 @@ var _ = Describe("Internal", func() {
 			}
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeTrue())
-
-			close(done)
 		})
 
-		It("should not call Update EventHandler if the object is not a runtime.Object", func(done Done) {
+		It("should not call Update EventHandler if the object is not a runtime.Object", func() {
 			instance.OnUpdate(&metav1.ObjectMeta{}, &corev1.Pod{})
 			instance.OnUpdate(&corev1.Pod{}, &metav1.ObjectMeta{})
-			close(done)
 		})
 
-		It("should not call Update EventHandler if the object does not have metadata", func(done Done) {
+		It("should not call Update EventHandler if the object does not have metadata", func() {
 			instance.OnUpdate(FooRuntimeObject{}, &corev1.Pod{})
 			instance.OnUpdate(&corev1.Pod{}, FooRuntimeObject{})
-			close(done)
 		})
 
-		It("should create a DeleteEvent", func(done Done) {
+		It("should create a DeleteEvent", func() {
 			funcs.DeleteFunc = func(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(instance.Queue))
@@ -237,10 +227,9 @@ var _ = Describe("Internal", func() {
 				Expect(evt.Object).To(Equal(pod))
 			}
 			instance.OnDelete(pod)
-			close(done)
 		})
 
-		It("should used Predicates to filter DeleteEvents", func(done Done) {
+		It("should used Predicates to filter DeleteEvents", func() {
 			instance = internal.EventHandler{
 				Queue:        controllertest.Queue{},
 				EventHandler: setfuncs,
@@ -283,21 +272,17 @@ var _ = Describe("Internal", func() {
 			}
 			instance.OnDelete(pod)
 			Expect(set).To(BeTrue())
-
-			close(done)
 		})
 
-		It("should not call Delete EventHandler if the object is not a runtime.Object", func(done Done) {
+		It("should not call Delete EventHandler if the object is not a runtime.Object", func() {
 			instance.OnDelete(&metav1.ObjectMeta{})
-			close(done)
 		})
 
-		It("should not call Delete EventHandler if the object does not have metadata", func(done Done) {
+		It("should not call Delete EventHandler if the object does not have metadata", func() {
 			instance.OnDelete(FooRuntimeObject{})
-			close(done)
 		})
 
-		It("should create a DeleteEvent from a tombstone", func(done Done) {
+		It("should create a DeleteEvent from a tombstone", func() {
 
 			tombstone := cache.DeletedFinalStateUnknown{
 				Obj: pod,
@@ -309,19 +294,16 @@ var _ = Describe("Internal", func() {
 			}
 
 			instance.OnDelete(tombstone)
-			close(done)
 		})
 
-		It("should ignore tombstone objects without meta", func(done Done) {
+		It("should ignore tombstone objects without meta", func() {
 			tombstone := cache.DeletedFinalStateUnknown{Obj: Foo{}}
 			instance.OnDelete(tombstone)
-			close(done)
 		})
-		It("should ignore objects without meta", func(done Done) {
+		It("should ignore objects without meta", func() {
 			instance.OnAdd(Foo{})
 			instance.OnUpdate(Foo{}, Foo{})
 			instance.OnDelete(Foo{})
-			close(done)
 		})
 	})
 })

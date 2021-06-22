@@ -42,28 +42,24 @@ var _ = Describe("controller.Controller", func() {
 	})
 
 	Describe("New", func() {
-		It("should return an error if Name is not Specified", func(done Done) {
+		It("should return an error if Name is not Specified", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c, err := controller.New("", m, controller.Options{Reconciler: rec})
 			Expect(c).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Name for Controller"))
-
-			close(done)
 		})
 
-		It("should return an error if Reconciler is not Specified", func(done Done) {
+		It("should return an error if Reconciler is not Specified", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("foo", m, controller.Options{})
 			Expect(c).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Reconciler"))
-
-			close(done)
 		})
 
-		It("NewController should return an error if injecting Reconciler fails", func(done Done) {
+		It("NewController should return an error if injecting Reconciler fails", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -71,11 +67,9 @@ var _ = Describe("controller.Controller", func() {
 			Expect(c).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
-
-			close(done)
 		})
 
-		It("should not return an error if two controllers are registered with different names", func(done Done) {
+		It("should not return an error if two controllers are registered with different names", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -86,8 +80,6 @@ var _ = Describe("controller.Controller", func() {
 			c2, err := controller.New("c2", m, controller.Options{Reconciler: rec})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(c2).ToNot(BeNil())
-
-			close(done)
 		})
 
 		It("should not leak goroutines when stopped", func() {

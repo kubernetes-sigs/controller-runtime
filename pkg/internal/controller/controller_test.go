@@ -91,7 +91,7 @@ var _ = Describe("controller", func() {
 	})
 
 	Describe("Start", func() {
-		It("should return an error if there is an error waiting for the informers", func(done Done) {
+		It("should return an error if there is an error waiting for the informers", func() {
 			f := false
 			ctrl.startWatches = []watchDescription{{
 				src: source.NewKindWithCache(&corev1.Pod{}, &informertest.FakeInformers{Synced: &f}),
@@ -102,11 +102,9 @@ var _ = Describe("controller", func() {
 			err := ctrl.Start(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to wait for foo caches to sync"))
-
-			close(done)
 		})
 
-		It("should error when cache sync timeout occurs", func(done Done) {
+		It("should error when cache sync timeout occurs", func() {
 			ctrl.CacheSyncTimeout = 10 * time.Nanosecond
 
 			c, err := cache.New(cfg, cache.Options{})
@@ -121,11 +119,9 @@ var _ = Describe("controller", func() {
 			err = ctrl.Start(context.TODO())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync: timed out waiting for cache to be synced"))
-
-			close(done)
 		})
 
-		It("should not error when cache sync timeout is of sufficiently high", func(done Done) {
+		It("should not error when cache sync timeout is of sufficiently high", func() {
 			ctrl.CacheSyncTimeout = 1 * time.Second
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -152,10 +148,9 @@ var _ = Describe("controller", func() {
 			}()
 
 			<-sourceSynced
-			close(done)
 		}, 10.0)
 
-		It("should process events from source.Channel", func(done Done) {
+		It("should process events from source.Channel", func() {
 			// channel to be closed when event is processed
 			processed := make(chan struct{})
 			// source channel to be injected
@@ -194,10 +189,9 @@ var _ = Describe("controller", func() {
 				Expect(ctrl.Start(ctx)).To(Succeed())
 			}()
 			<-processed
-			close(done)
 		})
 
-		It("should error when channel is passed as a source but stop channel is not injected", func(done Done) {
+		It("should error when channel is passed as a source but stop channel is not injected", func() {
 			ch := make(chan event.GenericEvent)
 			ctx, cancel := context.WithCancel(context.TODO())
 			defer cancel()
@@ -211,10 +205,9 @@ var _ = Describe("controller", func() {
 
 			Expect(e).NotTo(BeNil())
 			Expect(e.Error()).To(ContainSubstring("must call InjectStop on Channel before calling Start"))
-			close(done)
 		})
 
-		It("should error when channel source is not specified", func(done Done) {
+		It("should error when channel source is not specified", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -228,8 +221,6 @@ var _ = Describe("controller", func() {
 			e := ctrl.Start(ctx)
 			Expect(e).NotTo(BeNil())
 			Expect(e.Error()).To(ContainSubstring("must specify Channel.Source"))
-
-			close(done)
 		})
 
 		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {
@@ -403,7 +394,7 @@ var _ = Describe("controller", func() {
 	})
 
 	Describe("Processing queue items from a Controller", func() {
-		It("should call Reconciler if an item is enqueued", func(done Done) {
+		It("should call Reconciler if an item is enqueued", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			go func() {
@@ -419,11 +410,9 @@ var _ = Describe("controller", func() {
 			By("Removing the item from the queue")
 			Eventually(queue.Len).Should(Equal(0))
 			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
-
-			close(done)
 		})
 
-		It("should continue to process additional queue items after the first", func(done Done) {
+		It("should continue to process additional queue items after the first", func() {
 			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 				defer GinkgoRecover()
 				Fail("Reconciler should not have been called")
@@ -443,15 +432,13 @@ var _ = Describe("controller", func() {
 			By("expecting both of them to be skipped")
 			Eventually(queue.Len).Should(Equal(0))
 			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
-
-			close(done)
 		})
 
 		PIt("should forget an item if it is not a Request and continue processing items", func() {
 			// TODO(community): write this test
 		})
 
-		It("should requeue a Request if there is an error and continue processing items", func(done Done) {
+		It("should requeue a Request if there is an error and continue processing items", func() {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -473,8 +460,6 @@ var _ = Describe("controller", func() {
 			By("Removing the item from the queue")
 			Eventually(queue.Len).Should(Equal(0))
 			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
-
-			close(done)
 		}, 1.0)
 
 		// TODO(directxman12): we should ensure that backoff occurrs with error requeue
@@ -624,7 +609,7 @@ var _ = Describe("controller", func() {
 				reconcileTotal.Reset()
 			})
 
-			It("should get updated on successful reconciliation", func(done Done) {
+			It("should get updated on successful reconciliation", func() {
 				Expect(func() error {
 					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "success").Write(&reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
@@ -651,11 +636,9 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-
-				close(done)
 			}, 2.0)
 
-			It("should get updated on reconcile errors", func(done Done) {
+			It("should get updated on reconcile errors", func() {
 				Expect(func() error {
 					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "error").Write(&reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
@@ -682,11 +665,9 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-
-				close(done)
 			}, 2.0)
 
-			It("should get updated when reconcile returns with retry enabled", func(done Done) {
+			It("should get updated when reconcile returns with retry enabled", func() {
 				Expect(func() error {
 					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "retry").Write(&reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
@@ -714,11 +695,9 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-
-				close(done)
 			}, 2.0)
 
-			It("should get updated when reconcile returns with retryAfter enabled", func(done Done) {
+			It("should get updated when reconcile returns with retryAfter enabled", func() {
 				Expect(func() error {
 					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "retry_after").Write(&reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
@@ -745,13 +724,11 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-
-				close(done)
 			}, 2.0)
 		})
 
 		Context("should update prometheus metrics", func() {
-			It("should requeue a Request if there is an error and continue processing items", func(done Done) {
+			It("should requeue a Request if there is an error and continue processing items", func() {
 				var reconcileErrs dto.Metric
 				ctrlmetrics.ReconcileErrors.Reset()
 				Expect(func() error {
@@ -788,11 +765,9 @@ var _ = Describe("controller", func() {
 				By("Removing the item from the queue")
 				Eventually(queue.Len).Should(Equal(0))
 				Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
-
-				close(done)
 			}, 2.0)
 
-			It("should add a reconcile time to the reconcile time histogram", func(done Done) {
+			It("should add a reconcile time to the reconcile time histogram", func() {
 				var reconcileTime dto.Metric
 				ctrlmetrics.ReconcileTime.Reset()
 
@@ -831,8 +806,6 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-
-				close(done)
 			}, 4.0)
 		})
 	})

@@ -37,7 +37,7 @@ import (
 
 var _ = Describe("recorder", func() {
 	Describe("recorder", func() {
-		It("should publish events", func(done Done) {
+		It("should publish events", func() {
 			By("Creating the Manager")
 			cm, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
@@ -108,8 +108,6 @@ var _ = Describe("recorder", func() {
 			Expect(evt.Type).To(Equal(corev1.EventTypeNormal))
 			Expect(evt.Reason).To(Equal("test-reason"))
 			Expect(evt.Message).To(Equal("test-msg"))
-
-			close(done)
 		})
 	})
 })

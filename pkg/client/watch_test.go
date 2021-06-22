@@ -40,7 +40,7 @@ var _ = Describe("ClientWithWatch", func() {
 	var ns = "kube-public"
 	ctx := context.TODO()
 
-	BeforeEach(func(done Done) {
+	BeforeEach(func() {
 		atomic.AddUint64(&count, 1)
 		dep = &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("watch-deployment-name-%v", count), Namespace: ns, Labels: map[string]string{"app": fmt.Sprintf("bar-%v", count)}},
@@ -59,21 +59,17 @@ var _ = Describe("ClientWithWatch", func() {
 		var err error
 		dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		close(done)
 	}, serverSideTimeoutSeconds)
 
-	AfterEach(func(done Done) {
+	AfterEach(func() {
 		deleteDeployment(ctx, dep, ns)
-		close(done)
 	}, serverSideTimeoutSeconds)
 
 	Describe("NewWithWatch", func() {
-		It("should return a new Client", func(done Done) {
+		It("should return a new Client", func() {
 			cl, err := client.NewWithWatch(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
-
-			close(done)
 		})
 
 		watchSuite := func(through client.ObjectList, expectedType client.Object) {
@@ -105,12 +101,11 @@ var _ = Describe("ClientWithWatch", func() {
 
 		}
 
-		It("should receive a create event when watching the typed object", func(done Done) {
+		It("should receive a create event when watching the typed object", func() {
 			watchSuite(&appsv1.DeploymentList{}, &appsv1.Deployment{})
-			close(done)
 		}, 15)
 
-		It("should receive a create event when watching the unstructured object", func(done Done) {
+		It("should receive a create event when watching the unstructured object", func() {
 			u := &unstructured.UnstructuredList{}
 			u.SetGroupVersionKind(schema.GroupVersionKind{
 				Group:   "apps",
@@ -118,13 +113,11 @@ var _ = Describe("ClientWithWatch", func() {
 				Version: "v1",
 			})
 			watchSuite(u, &unstructured.Unstructured{})
-			close(done)
 		}, 15)
 
-		It("should receive a create event when watching the metadata object", func(done Done) {
+		It("should receive a create event when watching the metadata object", func() {
 			m := &metav1.PartialObjectMetadataList{TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"}}
 			watchSuite(m, &metav1.PartialObjectMetadata{})
-			close(done)
 		}, 15)
 	})
 

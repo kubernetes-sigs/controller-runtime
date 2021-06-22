@@ -48,7 +48,7 @@ var _ = Describe("controller", func() {
 	Describe("controller", func() {
 		// TODO(directxman12): write a whole suite of controller-client interaction tests
 
-		It("should reconcile", func(done Done) {
+		It("should reconcile", func() {
 			By("Creating the Manager")
 			cm, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
@@ -169,8 +169,6 @@ var _ = Describe("controller", func() {
 			err = cm.GetClient().
 				List(context.Background(), &controllertest.UnconventionalListTypeList{})
 			Expect(err).NotTo(HaveOccurred())
-
-			close(done)
 		}, 5)
 	})
 })

@@ -885,7 +885,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 		})
 		Describe("as an Informer", func() {
 			Context("with structured objects", func() {
-				It("should be able to get informer for the object", func(done Done) {
+				It("should be able to get informer for the object", func() {
 					By("getting a shared index informer for a pod")
 					pod := &corev1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
@@ -921,9 +921,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 					By("verifying the object is received on the channel")
 					Eventually(out).Should(Receive(Equal(pod)))
-					close(done)
 				})
-				It("should be able to get an informer by group/version/kind", func(done Done) {
+				It("should be able to get an informer by group/version/kind", func() {
 					By("getting an shared index informer for gvk = core/v1/pod")
 					gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
 					sii, err := informerCache.GetInformerForKind(context.TODO(), gvk)
@@ -960,7 +959,6 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 					By("verifying the object is received on the channel")
 					Eventually(out).Should(Receive(Equal(pod)))
-					close(done)
 				})
 				It("should be able to index an object field then retrieve objects by that field", func() {
 					By("creating the cache")
@@ -1030,7 +1028,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				})
 			})
 			Context("with unstructured objects", func() {
-				It("should be able to get informer for the object", func(done Done) {
+				It("should be able to get informer for the object", func() {
 					By("getting a shared index informer for a pod")
 
 					pod := &unstructured.Unstructured{
@@ -1072,7 +1070,6 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 					By("verifying the object is received on the channel")
 					Eventually(out).Should(Receive(Equal(pod)))
-					close(done)
 				}, 3)
 
 				It("should be able to index an object field then retrieve objects by that field", func() {
@@ -1145,7 +1142,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				})
 			})
 			Context("with metadata-only objects", func() {
-				It("should be able to get informer for the object", func(done Done) {
+				It("should be able to get informer for the object", func() {
 					By("getting a shared index informer for a pod")
 
 					pod := &corev1.Pod{
@@ -1193,7 +1190,6 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 					By("verifying the object's metadata is received on the channel")
 					Eventually(out).Should(Receive(Equal(podMeta)))
-					close(done)
 				}, 3)
 
 				It("should be able to index an object field then retrieve objects by that field", func() {

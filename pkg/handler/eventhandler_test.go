@@ -54,7 +54,7 @@ var _ = Describe("Eventhandler", func() {
 	})
 
 	Describe("EnqueueRequestForObject", func() {
-		It("should enqueue a Request with the Name / Namespace of the object in the CreateEvent.", func(done Done) {
+		It("should enqueue a Request with the Name / Namespace of the object in the CreateEvent.", func() {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
@@ -66,11 +66,9 @@ var _ = Describe("Eventhandler", func() {
 			req, ok := i.(reconcile.Request)
 			Expect(ok).To(BeTrue())
 			Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
-
-			close(done)
 		})
 
-		It("should enqueue a Request with the Name / Namespace of the object in the DeleteEvent.", func(done Done) {
+		It("should enqueue a Request with the Name / Namespace of the object in the DeleteEvent.", func() {
 			evt := event.DeleteEvent{
 				Object: pod,
 			}
@@ -82,12 +80,10 @@ var _ = Describe("Eventhandler", func() {
 			req, ok := i.(reconcile.Request)
 			Expect(ok).To(BeTrue())
 			Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
-
-			close(done)
 		})
 
 		It("should enqueue a Request with the Name / Namespace of one object in the UpdateEvent.",
-			func(done Done) {
+			func() {
 				newPod := pod.DeepCopy()
 				newPod.Name = "baz2"
 				newPod.Namespace = "biz2"
@@ -104,11 +100,9 @@ var _ = Describe("Eventhandler", func() {
 				req, ok := i.(reconcile.Request)
 				Expect(ok).To(BeTrue())
 				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz2", Name: "baz2"}))
-
-				close(done)
 			})
 
-		It("should enqueue a Request with the Name / Namespace of the object in the GenericEvent.", func(done Done) {
+		It("should enqueue a Request with the Name / Namespace of the object in the GenericEvent.", func() {
 			evt := event.GenericEvent{
 				Object: pod,
 			}
@@ -119,21 +113,18 @@ var _ = Describe("Eventhandler", func() {
 			req, ok := i.(reconcile.Request)
 			Expect(ok).To(BeTrue())
 			Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
-
-			close(done)
 		})
 
 		Context("for a runtime.Object without Object", func() {
-			It("should do nothing if the Object is missing for a CreateEvent.", func(done Done) {
+			It("should do nothing if the Object is missing for a CreateEvent.", func() {
 				evt := event.CreateEvent{
 					Object: nil,
 				}
 				instance.Create(evt, q)
 				Expect(q.Len()).To(Equal(0))
-				close(done)
 			})
 
-			It("should do nothing if the Object is missing for a UpdateEvent.", func(done Done) {
+			It("should do nothing if the Object is missing for a UpdateEvent.", func() {
 				newPod := pod.DeepCopy()
 				newPod.Name = "baz2"
 				newPod.Namespace = "biz2"
@@ -159,26 +150,22 @@ var _ = Describe("Eventhandler", func() {
 				req, ok = i.(reconcile.Request)
 				Expect(ok).To(BeTrue())
 				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
-
-				close(done)
 			})
 
-			It("should do nothing if the Object is missing for a DeleteEvent.", func(done Done) {
+			It("should do nothing if the Object is missing for a DeleteEvent.", func() {
 				evt := event.DeleteEvent{
 					Object: nil,
 				}
 				instance.Delete(evt, q)
 				Expect(q.Len()).To(Equal(0))
-				close(done)
 			})
 
-			It("should do nothing if the Object is missing for a GenericEvent.", func(done Done) {
+			It("should do nothing if the Object is missing for a GenericEvent.", func() {
 				evt := event.GenericEvent{
 					Object: nil,
 				}
 				instance.Generic(evt, q)
 				Expect(q.Len()).To(Equal(0))
-				close(done)
 			})
 		})
 	})
@@ -823,7 +810,7 @@ var _ = Describe("Eventhandler", func() {
 			},
 		}
 
-		It("should call CreateFunc for a CreateEvent if provided.", func(done Done) {
+		It("should call CreateFunc for a CreateEvent if provided.", func() {
 			instance := failingFuncs
 			evt := event.CreateEvent{
 				Object: pod,
@@ -834,20 +821,18 @@ var _ = Describe("Eventhandler", func() {
 				Expect(evt2).To(Equal(evt))
 			}
 			instance.Create(evt, q)
-			close(done)
 		})
 
-		It("should NOT call CreateFunc for a CreateEvent if NOT provided.", func(done Done) {
+		It("should NOT call CreateFunc for a CreateEvent if NOT provided.", func() {
 			instance := failingFuncs
 			instance.CreateFunc = nil
 			evt := event.CreateEvent{
 				Object: pod,
 			}
 			instance.Create(evt, q)
-			close(done)
 		})
 
-		It("should call UpdateFunc for an UpdateEvent if provided.", func(done Done) {
+		It("should call UpdateFunc for an UpdateEvent if provided.", func() {
 			newPod := pod.DeepCopy()
 			newPod.Name = pod.Name + "2"
 			newPod.Namespace = pod.Namespace + "2"
@@ -864,10 +849,9 @@ var _ = Describe("Eventhandler", func() {
 			}
 
 			instance.Update(evt, q)
-			close(done)
 		})
 
-		It("should NOT call UpdateFunc for an UpdateEvent if NOT provided.", func(done Done) {
+		It("should NOT call UpdateFunc for an UpdateEvent if NOT provided.", func() {
 			newPod := pod.DeepCopy()
 			newPod.Name = pod.Name + "2"
 			newPod.Namespace = pod.Namespace + "2"
@@ -876,10 +860,9 @@ var _ = Describe("Eventhandler", func() {
 				ObjectNew: newPod,
 			}
 			instance.Update(evt, q)
-			close(done)
 		})
 
-		It("should call DeleteFunc for a DeleteEvent if provided.", func(done Done) {
+		It("should call DeleteFunc for a DeleteEvent if provided.", func() {
 			instance := failingFuncs
 			evt := event.DeleteEvent{
 				Object: pod,
@@ -890,20 +873,18 @@ var _ = Describe("Eventhandler", func() {
 				Expect(evt2).To(Equal(evt))
 			}
 			instance.Delete(evt, q)
-			close(done)
 		})
 
-		It("should NOT call DeleteFunc for a DeleteEvent if NOT provided.", func(done Done) {
+		It("should NOT call DeleteFunc for a DeleteEvent if NOT provided.", func() {
 			instance := failingFuncs
 			instance.DeleteFunc = nil
 			evt := event.DeleteEvent{
 				Object: pod,
 			}
 			instance.Delete(evt, q)
-			close(done)
 		})
 
-		It("should call GenericFunc for a GenericEvent if provided.", func(done Done) {
+		It("should call GenericFunc for a GenericEvent if provided.", func() {
 			instance := failingFuncs
 			evt := event.GenericEvent{
 				Object: pod,
@@ -914,17 +895,15 @@ var _ = Describe("Eventhandler", func() {
 				Expect(evt2).To(Equal(evt))
 			}
 			instance.Generic(evt, q)
-			close(done)
 		})
 
-		It("should NOT call GenericFunc for a GenericEvent if NOT provided.", func(done Done) {
+		It("should NOT call GenericFunc for a GenericEvent if NOT provided.", func() {
 			instance := failingFuncs
 			instance.GenericFunc = nil
 			evt := event.GenericEvent{
 				Object: pod,
 			}
 			instance.Generic(evt, q)
-			close(done)
 		})
 	})
 })

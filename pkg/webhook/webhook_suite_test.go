@@ -42,7 +42,7 @@ func TestSource(t *testing.T) {
 var testenv *envtest.Environment
 var cfg *rest.Config
 
-var _ = BeforeSuite(func(done Done) {
+var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	testenv = &envtest.Environment{}
@@ -51,7 +51,6 @@ var _ = BeforeSuite(func(done Done) {
 	var err error
 	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
-	close(done)
 }, 60)
 
 var _ = AfterSuite(func() {

@@ -45,7 +45,7 @@ var _ = Describe("Test", func() {
 	var teardownTimeoutSeconds float64 = 10
 
 	// Initialize the client
-	BeforeEach(func(done Done) {
+	BeforeEach(func() {
 		crds = []client.Object{}
 		s = runtime.NewScheme()
 		err = v1beta1.AddToScheme(s)
@@ -55,12 +55,10 @@ var _ = Describe("Test", func() {
 
 		c, err = client.New(env.Config, client.Options{Scheme: s})
 		Expect(err).NotTo(HaveOccurred())
-
-		close(done)
 	})
 
 	// Cleanup CRDs
-	AfterEach(func(done Done) {
+	AfterEach(func() {
 		for _, crd := range runtimeCRDListToUnstructured(crds) {
 			// Delete only if CRD exists.
 			crdObjectKey := client.ObjectKey{
@@ -79,7 +77,6 @@ var _ = Describe("Test", func() {
 				return apierrors.IsNotFound(err)
 			}, 5*time.Second).Should(BeTrue())
 		}
-		close(done)
 	}, teardownTimeoutSeconds)
 
 	Describe("InstallCRDs", func() {
@@ -121,7 +118,7 @@ var _ = Describe("Test", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 		})
-		It("should install the CRDs into the cluster using directory", func(done Done) {
+		It("should install the CRDs into the cluster using directory", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{validDirectory},
 			})
@@ -221,11 +218,9 @@ var _ = Describe("Test", func() {
 				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).NotTo(HaveOccurred())
-
-			close(done)
 		}, 5)
 
-		It("should install the CRDs into the cluster using file", func(done Done) {
+		It("should install the CRDs into the cluster using file", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{filepath.Join(".", "testdata", "crds", "examplecrd3.yaml")},
 			})
@@ -249,11 +244,9 @@ var _ = Describe("Test", func() {
 				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).NotTo(HaveOccurred())
-
-			close(done)
 		}, 10)
 
-		It("should be able to install CRDs using multiple files", func(done Done) {
+		It("should be able to install CRDs using multiple files", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{
 					filepath.Join(".", "testdata", "examplecrd.yaml"),
@@ -262,11 +255,9 @@ var _ = Describe("Test", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crds).To(HaveLen(2))
-
-			close(done)
 		}, 10)
 
-		It("should filter out already existent CRD", func(done Done) {
+		It("should filter out already existent CRD", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{
 					filepath.Join(".", "testdata"),
@@ -304,36 +295,28 @@ var _ = Describe("Test", func() {
 				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).NotTo(HaveOccurred())
-
-			close(done)
 		}, 10)
 
-		It("should not return an not error if the directory doesn't exist", func(done Done) {
+		It("should not return an not error if the directory doesn't exist", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{Paths: []string{invalidDirectory}})
 			Expect(err).NotTo(HaveOccurred())
-
-			close(done)
 		}, 5)
 
-		It("should return an error if the directory doesn't exist", func(done Done) {
+		It("should return an error if the directory doesn't exist", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{invalidDirectory}, ErrorIfPathMissing: true,
 			})
 			Expect(err).To(HaveOccurred())
-
-			close(done)
 		}, 5)
 
-		It("should return an error if the file doesn't exist", func(done Done) {
+		It("should return an error if the file doesn't exist", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{Paths: []string{
 				filepath.Join(".", "testdata", "fake.yaml")}, ErrorIfPathMissing: true,
 			})
 			Expect(err).To(HaveOccurred())
-
-			close(done)
 		}, 5)
 
-		It("should return an error if the resource group version isn't found", func(done Done) {
+		It("should return an error if the resource group version isn't found", func() {
 			// Wait for a CRD where the Group and Version don't exist
 			err := WaitForCRDs(env.Config,
 				[]client.Object{
@@ -348,11 +331,9 @@ var _ = Describe("Test", func() {
 				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).To(HaveOccurred())
-
-			close(done)
 		}, 5)
 
-		It("should return an error if the resource isn't found in the group version", func(done Done) {
+		It("should return an error if the resource isn't found in the group version", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{"."},
 			})
@@ -379,11 +360,9 @@ var _ = Describe("Test", func() {
 				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).To(HaveOccurred())
-
-			close(done)
 		}, 5)
 
-		It("should reinstall the CRDs if already present in the cluster", func(done Done) {
+		It("should reinstall the CRDs if already present in the cluster", func() {
 
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{filepath.Join(".", "testdata")},
@@ -586,12 +565,10 @@ var _ = Describe("Test", func() {
 				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).NotTo(HaveOccurred())
-
-			close(done)
 		}, 5)
 	})
 
-	It("should update CRDs if already present in the cluster", func(done Done) {
+	It("should update CRDs if already present in the cluster", func() {
 
 		// Install only the CRDv1 multi-version example
 		crds, err = InstallCRDs(env.Config, CRDInstallOptions{
@@ -679,12 +656,10 @@ var _ = Describe("Test", func() {
 			CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 		)
 		Expect(err).NotTo(HaveOccurred())
-
-		close(done)
 	}, 5)
 
 	Describe("UninstallCRDs", func() {
-		It("should uninstall the CRDs from the cluster", func(done Done) {
+		It("should uninstall the CRDs from the cluster", func() {
 
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{validDirectory},
@@ -825,31 +800,27 @@ var _ = Describe("Test", func() {
 				}
 				return true
 			}, 20).Should(BeTrue())
-
-			close(done)
 		}, 30)
 	})
 
 	Describe("Start", func() {
-		It("should raise an error on invalid dir when flag is enabled", func(done Done) {
+		It("should raise an error on invalid dir when flag is enabled", func() {
 			env := &Environment{ErrorIfCRDPathMissing: true, CRDDirectoryPaths: []string{invalidDirectory}}
 			_, err := env.Start()
 			Expect(err).To(HaveOccurred())
 			Expect(env.Stop()).To(Succeed())
-			close(done)
 		}, 30)
 
-		It("should not raise an error on invalid dir when flag is disabled", func(done Done) {
+		It("should not raise an error on invalid dir when flag is disabled", func() {
 			env := &Environment{ErrorIfCRDPathMissing: false, CRDDirectoryPaths: []string{invalidDirectory}}
 			_, err := env.Start()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(env.Stop()).To(Succeed())
-			close(done)
 		}, 30)
 	})
 
 	Describe("Stop", func() {
-		It("should cleanup webhook /tmp folder with no error when using existing cluster", func(done Done) {
+		It("should cleanup webhook /tmp folder with no error when using existing cluster", func() {
 			env := &Environment{}
 			_, err := env.Start()
 			Expect(err).NotTo(HaveOccurred())
@@ -857,7 +828,6 @@ var _ = Describe("Test", func() {
 
 			// check if the /tmp/envtest-serving-certs-* dir doesnt exists any more
 			Expect(env.WebhookInstallOptions.LocalServingCertDir).ShouldNot(BeADirectory())
-			close(done)
 		}, 30)
 	})
 })

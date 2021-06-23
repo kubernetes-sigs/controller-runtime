@@ -86,7 +86,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	wh.log.V(1).Info("received request", "UID", sar.UID, "kind", sar.Kind)
 
-	reviewResponse = wh.Handle(ctx, Request{sar.SubjectAccessReview})
+	reviewResponse = wh.Handle(ctx, Request(sar))
 	wh.writeResponse(w, actualTokRevGVK, reviewResponse)
 }
 

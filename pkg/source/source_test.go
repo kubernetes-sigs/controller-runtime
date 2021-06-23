@@ -40,7 +40,7 @@ var _ = Describe("Source", func() {
 		var p *corev1.Pod
 		var ic *informertest.FakeInformers
 
-		BeforeEach(func(done Done) {
+		BeforeEach(func() {
 			ic = &informertest.FakeInformers{}
 			c = make(chan struct{})
 			p = &corev1.Pod{
@@ -50,11 +50,10 @@ var _ = Describe("Source", func() {
 					},
 				},
 			}
-			close(done)
 		})
 
 		Context("for a Pod resource", func() {
-			It("should provide a Pod CreateEvent", func(done Done) {
+			It("should provide a Pod CreateEvent", func() {
 				c := make(chan struct{})
 				p := &corev1.Pod{
 					Spec: corev1.PodSpec{
@@ -97,10 +96,9 @@ var _ = Describe("Source", func() {
 
 				i.Add(p)
 				<-c
-				close(done)
 			})
 
-			It("should provide a Pod UpdateEvent", func(done Done) {
+			It("should provide a Pod UpdateEvent", func() {
 				p2 := p.DeepCopy()
 				p2.SetLabels(map[string]string{"biz": "baz"})
 
@@ -141,10 +139,9 @@ var _ = Describe("Source", func() {
 
 				i.Update(p, p2)
 				<-c
-				close(done)
 			})
 
-			It("should provide a Pod DeletedEvent", func(done Done) {
+			It("should provide a Pod DeletedEvent", func() {
 				c := make(chan struct{})
 				p := &corev1.Pod{
 					Spec: corev1.PodSpec{
@@ -187,30 +184,25 @@ var _ = Describe("Source", func() {
 
 				i.Delete(p)
 				<-c
-				close(done)
 			})
 		})
 
-		It("should return an error from Start if informers were not injected", func(done Done) {
+		It("should return an error from Start if informers were not injected", func() {
 			instance := source.Kind{Type: &corev1.Pod{}}
 			err := instance.Start(ctx, nil, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("must call CacheInto on Kind before calling Start"))
-
-			close(done)
 		})
 
-		It("should return an error from Start if a type was not provided", func(done Done) {
+		It("should return an error from Start if a type was not provided", func() {
 			instance := source.Kind{}
 			Expect(instance.InjectCache(&informertest.FakeInformers{})).To(Succeed())
 			err := instance.Start(ctx, nil, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("must specify Kind.Type"))
-
-			close(done)
 		})
 
-		It("should return an error if syncing fails", func(done Done) {
+		It("should return an error if syncing fails", func() {
 			instance := source.Kind{Type: &corev1.Pod{}}
 			f := false
 			Expect(instance.InjectCache(&informertest.FakeInformers{Synced: &f})).To(Succeed())
@@ -219,12 +211,10 @@ var _ = Describe("Source", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("cache did not sync"))
 
-			close(done)
-
 		})
 
 		Context("for a Kind not in the cache", func() {
-			It("should return an error when WaitForSync is called", func(done Done) {
+			It("should return an error when WaitForSync is called", func() {
 				ic.Error = fmt.Errorf("test error")
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 
@@ -235,8 +225,6 @@ var _ = Describe("Source", func() {
 				err := instance.Start(ctx, handler.Funcs{}, q)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(instance.WaitForSync(context.Background())).To(HaveOccurred())
-
-				close(done)
 			})
 		})
 	})
@@ -249,7 +237,7 @@ var _ = Describe("Source", func() {
 			Expect(injected).To(BeFalse())
 		})
 
-		It("should return an error if syncing fails", func(done Done) {
+		It("should return an error if syncing fails", func() {
 			f := false
 			instance := source.NewKindWithCache(&corev1.Pod{}, &informertest.FakeInformers{Synced: &f})
 			Expect(instance.Start(context.Background(), nil, nil)).NotTo(HaveOccurred())
@@ -257,13 +245,11 @@ var _ = Describe("Source", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("cache did not sync"))
 
-			close(done)
-
 		})
 	})
 
 	Describe("Func", func() {
-		It("should be called from Start", func(done Done) {
+		It("should be called from Start", func() {
 			run := false
 			instance := source.Func(func(
 				context.Context,
@@ -283,8 +269,6 @@ var _ = Describe("Source", func() {
 				return expected
 			})
 			Expect(instance.Start(ctx, nil, nil)).To(Equal(expected))
-
-			close(done)
 		})
 	})
 
@@ -304,7 +288,7 @@ var _ = Describe("Source", func() {
 		})
 
 		Context("for a source", func() {
-			It("should provide a GenericEvent", func(done Done) {
+			It("should provide a GenericEvent", func() {
 				ch := make(chan event.GenericEvent)
 				c := make(chan struct{})
 				p := &corev1.Pod{
@@ -353,9 +337,8 @@ var _ = Describe("Source", func() {
 				ch <- invalidEvt
 				ch <- evt
 				<-c
-				close(done)
 			})
-			It("should get pending events processed once channel unblocked", func(done Done) {
+			It("should get pending events processed once channel unblocked", func() {
 				ch := make(chan event.GenericEvent)
 				unblock := make(chan struct{})
 				processed := make(chan struct{})
@@ -412,10 +395,8 @@ var _ = Describe("Source", func() {
 
 				// Validate all of the events have been processed.
 				Expect(eventCount).To(Equal(3))
-
-				close(done)
 			})
-			It("should be able to cope with events in the channel before the source is started", func(done Done) {
+			It("should be able to cope with events in the channel before the source is started", func() {
 				ch := make(chan event.GenericEvent, 1)
 				processed := make(chan struct{})
 				evt := event.GenericEvent{}
@@ -449,8 +430,6 @@ var _ = Describe("Source", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				<-processed
-
-				close(done)
 			})
 			It("should stop when the source channel is closed", func() {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
@@ -496,24 +475,22 @@ var _ = Describe("Source", func() {
 				Eventually(processed).Should(Receive())
 				Consistently(processed).ShouldNot(Receive())
 			})
-			It("should get error if no source specified", func(done Done) {
+			It("should get error if no source specified", func() {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{ /*no source specified*/ }
 				Expect(inject.StopChannelInto(ctx.Done(), instance)).To(BeTrue())
 				err := instance.Start(ctx, handler.Funcs{}, q)
 				Expect(err).To(Equal(fmt.Errorf("must specify Channel.Source")))
-				close(done)
 			})
-			It("should get error if no stop channel injected", func(done Done) {
+			It("should get error if no stop channel injected", func() {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := &source.Channel{Source: ch}
 				err := instance.Start(ctx, handler.Funcs{}, q)
 				Expect(err).To(Equal(fmt.Errorf("must call InjectStop on Channel before calling Start")))
-				close(done)
 			})
 		})
 		Context("for multi sources (handlers)", func() {
-			It("should provide GenericEvents for all handlers", func(done Done) {
+			It("should provide GenericEvents for all handlers", func() {
 				ch := make(chan event.GenericEvent)
 				p := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
@@ -581,7 +558,6 @@ var _ = Describe("Source", func() {
 
 				// Validate the two handlers received same event
 				Expect(resEvent1).To(Equal(resEvent2))
-				close(done)
 			})
 		})
 	})

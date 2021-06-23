@@ -36,7 +36,7 @@ import (
 var _ = Describe("Test", func() {
 
 	Describe("Webhook", func() {
-		It("should reject create request for webhook that rejects all requests", func(done Done) {
+		It("should reject create request for webhook that rejects all requests", func() {
 			m, err := manager.New(env.Config, manager.Options{
 				Port:    env.WebhookInstallOptions.LocalServingPort,
 				Host:    env.WebhookInstallOptions.LocalServingHost,
@@ -87,7 +87,6 @@ var _ = Describe("Test", func() {
 			}, 1*time.Second).Should(BeTrue())
 
 			cancel()
-			close(done)
 		})
 
 		It("should load webhooks from directory", func() {

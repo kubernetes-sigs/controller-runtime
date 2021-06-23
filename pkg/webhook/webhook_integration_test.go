@@ -79,7 +79,7 @@ var _ = Describe("Webhook", func() {
 		}
 	})
 	Context("when running a webhook server with a manager", func() {
-		It("should reject create request for webhook that rejects all requests", func(done Done) {
+		It("should reject create request for webhook that rejects all requests", func() {
 			m, err := manager.New(cfg, manager.Options{
 				Port:    testenv.WebhookInstallOptions.LocalServingPort,
 				Host:    testenv.WebhookInstallOptions.LocalServingHost,
@@ -101,9 +101,8 @@ var _ = Describe("Webhook", func() {
 			}, 1*time.Second).Should(BeTrue())
 
 			cancel()
-			close(done)
 		})
-		It("should reject create request for multi-webhook that rejects all requests", func(done Done) {
+		It("should reject create request for multi-webhook that rejects all requests", func() {
 			m, err := manager.New(cfg, manager.Options{
 				Port:    testenv.WebhookInstallOptions.LocalServingPort,
 				Host:    testenv.WebhookInstallOptions.LocalServingHost,
@@ -125,11 +124,10 @@ var _ = Describe("Webhook", func() {
 			}, 1*time.Second).Should(BeTrue())
 
 			cancel()
-			close(done)
 		})
 	})
 	Context("when running a webhook server without a manager", func() {
-		It("should reject create request for webhook that rejects all requests", func(done Done) {
+		It("should reject create request for webhook that rejects all requests", func() {
 			server := webhook.Server{
 				Port:    testenv.WebhookInstallOptions.LocalServingPort,
 				Host:    testenv.WebhookInstallOptions.LocalServingHost,
@@ -149,11 +147,10 @@ var _ = Describe("Webhook", func() {
 			}, 1*time.Second).Should(BeTrue())
 
 			cancel()
-			close(done)
 		})
 	})
 	Context("when running a standalone webhook", func() {
-		It("should reject create request for webhook that rejects all requests", func(done Done) {
+		It("should reject create request for webhook that rejects all requests", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 
 			By("generating the TLS config")
@@ -206,7 +203,6 @@ var _ = Describe("Webhook", func() {
 			}, 1*time.Second).Should(BeTrue())
 
 			cancel()
-			close(done)
 		})
 	})
 })

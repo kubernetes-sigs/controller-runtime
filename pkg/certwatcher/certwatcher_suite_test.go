@@ -38,15 +38,12 @@ func TestSource(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
-var _ = BeforeSuite(func(done Done) {
+var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
-
-	close(done)
 }, 60)
 
-var _ = AfterSuite(func(done Done) {
+var _ = AfterSuite(func() {
 	for _, file := range []string{certPath, keyPath} {
 		_ = os.Remove(file)
 	}
-	close(done)
 }, 60)

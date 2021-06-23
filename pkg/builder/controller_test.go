@@ -297,7 +297,7 @@ var _ = Describe("application", func() {
 	})
 
 	Describe("Start with ControllerManagedBy", func() {
-		It("should Reconcile Owns objects", func(done Done) {
+		It("should Reconcile Owns objects", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -308,10 +308,9 @@ var _ = Describe("application", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			doReconcileTest(ctx, "3", bldr, m, false)
-			close(done)
 		}, 10)
 
-		It("should Reconcile Watches objects", func(done Done) {
+		It("should Reconcile Watches objects", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -324,12 +323,11 @@ var _ = Describe("application", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			doReconcileTest(ctx, "4", bldr, m, true)
-			close(done)
 		}, 10)
 	})
 
 	Describe("Set custom predicates", func() {
-		It("should execute registered predicates only for assigned kind", func(done Done) {
+		It("should execute registered predicates only for assigned kind", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -385,8 +383,6 @@ var _ = Describe("application", func() {
 			Expect(deployPrctExecuted).To(BeTrue(), "Deploy predicated should be called at least once")
 			Expect(replicaSetPrctExecuted).To(BeTrue(), "ReplicaSet predicated should be called at least once")
 			Expect(allPrctExecuted).To(BeNumerically(">=", 2), "Global Predicated should be called at least twice")
-
-			close(done)
 		})
 	})
 

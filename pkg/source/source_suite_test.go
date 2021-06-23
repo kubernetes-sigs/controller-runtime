@@ -44,7 +44,7 @@ var icache cache.Cache
 var ctx context.Context
 var cancel context.CancelFunc
 
-var _ = BeforeSuite(func(done Done) {
+var _ = BeforeSuite(func() {
 	ctx, cancel = context.WithCancel(context.Background())
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
@@ -64,13 +64,9 @@ var _ = BeforeSuite(func(done Done) {
 		defer GinkgoRecover()
 		Expect(icache.Start(ctx)).NotTo(HaveOccurred())
 	}()
-
-	close(done)
 }, 60)
 
-var _ = AfterSuite(func(done Done) {
+var _ = AfterSuite(func() {
 	cancel()
 	Expect(testenv.Stop()).To(Succeed())
-
-	close(done)
 }, 5)

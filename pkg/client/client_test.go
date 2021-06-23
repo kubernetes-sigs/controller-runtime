@@ -136,7 +136,7 @@ var _ = Describe("Client", func() {
 	var ns = "default"
 	ctx := context.TODO()
 
-	BeforeEach(func(done Done) {
+	BeforeEach(func() {
 		atomic.AddUint64(&count, 1)
 		dep = &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("deployment-name-%v", count), Namespace: ns, Labels: map[string]string{"app": fmt.Sprintf("bar-%v", count)}},
@@ -166,12 +166,10 @@ var _ = Describe("Client", func() {
 			Spec:       corev1.NodeSpec{},
 		}
 		scheme = kscheme.Scheme
-
-		close(done)
 	}, serverSideTimeoutSeconds)
 
 	var delOptions *metav1.DeleteOptions
-	AfterEach(func(done Done) {
+	AfterEach(func() {
 		// Cleanup
 		var zero int64 = 0
 		policy := metav1.DeletePropagationForeground
@@ -185,44 +183,35 @@ var _ = Describe("Client", func() {
 			err = clientset.CoreV1().Nodes().Delete(ctx, node.Name, *delOptions)
 			Expect(err).NotTo(HaveOccurred())
 		}
-		close(done)
 	}, serverSideTimeoutSeconds)
 
 	// TODO(seans): Cast "cl" as "client" struct from "Client" interface. Then validate the
 	// instance values for the "client" struct.
 	Describe("New", func() {
-		It("should return a new Client", func(done Done) {
+		It("should return a new Client", func() {
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
-
-			close(done)
 		})
 
-		It("should fail if the config is nil", func(done Done) {
+		It("should fail if the config is nil", func() {
 			cl, err := client.New(nil, client.Options{})
 			Expect(err).To(HaveOccurred())
 			Expect(cl).To(BeNil())
-
-			close(done)
 		})
 
 		// TODO(seans): cast as client struct and inspect Scheme
-		It("should use the provided Scheme if provided", func(done Done) {
+		It("should use the provided Scheme if provided", func() {
 			cl, err := client.New(cfg, client.Options{Scheme: scheme})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
-
-			close(done)
 		})
 
 		// TODO(seans): cast as client struct and inspect Scheme
-		It("should default the Scheme if not provided", func(done Done) {
+		It("should default the Scheme if not provided", func() {
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
-
-			close(done)
 		})
 
 		PIt("should use the provided Mapper if provided", func() {
@@ -230,18 +219,16 @@ var _ = Describe("Client", func() {
 		})
 
 		// TODO(seans): cast as client struct and inspect Mapper
-		It("should create a Mapper if not provided", func(done Done) {
+		It("should create a Mapper if not provided", func() {
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
-
-			close(done)
 		})
 	})
 
 	Describe("Create", func() {
 		Context("with structured objects", func() {
-			It("should create a new object from a go struct", func(done Done) {
+			It("should create a new object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -256,11 +243,9 @@ var _ = Describe("Client", func() {
 
 				By("writing the result back to the go struct")
 				Expect(dep).To(Equal(actual))
-
-				close(done)
 			})
 
-			It("should create a new object non-namespace object from a go struct", func(done Done) {
+			It("should create a new object non-namespace object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -275,11 +260,9 @@ var _ = Describe("Client", func() {
 
 				By("writing the result back to the go struct")
 				Expect(node).To(Equal(actual))
-
-				close(done)
 			})
 
-			It("should fail if the object already exists", func(done Done) {
+			It("should fail if the object already exists", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -298,11 +281,9 @@ var _ = Describe("Client", func() {
 				err = cl.Create(context.TODO(), old)
 				Expect(err).To(HaveOccurred())
 				Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
-
-				close(done)
 			})
 
-			It("should fail if the object does not pass server-side validation", func(done Done) {
+			It("should fail if the object does not pass server-side validation", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -312,8 +293,6 @@ var _ = Describe("Client", func() {
 				Expect(err).To(HaveOccurred())
 				// TODO(seans): Add test to validate the returned error. Problems currently with
 				// different returned error locally versus travis.
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
 			It("should fail if the object cannot be mapped to a GVK", func() {
@@ -335,7 +314,7 @@ var _ = Describe("Client", func() {
 			})
 
 			Context("with the DryRun option", func() {
-				It("should not create a new object", func(done Done) {
+				It("should not create a new object", func() {
 					cl, err := client.New(cfg, client.Options{})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cl).NotTo(BeNil())
@@ -348,14 +327,12 @@ var _ = Describe("Client", func() {
 					Expect(err).To(HaveOccurred())
 					Expect(apierrors.IsNotFound(err)).To(BeTrue())
 					Expect(actual).To(Equal(&appsv1.Deployment{}))
-
-					close(done)
 				})
 			})
 		})
 
 		Context("with unstructured objects", func() {
-			It("should create a new object from a go struct", func(done Done) {
+			It("should create a new object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -376,10 +353,9 @@ var _ = Describe("Client", func() {
 				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
-				close(done)
 			})
 
-			It("should create a new non-namespace object ", func(done Done) {
+			It("should create a new non-namespace object ", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -406,11 +382,9 @@ var _ = Describe("Client", func() {
 				By("writing the result back to the go struct")
 
 				Expect(u).To(Equal(au))
-
-				close(done)
 			})
 
-			It("should fail if the object already exists", func(done Done) {
+			It("should fail if the object already exists", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -437,11 +411,9 @@ var _ = Describe("Client", func() {
 				err = cl.Create(context.TODO(), u)
 				Expect(err).To(HaveOccurred())
 				Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
-
-				close(done)
 			})
 
-			It("should fail if the object does not pass server-side validation", func(done Done) {
+			It("should fail if the object does not pass server-side validation", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -458,8 +430,6 @@ var _ = Describe("Client", func() {
 				Expect(err).To(HaveOccurred())
 				// TODO(seans): Add test to validate the returned error. Problems currently with
 				// different returned error locally versus travis.
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
 		})
@@ -475,7 +445,7 @@ var _ = Describe("Client", func() {
 		})
 
 		Context("with the DryRun option", func() {
-			It("should not create a new object from a go struct", func(done Done) {
+			It("should not create a new object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -497,15 +467,13 @@ var _ = Describe("Client", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(apierrors.IsNotFound(err)).To(BeTrue())
 				Expect(actual).To(Equal(&appsv1.Deployment{}))
-
-				close(done)
 			})
 		})
 	})
 
 	Describe("Update", func() {
 		Context("with structured objects", func() {
-			It("should update an existing object from a go struct", func(done Done) {
+			It("should update an existing object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -524,11 +492,9 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
-
-				close(done)
 			})
 
-			It("should update and preserve type information", func(done Done) {
+			It("should update and preserve type information", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -544,11 +510,9 @@ var _ = Describe("Client", func() {
 
 				By("validating updated Deployment has type information")
 				Expect(dep.GroupVersionKind()).To(Equal(depGvk))
-
-				close(done)
 			})
 
-			It("should update an existing object non-namespace object from a go struct", func(done Done) {
+			It("should update an existing object non-namespace object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -566,11 +530,9 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
-
-				close(done)
 			})
 
-			It("should fail if the object does not exist", func(done Done) {
+			It("should fail if the object does not exist", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -578,8 +540,6 @@ var _ = Describe("Client", func() {
 				By("updating non-existent object")
 				err = cl.Update(context.TODO(), dep)
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
 			PIt("should fail if the object does not pass server-side validation", func() {
@@ -590,7 +550,7 @@ var _ = Describe("Client", func() {
 
 			})
 
-			It("should fail if the object cannot be mapped to a GVK", func(done Done) {
+			It("should fail if the object cannot be mapped to a GVK", func() {
 				By("creating client with empty Scheme")
 				emptyScheme := runtime.NewScheme()
 				cl, err := client.New(cfg, client.Options{Scheme: emptyScheme})
@@ -606,8 +566,6 @@ var _ = Describe("Client", func() {
 				err = cl.Update(context.TODO(), dep)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("no kind is registered for the type"))
-
-				close(done)
 			})
 
 			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
@@ -615,7 +573,7 @@ var _ = Describe("Client", func() {
 			})
 		})
 		Context("with unstructured objects", func() {
-			It("should update an existing object from a go struct", func(done Done) {
+			It("should update an existing object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -641,11 +599,9 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
-
-				close(done)
 			})
 
-			It("should update and preserve type information", func(done Done) {
+			It("should update and preserve type information", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -664,11 +620,9 @@ var _ = Describe("Client", func() {
 
 				By("validating updated Deployment has type information")
 				Expect(u.GroupVersionKind()).To(Equal(depGvk))
-
-				close(done)
 			})
 
-			It("should update an existing object non-namespace object from a go struct", func(done Done) {
+			It("should update an existing object non-namespace object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -693,10 +647,8 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
-
-				close(done)
 			})
-			It("should fail if the object does not exist", func(done Done) {
+			It("should fail if the object does not exist", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -707,8 +659,6 @@ var _ = Describe("Client", func() {
 				u.SetGroupVersionKind(depGvk)
 				err = cl.Update(context.TODO(), dep)
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 		})
 		Context("with metadata objects", func() {
@@ -725,7 +675,7 @@ var _ = Describe("Client", func() {
 
 	Describe("Patch", func() {
 		Context("Metadata Client", func() {
-			It("should merge patch with options", func(done Done) {
+			It("should merge patch with options", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -751,14 +701,13 @@ var _ = Describe("Client", func() {
 
 				By("validating patch options were applied")
 				Expect(testOption.applied).To(Equal(true))
-				close(done)
 			})
 		})
 	})
 
 	Describe("StatusClient", func() {
 		Context("with structured objects", func() {
-			It("should update status of an existing object", func(done Done) {
+			It("should update status of an existing object", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -777,11 +726,9 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
-
-				close(done)
 			})
 
-			It("should update status and preserve type information", func(done Done) {
+			It("should update status and preserve type information", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -798,11 +745,9 @@ var _ = Describe("Client", func() {
 
 				By("validating updated Deployment has type information")
 				Expect(dep.GroupVersionKind()).To(Equal(depGvk))
-
-				close(done)
 			})
 
-			It("should patch status and preserve type information", func(done Done) {
+			It("should patch status and preserve type information", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -820,11 +765,9 @@ var _ = Describe("Client", func() {
 
 				By("validating updated Deployment has type information")
 				Expect(dep.GroupVersionKind()).To(Equal(depGvk))
-
-				close(done)
 			})
 
-			It("should not update spec of an existing object", func(done Done) {
+			It("should not update spec of an existing object", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -846,11 +789,9 @@ var _ = Describe("Client", func() {
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
 				Expect(*actual.Spec.Replicas).To(BeEquivalentTo(replicaCount))
-
-				close(done)
 			})
 
-			It("should update an existing object non-namespace object", func(done Done) {
+			It("should update an existing object non-namespace object", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -868,11 +809,9 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Phase).To(Equal(corev1.NodeRunning))
-
-				close(done)
 			})
 
-			It("should fail if the object does not exist", func(done Done) {
+			It("should fail if the object does not exist", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -880,11 +819,9 @@ var _ = Describe("Client", func() {
 				By("updating status of a non-existent object")
 				err = cl.Status().Update(context.TODO(), dep)
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
-			It("should fail if the object cannot be mapped to a GVK", func(done Done) {
+			It("should fail if the object cannot be mapped to a GVK", func() {
 				By("creating client with empty Scheme")
 				emptyScheme := runtime.NewScheme()
 				cl, err := client.New(cfg, client.Options{Scheme: emptyScheme})
@@ -900,8 +837,6 @@ var _ = Describe("Client", func() {
 				err = cl.Status().Update(context.TODO(), dep)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("no kind is registered for the type"))
-
-				close(done)
 			})
 
 			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
@@ -914,7 +849,7 @@ var _ = Describe("Client", func() {
 		})
 
 		Context("with unstructured objects", func() {
-			It("should update status of an existing object", func(done Done) {
+			It("should update status of an existing object", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -935,11 +870,9 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
-
-				close(done)
 			})
 
-			It("should update status and preserve type information", func(done Done) {
+			It("should update status and preserve type information", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -957,11 +890,9 @@ var _ = Describe("Client", func() {
 
 				By("validating updated Deployment has type information")
 				Expect(u.GroupVersionKind()).To(Equal(depGvk))
-
-				close(done)
 			})
 
-			It("should patch status and preserve type information", func(done Done) {
+			It("should patch status and preserve type information", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -986,11 +917,9 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
-
-				close(done)
 			})
 
-			It("should not update spec of an existing object", func(done Done) {
+			It("should not update spec of an existing object", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1014,11 +943,9 @@ var _ = Describe("Client", func() {
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
 				Expect(*actual.Spec.Replicas).To(BeEquivalentTo(replicaCount))
-
-				close(done)
 			})
 
-			It("should update an existing object non-namespace object", func(done Done) {
+			It("should update an existing object non-namespace object", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1038,11 +965,9 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Status.Phase).To(Equal(corev1.NodeRunning))
-
-				close(done)
 			})
 
-			It("should fail if the object does not exist", func(done Done) {
+			It("should fail if the object does not exist", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1052,8 +977,6 @@ var _ = Describe("Client", func() {
 				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
 				err = cl.Status().Update(context.TODO(), u)
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
 			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
@@ -1075,7 +998,7 @@ var _ = Describe("Client", func() {
 				Expect(cl.Status().Update(context.TODO(), obj)).NotTo(Succeed())
 			})
 
-			It("should patch status and preserve type information", func(done Done) {
+			It("should patch status and preserve type information", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1099,15 +1022,13 @@ var _ = Describe("Client", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(actual).NotTo(BeNil())
 				Expect(actual.Annotations).To(HaveKeyWithValue("some-new-annotation", "some-new-value"))
-
-				close(done)
 			})
 		})
 	})
 
 	Describe("Delete", func() {
 		Context("with structured objects", func() {
-			It("should delete an existing object from a go struct", func(done Done) {
+			It("should delete an existing object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1124,11 +1045,9 @@ var _ = Describe("Client", func() {
 				By("validating the Deployment no longer exists")
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, depName, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
-			It("should delete an existing object non-namespace object from a go struct", func(done Done) {
+			It("should delete an existing object non-namespace object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1145,11 +1064,9 @@ var _ = Describe("Client", func() {
 				By("validating the Node no longer exists")
 				_, err = clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
-			It("should fail if the object does not exist", func(done Done) {
+			It("should fail if the object does not exist", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1157,15 +1074,13 @@ var _ = Describe("Client", func() {
 				By("Deleting node before it is ever created")
 				err = cl.Delete(context.TODO(), node)
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
 			PIt("should fail if the object doesn't have meta", func() {
 
 			})
 
-			It("should fail if the object cannot be mapped to a GVK", func(done Done) {
+			It("should fail if the object cannot be mapped to a GVK", func() {
 				By("creating client with empty Scheme")
 				emptyScheme := runtime.NewScheme()
 				cl, err := client.New(cfg, client.Options{Scheme: emptyScheme})
@@ -1180,15 +1095,13 @@ var _ = Describe("Client", func() {
 				err = cl.Delete(context.TODO(), dep)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("no kind is registered for the type"))
-
-				close(done)
 			})
 
 			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 			})
 
-			It("should delete a collection of objects", func(done Done) {
+			It("should delete a collection of objects", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1215,12 +1128,10 @@ var _ = Describe("Client", func() {
 				Expect(err).To(HaveOccurred())
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep2Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 		})
 		Context("with unstructured objects", func() {
-			It("should delete an existing object from a go struct", func(done Done) {
+			It("should delete an existing object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1244,11 +1155,9 @@ var _ = Describe("Client", func() {
 				By("validating the Deployment no longer exists")
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, depName, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
-			It("should delete an existing object non-namespace object from a go struct", func(done Done) {
+			It("should delete an existing object non-namespace object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1272,11 +1181,9 @@ var _ = Describe("Client", func() {
 				By("validating the Node no longer exists")
 				_, err = clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
-			It("should fail if the object does not exist", func(done Done) {
+			It("should fail if the object does not exist", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1291,11 +1198,9 @@ var _ = Describe("Client", func() {
 				})
 				err = cl.Delete(context.TODO(), node)
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
-			It("should delete a collection of object", func(done Done) {
+			It("should delete a collection of object", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1329,12 +1234,10 @@ var _ = Describe("Client", func() {
 				Expect(err).To(HaveOccurred())
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep2Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 		})
 		Context("with metadata objects", func() {
-			It("should delete an existing object from a go struct", func(done Done) {
+			It("should delete an existing object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1351,11 +1254,9 @@ var _ = Describe("Client", func() {
 				By("validating the Deployment no longer exists")
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
-			It("should delete an existing object non-namespace object from a go struct", func(done Done) {
+			It("should delete an existing object non-namespace object from a go struct", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1372,11 +1273,9 @@ var _ = Describe("Client", func() {
 				By("validating the Node no longer exists")
 				_, err = clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
-			It("should fail if the object does not exist", func(done Done) {
+			It("should fail if the object does not exist", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1385,11 +1284,9 @@ var _ = Describe("Client", func() {
 				metaObj := metaOnlyFromObj(node, scheme)
 				err = cl.Delete(context.TODO(), metaObj)
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
-			It("should delete a collection of object", func(done Done) {
+			It("should delete a collection of object", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1417,15 +1314,13 @@ var _ = Describe("Client", func() {
 				Expect(err).To(HaveOccurred())
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep2Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 		})
 	})
 
 	Describe("Get", func() {
 		Context("with structured objects", func() {
-			It("should fetch an existing object for a go struct", func(done Done) {
+			It("should fetch an existing object for a go struct", func() {
 				By("first creating the Deployment")
 				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1443,11 +1338,9 @@ var _ = Describe("Client", func() {
 
 				By("validating the fetched deployment equals the created one")
 				Expect(dep).To(Equal(&actual))
-
-				close(done)
 			})
 
-			It("should fetch an existing non-namespace object for a go struct", func(done Done) {
+			It("should fetch an existing non-namespace object for a go struct", func() {
 				By("first creating the object")
 				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1464,11 +1357,9 @@ var _ = Describe("Client", func() {
 				Expect(actual).NotTo(BeNil())
 
 				Expect(node).To(Equal(&actual))
-
-				close(done)
 			})
 
-			It("should fail if the object does not exist", func(done Done) {
+			It("should fail if the object does not exist", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1478,8 +1369,6 @@ var _ = Describe("Client", func() {
 				var actual appsv1.Deployment
 				err = cl.Get(context.TODO(), key, &actual)
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
 			PIt("should fail if the object doesn't have meta", func() {
@@ -1511,7 +1400,7 @@ var _ = Describe("Client", func() {
 		})
 
 		Context("with unstructured objects", func() {
-			It("should fetch an existing object", func(done Done) {
+			It("should fetch an existing object", func() {
 				By("first creating the Deployment")
 				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1538,11 +1427,9 @@ var _ = Describe("Client", func() {
 
 				By("validating the fetched Deployment equals the created one")
 				Expect(u).To(Equal(&actual))
-
-				close(done)
 			})
 
-			It("should fetch an existing non-namespace object", func(done Done) {
+			It("should fetch an existing non-namespace object", func() {
 				By("first creating the Node")
 				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1569,11 +1456,9 @@ var _ = Describe("Client", func() {
 
 				By("validating the fetched Node equals the created one")
 				Expect(u).To(Equal(&actual))
-
-				close(done)
 			})
 
-			It("should fail if the object does not exist", func(done Done) {
+			It("should fail if the object does not exist", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1583,12 +1468,10 @@ var _ = Describe("Client", func() {
 				u := &unstructured.Unstructured{}
 				err = cl.Get(context.TODO(), key, u)
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 		})
 		Context("with metadata objects", func() {
-			It("should fetch an existing object for a go struct", func(done Done) {
+			It("should fetch an existing object for a go struct", func() {
 				By("first creating the Deployment")
 				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1615,11 +1498,9 @@ var _ = Describe("Client", func() {
 
 				By("validating the fetched deployment equals the created one")
 				Expect(metaOnlyFromObj(dep, scheme)).To(Equal(&actual))
-
-				close(done)
 			})
 
-			It("should fetch an existing non-namespace object for a go struct", func(done Done) {
+			It("should fetch an existing non-namespace object for a go struct", func() {
 				By("first creating the object")
 				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1640,11 +1521,9 @@ var _ = Describe("Client", func() {
 				Expect(actual).NotTo(BeNil())
 
 				Expect(metaOnlyFromObj(node, scheme)).To(Equal(&actual))
-
-				close(done)
 			})
 
-			It("should fail if the object does not exist", func(done Done) {
+			It("should fail if the object does not exist", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1659,8 +1538,6 @@ var _ = Describe("Client", func() {
 				})
 				err = cl.Get(context.TODO(), key, &actual)
 				Expect(err).To(HaveOccurred())
-
-				close(done)
 			})
 
 			PIt("should fail if the object doesn't have meta", func() {
@@ -1675,7 +1552,7 @@ var _ = Describe("Client", func() {
 
 	Describe("List", func() {
 		Context("with structured objects", func() {
-			It("should fetch collection of objects", func(done Done) {
+			It("should fetch collection of objects", func() {
 				By("creating an initial object")
 				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1696,11 +1573,9 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should fetch unstructured collection of objects", func(done Done) {
+			It("should fetch unstructured collection of objects", func() {
 				By("create an initial object")
 				_, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1732,10 +1607,9 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should fetch unstructured collection of objects, even if scheme is empty", func(done Done) {
+			It("should fetch unstructured collection of objects, even if scheme is empty", func() {
 				By("create an initial object")
 				_, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1762,10 +1636,9 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should return an empty list if there are no matching objects", func(done Done) {
+			It("should return an empty list if there are no matching objects", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1775,12 +1648,10 @@ var _ = Describe("Client", func() {
 
 				By("validating no Deployments are returned")
 				Expect(deps.Items).To(BeEmpty())
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
 			// TODO(seans): get label selector test working
-			It("should filter results by label selector", func(done Done) {
+			It("should filter results by label selector", func() {
 				By("creating a Deployment with the app=frontend label")
 				depFrontend := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1838,11 +1709,9 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should filter results by namespace selector", func(done Done) {
+			It("should filter results by namespace selector", func() {
 				By("creating a Deployment in test-namespace-1")
 				tns1 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-1"}}
 				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns1, metav1.CreateOptions{})
@@ -1899,11 +1768,9 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depBackend, "test-namespace-2")
 				deleteNamespace(ctx, tns1)
 				deleteNamespace(ctx, tns2)
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should filter results by field selector", func(done Done) {
+			It("should filter results by field selector", func() {
 				By("creating a Deployment with name deployment-frontend")
 				depFrontend := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: ns},
@@ -1953,11 +1820,9 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should filter results by namespace selector and label selector", func(done Done) {
+			It("should filter results by namespace selector and label selector", func() {
 				By("creating a Deployment in test-namespace-3 with the app=frontend label")
 				tns3 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-3"}}
 				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns3, metav1.CreateOptions{})
@@ -2048,8 +1913,6 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depFrontend4, "test-namespace-4")
 				deleteNamespace(ctx, tns3)
 				deleteNamespace(ctx, tns4)
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
 			It("should filter results using limit and continue options", func() {
@@ -2149,7 +2012,7 @@ var _ = Describe("Client", func() {
 		})
 
 		Context("with unstructured objects", func() {
-			It("should fetch collection of objects", func(done Done) {
+			It("should fetch collection of objects", func() {
 				By("create an initial object")
 				_, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -2176,10 +2039,9 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should return an empty list if there are no matching objects", func(done Done) {
+			It("should return an empty list if there are no matching objects", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -2194,11 +2056,9 @@ var _ = Describe("Client", func() {
 
 				By("validating no Deployments are returned")
 				Expect(deps.Items).To(BeEmpty())
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should filter results by namespace selector", func(done Done) {
+			It("should filter results by namespace selector", func() {
 				By("creating a Deployment in test-namespace-5")
 				tns1 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-5"}}
 				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns1, metav1.CreateOptions{})
@@ -2260,11 +2120,9 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depBackend, "test-namespace-6")
 				deleteNamespace(ctx, tns1)
 				deleteNamespace(ctx, tns2)
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should filter results by field selector", func(done Done) {
+			It("should filter results by field selector", func() {
 				By("creating a Deployment with name deployment-frontend")
 				depFrontend := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: ns},
@@ -2319,11 +2177,9 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should filter results by namespace selector and label selector", func(done Done) {
+			It("should filter results by namespace selector and label selector", func() {
 				By("creating a Deployment in test-namespace-7 with the app=frontend label")
 				tns3 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-7"}}
 				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns3, metav1.CreateOptions{})
@@ -2417,8 +2273,6 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depFrontend4, "test-namespace-8")
 				deleteNamespace(ctx, tns3)
 				deleteNamespace(ctx, tns4)
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
 			PIt("should fail if the object doesn't have meta", func() {
@@ -2430,7 +2284,7 @@ var _ = Describe("Client", func() {
 			})
 		})
 		Context("with metadata objects", func() {
-			It("should fetch collection of objects", func(done Done) {
+			It("should fetch collection of objects", func() {
 				By("creating an initial object")
 				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -2467,11 +2321,9 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should return an empty list if there are no matching objects", func(done Done) {
+			It("should return an empty list if there are no matching objects", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -2486,12 +2338,10 @@ var _ = Describe("Client", func() {
 
 				By("validating no Deployments are returned")
 				Expect(metaList.Items).To(BeEmpty())
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
 			// TODO(seans): get label selector test working
-			It("should filter results by label selector", func(done Done) {
+			It("should filter results by label selector", func() {
 				By("creating a Deployment with the app=frontend label")
 				depFrontend := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{
@@ -2554,11 +2404,9 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should filter results by namespace selector", func(done Done) {
+			It("should filter results by namespace selector", func() {
 				By("creating a Deployment in test-namespace-1")
 				tns1 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-1"}}
 				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns1, metav1.CreateOptions{})
@@ -2620,11 +2468,9 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depBackend, "test-namespace-2")
 				deleteNamespace(ctx, tns1)
 				deleteNamespace(ctx, tns2)
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should filter results by field selector", func(done Done) {
+			It("should filter results by field selector", func() {
 				By("creating a Deployment with name deployment-frontend")
 				depFrontend := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: ns},
@@ -2679,11 +2525,9 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
-			It("should filter results by namespace selector and label selector", func(done Done) {
+			It("should filter results by namespace selector and label selector", func() {
 				By("creating a Deployment in test-namespace-3 with the app=frontend label")
 				tns3 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-3"}}
 				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns3, metav1.CreateOptions{})
@@ -2779,8 +2623,6 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depFrontend4, "test-namespace-4")
 				deleteNamespace(ctx, tns3)
 				deleteNamespace(ctx, tns4)
-
-				close(done)
 			}, serverSideTimeoutSeconds)
 
 			It("should filter results using limit and continue options", func() {

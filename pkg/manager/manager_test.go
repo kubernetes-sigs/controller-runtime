@@ -75,7 +75,7 @@ var _ = Describe("manger.Manager", func() {
 
 		})
 
-		It("should return an error it can't create a client.Client", func(done Done) {
+		It("should return an error it can't create a client.Client", func() {
 			m, err := New(cfg, Options{
 				NewClient: func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
 					return nil, errors.New("expected error")
@@ -84,11 +84,9 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
-
-			close(done)
 		})
 
-		It("should return an error it can't create a cache.Cache", func(done Done) {
+		It("should return an error it can't create a cache.Cache", func() {
 			m, err := New(cfg, Options{
 				NewCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 					return nil, fmt.Errorf("expected error")
@@ -97,11 +95,9 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
-
-			close(done)
 		})
 
-		It("should create a client defined in by the new client function", func(done Done) {
+		It("should create a client defined in by the new client function", func() {
 			m, err := New(cfg, Options{
 				NewClient: func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
 					return nil, nil
@@ -110,11 +106,9 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m).ToNot(BeNil())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(m.GetClient()).To(BeNil())
-
-			close(done)
 		})
 
-		It("should return an error it can't create a recorder.Provider", func(done Done) {
+		It("should return an error it can't create a recorder.Provider", func() {
 			m, err := New(cfg, Options{
 				newRecorderProvider: func(_ *rest.Config, _ *runtime.Scheme, _ logr.Logger, _ intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
 					return nil, fmt.Errorf("expected error")
@@ -123,11 +117,9 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
-
-			close(done)
 		})
 
-		It("should be able to load Options from cfg.ControllerManagerConfiguration type", func(done Done) {
+		It("should be able to load Options from cfg.ControllerManagerConfiguration type", func() {
 			duration := metav1.Duration{Duration: 48 * time.Hour}
 			port := int(6090)
 			leaderElect := false
@@ -180,11 +172,9 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.Port).To(Equal(port))
 			Expect(m.Host).To(Equal("localhost"))
 			Expect(m.CertDir).To(Equal("/certs"))
-
-			close(done)
 		})
 
-		It("should be able to keep Options when cfg.ControllerManagerConfiguration set", func(done Done) {
+		It("should be able to keep Options when cfg.ControllerManagerConfiguration set", func() {
 			optDuration := time.Duration(2)
 			duration := metav1.Duration{Duration: 48 * time.Hour}
 			port := int(6090)
@@ -255,11 +245,9 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.Port).To(Equal(8080))
 			Expect(m.Host).To(Equal("example.com"))
 			Expect(m.CertDir).To(Equal("/pki"))
-
-			close(done)
 		})
 
-		It("should lazily initialize a webhook server if needed", func(done Done) {
+		It("should lazily initialize a webhook server if needed", func() {
 			By("creating a manager with options")
 			m, err := New(cfg, Options{Port: 9440, Host: "foo.com"})
 			Expect(err).NotTo(HaveOccurred())
@@ -270,11 +258,9 @@ var _ = Describe("manger.Manager", func() {
 			Expect(svr).NotTo(BeNil())
 			Expect(svr.Port).To(Equal(9440))
 			Expect(svr.Host).To(Equal("foo.com"))
-
-			close(done)
 		})
 
-		It("should not initialize a webhook server if Options.WebhookServer is set", func(done Done) {
+		It("should not initialize a webhook server if Options.WebhookServer is set", func() {
 			By("creating a manager with options")
 			m, err := New(cfg, Options{Port: 9441, WebhookServer: &webhook.Server{Port: 9440}})
 			Expect(err).NotTo(HaveOccurred())
@@ -284,8 +270,6 @@ var _ = Describe("manger.Manager", func() {
 			svr := m.GetWebhookServer()
 			Expect(svr).NotTo(BeNil())
 			Expect(svr.Port).To(Equal(9440))
-
-			close(done)
 		})
 
 		Context("with leader election enabled", func() {
@@ -599,7 +583,7 @@ var _ = Describe("manger.Manager", func() {
 
 	Describe("Start", func() {
 		var startSuite = func(options Options, callbacks ...func(Manager)) {
-			It("should Start each Component", func(done Done) {
+			It("should Start each Component", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
@@ -629,7 +613,6 @@ var _ = Describe("manger.Manager", func() {
 				}()
 
 				wgRunnableStarted.Wait()
-				close(done)
 			})
 
 			It("should not manipulate the provided config", func() {
@@ -651,7 +634,7 @@ var _ = Describe("manger.Manager", func() {
 				Expect(m.GetConfig()).To(Equal(originalCfg))
 			})
 
-			It("should stop when context is cancelled", func(done Done) {
+			It("should stop when context is cancelled", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
@@ -660,11 +643,9 @@ var _ = Describe("manger.Manager", func() {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
 				Expect(m.Start(ctx)).NotTo(HaveOccurred())
-
-				close(done)
 			})
 
-			It("should return an error if it can't start the cache", func(done Done) {
+			It("should return an error if it can't start the cache", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
@@ -677,11 +658,9 @@ var _ = Describe("manger.Manager", func() {
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				Expect(m.Start(ctx)).To(MatchError(ContainSubstring("expected error")))
-
-				close(done)
 			})
 
-			It("should start the cache before starting anything else", func(done Done) {
+			It("should start the cache before starting anything else", func() {
 				fakeCache := &startSignalingInformer{Cache: &informertest.FakeInformers{}}
 				options.NewCache = func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
 					return fakeCache, nil
@@ -710,10 +689,9 @@ var _ = Describe("manger.Manager", func() {
 				}()
 
 				<-runnableWasStarted
-				close(done)
 			})
 
-			It("should start additional clusters before anything else", func(done Done) {
+			It("should start additional clusters before anything else", func() {
 				fakeCache := &startSignalingInformer{Cache: &informertest.FakeInformers{}}
 				options.NewCache = func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
 					return fakeCache, nil
@@ -754,10 +732,9 @@ var _ = Describe("manger.Manager", func() {
 				}()
 
 				<-runnableWasStarted
-				close(done)
 			})
 
-			It("should return an error if any Components fail to Start", func(done Done) {
+			It("should return an error if any Components fail to Start", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
@@ -786,11 +763,9 @@ var _ = Describe("manger.Manager", func() {
 				err = m.Start(ctx)
 				Expect(err).ToNot(BeNil())
 				Expect(err.Error()).To(Equal("expected error"))
-
-				close(done)
 			})
 
-			It("should wait for runnables to stop", func(done Done) {
+			It("should wait for runnables to stop", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
@@ -840,10 +815,9 @@ var _ = Describe("manger.Manager", func() {
 				cancel()
 
 				wgManagerRunning.Wait()
-				close(done)
 			})
 
-			It("should return an error if any Components fail to Start and wait for runnables to stop", func(done Done) {
+			It("should return an error if any Components fail to Start and wait for runnables to stop", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
@@ -875,11 +849,9 @@ var _ = Describe("manger.Manager", func() {
 				defer cancel()
 				Expect(m.Start(ctx)).To(HaveOccurred())
 				Expect(runnableDoneCount).To(Equal(2))
-
-				close(done)
 			})
 
-			It("should refuse to add runnable if stop procedure is already engaged", func(done Done) {
+			It("should refuse to add runnable if stop procedure is already engaged", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
@@ -907,11 +879,9 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					return nil
 				}))).NotTo(Succeed())
-
-				close(done)
 			})
 
-			It("should return both runnables and stop errors when both error", func(done Done) {
+			It("should return both runnables and stop errors when both error", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
@@ -942,11 +912,9 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err.Error()).To(Equal(eMsg))
 				Expect(errors.Is(err, context.DeadlineExceeded)).To(BeTrue())
 				Expect(errors.Is(err, runnableError{})).To(BeTrue())
-
-				close(done)
 			})
 
-			It("should return only stop errors if runnables dont error", func(done Done) {
+			It("should return only stop errors if runnables dont error", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
@@ -982,11 +950,9 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err.Error()).To(Equal("failed waiting for all runnables to end within grace period of 1ns: context deadline exceeded"))
 				Expect(errors.Is(err, context.DeadlineExceeded)).To(BeTrue())
 				Expect(errors.Is(err, runnableError{})).ToNot(BeTrue())
-
-				close(done)
 			})
 
-			It("should return only runnables error if stop doesn't error", func(done Done) {
+			It("should return only runnables error if stop doesn't error", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
@@ -1002,11 +968,9 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err.Error()).To(Equal("not feeling like that"))
 				Expect(errors.Is(err, context.DeadlineExceeded)).ToNot(BeTrue())
 				Expect(errors.Is(err, runnableError{})).To(BeTrue())
-
-				close(done)
 			})
 
-			It("should not wait for runnables if gracefulShutdownTimeout is 0", func(done Done) {
+			It("should not wait for runnables if gracefulShutdownTimeout is 0", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
@@ -1033,7 +997,6 @@ var _ = Describe("manger.Manager", func() {
 
 				<-managerStopDone
 				<-runnableStopped
-				close(done)
 			})
 
 		}
@@ -1079,7 +1042,7 @@ var _ = Describe("manger.Manager", func() {
 				}
 			})
 
-			It("should stop serving metrics when stop is called", func(done Done) {
+			It("should stop serving metrics when stop is called", func() {
 				opts.MetricsBindAddress = ":0"
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
@@ -1088,7 +1051,6 @@ var _ = Describe("manger.Manager", func() {
 				go func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
-					close(done)
 				}()
 
 				// Check the metrics started
@@ -1106,7 +1068,7 @@ var _ = Describe("manger.Manager", func() {
 				}).ShouldNot(Succeed())
 			})
 
-			It("should serve metrics endpoint", func(done Done) {
+			It("should serve metrics endpoint", func() {
 				opts.MetricsBindAddress = ":0"
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
@@ -1116,7 +1078,6 @@ var _ = Describe("manger.Manager", func() {
 				go func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
-					close(done)
 				}()
 
 				metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
@@ -1125,7 +1086,7 @@ var _ = Describe("manger.Manager", func() {
 				Expect(resp.StatusCode).To(Equal(200))
 			})
 
-			It("should not serve anything other than metrics endpoint by default", func(done Done) {
+			It("should not serve anything other than metrics endpoint by default", func() {
 				opts.MetricsBindAddress = ":0"
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
@@ -1135,7 +1096,6 @@ var _ = Describe("manger.Manager", func() {
 				go func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
-					close(done)
 				}()
 
 				endpoint := fmt.Sprintf("http://%s/should-not-exist", listener.Addr().String())
@@ -1144,7 +1104,7 @@ var _ = Describe("manger.Manager", func() {
 				Expect(resp.StatusCode).To(Equal(404))
 			})
 
-			It("should serve metrics in its registry", func(done Done) {
+			It("should serve metrics in its registry", func() {
 				one := prometheus.NewCounter(prometheus.CounterOpts{
 					Name: "test_one",
 					Help: "test metric for testing",
@@ -1162,7 +1122,6 @@ var _ = Describe("manger.Manager", func() {
 				go func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
-					close(done)
 				}()
 
 				metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
@@ -1183,7 +1142,7 @@ var _ = Describe("manger.Manager", func() {
 				Expect(ok).To(BeTrue())
 			})
 
-			It("should serve extra endpoints", func(done Done) {
+			It("should serve extra endpoints", func() {
 				opts.MetricsBindAddress = ":0"
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
@@ -1204,7 +1163,6 @@ var _ = Describe("manger.Manager", func() {
 				go func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
-					close(done)
 				}()
 
 				endpoint := fmt.Sprintf("http://%s/debug", listener.Addr().String())
@@ -1240,7 +1198,7 @@ var _ = Describe("manger.Manager", func() {
 			}
 		})
 
-		It("should stop serving health probes when stop is called", func(done Done) {
+		It("should stop serving health probes when stop is called", func() {
 			opts.HealthProbeBindAddress = ":0"
 			m, err := New(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
@@ -1249,7 +1207,6 @@ var _ = Describe("manger.Manager", func() {
 			go func() {
 				defer GinkgoRecover()
 				Expect(m.Start(ctx)).NotTo(HaveOccurred())
-				close(done)
 			}()
 
 			// Check the health probes started
@@ -1267,7 +1224,7 @@ var _ = Describe("manger.Manager", func() {
 			}).ShouldNot(Succeed())
 		})
 
-		It("should serve readiness endpoint", func(done Done) {
+		It("should serve readiness endpoint", func() {
 			opts.HealthProbeBindAddress = ":0"
 			m, err := New(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
@@ -1282,7 +1239,6 @@ var _ = Describe("manger.Manager", func() {
 			go func() {
 				defer GinkgoRecover()
 				Expect(m.Start(ctx)).NotTo(HaveOccurred())
-				close(done)
 			}()
 
 			readinessEndpoint := fmt.Sprint("http://", listener.Addr().String(), defaultReadinessEndpoint)
@@ -1318,7 +1274,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 		})
 
-		It("should serve liveness endpoint", func(done Done) {
+		It("should serve liveness endpoint", func() {
 			opts.HealthProbeBindAddress = ":0"
 			m, err := New(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
@@ -1333,7 +1289,6 @@ var _ = Describe("manger.Manager", func() {
 			go func() {
 				defer GinkgoRecover()
 				Expect(m.Start(ctx)).NotTo(HaveOccurred())
-				close(done)
 			}()
 
 			livenessEndpoint := fmt.Sprint("http://", listener.Addr().String(), defaultLivenessEndpoint)
@@ -1372,7 +1327,7 @@ var _ = Describe("manger.Manager", func() {
 
 	Describe("Add", func() {
 		It("should immediately start the Component if the Manager has already Started another Component",
-			func(done Done) {
+			func() {
 				m, err := New(cfg, Options{})
 				Expect(err).NotTo(HaveOccurred())
 				mgr, ok := m.(*controllerManager)
@@ -1409,11 +1364,9 @@ var _ = Describe("manger.Manager", func() {
 				}))).To(Succeed())
 				<-c1
 				<-c2
-
-				close(done)
 			})
 
-		It("should immediately start the Component if the Manager has already Started", func(done Done) {
+		It("should immediately start the Component if the Manager has already Started", func() {
 			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
 			mgr, ok := m.(*controllerManager)
@@ -1440,8 +1393,6 @@ var _ = Describe("manger.Manager", func() {
 				return nil
 			}))).To(Succeed())
 			<-c1
-
-			close(done)
 		})
 
 		It("should fail if SetFields fails", func() {
@@ -1451,7 +1402,7 @@ var _ = Describe("manger.Manager", func() {
 		})
 	})
 	Describe("SetFields", func() {
-		It("should inject field values", func(done Done) {
+		It("should inject field values", func() {
 			m, err := New(cfg, Options{
 				NewCache: func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
 					return &informertest.FakeInformers{}, nil
@@ -1543,7 +1494,6 @@ var _ = Describe("manger.Manager", func() {
 				},
 			})
 			Expect(err).To(Equal(expected))
-			close(done)
 		})
 	})
 

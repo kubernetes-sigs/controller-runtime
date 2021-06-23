@@ -44,7 +44,7 @@ var _ = Describe("Source", func() {
 	var ns string
 	count := 0
 
-	BeforeEach(func(done Done) {
+	BeforeEach(func() {
 		// Create the namespace for the test
 		ns = fmt.Sprintf("controller-source-kindsource-%v", count)
 		count++
@@ -56,8 +56,6 @@ var _ = Describe("Source", func() {
 		q = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 		c1 = make(chan interface{})
 		c2 = make(chan interface{})
-
-		close(done)
 	})
 
 	JustBeforeEach(func() {
@@ -68,20 +66,18 @@ var _ = Describe("Source", func() {
 		Expect(inject.CacheInto(icache, instance2)).To(BeTrue())
 	})
 
-	AfterEach(func(done Done) {
+	AfterEach(func() {
 		err := clientset.CoreV1().Namespaces().Delete(ctx, ns, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		close(c1)
 		close(c2)
-
-		close(done)
 	})
 
 	Describe("Kind", func() {
 		Context("for a Deployment resource", func() {
 			obj = &appsv1.Deployment{}
 
-			It("should provide Deployment Events", func(done Done) {
+			It("should provide Deployment Events", func() {
 				var created, updated, deleted *appsv1.Deployment
 				var err error
 
@@ -192,8 +188,6 @@ var _ = Describe("Source", func() {
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.DeleteEvent{}))
 				deleteEvt.Object.SetResourceVersion("")
 				Expect(deleteEvt.Object).To(Equal(deleted))
-
-				close(done)
 			}, 5)
 		})
 
@@ -212,7 +206,7 @@ var _ = Describe("Source", func() {
 		var informerFactory kubeinformers.SharedInformerFactory
 		var stopTest chan struct{}
 
-		BeforeEach(func(done Done) {
+		BeforeEach(func() {
 			stopTest = make(chan struct{})
 			informerFactory = kubeinformers.NewSharedInformerFactory(clientset, time.Second*30)
 			depInformer = informerFactory.Apps().V1().ReplicaSets().Informer()
@@ -239,16 +233,14 @@ var _ = Describe("Source", func() {
 					},
 				},
 			}
-			close(done)
 		})
 
-		AfterEach(func(done Done) {
+		AfterEach(func() {
 			close(stopTest)
-			close(done)
 		})
 
 		Context("for a ReplicaSet resource", func() {
-			It("should provide a ReplicaSet CreateEvent", func(done Done) {
+			It("should provide a ReplicaSet CreateEvent", func() {
 				c := make(chan struct{})
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
@@ -282,10 +274,9 @@ var _ = Describe("Source", func() {
 				_, err = clientset.AppsV1().ReplicaSets("default").Create(ctx, rs, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				<-c
-				close(done)
 			}, 30)
 
-			It("should provide a ReplicaSet UpdateEvent", func(done Done) {
+			It("should provide a ReplicaSet UpdateEvent", func() {
 				var err error
 				rs, err = clientset.AppsV1().ReplicaSets("default").Get(ctx, rs.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -325,10 +316,9 @@ var _ = Describe("Source", func() {
 				_, err = clientset.AppsV1().ReplicaSets("default").Update(ctx, rs2, metav1.UpdateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				<-c
-				close(done)
 			})
 
-			It("should provide a ReplicaSet DeletedEvent", func(done Done) {
+			It("should provide a ReplicaSet DeletedEvent", func() {
 				c := make(chan struct{})
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
@@ -354,7 +344,6 @@ var _ = Describe("Source", func() {
 				err = clientset.AppsV1().ReplicaSets("default").Delete(ctx, rs.Name, metav1.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				<-c
-				close(done)
 			})
 		})
 	})

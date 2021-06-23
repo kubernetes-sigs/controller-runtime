@@ -55,7 +55,7 @@ var _ = Describe("cluster.Cluster", func() {
 
 		})
 
-		It("should return an error it can't create a client.Client", func(done Done) {
+		It("should return an error it can't create a client.Client", func() {
 			c, err := New(cfg, func(o *Options) {
 				o.NewClient = func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
 					return nil, errors.New("expected error")
@@ -64,11 +64,9 @@ var _ = Describe("cluster.Cluster", func() {
 			Expect(c).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
-
-			close(done)
 		})
 
-		It("should return an error it can't create a cache.Cache", func(done Done) {
+		It("should return an error it can't create a cache.Cache", func() {
 			c, err := New(cfg, func(o *Options) {
 				o.NewCache = func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 					return nil, fmt.Errorf("expected error")
@@ -77,11 +75,9 @@ var _ = Describe("cluster.Cluster", func() {
 			Expect(c).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
-
-			close(done)
 		})
 
-		It("should create a client defined in by the new client function", func(done Done) {
+		It("should create a client defined in by the new client function", func() {
 			c, err := New(cfg, func(o *Options) {
 				o.NewClient = func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
 					return nil, nil
@@ -90,11 +86,9 @@ var _ = Describe("cluster.Cluster", func() {
 			Expect(c).ToNot(BeNil())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(c.GetClient()).To(BeNil())
-
-			close(done)
 		})
 
-		It("should return an error it can't create a recorder.Provider", func(done Done) {
+		It("should return an error it can't create a recorder.Provider", func() {
 			c, err := New(cfg, func(o *Options) {
 				o.newRecorderProvider = func(_ *rest.Config, _ *runtime.Scheme, _ logr.Logger, _ intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
 					return nil, fmt.Errorf("expected error")
@@ -103,26 +97,22 @@ var _ = Describe("cluster.Cluster", func() {
 			Expect(c).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
-
-			close(done)
 		})
 
 	})
 
 	Describe("Start", func() {
-		It("should stop when context is cancelled", func(done Done) {
+		It("should stop when context is cancelled", func() {
 			c, err := New(cfg)
 			Expect(err).NotTo(HaveOccurred())
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 			Expect(c.Start(ctx)).NotTo(HaveOccurred())
-
-			close(done)
 		})
 	})
 
 	Describe("SetFields", func() {
-		It("should inject field values", func(done Done) {
+		It("should inject field values", func() {
 			c, err := New(cfg, func(o *Options) {
 				o.NewCache = func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
 					return &informertest.FakeInformers{}, nil
@@ -190,8 +180,6 @@ var _ = Describe("cluster.Cluster", func() {
 				},
 			})
 			Expect(err).To(Equal(expected))
-
-			close(done)
 		})
 	})
 

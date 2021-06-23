@@ -34,16 +34,16 @@ func TestControllerutil(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
 }
 
-var t *envtest.Environment
+var testenv *envtest.Environment
 var cfg *rest.Config
 var c client.Client
 
 var _ = BeforeSuite(func() {
 	var err error
 
-	t = &envtest.Environment{}
+	testenv = &envtest.Environment{}
 
-	cfg, err = t.Start()
+	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
 
 	c, err = client.New(cfg, client.Options{})
@@ -51,5 +51,5 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	Expect(t.Stop()).To(Succeed())
+	Expect(testenv.Stop()).To(Succeed())
 })

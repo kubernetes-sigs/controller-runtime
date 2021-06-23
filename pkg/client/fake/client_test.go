@@ -813,17 +813,16 @@ var _ = Describe("Fake client", func() {
 	}
 
 	Context("with default scheme.Scheme", func() {
-		BeforeEach(func(done Done) {
+		BeforeEach(func() {
 			cl = NewClientBuilder().
 				WithObjects(dep, dep2, cm).
 				Build()
-			close(done)
 		})
 		AssertClientBehavior()
 	})
 
 	Context("with given scheme", func() {
-		BeforeEach(func(done Done) {
+		BeforeEach(func() {
 			scheme := runtime.NewScheme()
 			Expect(corev1.AddToScheme(scheme)).To(Succeed())
 			Expect(appsv1.AddToScheme(scheme)).To(Succeed())
@@ -833,7 +832,6 @@ var _ = Describe("Fake client", func() {
 				WithObjects(cm).
 				WithLists(&appsv1.DeploymentList{Items: []appsv1.Deployment{*dep, *dep2}}).
 				Build()
-			close(done)
 		})
 		AssertClientBehavior()
 	})

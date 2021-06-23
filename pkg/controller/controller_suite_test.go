@@ -49,7 +49,7 @@ var clientset *kubernetes.Clientset
 // clientTransport is used to force-close keep-alives in tests that check for leaks.
 var clientTransport *http.Transport
 
-var _ = BeforeSuite(func(done Done) {
+var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	err := (&crscheme.Builder{
@@ -82,8 +82,6 @@ var _ = BeforeSuite(func(done Done) {
 
 	// Prevent the metrics listener being created
 	metrics.DefaultBindAddress = "0"
-
-	close(done)
 }, 60)
 
 var _ = AfterSuite(func() {

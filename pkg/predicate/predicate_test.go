@@ -59,7 +59,7 @@ var _ = Describe("Predicate", func() {
 			},
 		}
 
-		It("should call Create", func(done Done) {
+		It("should call Create", func() {
 			instance := failingFuncs
 			instance.CreateFunc = func(evt event.CreateEvent) bool {
 				defer GinkgoRecover()
@@ -80,10 +80,9 @@ var _ = Describe("Predicate", func() {
 
 			instance.CreateFunc = nil
 			Expect(instance.Create(evt)).To(BeTrue())
-			close(done)
 		})
 
-		It("should call Update", func(done Done) {
+		It("should call Update", func() {
 			newPod := pod.DeepCopy()
 			newPod.Name = "baz2"
 			newPod.Namespace = "biz2"
@@ -111,10 +110,9 @@ var _ = Describe("Predicate", func() {
 
 			instance.UpdateFunc = nil
 			Expect(instance.Update(evt)).To(BeTrue())
-			close(done)
 		})
 
-		It("should call Delete", func(done Done) {
+		It("should call Delete", func() {
 			instance := failingFuncs
 			instance.DeleteFunc = func(evt event.DeleteEvent) bool {
 				defer GinkgoRecover()
@@ -135,10 +133,9 @@ var _ = Describe("Predicate", func() {
 
 			instance.DeleteFunc = nil
 			Expect(instance.Delete(evt)).To(BeTrue())
-			close(done)
 		})
 
-		It("should call Generic", func(done Done) {
+		It("should call Generic", func() {
 			instance := failingFuncs
 			instance.GenericFunc = func(evt event.GenericEvent) bool {
 				defer GinkgoRecover()
@@ -159,7 +156,6 @@ var _ = Describe("Predicate", func() {
 
 			instance.GenericFunc = nil
 			Expect(instance.Generic(evt)).To(BeTrue())
-			close(done)
 		})
 	})
 

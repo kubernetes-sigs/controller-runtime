@@ -27,5 +27,9 @@ make generate
 header_text "running golangci-lint"
 make lint
 
-header_text "verifying modules"
-make modules verify-modules
+# Only run module verification in CI, otherwise updating
+# go module locally (which is a valid operation) causes `make test` to fail.
+if [[ -n ${CI} ]]; then
+    header_text "verifying modules"
+    make modules verify-modules
+fi

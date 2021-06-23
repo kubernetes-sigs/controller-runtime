@@ -248,6 +248,12 @@ func pollURLUntilOK(url url.URL, interval time.Duration, ready chan bool, stopCh
 // Stop stops this process gracefully, waits for its termination, and cleans up
 // the CertDir if necessary.
 func (ps *State) Stop() error {
+	// Always clear the directory if we need to.
+	defer func() {
+		if ps.DirNeedsCleaning {
+			_ = os.RemoveAll(ps.Dir)
+		}
+	}()
 	if ps.Cmd == nil {
 		return nil
 	}
@@ -267,9 +273,5 @@ func (ps *State) Stop() error {
 		return fmt.Errorf("timeout waiting for process %s to stop", path.Base(ps.Path))
 	}
 	ps.ready = false
-	if ps.DirNeedsCleaning {
-		return os.RemoveAll(ps.Dir)
-	}
-
 	return nil
 }

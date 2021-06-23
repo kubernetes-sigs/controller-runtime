@@ -24,9 +24,11 @@ source ${hack_dir}/common.sh
 tmp_root=/tmp
 kb_root_dir=$tmp_root/kubebuilder
 
-ENVTEST_K8S_VERSION=${ENVTEST_K8S_VERSION:-"1.21.2"}
+# Run verification scripts.
+${hack_dir}/verify.sh
 
-# set up envtest tools if necessary
+# Envtest.
+ENVTEST_K8S_VERSION=${ENVTEST_K8S_VERSION:-"1.21.2"}
 
 header_text "installing envtest tools@${ENVTEST_K8S_VERSION} with setup-envtest if necessary"
 tmp_bin=/tmp/cr-tests-bin
@@ -35,9 +37,9 @@ tmp_bin=/tmp/cr-tests-bin
     cd ${hack_dir}/../tools/setup-envtest
     GOBIN=${tmp_bin} go install .
 )
-source <(${tmp_bin}/setup-envtest use --use-env -p env ${ENVTEST_K8S_VERSION})
+export KUBEBUILDER_ASSETS="$(${tmp_bin}/setup-envtest use --use-env -p path "${ENVTEST_K8S_VERSION}")"
 
-${hack_dir}/verify.sh
+# Run tests.
 ${hack_dir}/test-all.sh
 
 header_text "confirming examples compile (via go install)"

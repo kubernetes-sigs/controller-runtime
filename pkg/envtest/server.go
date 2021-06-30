@@ -150,6 +150,7 @@ type Environment struct {
 	// UseExistingCluster indicates that this environments should use an
 	// existing kubeconfig, instead of trying to stand up a new control plane.
 	// This is useful in cases that need aggregated API servers and the like.
+	// It respects KUBEBUILDER_USE_EXISTING_CLUSTER environment variable.
 	UseExistingCluster *bool
 
 	// ControlPlaneStartTimeout is the maximum duration each controlplane component
@@ -169,7 +170,7 @@ type Environment struct {
 
 	// AttachControlPlaneOutput indicates if control plane output will be attached to os.Stdout and os.Stderr.
 	// Enable this to get more visibility of the testing control plane.
-	// It respect KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT environment variable.
+	// It respects KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT environment variable.
 	AttachControlPlaneOutput bool
 }
 

@@ -512,6 +512,14 @@ func defaultHealthProbeListener(addr string) (net.Listener, error) {
 	return ln, nil
 }
 
+//use spec managerBroadcaster to replace cluster's makeBroadcaster
+func NewProvider(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
+	managerBroadcaster := func() (record.EventBroadcaster, bool) {
+		return record.NewBroadcaster(), true
+	}
+	return intrec.NewProvider(config, scheme, logger, managerBroadcaster)
+}
+
 // setOptionsDefaults set default values for Options fields.
 func setOptionsDefaults(options Options) Options {
 	// Allow newResourceLock to be mocked
@@ -521,7 +529,7 @@ func setOptionsDefaults(options Options) Options {
 
 	// Allow newRecorderProvider to be mocked
 	if options.newRecorderProvider == nil {
-		options.newRecorderProvider = intrec.NewProvider
+		options.newRecorderProvider = NewProvider
 	}
 
 	// This is duplicated with pkg/cluster, we need it here

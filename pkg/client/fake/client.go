@@ -419,6 +419,28 @@ func (c *fakeClient) Delete(ctx context.Context, obj client.Object, opts ...clie
 	delOptions := client.DeleteOptions{}
 	delOptions.ApplyOptions(opts)
 
+	// Check the ResourceVersion if that Precondition was specified.
+	if delOptions.Preconditions != nil && delOptions.Preconditions.ResourceVersion != nil {
+		name := accessor.GetName()
+		dbObj, err := c.tracker.Get(gvr, accessor.GetNamespace(), name)
+		if err != nil {
+			return err
+		}
+		oldAccessor, err := meta.Accessor(dbObj)
+		if err != nil {
+			return err
+		}
+		actualRV := oldAccessor.GetResourceVersion()
+		expectRV := *delOptions.Preconditions.ResourceVersion
+		if actualRV != expectRV {
+			msg := fmt.Sprintf(
+				"the ResourceVersion in the precondition (%s) does not match the ResourceVersion in record (%s). "+
+					"The object might have been modified",
+				expectRV, actualRV)
+			return apierrors.NewConflict(gvr.GroupResource(), name, errors.New(msg))
+		}
+	}
+
 	return c.deleteObject(gvr, accessor)
 }
 

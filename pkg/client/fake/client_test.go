@@ -568,9 +568,50 @@ var _ = Describe("Fake client", func() {
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal(trackerAddResourceVersion))
 		})
 
-		It("should be able to Delete", func() {
+		It("should reject Delete with a mismatched ResourceVersion", func() {
+			bogusRV := "bogus"
+			By("Deleting with a mismatched ResourceVersion Precondition")
+			err := cl.Delete(context.Background(), dep, client.Preconditions{ResourceVersion: &bogusRV})
+			Expect(apierrors.IsConflict(err)).To(BeTrue())
+
+			list := &appsv1.DeploymentList{}
+			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(2))
+			Expect(list.Items).To(ConsistOf(*dep, *dep2))
+		})
+
+		It("should successfully Delete with a matching ResourceVersion", func() {
+			goodRV := trackerAddResourceVersion
+			By("Deleting with a matching ResourceVersion Precondition")
+			err := cl.Delete(context.Background(), dep, client.Preconditions{ResourceVersion: &goodRV})
+			Expect(err).To(BeNil())
+
+			list := &appsv1.DeploymentList{}
+			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(1))
+			Expect(list.Items).To(ConsistOf(*dep2))
+		})
+
+		It("should be able to Delete with no ResourceVersion Precondition", func() {
 			By("Deleting a deployment")
 			err := cl.Delete(context.Background(), dep)
+			Expect(err).To(BeNil())
+
+			By("Listing all deployments in the namespace")
+			list := &appsv1.DeploymentList{}
+			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(1))
+			Expect(list.Items).To(ConsistOf(*dep2))
+		})
+
+		It("should be able to Delete with no opts even if object's ResourceVersion doesn't match server", func() {
+			By("Deleting a deployment")
+			depCopy := dep.DeepCopy()
+			depCopy.ResourceVersion = "bogus"
+			err := cl.Delete(context.Background(), depCopy)
 			Expect(err).To(BeNil())
 
 			By("Listing all deployments in the namespace")

@@ -512,7 +512,7 @@ func defaultHealthProbeListener(addr string) (net.Listener, error) {
 	return ln, nil
 }
 
-// use spec managerBroadcaster to replace cluster's makeBroadcaster
+// use spec managerBroadcaster to replace cluster's makeBroadcaster.
 func NewProvider(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
 	managerBroadcaster := func() (record.EventBroadcaster, bool) {
 		return record.NewBroadcaster(), true

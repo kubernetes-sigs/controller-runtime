@@ -119,34 +119,53 @@ var (
 	}, []string{"name"})
 )
 
-func init() {
-	registerClientMetrics()
-	registerReflectorMetrics()
-}
+// RegisterClientMetrics sets up the client latency metrics from client-go.
+// To opt *out* of specific metrics, specify their *Key consts to optOut.
+func RegisterClientMetrics(optOut ...string) {
+	toRegister := map[string]bool{
+		LatencyKey: true,
+		ResultKey:  true,
+	}
+	for _, k := range optOut {
+		toRegister[k] = false
+	}
+	registerOpts := clientmetrics.RegisterOpts{}
 
-// registerClientMetrics sets up the client latency metrics from client-go.
-func registerClientMetrics() {
 	// register the metrics with our registry
-	Registry.MustRegister(requestLatency)
-	Registry.MustRegister(requestResult)
+	if toRegister[LatencyKey] {
+		Registry.MustRegister(requestLatency)
+		registerOpts.RequestLatency = &latencyAdapter{metric: requestLatency}
+	}
+	if toRegister[ResultKey] {
+		Registry.MustRegister(requestResult)
+		registerOpts.RequestResult = &resultAdapter{metric: requestResult}
+	}
 
 	// register the metrics with client-go
-	clientmetrics.Register(clientmetrics.RegisterOpts{
-		RequestLatency: &latencyAdapter{metric: requestLatency},
-		RequestResult:  &resultAdapter{metric: requestResult},
-	})
+	clientmetrics.Register(registerOpts)
 }
 
-// registerReflectorMetrics sets up reflector (reconcile) loop metrics.
-func registerReflectorMetrics() {
-	Registry.MustRegister(listsTotal)
-	Registry.MustRegister(listsDuration)
-	Registry.MustRegister(itemsPerList)
-	Registry.MustRegister(watchesTotal)
-	Registry.MustRegister(shortWatchesTotal)
-	Registry.MustRegister(watchDuration)
-	Registry.MustRegister(itemsPerWatch)
-	Registry.MustRegister(lastResourceVersion)
+// RegisterReflectorMetrics sets up reflector (reconcile) loop metrics.
+// To opt *out* of specific metrics, specify their *Key consts to optOut.
+func RegisterReflectorMetrics(optOut ...string) {
+	toRegister := map[string]prometheus.Collector{
+		ListsTotalKey:          listsTotal,
+		ListsDurationKey:       listsDuration,
+		ItemsPerListKey:        itemsPerList,
+		WatchesTotalKey:        watchesTotal,
+		ShortWatchesTotalKey:   shortWatchesTotal,
+		WatchDurationKey:       watchDuration,
+		ItemsPerWatchKey:       itemsPerWatch,
+		LastResourceVersionKey: lastResourceVersion,
+	}
+	for _, k := range optOut {
+		toRegister[k] = nil
+	}
+	for _, v := range toRegister {
+		if v != nil {
+			Registry.MustRegister(v)
+		}
+	}
 
 	reflectormetrics.SetReflectorMetricsProvider(reflectorMetricsProvider{})
 }

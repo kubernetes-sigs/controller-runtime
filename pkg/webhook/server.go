@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
@@ -294,9 +295,17 @@ func (s *Server) StartedChecker() healthz.Checker {
 	return func(req *http.Request) error {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+
 		if !s.started {
 			return fmt.Errorf("webhook server has not been started yet")
 		}
+
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(s.Host, strconv.Itoa(s.Port)), 10*time.Second)
+		if err != nil {
+			return fmt.Errorf("webhook server is not reachable: %v", err)
+		}
+		conn.Close()
+
 		return nil
 	}
 }

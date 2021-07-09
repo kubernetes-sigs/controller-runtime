@@ -137,6 +137,8 @@ var _ = Describe("Webhook Server", func() {
 				return ioutil.ReadAll(resp.Body)
 			}).Should(Equal([]byte("gadzooks!")))
 
+			Expect(server.StartedChecker()(nil)).To(Succeed())
+
 			ctxCancel()
 			Eventually(doneCh, "4s").Should(BeClosed())
 		})

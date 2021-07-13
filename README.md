@@ -39,6 +39,21 @@ Contributors:
   * [Documentation Changes](/.github/PULL_REQUEST_TEMPLATE/docs.md)
   * [Test/Build/Other Changes](/.github/PULL_REQUEST_TEMPLATE/other.md)
 
+##### Compatibility Matrix
+
+| Controller-Runtime      | release-0.2 | release-0.3 | release-0.4 | release-0.5 |
+|-------------------------|-------------|-------------|-------------|-------------|
+| kubernetes/release-1.17 |     -       |     -       |     ✓       |     ✓       |
+| kubernetes/release-1.16 |     -       |     -       |     ✓       |     ✓       |
+| kubernetes/release-1.15 |     ✓       |     ✓       |     -       |     -       |
+| kubernetes/release-1.14 |     ✓       |     ✓       |     -       |     -       |
+| kubernetes/release-1.13 |     -       |     -       |     -       |     -       |
+| kubernetes/release-1.12 |     -       |     -       |     -       |     -       |
+
+Key: 
+
+* `✓`: Compatible, `-`: Incompatible.
+  
 ## FAQ
 
 See [FAQ.md](FAQ.md)

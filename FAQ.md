@@ -79,3 +79,36 @@ from the API groups that it needs (be they Kubernetes types or your own).
 See the [scheme builder
 docs](https://godoc.org/sigs.k8s.io/controller-runtime/pkg/scheme) for
 more information.
+
+### Q: When using envtest with a third party API, why do I see the error: `no matches for kind "Kind" in version "<group>/<version>"`?
+
+**A**: While testing a third party API with `envtest`, in addition to registering the API type with the test client, you would also
+have to register it with the test server. To do so, download the associated CustomResourceDefinition's manifest locally
+and add its path to [`Environment.CRDDirectoryPaths`](https://pkg.go.dev/github.com/kubernetes-sigs/controller-runtime/pkg/envtest#Environment).
+
+For example, to use `customapiv1` in `envtest`:
+- Register the API type with test client by adding it to the `scheme` used in the tests:
+
+```go
+...
+var _ = BeforeSuite(func (done Done)) {
+  ...
+  testScheme := scheme.Scheme
+  err := customapiv1.AddToScheme(testScheme)
+  Expect(err).NotTo(HaveOccurred())
+}
+```
+
+- Specify the CRD path to install it in the test environment:
+
+```go
+...
+var _ = BeforeSuite(func(done Done) {
+  ...
+	By("bootstrapping test environment")
+	testEnv = &envtest.Environment{
+		CRDDirectoryPaths: []string{<location_of_the_CRD_for_`customapi`>},
+	}
+...
+```
+

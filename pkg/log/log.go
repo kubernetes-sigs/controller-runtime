@@ -35,6 +35,8 @@ package log
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -64,6 +66,9 @@ func init() {
 		loggerWasSetLock.Lock()
 		defer loggerWasSetLock.Unlock()
 		if !loggerWasSet {
+			// Alert the user that this is not a good thing to rely on
+			fmt.Fprintln(os.Stderr, "warning: log.SetLogger was not called; this is not recommended and may be unsupported in a future version of controller-runtime.  Call log.SetLogger(log.NullLogger{}) if you want no log output.")
+
 			Log.Fulfill(NullLogger{})
 		}
 	}()

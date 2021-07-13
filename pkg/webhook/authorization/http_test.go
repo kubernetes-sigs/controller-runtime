@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package authentication
+package authorization
 
 import (
 	"bytes"
@@ -26,7 +26,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	authenticationv1 "k8s.io/api/authentication/v1"
+	authorizationv1 "k8s.io/api/authorization/v1"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -35,8 +35,8 @@ import (
 var _ = Describe("Authentication Webhooks", func() {
 
 	const (
-		gvkJSONv1      = `"kind":"TokenReview","apiVersion":"authentication.k8s.io/v1"`
-		gvkJSONv1beta1 = `"kind":"TokenReview","apiVersion":"authentication.k8s.io/v1beta1"`
+		gvkJSONv1      = `"kind":"SubjectAccessReview","apiVersion":"authorization.k8s.io/v1"`
+		gvkJSONv1beta1 = `"kind":"SubjectAccessReview","apiVersion":"authorization.k8s.io/v1beta1"`
 	)
 
 	Describe("HTTP Handler", func() {
@@ -55,8 +55,7 @@ var _ = Describe("Authentication Webhooks", func() {
 		It("should return bad-request when given an empty body", func() {
 			req := &http.Request{Body: nil}
 
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},`+
-				`"error":"request body is empty"}}
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":false,"evaluationError":"request body is empty"}}
 `, gvkJSONv1)
 
 			webhook.ServeHTTP(respRecorder, req)
@@ -70,8 +69,8 @@ var _ = Describe("Authentication Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBuffer(nil)},
 			}
 
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},`+
-				`"error":"contentType=application/foo, expected application/json"}}
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":false,`+
+				`"evaluationError":"contentType=application/foo, expected application/json"}}
 `, gvkJSONv1)
 
 			webhook.ServeHTTP(respRecorder, req)
@@ -85,22 +84,8 @@ var _ = Describe("Authentication Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBufferString("{")},
 			}
 
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},`+
-				`"error":"couldn't get version/kind; json parse error: unexpected end of JSON input"}}
-`, gvkJSONv1)
-
-			webhook.ServeHTTP(respRecorder, req)
-			Expect(respRecorder.Body.String()).To(Equal(expected))
-		})
-
-		It("should return bad-request when given an undecodable body", func() {
-			req := &http.Request{
-				Header: http.Header{"Content-Type": []string{"application/json"}},
-				Method: http.MethodPost,
-				Body:   nopCloser{Reader: bytes.NewBufferString(`{"spec":{"token":""}}`)},
-			}
-
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"token is empty"}}
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":false,`+
+				`"evaluationError":"couldn't get version/kind; json parse error: unexpected end of JSON input"}}
 `, gvkJSONv1)
 
 			webhook.ServeHTTP(respRecorder, req)
@@ -118,7 +103,7 @@ var _ = Describe("Authentication Webhooks", func() {
 				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{}}}
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":true}}
 `, gvkJSONv1)
 
 			webhook.ServeHTTP(respRecorder, req)
@@ -129,14 +114,14 @@ var _ = Describe("Authentication Webhooks", func() {
 			req := &http.Request{
 				Header: http.Header{"Content-Type": []string{"application/json"}},
 				Method: http.MethodPost,
-				Body:   nopCloser{Reader: bytes.NewBufferString(fmt.Sprintf(`{%s,"spec":{"token":"foobar"}}`, gvkJSONv1))},
+				Body:   nopCloser{Reader: bytes.NewBufferString(fmt.Sprintf(`{%s,"spec":{"user":"foobar"}}`, gvkJSONv1))},
 			}
 			webhook := &Webhook{
 				Handler: &fakeHandler{},
 				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{}}}
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":true}}
 `, gvkJSONv1)
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
@@ -146,14 +131,14 @@ var _ = Describe("Authentication Webhooks", func() {
 			req := &http.Request{
 				Header: http.Header{"Content-Type": []string{"application/json"}},
 				Method: http.MethodPost,
-				Body:   nopCloser{Reader: bytes.NewBufferString(fmt.Sprintf(`{%s,"spec":{"token":"foobar"}}`, gvkJSONv1beta1))},
+				Body:   nopCloser{Reader: bytes.NewBufferString(fmt.Sprintf(`{%s,"spec":{"user":"foobar"}}`, gvkJSONv1beta1))},
 			}
 			webhook := &Webhook{
 				Handler: &fakeHandler{},
 				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{}}}
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":true}}
 `, gvkJSONv1beta1)
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
@@ -172,13 +157,13 @@ var _ = Describe("Authentication Webhooks", func() {
 				Handler: &fakeHandler{
 					fn: func(ctx context.Context, req Request) Response {
 						<-ctx.Done()
-						return Authenticated(ctx.Value(key).(string), authenticationv1.UserInfo{})
+						return NoOpinion(ctx.Value(key).(string))
 					},
 				},
 				log: logf.RuntimeLog.WithName("webhook"),
 			}
 
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{},"error":%q}}
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":false,"reason":%q}}
 `, gvkJSONv1, value)
 
 			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), key, value))
@@ -191,14 +176,14 @@ var _ = Describe("Authentication Webhooks", func() {
 			req := &http.Request{
 				Header: http.Header{"Content-Type": []string{"application/json"}},
 				Method: http.MethodPost,
-				Body:   nopCloser{Reader: bytes.NewBufferString(`{"spec":{"token":"foobar"}}`)},
+				Body:   nopCloser{Reader: bytes.NewBufferString(`{"spec":{"user":"foobar"}}`)},
 			}
 			type ctxkey int
 			const key ctxkey = 1
 			webhook := &Webhook{
 				Handler: &fakeHandler{
 					fn: func(ctx context.Context, req Request) Response {
-						return Authenticated(ctx.Value(key).(string), authenticationv1.UserInfo{})
+						return NoOpinion(ctx.Value(key).(string))
 					},
 				},
 				WithContextFunc: func(ctx context.Context, r *http.Request) context.Context {
@@ -207,7 +192,7 @@ var _ = Describe("Authentication Webhooks", func() {
 				log: logf.RuntimeLog.WithName("webhook"),
 			}
 
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{},"error":%q}}
+			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"allowed":false,"reason":%q}}
 `, gvkJSONv1, "application/json")
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -240,9 +225,9 @@ func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {
 	if h.fn != nil {
 		return h.fn(ctx, req)
 	}
-	return Response{TokenReview: authenticationv1.TokenReview{
-		Status: authenticationv1.TokenReviewStatus{
-			Authenticated: true,
+	return Response{SubjectAccessReview: authorizationv1.SubjectAccessReview{
+		Status: authorizationv1.SubjectAccessReviewStatus{
+			Allowed: true,
 		},
 	}}
 }

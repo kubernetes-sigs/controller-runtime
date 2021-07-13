@@ -134,9 +134,16 @@ func (e *EnqueueRequestForOwner) getOwnerReconcileRequest(object metav1.Object, 
 		// object in the event.
 		if ref.Kind == e.groupKind.Kind && refGV.Group == e.groupKind.Group {
 			// Match found - add a Request for the object referred to in the OwnerReference
-			request := reconcile.Request{NamespacedName: types.NamespacedName{
-				Name: ref.Name,
-			}}
+			request := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name: ref.Name,
+				},
+				GroupVersionKind: schema.GroupVersionKind{
+					Group:   refGV.Group,
+					Version: refGV.Version,
+					Kind:    ref.Kind,
+				},
+			}
 
 			// if owner is not namespaced then we should set the namespace to the empty
 			mapping, err := e.mapper.RESTMapping(e.groupKind, refGV.Version)

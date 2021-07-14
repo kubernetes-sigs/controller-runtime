@@ -49,8 +49,8 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 					AdmissionResponse: admissionv1.AdmissionResponse{
 						Allowed: true,
 						Result: &metav1.Status{
-							Code:   http.StatusOK,
-							Reason: "acceptable",
+							Code:    http.StatusOK,
+							Message: "acceptable",
 						},
 					},
 				},
@@ -65,7 +65,8 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 					AdmissionResponse: admissionv1.AdmissionResponse{
 						Allowed: false,
 						Result: &metav1.Status{
-							Code: http.StatusForbidden,
+							Code:   http.StatusForbidden,
+							Reason: metav1.StatusReasonForbidden,
 						},
 					},
 				},
@@ -78,8 +79,9 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 					AdmissionResponse: admissionv1.AdmissionResponse{
 						Allowed: false,
 						Result: &metav1.Status{
-							Code:   http.StatusForbidden,
-							Reason: "UNACCEPTABLE!",
+							Code:    http.StatusForbidden,
+							Reason:  metav1.StatusReasonForbidden,
+							Message: "UNACCEPTABLE!",
 						},
 					},
 				},
@@ -118,8 +120,8 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 					AdmissionResponse: admissionv1.AdmissionResponse{
 						Allowed: true,
 						Result: &metav1.Status{
-							Code:   http.StatusOK,
-							Reason: "some changes",
+							Code:    http.StatusOK,
+							Message: "some changes",
 						},
 					},
 					Patches: ops,
@@ -146,15 +148,15 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 	})
 
 	Describe("ValidationResponse", func() {
-		It("should populate a status with a reason when a reason is given", func() {
+		It("should populate a status with a message when a message is given", func() {
 			By("checking that a message is populated for 'allowed' responses")
 			Expect(ValidationResponse(true, "acceptable")).To(Equal(
 				Response{
 					AdmissionResponse: admissionv1.AdmissionResponse{
 						Allowed: true,
 						Result: &metav1.Status{
-							Code:   http.StatusOK,
-							Reason: "acceptable",
+							Code:    http.StatusOK,
+							Message: "acceptable",
 						},
 					},
 				},
@@ -166,8 +168,9 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 					AdmissionResponse: admissionv1.AdmissionResponse{
 						Allowed: false,
 						Result: &metav1.Status{
-							Code:   http.StatusForbidden,
-							Reason: "UNACCEPTABLE!",
+							Code:    http.StatusForbidden,
+							Reason:  metav1.StatusReasonForbidden,
+							Message: "UNACCEPTABLE!",
 						},
 					},
 				},
@@ -193,7 +196,8 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 					AdmissionResponse: admissionv1.AdmissionResponse{
 						Allowed: false,
 						Result: &metav1.Status{
-							Code: http.StatusForbidden,
+							Code:   http.StatusForbidden,
+							Reason: metav1.StatusReasonForbidden,
 						},
 					},
 				},

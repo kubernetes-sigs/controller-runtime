@@ -185,7 +185,7 @@ var _ = Describe("validatingHandler", func() {
 			})
 			Expect(response.Allowed).Should(BeFalse())
 			Expect(response.Result.Code).Should(Equal(int32(http.StatusForbidden)))
-			Expect(string(response.Result.Reason)).Should(Equal(expectedError.Error()))
+			Expect(response.Result.Message).Should(Equal(expectedError.Error()))
 
 		})
 
@@ -206,7 +206,8 @@ var _ = Describe("validatingHandler", func() {
 			})
 			Expect(response.Allowed).Should(BeFalse())
 			Expect(response.Result.Code).Should(Equal(int32(http.StatusForbidden)))
-			Expect(string(response.Result.Reason)).Should(Equal(expectedError.Error()))
+			Expect(response.Result.Reason).Should(Equal(metav1.StatusReasonForbidden))
+			Expect(response.Result.Message).Should(Equal(expectedError.Error()))
 
 		})
 
@@ -223,8 +224,8 @@ var _ = Describe("validatingHandler", func() {
 			})
 			Expect(response.Allowed).Should(BeFalse())
 			Expect(response.Result.Code).Should(Equal(int32(http.StatusForbidden)))
-			Expect(string(response.Result.Reason)).Should(Equal(expectedError.Error()))
-
+			Expect(response.Result.Reason).Should(Equal(metav1.StatusReasonForbidden))
+			Expect(response.Result.Message).Should(Equal(expectedError.Error()))
 		})
 
 	})

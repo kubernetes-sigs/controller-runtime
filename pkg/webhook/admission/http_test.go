@@ -154,7 +154,7 @@ var _ = Describe("Admission Webhooks", func() {
 				log: logf.RuntimeLog.WithName("webhook"),
 			}
 
-			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"reason":%q,"code":200}}}
+			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"message":%q,"code":200}}}
 `, gvkJSONv1, value)
 
 			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), key, value))
@@ -182,7 +182,7 @@ var _ = Describe("Admission Webhooks", func() {
 				log: logf.RuntimeLog.WithName("webhook"),
 			}
 
-			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"reason":%q,"code":200}}}
+			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"message":%q,"code":200}}}
 `, gvkJSONv1, "application/json")
 
 			ctx, cancel := context.WithCancel(context.Background())

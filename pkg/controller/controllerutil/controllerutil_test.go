@@ -407,6 +407,89 @@ var _ = Describe("Controllerutil", func() {
 		})
 	})
 
+	Describe("DeleteIfExist", func() {
+		var deploy *appsv1.Deployment
+		var deplSpec appsv1.DeploymentSpec
+		var deplKey types.NamespacedName
+		var specr controllerutil.MutateFn
+
+		BeforeEach(func() {
+			deploy = &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("deploy-%d", rand.Int31()), //nolint:gosec
+					Namespace: "default",
+				},
+			}
+
+			deplSpec = appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"foo": "bar"},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"foo": "bar",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "busybox",
+								Image: "busybox",
+							},
+						},
+					},
+				},
+			}
+
+			deplKey = types.NamespacedName{
+				Name:      deploy.Name,
+				Namespace: deploy.Namespace,
+			}
+
+			specr = deploymentSpecr(deploy, deplSpec)
+		})
+
+		It("creates a new object and delete it", func() {
+			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, specr)
+
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultCreated")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
+
+			By("actually having the deployment created")
+			fetched := &appsv1.Deployment{}
+			Expect(c.Get(context.TODO(), deplKey, fetched)).To(Succeed())
+
+			By("being mutated by MutateFn")
+			Expect(fetched.Spec.Template.Spec.Containers).To(HaveLen(1))
+			Expect(fetched.Spec.Template.Spec.Containers[0].Name).To(Equal(deplSpec.Template.Spec.Containers[0].Name))
+			Expect(fetched.Spec.Template.Spec.Containers[0].Image).To(Equal(deplSpec.Template.Spec.Containers[0].Image))
+
+			ope, err := controllerutil.DeleteIfExist(context.TODO(), c, deploy)
+
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultDeleted")
+			Expect(ope).To(BeEquivalentTo(controllerutil.OperationResultDeleted))
+
+		})
+
+		It("Delete a nonexisting object should return status unchanged", func() {
+
+			ope, err := controllerutil.DeleteIfExist(context.TODO(), c, deploy)
+
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultNone")
+			Expect(ope).To(BeEquivalentTo(controllerutil.OperationResultNone))
+
+		})
+	})
 	Describe("CreateOrPatch", func() {
 		var deploy *appsv1.Deployment
 		var deplSpec appsv1.DeploymentSpec

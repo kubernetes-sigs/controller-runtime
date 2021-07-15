@@ -179,6 +179,8 @@ const ( // They should complete the sentence "Deployment default/foo has been ..
 	OperationResultCreated OperationResult = "created"
 	// OperationResultUpdated means that an existing resource is updated.
 	OperationResultUpdated OperationResult = "updated"
+	// OperationResultDeleted means that an existing resource is deleted.
+	OperationResultDeleted OperationResult = "deleted"
 	// OperationResultUpdatedStatus means that an existing resource and its status is updated.
 	OperationResultUpdatedStatus OperationResult = "updatedStatus"
 	// OperationResultUpdatedStatusOnly means that only an existing status is updated.
@@ -332,6 +334,20 @@ func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f Mu
 	}
 
 	return result, nil
+}
+
+// DeleteIfExist deletes the given object in the Kubernetes
+// cluster.
+//
+// It returns the executed operation and an error.
+func DeleteIfExist(ctx context.Context, c client.Client, obj client.Object) (OperationResult, error) {
+	if err := c.Delete(ctx, obj); err != nil {
+		if apierrors.IsNotFound(err) {
+			return OperationResultNone, nil
+		}
+		return OperationResultNone, err
+	}
+	return OperationResultDeleted, nil
 }
 
 // mutate wraps a MutateFn and applies validation to its result.

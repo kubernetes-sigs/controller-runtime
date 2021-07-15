@@ -42,12 +42,12 @@ import (
 )
 
 // SetLogger sets a concrete logging implementation for all deferred Loggers.
-func SetLogger(l logr.Logger) {
+func SetLogger(l logr.LogSink) {
 	loggerWasSetLock.Lock()
 	defer loggerWasSetLock.Unlock()
 
 	loggerWasSet = true
-	Log.Fulfill(l)
+	dlog.Fulfill(l)
 }
 
 // It is safe to assume that if this wasn't set within the first 30 seconds of a binaries
@@ -64,7 +64,7 @@ func init() {
 		loggerWasSetLock.Lock()
 		defer loggerWasSetLock.Unlock()
 		if !loggerWasSet {
-			Log.Fulfill(NullLogger{})
+			dlog.Fulfill(NullLogger{})
 		}
 	}()
 }
@@ -79,13 +79,16 @@ var (
 // get any actual logging. If SetLogger is not called within
 // the first 30 seconds of a binaries lifetime, it will get
 // set to a NullLogger.
-var Log = NewDelegatingLogger(NullLogger{})
+var (
+	dlog = NewDelegatingLogger(NullLogger{})
+	Log  = logr.New(dlog)
+)
 
 // FromContext returns a logger with predefined values from a context.Context.
 func FromContext(ctx context.Context, keysAndValues ...interface{}) logr.Logger {
-	var log logr.Logger = Log
+	log := Log
 	if ctx != nil {
-		if logger := logr.FromContext(ctx); logger != nil {
+		if logger, err := logr.FromContext(ctx); err == nil {
 			log = logger
 		}
 	}

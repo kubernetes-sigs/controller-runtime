@@ -20,41 +20,40 @@ import (
 	"github.com/go-logr/logr"
 )
 
-// NB: this is the same as the null logger logr/testing,
+// NB: this is the same as the null logSink logr/testing,
 // but avoids accidentally adding the testing flags to
 // all binaries.
 
-// NullLogger is a logr.Logger that does nothing.
-type NullLogger struct{}
+// NullLogSink is a logr.Logger that does nothing.
+type NullLogSink struct{}
 
-var _ logr.Logger = NullLogger{}
+var _ logr.LogSink = NullLogSink{}
 
-// Info implements logr.InfoLogger.
-func (NullLogger) Info(_ string, _ ...interface{}) {
+// Init implements logr.LogSink.
+func (log NullLogSink) Init(_ logr.RuntimeInfo) {
+}
+
+// Info implements logr.LogSink.
+func (NullLogSink) Info(_ int, _ string, _ ...interface{}) {
 	// Do nothing.
 }
 
-// Enabled implements logr.InfoLogger.
-func (NullLogger) Enabled() bool {
+// Enabled implements logr.LogSink.
+func (NullLogSink) Enabled(_ int) bool {
 	return false
 }
 
-// Error implements logr.Logger.
-func (NullLogger) Error(_ error, _ string, _ ...interface{}) {
+// Error implements logr.LogSink.
+func (NullLogSink) Error(_ error, _ string, _ ...interface{}) {
 	// Do nothing.
 }
 
-// V implements logr.Logger.
-func (log NullLogger) V(_ int) logr.Logger {
+// WithName implements logr.LogSink.
+func (log NullLogSink) WithName(_ string) logr.LogSink {
 	return log
 }
 
-// WithName implements logr.Logger.
-func (log NullLogger) WithName(_ string) logr.Logger {
-	return log
-}
-
-// WithValues implements logr.Logger.
-func (log NullLogger) WithValues(_ ...interface{}) logr.Logger {
+// WithValues implements logr.LogSink.
+func (log NullLogSink) WithValues(_ ...interface{}) logr.LogSink {
 	return log
 }

@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ logr.Logger = &DelegatingLogger{}
+var _ logr.LogSink = &delegatingLogSink{}
 
 // logInfo is the information for a particular fakeLogger message.
 type logInfo struct {
@@ -49,7 +49,10 @@ type fakeLogger struct {
 	root *fakeLoggerRoot
 }
 
-func (f *fakeLogger) WithName(name string) logr.Logger {
+func (f *fakeLogger) Init(info logr.RuntimeInfo) {
+}
+
+func (f *fakeLogger) WithName(name string) logr.LogSink {
 	names := append([]string(nil), f.name...)
 	names = append(names, name)
 	return &fakeLogger{
@@ -59,7 +62,7 @@ func (f *fakeLogger) WithName(name string) logr.Logger {
 	}
 }
 
-func (f *fakeLogger) WithValues(vals ...interface{}) logr.Logger {
+func (f *fakeLogger) WithValues(vals ...interface{}) logr.LogSink {
 	tags := append([]interface{}(nil), f.tags...)
 	tags = append(tags, vals...)
 	return &fakeLogger{
@@ -80,7 +83,7 @@ func (f *fakeLogger) Error(err error, msg string, vals ...interface{}) {
 	})
 }
 
-func (f *fakeLogger) Info(msg string, vals ...interface{}) {
+func (f *fakeLogger) Info(l int, msg string, vals ...interface{}) {
 	tags := append([]interface{}(nil), f.tags...)
 	tags = append(tags, vals...)
 	f.root.messages = append(f.root.messages, logInfo{
@@ -90,27 +93,28 @@ func (f *fakeLogger) Info(msg string, vals ...interface{}) {
 	})
 }
 
-func (f *fakeLogger) Enabled() bool         { return true }
-func (f *fakeLogger) V(lvl int) logr.Logger { return f }
+func (f *fakeLogger) Enabled(l int) bool {
+	return true
+}
 
 var _ = Describe("logging", func() {
 
-	Describe("top-level logger", func() {
-		It("hold newly created loggers until a logger is set", func() {
-			By("grabbing a new sub-logger and logging to it")
+	Describe("top-level logSink", func() {
+		It("hold newly created loggers until a logSink is set", func() {
+			By("grabbing a new sub-logSink and logging to it")
 			l1 := Log.WithName("runtimeLog").WithValues("newtag", "newvalue1")
 			l1.Info("before msg")
 
-			By("actually setting the logger")
+			By("actually setting the logSink")
 			logger := &fakeLogger{root: &fakeLoggerRoot{}}
-			SetLogger(logger)
+			SetLogger(logr.New(logger))
 
-			By("grabbing another sub-logger and logging to both loggers")
+			By("grabbing another sub-logSink and logging to both loggers")
 			l2 := Log.WithName("runtimeLog").WithValues("newtag", "newvalue2")
 			l1.Info("after msg 1")
 			l2.Info("after msg 2")
 
-			By("ensuring that messages after the logger was set were logged")
+			By("ensuring that messages after the logSink was set were logged")
 			Expect(logger.root.messages).To(ConsistOf(
 				logInfo{name: []string{"runtimeLog"}, tags: []interface{}{"newtag", "newvalue1"}, msg: "after msg 1"},
 				logInfo{name: []string{"runtimeLog"}, tags: []interface{}{"newtag", "newvalue2"}, msg: "after msg 2"},
@@ -118,39 +122,39 @@ var _ = Describe("logging", func() {
 		})
 	})
 
-	Describe("lazy logger initialization", func() {
+	Describe("lazy logSink initialization", func() {
 		var (
 			root     *fakeLoggerRoot
-			baseLog  logr.Logger
-			delegLog *DelegatingLogger
+			baseLog  logr.LogSink
+			delegLog logr.Logger
 		)
 
 		BeforeEach(func() {
 			root = &fakeLoggerRoot{}
 			baseLog = &fakeLogger{root: root}
-			delegLog = NewDelegatingLogger(NullLogger{})
+			delegLog = NewDelegatingLogger(NullLogSink{})
 		})
 
 		It("should delegate with name", func() {
-			By("asking for a logger with a name before fulfill, and logging")
+			By("asking for a logSink with a name before fulfill, and logging")
 			befFulfill1 := delegLog.WithName("before-fulfill")
 			befFulfill2 := befFulfill1.WithName("two")
 			befFulfill1.Info("before fulfill")
 
-			By("logging on the base logger before fulfill")
+			By("logging on the base logSink before fulfill")
 			delegLog.Info("before fulfill base")
 
 			By("ensuring that no messages were actually recorded")
 			Expect(root.messages).To(BeEmpty())
 
 			By("fulfilling the promise")
-			delegLog.Fulfill(baseLog)
+			delegLog.GetSink().(canFulfill).Fulfill(baseLog)
 
 			By("logging with the existing loggers after fulfilling")
 			befFulfill1.Info("after 1")
 			befFulfill2.Info("after 2")
 
-			By("grabbing a new sub-logger of a previously constructed logger and logging to it")
+			By("grabbing a new sub-logSink of a previously constructed logSink and logging to it")
 			befFulfill1.WithName("after-from-before").Info("after 3")
 
 			By("logging with new loggers")
@@ -182,7 +186,7 @@ var _ = Describe("logging", func() {
 			child := delegLog.WithName("child")
 			go func() {
 				defer GinkgoRecover()
-				delegLog.Fulfill(NullLogger{})
+				delegLog.GetSink().(canFulfill).Fulfill(NullLogSink{})
 				close(fulfillDone)
 			}()
 			go func() {
@@ -232,25 +236,25 @@ var _ = Describe("logging", func() {
 		})
 
 		It("should delegate with tags", func() {
-			By("asking for a logger with a name before fulfill, and logging")
+			By("asking for a logSink with a name before fulfill, and logging")
 			befFulfill1 := delegLog.WithValues("tag1", "val1")
 			befFulfill2 := befFulfill1.WithValues("tag2", "val2")
 			befFulfill1.Info("before fulfill")
 
-			By("logging on the base logger before fulfill")
+			By("logging on the base logSink before fulfill")
 			delegLog.Info("before fulfill base")
 
 			By("ensuring that no messages were actually recorded")
 			Expect(root.messages).To(BeEmpty())
 
 			By("fulfilling the promise")
-			delegLog.Fulfill(baseLog)
+			delegLog.GetSink().(canFulfill).Fulfill(baseLog)
 
 			By("logging with the existing loggers after fulfilling")
 			befFulfill1.Info("after 1")
 			befFulfill2.Info("after 2")
 
-			By("grabbing a new sub-logger of a previously constructed logger and logging to it")
+			By("grabbing a new sub-logSink of a previously constructed logSink and logging to it")
 			befFulfill1.WithValues("tag3", "val3").Info("after 3")
 
 			By("logging with new loggers")
@@ -267,13 +271,13 @@ var _ = Describe("logging", func() {
 
 		It("shouldn't fulfill twice", func() {
 			By("fulfilling once")
-			delegLog.Fulfill(baseLog)
+			delegLog.GetSink().(canFulfill).Fulfill(baseLog)
 
 			By("logging a bit")
 			delegLog.Info("msg 1")
 
-			By("fulfilling with a new logger")
-			delegLog.Fulfill(&fakeLogger{})
+			By("fulfilling with a new logSink")
+			delegLog.GetSink().(canFulfill).Fulfill(&fakeLogger{})
 
 			By("logging some more")
 			delegLog.Info("msg 2")
@@ -286,17 +290,17 @@ var _ = Describe("logging", func() {
 		})
 	})
 
-	Describe("logger from context", func() {
-		It("should return default logger when context is empty", func() {
+	Describe("logSink from context", func() {
+		It("should return default logSink when context is empty", func() {
 			gotLog := FromContext(context.Background())
 			Expect(gotLog).To(Not(BeNil()))
 		})
 
-		It("should return existing logger", func() {
+		It("should return existing logSink", func() {
 			root := &fakeLoggerRoot{}
 			baseLog := &fakeLogger{root: root}
 
-			wantLog := baseLog.WithName("my-logger")
+			wantLog := logr.New(baseLog).WithName("my-logSink")
 			ctx := IntoContext(context.Background(), wantLog)
 
 			gotLog := FromContext(ctx)
@@ -304,7 +308,7 @@ var _ = Describe("logging", func() {
 
 			gotLog.Info("test message")
 			Expect(root.messages).To(ConsistOf(
-				logInfo{name: []string{"my-logger"}, msg: "test message"},
+				logInfo{name: []string{"my-logSink"}, msg: "test message"},
 			))
 		})
 
@@ -312,7 +316,7 @@ var _ = Describe("logging", func() {
 			root := &fakeLoggerRoot{}
 			baseLog := &fakeLogger{root: root}
 
-			wantLog := baseLog.WithName("my-logger")
+			wantLog := logr.New(baseLog).WithName("my-logSink")
 			ctx := IntoContext(context.Background(), wantLog)
 
 			gotLog := FromContext(ctx, "tag1", "value1")
@@ -320,7 +324,7 @@ var _ = Describe("logging", func() {
 
 			gotLog.Info("test message")
 			Expect(root.messages).To(ConsistOf(
-				logInfo{name: []string{"my-logger"}, tags: []interface{}{"tag1", "value1"}, msg: "test message"},
+				logInfo{name: []string{"my-logSink"}, tags: []interface{}{"tag1", "value1"}, msg: "test message"},
 			))
 		})
 	})

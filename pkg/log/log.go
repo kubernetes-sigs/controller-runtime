@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package log contains utilities for fetching a new logger
+// Package log contains utilities for fetching a new logSink
 // when one is not already available.
 //
 // The Log Handle
@@ -47,16 +47,16 @@ func SetLogger(l logr.Logger) {
 	defer loggerWasSetLock.Unlock()
 
 	loggerWasSet = true
-	Log.Fulfill(l)
+	Log.GetSink().(canFulfill).Fulfill(l.GetSink())
 }
 
 // It is safe to assume that if this wasn't set within the first 30 seconds of a binaries
-// lifetime, it will never get set. The DelegatingLogger causes a high number of memory
-// allocations when not given an actual Logger, so we set a NullLogger to avoid that.
+// lifetime, it will never get set. The delegatingLogSink causes a high number of memory
+// allocations when not given an actual Logger, so we set a NullLogSink to avoid that.
 //
-// We need to keep the DelegatingLogger because we have various inits() that get a logger from
+// We need to keep the delegatingLogSink because we have various inits() that get a logSink from
 // here. They will always get executed before any code that imports controller-runtime
-// has a chance to run and hence to set an actual logger.
+// has a chance to run and hence to set an actual logSink.
 func init() {
 	// Init is blocking, so start a new goroutine
 	go func() {
@@ -64,7 +64,7 @@ func init() {
 		loggerWasSetLock.Lock()
 		defer loggerWasSetLock.Unlock()
 		if !loggerWasSet {
-			Log.Fulfill(NullLogger{})
+			Log.GetSink().(canFulfill).Fulfill(NullLogSink{})
 		}
 	}()
 }
@@ -74,26 +74,28 @@ var (
 	loggerWasSet     bool
 )
 
-// Log is the base logger used by kubebuilder.  It delegates
+// Log is the base logSink used by kubebuilder.  It delegates
 // to another logr.Logger. You *must* call SetLogger to
 // get any actual logging. If SetLogger is not called within
 // the first 30 seconds of a binaries lifetime, it will get
-// set to a NullLogger.
-var Log = NewDelegatingLogger(NullLogger{})
+// set to a NullLogSink.
+var (
+	Log = NewDelegatingLogger(NullLogSink{})
+)
 
-// FromContext returns a logger with predefined values from a context.Context.
+// FromContext returns a logSink with predefined values from a context.Context.
 func FromContext(ctx context.Context, keysAndValues ...interface{}) logr.Logger {
-	var log logr.Logger = Log
+	log := Log
 	if ctx != nil {
-		if logger := logr.FromContext(ctx); logger != nil {
+		if logger, err := logr.FromContext(ctx); err == nil {
 			log = logger
 		}
 	}
 	return log.WithValues(keysAndValues...)
 }
 
-// IntoContext takes a context and sets the logger as one of its values.
-// Use FromContext function to retrieve the logger.
+// IntoContext takes a context and sets the logSink as one of its values.
+// Use FromContext function to retrieve the logSink.
 func IntoContext(ctx context.Context, log logr.Logger) context.Context {
 	return logr.NewContext(ctx, log)
 }

@@ -29,7 +29,7 @@ var _ = Describe("recorder.Provider", func() {
 	makeBroadcaster := func() (record.EventBroadcaster, bool) { return record.NewBroadcaster(), true }
 	Describe("NewProvider", func() {
 		It("should return a provider instance and a nil error.", func() {
-			provider, err := recorder.NewProvider(cfg, scheme.Scheme, logr.DiscardLogger{}, makeBroadcaster)
+			provider, err := recorder.NewProvider(cfg, scheme.Scheme, logr.Discard(), makeBroadcaster)
 			Expect(provider).NotTo(BeNil())
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -38,14 +38,14 @@ var _ = Describe("recorder.Provider", func() {
 			// Invalid the config
 			cfg1 := *cfg
 			cfg1.Host = "invalid host"
-			_, err := recorder.NewProvider(&cfg1, scheme.Scheme, logr.DiscardLogger{}, makeBroadcaster)
+			_, err := recorder.NewProvider(&cfg1, scheme.Scheme, logr.Discard(), makeBroadcaster)
 			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(ContainSubstring("failed to init client"))
 		})
 	})
 	Describe("GetEventRecorder", func() {
 		It("should return a recorder instance.", func() {
-			provider, err := recorder.NewProvider(cfg, scheme.Scheme, logr.DiscardLogger{}, makeBroadcaster)
+			provider, err := recorder.NewProvider(cfg, scheme.Scheme, logr.Discard(), makeBroadcaster)
 			Expect(err).NotTo(HaveOccurred())
 
 			recorder := provider.GetEventRecorderFor("test")

@@ -53,14 +53,26 @@ func (typedNoop) Reconcile(context.Context, reconcile.Request) (reconcile.Result
 	return reconcile.Result{}, nil
 }
 
-type testLogger struct {
+type testLogSink struct {
 	logr.Logger
 }
 
-func (l *testLogger) WithName(_ string) logr.Logger {
+func (l *testLogSink) Init(info logr.RuntimeInfo) {
+}
+
+func (l *testLogSink) Enabled(level int) bool {
+	return true
+}
+
+func (l *testLogSink) Info(level int, msg string, keysAndValues ...interface{}) {
+
+}
+
+func (l *testLogSink) WithValues(keysAndValues ...interface{}) logr.LogSink {
 	return l
 }
-func (l *testLogger) WithValues(_ ...interface{}) logr.Logger {
+
+func (l *testLogSink) WithName(name string) logr.LogSink {
 	return l
 }
 
@@ -225,12 +237,12 @@ var _ = Describe("application", func() {
 
 		It("should override logger during creation of controller", func() {
 
-			logger := &testLogger{}
+			logSink := &testLogSink{}
 			newController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
-				if options.Log == logger {
+				if options.Log.GetSink() == logSink {
 					return controller.New(name, mgr, options)
 				}
-				return nil, fmt.Errorf("logger expected %T but found %T", logger, options.Log)
+				return nil, fmt.Errorf("logSink expected %T but found %T", logSink, options.Log)
 			}
 
 			By("creating a controller manager")
@@ -240,7 +252,7 @@ var _ = Describe("application", func() {
 			instance, err := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
-				WithLogger(logger).
+				WithLogger(logr.New(logSink)).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())

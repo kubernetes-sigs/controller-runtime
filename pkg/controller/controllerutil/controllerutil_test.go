@@ -407,6 +407,92 @@ var _ = Describe("Controllerutil", func() {
 		})
 	})
 
+	Describe("CreateIfNotExist", func() {
+		var deploy *appsv1.Deployment
+		var deplSpec appsv1.DeploymentSpec
+		var deplKey types.NamespacedName
+		var specr controllerutil.MutateFn
+
+		BeforeEach(func() {
+			deploy = &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("deploy-%d", rand.Int31()),
+					Namespace: "default",
+				},
+			}
+
+			deplSpec = appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"foo": "bar"},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"foo": "bar",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "busybox",
+								Image: "busybox",
+							},
+						},
+					},
+				},
+			}
+
+			deplKey = types.NamespacedName{
+				Name:      deploy.Name,
+				Namespace: deploy.Namespace,
+			}
+
+			specr = deploymentSpecr(deploy, deplSpec)
+		})
+
+		It("creates a new object if one doesn't exists", func() {
+			op, err := controllerutil.CreateIfNotExist(context.TODO(), c, deploy, specr)
+
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultCreated")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
+
+			By("actually having the deployment created")
+			fetched := &appsv1.Deployment{}
+			Expect(c.Get(context.TODO(), deplKey, fetched)).To(Succeed())
+
+			By("being mutated by MutateFn")
+			Expect(fetched.Spec.Template.Spec.Containers).To(HaveLen(1))
+			Expect(fetched.Spec.Template.Spec.Containers[0].Name).To(Equal(deplSpec.Template.Spec.Containers[0].Name))
+			Expect(fetched.Spec.Template.Spec.Containers[0].Image).To(Equal(deplSpec.Template.Spec.Containers[0].Image))
+		})
+
+		It("errors when MutateFn changes object name on creation", func() {
+			op, err := controllerutil.CreateIfNotExist(context.TODO(), c, deploy, func() error {
+				Expect(specr()).To(Succeed())
+				return deploymentRenamer(deploy)()
+			})
+
+			By("returning error")
+			Expect(err).To(HaveOccurred())
+
+			By("returning OperationResultNone")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
+		})
+
+		It("aborts immediately if there was an error initially retrieving the object", func() {
+			op, err := controllerutil.CreateIfNotExist(context.TODO(), errorReader{c}, deploy, func() error {
+				Fail("Mutation method should not run")
+				return nil
+			})
+
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
 	Describe("CreateOrPatch", func() {
 		var deploy *appsv1.Deployment
 		var deplSpec appsv1.DeploymentSpec

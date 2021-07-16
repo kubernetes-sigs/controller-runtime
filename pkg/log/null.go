@@ -27,34 +27,38 @@ import (
 // NullLogger is a logr.Logger that does nothing.
 type NullLogger struct{}
 
-var _ logr.Logger = NullLogger{}
+var _ logr.LogSink = NullLogger{}
 
-// Info implements logr.InfoLogger.
-func (NullLogger) Info(_ string, _ ...interface{}) {
+// Init implements logr.LogSink.
+func (log NullLogger) Init(_ logr.RuntimeInfo) {
+}
+
+// Info implements logr.LogSink.
+func (NullLogger) Info(_ int, _ string, _ ...interface{}) {
 	// Do nothing.
 }
 
-// Enabled implements logr.InfoLogger.
-func (NullLogger) Enabled() bool {
+// Enabled implements logr.LogSink.
+func (NullLogger) Enabled(_ int) bool {
 	return false
 }
 
-// Error implements logr.Logger.
+// Error implements logr.LogSink.
 func (NullLogger) Error(_ error, _ string, _ ...interface{}) {
 	// Do nothing.
 }
 
-// V implements logr.Logger.
-func (log NullLogger) V(_ int) logr.Logger {
+// V implements logr.LogSink.
+func (log NullLogger) V(_ int) logr.LogSink {
 	return log
 }
 
-// WithName implements logr.Logger.
-func (log NullLogger) WithName(_ string) logr.Logger {
+// WithName implements logr.LogSink.
+func (log NullLogger) WithName(_ string) logr.LogSink {
 	return log
 }
 
-// WithValues implements logr.Logger.
-func (log NullLogger) WithValues(_ ...interface{}) logr.Logger {
+// WithValues implements logr.LogSink.
+func (log NullLogger) WithValues(_ ...interface{}) logr.LogSink {
 	return log
 }

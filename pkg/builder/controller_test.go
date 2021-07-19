@@ -307,7 +307,7 @@ var _ = Describe("application", func() {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			doReconcileTest(ctx, "3", bldr, m, false)
+			doReconcileTest(ctx, "3", m, false, bldr)
 		}, 10)
 
 		It("should Reconcile Watches objects", func() {
@@ -322,7 +322,7 @@ var _ = Describe("application", func() {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			doReconcileTest(ctx, "4", bldr, m, true)
+			doReconcileTest(ctx, "4", m, true, bldr)
 		}, 10)
 	})
 
@@ -378,7 +378,7 @@ var _ = Describe("application", func() {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			doReconcileTest(ctx, "5", bldr, m, true)
+			doReconcileTest(ctx, "5", m, true, bldr)
 
 			Expect(deployPrctExecuted).To(BeTrue(), "Deploy predicated should be called at least once")
 			Expect(replicaSetPrctExecuted).To(BeTrue(), "ReplicaSet predicated should be called at least once")
@@ -394,6 +394,16 @@ var _ = Describe("application", func() {
 			var err error
 			mgr, err = manager.New(cfg, manager.Options{NewCache: newNonTypedOnlyCache})
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should support multiple controllers watching the same metadata kind", func() {
+			bldr1 := ControllerManagedBy(mgr).For(&appsv1.Deployment{}, OnlyMetadata)
+			bldr2 := ControllerManagedBy(mgr).For(&appsv1.Deployment{}, OnlyMetadata)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			doReconcileTest(ctx, "6", mgr, true, bldr1, bldr2)
 		})
 
 		It("should support watching For, Owns, and Watch as metadata", func() {
@@ -421,7 +431,7 @@ var _ = Describe("application", func() {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			doReconcileTest(ctx, "8", bldr, mgr, true)
+			doReconcileTest(ctx, "8", mgr, true, bldr)
 
 			By("Creating a new stateful set")
 			set := &appsv1.StatefulSet{
@@ -496,7 +506,7 @@ func (c *nonTypedOnlyCache) GetInformerForKind(ctx context.Context, gvk schema.G
 
 // TODO(directxman12): this function has too many arguments, and the whole
 // "nameSuffix" think is a bit of a hack It should be cleaned up significantly by someone with a bit of time.
-func doReconcileTest(ctx context.Context, nameSuffix string, blder *Builder, mgr manager.Manager, complete bool) {
+func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager, complete bool, blders ...*Builder) {
 	deployName := "deploy-name-" + nameSuffix
 	rsName := "rs-name-" + nameSuffix
 
@@ -512,15 +522,17 @@ func doReconcileTest(ctx context.Context, nameSuffix string, blder *Builder, mgr
 		return reconcile.Result{}, nil
 	})
 
-	if complete {
-		err := blder.Complete(fn)
-		Expect(err).NotTo(HaveOccurred())
-	} else {
-		var err error
-		var c controller.Controller
-		c, err = blder.Build(fn)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(c).NotTo(BeNil())
+	for _, blder := range blders {
+		if complete {
+			err := blder.Complete(fn)
+			Expect(err).NotTo(HaveOccurred())
+		} else {
+			var err error
+			var c controller.Controller
+			c, err = blder.Build(fn)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c).NotTo(BeNil())
+		}
 	}
 
 	By("Starting the application")

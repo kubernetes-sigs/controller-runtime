@@ -128,6 +128,8 @@ var _ = Describe("Webhook Server", func() {
 		It("should serve a webhook on the requested path", func() {
 			server.Register("/somepath", &testHandler{})
 
+			Expect(server.StartedChecker()(nil)).ToNot(Succeed())
+
 			doneCh := startServer()
 
 			Eventually(func() ([]byte, error) {
@@ -136,6 +138,8 @@ var _ = Describe("Webhook Server", func() {
 				defer resp.Body.Close()
 				return ioutil.ReadAll(resp.Body)
 			}).Should(Equal([]byte("gadzooks!")))
+
+			Expect(server.StartedChecker()(nil)).To(Succeed())
 
 			ctxCancel()
 			Eventually(doneCh, "4s").Should(BeClosed())

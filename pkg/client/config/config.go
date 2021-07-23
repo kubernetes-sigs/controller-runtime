@@ -150,7 +150,7 @@ func loadConfigWithContext(apiServerURL string, loader clientcmd.ClientConfigLoa
 func GetConfigOrDie() *rest.Config {
 	config, err := GetConfig()
 	if err != nil {
-		log.Error(err, "unable to get kubeconfig")
+		fmt.Fprintln(os.Stderr, "error: unable to get kubeconfig")
 		os.Exit(1)
 	}
 	return config

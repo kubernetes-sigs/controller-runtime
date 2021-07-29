@@ -20,6 +20,8 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"os"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -91,6 +93,13 @@ type Etcd struct {
 func (e *Etcd) Start() error {
 	if err := e.setProcessState(); err != nil {
 		return err
+	}
+
+	//Set extra env for etcd in arm
+	if runtime.GOARCH == "arm64" {
+		if err := os.Setenv("ETCD_UNSUPPORTED_ARCH", "arm64"); err != nil {
+			return err
+		}
 	}
 	return e.processState.Start(e.Out, e.Err)
 }

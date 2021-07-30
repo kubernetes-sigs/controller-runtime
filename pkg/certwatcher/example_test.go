@@ -32,7 +32,7 @@ func Example() {
 	// Setup Context
 	ctx := ctrl.SetupSignalHandler()
 
-	// Initialize a new cert watcher with cert/key pari
+	// Initialize a new cert watcher with cert/key pair
 	watcher, err := certwatcher.New("ssl/tls.crt", "ssl/tls.key")
 	if err != nil {
 		panic(err)

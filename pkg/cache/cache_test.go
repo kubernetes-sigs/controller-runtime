@@ -312,6 +312,15 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(informerCache.List(context.Background(), listObj, opts)).To(Succeed())
 					Expect(listObj.Items).Should(HaveLen(3))
 				})
+
+				It("should return a limited result set matching the correct label", func() {
+					listObj := &corev1.PodList{}
+					labelOpt := client.MatchingLabels(map[string]string{"common-label": "common"})
+					limitOpt := client.Limit(1)
+					By("verifying that only Limit (1) number of objects are retrieved from the cache")
+					Expect(informerCache.List(context.Background(), listObj, labelOpt, limitOpt)).To(Succeed())
+					Expect(listObj.Items).Should(HaveLen(1))
+				})
 			})
 
 			Context("with unstructured objects", func() {

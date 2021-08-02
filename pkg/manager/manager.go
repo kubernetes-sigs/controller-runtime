@@ -222,6 +222,10 @@ type Options struct {
 	// It is used to set webhook.Server.CertDir if WebhookServer is not set.
 	CertDir string
 
+	// TLSMinVersion is the minimum version of TLS used
+	// If not set the webhook server will default to TLS 1.0
+	TLSMinVersion string
+
 	// WebhookServer is an externally configured webhook.Server. By default,
 	// a Manager will create a default server using Port, Host, and CertDir;
 	// if this is set, the Manager will use this server instead.
@@ -377,6 +381,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		port:                          options.Port,
 		host:                          options.Host,
 		certDir:                       options.CertDir,
+		tlsMinVersion:                 options.TLSMinVersion,
 		webhookServer:                 options.WebhookServer,
 		leaseDuration:                 *options.LeaseDuration,
 		renewDeadline:                 *options.RenewDeadline,
@@ -443,6 +448,10 @@ func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options,
 
 	if o.CertDir == "" && newObj.Webhook.CertDir != "" {
 		o.CertDir = newObj.Webhook.CertDir
+	}
+
+	if o.TLSMinVersion == "" && newObj.Webhook.TLSMinVersion != "" {
+		o.TLSMinVersion = newObj.Webhook.TLSMinVersion
 	}
 
 	if newObj.Controller != nil {

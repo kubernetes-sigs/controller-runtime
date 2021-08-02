@@ -139,6 +139,10 @@ type ControllerWebhook struct {
 	// must be named tls.key and tls.crt, respectively.
 	// +optional
 	CertDir string `json:"certDir,omitempty"`
+
+	// TLSMinVersion is the minimum version of TLS for the webhook server
+	// Defaults to TLS 1.0 if not set.
+	TLSMinVersion string `json:"tlsMinVersion,omitempty"`
 }
 
 // +kubebuilder:object:root=true

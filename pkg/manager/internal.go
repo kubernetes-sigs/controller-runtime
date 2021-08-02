@@ -144,6 +144,8 @@ type controllerManager struct {
 	// if not set, webhook server would look up the server key and certificate in
 	// {TempDir}/k8s-webhook-server/serving-certs
 	certDir string
+	// tlsMinVersion is the minimum TLS version that the webhook server will use
+	tlsMinVersion string
 
 	webhookServer *webhook.Server
 	// webhookServerOnce will be called in GetWebhookServer() to optionally initialize
@@ -338,9 +340,10 @@ func (cm *controllerManager) GetWebhookServer() *webhook.Server {
 	cm.webhookServerOnce.Do(func() {
 		if cm.webhookServer == nil {
 			cm.webhookServer = &webhook.Server{
-				Port:    cm.port,
-				Host:    cm.host,
-				CertDir: cm.certDir,
+				Port:          cm.port,
+				Host:          cm.host,
+				CertDir:       cm.certDir,
+				TLSMinVersion: cm.tlsMinVersion,
 			}
 		}
 		if err := cm.Add(cm.webhookServer); err != nil {

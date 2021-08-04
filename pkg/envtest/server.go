@@ -299,7 +299,12 @@ func (te *Environment) Start() (*rest.Config, error) {
 	te.CRDs = crds
 
 	log.V(1).Info("installing webhooks")
-	if err := te.WebhookInstallOptions.Install(te.Config); err != nil {
+	if te.WebhookInstallOptions.CustomTLSConfig != nil {
+		err = te.WebhookInstallOptions.InstallWithCustomTLS(te.Config)
+	} else {
+		err = te.WebhookInstallOptions.Install(te.Config)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("unable to install webhooks onto control plane: %w", err)
 	}
 	return te.Config, nil

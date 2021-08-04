@@ -18,6 +18,7 @@ package envtest
 
 import (
 	"context"
+	"crypto/tls"
 	"path/filepath"
 	"time"
 
@@ -107,6 +108,76 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(installOptions.MutatingWebhooks)).To(Equal(2))
 			Expect(len(installOptions.ValidatingWebhooks)).To(Equal(2))
+		})
+	})
+
+	Describe("Webhook With Custom TLS", func() {
+		It("should reject requests due to bad certificate", func(done Done) {
+			err := env.WebhookInstallOptions.setupCA()
+			dir := env.WebhookInstallOptions.LocalServingCertDir
+			certFile := filepath.Join(dir, "tls.crt")
+			keyFile := filepath.Join(dir, "tls.key")
+			Expect(err).NotTo(HaveOccurred())
+			sCert, err := tls.LoadX509KeyPair(certFile, keyFile)
+			Expect(err).NotTo(HaveOccurred())
+			m, err := manager.New(env.Config, manager.Options{
+				Port: env.WebhookInstallOptions.LocalServingPort,
+				Host: env.WebhookInstallOptions.LocalServingHost,
+				// CertDir: env.WebhookInstallOptions.LocalServingCertDir,
+				WebhookTLSConfig: &tls.Config{
+					NextProtos:   []string{"h2"},
+					Certificates: []tls.Certificate{sCert},
+					ClientAuth:   tls.NoClientCert,
+					MinVersion:   tls.VersionTLS13,
+				},
+			}) // we need manager here just to leverage manager.SetFields
+			Expect(err).NotTo(HaveOccurred())
+			server := m.GetWebhookServer()
+			server.Register("/failing", &webhook.Admission{Handler: &rejectingValidator{}})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				_ = server.Start(ctx)
+			}()
+
+			c, err := client.New(env.Config, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			obj := &appsv1.Deployment{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-deployment",
+					Namespace: "default",
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			Eventually(func() bool {
+				err = c.Create(context.TODO(), obj)
+				// Bad Certificate shows up as InternalError
+				return apierrors.ReasonForError(err) == metav1.StatusReason("InternalError")
+			}, 1*time.Second).Should(BeTrue())
+
+			close(done)
 		})
 	})
 })

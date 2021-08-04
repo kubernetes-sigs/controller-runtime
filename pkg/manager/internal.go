@@ -18,6 +18,7 @@ package manager
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -144,6 +145,11 @@ type controllerManager struct {
 	// if not set, webhook server would look up the server key and certificate in
 	// {TempDir}/k8s-webhook-server/serving-certs
 	certDir string
+
+	// WebhookTLSConfig is a *tls.Config object that will be used in place of
+	// the one normally created by reading certs in the CertDir.  If both
+	// CertDir and this are specified CertDir will be ignored
+	webhookTLSConfig *tls.Config
 
 	webhookServer *webhook.Server
 	// webhookServerOnce will be called in GetWebhookServer() to optionally initialize
@@ -338,9 +344,10 @@ func (cm *controllerManager) GetWebhookServer() *webhook.Server {
 	cm.webhookServerOnce.Do(func() {
 		if cm.webhookServer == nil {
 			cm.webhookServer = &webhook.Server{
-				Port:    cm.port,
-				Host:    cm.host,
-				CertDir: cm.certDir,
+				Port:      cm.port,
+				Host:      cm.host,
+				CertDir:   cm.certDir,
+				TLSConfig: cm.webhookTLSConfig,
 			}
 		}
 		if err := cm.Add(cm.webhookServer); err != nil {

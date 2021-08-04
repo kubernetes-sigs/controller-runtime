@@ -58,6 +58,11 @@ type Server struct {
 	// It will be defaulted to 9443 if unspecified.
 	Port int
 
+	// TLSConfig is a *tls.Config object that will be used in place of
+	// the one normally created by reading certs in the CertDir.
+	// CertDir and TLSMinVersion are ignored when this is specified.
+	TLSConfig *tls.Config
+
 	// CertDir is the directory that contains the server key and certificate. The
 	// server key and certificate.
 	CertDir string
@@ -73,7 +78,8 @@ type Server struct {
 	ClientCAName string
 
 	// TLSVersion is the minimum version of TLS supported. Accepts
-	// "", "1.0", "1.1", "1.2" and "1.3" only ("" is equivalent to "1.0" for backwards compatibility)
+	// "", "1.0", "1.1", "1.2" and "1.3" only ("" is equivalent to "1.0" for backwards compatibility).
+	// Ignored when TLSConfig is specified
 	TLSMinVersion string
 
 	// WebhookMux is the multiplexer that handles different webhooks.
@@ -215,30 +221,33 @@ func (s *Server) Start(ctx context.Context) error {
 	certPath := filepath.Join(s.CertDir, s.CertName)
 	keyPath := filepath.Join(s.CertDir, s.KeyName)
 
-	certWatcher, err := certwatcher.New(certPath, keyPath)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		if err := certWatcher.Start(ctx); err != nil {
-			log.Error(err, "certificate watcher error")
+	var cfg *tls.Config
+	if s.TLSConfig != nil {
+		cfg = s.TLSConfig
+	} else {
+		certWatcher, err := certwatcher.New(certPath, keyPath)
+		if err != nil {
+			return err
 		}
-	}()
+		go func() {
+			if err := certWatcher.Start(ctx); err != nil {
+				log.Error(err, "certificate watcher error")
+			}
+		}()
+		tlsMinVersion, err := tlsVersion(s.TLSMinVersion)
+		if err != nil {
+			return err
+		}
 
-	tlsMinVersion, err := tlsVersion(s.TLSMinVersion)
-	if err != nil {
-		return err
-	}
-
-	cfg := &tls.Config{ //nolint:gosec
-		NextProtos:     []string{"h2"},
-		GetCertificate: certWatcher.GetCertificate,
-		MinVersion:     tlsMinVersion,
+		cfg = &tls.Config{ // nolint:gosec
+			NextProtos:     []string{"h2"},
+			GetCertificate: certWatcher.GetCertificate,
+			MinVersion:     tlsMinVersion,
+		}
 	}
 
 	// load CA to verify client certificate
-	if s.ClientCAName != "" {
+	if s.ClientCAName != "" && s.TLSConfig == nil {
 		certPool := x509.NewCertPool()
 		clientCABytes, err := ioutil.ReadFile(filepath.Join(s.CertDir, s.ClientCAName))
 		if err != nil {

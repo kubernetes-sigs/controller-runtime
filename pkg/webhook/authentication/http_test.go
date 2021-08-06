@@ -35,8 +35,7 @@ import (
 var _ = Describe("Authentication Webhooks", func() {
 
 	const (
-		gvkJSONv1      = `"kind":"TokenReview","apiVersion":"authentication.k8s.io/v1"`
-		gvkJSONv1beta1 = `"kind":"TokenReview","apiVersion":"authentication.k8s.io/v1beta1"`
+		gvkJSONv1 = `"kind":"TokenReview","apiVersion":"authentication.k8s.io/v1"`
 	)
 
 	Describe("HTTP Handler", func() {
@@ -131,23 +130,6 @@ var _ = Describe("Authentication Webhooks", func() {
 
 			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{}}}
 `, gvkJSONv1)
-			webhook.ServeHTTP(respRecorder, req)
-			Expect(respRecorder.Body.String()).To(Equal(expected))
-		})
-
-		It("should return the v1beta1 response given by the handler", func() {
-			req := &http.Request{
-				Header: http.Header{"Content-Type": []string{"application/json"}},
-				Method: http.MethodPost,
-				Body:   nopCloser{Reader: bytes.NewBufferString(fmt.Sprintf(`{%s,"spec":{"token":"foobar"}}`, gvkJSONv1beta1))},
-			}
-			webhook := &Webhook{
-				Handler: &fakeHandler{},
-				log:     logf.RuntimeLog.WithName("webhook"),
-			}
-
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{}}}
-`, gvkJSONv1beta1)
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})

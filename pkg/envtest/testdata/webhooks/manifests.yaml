@@ -1,5 +1,5 @@
 ---
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   creationTimestamp: null
@@ -10,7 +10,7 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-v1beta1
+      path: /mutate-v1
   failurePolicy: Fail
   name: mpods.kb.io
   rules:
@@ -49,7 +49,7 @@ webhooks:
     resources:
     - pods
 ---
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
   creationTimestamp: null
@@ -60,7 +60,7 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-v1beta1
+      path: /validate-v1
   failurePolicy: Fail
   name: vpods.kb.io
   rules:

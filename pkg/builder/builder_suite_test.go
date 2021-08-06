@@ -21,12 +21,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
@@ -78,27 +78,32 @@ var _ = AfterSuite(func() {
 func addCRDToEnvironment(env *envtest.Environment, gvks ...schema.GroupVersionKind) {
 	for _, gvk := range gvks {
 		plural, singular := meta.UnsafeGuessKindToResource(gvk)
-		crd := &apiextensionsv1beta1.CustomResourceDefinition{
+		crd := apiextensionsv1.CustomResourceDefinition{
 			TypeMeta: metav1.TypeMeta{
-				APIVersion: "apiextensions.k8s.io/v1beta1",
+				APIVersion: "apiextensions.k8s.io/v1",
 				Kind:       "CustomResourceDefinition",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name: plural.Resource + "." + gvk.Group,
 			},
-			Spec: apiextensionsv1beta1.CustomResourceDefinitionSpec{
-				Group:   gvk.Group,
-				Version: gvk.Version,
-				Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
+			Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+				Group: gvk.Group,
+				Names: apiextensionsv1.CustomResourceDefinitionNames{
 					Plural:   plural.Resource,
 					Singular: singular.Resource,
 					Kind:     gvk.Kind,
 				},
-				Versions: []apiextensionsv1beta1.CustomResourceDefinitionVersion{
+				Scope: apiextensionsv1.NamespaceScoped,
+				Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
 					{
 						Name:    gvk.Version,
 						Served:  true,
 						Storage: true,
+						Schema: &apiextensionsv1.CustomResourceValidation{
+							OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+								Type: "object",
+							},
+						},
 					},
 				},
 			},

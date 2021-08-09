@@ -88,6 +88,39 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(reconcile.Result{Requeue: true}))
 		})
+
+		It("should not recover panic if RecoverPanic is false by default", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			defer func() {
+				Expect(recover()).ShouldNot(BeNil())
+			}()
+			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
+				var res *reconcile.Result
+				return *res, nil
+			})
+			_, _ = ctrl.Reconcile(ctx,
+				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+		})
+
+		It("should recover panic if RecoverPanic is true", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			defer func() {
+				Expect(recover()).To(BeNil())
+			}()
+			ctrl.RecoverPanic = true
+			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
+				var res *reconcile.Result
+				return *res, nil
+			})
+			_, err := ctrl.Reconcile(ctx,
+				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("[recovered]"))
+		})
 	})
 
 	Describe("Start", func() {

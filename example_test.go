@@ -63,7 +63,7 @@ func Example() {
 // This example creates a simple application Controller that is configured for ReplicaSets and Pods.
 // This application controller will be running leader election with the provided configuration in the manager options.
 // If leader election configuration is not provided, controller runs leader election with default values.
-// Default values taken from: https://github.com/kubernetes/apiserver/blob/master/pkg/apis/config/v1alpha1/defaults.go
+// Default values taken from: https://github.com/kubernetes/component-base/blob/master/config/v1alpha1/defaults.go
 //	defaultLeaseDuration = 15 * time.Second
 //	defaultRenewDeadline = 10 * time.Second
 //	defaultRetryPeriod   = 2 * time.Second

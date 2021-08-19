@@ -52,6 +52,7 @@ func newSpecificInformersMap(config *rest.Config,
 	resync time.Duration,
 	namespace string,
 	selectors SelectorsByGVK,
+	disableDeepCopy DisableDeepCopyByGVK,
 	createListWatcher createListWatcherFunc) *specificInformersMap {
 	ip := &specificInformersMap{
 		config:            config,
@@ -65,6 +66,7 @@ func newSpecificInformersMap(config *rest.Config,
 		createListWatcher: createListWatcher,
 		namespace:         namespace,
 		selectors:         selectors,
+		disableDeepCopy:   disableDeepCopy,
 	}
 	return ip
 }
@@ -129,6 +131,9 @@ type specificInformersMap struct {
 	// selectors are the label or field selectors that will be added to the
 	// ListWatch ListOptions.
 	selectors SelectorsByGVK
+
+	// disableDeepCopy indicates not to deep copy objects during get or list objects.
+	disableDeepCopy DisableDeepCopyByGVK
 }
 
 // Start calls Run on each of the informers and sets started to true.  Blocks on the context.
@@ -234,7 +239,12 @@ func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, ob
 
 	i := &MapEntry{
 		Informer: ni,
-		Reader:   CacheReader{indexer: ni.GetIndexer(), groupVersionKind: gvk, scopeName: rm.Scope.Name()},
+		Reader: CacheReader{
+			indexer:          ni.GetIndexer(),
+			groupVersionKind: gvk,
+			scopeName:        rm.Scope.Name(),
+			disableDeepCopy:  ip.disableDeepCopy.IsDisabled(gvk),
+		},
 	}
 	ip.informersByGVK[gvk] = i
 

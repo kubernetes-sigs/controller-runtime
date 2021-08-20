@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/discovery"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 )
@@ -40,17 +39,8 @@ var (
 	protobufSchemeLock sync.RWMutex
 )
 
-func init() {
-	// Currently only enabled for built-in resources which are guaranteed to implement Protocol Buffers.
-	// For custom resources, CRDs can not support Protocol Buffers but Aggregated API can.
-	// See doc: https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#advanced-features-and-flexibility
-	if err := clientgoscheme.AddToScheme(protobufScheme); err != nil {
-		panic(err)
-	}
-}
-
 // AddToProtobufScheme add the given SchemeBuilder into protobufScheme, which should
-// be additional types that do support protobuf.
+// be additional types where we do want to support protobuf.
 func AddToProtobufScheme(addToScheme func(*runtime.Scheme) error) error {
 	protobufSchemeLock.Lock()
 	defer protobufSchemeLock.Unlock()
@@ -118,8 +108,8 @@ func GVKForObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersi
 // RESTClientForGVK constructs a new rest.Interface capable of accessing the resource associated
 // with the given GroupVersionKind. The REST client will be configured to use the negotiated serializer from
 // baseConfig, if set, otherwise a default serializer will be set.
-func RESTClientForGVK(gvk schema.GroupVersionKind, isUnstructured bool, baseConfig *rest.Config, codecs serializer.CodecFactory) (rest.Interface, error) {
-	return rest.RESTClientFor(createRestConfig(gvk, isUnstructured, baseConfig, codecs))
+func RESTClientForGVK(scheme *runtime.Scheme, gvk schema.GroupVersionKind, isUnstructured bool, baseConfig *rest.Config, codecs serializer.CodecFactory) (rest.Interface, error) {
+	return rest.RESTClientFor(createRestConfig(scheme, gvk, isUnstructured, baseConfig, codecs))
 }
 
 // serializerWithDecodedGVK is a CodecFactory that overrides the DecoderToVersion of a WithoutConversionCodecFactory
@@ -136,7 +126,7 @@ func (f serializerWithDecodedGVK) DecoderToVersion(serializer runtime.Decoder, _
 }
 
 // createRestConfig copies the base config and updates needed fields for a new rest config.
-func createRestConfig(gvk schema.GroupVersionKind, isUnstructured bool, baseConfig *rest.Config, codecs serializer.CodecFactory) *rest.Config {
+func createRestConfig(scheme *runtime.Scheme, gvk schema.GroupVersionKind, isUnstructured bool, baseConfig *rest.Config, codecs serializer.CodecFactory) *rest.Config {
 	gv := gvk.GroupVersion()
 
 	cfg := rest.CopyConfig(baseConfig)
@@ -151,11 +141,9 @@ func createRestConfig(gvk schema.GroupVersionKind, isUnstructured bool, baseConf
 	}
 	// TODO(FillZpp): In the long run, we want to check discovery or something to make sure that this is actually true.
 	if cfg.ContentType == "" && !isUnstructured {
-		protobufSchemeLock.RLock()
-		if protobufScheme.Recognizes(gvk) {
+		if canUseProtobuf(scheme, gvk) {
 			cfg.ContentType = runtime.ContentTypeProtobuf
 		}
-		protobufSchemeLock.RUnlock()
 	}
 
 	if isUnstructured {
@@ -193,4 +181,130 @@ func zero(x interface{}) {
 	}
 	res := reflect.ValueOf(x).Elem()
 	res.Set(reflect.Zero(res.Type()))
+}
+
+// canUseProtobuf returns true if we should use protobuf encoding.
+// We need two things: (1) the apiserver must support protobuf for the type,
+// and (2) we must have a proto-compatible receiving go type.
+// Because it's hard to know in general if apiserver supports proto for a given GVK,
+// we maintain a list of built-in apigroups which do support proto;
+// additional schemas can be added as proto-safe using AddToProtobufScheme.
+// We check if we have a proto-compatible type by interface casting.
+func canUseProtobuf(scheme *runtime.Scheme, gvk schema.GroupVersionKind) bool {
+	// Check that the client supports proto for this type
+	gvkType, found := scheme.AllKnownTypes()[gvk]
+	if !found {
+		// We aren't going to be able to deserialize proto without type information.
+		return false
+	}
+	if !implementsProto(gvkType) {
+		// We don't have proto information, can't parse proto
+		return false
+	}
+
+	// Check that the apiserver also supports proto for this type
+	serverSupportsProto := false
+
+	// Check for built-in types well-known to support proto
+	serverSupportsProto = isWellKnownKindThatSupportsProto(gvk)
+
+	// Check for additional types explicitly marked as supporting proto
+	if !serverSupportsProto {
+		protobufSchemeLock.RLock()
+		serverSupportsProto = protobufScheme.Recognizes(gvk)
+		protobufSchemeLock.RUnlock()
+	}
+
+	return serverSupportsProto
+}
+
+// isWellKnownKindThatSupportsProto returns true if the gvk is a well-known Kind that supports proto encoding.
+func isWellKnownKindThatSupportsProto(gvk schema.GroupVersionKind) bool {
+	// corev1
+	if gvk.Group == "" && gvk.Version == "v1" {
+		return true
+	}
+
+	// extensions v1beta1
+	if gvk.Group == "extensions" && gvk.Version == "v1beta1" {
+		return true
+	}
+
+	// Generated with `kubectl api-resources -oname | grep "\." | sort | cut -f2- -d. | sort | uniq | awk '{print "case \"" $0 "\": return true" }'` (before adding any CRDs)
+	switch gvk.Group {
+	case "admissionregistration.k8s.io":
+		return true
+	case "apiextensions.k8s.io":
+		return true
+	case "apiregistration.k8s.io":
+		return true
+	case "apps":
+		return true
+	case "authentication.k8s.io":
+		return true
+	case "authorization.k8s.io":
+		return true
+	case "autoscaling":
+		return true
+	case "batch":
+		return true
+	case "certificates.k8s.io":
+		return true
+	case "coordination.k8s.io":
+		return true
+	case "discovery.k8s.io":
+		return true
+	case "events.k8s.io":
+		return true
+	case "flowcontrol.apiserver.k8s.io":
+		return true
+	case "networking.k8s.io":
+		return true
+	case "node.k8s.io":
+		return true
+	case "policy":
+		return true
+	case "rbac.authorization.k8s.io":
+		return true
+	case "scheduling.k8s.io":
+		return true
+	case "storage.k8s.io":
+		return true
+	}
+	return false
+}
+
+var (
+	memoizeImplementsProto     = make(map[reflect.Type]bool)
+	memoizeImplementsProtoLock sync.RWMutex
+)
+
+// protoMessage is implemented by protobuf messages (of all libraries).
+type protoMessage interface {
+	ProtoMessage()
+}
+
+var protoMessageType = reflect.TypeOf(new(protoMessage)).Elem()
+
+// implementsProto returns true if the local go type supports protobuf deserialization.
+func implementsProto(t reflect.Type) bool {
+	memoizeImplementsProtoLock.RLock()
+	result, found := memoizeImplementsProto[t]
+	memoizeImplementsProtoLock.RUnlock()
+
+	if found {
+		return result
+	}
+
+	// We normally get the raw struct e.g. v1.Pod, not &v1.Pod
+	if t.Kind() == reflect.Struct {
+		return implementsProto(reflect.PtrTo(t))
+	}
+
+	result = t.Implements(protoMessageType)
+	memoizeImplementsProtoLock.Lock()
+	memoizeImplementsProto[t] = result
+	memoizeImplementsProtoLock.Unlock()
+
+	return result
 }

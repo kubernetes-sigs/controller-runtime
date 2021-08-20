@@ -59,7 +59,7 @@ func (c *clientCache) newResource(gvk schema.GroupVersionKind, isList, isUnstruc
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 	}
 
-	client, err := apiutil.RESTClientForGVK(gvk, isUnstructured, c.config, c.codecs)
+	client, err := apiutil.RESTClientForGVK(c.scheme, gvk, isUnstructured, c.config, c.codecs)
 	if err != nil {
 		return nil, err
 	}

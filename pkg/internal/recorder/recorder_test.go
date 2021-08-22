@@ -34,13 +34,13 @@ var _ = Describe("recorder.Provider", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should return an error if failed to init clientSet.", func() {
+		It("should return an error if failed to init client.", func() {
 			// Invalid the config
 			cfg1 := *cfg
 			cfg1.Host = "invalid host"
 			_, err := recorder.NewProvider(&cfg1, scheme.Scheme, logr.DiscardLogger{}, makeBroadcaster)
 			Expect(err).NotTo(BeNil())
-			Expect(err.Error()).To(ContainSubstring("failed to init clientSet"))
+			Expect(err.Error()).To(ContainSubstring("failed to init client"))
 		})
 	})
 	Describe("GetEventRecorder", func() {

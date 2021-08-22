@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 
+	"sigs.k8s.io/controller-runtime/examples/crd/pkg"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -1397,6 +1398,33 @@ var _ = Describe("Client", func() {
 			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 			})
+
+			// Test this with an integrated type and a CRD to make sure it covers both proto
+			// and json deserialization.
+			for idx, object := range []client.Object{&corev1.ConfigMap{}, &pkg.ChaosPod{}} {
+				idx, object := idx, object
+				It(fmt.Sprintf("should not retain any data in the obj variable that is not on the server for %T", object), func() {
+					cl, err := client.New(cfg, client.Options{})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(cl).NotTo(BeNil())
+
+					object.SetName(fmt.Sprintf("retain-test-%d", idx))
+					object.SetNamespace(ns)
+
+					By("First creating the object")
+					toCreate := object.DeepCopyObject().(client.Object)
+					Expect(cl.Create(ctx, toCreate)).NotTo(HaveOccurred())
+
+					By("Fetching it into a variable that has finalizers set")
+					toGetInto := object.DeepCopyObject().(client.Object)
+					toGetInto.SetFinalizers([]string{"some-finalizer"})
+					Expect(cl.Get(ctx, client.ObjectKeyFromObject(object), toGetInto)).NotTo(HaveOccurred())
+
+					By("Ensuring the created and the received object are equal")
+					Expect(toCreate).Should(Equal(toGetInto))
+				})
+			}
+
 		})
 
 		Context("with unstructured objects", func() {
@@ -1468,6 +1496,30 @@ var _ = Describe("Client", func() {
 				u := &unstructured.Unstructured{}
 				err = cl.Get(context.TODO(), key, u)
 				Expect(err).To(HaveOccurred())
+			})
+
+			It("should not retain any data in the obj variable that is not on the server", func() {
+				object := &unstructured.Unstructured{}
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				object.SetName("retain-unstructured")
+				object.SetNamespace(ns)
+				object.SetAPIVersion("chaosapps.metamagical.io/v1")
+				object.SetKind("ChaosPod")
+
+				By("First creating the object")
+				toCreate := object.DeepCopyObject().(client.Object)
+				Expect(cl.Create(ctx, toCreate)).NotTo(HaveOccurred())
+
+				By("Fetching it into a variable that has finalizers set")
+				toGetInto := object.DeepCopyObject().(client.Object)
+				toGetInto.SetFinalizers([]string{"some-finalizer"})
+				Expect(cl.Get(ctx, client.ObjectKeyFromObject(object), toGetInto)).NotTo(HaveOccurred())
+
+				By("Ensuring the created and the received object are equal")
+				Expect(toCreate).Should(Equal(toGetInto))
 			})
 		})
 		Context("with metadata objects", func() {
@@ -1546,6 +1598,27 @@ var _ = Describe("Client", func() {
 
 			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
+			})
+
+			It("should not retain any data in the obj variable that is not on the server", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("First creating the object")
+				toCreate := &pkg.ChaosPod{ObjectMeta: metav1.ObjectMeta{Name: "retain-metadata", Namespace: ns}}
+				Expect(cl.Create(ctx, toCreate)).NotTo(HaveOccurred())
+
+				By("Fetching it into a variable that has finalizers set")
+				toGetInto := &metav1.PartialObjectMetadata{
+					TypeMeta:   metav1.TypeMeta{APIVersion: "chaosapps.metamagical.io/v1", Kind: "ChaosPod"},
+					ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "retain-metadata"},
+				}
+				toGetInto.SetFinalizers([]string{"some-finalizer"})
+				Expect(cl.Get(ctx, client.ObjectKeyFromObject(toGetInto), toGetInto)).NotTo(HaveOccurred())
+
+				By("Ensuring the created and the received objects metadata are equal")
+				Expect(toCreate.ObjectMeta).Should(Equal(toGetInto.ObjectMeta))
 			})
 		})
 	})

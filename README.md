@@ -12,7 +12,7 @@ see how it can be used.
 
 Documentation:
 
-- [Package overview](https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg)
+- [Package overview](https://pkg.go.dev/sigs.k8s.io/controller-runtime#section-directories)
 - [Basic controller using builder](https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/builder#example-Builder)
 - [Creating a manager](https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/manager#example-New)
 - [Creating a controller](https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/controller#example-New)

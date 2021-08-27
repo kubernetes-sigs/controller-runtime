@@ -45,10 +45,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
-	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
@@ -1444,7 +1444,7 @@ var _ = Describe("manger.Manager", func() {
 				},
 				log: func(logger logr.Logger) error {
 					defer GinkgoRecover()
-					Expect(logger).To(Equal(logf.RuntimeLog.WithName("manager")))
+					Expect(logger).To(Equal(log.Log))
 					return nil
 				},
 			})

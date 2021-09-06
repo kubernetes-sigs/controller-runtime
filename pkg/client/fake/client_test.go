@@ -851,6 +851,47 @@ var _ = Describe("Fake client", func() {
 			err = cl.Get(context.Background(), namespacedName, obj)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
+
+		It("should remove finalizers of the object on Patch", func() {
+			namespacedName := types.NamespacedName{
+				Name:      "test-cm",
+				Namespace: "patch-finalizers-in-obj",
+			}
+			By("Creating a new object")
+			obj := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       namespacedName.Name,
+					Namespace:  namespacedName.Namespace,
+					Finalizers: []string{"finalizers.sigs.k8s.io/test"},
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+			err := cl.Create(context.Background(), obj)
+			Expect(err).To(BeNil())
+
+			By("Removing the finalizer")
+			mergePatch, err := json.Marshal(map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"$deleteFromPrimitiveList/finalizers": []string{
+						"finalizers.sigs.k8s.io/test",
+					},
+				},
+			})
+			Expect(err).To(BeNil())
+			err = cl.Patch(context.Background(), obj, client.RawPatch(types.StrategicMergePatchType, mergePatch))
+			Expect(err).To(BeNil())
+
+			By("Check the finalizer has been removed in the object")
+			Expect(len(obj.Finalizers)).To(Equal(0))
+
+			By("Check the finalizer has been removed in client")
+			newObj := &corev1.ConfigMap{}
+			err = cl.Get(context.Background(), namespacedName, newObj)
+			Expect(err).To(BeNil())
+			Expect(len(newObj.Finalizers)).To(Equal(0))
+		})
 	}
 
 	Context("with default scheme.Scheme", func() {

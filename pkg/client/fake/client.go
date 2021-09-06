@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -284,6 +285,7 @@ func (c *fakeClient) Get(ctx context.Context, key client.ObjectKey, obj client.O
 		return err
 	}
 	decoder := scheme.Codecs.UniversalDecoder()
+	zero(obj)
 	_, _, err = decoder.Decode(j, nil, obj)
 	return err
 }
@@ -346,6 +348,7 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 		return err
 	}
 	decoder := scheme.Codecs.UniversalDecoder()
+	zero(obj)
 	_, _, err = decoder.Decode(j, nil, obj)
 	if err != nil {
 		return err
@@ -549,6 +552,7 @@ func (c *fakeClient) Patch(ctx context.Context, obj client.Object, patch client.
 		return err
 	}
 	decoder := scheme.Codecs.UniversalDecoder()
+	zero(obj)
 	_, _, err = decoder.Decode(j, nil, obj)
 	return err
 }
@@ -694,4 +698,13 @@ func allowsCreateOnUpdate(gvk schema.GroupVersionKind) bool {
 	}
 
 	return false
+}
+
+// zero zeros the value of a pointer.
+func zero(x interface{}) {
+	if x == nil {
+		return
+	}
+	res := reflect.ValueOf(x).Elem()
+	res.Set(reflect.Zero(res.Type()))
 }

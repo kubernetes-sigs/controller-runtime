@@ -140,6 +140,51 @@ var _ = Describe("Fake client", func() {
 			Expect(list.Items).To(HaveLen(2))
 		})
 
+		It("should be able to retrieve registered objects that got manipulated as unstructured", func() {
+			list := func() {
+				By("Listing all endpoints in a namespace")
+				list := &unstructured.UnstructuredList{}
+				list.SetAPIVersion("v1")
+				list.SetKind("EndpointsList")
+				err := cl.List(context.Background(), list, client.InNamespace("ns1"))
+				Expect(err).To(BeNil())
+				Expect(list.Items).To(HaveLen(1))
+			}
+
+			unstructuredEndpoint := func() *unstructured.Unstructured {
+				item := &unstructured.Unstructured{}
+				item.SetAPIVersion("v1")
+				item.SetKind("Endpoints")
+				item.SetName("test-endpoint")
+				item.SetNamespace("ns1")
+				return item
+			}
+
+			By("Adding the object during client initialization")
+			cl = NewFakeClient(unstructuredEndpoint())
+			list()
+			Expect(cl.Delete(context.Background(), unstructuredEndpoint())).To(BeNil())
+
+			By("Creating an object")
+			item := unstructuredEndpoint()
+			err := cl.Create(context.Background(), item)
+			Expect(err).To(BeNil())
+			list()
+
+			By("Updating the object")
+			item.SetAnnotations(map[string]string{"foo": "bar"})
+			err = cl.Update(context.Background(), item)
+			Expect(err).To(BeNil())
+			list()
+
+			By("Patching the object")
+			old := item.DeepCopy()
+			item.SetAnnotations(map[string]string{"bar": "baz"})
+			err = cl.Patch(context.Background(), item, client.MergeFrom(old))
+			Expect(err).To(BeNil())
+			list()
+		})
+
 		It("should be able to Create an unregistered type using unstructured", func() {
 			item := &unstructured.Unstructured{}
 			item.SetAPIVersion("custom/v1")

@@ -105,18 +105,32 @@ User will override `NewCache` function to make clear that they know exactly the
 implications of using a different cache than the default one
 
 ```golang
- ctrl.Options.NewCache = cache.BuilderWithOptions(cache.Options{
-                            SelectorsByObject: cache.SelectorsByObject{
-                                    &corev1.Node{}: {
-                                        Field: fields.SelectorFromSet(fields.Set{"metadata.name": "node01"}),
-                                    }
-                                    &v1beta1.NodeNetworkState{}: {
-                                        Field: fields.SelectorFromSet(fields.Set{"metadata.name": "node01"}),
-                                        Label: labels.SelectorFromSet(labels.Set{"app": "kubernetes-nmstate})",
-                                    }
-                                }
-                            }
-                        )
+    ...
+
+    ctrlOptions := ctrl.Options{
+        Scheme:             scheme,
+        MetricsBindAddress: "0", // disable metrics
+    }
+
+    // some other settings about ctrl.Options
+    ...
+
+    // replace default NewCacheFunc with your own
+    ctrlOptions.NewCache = cache.BuilderWithOptions(cache.Options{
+        SelectorsByObject: cache.SelectorsByObject{
+            &corev1.Node{}: {
+                Field: fields.SelectorFromSet(fields.Set{"metadata.name": "node01"}),
+            },
+            &nmstatev1beta1.NodeNetworkState{}: {
+                Field: fields.SelectorFromSet(fields.Set{"metadata.name": "node01"}),
+                Label: labels.SelectorFromSet(labels.Set{"app": "kubernetes-nmstate"}),
+            },
+        },
+    })
+
+    mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrlOptions)
+
+    ...
 ```
 
 

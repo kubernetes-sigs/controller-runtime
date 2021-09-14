@@ -170,6 +170,11 @@ func (t versionedTracker) Add(obj runtime.Object) error {
 			// be recognized
 			accessor.SetResourceVersion(trackerAddResourceVersion)
 		}
+
+		obj, err = convertFromUnstructuredIfNecessary(t.scheme, obj)
+		if err != nil {
+			return err
+		}
 		if err := t.ObjectTracker.Add(obj); err != nil {
 			return err
 		}
@@ -193,11 +198,43 @@ func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Ob
 		return apierrors.NewBadRequest("resourceVersion can not be set for Create requests")
 	}
 	accessor.SetResourceVersion("1")
+	obj, err = convertFromUnstructuredIfNecessary(t.scheme, obj)
+	if err != nil {
+		return err
+	}
 	if err := t.ObjectTracker.Create(gvr, obj, ns); err != nil {
 		accessor.SetResourceVersion("")
 		return err
 	}
+
 	return nil
+}
+
+// convertFromUnstructuredIfNecessary will convert *unstructured.Unstructured for a GVK that is recocnized
+// by the schema into the whatever the schema produces with New() for said GVK.
+// This is required because the tracker unconditionally saves on manipulations, but it's List() implementation
+// tries to assign whatever it finds into a ListType it gets from schema.New() - Thus we have to ensure
+// we save as the very same type, otherwise subsequent List requests will fail.
+func convertFromUnstructuredIfNecessary(s *runtime.Scheme, o runtime.Object) (runtime.Object, error) {
+	u, isUnstructured := o.(*unstructured.Unstructured)
+	if !isUnstructured || !s.Recognizes(u.GroupVersionKind()) {
+		return o, nil
+	}
+
+	typed, err := s.New(u.GroupVersionKind())
+	if err != nil {
+		return nil, fmt.Errorf("scheme recognizes %s but failed to produce an object for it: %w", u.GroupVersionKind().String(), err)
+	}
+
+	unstructuredSerialized, err := json.Marshal(u)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize %T: %w", unstructuredSerialized, err)
+	}
+	if err := json.Unmarshal(unstructuredSerialized, typed); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal the content of %T into %T: %w", u, typed, err)
+	}
+
+	return typed, nil
 }
 
 func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Object, ns string) error {
@@ -255,6 +292,10 @@ func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Ob
 	accessor.SetResourceVersion(strconv.FormatUint(intResourceVersion, 10))
 	if !accessor.GetDeletionTimestamp().IsZero() && len(accessor.GetFinalizers()) == 0 {
 		return t.ObjectTracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
+	}
+	obj, err = convertFromUnstructuredIfNecessary(t.scheme, obj)
+	if err != nil {
+		return err
 	}
 	return t.ObjectTracker.Update(gvr, obj, ns)
 }
@@ -320,7 +361,7 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 	}
 
 	if _, isUnstructuredList := obj.(*unstructured.UnstructuredList); isUnstructuredList && !c.scheme.Recognizes(gvk) {
-		// We need tor register the ListKind with UnstructuredList:
+		// We need to register the ListKind with UnstructuredList:
 		// https://github.com/kubernetes/kubernetes/blob/7b2776b89fb1be28d4e9203bdeec079be903c103/staging/src/k8s.io/client-go/dynamic/fake/simple.go#L44-L51
 		c.schemeWriteLock.Lock()
 		c.scheme.AddKnownTypeWithName(gvk.GroupVersion().WithKind(gvk.Kind+"List"), &unstructured.UnstructuredList{})

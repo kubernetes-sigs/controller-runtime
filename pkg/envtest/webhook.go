@@ -29,7 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/yaml"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -175,17 +177,29 @@ func WaitForWebhooks(config *rest.Config,
 	waitingFor := map[schema.GroupVersionKind]*sets.String{}
 
 	for _, hook := range mutatingWebhooks {
-		if _, ok := waitingFor[hook.GroupVersionKind()]; !ok {
-			waitingFor[hook.GroupVersionKind()] = &sets.String{}
+		h := hook
+		gvk, err := apiutil.GVKForObject(&h, scheme.Scheme)
+		if err != nil {
+			return fmt.Errorf("unable to get gvk for MutatingWebhookConfiguration %s: %v", hook.GetName(), err)
 		}
-		waitingFor[hook.GroupVersionKind()].Insert(hook.GetName())
+
+		if _, ok := waitingFor[gvk]; !ok {
+			waitingFor[gvk] = &sets.String{}
+		}
+		waitingFor[gvk].Insert(h.GetName())
 	}
 
 	for _, hook := range validatingWebhooks {
-		if _, ok := waitingFor[hook.GroupVersionKind()]; !ok {
-			waitingFor[hook.GroupVersionKind()] = &sets.String{}
+		h := hook
+		gvk, err := apiutil.GVKForObject(&h, scheme.Scheme)
+		if err != nil {
+			return fmt.Errorf("unable to get gvk for ValidatingWebhookConfiguration %s: %v", hook.GetName(), err)
 		}
-		waitingFor[hook.GroupVersionKind()].Insert(hook.GetName())
+
+		if _, ok := waitingFor[gvk]; !ok {
+			waitingFor[gvk] = &sets.String{}
+		}
+		waitingFor[gvk].Insert(hook.GetName())
 	}
 
 	// Poll until all resources are found in discovery

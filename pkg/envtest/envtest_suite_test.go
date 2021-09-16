@@ -54,7 +54,7 @@ func initializeWebhookInEnvironment() {
 	webhookPathV1 := "/failing"
 
 	env.WebhookInstallOptions = WebhookInstallOptions{
-		ValidatingWebhooks: []admissionv1.ValidatingWebhookConfiguration{
+		ValidatingWebhooks: []*admissionv1.ValidatingWebhookConfiguration{
 			{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "deployment-validation-webhook-config",

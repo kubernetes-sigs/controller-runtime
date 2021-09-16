@@ -359,21 +359,26 @@ func modifyConversionWebhooks(crds []apiextensionsv1.CustomResourceDefinition, s
 	}
 	url := pointer.StringPtr(fmt.Sprintf("https://%s/convert", hostPort))
 
-	for _, c := range crds {
+	for i := range crds {
 		// Continue if we're preserving unknown fields.
-		if c.Spec.PreserveUnknownFields {
+		if crds[i].Spec.PreserveUnknownFields {
 			continue
 		}
 		// Continue if the GroupKind isn't registered as being convertible.
 		if _, ok := convertibles[schema.GroupKind{
-			Group: c.Spec.Group,
-			Kind:  c.Spec.Names.Kind,
+			Group: crds[i].Spec.Group,
+			Kind:  crds[i].Spec.Names.Kind,
 		}]; !ok {
 			continue
 		}
-		c.Spec.Conversion.Strategy = apiextensionsv1.WebhookConverter
-		c.Spec.Conversion.Webhook.ClientConfig.Service = nil
-		c.Spec.Conversion.Webhook.ClientConfig = &apiextensionsv1.WebhookClientConfig{
+		if crds[i].Spec.Conversion == nil {
+			crds[i].Spec.Conversion = &apiextensionsv1.CustomResourceConversion{
+				Webhook: &apiextensionsv1.WebhookConversion{},
+			}
+		}
+		crds[i].Spec.Conversion.Strategy = apiextensionsv1.WebhookConverter
+		crds[i].Spec.Conversion.Webhook.ConversionReviewVersions = []string{"v1", "v1beta1"}
+		crds[i].Spec.Conversion.Webhook.ClientConfig = &apiextensionsv1.WebhookClientConfig{
 			Service:  nil,
 			URL:      url,
 			CABundle: webhookOptions.LocalServingCAData,

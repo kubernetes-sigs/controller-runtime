@@ -33,7 +33,7 @@ import (
 )
 
 var _ = Describe("Test", func() {
-	var crds []apiextensionsv1.CustomResourceDefinition
+	var crds []*apiextensionsv1.CustomResourceDefinition
 	var err error
 	var s *runtime.Scheme
 	var c client.Client
@@ -45,7 +45,7 @@ var _ = Describe("Test", func() {
 
 	// Initialize the client
 	BeforeEach(func() {
-		crds = []apiextensionsv1.CustomResourceDefinition{}
+		crds = []*apiextensionsv1.CustomResourceDefinition{}
 		s = scheme.Scheme
 		err = apiextensionsv1.AddToScheme(s)
 		Expect(err).NotTo(HaveOccurred())
@@ -69,7 +69,7 @@ var _ = Describe("Test", func() {
 				continue
 			}
 			Expect(err).NotTo(HaveOccurred())
-			Expect(c.Delete(context.TODO(), &crd)).To(Succeed())
+			Expect(c.Delete(context.TODO(), crd)).To(Succeed())
 			Eventually(func() bool {
 				err := c.Get(context.TODO(), crdObjectKey, &placeholder)
 				return apierrors.IsNotFound(err)
@@ -91,7 +91,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Frigate"))
 
-			err = WaitForCRDs(env.Config, []apiextensionsv1.CustomResourceDefinition{
+			err = WaitForCRDs(env.Config, []*apiextensionsv1.CustomResourceDefinition{
 				{
 					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 						Group: "ship.example.com",
@@ -149,7 +149,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
-			err = WaitForCRDs(env.Config, []apiextensionsv1.CustomResourceDefinition{
+			err = WaitForCRDs(env.Config, []*apiextensionsv1.CustomResourceDefinition{
 				{
 					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 						Group: "bar.example.com",
@@ -256,7 +256,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Config"))
 
-			err = WaitForCRDs(env.Config, []apiextensionsv1.CustomResourceDefinition{
+			err = WaitForCRDs(env.Config, []*apiextensionsv1.CustomResourceDefinition{
 				{
 					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 						Group: "foo.example.com",
@@ -305,7 +305,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Foo"))
 
-			err = WaitForCRDs(env.Config, []apiextensionsv1.CustomResourceDefinition{
+			err = WaitForCRDs(env.Config, []*apiextensionsv1.CustomResourceDefinition{
 				{
 					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 						Group: "bar.example.com",
@@ -353,7 +353,7 @@ var _ = Describe("Test", func() {
 		It("should return an error if the resource group version isn't found", func() {
 			// Wait for a CRD where the Group and Version don't exist
 			err := WaitForCRDs(env.Config,
-				[]apiextensionsv1.CustomResourceDefinition{
+				[]*apiextensionsv1.CustomResourceDefinition{
 					{
 						Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 							Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
@@ -383,7 +383,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Wait for a CRD that doesn't exist, but the Group and Version do
-			err = WaitForCRDs(env.Config, []apiextensionsv1.CustomResourceDefinition{
+			err = WaitForCRDs(env.Config, []*apiextensionsv1.CustomResourceDefinition{
 				{
 					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 						Group: "qux.example.com",
@@ -457,7 +457,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
-			err = WaitForCRDs(env.Config, []apiextensionsv1.CustomResourceDefinition{
+			err = WaitForCRDs(env.Config, []*apiextensionsv1.CustomResourceDefinition{
 				{
 					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 						Group: "bar.example.com",
@@ -586,7 +586,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
-			err = WaitForCRDs(env.Config, []apiextensionsv1.CustomResourceDefinition{
+			err = WaitForCRDs(env.Config, []*apiextensionsv1.CustomResourceDefinition{
 				{
 					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 						Group: "bar.example.com",
@@ -702,7 +702,7 @@ var _ = Describe("Test", func() {
 		// Store resource version for comparison later on
 		firstRV := crd.ResourceVersion
 
-		err = WaitForCRDs(env.Config, []apiextensionsv1.CustomResourceDefinition{
+		err = WaitForCRDs(env.Config, []*apiextensionsv1.CustomResourceDefinition{
 			{
 				Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 					Group: "crew.example.com",
@@ -742,7 +742,7 @@ var _ = Describe("Test", func() {
 		Expect(len(crd.Spec.Versions)).To(BeEquivalentTo(3))
 		Expect(crd.ResourceVersion).NotTo(BeEquivalentTo(firstRV))
 
-		err = WaitForCRDs(env.Config, []apiextensionsv1.CustomResourceDefinition{
+		err = WaitForCRDs(env.Config, []*apiextensionsv1.CustomResourceDefinition{
 			{
 				Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 					Group: "crew.example.com",
@@ -808,7 +808,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
-			err = WaitForCRDs(env.Config, []apiextensionsv1.CustomResourceDefinition{
+			err = WaitForCRDs(env.Config, []*apiextensionsv1.CustomResourceDefinition{
 				{
 					Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 						Group: "bar.example.com",

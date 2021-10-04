@@ -19,6 +19,7 @@ package source_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -218,13 +219,16 @@ var _ = Describe("Source", func() {
 				ic.Error = fmt.Errorf("test error")
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 
+				ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				defer cancel()
+
 				instance := &source.Kind{
 					Type: &corev1.Pod{},
 				}
 				Expect(instance.InjectCache(ic)).To(Succeed())
 				err := instance.Start(ctx, handler.Funcs{}, q)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(instance.WaitForSync(context.Background())).To(HaveOccurred())
+				Eventually(instance.WaitForSync(context.Background())).Should(HaveOccurred())
 			})
 		})
 	})

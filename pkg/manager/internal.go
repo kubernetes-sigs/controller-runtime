@@ -380,7 +380,7 @@ func (cm *controllerManager) serveMetrics() {
 	}
 	// Run the server
 	cm.startRunnable(RunnableFunc(func(_ context.Context) error {
-		cm.logger.Info("starting metrics server", "path", defaultMetricsEndpoint)
+		cm.logger.Info("Starting metrics server", "path", defaultMetricsEndpoint)
 		if err := server.Serve(cm.metricsListener); err != nil && err != http.ErrServerClosed {
 			return err
 		}

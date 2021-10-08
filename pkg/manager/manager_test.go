@@ -28,8 +28,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"k8s.io/client-go/tools/record"
-
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -1811,36 +1809,4 @@ func (c *startClusterAfterManager) Start(ctx context.Context) error {
 
 func (c *startClusterAfterManager) GetCache() cache.Cache {
 	return c.informer
-}
-
-func (c *startClusterAfterManager) SetFields(interface{}) error {
-	return nil
-}
-
-func (c *startClusterAfterManager) GetConfig() *rest.Config {
-	return nil
-}
-
-func (c *startClusterAfterManager) GetScheme() *runtime.Scheme {
-	return nil
-}
-
-func (c *startClusterAfterManager) GetClient() client.Client {
-	return nil
-}
-
-func (c *startClusterAfterManager) GetFieldIndexer() client.FieldIndexer {
-	return nil
-}
-
-func (c *startClusterAfterManager) GetEventRecorderFor(name string) record.EventRecorder {
-	return nil
-}
-
-func (c *startClusterAfterManager) GetRESTMapper() meta.RESTMapper {
-	return nil
-}
-
-func (c *startClusterAfterManager) GetAPIReader() client.Reader {
-	return nil
 }

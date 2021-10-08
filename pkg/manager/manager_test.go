@@ -1350,8 +1350,8 @@ var _ = Describe("manger.Manager", func() {
 
 				// Wait for the Manager to start
 				Eventually(func() bool {
-					mgr.mu.Lock()
-					defer mgr.mu.Unlock()
+					mgr.addMu.Lock()
+					defer mgr.addMu.Unlock()
 					return mgr.started
 				}).Should(BeTrue())
 
@@ -1381,8 +1381,8 @@ var _ = Describe("manger.Manager", func() {
 
 			// Wait for the Manager to start
 			Eventually(func() bool {
-				mgr.mu.Lock()
-				defer mgr.mu.Unlock()
+				mgr.addMu.Lock()
+				defer mgr.addMu.Unlock()
 				return mgr.started
 			}).Should(BeTrue())
 

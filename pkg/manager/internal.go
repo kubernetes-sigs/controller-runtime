@@ -211,6 +211,12 @@ func (cm *controllerManager) Add(r Runnable) error {
 		cm.nonLeaderElectionRunnables = append(cm.nonLeaderElectionRunnables, r)
 	} else if hasCache, ok := r.(hasCache); ok {
 		cm.caches = append(cm.caches, hasCache)
+		if cm.started {
+			cm.startRunnable(hasCache)
+			if !hasCache.GetCache().WaitForCacheSync(cm.internalCtx) {
+				return fmt.Errorf("could not sync cache")
+			}
+		}
 	} else {
 		shouldStart = cm.startedLeader
 		cm.leaderElectionRunnables = append(cm.leaderElectionRunnables, r)

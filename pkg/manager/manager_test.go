@@ -765,6 +765,46 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err.Error()).To(Equal("expected error"))
 			})
 
+			It("should start caches added after Manager has started", func() {
+				fakeCache := &startSignalingInformer{Cache: &informertest.FakeInformers{}}
+				options.NewCache = func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+					return fakeCache, nil
+				}
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+
+				runnableWasStarted := make(chan struct{})
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					defer GinkgoRecover()
+					if !fakeCache.wasSynced {
+						return errors.New("WaitForCacheSyncCalled wasn't called before Runnable got started")
+					}
+					close(runnableWasStarted)
+					return nil
+				}))).To(Succeed())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(ctx)).ToNot(HaveOccurred())
+				}()
+
+				<-runnableWasStarted
+
+				additionalClusterCache := &startSignalingInformer{Cache: &informertest.FakeInformers{}}
+				fakeCluster := &startClusterAfterManager{informer: additionalClusterCache}
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(m.Add(fakeCluster)).NotTo(HaveOccurred())
+
+				Expect(fakeCluster.informer.wasStarted).To(BeTrue())
+				Expect(fakeCluster.informer.wasSynced).To(BeTrue())
+			})
+
 			It("should wait for runnables to stop", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
@@ -1757,4 +1797,16 @@ func (c *startSignalingInformer) WaitForCacheSync(ctx context.Context) bool {
 		c.wasSynced = true
 	}()
 	return c.Cache.WaitForCacheSync(ctx)
+}
+
+type startClusterAfterManager struct {
+	informer *startSignalingInformer
+}
+
+func (c *startClusterAfterManager) Start(ctx context.Context) error {
+	return c.informer.Start(ctx)
+}
+
+func (c *startClusterAfterManager) GetCache() cache.Cache {
+	return c.informer
 }

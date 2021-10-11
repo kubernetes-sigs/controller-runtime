@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"reflect"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
@@ -472,35 +473,76 @@ var _ = Describe("Zap log level flag options setup", func() {
 		})
 	})
 
+	Context("with zap-time-encoding flag provided", func() {
+
+		It("Should set time encoder in options", func() {
+			args := []string{"--zap-time-encoding=rfc3339"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+
+			opt := Options{}
+			UseFlagOptions(&fromFlags)(&opt)
+			opt.addDefaults()
+
+			optVal := reflect.ValueOf(opt.TimeEncoder)
+			expVal := reflect.ValueOf(zapcore.RFC3339TimeEncoder)
+
+			Expect(optVal.Pointer()).To(Equal(expVal.Pointer()))
+		})
+
+		It("Should default to 'epoch' time encoding", func() {
+			args := []string{""}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+
+			opt := Options{}
+			UseFlagOptions(&fromFlags)(&opt)
+			opt.addDefaults()
+
+			optVal := reflect.ValueOf(opt.TimeEncoder)
+			expVal := reflect.ValueOf(zapcore.EpochTimeEncoder)
+
+			Expect(optVal.Pointer()).To(Equal(expVal.Pointer()))
+		})
+
+		It("Should return an error message, with unknown time-encoding", func() {
+			fs = *flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+			args := []string{"--zap-time-encoding=foobar"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("Should propagate time encoder to logger", func() {
+			// zaps ISO8601TimeEncoder uses 2006-01-02T15:04:05.000Z0700 as pattern for iso8601 encoding
+			iso8601Pattern := `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{3}(\+[0-9]{4}|Z)`
+
+			args := []string{"--zap-time-encoding=iso8601"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+			logOut := new(bytes.Buffer)
+
+			logger := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
+			logger.Info("This is a test message")
+
+			outRaw := logOut.Bytes()
+
+			res := map[string]interface{}{}
+			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+			Expect(res["ts"]).Should(MatchRegexp(iso8601Pattern))
+		})
+
+	})
+
 	Context("with encoder options provided programmatically", func() {
 
-		It("Should set Console Encoder, with given Nanos TimeEncoder option.", func() {
-			logOut := new(bytes.Buffer)
-			f := func(ec *zapcore.EncoderConfig) {
-				if err := ec.EncodeTime.UnmarshalText([]byte("nanos")); err != nil {
-					Expect(err).ToNot(HaveOccurred())
-				}
-			}
-			opts := func(o *Options) {
-				o.EncoderConfigOptions = append(o.EncoderConfigOptions, f)
-			}
-			log := New(UseDevMode(true), WriteTo(logOut), opts)
-			log.Info("This is a test message")
-			outRaw := logOut.Bytes()
-			// Assert for Console Encoder
-			res := map[string]interface{}{}
-			Expect(json.Unmarshal(outRaw, &res)).ToNot(Succeed())
-			// Assert for Epoch Nanos TimeEncoder
-			Expect(string(outRaw)).ShouldNot(ContainSubstring("."))
-
-		})
 		It("Should set JSON Encoder, with given Millis TimeEncoder option, and MessageKey", func() {
 			logOut := new(bytes.Buffer)
 			f := func(ec *zapcore.EncoderConfig) {
 				ec.MessageKey = "MillisTimeFormat"
-				if err := ec.EncodeTime.UnmarshalText([]byte("millis")); err != nil {
-					Expect(err).ToNot(HaveOccurred())
-				}
 			}
 			opts := func(o *Options) {
 				o.EncoderConfigOptions = append(o.EncoderConfigOptions, f)
@@ -511,8 +553,6 @@ var _ = Describe("Zap log level flag options setup", func() {
 			// Assert for JSON Encoder
 			res := map[string]interface{}{}
 			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
-			// Assert for Epoch Nanos TimeEncoder
-			Expect(string(outRaw)).Should(ContainSubstring("."))
 			// Assert for MessageKey
 			Expect(string(outRaw)).Should(ContainSubstring("MillisTimeFormat"))
 		})

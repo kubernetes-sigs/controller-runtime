@@ -550,8 +550,11 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 	if cm.gracefulShutdownTimeout == 0 {
 		return nil
 	}
-	cm.addMu.RLock()
-	defer cm.addMu.RUnlock()
+
+	// NOTE: it is required to get the addMu write lock, so we are sure that we not starting any runnable
+	// while we start waitForRunnableToEnd.
+	cm.addMu.Lock()
+	defer cm.addMu.Unlock()
 
 	// Note: stopProcedureEngaged is used by Add, AddMetricsExtraHandler, AddReadyzCheck, but it is safe to change here because
 	// addMu.RLock() prevents the above functions to be executed concurrently with this operation.

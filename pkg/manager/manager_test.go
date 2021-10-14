@@ -306,7 +306,7 @@ var _ = Describe("manger.Manager", func() {
 					Expect(m.Start(ctx)).To(BeNil())
 					close(mgrDone)
 				}()
-				<-cm.elected
+				<-cm.Elected()
 				cancel()
 				select {
 				case <-leaderElectionDone:
@@ -335,7 +335,7 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					err := m.Start(ctx)
 					Expect(err).ToNot(BeNil())
-					Expect(err.Error()).To(Equal("leader election lost"))
+					Expect(err.Error()).To(ContainSubstring("leader election lost"))
 					close(mgrDone)
 				}()
 				cm := m.(*controllerManager)
@@ -401,8 +401,8 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					Expect(m1.Elected()).ShouldNot(BeClosed())
 					Expect(m1.Start(ctx1)).NotTo(HaveOccurred())
-					Expect(m1.Elected()).Should(BeClosed())
 				}()
+				<-m1.Elected()
 				<-c1
 
 				c2 := make(chan struct{})
@@ -435,6 +435,7 @@ var _ = Describe("manger.Manager", func() {
 				Expect(m).To(BeNil())
 				Expect(err).To(MatchError(ContainSubstring("expected error")))
 			})
+
 			It("should return an error if namespace not set and not running in cluster", func() {
 				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime"})
 				Expect(m).To(BeNil())
@@ -609,9 +610,9 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					Expect(m.Elected()).ShouldNot(BeClosed())
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
-					Expect(m.Elected()).Should(BeClosed())
 				}()
 
+				<-m.Elected()
 				wgRunnableStarted.Wait()
 			})
 
@@ -653,7 +654,9 @@ var _ = Describe("manger.Manager", func() {
 				}
 				mgr, ok := m.(*controllerManager)
 				Expect(ok).To(BeTrue())
-				mgr.caches = []hasCache{&cacheProvider{cache: &informertest.FakeInformers{Error: fmt.Errorf("expected error")}}}
+				Expect(mgr.Add(
+					&cacheProvider{cache: &informertest.FakeInformers{Error: fmt.Errorf("expected error")}},
+				)).To(Succeed())
 
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
@@ -672,14 +675,15 @@ var _ = Describe("manger.Manager", func() {
 				}
 
 				runnableWasStarted := make(chan struct{})
-				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+				runnable := RunnableFunc(func(ctx context.Context) error {
 					defer GinkgoRecover()
 					if !fakeCache.wasSynced {
 						return errors.New("runnable got started before cache was synced")
 					}
 					close(runnableWasStarted)
 					return nil
-				}))).To(Succeed())
+				})
+				Expect(m.Add(runnable)).To(Succeed())
 
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
@@ -801,8 +805,11 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(m.Add(fakeCluster)).NotTo(HaveOccurred())
 
-				Expect(fakeCluster.informer.wasStarted).To(BeTrue())
-				Expect(fakeCluster.informer.wasSynced).To(BeTrue())
+				Eventually(func() bool {
+					fakeCluster.informer.mu.Lock()
+					defer fakeCluster.informer.mu.Unlock()
+					return fakeCluster.informer.wasStarted && fakeCluster.informer.wasSynced
+				}).Should(BeTrue())
 			})
 
 			It("should wait for runnables to stop", func() {
@@ -1029,10 +1036,11 @@ var _ = Describe("manger.Manager", func() {
 				ctx, cancel := context.WithCancel(context.Background())
 				managerStopDone := make(chan struct{})
 				go func() {
+					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 					close(managerStopDone)
 				}()
-				<-m.(*controllerManager).elected
+				<-m.Elected()
 				cancel()
 
 				<-managerStopDone
@@ -1119,6 +1127,7 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
+				<-m.Elected()
 
 				metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
 				resp, err := http.Get(metricsEndpoint)
@@ -1137,10 +1146,12 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
+				<-m.Elected()
 
 				endpoint := fmt.Sprintf("http://%s/should-not-exist", listener.Addr().String())
 				resp, err := http.Get(endpoint)
 				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
 				Expect(resp.StatusCode).To(Equal(404))
 			})
 
@@ -1163,10 +1174,12 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
+				<-m.Elected()
 
 				metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
 				resp, err := http.Get(metricsEndpoint)
 				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
 				Expect(resp.StatusCode).To(Equal(200))
 
 				data, err := ioutil.ReadAll(resp.Body)
@@ -1204,10 +1217,12 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
+				<-m.Elected()
 
 				endpoint := fmt.Sprintf("http://%s/debug", listener.Addr().String())
 				resp, err := http.Get(endpoint)
 				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
 				Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 				body, err := ioutil.ReadAll(resp.Body)
@@ -1248,6 +1263,7 @@ var _ = Describe("manger.Manager", func() {
 				defer GinkgoRecover()
 				Expect(m.Start(ctx)).NotTo(HaveOccurred())
 			}()
+			<-m.Elected()
 
 			// Check the health probes started
 			endpoint := fmt.Sprintf("http://%s", listener.Addr().String())
@@ -1261,7 +1277,7 @@ var _ = Describe("manger.Manager", func() {
 			Eventually(func() error {
 				_, err = http.Get(endpoint)
 				return err
-			}).ShouldNot(Succeed())
+			}, 10*time.Second).ShouldNot(Succeed())
 		})
 
 		It("should serve readiness endpoint", func() {
@@ -1280,18 +1296,21 @@ var _ = Describe("manger.Manager", func() {
 				defer GinkgoRecover()
 				Expect(m.Start(ctx)).NotTo(HaveOccurred())
 			}()
+			<-m.Elected()
 
 			readinessEndpoint := fmt.Sprint("http://", listener.Addr().String(), defaultReadinessEndpoint)
 
 			// Controller is not ready
 			resp, err := http.Get(readinessEndpoint)
 			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
 			Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
 
 			// Controller is ready
 			res = nil
 			resp, err = http.Get(readinessEndpoint)
 			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 			// Check readiness path without trailing slash without redirect
@@ -1304,6 +1323,7 @@ var _ = Describe("manger.Manager", func() {
 			}
 			resp, err = httpClient.Get(readinessEndpoint)
 			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 			// Check readiness path for individual check
@@ -1311,6 +1331,7 @@ var _ = Describe("manger.Manager", func() {
 			res = nil
 			resp, err = http.Get(readinessEndpoint)
 			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 		})
 
@@ -1330,18 +1351,21 @@ var _ = Describe("manger.Manager", func() {
 				defer GinkgoRecover()
 				Expect(m.Start(ctx)).NotTo(HaveOccurred())
 			}()
+			<-m.Elected()
 
 			livenessEndpoint := fmt.Sprint("http://", listener.Addr().String(), defaultLivenessEndpoint)
 
 			// Controller is not ready
 			resp, err := http.Get(livenessEndpoint)
 			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
 			Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
 
 			// Controller is ready
 			res = nil
 			resp, err = http.Get(livenessEndpoint)
 			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 			// Check liveness path without trailing slash without redirect
@@ -1354,6 +1378,7 @@ var _ = Describe("manger.Manager", func() {
 			}
 			resp, err = httpClient.Get(livenessEndpoint)
 			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 			// Check readiness path for individual check
@@ -1361,6 +1386,7 @@ var _ = Describe("manger.Manager", func() {
 			res = nil
 			resp, err = http.Get(livenessEndpoint)
 			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 		})
 	})
@@ -1387,12 +1413,11 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
+				<-m.Elected()
 
 				// Wait for the Manager to start
 				Eventually(func() bool {
-					mgr.mu.Lock()
-					defer mgr.mu.Unlock()
-					return mgr.started
+					return mgr.runnables.Caches.Started()
 				}).Should(BeTrue())
 
 				// Add another component after starting
@@ -1421,9 +1446,7 @@ var _ = Describe("manger.Manager", func() {
 
 			// Wait for the Manager to start
 			Eventually(func() bool {
-				mgr.mu.Lock()
-				defer mgr.mu.Unlock()
-				return mgr.started
+				return mgr.runnables.Caches.Started()
 			}).Should(BeTrue())
 
 			c1 := make(chan struct{})
@@ -1577,6 +1600,8 @@ var _ = Describe("manger.Manager", func() {
 			defer close(doneCh)
 			Expect(m.Start(ctx)).To(Succeed())
 		}()
+		<-m.Elected()
+
 		Eventually(func() *corev1.Event {
 			evts, err := clientset.CoreV1().Events("").Search(m.GetScheme(), &ns)
 			Expect(err).NotTo(HaveOccurred())
@@ -1765,11 +1790,12 @@ func (c *cacheProvider) Start(ctx context.Context) error {
 }
 
 type startSignalingInformer struct {
+	mu sync.Mutex
+
 	// The manager calls Start and WaitForCacheSync in
 	// parallel, so we have to protect wasStarted with a Mutex
 	// and block in WaitForCacheSync until it is true.
-	wasStartedLock sync.Mutex
-	wasStarted     bool
+	wasStarted bool
 	// was synced will be true once Start was called and
 	// WaitForCacheSync returned, just like a real cache.
 	wasSynced bool
@@ -1777,24 +1803,23 @@ type startSignalingInformer struct {
 }
 
 func (c *startSignalingInformer) started() bool {
-	c.wasStartedLock.Lock()
-	defer c.wasStartedLock.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.wasStarted
 }
 
 func (c *startSignalingInformer) Start(ctx context.Context) error {
-	c.wasStartedLock.Lock()
+	c.mu.Lock()
 	c.wasStarted = true
-	c.wasStartedLock.Unlock()
+	c.mu.Unlock()
 	return c.Cache.Start(ctx)
 }
 
 func (c *startSignalingInformer) WaitForCacheSync(ctx context.Context) bool {
 	defer func() {
-		for !c.started() {
-			continue
-		}
+		c.mu.Lock()
 		c.wasSynced = true
+		c.mu.Unlock()
 	}()
 	return c.Cache.WaitForCacheSync(ctx)
 }

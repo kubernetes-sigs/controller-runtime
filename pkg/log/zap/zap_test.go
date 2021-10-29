@@ -62,7 +62,7 @@ type fakeLoggerRoot struct {
 	messages []logInfo
 }
 
-var _ logr.Logger = &fakeLogger{}
+var _ logr.LogSink = &fakeLogger{}
 
 // fakeLogger is a fake implementation of logr.Logger that records
 // messages, tags, and names,
@@ -74,7 +74,10 @@ type fakeLogger struct {
 	root *fakeLoggerRoot
 }
 
-func (f *fakeLogger) WithName(name string) logr.Logger {
+func (f *fakeLogger) Init(info logr.RuntimeInfo) {
+}
+
+func (f *fakeLogger) WithName(name string) logr.LogSink {
 	names := append([]string(nil), f.name...)
 	names = append(names, name)
 	return &fakeLogger{
@@ -84,7 +87,7 @@ func (f *fakeLogger) WithName(name string) logr.Logger {
 	}
 }
 
-func (f *fakeLogger) WithValues(vals ...interface{}) logr.Logger {
+func (f *fakeLogger) WithValues(vals ...interface{}) logr.LogSink {
 	tags := append([]interface{}(nil), f.tags...)
 	tags = append(tags, vals...)
 	return &fakeLogger{
@@ -105,7 +108,7 @@ func (f *fakeLogger) Error(err error, msg string, vals ...interface{}) {
 	})
 }
 
-func (f *fakeLogger) Info(msg string, vals ...interface{}) {
+func (f *fakeLogger) Info(level int, msg string, vals ...interface{}) {
 	tags := append([]interface{}(nil), f.tags...)
 	tags = append(tags, vals...)
 	f.root.messages = append(f.root.messages, logInfo{
@@ -115,8 +118,8 @@ func (f *fakeLogger) Info(msg string, vals ...interface{}) {
 	})
 }
 
-func (f *fakeLogger) Enabled() bool         { return true }
-func (f *fakeLogger) V(lvl int) logr.Logger { return f }
+func (f *fakeLogger) Enabled(level int) bool { return true }
+func (f *fakeLogger) V(lvl int) logr.LogSink { return f }
 
 var _ = Describe("Zap options setup", func() {
 	var opts *Options
@@ -575,8 +578,8 @@ var _ = Describe("Zap log level flag options setup", func() {
 				logOut.Truncate(0)
 				logger.V(4).Info("test 4") // Should not be logged
 				Expect(logOut.String()).To(BeEmpty())
-				logger.V(-3).Info("test -3") // Log a panic, since V(-1*N) for all N > 0 is not permitted.
-				Expect(logOut.String()).To(ContainSubstring(`"level":"dpanic"`))
+				logger.V(-3).Info("test -3")
+				Expect(logOut.String()).To(ContainSubstring("test -3"))
 			})
 			It("does not log with positive logr level", func() {
 				By("setting up the logger")

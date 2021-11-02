@@ -57,10 +57,21 @@ type testLogger struct {
 	logr.Logger
 }
 
-func (l *testLogger) WithName(_ string) logr.Logger {
+func (l *testLogger) Init(logr.RuntimeInfo) {
+}
+
+func (l *testLogger) Enabled(int) bool {
+	return true
+}
+
+func (l *testLogger) Info(level int, msg string, keysAndValues ...interface{}) {
+}
+
+func (l *testLogger) WithValues(keysAndValues ...interface{}) logr.LogSink {
 	return l
 }
-func (l *testLogger) WithValues(_ ...interface{}) logr.Logger {
+
+func (l *testLogger) WithName(name string) logr.LogSink {
 	return l
 }
 
@@ -227,7 +238,7 @@ var _ = Describe("application", func() {
 
 			logger := &testLogger{}
 			newController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
-				if options.Log == logger {
+				if options.Log.GetSink() == logger {
 					return controller.New(name, mgr, options)
 				}
 				return nil, fmt.Errorf("logger expected %T but found %T", logger, options.Log)
@@ -240,7 +251,7 @@ var _ = Describe("application", func() {
 			instance, err := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
-				WithLogger(logger).
+				WithLogger(logr.New(logger)).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())

@@ -571,7 +571,7 @@ func setOptionsDefaults(options Options) Options {
 		options.GracefulShutdownTimeout = &gracefulShutdownTimeout
 	}
 
-	if options.Logger == nil {
+	if options.Logger.GetSink() == nil {
 		options.Logger = log.Log
 	}
 

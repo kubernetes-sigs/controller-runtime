@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/internal/httpserver"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -185,7 +186,7 @@ var _ = Describe("Webhook", func() {
 			http.Handle("/failing", hook)
 
 			By("running the http server")
-			srv := &http.Server{}
+			srv := httpserver.New(nil)
 			go func() {
 				idleConnsClosed := make(chan struct{})
 				go func() {

@@ -425,11 +425,13 @@ func (cm *controllerManager) serveHealthProbes() {
 		cm.healthzStarted = true
 	}()
 
-	// Shutdown the server when stop is closed
-	<-cm.internalProceduresStop
-	if err := server.Shutdown(cm.shutdownCtx); err != nil {
-		cm.errChan <- err
-	}
+	go func() {
+		// Shutdown the server when stop is closed
+		<-cm.internalProceduresStop
+		if err := server.Shutdown(cm.shutdownCtx); err != nil {
+			cm.errChan <- err
+		}
+	}()
 }
 
 func (cm *controllerManager) Start(ctx context.Context) (err error) {
@@ -473,7 +475,7 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 
 	// Serve health probes
 	if cm.healthProbeListener != nil {
-		go cm.serveHealthProbes()
+		cm.serveHealthProbes()
 	}
 
 	// Webhooks MUST start before any cache is populated, otherwise there is a race condition

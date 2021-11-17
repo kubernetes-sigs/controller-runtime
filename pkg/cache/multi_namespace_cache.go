@@ -329,3 +329,7 @@ func (i *multiNamespaceInformer) HasSynced() bool {
 	}
 	return true
 }
+
+func (i *multiNamespaceInformer) GetIndexer() toolscache.Indexer {
+	panic("GetIndexer is not supported for multiNamespaceInformer")
+}

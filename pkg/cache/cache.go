@@ -84,6 +84,8 @@ type Informer interface {
 	AddIndexers(indexers toolscache.Indexers) error
 	// HasSynced return true if the informers underlying store has synced.
 	HasSynced() bool
+	// GetIndexer returns the Indexer backed by this informer
+	GetIndexer() toolscache.Indexer
 }
 
 // ObjectSelector is an alias name of internal.Selector.

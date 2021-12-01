@@ -277,19 +277,19 @@ func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformer
 	// Create a new ListWatch for the obj
 	return &cache.ListWatch{
 		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
-			ip.selectors[gvk].ApplyToList(&opts)
+			ip.selectors.forGVK(gvk).ApplyToList(&opts)
 			res := listObj.DeepCopyObject()
-			namespace := restrictNamespaceBySelector(ip.namespace, ip.selectors[gvk])
+			namespace := restrictNamespaceBySelector(ip.namespace, ip.selectors.forGVK(gvk))
 			isNamespaceScoped := namespace != "" && mapping.Scope.Name() != meta.RESTScopeNameRoot
 			err := client.Get().NamespaceIfScoped(namespace, isNamespaceScoped).Resource(mapping.Resource.Resource).VersionedParams(&opts, ip.paramCodec).Do(ctx).Into(res)
 			return res, err
 		},
 		// Setup the watch function
 		WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
-			ip.selectors[gvk].ApplyToList(&opts)
+			ip.selectors.forGVK(gvk).ApplyToList(&opts)
 			// Watch needs to be set to true separately
 			opts.Watch = true
-			namespace := restrictNamespaceBySelector(ip.namespace, ip.selectors[gvk])
+			namespace := restrictNamespaceBySelector(ip.namespace, ip.selectors.forGVK(gvk))
 			isNamespaceScoped := namespace != "" && mapping.Scope.Name() != meta.RESTScopeNameRoot
 			return client.Get().NamespaceIfScoped(namespace, isNamespaceScoped).Resource(mapping.Resource.Resource).VersionedParams(&opts, ip.paramCodec).Watch(ctx)
 		},

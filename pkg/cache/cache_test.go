@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strconv"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -73,6 +74,33 @@ func createPodWithLabels(name, namespace string, restartPolicy corev1.RestartPol
 	return pod
 }
 
+func createSvc(name, namespace string, cl client.Client) client.Object {
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{{Port: 1}},
+		},
+	}
+	err := cl.Create(context.Background(), svc)
+	Expect(err).NotTo(HaveOccurred())
+	return svc
+}
+
+func createSA(name, namespace string, cl client.Client) client.Object {
+	sa := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+	err := cl.Create(context.Background(), sa)
+	Expect(err).NotTo(HaveOccurred())
+	return sa
+}
+
 func createPod(name, namespace string, restartPolicy corev1.RestartPolicy) client.Object {
 	return createPodWithLabels(name, namespace, restartPolicy, nil)
 }
@@ -92,6 +120,76 @@ var _ = Describe("Multi-Namespace Informer Cache", func() {
 })
 var _ = Describe("Informer Cache without DeepCopy", func() {
 	CacheTest(cache.New, cache.Options{UnsafeDisableDeepCopyByObject: cache.DisableDeepCopyByObject{cache.ObjectAll{}: true}})
+})
+var _ = Describe("Cache with selectors", func() {
+	defer GinkgoRecover()
+	var (
+		informerCache       cache.Cache
+		informerCacheCtx    context.Context
+		informerCacheCancel context.CancelFunc
+	)
+
+	BeforeEach(func() {
+		informerCacheCtx, informerCacheCancel = context.WithCancel(context.Background())
+		Expect(cfg).NotTo(BeNil())
+		cl, err := client.New(cfg, client.Options{})
+		Expect(err).NotTo(HaveOccurred())
+		err = ensureNamespace(testNamespaceOne, cl)
+		Expect(err).NotTo(HaveOccurred())
+		err = ensureNamespace(testNamespaceTwo, cl)
+		Expect(err).NotTo(HaveOccurred())
+		for idx, namespace := range []string{testNamespaceOne, testNamespaceTwo} {
+			_ = createSA("test-sa-"+strconv.Itoa(idx), namespace, cl)
+			_ = createSvc("test-svc-"+strconv.Itoa(idx), namespace, cl)
+		}
+
+		opts := cache.Options{
+			SelectorsByObject: cache.SelectorsByObject{
+				&corev1.ServiceAccount{}: {Field: fields.OneTermEqualSelector("metadata.namespace", testNamespaceOne)},
+			},
+			DefaultSelector: cache.ObjectSelector{Field: fields.OneTermEqualSelector("metadata.namespace", testNamespaceTwo)},
+		}
+
+		By("creating the informer cache")
+		informerCache, err = cache.New(cfg, opts)
+		Expect(err).NotTo(HaveOccurred())
+		By("running the cache and waiting for it to sync")
+		// pass as an arg so that we don't race between close and re-assign
+		go func(ctx context.Context) {
+			defer GinkgoRecover()
+			Expect(informerCache.Start(ctx)).To(Succeed())
+		}(informerCacheCtx)
+		Expect(informerCache.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
+	})
+
+	AfterEach(func() {
+		ctx := context.Background()
+		cl, err := client.New(cfg, client.Options{})
+		Expect(err).NotTo(HaveOccurred())
+		for idx, namespace := range []string{testNamespaceOne, testNamespaceTwo} {
+			err = cl.Delete(ctx, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "test-sa-" + strconv.Itoa(idx)}})
+			Expect(err).NotTo(HaveOccurred())
+			err = cl.Delete(ctx, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "test-svc-" + strconv.Itoa(idx)}})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		informerCacheCancel()
+	})
+
+	It("Should list serviceaccounts and find exactly one in namespace "+testNamespaceOne, func() {
+		var sas corev1.ServiceAccountList
+		err := informerCache.List(informerCacheCtx, &sas)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(sas.Items)).To(Equal(1))
+		Expect(sas.Items[0].Namespace).To(Equal(testNamespaceOne))
+	})
+
+	It("Should list services and find exactly one in namespace "+testNamespaceTwo, func() {
+		var svcs corev1.ServiceList
+		err := informerCache.List(informerCacheCtx, &svcs)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(svcs.Items)).To(Equal(1))
+		Expect(svcs.Items[0].Namespace).To(Equal(testNamespaceTwo))
+	})
 })
 
 func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error), opts cache.Options) {

@@ -467,6 +467,39 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
 		})
 
+		It("should requeue a Request if there is an error and continue processing items using Len()", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{Namespace: "bar", Name: "foo"},
+			}
+			queue = &controllertest.Queue{
+				Interface: workqueue.New(),
+			}
+			ctrl.Queue = queue
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
+			}()
+
+			queue.Add(request)
+			queue.Add(req)
+			Expect(ctrl.Len()).To(Equal(2))
+			By("Invoking Reconciler which will give an error")
+
+			fakeReconcile.AddResult(reconcile.Result{}, fmt.Errorf("expected error: reconcile"))
+			Expect(<-reconciled).To(Equal(req))
+
+			By("Invoking Reconciler a second time without error")
+			fakeReconcile.AddResult(reconcile.Result{}, nil)
+			Expect(ctrl.Len()).To(Equal(1))
+			Expect(<-reconciled).To(Equal(req))
+
+			By("Removing the item from the queue")
+			Expect(ctrl.Len()).To(Equal(0))
+			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
+		}, 1.0)
+
 		PIt("should forget an item if it is not a Request and continue processing items", func() {
 			// TODO(community): write this test
 		})

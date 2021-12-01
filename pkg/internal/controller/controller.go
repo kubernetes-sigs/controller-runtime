@@ -267,6 +267,15 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 	return true
 }
 
+// Len returns the current queue length, for informational purposes only. You
+// shouldn't e.g. gate a call to Add() or Get() on Len() being a particular
+// value, that can't be synchronized properly.
+func (c *Controller) Len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.Queue.Len()
+}
+
 const (
 	labelError        = "error"
 	labelRequeueAfter = "requeue_after"

@@ -79,6 +79,11 @@ type Controller interface {
 
 	// GetLogger returns this controller logger prefilled with basic information.
 	GetLogger() logr.Logger
+
+	// Len returns the current queue length, for informational purposes only. You
+	// shouldn't e.g. gate a call to Add() or Get() on Len() being a particular
+	// value, that can't be synchronized properly.
+	Len() int
 }
 
 // New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have

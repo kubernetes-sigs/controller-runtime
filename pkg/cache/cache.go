@@ -159,21 +159,23 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 //          returned from cache get/list before mutating it.
 func BuilderWithOptions(options Options) NewCacheFunc {
 	return func(config *rest.Config, opts Options) (Cache, error) {
-		if opts.Scheme == nil {
-			opts.Scheme = options.Scheme
+		if options.Scheme == nil {
+			options.Scheme = opts.Scheme
 		}
-		if opts.Mapper == nil {
-			opts.Mapper = options.Mapper
+		if options.Mapper == nil {
+			options.Mapper = opts.Mapper
+		}
+		if options.Resync == nil {
+			options.Resync = opts.Resync
+		}
+		if options.Namespace == "" {
+			options.Namespace = opts.Namespace
 		}
 		if opts.Resync == nil {
 			opts.Resync = options.Resync
 		}
-		if opts.Namespace == "" {
-			opts.Namespace = options.Namespace
-		}
-		opts.SelectorsByObject = options.SelectorsByObject
-		opts.UnsafeDisableDeepCopyByObject = options.UnsafeDisableDeepCopyByObject
-		return New(config, opts)
+
+		return New(config, options)
 	}
 }
 

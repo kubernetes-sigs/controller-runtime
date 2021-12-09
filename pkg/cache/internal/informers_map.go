@@ -102,9 +102,6 @@ type specificInformersMap struct {
 	// paramCodec is used by list and watch
 	paramCodec runtime.ParameterCodec
 
-	// stop is the stop channel to stop informers
-	stop <-chan struct{}
-
 	// resync is the base frequency the informers are resynced
 	// a 10 percent jitter will be added to the resync period between informers
 	// so that all informers will not send list requests simultaneously.
@@ -135,6 +132,9 @@ type specificInformersMap struct {
 
 	// disableDeepCopy indicates not to deep copy objects during get or list objects.
 	disableDeepCopy DisableDeepCopyByGVK
+
+	// ctx is the main context to be used managing watchers.
+	ctx context.Context
 }
 
 // Start calls Run on each of the informers and sets started to true.  Blocks on the context.
@@ -144,8 +144,7 @@ func (ip *specificInformersMap) Start(ctx context.Context) {
 		ip.mu.Lock()
 		defer ip.mu.Unlock()
 
-		// Set the stop channel so it can be passed to informers that are added later
-		ip.stop = ctx.Done()
+		ip.ctx = ctx
 
 		// Start each informer
 		for _, informer := range ip.informersByGVK {
@@ -192,7 +191,7 @@ func (ip *specificInformersMap) Get(ctx context.Context, gvk schema.GroupVersion
 
 	if !ok {
 		var err error
-		if i, started, err = ip.addInformerToMap(ctx, gvk, obj); err != nil {
+		if i, started, err = ip.addInformerToMap(gvk, obj); err != nil {
 			return started, nil, err
 		}
 	}
@@ -207,7 +206,7 @@ func (ip *specificInformersMap) Get(ctx context.Context, gvk schema.GroupVersion
 	return started, i, nil
 }
 
-func (ip *specificInformersMap) addInformerToMap(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object) (*MapEntry, bool, error) {
+func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.Object) (*MapEntry, bool, error) {
 	ip.mu.Lock()
 	defer ip.mu.Unlock()
 
@@ -220,7 +219,7 @@ func (ip *specificInformersMap) addInformerToMap(ctx context.Context, gvk schema
 
 	// Create a NewSharedIndexInformer and add it to the map.
 	var lw *cache.ListWatch
-	lw, err := ip.createListWatcher(ctx, gvk, ip)
+	lw, err := ip.createListWatcher(ip.ctx, gvk, ip)
 	if err != nil {
 		return nil, false, err
 	}
@@ -247,7 +246,7 @@ func (ip *specificInformersMap) addInformerToMap(ctx context.Context, gvk schema
 	// TODO(seans): write thorough tests and document what happens here - can you add indexers?
 	// can you add eventhandlers?
 	if ip.started {
-		go i.Informer.Run(ip.stop)
+		go i.Informer.Run(ip.ctx.Done())
 	}
 	return i, ip.started, nil
 }

@@ -37,7 +37,7 @@ Currently controllers that use `controller-runtime` need to configure the `ctrl.
 
 ## Motivation
 
-This change is important because: 
+This change is important because:
 - it will help make it easier for controllers to be configured by other machine processes
 - it will reduce the required flags required to start a controller
 - allow for configuration types which aren't natively supported by flags
@@ -65,7 +65,7 @@ This change is important because:
 
 ## Proposal
 
-The `ctrl.Manager` _SHOULD_ support loading configurations from `ComponentConfig` like objects. 
+The `ctrl.Manager` _SHOULD_ support loading configurations from `ComponentConfig` like objects.
 An interface for that object with getters for the specific configuration parameters is created to bridge existing patterns.
 
 Without breaking the current `ctrl.NewManager` which uses an exported `ctrl.Options{}` the `manager.go` can expose a new func, `NewFromComponentConfig()` this would be able to loop through the getters to populate an internal `ctrl.Options{}` and pass that into `New()`.
@@ -101,7 +101,7 @@ type ManagerConfiguration interface {
 func NewFromComponentConfig(config *rest.Config, scheme *runtime.Scheme, filename string, managerconfig ManagerConfiguration) (Manager, error) {
 	codecs := serializer.NewCodecFactory(scheme)
     if err := decodeComponentConfigFileInto(codecs, filename, managerconfig); err != nil {
-		
+
 	}
 	options := Options{}
 
@@ -139,7 +139,7 @@ import (
 
 // ControllerManagerConfiguration defines the embedded RuntimeConfiguration for controller-runtime clients.
 type ControllerManagerConfiguration struct {
-	Namespace string `json:"namespace,omitempty"` 
+	Namespace string `json:"namespace,omitempty"`
 
 	SyncPeriod *time.Duration `json:"syncPeriod,omitempty"`
 
@@ -168,7 +168,7 @@ type ControllerManagerConfigurationHealth struct {
 
 #### Default ComponentConfig Type
 
-To enable `controller-runtime` to have a default `ComponentConfig` struct which can be used instead of requiring each controller or extension to build it's own `ComponentConfig` type, we can create a `DefaultControllerConfiguration` type which can exist in `pkg/api/config/v1alpha1/types.go`. This will allow the controller authors to use this before needing to implement their own type with additional configs.
+To enable `controller-runtime` to have a default `ComponentConfig` struct which can be used instead of requiring each controller or extension to build its own `ComponentConfig` type, we can create a `DefaultControllerConfiguration` type which can exist in `pkg/api/config/v1alpha1/types.go`. This will allow the controller authors to use this before needing to implement their own type with additional configs.
 
 ```golang
 // pkg/api/config/v1alpha1/types.go
@@ -212,12 +212,12 @@ if err != nil {
 }
 ```
 
-The above example uses `configname` which is the name of the file to load the configuration from and uses `scheme` to get the specific serializer, eg `serializer.NewCodecFactory(scheme)`. This will allow the configuration to be unmarshalled into the `runtime.Object` type and passed into the 
+The above example uses `configname` which is the name of the file to load the configuration from and uses `scheme` to get the specific serializer, eg `serializer.NewCodecFactory(scheme)`. This will allow the configuration to be unmarshalled into the `runtime.Object` type and passed into the
 `ctrl.NewManagerFromComponentConfig()` as a `ManagerConfiguration` interface.
 
 #### Using Flags w/ ComponentConfig
 
-Since this design still requires setting up the initial `ComponentConfig` type and passing in a pointer to `ctrl.NewFromComponentConfig()` if you want to allow for the use of flags, your controller can use any of the different flagging interfaces. eg [`flag`](https://golang.org/pkg/flag/), [`pflag`](https://godoc.org/github.com/spf13/pflag), [`flagnum`](https://godoc.org/github.com/luci/luci-go/common/flag/flagenum) and set values on the `ComponentConfig` type prior to passing the pointer into the `ctrl.NewFromComponentConfig()`, example below.
+Since this design still requires setting up the initial `ComponentConfig` type and passing in a pointer to `ctrl.NewFromComponentConfig()` if you want to allow for the use of flags, your controller can use any of the different flagging interfaces. eg [`flag`](https://golang.org/pkg/flag/), [`pflag`](https://pkg.go.dev/github.com/spf13/pflag), [`flagnum`](https://pkg.go.dev/github.com/luci/luci-go/common/flag/flagenum) and set values on the `ComponentConfig` type prior to passing the pointer into the `ctrl.NewFromComponentConfig()`, example below.
 
 ```golang
 leaderElect := true
@@ -247,7 +247,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	configv1alpha1 "sigs.k8s.io/controller-runtime/pkg/apis/config/v1alpha1"
-) 
+)
 
 type ControllerNameConfigurationSpec struct {
 	configv1alpha1.ControllerManagerConfiguration `json:",inline"`

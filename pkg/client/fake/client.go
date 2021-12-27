@@ -227,7 +227,7 @@ func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Ob
 
 // convertFromUnstructuredIfNecessary will convert *unstructured.Unstructured for a GVK that is recocnized
 // by the schema into the whatever the schema produces with New() for said GVK.
-// This is required because the tracker unconditionally saves on manipulations, but it's List() implementation
+// This is required because the tracker unconditionally saves on manipulations, but its List() implementation
 // tries to assign whatever it finds into a ListType it gets from schema.New() - Thus we have to ensure
 // we save as the very same type, otherwise subsequent List requests will fail.
 func convertFromUnstructuredIfNecessary(s *runtime.Scheme, o runtime.Object) (runtime.Object, error) {

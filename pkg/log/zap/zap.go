@@ -138,7 +138,7 @@ type Options struct {
 	// console when Development is true and JSON otherwise
 	Encoder zapcore.Encoder
 	// EncoderConfigOptions can modify the EncoderConfig needed to initialize an Encoder.
-	// See https://godoc.org/go.uber.org/zap/zapcore#EncoderConfig for the list of options
+	// See https://pkg.go.dev/go.uber.org/zap/zapcore#EncoderConfig for the list of options
 	// that can be configured.
 	// Note that the EncoderConfigOptions are not applied when the Encoder option is already set.
 	EncoderConfigOptions []EncoderConfigOption

@@ -393,7 +393,6 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		livenessEndpointName:          options.LivenessEndpointName,
 		gracefulShutdownTimeout:       *options.GracefulShutdownTimeout,
 		internalProceduresStop:        make(chan struct{}),
-		leaderElectionStopped:         make(chan struct{}),
 		leaderElectionReleaseOnCancel: options.LeaderElectionReleaseOnCancel,
 	}, nil
 }

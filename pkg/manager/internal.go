@@ -478,11 +478,9 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 
 	// Start the leader election and all required runnables.
 	{
-		ctx, cancel := context.WithCancel(context.Background())
-		cm.leaderElectionCancel = cancel
 		go func() {
 			if cm.resourceLock != nil {
-				if err := cm.startLeaderElection(ctx); err != nil {
+				if err := cm.startLeaderElection(); err != nil {
 					cm.errChan <- err
 				}
 			} else {
@@ -552,12 +550,14 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 	defer cm.recorderProvider.Stop(cm.shutdownCtx)
 	defer func() {
 		// Cancel leader election only after we waited. It will os.Exit() the app for safety.
-		if cm.resourceLock != nil {
-			// After asking the context to be cancelled, make sure
-			// we wait for the leader stopped channel to be closed, otherwise
-			// we might encounter race conditions between this code
-			// and the event recorder, which is used within leader election code.
+		// After asking the context to be cancelled, make sure
+		// we wait for the leader stopped channel to be closed, otherwise
+		// we might encounter race conditions between this code
+		// and the event recorder, which is used within leader election code.
+		if cm.leaderElectionCancel != nil {
 			cm.leaderElectionCancel()
+		}
+		if cm.leaderElectionStopped != nil {
 			<-cm.leaderElectionStopped
 		}
 	}()
@@ -604,7 +604,7 @@ func (cm *controllerManager) startLeaderElectionRunnables() error {
 	return cm.runnables.LeaderElection.Start(cm.internalCtx)
 }
 
-func (cm *controllerManager) startLeaderElection(ctx context.Context) (err error) {
+func (cm *controllerManager) startLeaderElection() (err error) {
 	l, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
 		Lock:          cm.resourceLock,
 		LeaseDuration: cm.leaseDuration,
@@ -636,6 +636,10 @@ func (cm *controllerManager) startLeaderElection(ctx context.Context) (err error
 	if err != nil {
 		return err
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cm.leaderElectionCancel = cancel
+	cm.leaderElectionStopped = make(chan struct{})
 
 	// Start the leader elector process
 	go func() {

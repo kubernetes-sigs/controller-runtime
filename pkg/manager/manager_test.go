@@ -40,6 +40,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -446,8 +447,23 @@ var _ = Describe("manger.Manager", func() {
 			// We must keep this default until we are sure all controller-runtime users have upgraded from the original default
 			// ConfigMap lock to a controller-runtime version that has this new default. Many users of controller-runtime skip
 			// versions, so we should be extremely conservative here.
-			It("should default to ConfigMapsLeasesResourceLock", func() {
+			It("should default to LeasesResourceLock", func() {
 				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime", LeaderElectionNamespace: "my-ns"})
+				Expect(m).ToNot(BeNil())
+				Expect(err).ToNot(HaveOccurred())
+				cm, ok := m.(*controllerManager)
+				Expect(ok).To(BeTrue())
+				_, isLeaseLock := cm.resourceLock.(*resourcelock.LeaseLock)
+				Expect(isLeaseLock).To(BeTrue())
+
+			})
+			It("should use the specified ResourceLock", func() {
+				m, err := New(cfg, Options{
+					LeaderElection:             true,
+					LeaderElectionResourceLock: resourcelock.ConfigMapsLeasesResourceLock,
+					LeaderElectionID:           "controller-runtime",
+					LeaderElectionNamespace:    "my-ns",
+				})
 				Expect(m).ToNot(BeNil())
 				Expect(err).ToNot(HaveOccurred())
 				cm, ok := m.(*controllerManager)
@@ -458,21 +474,6 @@ var _ = Describe("manger.Manager", func() {
 				Expect(primaryIsConfigMapLock).To(BeTrue())
 				_, secondaryIsLeaseLock := multilock.Secondary.(*resourcelock.LeaseLock)
 				Expect(secondaryIsLeaseLock).To(BeTrue())
-
-			})
-			It("should use the specified ResourceLock", func() {
-				m, err := New(cfg, Options{
-					LeaderElection:             true,
-					LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
-					LeaderElectionID:           "controller-runtime",
-					LeaderElectionNamespace:    "my-ns",
-				})
-				Expect(m).ToNot(BeNil())
-				Expect(err).ToNot(HaveOccurred())
-				cm, ok := m.(*controllerManager)
-				Expect(ok).To(BeTrue())
-				_, isLeaseLock := cm.resourceLock.(*resourcelock.LeaseLock)
-				Expect(isLeaseLock).To(BeTrue())
 			})
 			It("should release lease if ElectionReleaseOnCancel is true", func() {
 				var rl resourcelock.Interface

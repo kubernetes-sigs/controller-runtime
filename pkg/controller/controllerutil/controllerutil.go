@@ -345,7 +345,7 @@ func mutate(f MutateFn, key client.ObjectKey, obj client.Object) error {
 	return nil
 }
 
-// MutateFn is a function which mutates the existing object into it's desired state.
+// MutateFn is a function which mutates the existing object into its desired state.
 type MutateFn func() error
 
 // AddFinalizer accepts an Object and adds the provided finalizer if not present.

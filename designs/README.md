@@ -2,7 +2,7 @@ Designs
 =======
 
 These are design documents for changes to Controller Runtime They exist
-to help document the design processes that go into writing Controller 
+to help document the design processes that go into writing Controller
 Runtime, but may not be up-to-date (more below).
 
 Not all changes to Controller Runtime need a design document -- only major
@@ -17,7 +17,7 @@ proof-of-concept process can help iron out wrinkles and can help with the
 ## Out-of-Date Designs
 
 **Controller Runtime documentation
-[GoDoc](https://godoc.org/sigs.k8s.io/controller-runtime) should be
+[GoDoc](https://pkg.go.dev/sigs.k8s.io/controller-runtime) should be
 considered the canonical, update-to-date reference and architectural
 documentation** for Controller Runtime.
 

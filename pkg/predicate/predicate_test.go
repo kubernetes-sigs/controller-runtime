@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -827,6 +828,13 @@ var _ = Describe("Predicate", func() {
 		}
 		passFuncs := funcs(true)
 		failFuncs := funcs(false)
+
+		var injectFunc inject.Func
+		injectFunc = func(i interface{}) error {
+			_, err := inject.InjectorInto(injectFunc, i)
+			return err
+		}
+
 		Describe("When checking an And predicate", func() {
 			It("should return false when one of its predicates returns false", func() {
 				a := predicate.And(passFuncs, failFuncs)
@@ -841,6 +849,12 @@ var _ = Describe("Predicate", func() {
 				Expect(a.Update(event.UpdateEvent{})).To(BeTrue())
 				Expect(a.Delete(event.DeleteEvent{})).To(BeTrue())
 				Expect(a.Generic(event.GenericEvent{})).To(BeTrue())
+			})
+			It("should inject into its predicates", func() {
+				prct := &injectablePredicate{}
+				a := predicate.And(prct)
+				Expect(injectFunc(a)).To(Succeed())
+				Expect(prct.injected).To(BeTrue())
 			})
 		})
 		Describe("When checking an Or predicate", func() {
@@ -857,6 +871,12 @@ var _ = Describe("Predicate", func() {
 				Expect(o.Update(event.UpdateEvent{})).To(BeFalse())
 				Expect(o.Delete(event.DeleteEvent{})).To(BeFalse())
 				Expect(o.Generic(event.GenericEvent{})).To(BeFalse())
+			})
+			It("should inject into its predicates", func() {
+				prct := &injectablePredicate{}
+				a := predicate.Or(prct)
+				Expect(injectFunc(a)).To(Succeed())
+				Expect(prct.injected).To(BeTrue())
 			})
 		})
 	})
@@ -942,3 +962,13 @@ var _ = Describe("Predicate", func() {
 		})
 	})
 })
+
+type injectablePredicate struct {
+	injected bool
+	predicate.Funcs
+}
+
+func (i *injectablePredicate) InjectFunc(f inject.Func) error {
+	i.injected = true
+	return nil
+}

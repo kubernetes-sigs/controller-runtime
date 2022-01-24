@@ -421,7 +421,10 @@ func (s *APIServer) Stop() error {
 			return err
 		}
 	}
-	return s.Authn.Stop()
+	if s.Authn != nil {
+		return s.Authn.Stop()
+	}
+	return nil
 }
 
 // APIServerDefaultArgs exposes the default args for the APIServer so that you

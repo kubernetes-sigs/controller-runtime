@@ -64,9 +64,9 @@ var _ = BeforeSuite(func() {
 		defer GinkgoRecover()
 		Expect(icache.Start(ctx)).NotTo(HaveOccurred())
 	}()
-}, 60)
+})
 
 var _ = AfterSuite(func() {
 	cancel()
 	Expect(testenv.Stop()).To(Succeed())
-}, 5)
+})

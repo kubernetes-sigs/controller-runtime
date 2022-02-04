@@ -41,4 +41,4 @@ var _ = BeforeSuite(func() {
 
 	// for things that technically need a rest.Config for defaulting, but don't actually use them
 	cfg = &rest.Config{}
-}, 60)
+})

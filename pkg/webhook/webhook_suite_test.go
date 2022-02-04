@@ -50,12 +50,12 @@ var _ = BeforeSuite(func() {
 	var err error
 	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
-}, 60)
+})
 
 var _ = AfterSuite(func() {
 	fmt.Println("stopping?")
 	Expect(testenv.Stop()).To(Succeed())
-}, 60)
+})
 
 func initializeWebhookInEnvironment() {
 	namespacedScopeV1 := admissionv1.NamespacedScope

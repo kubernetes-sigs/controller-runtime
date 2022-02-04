@@ -63,7 +63,7 @@ var _ = BeforeSuite(func() {
 
 	webhook.DefaultPort, _, err = addr.Suggest("")
 	Expect(err).NotTo(HaveOccurred())
-}, 60)
+})
 
 var _ = AfterSuite(func() {
 	Expect(testenv.Stop()).To(Succeed())

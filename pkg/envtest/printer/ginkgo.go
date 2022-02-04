@@ -21,9 +21,9 @@ package printer
 import (
 	"fmt"
 
-	"github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	"github.com/onsi/ginkgo/types"
+	"github.com/onsi/ginkgo/v2"
 )
 
 var _ ginkgo.Reporter = NewlineReporter{}

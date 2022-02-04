@@ -188,7 +188,7 @@ var _ = Describe("Source", func() {
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.DeleteEvent{}))
 				deleteEvt.Object.SetResourceVersion("")
 				Expect(deleteEvt.Object).To(Equal(deleted))
-			}, 5)
+			})
 		})
 
 		// TODO(pwittrock): Write this test
@@ -274,7 +274,7 @@ var _ = Describe("Source", func() {
 				_, err = clientset.AppsV1().ReplicaSets("default").Create(ctx, rs, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				<-c
-			}, 30)
+			})
 
 			It("should provide a ReplicaSet UpdateEvent", func() {
 				var err error

@@ -169,7 +169,7 @@ var _ = Describe("controller", func() {
 			err = cm.GetClient().
 				List(context.Background(), &controllertest.UnconventionalListTypeList{})
 			Expect(err).NotTo(HaveOccurred())
-		}, 5)
+		})
 	})
 })
 

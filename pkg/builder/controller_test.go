@@ -321,7 +321,7 @@ var _ = Describe("application", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			doReconcileTest(ctx, "3", m, false, bldr)
-		}, 10)
+		})
 
 		It("should Reconcile Watches objects", func() {
 			m, err := manager.New(cfg, manager.Options{})
@@ -336,7 +336,7 @@ var _ = Describe("application", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			doReconcileTest(ctx, "4", m, true, bldr)
-		}, 10)
+		})
 	})
 
 	Describe("Set custom predicates", func() {

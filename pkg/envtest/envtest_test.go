@@ -243,7 +243,7 @@ var _ = Describe("Test", func() {
 				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).NotTo(HaveOccurred())
-		}, 5)
+		})
 
 		It("should install the CRDs into the cluster using file", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
@@ -278,7 +278,7 @@ var _ = Describe("Test", func() {
 				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).NotTo(HaveOccurred())
-		}, 10)
+		})
 
 		It("should be able to install CRDs using multiple files", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
@@ -289,7 +289,7 @@ var _ = Describe("Test", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crds).To(HaveLen(2))
-		}, 10)
+		})
 
 		It("should filter out already existent CRD", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
@@ -329,26 +329,26 @@ var _ = Describe("Test", func() {
 				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).NotTo(HaveOccurred())
-		}, 10)
+		})
 
 		It("should not return an not error if the directory doesn't exist", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{Paths: []string{invalidDirectory}})
 			Expect(err).NotTo(HaveOccurred())
-		}, 5)
+		})
 
 		It("should return an error if the directory doesn't exist", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{invalidDirectory}, ErrorIfPathMissing: true,
 			})
 			Expect(err).To(HaveOccurred())
-		}, 5)
+		})
 
 		It("should return an error if the file doesn't exist", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{Paths: []string{
 				filepath.Join(".", "testdata", "fake.yaml")}, ErrorIfPathMissing: true,
 			})
 			Expect(err).To(HaveOccurred())
-		}, 5)
+		})
 
 		It("should return an error if the resource group version isn't found", func() {
 			// Wait for a CRD where the Group and Version don't exist
@@ -374,7 +374,7 @@ var _ = Describe("Test", func() {
 				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).To(HaveOccurred())
-		}, 5)
+		})
 
 		It("should return an error if the resource isn't found in the group version", func() {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
@@ -421,7 +421,7 @@ var _ = Describe("Test", func() {
 				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).To(HaveOccurred())
-		}, 5)
+		})
 
 		It("should reinstall the CRDs if already present in the cluster", func() {
 
@@ -680,7 +680,7 @@ var _ = Describe("Test", func() {
 				CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 			)
 			Expect(err).NotTo(HaveOccurred())
-		}, 5)
+		})
 	})
 
 	It("should update CRDs if already present in the cluster", func() {
@@ -771,7 +771,7 @@ var _ = Describe("Test", func() {
 			CRDInstallOptions{MaxTime: 50 * time.Millisecond, PollInterval: 15 * time.Millisecond},
 		)
 		Expect(err).NotTo(HaveOccurred())
-	}, 5)
+	})
 
 	Describe("UninstallCRDs", func() {
 		It("should uninstall the CRDs from the cluster", func() {
@@ -928,7 +928,7 @@ var _ = Describe("Test", func() {
 				}
 				return true
 			}, 20).Should(BeTrue())
-		}, 30)
+		})
 	})
 
 	Describe("Start", func() {
@@ -937,14 +937,14 @@ var _ = Describe("Test", func() {
 			_, err := env.Start()
 			Expect(err).To(HaveOccurred())
 			Expect(env.Stop()).To(Succeed())
-		}, 30)
+		})
 
 		It("should not raise an error on invalid dir when flag is disabled", func() {
 			env := &Environment{ErrorIfCRDPathMissing: false, CRDDirectoryPaths: []string{invalidDirectory}}
 			_, err := env.Start()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(env.Stop()).To(Succeed())
-		}, 30)
+		})
 	})
 
 	Describe("Stop", func() {
@@ -956,6 +956,6 @@ var _ = Describe("Test", func() {
 
 			// check if the /tmp/envtest-serving-certs-* dir doesnt exists any more
 			Expect(env.WebhookInstallOptions.LocalServingCertDir).ShouldNot(BeADirectory())
-		}, 30)
+		})
 	})
 })

@@ -72,7 +72,7 @@ var _ = BeforeSuite(func() {
 
 	// Prevent the metrics listener being created
 	metrics.DefaultBindAddress = "0"
-}, 60)
+})
 
 var _ = AfterSuite(func() {
 	Expect(testenv.Stop()).To(Succeed())

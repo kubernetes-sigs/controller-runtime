@@ -40,10 +40,10 @@ func TestSource(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
-}, 60)
+})
 
 var _ = AfterSuite(func() {
 	for _, file := range []string{certPath, keyPath} {
 		_ = os.Remove(file)
 	}
-}, 60)
+})

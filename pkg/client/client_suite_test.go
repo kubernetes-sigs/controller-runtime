@@ -55,7 +55,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(pkg.AddToScheme(scheme.Scheme)).NotTo(HaveOccurred())
-}, 60)
+})
 
 var _ = AfterSuite(func() {
 	Expect(testenv.Stop()).To(Succeed())

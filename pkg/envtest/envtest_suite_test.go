@@ -44,7 +44,7 @@ var _ = BeforeSuite(func() {
 	initializeWebhookInEnvironment()
 	_, err := env.Start()
 	Expect(err).NotTo(HaveOccurred())
-}, StartTimeout)
+})
 
 func initializeWebhookInEnvironment() {
 	namespacedScopeV1 := admissionv1.NamespacedScope
@@ -133,4 +133,4 @@ func initializeWebhookInEnvironment() {
 
 var _ = AfterSuite(func() {
 	Expect(env.Stop()).NotTo(HaveOccurred())
-}, StopTimeout)
+})

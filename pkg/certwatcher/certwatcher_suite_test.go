@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/reporters"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -28,14 +29,14 @@ import (
 )
 
 var (
-	certPath = "testdata/tls.crt"
-	keyPath  = "testdata/tls.key"
+	certPath  = "testdata/tls.crt"
+	keyPath   = "testdata/tls.key"
+	suiteName = "CertWatcher Suite"
 )
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "CertWatcher Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, suiteName)
 }
 
 var _ = BeforeSuite(func() {
@@ -46,4 +47,9 @@ var _ = AfterSuite(func() {
 	for _, file := range []string{certPath, keyPath} {
 		_ = os.Remove(file)
 	}
+})
+
+var _ = ReportAfterSuite("Report to Prow", func(report Report) {
+	reporters.ReportViaDeprecatedReporter(printer.NewlineReporter{}, report)          //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
+	reporters.ReportViaDeprecatedReporter(printer.NewProwReporter(suiteName), report) //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
 })

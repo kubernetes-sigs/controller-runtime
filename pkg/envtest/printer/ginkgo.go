@@ -21,21 +21,20 @@ package printer
 import (
 	"fmt"
 
-	"github.com/onsi/ginkgo/config"
-	"github.com/onsi/ginkgo/types"
 	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/config"
+	"github.com/onsi/ginkgo/v2/types"
 )
 
-var _ ginkgo.Reporter = NewlineReporter{}
+var _ ginkgo.Reporter = NewlineReporter{} //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
 
 // NewlineReporter is Reporter that Prints a newline after the default Reporter output so that the results
 // are correctly parsed by test automation.
 // See issue https://github.com/jstemmer/go-junit-report/issues/31
 type NewlineReporter struct{}
 
-// SpecSuiteWillBegin implements ginkgo.Reporter.
-func (NewlineReporter) SpecSuiteWillBegin(config config.GinkgoConfigType, summary *types.SuiteSummary) {
-}
+// SuiteWillBegin implements ginkgo.Reporter.
+func (NewlineReporter) SuiteWillBegin(config config.GinkgoConfigType, summary *types.SuiteSummary) {}
 
 // BeforeSuiteDidRun implements ginkgo.Reporter.
 func (NewlineReporter) BeforeSuiteDidRun(setupSummary *types.SetupSummary) {}
@@ -49,5 +48,5 @@ func (NewlineReporter) SpecWillRun(specSummary *types.SpecSummary) {}
 // SpecDidComplete implements ginkgo.Reporter.
 func (NewlineReporter) SpecDidComplete(specSummary *types.SpecSummary) {}
 
-// SpecSuiteDidEnd Prints a newline between "35 Passed | 0 Failed | 0 Pending | 0 Skipped" and "--- PASS:".
-func (NewlineReporter) SpecSuiteDidEnd(summary *types.SuiteSummary) { fmt.Printf("\n") }
+// SuiteDidEnd Prints a newline between "35 Passed | 0 Failed | 0 Pending | 0 Skipped" and "--- PASS:".
+func (NewlineReporter) SuiteDidEnd(summary *types.SuiteSummary) { fmt.Printf("\n") }

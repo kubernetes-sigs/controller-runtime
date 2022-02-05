@@ -22,10 +22,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/onsi/ginkgo/config"
-	"github.com/onsi/ginkgo/reporters"
-	"github.com/onsi/ginkgo/types"
-	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/config"
+	"github.com/onsi/ginkgo/v2/reporters"
+	"github.com/onsi/ginkgo/v2/types"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -45,7 +44,7 @@ type prowReporter struct {
 // see https://github.com/onsi/ginkgo/issues/706
 // When using this you must make sure to grep for failures in your junit xmls and fail the run
 // if there are any.
-func NewProwReporter(suiteName string) ginkgo.Reporter {
+func NewProwReporter(suiteName string) reporters.DeprecatedReporter { //nolint  // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
 	allRegisteredSuitesLock.Lock()
 	if allRegisteredSuites.Has(suiteName) {
 		panic(fmt.Sprintf("Suite named %q registered more than once", suiteName))
@@ -61,15 +60,15 @@ func NewProwReporter(suiteName string) ginkgo.Reporter {
 		return &prowReporter{}
 	}
 
-	path := filepath.Join(artifactsDir, fmt.Sprintf("junit_%s_%d.xml", suiteName, config.GinkgoConfig.ParallelNode))
+	path := filepath.Join(artifactsDir, fmt.Sprintf("junit_%s.xml", suiteName))
 	return &prowReporter{
 		junitReporter: reporters.NewJUnitReporter(path),
 	}
 }
 
-func (pr *prowReporter) SpecSuiteWillBegin(config config.GinkgoConfigType, summary *types.SuiteSummary) {
+func (pr *prowReporter) SuiteWillBegin(config config.GinkgoConfigType, summary *types.SuiteSummary) {
 	if pr.junitReporter != nil {
-		pr.junitReporter.SpecSuiteWillBegin(config, summary)
+		pr.junitReporter.SuiteWillBegin(config, summary)
 	}
 }
 
@@ -101,9 +100,9 @@ func (pr *prowReporter) SpecDidComplete(specSummary *types.SpecSummary) {
 	}
 }
 
-// SpecSuiteDidEnd Prints a newline between "35 Passed | 0 Failed | 0 Pending | 0 Skipped" and "--- PASS:".
-func (pr *prowReporter) SpecSuiteDidEnd(summary *types.SuiteSummary) {
+// SuiteDidEnd Prints a newline between "35 Passed | 0 Failed | 0 Pending | 0 Skipped" and "--- PASS:".
+func (pr *prowReporter) SuiteDidEnd(summary *types.SuiteSummary) {
 	if pr.junitReporter != nil {
-		pr.junitReporter.SpecSuiteDidEnd(summary)
+		pr.junitReporter.SuiteDidEnd(summary)
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/reporters"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 
@@ -27,12 +28,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
+var suiteName = "Fake client Suite"
+
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "Fake client Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, suiteName)
 }
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+})
+
+var _ = ReportAfterSuite("Report to Prow", func(report Report) {
+	reporters.ReportViaDeprecatedReporter(printer.NewlineReporter{}, report)          //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
+	reporters.ReportViaDeprecatedReporter(printer.NewProwReporter(suiteName), report) //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
 })

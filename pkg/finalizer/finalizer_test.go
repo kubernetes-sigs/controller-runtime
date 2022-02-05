@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/reporters"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,10 +22,12 @@ type mockFinalizer struct {
 func (f mockFinalizer) Finalize(context.Context, client.Object) (Result, error) {
 	return f.result, f.err
 }
+
+var suiteName = "Finalizer Suite"
+
 func TestFinalizer(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "Finalizer Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, suiteName)
 }
 
 var _ = Describe("TestFinalizer", func() {
@@ -213,4 +216,9 @@ var _ = Describe("TestFinalizer", func() {
 			Expect(pod.Finalizers[1]).To(Equal("finalizers.sigs.k8s.io/testfinalizer3"))
 		})
 	})
+})
+
+var _ = ReportAfterSuite("Report to Prow", func(report Report) {
+	reporters.ReportViaDeprecatedReporter(printer.NewlineReporter{}, report)          //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
+	reporters.ReportViaDeprecatedReporter(printer.NewProwReporter(suiteName), report) //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
 })

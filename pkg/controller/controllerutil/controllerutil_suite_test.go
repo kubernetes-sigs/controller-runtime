@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/reporters"
 	. "github.com/onsi/gomega"
 
 	"k8s.io/client-go/rest"
@@ -28,10 +29,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
+var suiteName = "Controllerutil Suite"
+
 func TestControllerutil(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "Controllerutil Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, suiteName)
 }
 
 var testenv *envtest.Environment
@@ -52,4 +54,9 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	Expect(testenv.Stop()).To(Succeed())
+})
+
+var _ = ReportAfterSuite("Report to Prow", func(report Report) {
+	reporters.ReportViaDeprecatedReporter(printer.NewlineReporter{}, report)          //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
+	reporters.ReportViaDeprecatedReporter(printer.NewProwReporter(suiteName), report) //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
 })

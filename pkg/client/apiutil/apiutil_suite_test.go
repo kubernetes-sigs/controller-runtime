@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/reporters"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
@@ -28,10 +29,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
+var suiteName = "API Utilities Test Suite"
+
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "API Utilities Test Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, suiteName)
 }
 
 var cfg *rest.Config
@@ -41,4 +43,9 @@ var _ = BeforeSuite(func() {
 
 	// for things that technically need a rest.Config for defaulting, but don't actually use them
 	cfg = &rest.Config{}
+})
+
+var _ = ReportAfterSuite("Report to Prow", func(report Report) {
+	reporters.ReportViaDeprecatedReporter(printer.NewlineReporter{}, report)          //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
+	reporters.ReportViaDeprecatedReporter(printer.NewProwReporter(suiteName), report) //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
 })

@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/reporters"
 	. "github.com/onsi/gomega"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,10 +30,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
+var suiteName = "Envtest Suite"
+
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "Envtest Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, suiteName)
 }
 
 var env *Environment
@@ -133,4 +135,9 @@ func initializeWebhookInEnvironment() {
 
 var _ = AfterSuite(func() {
 	Expect(env.Stop()).NotTo(HaveOccurred())
+})
+
+var _ = ReportAfterSuite("Report to Prow", func(report Report) {
+	reporters.ReportViaDeprecatedReporter(printer.NewlineReporter{}, report)          //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
+	reporters.ReportViaDeprecatedReporter(printer.NewProwReporter(suiteName), report) //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
 })

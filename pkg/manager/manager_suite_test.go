@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/reporters"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -32,10 +33,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
+var suiteName = "Manager Suite"
+
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "Manager Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, suiteName)
 }
 
 var testenv *envtest.Environment
@@ -79,4 +81,9 @@ var _ = AfterSuite(func() {
 
 	// Put the DefaultBindAddress back
 	metrics.DefaultBindAddress = ":8080"
+})
+
+var _ = ReportAfterSuite("Report to Prow", func(report Report) {
+	reporters.ReportViaDeprecatedReporter(printer.NewlineReporter{}, report)          //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
+	reporters.ReportViaDeprecatedReporter(printer.NewProwReporter(suiteName), report) //nolint // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
 })

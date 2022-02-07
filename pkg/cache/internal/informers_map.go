@@ -429,11 +429,9 @@ func createMetadataListWatch(gvk schema.GroupVersionKind, ip *specificInformersM
 func newGVKFixupWatcher(gvk schema.GroupVersionKind, watcher watch.Interface) watch.Interface {
 	return watch.Filter(
 		watcher,
-		func(in watch.Event) (out watch.Event, keep bool) {
-			keep = true
-			in.DeepCopyInto(&out)
-			out.Object.GetObjectKind().SetGroupVersionKind(gvk)
-			return out, keep
+		func(in watch.Event) (watch.Event, bool) {
+			in.Object.GetObjectKind().SetGroupVersionKind(gvk)
+			return in, true
 		},
 	)
 }

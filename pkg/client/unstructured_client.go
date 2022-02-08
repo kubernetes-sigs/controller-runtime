@@ -52,6 +52,7 @@ func (uc *unstructuredClient) Create(ctx context.Context, obj Object, opts ...Cr
 
 	createOpts := &CreateOptions{}
 	createOpts.ApplyOptions(opts)
+
 	result := o.Post().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
@@ -80,6 +81,7 @@ func (uc *unstructuredClient) Update(ctx context.Context, obj Object, opts ...Up
 
 	updateOpts := UpdateOptions{}
 	updateOpts.ApplyOptions(opts)
+
 	result := o.Put().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
@@ -107,6 +109,7 @@ func (uc *unstructuredClient) Delete(ctx context.Context, obj Object, opts ...De
 
 	deleteOpts := DeleteOptions{}
 	deleteOpts.ApplyOptions(opts)
+
 	return o.Delete().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
@@ -130,6 +133,7 @@ func (uc *unstructuredClient) DeleteAllOf(ctx context.Context, obj Object, opts 
 
 	deleteAllOfOpts := DeleteAllOfOptions{}
 	deleteAllOfOpts.ApplyOptions(opts)
+
 	return o.Delete().
 		NamespaceIfScoped(deleteAllOfOpts.ListOptions.Namespace, o.isNamespaced()).
 		Resource(o.resource()).
@@ -157,11 +161,13 @@ func (uc *unstructuredClient) Patch(ctx context.Context, obj Object, patch Patch
 	}
 
 	patchOpts := &PatchOptions{}
+	patchOpts.ApplyOptions(opts)
+
 	return o.Patch(patch.Type()).
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		VersionedParams(patchOpts.ApplyOptions(opts).AsPatchOptions(), uc.paramCodec).
+		VersionedParams(patchOpts.AsPatchOptions(), uc.paramCodec).
 		Body(data).
 		Do(ctx).
 		Into(obj)
@@ -205,13 +211,13 @@ func (uc *unstructuredClient) List(ctx context.Context, obj ObjectList, opts ...
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 	}
 
-	listOpts := ListOptions{}
-	listOpts.ApplyOptions(opts)
-
 	r, err := uc.cache.getResource(obj)
 	if err != nil {
 		return err
 	}
+
+	listOpts := ListOptions{}
+	listOpts.ApplyOptions(opts)
 
 	return r.Get().
 		NamespaceIfScoped(listOpts.Namespace, r.isNamespaced()).
@@ -232,13 +238,16 @@ func (uc *unstructuredClient) UpdateStatus(ctx context.Context, obj Object, opts
 		return err
 	}
 
+	updateOpts := UpdateOptions{}
+	updateOpts.ApplyOptions(opts)
+
 	return o.Put().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
 		SubResource("status").
 		Body(obj).
-		VersionedParams((&UpdateOptions{}).ApplyOptions(opts).AsUpdateOptions(), uc.paramCodec).
+		VersionedParams(updateOpts.AsUpdateOptions(), uc.paramCodec).
 		Do(ctx).
 		Into(obj)
 }
@@ -262,13 +271,15 @@ func (uc *unstructuredClient) PatchStatus(ctx context.Context, obj Object, patch
 	}
 
 	patchOpts := &PatchOptions{}
+	patchOpts.ApplyOptions(opts)
+
 	result := o.Patch(patch.Type()).
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
 		SubResource("status").
 		Body(data).
-		VersionedParams(patchOpts.ApplyOptions(opts).AsPatchOptions(), uc.paramCodec).
+		VersionedParams(patchOpts.AsPatchOptions(), uc.paramCodec).
 		Do(ctx).
 		Into(u)
 

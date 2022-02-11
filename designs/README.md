@@ -1,12 +1,12 @@
 Designs
 =======
 
-These are design documents for changes to Controller Runtime They exist
-to help document the design processes that go into writing Controller
-Runtime, but may not be up-to-date (more below).
+These are the design documents for changes to Controller Runtime. They
+exist to help document the design processes that go into writing
+Controller Runtime, but may not be up-to-date (more below).
 
 Not all changes to Controller Runtime need a design document -- only major
-ones. use your best judgement.
+ones. Use your best judgement.
 
 When submitting a design document, we encourage having written
 a proof-of-concept, and it's perfectly acceptable to submit the
@@ -29,7 +29,7 @@ why things changed.  For example:
 
 # Out of Date
 
-This change is out of date.  It turns out curly braces a frustrating to
+This change is out of date.  It turns out curly braces are frustrating to
 type, so we had to abandon functions entirely, and have users specify
 custom functionality using strings of Common LISP instead.  See #000 for
 more information.

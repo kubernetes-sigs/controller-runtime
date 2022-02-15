@@ -335,11 +335,21 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}
 
 	// Create the resource lock to enable leader election)
-	leaderConfig := options.LeaderElectionConfig
-	if leaderConfig == nil {
+	var leaderConfig *rest.Config
+	var leaderRecorderProvider *intrec.Provider
+
+	if options.LeaderElectionConfig == nil {
 		leaderConfig = rest.CopyConfig(config)
+		leaderRecorderProvider = recorderProvider
+	} else {
+		leaderConfig = rest.CopyConfig(options.LeaderElectionConfig)
+		leaderRecorderProvider, err = options.newRecorderProvider(leaderConfig, cluster.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
+		if err != nil {
+			return nil, err
+		}
 	}
-	resourceLock, err := options.newResourceLock(leaderConfig, recorderProvider, leaderelection.Options{
+
+	resourceLock, err := options.newResourceLock(leaderConfig, leaderRecorderProvider, leaderelection.Options{
 		LeaderElection:             options.LeaderElection,
 		LeaderElectionResourceLock: options.LeaderElectionResourceLock,
 		LeaderElectionID:           options.LeaderElectionID,

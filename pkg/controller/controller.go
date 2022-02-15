@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/util/workqueue"
+
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -135,7 +136,7 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 		CacheSyncTimeout:        options.CacheSyncTimeout,
 		SetFields:               mgr.SetFields,
 		Name:                    name,
-		Log:                     options.Log.WithName("controller").WithName(name),
+		Log:                     options.Log.WithName("controller").WithName(name).WithValues("controller", name),
 		RecoverPanic:            options.RecoverPanic,
 	}, nil
 }

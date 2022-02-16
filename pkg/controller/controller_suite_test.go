@@ -37,7 +37,7 @@ import (
 	crscheme "sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
-var suiteName = "Controller Integration Suite"
+const suiteName = "Controller Integration Suite"
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)

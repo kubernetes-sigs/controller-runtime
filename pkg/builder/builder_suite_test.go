@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
-var suiteName = "application Suite"
+const suiteName = "application Suite"
 
 func TestBuilder(t *testing.T) {
 	RegisterFailHandler(Fail)

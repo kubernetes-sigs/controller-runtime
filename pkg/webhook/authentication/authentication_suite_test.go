@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-var suiteName = "Authentication Webhook Suite"
+const suiteName = "Authentication Webhook Suite"
 
 func TestAuthenticationWebhook(t *testing.T) {
 	RegisterFailHandler(Fail)

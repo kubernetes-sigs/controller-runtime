@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
-var suiteName = "Runtime Signal Suite"
+const suiteName = "Runtime Signal Suite"
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)

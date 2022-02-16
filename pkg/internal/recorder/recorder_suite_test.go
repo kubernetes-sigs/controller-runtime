@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-var suiteName = "Recorder Integration Suite"
+const suiteName = "Recorder Integration Suite"
 
 func TestRecorder(t *testing.T) {
 	RegisterFailHandler(Fail)

@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-var suiteName = "Client Config Test Suite"
+const suiteName = "Client Config Test Suite"
 
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)

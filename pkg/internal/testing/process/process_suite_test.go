@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
-var suiteName = "Envtest Process Launcher Suite"
+const suiteName = "Envtest Process Launcher Suite"
 
 func TestInternal(t *testing.T) {
 	t.Parallel()

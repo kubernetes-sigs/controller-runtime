@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
-var suiteName = "Config Suite"
+const suiteName = "Config Suite"
 
 func TestScheme(t *testing.T) {
 	RegisterFailHandler(Fail)

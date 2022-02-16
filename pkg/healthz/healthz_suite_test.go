@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-var suiteName = "Healthz Suite"
+const suiteName = "Healthz Suite"
 
 func TestHealthz(t *testing.T) {
 	RegisterFailHandler(Fail)

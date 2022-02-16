@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
-var suiteName = "Cache Internal Suite"
+const suiteName = "Cache Internal Suite"
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)

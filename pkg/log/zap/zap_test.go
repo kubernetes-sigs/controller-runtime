@@ -257,7 +257,7 @@ var _ = Describe("Zap logger setup", func() {
 			})
 
 			It("should not panic with nil obj", func() {
-				pod := &corev1.Pod{}
+				var pod *corev1.Pod
 				pod = nil
 				logger.Info("here's a kubernetes object", "thing", pod)
 

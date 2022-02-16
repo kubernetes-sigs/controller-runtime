@@ -175,6 +175,9 @@ func (ks *Kind) WaitForSync(ctx context.Context) error {
 		return err
 	case <-ctx.Done():
 		ks.startCancel()
+		if ctx.Err() == context.Canceled {
+			return nil
+		}
 		return errors.New("timed out waiting for cache to be synced")
 	}
 }

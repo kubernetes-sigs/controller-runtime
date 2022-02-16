@@ -26,6 +26,7 @@ import (
 	"github.com/go-logr/logr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/util/workqueue"
+
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -62,6 +63,9 @@ type Controller struct {
 	// SetFields is used to inject dependencies into other objects such as Sources, EventHandlers and Predicates
 	// Deprecated: the caller should handle injected fields itself.
 	SetFields func(i interface{}) error
+
+	// LoggerCustomizer customizes the logger for individual reconciliations.
+	LoggerCustomizer func(logr.Logger, reconcile.Request) logr.Logger
 
 	// mu is used to synchronize Controller setup
 	mu sync.Mutex
@@ -109,8 +113,6 @@ func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (_ re
 			}
 		}()
 	}
-	log := c.Log.WithValues("name", req.Name, "namespace", req.Namespace)
-	ctx = logf.IntoContext(ctx, log)
 	return c.Do.Reconcile(ctx, req)
 }
 
@@ -303,7 +305,12 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 		return
 	}
 
-	log := c.Log.WithValues("name", req.Name, "namespace", req.Namespace)
+	var log logr.Logger
+	if c.LoggerCustomizer != nil {
+		log = c.LoggerCustomizer(c.Log, req)
+	} else {
+		log = c.Log.WithValues("name", req.Name, "namespace", req.Namespace)
+	}
 	ctx = logf.IntoContext(ctx, log)
 
 	// RunInformersAndControllers the syncHandler, passing it the Namespace/Name string of the

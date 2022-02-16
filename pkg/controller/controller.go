@@ -50,6 +50,9 @@ type Options struct {
 	// request via the context field.
 	Log logr.Logger
 
+	// LoggerCustomizer customizes the logger for individual reconciliations.
+	LoggerCustomizer func(logr.Logger, reconcile.Request) logr.Logger
+
 	// CacheSyncTimeout refers to the time limit set to wait for syncing caches.
 	// Defaults to 2 minutes if not set.
 	CacheSyncTimeout time.Duration
@@ -137,6 +140,7 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 		SetFields:               mgr.SetFields,
 		Name:                    name,
 		Log:                     options.Log.WithName("controller").WithName(name).WithValues("controller", name),
+		LoggerCustomizer:        options.LoggerCustomizer,
 		RecoverPanic:            options.RecoverPanic,
 	}, nil
 }

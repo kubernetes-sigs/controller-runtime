@@ -154,6 +154,13 @@ func (blder *Builder) WithLogger(log logr.Logger) *Builder {
 	return blder
 }
 
+// WithLoggerCustomizer sets a LoggerCustomizer which allows per-reconcile customization
+// of the logger.
+func (blder *Builder) WithLoggerCustomizer(loggerCustomizer func(logr.Logger, reconcile.Request) logr.Logger) *Builder {
+	blder.ctrlOptions.LoggerCustomizer = loggerCustomizer
+	return blder
+}
+
 // Named sets the name of the controller to the given name.  The name shows up
 // in metrics, among other things, and thus should be a prometheus compatible name
 // (underscores and alphanumeric characters only).

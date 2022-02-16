@@ -154,6 +154,32 @@ var _ = Describe("controller", func() {
 			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync: timed out waiting for cache to be synced"))
 		})
 
+		It("should not error when context cancelled", func() {
+			ctrl.CacheSyncTimeout = 1 * time.Second
+
+			sourceSynced := make(chan struct{})
+			c, err := cache.New(cfg, cache.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			c = &cacheWithIndefinitelyBlockingGetInformer{c}
+			ctrl.startWatches = []watchDescription{{
+				src: &singnallingSourceWrapper{
+					SyncingSource: source.NewKindWithCache(&appsv1.Deployment{}, c),
+					cacheSyncDone: sourceSynced,
+				},
+			}}
+			ctrl.Name = "testcontroller"
+
+			ctx, cancel := context.WithCancel(context.TODO())
+			go func() {
+				defer GinkgoRecover()
+				err = ctrl.Start(ctx)
+				Expect(err).To(Succeed())
+			}()
+
+			cancel()
+			<-sourceSynced
+		})
+
 		It("should not error when cache sync timeout is of sufficiently high", func() {
 			ctrl.CacheSyncTimeout = 1 * time.Second
 

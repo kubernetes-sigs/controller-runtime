@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
-var suiteName = "TinyCA (Internal Certs) Suite"
+const suiteName = "TinyCA (Internal Certs) Suite"
 
 func TestInternal(t *testing.T) {
 	t.Parallel()

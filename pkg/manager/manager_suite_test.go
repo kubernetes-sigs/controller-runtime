@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
-var suiteName = "Manager Suite"
+const suiteName = "Manager Suite"
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)

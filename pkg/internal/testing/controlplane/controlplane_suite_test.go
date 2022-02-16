@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
-var suiteName = "Control Plane Standup Unit Tests"
+const suiteName = "Control Plane Standup Unit Tests"
 
 func TestIntegration(t *testing.T) {
 	t.Parallel()

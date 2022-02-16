@@ -23,7 +23,7 @@ func (f mockFinalizer) Finalize(context.Context, client.Object) (Result, error) 
 	return f.result, f.err
 }
 
-var suiteName = "Finalizer Suite"
+const suiteName = "Finalizer Suite"
 
 func TestFinalizer(t *testing.T) {
 	RegisterFailHandler(Fail)

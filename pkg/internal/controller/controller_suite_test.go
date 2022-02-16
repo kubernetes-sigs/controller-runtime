@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-var suiteName = "Controller internal Suite"
+const suiteName = "Controller internal Suite"
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)

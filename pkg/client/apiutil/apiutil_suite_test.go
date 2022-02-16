@@ -29,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-var suiteName = "API Utilities Test Suite"
+const suiteName = "API Utilities Test Suite"
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)

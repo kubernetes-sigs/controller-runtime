@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
-var suiteName = "Zap Log Suite"
+const suiteName = "Zap Log Suite"
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)

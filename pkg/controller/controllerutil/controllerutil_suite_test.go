@@ -29,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
-var suiteName = "Controllerutil Suite"
+const suiteName = "Controllerutil Suite"
 
 func TestControllerutil(t *testing.T) {
 	RegisterFailHandler(Fail)

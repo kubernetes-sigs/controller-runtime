@@ -99,17 +99,21 @@ type watchDescription struct {
 
 // Reconcile implements reconcile.Reconciler.
 func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (_ reconcile.Result, err error) {
-	if c.RecoverPanic {
-		defer func() {
-			if r := recover(); r != nil {
+	log := c.Log.WithValues("name", req.Name, "namespace", req.Namespace)
+	defer func() {
+		if r := recover(); r != nil {
+			if c.RecoverPanic {
 				for _, fn := range utilruntime.PanicHandlers {
 					fn(r)
 				}
 				err = fmt.Errorf("panic: %v [recovered]", r)
+				return
 			}
-		}()
-	}
-	log := c.Log.WithValues("name", req.Name, "namespace", req.Namespace)
+
+			log.Info(fmt.Sprintf("Observed a panic in reconciler: %v", r))
+			panic(r)
+		}
+	}()
 	ctx = logf.IntoContext(ctx, log)
 	return c.Do.Reconcile(ctx, req)
 }

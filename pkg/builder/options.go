@@ -110,13 +110,22 @@ var (
 	//
 	// When watching a resource with OnlyMetadata, for example the v1.Pod, you
 	// should not Get and List using the v1.Pod type. Instead, you should use
-	// the special metav1.PartialObjectMetadata type:
+	// the special metav1.PartialObjectMetadata type.
 	//
-	//   pod := &v1.Pod{}                             // ❌
-	//   mgr.GetClient().Get(ctx, nsAndName, pod)     // ❌
+	// ❌ Incorrect:
 	//
-	//   pod := &metav1.PartialObjectMetadata{}       // ✅
-	//   mgr.GetClient().Get(ctx, nsAndName, pod)     // ✅
+	//   pod := &v1.Pod{}
+	//   mgr.GetClient().Get(ctx, nsAndName, pod)
+	//
+	// ✅ Correct:
+	//
+	//   pod := &metav1.PartialObjectMetadata{}
+	//   pod.SetGroupVersionKind(schema.GroupVersionKind{
+	//       Group:   "",
+	//       Version: "v1",
+	//       Kind:    "Pod",
+	//   })
+	//   mgr.GetClient().Get(ctx, nsAndName, pod)
 	//
 	// In the first case, controller-runtime will create another cache for the
 	// concrete type on top of the metadata cache; this increases memory

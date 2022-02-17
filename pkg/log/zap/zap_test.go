@@ -258,7 +258,6 @@ var _ = Describe("Zap logger setup", func() {
 
 			It("should not panic with nil obj", func() {
 				var pod *corev1.Pod
-				pod = nil
 				logger.Info("here's a kubernetes object", "thing", pod)
 
 				outRaw := logOut.Bytes()

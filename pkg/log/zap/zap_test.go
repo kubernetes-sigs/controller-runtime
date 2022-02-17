@@ -255,6 +255,14 @@ var _ = Describe("Zap logger setup", func() {
 					"namespace": name.Namespace,
 				}))
 			})
+
+			It("should not panic with nil obj", func() {
+				var pod *corev1.Pod
+				logger.Info("here's a kubernetes object", "thing", pod)
+
+				outRaw := logOut.Bytes()
+				Expect(string(outRaw)).Should(ContainSubstring("got nil for runtime.Object"))
+			})
 		}
 
 		Context("with logger created using New", func() {

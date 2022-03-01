@@ -98,9 +98,9 @@ type Manager interface {
 
 // Options are the arguments for creating a new Manager.
 type Options struct {
-	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
+	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources.
 	// Defaults to the kubernetes/client-go scheme.Scheme, but it's almost always better
-	// idea to pass your own scheme in.  See the documentation in pkg/scheme for more information.
+	// to pass your own scheme in. See the documentation in pkg/scheme for more information.
 	Scheme *runtime.Scheme
 
 	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs
@@ -186,11 +186,11 @@ type Options struct {
 	// between tries of actions. Default is 2 seconds.
 	RetryPeriod *time.Duration
 
-	// Namespace if specified restricts the manager's cache to watch objects in
-	// the desired namespace Defaults to all namespaces
+	// Namespace, if specified, restricts the manager's cache to watch objects in
+	// the desired namespace. Defaults to all namespaces.
 	//
 	// Note: If a namespace is specified, controllers can still Watch for a
-	// cluster-scoped resource (e.g Node).  For namespaced resources the cache
+	// cluster-scoped resource (e.g Node). For namespaced resources, the cache
 	// will only hold objects from the desired namespace.
 	Namespace string
 
@@ -228,7 +228,7 @@ type Options struct {
 	// if this is set, the Manager will use this server instead.
 	WebhookServer *webhook.Server
 
-	// Functions to all for a user to customize the values that will be injected.
+	// Functions to allow for a user to customize values that will be injected.
 
 	// NewCache is the function that will create the cache to be used
 	// by the manager. If not set this will use the default new cache function.

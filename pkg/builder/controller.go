@@ -36,6 +36,7 @@ import (
 
 // Supporting mocking out functions for testing.
 var newController = controller.New
+var newUnmanagedController = controller.NewUnmanaged
 var getGvk = apiutil.GVKForObject
 
 // project represents other forms that the we can use to
@@ -59,11 +60,18 @@ type Builder struct {
 	ctrl             controller.Controller
 	ctrlOptions      controller.Options
 	name             string
+	unmanaged        bool
 }
 
 // ControllerManagedBy returns a new controller builder that will be started by the provided Manager.
 func ControllerManagedBy(m manager.Manager) *Builder {
 	return &Builder{mgr: m}
+}
+
+// Unmanaged allows to set the controller to be unmanaged.
+func (blder *Builder) Unmanaged(unmanaged bool) *Builder {
+	blder.unmanaged = unmanaged
+	return blder
 }
 
 // ForInput represents the information set by For method.
@@ -311,6 +319,10 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 	ctrlOptions.Log = ctrlOptions.Log.WithValues("reconciler group", gvk.Group, "reconciler kind", gvk.Kind)
 
 	// Build the controller and return.
+	if blder.unmanaged {
+		blder.ctrl, err = newUnmanagedController(blder.getControllerName(gvk), blder.mgr, ctrlOptions)
+		return err
+	}
 	blder.ctrl, err = newController(blder.getControllerName(gvk), blder.mgr, ctrlOptions)
 	return err
 }

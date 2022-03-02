@@ -75,9 +75,20 @@ func (l *testLogger) WithName(name string) logr.LogSink {
 	return l
 }
 
+type UnmanagedWrapper struct {
+	controller.Controller
+}
+
 var _ = Describe("application", func() {
 	BeforeEach(func() {
 		newController = controller.New
+		newUnmanagedController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
+			ctrl, err := controller.NewUnmanaged(name, mgr, options)
+			if err != nil {
+				return nil, err
+			}
+			return &UnmanagedWrapper{ctrl}, nil
+		}
 	})
 
 	noop := reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
@@ -85,6 +96,36 @@ var _ = Describe("application", func() {
 	})
 
 	Describe("New", func() {
+
+		It("should return a non-managed controller when unmanaged is set", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				For(&appsv1.ReplicaSet{}).
+				Owns(&appsv1.ReplicaSet{}).
+				Unmanaged(true).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).To(BeAssignableToTypeOf(&UnmanagedWrapper{}))
+			Expect(instance).NotTo(BeNil())
+		})
+
+		It("should not return a non-managed controller when unmanaged is set", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				For(&appsv1.ReplicaSet{}).
+				Owns(&appsv1.ReplicaSet{}).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeAssignableToTypeOf(&UnmanagedWrapper{}))
+			Expect(instance).NotTo(BeNil())
+		})
+
 		It("should return success if given valid objects", func() {
 			By("creating a controller manager")
 			m, err := manager.New(cfg, manager.Options{})

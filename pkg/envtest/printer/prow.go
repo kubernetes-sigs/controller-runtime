@@ -22,10 +22,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/onsi/ginkgo/v2/config"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/ginkgo/v2/reporters"
-	"github.com/onsi/ginkgo/v2/types"
-
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -34,17 +32,8 @@ var (
 	allRegisteredSuitesLock = &sync.Mutex{}
 )
 
-type prowReporter struct {
-	junitReporter *reporters.JUnitReporter
-}
-
-// NewProwReporter returns a prowReporter that will write out junit if running in Prow and do
-// nothing otherwise.
-// WARNING: It seems this does not always properly fail the test runs when there are failures,
-// see https://github.com/onsi/ginkgo/issues/706
-// When using this you must make sure to grep for failures in your junit xmls and fail the run
-// if there are any.
-func NewProwReporter(suiteName string) reporters.DeprecatedReporter { //nolint  // For migration of custom reporter check https://onsi.github.io/ginkgo/MIGRATING_TO_V2#migration-strategy-2
+// AddReport adds.
+func AddReport(report ginkgo.Report, suiteName string) {
 	allRegisteredSuitesLock.Lock()
 	if allRegisteredSuites.Has(suiteName) {
 		panic(fmt.Sprintf("Suite named %q registered more than once", suiteName))
@@ -52,57 +41,11 @@ func NewProwReporter(suiteName string) reporters.DeprecatedReporter { //nolint  
 	allRegisteredSuites.Insert(suiteName)
 	allRegisteredSuitesLock.Unlock()
 
-	if os.Getenv("CI") == "" {
-		return &prowReporter{}
-	}
 	artifactsDir := os.Getenv("ARTIFACTS")
-	if artifactsDir == "" {
-		return &prowReporter{}
-	}
 
-	path := filepath.Join(artifactsDir, fmt.Sprintf("junit_%s.xml", suiteName))
-	return &prowReporter{
-		junitReporter: reporters.NewJUnitReporter(path),
-	}
-}
-
-func (pr *prowReporter) SuiteWillBegin(config config.GinkgoConfigType, summary *types.SuiteSummary) {
-	if pr.junitReporter != nil {
-		pr.junitReporter.SuiteWillBegin(config, summary)
-	}
-}
-
-// BeforeSuiteDidRun implements ginkgo.Reporter.
-func (pr *prowReporter) BeforeSuiteDidRun(setupSummary *types.SetupSummary) {
-	if pr.junitReporter != nil {
-		pr.junitReporter.BeforeSuiteDidRun(setupSummary)
-	}
-}
-
-// AfterSuiteDidRun implements ginkgo.Reporter.
-func (pr *prowReporter) AfterSuiteDidRun(setupSummary *types.SetupSummary) {
-	if pr.junitReporter != nil {
-		pr.junitReporter.AfterSuiteDidRun(setupSummary)
-	}
-}
-
-// SpecWillRun implements ginkgo.Reporter.
-func (pr *prowReporter) SpecWillRun(specSummary *types.SpecSummary) {
-	if pr.junitReporter != nil {
-		pr.junitReporter.SpecWillRun(specSummary)
-	}
-}
-
-// SpecDidComplete implements ginkgo.Reporter.
-func (pr *prowReporter) SpecDidComplete(specSummary *types.SpecSummary) {
-	if pr.junitReporter != nil {
-		pr.junitReporter.SpecDidComplete(specSummary)
-	}
-}
-
-// SuiteDidEnd Prints a newline between "35 Passed | 0 Failed | 0 Pending | 0 Skipped" and "--- PASS:".
-func (pr *prowReporter) SuiteDidEnd(summary *types.SuiteSummary) {
-	if pr.junitReporter != nil {
-		pr.junitReporter.SuiteDidEnd(summary)
+	if os.Getenv("CI") != "" && artifactsDir != "" {
+		path := filepath.Join(artifactsDir, fmt.Sprintf("junit_%s_%d.xml", suiteName, report.SuiteConfig.ParallelProcess))
+		err := reporters.GenerateJUnitReport(report, path)
+		fmt.Printf("Failed to generate report\n\t%s", err.Error())
 	}
 }

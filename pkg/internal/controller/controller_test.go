@@ -210,7 +210,7 @@ var _ = Describe("controller", func() {
 			}()
 
 			<-sourceSynced
-		}, 10.0)
+		})
 
 		It("should process events from source.Channel", func() {
 			// channel to be closed when event is processed
@@ -521,8 +521,8 @@ var _ = Describe("controller", func() {
 
 			By("Removing the item from the queue")
 			Eventually(queue.Len).Should(Equal(0))
-			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
-		}, 1.0)
+			Eventually(func() int { return queue.NumRequeues(request) }, 1.0).Should(Equal(0))
+		})
 
 		// TODO(directxman12): we should ensure that backoff occurrs with error requeue
 
@@ -698,7 +698,7 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-			}, 2.0)
+			})
 
 			It("should get updated on reconcile errors", func() {
 				Expect(func() error {
@@ -727,7 +727,7 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-			}, 2.0)
+			})
 
 			It("should get updated when reconcile returns with retry enabled", func() {
 				Expect(func() error {
@@ -757,7 +757,7 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-			}, 2.0)
+			})
 
 			It("should get updated when reconcile returns with retryAfter enabled", func() {
 				Expect(func() error {
@@ -786,7 +786,7 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-			}, 2.0)
+			})
 		})
 
 		Context("should update prometheus metrics", func() {
@@ -827,7 +827,7 @@ var _ = Describe("controller", func() {
 				By("Removing the item from the queue")
 				Eventually(queue.Len).Should(Equal(0))
 				Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
-			}, 2.0)
+			})
 
 			It("should add a reconcile time to the reconcile time histogram", func() {
 				var reconcileTime dto.Metric
@@ -868,7 +868,7 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-			}, 4.0)
+			})
 		})
 	})
 })

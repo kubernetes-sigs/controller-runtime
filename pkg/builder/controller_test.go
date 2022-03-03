@@ -552,7 +552,6 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 	go func() {
 		defer GinkgoRecover()
 		Expect(mgr.Start(ctx)).NotTo(HaveOccurred())
-		By("Stopping the application")
 	}()
 
 	By("Creating a Deployment")

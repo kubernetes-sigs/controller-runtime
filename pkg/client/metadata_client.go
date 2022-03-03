@@ -145,7 +145,8 @@ func (mc *metadataClient) List(ctx context.Context, obj ObjectList, opts ...List
 		return fmt.Errorf("metadata client did not understand object: %T", obj)
 	}
 
-	gvk := metadata.GroupVersionKind()
+	listGVK := metadata.GroupVersionKind()
+	gvk := listGVK
 	if strings.HasSuffix(gvk.Kind, "List") {
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 	}
@@ -163,7 +164,7 @@ func (mc *metadataClient) List(ctx context.Context, obj ObjectList, opts ...List
 		return err
 	}
 	*metadata = *res
-	metadata.SetGroupVersionKind(gvk) // restore the GVK, which isn't set on metadata
+	metadata.SetGroupVersionKind(listGVK) // restore the GVK, which isn't set on metadata
 	return nil
 }
 

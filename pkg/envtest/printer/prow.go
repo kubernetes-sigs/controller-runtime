@@ -46,6 +46,8 @@ func AddReport(report ginkgo.Report, suiteName string) {
 	if os.Getenv("CI") != "" && artifactsDir != "" {
 		path := filepath.Join(artifactsDir, fmt.Sprintf("junit_%s_%d.xml", suiteName, report.SuiteConfig.ParallelProcess))
 		err := reporters.GenerateJUnitReport(report, path)
-		fmt.Printf("Failed to generate report\n\t%s", err.Error())
+		if err != nil {
+			fmt.Printf("Failed to generate report\n\t%s", err.Error())
+		}
 	}
 }

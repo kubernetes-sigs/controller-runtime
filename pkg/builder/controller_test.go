@@ -238,10 +238,10 @@ var _ = Describe("application", func() {
 
 			logger := &testLogger{}
 			newController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
-				if options.Log.GetSink() == logger {
+				if options.LogConstructor(nil).GetSink() == logger {
 					return controller.New(name, mgr, options)
 				}
-				return nil, fmt.Errorf("logger expected %T but found %T", logger, options.Log)
+				return nil, fmt.Errorf("logger expected %T but found %T", logger, options.LogConstructor)
 			}
 
 			By("creating a controller manager")
@@ -251,7 +251,9 @@ var _ = Describe("application", func() {
 			instance, err := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
-				WithLogger(logr.New(logger)).
+				WithLogConstructor(func(request *reconcile.Request) logr.Logger {
+					return logr.New(logger)
+				}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())

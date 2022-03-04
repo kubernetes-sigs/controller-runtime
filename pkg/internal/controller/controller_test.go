@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
@@ -70,7 +71,9 @@ var _ = Describe("controller", func() {
 			MaxConcurrentReconciles: 1,
 			Do:                      fakeReconcile,
 			MakeQueue:               func() workqueue.RateLimitingInterface { return queue },
-			Log:                     log.RuntimeLog.WithName("controller").WithName("test"),
+			LogConstructor: func(_ *reconcile.Request) logr.Logger {
+				return log.RuntimeLog.WithName("controller").WithName("test")
+			},
 		}
 		Expect(ctrl.InjectFunc(func(interface{}) error { return nil })).To(Succeed())
 	})

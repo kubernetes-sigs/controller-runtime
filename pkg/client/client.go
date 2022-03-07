@@ -182,11 +182,19 @@ func (c *client) RESTMapper() meta.RESTMapper {
 func (c *client) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
 	switch obj.(type) {
 	case *unstructured.Unstructured:
-		return c.unstructuredClient.Create(ctx, obj, opts...)
+		err := c.unstructuredClient.Create(ctx, obj, opts...)
+		if err != nil && runtime.IsNotRegisteredError(err) {
+			return fmt.Errorf("custom IsNotRegisteredError:%w", err)
+		}
+		return err
 	case *metav1.PartialObjectMetadata:
 		return fmt.Errorf("cannot create using only metadata")
 	default:
-		return c.typedClient.Create(ctx, obj, opts...)
+		err := c.typedClient.Create(ctx, obj, opts...)
+		if err != nil && runtime.IsNotRegisteredError(err) {
+			return fmt.Errorf("custom IsNotRegisteredError:%w", err)
+		}
+		return err
 	}
 }
 

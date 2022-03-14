@@ -148,8 +148,12 @@ func (c *CacheReader) List(_ context.Context, out client.ObjectList, opts ...cli
 					for i := range list {
 						obj := list[i].(client.Object)
 						key := client.ObjectKey{Namespace: obj.GetNamespace(), Name: obj.GetName()}
-						if _, exists := objmap[key]; exists {
-							numap[key] = obj
+						if o, exists := objmap[key]; exists {
+							if o.(client.Object).GetGeneration() == obj.GetGeneration() {
+								numap[key] = obj
+							} else {
+								return fmt.Errorf("multiple generation found in indices for %+v %s/%s", obj.GetObjectKind().GroupVersionKind(), obj.GetNamespace(), obj.GetName())
+							}
 						}
 					}
 					objmap = numap

@@ -18,19 +18,19 @@ var _ = Describe("runnables", func() {
 	errCh := make(chan error)
 
 	It("should be able to create a new runnables object", func() {
-		Expect(newRunnables(errCh)).ToNot(BeNil())
+		Expect(newRunnables(defaultBaseContext, errCh)).ToNot(BeNil())
 	})
 
 	It("should add caches to the appropriate group", func() {
 		cache := &cacheProvider{cache: &informertest.FakeInformers{Error: fmt.Errorf("expected error")}}
-		r := newRunnables(errCh)
+		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(cache)).To(Succeed())
 		Expect(r.Caches.startQueue).To(HaveLen(1))
 	})
 
 	It("should add webhooks to the appropriate group", func() {
 		webhook := &webhook.Server{}
-		r := newRunnables(errCh)
+		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(webhook)).To(Succeed())
 		Expect(r.Webhooks.startQueue).To(HaveLen(1))
 	})
@@ -41,7 +41,7 @@ var _ = Describe("runnables", func() {
 			return err
 		})
 
-		r := newRunnables(errCh)
+		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(runnable)).To(Succeed())
 		Expect(r.LeaderElection.startQueue).To(HaveLen(1))
 	})
@@ -53,7 +53,7 @@ var _ = Describe("runnableGroup", func() {
 	It("should be able to add new runnables before it starts", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		rg := newRunnableGroup(errCh)
+		rg := newRunnableGroup(defaultBaseContext, errCh)
 		Expect(rg.Add(RunnableFunc(func(c context.Context) error {
 			<-ctx.Done()
 			return nil
@@ -65,7 +65,7 @@ var _ = Describe("runnableGroup", func() {
 	It("should be able to add new runnables before and after start", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		rg := newRunnableGroup(errCh)
+		rg := newRunnableGroup(defaultBaseContext, errCh)
 		Expect(rg.Add(RunnableFunc(func(c context.Context) error {
 			<-ctx.Done()
 			return nil
@@ -81,7 +81,7 @@ var _ = Describe("runnableGroup", func() {
 	It("should be able to add new runnables before and after start concurrently", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		rg := newRunnableGroup(errCh)
+		rg := newRunnableGroup(defaultBaseContext, errCh)
 
 		go func() {
 			defer GinkgoRecover()
@@ -106,7 +106,7 @@ var _ = Describe("runnableGroup", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 
 		exited := pointer.Int64(0)
-		rg := newRunnableGroup(errCh)
+		rg := newRunnableGroup(defaultBaseContext, errCh)
 		for i := 0; i < 10; i++ {
 			Expect(rg.Add(RunnableFunc(func(c context.Context) error {
 				defer atomic.AddInt64(exited, 1)
@@ -131,7 +131,7 @@ var _ = Describe("runnableGroup", func() {
 	It("should be able to wait for all runnables to be ready at different intervals", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
-		rg := newRunnableGroup(errCh)
+		rg := newRunnableGroup(defaultBaseContext, errCh)
 
 		go func() {
 			defer GinkgoRecover()
@@ -157,7 +157,7 @@ var _ = Describe("runnableGroup", func() {
 	It("should not turn ready if some readiness check fail", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		rg := newRunnableGroup(errCh)
+		rg := newRunnableGroup(defaultBaseContext, errCh)
 
 		go func() {
 			defer GinkgoRecover()

@@ -304,7 +304,7 @@ func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f Mu
 		result = OperationResultUpdated
 	}
 
-	if (hasBeforeStatus || hasAfterStatus) && !reflect.DeepEqual(beforeStatus, afterStatus) {
+	if hasBeforeStatus && hasAfterStatus && !reflect.DeepEqual(beforeStatus, afterStatus) {
 		// Only issue a Status Patch if the resource has a status and the beforeStatus
 		// and afterStatus copies differ
 		if result == OperationResultUpdated {

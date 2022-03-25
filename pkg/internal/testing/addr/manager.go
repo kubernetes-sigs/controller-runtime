@@ -42,12 +42,18 @@ var (
 )
 
 func init() {
-	baseDir, err := os.UserCacheDir()
-	if err != nil {
-		baseDir = os.TempDir()
+	const (
+		envTestDir = "kubebuilder-envtest"
+		permission = 0750
+	)
+	if baseDir, err := os.UserCacheDir(); err == nil {
+		cacheDir = filepath.Join(baseDir, envTestDir)
+		if err := os.MkdirAll(cacheDir, permission); err == nil {
+			return
+		}
 	}
-	cacheDir = filepath.Join(baseDir, "kubebuilder-envtest")
-	if err := os.MkdirAll(cacheDir, 0750); err != nil {
+	cacheDir = filepath.Join(os.TempDir(), envTestDir)
+	if err := os.MkdirAll(cacheDir, permission); err != nil {
 		panic(err)
 	}
 }

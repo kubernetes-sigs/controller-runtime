@@ -1245,6 +1245,40 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(sii).To(BeNil())
 					Expect(apierrors.IsTimeout(err)).To(BeTrue())
 				})
+
+				It("should be able not to change indexer values after indexing cluster-scope objects", func() {
+					By("creating the cache")
+					informer, err := cache.New(cfg, cache.Options{})
+					Expect(err).NotTo(HaveOccurred())
+
+					By("indexing the Namespace objects with fixed values before starting")
+					pod := &corev1.Namespace{}
+					indexerValues := []string{"a", "b", "c"}
+					fieldName := "fixedValues"
+					indexFunc := func(obj client.Object) []string {
+						return indexerValues
+					}
+					Expect(informer.IndexField(context.TODO(), pod, fieldName, indexFunc)).To(Succeed())
+
+					By("running the cache and waiting for it to sync")
+					go func() {
+						defer GinkgoRecover()
+						Expect(informer.Start(informerCacheCtx)).To(Succeed())
+					}()
+					Expect(informer.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
+
+					By("listing Namespaces with fixed indexer")
+					listObj := &corev1.NamespaceList{}
+					Expect(informer.List(context.Background(), listObj,
+						client.MatchingFields{fieldName: "a"})).To(Succeed())
+					Expect(listObj.Items).NotTo(BeZero())
+
+					By("verifying the indexing does not change fixed returned values")
+					Expect(indexerValues).Should(HaveLen(3))
+					Expect(indexerValues[0]).To(Equal("a"))
+					Expect(indexerValues[1]).To(Equal("b"))
+					Expect(indexerValues[2]).To(Equal("c"))
+				})
 			})
 			Context("with unstructured objects", func() {
 				It("should be able to get informer for the object", func() {

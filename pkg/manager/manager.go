@@ -239,6 +239,11 @@ type Options struct {
 	// use the cache for reads and the client for writes.
 	NewClient cluster.NewClientFunc
 
+	// BaseContext is the function that provides Context values to Runnables
+	// managed by the Manager. If a BaseContext function isn't provided, Runnables
+	// will receive a new Background Context instead.
+	BaseContext BaseContextFunc
+
 	// ClientDisableCacheFor tells the client that, if any cache is used, to bypass it
 	// for the given objects.
 	ClientDisableCacheFor []client.Object
@@ -277,6 +282,10 @@ type Options struct {
 	newMetricsListener     func(addr string) (net.Listener, error)
 	newHealthProbeListener func(addr string) (net.Listener, error)
 }
+
+// BaseContextFunc is a function used to provide a base Context to Runnables
+// managed by a Manager.
+type BaseContextFunc func() context.Context
 
 // Runnable allows a component to be started.
 // It's very important that Start blocks until
@@ -377,7 +386,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}
 
 	errChan := make(chan error)
-	runnables := newRunnables(errChan)
+	runnables := newRunnables(options.BaseContext, errChan)
 
 	return &controllerManager{
 		stopProcedureEngaged:          pointer.Int64(0),
@@ -529,6 +538,12 @@ func defaultHealthProbeListener(addr string) (net.Listener, error) {
 	return ln, nil
 }
 
+// defaultBaseContext is used as the BaseContext value in Options if one
+// has not already been set.
+func defaultBaseContext() context.Context {
+	return context.Background()
+}
+
 // setOptionsDefaults set default values for Options fields.
 func setOptionsDefaults(options Options) Options {
 	// Allow newResourceLock to be mocked
@@ -590,6 +605,10 @@ func setOptionsDefaults(options Options) Options {
 
 	if options.Logger.GetSink() == nil {
 		options.Logger = log.Log
+	}
+
+	if options.BaseContext == nil {
+		options.BaseContext = defaultBaseContext
 	}
 
 	return options

@@ -193,8 +193,8 @@ func indexByField(indexer Informer, field string, extractor client.IndexerFunc) 
 		rawVals := extractor(obj)
 		var vals []string
 		if ns == "" {
-			// if we're not doubling the keys for the namespaced case, just re-use what was returned to us
-			vals = rawVals
+			// if we're not doubling the keys for the namespaced case, just create a new slice with same length
+			vals = make([]string, len(rawVals))
 		} else {
 			// if we need to add non-namespaced versions too, double the length
 			vals = make([]string, len(rawVals)*2)

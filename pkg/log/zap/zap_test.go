@@ -528,7 +528,7 @@ var _ = Describe("Zap log level flag options setup", func() {
 
 		It("Should propagate time encoder to logger", func() {
 			// zaps ISO8601TimeEncoder uses 2006-01-02T15:04:05.000Z0700 as pattern for iso8601 encoding
-			iso8601Pattern := `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{3}(\+[0-9]{4}|Z)`
+			iso8601Pattern := `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{3}([-+][0-9]{4}|Z)`
 
 			args := []string{"--zap-time-encoding=iso8601"}
 			fromFlags.BindFlags(&fs)

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -133,9 +134,14 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 			i, lastErr = ks.cache.GetInformer(ctx, ks.Type)
 			if lastErr != nil {
 				kindMatchErr := &meta.NoKindMatchError{}
-				if errors.As(lastErr, &kindMatchErr) {
+				switch {
+				case errors.As(lastErr, &kindMatchErr):
 					log.Error(lastErr, "if kind is a CRD, it should be installed before calling Start",
 						"kind", kindMatchErr.GroupKind)
+				case runtime.IsNotRegisteredError(lastErr):
+					log.Error(lastErr, "kind must be registered to the Scheme")
+				default:
+					log.Error(lastErr, "failed to get informer from cache")
 				}
 				return false, nil // Retry.
 			}

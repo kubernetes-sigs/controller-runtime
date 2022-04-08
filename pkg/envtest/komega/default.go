@@ -61,7 +61,7 @@ func Update(obj client.Object, f func(), opts ...client.UpdateOption) func() err
 // UpdateStatus returns a function that fetches a resource, applies the provided update function and then updates the resource's status.
 // It can be used with gomega.Eventually() like this:
 //   deployment := appsv1.Deployment{ ... }
-//   gomega.Eventually(k.Update(&deployment, func (o client.Object) {
+//   gomega.Eventually(k.UpdateStatus(&deployment, func (o client.Object) {
 //     deployment.Status.AvailableReplicas = 1
 //     return &deployment
 //   })).To(gomega.Scucceed())

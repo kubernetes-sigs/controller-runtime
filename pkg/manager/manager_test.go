@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -470,8 +471,10 @@ var _ = Describe("manger.Manager", func() {
 				Expect(ok).To(BeTrue())
 				multilock, isMultiLock := cm.resourceLock.(*resourcelock.MultiLock)
 				Expect(isMultiLock).To(BeTrue())
-				_, primaryIsConfigMapLock := multilock.Primary.(*resourcelock.ConfigMapLock)
-				Expect(primaryIsConfigMapLock).To(BeTrue())
+				primaryLockType := reflect.TypeOf(multilock.Primary)
+				Expect(primaryLockType.Kind()).To(Equal(reflect.Ptr))
+				Expect(primaryLockType.Elem().PkgPath()).To(Equal("k8s.io/client-go/tools/leaderelection/resourcelock"))
+				Expect(primaryLockType.Elem().Name()).To(Equal("configMapLock"))
 				_, secondaryIsLeaseLock := multilock.Secondary.(*resourcelock.LeaseLock)
 				Expect(secondaryIsLeaseLock).To(BeTrue())
 			})

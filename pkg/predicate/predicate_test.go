@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -927,6 +928,80 @@ var _ = Describe("Predicate", func() {
 				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Object: new})).To(BeFalse())
 				Expect(byNamespaceFuncs.Generic(event.GenericEvent{Object: new})).To(BeFalse())
 				Expect(byNamespaceFuncs.Update(failEvt1)).To(BeFalse())
+			})
+		})
+	})
+
+	Describe("When checking a MatchingNamespacedNamePredicate", func() {
+		instance, err := predicate.MatchingNamespacedNamePredicate(types.NamespacedName{
+			Name:      "foo",
+			Namespace: "bar",
+		})
+		if err != nil {
+			Fail("Improper Namespaced Name passed during predicate instantiation.")
+		}
+
+		Context("When the Namespaced Name does not match the event object namespace", func() {
+			It("should return false", func() {
+				failMatch := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "foo",
+						Namespace: "wrong",
+					},
+				}
+				Expect(instance.Create(event.CreateEvent{Object: failMatch})).To(BeFalse())
+				Expect(instance.Delete(event.DeleteEvent{Object: failMatch})).To(BeFalse())
+				Expect(instance.Generic(event.GenericEvent{Object: failMatch})).To(BeFalse())
+				Expect(instance.Update(event.UpdateEvent{ObjectNew: failMatch})).To(BeFalse())
+			})
+		})
+
+		Context("When the Namespaced Name does not match the event object name", func() {
+			It("should return false", func() {
+				failMatch := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "wrong",
+						Namespace: "bar",
+					},
+				}
+				Expect(instance.Create(event.CreateEvent{Object: failMatch})).To(BeFalse())
+				Expect(instance.Delete(event.DeleteEvent{Object: failMatch})).To(BeFalse())
+				Expect(instance.Generic(event.GenericEvent{Object: failMatch})).To(BeFalse())
+				Expect(instance.Update(event.UpdateEvent{ObjectNew: failMatch})).To(BeFalse())
+			})
+		})
+
+		Context("When the Namespaced Name matches the event object", func() {
+			It("should return true", func() {
+				successMatch := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "foo",
+						Namespace: "bar",
+					},
+				}
+				Expect(instance.Create(event.CreateEvent{Object: successMatch})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{Object: successMatch})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{Object: successMatch})).To(BeTrue())
+				Expect(instance.Update(event.UpdateEvent{ObjectNew: successMatch})).To(BeTrue())
+			})
+		})
+
+		Context("When the Namespaced Name matches the cluster-scoped event object", func() {
+			It("should return true", func() {
+				clusterScopedInstance, err := predicate.MatchingNamespacedNamePredicate(types.NamespacedName{
+					Name: "worker-node",
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				successMatch := &corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "worker-node",
+					},
+				}
+				Expect(clusterScopedInstance.Create(event.CreateEvent{Object: successMatch})).To(BeTrue())
+				Expect(clusterScopedInstance.Delete(event.DeleteEvent{Object: successMatch})).To(BeTrue())
+				Expect(clusterScopedInstance.Generic(event.GenericEvent{Object: successMatch})).To(BeTrue())
+				Expect(clusterScopedInstance.Update(event.UpdateEvent{ObjectNew: successMatch})).To(BeTrue())
 			})
 		})
 	})

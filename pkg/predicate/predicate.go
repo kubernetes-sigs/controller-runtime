@@ -17,10 +17,12 @@ limitations under the License.
 package predicate
 
 import (
+	"fmt"
 	"reflect"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
@@ -348,5 +350,17 @@ func LabelSelectorPredicate(s metav1.LabelSelector) (Predicate, error) {
 	}
 	return NewPredicateFuncs(func(o client.Object) bool {
 		return selector.Matches(labels.Set(o.GetLabels()))
+	}), nil
+}
+
+// MatchingNamespacedNamePredicate constructs a Predicate to match a Namespaced object.
+// Only objects matching the Name and Namespace pair will be admitted.
+func MatchingNamespacedNamePredicate(namespacedName types.NamespacedName) (Predicate, error) {
+	if len(namespacedName.Name) == 0 {
+		return Funcs{}, fmt.Errorf("name cannot be empty")
+	}
+
+	return NewPredicateFuncs(func(object client.Object) bool {
+		return object.GetName() == namespacedName.Name && object.GetNamespace() == namespacedName.Namespace
 	}), nil
 }

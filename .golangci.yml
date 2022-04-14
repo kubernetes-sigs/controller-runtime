@@ -121,6 +121,11 @@ issues:
   - linters:
     - gocritic
     text: "singleCaseSwitch: should rewrite switch statement to if statement"
+  # It considers all file access to a filename that comes from a variable problematic,
+  # which is naiv at best.
+  - linters:
+    - gosec
+    text: "G304: Potential file inclusion via variable"
 
 run:
   timeout: 10m

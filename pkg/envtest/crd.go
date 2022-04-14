@@ -426,7 +426,7 @@ func readCRDs(basePath string, files []os.FileInfo) ([]*apiextensionsv1.CustomRe
 
 // readDocuments reads documents from file.
 func readDocuments(fp string) ([][]byte, error) {
-	b, err := ioutil.ReadFile(fp) //nolint:gosec
+	b, err := ioutil.ReadFile(fp)
 	if err != nil {
 		return nil, err
 	}

@@ -1110,7 +1110,7 @@ var _ = Describe("Client", func() {
 				By("initially creating two Deployments")
 
 				dep2 := dep.DeepCopy()
-				dep2.Name = dep2.Name + "-2"
+				dep2.Name += "-2"
 
 				dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1209,7 +1209,7 @@ var _ = Describe("Client", func() {
 				By("initially creating two Deployments")
 
 				dep2 := dep.DeepCopy()
-				dep2.Name = dep2.Name + "-2"
+				dep2.Name += "-2"
 
 				dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1295,7 +1295,7 @@ var _ = Describe("Client", func() {
 				By("initially creating two Deployments")
 
 				dep2 := dep.DeepCopy()
-				dep2.Name = dep2.Name + "-2"
+				dep2.Name += "-2"
 
 				dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())

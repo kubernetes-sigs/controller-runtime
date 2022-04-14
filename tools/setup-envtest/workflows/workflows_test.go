@@ -369,7 +369,7 @@ var _ = Describe("Workflows", func() {
 		})
 
 		It("should remove matching versions from the store & keep non-matching ones", func() {
-			entries, err := env.FS.ReadDir(filepath.Join(".teststore/k8s"))
+			entries, err := env.FS.ReadDir(".teststore/k8s")
 			Expect(err).NotTo(HaveOccurred(), "should be able to read the store")
 			Expect(entries).To(ConsistOf(
 				WithTransform(fs.FileInfo.Name, Equal("1.16.2-ifonlysingularitywasstillathing-amd64")),

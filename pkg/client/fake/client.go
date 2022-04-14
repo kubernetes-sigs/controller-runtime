@@ -352,9 +352,7 @@ func (c *fakeClient) Watch(ctx context.Context, list client.ObjectList, opts ...
 		return nil, err
 	}
 
-	if strings.HasSuffix(gvk.Kind, "List") {
-		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
-	}
+	gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
 
 	listOpts := client.ListOptions{}
 	listOpts.ApplyOptions(opts)
@@ -371,9 +369,7 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 
 	originalKind := gvk.Kind
 
-	if strings.HasSuffix(gvk.Kind, "List") {
-		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
-	}
+	gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
 
 	if _, isUnstructuredList := obj.(*unstructured.UnstructuredList); isUnstructuredList && !c.scheme.Recognizes(gvk) {
 		// We need to register the ListKind with UnstructuredList:

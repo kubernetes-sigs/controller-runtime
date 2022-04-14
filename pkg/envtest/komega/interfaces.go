@@ -45,7 +45,7 @@ type Komega interface {
 	//   gomega.Eventually(k.Update(&deployment, func (o client.Object) {
 	//     deployment.Spec.Replicas = 3
 	//     return &deployment
-	//   })).To(gomega.Scucceed())
+	//   })).To(gomega.Succeed())
 	// By calling the returned function directly it can also be used as gomega.Expect(k.Update(...)()).To(...)
 	Update(client.Object, func(), ...client.UpdateOption) func() error
 
@@ -55,7 +55,7 @@ type Komega interface {
 	//   gomega.Eventually(k.Update(&deployment, func (o client.Object) {
 	//     deployment.Status.AvailableReplicas = 1
 	//     return &deployment
-	//   })).To(gomega.Scucceed())
+	//   })).To(gomega.Succeed())
 	// By calling the returned function directly it can also be used as gomega.Expect(k.UpdateStatus(...)()).To(...)
 	UpdateStatus(client.Object, func(), ...client.UpdateOption) func() error
 

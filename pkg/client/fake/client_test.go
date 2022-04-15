@@ -985,7 +985,7 @@ var _ = Describe("Fake client", func() {
 
 	It("should be able to build with given tracker and get resource", func() {
 		clientSet := fake.NewSimpleClientset(dep)
-		cl := NewClientBuilder().WithObjectTracker(clientSet.Tracker()).Build()
+		cl := NewClientBuilder().WithRuntimeObjects(dep2).WithObjectTracker(clientSet.Tracker()).Build()
 
 		By("Getting a deployment")
 		namespacedName := types.NamespacedName{
@@ -997,17 +997,38 @@ var _ = Describe("Fake client", func() {
 		Expect(err).To(BeNil())
 		Expect(obj).To(Equal(dep))
 
-		namespacedName2 := types.NamespacedName{
-			Name:      "test-deployment-2",
+		By("Getting a deployment from clientSet")
+		csDep2, err := clientSet.AppsV1().Deployments("ns1").Get(context.Background(), "test-deployment-2", metav1.GetOptions{})
+		Expect(err).To(BeNil())
+		Expect(csDep2).To(Equal(dep2))
+
+		By("Getting a new deployment")
+		namespacedName3 := types.NamespacedName{
+			Name:      "test-deployment-3",
 			Namespace: "ns1",
 		}
 
-		_, err = clientSet.AppsV1().Deployments("ns1").Create(context.Background(), dep2, metav1.CreateOptions{})
+		dep3 := &appsv1.Deployment{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-3",
+				Namespace: "ns1",
+				Labels: map[string]string{
+					"test-label": "label-value",
+				},
+				ResourceVersion: trackerAddResourceVersion,
+			},
+		}
+
+		_, err = clientSet.AppsV1().Deployments("ns1").Create(context.Background(), dep3, metav1.CreateOptions{})
 		Expect(err).To(BeNil())
 
 		obj = &appsv1.Deployment{}
-		err = cl.Get(context.Background(), namespacedName2, obj)
+		err = cl.Get(context.Background(), namespacedName3, obj)
 		Expect(err).To(BeNil())
-		Expect(obj).To(Equal(dep2))
+		Expect(obj).To(Equal(dep3))
 	})
 })

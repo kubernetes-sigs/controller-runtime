@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"k8s.io/client-go/kubernetes/fake"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -980,5 +981,33 @@ var _ = Describe("Fake client", func() {
 			},
 		}
 		Expect(retrieved).To(Equal(reference))
+	})
+
+	It("should be able to build with given tracker and get resource", func() {
+		clientSet := fake.NewSimpleClientset(dep)
+		cl := NewClientBuilder().WithObjectTracker(clientSet.Tracker()).Build()
+
+		By("Getting a deployment")
+		namespacedName := types.NamespacedName{
+			Name:      "test-deployment",
+			Namespace: "ns1",
+		}
+		obj := &appsv1.Deployment{}
+		err := cl.Get(context.Background(), namespacedName, obj)
+		Expect(err).To(BeNil())
+		Expect(obj).To(Equal(dep))
+
+		namespacedName2 := types.NamespacedName{
+			Name:      "test-deployment-2",
+			Namespace: "ns1",
+		}
+
+		_, err = clientSet.AppsV1().Deployments("ns1").Create(context.Background(), dep2, metav1.CreateOptions{})
+		Expect(err).To(BeNil())
+
+		obj = &appsv1.Deployment{}
+		err = cl.Get(context.Background(), namespacedName2, obj)
+		Expect(err).To(BeNil())
+		Expect(obj).To(Equal(dep2))
 	})
 })

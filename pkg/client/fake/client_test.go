@@ -20,8 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"k8s.io/client-go/kubernetes/fake"
 	"time"
+
+	"k8s.io/client-go/kubernetes/fake"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

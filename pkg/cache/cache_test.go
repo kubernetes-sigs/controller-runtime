@@ -202,7 +202,7 @@ var _ = Describe("Cache with transformers", func() {
 				}
 				return i, nil
 			},
-			TransformFuncByObject: cache.TransformFuncByObject{
+			TransformByObject: cache.TransformByObject{
 				&corev1.Pod{}: func(i interface{}) (interface{}, error) {
 					if obj := i.(runtime.Object); obj != nil {
 						accessor, err := meta.Accessor(obj)

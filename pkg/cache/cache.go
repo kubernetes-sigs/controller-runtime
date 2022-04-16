@@ -129,16 +129,16 @@ type Options struct {
 	// otherwise you will mutate the object in the cache.
 	UnsafeDisableDeepCopyByObject DisableDeepCopyByObject
 
-	// TransformFuncByObject is a map from GVKs to transformer functions which
+	// TransformByObject is a map from GVKs to transformer functions which
 	// get applied when objects of the transformation are about to be committed
 	// to cache.
 	//
 	// This function is called both for new objects to enter the cache,
 	// 	and for updated objects.
-	TransformFuncByObject TransformFuncByObject
+	TransformByObject TransformByObject
 
 	// DefaultTransform is the transform used for all GVKs which do
-	// not have an explicit transform func set in TransformFuncByObject
+	// not have an explicit transform func set in TransformByObject
 	DefaultTransform toolscache.TransformFunc
 }
 
@@ -158,7 +158,7 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 	if err != nil {
 		return nil, err
 	}
-	transformByGVK, err := convertToTransformByKindAndGVK(opts.TransformFuncByObject, opts.DefaultTransform, opts.Scheme)
+	transformByGVK, err := convertToTransformByKindAndGVK(opts.TransformByObject, opts.DefaultTransform, opts.Scheme)
 	if err != nil {
 		return nil, err
 	}
@@ -259,11 +259,11 @@ func convertToDisableDeepCopyByGVK(disableDeepCopyByObject DisableDeepCopyByObje
 	return disableDeepCopyByGVK, nil
 }
 
-// TransformFuncByObject associate a client.Object's GVK to a transformer function
+// TransformByObject associate a client.Object's GVK to a transformer function
 // to be applied when storing the object into the cache.
-type TransformFuncByObject map[client.Object]toolscache.TransformFunc
+type TransformByObject map[client.Object]toolscache.TransformFunc
 
-func convertToTransformByKindAndGVK(t TransformFuncByObject, defaultTransform toolscache.TransformFunc, scheme *runtime.Scheme) (internal.TransformFuncByObject, error) {
+func convertToTransformByKindAndGVK(t TransformByObject, defaultTransform toolscache.TransformFunc, scheme *runtime.Scheme) (internal.TransformFuncByObject, error) {
 	result := internal.NewTransformFuncByObject()
 	for obj, transformation := range t {
 		if err := result.Set(obj, scheme, transformation); err != nil {

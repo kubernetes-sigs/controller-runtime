@@ -186,38 +186,43 @@ var _ = Describe("Cache with transformers", func() {
 		By("creating the informer cache")
 		informerCache, err = cache.New(cfg, cache.Options{
 			DefaultTransform: func(i interface{}) (interface{}, error) {
-				if obj := i.(runtime.Object); obj != nil {
-					accessor, err := meta.Accessor(obj)
-					if err == nil {
-						annotations := accessor.GetAnnotations()
-						if _, exists := annotations["transformed"]; !exists {
-							if annotations == nil {
-								annotations = make(map[string]string)
-							}
-							annotations["transformed"] = "default"
-							accessor.SetAnnotations(annotations)
-						}
-					}
+				obj := i.(runtime.Object)
+				Expect(obj).NotTo(BeNil())
 
+				accessor, err := meta.Accessor(obj)
+				Expect(err).To(BeNil())
+				annotations := accessor.GetAnnotations()
+
+				if _, exists := annotations["transformed"]; exists {
+					// Avoid performing transformation multiple times.
+					return i, nil
 				}
+
+				if annotations == nil {
+					annotations = make(map[string]string)
+				}
+				annotations["transformed"] = "default"
+				accessor.SetAnnotations(annotations)
 				return i, nil
 			},
 			TransformByObject: cache.TransformByObject{
 				&corev1.Pod{}: func(i interface{}) (interface{}, error) {
-					if obj := i.(runtime.Object); obj != nil {
-						accessor, err := meta.Accessor(obj)
-						if err == nil {
-							annotations := accessor.GetAnnotations()
-							if _, exists := annotations["transformed"]; !exists {
-								if annotations == nil {
-									annotations = make(map[string]string)
-								}
-								annotations["transformed"] = "explicit"
-								accessor.SetAnnotations(annotations)
-							}
-						}
+					obj := i.(runtime.Object)
+					Expect(obj).NotTo(BeNil())
+					accessor, err := meta.Accessor(obj)
+					Expect(err).To(BeNil())
 
+					annotations := accessor.GetAnnotations()
+					if _, exists := annotations["transformed"]; exists {
+						// Avoid performing transformation multiple times.
+						return i, nil
 					}
+
+					if annotations == nil {
+						annotations = make(map[string]string)
+					}
+					annotations["transformed"] = "explicit"
+					accessor.SetAnnotations(annotations)
 					return i, nil
 				},
 			},

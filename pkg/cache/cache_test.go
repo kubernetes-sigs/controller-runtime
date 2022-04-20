@@ -29,10 +29,12 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -121,6 +123,221 @@ var _ = Describe("Multi-Namespace Informer Cache", func() {
 var _ = Describe("Informer Cache without DeepCopy", func() {
 	CacheTest(cache.New, cache.Options{UnsafeDisableDeepCopyByObject: cache.DisableDeepCopyByObject{cache.ObjectAll{}: true}})
 })
+
+var _ = Describe("Cache with transformers", func() {
+	var (
+		informerCache       cache.Cache
+		informerCacheCtx    context.Context
+		informerCacheCancel context.CancelFunc
+		knownPod1           client.Object
+		knownPod2           client.Object
+		knownPod3           client.Object
+		knownPod4           client.Object
+		knownPod5           client.Object
+		knownPod6           client.Object
+	)
+
+	getTransformValue := func(obj client.Object) string {
+		accessor, err := meta.Accessor(obj)
+		if err == nil {
+			annotations := accessor.GetAnnotations()
+			if val, exists := annotations["transformed"]; exists {
+				return val
+			}
+		}
+		return ""
+	}
+
+	BeforeEach(func() {
+		informerCacheCtx, informerCacheCancel = context.WithCancel(context.Background())
+		Expect(cfg).NotTo(BeNil())
+
+		By("creating three pods")
+		cl, err := client.New(cfg, client.Options{})
+		Expect(err).NotTo(HaveOccurred())
+		err = ensureNode(testNodeOne, cl)
+		Expect(err).NotTo(HaveOccurred())
+		err = ensureNamespace(testNamespaceOne, cl)
+		Expect(err).NotTo(HaveOccurred())
+		err = ensureNamespace(testNamespaceTwo, cl)
+		Expect(err).NotTo(HaveOccurred())
+		err = ensureNamespace(testNamespaceThree, cl)
+		Expect(err).NotTo(HaveOccurred())
+		// Includes restart policy since these objects are indexed on this field.
+		knownPod1 = createPod("test-pod-1", testNamespaceOne, corev1.RestartPolicyNever)
+		knownPod2 = createPod("test-pod-2", testNamespaceTwo, corev1.RestartPolicyAlways)
+		knownPod3 = createPodWithLabels("test-pod-3", testNamespaceTwo, corev1.RestartPolicyOnFailure, map[string]string{"common-label": "common"})
+		knownPod4 = createPodWithLabels("test-pod-4", testNamespaceThree, corev1.RestartPolicyNever, map[string]string{"common-label": "common"})
+		knownPod5 = createPod("test-pod-5", testNamespaceOne, corev1.RestartPolicyNever)
+		knownPod6 = createPod("test-pod-6", testNamespaceTwo, corev1.RestartPolicyAlways)
+
+		podGVK := schema.GroupVersionKind{
+			Kind:    "Pod",
+			Version: "v1",
+		}
+
+		knownPod1.GetObjectKind().SetGroupVersionKind(podGVK)
+		knownPod2.GetObjectKind().SetGroupVersionKind(podGVK)
+		knownPod3.GetObjectKind().SetGroupVersionKind(podGVK)
+		knownPod4.GetObjectKind().SetGroupVersionKind(podGVK)
+		knownPod5.GetObjectKind().SetGroupVersionKind(podGVK)
+		knownPod6.GetObjectKind().SetGroupVersionKind(podGVK)
+
+		By("creating the informer cache")
+		informerCache, err = cache.New(cfg, cache.Options{
+			DefaultTransform: func(i interface{}) (interface{}, error) {
+				obj := i.(runtime.Object)
+				Expect(obj).NotTo(BeNil())
+
+				accessor, err := meta.Accessor(obj)
+				Expect(err).To(BeNil())
+				annotations := accessor.GetAnnotations()
+
+				if _, exists := annotations["transformed"]; exists {
+					// Avoid performing transformation multiple times.
+					return i, nil
+				}
+
+				if annotations == nil {
+					annotations = make(map[string]string)
+				}
+				annotations["transformed"] = "default"
+				accessor.SetAnnotations(annotations)
+				return i, nil
+			},
+			TransformByObject: cache.TransformByObject{
+				&corev1.Pod{}: func(i interface{}) (interface{}, error) {
+					obj := i.(runtime.Object)
+					Expect(obj).NotTo(BeNil())
+					accessor, err := meta.Accessor(obj)
+					Expect(err).To(BeNil())
+
+					annotations := accessor.GetAnnotations()
+					if _, exists := annotations["transformed"]; exists {
+						// Avoid performing transformation multiple times.
+						return i, nil
+					}
+
+					if annotations == nil {
+						annotations = make(map[string]string)
+					}
+					annotations["transformed"] = "explicit"
+					accessor.SetAnnotations(annotations)
+					return i, nil
+				},
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+		By("running the cache and waiting for it to sync")
+		// pass as an arg so that we don't race between close and re-assign
+		go func(ctx context.Context) {
+			defer GinkgoRecover()
+			Expect(informerCache.Start(ctx)).To(Succeed())
+		}(informerCacheCtx)
+		Expect(informerCache.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
+	})
+
+	AfterEach(func() {
+		By("cleaning up created pods")
+		deletePod(knownPod1)
+		deletePod(knownPod2)
+		deletePod(knownPod3)
+		deletePod(knownPod4)
+		deletePod(knownPod5)
+		deletePod(knownPod6)
+
+		informerCacheCancel()
+	})
+
+	Context("with structured objects", func() {
+		It("should apply transformers to explicitly specified GVKS", func() {
+			By("listing pods")
+			out := corev1.PodList{}
+			Expect(informerCache.List(context.Background(), &out)).To(Succeed())
+
+			By("verifying that the returned pods were transformed")
+			for i := 0; i < len(out.Items); i++ {
+				Expect(getTransformValue(&out.Items[i])).To(BeIdenticalTo("explicit"))
+			}
+		})
+
+		It("should apply default transformer to objects when none is specified", func() {
+			By("getting the Kubernetes service")
+			svc := &corev1.Service{}
+			svcKey := client.ObjectKey{Namespace: "default", Name: "kubernetes"}
+			Expect(informerCache.Get(context.Background(), svcKey, svc)).To(Succeed())
+
+			By("verifying that the returned service was transformed")
+			Expect(getTransformValue(svc)).To(BeIdenticalTo("default"))
+		})
+	})
+
+	Context("with unstructured objects", func() {
+		It("should apply transformers to explicitly specified GVKS", func() {
+			By("listing pods")
+			out := unstructured.UnstructuredList{}
+			out.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "",
+				Version: "v1",
+				Kind:    "PodList",
+			})
+			Expect(informerCache.List(context.Background(), &out)).To(Succeed())
+
+			By("verifying that the returned pods were transformed")
+			for i := 0; i < len(out.Items); i++ {
+				Expect(getTransformValue(&out.Items[i])).To(BeIdenticalTo("explicit"))
+			}
+		})
+
+		It("should apply default transformer to objects when none is specified", func() {
+			By("getting the Kubernetes service")
+			svc := &unstructured.Unstructured{}
+			svc.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Service",
+			})
+			svcKey := client.ObjectKey{Namespace: "default", Name: "kubernetes"}
+			Expect(informerCache.Get(context.Background(), svcKey, svc)).To(Succeed())
+
+			By("verifying that the returned service was transformed")
+			Expect(getTransformValue(svc)).To(BeIdenticalTo("default"))
+		})
+	})
+
+	Context("with metadata-only objects", func() {
+		It("should apply transformers to explicitly specified GVKS", func() {
+			By("listing pods")
+			out := metav1.PartialObjectMetadataList{}
+			out.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "",
+				Version: "v1",
+				Kind:    "PodList",
+			})
+			Expect(informerCache.List(context.Background(), &out)).To(Succeed())
+
+			By("verifying that the returned pods were transformed")
+			for i := 0; i < len(out.Items); i++ {
+				Expect(getTransformValue(&out.Items[i])).To(BeIdenticalTo("explicit"))
+			}
+		})
+		It("should apply default transformer to objects when none is specified", func() {
+			By("getting the Kubernetes service")
+			svc := &metav1.PartialObjectMetadata{}
+			svc.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Service",
+			})
+			svcKey := client.ObjectKey{Namespace: "default", Name: "kubernetes"}
+			Expect(informerCache.Get(context.Background(), svcKey, svc)).To(Succeed())
+
+			By("verifying that the returned service was transformed")
+			Expect(getTransformValue(svc)).To(BeIdenticalTo("default"))
+		})
+	})
+})
+
 var _ = Describe("Cache with selectors", func() {
 	defer GinkgoRecover()
 	var (

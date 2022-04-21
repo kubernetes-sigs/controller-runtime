@@ -830,6 +830,27 @@ var _ = Describe("Fake client", func() {
 				Expect(obj).To(Equal(cm))
 				Expect(obj.ObjectMeta.ResourceVersion).To(Equal(trackerAddResourceVersion))
 			})
+
+			It("Should not Delete the object", func() {
+				By("Deleting a configmap with DryRun with Delete()")
+				err := cl.Delete(context.Background(), cm, client.DryRunAll)
+				Expect(err).To(BeNil())
+
+				By("Deleting a configmap with DryRun with DeleteAllOf()")
+				err = cl.DeleteAllOf(context.Background(), cm, client.DryRunAll)
+				Expect(err).To(BeNil())
+
+				By("Getting the configmap")
+				namespacedName := types.NamespacedName{
+					Name:      "test-cm",
+					Namespace: "ns2",
+				}
+				obj := &corev1.ConfigMap{}
+				err = cl.Get(context.Background(), namespacedName, obj)
+				Expect(err).To(BeNil())
+				Expect(obj).To(Equal(cm))
+				Expect(obj.ObjectMeta.ResourceVersion).To(Equal(trackerAddResourceVersion))
+			})
 		})
 
 		It("should be able to Patch", func() {

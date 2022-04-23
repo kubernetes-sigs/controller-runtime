@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/client-go/kubernetes/fake"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -1001,5 +1003,54 @@ var _ = Describe("Fake client", func() {
 			},
 		}
 		Expect(retrieved).To(Equal(reference))
+	})
+
+	It("should be able to build with given tracker and get resource", func() {
+		clientSet := fake.NewSimpleClientset(dep)
+		cl := NewClientBuilder().WithRuntimeObjects(dep2).WithObjectTracker(clientSet.Tracker()).Build()
+
+		By("Getting a deployment")
+		namespacedName := types.NamespacedName{
+			Name:      "test-deployment",
+			Namespace: "ns1",
+		}
+		obj := &appsv1.Deployment{}
+		err := cl.Get(context.Background(), namespacedName, obj)
+		Expect(err).To(BeNil())
+		Expect(obj).To(Equal(dep))
+
+		By("Getting a deployment from clientSet")
+		csDep2, err := clientSet.AppsV1().Deployments("ns1").Get(context.Background(), "test-deployment-2", metav1.GetOptions{})
+		Expect(err).To(BeNil())
+		Expect(csDep2).To(Equal(dep2))
+
+		By("Getting a new deployment")
+		namespacedName3 := types.NamespacedName{
+			Name:      "test-deployment-3",
+			Namespace: "ns1",
+		}
+
+		dep3 := &appsv1.Deployment{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-3",
+				Namespace: "ns1",
+				Labels: map[string]string{
+					"test-label": "label-value",
+				},
+				ResourceVersion: trackerAddResourceVersion,
+			},
+		}
+
+		_, err = clientSet.AppsV1().Deployments("ns1").Create(context.Background(), dep3, metav1.CreateOptions{})
+		Expect(err).To(BeNil())
+
+		obj = &appsv1.Deployment{}
+		err = cl.Get(context.Background(), namespacedName3, obj)
+		Expect(err).To(BeNil())
+		Expect(obj).To(Equal(dep3))
 	})
 })

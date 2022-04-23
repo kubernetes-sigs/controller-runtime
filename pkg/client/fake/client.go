@@ -92,6 +92,7 @@ type ClientBuilder struct {
 	initObject         []client.Object
 	initLists          []client.ObjectList
 	initRuntimeObjects []runtime.Object
+	objectTracker      testing.ObjectTracker
 }
 
 // WithScheme sets this builder's internal scheme.
@@ -128,6 +129,12 @@ func (f *ClientBuilder) WithRuntimeObjects(initRuntimeObjs ...runtime.Object) *C
 	return f
 }
 
+// WithObjectTracker can be optionally used to initialize this fake client with testing.ObjectTracker.
+func (f *ClientBuilder) WithObjectTracker(ot testing.ObjectTracker) *ClientBuilder {
+	f.objectTracker = ot
+	return f
+}
+
 // Build builds and returns a new fake client.
 func (f *ClientBuilder) Build() client.WithWatch {
 	if f.scheme == nil {
@@ -137,7 +144,14 @@ func (f *ClientBuilder) Build() client.WithWatch {
 		f.restMapper = meta.NewDefaultRESTMapper([]schema.GroupVersion{})
 	}
 
-	tracker := versionedTracker{ObjectTracker: testing.NewObjectTracker(f.scheme, scheme.Codecs.UniversalDecoder()), scheme: f.scheme}
+	var tracker versionedTracker
+
+	if f.objectTracker == nil {
+		tracker = versionedTracker{ObjectTracker: testing.NewObjectTracker(f.scheme, scheme.Codecs.UniversalDecoder()), scheme: f.scheme}
+	} else {
+		tracker = versionedTracker{ObjectTracker: f.objectTracker, scheme: f.scheme}
+	}
+
 	for _, obj := range f.initObject {
 		if err := tracker.Add(obj); err != nil {
 			panic(fmt.Errorf("failed to add object %v to fake client: %w", obj, err))

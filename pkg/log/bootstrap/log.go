@@ -14,24 +14,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package logr
+package bootstrap
 
 import (
-	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/types"
+	gologr "github.com/go-logr/logr"
+	gozapr "github.com/go-logr/zapr"
+	"sigs.k8s.io/controller-runtime/pkg/log/logr"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-var _ logr.Marshaler = (*namespacedNameWrapper)(nil)
+// New returns a brand new Logger configured with Opts. It
+// uses logr.NewKubeAwareLogSink which adds Type information and
+// Namespace/Name to the log.
+func New(opts ...zap.Opts) gologr.Logger {
+	zapLogger := gozapr.NewLogger(zap.NewRaw(opts...))
 
-type namespacedNameWrapper struct {
-	types.NamespacedName
-}
-
-func (w *namespacedNameWrapper) MarshalLog() interface{} {
-	result := make(map[string]string)
-	if w.Namespace != "" {
-		result["namespace"] = w.Namespace
+	o := &zap.Options{}
+	for _, opt := range opts {
+		opt(o)
 	}
-	result["name"] = w.Name
-	return result
+	return logr.NewKubeAwareLogger(zapLogger, o.Development)
 }

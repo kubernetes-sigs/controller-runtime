@@ -29,14 +29,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	cfg "sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/log/bootstrap"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
 var scheme = runtime.NewScheme()
 
 func init() {
-	log.SetLogger(zap.New())
+	log.SetLogger(bootstrap.New())
 	clientgoscheme.AddToScheme(scheme)
 	v1alpha1.AddToScheme(scheme)
 }

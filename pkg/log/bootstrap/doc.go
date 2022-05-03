@@ -14,24 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package logr
-
-import (
-	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/types"
-)
-
-var _ logr.Marshaler = (*namespacedNameWrapper)(nil)
-
-type namespacedNameWrapper struct {
-	types.NamespacedName
-}
-
-func (w *namespacedNameWrapper) MarshalLog() interface{} {
-	result := make(map[string]string)
-	if w.Namespace != "" {
-		result["namespace"] = w.Namespace
-	}
-	result["name"] = w.Name
-	return result
-}
+// Package bootstrap is used to bootstrap the logger with both customized zap and logr.
+package bootstrap

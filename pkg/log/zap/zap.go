@@ -39,6 +39,7 @@ type NewEncoderFunc func(...EncoderConfigOption) zapcore.Encoder
 // New returns a brand new Logger configured with Opts. It
 // uses KubeAwareEncoder which adds Type information and
 // Namespace/Name to the log.
+// Deprecated: use bootstrap.New as instead.
 func New(opts ...Opts) logr.Logger {
 	return zapr.NewLogger(NewRaw(opts...))
 }

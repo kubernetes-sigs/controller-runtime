@@ -17,10 +17,14 @@ limitations under the License.
 package logr
 
 import (
+	"reflect"
+
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"reflect"
 )
+
+var _ logr.Marshaler = (*kubeObjectWrapper)(nil)
 
 type kubeObjectWrapper struct {
 	obj runtime.Object

@@ -18,7 +18,9 @@ package logr
 
 import (
 	"bytes"
+
 	"encoding/json"
+
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -79,7 +81,7 @@ var _ = Describe("Logr logSink setup", func() {
 
 			It("should log a standard non-namespaced Kubernetes object name", func() {
 				node := &corev1.Node{}
-				node.Name = "some-node"
+				node.Name = "some-node-1"
 				logger.Info("here's a kubernetes object", "thing", node)
 
 				outRaw := logOut.Bytes()
@@ -93,7 +95,7 @@ var _ = Describe("Logr logSink setup", func() {
 
 			It("should log a standard Kubernetes object's kind, if set", func() {
 				node := &corev1.Node{}
-				node.Name = "some-node"
+				node.Name = "some-node-2"
 				node.APIVersion = "v1"
 				node.Kind = "Node"
 				logger.Info("here's a kubernetes object", "thing", node)
@@ -110,7 +112,7 @@ var _ = Describe("Logr logSink setup", func() {
 			})
 
 			It("should log a standard non-namespaced NamespacedName name", func() {
-				name := types.NamespacedName{Name: "some-node"}
+				name := types.NamespacedName{Name: "some-node-3"}
 				logger.Info("here's a kubernetes object", "thing", name)
 
 				outRaw := logOut.Bytes()

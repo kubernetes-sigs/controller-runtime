@@ -24,48 +24,57 @@ import (
 )
 
 type KubeAwareLogSink struct {
+	sink             logr.LogSink
 	kubeAwareEnabled *atomic.Bool
-	logger           logr.LogSink
+}
+
+func NewKubeAwareLogger(logger logr.Logger, kubeAwareEnabled bool) logr.Logger {
+	return logr.New(NewKubeAwareLogSink(logger.GetSink(), kubeAwareEnabled))
+}
+
+func NewKubeAwareLogSink(logSink logr.LogSink, kubeAwareEnabled bool) *KubeAwareLogSink {
+	return &KubeAwareLogSink{sink: logSink, kubeAwareEnabled: atomic.NewBool(kubeAwareEnabled)}
 }
 
 func (k *KubeAwareLogSink) Init(info logr.RuntimeInfo) {
-	k.logger.Init(info)
+	k.sink.Init(info)
 }
 
 func (k *KubeAwareLogSink) Enabled(level int) bool {
-	return k.logger.Enabled(level)
+	return k.sink.Enabled(level)
 }
 
 func (k *KubeAwareLogSink) Info(level int, msg string, keysAndValues ...interface{}) {
 	if !k.KubeAwareEnabled() {
-		k.logger.Info(level, msg, keysAndValues...)
+		k.sink.Info(level, msg, keysAndValues...)
 		return
 	}
 
-	k.logger.Info(level, msg, k.wrapKeyAndValues(keysAndValues)...)
+	k.sink.Info(level, msg, k.wrapKeyAndValues(keysAndValues)...)
 }
 
 func (k *KubeAwareLogSink) Error(err error, msg string, keysAndValues ...interface{}) {
 	if !k.KubeAwareEnabled() {
-		k.logger.Error(err, msg, keysAndValues...)
+		k.sink.Error(err, msg, keysAndValues...)
 		return
 	}
-	k.logger.Error(err, msg, k.wrapKeyAndValues(keysAndValues)...)
+	k.sink.Error(err, msg, k.wrapKeyAndValues(keysAndValues)...)
 }
 
 func (k *KubeAwareLogSink) wrapKeyAndValues(keysAndValues []interface{}) []interface{} {
 	result := make([]interface{}, len(keysAndValues))
 	for i, item := range keysAndValues {
-		if i%2 == 1 {
+		if i%2 == 0 {
 			// item is key, no need to resolve
 			result[i] = item
 			continue
 		}
+
 		switch val := item.(type) {
 		case runtime.Object:
-			result[i] = kubeObjectWrapper{obj: val}
+			result[i] = &kubeObjectWrapper{obj: val}
 		case types.NamespacedName:
-			result[i] = namespacedNameWrapper{NamespacedName: val}
+			result[i] = &namespacedNameWrapper{NamespacedName: val}
 		default:
 			result[i] = item
 		}
@@ -76,14 +85,14 @@ func (k *KubeAwareLogSink) wrapKeyAndValues(keysAndValues []interface{}) []inter
 func (k *KubeAwareLogSink) WithValues(keysAndValues ...interface{}) logr.LogSink {
 	return &KubeAwareLogSink{
 		kubeAwareEnabled: k.kubeAwareEnabled,
-		logger:           k.logger.WithValues(keysAndValues...),
+		sink:             k.sink.WithValues(k.wrapKeyAndValues(keysAndValues)...),
 	}
 }
 
 func (k *KubeAwareLogSink) WithName(name string) logr.LogSink {
 	return &KubeAwareLogSink{
 		kubeAwareEnabled: k.kubeAwareEnabled,
-		logger:           k.logger.WithName(name),
+		sink:             k.sink.WithName(name),
 	}
 }
 

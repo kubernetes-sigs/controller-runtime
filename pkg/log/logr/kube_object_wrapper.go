@@ -19,6 +19,7 @@ package logr
 import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"reflect"
 )
 
 type kubeObjectWrapper struct {
@@ -27,6 +28,12 @@ type kubeObjectWrapper struct {
 
 func (w *kubeObjectWrapper) MarshalLog() interface{} {
 	result := make(map[string]string)
+
+	if reflect.ValueOf(w.obj).IsNil() {
+		// best effort ,noop
+		return nil
+	}
+
 	if gvk := w.obj.GetObjectKind().GroupVersionKind(); gvk.Version != "" {
 		result["apiVersion"] = gvk.GroupVersion().String()
 		result["kind"] = gvk.Kind

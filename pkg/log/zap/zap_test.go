@@ -263,6 +263,65 @@ var _ = Describe("Zap logger setup", func() {
 				outRaw := logOut.Bytes()
 				Expect(string(outRaw)).Should(ContainSubstring("got nil for runtime.Object"))
 			})
+
+			// see https://github.com/kubernetes-sigs/controller-runtime/issues/1290
+			It("should log NamespacedName as origin stringer when using logrLogger.WithValues", func() {
+				name := types.NamespacedName{Name: "some-pod", Namespace: "some-ns"}
+				logger.WithValues("thing", name).Info("here's a kubernetes object")
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).NotTo(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":      name.Name,
+					"namespace": name.Namespace,
+				}))
+				Expect(res).To(HaveKeyWithValue("thing", "some-ns/some-pod"))
+			})
+
+			// see https://github.com/kubernetes-sigs/controller-runtime/issues/1290
+			It("should log Kubernetes objects as origin stringer when using logrLogger.WithValues", func() {
+				node := &corev1.Node{}
+				node.Name = "some-node"
+				node.APIVersion = "v1"
+				node.Kind = "Node"
+				logger.WithValues("thing", node).Info("here's a kubernetes object")
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).NotTo(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":       node.Name,
+					"apiVersion": "v1",
+					"kind":       "Node",
+				}))
+				Expect(res).To(HaveKeyWithValue("thing", "&Node{ObjectMeta:{some-node      0 0001-01-01 00:00:00 +0000 UTC <nil> <nil> map[] map[] [] []  []},Spec:NodeSpec{PodCIDR:,DoNotUseExternalID:,ProviderID:,Unschedulable:false,Taints:[]Taint{},ConfigSource:nil,PodCIDRs:[],},Status:NodeStatus{Capacity:ResourceList{},Allocatable:ResourceList{},Phase:,Conditions:[]NodeCondition{},Addresses:[]NodeAddress{},DaemonEndpoints:NodeDaemonEndpoints{KubeletEndpoint:DaemonEndpoint{Port:0,},},NodeInfo:NodeSystemInfo{MachineID:,SystemUUID:,BootID:,KernelVersion:,OSImage:,ContainerRuntimeVersion:,KubeletVersion:,KubeProxyVersion:,OperatingSystem:,Architecture:,},Images:[]ContainerImage{},VolumesInUse:[],VolumesAttached:[]AttachedVolume{},Config:nil,},}"))
+			})
+
+			// see https://github.com/kubernetes-sigs/controller-runtime/issues/1290
+			It("should log an unstructured Kubernetes object as origin stringer when using logrLogger.WithValues", func() {
+				pod := &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"name":      "some-pod",
+							"namespace": "some-ns",
+						},
+					},
+				}
+				logger.WithValues("thing", pod).Info("here's a kubernetes object")
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).NotTo(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":      "some-pod",
+					"namespace": "some-ns",
+				}))
+				Expect(res).To(HaveKeyWithValue("thing", pod.Object))
+			})
 		}
 
 		Context("with logger created using New", func() {

@@ -117,7 +117,7 @@ func (o *WebhookInstallOptions) generateHostPort() (string, error) {
 	if o.LocalServingPort == 0 {
 		port, host, err := addr.Suggest(o.LocalServingHost)
 		if err != nil {
-			return "", fmt.Errorf("unable to grab random port for serving webhooks on: %v", err)
+			return "", fmt.Errorf("unable to grab random port for serving webhooks on: %w", err)
 		}
 		o.LocalServingPort = port
 		o.LocalServingHost = host
@@ -180,7 +180,7 @@ func WaitForWebhooks(config *rest.Config,
 		h := hook
 		gvk, err := apiutil.GVKForObject(h, scheme.Scheme)
 		if err != nil {
-			return fmt.Errorf("unable to get gvk for MutatingWebhookConfiguration %s: %v", hook.GetName(), err)
+			return fmt.Errorf("unable to get gvk for MutatingWebhookConfiguration %s: %w", hook.GetName(), err)
 		}
 
 		if _, ok := waitingFor[gvk]; !ok {
@@ -193,7 +193,7 @@ func WaitForWebhooks(config *rest.Config,
 		h := hook
 		gvk, err := apiutil.GVKForObject(h, scheme.Scheme)
 		if err != nil {
-			return fmt.Errorf("unable to get gvk for ValidatingWebhookConfiguration %s: %v", hook.GetName(), err)
+			return fmt.Errorf("unable to get gvk for ValidatingWebhookConfiguration %s: %w", hook.GetName(), err)
 		}
 
 		if _, ok := waitingFor[gvk]; !ok {
@@ -257,31 +257,31 @@ func (p *webhookPoller) poll() (done bool, err error) {
 func (o *WebhookInstallOptions) setupCA() error {
 	hookCA, err := certs.NewTinyCA()
 	if err != nil {
-		return fmt.Errorf("unable to set up webhook CA: %v", err)
+		return fmt.Errorf("unable to set up webhook CA: %w", err)
 	}
 
 	names := []string{"localhost", o.LocalServingHost, o.LocalServingHostExternalName}
 	hookCert, err := hookCA.NewServingCert(names...)
 	if err != nil {
-		return fmt.Errorf("unable to set up webhook serving certs: %v", err)
+		return fmt.Errorf("unable to set up webhook serving certs: %w", err)
 	}
 
 	localServingCertsDir, err := ioutil.TempDir("", "envtest-serving-certs-")
 	o.LocalServingCertDir = localServingCertsDir
 	if err != nil {
-		return fmt.Errorf("unable to create directory for webhook serving certs: %v", err)
+		return fmt.Errorf("unable to create directory for webhook serving certs: %w", err)
 	}
 
 	certData, keyData, err := hookCert.AsBytes()
 	if err != nil {
-		return fmt.Errorf("unable to marshal webhook serving certs: %v", err)
+		return fmt.Errorf("unable to marshal webhook serving certs: %w", err)
 	}
 
 	if err := ioutil.WriteFile(filepath.Join(localServingCertsDir, "tls.crt"), certData, 0640); err != nil { //nolint:gosec
-		return fmt.Errorf("unable to write webhook serving cert to disk: %v", err)
+		return fmt.Errorf("unable to write webhook serving cert to disk: %w", err)
 	}
 	if err := ioutil.WriteFile(filepath.Join(localServingCertsDir, "tls.key"), keyData, 0640); err != nil { //nolint:gosec
-		return fmt.Errorf("unable to write webhook serving key to disk: %v", err)
+		return fmt.Errorf("unable to write webhook serving key to disk: %w", err)
 	}
 
 	o.LocalServingCAData = certData

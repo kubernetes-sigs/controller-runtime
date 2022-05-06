@@ -84,15 +84,6 @@ var (
 	}
 )
 
-type platformVer struct {
-	versions.Platform
-	versions.Concrete
-}
-
-func (p platformVer) String() string {
-	return p.Platform.BaseName(p.Concrete)
-}
-
 type item struct {
 	meta     bucketObject
 	contents []byte

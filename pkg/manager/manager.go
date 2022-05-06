@@ -533,7 +533,7 @@ func defaultHealthProbeListener(addr string) (net.Listener, error) {
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("error listening on %s: %v", addr, err)
+		return nil, fmt.Errorf("error listening on %s: %w", addr, err)
 	}
 	return ln, nil
 }

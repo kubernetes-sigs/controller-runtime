@@ -64,7 +64,7 @@ func (f finalizers) Finalize(ctx context.Context, obj client.Object) (Result, er
 				// object (e.g. it may set a condition and need a status update).
 				res.Updated = res.Updated || finalizerRes.Updated
 				res.StatusUpdated = res.StatusUpdated || finalizerRes.StatusUpdated
-				errList = append(errList, fmt.Errorf("finalizer %q failed: %v", key, err))
+				errList = append(errList, fmt.Errorf("finalizer %q failed: %w", key, err))
 			} else {
 				// If the finalizer succeeds, we remove the finalizer from the primary
 				// object's metadata, so we know it will need an update.

@@ -7,6 +7,7 @@ linters:
   - depguard
   - dogsled
   - errcheck
+  - errorlint
   - exportloopref
   - goconst
   - gocritic
@@ -34,6 +35,7 @@ linters:
   - typecheck
   - unconvert
   - unparam
+  - unused
   - varcheck
   - whitespace
 

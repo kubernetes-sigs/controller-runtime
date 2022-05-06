@@ -494,6 +494,11 @@ func (o Options) AndFromOrDie(loader config.ControllerManagerConfiguration) Opti
 }
 
 func (o Options) setLeaderElectionConfig(obj v1alpha1.ControllerManagerConfigurationSpec) Options {
+	if obj.LeaderElection == nil {
+		// The source does not have any configuration; noop
+		return o
+	}
+
 	if !o.LeaderElection && obj.LeaderElection.LeaderElect != nil {
 		o.LeaderElection = *obj.LeaderElection.LeaderElect
 	}

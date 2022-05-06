@@ -1806,12 +1806,6 @@ type startSignalingInformer struct {
 	cache.Cache
 }
 
-func (c *startSignalingInformer) started() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.wasStarted
-}
-
 func (c *startSignalingInformer) Start(ctx context.Context) error {
 	c.mu.Lock()
 	c.wasStarted = true

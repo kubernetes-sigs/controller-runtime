@@ -225,12 +225,6 @@ var _ = Describe("Arguments Templates", func() {
 	})
 })
 
-type plainDefaults map[string][]string
-
-func (d plainDefaults) DefaultArgs() map[string][]string {
-	return d
-}
-
 var _ = Describe("Arguments", func() {
 	Context("when appending", func() {
 		It("should copy from defaults when appending for the first time", func() {

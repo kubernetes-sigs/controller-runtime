@@ -18,7 +18,6 @@ package process_test
 
 import (
 	"bytes"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -297,7 +296,7 @@ var _ = Describe("Stop method", func() {
 			var err error
 
 			Expect(processState.Start(nil, nil)).To(Succeed())
-			processState.Dir, err = ioutil.TempDir("", "k8s_test_framework_")
+			processState.Dir, err = os.MkdirTemp("", "k8s_test_framework_")
 			Expect(err).NotTo(HaveOccurred())
 			processState.DirNeedsCleaning = true
 			processState.StopTimeout = 400 * time.Millisecond

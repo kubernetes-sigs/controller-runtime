@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -241,7 +240,7 @@ func (s *Server) Start(ctx context.Context) error {
 	// load CA to verify client certificate
 	if s.ClientCAName != "" {
 		certPool := x509.NewCertPool()
-		clientCABytes, err := ioutil.ReadFile(filepath.Join(s.CertDir, s.ClientCAName))
+		clientCABytes, err := os.ReadFile(filepath.Join(s.CertDir, s.ClientCAName))
 		if err != nil {
 			return fmt.Errorf("failed to read client CA cert: %w", err)
 		}

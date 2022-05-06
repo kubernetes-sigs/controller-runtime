@@ -215,7 +215,7 @@ func (t versionedTracker) Add(obj runtime.Object) error {
 func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Object, ns string) error {
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
-		return fmt.Errorf("failed to get accessor for object: %v", err)
+		return fmt.Errorf("failed to get accessor for object: %w", err)
 	}
 	if accessor.GetName() == "" {
 		return apierrors.NewInvalid(
@@ -269,7 +269,7 @@ func convertFromUnstructuredIfNecessary(s *runtime.Scheme, o runtime.Object) (ru
 func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Object, ns string) error {
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
-		return fmt.Errorf("failed to get accessor for object: %v", err)
+		return fmt.Errorf("failed to get accessor for object: %w", err)
 	}
 
 	if accessor.GetName() == "" {
@@ -315,7 +315,7 @@ func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Ob
 	}
 	intResourceVersion, err := strconv.ParseUint(oldAccessor.GetResourceVersion(), 10, 64)
 	if err != nil {
-		return fmt.Errorf("can not convert resourceVersion %q to int: %v", oldAccessor.GetResourceVersion(), err)
+		return fmt.Errorf("can not convert resourceVersion %q to int: %w", oldAccessor.GetResourceVersion(), err)
 	}
 	intResourceVersion++
 	accessor.SetResourceVersion(strconv.FormatUint(intResourceVersion, 10))

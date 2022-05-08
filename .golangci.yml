@@ -64,6 +64,10 @@ linters-settings:
     go: "1.18"
   stylecheck:
     go: "1.18"
+  depguard:
+    include-go-root: true
+    packages:
+      - io/ioutil # https://go.dev/doc/go1.16#ioutil
 
 issues:
   max-same-issues: 0

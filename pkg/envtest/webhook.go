@@ -16,7 +16,6 @@ package envtest
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -266,7 +265,7 @@ func (o *WebhookInstallOptions) setupCA() error {
 		return fmt.Errorf("unable to set up webhook serving certs: %w", err)
 	}
 
-	localServingCertsDir, err := ioutil.TempDir("", "envtest-serving-certs-")
+	localServingCertsDir, err := os.MkdirTemp("", "envtest-serving-certs-")
 	o.LocalServingCertDir = localServingCertsDir
 	if err != nil {
 		return fmt.Errorf("unable to create directory for webhook serving certs: %w", err)
@@ -277,10 +276,10 @@ func (o *WebhookInstallOptions) setupCA() error {
 		return fmt.Errorf("unable to marshal webhook serving certs: %w", err)
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(localServingCertsDir, "tls.crt"), certData, 0640); err != nil { //nolint:gosec
+	if err := os.WriteFile(filepath.Join(localServingCertsDir, "tls.crt"), certData, 0640); err != nil { //nolint:gosec
 		return fmt.Errorf("unable to write webhook serving cert to disk: %w", err)
 	}
-	if err := ioutil.WriteFile(filepath.Join(localServingCertsDir, "tls.key"), keyData, 0640); err != nil { //nolint:gosec
+	if err := os.WriteFile(filepath.Join(localServingCertsDir, "tls.key"), keyData, 0640); err != nil { //nolint:gosec
 		return fmt.Errorf("unable to write webhook serving key to disk: %w", err)
 	}
 
@@ -359,7 +358,7 @@ func parseWebhook(options *WebhookInstallOptions) error {
 // returns slice of mutating and validating webhook configurations.
 func readWebhooks(path string) ([]*admissionv1.MutatingWebhookConfiguration, []*admissionv1.ValidatingWebhookConfiguration, error) {
 	// Get the webhook files
-	var files []os.FileInfo
+	var files []string
 	var err error
 	log.V(1).Info("reading Webhooks from path", "path", path)
 	info, err := os.Stat(path)
@@ -367,9 +366,15 @@ func readWebhooks(path string) ([]*admissionv1.MutatingWebhookConfiguration, []*
 		return nil, nil, err
 	}
 	if !info.IsDir() {
-		path, files = filepath.Dir(path), []os.FileInfo{info}
-	} else if files, err = ioutil.ReadDir(path); err != nil {
-		return nil, nil, err
+		path, files = filepath.Dir(path), []string{info.Name()}
+	} else {
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, e := range entries {
+			files = append(files, e.Name())
+		}
 	}
 
 	// file extensions that may contain Webhooks
@@ -379,12 +384,12 @@ func readWebhooks(path string) ([]*admissionv1.MutatingWebhookConfiguration, []*
 	var valHooks []*admissionv1.ValidatingWebhookConfiguration
 	for _, file := range files {
 		// Only parse allowlisted file types
-		if !resourceExtensions.Has(filepath.Ext(file.Name())) {
+		if !resourceExtensions.Has(filepath.Ext(file)) {
 			continue
 		}
 
 		// Unmarshal Webhooks from file into structs
-		docs, err := readDocuments(filepath.Join(path, file.Name()))
+		docs, err := readDocuments(filepath.Join(path, file))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -422,7 +427,7 @@ func readWebhooks(path string) ([]*admissionv1.MutatingWebhookConfiguration, []*
 			}
 		}
 
-		log.V(1).Info("read webhooks from file", "file", file.Name())
+		log.V(1).Info("read webhooks from file", "file", file)
 	}
 	return mutHooks, valHooks, nil
 }

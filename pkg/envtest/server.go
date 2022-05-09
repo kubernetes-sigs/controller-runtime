@@ -211,7 +211,7 @@ func (te *Environment) Start() (*rest.Config, error) {
 		}
 	} else {
 		apiServer := te.ControlPlane.GetAPIServer()
-		if len(apiServer.Args) == 0 { //nolint:staticcheck
+		if len(apiServer.Args) == 0 { //nolint:ignore
 			// pass these through separately from above in case something like
 			// AddUser defaults APIServer.
 			//
@@ -222,7 +222,7 @@ func (te *Environment) Start() (*rest.Config, error) {
 			// NB(directxman12): we still pass these in so that things work if the
 			// user manually specifies them, but in most cases we expect them to
 			// be nil so that we use the new .Configure() logic.
-			apiServer.Args = te.KubeAPIServerFlags //nolint:staticcheck
+			apiServer.Args = te.KubeAPIServerFlags //nolint:ignore
 		}
 		if te.ControlPlane.Etcd == nil {
 			te.ControlPlane.Etcd = &controlplane.Etcd{}
@@ -372,4 +372,4 @@ func (te *Environment) useExistingCluster() bool {
 // you can use those to append your own additional arguments.
 //
 // Deprecated: use APIServer.Configure() instead.
-var DefaultKubeAPIServerFlags = controlplane.APIServerDefaultArgs //nolint:staticcheck
+var DefaultKubeAPIServerFlags = controlplane.APIServerDefaultArgs //nolint:ignore

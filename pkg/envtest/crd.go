@@ -196,7 +196,7 @@ func (p *poller) poll() (done bool, err error) {
 		// TODO: Maybe the controller-runtime client should be able to do this...
 		resourceList, err := cs.Discovery().ServerResourcesForGroupVersion(gv.Group + "/" + gv.Version)
 		if err != nil {
-			return false, nil //nolint:nilerr
+			return false, nil //nolint:ignore
 		}
 
 		// Remove each found resource from the resources set that we are waiting for

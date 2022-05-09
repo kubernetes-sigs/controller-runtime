@@ -139,3 +139,4 @@ run:
   - "zz_generated.*\\.go$"
   - ".*conversion.*\\.go$"
   allow-parallel-runners: true
+  go: '1.18'

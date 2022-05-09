@@ -288,7 +288,7 @@ func (s *APIServer) setProcessState() error {
 		return err
 	}
 
-	s.processState.Args, s.Args, err = process.TemplateAndArguments(s.Args, s.Configure(), process.TemplateDefaults{ //nolint:staticcheck
+	s.processState.Args, s.Args, err = process.TemplateAndArguments(s.Args, s.Configure(), process.TemplateDefaults{ //nolint:ignore
 		Data:     s,
 		Defaults: s.defaultArgs(),
 		MinimalDefaults: map[string][]string{

@@ -329,7 +329,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		clusterOptions.NewClient = options.NewClient
 		clusterOptions.ClientDisableCacheFor = options.ClientDisableCacheFor
 		clusterOptions.DryRunClient = options.DryRunClient
-		clusterOptions.EventBroadcaster = options.EventBroadcaster //nolint:staticcheck
+		clusterOptions.EventBroadcaster = options.EventBroadcaster // nolint:ignore
 	})
 	if err != nil {
 		return nil, err

@@ -192,6 +192,61 @@ var _ = Describe("Admission Webhooks", func() {
 			Expect(handler.dep.decoder).NotTo(BeNil())
 		})
 	})
+
+	Describe("panic recovery", func() {
+		It("should recover panic if RecoverPanic is true", func() {
+			panicHandler := func() *Webhook {
+				handler := &fakeHandler{
+					fn: func(ctx context.Context, req Request) Response {
+						panic("injected panic")
+					},
+				}
+				webhook := &Webhook{
+					Handler:      handler,
+					RecoverPanic: true,
+					log:          logf.RuntimeLog.WithName("webhook"),
+				}
+
+				return webhook
+			}
+
+			By("setting up a webhook with a panicking handler")
+			webhook := panicHandler()
+
+			By("invoking the webhook")
+			resp := webhook.Handle(context.Background(), Request{})
+
+			By("checking that it errored the request")
+			Expect(resp.Allowed).To(BeFalse())
+			Expect(resp.Result.Code).To(Equal(int32(http.StatusInternalServerError)))
+			Expect(resp.Result.Message).To(Equal("panic: injected panic [recovered]"))
+		})
+
+		It("should not recover panic if RecoverPanic is false by default", func() {
+			panicHandler := func() *Webhook {
+				handler := &fakeHandler{
+					fn: func(ctx context.Context, req Request) Response {
+						panic("injected panic")
+					},
+				}
+				webhook := &Webhook{
+					Handler: handler,
+					log:     logf.RuntimeLog.WithName("webhook"),
+				}
+
+				return webhook
+			}
+
+			By("setting up a webhook with a panicking handler")
+			defer func() {
+				Expect(recover()).ShouldNot(BeNil())
+			}()
+			webhook := panicHandler()
+
+			By("invoking the webhook")
+			webhook.Handle(context.Background(), Request{})
+		})
+	})
 })
 
 var _ = Describe("Should be able to write/read admission.Request to/from context", func() {

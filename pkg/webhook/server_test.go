@@ -18,6 +18,7 @@ package webhook_test
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -186,7 +187,7 @@ var _ = Describe("Webhook Server", func() {
 		})
 	})
 
-	It("should serve be able to serve in unmanaged mode", func() {
+	It("should be able to serve in unmanaged mode", func() {
 		server = &webhook.Server{
 			Host:    servingOpts.LocalServingHost,
 			Port:    servingOpts.LocalServingPort,
@@ -203,6 +204,46 @@ var _ = Describe("Webhook Server", func() {
 			defer resp.Body.Close()
 			return io.ReadAll(resp.Body)
 		}).Should(Equal([]byte("gadzooks!")))
+
+		ctxCancel()
+		Eventually(doneCh, "4s").Should(BeClosed())
+	})
+
+	It("should respect passed in TLS configurations", func() {
+		var finalCfg *tls.Config
+		tlsCfgFunc := func(cfg *tls.Config) {
+			cfg.CipherSuites = []uint16{
+				tls.TLS_AES_128_GCM_SHA256,
+				tls.TLS_AES_256_GCM_SHA384,
+			}
+			// save cfg after changes to test against
+			finalCfg = cfg
+		}
+		server = &webhook.Server{
+			Host:          servingOpts.LocalServingHost,
+			Port:          servingOpts.LocalServingPort,
+			CertDir:       servingOpts.LocalServingCertDir,
+			TLSMinVersion: "1.2",
+			TLSOpts: []func(*tls.Config){
+				tlsCfgFunc,
+			},
+		}
+		server.Register("/somepath", &testHandler{})
+		doneCh := genericStartServer(func(ctx context.Context) {
+			Expect(server.StartStandalone(ctx, scheme.Scheme))
+		})
+
+		Eventually(func() ([]byte, error) {
+			resp, err := client.Get(fmt.Sprintf("https://%s/somepath", testHostPort))
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			return io.ReadAll(resp.Body)
+		}).Should(Equal([]byte("gadzooks!")))
+		Expect(finalCfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
+		Expect(finalCfg.CipherSuites).To(ContainElements(
+			tls.TLS_AES_128_GCM_SHA256,
+			tls.TLS_AES_256_GCM_SHA384,
+		))
 
 		ctxCancel()
 		Eventually(doneCh, "4s").Should(BeClosed())

@@ -278,12 +278,6 @@ func CreateCRDs(config *rest.Config, crds []*apiextensionsv1.CustomResourceDefin
 
 // renderCRDs iterate through options.Paths and extract all CRD files.
 func renderCRDs(options *CRDInstallOptions) ([]*apiextensionsv1.CustomResourceDefinition, error) {
-	var (
-		err   error
-		info  os.FileInfo
-		files []string
-	)
-
 	type GVKN struct {
 		GVK  schema.GroupVersionKind
 		Name string
@@ -292,7 +286,12 @@ func renderCRDs(options *CRDInstallOptions) ([]*apiextensionsv1.CustomResourceDe
 	crds := map[GVKN]*apiextensionsv1.CustomResourceDefinition{}
 
 	for _, path := range options.Paths {
-		var filePath = path
+		var (
+			err      error
+			info     os.FileInfo
+			files    []string
+			filePath = path
+		)
 
 		// Return the error if ErrorIfPathMissing exists
 		if info, err = os.Stat(path); os.IsNotExist(err) {

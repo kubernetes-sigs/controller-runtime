@@ -248,6 +248,31 @@ var _ = Describe("Webhook Server", func() {
 		ctxCancel()
 		Eventually(doneCh, "4s").Should(BeClosed())
 	})
+
+	It("should respect passed in WebhookWrapper", func() {
+		server = &webhook.Server{
+			Host:    servingOpts.LocalServingHost,
+			Port:    servingOpts.LocalServingPort,
+			CertDir: servingOpts.LocalServingCertDir,
+			WebhookWrapper: func(handler http.Handler) (http.Handler, error) {
+				return &testWrapper{handler: handler}, nil
+			},
+		}
+		server.Register("/somepath", &testHandler{})
+		doneCh := genericStartServer(func(ctx context.Context) {
+			Expect(server.StartStandalone(ctx, scheme.Scheme))
+		})
+		Eventually(func() ([]byte, error) {
+			resp, err := client.Get(fmt.Sprintf("https://%s/somepath", testHostPort))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.Header.Get("custom-header")).To(Equal("custom-value"))
+			defer resp.Body.Close()
+			return io.ReadAll(resp.Body)
+		}).Should(Equal([]byte("gadzooks!")))
+
+		ctxCancel()
+		Eventually(doneCh, "4s").Should(BeClosed())
+	})
 })
 
 type testHandler struct {
@@ -263,3 +288,14 @@ func (t *testHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		panic("unable to write http response!")
 	}
 }
+
+type testWrapper struct {
+	handler http.Handler
+}
+
+func (t testWrapper) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	resp.Header().Set("custom-header", "custom-value")
+	t.handler.ServeHTTP(resp, req)
+}
+
+var _ http.Handler = &testWrapper{}

@@ -82,6 +82,9 @@ type Server struct {
 	// WebhookMux is the multiplexer that handles different webhooks.
 	WebhookMux *http.ServeMux
 
+	// WebhookWrapper is a custom wrapper func that enables adding middleware onto the webhook mux.
+	WebhookWrapper func(http.Handler) (http.Handler, error)
+
 	// webhooks keep track of all registered webhooks for dependency injection,
 	// and to provide better panic messages on duplicate webhook registration.
 	webhooks map[string]http.Handler
@@ -269,7 +272,14 @@ func (s *Server) Start(ctx context.Context) error {
 
 	log.Info("Serving webhook server", "host", s.Host, "port", s.Port)
 
-	srv := httpserver.New(s.WebhookMux)
+	var handler http.Handler = s.WebhookMux
+	if s.WebhookWrapper != nil {
+		handler, err = s.WebhookWrapper(handler)
+		if err != nil {
+			return err
+		}
+	}
+	srv := httpserver.New(handler)
 
 	idleConnsClosed := make(chan struct{})
 	go func() {

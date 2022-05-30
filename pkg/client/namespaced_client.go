@@ -138,7 +138,7 @@ func (n *namespacedClient) Patch(ctx context.Context, obj Object, patch Patch, o
 }
 
 // Get implements client.Client.
-func (n *namespacedClient) Get(ctx context.Context, key ObjectKey, obj Object) error {
+func (n *namespacedClient) Get(ctx context.Context, key ObjectKey, obj Object, opts ...GetOption) error {
 	isNamespaceScoped, err := objectutil.IsAPINamespaced(obj, n.Scheme(), n.RESTMapper())
 	if err != nil {
 		return fmt.Errorf("error finding the scope of the object: %w", err)
@@ -149,7 +149,7 @@ func (n *namespacedClient) Get(ctx context.Context, key ObjectKey, obj Object) e
 		}
 		key.Namespace = n.namespace
 	}
-	return n.client.Get(ctx, key, obj)
+	return n.client.Get(ctx, key, obj, opts...)
 }
 
 // List implements client.Client.

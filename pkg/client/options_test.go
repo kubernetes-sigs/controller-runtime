@@ -74,6 +74,15 @@ var _ = Describe("ListOptions", func() {
 	})
 })
 
+var _ = Describe("GetOptions", func() {
+	It("Should set Raw", func() {
+		o := &client.GetOptions{Raw: &metav1.GetOptions{ResourceVersion: "RV0"}}
+		newGetOpts := &client.GetOptions{}
+		o.ApplyToGet(newGetOpts)
+		Expect(newGetOpts).To(Equal(o))
+	})
+})
+
 var _ = Describe("CreateOptions", func() {
 	It("Should set DryRun", func() {
 		o := &client.CreateOptions{DryRun: []string{"Hello", "Theodore"}}

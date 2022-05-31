@@ -96,6 +96,16 @@ type Manager interface {
 	GetControllerOptions() v1alpha1.ControllerConfigurationSpec
 }
 
+// ManagerWithLeaderCallbacks is an extension of the Manager interface with support for leader election callback
+// configuration helpers defined.
+type ManagerWithLeaderCallbacks interface {
+	Manager
+
+	AddOnStoppedLeadingCallback(f func() error)
+
+	AddOnNewLeaderCallback(f func(string) error)
+}
+
 // Options are the arguments for creating a new Manager.
 type Options struct {
 	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources.
@@ -203,6 +213,15 @@ type Options struct {
 	// RetryPeriod is the duration the LeaderElector clients should wait
 	// between tries of actions. Default is 2 seconds.
 	RetryPeriod *time.Duration
+
+	// OnStoppedLeadingCallback provides a way to configure a set of helper functions
+	// that are invoked when the current leader stops leading by losing the election or failing
+	// to renew the lock.
+	OnStoppedLeadingCallback []func() error
+
+	// OnNewLeaderCallback provides a way to configure a set of handlers to be invoked when the
+	// current leader changes.
+	OnNewLeaderCallback []func(string) error
 
 	// Namespace, if specified, restricts the manager's cache to watch objects in
 	// the desired namespace. Defaults to all namespaces.
@@ -332,8 +351,18 @@ type LeaderElectionRunnable interface {
 	NeedLeaderElection() bool
 }
 
+// NewWithLeaderElectionCallback returns a new Manager for creating controllers with leader election
+// callback setup helpers defined.
+func NewWithLeaderElectionCallback(config *rest.Config, options Options) (ManagerWithLeaderCallbacks, error) {
+	return newController(config, options)
+}
+
 // New returns a new Manager for creating Controllers.
 func New(config *rest.Config, options Options) (Manager, error) {
+	return newController(config, options)
+}
+
+func newController(config *rest.Config, options Options) (*controllerManager, error) {
 	// Set default values for options fields
 	options = setOptionsDefaults(options)
 
@@ -432,6 +461,8 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		internalProceduresStop:        make(chan struct{}),
 		leaderElectionStopped:         make(chan struct{}),
 		leaderElectionReleaseOnCancel: options.LeaderElectionReleaseOnCancel,
+		onStoppedLeadingCallback:      options.OnStoppedLeadingCallback,
+		onNewLeaderCallback:           options.OnNewLeaderCallback,
 	}, nil
 }
 

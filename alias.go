@@ -106,6 +106,9 @@ var (
 	// NewManager returns a new Manager for creating Controllers.
 	NewManager = manager.New
 
+	// NewManagerWithLeaderCallback returns a new ManagerWithLeaderCallback for creating controllers with leader callbacks.
+	NewManagerWithLeaderCallback = manager.NewWithLeaderElectionCallback
+
 	// CreateOrUpdate creates or updates the given object obj in the Kubernetes
 	// cluster. The object's desired state should be reconciled with the existing
 	// state using the passed in ReconcileFn. obj must be a struct pointer so that

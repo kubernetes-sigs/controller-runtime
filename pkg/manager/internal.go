@@ -170,11 +170,32 @@ type controllerManager struct {
 	// internalProceduresStop channel is used internally to the manager when coordinating
 	// the proper shutdown of servers. This channel is also used for dependency injection.
 	internalProceduresStop chan struct{}
+
+	// onStoppedLeadingCallback provides a way to configure a set of helper functions
+	// that are invoked when the current leader stops leading by losing the election or failing
+	// to renew the lock.
+	onStoppedLeadingCallback []func() error
+
+	// onNewLeaderCallback provides a way to configure a set of handlers to be invoked when the
+	// current leader changes.
+	onNewLeaderCallback []func(string) error
 }
 
 type hasCache interface {
 	Runnable
 	GetCache() cache.Cache
+}
+
+// AddOnStoppedLeadingCallback provides a way to inject a callable function into the controllerManager that
+// will be triggered in case if the current leader stops leading.
+func (cm *controllerManager) AddOnStoppedLeadingCallback(callback func() error) {
+	cm.onStoppedLeadingCallback = append(cm.onStoppedLeadingCallback, callback)
+}
+
+// AddOnNewLeaderCallback provides a way to inject a callable function into the controllerManager that
+// will be triggered in case if the current leader changes and a new leader is elected with the identity.
+func (cm *controllerManager) AddOnNewLeaderCallback(callback func(identity string) error) {
+	cm.onNewLeaderCallback = append(cm.onNewLeaderCallback, callback)
 }
 
 // Add sets dependencies on i, and adds it to the list of Runnables to start.
@@ -623,13 +644,34 @@ func (cm *controllerManager) startLeaderElection(ctx context.Context) (err error
 				if cm.onStoppedLeading != nil {
 					cm.onStoppedLeading()
 				}
+				var retErrors = []error{
+					errors.New("leader election lost"),
+				}
+
+				for _, cb := range cm.onStoppedLeadingCallback {
+					if err := cb(); err != nil {
+						retErrors = append(retErrors, err)
+					}
+				}
 				// Make sure graceful shutdown is skipped if we lost the leader lock without
 				// intending to.
 				cm.gracefulShutdownTimeout = time.Duration(0)
 				// Most implementations of leader election log.Fatal() here.
 				// Since Start is wrapped in log.Fatal when called, we can just return
 				// an error here which will cause the program to exit.
-				cm.errChan <- errors.New("leader election lost")
+				cm.errChan <- kerrors.NewAggregate(retErrors)
+			},
+			OnNewLeader: func(identity string) {
+				retErrors := []error{}
+
+				for _, cb := range cm.onNewLeaderCallback {
+					if err := cb(identity); err != nil {
+						retErrors = append(retErrors, err)
+					}
+				}
+				if len(retErrors) > 0 {
+					cm.errChan <- kerrors.NewAggregate(retErrors)
+				}
 			},
 		},
 		ReleaseOnCancel: cm.leaderElectionReleaseOnCancel,

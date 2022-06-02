@@ -27,7 +27,7 @@ import (
 
 var _ Reader = &unstructuredClient{}
 var _ Writer = &unstructuredClient{}
-var _ StatusWriter = &unstructuredClient{}
+var _ SubResourceWriter = &unstructuredClient{}
 
 // client is a client.Client that reads and writes directly from/to an API server.  It lazily initializes
 // new clients at the time they are used, and caches the client.
@@ -226,7 +226,7 @@ func (uc *unstructuredClient) List(ctx context.Context, obj ObjectList, opts ...
 		Into(obj)
 }
 
-func (uc *unstructuredClient) UpdateStatus(ctx context.Context, obj Object, opts ...UpdateOption) error {
+func (uc *unstructuredClient) UpdateSubResource(ctx context.Context, obj Object, subResource string, opts ...UpdateOption) error {
 	if _, ok := obj.(*unstructured.Unstructured); !ok {
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
 	}
@@ -243,14 +243,14 @@ func (uc *unstructuredClient) UpdateStatus(ctx context.Context, obj Object, opts
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		SubResource("status").
+		SubResource(subResource).
 		Body(obj).
 		VersionedParams(updateOpts.AsUpdateOptions(), uc.paramCodec).
 		Do(ctx).
 		Into(obj)
 }
 
-func (uc *unstructuredClient) PatchStatus(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
+func (uc *unstructuredClient) PatchSubResource(ctx context.Context, obj Object, subResource string, patch Patch, opts ...PatchOption) error {
 	u, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
@@ -275,7 +275,7 @@ func (uc *unstructuredClient) PatchStatus(ctx context.Context, obj Object, patch
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		SubResource("status").
+		SubResource(subResource).
 		Body(data).
 		VersionedParams(patchOpts.AsPatchOptions(), uc.paramCodec).
 		Do(ctx).

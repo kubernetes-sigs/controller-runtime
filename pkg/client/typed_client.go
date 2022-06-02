@@ -24,7 +24,7 @@ import (
 
 var _ Reader = &typedClient{}
 var _ Writer = &typedClient{}
-var _ StatusWriter = &typedClient{}
+var _ SubResourceWriter = &typedClient{}
 
 // client is a client.Client that reads and writes directly from/to an API server.  It lazily initializes
 // new clients at the time they are used, and caches the client.
@@ -168,8 +168,8 @@ func (c *typedClient) List(ctx context.Context, obj ObjectList, opts ...ListOpti
 		Into(obj)
 }
 
-// UpdateStatus used by StatusWriter to write status.
-func (c *typedClient) UpdateStatus(ctx context.Context, obj Object, opts ...UpdateOption) error {
+// UpdateSubResource used by SubResourceWriter to write status.
+func (c *typedClient) UpdateSubResource(ctx context.Context, obj Object, subResource string, opts ...UpdateOption) error {
 	o, err := c.cache.getObjMeta(obj)
 	if err != nil {
 		return err
@@ -185,15 +185,15 @@ func (c *typedClient) UpdateStatus(ctx context.Context, obj Object, opts ...Upda
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		SubResource("status").
+		SubResource(subResource).
 		Body(obj).
 		VersionedParams(updateOpts.AsUpdateOptions(), c.paramCodec).
 		Do(ctx).
 		Into(obj)
 }
 
-// PatchStatus used by StatusWriter to write status.
-func (c *typedClient) PatchStatus(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
+// PatchSubResource used by SubResourceWriter to write subresource.
+func (c *typedClient) PatchSubResource(ctx context.Context, obj Object, subResource string, patch Patch, opts ...PatchOption) error {
 	o, err := c.cache.getObjMeta(obj)
 	if err != nil {
 		return err
@@ -211,7 +211,7 @@ func (c *typedClient) PatchStatus(ctx context.Context, obj Object, patch Patch, 
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		SubResource("status").
+		SubResource(subResource).
 		Body(data).
 		VersionedParams(patchOpts.AsPatchOptions(), c.paramCodec).
 		Do(ctx).

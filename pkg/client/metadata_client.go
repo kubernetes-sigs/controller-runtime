@@ -168,7 +168,7 @@ func (mc *metadataClient) List(ctx context.Context, obj ObjectList, opts ...List
 	return nil
 }
 
-func (mc *metadataClient) PatchStatus(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
+func (mc *metadataClient) PatchSubResource(ctx context.Context, obj Object, subResource string, patch Patch, opts ...PatchOption) error {
 	metadata, ok := obj.(*metav1.PartialObjectMetadata)
 	if !ok {
 		return fmt.Errorf("metadata client did not understand object: %T", obj)
@@ -186,7 +186,7 @@ func (mc *metadataClient) PatchStatus(ctx context.Context, obj Object, patch Pat
 	}
 
 	patchOpts := &PatchOptions{}
-	res, err := resInt.Patch(ctx, metadata.Name, patch.Type(), data, *patchOpts.AsPatchOptions(), "status")
+	res, err := resInt.Patch(ctx, metadata.Name, patch.Type(), data, *patchOpts.AsPatchOptions(), subResource)
 	if err != nil {
 		return err
 	}

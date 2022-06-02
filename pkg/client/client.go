@@ -288,40 +288,45 @@ func (c *client) List(ctx context.Context, obj ObjectList, opts ...ListOption) e
 }
 
 // Status implements client.StatusClient.
-func (c *client) Status() StatusWriter {
-	return &statusWriter{client: c}
+func (c *client) Status() SubResourceWriter {
+	return &subResourceWriter{client: c, subResource: "status"}
 }
 
-// statusWriter is client.StatusWriter that writes status subresource.
-type statusWriter struct {
-	client *client
+func (c *client) SubResource(subResource string) SubResourceWriter {
+	return &subResourceWriter{client: c, subResource: subResource}
 }
 
-// ensure statusWriter implements client.StatusWriter.
-var _ StatusWriter = &statusWriter{}
+// subResourceWriter is client.SubResourceWriter that writes to subresources.
+type subResourceWriter struct {
+	client      *client
+	subResource string
+}
 
-// Update implements client.StatusWriter.
-func (sw *statusWriter) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
+// ensure subResourceWriter implements client.SubResourceWriter.
+var _ SubResourceWriter = &subResourceWriter{}
+
+// Update implements client.SubResourceWriter.
+func (sw *subResourceWriter) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	defer sw.client.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	switch obj.(type) {
 	case *unstructured.Unstructured:
-		return sw.client.unstructuredClient.UpdateStatus(ctx, obj, opts...)
+		return sw.client.unstructuredClient.UpdateSubResource(ctx, obj, sw.subResource, opts...)
 	case *metav1.PartialObjectMetadata:
 		return fmt.Errorf("cannot update status using only metadata -- did you mean to patch?")
 	default:
-		return sw.client.typedClient.UpdateStatus(ctx, obj, opts...)
+		return sw.client.typedClient.UpdateSubResource(ctx, obj, sw.subResource, opts...)
 	}
 }
 
-// Patch implements client.Client.
-func (sw *statusWriter) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
+// Patch implements client.SubResourceWriter.
+func (sw *subResourceWriter) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
 	defer sw.client.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	switch obj.(type) {
 	case *unstructured.Unstructured:
-		return sw.client.unstructuredClient.PatchStatus(ctx, obj, patch, opts...)
+		return sw.client.unstructuredClient.PatchSubResource(ctx, obj, sw.subResource, patch, opts...)
 	case *metav1.PartialObjectMetadata:
-		return sw.client.metadataClient.PatchStatus(ctx, obj, patch, opts...)
+		return sw.client.metadataClient.PatchSubResource(ctx, obj, sw.subResource, patch, opts...)
 	default:
-		return sw.client.typedClient.PatchStatus(ctx, obj, patch, opts...)
+		return sw.client.typedClient.PatchSubResource(ctx, obj, sw.subResource, patch, opts...)
 	}
 }

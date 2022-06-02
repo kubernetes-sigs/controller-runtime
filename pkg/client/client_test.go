@@ -2913,6 +2913,24 @@ var _ = Describe("Client", func() {
 		})
 	})
 
+	Describe("GetOptions", func() {
+		It("should be convertable to metav1.GetOptions", func() {
+			o := (&client.GetOptions{}).ApplyOptions([]client.GetOption{
+				&client.GetOptions{Raw: &metav1.GetOptions{ResourceVersion: "RV0"}},
+			})
+			mo := o.AsGetOptions()
+			Expect(mo).NotTo(BeNil())
+			Expect(mo.ResourceVersion).To(Equal("RV0"))
+		})
+
+		It("should produce empty metav1.GetOptions if nil", func() {
+			var o *client.GetOptions
+			Expect(o.AsGetOptions()).To(Equal(&metav1.GetOptions{}))
+			o = &client.GetOptions{}
+			Expect(o.AsGetOptions()).To(Equal(&metav1.GetOptions{}))
+		})
+	})
+
 	Describe("ListOptions", func() {
 		It("should be convertable to metav1.ListOptions", func() {
 			lo := (&client.ListOptions{}).ApplyOptions([]client.ListOption{
@@ -3389,7 +3407,7 @@ type fakeReader struct {
 	Called int
 }
 
-func (f *fakeReader) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+func (f *fakeReader) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	f.Called++
 	return nil
 }

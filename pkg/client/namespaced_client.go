@@ -161,21 +161,26 @@ func (n *namespacedClient) List(ctx context.Context, obj ObjectList, opts ...Lis
 }
 
 // Status implements client.StatusClient.
-func (n *namespacedClient) Status() StatusWriter {
-	return &namespacedClientStatusWriter{StatusClient: n.client.Status(), namespace: n.namespace, namespacedclient: n}
+func (n *namespacedClient) Status() SubResourceWriter {
+	return &namespacedClientSubResourceWriter{StatusClient: n.client.SubResource("status"), namespace: n.namespace, namespacedclient: n}
 }
 
-// ensure namespacedClientStatusWriter implements client.StatusWriter.
-var _ StatusWriter = &namespacedClientStatusWriter{}
+// SubResource implements client.SubResourceClient.
+func (n *namespacedClient) SubResource(subResource string) SubResourceWriter {
+	return &namespacedClientSubResourceWriter{StatusClient: n.client.SubResource(subResource), namespace: n.namespace, namespacedclient: n}
+}
 
-type namespacedClientStatusWriter struct {
-	StatusClient     StatusWriter
+// ensure namespacedClientSubResourceWriter implements client.SubResourceWriter.
+var _ SubResourceWriter = &namespacedClientSubResourceWriter{}
+
+type namespacedClientSubResourceWriter struct {
+	StatusClient     SubResourceWriter
 	namespace        string
 	namespacedclient Client
 }
 
-// Update implements client.StatusWriter.
-func (nsw *namespacedClientStatusWriter) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
+// Update implements client.SubResourceWriter.
+func (nsw *namespacedClientSubResourceWriter) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	isNamespaceScoped, err := objectutil.IsAPINamespaced(obj, nsw.namespacedclient.Scheme(), nsw.namespacedclient.RESTMapper())
 
 	if err != nil {
@@ -193,8 +198,8 @@ func (nsw *namespacedClientStatusWriter) Update(ctx context.Context, obj Object,
 	return nsw.StatusClient.Update(ctx, obj, opts...)
 }
 
-// Patch implements client.StatusWriter.
-func (nsw *namespacedClientStatusWriter) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
+// Patch implements client.SubResourceWriter.
+func (nsw *namespacedClientSubResourceWriter) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
 	isNamespaceScoped, err := objectutil.IsAPINamespaced(obj, nsw.namespacedclient.Scheme(), nsw.namespacedclient.RESTMapper())
 
 	if err != nil {

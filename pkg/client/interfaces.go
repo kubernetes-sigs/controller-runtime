@@ -81,11 +81,20 @@ type Writer interface {
 // StatusClient knows how to create a client which can update status subresource
 // for kubernetes objects.
 type StatusClient interface {
-	Status() StatusWriter
+	Status() SubResourceWriter
 }
 
-// StatusWriter knows how to update status subresource of a Kubernetes object.
-type StatusWriter interface {
+// SubResourceClient knows how to create a client which can update subresource
+// for kubernetes objects.
+type SubResourceClient interface {
+	SubResource(subResource string) SubResourceWriter
+}
+
+// StatusWriter is kept for backward compatibility.
+type StatusWriter = SubResourceWriter
+
+// SubResourceWriter knows how to update subresource of a Kubernetes object.
+type SubResourceWriter interface {
 	// Update updates the fields corresponding to the status subresource for the
 	// given obj. obj must be a struct pointer so that obj can be updated
 	// with the content returned by the Server.
@@ -102,6 +111,7 @@ type Client interface {
 	Reader
 	Writer
 	StatusClient
+	SubResourceClient
 
 	// Scheme returns the scheme this client is using.
 	Scheme() *runtime.Scheme

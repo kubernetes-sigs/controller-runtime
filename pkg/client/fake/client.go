@@ -634,8 +634,12 @@ func (c *fakeClient) Patch(ctx context.Context, obj client.Object, patch client.
 	return err
 }
 
-func (c *fakeClient) Status() client.StatusWriter {
-	return &fakeStatusWriter{client: c}
+func (c *fakeClient) Status() client.SubResourceWriter {
+	return &fakeSubResourceWriter{client: c}
+}
+
+func (c *fakeClient) SubResource(subResource string) client.SubResourceWriter {
+	return &fakeSubResourceWriter{client: c}
 }
 
 func (c *fakeClient) deleteObject(gvr schema.GroupVersionResource, accessor metav1.Object) error {
@@ -664,19 +668,19 @@ func getGVRFromObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupV
 	return gvr, nil
 }
 
-type fakeStatusWriter struct {
+type fakeSubResourceWriter struct {
 	client *fakeClient
 }
 
-func (sw *fakeStatusWriter) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-	// TODO(droot): This results in full update of the obj (spec + status). Need
-	// a way to update status field only.
+func (sw *fakeSubResourceWriter) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	// TODO(droot): This results in full update of the obj (spec + subresources). Need
+	// a way to update subresource only.
 	return sw.client.Update(ctx, obj, opts...)
 }
 
-func (sw *fakeStatusWriter) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-	// TODO(droot): This results in full update of the obj (spec + status). Need
-	// a way to update status field only.
+func (sw *fakeSubResourceWriter) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	// TODO(droot): This results in full update of the obj (spec + subresources). Need
+	// a way to update subresource only.
 	return sw.client.Patch(ctx, obj, patch, opts...)
 }
 

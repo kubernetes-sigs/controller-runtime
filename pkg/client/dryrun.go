@@ -83,7 +83,7 @@ func (c *dryRunClient) List(ctx context.Context, obj ObjectList, opts ...ListOpt
 
 // Status implements client.StatusClient.
 func (c *dryRunClient) Status() SubResourceWriter {
-	return &dryRunSubResourceWriter{client: c.client.SubResource("status")}
+	return c.SubResource("status")
 }
 
 // SubResource implements client.SubResourceClient.

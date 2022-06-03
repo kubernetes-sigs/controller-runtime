@@ -162,7 +162,7 @@ func (n *namespacedClient) List(ctx context.Context, obj ObjectList, opts ...Lis
 
 // Status implements client.StatusClient.
 func (n *namespacedClient) Status() SubResourceWriter {
-	return &namespacedClientSubResourceWriter{StatusClient: n.client.SubResource("status"), namespace: n.namespace, namespacedclient: n}
+	return n.SubResource("status")
 }
 
 // SubResource implements client.SubResourceClient.

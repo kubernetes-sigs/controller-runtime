@@ -290,7 +290,7 @@ func (c *client) List(ctx context.Context, obj ObjectList, opts ...ListOption) e
 
 // Status implements client.StatusClient.
 func (c *client) Status() SubResourceWriter {
-	return &subResourceWriter{client: c, subResource: "status"}
+	return c.SubResource("status")
 }
 
 func (c *client) SubResource(subResource string) SubResourceWriter {

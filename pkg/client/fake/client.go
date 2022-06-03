@@ -635,7 +635,7 @@ func (c *fakeClient) Patch(ctx context.Context, obj client.Object, patch client.
 }
 
 func (c *fakeClient) Status() client.SubResourceWriter {
-	return &fakeSubResourceWriter{client: c}
+	return c.SubResource("status")
 }
 
 func (c *fakeClient) SubResource(subResource string) client.SubResourceWriter {

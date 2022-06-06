@@ -45,7 +45,7 @@ type WarningHandlerOptions struct {
 	// AllowDuplicateLogs does not deduplicate the to-be
 	// logged surfaced warnings messages. See
 	// log.WarningHandlerOptions for considerations
-	// regarding deuplication
+	// regarding deduplication
 	AllowDuplicateLogs bool
 }
 

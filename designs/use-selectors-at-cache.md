@@ -1,5 +1,5 @@
-Filter cache ListWatch using selectors
-===================
+# Filter cache ListWatch using selectors
+
 ## Motivation
 
 Controller-Runtime controllers use a cache to subscribe to events from
@@ -32,6 +32,7 @@ This proposal is related to the following issue [2]
 
 Add a new selector code at `pkg/cache/internal/selector.go` with common structs
 and helpers
+
 ```golang
 package internal
 
@@ -53,14 +54,12 @@ type Selector struct {
 func (s Selector) ApplyToList(listOpts *metav1.ListOptions) {
 ...
 }
-
+```
 
 Add a type alias to `pkg/cache/cache.go` to internal
 
 ```golang
-
 type SelectorsByObject internal.SelectorsByObject
-
 ```
 
 Extend `cache.Options` as follows:
@@ -78,7 +77,6 @@ type Options struct {
 Add new builder function that will return a cache constructor using the passed
 cache.Options, users can set SelectorsByObject there to filter out cache, it
 will convert SelectorByObject to SelectorsByGVK
-
 
 ```golang
 func BuilderWithOptions(options cache.Options) NewCacheFunc {
@@ -118,7 +116,6 @@ implications of using a different cache than the default one
                             }
                         )
 ```
-
 
 [1] https://github.com/nmstate/kubernetes-nmstate/pull/687
 [2] https://github.com/kubernetes-sigs/controller-runtime/issues/244

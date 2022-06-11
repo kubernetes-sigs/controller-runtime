@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -190,6 +191,24 @@ var _ = Describe("Admission Webhooks", func() {
 			webhook.ServeHTTP(respRecorder, req.WithContext(ctx))
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
+
+		It("should never run into circular calling if the writer has broken", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Body:   nopCloser{Reader: bytes.NewBufferString(fmt.Sprintf(`{%s,"request":{}}`, gvkJSONv1))},
+			}
+			webhook := &Webhook{
+				Handler: &fakeHandler{},
+				log:     logf.RuntimeLog.WithName("webhook"),
+			}
+
+			bw := &brokenWriter{ResponseWriter: respRecorder}
+			Eventually(func() int {
+				// This should not be blocked by the circular calling of writeResponse and writeAdmissionResponse
+				webhook.ServeHTTP(bw, req)
+				return respRecorder.Body.Len()
+			}, time.Second*3).Should(Equal(0))
+		})
 	})
 })
 
@@ -224,4 +243,12 @@ func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {
 	return Response{AdmissionResponse: admissionv1.AdmissionResponse{
 		Allowed: true,
 	}}
+}
+
+type brokenWriter struct {
+	http.ResponseWriter
+}
+
+func (bw *brokenWriter) Write(buf []byte) (int, error) {
+	return 0, fmt.Errorf("mock: write: broken pipe")
 }

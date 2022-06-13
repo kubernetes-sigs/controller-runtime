@@ -52,7 +52,7 @@ func (n *namespacedClient) RESTMapper() meta.RESTMapper {
 	return n.client.RESTMapper()
 }
 
-// Create implements clinet.Client.
+// Create implements client.Client.
 func (n *namespacedClient) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
 	isNamespaceScoped, err := objectutil.IsAPINamespaced(obj, n.Scheme(), n.RESTMapper())
 	if err != nil {
@@ -145,7 +145,7 @@ func (n *namespacedClient) Get(ctx context.Context, key ObjectKey, obj Object, o
 	}
 	if isNamespaceScoped {
 		if key.Namespace != "" && key.Namespace != n.namespace {
-			return fmt.Errorf("namespace %s provided for the object %s does not match the namesapce %s on the client", key.Namespace, obj.GetName(), n.namespace)
+			return fmt.Errorf("namespace %s provided for the object %s does not match the namespace %s on the client", key.Namespace, obj.GetName(), n.namespace)
 		}
 		key.Namespace = n.namespace
 	}

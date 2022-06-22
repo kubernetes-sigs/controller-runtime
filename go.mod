@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/fsnotify/fsnotify v1.5.4
-	github.com/go-logr/logr v1.2.0
+	github.com/go-logr/logr v1.2.3
 	github.com/go-logr/zapr v1.2.0
 	github.com/google/go-cmp v0.5.5
 	github.com/onsi/ginkgo v1.16.5

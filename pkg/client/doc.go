@@ -25,7 +25,7 @@ limitations under the License.
 // The New function can be used to create a new client that talks directly
 // to the API server.
 //
-// A common pattern in Kubernetes to read from a cache and write to the API
+// It is a common pattern in Kubernetes to read from a cache and write to the API
 // server.  This pattern is covered by the DelegatingClient type, which can
 // be used to have a client whose Reader is different from the Writer.
 //

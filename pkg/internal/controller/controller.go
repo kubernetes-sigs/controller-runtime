@@ -296,7 +296,6 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 	// RunInformersAndControllers the syncHandler, passing it the Namespace/Name string of the
 	// resource to be synced.
 	result, err := c.Do.Reconcile(ctx, req)
-	log.V(7).Info("reconcile have result", "result", result, "error", result)
 	switch {
 	case err != nil:
 		c.Queue.AddRateLimited(req)

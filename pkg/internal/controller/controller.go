@@ -238,7 +238,7 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 		// Stop working
 		return false
 	}
-
+	c.Log.V(7).Info("queue get obj", "obj", obj)
 	// We call Done here so the workqueue knows we have finished
 	// processing this item. We also must remember to call Forget if we
 	// do not want this work item being re-queued. For example, we do
@@ -309,6 +309,7 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 		// to result.RequestAfter
 		c.Queue.Forget(obj)
 		c.Queue.AddAfter(req, result.RequeueAfter)
+		log.V(7).Info("queue add req", "req", req, "after", result.RequeueAfter.String())
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeueAfter).Inc()
 	case result.Requeue:
 		c.Queue.AddRateLimited(req)

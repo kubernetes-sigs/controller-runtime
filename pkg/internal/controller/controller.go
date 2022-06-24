@@ -234,18 +234,21 @@ func (c *Controller) Start(ctx context.Context) error {
 // attempt to process it, by calling the reconcileHandler.
 func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 	obj, shutdown := c.Queue.Get()
+	c.Log.V(7).Info("queue get obj", "obj", obj, "shutdown", shutdown)
 	if shutdown {
 		// Stop working
 		return false
 	}
-	c.Log.V(7).Info("queue get obj", "obj", obj)
 	// We call Done here so the workqueue knows we have finished
 	// processing this item. We also must remember to call Forget if we
 	// do not want this work item being re-queued. For example, we do
 	// not call Forget if a transient error occurs, instead the item is
 	// put back on the workqueue and attempted again after a back-off
 	// period.
-	defer c.Queue.Done(obj)
+	defer func() {
+		c.Log.V(7).Info("queue done obj", "obj", obj)
+		c.Queue.Done(obj)
+	}()
 
 	ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(1)
 	defer ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(-1)

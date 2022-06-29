@@ -88,13 +88,12 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 		// is log.KubeAPIWarningLogger with deduplication enabled.
 		// See log.KubeAPIWarningLoggerOptions for considerations
 		// regarding deduplication.
-		rest.SetDefaultWarningHandler(
-			log.NewKubeAPIWarningLogger(
-				logger,
-				log.KubeAPIWarningLoggerOptions{
-					Deduplicate: !options.Opts.AllowDuplicateLogs,
-				},
-			),
+		config = rest.CopyConfig(config)
+		config.WarningHandler = log.NewKubeAPIWarningLogger(
+			logger,
+			log.KubeAPIWarningLoggerOptions{
+				Deduplicate: !options.Opts.AllowDuplicateLogs,
+			},
 		)
 	}
 

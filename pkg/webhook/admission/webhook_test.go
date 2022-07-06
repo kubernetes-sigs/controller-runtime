@@ -194,6 +194,21 @@ var _ = Describe("Admission Webhooks", func() {
 	})
 })
 
+var _ = Describe("Should be able to write/read admission.Request to/from context", func() {
+	ctx := context.Background()
+	testRequest := Request{
+		admissionv1.AdmissionRequest{
+			UID: "test-uid",
+		},
+	}
+
+	ctx = NewContextWithRequest(ctx, testRequest)
+
+	gotRequest, err := RequestFromContext(ctx)
+	Expect(err).To(Not(HaveOccurred()))
+	Expect(gotRequest).To(Equal(testRequest))
+})
+
 type stringInjector interface {
 	InjectString(s string) error
 }

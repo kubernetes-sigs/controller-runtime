@@ -539,11 +539,13 @@ func runTests(admissionReviewVersion string) {
 // TestDefaulter.
 var _ runtime.Object = &TestDefaulter{}
 
+const testDefaulterKind = "TestDefaulter"
+
 type TestDefaulter struct {
 	Replica int `json:"replica,omitempty"`
 }
 
-var testDefaulterGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: "TestDefaulter"}
+var testDefaulterGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: testDefaulterKind}
 
 func (d *TestDefaulter) GetObjectKind() schema.ObjectKind { return d }
 func (d *TestDefaulter) DeepCopyObject() runtime.Object {
@@ -574,11 +576,13 @@ func (d *TestDefaulter) Default() {
 // TestValidator.
 var _ runtime.Object = &TestValidator{}
 
+const testValidatorKind = "TestValidator"
+
 type TestValidator struct {
 	Replica int `json:"replica,omitempty"`
 }
 
-var testValidatorGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: "TestValidator"}
+var testValidatorGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: testValidatorKind}
 
 func (v *TestValidator) GetObjectKind() schema.ObjectKind { return v }
 func (v *TestValidator) DeepCopyObject() runtime.Object {
@@ -694,6 +698,14 @@ func (dv *TestDefaultValidator) ValidateDelete() error {
 type TestCustomDefaulter struct{}
 
 func (*TestCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
+	req, err := admission.RequestFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("expected admission.Request in ctx: %w", err)
+	}
+	if req.Kind.Kind != testDefaulterKind {
+		return fmt.Errorf("expected Kind TestDefaulter got %q", req.Kind.Kind)
+	}
+
 	d := obj.(*TestDefaulter) //nolint:ifshort
 	if d.Replica < 2 {
 		d.Replica = 2
@@ -708,6 +720,14 @@ var _ admission.CustomDefaulter = &TestCustomDefaulter{}
 type TestCustomValidator struct{}
 
 func (*TestCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) error {
+	req, err := admission.RequestFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("expected admission.Request in ctx: %w", err)
+	}
+	if req.Kind.Kind != testValidatorKind {
+		return fmt.Errorf("expected Kind TestValidator got %q", req.Kind.Kind)
+	}
+
 	v := obj.(*TestValidator) //nolint:ifshort
 	if v.Replica < 0 {
 		return errors.New("number of replica should be greater than or equal to 0")
@@ -716,6 +736,14 @@ func (*TestCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Obje
 }
 
 func (*TestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
+	req, err := admission.RequestFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("expected admission.Request in ctx: %w", err)
+	}
+	if req.Kind.Kind != testValidatorKind {
+		return fmt.Errorf("expected Kind TestValidator got %q", req.Kind.Kind)
+	}
+
 	v := newObj.(*TestValidator)
 	old := oldObj.(*TestValidator) //nolint:ifshort
 	if v.Replica < 0 {
@@ -728,6 +756,14 @@ func (*TestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj r
 }
 
 func (*TestCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) error {
+	req, err := admission.RequestFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("expected admission.Request in ctx: %w", err)
+	}
+	if req.Kind.Kind != testValidatorKind {
+		return fmt.Errorf("expected Kind TestValidator got %q", req.Kind.Kind)
+	}
+
 	v := obj.(*TestValidator) //nolint:ifshort
 	if v.Replica > 0 {
 		return errors.New("number of replica should be less than or equal to 0 to delete")

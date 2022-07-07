@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 )
@@ -39,11 +40,20 @@ type WebhookBuilder struct {
 	gvk           schema.GroupVersionKind
 	mgr           manager.Manager
 	config        *rest.Config
+	scheme        *runtime.Scheme
+	server        *webhook.Server
 }
 
-// WebhookManagedBy allows inform its manager.Manager.
+// WebhookManagedBy allows to inform its manager.Manager.
 func WebhookManagedBy(m manager.Manager) *WebhookBuilder {
-	return &WebhookBuilder{mgr: m}
+	blder := WebhookWithServerAndScheme(m.GetWebhookServer(), m.GetScheme())
+	blder.mgr = m
+	return blder
+}
+
+// WebhookWithServerAndScheme allows to set up webhooks with the given server and scheme.
+func WebhookWithServerAndScheme(server *webhook.Server, scheme *runtime.Scheme) *WebhookBuilder {
+	return &WebhookBuilder{server: server, scheme: scheme}
 }
 
 // TODO(droot): update the GoDoc for conversion.
@@ -78,7 +88,7 @@ func (blder *WebhookBuilder) Complete() error {
 }
 
 func (blder *WebhookBuilder) loadRestConfig() {
-	if blder.config == nil {
+	if blder.config == nil && blder.mgr != nil {
 		blder.config = blder.mgr.GetConfig()
 	}
 }
@@ -90,7 +100,7 @@ func (blder *WebhookBuilder) registerWebhooks() error {
 	}
 
 	// Create webhook(s) for each type
-	blder.gvk, err = apiutil.GVKForObject(typ, blder.mgr.GetScheme())
+	blder.gvk, err = apiutil.GVKForObject(typ, blder.scheme)
 	if err != nil {
 		return err
 	}
@@ -117,7 +127,7 @@ func (blder *WebhookBuilder) registerDefaultingWebhook() {
 			log.Info("Registering a mutating webhook",
 				"GVK", blder.gvk,
 				"path", path)
-			blder.mgr.GetWebhookServer().Register(path, mwh)
+			blder.server.Register(path, mwh)
 		}
 	}
 }
@@ -146,7 +156,7 @@ func (blder *WebhookBuilder) registerValidatingWebhook() {
 			log.Info("Registering a validating webhook",
 				"GVK", blder.gvk,
 				"path", path)
-			blder.mgr.GetWebhookServer().Register(path, vwh)
+			blder.server.Register(path, vwh)
 		}
 	}
 }
@@ -165,14 +175,14 @@ func (blder *WebhookBuilder) getValidatingWebhook() *admission.Webhook {
 }
 
 func (blder *WebhookBuilder) registerConversionWebhook() error {
-	ok, err := conversion.IsConvertible(blder.mgr.GetScheme(), blder.apiType)
+	ok, err := conversion.IsConvertible(blder.scheme, blder.apiType)
 	if err != nil {
 		log.Error(err, "conversion check failed", "GVK", blder.gvk)
 		return err
 	}
 	if ok {
 		if !blder.isAlreadyHandled("/convert") {
-			blder.mgr.GetWebhookServer().Register("/convert", &conversion.Webhook{})
+			blder.server.Register("/convert", &conversion.Webhook{})
 		}
 		log.Info("Conversion webhook enabled", "GVK", blder.gvk)
 	}
@@ -188,10 +198,10 @@ func (blder *WebhookBuilder) getType() (runtime.Object, error) {
 }
 
 func (blder *WebhookBuilder) isAlreadyHandled(path string) bool {
-	if blder.mgr.GetWebhookServer().WebhookMux == nil {
+	if blder.server.WebhookMux == nil {
 		return false
 	}
-	h, p := blder.mgr.GetWebhookServer().WebhookMux.Handler(&http.Request{URL: &url.URL{Path: path}})
+	h, p := blder.server.WebhookMux.Handler(&http.Request{URL: &url.URL{Path: path}})
 	if p == path && h != nil {
 		return true
 	}

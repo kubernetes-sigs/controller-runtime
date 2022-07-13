@@ -315,13 +315,13 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 			"controllerKind", gvk.Kind,
 		)
 
-		lowerCamelCaseKind := strings.ToLower(gvk.Kind[:1]) + gvk.Kind[1:]
+		kind := gvk.Kind
 
 		ctrlOptions.LogConstructor = func(req *reconcile.Request) logr.Logger {
 			log := log
 			if req != nil {
 				log = log.WithValues(
-					lowerCamelCaseKind, klog.KRef(req.Namespace, req.Name),
+					kind, klog.KRef(req.Namespace, req.Name),
 					"namespace", req.Namespace, "name", req.Name,
 				)
 			}

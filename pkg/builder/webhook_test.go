@@ -134,6 +134,72 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
 	})
 
+	It("should scaffold a defaulting webhook which recovers from panics", func() {
+		By("creating a controller manager")
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
+		builder.Register(&TestDefaulter{}, &TestDefaulterList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		err = WebhookManagedBy(m).
+			For(&TestDefaulter{Panic: true}).
+			RecoverPanic().
+			Complete()
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		svr := m.GetWebhookServer()
+		ExpectWithOffset(1, svr).NotTo(BeNil())
+
+		reader := strings.NewReader(`{
+  "kind":"AdmissionReview",
+  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
+  "request":{
+    "uid":"07e52e8d-4513-11e9-a716-42010a800270",
+    "kind":{
+      "group":"",
+      "version":"v1",
+      "kind":"TestDefaulter"
+    },
+    "resource":{
+      "group":"",
+      "version":"v1",
+      "resource":"testdefaulter"
+    },
+    "namespace":"default",
+    "operation":"CREATE",
+    "object":{
+      "replica":1,
+      "panic":true
+    },
+    "oldObject":null
+  }
+}`)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		// TODO: we may want to improve it to make it be able to inject dependencies,
+		// but not always try to load certs and return not found error.
+		err = svr.Start(ctx)
+		if err != nil && !os.IsNotExist(err) {
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		}
+
+		By("sending a request to a mutating webhook path")
+		path := generateMutatePath(testDefaulterGVK)
+		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req.Header.Add("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		svr.WebhookMux.ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable fields")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":500`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"message":"panic: injected panic [recovered]`))
+	})
+
 	It("should scaffold a defaulting webhook with a custom defaulter", func() {
 		By("creating a controller manager")
 		m, err := manager.New(cfg, manager.Options{})
@@ -282,6 +348,73 @@ func runTests(admissionReviewVersion string) {
 		By("sanity checking the response contains reasonable field")
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":403`))
+	})
+
+	It("should scaffold a validating webhook which recovers from panics", func() {
+		By("creating a controller manager")
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+		builder.Register(&TestValidator{}, &TestValidatorList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		err = WebhookManagedBy(m).
+			For(&TestValidator{Panic: true}).
+			RecoverPanic().
+			Complete()
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		svr := m.GetWebhookServer()
+		ExpectWithOffset(1, svr).NotTo(BeNil())
+
+		reader := strings.NewReader(`{
+  "kind":"AdmissionReview",
+  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
+  "request":{
+    "uid":"07e52e8d-4513-11e9-a716-42010a800270",
+    "kind":{
+      "group":"",
+      "version":"v1",
+      "kind":"TestValidator"
+    },
+    "resource":{
+      "group":"",
+      "version":"v1",
+      "resource":"testvalidator"
+    },
+    "namespace":"default",
+    "operation":"CREATE",
+    "object":{
+      "replica":2,
+      "panic":true
+    }
+  }
+}`)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		// TODO: we may want to improve it to make it be able to inject dependencies,
+		// but not always try to load certs and return not found error.
+		err = svr.Start(ctx)
+		if err != nil && !os.IsNotExist(err) {
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		}
+
+		By("sending a request to a validating webhook path")
+		path := generateValidatePath(testValidatorGVK)
+		_, err = reader.Seek(0, 0)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req.Header.Add("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		svr.WebhookMux.ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable field")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":500`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"message":"panic: injected panic [recovered]`))
 	})
 
 	It("should scaffold a validating webhook with a custom validator", func() {
@@ -542,7 +675,8 @@ var _ runtime.Object = &TestDefaulter{}
 const testDefaulterKind = "TestDefaulter"
 
 type TestDefaulter struct {
-	Replica int `json:"replica,omitempty"`
+	Replica int  `json:"replica,omitempty"`
+	Panic   bool `json:"panic,omitempty"`
 }
 
 var testDefaulterGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: testDefaulterKind}
@@ -568,6 +702,9 @@ func (*TestDefaulterList) GetObjectKind() schema.ObjectKind { return nil }
 func (*TestDefaulterList) DeepCopyObject() runtime.Object   { return nil }
 
 func (d *TestDefaulter) Default() {
+	if d.Panic {
+		panic("injected panic")
+	}
 	if d.Replica < 2 {
 		d.Replica = 2
 	}
@@ -579,7 +716,8 @@ var _ runtime.Object = &TestValidator{}
 const testValidatorKind = "TestValidator"
 
 type TestValidator struct {
-	Replica int `json:"replica,omitempty"`
+	Replica int  `json:"replica,omitempty"`
+	Panic   bool `json:"panic,omitempty"`
 }
 
 var testValidatorGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: testValidatorKind}
@@ -607,6 +745,9 @@ func (*TestValidatorList) DeepCopyObject() runtime.Object   { return nil }
 var _ admission.Validator = &TestValidator{}
 
 func (v *TestValidator) ValidateCreate() error {
+	if v.Panic {
+		panic("injected panic")
+	}
 	if v.Replica < 0 {
 		return errors.New("number of replica should be greater than or equal to 0")
 	}
@@ -614,6 +755,9 @@ func (v *TestValidator) ValidateCreate() error {
 }
 
 func (v *TestValidator) ValidateUpdate(old runtime.Object) error {
+	if v.Panic {
+		panic("injected panic")
+	}
 	if v.Replica < 0 {
 		return errors.New("number of replica should be greater than or equal to 0")
 	}
@@ -626,6 +770,9 @@ func (v *TestValidator) ValidateUpdate(old runtime.Object) error {
 }
 
 func (v *TestValidator) ValidateDelete() error {
+	if v.Panic {
+		panic("injected panic")
+	}
 	if v.Replica > 0 {
 		return errors.New("number of replica should be less than or equal to 0 to delete")
 	}

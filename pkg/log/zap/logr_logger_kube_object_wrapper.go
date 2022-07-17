@@ -34,8 +34,8 @@ func (w *logrLoggerKubeObjectWrapper) MarshalLog() interface{} {
 	result := make(map[string]string)
 
 	if reflect.ValueOf(w.obj).IsNil() {
-		// best effort ,noop
-		return nil
+		// keep same behavior with kubeObjectWrapper.MarshalLogObject
+		return "got nil for runtime.Object"
 	}
 
 	if gvk := w.obj.GetObjectKind().GroupVersionKind(); gvk.Version != "" {

@@ -33,10 +33,10 @@ type KubeAwareLogSink struct {
 	kubeAwareEnabled *atomic.Bool
 }
 
-// NewKubeAwareLogger return the wrapper with existed logr.Logger.
+// NewKubeAwareLogrLogger return the wrapper with existed logr.Logger.
 // logger is the backend logger.
 // kubeAwareEnabled is the flag to enable kube aware logging.
-func NewKubeAwareLogger(logger logr.Logger, kubeAwareEnabled bool) logr.Logger {
+func NewKubeAwareLogrLogger(logger logr.Logger, kubeAwareEnabled bool) logr.Logger {
 	return logr.New(NewKubeAwareLogSink(logger.GetSink(), kubeAwareEnabled))
 }
 
@@ -114,9 +114,9 @@ func (k *KubeAwareLogSink) wrapKeyAndValues(keysAndValues []interface{}) []inter
 
 		switch val := item.(type) {
 		case runtime.Object:
-			result[i] = &kubeObjectWrapper{obj: val}
+			result[i] = &logrLoggerKubeObjectWrapper{obj: val}
 		case types.NamespacedName:
-			result[i] = &namespacedNameWrapper{NamespacedName: val}
+			result[i] = &logrLoggerNamespacedNameWrapper{NamespacedName: val}
 		default:
 			result[i] = item
 		}

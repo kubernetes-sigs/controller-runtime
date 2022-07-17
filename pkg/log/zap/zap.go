@@ -41,7 +41,7 @@ type NewEncoderFunc func(...EncoderConfigOption) zapcore.Encoder
 // information and Namespace/Name to the log.
 func New(opts ...Opts) logr.Logger {
 	zaprLogger := zapr.NewLogger(NewRaw(opts...))
-	return NewKubeAwareLogger(zaprLogger, true)
+	return NewKubeAwareLogrLogger(zaprLogger, true)
 }
 
 // Opts allows to manipulate Options.

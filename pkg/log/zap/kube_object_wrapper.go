@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package logr
+package zap
 
 import (
 	"reflect"
@@ -24,13 +24,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-var _ logr.Marshaler = (*kubeObjectWrapper)(nil)
+var _ logr.Marshaler = (*logrLoggerKubeObjectWrapper)(nil)
 
-type kubeObjectWrapper struct {
+type logrLoggerKubeObjectWrapper struct {
 	obj runtime.Object
 }
 
-func (w *kubeObjectWrapper) MarshalLog() interface{} {
+func (w *logrLoggerKubeObjectWrapper) MarshalLog() interface{} {
 	result := make(map[string]string)
 
 	if reflect.ValueOf(w.obj).IsNil() {

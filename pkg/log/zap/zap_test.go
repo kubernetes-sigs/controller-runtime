@@ -145,6 +145,8 @@ var _ = Describe("Zap options setup", func() {
 	})
 })
 
+const kindNode = "Node"
+
 var _ = Describe("Zap logger setup", func() {
 	Context("when logging kubernetes objects", func() {
 		var logOut *bytes.Buffer
@@ -194,7 +196,7 @@ var _ = Describe("Zap logger setup", func() {
 				node := &corev1.Node{}
 				node.Name = "some-node-2"
 				node.APIVersion = "v1"
-				node.Kind = "Node"
+				node.Kind = kindNode
 				logger.Info("here's a kubernetes object", "thing", node)
 
 				outRaw := logOut.Bytes()
@@ -204,7 +206,7 @@ var _ = Describe("Zap logger setup", func() {
 				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
 					"name":       node.Name,
 					"apiVersion": "v1",
-					"kind":       "Node",
+					"kind":       kindNode,
 				}))
 			})
 
@@ -263,9 +265,7 @@ var _ = Describe("Zap logger setup", func() {
 				outRaw := logOut.Bytes()
 				Expect(string(outRaw)).Should(ContainSubstring("got nil for runtime.Object"))
 			})
-
-			// see https://github.com/kubernetes-sigs/controller-runtime/issues/1290
-			It("should log NamespacedName as origin stringer when using logrLogger.WithValues", func() {
+			It("should log a standard namespaced when using logrLogger.WithValues", func() {
 				name := types.NamespacedName{Name: "some-pod", Namespace: "some-ns"}
 				logger.WithValues("thing", name).Info("here's a kubernetes object")
 
@@ -273,35 +273,31 @@ var _ = Describe("Zap logger setup", func() {
 				res := map[string]interface{}{}
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
-				Expect(res).NotTo(HaveKeyWithValue("thing", map[string]interface{}{
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
 					"name":      name.Name,
 					"namespace": name.Namespace,
 				}))
-				Expect(res).To(HaveKeyWithValue("thing", "some-ns/some-pod"))
 			})
 
-			// see https://github.com/kubernetes-sigs/controller-runtime/issues/1290
-			It("should log Kubernetes objects as origin stringer when using logrLogger.WithValues", func() {
+			It("should log a standard Kubernetes objects when using logrLogger.WithValues", func() {
 				node := &corev1.Node{}
 				node.Name = "some-node"
 				node.APIVersion = "v1"
-				node.Kind = "Node"
+				node.Kind = kindNode
 				logger.WithValues("thing", node).Info("here's a kubernetes object")
 
 				outRaw := logOut.Bytes()
 				res := map[string]interface{}{}
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
-				Expect(res).NotTo(HaveKeyWithValue("thing", map[string]interface{}{
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
 					"name":       node.Name,
 					"apiVersion": "v1",
-					"kind":       "Node",
+					"kind":       kindNode,
 				}))
-				Expect(res).To(HaveKeyWithValue("thing", "&Node{ObjectMeta:{some-node      0 0001-01-01 00:00:00 +0000 UTC <nil> <nil> map[] map[] [] []  []},Spec:NodeSpec{PodCIDR:,DoNotUseExternalID:,ProviderID:,Unschedulable:false,Taints:[]Taint{},ConfigSource:nil,PodCIDRs:[],},Status:NodeStatus{Capacity:ResourceList{},Allocatable:ResourceList{},Phase:,Conditions:[]NodeCondition{},Addresses:[]NodeAddress{},DaemonEndpoints:NodeDaemonEndpoints{KubeletEndpoint:DaemonEndpoint{Port:0,},},NodeInfo:NodeSystemInfo{MachineID:,SystemUUID:,BootID:,KernelVersion:,OSImage:,ContainerRuntimeVersion:,KubeletVersion:,KubeProxyVersion:,OperatingSystem:,Architecture:,},Images:[]ContainerImage{},VolumesInUse:[],VolumesAttached:[]AttachedVolume{},Config:nil,},}"))
 			})
 
-			// see https://github.com/kubernetes-sigs/controller-runtime/issues/1290
-			It("should log an unstructured Kubernetes object as origin stringer when using logrLogger.WithValues", func() {
+			It("should log a standard unstructured Kubernetes object when using logrLogger.WithValues", func() {
 				pod := &unstructured.Unstructured{
 					Object: map[string]interface{}{
 						"metadata": map[string]interface{}{
@@ -316,11 +312,10 @@ var _ = Describe("Zap logger setup", func() {
 				res := map[string]interface{}{}
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
-				Expect(res).NotTo(HaveKeyWithValue("thing", map[string]interface{}{
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
 					"name":      "some-pod",
 					"namespace": "some-ns",
 				}))
-				Expect(res).To(HaveKeyWithValue("thing", pod.Object))
 			})
 		}
 

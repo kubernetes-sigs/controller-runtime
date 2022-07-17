@@ -24,7 +24,6 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/log/bootstrap"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -45,7 +44,7 @@ func runMain() int {
 		flag.CommandLine.AddGoFlagSet(&goFlagSet)
 	}
 	flag.Parse()
-	ctrl.SetLogger(bootstrap.New(zap.UseFlagOptions(loggerOpts)))
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(loggerOpts)))
 
 	log := ctrl.Log.WithName("main")
 

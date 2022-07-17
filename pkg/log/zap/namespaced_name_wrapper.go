@@ -14,20 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package logr
+package zap
 
 import (
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
 )
 
-var _ logr.Marshaler = (*namespacedNameWrapper)(nil)
+var _ logr.Marshaler = (*logrLoggerNamespacedNameWrapper)(nil)
 
-type namespacedNameWrapper struct {
+type logrLoggerNamespacedNameWrapper struct {
 	types.NamespacedName
 }
 
-func (w *namespacedNameWrapper) MarshalLog() interface{} {
+func (w *logrLoggerNamespacedNameWrapper) MarshalLog() interface{} {
 	result := make(map[string]string)
 	if w.Namespace != "" {
 		result["namespace"] = w.Namespace

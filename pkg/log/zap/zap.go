@@ -37,11 +37,11 @@ type EncoderConfigOption func(*zapcore.EncoderConfig)
 type NewEncoderFunc func(...EncoderConfigOption) zapcore.Encoder
 
 // New returns a brand new Logger configured with Opts. It
-// uses KubeAwareEncoder which adds Type information and
-// Namespace/Name to the log.
-// Deprecated: use bootstrap.New as instead.
+// uses KubeAwareLogger/KubeAwareEncoder which adds Type
+// information and Namespace/Name to the log.
 func New(opts ...Opts) logr.Logger {
-	return zapr.NewLogger(NewRaw(opts...))
+	zaprLogger := zapr.NewLogger(NewRaw(opts...))
+	return NewKubeAwareLogger(zaprLogger, true)
 }
 
 // Opts allows to manipulate Options.
@@ -171,11 +171,6 @@ type Options struct {
 	// TimeEncoder specifies the encoder for the timestamps in log messages.
 	// Defaults to EpochTimeEncoder as this is the default in Zap currently.
 	TimeEncoder zapcore.TimeEncoder
-	// UseKubeAwareEncoder configures the logger to use the KubeAwareEncoder for encoding kubernetes
-	// object as Type information and Namespace/Name.
-	// Note: KubeAwareEncoder could NOT resolve the object passed by logger.WithValues(), see
-	// https://github.com/kubernetes-sigs/controller-runtime/issues/1290
-	UseKubeAwareEncoder bool
 }
 
 // addDefaults adds defaults to the Options.
@@ -251,11 +246,7 @@ func NewRaw(opts ...Opts) *zap.Logger {
 	sink := zapcore.AddSync(o.DestWriter)
 
 	o.ZapOpts = append(o.ZapOpts, zap.AddCallerSkip(1), zap.ErrorOutput(sink))
-	encoder := o.Encoder
-	if o.UseKubeAwareEncoder {
-		encoder = &KubeAwareEncoder{Encoder: o.Encoder, Verbose: o.Development}
-	}
-	log := zap.New(zapcore.NewCore(encoder, sink, o.Level))
+	log := zap.New(zapcore.NewCore(&KubeAwareEncoder{Encoder: o.Encoder, Verbose: o.Development}, sink, o.Level))
 	log = log.WithOptions(o.ZapOpts...)
 	return log
 }

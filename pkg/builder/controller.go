@@ -155,6 +155,14 @@ func (blder *Builder) WithLogConstructor(logConstructor func(*reconcile.Request)
 	return blder
 }
 
+// WithLogger overrides the controller options's GetDefaultLogger.
+func (blder *Builder) WithLogger(log logr.Logger) *Builder {
+	blder.ctrlOptions.GetDefaultLogger = func() logr.Logger {
+		return log
+	}
+	return blder
+}
+
 // Named sets the name of the controller to the given name.  The name shows up
 // in metrics, among other things, and thus should be a prometheus compatible name
 // (underscores and alphanumeric characters only).
@@ -309,7 +317,14 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 
 	// Setup the logger.
 	if ctrlOptions.LogConstructor == nil {
-		log := blder.mgr.GetLogger().WithValues(
+		var log logr.Logger
+		if ctrlOptions.GetDefaultLogger != nil {
+			log = ctrlOptions.GetDefaultLogger()
+		} else {
+			log = blder.mgr.GetLogger()
+		}
+
+		log = log.WithValues(
 			"controller", controllerName,
 			"controllerGroup", gvk.Group,
 			"controllerKind", gvk.Kind,

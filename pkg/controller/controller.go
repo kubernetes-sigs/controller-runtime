@@ -51,6 +51,10 @@ type Options struct {
 	// to each reconciliation via the context field.
 	LogConstructor func(request *reconcile.Request) logr.Logger
 
+	// GetDefaultLogger returns this controller's root logger, used only if LogConstructor is not set.
+	// By defaults, manager.GetDefaultLogger will be used.
+	GetDefaultLogger func() logr.Logger
+
 	// CacheSyncTimeout refers to the time limit set to wait for syncing caches.
 	// Defaults to 2 minutes if not set.
 	CacheSyncTimeout time.Duration
@@ -107,7 +111,14 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 	}
 
 	if options.LogConstructor == nil {
-		log := mgr.GetLogger().WithValues(
+		var log logr.Logger
+		if options.GetDefaultLogger != nil {
+			log = options.GetDefaultLogger()
+		} else {
+			log = mgr.GetLogger()
+		}
+
+		log = log.WithValues(
 			"controller", name,
 		)
 		options.LogConstructor = func(req *reconcile.Request) logr.Logger {

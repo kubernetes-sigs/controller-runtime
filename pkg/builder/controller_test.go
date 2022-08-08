@@ -259,6 +259,28 @@ var _ = Describe("application", func() {
 			Expect(instance).NotTo(BeNil())
 		})
 
+		It("should honor default log options", func() {
+			logger := &testLogger{}
+			newController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
+				if options.GetDefaultLogger != nil && options.GetDefaultLogger().GetSink() == logger {
+					return controller.New(name, mgr, options)
+				}
+				return nil, fmt.Errorf("logger expected %T but found %T", logger, options.LogConstructor)
+			}
+
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				For(&appsv1.ReplicaSet{}).
+				Owns(&appsv1.ReplicaSet{}).
+				WithLogger(logr.New(logger)).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeNil())
+		})
+
 		It("should prefer reconciler from options during creation of controller", func() {
 			newController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
 				if options.Reconciler != (typedNoop{}) {

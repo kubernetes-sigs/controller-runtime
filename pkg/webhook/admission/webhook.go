@@ -23,15 +23,17 @@ import (
 	"net/http"
 
 	"github.com/go-logr/logr"
-	jsonpatch "gomodules.xyz/jsonpatch/v2"
+	"gomodules.xyz/jsonpatch/v2"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2"
 
-	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	internallog "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
@@ -131,6 +133,12 @@ type Webhook struct {
 	// headers thus allowing you to read them from within the handler
 	WithContextFunc func(context.Context, *http.Request) context.Context
 
+	// LogConstructor is used to construct a logger for logging messages during webhook calls
+	// based on the given base logger (which might carry more values like the webhook's path).
+	// Note: LogConstructor has to be able to handle nil requests as we are also using it
+	// outside the context of requests.
+	LogConstructor func(base logr.Logger, req *Request) logr.Logger
+
 	// decoder is constructed on receiving a scheme and passed down to then handler
 	decoder *Decoder
 
@@ -166,13 +174,36 @@ func (wh *Webhook) Handle(ctx context.Context, req Request) (response Response) 
 		}()
 	}
 
+	reqLog := wh.getLogger(&req)
+	reqLog = reqLog.WithValues("requestID", req.UID)
+	ctx = logf.IntoContext(ctx, reqLog)
+
 	resp := wh.Handler.Handle(ctx, req)
 	if err := resp.Complete(req); err != nil {
-		wh.log.Error(err, "unable to encode response")
+		reqLog.Error(err, "unable to encode response")
 		return Errored(http.StatusInternalServerError, errUnableToEncodeResponse)
 	}
 
 	return resp
+}
+
+// getLogger constructs a logger from the injected log and LogConstructor.
+func (wh *Webhook) getLogger(req *Request) logr.Logger {
+	logConstructor := wh.LogConstructor
+	if logConstructor == nil {
+		logConstructor = DefaultLogConstructor
+	}
+	return logConstructor(wh.log, req)
+}
+
+// DefaultLogConstructor adds some commonly interesting fields to the given logger.
+func DefaultLogConstructor(base logr.Logger, req *Request) logr.Logger {
+	if req != nil {
+		return base.WithValues("object", klog.KRef(req.Namespace, req.Name),
+			"resource", req.Resource, "user", req.UserInfo.Username,
+		)
+	}
+	return base
 }
 
 // InjectScheme injects a scheme into the webhook, in order to construct a Decoder.
@@ -267,7 +298,7 @@ func StandaloneWebhook(hook *Webhook, opts StandaloneOptions) (http.Handler, err
 	}
 
 	if opts.Logger.GetSink() == nil {
-		opts.Logger = logf.RuntimeLog.WithName("webhook")
+		opts.Logger = internallog.RuntimeLog.WithName("webhook")
 	}
 	hook.log = opts.Logger
 

@@ -10,6 +10,8 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 var _ = Describe("Defaulter Handler", func() {
@@ -17,6 +19,7 @@ var _ = Describe("Defaulter Handler", func() {
 	It("should return ok if received delete verb in defaulter handler", func() {
 		obj := &TestDefaulter{}
 		handler := DefaultingWebhookFor(obj)
+		Expect(inject.LoggerInto(log, handler)).To(BeTrue())
 
 		resp := handler.Handle(context.TODO(), Request{
 			AdmissionRequest: admissionv1.AdmissionRequest{

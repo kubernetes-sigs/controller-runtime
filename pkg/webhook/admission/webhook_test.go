@@ -18,22 +18,37 @@ package admission
 
 import (
 	"context"
+	"io"
 	"net/http"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	jsonpatch "gomodules.xyz/jsonpatch/v2"
+	"github.com/onsi/gomega/gbytes"
+	"gomodules.xyz/jsonpatch/v2"
 	admissionv1 "k8s.io/api/admission/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	machinerytypes "k8s.io/apimachinery/pkg/types"
 
-	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	internallog "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 var _ = Describe("Admission Webhooks", func() {
+	var (
+		logBuffer  *gbytes.Buffer
+		testLogger logr.Logger
+	)
+
+	BeforeEach(func() {
+		logBuffer = gbytes.NewBuffer()
+		testLogger = zap.New(zap.JSONEncoder(), zap.WriteTo(io.MultiWriter(logBuffer, GinkgoWriter)))
+	})
+
 	allowHandler := func() *Webhook {
 		handler := &fakeHandler{
 			fn: func(ctx context.Context, req Request) Response {
@@ -46,7 +61,7 @@ var _ = Describe("Admission Webhooks", func() {
 		}
 		webhook := &Webhook{
 			Handler: handler,
-			log:     logf.RuntimeLog.WithName("webhook"),
+			log:     internallog.RuntimeLog.WithName("webhook"),
 		}
 
 		return webhook
@@ -96,7 +111,7 @@ var _ = Describe("Admission Webhooks", func() {
 					},
 				}
 			}),
-			log: logf.RuntimeLog.WithName("webhook"),
+			log: internallog.RuntimeLog.WithName("webhook"),
 		}
 
 		By("invoking the webhook")
@@ -113,7 +128,7 @@ var _ = Describe("Admission Webhooks", func() {
 			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
 				return Patched("", jsonpatch.Operation{Operation: "add", Path: "/a", Value: 2}, jsonpatch.Operation{Operation: "replace", Path: "/b", Value: 4})
 			}),
-			log: logf.RuntimeLog.WithName("webhook"),
+			log: internallog.RuntimeLog.WithName("webhook"),
 		}
 
 		By("invoking the webhook")
@@ -123,6 +138,70 @@ var _ = Describe("Admission Webhooks", func() {
 		patchType := admissionv1.PatchTypeJSONPatch
 		Expect(resp.PatchType).To(Equal(&patchType))
 		Expect(resp.Patch).To(Equal([]byte(`[{"op":"add","path":"/a","value":2},{"op":"replace","path":"/b","value":4}]`)))
+	})
+
+	It("should pass a request logger via the context", func() {
+		By("setting up a webhook that uses the request logger")
+		webhook := &Webhook{
+			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
+				logf.FromContext(ctx).Info("Received request")
+
+				return Response{
+					AdmissionResponse: admissionv1.AdmissionResponse{
+						Allowed: true,
+					},
+				}
+			}),
+			log: testLogger,
+		}
+
+		By("invoking the webhook")
+		resp := webhook.Handle(context.Background(), Request{AdmissionRequest: admissionv1.AdmissionRequest{
+			UID:       "test123",
+			Name:      "foo",
+			Namespace: "bar",
+			Resource: metav1.GroupVersionResource{
+				Group:    "apps",
+				Version:  "v1",
+				Resource: "deployments",
+			},
+			UserInfo: authenticationv1.UserInfo{
+				Username: "tim",
+			},
+		}})
+		Expect(resp.Allowed).To(BeTrue())
+
+		By("checking that the log message contains the request fields")
+		Eventually(logBuffer).Should(gbytes.Say(`"msg":"Received request","object":{"name":"foo","namespace":"bar"},"resource":{"group":"apps","version":"v1","resource":"deployments"},"user":"tim","requestID":"test123"}`))
+	})
+
+	It("should pass a request logger created by LogConstructor via the context", func() {
+		By("setting up a webhook that uses the request logger")
+		webhook := &Webhook{
+			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
+				logf.FromContext(ctx).Info("Received request")
+
+				return Response{
+					AdmissionResponse: admissionv1.AdmissionResponse{
+						Allowed: true,
+					},
+				}
+			}),
+			LogConstructor: func(base logr.Logger, req *Request) logr.Logger {
+				return base.WithValues("operation", req.Operation)
+			},
+			log: testLogger,
+		}
+
+		By("invoking the webhook")
+		resp := webhook.Handle(context.Background(), Request{AdmissionRequest: admissionv1.AdmissionRequest{
+			UID:       "test123",
+			Operation: admissionv1.Create,
+		}})
+		Expect(resp.Allowed).To(BeTrue())
+
+		By("checking that the log message contains the request fields")
+		Eventually(logBuffer).Should(gbytes.Say(`"msg":"Received request","operation":"CREATE","requestID":"test123"}`))
 	})
 
 	Describe("dependency injection", func() {
@@ -139,7 +218,7 @@ var _ = Describe("Admission Webhooks", func() {
 			handler := &fakeHandler{}
 			webhook := &Webhook{
 				Handler: handler,
-				log:     logf.RuntimeLog.WithName("webhook"),
+				log:     internallog.RuntimeLog.WithName("webhook"),
 			}
 			Expect(setFields(webhook)).To(Succeed())
 			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
@@ -159,7 +238,7 @@ var _ = Describe("Admission Webhooks", func() {
 			handler := &fakeHandler{}
 			webhook := &Webhook{
 				Handler: handler,
-				log:     logf.RuntimeLog.WithName("webhook"),
+				log:     internallog.RuntimeLog.WithName("webhook"),
 			}
 			Expect(setFields(webhook)).To(Succeed())
 			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
@@ -204,7 +283,7 @@ var _ = Describe("Admission Webhooks", func() {
 				webhook := &Webhook{
 					Handler:      handler,
 					RecoverPanic: true,
-					log:          logf.RuntimeLog.WithName("webhook"),
+					log:          internallog.RuntimeLog.WithName("webhook"),
 				}
 
 				return webhook
@@ -231,7 +310,7 @@ var _ = Describe("Admission Webhooks", func() {
 				}
 				webhook := &Webhook{
 					Handler: handler,
-					log:     logf.RuntimeLog.WithName("webhook"),
+					log:     internallog.RuntimeLog.WithName("webhook"),
 				}
 
 				return webhook

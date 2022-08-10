@@ -244,7 +244,7 @@ func NewRaw(opts ...Opts) *zap.Logger {
 	// this basically mimics New<type>Config, but with a custom sink
 	sink := zapcore.AddSync(o.DestWriter)
 
-	o.ZapOpts = append(o.ZapOpts, zap.AddCallerSkip(1), zap.ErrorOutput(sink))
+	o.ZapOpts = append(o.ZapOpts, zap.ErrorOutput(sink))
 	log := zap.New(zapcore.NewCore(&KubeAwareEncoder{Encoder: o.Encoder, Verbose: o.Development}, sink, o.Level))
 	log = log.WithOptions(o.ZapOpts...)
 	return log

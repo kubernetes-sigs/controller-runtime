@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"net/http"
+	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
@@ -56,7 +57,8 @@ func Example() {
 
 	// Initialize your tls server
 	srv := &http.Server{
-		Handler: &sampleServer{},
+		Handler:           &sampleServer{},
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	// Start goroutine for handling server shutdown.

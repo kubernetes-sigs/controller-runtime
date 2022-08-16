@@ -59,7 +59,9 @@ func ExampleNew_multinamespaceCache() {
 	}
 
 	mgr, err := manager.New(cfg, manager.Options{
-		NewCache: cache.MultiNamespacedCacheBuilder([]string{"namespace1", "namespace2"}),
+		NewCache: cache.MultiNamespacedCacheWithOptionsBuilder(
+			cache.WithLegacyNamespaceCaches([]string{"namespace1", "namespace2"}),
+		),
 	})
 	if err != nil {
 		log.Error(err, "unable to set up manager")

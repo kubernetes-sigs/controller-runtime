@@ -23,10 +23,12 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	toolscache "k8s.io/client-go/tools/cache"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/internal/objectutil"
 )
@@ -37,37 +39,153 @@ type NewCacheFunc func(config *rest.Config, opts Options) (Cache, error)
 // a new global namespaced cache to handle cluster scoped resources.
 const globalCache = "_cluster-scope"
 
-// MultiNamespacedCacheBuilder - Builder function to create a new multi-namespaced cache.
-// This will scope the cache to a list of namespaces. Listing for all namespaces
-// will list for all the namespaces that this knows about. By default this will create
-// a global cache for cluster scoped resource. Note that this is not intended
-// to be used for excluding namespaces, this is better done via a Predicate. Also note that
-// you may face performance issues when using this with a high number of namespaces.
-func MultiNamespacedCacheBuilder(namespaces []string) NewCacheFunc {
+// MultiNamespacedOption is a function that modifies a MultiNamespacedOptions.
+type MultiNamespacedOption func(*MultiNamespacedOptions)
+
+// MultiNamespacedOptions is used to configure the functions used to create caches
+// on a per-namespace basis.
+type MultiNamespacedOptions struct {
+	NewNamespaceCaches        map[string]NewCacheFunc
+	NewClusterScopedCache     NewCacheFunc
+	NewDefaultNamespacedCache NewCacheFunc
+}
+
+// WithLegacyNamespaceCaches configures the MultiNamespacedCacheWithOptionsBuilder
+// with standard caches in each of the namespaces provided as well as for cluster-scoped
+// objects. This option enables use of the MultiNamespacedCacheWithOptionsBuilder
+// to match the behavior of the deprecated MultiNamespacedCacheBuilder.
+func WithLegacyNamespaceCaches(namespaces []string) MultiNamespacedOption {
+	return func(options *MultiNamespacedOptions) {
+		WithNamespaceCaches(namespaces, New)(options)
+		WithClusterScopedCache(New)(options)
+	}
+}
+
+// WithNamespaceCaches configures MultiNamespacedCacheWithOptionsBuilder
+// with namespace-specific caches that are created using the provided NewCacheFunc.
+func WithNamespaceCaches(namespaces []string, f NewCacheFunc) MultiNamespacedOption {
+	return func(options *MultiNamespacedOptions) {
+		for _, ns := range namespaces {
+			WithNamespaceCache(ns, f)(options)
+		}
+	}
+}
+
+// WithNamespaceCache configures MultiNamespacedCacheWithOptionsBuilder
+// with a namespace cache that uses the provided NewCacheFunc.
+func WithNamespaceCache(namespace string, f NewCacheFunc) MultiNamespacedOption {
+	return func(options *MultiNamespacedOptions) {
+		options.NewNamespaceCaches[namespace] = f
+	}
+}
+
+// WithClusterScopedCache configures MultiNamespacedCacheWithOptionsBuilder
+// with a cache for cluster-scoped objects that uses the provided NewCacheFunc.
+func WithClusterScopedCache(f NewCacheFunc) MultiNamespacedOption {
+	return func(options *MultiNamespacedOptions) {
+		options.NewClusterScopedCache = f
+	}
+}
+
+// WithDefaultNamespacedCache configures MultiNamespacedCacheWithOptionsBuilder
+// with a "catch-all" cache for namespace-scoped objects that are in namespaces
+// explicitly configured on the cache builder.
+func WithDefaultNamespacedCache(f NewCacheFunc) MultiNamespacedOption {
+	return func(options *MultiNamespacedOptions) {
+		options.NewDefaultNamespacedCache = f
+	}
+}
+
+// MultiNamespacedCacheWithOptionsBuilder builds a composite cache that delegates to per-namespace
+// caches built according to the passed MultiNamespacedOption options.
+//
+// If the set of options passed to MultiNamespacedCacheWithOptionsBuilder results in the NewCacheFunc
+// being set multiple times for the same namespace, the last such setting will be used.
+//
+// If a default namespaced cache is defined (e.g. with WithDefaultNamespacedCache), it will be used
+// as a catch-all for objects not in the explicit namespaces configured on the cache builder. The
+// default namespaced cache is automatically configured with extra field selectors to avoid duplicate
+// caching of objects between namespace-specific caches and this catch-all cache.
+//
+// If a cluster-scoped cache is defined (e.g. with WithClusterScopedCache), it will be used for
+// cluster-scoped objects. If it is undefined, the resulting cache will return an error during read
+// operations, reporting that a cluster-scoped cache is not defined.
+func MultiNamespacedCacheWithOptionsBuilder(opts ...MultiNamespacedOption) NewCacheFunc {
+	multiNamespaceOpts := MultiNamespacedOptions{
+		NewNamespaceCaches: map[string]NewCacheFunc{},
+	}
+	for _, opt := range opts {
+		opt(&multiNamespaceOpts)
+	}
+
 	return func(config *rest.Config, opts Options) (Cache, error) {
 		opts, err := defaultOpts(config, opts)
 		if err != nil {
 			return nil, err
 		}
 
-		caches := map[string]Cache{}
-
-		// create a cache for cluster scoped resources
-		gCache, err := New(config, opts)
-		if err != nil {
-			return nil, fmt.Errorf("error creating global cache: %w", err)
-		}
-
-		for _, ns := range namespaces {
-			opts.Namespace = ns
-			c, err := New(config, opts)
+		var clusterCache Cache
+		if multiNamespaceOpts.NewClusterScopedCache != nil {
+			clusterCache, err = multiNamespaceOpts.NewClusterScopedCache(config, opts)
 			if err != nil {
 				return nil, err
 			}
-			caches[ns] = c
 		}
-		return &multiNamespaceCache{namespaceToCache: caches, Scheme: opts.Scheme, RESTMapper: opts.Mapper, clusterCache: gCache}, nil
+
+		nsToCache := map[string]Cache{}
+		if multiNamespaceOpts.NewDefaultNamespacedCache != nil {
+			defaultNamespaceCache, err := multiNamespaceOpts.NewDefaultNamespacedCache(config, ignoreNamespaces(opts, multiNamespaceOpts.NewNamespaceCaches))
+			if err != nil {
+				return nil, err
+			}
+			nsToCache[corev1.NamespaceAll] = defaultNamespaceCache
+		}
+
+		for ns, newCacheFunc := range multiNamespaceOpts.NewNamespaceCaches {
+			opts.Namespace = ns
+			nsToCache[ns], err = newCacheFunc(config, opts)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return &multiNamespaceCache{
+			namespaceToCache: nsToCache,
+			clusterCache:     clusterCache,
+			RESTMapper:       opts.Mapper,
+			Scheme:           opts.Scheme,
+		}, nil
 	}
+}
+
+func ignoreNamespaces(opts Options, newObjectCaches map[string]NewCacheFunc) Options {
+	fieldSelectors := []fields.Selector{}
+	if opts.DefaultSelector.Field != nil {
+		fieldSelectors = append(fieldSelectors, opts.DefaultSelector.Field)
+	}
+	for ns := range newObjectCaches {
+		fieldSelectors = append(fieldSelectors, fields.OneTermNotEqualSelector("metadata.namespace", ns))
+	}
+	opts.DefaultSelector.Field = fields.AndSelectors(fieldSelectors...)
+	return opts
+}
+
+// MultiNamespacedCacheBuilder - Builder function to create a new multi-namespaced cache.
+// This will scope the cache to a list of namespaces. Listing for all namespaces
+// will list for all the namespaces that this knows about. By default this will create
+// a global cache for cluster scoped resource. Note that this is not intended
+// to be used for excluding namespaces, this is better done via a Predicate. Also note that
+// you may face performance issues when using this with a high number of namespaces.
+//
+// Deprecated: Use MultiNamespacedCacheWithOptionsBuilder instead:
+//
+//	  cache.MultiNamespacedCacheWithOptionsBuilder(
+//		   WithLegacyNamespaceCaches(namespaces),
+//	  )
+func MultiNamespacedCacheBuilder(namespaces []string) NewCacheFunc {
+	return MultiNamespacedCacheWithOptionsBuilder(
+		WithLegacyNamespaceCaches(namespaces),
+	)
 }
 
 // multiNamespaceCache knows how to handle multiple namespaced caches
@@ -94,12 +212,13 @@ func (c *multiNamespaceCache) GetInformer(ctx context.Context, obj client.Object
 		return nil, err
 	}
 	if !isNamespaced {
-		clusterCacheInf, err := c.clusterCache.GetInformer(ctx, obj)
-		if err != nil {
-			return nil, err
+		if c.clusterCache != nil {
+			clusterCacheInf, err := c.clusterCache.GetInformer(ctx, obj)
+			if err != nil {
+				return nil, err
+			}
+			informers[globalCache] = clusterCacheInf
 		}
-		informers[globalCache] = clusterCacheInf
-
 		return &multiNamespaceInformer{namespaceToInformer: informers}, nil
 	}
 
@@ -124,12 +243,13 @@ func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema
 		return nil, err
 	}
 	if !isNamespaced {
-		clusterCacheInf, err := c.clusterCache.GetInformerForKind(ctx, gvk)
-		if err != nil {
-			return nil, err
+		if c.clusterCache != nil {
+			clusterCacheInf, err := c.clusterCache.GetInformerForKind(ctx, gvk)
+			if err != nil {
+				return nil, err
+			}
+			informers[globalCache] = clusterCacheInf
 		}
-		informers[globalCache] = clusterCacheInf
-
 		return &multiNamespaceInformer{namespaceToInformer: informers}, nil
 	}
 
@@ -146,12 +266,14 @@ func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema
 
 func (c *multiNamespaceCache) Start(ctx context.Context) error {
 	// start global cache
-	go func() {
-		err := c.clusterCache.Start(ctx)
-		if err != nil {
-			log.Error(err, "cluster scoped cache failed to start")
-		}
-	}()
+	if c.clusterCache != nil {
+		go func() {
+			err := c.clusterCache.Start(ctx)
+			if err != nil {
+				log.Error(err, "cluster scoped cache failed to start")
+			}
+		}()
+	}
 
 	// start namespaced caches
 	for ns, cache := range c.namespaceToCache {
@@ -176,7 +298,7 @@ func (c *multiNamespaceCache) WaitForCacheSync(ctx context.Context) bool {
 	}
 
 	// check if cluster scoped cache has synced
-	if !c.clusterCache.WaitForCacheSync(ctx) {
+	if c.clusterCache != nil && !c.clusterCache.WaitForCacheSync(ctx) {
 		synced = false
 	}
 	return synced
@@ -189,6 +311,9 @@ func (c *multiNamespaceCache) IndexField(ctx context.Context, obj client.Object,
 	}
 
 	if !isNamespaced {
+		if c.clusterCache == nil {
+			return nil
+		}
 		return c.clusterCache.IndexField(ctx, obj, field, extractValue)
 	}
 
@@ -207,11 +332,18 @@ func (c *multiNamespaceCache) Get(ctx context.Context, key client.ObjectKey, obj
 	}
 
 	if !isNamespaced {
+		if c.clusterCache == nil {
+			return fmt.Errorf("unable to get: %v because cluster-scoped cache does not exist", key)
+		}
 		// Look into the global cache to fetch the object
 		return c.clusterCache.Get(ctx, key, obj)
 	}
 
 	cache, ok := c.namespaceToCache[key.Namespace]
+	if !ok {
+		// Use the default/catch-all namespace cache if we have one.
+		cache, ok = c.namespaceToCache[corev1.NamespaceAll]
+	}
 	if !ok {
 		return fmt.Errorf("unable to get: %v because of unknown namespace for the cache", key)
 	}
@@ -229,12 +361,19 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 	}
 
 	if !isNamespaced {
+		if c.clusterCache == nil {
+			return fmt.Errorf("unable to get because cluster-scoped cache does not exist")
+		}
 		// Look at the global cache to get the objects with the specified GVK
 		return c.clusterCache.List(ctx, list, opts...)
 	}
 
 	if listOpts.Namespace != corev1.NamespaceAll {
 		cache, ok := c.namespaceToCache[listOpts.Namespace]
+		if !ok {
+			// Use the default/catch-all namespace cache if we have one.
+			cache, ok = c.namespaceToCache[corev1.NamespaceAll]
+		}
 		if !ok {
 			return fmt.Errorf("unable to get: %v because of unknown namespace for the cache", listOpts.Namespace)
 		}

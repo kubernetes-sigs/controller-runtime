@@ -28,7 +28,6 @@ import (
 	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -74,10 +73,6 @@ var _ = AfterSuite(func() {
 
 	// Change the webhook.DefaultPort back to the original default.
 	webhook.DefaultPort = 9443
-})
-
-var _ = ReportAfterSuite("Report to Prow", func(report Report) {
-	printer.AddReport(report, suiteName)
 })
 
 func addCRDToEnvironment(env *envtest.Environment, gvks ...schema.GroupVersionKind) {

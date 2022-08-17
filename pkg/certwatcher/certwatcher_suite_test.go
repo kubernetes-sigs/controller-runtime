@@ -22,7 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -46,8 +45,4 @@ var _ = AfterSuite(func() {
 	for _, file := range []string{certPath, keyPath} {
 		_ = os.Remove(file)
 	}
-})
-
-var _ = ReportAfterSuite("Report to Prow", func(report Report) {
-	printer.AddReport(report, suiteName)
 })

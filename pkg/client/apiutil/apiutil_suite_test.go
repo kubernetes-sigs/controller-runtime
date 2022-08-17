@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -42,8 +41,4 @@ var _ = BeforeSuite(func() {
 
 	// for things that technically need a rest.Config for defaulting, but don't actually use them
 	cfg = &rest.Config{}
-})
-
-var _ = ReportAfterSuite("Report to Prow", func(report Report) {
-	printer.AddReport(report, suiteName)
 })

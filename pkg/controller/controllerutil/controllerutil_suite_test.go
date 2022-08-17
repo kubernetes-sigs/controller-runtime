@@ -25,7 +25,6 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
 const suiteName = "Controllerutil Suite"
@@ -53,8 +52,4 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	Expect(testenv.Stop()).To(Succeed())
-})
-
-var _ = ReportAfterSuite("Report to Prow", func(report Report) {
-	printer.AddReport(report, suiteName)
 })

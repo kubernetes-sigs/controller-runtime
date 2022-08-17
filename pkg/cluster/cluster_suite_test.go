@@ -25,7 +25,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -68,8 +67,4 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	Expect(testenv.Stop()).To(Succeed())
-})
-
-var _ = ReportAfterSuite("Report to Prow", func(report Report) {
-	printer.AddReport(report, suiteName)
 })

@@ -21,8 +21,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
 const suiteName = "Addr Suite"
@@ -32,7 +30,3 @@ func TestAddr(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, suiteName)
 }
-
-var _ = ReportAfterSuite("Report to Prow", func(report Report) {
-	printer.AddReport(report, suiteName)
-})

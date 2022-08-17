@@ -22,7 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
 const suiteName = "Runtime Signal Suite"
@@ -34,8 +33,4 @@ func TestSource(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	signal.Reset()
-})
-
-var _ = ReportAfterSuite("Report to Prow", func(report Report) {
-	printer.AddReport(report, suiteName)
 })

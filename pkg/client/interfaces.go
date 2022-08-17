@@ -143,3 +143,13 @@ func IgnoreNotFound(err error) error {
 	}
 	return err
 }
+
+// IgnoreAlreadyExists returns nil on AlreadyExists errors.
+// All other values that are not AlreadyExists errors or nil are returned unmodified.
+func IgnoreAlreadyExists(err error) error {
+	if apierrors.IsAlreadyExists(err) {
+		return nil
+	}
+
+	return err
+}

@@ -3403,6 +3403,32 @@ var _ = Describe("IgnoreNotFound", func() {
 	})
 })
 
+var _ = Describe("IgnoreAlreadyExists", func() {
+	It("should return nil on a 'AlreadyExists' error", func() {
+		By("creating a AlreadyExists error")
+		err := apierrors.NewAlreadyExists(schema.GroupResource{}, "")
+
+		By("returning no error")
+		Expect(client.IgnoreAlreadyExists(err)).To(Succeed())
+	})
+
+	It("should return the error on a status other than already exists", func() {
+		By("creating a BadRequest error")
+		err := apierrors.NewBadRequest("")
+
+		By("returning an error")
+		Expect(client.IgnoreAlreadyExists(err)).To(HaveOccurred())
+	})
+
+	It("should return the error on a non-status error", func() {
+		By("creating an fmt error")
+		err := fmt.Errorf("arbitrary error")
+
+		By("returning an error")
+		Expect(client.IgnoreAlreadyExists(err)).To(HaveOccurred())
+	})
+})
+
 type fakeReader struct {
 	Called int
 }

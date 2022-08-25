@@ -61,9 +61,9 @@ Deleting Kubernetes objects) or external Events (GitHub Webhooks, polling extern
 
 Example reconcile Logic:
 
-	* Read an object and all the Pods it owns.
-	* Observe that the object spec specifies 5 replicas but actual cluster contains only 1 Pod replica.
-	* Create 4 Pods and set their OwnerReferences to the object.
+* Read an object and all the Pods it owns.
+* Observe that the object spec specifies 5 replicas but actual cluster contains only 1 Pod replica.
+* Create 4 Pods and set their OwnerReferences to the object.
 
 reconcile may be implemented as either a type:
 

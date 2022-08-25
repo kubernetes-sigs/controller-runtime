@@ -148,7 +148,7 @@ func ExampleStandaloneWebhook() {
 	mux.Handle("/validating", validatingHookHandler)
 
 	// Run your handler
-	if err := http.ListenAndServe(port, mux); err != nil {
+	if err := http.ListenAndServe(port, mux); err != nil { //nolint:gosec // it's fine to not set timeouts here
 		panic(err)
 	}
 }

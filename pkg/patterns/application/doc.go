@@ -16,7 +16,6 @@ limitations under the License.
 
 // Package application documents patterns for building Controllers to manage specific applications.
 //
-//
 // An application is a Controller and Resource that together implement the operational logic for an application.
 // They are often used to take off-the-shelf OSS applications, and make them Kubernetes native.
 //

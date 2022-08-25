@@ -27,11 +27,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-const suiteName = "API Utilities Test Suite"
-
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "API Utilities Test Suite")
 }
 
 var cfg *rest.Config

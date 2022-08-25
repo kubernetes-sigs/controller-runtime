@@ -27,14 +27,13 @@ import (
 )
 
 var (
-	certPath  = "testdata/tls.crt"
-	keyPath   = "testdata/tls.key"
-	suiteName = "CertWatcher Suite"
+	certPath = "testdata/tls.crt"
+	keyPath  = "testdata/tls.key"
 )
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "CertWatcher Suite")
 }
 
 var _ = BeforeSuite(func() {

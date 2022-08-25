@@ -23,9 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const suiteName = "Cache Internal Suite"
-
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Cache Internal Suite")
 }

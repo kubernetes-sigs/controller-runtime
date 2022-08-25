@@ -25,11 +25,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-const suiteName = "Reconcile Suite"
-
 func TestReconcile(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Reconcile Suite")
 }
 
 var _ = BeforeSuite(func() {

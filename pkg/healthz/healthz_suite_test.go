@@ -25,11 +25,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-const suiteName = "Healthz Suite"
-
 func TestHealthz(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Healthz Suite")
 }
 
 var _ = BeforeSuite(func() {

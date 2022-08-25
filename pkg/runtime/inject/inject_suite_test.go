@@ -23,9 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const suiteName = "Runtime Injection Suite"
-
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Runtime Injection Suite")
 }

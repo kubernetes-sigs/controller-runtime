@@ -23,9 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const suiteName = "Zap Log Suite"
-
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Zap Log Suite")
 }

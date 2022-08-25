@@ -28,11 +28,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-const suiteName = "Cache Suite"
-
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Cache Suite")
 }
 
 var testenv *envtest.Environment

@@ -25,11 +25,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-const suiteName = "Predicate Suite"
-
 func TestPredicate(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Predicate Suite")
 }
 
 var _ = BeforeSuite(func() {

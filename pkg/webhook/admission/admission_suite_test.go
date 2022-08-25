@@ -26,11 +26,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-const suiteName = "Admission Webhook Suite"
-
 func TestAdmissionWebhook(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Admission Webhook Suite")
 }
 
 var _ = BeforeSuite(func() {

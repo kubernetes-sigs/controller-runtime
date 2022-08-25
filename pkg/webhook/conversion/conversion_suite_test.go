@@ -25,11 +25,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-const suiteName = "CRD conversion Suite"
-
 func TestConversionWebhook(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "CRD conversion Suite")
 }
 
 var _ = BeforeSuite(func() {

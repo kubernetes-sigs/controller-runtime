@@ -23,9 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const suiteName = "Config Suite"
-
 func TestScheme(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Config Suite")
 }

@@ -26,11 +26,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-const suiteName = "Client Config Test Suite"
-
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Client Config Test Suite")
 }
 
 var _ = BeforeSuite(func() {

@@ -28,11 +28,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-const suiteName = "Recorder Integration Suite"
-
 func TestRecorder(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Recorder Integration Suite")
 }
 
 var testenv *envtest.Environment

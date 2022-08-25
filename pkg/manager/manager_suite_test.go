@@ -31,11 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
-const suiteName = "Manager Suite"
-
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Manager Suite")
 }
 
 var testenv *envtest.Environment

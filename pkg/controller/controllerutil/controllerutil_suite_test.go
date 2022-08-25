@@ -27,11 +27,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
 
-const suiteName = "Controllerutil Suite"
-
 func TestControllerutil(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Controllerutil Suite")
 }
 
 var testenv *envtest.Environment

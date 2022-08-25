@@ -23,10 +23,8 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const suiteName = "Addr Suite"
-
 func TestAddr(t *testing.T) {
 	t.Parallel()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Addr Suite")
 }

@@ -25,11 +25,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-const suiteName = "Source Internal Suite"
-
 func TestInternal(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Source Internal Suite")
 }
 
 var _ = BeforeSuite(func() {

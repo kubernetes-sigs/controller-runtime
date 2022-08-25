@@ -23,10 +23,8 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const suiteName = "Envtest Process Launcher Suite"
-
 func TestInternal(t *testing.T) {
 	t.Parallel()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Envtest Process Launcher Suite")
 }

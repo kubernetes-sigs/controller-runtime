@@ -23,10 +23,8 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const suiteName = "Control Plane Standup Unit Tests"
-
 func TestIntegration(t *testing.T) {
 	t.Parallel()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Control Plane Standup Unit Tests")
 }

@@ -35,11 +35,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
-const suiteName = "application Suite"
-
 func TestBuilder(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "application Suite")
 }
 
 var testenv *envtest.Environment

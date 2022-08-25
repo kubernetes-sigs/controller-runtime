@@ -24,11 +24,9 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const suiteName = "Runtime Signal Suite"
-
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, suiteName)
+	RunSpecs(t, "Runtime Signal Suite")
 }
 
 var _ = BeforeSuite(func() {

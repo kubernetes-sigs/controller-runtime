@@ -150,8 +150,12 @@ func (o *CreateOptions) AsCreateOptions() *metav1.CreateOptions {
 		o.Raw = &metav1.CreateOptions{}
 	}
 
-	o.Raw.DryRun = o.DryRun
-	o.Raw.FieldManager = o.FieldManager
+	if len(o.DryRun) > 0 {
+		o.Raw.DryRun = o.DryRun
+	}
+	if o.FieldManager != "" {
+		o.Raw.FieldManager = o.FieldManager
+	}
 	return o.Raw
 }
 
@@ -227,10 +231,18 @@ func (o *DeleteOptions) AsDeleteOptions() *metav1.DeleteOptions {
 		o.Raw = &metav1.DeleteOptions{}
 	}
 
-	o.Raw.GracePeriodSeconds = o.GracePeriodSeconds
-	o.Raw.Preconditions = o.Preconditions
-	o.Raw.PropagationPolicy = o.PropagationPolicy
-	o.Raw.DryRun = o.DryRun
+	if o.GracePeriodSeconds != nil {
+		o.Raw.GracePeriodSeconds = o.GracePeriodSeconds
+	}
+	if o.Preconditions != nil {
+		o.Raw.Preconditions = o.Preconditions
+	}
+	if o.PropagationPolicy != nil {
+		o.Raw.PropagationPolicy = o.PropagationPolicy
+	}
+	if len(o.DryRun) > 0 {
+		o.Raw.DryRun = o.DryRun
+	}
 	return o.Raw
 }
 
@@ -425,6 +437,7 @@ func (o *ListOptions) AsListOptions() *metav1.ListOptions {
 	if o.Raw == nil {
 		o.Raw = &metav1.ListOptions{}
 	}
+
 	if o.LabelSelector != nil {
 		o.Raw.LabelSelector = o.LabelSelector.String()
 	}
@@ -598,8 +611,12 @@ func (o *UpdateOptions) AsUpdateOptions() *metav1.UpdateOptions {
 		o.Raw = &metav1.UpdateOptions{}
 	}
 
-	o.Raw.DryRun = o.DryRun
-	o.Raw.FieldManager = o.FieldManager
+	if len(o.DryRun) > 0 {
+		o.Raw.DryRun = o.DryRun
+	}
+	if o.FieldManager != "" {
+		o.Raw.FieldManager = o.FieldManager
+	}
 	return o.Raw
 }
 
@@ -673,9 +690,15 @@ func (o *PatchOptions) AsPatchOptions() *metav1.PatchOptions {
 		o.Raw = &metav1.PatchOptions{}
 	}
 
-	o.Raw.DryRun = o.DryRun
-	o.Raw.Force = o.Force
-	o.Raw.FieldManager = o.FieldManager
+	if len(o.DryRun) > 0 {
+		o.Raw.DryRun = o.DryRun
+	}
+	if o.Force != nil {
+		o.Raw.Force = o.Force
+	}
+	if o.FieldManager != "" {
+		o.Raw.FieldManager = o.FieldManager
+	}
 	return o.Raw
 }
 

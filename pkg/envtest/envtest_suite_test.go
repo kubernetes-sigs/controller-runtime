@@ -19,20 +19,18 @@ package envtest
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "Envtest Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, "Envtest Suite")
 }
 
 var env *Environment
@@ -44,7 +42,7 @@ var _ = BeforeSuite(func() {
 	initializeWebhookInEnvironment()
 	_, err := env.Start()
 	Expect(err).NotTo(HaveOccurred())
-}, StartTimeout)
+})
 
 func initializeWebhookInEnvironment() {
 	namespacedScopeV1 := admissionv1.NamespacedScope
@@ -133,4 +131,4 @@ func initializeWebhookInEnvironment() {
 
 var _ = AfterSuite(func() {
 	Expect(env.Stop()).NotTo(HaveOccurred())
-}, StopTimeout)
+})

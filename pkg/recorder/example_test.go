@@ -19,6 +19,7 @@ package recorder_test
 import (
 	corev1 "k8s.io/api/core/v1"
 
+	_ "github.com/onsi/ginkgo/v2"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
 

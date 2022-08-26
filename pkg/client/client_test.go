@@ -22,7 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -37,8 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/examples/crd/pkg"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-const serverSideTimeoutSeconds = 10
 
 func deleteDeployment(ctx context.Context, dep *appsv1.Deployment, ns string) {
 	_, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
@@ -167,7 +165,7 @@ var _ = Describe("Client", func() {
 			Spec:       corev1.NodeSpec{},
 		}
 		scheme = kscheme.Scheme
-	}, serverSideTimeoutSeconds)
+	})
 
 	var delOptions *metav1.DeleteOptions
 	AfterEach(func() {
@@ -184,7 +182,7 @@ var _ = Describe("Client", func() {
 			err = clientset.CoreV1().Nodes().Delete(ctx, node.Name, *delOptions)
 			Expect(err).NotTo(HaveOccurred())
 		}
-	}, serverSideTimeoutSeconds)
+	})
 
 	// TODO(seans): Cast "cl" as "client" struct from "Client" interface. Then validate the
 	// instance values for the "client" struct.
@@ -294,7 +292,7 @@ var _ = Describe("Client", func() {
 				Expect(err).To(HaveOccurred())
 				// TODO(seans): Add test to validate the returned error. Problems currently with
 				// different returned error locally versus travis.
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should fail if the object cannot be mapped to a GVK", func() {
 				By("creating client with empty Scheme")
@@ -431,7 +429,7 @@ var _ = Describe("Client", func() {
 				Expect(err).To(HaveOccurred())
 				// TODO(seans): Add test to validate the returned error. Problems currently with
 				// different returned error locally versus travis.
-			}, serverSideTimeoutSeconds)
+			})
 
 		})
 
@@ -1646,7 +1644,7 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should fetch unstructured collection of objects", func() {
 				By("create an initial object")
@@ -1680,7 +1678,7 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should fetch unstructured collection of objects, even if scheme is empty", func() {
 				By("create an initial object")
@@ -1709,7 +1707,7 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should return an empty list if there are no matching objects", func() {
 				cl, err := client.New(cfg, client.Options{})
@@ -1721,7 +1719,7 @@ var _ = Describe("Client", func() {
 
 				By("validating no Deployments are returned")
 				Expect(deps.Items).To(BeEmpty())
-			}, serverSideTimeoutSeconds)
+			})
 
 			// TODO(seans): get label selector test working
 			It("should filter results by label selector", func() {
@@ -1782,7 +1780,7 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by namespace selector", func() {
 				By("creating a Deployment in test-namespace-1")
@@ -1841,7 +1839,7 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depBackend, "test-namespace-2")
 				deleteNamespace(ctx, tns1)
 				deleteNamespace(ctx, tns2)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by field selector", func() {
 				By("creating a Deployment with name deployment-frontend")
@@ -1893,7 +1891,7 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by namespace selector and label selector", func() {
 				By("creating a Deployment in test-namespace-3 with the app=frontend label")
@@ -1986,7 +1984,7 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depFrontend4, "test-namespace-4")
 				deleteNamespace(ctx, tns3)
 				deleteNamespace(ctx, tns4)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results using limit and continue options", func() {
 
@@ -2069,7 +2067,7 @@ var _ = Describe("Client", func() {
 				Expect(deps.Continue).To(BeEmpty())
 				Expect(deps.Items[0].Name).To(Equal(dep3.Name))
 				Expect(deps.Items[1].Name).To(Equal(dep4.Name))
-			}, serverSideTimeoutSeconds)
+			})
 
 			PIt("should fail if the object doesn't have meta", func() {
 
@@ -2112,7 +2110,7 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should return an empty list if there are no matching objects", func() {
 				cl, err := client.New(cfg, client.Options{})
@@ -2129,7 +2127,7 @@ var _ = Describe("Client", func() {
 
 				By("validating no Deployments are returned")
 				Expect(deps.Items).To(BeEmpty())
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by namespace selector", func() {
 				By("creating a Deployment in test-namespace-5")
@@ -2193,7 +2191,7 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depBackend, "test-namespace-6")
 				deleteNamespace(ctx, tns1)
 				deleteNamespace(ctx, tns2)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by field selector", func() {
 				By("creating a Deployment with name deployment-frontend")
@@ -2250,7 +2248,7 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by namespace selector and label selector", func() {
 				By("creating a Deployment in test-namespace-7 with the app=frontend label")
@@ -2346,7 +2344,7 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depFrontend4, "test-namespace-8")
 				deleteNamespace(ctx, tns3)
 				deleteNamespace(ctx, tns4)
-			}, serverSideTimeoutSeconds)
+			})
 
 			PIt("should fail if the object doesn't have meta", func() {
 
@@ -2394,7 +2392,7 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should return an empty list if there are no matching objects", func() {
 				cl, err := client.New(cfg, client.Options{})
@@ -2411,7 +2409,7 @@ var _ = Describe("Client", func() {
 
 				By("validating no Deployments are returned")
 				Expect(metaList.Items).To(BeEmpty())
-			}, serverSideTimeoutSeconds)
+			})
 
 			// TODO(seans): get label selector test working
 			It("should filter results by label selector", func() {
@@ -2477,7 +2475,7 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by namespace selector", func() {
 				By("creating a Deployment in test-namespace-1")
@@ -2541,7 +2539,7 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depBackend, "test-namespace-2")
 				deleteNamespace(ctx, tns1)
 				deleteNamespace(ctx, tns2)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by field selector", func() {
 				By("creating a Deployment with name deployment-frontend")
@@ -2598,7 +2596,7 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by namespace selector and label selector", func() {
 				By("creating a Deployment in test-namespace-3 with the app=frontend label")
@@ -2696,7 +2694,7 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depFrontend4, "test-namespace-4")
 				deleteNamespace(ctx, tns3)
 				deleteNamespace(ctx, tns4)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results using limit and continue options", func() {
 
@@ -2794,7 +2792,7 @@ var _ = Describe("Client", func() {
 				Expect(metaList.Continue).To(BeEmpty())
 				Expect(metaList.Items[0].Name).To(Equal(dep3.Name))
 				Expect(metaList.Items[1].Name).To(Equal(dep4.Name))
-			}, serverSideTimeoutSeconds)
+			})
 
 			PIt("should fail if the object doesn't have meta", func() {
 

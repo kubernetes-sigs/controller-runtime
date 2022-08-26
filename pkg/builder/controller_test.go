@@ -23,7 +23,7 @@ import (
 	"sync/atomic"
 
 	"github.com/go-logr/logr"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -321,7 +321,7 @@ var _ = Describe("application", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			doReconcileTest(ctx, "3", m, false, bldr)
-		}, 10)
+		})
 
 		It("should Reconcile Watches objects", func() {
 			m, err := manager.New(cfg, manager.Options{})
@@ -336,7 +336,7 @@ var _ = Describe("application", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			doReconcileTest(ctx, "4", m, true, bldr)
-		}, 10)
+		})
 	})
 
 	Describe("Set custom predicates", func() {
@@ -552,7 +552,6 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 	go func() {
 		defer GinkgoRecover()
 		Expect(mgr.Start(ctx)).NotTo(HaveOccurred())
-		By("Stopping the application")
 	}()
 
 	By("Creating a Deployment")

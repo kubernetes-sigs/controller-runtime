@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 )
 
 type mockFinalizer struct {
@@ -21,10 +20,10 @@ type mockFinalizer struct {
 func (f mockFinalizer) Finalize(context.Context, client.Object) (Result, error) {
 	return f.result, f.err
 }
+
 func TestFinalizer(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "Finalizer Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, "Finalizer Suite")
 }
 
 var _ = Describe("TestFinalizer", func() {

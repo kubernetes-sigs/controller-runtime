@@ -20,8 +20,21 @@ source $(dirname ${BASH_SOURCE})/common.sh
 
 header_text "running go test"
 
-go test -race ${P_FLAG} ${MOD_OPT} ./...
+if [[ -n ${ARTIFACTS:-} ]]; then
+  GINKGO_ARGS="-ginkgo.junit-report=junit-report.xml"
+fi
+
+result=0
+go test -race ${P_FLAG} ${MOD_OPT} ./... ${GINKGO_ARGS} || result=$?
 
 if [[ -n ${ARTIFACTS:-} ]]; then
-  if grep -Rin '<failure type="Failure">' ${ARTIFACTS}/*; then exit 1; fi
+  mkdir -p ${ARTIFACTS}
+  for file in `find . -name *junit-report.xml`; do
+    new_file=${file#./}
+    new_file=${new_file%/junit-report.xml}
+    new_file=${new_file//"/"/"-"}
+    mv "$file" "$ARTIFACTS/junit_${new_file}.xml"
+  done
 fi
+
+exit $result

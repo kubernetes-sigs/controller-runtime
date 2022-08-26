@@ -23,8 +23,7 @@ import (
 	"sort"
 	"strconv"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
@@ -1540,7 +1539,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 					By("verifying the object is received on the channel")
 					Eventually(out).Should(Receive(Equal(pod)))
-				}, 3)
+				})
 
 				It("should be able to index an object field then retrieve objects by that field", func() {
 					By("creating the cache")
@@ -1590,7 +1589,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(listObj.Items).Should(HaveLen(1))
 					actual := listObj.Items[0]
 					Expect(actual.GetName()).To(Equal("test-pod-3"))
-				}, 3)
+				})
 
 				It("should allow for get informer to be cancelled", func() {
 					By("cancelling the context")
@@ -1660,7 +1659,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 					By("verifying the object's metadata is received on the channel")
 					Eventually(out).Should(Receive(Equal(podMeta)))
-				}, 3)
+				})
 
 				It("should be able to index an object field then retrieve objects by that field", func() {
 					By("creating the cache")
@@ -1714,7 +1713,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						Version: "v1",
 						Kind:    "Pod",
 					}))
-				}, 3)
+				})
 
 				It("should allow for get informer to be cancelled", func() {
 					By("creating a context and cancelling it")

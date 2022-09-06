@@ -29,15 +29,30 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
 
+// KubeconfigFlagName is the name of the kubeconfig flag
+const KubeconfigFlagName = "kubeconfig"
+
 var (
 	kubeconfig string
 	log        = logf.RuntimeLog.WithName("client").WithName("config")
 )
 
+// init registers the "kubeconfig" flag to the default command line FlagSet.
+// TODO: This should be removed, as it potentially leads to redefined flag errors for users, if they already
+// have registered the "kubeconfig" flag to the command line FlagSet in other parts of their code.
 func init() {
-	// TODO: Fix this to allow double vendoring this library but still register flags on behalf of users
-	flag.StringVar(&kubeconfig, "kubeconfig", "",
-		"Paths to a kubeconfig. Only required if out-of-cluster.")
+	RegisterFlags(flag.CommandLine)
+}
+
+// RegisterFlags registers flag variables to the given FlagSet if not already registered.
+// It uses the default command line FlagSet, if none is provided. Currently, it only registers the kubeconfig flag.
+func RegisterFlags(fs *flag.FlagSet) {
+	if fs == nil {
+		fs = flag.CommandLine
+	}
+	if fs.Lookup(KubeconfigFlagName) == nil {
+		fs.StringVar(&kubeconfig, KubeconfigFlagName, "", "Paths to a kubeconfig. Only required if out-of-cluster.")
+	}
 }
 
 // GetConfig creates a *rest.Config for talking to a Kubernetes API server.

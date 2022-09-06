@@ -160,8 +160,8 @@ var _ = Describe("MultiNamespacedCacheWithOptionsBuilder", func() {
 		pod3b = createPodWithLabels("pod-3b", testNamespaceThree, corev1.RestartPolicyNever, map[string]string{"other-match": "true"})  // matches (matches default cache label selector)
 		By("creating the informer cache")
 		informerCache, err = cache.MultiNamespacedCacheWithOptionsBuilder(
-			cache.WithNamespaceCache(testNamespaceOne, cache.New),
-			cache.WithNamespaceCache(testNamespaceTwo, cache.BuilderWithOptions(cache.Options{
+			cache.WithNamespacedCache(testNamespaceOne, cache.New),
+			cache.WithNamespacedCache(testNamespaceTwo, cache.BuilderWithOptions(cache.Options{
 				DefaultSelector: cache.ObjectSelector{
 					Label: labels.Set{"ns2-match": "true"}.AsSelector(),
 				},

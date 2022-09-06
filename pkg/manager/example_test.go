@@ -60,7 +60,7 @@ func ExampleNew_multinamespaceCache() {
 
 	mgr, err := manager.New(cfg, manager.Options{
 		NewCache: cache.MultiNamespacedCacheWithOptionsBuilder(
-			cache.WithLegacyNamespaceCaches([]string{"namespace1", "namespace2"}),
+			cache.WithLegacyNamespacedCaches([]string{"namespace1", "namespace2"}),
 		),
 	})
 	if err != nil {

@@ -45,37 +45,37 @@ type MultiNamespacedOption func(*MultiNamespacedOptions)
 // MultiNamespacedOptions is used to configure the functions used to create caches
 // on a per-namespace basis.
 type MultiNamespacedOptions struct {
-	NewNamespaceCaches        map[string]NewCacheFunc
+	NewNamespacedCaches       map[string]NewCacheFunc
 	NewClusterScopedCache     NewCacheFunc
 	NewDefaultNamespacedCache NewCacheFunc
 }
 
-// WithLegacyNamespaceCaches configures the MultiNamespacedCacheWithOptionsBuilder
+// WithLegacyNamespacedCaches configures the MultiNamespacedCacheWithOptionsBuilder
 // with standard caches in each of the namespaces provided as well as for cluster-scoped
 // objects. This option enables use of the MultiNamespacedCacheWithOptionsBuilder
 // to match the behavior of the deprecated MultiNamespacedCacheBuilder.
-func WithLegacyNamespaceCaches(namespaces []string) MultiNamespacedOption {
+func WithLegacyNamespacedCaches(namespaces []string) MultiNamespacedOption {
 	return func(options *MultiNamespacedOptions) {
-		WithNamespaceCaches(namespaces, New)(options)
+		WithNamespacedCaches(namespaces, New)(options)
 		WithClusterScopedCache(New)(options)
 	}
 }
 
-// WithNamespaceCaches configures MultiNamespacedCacheWithOptionsBuilder
+// WithNamespacedCaches configures MultiNamespacedCacheWithOptionsBuilder
 // with namespace-specific caches that are created using the provided NewCacheFunc.
-func WithNamespaceCaches(namespaces []string, f NewCacheFunc) MultiNamespacedOption {
+func WithNamespacedCaches(namespaces []string, f NewCacheFunc) MultiNamespacedOption {
 	return func(options *MultiNamespacedOptions) {
 		for _, ns := range namespaces {
-			WithNamespaceCache(ns, f)(options)
+			WithNamespacedCache(ns, f)(options)
 		}
 	}
 }
 
-// WithNamespaceCache configures MultiNamespacedCacheWithOptionsBuilder
+// WithNamespacedCache configures MultiNamespacedCacheWithOptionsBuilder
 // with a namespace cache that uses the provided NewCacheFunc.
-func WithNamespaceCache(namespace string, f NewCacheFunc) MultiNamespacedOption {
+func WithNamespacedCache(namespace string, f NewCacheFunc) MultiNamespacedOption {
 	return func(options *MultiNamespacedOptions) {
-		options.NewNamespaceCaches[namespace] = f
+		options.NewNamespacedCaches[namespace] = f
 	}
 }
 
@@ -89,7 +89,7 @@ func WithClusterScopedCache(f NewCacheFunc) MultiNamespacedOption {
 
 // WithDefaultNamespacedCache configures MultiNamespacedCacheWithOptionsBuilder
 // with a "catch-all" cache for namespace-scoped objects that are in namespaces
-// explicitly configured on the cache builder.
+// not explicitly configured on the cache builder.
 func WithDefaultNamespacedCache(f NewCacheFunc) MultiNamespacedOption {
 	return func(options *MultiNamespacedOptions) {
 		options.NewDefaultNamespacedCache = f
@@ -112,7 +112,7 @@ func WithDefaultNamespacedCache(f NewCacheFunc) MultiNamespacedOption {
 // operations, reporting that a cluster-scoped cache is not defined.
 func MultiNamespacedCacheWithOptionsBuilder(opts ...MultiNamespacedOption) NewCacheFunc {
 	multiNamespaceOpts := MultiNamespacedOptions{
-		NewNamespaceCaches: map[string]NewCacheFunc{},
+		NewNamespacedCaches: map[string]NewCacheFunc{},
 	}
 	for _, opt := range opts {
 		opt(&multiNamespaceOpts)
@@ -134,14 +134,15 @@ func MultiNamespacedCacheWithOptionsBuilder(opts ...MultiNamespacedOption) NewCa
 
 		nsToCache := map[string]Cache{}
 		if multiNamespaceOpts.NewDefaultNamespacedCache != nil {
-			defaultNamespaceCache, err := multiNamespaceOpts.NewDefaultNamespacedCache(config, ignoreNamespaces(opts, multiNamespaceOpts.NewNamespaceCaches))
+			defaultNamespacedOpts := setDefaultNamespacedCacheOpts(opts, multiNamespaceOpts.NewNamespacedCaches)
+			defaultNamespacedCache, err := multiNamespaceOpts.NewDefaultNamespacedCache(config, defaultNamespacedOpts)
 			if err != nil {
 				return nil, err
 			}
-			nsToCache[corev1.NamespaceAll] = defaultNamespaceCache
+			nsToCache[corev1.NamespaceAll] = defaultNamespacedCache
 		}
 
-		for ns, newCacheFunc := range multiNamespaceOpts.NewNamespaceCaches {
+		for ns, newCacheFunc := range multiNamespaceOpts.NewNamespacedCaches {
 			opts.Namespace = ns
 			nsToCache[ns], err = newCacheFunc(config, opts)
 			if err != nil {
@@ -158,7 +159,7 @@ func MultiNamespacedCacheWithOptionsBuilder(opts ...MultiNamespacedOption) NewCa
 	}
 }
 
-func ignoreNamespaces(opts Options, newObjectCaches map[string]NewCacheFunc) Options {
+func setDefaultNamespacedCacheOpts(opts Options, newObjectCaches map[string]NewCacheFunc) Options {
 	fieldSelectors := []fields.Selector{}
 	if opts.DefaultSelector.Field != nil {
 		fieldSelectors = append(fieldSelectors, opts.DefaultSelector.Field)
@@ -180,11 +181,11 @@ func ignoreNamespaces(opts Options, newObjectCaches map[string]NewCacheFunc) Opt
 // Deprecated: Use MultiNamespacedCacheWithOptionsBuilder instead:
 //
 //	  cache.MultiNamespacedCacheWithOptionsBuilder(
-//		   WithLegacyNamespaceCaches(namespaces),
+//		   WithLegacyNamespacedCaches(namespaces),
 //	  )
 func MultiNamespacedCacheBuilder(namespaces []string) NewCacheFunc {
 	return MultiNamespacedCacheWithOptionsBuilder(
-		WithLegacyNamespaceCaches(namespaces),
+		WithLegacyNamespacedCaches(namespaces),
 	)
 }
 
@@ -345,7 +346,7 @@ func (c *multiNamespaceCache) Get(ctx context.Context, key client.ObjectKey, obj
 		cache, ok = c.namespaceToCache[corev1.NamespaceAll]
 	}
 	if !ok {
-		return fmt.Errorf("unable to get: %v because of unknown namespace for the cache", key)
+		return fmt.Errorf("unable to get %q: neither a per-namespace nor a default namespaced cache exists", key)
 	}
 	return cache.Get(ctx, key, obj)
 }
@@ -375,7 +376,7 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 			cache, ok = c.namespaceToCache[corev1.NamespaceAll]
 		}
 		if !ok {
-			return fmt.Errorf("unable to get: %v because of unknown namespace for the cache", listOpts.Namespace)
+			return fmt.Errorf("unable to list in namespace %q: neither a per-namespace nor a default namespaced cache exists", listOpts.Namespace)
 		}
 		return cache.List(ctx, list, opts...)
 	}

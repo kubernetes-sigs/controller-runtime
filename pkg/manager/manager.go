@@ -219,6 +219,7 @@ type Options struct {
 
 	// HealthProbeBindAddress is the TCP address that the controller should bind to
 	// for serving health probes
+	// It can be set to "0" or "" to disable serving the health probe.
 	HealthProbeBindAddress string
 
 	// Readiness probe endpoint name, defaults to "readyz"

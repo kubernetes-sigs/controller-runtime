@@ -1,4 +1,6 @@
 //go:generate controller-gen object crd paths="." output:dir="."
+
+// +kubebuilder:ac:generate=true
 // +groupName=applytest.kubebuilder.io
 // +versionName=v1
 //go:generate $GOPATH/src/sigs.k8s.io/controller-tools/controller-gen apply paths="./..."
@@ -9,9 +11,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +kubebuilder:resource:singular=foo
 // +kubebuilder:object:generate=true
 // +kubebuilder:object:root=true
-// +kubebuilder:ac:root=true
 type Foo struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`

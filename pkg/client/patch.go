@@ -18,7 +18,6 @@ package client
 
 import (
 	"fmt"
-	"reflect"
 
 	jsonpatch "github.com/evanphx/json-patch/v5"
 	"k8s.io/apimachinery/pkg/types"
@@ -215,7 +214,7 @@ func (p applyPatch) Data(obj Object) ([]byte, error) {
 
 // applyFromPatch uses server-side-apply with a ApplyConfiguration object.
 type applyFromPatch struct {
-	patch interface{}
+	patch ApplyConfigurationObject
 }
 
 // Type implements Patch.
@@ -224,25 +223,12 @@ func (p applyFromPatch) Type() types.PatchType {
 }
 
 // setNameNamespace sets name and namespace for the returned object if an ApplyConfiguration was supplied.
-func setNameNamespace(obj Object, ac interface{}) error {
-	if !reflect.ValueOf(ac).Elem().IsValid() || reflect.ValueOf(ac).Elem().Kind() != reflect.Struct {
-		return fmt.Errorf("ApplyConfiguration is not a valid struct")
+func setNameNamespace(obj Object, ac ApplyConfigurationObject) error {
+	if ac.GetName() == "" {
+		return fmt.Errorf("ApplyConfiguration must have a non-empty Name")
 	}
-	// Since Name and Namespace are embedded objects, nil checks must be
-	// performed against the embedded ObjectMeta object first.
-	if reflect.ValueOf(ac).Elem().FieldByName("ObjectMetaApplyConfiguration").IsNil() {
-		return fmt.Errorf("ApplyConfiguration must include ObjectMetaApplyConfiguration")
-	}
-	if reflect.ValueOf(ac).Elem().FieldByName("Name").Elem().IsZero() {
-		return fmt.Errorf("ApplyConfiguration must have a non-empty Name in ObjectMetaApplyConfiguration")
-	}
-	obj.SetName(reflect.ValueOf(ac).Elem().FieldByName("Name").Elem().String())
-	// Only set the namespace if the object provides a namespace. This value
-	// is omitted for cluster scoped objects.
-	if !reflect.ValueOf(ac).Elem().FieldByName("Namespace").Elem().IsZero() {
-		obj.SetNamespace(reflect.ValueOf(ac).Elem().FieldByName("Namespace").Elem().String())
-	}
-
+	obj.SetName(ac.GetName())
+	obj.SetNamespace(ac.GetNamespace())
 	return nil
 }
 
@@ -261,6 +247,6 @@ func (p applyFromPatch) Data(o Object) ([]byte, error) {
 }
 
 // ApplyFrom creates an applyFromPatch object with the provided ApplyConfiguration.
-func ApplyFrom(ac interface{}) Patch {
+func ApplyFrom(ac ApplyConfigurationObject) Patch {
 	return applyFromPatch{patch: ac}
 }

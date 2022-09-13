@@ -75,3 +75,11 @@ type ObjectList interface {
 	metav1.ListInterface
 	runtime.Object
 }
+
+// ApplyConfigurationObject is a special object used for server side apply. It is a
+// Kubernetes object with all fields set as pointers to distinguish between nil value and empty.
+// It implements the getters for Name and Namespace for use with with ApplyPatch.
+type ApplyConfigurationObject interface {
+	GetNamespace() string
+	GetName() string
+}

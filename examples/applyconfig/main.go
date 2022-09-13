@@ -19,8 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
-
-	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
 var sch *runtime.Scheme
@@ -108,17 +106,11 @@ func runMain() int {
 	fooObj := &v1.Foo{}
 
 	// To use the SSA typed client, use the ApplyConfiguration generated types instead of the types defined in v1
-	applyConfig1 := (&ac.FooApplyConfiguration{
-		TypeMetaApplyConfiguration:   *metav1ac.TypeMeta().WithKind("Foo").WithAPIVersion("applytest.kubebuilder.io/v1"),
-		ObjectMetaApplyConfiguration: metav1ac.ObjectMeta().WithName("acdefault").WithNamespace("default"),
-	}).WithNonNullableField("value1")
+	applyConfig1 := ac.Foo().WithName("acdefault").WithNamespace("default").WithNonNullableField("value1")
 
 	// Without ApplyConfiguration, NonNullableField is not an optional field so it must be specified if Foo{} was used instead of the ApplyConfiguration
 	// The ApplyConfiguration uses pointers for all objects, so omitting a field is equivalent to saying that it is not of interest in this Apply
-	applyConfig2 := (&ac.FooApplyConfiguration{
-		TypeMetaApplyConfiguration: *metav1ac.TypeMeta().WithKind("Foo").WithAPIVersion("applytest.kubebuilder.io/v1"),
-		ObjectMetaApplyConfiguration: metav1ac.ObjectMeta().WithName("acdefault").WithNamespace("default"),
-	}).WithNullableField("value2")
+	applyConfig2 := ac.Foo().WithName("acdefault").WithNamespace("default").WithNullableField("value2")
 
 	if err := cl.Patch(context.TODO(), fooObj, client.ApplyFrom(applyConfig1), owner); err != nil {
 		panic(err)

@@ -33,6 +33,7 @@ WARNING: ⚠️ Current Limitations / Known Issues with the fake Client ⚠️
     e.g. metadata and status in the same reconcile.
   - No OpenAPI validation is performed when creating or updating objects.
   - ObjectMeta's `Generation` and `ResourceVersion` don't behave properly, Patch or Update
-    operations that rely on these fields will fail, or give false positives.
+    operations that rely on these fields will fail, or give false positives. `Generation` will be
+    updated correctly only for custom resources.
 */
 package fake

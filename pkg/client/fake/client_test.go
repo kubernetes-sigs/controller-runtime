@@ -36,10 +36,26 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	crscheme "sigs.k8s.io/controller-runtime/pkg/scheme"
 )
+
+type DummyCustomResource struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              struct {
+		A int `json:"a"`
+	} `json:"spec,omitempty"`
+	Status struct{} `json:"status,omitempty"`
+}
+
+func (crd *DummyCustomResource) DeepCopyObject() runtime.Object {
+	copy := *crd
+	return &copy
+}
 
 var _ = Describe("Fake client", func() {
 	var dep *appsv1.Deployment
@@ -984,18 +1000,62 @@ var _ = Describe("Fake client", func() {
 	})
 
 	Context("with given scheme", func() {
+		var cr *DummyCustomResource
+
 		BeforeEach(func() {
 			scheme := runtime.NewScheme()
 			Expect(corev1.AddToScheme(scheme)).To(Succeed())
 			Expect(appsv1.AddToScheme(scheme)).To(Succeed())
 			Expect(coordinationv1.AddToScheme(scheme)).To(Succeed())
+
+			schemeBuilder := &crscheme.Builder{GroupVersion: schema.GroupVersion{Group: "custom", Version: "v1"}}
+			schemeBuilder.Register(&DummyCustomResource{})
+			Expect(schemeBuilder.AddToScheme(scheme)).To(Succeed())
+
+			cr = &DummyCustomResource{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "DummyCustomResource",
+					APIVersion: "custom/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "dcr",
+					Namespace: "default",
+				},
+			}
+
 			cl = NewClientBuilder().
 				WithScheme(scheme).
-				WithObjects(cm).
+				WithObjects(cm, cr).
 				WithLists(&appsv1.DeploymentList{Items: []appsv1.Deployment{*dep, *dep2}}).
 				Build()
 		})
 		AssertClientWithoutIndexBehavior()
+
+		It("should increment generation for CR non-metadata change", func() {
+			oldGeneration := cr.Generation
+			cr.Spec.A = 1
+			Expect(cl.Update(context.Background(), cr)).To(BeNil())
+			Expect(cr.Generation).To(Equal(oldGeneration + 1))
+		})
+
+		It("should not increment generation for CR metadata change", func() {
+			oldGeneration := cr.Generation
+			cr.Annotations = map[string]string{
+				"annotation": "value",
+			}
+			Expect(cl.Update(context.Background(), cr)).To(BeNil())
+			Expect(cr.Generation).To(Equal(oldGeneration))
+		})
+
+		It("should not increment generation for non-CR change", func() {
+			oldGeneration := dep.Generation
+			dep.Annotations = map[string]string{
+				"annotation": "value",
+			}
+			dep.Spec.MinReadySeconds = 10
+			Expect(cl.Update(context.Background(), dep)).To(BeNil())
+			Expect(dep.Generation).To(Equal(oldGeneration))
+		})
 	})
 
 	Context("with Indexes", func() {

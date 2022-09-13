@@ -44,6 +44,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/internal/objectutil"
+
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 )
 
 type versionedTracker struct {
@@ -370,6 +372,13 @@ func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Ob
 	}
 	intResourceVersion++
 	accessor.SetResourceVersion(strconv.FormatUint(intResourceVersion, 10))
+
+	// The behavior of the generation field is inconsistent across built-in k8s resources, but it's
+	// consistent for CRs. CRs have their generation increased on non-metadata changes only.
+	if isCustomResource(gvk) && didNonMetadataFieldChange(oldObject, obj) {
+		accessor.SetGeneration(oldAccessor.GetGeneration() + 1)
+	}
+
 	if !accessor.GetDeletionTimestamp().IsZero() && len(accessor.GetFinalizers()) == 0 {
 		return t.ObjectTracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
 	}
@@ -378,6 +387,31 @@ func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Ob
 		return err
 	}
 	return t.ObjectTracker.Update(gvr, obj, ns)
+}
+
+func isCustomResource(gvk schema.GroupVersionKind) bool {
+	return !scheme.Scheme.Recognizes(gvk)
+}
+
+func didNonMetadataFieldChange(old runtime.Object, new runtime.Object) bool {
+	oldUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(old)
+	newUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(new)
+
+	oldCopyContent := copyNonMetadata(oldUnstructured)
+	newCopyContent := copyNonMetadata(newUnstructured)
+
+	return !apiequality.Semantic.DeepEqual(oldCopyContent, newCopyContent)
+}
+
+func copyNonMetadata(original map[string]interface{}) map[string]interface{} {
+	ret := make(map[string]interface{})
+	for key, val := range original {
+		if key == "metadata" {
+			continue
+		}
+		ret[key] = val
+	}
+	return ret
 }
 
 func (c *fakeClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {

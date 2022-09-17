@@ -300,6 +300,9 @@ type Options struct {
 	newResourceLock        func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
 	newMetricsListener     func(addr string) (net.Listener, error)
 	newHealthProbeListener func(addr string) (net.Listener, error)
+
+	// preWatch resources for leader-election runnables
+	PreWatch bool
 }
 
 // BaseContextFunc is a function used to provide a base Context to Runnables
@@ -314,6 +317,12 @@ type Runnable interface {
 	// when the context is closed. Start blocks until the context is closed or
 	// an error occurs.
 	Start(context.Context) error
+}
+
+// runnable with preWatch resources
+type RunnableWithPreWatch interface {
+	Runnable
+	PreWatch() error
 }
 
 // RunnableFunc implements Runnable using a function.
@@ -406,6 +415,10 @@ func New(config *rest.Config, options Options) (Manager, error) {
 
 	errChan := make(chan error)
 	runnables := newRunnables(options.BaseContext, errChan)
+
+	if options.PreWatch {
+		runnables.LeaderElection.preWatch = true
+	}
 
 	return &controllerManager{
 		stopProcedureEngaged:          pointer.Int64(0),

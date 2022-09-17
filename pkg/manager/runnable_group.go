@@ -98,6 +98,9 @@ type runnableGroup struct {
 	// wg is an internal sync.WaitGroup that allows us to properly stop
 	// and wait for all the runnables to finish before returning.
 	wg *sync.WaitGroup
+
+	// preWatch resources for leader-election runnables
+	preWatch bool
 }
 
 func newRunnableGroup(baseContext BaseContextFunc, errChan chan error) *runnableGroup {
@@ -170,6 +173,15 @@ func (r *runnableGroup) Start(ctx context.Context) error {
 	})
 
 	return retErr
+}
+
+func (r *runnableGroup) preWatchWithRunnable(rn Runnable) {
+	preWatchRunnable, ok := rn.(RunnableWithPreWatch)
+	if ok {
+		if err := preWatchRunnable.PreWatch(); err != nil {
+			r.errChan <- err
+		}
+	}
 }
 
 // reconcile is our main entrypoint for every runnable added
@@ -251,6 +263,9 @@ func (r *runnableGroup) Add(rn Runnable, ready runnableCheck) error {
 
 		// Check if we're already started.
 		if !r.started {
+			if r.preWatch {
+				go r.preWatchWithRunnable(readyRunnable.Runnable)
+			}
 			// Store the runnable in the internal if not.
 			r.startQueue = append(r.startQueue, readyRunnable)
 			r.start.Unlock()

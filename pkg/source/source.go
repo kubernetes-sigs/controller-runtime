@@ -60,6 +60,11 @@ type Source interface {
 	Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
 }
 
+type PreWatch interface {
+	Source
+	PreWatch() error
+}
+
 // SyncingSource is a source that needs syncing prior to being usable. The controller
 // will call its WaitForSync prior to starting workers.
 type SyncingSource interface {
@@ -87,6 +92,10 @@ func (ks *kindWithCache) WaitForSync(ctx context.Context) error {
 	return ks.kind.WaitForSync(ctx)
 }
 
+func (ks *kindWithCache) PreWatch() error {
+	return ks.kind.PreWatch()
+}
+
 // Kind is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
 type Kind struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
@@ -102,6 +111,36 @@ type Kind struct {
 }
 
 var _ SyncingSource = &Kind{}
+
+// register the ks.type to cache
+func (ks *Kind) PreWatch() error {
+	// Type should have been specified by the user.
+	if ks.Type == nil {
+		return fmt.Errorf("must specify Kind.Type")
+	}
+
+	// cache should have been injected before Start was called
+	if ks.cache == nil {
+		return fmt.Errorf("must call CacheInto on Kind before calling Start")
+	}
+
+	_, err := ks.cache.GetInformer(context.Background(), ks.Type)
+	if err != nil {
+		kindMatchErr := &meta.NoKindMatchError{}
+		switch {
+		case errors.As(err, &kindMatchErr):
+			log.Error(err, "if kind is a CRD, it should be installed before calling Start",
+				"kind", kindMatchErr.GroupKind)
+		case runtime.IsNotRegisteredError(err):
+			log.Error(err, "kind must be registered to the Scheme")
+		default:
+			log.Error(err, "failed to get informer from cache")
+		}
+		return err
+	}
+	log.Info("pre watch", "object", ks.Type)
+	return nil
+}
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.

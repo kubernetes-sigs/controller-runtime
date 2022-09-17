@@ -358,3 +358,19 @@ func (c *Controller) InjectFunc(f inject.Func) error {
 func (c *Controller) updateMetrics(reconcileTime time.Duration) {
 	ctrlmetrics.ReconcileTime.WithLabelValues(c.Name).Observe(reconcileTime.Seconds())
 }
+
+// implements PreWatch interface.
+func (c *Controller) PreWatch() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, watch := range c.startWatches {
+		preWatchSource, ok := watch.src.(source.PreWatch)
+		if !ok {
+			continue
+		}
+		if err := preWatchSource.PreWatch(); err != nil {
+			return err
+		}
+	}
+	return nil
+}

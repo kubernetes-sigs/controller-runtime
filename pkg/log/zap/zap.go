@@ -101,7 +101,7 @@ func newConsoleEncoder(opts ...EncoderConfigOption) zapcore.Encoder {
 	return zapcore.NewConsoleEncoder(encoderConfig)
 }
 
-// Level sets Options.Level, which configures the the minimum enabled logging level e.g Debug, Info.
+// Level sets Options.Level, which configures the minimum enabled logging level e.g Debug, Info.
 // A zap log level should be multiplied by -1 to get the logr verbosity.
 // For example, to get logr verbosity of 3, pass zapcore.Level(-3) to this Opts.
 // See https://pkg.go.dev/github.com/go-logr/zapr for how zap level relates to logr verbosity.

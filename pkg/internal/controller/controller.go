@@ -262,7 +262,7 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 	// We call Done here so the workqueue knows we have finished
 	// processing this item. We also must remember to call Forget if we
 	// do not want this work item being re-queued. For example, we do
-	// not call Forget if a transient error occurs, instead the item is
+	// not call Forget if a transient error occurs, instead of the item is
 	// put back on the workqueue and attempted again after a back-off
 	// period.
 	defer c.Queue.Done(obj)

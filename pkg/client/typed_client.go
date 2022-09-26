@@ -42,6 +42,7 @@ func (c *typedClient) Create(ctx context.Context, obj Object, opts ...CreateOpti
 
 	createOpts := &CreateOptions{}
 	createOpts.ApplyOptions(opts)
+
 	return o.Post().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
@@ -60,6 +61,7 @@ func (c *typedClient) Update(ctx context.Context, obj Object, opts ...UpdateOpti
 
 	updateOpts := &UpdateOptions{}
 	updateOpts.ApplyOptions(opts)
+
 	return o.Put().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
@@ -121,11 +123,13 @@ func (c *typedClient) Patch(ctx context.Context, obj Object, patch Patch, opts .
 	}
 
 	patchOpts := &PatchOptions{}
+	patchOpts.ApplyOptions(opts)
+
 	return o.Patch(patch.Type()).
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		VersionedParams(patchOpts.ApplyOptions(opts).AsPatchOptions(), c.paramCodec).
+		VersionedParams(patchOpts.AsPatchOptions(), c.paramCodec).
 		Body(data).
 		Do(ctx).
 		Into(obj)
@@ -152,8 +156,10 @@ func (c *typedClient) List(ctx context.Context, obj ObjectList, opts ...ListOpti
 	if err != nil {
 		return err
 	}
+
 	listOpts := ListOptions{}
 	listOpts.ApplyOptions(opts)
+
 	return r.Get().
 		NamespaceIfScoped(listOpts.Namespace, r.isNamespaced()).
 		Resource(r.resource()).
@@ -172,13 +178,16 @@ func (c *typedClient) UpdateStatus(ctx context.Context, obj Object, opts ...Upda
 	// wrapped to improve the UX ?
 	// It will be nice to receive an error saying the object doesn't implement
 	// status subresource and check CRD definition
+	updateOpts := &UpdateOptions{}
+	updateOpts.ApplyOptions(opts)
+
 	return o.Put().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
 		SubResource("status").
 		Body(obj).
-		VersionedParams((&UpdateOptions{}).ApplyOptions(opts).AsUpdateOptions(), c.paramCodec).
+		VersionedParams(updateOpts.AsUpdateOptions(), c.paramCodec).
 		Do(ctx).
 		Into(obj)
 }
@@ -196,13 +205,15 @@ func (c *typedClient) PatchStatus(ctx context.Context, obj Object, patch Patch, 
 	}
 
 	patchOpts := &PatchOptions{}
+	patchOpts.ApplyOptions(opts)
+
 	return o.Patch(patch.Type()).
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
 		SubResource("status").
 		Body(data).
-		VersionedParams(patchOpts.ApplyOptions(opts).AsPatchOptions(), c.paramCodec).
+		VersionedParams(patchOpts.AsPatchOptions(), c.paramCodec).
 		Do(ctx).
 		Into(obj)
 }

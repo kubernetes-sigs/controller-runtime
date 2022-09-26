@@ -58,10 +58,10 @@ type testLogger struct {
 }
 
 func (l *testLogger) WithName(_ string) logr.Logger {
-	return l
+	return l.Logger
 }
 func (l *testLogger) WithValues(_ ...interface{}) logr.Logger {
-	return l
+	return l.Logger
 }
 
 var _ = Describe("application", func() {
@@ -227,7 +227,7 @@ var _ = Describe("application", func() {
 
 			logger := &testLogger{}
 			newController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
-				if options.Log == logger {
+				if options.Log == logger.Logger {
 					return controller.New(name, mgr, options)
 				}
 				return nil, fmt.Errorf("logger expected %T but found %T", logger, options.Log)
@@ -240,7 +240,7 @@ var _ = Describe("application", func() {
 			instance, err := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
-				WithLogger(logger).
+				WithLogger(logger.Logger).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())

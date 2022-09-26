@@ -243,7 +243,7 @@ func StandaloneWebhook(hook *Webhook, opts StandaloneOptions) (http.Handler, err
 		return nil, err
 	}
 
-	if opts.Logger == nil {
+	if opts.Logger == (logr.Logger{}) {
 		opts.Logger = logf.RuntimeLog.WithName("webhook")
 	}
 	hook.log = opts.Logger

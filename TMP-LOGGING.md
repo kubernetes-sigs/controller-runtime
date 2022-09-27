@@ -51,7 +51,7 @@ You can configure the logging implementation using
 `"sigs.k8s.io/controller-runtime/pkg/log".SetLogger`.  That
 package also contains the convenience functions for setting up Zap.
 
-You can get a handle to the the "root" logger using
+You can get a handle to the "root" logger using
 `"sigs.k8s.io/controller-runtime/pkg/log".Log`, and can then call
 `WithName` to create individual named loggers.  You can call `WithName`
 repeatedly to chain names together:

@@ -19,6 +19,7 @@ package apiutil
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -36,7 +37,10 @@ type dynamicRESTMapper struct {
 	limiter      *rate.Limiter
 	newMapper    func() (meta.RESTMapper, error)
 
-	lazy bool
+	lazy    bool
+	inited  uint32
+	initMtx sync.Mutex
+
 	// Used for lazy init.
 	initOnce sync.Once
 }
@@ -125,11 +129,18 @@ func (drm *dynamicRESTMapper) setStaticMapper() error {
 
 // init initializes drm only once if drm is lazy.
 func (drm *dynamicRESTMapper) init() (err error) {
-	drm.initOnce.Do(func() {
-		if drm.lazy {
-			err = drm.setStaticMapper()
+	// skip init if drm is not lazy or has initialized
+	if !drm.lazy || atomic.LoadUint32(&drm.inited) != 0 {
+		return nil
+	}
+
+	drm.initMtx.Lock()
+	defer drm.initMtx.Unlock()
+	if drm.inited == 0 {
+		if err = drm.setStaticMapper(); err == nil {
+			atomic.StoreUint32(&drm.inited, 1)
 		}
-	})
+	}
 	return err
 }
 

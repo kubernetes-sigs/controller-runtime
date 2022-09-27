@@ -1,6 +1,23 @@
-package apiutil_test
+/*
+Copyright 2021 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package apiutil
 
 import (
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -10,8 +27,6 @@ import (
 	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 var (
@@ -36,7 +51,7 @@ var _ = Describe("Dynamic REST Mapper", func() {
 		}
 
 		lim = rate.NewLimiter(rate.Limit(5), 5)
-		mapper, err = apiutil.NewDynamicRESTMapper(cfg, apiutil.WithLimiter(lim), apiutil.WithCustomMapper(func() (meta.RESTMapper, error) {
+		mapper, err = NewDynamicRESTMapper(cfg, WithLimiter(lim), WithCustomMapper(func() (meta.RESTMapper, error) {
 			baseMapper := meta.NewDefaultRESTMapper(nil)
 			addToMapper(baseMapper)
 
@@ -130,11 +145,28 @@ var _ = Describe("Dynamic REST Mapper", func() {
 			By("ensuring that it was only refreshed once")
 			Expect(count).To(Equal(1))
 		})
+
+		It("should lazily initialize if the lazy option is used", func() {
+			var err error
+			var failedOnce bool
+			mockErr := fmt.Errorf("mock failed once")
+			mapper, err = NewDynamicRESTMapper(cfg, WithLazyDiscovery, WithCustomMapper(func() (meta.RESTMapper, error) {
+				// Make newMapper fail once
+				if !failedOnce {
+					failedOnce = true
+					return nil, mockErr
+				}
+				baseMapper := meta.NewDefaultRESTMapper(nil)
+				addToMapper(baseMapper)
+				return baseMapper, nil
+			}))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(mapper.(*dynamicRESTMapper).staticMapper).To(BeNil())
+
+			Expect(callWithTarget()).To(MatchError(mockErr))
+			Expect(callWithTarget()).To(Succeed())
+		})
 	}
-
-	PIt("should lazily initialize if the lazy option is used", func() {
-
-	})
 
 	Describe("KindFor", func() {
 		mapperTest(func() error {

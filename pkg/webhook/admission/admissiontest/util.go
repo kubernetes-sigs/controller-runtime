@@ -19,7 +19,12 @@ package admissiontest
 import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
+
+var _ runtime.Object = (*FakeValidator)(nil)
+var _ schema.ObjectKind = (*FakeValidator)(nil)
+var _ webhook.Validator = (*FakeValidator)(nil)
 
 // FakeValidator provides fake validating webhook functionality for testing
 // It implements the admission.Validator interface and
@@ -63,4 +68,53 @@ func (v *FakeValidator) GroupVersionKind() schema.GroupVersionKind {
 // SetGroupVersionKind implements admission.Validator.
 func (v *FakeValidator) SetGroupVersionKind(gvk schema.GroupVersionKind) {
 	v.GVKToReturn = gvk
+}
+
+var _ runtime.Object = (*FakeValidatorWarn)(nil)
+var _ schema.ObjectKind = (*FakeValidatorWarn)(nil)
+var _ webhook.ValidatorWarn = (*FakeValidatorWarn)(nil)
+
+// FakeValidatorWarn provides fake validating webhook functionality for testing
+// It implements the admission.ValidatorWarn interface and
+// rejects all requests with the same configured error
+// or passes if ErrorToReturn is nil.
+// And it would always return configured warning messages WarningsToReturn.
+type FakeValidatorWarn struct {
+	// ErrorToReturn is the error for which the FakeValidatorWarn rejects all requests
+	ErrorToReturn error `json:"ErrorToReturn,omitempty"`
+	// GVKToReturn is the GroupVersionKind that the webhook operates on
+	GVKToReturn schema.GroupVersionKind
+	// WarningsToReturn is the warnings for FakeValidatorWarn returns to all requests
+	WarningsToReturn []string
+}
+
+func (v *FakeValidatorWarn) ValidateCreate() (err error, warnings []string) {
+	return v.ErrorToReturn, v.WarningsToReturn
+}
+
+func (v *FakeValidatorWarn) ValidateUpdate(old runtime.Object) (err error, warnings []string) {
+	return v.ErrorToReturn, v.WarningsToReturn
+}
+
+func (v *FakeValidatorWarn) ValidateDelete() (err error, warnings []string) {
+	return v.ErrorToReturn, v.WarningsToReturn
+}
+
+func (v *FakeValidatorWarn) SetGroupVersionKind(kind schema.GroupVersionKind) {
+	v.GVKToReturn = kind
+}
+
+func (v *FakeValidatorWarn) GroupVersionKind() schema.GroupVersionKind {
+	return v.GVKToReturn
+}
+
+func (v *FakeValidatorWarn) GetObjectKind() schema.ObjectKind {
+	return v
+}
+
+func (v *FakeValidatorWarn) DeepCopyObject() runtime.Object {
+	return &FakeValidatorWarn{ErrorToReturn: v.ErrorToReturn,
+		GVKToReturn:      v.GVKToReturn,
+		WarningsToReturn: v.WarningsToReturn,
+	}
 }

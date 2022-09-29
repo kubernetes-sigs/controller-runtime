@@ -29,6 +29,9 @@ type Defaulter = admission.Defaulter
 // Validator defines functions for validating an operation.
 type Validator = admission.Validator
 
+// ValidatorWarn like Validator, but could return warnings.
+type ValidatorWarn = admission.ValidatorWarn
+
 // CustomDefaulter defines functions for setting defaults on resources.
 type CustomDefaulter = admission.CustomDefaulter
 

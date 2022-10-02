@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,8 +45,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/internal/objectutil"
-
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
 )
 
 type versionedTracker struct {
@@ -280,6 +279,7 @@ func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Ob
 		return apierrors.NewBadRequest("resourceVersion can not be set for Create requests")
 	}
 	accessor.SetResourceVersion("1")
+	accessor.SetGeneration(1)
 	obj, err = convertFromUnstructuredIfNecessary(t.scheme, obj)
 	if err != nil {
 		return err

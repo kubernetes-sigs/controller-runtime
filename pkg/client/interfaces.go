@@ -60,7 +60,8 @@ type Reader interface {
 
 // Writer knows how to create, delete, and update Kubernetes objects.
 type Writer interface {
-	// Create saves the object obj in the Kubernetes cluster.
+	// Create saves the object obj in the Kubernetes cluster. obj must be a
+	// struct pointer so that obj can be updated with the content returned by the Server.
 	Create(ctx context.Context, obj Object, opts ...CreateOption) error
 
 	// Delete deletes the given obj from Kubernetes cluster.

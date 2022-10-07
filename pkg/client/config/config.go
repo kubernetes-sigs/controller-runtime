@@ -50,7 +50,10 @@ func RegisterFlags(fs *flag.FlagSet) {
 	if fs == nil {
 		fs = flag.CommandLine
 	}
-	if fs.Lookup(KubeconfigFlagName) == nil {
+	f := fs.Lookup(KubeconfigFlagName)
+	if f != nil {
+		kubeconfig = f.Value.String()
+	} else {
 		fs.StringVar(&kubeconfig, KubeconfigFlagName, "", "Paths to a kubeconfig. Only required if out-of-cluster.")
 	}
 }

@@ -279,7 +279,19 @@ func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Ob
 		return apierrors.NewBadRequest("resourceVersion can not be set for Create requests")
 	}
 	accessor.SetResourceVersion("1")
-	accessor.SetGeneration(1)
+
+	gvk := obj.GetObjectKind().GroupVersionKind()
+	if gvk.Empty() {
+		gvk, err = apiutil.GVKForObject(obj, t.scheme)
+		if err != nil {
+			return err
+		}
+	}
+
+	if isCustomResource(gvk) {
+		accessor.SetGeneration(1)
+	}
+
 	obj, err = convertFromUnstructuredIfNecessary(t.scheme, obj)
 	if err != nil {
 		return err

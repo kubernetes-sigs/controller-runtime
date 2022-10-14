@@ -20,11 +20,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -45,6 +49,7 @@ var _ = Describe("Fake client", func() {
 	var cl client.WithWatch
 
 	BeforeEach(func() {
+		replicas := int32(1)
 		dep = &appsv1.Deployment{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "apps/v1",
@@ -54,6 +59,12 @@ var _ = Describe("Fake client", func() {
 				Name:            "test-deployment",
 				Namespace:       "ns1",
 				ResourceVersion: trackerAddResourceVersion,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Strategy: appsv1.DeploymentStrategy{
+					Type: appsv1.RecreateDeploymentStrategyType,
+				},
 			},
 		}
 		dep2 = &appsv1.Deployment{
@@ -68,6 +79,9 @@ var _ = Describe("Fake client", func() {
 					"test-label": "label-value",
 				},
 				ResourceVersion: trackerAddResourceVersion,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
 			},
 		}
 		cm = &corev1.ConfigMap{
@@ -86,7 +100,7 @@ var _ = Describe("Fake client", func() {
 		}
 	})
 
-	AssertClientBehavior := func() {
+	AssertClientWOIndexBehavior := func() {
 		It("should be able to Get", func() {
 			By("Getting a deployment")
 			namespacedName := types.NamespacedName{
@@ -967,7 +981,7 @@ var _ = Describe("Fake client", func() {
 				WithObjects(dep, dep2, cm).
 				Build()
 		})
-		AssertClientBehavior()
+		AssertClientWOIndexBehavior()
 	})
 
 	Context("with given scheme", func() {
@@ -982,7 +996,167 @@ var _ = Describe("Fake client", func() {
 				WithLists(&appsv1.DeploymentList{Items: []appsv1.Deployment{*dep, *dep2}}).
 				Build()
 		})
-		AssertClientBehavior()
+		AssertClientWOIndexBehavior()
+	})
+
+	Context("with Indexes", func() {
+		depReplicasIndexer := func(obj client.Object) []string {
+			dep, ok := obj.(*appsv1.Deployment)
+			if !ok {
+				panic(fmt.Errorf("indexer function for type %T's spec.replicas field received"+
+					" object of type %T, this should never happen", appsv1.Deployment{}, obj))
+			}
+			indexVal := ""
+			if dep.Spec.Replicas != nil {
+				indexVal = strconv.Itoa(int(*dep.Spec.Replicas))
+			}
+			return []string{indexVal}
+		}
+
+		depStrategyTypeIndexer := func(obj client.Object) []string {
+			dep, ok := obj.(*appsv1.Deployment)
+			if !ok {
+				panic(fmt.Errorf("indexer function for type %T's spec.strategy.type field received"+
+					" object of type %T, this should never happen", appsv1.Deployment{}, obj))
+			}
+			return []string{string(dep.Spec.Strategy.Type)}
+		}
+
+		var (
+			depGVR schema.GroupVersionResource
+			cb     *ClientBuilder
+		)
+
+		BeforeEach(func() {
+			cb = NewClientBuilder().
+				WithObjects(dep, dep2, cm).
+				WithIndex(depGVR, "spec.replicas", depReplicasIndexer)
+			depGVR = appsv1.SchemeGroupVersion.WithResource("deployments")
+		})
+
+		Context("client has just one Index", func() {
+			BeforeEach(func() { cl = cb.Build() })
+
+			Context("behavior that doesn't use an Index", func() {
+				AssertClientWOIndexBehavior()
+			})
+
+			Context("filtered List using field selector", func() {
+				It("errors when there's no Index for the GroupVersionResource", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("key", "val"),
+					}
+					err := cl.List(context.Background(), &corev1.ConfigMapList{}, listOpts)
+					Expect(err).NotTo(BeNil())
+				})
+
+				It("errors when there's no Index matching the field name", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.paused", "false"),
+					}
+					err := cl.List(context.Background(), &appsv1.DeploymentList{}, listOpts)
+					Expect(err).NotTo(BeNil())
+				})
+
+				It("errors when field selector uses two requirements", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.AndSelectors(
+							fields.OneTermEqualSelector("spec.replicas", "1"),
+							fields.OneTermEqualSelector("spec.strategy.type", string(appsv1.RecreateDeploymentStrategyType)),
+						)}
+					err := cl.List(context.Background(), &appsv1.DeploymentList{}, listOpts)
+					Expect(err).NotTo(BeNil())
+				})
+
+				It("returns two deployments that match the only field selector requirement", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.replicas", "1"),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(ConsistOf(*dep, *dep2))
+				})
+
+				It("returns no object because no object matches the only field selector requirement", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.replicas", "2"),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(BeEmpty())
+				})
+
+				It("returns deployment that matches both the field and label selectors", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.replicas", "1"),
+						LabelSelector: labels.SelectorFromSet(dep2.Labels),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(ConsistOf(*dep2))
+				})
+
+				It("returns no object even if field selector matches because label selector doesn't", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.replicas", "1"),
+						LabelSelector: labels.Nothing(),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(BeEmpty())
+				})
+
+				It("returns no object even if label selector matches because field selector doesn't", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.replicas", "2"),
+						LabelSelector: labels.Everything(),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(BeEmpty())
+				})
+			})
+		})
+
+		Context("client has two Indexes", func() {
+			BeforeEach(func() {
+				cl = cb.WithIndex(depGVR, "spec.strategy.type", depStrategyTypeIndexer).Build()
+			})
+
+			Context("behavior that doesn't use an Index", func() {
+				AssertClientWOIndexBehavior()
+			})
+
+			Context("filtered List using field selector", func() {
+				It("uses the second index to retrieve the indexed objects when there are matches", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.strategy.type", string(appsv1.RecreateDeploymentStrategyType)),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(ConsistOf(*dep))
+				})
+
+				It("uses the second index to retrieve the indexed objects when there are no matches", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.strategy.type", string(appsv1.RollingUpdateDeploymentStrategyType)),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(BeEmpty())
+				})
+
+				It("errors when field selector uses two requirements", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.AndSelectors(
+							fields.OneTermEqualSelector("spec.replicas", "1"),
+							fields.OneTermEqualSelector("spec.strategy.type", string(appsv1.RecreateDeploymentStrategyType)),
+						)}
+					err := cl.List(context.Background(), &appsv1.DeploymentList{}, listOpts)
+					Expect(err).NotTo(BeNil())
+				})
+			})
+		})
 	})
 
 	It("should set the ResourceVersion to 999 when adding an object to the tracker", func() {
@@ -1051,5 +1225,22 @@ var _ = Describe("Fake client", func() {
 		err = cl.Get(context.Background(), namespacedName3, obj)
 		Expect(err).To(BeNil())
 		Expect(obj).To(Equal(dep3))
+	})
+})
+
+var _ = Describe("Fake client builder", func() {
+	It("panics when an index with the same name and GroupVersionResource is registered twice", func() {
+		// We need any realistic GroupVersionResource, the choice of deployments is arbitrary.
+		gvr := appsv1.SchemeGroupVersion.WithResource("deployments")
+
+		cb := NewClientBuilder().WithIndex(gvr,
+			"test-name",
+			func(client.Object) []string { return nil })
+
+		Expect(func() {
+			cb.WithIndex(gvr,
+				"test-name",
+				func(client.Object) []string { return []string{"foo"} })
+		}).To(Panic())
 	})
 })

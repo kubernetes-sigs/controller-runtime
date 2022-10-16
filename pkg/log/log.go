@@ -38,6 +38,8 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"github.com/go-logr/logr"
 )
 
@@ -81,7 +83,8 @@ var (
 // set to a NullLogSink.
 var (
 	dlog = NewDelegatingLogSink(NullLogSink{})
-	Log  = logr.New(dlog)
+	// Log uses `klog` as the controller-runtime default logger.
+	Log = klog.NewKlogr()
 )
 
 // FromContext returns a logger with predefined values from a context.Context.

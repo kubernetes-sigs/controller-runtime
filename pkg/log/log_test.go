@@ -100,7 +100,8 @@ var _ = Describe("logging", func() {
 	Describe("top-level logger", func() {
 		It("hold newly created loggers until a logger is set", func() {
 			By("grabbing a new sub-logger and logging to it")
-			l1 := Log.WithName("runtimeLog").WithValues("newtag", "newvalue1")
+			lgr := logr.New(dlog)
+			l1 := lgr.WithName("runtimeLog").WithValues("newtag", "newvalue1")
 			l1.Info("before msg")
 
 			By("actually setting the logger")
@@ -108,7 +109,7 @@ var _ = Describe("logging", func() {
 			SetLogger(logr.New(logger))
 
 			By("grabbing another sub-logger and logging to both loggers")
-			l2 := Log.WithName("runtimeLog").WithValues("newtag", "newvalue2")
+			l2 := lgr.WithName("runtimeLog").WithValues("newtag", "newvalue2")
 			l1.Info("after msg 1")
 			l2.Info("after msg 2")
 

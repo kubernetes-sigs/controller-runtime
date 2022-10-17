@@ -18,6 +18,7 @@ package manager
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -211,6 +212,9 @@ var _ = Describe("manger.Manager", func() {
 				},
 			}
 
+			optionsTlSOptsFuncs := []func(*tls.Config){
+				func(config *tls.Config) {},
+			}
 			m, err := Options{
 				SyncPeriod:                 &optDuration,
 				LeaderElection:             true,
@@ -228,6 +232,7 @@ var _ = Describe("manger.Manager", func() {
 				Port:                       8080,
 				Host:                       "example.com",
 				CertDir:                    "/pki",
+				TLSOpts:                    optionsTlSOptsFuncs,
 			}.AndFrom(&fakeDeferredLoader{ccfg})
 			Expect(err).To(BeNil())
 
@@ -247,6 +252,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.Port).To(Equal(8080))
 			Expect(m.Host).To(Equal("example.com"))
 			Expect(m.CertDir).To(Equal("/pki"))
+			Expect(m.TLSOpts).To(Equal(optionsTlSOptsFuncs))
 		})
 
 		It("should lazily initialize a webhook server if needed", func() {

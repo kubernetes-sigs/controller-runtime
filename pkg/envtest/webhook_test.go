@@ -18,6 +18,7 @@ package envtest
 
 import (
 	"context"
+	"crypto/tls"
 	"path/filepath"
 	"time"
 
@@ -41,6 +42,9 @@ var _ = Describe("Test", func() {
 				Port:    env.WebhookInstallOptions.LocalServingPort,
 				Host:    env.WebhookInstallOptions.LocalServingHost,
 				CertDir: env.WebhookInstallOptions.LocalServingCertDir,
+				TLSOpts: []func(*tls.Config){
+					func(config *tls.Config) {},
+				},
 			}) // we need manager here just to leverage manager.SetFields
 			Expect(err).NotTo(HaveOccurred())
 			server := m.GetWebhookServer()

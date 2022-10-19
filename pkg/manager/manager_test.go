@@ -511,6 +511,25 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).To(BeNil())
 				Expect(record.HolderIdentity).To(BeEmpty())
 			})
+			When("using a custom LeaderElectionResourceLockInterface", func() {
+				It("should use the custom LeaderElectionResourceLockInterface", func() {
+					rl, err := fakeleaderelection.NewResourceLock(nil, nil, leaderelection.Options{})
+					Expect(err).NotTo(HaveOccurred())
+
+					m, err := New(cfg, Options{
+						LeaderElection:                      true,
+						LeaderElectionResourceLockInterface: rl,
+						newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+							return nil, fmt.Errorf("this should not be called")
+						},
+					})
+					Expect(m).ToNot(BeNil())
+					Expect(err).ToNot(HaveOccurred())
+					cm, ok := m.(*controllerManager)
+					Expect(ok).To(BeTrue())
+					Expect(cm.resourceLock).To(Equal(rl))
+				})
+			})
 		})
 
 		It("should create a listener for the metrics if a valid address is provided", func() {

@@ -193,6 +193,12 @@ type Options struct {
 	// LeaseDuration time first.
 	LeaderElectionReleaseOnCancel bool
 
+	// LeaderElectionResourceLockInterface allows to provide a custom resourcelock.Interface that was created outside
+	// of the controller-runtime. If this value is set the options LeaderElectionID, LeaderElectionNamespace,
+	// LeaderElectionResourceLock, LeaseDuration, RenewDeadline and RetryPeriod will be ignored. This can be useful if you
+	// want to use a locking mechanism that is currently not supported, like a MultiLock across two Kubernetes clusters.
+	LeaderElectionResourceLockInterface resourcelock.Interface
+
 	// LeaseDuration is the duration that non-leader candidates will
 	// wait to force acquire leadership. This is measured against time of
 	// last observed ack. Default is 15 seconds.
@@ -377,14 +383,19 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		}
 	}
 
-	resourceLock, err := options.newResourceLock(leaderConfig, leaderRecorderProvider, leaderelection.Options{
-		LeaderElection:             options.LeaderElection,
-		LeaderElectionResourceLock: options.LeaderElectionResourceLock,
-		LeaderElectionID:           options.LeaderElectionID,
-		LeaderElectionNamespace:    options.LeaderElectionNamespace,
-	})
-	if err != nil {
-		return nil, err
+	var resourceLock resourcelock.Interface
+	if options.LeaderElectionResourceLockInterface != nil && options.LeaderElection {
+		resourceLock = options.LeaderElectionResourceLockInterface
+	} else {
+		resourceLock, err = options.newResourceLock(leaderConfig, leaderRecorderProvider, leaderelection.Options{
+			LeaderElection:             options.LeaderElection,
+			LeaderElectionResourceLock: options.LeaderElectionResourceLock,
+			LeaderElectionID:           options.LeaderElectionID,
+			LeaderElectionNamespace:    options.LeaderElectionNamespace,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Create the metrics listener. This will throw an error if the metrics bind

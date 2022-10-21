@@ -85,6 +85,7 @@ var _ = Describe("Webhook", func() {
 				Port:    testenv.WebhookInstallOptions.LocalServingPort,
 				Host:    testenv.WebhookInstallOptions.LocalServingHost,
 				CertDir: testenv.WebhookInstallOptions.LocalServingCertDir,
+				TLSOpts: []func(*tls.Config){func(config *tls.Config) {}},
 			}) // we need manager here just to leverage manager.SetFields
 			Expect(err).NotTo(HaveOccurred())
 			server := m.GetWebhookServer()
@@ -108,6 +109,7 @@ var _ = Describe("Webhook", func() {
 				Port:    testenv.WebhookInstallOptions.LocalServingPort,
 				Host:    testenv.WebhookInstallOptions.LocalServingHost,
 				CertDir: testenv.WebhookInstallOptions.LocalServingCertDir,
+				TLSOpts: []func(*tls.Config){func(config *tls.Config) {}},
 			}) // we need manager here just to leverage manager.SetFields
 			Expect(err).NotTo(HaveOccurred())
 			server := m.GetWebhookServer()

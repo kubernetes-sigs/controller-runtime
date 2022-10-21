@@ -502,7 +502,7 @@ var _ = Describe("Zap log level flag options setup", func() {
 			Expect(optVal.Pointer()).To(Equal(expVal.Pointer()))
 		})
 
-		It("Should default to 'epoch' time encoding", func() {
+		It("Should default to 'rfc3339' time encoding", func() {
 			args := []string{""}
 			fromFlags.BindFlags(&fs)
 			err := fs.Parse(args)
@@ -513,7 +513,7 @@ var _ = Describe("Zap log level flag options setup", func() {
 			opt.addDefaults()
 
 			optVal := reflect.ValueOf(opt.TimeEncoder)
-			expVal := reflect.ValueOf(zapcore.EpochTimeEncoder)
+			expVal := reflect.ValueOf(zapcore.RFC3339TimeEncoder)
 
 			Expect(optVal.Pointer()).To(Equal(expVal.Pointer()))
 		})

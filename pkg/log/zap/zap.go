@@ -168,7 +168,7 @@ type Options struct {
 	// underlying Zap logger.
 	ZapOpts []zap.Option
 	// TimeEncoder specifies the encoder for the timestamps in log messages.
-	// Defaults to EpochTimeEncoder as this is the default in Zap currently.
+	// Defaults to RFC3339TimeEncoder.
 	TimeEncoder zapcore.TimeEncoder
 }
 
@@ -217,7 +217,7 @@ func (o *Options) addDefaults() {
 	}
 
 	if o.TimeEncoder == nil {
-		o.TimeEncoder = zapcore.EpochTimeEncoder
+		o.TimeEncoder = zapcore.RFC3339TimeEncoder
 	}
 	f := func(ecfg *zapcore.EncoderConfig) {
 		ecfg.EncodeTime = o.TimeEncoder

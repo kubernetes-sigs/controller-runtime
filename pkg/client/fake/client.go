@@ -56,9 +56,9 @@ type fakeClient struct {
 	scheme     *runtime.Scheme
 	restMapper meta.RESTMapper
 
-	// indexes maps each GroupVersionResource (GVR) to the indexes registered for that GVR.
+	// indexes maps each GroupVersionKind (GVK) to the indexes registered for that GVK.
 	// The inner map maps from index name to IndexerFunc.
-	indexes map[schema.GroupVersionResource]map[string]client.IndexerFunc
+	indexes map[schema.GroupVersionKind]map[string]client.IndexerFunc
 
 	schemeWriteLock sync.Mutex
 }
@@ -102,9 +102,9 @@ type ClientBuilder struct {
 	initRuntimeObjects []runtime.Object
 	objectTracker      testing.ObjectTracker
 
-	// indexes maps each GroupVersionResource (GVR) to the indexes registered for that GVR.
+	// indexes maps each GroupVersionKind (GVK) to the indexes registered for that GVK.
 	// The inner map maps from index name to IndexerFunc.
-	indexes map[schema.GroupVersionResource]map[string]client.IndexerFunc
+	indexes map[schema.GroupVersionKind]map[string]client.IndexerFunc
 }
 
 // WithScheme sets this builder's internal scheme.
@@ -147,27 +147,40 @@ func (f *ClientBuilder) WithObjectTracker(ot testing.ObjectTracker) *ClientBuild
 	return f
 }
 
-// WithIndex can be optionally used to register an index with name `name` and indexer `indexer` for
-// API objects of GroupVersionResource `gvr` in the fake client.
-// It can be invoked multiple times, both with different GroupVersionResource or the same one.
-// Invoking WithIndex twice with the same `name` and `gvr` will panic.
-func (f *ClientBuilder) WithIndex(gvr schema.GroupVersionResource, name string, indexer client.IndexerFunc) *ClientBuilder {
+// WithIndex can be optionally used to register an index with name `field` and indexer `extractValue`
+// for API objects of the same GroupVersionKind (GVK) as `obj` in the fake client.
+// It can be invoked multiple times, both with objects of the same GVK or different ones.
+// Invoking WithIndex twice with the same `field` and GVK (via `obj`) arguments will panic.
+// WithIndex retrieves the GVK of `obj` using the scheme registered via WithScheme if
+// WithScheme was previously invoked, the default scheme otherwise.
+func (f *ClientBuilder) WithIndex(obj runtime.Object, field string, extractValue client.IndexerFunc) *ClientBuilder {
+	objScheme := f.scheme
+	if objScheme == nil {
+		objScheme = scheme.Scheme
+	}
+
+	gvk, err := apiutil.GVKForObject(obj, objScheme)
+	if err != nil {
+		panic(err)
+	}
+
 	// If this is the first index being registered, we initialize the map storing all the indexes.
 	if f.indexes == nil {
-		f.indexes = make(map[schema.GroupVersionResource]map[string]client.IndexerFunc)
+		f.indexes = make(map[schema.GroupVersionKind]map[string]client.IndexerFunc)
 	}
 
-	// If this is the first index being registered for the input GroupVersionResource, we initialize
-	// the map storing the indexes for that GroupVersionResource.
-	if f.indexes[gvr] == nil {
-		f.indexes[gvr] = make(map[string]client.IndexerFunc)
+	// If this is the first index being registered for the GroupVersionKind of `obj`, we initialize
+	// the map storing the indexes for that GroupVersionKind.
+	if f.indexes[gvk] == nil {
+		f.indexes[gvk] = make(map[string]client.IndexerFunc)
 	}
 
-	if _, nameAlreadyTaken := f.indexes[gvr][name]; nameAlreadyTaken {
-		panic(fmt.Errorf("indexer conflict: index name %s is already registered for GroupVersionResource %v", name, gvr))
+	if _, fieldAlreadyIndexed := f.indexes[gvk][field]; fieldAlreadyIndexed {
+		panic(fmt.Errorf("indexer conflict: field %s for GroupVersionKind %v is already indexed",
+			field, gvk))
 	}
 
-	f.indexes[gvr][name] = indexer
+	f.indexes[gvk][field] = extractValue
 
 	return f
 }
@@ -469,7 +482,7 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 		return err
 	}
 
-	filteredList, err := c.filterList(objs, gvr, listOpts.LabelSelector, listOpts.FieldSelector)
+	filteredList, err := c.filterList(objs, gvk, listOpts.LabelSelector, listOpts.FieldSelector)
 	if err != nil {
 		return err
 	}
@@ -477,7 +490,7 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 	return meta.SetList(obj, filteredList)
 }
 
-func (c *fakeClient) filterList(list []runtime.Object, gvr schema.GroupVersionResource, ls labels.Selector, fs fields.Selector) ([]runtime.Object, error) {
+func (c *fakeClient) filterList(list []runtime.Object, gvk schema.GroupVersionKind, ls labels.Selector, fs fields.Selector) ([]runtime.Object, error) {
 	// Filter the objects with the label selector
 	filteredList := list
 	if ls != nil {
@@ -490,7 +503,7 @@ func (c *fakeClient) filterList(list []runtime.Object, gvr schema.GroupVersionRe
 
 	// Filter the result of the previous pass with the field selector
 	if fs != nil {
-		objsFilteredByField, err := c.filterWithFields(filteredList, gvr, fs)
+		objsFilteredByField, err := c.filterWithFields(filteredList, gvk, fs)
 		if err != nil {
 			return nil, err
 		}
@@ -500,7 +513,7 @@ func (c *fakeClient) filterList(list []runtime.Object, gvr schema.GroupVersionRe
 	return filteredList, nil
 }
 
-func (c *fakeClient) filterWithFields(list []runtime.Object, gvr schema.GroupVersionResource, fs fields.Selector) ([]runtime.Object, error) {
+func (c *fakeClient) filterWithFields(list []runtime.Object, gvk schema.GroupVersionKind, fs fields.Selector) ([]runtime.Object, error) {
 	// We only allow filtering on the basis of a single field to ensure consistency with the
 	// behavior of the cache reader (which we're faking here).
 	fieldKey, fieldVal, requiresExact := selector.RequiresExactMatch(fs)
@@ -510,18 +523,14 @@ func (c *fakeClient) filterWithFields(list []runtime.Object, gvr schema.GroupVer
 	}
 
 	// Field selection is mimicked via indexes, so there's no sane answer this function can give
-	// if there are no indexes registered for the GroupVersionResource of the objects in the list.
-	indexes, listGVRHasIndexes := c.indexes[gvr]
-	if !listGVRHasIndexes {
-		return nil, fmt.Errorf("List on GroupVersionResource %v specifies field selector, but no "+
-			"indexes for that GroupResourceVersion are defined", gvr)
+	// if there are no indexes registered for the GroupVersionKind of the objects in the list.
+	indexes := c.indexes[gvk]
+	if len(indexes) == 0 || indexes[fieldKey] == nil {
+		return nil, fmt.Errorf("List on GroupVersionKind %v specifies selector on field %s, but no "+
+			"index with name %s has been registered for GroupVersionKind %v", gvk, fieldKey, fieldKey, gvk)
 	}
 
-	indexExtractor, found := indexes[fieldKey]
-	if !found {
-		return nil, fmt.Errorf("no index with name %s was registered", fieldKey)
-	}
-
+	indexExtractor := indexes[fieldKey]
 	filteredList := make([]runtime.Object, 0, len(list))
 	for _, obj := range list {
 		if c.objMatchesFieldSelector(obj, indexExtractor, fieldVal) {

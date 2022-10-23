@@ -28,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -100,7 +99,7 @@ var _ = Describe("Fake client", func() {
 		}
 	})
 
-	AssertClientWOIndexBehavior := func() {
+	AssertClientWithoutIndexBehavior := func() {
 		It("should be able to Get", func() {
 			By("Getting a deployment")
 			namespacedName := types.NamespacedName{
@@ -981,7 +980,7 @@ var _ = Describe("Fake client", func() {
 				WithObjects(dep, dep2, cm).
 				Build()
 		})
-		AssertClientWOIndexBehavior()
+		AssertClientWithoutIndexBehavior()
 	})
 
 	Context("with given scheme", func() {
@@ -996,7 +995,7 @@ var _ = Describe("Fake client", func() {
 				WithLists(&appsv1.DeploymentList{Items: []appsv1.Deployment{*dep, *dep2}}).
 				Build()
 		})
-		AssertClientWOIndexBehavior()
+		AssertClientWithoutIndexBehavior()
 	})
 
 	Context("with Indexes", func() {
@@ -1022,23 +1021,18 @@ var _ = Describe("Fake client", func() {
 			return []string{string(dep.Spec.Strategy.Type)}
 		}
 
-		var (
-			depGVR schema.GroupVersionResource
-			cb     *ClientBuilder
-		)
-
+		var cb *ClientBuilder
 		BeforeEach(func() {
 			cb = NewClientBuilder().
 				WithObjects(dep, dep2, cm).
-				WithIndex(depGVR, "spec.replicas", depReplicasIndexer)
-			depGVR = appsv1.SchemeGroupVersion.WithResource("deployments")
+				WithIndex(&appsv1.Deployment{}, "spec.replicas", depReplicasIndexer)
 		})
 
 		Context("client has just one Index", func() {
 			BeforeEach(func() { cl = cb.Build() })
 
 			Context("behavior that doesn't use an Index", func() {
-				AssertClientWOIndexBehavior()
+				AssertClientWithoutIndexBehavior()
 			})
 
 			Context("filtered List using field selector", func() {
@@ -1120,11 +1114,11 @@ var _ = Describe("Fake client", func() {
 
 		Context("client has two Indexes", func() {
 			BeforeEach(func() {
-				cl = cb.WithIndex(depGVR, "spec.strategy.type", depStrategyTypeIndexer).Build()
+				cl = cb.WithIndex(&appsv1.Deployment{}, "spec.strategy.type", depStrategyTypeIndexer).Build()
 			})
 
 			Context("behavior that doesn't use an Index", func() {
-				AssertClientWOIndexBehavior()
+				AssertClientWithoutIndexBehavior()
 			})
 
 			Context("filtered List using field selector", func() {
@@ -1229,16 +1223,14 @@ var _ = Describe("Fake client", func() {
 })
 
 var _ = Describe("Fake client builder", func() {
-	It("panics when an index with the same name and GroupVersionResource is registered twice", func() {
-		// We need any realistic GroupVersionResource, the choice of deployments is arbitrary.
-		gvr := appsv1.SchemeGroupVersion.WithResource("deployments")
-
-		cb := NewClientBuilder().WithIndex(gvr,
+	It("panics when an index with the same name and GroupVersionKind is registered twice", func() {
+		// We need any realistic GroupVersionKind, the choice of apps/v1 Deployment is arbitrary.
+		cb := NewClientBuilder().WithIndex(&appsv1.Deployment{},
 			"test-name",
 			func(client.Object) []string { return nil })
 
 		Expect(func() {
-			cb.WithIndex(gvr,
+			cb.WithIndex(&appsv1.Deployment{},
 				"test-name",
 				func(client.Object) []string { return []string{"foo"} })
 		}).To(Panic())

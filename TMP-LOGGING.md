@@ -21,7 +21,7 @@ log.Printf("starting reconciliation for pod %s/%s", podNamespace, podName)
 In controller-runtime, we'd instead write:
 
 ```go
-logger.Info("starting reconciliation", "pod", req.NamespacedNamed)
+logger.Info("starting reconciliation", "pod", req.NamespacedName)
 ```
 
 or even write

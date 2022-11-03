@@ -19,12 +19,7 @@ package admissiontest
 import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
-
-var _ runtime.Object = (*FakeValidator)(nil)
-var _ schema.ObjectKind = (*FakeValidator)(nil)
-var _ webhook.Validator = (*FakeValidator)(nil)
 
 // FakeValidator provides fake validating webhook functionality for testing
 // It implements the admission.Validator interface and
@@ -69,10 +64,6 @@ func (v *FakeValidator) GroupVersionKind() schema.GroupVersionKind {
 func (v *FakeValidator) SetGroupVersionKind(gvk schema.GroupVersionKind) {
 	v.GVKToReturn = gvk
 }
-
-var _ runtime.Object = (*FakeValidatorWarn)(nil)
-var _ schema.ObjectKind = (*FakeValidatorWarn)(nil)
-var _ webhook.ValidatorWarn = (*FakeValidatorWarn)(nil)
 
 // FakeValidatorWarn provides fake validating webhook functionality for testing
 // It implements the admission.ValidatorWarn interface and

@@ -809,6 +809,110 @@ var _ = Describe("Predicate", func() {
 		})
 	})
 
+	// NamespacePredicate has almost identical test cases as LabelChangedPredicates,
+	// so the duplication linter should be muted on both two test suites.
+	//nolint:dupl
+	Describe("When checking an NamespacePredicate", func() {
+		name := "baz"
+		desiredNamespace := "biz"
+		instance := predicate.NamespacePredicate{Namespace: desiredNamespace}
+		Context("Where the object is missing", func() {
+			It("should return false", func() {
+				Expect(instance.Create(event.CreateEvent{})).To(BeFalse())
+				Expect(instance.Update(event.UpdateEvent{})).To(BeFalse())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeFalse())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeFalse())
+			})
+		})
+
+		Context("Where namespace not match", func() {
+			It("should return false", func() {
+				po := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      name,
+						Namespace: desiredNamespace + "1",
+					}}
+				Expect(instance.Create(event.CreateEvent{Object: po})).To(BeFalse())
+				Expect(instance.Update(event.UpdateEvent{ObjectNew: po})).To(BeFalse())
+				Expect(instance.Delete(event.DeleteEvent{Object: po})).To(BeFalse())
+				Expect(instance.Generic(event.GenericEvent{Object: po})).To(BeFalse())
+			})
+		})
+
+		Context("Where namespace match", func() {
+			It("should return true", func() {
+				po := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      name,
+						Namespace: desiredNamespace,
+					}}
+				Expect(instance.Create(event.CreateEvent{Object: po})).To(BeTrue())
+				Expect(instance.Update(event.UpdateEvent{ObjectNew: po})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{Object: po})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{Object: po})).To(BeTrue())
+			})
+		})
+	})
+
+	// NamespaceNamePredicate has almost identical test cases as NamespacePredicate,
+	// so the duplication linter should be muted on both two test suites.
+	//nolint:dupl
+	Describe("When checking an NamespaceNamePredicate", func() {
+		desiredNamespace := "biz"
+		desiredName := "baz"
+		instance := predicate.NamespaceNamePredicate{Namespace: desiredNamespace, Name: desiredName}
+		Context("Where the object is missing", func() {
+			It("should return false", func() {
+				Expect(instance.Create(event.CreateEvent{})).To(BeFalse())
+				Expect(instance.Update(event.UpdateEvent{})).To(BeFalse())
+				Expect(instance.Delete(event.DeleteEvent{})).To(BeFalse())
+				Expect(instance.Generic(event.GenericEvent{})).To(BeFalse())
+			})
+		})
+
+		Context("Where only name match", func() {
+			It("should return false", func() {
+				po := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      desiredName,
+						Namespace: desiredNamespace + "1",
+					}}
+				Expect(instance.Create(event.CreateEvent{Object: po})).To(BeFalse())
+				Expect(instance.Update(event.UpdateEvent{ObjectNew: po})).To(BeFalse())
+				Expect(instance.Delete(event.DeleteEvent{Object: po})).To(BeFalse())
+				Expect(instance.Generic(event.GenericEvent{Object: po})).To(BeFalse())
+			})
+		})
+
+		Context("Where only namespace match", func() {
+			It("should return false", func() {
+				po := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      desiredName + "1",
+						Namespace: desiredNamespace,
+					}}
+				Expect(instance.Create(event.CreateEvent{Object: po})).To(BeFalse())
+				Expect(instance.Update(event.UpdateEvent{ObjectNew: po})).To(BeFalse())
+				Expect(instance.Delete(event.DeleteEvent{Object: po})).To(BeFalse())
+				Expect(instance.Generic(event.GenericEvent{Object: po})).To(BeFalse())
+			})
+		})
+
+		Context("Where both name and namespace match", func() {
+			It("should return true", func() {
+				po := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      desiredName,
+						Namespace: desiredNamespace,
+					}}
+				Expect(instance.Create(event.CreateEvent{Object: po})).To(BeTrue())
+				Expect(instance.Update(event.UpdateEvent{ObjectNew: po})).To(BeTrue())
+				Expect(instance.Delete(event.DeleteEvent{Object: po})).To(BeTrue())
+				Expect(instance.Generic(event.GenericEvent{Object: po})).To(BeTrue())
+			})
+		})
+	})
+
 	Context("With a boolean predicate", func() {
 		funcs := func(pass bool) predicate.Funcs {
 			return predicate.Funcs{

@@ -48,6 +48,8 @@ var _ Predicate = Funcs{}
 var _ Predicate = ResourceVersionChangedPredicate{}
 var _ Predicate = GenerationChangedPredicate{}
 var _ Predicate = AnnotationChangedPredicate{}
+var _ Predicate = NamespacePredicate{}
+var _ Predicate = NamespaceNamePredicate{}
 var _ Predicate = or{}
 var _ Predicate = and{}
 
@@ -230,6 +232,83 @@ func (LabelChangedPredicate) Update(e event.UpdateEvent) bool {
 	}
 
 	return !reflect.DeepEqual(e.ObjectNew.GetLabels(), e.ObjectOld.GetLabels())
+}
+
+// NamespacePredicate implements a namespace predicate function for namespaced resource.
+//
+// This predicate will skip all events that not happens on the specific object.
+// It is intended to be used in conjunction with the GenerationChangedPredicate, as in the following example:
+//
+// Controller.Watch(
+//
+//	&source.Kind{Type: v1.MyCustomKind},
+//	&handler.EnqueueRequestForObject{},
+//	predicate.Or(predicate.GenerationChangedPredicate{},
+//		predicate.NamespacePredicate{Namespace: "specificNamespace"}))
+//
+// This will be helpful when object's labels is carrying some extra specification information beyond object's spec,
+// and the controller will be triggered if any valid spec change (not only in spec, but also in labels) happens.
+type NamespacePredicate struct {
+	Namespace string
+}
+
+// Create implements default CreateEvent filter for checking object is the specific.
+func (p NamespacePredicate) Create(e event.CreateEvent) bool {
+	return e.Object != nil && e.Object.GetNamespace() == p.Namespace
+}
+
+// Update implements default UpdateEvent filter for checking object is the specific.
+func (p NamespacePredicate) Update(e event.UpdateEvent) bool {
+	return e.ObjectNew != nil && e.ObjectNew.GetNamespace() == p.Namespace
+}
+
+// Delete implements default DeleteEvent filter for checking object is the specific.
+func (p NamespacePredicate) Delete(e event.DeleteEvent) bool {
+	return e.Object != nil && e.Object.GetNamespace() == p.Namespace
+}
+
+// Generic implements default GenericEvent filter for checking object is the specific.
+func (p NamespacePredicate) Generic(e event.GenericEvent) bool {
+	return e.Object != nil && e.Object.GetNamespace() == p.Namespace
+}
+
+// NamespaceNamePredicate implements a default single object predicate function for a specific object.
+//
+// This predicate will skip all events that not happens on the specific object.
+// It is intended to be used in conjunction with the GenerationChangedPredicate, as in the following example:
+//
+// Controller.Watch(
+//
+//	&source.Kind{Type: v1.MyCustomKind},
+//	&handler.EnqueueRequestForObject{},
+//	predicate.Or(predicate.GenerationChangedPredicate{},
+//		predicate.NamespaceNamePredicate{Name: "specificName", Namespace: "specificNamespace"}))
+//
+// This will be helpful when object's labels is carrying some extra specification information beyond object's spec,
+// and the controller will be triggered if any valid spec change (not only in spec, but also in labels) happens.
+type NamespaceNamePredicate struct {
+	Name      string
+	Namespace string
+}
+
+// Create implements default CreateEvent filter for checking object is the specific.
+func (p NamespaceNamePredicate) Create(e event.CreateEvent) bool {
+	return e.Object != nil && e.Object.GetName() == p.Name && e.Object.GetNamespace() == p.Namespace
+}
+
+// Update implements default UpdateEvent filter for checking object is the specific.
+func (p NamespaceNamePredicate) Update(e event.UpdateEvent) bool {
+	return e.ObjectNew != nil && e.ObjectNew.GetName() == p.Name && e.ObjectNew.GetNamespace() == p.Namespace
+}
+
+// Delete implements default DeleteEvent filter for checking object is the specific.
+func (p NamespaceNamePredicate) Delete(e event.DeleteEvent) bool {
+	return e.Object != nil && e.Object.GetName() == p.Name && e.Object.GetNamespace() == p.Namespace
+}
+
+// Generic implements default GenericEvent filter for checking object is the specific.
+func (p NamespaceNamePredicate) Generic(e event.GenericEvent) bool {
+	return e.Object != nil && e.Object.GetName() == p.Name && e.Object.GetNamespace() == p.Namespace
 }
 
 // And returns a composite predicate that implements a logical AND of the predicates passed to it.

@@ -79,16 +79,16 @@ type FakeValidatorWarn struct {
 	WarningsToReturn []string
 }
 
-func (v *FakeValidatorWarn) ValidateCreate() (err error, warnings []string) {
-	return v.ErrorToReturn, v.WarningsToReturn
+func (v *FakeValidatorWarn) ValidateCreate() (warnings []string, err error) {
+	return v.WarningsToReturn, v.ErrorToReturn
 }
 
-func (v *FakeValidatorWarn) ValidateUpdate(old runtime.Object) (err error, warnings []string) {
-	return v.ErrorToReturn, v.WarningsToReturn
+func (v *FakeValidatorWarn) ValidateUpdate(old runtime.Object) (warnings []string, err error) {
+	return v.WarningsToReturn, v.ErrorToReturn
 }
 
-func (v *FakeValidatorWarn) ValidateDelete() (err error, warnings []string) {
-	return v.ErrorToReturn, v.WarningsToReturn
+func (v *FakeValidatorWarn) ValidateDelete() (warnings []string, err error) {
+	return v.WarningsToReturn, v.ErrorToReturn
 }
 
 func (v *FakeValidatorWarn) SetGroupVersionKind(kind schema.GroupVersionKind) {

@@ -29,13 +29,16 @@ import (
 // ValidatorWarn works like Validator, but it allows to return warnings.
 type ValidatorWarn interface {
 	runtime.Object
-	ValidateCreate() (err error, warnings []string)
-	ValidateUpdate(old runtime.Object) (err error, warnings []string)
-	ValidateDelete() (err error, warnings []string)
+	ValidateCreate() (warnings []string, err error)
+	ValidateUpdate(old runtime.Object) (warnings []string, err error)
+	ValidateDelete() (warnings []string, err error)
 }
 
+// ValidatingWebhookWithWarningFor creates a new Webhook for validating the provided type with warning messages.
 func ValidatingWebhookWithWarningFor(validatorWarning ValidatorWarn) *Webhook {
-	return nil
+	return &Webhook{
+		Handler: &validatingWarnHandler{validatorWarn: validatorWarning},
+	}
 }
 
 var _ Handler = &validatingWarnHandler{}
@@ -68,7 +71,7 @@ func (h *validatingWarnHandler) Handle(ctx context.Context, req Request) Respons
 			return Errored(http.StatusBadRequest, err)
 		}
 
-		err, warnings := obj.ValidateCreate()
+		warnings, err := obj.ValidateCreate()
 		allWarnings = append(allWarnings, warnings...)
 		if err != nil {
 			var apiStatus apierrors.APIStatus
@@ -90,7 +93,7 @@ func (h *validatingWarnHandler) Handle(ctx context.Context, req Request) Respons
 		if err != nil {
 			return Errored(http.StatusBadRequest, err)
 		}
-		err, warnings := obj.ValidateUpdate(oldObj)
+		warnings, err := obj.ValidateUpdate(oldObj)
 		allWarnings = append(allWarnings, warnings...)
 		if err != nil {
 			var apiStatus apierrors.APIStatus
@@ -109,7 +112,7 @@ func (h *validatingWarnHandler) Handle(ctx context.Context, req Request) Respons
 			return Errored(http.StatusBadRequest, err)
 		}
 
-		err, warnings := obj.ValidateDelete()
+		warnings, err := obj.ValidateDelete()
 		allWarnings = append(allWarnings, warnings...)
 		if err != nil {
 			var apiStatus apierrors.APIStatus

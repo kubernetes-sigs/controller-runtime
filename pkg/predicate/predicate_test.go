@@ -879,6 +879,28 @@ var _ = Describe("Predicate", func() {
 				Expect(prct.injected).To(BeTrue())
 			})
 		})
+		Describe("When checking a Not predicate", func() {
+			It("should return false when its predicate returns true", func() {
+				n := predicate.Not(passFuncs)
+				Expect(n.Create(event.CreateEvent{})).To(BeFalse())
+				Expect(n.Update(event.UpdateEvent{})).To(BeFalse())
+				Expect(n.Delete(event.DeleteEvent{})).To(BeFalse())
+				Expect(n.Generic(event.GenericEvent{})).To(BeFalse())
+			})
+			It("should return true when its predicate returns false", func() {
+				n := predicate.Not(failFuncs)
+				Expect(n.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(n.Update(event.UpdateEvent{})).To(BeTrue())
+				Expect(n.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(n.Generic(event.GenericEvent{})).To(BeTrue())
+			})
+			It("should inject into its predicate", func() {
+				prct := &injectablePredicate{}
+				n := predicate.Not(prct)
+				Expect(injectFunc(n)).To(Succeed())
+				Expect(prct.injected).To(BeTrue())
+			})
+		})
 	})
 
 	Describe("NewPredicateFuncs with a namespace filter function", func() {

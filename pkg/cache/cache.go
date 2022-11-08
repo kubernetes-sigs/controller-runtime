@@ -272,7 +272,7 @@ func combineSelectors(inherited, options Options, scheme *runtime.Scheme) (Selec
 	//
 	// There is a bunch of complexity here because we need to convert to SelectorsByGVK
 	// to be able to match keys between options and inherited and then convert back to SelectorsByObject
-	optionsSelectorsByGVK, err := convertToByGVK(options.SelectorsByObject, options.DefaultSelector, options.Scheme)
+	optionsSelectorsByGVK, err := convertToByGVK(options.SelectorsByObject, options.DefaultSelector, scheme)
 	if err != nil {
 		return nil, ObjectSelector{}, err
 	}

@@ -177,6 +177,28 @@ var _ = Describe("cache.inheritFrom", func() {
 			Expect(selector.Field.Matches(fields.Set{"metadata.name": "other", "metadata.namespace": "inherited"})).To(BeFalse())
 			Expect(selector.Field.Matches(fields.Set{"metadata.name": "specified", "metadata.namespace": "inherited"})).To(BeTrue())
 		})
+		It("uses inherited scheme for inherited selectors", func() {
+			inherited.Scheme = coreScheme
+			inherited.SelectorsByObject = map[client.Object]ObjectSelector{&corev1.ConfigMap{}: {}}
+			Expect(checkError(specified.inheritFrom(inherited)).SelectorsByObject).To(HaveLen(1))
+		})
+		It("does not use specified scheme for inherited selectors", func() {
+			inherited.Scheme = runtime.NewScheme()
+			specified.Scheme = coreScheme
+			inherited.SelectorsByObject = map[client.Object]ObjectSelector{&corev1.ConfigMap{}: {}}
+			_, err := specified.inheritFrom(inherited)
+			Expect(err).To(WithTransform(runtime.IsNotRegisteredError, BeTrue()))
+		})
+		It("uses inherited scheme for specified selectors", func() {
+			inherited.Scheme = coreScheme
+			specified.SelectorsByObject = map[client.Object]ObjectSelector{&corev1.ConfigMap{}: {}}
+			Expect(checkError(specified.inheritFrom(inherited)).SelectorsByObject).To(HaveLen(1))
+		})
+		It("uses specified scheme for specified selectors", func() {
+			specified.Scheme = coreScheme
+			specified.SelectorsByObject = map[client.Object]ObjectSelector{&corev1.ConfigMap{}: {}}
+			Expect(checkError(specified.inheritFrom(inherited)).SelectorsByObject).To(HaveLen(1))
+		})
 	})
 	Context("DefaultSelector", func() {
 		It("is unchanged when specified and inherited are unset", func() {

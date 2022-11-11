@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -141,7 +142,7 @@ func (ip *informerCache) GetInformerForKind(ctx context.Context, gvk schema.Grou
 	if err != nil {
 		return nil, err
 	}
-	return i.Informer, err
+	return WrapInformer(i.Informer), err
 }
 
 // GetInformer returns the informer for the obj.
@@ -155,7 +156,7 @@ func (ip *informerCache) GetInformer(ctx context.Context, obj client.Object) (In
 	if err != nil {
 		return nil, err
 	}
-	return i.Informer, err
+	return WrapInformer(i.Informer), err
 }
 
 // NeedLeaderElection implements the LeaderElectionRunnable interface
@@ -214,4 +215,21 @@ func indexByField(indexer Informer, field string, extractor client.IndexerFunc) 
 	}
 
 	return indexer.AddIndexers(cache.Indexers{internal.FieldIndexName(field): indexFunc})
+}
+
+type informerWrapper struct {
+	cache.SharedIndexInformer
+}
+
+func (iw *informerWrapper) AddEventHandler(handler cache.ResourceEventHandler) {
+	_, _ = iw.SharedIndexInformer.AddEventHandler(handler)
+}
+
+func (iw *informerWrapper) AddEventHandlerWithResyncPeriod(handler cache.ResourceEventHandler, resyncPeriod time.Duration) {
+	_, _ = iw.SharedIndexInformer.AddEventHandlerWithResyncPeriod(handler, resyncPeriod)
+}
+
+// WrapInformer is a temporary wrapper to make Informer compatible with the SharedIndexInformer in client-go v0.26.0
+func WrapInformer(i cache.SharedIndexInformer) Informer {
+	return &informerWrapper{SharedIndexInformer: i}
 }

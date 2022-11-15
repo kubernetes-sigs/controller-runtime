@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -245,7 +244,7 @@ var _ = Describe("Source", func() {
 				c := make(chan struct{})
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.Informer{Informer: cache.WrapInformer(depInformer)}
+				instance := &source.Informer{Informer: depInformer}
 				err := instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
@@ -286,7 +285,7 @@ var _ = Describe("Source", func() {
 				rs2.SetLabels(map[string]string{"biz": "baz"})
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.Informer{Informer: cache.WrapInformer(depInformer)}
+				instance := &source.Informer{Informer: depInformer}
 				err = instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 					},
@@ -323,7 +322,7 @@ var _ = Describe("Source", func() {
 				c := make(chan struct{})
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.Informer{Informer: cache.WrapInformer(depInformer)}
+				instance := &source.Informer{Informer: depInformer}
 				err := instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
 					},

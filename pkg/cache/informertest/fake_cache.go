@@ -47,7 +47,11 @@ func (c *FakeInformers) GetInformerForKind(ctx context.Context, gvk schema.Group
 	if err != nil {
 		return nil, err
 	}
-	return c.informerFor(gvk, obj)
+	i, err := c.informerFor(gvk, obj)
+	if err != nil {
+		return nil, err
+	}
+	return cache.WrapInformer(i), nil
 }
 
 // FakeInformerForKind implements Informers.
@@ -76,7 +80,11 @@ func (c *FakeInformers) GetInformer(ctx context.Context, obj client.Object) (cac
 		return nil, err
 	}
 	gvk := gvks[0]
-	return c.informerFor(gvk, obj)
+	i, err := c.informerFor(gvk, obj)
+	if err != nil {
+		return nil, err
+	}
+	return cache.WrapInformer(i), nil
 }
 
 // WaitForCacheSync implements Informers.

@@ -33,7 +33,19 @@ var _ EventHandler = &EnqueueRequestForObject{}
 // EnqueueRequestForObject enqueues a Request containing the Name and Namespace of the object that is the source of the Event.
 // (e.g. the created / deleted / updated objects Name and Namespace).  handler.EnqueueRequestForObject is used by almost all
 // Controllers that have associated Resources (e.g. CRDs) to reconcile the associated Resource.
-type EnqueueRequestForObject struct{}
+type EnqueueRequestForObject struct {
+	EnableRateLimiting bool
+}
+
+// add either adds requests to the Queue directly, or works with AddRateLimited if EnableRateLimiting is enabled
+func (e *EnqueueRequestForObject) add(q workqueue.RateLimitingInterface, req reconcile.Request) {
+	if e.EnableRateLimiting {
+		q.AddRateLimited(req)
+		return
+	}
+
+	q.Add(req)
+}
 
 // Create implements EventHandler.
 func (e *EnqueueRequestForObject) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
@@ -41,25 +53,31 @@ func (e *EnqueueRequestForObject) Create(evt event.CreateEvent, q workqueue.Rate
 		enqueueLog.Error(nil, "CreateEvent received with no metadata", "event", evt)
 		return
 	}
-	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-		Name:      evt.Object.GetName(),
-		Namespace: evt.Object.GetNamespace(),
-	}})
+	e.add(
+		q, reconcile.Request{NamespacedName: types.NamespacedName{
+			Name:      evt.Object.GetName(),
+			Namespace: evt.Object.GetNamespace(),
+		}},
+	)
 }
 
 // Update implements EventHandler.
 func (e *EnqueueRequestForObject) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 	switch {
 	case evt.ObjectNew != nil:
-		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-			Name:      evt.ObjectNew.GetName(),
-			Namespace: evt.ObjectNew.GetNamespace(),
-		}})
+		e.add(
+			q, reconcile.Request{NamespacedName: types.NamespacedName{
+				Name:      evt.ObjectNew.GetName(),
+				Namespace: evt.ObjectNew.GetNamespace(),
+			}},
+		)
 	case evt.ObjectOld != nil:
-		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-			Name:      evt.ObjectOld.GetName(),
-			Namespace: evt.ObjectOld.GetNamespace(),
-		}})
+		e.add(
+			q, reconcile.Request{NamespacedName: types.NamespacedName{
+				Name:      evt.ObjectOld.GetName(),
+				Namespace: evt.ObjectOld.GetNamespace(),
+			}},
+		)
 	default:
 		enqueueLog.Error(nil, "UpdateEvent received with no metadata", "event", evt)
 	}
@@ -71,10 +89,12 @@ func (e *EnqueueRequestForObject) Delete(evt event.DeleteEvent, q workqueue.Rate
 		enqueueLog.Error(nil, "DeleteEvent received with no metadata", "event", evt)
 		return
 	}
-	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-		Name:      evt.Object.GetName(),
-		Namespace: evt.Object.GetNamespace(),
-	}})
+	e.add(
+		q, reconcile.Request{NamespacedName: types.NamespacedName{
+			Name:      evt.Object.GetName(),
+			Namespace: evt.Object.GetNamespace(),
+		}},
+	)
 }
 
 // Generic implements EventHandler.
@@ -83,8 +103,10 @@ func (e *EnqueueRequestForObject) Generic(evt event.GenericEvent, q workqueue.Ra
 		enqueueLog.Error(nil, "GenericEvent received with no metadata", "event", evt)
 		return
 	}
-	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-		Name:      evt.Object.GetName(),
-		Namespace: evt.Object.GetNamespace(),
-	}})
+	e.add(
+		q, reconcile.Request{NamespacedName: types.NamespacedName{
+			Name:      evt.Object.GetName(),
+			Namespace: evt.Object.GetNamespace(),
+		}},
+	)
 }

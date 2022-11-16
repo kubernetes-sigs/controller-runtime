@@ -78,11 +78,19 @@ type Informer interface {
 	// AddEventHandler adds an event handler to the shared informer using the shared informer's resync
 	// period.  Events to a single handler are delivered sequentially, but there is no coordination
 	// between different handlers.
-	AddEventHandler(handler toolscache.ResourceEventHandler)
+	// It returns a registration handle for the handler that can be used to remove
+	// the handler again.
+	AddEventHandler(handler toolscache.ResourceEventHandler) (toolscache.ResourceEventHandlerRegistration, error)
 	// AddEventHandlerWithResyncPeriod adds an event handler to the shared informer using the
 	// specified resync period.  Events to a single handler are delivered sequentially, but there is
 	// no coordination between different handlers.
-	AddEventHandlerWithResyncPeriod(handler toolscache.ResourceEventHandler, resyncPeriod time.Duration)
+	// It returns a registration handle for the handler that can be used to remove
+	// the handler again and an error if the handler cannot be added.
+	AddEventHandlerWithResyncPeriod(handler toolscache.ResourceEventHandler, resyncPeriod time.Duration) (toolscache.ResourceEventHandlerRegistration, error)
+	// RemoveEventHandler removes a formerly added event handler given by
+	// its registration handle.
+	// This function is guaranteed to be idempotent, and thread-safe.
+	RemoveEventHandler(handle toolscache.ResourceEventHandlerRegistration) error
 	// AddIndexers adds more indexers to this store.  If you call this after you already have data
 	// in the store, the results are undefined.
 	AddIndexers(indexers toolscache.Indexers) error

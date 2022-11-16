@@ -1345,7 +1345,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					addFunc := func(obj interface{}) {
 						out <- obj
 					}
-					sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+					_, _ = sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
 
 					By("adding an object")
 					cl, err := client.New(cfg, client.Options{})
@@ -1369,7 +1369,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					addFunc := func(obj interface{}) {
 						out <- obj
 					}
-					sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+					_, _ = sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
 
 					By("adding an object")
 					cl, err := client.New(cfg, client.Options{})
@@ -1528,7 +1528,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					addFunc := func(obj interface{}) {
 						out <- obj
 					}
-					sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+					_, _ = sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
 
 					By("adding an object")
 					cl, err := client.New(cfg, client.Options{})
@@ -1646,7 +1646,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					addFunc := func(obj interface{}) {
 						out <- obj
 					}
-					sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+					_, _ = sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
 
 					By("adding an object")
 					cl, err := client.New(cfg, client.Options{})

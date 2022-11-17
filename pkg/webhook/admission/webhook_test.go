@@ -172,7 +172,7 @@ var _ = Describe("Admission Webhooks", func() {
 		Expect(resp.Allowed).To(BeTrue())
 
 		By("checking that the log message contains the request fields")
-		Eventually(logBuffer).Should(gbytes.Say(`"msg":"Received request","object":{"name":"foo","namespace":"bar"},"resource":{"group":"apps","version":"v1","resource":"deployments"},"user":"tim","requestID":"test123"}`))
+		Eventually(logBuffer).Should(gbytes.Say(`"msg":"Received request","object":{"name":"foo","namespace":"bar"},"namespace":"bar","name":"foo","resource":{"group":"apps","version":"v1","resource":"deployments"},"user":"tim","requestID":"test123"}`))
 	})
 
 	It("should pass a request logger created by LogConstructor via the context", func() {

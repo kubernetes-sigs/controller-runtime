@@ -200,6 +200,7 @@ func (wh *Webhook) getLogger(req *Request) logr.Logger {
 func DefaultLogConstructor(base logr.Logger, req *Request) logr.Logger {
 	if req != nil {
 		return base.WithValues("object", klog.KRef(req.Namespace, req.Name),
+			"namespace", req.Namespace, "name", req.Name,
 			"resource", req.Resource, "user", req.UserInfo.Username,
 		)
 	}

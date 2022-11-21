@@ -113,7 +113,7 @@ func GetConfigWithContext(context string) (*rest.Config, error) {
 var loadInClusterConfig = rest.InClusterConfig
 
 // loadConfig loads a REST Config as per the rules specified in GetConfig.
-func loadConfig(context string) (*rest.Config, error) {
+func loadConfig(context string) (config *rest.Config, configErr error) {
 	// If a flag is specified with the config location, use that
 	if len(kubeconfig) > 0 {
 		return loadConfigWithContext("", &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig}, context)
@@ -123,9 +123,16 @@ func loadConfig(context string) (*rest.Config, error) {
 	// try the in-cluster config.
 	kubeconfigPath := os.Getenv(clientcmd.RecommendedConfigPathEnvVar)
 	if len(kubeconfigPath) == 0 {
-		if c, err := loadInClusterConfig(); err == nil {
+		c, err := loadInClusterConfig()
+		if err == nil {
 			return c, nil
 		}
+
+		defer func() {
+			if configErr != nil {
+				log.Error(err, "unable to load in-cluster config")
+			}
+		}()
 	}
 
 	// If the recommended kubeconfig env variable is set, or there

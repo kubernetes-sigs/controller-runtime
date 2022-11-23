@@ -1003,9 +1003,9 @@ var _ = Describe("Fake client", func() {
 		var cr *DummyCustomResource
 
 		toUnstructured := func(object interface{}) unstructured.Unstructured {
-			unstructured_, err := runtime.DefaultUnstructuredConverter.ToUnstructured(cr)
+			unstructuredObject, err := runtime.DefaultUnstructuredConverter.ToUnstructured(object)
 			Expect(err).To(BeNil())
-			return unstructured.Unstructured{Object: unstructured_}
+			return unstructured.Unstructured{Object: unstructuredObject}
 		}
 
 		BeforeEach(func() {
@@ -1066,9 +1066,9 @@ var _ = Describe("Fake client", func() {
 		It("should increment the generation for CR non-metadata change using unstructured objects", func() {
 			oldGeneration := cr.Generation
 			cr.Spec.A = 1
-			unstructured_ := toUnstructured(cr)
-			Expect(cl.Update(context.Background(), &unstructured_)).To(BeNil())
-			Expect(unstructured_.GetGeneration()).To(Equal(oldGeneration + 1))
+			unstructuredCR := toUnstructured(cr)
+			Expect(cl.Update(context.Background(), &unstructuredCR)).To(BeNil())
+			Expect(unstructuredCR.GetGeneration()).To(Equal(oldGeneration + 1))
 		})
 
 		It("should not increment generation for CR metadata change using unstructured objects", func() {
@@ -1076,9 +1076,9 @@ var _ = Describe("Fake client", func() {
 			cr.Annotations = map[string]string{
 				"annotation": "value",
 			}
-			unstructured_ := toUnstructured(cr)
-			Expect(cl.Update(context.Background(), &unstructured_)).To(BeNil())
-			Expect(unstructured_.GetGeneration()).To(Equal(oldGeneration))
+			unstructuredCR := toUnstructured(cr)
+			Expect(cl.Update(context.Background(), &unstructuredCR)).To(BeNil())
+			Expect(unstructuredCR.GetGeneration()).To(Equal(oldGeneration))
 		})
 
 		It("should not increment generation for non-CR change using unstructured objects", func() {
@@ -1087,9 +1087,9 @@ var _ = Describe("Fake client", func() {
 				"annotation": "value",
 			}
 			dep.Spec.MinReadySeconds = 10
-			unstructured_ := toUnstructured(cr)
-			Expect(cl.Update(context.Background(), &unstructured_)).To(BeNil())
-			Expect(unstructured_.GetGeneration()).To(Equal(oldGeneration))
+			unstructuredCR := toUnstructured(cr)
+			Expect(cl.Update(context.Background(), &unstructuredCR)).To(BeNil())
+			Expect(unstructuredCR.GetGeneration()).To(Equal(oldGeneration))
 		})
 	})
 

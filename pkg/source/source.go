@@ -83,6 +83,10 @@ func (ks *kindWithCache) Start(ctx context.Context, handler handler.EventHandler
 	return ks.kind.Start(ctx, handler, queue, prct...)
 }
 
+func (ks *kindWithCache) String() string {
+	return ks.kind.String()
+}
+
 func (ks *kindWithCache) WaitForSync(ctx context.Context) error {
 	return ks.kind.WaitForSync(ctx)
 }

@@ -873,6 +873,23 @@ var _ = Describe("controller", func() {
 	})
 })
 
+var _ = Describe("ReconcileIDFromContext function", func() {
+	It("should return an empty string if there is nothing in the context", func() {
+		ctx := context.Background()
+		reconcileID := ReconcileIDFromContext(ctx)
+
+		Expect(reconcileID).To(Equal(types.UID("")))
+	})
+
+	It("should return the correct reconcileID from context", func() {
+		const expectedReconcileID = types.UID("uuid")
+		ctx := addReconcileID(context.Background(), expectedReconcileID)
+		reconcileID := ReconcileIDFromContext(ctx)
+
+		Expect(reconcileID).To(Equal(expectedReconcileID))
+	})
+})
+
 type DelegatingQueue struct {
 	workqueue.RateLimitingInterface
 	mu sync.Mutex

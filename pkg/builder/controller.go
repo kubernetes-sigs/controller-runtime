@@ -23,7 +23,6 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -319,7 +318,6 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 			log := log
 			if req != nil {
 				log = log.WithValues(
-					gvk.Kind, klog.KRef(req.Namespace, req.Name),
 					"namespace", req.Namespace, "name", req.Name,
 				)
 			}

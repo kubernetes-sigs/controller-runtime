@@ -74,7 +74,7 @@ func Update(obj client.Object, f func(), opts ...client.UpdateOption) func() err
 //	})).To(gomega.Succeed())
 //
 // By calling the returned function directly it can also be used as gomega.Expect(k.UpdateStatus(...)()).To(...)
-func UpdateStatus(obj client.Object, f func(), opts ...client.UpdateOption) func() error {
+func UpdateStatus(obj client.Object, f func(), opts ...client.SubResourceUpdateOption) func() error {
 	checkDefaultClient()
 	return defaultK.UpdateStatus(obj, f, opts...)
 }

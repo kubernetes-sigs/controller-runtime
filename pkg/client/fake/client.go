@@ -752,8 +752,12 @@ func (c *fakeClient) Patch(ctx context.Context, obj client.Object, patch client.
 	return err
 }
 
-func (c *fakeClient) Status() client.StatusWriter {
-	return &fakeStatusWriter{client: c}
+func (c *fakeClient) Status() client.SubResourceWriter {
+	return c.SubResource("status")
+}
+
+func (c *fakeClient) SubResource(subResource string) client.SubResourceWriter {
+	return &fakeSubResourceWriter{client: c}
 }
 
 func (c *fakeClient) deleteObject(gvr schema.GroupVersionResource, accessor metav1.Object) error {
@@ -782,20 +786,40 @@ func getGVRFromObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupV
 	return gvr, nil
 }
 
-type fakeStatusWriter struct {
+type fakeSubResourceWriter struct {
 	client *fakeClient
 }
 
-func (sw *fakeStatusWriter) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-	// TODO(droot): This results in full update of the obj (spec + status). Need
-	// a way to update status field only.
-	return sw.client.Update(ctx, obj, opts...)
+func (sw *fakeSubResourceWriter) Create(ctx context.Context, obj client.Object, subResource client.Object, opts ...client.SubResourceCreateOption) error {
+	panic("fakeSubResourceWriter does not support create")
 }
 
-func (sw *fakeStatusWriter) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-	// TODO(droot): This results in full update of the obj (spec + status). Need
-	// a way to update status field only.
-	return sw.client.Patch(ctx, obj, patch, opts...)
+func (sw *fakeSubResourceWriter) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+	// TODO(droot): This results in full update of the obj (spec + subresources). Need
+	// a way to update subresource only.
+	updateOptions := client.SubResourceUpdateOptions{}
+	updateOptions.ApplyOptions(opts)
+
+	body := obj
+	if updateOptions.SubResourceBody != nil {
+		body = updateOptions.SubResourceBody
+	}
+	return sw.client.Update(ctx, body, &updateOptions.UpdateOptions)
+}
+
+func (sw *fakeSubResourceWriter) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+	// TODO(droot): This results in full update of the obj (spec + subresources). Need
+	// a way to update subresource only.
+
+	patchOptions := client.SubResourcePatchOptions{}
+	patchOptions.ApplyOptions(opts)
+
+	body := obj
+	if patchOptions.SubResourceBody != nil {
+		body = patchOptions.SubResourceBody
+	}
+
+	return sw.client.Patch(ctx, body, patch, &patchOptions.PatchOptions)
 }
 
 func allowsUnconditionalUpdate(gvk schema.GroupVersionKind) bool {

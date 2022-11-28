@@ -226,7 +226,7 @@ var _ = Describe("DryRunClient", func() {
 	It("should not change objects via update status with opts", func() {
 		changedDep := dep.DeepCopy()
 		changedDep.Status.Replicas = 99
-		opts := &client.UpdateOptions{DryRun: []string{"Bye", "Pippa"}}
+		opts := &client.SubResourceUpdateOptions{UpdateOptions: client.UpdateOptions{DryRun: []string{"Bye", "Pippa"}}}
 
 		Expect(getClient().Status().Update(ctx, changedDep, opts)).NotTo(HaveOccurred())
 
@@ -252,7 +252,7 @@ var _ = Describe("DryRunClient", func() {
 		changedDep := dep.DeepCopy()
 		changedDep.Status.Replicas = 99
 
-		opts := &client.PatchOptions{DryRun: []string{"Bye", "Pippa"}}
+		opts := &client.SubResourcePatchOptions{PatchOptions: client.PatchOptions{DryRun: []string{"Bye", "Pippa"}}}
 
 		Expect(getClient().Status().Patch(ctx, changedDep, client.MergeFrom(dep), opts)).ToNot(HaveOccurred())
 

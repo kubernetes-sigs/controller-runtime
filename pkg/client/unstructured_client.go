@@ -27,7 +27,6 @@ import (
 
 var _ Reader = &unstructuredClient{}
 var _ Writer = &unstructuredClient{}
-var _ StatusWriter = &unstructuredClient{}
 
 // client is a client.Client that reads and writes directly from/to an API server.  It lazily initializes
 // new clients at the time they are used, and caches the client.
@@ -226,7 +225,39 @@ func (uc *unstructuredClient) List(ctx context.Context, obj ObjectList, opts ...
 		Into(obj)
 }
 
-func (uc *unstructuredClient) UpdateStatus(ctx context.Context, obj Object, opts ...UpdateOption) error {
+func (uc *unstructuredClient) CreateSubResource(ctx context.Context, obj, subResourceObj Object, subResource string, opts ...SubResourceCreateOption) error {
+	if _, ok := obj.(*unstructured.Unstructured); !ok {
+		return fmt.Errorf("unstructured client did not understand object: %T", subResource)
+	}
+
+	if _, ok := subResourceObj.(*unstructured.Unstructured); !ok {
+		return fmt.Errorf("unstructured client did not understand object: %T", obj)
+	}
+
+	if subResourceObj.GetName() == "" {
+		subResourceObj.SetName(obj.GetName())
+	}
+
+	o, err := uc.cache.getObjMeta(obj)
+	if err != nil {
+		return err
+	}
+
+	createOpts := &SubResourceCreateOptions{}
+	createOpts.ApplyOptions(opts)
+
+	return o.Post().
+		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
+		Resource(o.resource()).
+		Name(o.GetName()).
+		SubResource(subResource).
+		Body(subResourceObj).
+		VersionedParams(createOpts.AsCreateOptions(), uc.paramCodec).
+		Do(ctx).
+		Into(subResourceObj)
+}
+
+func (uc *unstructuredClient) UpdateSubResource(ctx context.Context, obj Object, subResource string, opts ...SubResourceUpdateOption) error {
 	if _, ok := obj.(*unstructured.Unstructured); !ok {
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
 	}
@@ -236,21 +267,32 @@ func (uc *unstructuredClient) UpdateStatus(ctx context.Context, obj Object, opts
 		return err
 	}
 
-	updateOpts := UpdateOptions{}
+	updateOpts := SubResourceUpdateOptions{}
 	updateOpts.ApplyOptions(opts)
+
+	body := obj
+	if updateOpts.SubResourceBody != nil {
+		body = updateOpts.SubResourceBody
+	}
+	if body.GetName() == "" {
+		body.SetName(obj.GetName())
+	}
+	if body.GetNamespace() == "" {
+		body.SetNamespace(obj.GetNamespace())
+	}
 
 	return o.Put().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		SubResource("status").
-		Body(obj).
+		SubResource(subResource).
+		Body(body).
 		VersionedParams(updateOpts.AsUpdateOptions(), uc.paramCodec).
 		Do(ctx).
-		Into(obj)
+		Into(body)
 }
 
-func (uc *unstructuredClient) PatchStatus(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
+func (uc *unstructuredClient) PatchSubResource(ctx context.Context, obj Object, subResource string, patch Patch, opts ...SubResourcePatchOption) error {
 	u, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
@@ -263,23 +305,28 @@ func (uc *unstructuredClient) PatchStatus(ctx context.Context, obj Object, patch
 		return err
 	}
 
-	data, err := patch.Data(obj)
+	patchOpts := &SubResourcePatchOptions{}
+	patchOpts.ApplyOptions(opts)
+
+	body := obj
+	if patchOpts.SubResourceBody != nil {
+		body = patchOpts.SubResourceBody
+	}
+
+	data, err := patch.Data(body)
 	if err != nil {
 		return err
 	}
-
-	patchOpts := &PatchOptions{}
-	patchOpts.ApplyOptions(opts)
 
 	result := o.Patch(patch.Type()).
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		SubResource("status").
+		SubResource(subResource).
 		Body(data).
 		VersionedParams(patchOpts.AsPatchOptions(), uc.paramCodec).
 		Do(ctx).
-		Into(u)
+		Into(body)
 
 	u.SetGroupVersionKind(gvk)
 	return result

@@ -18,6 +18,7 @@ package client_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -25,7 +26,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -130,6 +135,8 @@ var _ = Describe("Client", func() {
 	var dep *appsv1.Deployment
 	var pod *corev1.Pod
 	var node *corev1.Node
+	var serviceAccount *corev1.ServiceAccount
+	var csr *certificatesv1.CertificateSigningRequest
 	var count uint64 = 0
 	var replicaCount int32 = 2
 	var ns = "default"
@@ -164,6 +171,30 @@ var _ = Describe("Client", func() {
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("node-name-%v", count)},
 			Spec:       corev1.NodeSpec{},
 		}
+		serviceAccount = &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("sa-%v", count), Namespace: ns}}
+		csr = &certificatesv1.CertificateSigningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("csr-%v", count)},
+			Spec: certificatesv1.CertificateSigningRequestSpec{
+				SignerName: "org.io/my-signer",
+				Request: []byte(`-----BEGIN CERTIFICATE REQUEST-----
+MIIChzCCAW8CAQAwQjELMAkGA1UEBhMCWFgxFTATBgNVBAcMDERlZmF1bHQgQ2l0
+eTEcMBoGA1UECgwTRGVmYXVsdCBDb21wYW55IEx0ZDCCASIwDQYJKoZIhvcNAQEB
+BQADggEPADCCAQoCggEBANe06dLX/bDNm6mVEnKdJexcJM6WKMFSt5o6BEdD1+Ki
+WyUcvfNgIBbwAZjkF9U1r7+KuDcc6XYFnb6ky1wPo4C+XwcIIx7Nnbf8IdWJukPb
+2BCsqO4NCsG6kKFavmH9J3q//nwKUvlQE+AJ2MPuOAZTwZ4KskghiGuS8hyk6/PZ
+XH9QhV7Jma43bDzQozd2C7OujRBhLsuP94KSu839RRFWd9ms3XHgTxLxb7nxwZDx
+9l7/ZVAObJoQYlHENqs12NCVP4gpJfbcY8/rd+IG4ftcZEmpeO4kKO+d2TpRKQqw
+bjCMoAdD5Y43iLTtyql4qRnbMe3nxYG2+1inEryuV/cCAwEAAaAAMA0GCSqGSIb3
+DQEBCwUAA4IBAQDH5hDByRN7wERQtC/o6uc8Y+yhjq9YcBJjjbnD6Vwru5pOdWtx
+qfKkkXI5KNOdEhWzLnJyOcWHjj8UoHqI3AjxGC7dTM95eGjxQGUpsUOX8JSd4MiZ
+cct4g4BKBj02AGqZLiEgN+PLCYAmEaYU7oZc4OAh6WzMrljNRsj66awMQpw8O1eY
+YuBa8vwz8ko8vn/pn7IrFu8cZ+EA3rluJ+budX/QrEGi1hijg27q7/Qr0wNI9f1v
+086mLKdqaBTkblXWEvF3WP4CcLNyrSNi4eu+G0fcAgGp1F/Nqh0MuWKSOLprv5Om
+U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
+-----END CERTIFICATE REQUEST-----`),
+				Usages: []certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
+			},
+		}
 		scheme = kscheme.Scheme
 	})
 
@@ -182,6 +213,11 @@ var _ = Describe("Client", func() {
 			err = clientset.CoreV1().Nodes().Delete(ctx, node.Name, *delOptions)
 			Expect(err).NotTo(HaveOccurred())
 		}
+		err = clientset.CoreV1().ServiceAccounts(ns).Delete(ctx, serviceAccount.Name, *delOptions)
+		Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
+
+		err = clientset.CertificatesV1().CertificateSigningRequests().Delete(ctx, csr.Name, *delOptions)
+		Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 	})
 
 	// TODO(seans): Cast "cl" as "client" struct from "Client" interface. Then validate the
@@ -702,6 +738,390 @@ var _ = Describe("Client", func() {
 				Expect(testOption.applied).To(Equal(true))
 			})
 		})
+	})
+
+	Describe("SubResourceWriter", func() {
+		Context("with structured objects", func() {
+			It("should be able to create ServiceAccount tokens", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating the serviceAccount")
+				_, err = clientset.CoreV1().ServiceAccounts(serviceAccount.Namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
+				Expect((err)).NotTo(HaveOccurred())
+
+				token := &authenticationv1.TokenRequest{}
+				err = cl.SubResource("token").Create(ctx, serviceAccount, token)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(token.Status.Token).NotTo(Equal(""))
+			})
+
+			It("should be able to create Pod evictions", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				// Make the pod valid
+				pod.Spec.Containers = []corev1.Container{{Name: "foo", Image: "busybox"}}
+
+				By("Creating the pod")
+				pod, err = clientset.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Creating the eviction")
+				eviction := &policyv1.Eviction{
+					DeleteOptions: &metav1.DeleteOptions{GracePeriodSeconds: ptr(int64(0))},
+				}
+				err = cl.SubResource("eviction").Create(ctx, pod, eviction)
+				Expect((err)).NotTo(HaveOccurred())
+
+				By("Asserting the pod is gone")
+				_, err = clientset.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			})
+
+			It("should be able to create Pod bindings", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				// Make the pod valid
+				pod.Spec.Containers = []corev1.Container{{Name: "foo", Image: "busybox"}}
+
+				By("Creating the pod")
+				pod, err = clientset.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Creating the binding")
+				binding := &corev1.Binding{
+					Target: corev1.ObjectReference{Name: node.Name},
+				}
+				err = cl.SubResource("binding").Create(ctx, pod, binding)
+				Expect((err)).NotTo(HaveOccurred())
+
+				By("Asserting the pod is bound")
+				pod, err = clientset.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(pod.Spec.NodeName).To(Equal(node.Name))
+			})
+
+			It("should be able to approve CSRs", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating the CSR")
+				csr, err := clientset.CertificatesV1().CertificateSigningRequests().Create(ctx, csr, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Approving the CSR")
+				csr.Status.Conditions = append(csr.Status.Conditions, certificatesv1.CertificateSigningRequestCondition{
+					Type:   certificatesv1.CertificateApproved,
+					Status: corev1.ConditionTrue,
+				})
+				err = cl.SubResource("approval").Update(ctx, csr)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Asserting the CSR is approved")
+				csr, err = clientset.CertificatesV1().CertificateSigningRequests().Get(ctx, csr.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesv1.CertificateApproved))
+				Expect(csr.Status.Conditions[0].Status).To(Equal(corev1.ConditionTrue))
+			})
+
+			It("should be able to approve CSRs using Patch", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating the CSR")
+				csr, err := clientset.CertificatesV1().CertificateSigningRequests().Create(ctx, csr, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Approving the CSR")
+				patch := client.MergeFrom(csr.DeepCopy())
+				csr.Status.Conditions = append(csr.Status.Conditions, certificatesv1.CertificateSigningRequestCondition{
+					Type:   certificatesv1.CertificateApproved,
+					Status: corev1.ConditionTrue,
+				})
+				err = cl.SubResource("approval").Patch(ctx, csr, patch)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Asserting the CSR is approved")
+				csr, err = clientset.CertificatesV1().CertificateSigningRequests().Get(ctx, csr.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesv1.CertificateApproved))
+				Expect(csr.Status.Conditions[0].Status).To(Equal(corev1.ConditionTrue))
+			})
+
+			It("should be able to update the scale subresource", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Updating the scale subresurce")
+				replicaCount := *dep.Spec.Replicas
+				scale := &autoscalingv1.Scale{Spec: autoscalingv1.ScaleSpec{Replicas: replicaCount}}
+				err = cl.SubResource("scale").Update(ctx, dep, client.WithSubResourceBody(scale))
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Asserting replicas got updated")
+				dep, err = clientset.AppsV1().Deployments(dep.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*dep.Spec.Replicas).To(Equal(replicaCount))
+			})
+
+			It("should be able to patch the scale subresource", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Updating the scale subresurce")
+				replicaCount := *dep.Spec.Replicas
+				patch := client.MergeFrom(&autoscalingv1.Scale{})
+				scale := &autoscalingv1.Scale{Spec: autoscalingv1.ScaleSpec{Replicas: replicaCount}}
+				err = cl.SubResource("scale").Patch(ctx, dep, patch, client.WithSubResourceBody(scale))
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Asserting replicas got updated")
+				dep, err = clientset.AppsV1().Deployments(dep.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*dep.Spec.Replicas).To(Equal(replicaCount))
+			})
+		})
+
+		Context("with unstructured objects", func() {
+			It("should be able to create ServiceAccount tokens", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating the serviceAccount")
+				_, err = clientset.CoreV1().ServiceAccounts(serviceAccount.Namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
+				Expect((err)).NotTo(HaveOccurred())
+
+				serviceAccount.APIVersion = "v1"
+				serviceAccount.Kind = "ServiceAccount"
+				serviceAccountUnstructured, err := toUnstructured(serviceAccount)
+				Expect(err).NotTo(HaveOccurred())
+
+				token := &unstructured.Unstructured{}
+				token.SetAPIVersion("authentication.k8s.io/v1")
+				token.SetKind("TokenRequest")
+				err = cl.SubResource("token").Create(ctx, serviceAccountUnstructured, token)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(token.GetAPIVersion()).To(Equal("authentication.k8s.io/v1"))
+				Expect(token.GetKind()).To(Equal("TokenRequest"))
+
+				val, found, err := unstructured.NestedString(token.UnstructuredContent(), "status", "token")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(found).To(BeTrue())
+				Expect(val).NotTo(Equal(""))
+			})
+
+			It("should be able to create Pod evictions", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				// Make the pod valid
+				pod.Spec.Containers = []corev1.Container{{Name: "foo", Image: "busybox"}}
+
+				By("Creating the pod")
+				pod, err = clientset.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				pod.APIVersion = "v1"
+				pod.Kind = "Pod"
+				podUnstructured, err := toUnstructured(pod)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Creating the eviction")
+				eviction := &unstructured.Unstructured{}
+				eviction.SetAPIVersion("policy/v1")
+				eviction.SetKind("Eviction")
+				err = unstructured.SetNestedField(eviction.UnstructuredContent(), int64(0), "deleteOptions", "gracePeriodSeconds")
+				Expect(err).NotTo(HaveOccurred())
+				err = cl.SubResource("eviction").Create(ctx, podUnstructured, eviction)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(eviction.GetAPIVersion()).To(Equal("policy/v1"))
+				Expect(eviction.GetKind()).To(Equal("Eviction"))
+
+				By("Asserting the pod is gone")
+				_, err = clientset.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			})
+
+			It("should be able to create Pod bindings", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				// Make the pod valid
+				pod.Spec.Containers = []corev1.Container{{Name: "foo", Image: "busybox"}}
+
+				By("Creating the pod")
+				pod, err = clientset.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				pod.APIVersion = "v1"
+				pod.Kind = "Pod"
+				podUnstructured, err := toUnstructured(pod)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Creating the binding")
+				binding := &unstructured.Unstructured{}
+				binding.SetAPIVersion("v1")
+				binding.SetKind("Binding")
+				err = unstructured.SetNestedField(binding.UnstructuredContent(), node.Name, "target", "name")
+				Expect(err).NotTo(HaveOccurred())
+
+				err = cl.SubResource("binding").Create(ctx, podUnstructured, binding)
+				Expect((err)).NotTo(HaveOccurred())
+				Expect(binding.GetAPIVersion()).To(Equal("v1"))
+				Expect(binding.GetKind()).To(Equal("Binding"))
+
+				By("Asserting the pod is bound")
+				pod, err = clientset.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(pod.Spec.NodeName).To(Equal(node.Name))
+			})
+
+			It("should be able to approve CSRs", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating the CSR")
+				csr, err := clientset.CertificatesV1().CertificateSigningRequests().Create(ctx, csr, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Approving the CSR")
+				csr.Status.Conditions = append(csr.Status.Conditions, certificatesv1.CertificateSigningRequestCondition{
+					Type:   certificatesv1.CertificateApproved,
+					Status: corev1.ConditionTrue,
+				})
+				csr.APIVersion = "certificates.k8s.io/v1"
+				csr.Kind = "CertificateSigningRequest"
+				csrUnstructured, err := toUnstructured(csr)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = cl.SubResource("approval").Update(ctx, csrUnstructured)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(csrUnstructured.GetAPIVersion()).To(Equal("certificates.k8s.io/v1"))
+				Expect(csrUnstructured.GetKind()).To(Equal("CertificateSigningRequest"))
+
+				By("Asserting the CSR is approved")
+				csr, err = clientset.CertificatesV1().CertificateSigningRequests().Get(ctx, csr.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesv1.CertificateApproved))
+				Expect(csr.Status.Conditions[0].Status).To(Equal(corev1.ConditionTrue))
+			})
+
+			It("should be able to approve CSRs using Patch", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating the CSR")
+				csr, err := clientset.CertificatesV1().CertificateSigningRequests().Create(ctx, csr, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Approving the CSR")
+				patch := client.MergeFrom(csr.DeepCopy())
+				csr.Status.Conditions = append(csr.Status.Conditions, certificatesv1.CertificateSigningRequestCondition{
+					Type:   certificatesv1.CertificateApproved,
+					Status: corev1.ConditionTrue,
+				})
+				csr.APIVersion = "certificates.k8s.io/v1"
+				csr.Kind = "CertificateSigningRequest"
+				csrUnstructured, err := toUnstructured(csr)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = cl.SubResource("approval").Patch(ctx, csrUnstructured, patch)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(csrUnstructured.GetAPIVersion()).To(Equal("certificates.k8s.io/v1"))
+				Expect(csrUnstructured.GetKind()).To(Equal("CertificateSigningRequest"))
+
+				By("Asserting the CSR is approved")
+				csr, err = clientset.CertificatesV1().CertificateSigningRequests().Get(ctx, csr.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesv1.CertificateApproved))
+				Expect(csr.Status.Conditions[0].Status).To(Equal(corev1.ConditionTrue))
+			})
+
+			It("should be able to update the scale subresource", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				dep.APIVersion = "apps/v1"
+				dep.Kind = "Deployment"
+				depUnstructured, err := toUnstructured(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Updating the scale subresurce")
+				replicaCount := *dep.Spec.Replicas
+				scale := &unstructured.Unstructured{}
+				scale.SetAPIVersion("autoscaling/v1")
+				scale.SetKind("Scale")
+				Expect(unstructured.SetNestedField(scale.Object, int64(replicaCount), "spec", "replicas")).NotTo(HaveOccurred())
+				err = cl.SubResource("scale").Update(ctx, depUnstructured, client.WithSubResourceBody(scale))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(scale.GetAPIVersion()).To(Equal("autoscaling/v1"))
+				Expect(scale.GetKind()).To(Equal("Scale"))
+
+				By("Asserting replicas got updated")
+				dep, err = clientset.AppsV1().Deployments(dep.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*dep.Spec.Replicas).To(Equal(replicaCount))
+			})
+
+			It("should be able to patch the scale subresource", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				dep.APIVersion = "apps/v1"
+				dep.Kind = "Deployment"
+				depUnstructured, err := toUnstructured(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Updating the scale subresurce")
+				replicaCount := *dep.Spec.Replicas
+				scale := &unstructured.Unstructured{}
+				scale.SetAPIVersion("autoscaling/v1")
+				scale.SetKind("Scale")
+				patch := client.MergeFrom(scale.DeepCopy())
+				Expect(unstructured.SetNestedField(scale.Object, int64(replicaCount), "spec", "replicas")).NotTo(HaveOccurred())
+				err = cl.SubResource("scale").Patch(ctx, depUnstructured, patch, client.WithSubResourceBody(scale))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(scale.GetAPIVersion()).To(Equal("autoscaling/v1"))
+				Expect(scale.GetKind()).To(Equal("Scale"))
+
+				By("Asserting replicas got updated")
+				dep, err = clientset.AppsV1().Deployments(dep.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*dep.Spec.Replicas).To(Equal(replicaCount))
+			})
+		})
+
 	})
 
 	Describe("StatusClient", func() {
@@ -3439,4 +3859,17 @@ func (f *fakeReader) Get(ctx context.Context, key client.ObjectKey, obj client.O
 func (f *fakeReader) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 	f.Called++
 	return nil
+}
+
+func ptr[T any](to T) *T {
+	return &to
+}
+
+func toUnstructured(o client.Object) (*unstructured.Unstructured, error) {
+	serialized, err := json.Marshal(o)
+	if err != nil {
+		return nil, err
+	}
+	u := &unstructured.Unstructured{}
+	return u, json.Unmarshal(serialized, u)
 }

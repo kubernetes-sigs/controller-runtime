@@ -81,7 +81,7 @@ func (k *komega) Update(obj client.Object, updateFunc func(), opts ...client.Upd
 }
 
 // UpdateStatus returns a function that fetches a resource, applies the provided update function and then updates the resource's status.
-func (k *komega) UpdateStatus(obj client.Object, updateFunc func(), opts ...client.UpdateOption) func() error {
+func (k *komega) UpdateStatus(obj client.Object, updateFunc func(), opts ...client.SubResourceUpdateOption) func() error {
 	key := types.NamespacedName{
 		Name:      obj.GetName(),
 		Namespace: obj.GetNamespace(),

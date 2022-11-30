@@ -57,7 +57,7 @@ type Komega interface {
 	//     return &deployment
 	//   })).To(gomega.Succeed())
 	// By calling the returned function directly it can also be used as gomega.Expect(k.UpdateStatus(...)()).To(...)
-	UpdateStatus(client.Object, func(), ...client.UpdateOption) func() error
+	UpdateStatus(client.Object, func(), ...client.SubResourceUpdateOption) func() error
 
 	// Object returns a function that fetches a resource and returns the object.
 	// It can be used with gomega.Eventually() like this:

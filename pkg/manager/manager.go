@@ -439,6 +439,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		certDir:                       options.CertDir,
 		tlsOpts:                       options.TLSOpts,
 		webhookServer:                 options.WebhookServer,
+		leaderElectionID:              options.LeaderElectionID,
 		leaseDuration:                 *options.LeaseDuration,
 		renewDeadline:                 *options.RenewDeadline,
 		retryPeriod:                   *options.RetryPeriod,

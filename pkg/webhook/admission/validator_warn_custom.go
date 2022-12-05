@@ -29,9 +29,9 @@ import (
 
 // CustomValidatorWarn works like CustomValidator, but it allows to return warnings.
 type CustomValidatorWarn interface {
-	ValidateCreate(ctx context.Context, obj runtime.Object) (err error, warnings []string)
-	ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (err error, warnings []string)
-	ValidateDelete(ctx context.Context, obj runtime.Object) (err error, warnings []string)
+	ValidateCreate(ctx context.Context, obj runtime.Object) (warnings []string, err error)
+	ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (warnings []string, err error)
+	ValidateDelete(ctx context.Context, obj runtime.Object) (warnings []string, err error)
 }
 
 // WithCustomValidatorWarn creates a new Webhook for validating the provided type.
@@ -75,7 +75,7 @@ func (h *validatorWarnForType) Handle(ctx context.Context, req Request) Response
 			return Errored(http.StatusBadRequest, err)
 		}
 
-		err, warnings = h.validatorWarn.ValidateCreate(ctx, obj)
+		warnings, err = h.validatorWarn.ValidateCreate(ctx, obj)
 	case v1.Update:
 		oldObj := obj.DeepCopyObject()
 		if err := h.decoder.DecodeRaw(req.Object, obj); err != nil {
@@ -85,7 +85,7 @@ func (h *validatorWarnForType) Handle(ctx context.Context, req Request) Response
 			return Errored(http.StatusBadRequest, err)
 		}
 
-		err, warnings = h.validatorWarn.ValidateUpdate(ctx, oldObj, obj)
+		warnings, err = h.validatorWarn.ValidateUpdate(ctx, oldObj, obj)
 	case v1.Delete:
 		// In reference to PR: https://github.com/kubernetes/kubernetes/pull/76346
 		// OldObject contains the object being deleted
@@ -93,7 +93,7 @@ func (h *validatorWarnForType) Handle(ctx context.Context, req Request) Response
 			return Errored(http.StatusBadRequest, err)
 		}
 
-		err, warnings = h.validatorWarn.ValidateDelete(ctx, obj)
+		warnings, err = h.validatorWarn.ValidateDelete(ctx, obj)
 	default:
 		return Errored(http.StatusBadRequest, fmt.Errorf("unknown operation request %q", req.Operation))
 	}

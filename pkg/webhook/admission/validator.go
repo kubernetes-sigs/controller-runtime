@@ -18,7 +18,7 @@ package admission
 
 import (
 	"context"
-	goerrors "errors"
+	"errors"
 	"net/http"
 
 	v1 "k8s.io/api/admission/v1"
@@ -66,7 +66,7 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 		err = obj.ValidateCreate()
 		if err != nil {
 			var apiStatus apierrors.APIStatus
-			if goerrors.As(err, &apiStatus) {
+			if errors.As(err, &apiStatus) {
 				return validationResponseFromStatus(false, apiStatus.Status())
 			}
 			return Denied(err.Error())
@@ -88,7 +88,7 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 		err = obj.ValidateUpdate(oldObj)
 		if err != nil {
 			var apiStatus apierrors.APIStatus
-			if goerrors.As(err, &apiStatus) {
+			if errors.As(err, &apiStatus) {
 				return validationResponseFromStatus(false, apiStatus.Status())
 			}
 			return Denied(err.Error())
@@ -106,7 +106,7 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 		err = obj.ValidateDelete()
 		if err != nil {
 			var apiStatus apierrors.APIStatus
-			if goerrors.As(err, &apiStatus) {
+			if errors.As(err, &apiStatus) {
 				return validationResponseFromStatus(false, apiStatus.Status())
 			}
 			return Denied(err.Error())

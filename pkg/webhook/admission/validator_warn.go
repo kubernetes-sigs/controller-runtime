@@ -18,7 +18,7 @@ package admission
 
 import (
 	"context"
-	goerrors "errors"
+	"errors"
 	"net/http"
 
 	v1 "k8s.io/api/admission/v1"
@@ -75,7 +75,7 @@ func (h *validatingWarnHandler) Handle(ctx context.Context, req Request) Respons
 		allWarnings = append(allWarnings, warnings...)
 		if err != nil {
 			var apiStatus apierrors.APIStatus
-			if goerrors.As(err, &apiStatus) {
+			if errors.As(err, &apiStatus) {
 				return validationResponseFromStatus(false, apiStatus.Status())
 			}
 			return Denied(err.Error()).WithWarnings(allWarnings...)
@@ -97,7 +97,7 @@ func (h *validatingWarnHandler) Handle(ctx context.Context, req Request) Respons
 		allWarnings = append(allWarnings, warnings...)
 		if err != nil {
 			var apiStatus apierrors.APIStatus
-			if goerrors.As(err, &apiStatus) {
+			if errors.As(err, &apiStatus) {
 				return validationResponseFromStatus(false, apiStatus.Status())
 			}
 			return Denied(err.Error()).WithWarnings(allWarnings...)
@@ -116,7 +116,7 @@ func (h *validatingWarnHandler) Handle(ctx context.Context, req Request) Respons
 		allWarnings = append(allWarnings, warnings...)
 		if err != nil {
 			var apiStatus apierrors.APIStatus
-			if goerrors.As(err, &apiStatus) {
+			if errors.As(err, &apiStatus) {
 				return validationResponseFromStatus(false, apiStatus.Status())
 			}
 			return Denied(err.Error()).WithWarnings(allWarnings...)

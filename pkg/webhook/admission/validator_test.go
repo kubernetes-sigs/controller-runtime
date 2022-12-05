@@ -18,7 +18,7 @@ package admission
 
 import (
 	"context"
-	goerrors "errors"
+	"errors"
 	"net/http"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -168,7 +168,7 @@ var _ = Describe("validatingHandler", func() {
 	})
 	Context("when dealing with non-status errors", func() {
 
-		expectedError := goerrors.New("some error")
+		expectedError := errors.New("some error")
 		f := &admissiontest.FakeValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK}
 		handler := validatingHandler{validator: f, decoder: decoder}
 

@@ -2,7 +2,7 @@ package admission
 
 import (
 	"context"
-	goerrors "errors"
+	"errors"
 	"net/http"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -215,7 +215,7 @@ var _ = Describe("validatingWarnHandler", func() {
 
 	Context("when dealing with non-status errors, without warning messages", func() {
 
-		expectedError := goerrors.New("some error")
+		expectedError := errors.New("some error")
 		f := &admissiontest.FakeValidatorWarn{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK}
 		handler := validatingWarnHandler{validatorWarn: f, decoder: decoder}
 
@@ -275,7 +275,7 @@ var _ = Describe("validatingWarnHandler", func() {
 
 	Context("when dealing with non-status errors, with warning messages", func() {
 
-		expectedError := goerrors.New("some error")
+		expectedError := errors.New("some error")
 		f := &admissiontest.FakeValidatorWarn{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{warningMessage, anotherWarningMessage}}
 		handler := validatingWarnHandler{validatorWarn: f, decoder: decoder}
 

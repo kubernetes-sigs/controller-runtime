@@ -892,7 +892,7 @@ func (*TestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj r
 	}
 
 	v := newObj.(*TestValidator)
-	old := oldObj.(*TestValidator) //nolint:ifshort
+	old := oldObj.(*TestValidator)
 	if v.Replica < 0 {
 		return errors.New("number of replica should be greater than or equal to 0")
 	}

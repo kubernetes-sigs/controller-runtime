@@ -18,10 +18,11 @@ package envtest
 
 import (
 	"context"
+	"crypto/tls"
 	"path/filepath"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -41,6 +42,9 @@ var _ = Describe("Test", func() {
 				Port:    env.WebhookInstallOptions.LocalServingPort,
 				Host:    env.WebhookInstallOptions.LocalServingHost,
 				CertDir: env.WebhookInstallOptions.LocalServingCertDir,
+				TLSOpts: []func(*tls.Config){
+					func(config *tls.Config) {},
+				},
 			}) // we need manager here just to leverage manager.SetFields
 			Expect(err).NotTo(HaveOccurred())
 			server := m.GetWebhookServer()

@@ -18,6 +18,7 @@ package manager
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -30,7 +31,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/goleak"
@@ -211,6 +212,9 @@ var _ = Describe("manger.Manager", func() {
 				},
 			}
 
+			optionsTlSOptsFuncs := []func(*tls.Config){
+				func(config *tls.Config) {},
+			}
 			m, err := Options{
 				SyncPeriod:                 &optDuration,
 				LeaderElection:             true,
@@ -228,6 +232,7 @@ var _ = Describe("manger.Manager", func() {
 				Port:                       8080,
 				Host:                       "example.com",
 				CertDir:                    "/pki",
+				TLSOpts:                    optionsTlSOptsFuncs,
 			}.AndFrom(&fakeDeferredLoader{ccfg})
 			Expect(err).To(BeNil())
 
@@ -247,6 +252,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.Port).To(Equal(8080))
 			Expect(m.Host).To(Equal("example.com"))
 			Expect(m.CertDir).To(Equal("/pki"))
+			Expect(m.TLSOpts).To(Equal(optionsTlSOptsFuncs))
 		})
 
 		It("should lazily initialize a webhook server if needed", func() {
@@ -510,6 +516,25 @@ var _ = Describe("manger.Manager", func() {
 				record, _, err := rl.Get(ctx)
 				Expect(err).To(BeNil())
 				Expect(record.HolderIdentity).To(BeEmpty())
+			})
+			When("using a custom LeaderElectionResourceLockInterface", func() {
+				It("should use the custom LeaderElectionResourceLockInterface", func() {
+					rl, err := fakeleaderelection.NewResourceLock(nil, nil, leaderelection.Options{})
+					Expect(err).NotTo(HaveOccurred())
+
+					m, err := New(cfg, Options{
+						LeaderElection:                      true,
+						LeaderElectionResourceLockInterface: rl,
+						newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+							return nil, fmt.Errorf("this should not be called")
+						},
+					})
+					Expect(m).ToNot(BeNil())
+					Expect(err).ToNot(HaveOccurred())
+					cm, ok := m.(*controllerManager)
+					Expect(ok).To(BeTrue())
+					Expect(cm.resourceLock).To(Equal(rl))
+				})
 			})
 		})
 

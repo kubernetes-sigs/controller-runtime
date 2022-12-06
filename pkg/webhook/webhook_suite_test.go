@@ -20,22 +20,20 @@ import (
 	"fmt"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "Webhook Integration Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, "Webhook Integration Suite")
 }
 
 var testenv *envtest.Environment
@@ -50,12 +48,12 @@ var _ = BeforeSuite(func() {
 	var err error
 	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
-}, 60)
+})
 
 var _ = AfterSuite(func() {
 	fmt.Println("stopping?")
 	Expect(testenv.Stop()).To(Succeed())
-}, 60)
+})
 
 func initializeWebhookInEnvironment() {
 	namespacedScopeV1 := admissionv1.NamespacedScope

@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -188,7 +188,7 @@ var _ = Describe("Source", func() {
 				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.DeleteEvent{}))
 				deleteEvt.Object.SetResourceVersion("")
 				Expect(deleteEvt.Object).To(Equal(deleted))
-			}, 5)
+			})
 		})
 
 		// TODO(pwittrock): Write this test
@@ -274,7 +274,7 @@ var _ = Describe("Source", func() {
 				_, err = clientset.AppsV1().ReplicaSets("default").Create(ctx, rs, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				<-c
-			}, 30)
+			})
 
 			It("should provide a ReplicaSet UpdateEvent", func() {
 				var err error

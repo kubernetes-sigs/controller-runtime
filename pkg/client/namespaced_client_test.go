@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -480,7 +480,7 @@ var _ = Describe("NamespacedClient", func() {
 		})
 	})
 
-	Describe("StatusWriter", func() {
+	Describe("SubResourceWriter", func() {
 		var err error
 		BeforeEach(func() {
 			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
@@ -495,7 +495,7 @@ var _ = Describe("NamespacedClient", func() {
 			changedDep := dep.DeepCopy()
 			changedDep.Status.Replicas = 99
 
-			Expect(getClient().Status().Update(ctx, changedDep)).NotTo(HaveOccurred())
+			Expect(getClient().SubResource("status").Update(ctx, changedDep)).NotTo(HaveOccurred())
 
 			actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -509,14 +509,14 @@ var _ = Describe("NamespacedClient", func() {
 			changedDep.SetNamespace("test")
 			changedDep.Status.Replicas = 99
 
-			Expect(getClient().Status().Update(ctx, changedDep)).To(HaveOccurred())
+			Expect(getClient().SubResource("status").Update(ctx, changedDep)).To(HaveOccurred())
 		})
 
 		It("should change objects via status patch", func() {
 			changedDep := dep.DeepCopy()
 			changedDep.Status.Replicas = 99
 
-			Expect(getClient().Status().Patch(ctx, changedDep, client.MergeFrom(dep))).NotTo(HaveOccurred())
+			Expect(getClient().SubResource("status").Patch(ctx, changedDep, client.MergeFrom(dep))).NotTo(HaveOccurred())
 
 			actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -530,7 +530,7 @@ var _ = Describe("NamespacedClient", func() {
 			changedDep.Status.Replicas = 99
 			changedDep.SetNamespace("test")
 
-			Expect(getClient().Status().Patch(ctx, changedDep, client.MergeFrom(dep))).To(HaveOccurred())
+			Expect(getClient().SubResource("status").Patch(ctx, changedDep, client.MergeFrom(dep))).To(HaveOccurred())
 		})
 	})
 

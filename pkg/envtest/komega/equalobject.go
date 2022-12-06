@@ -257,15 +257,15 @@ func (o *EqualObjectOptions) ApplyOptions(opts []EqualObjectOption) *EqualObject
 // Paths are written in a syntax similar to Go with a few special cases. Both types and
 // json/yaml field names are supported.
 //
-// Regular Paths
-//   "ObjectMeta.Name"
-//   "metadata.name"
-// Arrays
-//   "metadata.ownerReferences[0].name"
-// Maps, if they do not contain any of .[]/\
-//   "metadata.labels.something"
-// Maps, if they contain any of .[]/\
-//   "metadata.labels[kubernetes.io/something]"
+// Regular Paths:
+// * "ObjectMeta.Name"
+// * "metadata.name"
+// Arrays:
+// * "metadata.ownerReferences[0].name"
+// Maps, if they do not contain any of .[]/\:
+// * "metadata.labels.something"
+// Maps, if they contain any of .[]/\:
+// * "metadata.labels[kubernetes.io/something]"
 type IgnorePaths []string
 
 // ApplyToEqualObjectMatcher applies this configuration to the given MatchOptions.
@@ -279,15 +279,15 @@ func (i IgnorePaths) ApplyToEqualObjectMatcher(opts *EqualObjectOptions) {
 // Paths are written in a syntax similar to Go with a few special cases. Both types and
 // json/yaml field names are supported.
 //
-// Regular Paths
-//   "ObjectMeta.Name"
-//   "metadata.name"
-// Arrays
-//   "metadata.ownerReferences[0].name"
-// Maps, if they do not contain any of .[]/\
-//   "metadata.labels.something"
-// Maps, if they contain any of .[]/\
-//   "metadata.labels[kubernetes.io/something]"
+// Regular Paths:
+// * "ObjectMeta.Name"
+// * "metadata.name"
+// Arrays:
+// * "metadata.ownerReferences[0].name"
+// Maps, if they do not contain any of .[]/\:
+// * "metadata.labels.something"
+// Maps, if they contain any of .[]/\:
+// * "metadata.labels[kubernetes.io/something]"
 type MatchPaths []string
 
 // ApplyToEqualObjectMatcher applies this configuration to the given MatchOptions.

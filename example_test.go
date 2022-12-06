@@ -26,6 +26,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	// since we invoke tests with -ginkgo.junit-report we need to import ginkgo.
+	_ "github.com/onsi/ginkgo/v2"
 )
 
 // This example creates a simple application Controller that is configured for ReplicaSets and Pods.
@@ -64,9 +67,9 @@ func Example() {
 // This application controller will be running leader election with the provided configuration in the manager options.
 // If leader election configuration is not provided, controller runs leader election with default values.
 // Default values taken from: https://github.com/kubernetes/component-base/blob/master/config/v1alpha1/defaults.go
-//	defaultLeaseDuration = 15 * time.Second
-//	defaultRenewDeadline = 10 * time.Second
-//	defaultRetryPeriod   = 2 * time.Second
+// * defaultLeaseDuration = 15 * time.Second
+// * defaultRenewDeadline = 10 * time.Second
+// * defaultRetryPeriod   = 2 * time.Second
 //
 // * Create a new application for ReplicaSets that manages Pods owned by the ReplicaSet and calls into
 // ReplicaSetReconciler.

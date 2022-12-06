@@ -19,7 +19,7 @@ package authentication
 import (
 	"errors"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	authenticationv1 "k8s.io/api/authentication/v1"

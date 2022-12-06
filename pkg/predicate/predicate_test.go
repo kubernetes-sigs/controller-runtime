@@ -17,7 +17,7 @@ limitations under the License.
 package predicate_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -413,7 +413,7 @@ var _ = Describe("Predicate", func() {
 
 	// AnnotationChangedPredicate has almost identical test cases as LabelChangedPredicates,
 	// so the duplication linter should be muted on both two test suites.
-	// nolint:dupl
+	//nolint:dupl
 	Describe("When checking an AnnotationChangedPredicate", func() {
 		instance := predicate.AnnotationChangedPredicate{}
 		Context("Where the old object is missing", func() {
@@ -612,7 +612,7 @@ var _ = Describe("Predicate", func() {
 
 	// LabelChangedPredicates has almost identical test cases as AnnotationChangedPredicates,
 	// so the duplication linter should be muted on both two test suites.
-	// nolint:dupl
+	//nolint:dupl
 	Describe("When checking a LabelChangedPredicate", func() {
 		instance := predicate.LabelChangedPredicate{}
 		Context("Where the old object is missing", func() {
@@ -876,6 +876,28 @@ var _ = Describe("Predicate", func() {
 				prct := &injectablePredicate{}
 				a := predicate.Or(prct)
 				Expect(injectFunc(a)).To(Succeed())
+				Expect(prct.injected).To(BeTrue())
+			})
+		})
+		Describe("When checking a Not predicate", func() {
+			It("should return false when its predicate returns true", func() {
+				n := predicate.Not(passFuncs)
+				Expect(n.Create(event.CreateEvent{})).To(BeFalse())
+				Expect(n.Update(event.UpdateEvent{})).To(BeFalse())
+				Expect(n.Delete(event.DeleteEvent{})).To(BeFalse())
+				Expect(n.Generic(event.GenericEvent{})).To(BeFalse())
+			})
+			It("should return true when its predicate returns false", func() {
+				n := predicate.Not(failFuncs)
+				Expect(n.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(n.Update(event.UpdateEvent{})).To(BeTrue())
+				Expect(n.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(n.Generic(event.GenericEvent{})).To(BeTrue())
+			})
+			It("should inject into its predicate", func() {
+				prct := &injectablePredicate{}
+				n := predicate.Not(prct)
+				Expect(injectFunc(n)).To(Succeed())
 				Expect(prct.injected).To(BeTrue())
 			})
 		})

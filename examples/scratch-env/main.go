@@ -21,10 +21,11 @@ import (
 	"os"
 
 	flag "github.com/spf13/pflag"
+	"go.uber.org/zap"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	logzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 var (
@@ -35,8 +36,9 @@ var (
 
 // have a separate function so we can return an exit code w/o skipping defers
 func runMain() int {
-	loggerOpts := &zap.Options{
+	loggerOpts := &logzap.Options{
 		Development: true, // a sane default
+		ZapOpts:     []zap.Option{zap.AddCaller()},
 	}
 	{
 		var goFlagSet goflag.FlagSet
@@ -44,7 +46,8 @@ func runMain() int {
 		flag.CommandLine.AddGoFlagSet(&goFlagSet)
 	}
 	flag.Parse()
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(loggerOpts)))
+	ctrl.SetLogger(logzap.New(logzap.UseFlagOptions(loggerOpts)))
+	ctrl.Log.Info("Starting...")
 
 	log := ctrl.Log.WithName("main")
 

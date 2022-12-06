@@ -19,7 +19,7 @@ package admission
 import (
 	"context"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	jsonpatch "gomodules.xyz/jsonpatch/v2"

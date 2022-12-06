@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Kubernetes Authors.
+Copyright 2022 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,14 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package envtest
+package selector_test
 
 import (
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-// NewlineReporter is Reporter that Prints a newline after the default Reporter output so that the results
-// are correctly parsed by test automation.
-// See issue https://github.com/jstemmer/go-junit-report/issues/31
-// It's re-exported here to avoid compatibility breakage/mass rewrites.
-type NewlineReporter = printer.NewlineReporter
+func TestSource(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Fields Selector Utils Suite")
+}

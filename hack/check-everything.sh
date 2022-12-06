@@ -28,7 +28,7 @@ kb_root_dir=$tmp_root/kubebuilder
 ${hack_dir}/verify.sh
 
 # Envtest.
-ENVTEST_K8S_VERSION=${ENVTEST_K8S_VERSION:-"1.22.0"}
+ENVTEST_K8S_VERSION=${ENVTEST_K8S_VERSION:-"1.24.2"}
 
 header_text "installing envtest tools@${ENVTEST_K8S_VERSION} with setup-envtest if necessary"
 tmp_bin=/tmp/cr-tests-bin

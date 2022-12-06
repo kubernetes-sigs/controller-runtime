@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -1733,6 +1734,29 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(sii).To(BeNil())
 					Expect(apierrors.IsTimeout(err)).To(BeTrue())
 				})
+			})
+		})
+		Describe("use UnsafeDisableDeepCopy list options", func() {
+			It("should be able to change object in informer cache", func() {
+				By("listing pods")
+				out := corev1.PodList{}
+				Expect(informerCache.List(context.Background(), &out, client.UnsafeDisableDeepCopy)).To(Succeed())
+				for _, item := range out.Items {
+					if strings.Compare(item.Name, "test-pod-3") == 0 { // test-pod-3 has labels
+						item.Labels["UnsafeDisableDeepCopy"] = "true"
+						break
+					}
+				}
+
+				By("verifying that the returned pods were changed")
+				out2 := corev1.PodList{}
+				Expect(informerCache.List(context.Background(), &out, client.UnsafeDisableDeepCopy)).To(Succeed())
+				for _, item := range out2.Items {
+					if strings.Compare(item.Name, "test-pod-3") == 0 {
+						Expect(item.Labels["UnsafeDisableDeepCopy"]).To(Equal("true"))
+						break
+					}
+				}
 			})
 		})
 	})

@@ -13,7 +13,7 @@ require (
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/client_model v0.3.0
 	go.uber.org/goleak v1.2.0
-	go.uber.org/zap v1.23.0
+	go.uber.org/zap v1.24.0
 	golang.org/x/sys v0.3.0
 	golang.org/x/time v0.0.0-20220609170525-579cf78fd858
 	gomodules.xyz/jsonpatch/v2 v2.2.0

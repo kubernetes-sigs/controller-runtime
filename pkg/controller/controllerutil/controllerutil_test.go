@@ -101,7 +101,6 @@ var _ = Describe("Controllerutil", func() {
 				APIVersion: "extensions/v1beta1",
 				UID:        "foo-uid-2",
 			}))
-
 		})
 	})
 
@@ -596,7 +595,7 @@ var _ = Describe("Controllerutil", func() {
 			assertLocalDeployWasUpdated(nil)
 
 			op, err = controllerutil.CreateOrPatch(context.TODO(), c, deploy, func() error {
-				deploy.Spec.Replicas = pointer.Int32Ptr(5)
+				deploy.Spec.Replicas = pointer.Int32(5)
 				deploy.Status.Conditions = []appsv1.DeploymentCondition{{
 					Type:   appsv1.DeploymentProgressing,
 					Status: corev1.ConditionTrue,
@@ -770,11 +769,15 @@ var _ = Describe("Controllerutil", func() {
 	})
 })
 
-const testFinalizer = "foo.bar.baz"
-const testFinalizer1 = testFinalizer + "1"
+const (
+	testFinalizer  = "foo.bar.baz"
+	testFinalizer1 = testFinalizer + "1"
+)
 
-var _ runtime.Object = &errRuntimeObj{}
-var _ metav1.Object = &errMetaObj{}
+var (
+	_ runtime.Object = &errRuntimeObj{}
+	_ metav1.Object  = &errMetaObj{}
+)
 
 type errRuntimeObj struct {
 	runtime.TypeMeta

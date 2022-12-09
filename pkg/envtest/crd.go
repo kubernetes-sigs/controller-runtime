@@ -84,8 +84,10 @@ type CRDInstallOptions struct {
 	WebhookOptions WebhookInstallOptions
 }
 
-const defaultPollInterval = 100 * time.Millisecond
-const defaultMaxWait = 10 * time.Second
+const (
+	defaultPollInterval = 100 * time.Millisecond
+	defaultMaxWait      = 10 * time.Second
+)
 
 // InstallCRDs installs a collection of CRDs into a cluster by reading the crd yaml files from a directory.
 func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]*apiextensionsv1.CustomResourceDefinition, error) {
@@ -362,7 +364,7 @@ func modifyConversionWebhooks(crds []*apiextensionsv1.CustomResourceDefinition, 
 	if err != nil {
 		return err
 	}
-	url := pointer.StringPtr(fmt.Sprintf("https://%s/convert", hostPort))
+	url := pointer.String(fmt.Sprintf("https://%s/convert", hostPort))
 
 	for i := range crds {
 		// Continue if we're preserving unknown fields.

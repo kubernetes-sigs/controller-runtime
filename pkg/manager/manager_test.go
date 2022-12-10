@@ -1492,6 +1492,29 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m.Add(&failRec{})).To(HaveOccurred())
 		})
+
+		It("should fail if attempted to start a second time", func() {
+			m, err := New(cfg, Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(ctx)).NotTo(HaveOccurred())
+			}()
+			// Wait for the Manager to start
+			Eventually(func() bool {
+				mgr, ok := m.(*controllerManager)
+				Expect(ok).To(BeTrue())
+				return mgr.runnables.Caches.Started()
+			}).Should(BeTrue())
+
+			err = m.Start(ctx)
+			Expect(err).ToNot(BeNil())
+			Expect(err.Error()).To(Equal("manager already started"))
+
+		})
 	})
 	Describe("SetFields", func() {
 		It("should inject field values", func() {

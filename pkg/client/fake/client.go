@@ -385,9 +385,14 @@ func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Ob
 	intResourceVersion++
 	accessor.SetResourceVersion(strconv.FormatUint(intResourceVersion, 10))
 
+	crRequiresGenerationUpdate, err := didNonMetadataFieldChange(oldObject, obj)
+	if err != nil {
+		return fmt.Errorf("failed to check if generation should be updated: %w", err)
+	}
+
 	// The behavior of the generation field is inconsistent across built-in k8s resources, but it's
 	// consistent for CRs. CRs have their generation increased on non-metadata changes only.
-	if isCustomResource(gvk) && didNonMetadataFieldChange(oldObject, obj) {
+	if isCustomResource(gvk) && crRequiresGenerationUpdate {
 		accessor.SetGeneration(oldAccessor.GetGeneration() + 1)
 	}
 
@@ -405,14 +410,21 @@ func isCustomResource(gvk schema.GroupVersionKind) bool {
 	return !scheme.Scheme.Recognizes(gvk)
 }
 
-func didNonMetadataFieldChange(old runtime.Object, new runtime.Object) bool {
-	oldUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(old)
-	newUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(new)
+func didNonMetadataFieldChange(old runtime.Object, new runtime.Object) (bool, error) {
+	oldUnstructured, err := runtime.DefaultUnstructuredConverter.ToUnstructured(old)
+	if err != nil {
+		return false, fmt.Errorf("can't convert %v to unstructued: %w", old, err)
+	}
+
+	newUnstructured, err := runtime.DefaultUnstructuredConverter.ToUnstructured(new)
+	if err != nil {
+		return false, fmt.Errorf("can't convert %v to unstructued: %w", new, err)
+	}
 
 	oldCopyContent := copyNonMetadata(oldUnstructured)
 	newCopyContent := copyNonMetadata(newUnstructured)
 
-	return !apiequality.Semantic.DeepEqual(oldCopyContent, newCopyContent)
+	return !apiequality.Semantic.DeepEqual(oldCopyContent, newCopyContent), nil
 }
 
 func copyNonMetadata(original map[string]interface{}) map[string]interface{} {

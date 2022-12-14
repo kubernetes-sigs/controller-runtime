@@ -25,11 +25,14 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/goleak"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	internalcontroller "sigs.k8s.io/controller-runtime/pkg/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -141,6 +144,39 @@ var _ = Describe("controller.Controller", func() {
 			// like 30s or so) but force it to speed up the tests.
 			clientTransport.CloseIdleConnections()
 			Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
+		})
+
+		It("should default RecoverPanic from the manager", func() {
+			m, err := manager.New(cfg, manager.Options{Controller: v1alpha1.ControllerConfigurationSpec{RecoverPanic: pointer.Bool(true)}})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller)
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.RecoverPanic).NotTo(BeNil())
+			Expect(*ctrl.RecoverPanic).To(BeTrue())
+		})
+
+		It("should not override RecoverPanic on the controller", func() {
+			m, err := manager.New(cfg, manager.Options{Controller: v1alpha1.ControllerConfigurationSpec{RecoverPanic: pointer.Bool(true)}})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				Reconciler:   reconcile.Func(nil),
+				RecoverPanic: pointer.Bool(false),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller)
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.RecoverPanic).NotTo(BeNil())
+			Expect(*ctrl.RecoverPanic).To(BeFalse())
 		})
 	})
 })

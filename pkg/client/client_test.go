@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sync/atomic"
 	"time"
 
@@ -740,8 +741,23 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 		})
 	})
 
-	Describe("SubResourceWriter", func() {
+	Describe("SubResourceClient", func() {
 		Context("with structured objects", func() {
+			It("should be able to read the Scale subresource", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("reading the scale subresource")
+				scale := &autoscalingv1.Scale{}
+				err = cl.SubResource("scale").Get(ctx, dep, scale)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(scale.Spec.Replicas).To(Equal(*dep.Spec.Replicas))
+			})
 			It("should be able to create ServiceAccount tokens", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
@@ -901,6 +917,31 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 		})
 
 		Context("with unstructured objects", func() {
+			It("should be able to read the Scale subresource", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				dep.APIVersion = appsv1.SchemeGroupVersion.String()
+				dep.Kind = reflect.TypeOf(dep).Elem().Name()
+				depUnstructured, err := toUnstructured(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("reading the scale subresource")
+				scale := &unstructured.Unstructured{}
+				scale.SetAPIVersion("autoscaling/v1")
+				scale.SetKind("Scale")
+				err = cl.SubResource("scale").Get(ctx, depUnstructured, scale)
+				Expect(err).NotTo(HaveOccurred())
+
+				val, found, err := unstructured.NestedInt64(scale.UnstructuredContent(), "spec", "replicas")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(found).To(BeTrue())
+				Expect(int32(val)).To(Equal(*dep.Spec.Replicas))
+			})
 			It("should be able to create ServiceAccount tokens", func() {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())

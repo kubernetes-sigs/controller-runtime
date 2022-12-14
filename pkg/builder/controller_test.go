@@ -112,16 +112,55 @@ var _ = Describe("application", func() {
 			Expect(instance).To(BeNil())
 		})
 
-		It("should return an error if For function is not called", func() {
+		It("should return an error if For and Named function are not called", func() {
 			By("creating a controller manager")
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
+				Watches(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueRequestForObject{}).
+				Build(noop)
+			Expect(err).To(MatchError(ContainSubstring("one of For() or Named() must be called")))
+			Expect(instance).To(BeNil())
+		})
+
+		It("should return an error when using Owns without For", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				Named("my_controller").
 				Owns(&appsv1.ReplicaSet{}).
 				Build(noop)
-			Expect(err).To(MatchError(ContainSubstring("must provide an object for reconciliation")))
+			Expect(err).To(MatchError(ContainSubstring("Owns() can only be used together with For()")))
 			Expect(instance).To(BeNil())
+
+		})
+
+		It("should return an error when there are no watches", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				Named("my_controller").
+				Build(noop)
+			Expect(err).To(MatchError(ContainSubstring("there are no watches configured, controller will never get triggered. Use For(), Owns() or Watches() to set them up")))
+			Expect(instance).To(BeNil())
+		})
+
+		It("should allow creating a controllerw without calling For", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				Named("my_controller").
+				Watches(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueRequestForObject{}).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeNil())
 		})
 
 		It("should return an error if there is no GVK for an object, and thus we can't default the controller name", func() {

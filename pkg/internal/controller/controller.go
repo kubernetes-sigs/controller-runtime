@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -58,11 +57,17 @@ type Controller struct {
 	// the Queue for processing
 	Queue workqueue.RateLimitingInterface
 
+	// startedSources maintains a list of sources that have already started.
+	startedSources []source.Source
+
 	// mu is used to synchronize Controller setup
 	mu sync.Mutex
 
 	// Started is true if the Controller has been Started
 	Started bool
+
+	// Stopped is true if the Controller has been Stopped
+	Stopped bool
 
 	// ctx is the context that was passed to Start() and used when starting watches.
 	//
@@ -70,6 +75,9 @@ type Controller struct {
 	// while we usually always strive to follow best practices, we consider this a legacy case and it should
 	// undergo a major refactoring and redesign to allow for context to not be stored in a struct.
 	ctx context.Context
+
+	// cancel is the CancelFunc of the ctx, to stop the controller and its watches dynamically.
+	cancel context.CancelFunc
 
 	// CacheSyncTimeout refers to the time limit set on waiting for cache to sync
 	// Defaults to 2 minutes if not set.
@@ -123,6 +131,10 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if c.Stopped {
+		return fmt.Errorf("can not start watch in a stopped controller")
+	}
+
 	// Controller hasn't started yet, store the watches locally and return.
 	//
 	// These watches are going to be held on the controller struct until the manager or user calls Start(...).
@@ -132,7 +144,11 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	}
 
 	c.LogConstructor(nil).Info("Starting EventSource", "source", src)
-	return src.Start(c.ctx, evthdler, c.Queue, prct...)
+	err := src.Start(c.ctx, evthdler, c.Queue, prct...)
+	if err == nil {
+		c.startedSources = append(c.startedSources, src)
+	}
+	return err
 }
 
 // NeedLeaderElection implements the manager.LeaderElectionRunnable interface.
@@ -148,23 +164,21 @@ func (c *Controller) Start(ctx context.Context) error {
 	// use an IIFE to get proper lock handling
 	// but lock outside to get proper handling of the queue shutdown
 	c.mu.Lock()
+	if c.Stopped {
+		return fmt.Errorf("can not restart a stopped controller, you should create a new one")
+	}
 	if c.Started {
-		return errors.New("controller was started more than once. This is likely to be caused by being added to a manager multiple times")
+		return fmt.Errorf("controller was started more than once. This is likely to be caused by being added to a manager multiple times")
 	}
 
 	c.initMetrics()
 
 	// Set the internal context.
-	c.ctx = ctx
+	c.ctx, c.cancel = context.WithCancel(ctx)
 
 	c.Queue = c.MakeQueue()
-	go func() {
-		<-ctx.Done()
-		c.Queue.ShutDown()
-	}()
-
 	wg := &sync.WaitGroup{}
-	err := func() error {
+	startErr := func() error {
 		defer c.mu.Unlock()
 
 		// TODO(pwittrock): Reconsider HandleCrash
@@ -179,6 +193,7 @@ func (c *Controller) Start(ctx context.Context) error {
 			if err := watch.src.Start(ctx, watch.handler, c.Queue, watch.predicates...); err != nil {
 				return err
 			}
+			c.startedSources = append(c.startedSources, watch.src)
 		}
 
 		// Start the SharedIndexInformer factories to begin populating the SharedIndexInformer caches
@@ -231,14 +246,51 @@ func (c *Controller) Start(ctx context.Context) error {
 		c.Started = true
 		return nil
 	}()
-	if err != nil {
-		return err
+
+	defer func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.Stopped = true
+
+		c.cancel()
+		c.Queue.ShutDown()
+		for _, src := range c.startedSources {
+			if stoppableSrc, ok := src.(source.StoppableSource); ok {
+				if err := stoppableSrc.Stop(); err != nil {
+					c.LogConstructor(nil).Error(err, "Failed to stop watch source when controller stopping", "source", src)
+				}
+			} else {
+				c.LogConstructor(nil).Info("Skip unstoppable watch source when controller stopping", "source", src)
+			}
+		}
+		c.LogConstructor(nil).Info("All watch sources finished")
+	}()
+
+	if startErr != nil {
+		return startErr
 	}
 
 	<-ctx.Done()
 	c.LogConstructor(nil).Info("Shutdown signal received, waiting for all workers to finish")
 	wg.Wait()
 	c.LogConstructor(nil).Info("All workers finished")
+	return nil
+}
+
+// Stop implements controller.Controller.
+func (c *Controller) Stop() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.Stopped {
+		return fmt.Errorf("can not stop a stopped controller")
+	}
+	if !c.Started {
+		return fmt.Errorf("can not stop an unstarted controller")
+	}
+	c.Stopped = true
+	c.cancel()
+
 	return nil
 }
 

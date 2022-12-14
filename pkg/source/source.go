@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	toolscache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -55,6 +56,12 @@ type Source interface {
 type SyncingSource interface {
 	Source
 	WaitForSync(ctx context.Context) error
+}
+
+// StoppableSource is a source that can be stopped after starting.
+type StoppableSource interface {
+	Source
+	Stop() error
 }
 
 // Kind creates a KindSource with the given cache provider.
@@ -191,6 +198,10 @@ func (cs *Channel) syncLoop(ctx context.Context) {
 type Informer struct {
 	// Informer is the controller-runtime Informer
 	Informer cache.Informer
+
+	mu                       sync.Mutex
+	canceled                 bool
+	eventHandlerRegistration toolscache.ResourceEventHandlerRegistration
 }
 
 var _ Source = &Informer{}
@@ -204,7 +215,14 @@ func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, que
 		return fmt.Errorf("must specify Informer.Informer")
 	}
 
-	_, err := is.Informer.AddEventHandler(internal.NewEventHandler(ctx, queue, handler, prct))
+	is.mu.Lock()
+	defer is.mu.Unlock()
+	if is.canceled {
+		return nil
+	}
+
+	var err error
+	is.eventHandlerRegistration, err = is.Informer.AddEventHandler(internal.NewEventHandler(ctx, queue, handler, prct))
 	if err != nil {
 		return err
 	}
@@ -213,6 +231,18 @@ func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, que
 
 func (is *Informer) String() string {
 	return fmt.Sprintf("informer source: %p", is.Informer)
+}
+
+// Stop implements StoppableSource to stop it dynamically.
+func (is *Informer) Stop() error {
+	is.mu.Lock()
+	defer is.mu.Unlock()
+	is.canceled = true
+
+	if is.eventHandlerRegistration != nil {
+		return is.Informer.RemoveEventHandler(is.eventHandlerRegistration)
+	}
+	return nil
 }
 
 var _ Source = Func(nil)

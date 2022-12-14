@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	toolscache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,6 +30,11 @@ type Kind struct {
 	// contain an error, startup and syncing finished.
 	started     chan error
 	startCancel func()
+
+	informer                 cache.Informer
+	mu                       sync.Mutex
+	canceled                 bool
+	eventHandlerRegistration toolscache.ResourceEventHandlerRegistration
 }
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
@@ -41,21 +48,25 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 		return fmt.Errorf("must create Kind with a non-nil cache")
 	}
 
+	ks.mu.Lock()
+	defer ks.mu.Unlock()
+	// If it has been canceled before start, just ignore it.
+	if ks.canceled {
+		return nil
+	}
+
 	// cache.GetInformer will block until its context is cancelled if the cache was already started and it can not
 	// sync that informer (most commonly due to RBAC issues).
 	ctx, ks.startCancel = context.WithCancel(ctx)
 	ks.started = make(chan error)
 	go func() {
-		var (
-			i       cache.Informer
-			lastErr error
-		)
+		var lastErr error
 
 		// Tries to get an informer until it returns true,
 		// an error or the specified context is cancelled or expired.
 		if err := wait.PollImmediateUntilWithContext(ctx, 10*time.Second, func(ctx context.Context) (bool, error) {
 			// Lookup the Informer from the Cache and add an EventHandler which populates the Queue
-			i, lastErr = ks.Cache.GetInformer(ctx, ks.Type)
+			ks.informer, lastErr = ks.Cache.GetInformer(ctx, ks.Type)
 			if lastErr != nil {
 				kindMatchErr := &meta.NoKindMatchError{}
 				switch {
@@ -79,7 +90,8 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 			return
 		}
 
-		_, err := i.AddEventHandler(NewEventHandler(ctx, queue, handler, prct))
+		var err error
+		ks.eventHandlerRegistration, err = ks.informer.AddEventHandler(NewEventHandler(ctx, queue, handler, prct))
 		if err != nil {
 			ks.started <- err
 			return
@@ -114,4 +126,33 @@ func (ks *Kind) WaitForSync(ctx context.Context) error {
 		}
 		return errors.New("timed out waiting for cache to be synced")
 	}
+}
+
+// Stop implements StoppableSource to stop it dynamically.
+func (ks *Kind) Stop() error {
+	ks.mu.Lock()
+	defer ks.mu.Unlock()
+	if ks.canceled {
+		return nil
+	}
+	ks.canceled = true
+
+	// Return if it has not been started.
+	if ks.started == nil {
+		return nil
+	}
+
+	// Cancel if it is starting.
+	select {
+	case <-ks.started:
+	default:
+		ks.startCancel()
+		// Wait for starting abort
+		<-ks.started
+	}
+
+	if ks.eventHandlerRegistration != nil {
+		return ks.informer.RemoveEventHandler(ks.eventHandlerRegistration)
+	}
+	return nil
 }

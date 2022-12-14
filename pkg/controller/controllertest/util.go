@@ -17,6 +17,8 @@ limitations under the License.
 package controllertest
 
 import (
+	"fmt"
+	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +35,12 @@ type FakeInformer struct {
 	// RunCount is incremented each time RunInformersAndControllers is called
 	RunCount int
 
-	handlers []cache.ResourceEventHandler
+	handlers []*listenHandler
+	mu       sync.RWMutex
+}
+
+type listenHandler struct {
+	cache.ResourceEventHandler
 }
 
 // AddIndexers does nothing.  TODO(community): Implement this.
@@ -58,8 +65,11 @@ func (f *FakeInformer) HasSynced() bool {
 
 // AddEventHandler implements the Informer interface.  Adds an EventHandler to the fake Informers. TODO(community): Implement Registration.
 func (f *FakeInformer) AddEventHandler(handler cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
-	f.handlers = append(f.handlers, handler)
-	return nil, nil
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	lh := &listenHandler{ResourceEventHandler: handler}
+	f.handlers = append(f.handlers, lh)
+	return &lh, nil
 }
 
 // Run implements the Informer interface.  Increments f.RunCount.
@@ -69,6 +79,8 @@ func (f *FakeInformer) Run(<-chan struct{}) {
 
 // Add fakes an Add event for obj.
 func (f *FakeInformer) Add(obj metav1.Object) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	for _, h := range f.handlers {
 		h.OnAdd(obj)
 	}
@@ -76,6 +88,8 @@ func (f *FakeInformer) Add(obj metav1.Object) {
 
 // Update fakes an Update event for obj.
 func (f *FakeInformer) Update(oldObj, newObj metav1.Object) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	for _, h := range f.handlers {
 		h.OnUpdate(oldObj, newObj)
 	}
@@ -83,6 +97,8 @@ func (f *FakeInformer) Update(oldObj, newObj metav1.Object) {
 
 // Delete fakes an Delete event for obj.
 func (f *FakeInformer) Delete(obj metav1.Object) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	for _, h := range f.handlers {
 		h.OnDelete(obj)
 	}
@@ -95,6 +111,21 @@ func (f *FakeInformer) AddEventHandlerWithResyncPeriod(handler cache.ResourceEve
 
 // RemoveEventHandler does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) RemoveEventHandler(handle cache.ResourceEventHandlerRegistration) error {
+	lh, ok := handle.(*listenHandler)
+	if !ok {
+		return fmt.Errorf("invalid key type %t", handle)
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	handlers := make([]*listenHandler, 0, len(f.handlers))
+	for _, h := range f.handlers {
+		if h == lh {
+			continue
+		}
+		handlers = append(handlers, h)
+	}
+	f.handlers = handlers
 	return nil
 }
 

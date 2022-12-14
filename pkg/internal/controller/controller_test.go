@@ -311,6 +311,33 @@ var _ = Describe("controller", func() {
 			Expect(err.Error()).To(Equal("controller was started more than once. This is likely to be caused by being added to a manager multiple times"))
 		})
 
+		It("should return an error if it gets start after stopped", func() {
+			stoppedChan := make(chan struct{})
+			go func() {
+				Expect(ctrl.Start(context.TODO())).To(BeNil())
+				close(stoppedChan)
+			}()
+
+			// wait for started
+			var started bool
+			for !started {
+				func() {
+					ctrl.mu.Lock()
+					defer ctrl.mu.Unlock()
+					started = ctrl.Started
+				}()
+			}
+
+			err := ctrl.Stop()
+			Expect(err).NotTo(BeNil())
+			<-stoppedChan
+			Expect(ctrl.Stopped).To(Equal(true))
+
+			err = ctrl.Start(context.TODO())
+			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(Equal("can not restart a stopped controller, you should create a new one"))
+		})
+
 	})
 
 	Describe("Processing queue items from a Controller", func() {

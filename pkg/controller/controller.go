@@ -86,6 +86,10 @@ type Controller interface {
 
 	// GetLogger returns this controller logger prefilled with basic information.
 	GetLogger() logr.Logger
+
+	// Stop stops the controller and all its watches dynamically.
+	// Note that it will only trigger the stop but will not wait for them all stopped.
+	Stop() error
 }
 
 // New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have

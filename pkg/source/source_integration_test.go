@@ -186,6 +186,121 @@ var _ = Describe("Source", func() {
 				deleteEvt.Object.SetResourceVersion("")
 				Expect(deleteEvt.Object).To(Equal(deleted))
 			})
+
+			It("should not get events after stopped", func() {
+				var created, updated *appsv1.Deployment
+				var err error
+
+				// Get the client and Deployment used to create events
+				client := clientset.AppsV1().Deployments(ns)
+				deployment := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "deployment-name-2"},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"foo": "bar"},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "nginx",
+										Image: "nginx",
+									},
+								},
+							},
+						},
+					},
+				}
+
+				// Create an event handler to verify the events
+				newHandler := func(c chan interface{}) handler.Funcs {
+					return handler.Funcs{
+						CreateFunc: func(ctx context.Context, evt event.CreateEvent, rli workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Expect(rli).To(Equal(q))
+							c <- evt
+						},
+						UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, rli workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Expect(rli).To(Equal(q))
+							c <- evt
+						},
+						DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, rli workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Expect(rli).To(Equal(q))
+							c <- evt
+						},
+					}
+				}
+				handler1 := newHandler(c1)
+				handler2 := newHandler(c2)
+
+				// Create 2 instances
+				Expect(instance1.Start(ctx, handler1, q)).To(Succeed())
+				Expect(instance2.Start(ctx, handler2, q)).To(Succeed())
+
+				By("Creating a Deployment and expecting the CreateEvent.")
+				created, err = client.Create(ctx, deployment, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(created).NotTo(BeNil())
+
+				// Check first CreateEvent
+				evt := <-c1
+				createEvt, ok := evt.(event.CreateEvent)
+				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.CreateEvent{}))
+				Expect(createEvt.Object).To(Equal(created))
+
+				// Check second CreateEvent
+				evt = <-c2
+				createEvt, ok = evt.(event.CreateEvent)
+				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.CreateEvent{}))
+				Expect(createEvt.Object).To(Equal(created))
+
+				By("Stop the second kind source")
+				err = instance2.(source.StoppableSource).Stop()
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Updating a Deployment and expecting the UpdateEvent.")
+				updated = created.DeepCopy()
+				updated.Labels = map[string]string{"biz": "buz"}
+				updated, err = client.Update(ctx, updated, metav1.UpdateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				// Check first UpdateEvent
+				evt = <-c1
+				updateEvt, ok := evt.(event.UpdateEvent)
+				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.UpdateEvent{}))
+
+				Expect(updateEvt.ObjectNew).To(Equal(updated))
+
+				Expect(updateEvt.ObjectOld).To(Equal(created))
+
+				// Check second UpdateEvent should not receive
+				waitCtx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
+				defer cancel1()
+				select {
+				case <-c2:
+					Fail("kind2 is expected to be stopped")
+				case <-waitCtx1.Done():
+				}
+
+				By("Stop the first kind source")
+				err = instance1.(source.StoppableSource).Stop()
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Deleting a Deployment and expecting the Delete.")
+				err = client.Delete(ctx, created.Name, metav1.DeleteOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				waitCtx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
+				defer cancel2()
+				select {
+				case <-c1:
+					Fail("kind1 is expected to be stopped")
+				case <-waitCtx2.Done():
+				}
+			})
 		})
 
 		// TODO(pwittrock): Write this test

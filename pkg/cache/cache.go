@@ -156,10 +156,33 @@ type Options struct {
 
 var defaultResyncTime = 10 * time.Hour
 
+// Default defaults the options internals.
+func (options *Options) Default(config *rest.Config) error {
+	// Use the default Kubernetes Scheme if unset
+	if options.Scheme == nil {
+		options.Scheme = scheme.Scheme
+	}
+
+	// Construct a new Mapper if unset
+	if options.Mapper == nil {
+		var err error
+		options.Mapper, err = apiutil.NewDiscoveryRESTMapper(config)
+		if err != nil {
+			log.WithName("setup").Error(err, "Failed to get API Group-Resources")
+			return fmt.Errorf("could not create RESTMapper from config")
+		}
+	}
+
+	// Default the resync period to 10 hours if unset
+	if options.Resync == nil {
+		options.Resync = &defaultResyncTime
+	}
+	return nil
+}
+
 // New initializes and returns a new Cache.
 func New(config *rest.Config, opts Options) (Cache, error) {
-	opts, err := defaultOpts(config, opts)
-	if err != nil {
+	if err := opts.Default(config); err != nil {
 		return nil, err
 	}
 	selectorsByGVK, err := convertToByGVK(opts.SelectorsByObject, opts.DefaultSelector, opts.Scheme)
@@ -206,13 +229,10 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 // returned from cache get/list before mutating it.
 func BuilderWithOptions(options Options) NewCacheFunc {
 	return func(config *rest.Config, inherited Options) (Cache, error) {
-		var err error
-		inherited, err = defaultOpts(config, inherited)
-		if err != nil {
+		if err := inherited.Default(config); err != nil {
 			return nil, err
 		}
-		options, err = defaultOpts(config, options)
-		if err != nil {
+		if err := options.Default(config); err != nil {
 			return nil, err
 		}
 		combined, err := options.inheritFrom(inherited)
@@ -411,29 +431,6 @@ func combineTransform(inherited, current toolscache.TransformFunc) toolscache.Tr
 		}
 		return current(mid)
 	}
-}
-
-func defaultOpts(config *rest.Config, opts Options) (Options, error) {
-	// Use the default Kubernetes Scheme if unset
-	if opts.Scheme == nil {
-		opts.Scheme = scheme.Scheme
-	}
-
-	// Construct a new Mapper if unset
-	if opts.Mapper == nil {
-		var err error
-		opts.Mapper, err = apiutil.NewDiscoveryRESTMapper(config)
-		if err != nil {
-			log.WithName("setup").Error(err, "Failed to get API Group-Resources")
-			return opts, fmt.Errorf("could not create RESTMapper from config")
-		}
-	}
-
-	// Default the resync period to 10 hours if unset
-	if opts.Resync == nil {
-		opts.Resync = &defaultResyncTime
-	}
-	return opts, nil
 }
 
 func convertToByGVK[T any](byObject map[client.Object]T, def T, scheme *runtime.Scheme) (map[schema.GroupVersionKind]T, error) {

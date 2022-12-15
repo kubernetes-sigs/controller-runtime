@@ -45,8 +45,7 @@ const globalCache = "_cluster-scope"
 // you may face performance issues when using this with a high number of namespaces.
 func MultiNamespacedCacheBuilder(namespaces []string) NewCacheFunc {
 	return func(config *rest.Config, opts Options) (Cache, error) {
-		opts, err := defaultOpts(config, opts)
-		if err != nil {
+		if err := opts.Default(config); err != nil {
 			return nil, err
 		}
 

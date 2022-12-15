@@ -1577,7 +1577,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetConfig()).To(Equal(mgr.cluster.GetConfig()))
+		Expect(m.GetConfig()).To(Equal(mgr.defaultCluster.GetConfig()))
 	})
 
 	It("should provide a function to get the Client", func() {
@@ -1585,7 +1585,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetClient()).To(Equal(mgr.cluster.GetClient()))
+		Expect(m.GetClient()).To(Equal(mgr.defaultCluster.GetClient()))
 	})
 
 	It("should provide a function to get the Scheme", func() {
@@ -1593,7 +1593,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetScheme()).To(Equal(mgr.cluster.GetScheme()))
+		Expect(m.GetScheme()).To(Equal(mgr.defaultCluster.GetScheme()))
 	})
 
 	It("should provide a function to get the FieldIndexer", func() {
@@ -1601,7 +1601,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		Expect(m.GetFieldIndexer()).To(Equal(mgr.cluster.GetFieldIndexer()))
+		Expect(m.GetFieldIndexer()).To(Equal(mgr.defaultCluster.GetFieldIndexer()))
 	})
 
 	It("should provide a function to get the EventRecorder", func() {

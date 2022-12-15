@@ -346,7 +346,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Set default values for options fields
 	options = setOptionsDefaults(options)
 
-	cluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {
+	defaultCluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {
 		clusterOptions.Scheme = options.Scheme
 		clusterOptions.MapperProvider = options.MapperProvider
 		clusterOptions.Logger = options.Logger
@@ -365,7 +365,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Create the recorder provider to inject event recorders for the components.
 	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.
-	recorderProvider, err := options.newRecorderProvider(config, cluster.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
+	recorderProvider, err := options.newRecorderProvider(config, defaultCluster.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +379,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		leaderRecorderProvider = recorderProvider
 	} else {
 		leaderConfig = rest.CopyConfig(options.LeaderElectionConfig)
-		leaderRecorderProvider, err = options.newRecorderProvider(leaderConfig, cluster.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
+		leaderRecorderProvider, err = options.newRecorderProvider(leaderConfig, defaultCluster.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
 		if err != nil {
 			return nil, err
 		}
@@ -422,7 +422,8 @@ func New(config *rest.Config, options Options) (Manager, error) {
 
 	return &controllerManager{
 		stopProcedureEngaged:          pointer.Int64(0),
-		cluster:                       cluster,
+		defaultCluster:                defaultCluster,
+		clusters:                      map[string]cluster.Cluster{},
 		runnables:                     runnables,
 		errChan:                       errChan,
 		recorderProvider:              recorderProvider,

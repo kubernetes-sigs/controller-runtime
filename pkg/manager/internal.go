@@ -71,8 +71,11 @@ type controllerManager struct {
 	errChan              chan error
 	runnables            *runnables
 
-	// cluster holds a variety of methods to interact with a cluster. Required.
-	cluster cluster.Cluster
+	// defaultCluster holds a variety of methods to interact with a cluster. Required.
+	defaultCluster cluster.Cluster
+
+	// clusters holds all the clusters registered with this controller.
+	clusters map[string]cluster.Cluster
 
 	// recorderProvider is used to generate event recorders that will be injected into Controllers
 	// (and EventHandlers, Sources and Predicates).
@@ -249,36 +252,40 @@ func (cm *controllerManager) AddReadyzCheck(name string, check healthz.Checker) 
 	return nil
 }
 
+func (cm *controllerManager) ID() string {
+	return cm.defaultCluster.ID()
+}
+
 func (cm *controllerManager) GetConfig() *rest.Config {
-	return cm.cluster.GetConfig()
+	return cm.defaultCluster.GetConfig()
 }
 
 func (cm *controllerManager) GetClient() client.Client {
-	return cm.cluster.GetClient()
+	return cm.defaultCluster.GetClient()
 }
 
 func (cm *controllerManager) GetScheme() *runtime.Scheme {
-	return cm.cluster.GetScheme()
+	return cm.defaultCluster.GetScheme()
 }
 
 func (cm *controllerManager) GetFieldIndexer() client.FieldIndexer {
-	return cm.cluster.GetFieldIndexer()
+	return cm.defaultCluster.GetFieldIndexer()
 }
 
 func (cm *controllerManager) GetCache() cache.Cache {
-	return cm.cluster.GetCache()
+	return cm.defaultCluster.GetCache()
 }
 
 func (cm *controllerManager) GetEventRecorderFor(name string) record.EventRecorder {
-	return cm.cluster.GetEventRecorderFor(name)
+	return cm.defaultCluster.GetEventRecorderFor(name)
 }
 
 func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
-	return cm.cluster.GetRESTMapper()
+	return cm.defaultCluster.GetRESTMapper()
 }
 
 func (cm *controllerManager) GetAPIReader() client.Reader {
-	return cm.cluster.GetAPIReader()
+	return cm.defaultCluster.GetAPIReader()
 }
 
 func (cm *controllerManager) GetWebhookServer() *webhook.Server {
@@ -419,9 +426,14 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 		}
 	}()
 
-	// Add the cluster runnable.
-	if err := cm.add(cm.cluster); err != nil {
-		return fmt.Errorf("failed to add cluster to runnables: %w", err)
+	// Add the cluster runnables.
+	if err := cm.add(cm.defaultCluster); err != nil {
+		return fmt.Errorf("failed to add default cluster to runnables: %w", err)
+	}
+	for key, cluster := range cm.clusters {
+		if err := cm.add(cluster); err != nil {
+			return fmt.Errorf("failed to add cluster %q to runnables: %w", key, err)
+		}
 	}
 
 	// Metrics should be served whether the controller is leader or not.

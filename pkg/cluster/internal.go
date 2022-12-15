@@ -57,6 +57,10 @@ type cluster struct {
 	logger logr.Logger
 }
 
+func (c *cluster) ID() string {
+	return c.config.Host + c.config.APIPath
+}
+
 func (c *cluster) GetConfig() *rest.Config {
 	return c.config
 }

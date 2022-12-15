@@ -37,6 +37,9 @@ import (
 
 // Cluster provides various methods to interact with a cluster.
 type Cluster interface {
+	// ID returns a unique identifier for the current cluster.
+	ID() string
+
 	// GetConfig returns an initialized Config
 	GetConfig() *rest.Config
 

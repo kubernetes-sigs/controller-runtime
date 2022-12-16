@@ -181,8 +181,20 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 		internalSelectorsByGVK[gvk] = internal.Selector(selector)
 	}
 
-	im := internal.NewInformersMap(config, opts.Scheme, opts.Mapper, *opts.Resync, opts.Namespace, internalSelectorsByGVK, disableDeepCopyByGVK, transformByObj)
-	return &informerCache{InformersMap: im}, nil
+	return &informerCache{
+		scheme: opts.Scheme,
+		InformersMap: internal.NewInformersMap(config, &internal.InformersMapOptions{
+			Scheme:       opts.Scheme,
+			Mapper:       opts.Mapper,
+			ResyncPeriod: *opts.Resync,
+			Namespace:    opts.Namespace,
+			ByGVK: internal.InformersMapOptionsByGVK{
+				Selectors:       internalSelectorsByGVK,
+				DisableDeepCopy: disableDeepCopyByGVK,
+				Transformers:    transformByObj,
+			},
+		}),
+	}, nil
 }
 
 // BuilderWithOptions returns a Cache constructor that will build a cache

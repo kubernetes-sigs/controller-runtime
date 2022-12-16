@@ -45,34 +45,30 @@ func init() {
 // clientListWatcherFunc knows how to create a ListWatcher.
 type createListWatcherFunc func(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error)
 
+// specificInformerMapOptions contains options to create a new specific informer map.
+type specificInformerMapOptions struct {
+	*InformersMapOptions
+	ListWatcherFunc createListWatcherFunc
+}
+
 // newSpecificInformersMap returns a new specificInformersMap (like
 // the generical InformersMap, except that it doesn't implement WaitForCacheSync).
-func newSpecificInformersMap(config *rest.Config,
-	scheme *runtime.Scheme,
-	mapper meta.RESTMapper,
-	resync time.Duration,
-	namespace string,
-	selectors SelectorsByGVK,
-	disableDeepCopy DisableDeepCopyByGVK,
-	transformers TransformFuncByObject,
-	createListWatcher createListWatcherFunc,
-) *specificInformersMap {
-	ip := &specificInformersMap{
+func newSpecificInformersMap(config *rest.Config, options *specificInformerMapOptions) *specificInformersMap {
+	return &specificInformersMap{
 		config:            config,
-		Scheme:            scheme,
-		mapper:            mapper,
+		scheme:            options.Scheme,
+		mapper:            options.Mapper,
 		informersByGVK:    make(map[schema.GroupVersionKind]*MapEntry),
-		codecs:            serializer.NewCodecFactory(scheme),
-		paramCodec:        runtime.NewParameterCodec(scheme),
-		resync:            resync,
+		codecs:            serializer.NewCodecFactory(options.Scheme),
+		paramCodec:        runtime.NewParameterCodec(options.Scheme),
+		resync:            options.ResyncPeriod,
 		startWait:         make(chan struct{}),
-		createListWatcher: createListWatcher,
-		namespace:         namespace,
-		selectors:         selectors.forGVK,
-		disableDeepCopy:   disableDeepCopy,
-		transformers:      transformers,
+		createListWatcher: options.ListWatcherFunc,
+		namespace:         options.Namespace,
+		selectors:         options.ByGVK.Selectors.forGVK,
+		disableDeepCopy:   options.ByGVK.DisableDeepCopy,
+		transformers:      options.ByGVK.Transformers,
 	}
-	return ip
 }
 
 // MapEntry contains the cached data for an Informer.
@@ -87,8 +83,8 @@ type MapEntry struct {
 // specificInformersMap create and caches Informers for (runtime.Object, schema.GroupVersionKind) pairs.
 // It uses a standard parameter codec constructed based on the given generated Scheme.
 type specificInformersMap struct {
-	// Scheme maps runtime.Objects to GroupVersionKinds
-	Scheme *runtime.Scheme
+	// scheme maps runtime.Objects to GroupVersionKinds
+	scheme *runtime.Scheme
 
 	// config is used to talk to the apiserver
 	config *rest.Config
@@ -265,7 +261,7 @@ func (ip *specificInformersMap) addInformerToMap(gvk schema.GroupVersionKind, ob
 }
 
 // newListWatch returns a new ListWatch object that can be used to create a SharedIndexInformer.
-func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
+func structuredListWatch(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
 	// Kubernetes APIs work against Resources, not GroupVersionKinds.  Map the
 	// groupVersionKind to the Resource API we will use.
 	mapping, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
@@ -278,7 +274,7 @@ func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformer
 		return nil, err
 	}
 	listGVK := gvk.GroupVersion().WithKind(gvk.Kind + "List")
-	listObj, err := ip.Scheme.New(listGVK)
+	listObj, err := ip.scheme.New(listGVK)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +304,7 @@ func createStructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformer
 	}, nil
 }
 
-func createUnstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
+func unstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
 	// Kubernetes APIs work against Resources, not GroupVersionKinds.  Map the
 	// groupVersionKind to the Resource API we will use.
 	mapping, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
@@ -352,7 +348,7 @@ func createUnstructuredListWatch(gvk schema.GroupVersionKind, ip *specificInform
 	}, nil
 }
 
-func createMetadataListWatch(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
+func metadataListWatch(gvk schema.GroupVersionKind, ip *specificInformersMap) (*cache.ListWatch, error) {
 	// Kubernetes APIs work against Resources, not GroupVersionKinds.  Map the
 	// groupVersionKind to the Resource API we will use.
 	mapping, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)

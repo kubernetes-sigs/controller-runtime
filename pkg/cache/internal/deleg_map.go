@@ -34,32 +34,48 @@ import (
 type InformersMap struct {
 	// we abstract over the details of structured/unstructured/metadata with the specificInformerMaps
 	// TODO(directxman12): genericize this over different projections now that we have 3 different maps
+	// TODO(vincepri): A different structure of the specific informer map is possible, although it requires
+	// a large refactoring that takes into account that there may be different kind of informers, in this case
+	// 3 of those: structured, unstructured, and metadata.
 
 	structured   *specificInformersMap
 	unstructured *specificInformersMap
 	metadata     *specificInformersMap
+}
 
-	// Scheme maps runtime.Objects to GroupVersionKinds
-	Scheme *runtime.Scheme
+// InformersMapOptions configures an InformerMap.
+type InformersMapOptions struct {
+	Scheme       *runtime.Scheme
+	Mapper       meta.RESTMapper
+	ResyncPeriod time.Duration
+	Namespace    string
+	ByGVK        InformersMapOptionsByGVK
+}
+
+// InformersMapOptionsByGVK configured additional by group version kind (or object)
+// in an InformerMap.
+type InformersMapOptionsByGVK struct {
+	Selectors       SelectorsByGVK
+	Transformers    TransformFuncByObject // TODO(vincepri): Why is this by object and not GVK?
+	DisableDeepCopy DisableDeepCopyByGVK
 }
 
 // NewInformersMap creates a new InformersMap that can create informers for
 // both structured and unstructured objects.
-func NewInformersMap(config *rest.Config,
-	scheme *runtime.Scheme,
-	mapper meta.RESTMapper,
-	resync time.Duration,
-	namespace string,
-	selectors SelectorsByGVK,
-	disableDeepCopy DisableDeepCopyByGVK,
-	transformers TransformFuncByObject,
-) *InformersMap {
+func NewInformersMap(config *rest.Config, options *InformersMapOptions) *InformersMap {
 	return &InformersMap{
-		structured:   newStructuredInformersMap(config, scheme, mapper, resync, namespace, selectors, disableDeepCopy, transformers),
-		unstructured: newUnstructuredInformersMap(config, scheme, mapper, resync, namespace, selectors, disableDeepCopy, transformers),
-		metadata:     newMetadataInformersMap(config, scheme, mapper, resync, namespace, selectors, disableDeepCopy, transformers),
-
-		Scheme: scheme,
+		structured: newSpecificInformersMap(config, &specificInformerMapOptions{
+			InformersMapOptions: options,
+			ListWatcherFunc:     structuredListWatch,
+		}),
+		unstructured: newSpecificInformersMap(config, &specificInformerMapOptions{
+			InformersMapOptions: options,
+			ListWatcherFunc:     unstructuredListWatch,
+		}),
+		metadata: newSpecificInformersMap(config, &specificInformerMapOptions{
+			InformersMapOptions: options,
+			ListWatcherFunc:     metadataListWatch,
+		}),
 	}
 }
 
@@ -105,22 +121,4 @@ func (m *InformersMap) Get(ctx context.Context, gvk schema.GroupVersionKind, obj
 	default:
 		return m.structured.Get(ctx, gvk, obj)
 	}
-}
-
-// newStructuredInformersMap creates a new InformersMap for structured objects.
-func newStructuredInformersMap(config *rest.Config, scheme *runtime.Scheme, mapper meta.RESTMapper, resync time.Duration,
-	namespace string, selectors SelectorsByGVK, disableDeepCopy DisableDeepCopyByGVK, transformers TransformFuncByObject) *specificInformersMap {
-	return newSpecificInformersMap(config, scheme, mapper, resync, namespace, selectors, disableDeepCopy, transformers, createStructuredListWatch)
-}
-
-// newUnstructuredInformersMap creates a new InformersMap for unstructured objects.
-func newUnstructuredInformersMap(config *rest.Config, scheme *runtime.Scheme, mapper meta.RESTMapper, resync time.Duration,
-	namespace string, selectors SelectorsByGVK, disableDeepCopy DisableDeepCopyByGVK, transformers TransformFuncByObject) *specificInformersMap {
-	return newSpecificInformersMap(config, scheme, mapper, resync, namespace, selectors, disableDeepCopy, transformers, createUnstructuredListWatch)
-}
-
-// newMetadataInformersMap creates a new InformersMap for metadata-only objects.
-func newMetadataInformersMap(config *rest.Config, scheme *runtime.Scheme, mapper meta.RESTMapper, resync time.Duration,
-	namespace string, selectors SelectorsByGVK, disableDeepCopy DisableDeepCopyByGVK, transformers TransformFuncByObject) *specificInformersMap {
-	return newSpecificInformersMap(config, scheme, mapper, resync, namespace, selectors, disableDeepCopy, transformers, createMetadataListWatch)
 }

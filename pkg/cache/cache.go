@@ -170,11 +170,11 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 	if err != nil {
 		return nil, err
 	}
-	transformByGVK, err := convertToByGVK(opts.TransformByObject, opts.DefaultTransform, opts.Scheme)
+	transformers, err := convertToByGVK(opts.TransformByObject, opts.DefaultTransform, opts.Scheme)
 	if err != nil {
 		return nil, err
 	}
-	transformByObj := internal.TransformFuncByObjectFromMap(transformByGVK)
+	transformByGVK := internal.TransformFuncByGVKFromMap(transformers)
 
 	internalSelectorsByGVK := internal.SelectorsByGVK{}
 	for gvk, selector := range selectorsByGVK {
@@ -191,7 +191,7 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 			ByGVK: internal.InformersMapOptionsByGVK{
 				Selectors:       internalSelectorsByGVK,
 				DisableDeepCopy: disableDeepCopyByGVK,
-				Transformers:    transformByObj,
+				Transformers:    transformByGVK,
 			},
 		}),
 	}, nil

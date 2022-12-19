@@ -376,6 +376,23 @@ var _ = Describe("application", func() {
 			defer cancel()
 			doReconcileTest(ctx, "4", m, true, bldr)
 		})
+
+		It("should Reconcile without For", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			bldr := ControllerManagedBy(m).
+				Named("Deployment").
+				Watches( // Equivalent of For
+						&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForObject{}).
+				Watches( // Equivalent of Owns
+					&source.Kind{Type: &appsv1.ReplicaSet{}},
+					&handler.EnqueueRequestForOwner{OwnerType: &appsv1.Deployment{}, IsController: true})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			doReconcileTest(ctx, "9", m, true, bldr)
+		})
 	})
 
 	Describe("Set custom predicates", func() {

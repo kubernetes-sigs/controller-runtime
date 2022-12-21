@@ -112,7 +112,7 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 		}
 	}
 
-	clientcache := &clientCache{
+	resources := &clientRestResources{
 		config: config,
 		scheme: options.Scheme,
 		mapper: options.Mapper,
@@ -129,11 +129,11 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 
 	c := &client{
 		typedClient: typedClient{
-			cache:      clientcache,
+			resources:  resources,
 			paramCodec: runtime.NewParameterCodec(options.Scheme),
 		},
 		unstructuredClient: unstructuredClient{
-			cache:      clientcache,
+			resources:  resources,
 			paramCodec: noConversionParamCodec{},
 		},
 		metadataClient: metadataClient{
@@ -149,8 +149,8 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 
 var _ Client = &client{}
 
-// client is a client.Client that reads and writes directly from/to an API server.  It lazily initializes
-// new clients at the time they are used, and caches the client.
+// client is a client.Client that reads and writes directly from/to an API server.
+// It lazily initializes new clients at the time they are used.
 type client struct {
 	typedClient        typedClient
 	unstructuredClient unstructuredClient

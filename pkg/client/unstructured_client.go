@@ -28,10 +28,8 @@ import (
 var _ Reader = &unstructuredClient{}
 var _ Writer = &unstructuredClient{}
 
-// client is a client.Client that reads and writes directly from/to an API server.  It lazily initializes
-// new clients at the time they are used, and caches the client.
 type unstructuredClient struct {
-	cache      *clientCache
+	resources  *clientRestResources
 	paramCodec runtime.ParameterCodec
 }
 
@@ -44,7 +42,7 @@ func (uc *unstructuredClient) Create(ctx context.Context, obj Object, opts ...Cr
 
 	gvk := u.GroupVersionKind()
 
-	o, err := uc.cache.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
@@ -73,7 +71,7 @@ func (uc *unstructuredClient) Update(ctx context.Context, obj Object, opts ...Up
 
 	gvk := u.GroupVersionKind()
 
-	o, err := uc.cache.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
@@ -100,7 +98,7 @@ func (uc *unstructuredClient) Delete(ctx context.Context, obj Object, opts ...De
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
 	}
 
-	o, err := uc.cache.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
@@ -123,7 +121,7 @@ func (uc *unstructuredClient) DeleteAllOf(ctx context.Context, obj Object, opts 
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
 	}
 
-	o, err := uc.cache.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
@@ -146,7 +144,7 @@ func (uc *unstructuredClient) Patch(ctx context.Context, obj Object, patch Patch
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
 	}
 
-	o, err := uc.cache.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
@@ -181,7 +179,7 @@ func (uc *unstructuredClient) Get(ctx context.Context, key ObjectKey, obj Object
 	getOpts := GetOptions{}
 	getOpts.ApplyOptions(opts)
 
-	r, err := uc.cache.getResource(obj)
+	r, err := uc.resources.getResource(obj)
 	if err != nil {
 		return err
 	}
@@ -209,7 +207,7 @@ func (uc *unstructuredClient) List(ctx context.Context, obj ObjectList, opts ...
 	gvk := u.GroupVersionKind()
 	gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
 
-	r, err := uc.cache.getResource(obj)
+	r, err := uc.resources.getResource(obj)
 	if err != nil {
 		return err
 	}
@@ -238,7 +236,7 @@ func (uc *unstructuredClient) GetSubResource(ctx context.Context, obj, subResour
 		subResourceObj.SetName(obj.GetName())
 	}
 
-	o, err := uc.cache.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
@@ -269,7 +267,7 @@ func (uc *unstructuredClient) CreateSubResource(ctx context.Context, obj, subRes
 		subResourceObj.SetName(obj.GetName())
 	}
 
-	o, err := uc.cache.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
@@ -293,7 +291,7 @@ func (uc *unstructuredClient) UpdateSubResource(ctx context.Context, obj Object,
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
 	}
 
-	o, err := uc.cache.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
@@ -331,7 +329,7 @@ func (uc *unstructuredClient) PatchSubResource(ctx context.Context, obj Object, 
 
 	gvk := u.GroupVersionKind()
 
-	o, err := uc.cache.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}

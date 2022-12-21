@@ -85,7 +85,7 @@ func (w *watchingClient) unstructuredWatch(ctx context.Context, obj *unstructure
 	gvk := obj.GroupVersionKind()
 	gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
 
-	r, err := w.client.unstructuredClient.cache.getResource(obj)
+	r, err := w.client.unstructuredClient.resources.getResource(obj)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func (w *watchingClient) unstructuredWatch(ctx context.Context, obj *unstructure
 }
 
 func (w *watchingClient) typedWatch(ctx context.Context, obj ObjectList, opts ...ListOption) (watch.Interface, error) {
-	r, err := w.client.typedClient.cache.getResource(obj)
+	r, err := w.client.typedClient.resources.getResource(obj)
 	if err != nil {
 		return nil, err
 	}

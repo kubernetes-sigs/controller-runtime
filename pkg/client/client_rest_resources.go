@@ -30,8 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
-// clientCache creates and caches rest clients and metadata for Kubernetes types.
-type clientCache struct {
+// clientRestResources creates and stores rest clients and metadata for Kubernetes types.
+type clientRestResources struct {
 	// config is the rest.Config to talk to an apiserver
 	config *rest.Config
 
@@ -44,16 +44,16 @@ type clientCache struct {
 	// codecs are used to create a REST client for a gvk
 	codecs serializer.CodecFactory
 
-	// structuredResourceByType caches structured type metadata
+	// structuredResourceByType stores structured type metadata
 	structuredResourceByType map[schema.GroupVersionKind]*resourceMeta
-	// unstructuredResourceByType caches unstructured type metadata
+	// unstructuredResourceByType stores unstructured type metadata
 	unstructuredResourceByType map[schema.GroupVersionKind]*resourceMeta
 	mu                         sync.RWMutex
 }
 
 // newResource maps obj to a Kubernetes Resource and constructs a client for that Resource.
 // If the object is a list, the resource represents the item's type instead.
-func (c *clientCache) newResource(gvk schema.GroupVersionKind, isList, isUnstructured bool) (*resourceMeta, error) {
+func (c *clientRestResources) newResource(gvk schema.GroupVersionKind, isList, isUnstructured bool) (*resourceMeta, error) {
 	if strings.HasSuffix(gvk.Kind, "List") && isList {
 		// if this was a list, treat it as a request for the item's resource
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
@@ -72,7 +72,7 @@ func (c *clientCache) newResource(gvk schema.GroupVersionKind, isList, isUnstruc
 
 // getResource returns the resource meta information for the given type of object.
 // If the object is a list, the resource represents the item's type instead.
-func (c *clientCache) getResource(obj runtime.Object) (*resourceMeta, error) {
+func (c *clientRestResources) getResource(obj runtime.Object) (*resourceMeta, error) {
 	gvk, err := apiutil.GVKForObject(obj, c.scheme)
 	if err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (c *clientCache) getResource(obj runtime.Object) (*resourceMeta, error) {
 }
 
 // getObjMeta returns objMeta containing both type and object metadata and state.
-func (c *clientCache) getObjMeta(obj runtime.Object) (*objMeta, error) {
+func (c *clientRestResources) getObjMeta(obj runtime.Object) (*objMeta, error) {
 	r, err := c.getResource(obj)
 	if err != nil {
 		return nil, err
@@ -120,7 +120,7 @@ func (c *clientCache) getObjMeta(obj runtime.Object) (*objMeta, error) {
 	return &objMeta{resourceMeta: r, Object: m}, err
 }
 
-// resourceMeta caches state for a Kubernetes type.
+// resourceMeta stores state for a Kubernetes type.
 type resourceMeta struct {
 	// client is the rest client used to talk to the apiserver
 	rest.Interface

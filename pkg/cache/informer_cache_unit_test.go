@@ -38,7 +38,8 @@ const (
 
 var _ = Describe("ip.objectTypeForListObject", func() {
 	ip := &informerCache{
-		InformersMap: &internal.InformersMap{Scheme: scheme.Scheme},
+		scheme:       scheme.Scheme,
+		InformersMap: &internal.InformersMap{},
 	}
 
 	It("should find the object type for unstructured lists", func() {
@@ -70,14 +71,14 @@ var _ = Describe("ip.objectTypeForListObject", func() {
 
 	It("should find the object type of a list with a slice of pointers items field", func() {
 		By("registering the type", func() {
-			ip.Scheme = runtime.NewScheme()
+			ip.scheme = runtime.NewScheme()
 			err := (&crscheme.Builder{
 				GroupVersion: schema.GroupVersion{Group: itemPointerSliceTypeGroupName, Version: itemPointerSliceTypeVersion},
 			}).
 				Register(
 					&controllertest.UnconventionalListType{},
 					&controllertest.UnconventionalListTypeList{},
-				).AddToScheme(ip.Scheme)
+				).AddToScheme(ip.scheme)
 			Expect(err).To(BeNil())
 		})
 

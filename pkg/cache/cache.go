@@ -170,19 +170,31 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 	if err != nil {
 		return nil, err
 	}
-	transformByGVK, err := convertToByGVK(opts.TransformByObject, opts.DefaultTransform, opts.Scheme)
+	transformers, err := convertToByGVK(opts.TransformByObject, opts.DefaultTransform, opts.Scheme)
 	if err != nil {
 		return nil, err
 	}
-	transformByObj := internal.TransformFuncByObjectFromMap(transformByGVK)
+	transformByGVK := internal.TransformFuncByGVKFromMap(transformers)
 
 	internalSelectorsByGVK := internal.SelectorsByGVK{}
 	for gvk, selector := range selectorsByGVK {
 		internalSelectorsByGVK[gvk] = internal.Selector(selector)
 	}
 
-	im := internal.NewInformersMap(config, opts.Scheme, opts.Mapper, *opts.Resync, opts.Namespace, internalSelectorsByGVK, disableDeepCopyByGVK, transformByObj)
-	return &informerCache{InformersMap: im}, nil
+	return &informerCache{
+		scheme: opts.Scheme,
+		InformersMap: internal.NewInformersMap(config, &internal.InformersMapOptions{
+			Scheme:       opts.Scheme,
+			Mapper:       opts.Mapper,
+			ResyncPeriod: *opts.Resync,
+			Namespace:    opts.Namespace,
+			ByGVK: internal.InformersMapOptionsByGVK{
+				Selectors:       internalSelectorsByGVK,
+				DisableDeepCopy: disableDeepCopyByGVK,
+				Transformers:    transformByGVK,
+			},
+		}),
+	}, nil
 }
 
 // BuilderWithOptions returns a Cache constructor that will build a cache

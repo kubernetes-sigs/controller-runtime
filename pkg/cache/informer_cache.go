@@ -47,12 +47,13 @@ func (*ErrCacheNotStarted) Error() string {
 
 // informerCache is a Kubernetes Object cache populated from InformersMap.  informerCache wraps an InformersMap.
 type informerCache struct {
+	scheme *runtime.Scheme
 	*internal.InformersMap
 }
 
 // Get implements Reader.
 func (ip *informerCache) Get(ctx context.Context, key client.ObjectKey, out client.Object, opts ...client.GetOption) error {
-	gvk, err := apiutil.GVKForObject(out, ip.Scheme)
+	gvk, err := apiutil.GVKForObject(out, ip.scheme)
 	if err != nil {
 		return err
 	}
@@ -91,7 +92,7 @@ func (ip *informerCache) List(ctx context.Context, out client.ObjectList, opts .
 // for a single object corresponding to the passed-in list type. We need them
 // because they are used as cache map key.
 func (ip *informerCache) objectTypeForListObject(list client.ObjectList) (*schema.GroupVersionKind, runtime.Object, error) {
-	gvk, err := apiutil.GVKForObject(list, ip.Scheme)
+	gvk, err := apiutil.GVKForObject(list, ip.scheme)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -132,7 +133,7 @@ func (ip *informerCache) objectTypeForListObject(list client.ObjectList) (*schem
 // GetInformerForKind returns the informer for the GroupVersionKind.
 func (ip *informerCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (Informer, error) {
 	// Map the gvk to an object
-	obj, err := ip.Scheme.New(gvk)
+	obj, err := ip.scheme.New(gvk)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +147,7 @@ func (ip *informerCache) GetInformerForKind(ctx context.Context, gvk schema.Grou
 
 // GetInformer returns the informer for the obj.
 func (ip *informerCache) GetInformer(ctx context.Context, obj client.Object) (Informer, error) {
-	gvk, err := apiutil.GVKForObject(obj, ip.Scheme)
+	gvk, err := apiutil.GVKForObject(obj, ip.scheme)
 	if err != nil {
 		return nil, err
 	}

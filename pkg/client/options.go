@@ -498,7 +498,16 @@ type MatchingLabels map[string]string
 // ApplyToList applies this configuration to the given list options.
 func (m MatchingLabels) ApplyToList(opts *ListOptions) {
 	// TODO(directxman12): can we avoid reserializing this over and over?
-	sel := labels.SelectorFromValidatedSet(map[string]string(m))
+	nonvalSel := labels.SelectorFromValidatedSet(map[string]string(m))
+	reqs, _ := nonvalSel.Requirements()
+	sel := opts.LabelSelector
+	if sel == nil {
+		sel = labels.NewSelector()
+	}
+	for _, req := range reqs {
+		sel = sel.Add(req)
+	}
+
 	opts.LabelSelector = sel
 }
 
@@ -513,7 +522,11 @@ type HasLabels []string
 
 // ApplyToList applies this configuration to the given list options.
 func (m HasLabels) ApplyToList(opts *ListOptions) {
-	sel := labels.NewSelector()
+	sel := opts.LabelSelector
+	if opts.LabelSelector == nil {
+		sel = labels.NewSelector()
+	}
+
 	for _, label := range m {
 		r, err := labels.NewRequirement(label, selection.Exists, nil)
 		if err == nil {

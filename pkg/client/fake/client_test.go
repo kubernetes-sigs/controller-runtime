@@ -44,6 +44,7 @@ import (
 var _ = Describe("Fake client", func() {
 	var dep *appsv1.Deployment
 	var dep2 *appsv1.Deployment
+	var dep3 *appsv1.Deployment
 	var cm *corev1.ConfigMap
 	var cl client.WithWatch
 
@@ -76,6 +77,24 @@ var _ = Describe("Fake client", func() {
 				Namespace: "ns1",
 				Labels: map[string]string{
 					"test-label": "label-value",
+				},
+				ResourceVersion: trackerAddResourceVersion,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+			},
+		}
+		dep3 = &appsv1.Deployment{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-3",
+				Namespace: "ns1",
+				Labels: map[string]string{
+					"test-label":       "label-value",
+					"other-test-label": "other-label-value",
 				},
 				ResourceVersion: trackerAddResourceVersion,
 			},
@@ -130,8 +149,8 @@ var _ = Describe("Fake client", func() {
 			list := &appsv1.DeploymentList{}
 			err := cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
-			Expect(list.Items).To(HaveLen(2))
-			Expect(list.Items).To(ConsistOf(*dep, *dep2))
+			Expect(list.Items).To(HaveLen(3))
+			Expect(list.Items).To(ConsistOf(*dep, *dep2, *dep3))
 		})
 
 		It("should be able to List using unstructured list", func() {
@@ -141,7 +160,7 @@ var _ = Describe("Fake client", func() {
 			list.SetKind("DeploymentList")
 			err := cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
-			Expect(list.Items).To(HaveLen(2))
+			Expect(list.Items).To(HaveLen(3))
 		})
 
 		It("should be able to List using unstructured list when setting a non-list kind", func() {
@@ -151,7 +170,7 @@ var _ = Describe("Fake client", func() {
 			list.SetKind("Deployment")
 			err := cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
-			Expect(list.Items).To(HaveLen(2))
+			Expect(list.Items).To(HaveLen(3))
 		})
 
 		It("should be able to retrieve registered objects that got manipulated as unstructured", func() {
@@ -333,8 +352,8 @@ var _ = Describe("Fake client", func() {
 					"test-label": "label-value",
 				}))
 			Expect(err).To(BeNil())
-			Expect(list.Items).To(HaveLen(1))
-			Expect(list.Items).To(ConsistOf(*dep2))
+			Expect(list.Items).To(HaveLen(2))
+			Expect(list.Items).To(ConsistOf(*dep2, *dep3))
 		})
 
 		It("should support filtering by label existence", func() {
@@ -343,8 +362,26 @@ var _ = Describe("Fake client", func() {
 			err := cl.List(context.Background(), list, client.InNamespace("ns1"),
 				client.HasLabels{"test-label"})
 			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(2))
+			Expect(list.Items).To(ConsistOf(*dep2, *dep3))
+		})
+
+		It("should be able to concatenate filters", func() {
+			By("Listing deployments with a particular pair of labels")
+			list := &appsv1.DeploymentList{}
+			err := cl.List(context.Background(), list, client.InNamespace("ns1"),
+				client.HasLabels{"test-label"}, client.HasLabels{"other-test-label"})
+			Expect(err).To(BeNil())
 			Expect(list.Items).To(HaveLen(1))
-			Expect(list.Items).To(ConsistOf(*dep2))
+			Expect(list.Items).To(ConsistOf(*dep3))
+
+			By("Listing deployments with a particular pair of labels in inverse order")
+			list = &appsv1.DeploymentList{}
+			err = cl.List(context.Background(), list, client.InNamespace("ns1"),
+				client.HasLabels{"other-test-label"}, client.HasLabels{"test-label"})
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(1))
+			Expect(list.Items).To(ConsistOf(*dep3))
 		})
 
 		It("should be able to Create", func() {
@@ -636,8 +673,8 @@ var _ = Describe("Fake client", func() {
 			list := &appsv1.DeploymentList{}
 			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
-			Expect(list.Items).To(HaveLen(2))
-			Expect(list.Items).To(ConsistOf(*dep, *dep2))
+			Expect(list.Items).To(HaveLen(3))
+			Expect(list.Items).To(ConsistOf(*dep, *dep2, *dep3))
 		})
 
 		It("should successfully Delete with a matching ResourceVersion", func() {
@@ -649,8 +686,8 @@ var _ = Describe("Fake client", func() {
 			list := &appsv1.DeploymentList{}
 			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
-			Expect(list.Items).To(HaveLen(1))
-			Expect(list.Items).To(ConsistOf(*dep2))
+			Expect(list.Items).To(HaveLen(2))
+			Expect(list.Items).To(ConsistOf(*dep2, *dep3))
 		})
 
 		It("should be able to Delete with no ResourceVersion Precondition", func() {
@@ -662,8 +699,8 @@ var _ = Describe("Fake client", func() {
 			list := &appsv1.DeploymentList{}
 			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
-			Expect(list.Items).To(HaveLen(1))
-			Expect(list.Items).To(ConsistOf(*dep2))
+			Expect(list.Items).To(HaveLen(2))
+			Expect(list.Items).To(ConsistOf(*dep2, *dep3))
 		})
 
 		It("should be able to Delete with no opts even if object's ResourceVersion doesn't match server", func() {
@@ -677,8 +714,8 @@ var _ = Describe("Fake client", func() {
 			list := &appsv1.DeploymentList{}
 			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
-			Expect(list.Items).To(HaveLen(1))
-			Expect(list.Items).To(ConsistOf(*dep2))
+			Expect(list.Items).To(HaveLen(2))
+			Expect(list.Items).To(ConsistOf(*dep2, *dep3))
 		})
 
 		It("should handle finalizers on Update", func() {
@@ -977,7 +1014,7 @@ var _ = Describe("Fake client", func() {
 	Context("with default scheme.Scheme", func() {
 		BeforeEach(func() {
 			cl = NewClientBuilder().
-				WithObjects(dep, dep2, cm).
+				WithObjects(dep, dep2, dep3, cm).
 				Build()
 		})
 		AssertClientWithoutIndexBehavior()
@@ -992,7 +1029,7 @@ var _ = Describe("Fake client", func() {
 			cl = NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(cm).
-				WithLists(&appsv1.DeploymentList{Items: []appsv1.Deployment{*dep, *dep2}}).
+				WithLists(&appsv1.DeploymentList{Items: []appsv1.Deployment{*dep, *dep2, *dep3}}).
 				Build()
 		})
 		AssertClientWithoutIndexBehavior()
@@ -1024,7 +1061,7 @@ var _ = Describe("Fake client", func() {
 		var cb *ClientBuilder
 		BeforeEach(func() {
 			cb = NewClientBuilder().
-				WithObjects(dep, dep2, cm).
+				WithObjects(dep, dep2, dep3, cm).
 				WithIndex(&appsv1.Deployment{}, "spec.replicas", depReplicasIndexer)
 		})
 
@@ -1068,7 +1105,7 @@ var _ = Describe("Fake client", func() {
 					}
 					list := &appsv1.DeploymentList{}
 					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
-					Expect(list.Items).To(ConsistOf(*dep, *dep2))
+					Expect(list.Items).To(ConsistOf(*dep, *dep2, *dep3))
 				})
 
 				It("returns no object because no object matches the only field selector requirement", func() {
@@ -1087,7 +1124,7 @@ var _ = Describe("Fake client", func() {
 					}
 					list := &appsv1.DeploymentList{}
 					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
-					Expect(list.Items).To(ConsistOf(*dep2))
+					Expect(list.Items).To(ConsistOf(*dep2, *dep3))
 				})
 
 				It("returns no object even if field selector matches because label selector doesn't", func() {

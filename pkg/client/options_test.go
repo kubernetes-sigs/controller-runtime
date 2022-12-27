@@ -237,4 +237,34 @@ var _ = Describe("MatchingLabels", func() {
 		expectedErrMsg := `values[0][k]: Invalid value: "axahm2EJ8Phiephe2eixohbee9eGeiyees1thuozi1xoh0GiuH3diewi8iem7Nui": must be no more than 63 characters`
 		Expect(err.Error()).To(Equal(expectedErrMsg))
 	})
+	It("Should add to existing selector", func() {
+		matchingLabels := client.MatchingLabels(map[string]string{"label1": "value1"})
+		listOpts := &client.ListOptions{}
+		matchingLabels.ApplyToList(listOpts)
+		Expect(listOpts.LabelSelector.String()).To(Equal("label1=value1"))
+
+		newMatchingLabels := client.MatchingLabels(map[string]string{"label2": "value2"})
+		newMatchingLabels.ApplyToList(listOpts)
+		Expect(listOpts.LabelSelector.String()).To(Equal("label1=value1,label2=value2"))
+	})
+})
+
+var _ = Describe("HasLabels", func() {
+	It("Should produce expected serialization", func() {
+		hasLabels := client.HasLabels([]string{"label1", "label2"})
+		listOpts := &client.ListOptions{}
+		hasLabels.ApplyToList(listOpts)
+		Expect(listOpts.LabelSelector.String()).To(Equal("label1,label2"))
+	})
+	It("Should add to existing selector", func() {
+		hasLabel := client.HasLabels([]string{"label1"})
+		listOpts := &client.ListOptions{}
+		hasLabel.ApplyToList(listOpts)
+		hasOtherLabel := client.HasLabels([]string{"label2"})
+		hasOtherLabel.ApplyToList(listOpts)
+		Expect(listOpts.LabelSelector.String()).To(Equal("label1,label2"))
+	})
+	It("Should produce an invalid selector when given invalid input", func() {
+		// TODO
+	})
 })

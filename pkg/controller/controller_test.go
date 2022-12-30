@@ -178,6 +178,50 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ctrl.RecoverPanic).NotTo(BeNil())
 			Expect(*ctrl.RecoverPanic).To(BeFalse())
 		})
+
+		It("should default NeedLeaderElection on the controller to true", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				Reconciler: rec,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller)
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.NeedLeaderElection()).To(BeTrue())
+		})
+
+		It("should allow for setting leaderElected to false", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				Reconciler:    rec,
+				LeaderElected: pointer.Bool(false),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller)
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.NeedLeaderElection()).To(BeFalse())
+		})
+
+		It("should implement manager.LeaderElectionRunnable", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				Reconciler: rec,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := c.(manager.LeaderElectionRunnable)
+			Expect(ok).To(BeTrue())
+		})
 	})
 })
 

@@ -238,3 +238,42 @@ var _ = Describe("MatchingLabels", func() {
 		Expect(err.Error()).To(Equal(expectedErrMsg))
 	})
 })
+
+var _ = Describe("FieldOwner", func() {
+	It("Should apply to PatchOptions", func() {
+		o := &client.PatchOptions{FieldManager: "bar"}
+		t := client.FieldOwner("foo")
+		t.ApplyToPatch(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to CreateOptions", func() {
+		o := &client.CreateOptions{FieldManager: "bar"}
+		t := client.FieldOwner("foo")
+		t.ApplyToCreate(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to UpdateOptions", func() {
+		o := &client.UpdateOptions{FieldManager: "bar"}
+		t := client.FieldOwner("foo")
+		t.ApplyToUpdate(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to SubResourcePatchOptions", func() {
+		o := &client.SubResourcePatchOptions{PatchOptions: client.PatchOptions{FieldManager: "bar"}}
+		t := client.FieldOwner("foo")
+		t.ApplyToSubResourcePatch(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to SubResourceCreateOptions", func() {
+		o := &client.SubResourceCreateOptions{CreateOptions: client.CreateOptions{FieldManager: "bar"}}
+		t := client.FieldOwner("foo")
+		t.ApplyToSubResourceCreate(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to SubResourceUpdateOptions", func() {
+		o := &client.SubResourceUpdateOptions{UpdateOptions: client.UpdateOptions{FieldManager: "bar"}}
+		t := client.FieldOwner("foo")
+		t.ApplyToSubResourceUpdate(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+})

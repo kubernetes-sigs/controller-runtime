@@ -169,8 +169,6 @@ func (f FieldOwner) ApplyToSubResourceUpdate(opts *SubResourceUpdateOptions) {
 	opts.FieldManager = string(f)
 }
 
-
-
 // }}}
 
 // {{{ Create Options

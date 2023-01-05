@@ -199,8 +199,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{
-				Reconciler:    rec,
-				LeaderElected: pointer.Bool(false),
+				Reconciler:         rec,
+				NeedLeaderElection: pointer.Bool(false),
 			})
 			Expect(err).NotTo(HaveOccurred())
 

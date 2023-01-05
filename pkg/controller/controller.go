@@ -59,9 +59,9 @@ type Options struct {
 	// Defaults to the Controller.RecoverPanic setting from the Manager if unset.
 	RecoverPanic *bool
 
-	// LeaderElected indicates whether the controller needs to use leader election.
+	// NeedLeaderElection indicates whether the controller needs to use leader election.
 	// Defaults to true, which means the controller will use leader election.
-	LeaderElected *bool
+	NeedLeaderElection *bool
 }
 
 // Controller implements a Kubernetes API.  A Controller manages a work queue fed reconcile.Requests
@@ -160,7 +160,7 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 		Name:                    name,
 		LogConstructor:          options.LogConstructor,
 		RecoverPanic:            options.RecoverPanic,
-		LeaderElected:           options.LeaderElected,
+		LeaderElected:           options.NeedLeaderElection,
 	}, nil
 }
 

@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -57,6 +58,8 @@ var _ = Describe("controller", func() {
 	var request = reconcile.Request{
 		NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
 	}
+	var mg manager.Manager
+	var managerOpts manager.Options
 
 	BeforeEach(func() {
 		reconciled = make(chan reconcile.Request)
@@ -76,7 +79,14 @@ var _ = Describe("controller", func() {
 				return log.RuntimeLog.WithName("controller").WithName("test")
 			},
 		}
-		Expect(ctrl.InjectFunc(func(interface{}) error { return nil })).To(Succeed())
+		managerOpts = manager.Options{
+			HealthProbeBindAddress: "0",
+			MetricsBindAddress:     "0",
+		}
+
+		var err error
+		mg, err = manager.New(cfg, managerOpts)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	Describe("Reconciler", func() {
@@ -300,7 +310,7 @@ var _ = Describe("controller", func() {
 				started = true
 				return nil
 			})
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).NotTo(HaveOccurred())
+			Expect(ctrl.Watch(mg, src, evthdl, pr1, pr2)).NotTo(HaveOccurred())
 
 			// Use a cancelled context so Start doesn't block
 			ctx, cancel := context.WithCancel(context.Background())
@@ -317,7 +327,7 @@ var _ = Describe("controller", func() {
 				defer GinkgoRecover()
 				return err
 			})
-			Expect(ctrl.Watch(src, &handler.EnqueueRequestForObject{})).To(Succeed())
+			Expect(ctrl.Watch(mg, src, &handler.EnqueueRequestForObject{})).To(Succeed())
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -337,122 +347,11 @@ var _ = Describe("controller", func() {
 	})
 
 	Describe("Watch", func() {
-		It("should inject dependencies into the Source", func() {
+		It("should inject dependencies from the manager (cluster) into the Source", func() {
 			src := &source.Kind{Type: &corev1.Pod{}}
 			Expect(src.InjectCache(informers)).To(Succeed())
 			evthdl := &handler.EnqueueRequestForObject{}
-			found := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == src {
-					found = true
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue(), "Source not injected")
-		})
-
-		It("should return an error if there is an error injecting into the Source", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			expected := fmt.Errorf("expect fail source")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == src {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
-		})
-
-		It("should inject dependencies into the EventHandler", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			found := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == evthdl {
-					found = true
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue(), "EventHandler not injected")
-		})
-
-		It("should return an error if there is an error injecting into the EventHandler", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			evthdl := &handler.EnqueueRequestForObject{}
-			expected := fmt.Errorf("expect fail eventhandler")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == evthdl {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
-		})
-
-		PIt("should inject dependencies into the Reconciler", func() {
-			// TODO(community): Write this
-		})
-
-		PIt("should return an error if there is an error injecting into the Reconciler", func() {
-			// TODO(community): Write this
-		})
-
-		It("should inject dependencies into all of the Predicates", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			pr1 := &predicate.Funcs{}
-			pr2 := &predicate.Funcs{}
-			found1 := false
-			found2 := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr1 {
-					found1 = true
-				}
-				if i == pr2 {
-					found2 = true
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).NotTo(HaveOccurred())
-			Expect(found1).To(BeTrue(), "First Predicated not injected")
-			Expect(found2).To(BeTrue(), "Second Predicated not injected")
-		})
-
-		It("should return an error if there is an error injecting into any of the Predicates", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			pr1 := &predicate.Funcs{}
-			pr2 := &predicate.Funcs{}
-			expected := fmt.Errorf("expect fail predicate")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr1 {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).To(Equal(expected))
-
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr2 {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).To(Equal(expected))
+			Expect(ctrl.Watch(mg, src, evthdl)).NotTo(HaveOccurred())
 		})
 	})
 

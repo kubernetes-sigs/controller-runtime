@@ -111,7 +111,7 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{Reconciler: rec})
-			Expect(c.Watch(watch, &handler.EnqueueRequestForObject{})).To(Succeed())
+			Expect(c.Watch(m, watch, &handler.EnqueueRequestForObject{})).To(Succeed())
 			Expect(err).NotTo(HaveOccurred())
 
 			ctx, cancel := context.WithCancel(context.Background())

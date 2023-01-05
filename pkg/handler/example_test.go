@@ -25,17 +25,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var c controller.Controller
+var (
+	mgr manager.Manager
+	c   controller.Controller
+)
 
 // This example watches Pods and enqueues Requests with the Name and Namespace of the Pod from
 // the Event (i.e. change caused by a Create, Update, Delete).
 func ExampleEnqueueRequestForObject() {
 	// controller is a controller.controller
 	err := c.Watch(
+		mgr,
 		&source.Kind{Type: &corev1.Pod{}},
 		&handler.EnqueueRequestForObject{},
 	)
@@ -49,6 +54,7 @@ func ExampleEnqueueRequestForObject() {
 func ExampleEnqueueRequestForOwner() {
 	// controller is a controller.controller
 	err := c.Watch(
+		mgr,
 		&source.Kind{Type: &appsv1.ReplicaSet{}},
 		&handler.EnqueueRequestForOwner{
 			OwnerType:    &appsv1.Deployment{},
@@ -65,6 +71,7 @@ func ExampleEnqueueRequestForOwner() {
 func ExampleEnqueueRequestsFromMapFunc() {
 	// controller is a controller.controller
 	err := c.Watch(
+		mgr,
 		&source.Kind{Type: &appsv1.Deployment{}},
 		handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
 			return []reconcile.Request{
@@ -88,6 +95,7 @@ func ExampleEnqueueRequestsFromMapFunc() {
 func ExampleFuncs() {
 	// controller is a controller.controller
 	err := c.Watch(
+		mgr,
 		&source.Kind{Type: &corev1.Pod{}},
 		handler.Funcs{
 			CreateFunc: func(e event.CreateEvent, q workqueue.RateLimitingInterface) {

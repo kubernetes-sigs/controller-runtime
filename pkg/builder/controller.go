@@ -224,7 +224,7 @@ func (blder *Builder) doWatch() error {
 		src := &source.Kind{Type: typeForSrc}
 		hdler := &handler.EnqueueRequestForObject{}
 		allPredicates := append(blder.globalPredicates, blder.forInput.predicates...)
-		if err := blder.ctrl.Watch(src, hdler, allPredicates...); err != nil {
+		if err := blder.ctrl.Watch(blder.mgr, src, hdler, allPredicates...); err != nil {
 			return err
 		}
 	}
@@ -245,7 +245,7 @@ func (blder *Builder) doWatch() error {
 		}
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, own.predicates...)
-		if err := blder.ctrl.Watch(src, hdler, allPredicates...); err != nil {
+		if err := blder.ctrl.Watch(blder.mgr, src, hdler, allPredicates...); err != nil {
 			return err
 		}
 	}
@@ -267,7 +267,7 @@ func (blder *Builder) doWatch() error {
 			srckind.Type = typeForSrc
 		}
 
-		if err := blder.ctrl.Watch(w.src, w.eventhandler, allPredicates...); err != nil {
+		if err := blder.ctrl.Watch(blder.mgr, w.src, w.eventhandler, allPredicates...); err != nil {
 			return err
 		}
 	}

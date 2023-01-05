@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -74,7 +75,7 @@ type Controller interface {
 	// Watch may be provided one or more Predicates to filter events before
 	// they are given to the EventHandler.  Events will be passed to the
 	// EventHandler if all provided Predicates evaluate to true.
-	Watch(src source.Source, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error
+	Watch(cluster cluster.Cluster, src source.Source, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error
 
 	// Start starts the controller.  Start blocks until the context is closed or a
 	// controller has an error starting.
@@ -152,7 +153,6 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 		},
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
 		CacheSyncTimeout:        options.CacheSyncTimeout,
-		SetFields:               mgr.SetFields,
 		Name:                    name,
 		LogConstructor:          options.LogConstructor,
 		RecoverPanic:            options.RecoverPanic,

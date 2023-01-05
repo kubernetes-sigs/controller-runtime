@@ -77,6 +77,9 @@ type controllerManager struct {
 	// clusters holds all the clusters registered with this controller.
 	clusters map[string]cluster.Cluster
 
+	clusterConfigGetter cluster.ConfigFinder
+	newClusterOptions   cluster.Option
+
 	// recorderProvider is used to generate event recorders that will be injected into Controllers
 	// (and EventHandlers, Sources and Predicates).
 	recorderProvider *intrec.Provider
@@ -183,6 +186,29 @@ type controllerManager struct {
 type hasCache interface {
 	Runnable
 	GetCache() cache.Cache
+}
+
+func (cm *controllerManager) ByID(id string) (cluster.Cluster, error) {
+	cm.Lock()
+	defer cm.Unlock()
+	if c, ok := cm.clusters[id]; ok {
+		return c, nil
+	}
+	config, err := cm.clusterConfigGetter(id)
+	if err != nil {
+		return nil, err
+	}
+	c, err := cluster.New(config, cm.newClusterOptions)
+	if err != nil {
+		return nil, err
+	}
+	// Add the newly created cluster as a runnable to the manager,
+	// if the manager is already running, the runnable `add` waits
+	// for the cache to sync before returning.
+	if err := cm.add(c); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 // Add sets dependencies on i, and adds it to the list of Runnables to start.

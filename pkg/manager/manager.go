@@ -53,6 +53,9 @@ type Manager interface {
 	// Cluster holds a variety of methods to interact with a cluster.
 	cluster.Cluster
 
+	// Finder allows to find a cluster by its own unique identifier.
+	cluster.Finder
+
 	// Add will set requested dependencies on the component, and cause the component to be
 	// started when Start is called.
 	// Depending on if a Runnable implements LeaderElectionRunnable interface, a Runnable can be run in either
@@ -97,6 +100,15 @@ type Manager interface {
 
 // Options are the arguments for creating a new Manager.
 type Options struct {
+	// ClusterConfigFinder can be supplied to a Manager to find a cluster rest.Config
+	// given a unique identifier passed in.
+	//
+	// The function is called whenever a user calls ByID(...) on a Manager requesting a client
+	// for the given identifier. The main purpose of the finder is to retrieve rest.Config objects
+	// and return it to the manager; the manager is in charge of setting up everything needed for the
+	// Cluster to function, including cluster and caches.
+	ClusterConfigFinder cluster.ConfigFinder
+
 	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources.
 	// Defaults to the kubernetes/client-go scheme.Scheme, but it's almost always better
 	// to pass your own scheme in. See the documentation in pkg/scheme for more information.
@@ -342,11 +354,17 @@ type LeaderElectionRunnable interface {
 }
 
 // New returns a new Manager for creating Controllers.
+//
+// The first parameter takes in a default cluster REST config, this is the cluster where the leader election
+// happens, usually the one where the manager runs on.
+//
+// Additional clusters can be added later to this manager, or users might provide a custom ClusterDiscovery
+// struct or function which takes a unique identifier, and returns the *rest.Config for that cluster.
 func New(config *rest.Config, options Options) (Manager, error) {
 	// Set default values for options fields
 	options = setOptionsDefaults(options)
 
-	defaultCluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {
+	newClusterOptions := func(clusterOptions *cluster.Options) {
 		clusterOptions.Scheme = options.Scheme
 		clusterOptions.MapperProvider = options.MapperProvider
 		clusterOptions.Logger = options.Logger
@@ -357,7 +375,9 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		clusterOptions.ClientDisableCacheFor = options.ClientDisableCacheFor
 		clusterOptions.DryRunClient = options.DryRunClient
 		clusterOptions.EventBroadcaster = options.EventBroadcaster //nolint:staticcheck
-	})
+	}
+
+	defaultCluster, err := cluster.New(config, newClusterOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -421,9 +441,12 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	runnables := newRunnables(options.BaseContext, errChan)
 
 	return &controllerManager{
-		stopProcedureEngaged:          pointer.Int64(0),
-		defaultCluster:                defaultCluster,
-		clusters:                      map[string]cluster.Cluster{},
+		stopProcedureEngaged: pointer.Int64(0),
+		defaultCluster:       defaultCluster,
+		clusters: map[string]cluster.Cluster{
+			defaultCluster.ID(): defaultCluster,
+		},
+		newClusterOptions:             newClusterOptions,
 		runnables:                     runnables,
 		errChan:                       errChan,
 		recorderProvider:              recorderProvider,

@@ -93,6 +93,9 @@ type Controller struct {
 
 	// RecoverPanic indicates whether the panic caused by reconcile should be recovered.
 	RecoverPanic *bool
+
+	// LeaderElected indicates whether the controller is leader elected or always running.
+	LeaderElected *bool
 }
 
 // watchDescription contains all the information necessary to start a watch.
@@ -150,6 +153,14 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 
 	c.LogConstructor(nil).Info("Starting EventSource", "source", src)
 	return src.Start(c.ctx, evthdler, c.Queue, prct...)
+}
+
+// NeedLeaderElection implements the manager.LeaderElectionRunnable interface.
+func (c *Controller) NeedLeaderElection() bool {
+	if c.LeaderElected == nil {
+		return true
+	}
+	return *c.LeaderElected
 }
 
 // Start implements controller.Controller.

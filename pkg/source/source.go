@@ -24,14 +24,15 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source/internal"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -52,8 +53,7 @@ const (
 //
 // * Use Channel for events originating outside the cluster (eh.g. GitHub Webhook callback, Polling external urls).
 //
-// Users may build their own Source implementations.  If their implementations implement any of the inject package
-// interfaces, the dependencies will be injected by the Controller when Watch is called.
+// Users may build their own Source implementations.
 type Source interface {
 	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 	// to enqueue reconcile.Requests.
@@ -67,34 +67,33 @@ type SyncingSource interface {
 	WaitForSync(ctx context.Context) error
 }
 
-// NewKindWithCache creates a Source without InjectCache, so that it is assured that the given cache is used
-// and not overwritten. It can be used to watch objects in a different cluster by passing the cache
-// from that other cluster.
-func NewKindWithCache(object client.Object, cache cache.Cache) SyncingSource {
-	return &kindWithCache{kind: Kind{Type: object, cache: cache}}
+// Kind creates a KindSource with the given cache provider.
+func Kind(cache cache.Cache, object client.Object) SyncingSource {
+	return &kind{obj: object, cache: cache}
 }
 
-type kindWithCache struct {
-	kind Kind
+// KindAsPartialMetadata modifies the given Source created with Kind(...)
+// to project the type with a metav1.PartialObjectMetadata.
+func KindAsPartialMetadata(src SyncingSource, scheme *runtime.Scheme) error {
+	ks, ok := src.(*kind)
+	if !ok {
+		return fmt.Errorf("expected Source created with source.Kind(...), got %T", src)
+	}
+
+	metaObj := &metav1.PartialObjectMetadata{}
+	gvk, err := apiutil.GVKForObject(ks.obj, scheme)
+	if err != nil {
+		return fmt.Errorf("unable to determine GVK of %T for a metadata-only watch: %w", ks.obj, err)
+	}
+	metaObj.SetGroupVersionKind(gvk)
+	ks.obj = metaObj
+	return nil
 }
 
-func (ks *kindWithCache) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
-	return ks.kind.Start(ctx, handler, queue, prct...)
-}
-
-func (ks *kindWithCache) String() string {
-	return ks.kind.String()
-}
-
-func (ks *kindWithCache) WaitForSync(ctx context.Context) error {
-	return ks.kind.WaitForSync(ctx)
-}
-
-// Kind is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
-type Kind struct {
-	// Type is the type of object to watch.  e.g. &v1.Pod{}
-	Type client.Object
+// kind is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
+type kind struct {
+	// obj is the type of object to watch.  e.g. &v1.Pod{}
+	obj client.Object
 
 	// cache used to watch APIs
 	cache cache.Cache
@@ -105,20 +104,17 @@ type Kind struct {
 	startCancel func()
 }
 
-var _ SyncingSource = &Kind{}
+var _ SyncingSource = &kind{}
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
+func (ks *kind) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
-	// Type should have been specified by the user.
-	if ks.Type == nil {
-		return fmt.Errorf("must specify Kind.Type")
+	if ks.obj == nil {
+		return fmt.Errorf("must create Kind with a non-nil object")
 	}
-
-	// cache should have been injected before Start was called
 	if ks.cache == nil {
-		return fmt.Errorf("must call CacheInto on Kind before calling Start")
+		return fmt.Errorf("must create Kind with a non-nil cache")
 	}
 
 	// cache.GetInformer will block until its context is cancelled if the cache was already started and it can not
@@ -135,7 +131,7 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 		// an error or the specified context is cancelled or expired.
 		if err := wait.PollImmediateUntilWithContext(ctx, 10*time.Second, func(ctx context.Context) (bool, error) {
 			// Lookup the Informer from the Cache and add an EventHandler which populates the Queue
-			i, lastErr = ks.cache.GetInformer(ctx, ks.Type)
+			i, lastErr = ks.cache.GetInformer(ctx, ks.obj)
 			if lastErr != nil {
 				kindMatchErr := &meta.NoKindMatchError{}
 				switch {
@@ -174,16 +170,16 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 	return nil
 }
 
-func (ks *Kind) String() string {
-	if ks.Type != nil {
-		return fmt.Sprintf("kind source: %T", ks.Type)
+func (ks *kind) String() string {
+	if ks.obj != nil {
+		return fmt.Sprintf("kind source: %T", ks.obj)
 	}
 	return "kind source: unknown type"
 }
 
 // WaitForSync implements SyncingSource to allow controllers to wait with starting
 // workers until the cache is synced.
-func (ks *Kind) WaitForSync(ctx context.Context) error {
+func (ks *kind) WaitForSync(ctx context.Context) error {
 	select {
 	case err := <-ks.started:
 		return err
@@ -194,17 +190,6 @@ func (ks *Kind) WaitForSync(ctx context.Context) error {
 		}
 		return errors.New("timed out waiting for cache to be synced")
 	}
-}
-
-var _ inject.Cache = &Kind{}
-
-// InjectCache is internal should be called only by the Controller.  InjectCache is used to inject
-// the Cache dependency initialized by the ControllerManager.
-func (ks *Kind) InjectCache(c cache.Cache) error {
-	if ks.cache == nil {
-		ks.cache = c
-	}
-	return nil
 }
 
 var _ Source = &Channel{}
@@ -219,7 +204,7 @@ type Channel struct {
 	// Source is the source channel to fetch GenericEvents
 	Source <-chan event.GenericEvent
 
-	// stop is to end ongoing goroutine, and close the channels
+	// Stop is to end ongoing goroutine, and close the channels
 	stop <-chan struct{}
 
 	// dest is the destination channels of the added event handlers
@@ -237,18 +222,6 @@ func (cs *Channel) String() string {
 	return fmt.Sprintf("channel source: %p", cs)
 }
 
-var _ inject.Stoppable = &Channel{}
-
-// InjectStopChannel is internal should be called only by the Controller.
-// It is used to inject the stop channel initialized by the ControllerManager.
-func (cs *Channel) InjectStopChannel(stop <-chan struct{}) error {
-	if cs.stop == nil {
-		cs.stop = stop
-	}
-
-	return nil
-}
-
 // Start implements Source and should only be called by the Controller.
 func (cs *Channel) Start(
 	ctx context.Context,
@@ -260,10 +233,8 @@ func (cs *Channel) Start(
 		return fmt.Errorf("must specify Channel.Source")
 	}
 
-	// stop should have been injected before Start was called
-	if cs.stop == nil {
-		return fmt.Errorf("must call InjectStop on Channel before calling Start")
-	}
+	// set the stop channel to be the context.
+	cs.stop = ctx.Done()
 
 	// use default value if DestBufferSize not specified
 	if cs.DestBufferSize == 0 {

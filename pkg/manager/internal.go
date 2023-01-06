@@ -206,9 +206,6 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 	if _, err := inject.InjectorInto(cm.SetFields, i); err != nil {
 		return err
 	}
-	if _, err := inject.StopChannelInto(cm.internalProceduresStop, i); err != nil {
-		return err
-	}
 	if _, err := inject.LoggerInto(cm.logger, i); err != nil {
 		return err
 	}

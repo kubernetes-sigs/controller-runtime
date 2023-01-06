@@ -45,6 +45,9 @@ type Cluster interface {
 	// GetConfig returns an initialized Config
 	GetConfig() *rest.Config
 
+	// GetCache returns a cache.Cache
+	GetCache() cache.Cache
+
 	// GetScheme returns an initialized Scheme
 	GetScheme() *runtime.Scheme
 
@@ -56,9 +59,6 @@ type Cluster interface {
 
 	// GetFieldIndexer returns a client.FieldIndexer configured with the client
 	GetFieldIndexer() client.FieldIndexer
-
-	// GetCache returns a cache.Cache
-	GetCache() cache.Cache
 
 	// GetEventRecorderFor returns a new EventRecorder for the provided name
 	GetEventRecorderFor(name string) record.EventRecorder

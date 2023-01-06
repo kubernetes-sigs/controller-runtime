@@ -1547,11 +1547,6 @@ var _ = Describe("manger.Manager", func() {
 					Expect(c).To(Equal(m.GetCache()))
 					return nil
 				},
-				stop: func(stop <-chan struct{}) error {
-					defer GinkgoRecover()
-					Expect(stop).NotTo(BeNil())
-					return nil
-				},
 				f: func(f inject.Func) error {
 					defer GinkgoRecover()
 					Expect(f).NotTo(BeNil())
@@ -1598,13 +1593,6 @@ var _ = Describe("manger.Manager", func() {
 
 			err = m.SetFields(&injectable{
 				f: func(c inject.Func) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
-
-			err = m.SetFields(&injectable{
-				stop: func(<-chan struct{}) error {
 					return expected
 				},
 			})
@@ -1742,7 +1730,6 @@ var _ inject.Cache = &injectable{}
 var _ inject.Client = &injectable{}
 var _ inject.Scheme = &injectable{}
 var _ inject.Config = &injectable{}
-var _ inject.Stoppable = &injectable{}
 var _ inject.Logger = &injectable{}
 
 type injectable struct {
@@ -1751,7 +1738,6 @@ type injectable struct {
 	config func(config *rest.Config) error
 	cache  func(cache.Cache) error
 	f      func(inject.Func) error
-	stop   func(<-chan struct{}) error
 	log    func(logger logr.Logger) error
 }
 
@@ -1788,13 +1774,6 @@ func (i *injectable) InjectFunc(f inject.Func) error {
 		return nil
 	}
 	return i.f(f)
-}
-
-func (i *injectable) InjectStopChannel(stop <-chan struct{}) error {
-	if i.stop == nil {
-		return nil
-	}
-	return i.stop(stop)
 }
 
 func (i *injectable) InjectLogger(log logr.Logger) error {

@@ -44,7 +44,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -52,7 +51,6 @@ var _ = Describe("controller", func() {
 	var fakeReconcile *fakeReconciler
 	var ctrl *Controller
 	var queue *controllertest.Queue
-	var informers *informertest.FakeInformers
 	var reconciled chan reconcile.Request
 	var request = reconcile.Request{
 		NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
@@ -67,7 +65,6 @@ var _ = Describe("controller", func() {
 		queue = &controllertest.Queue{
 			Interface: workqueue.New(),
 		}
-		informers = &informertest.FakeInformers{}
 		ctrl = &Controller{
 			MaxConcurrentReconciles: 1,
 			Do:                      fakeReconcile,
@@ -76,7 +73,6 @@ var _ = Describe("controller", func() {
 				return log.RuntimeLog.WithName("controller").WithName("test")
 			},
 		}
-		Expect(ctrl.InjectFunc(func(interface{}) error { return nil })).To(Succeed())
 	})
 
 	Describe("Reconciler", func() {
@@ -131,7 +127,7 @@ var _ = Describe("controller", func() {
 		It("should return an error if there is an error waiting for the informers", func() {
 			f := false
 			ctrl.startWatches = []watchDescription{{
-				src: source.NewKindWithCache(&corev1.Pod{}, &informertest.FakeInformers{Synced: &f}),
+				src: source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}),
 			}}
 			ctrl.Name = "foo"
 			ctx, cancel := context.WithCancel(context.Background())
@@ -149,7 +145,7 @@ var _ = Describe("controller", func() {
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 
 			ctrl.startWatches = []watchDescription{{
-				src: source.NewKindWithCache(&appsv1.Deployment{}, c),
+				src: source.Kind(c, &appsv1.Deployment{}),
 			}}
 			ctrl.Name = "testcontroller"
 
@@ -167,7 +163,7 @@ var _ = Describe("controller", func() {
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 			ctrl.startWatches = []watchDescription{{
 				src: &singnallingSourceWrapper{
-					SyncingSource: source.NewKindWithCache(&appsv1.Deployment{}, c),
+					SyncingSource: source.Kind(c, &appsv1.Deployment{}),
 					cacheSyncDone: sourceSynced,
 				},
 			}}
@@ -195,7 +191,7 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			ctrl.startWatches = []watchDescription{{
 				src: &singnallingSourceWrapper{
-					SyncingSource: source.NewKindWithCache(&appsv1.Deployment{}, c),
+					SyncingSource: source.Kind(c, &appsv1.Deployment{}),
 					cacheSyncDone: sourceSynced,
 				},
 			}}
@@ -232,7 +228,6 @@ var _ = Describe("controller", func() {
 
 			ins := &source.Channel{Source: ch}
 			ins.DestBufferSize = 1
-			Expect(inject.StopChannelInto(ctx.Done(), ins)).To(BeTrue())
 
 			// send the event to the channel
 			ch <- evt
@@ -254,31 +249,13 @@ var _ = Describe("controller", func() {
 			<-processed
 		})
 
-		It("should error when channel is passed as a source but stop channel is not injected", func() {
-			ch := make(chan event.GenericEvent)
-			ctx, cancel := context.WithCancel(context.TODO())
-			defer cancel()
-
-			ins := &source.Channel{Source: ch}
-			ctrl.startWatches = []watchDescription{{
-				src: ins,
-			}}
-
-			e := ctrl.Start(ctx)
-
-			Expect(e).NotTo(BeNil())
-			Expect(e.Error()).To(ContainSubstring("must call InjectStop on Channel before calling Start"))
-		})
-
 		It("should error when channel source is not specified", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			ins := &source.Channel{}
-			Expect(inject.StopChannelInto(make(<-chan struct{}), ins)).To(BeTrue())
-
 			ctrl.startWatches = []watchDescription{{
-				src: &source.Channel{},
+				src: ins,
 			}}
 
 			e := ctrl.Start(ctx)
@@ -334,126 +311,6 @@ var _ = Describe("controller", func() {
 			Expect(err.Error()).To(Equal("controller was started more than once. This is likely to be caused by being added to a manager multiple times"))
 		})
 
-	})
-
-	Describe("Watch", func() {
-		It("should inject dependencies into the Source", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			found := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == src {
-					found = true
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue(), "Source not injected")
-		})
-
-		It("should return an error if there is an error injecting into the Source", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			expected := fmt.Errorf("expect fail source")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == src {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
-		})
-
-		It("should inject dependencies into the EventHandler", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			found := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == evthdl {
-					found = true
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue(), "EventHandler not injected")
-		})
-
-		It("should return an error if there is an error injecting into the EventHandler", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			evthdl := &handler.EnqueueRequestForObject{}
-			expected := fmt.Errorf("expect fail eventhandler")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == evthdl {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
-		})
-
-		PIt("should inject dependencies into the Reconciler", func() {
-			// TODO(community): Write this
-		})
-
-		PIt("should return an error if there is an error injecting into the Reconciler", func() {
-			// TODO(community): Write this
-		})
-
-		It("should inject dependencies into all of the Predicates", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			pr1 := &predicate.Funcs{}
-			pr2 := &predicate.Funcs{}
-			found1 := false
-			found2 := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr1 {
-					found1 = true
-				}
-				if i == pr2 {
-					found2 = true
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).NotTo(HaveOccurred())
-			Expect(found1).To(BeTrue(), "First Predicated not injected")
-			Expect(found2).To(BeTrue(), "Second Predicated not injected")
-		})
-
-		It("should return an error if there is an error injecting into any of the Predicates", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			pr1 := &predicate.Funcs{}
-			pr2 := &predicate.Funcs{}
-			expected := fmt.Errorf("expect fail predicate")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr1 {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).To(Equal(expected))
-
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr2 {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).To(Equal(expected))
-		})
 	})
 
 	Describe("Processing queue items from a Controller", func() {

@@ -23,7 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -37,7 +36,7 @@ import (
 )
 
 var _ = Describe("Source", func() {
-	var instance1, instance2 *source.Kind
+	var instance1, instance2 source.Source
 	var obj client.Object
 	var q workqueue.RateLimitingInterface
 	var c1, c2 chan interface{}
@@ -59,11 +58,8 @@ var _ = Describe("Source", func() {
 	})
 
 	JustBeforeEach(func() {
-		instance1 = &source.Kind{Type: obj}
-		Expect(inject.CacheInto(icache, instance1)).To(BeTrue())
-
-		instance2 = &source.Kind{Type: obj}
-		Expect(inject.CacheInto(icache, instance2)).To(BeTrue())
+		instance1 = source.Kind(icache, obj)
+		instance2 = source.Kind(icache, obj)
 	})
 
 	AfterEach(func() {

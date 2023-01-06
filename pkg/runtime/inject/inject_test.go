@@ -130,28 +130,6 @@ var _ = Describe("runtime inject", func() {
 		Expect(res).To(Equal(true))
 	})
 
-	It("should set stop channel", func() {
-
-		stop := make(<-chan struct{})
-
-		By("Validating injecting stop channel")
-		res, err := StopChannelInto(stop, instance)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(true))
-		Expect(stop).To(Equal(instance.GetStop()))
-
-		By("Returning false if the type does not implement inject.Stoppable")
-		res, err = StopChannelInto(stop, uninjectable)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(false))
-		Expect(uninjectable.GetStop()).To(BeNil())
-
-		By("Returning an error if stop channel injection fails")
-		res, err = StopChannelInto(nil, instance)
-		Expect(err).To(Equal(errInjectFail))
-		Expect(res).To(Equal(true))
-	})
-
 	It("should set api reader", func() {
 		apiReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{Client: fake.NewClientBuilder().Build()})
 		Expect(err).NotTo(HaveOccurred())

@@ -88,6 +88,7 @@ var _ = Describe("controller.Controller", func() {
 		It("should not leak goroutines when stopped", func() {
 			currentGRs := goleak.IgnoreCurrent()
 
+			ctx, cancel := context.WithCancel(context.Background())
 			watchChan := make(chan event.GenericEvent, 1)
 			watch := &source.Channel{Source: watchChan}
 			watchChan <- event.GenericEvent{Object: &corev1.Pod{}}
@@ -114,7 +115,6 @@ var _ = Describe("controller.Controller", func() {
 			Expect(c.Watch(watch, &handler.EnqueueRequestForObject{})).To(Succeed())
 			Expect(err).NotTo(HaveOccurred())
 
-			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
 				defer GinkgoRecover()
 				Expect(m.Start(ctx)).To(Succeed())

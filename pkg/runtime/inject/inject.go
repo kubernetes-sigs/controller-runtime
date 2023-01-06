@@ -15,7 +15,8 @@ limitations under the License.
 */
 
 // Package inject is used by a Manager to inject types into Sources, EventHandlers, Predicates, and Reconciles.
-// Deprecated: Use manager.Options fields directly. This package will be removed in v0.10.
+//
+// Deprecated: Use manager.Options fields directly. This package will be removed in a future version.
 package inject
 
 import (
@@ -30,12 +31,16 @@ import (
 
 // Cache is used by the ControllerManager to inject Cache into Sources, EventHandlers, Predicates, and
 // Reconciles.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 type Cache interface {
 	InjectCache(cache cache.Cache) error
 }
 
 // CacheInto will set informers on i and return the result if it implements Cache.  Returns
 // false if i does not implement Cache.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 func CacheInto(c cache.Cache, i interface{}) (bool, error) {
 	if s, ok := i.(Cache); ok {
 		return true, s.InjectCache(c)
@@ -44,12 +49,16 @@ func CacheInto(c cache.Cache, i interface{}) (bool, error) {
 }
 
 // APIReader is used by the Manager to inject the APIReader into necessary types.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 type APIReader interface {
 	InjectAPIReader(client.Reader) error
 }
 
 // APIReaderInto will set APIReader on i and return the result if it implements APIReaderInto.
 // Returns false if i does not implement APIReader.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 func APIReaderInto(reader client.Reader, i interface{}) (bool, error) {
 	if s, ok := i.(APIReader); ok {
 		return true, s.InjectAPIReader(reader)
@@ -59,12 +68,16 @@ func APIReaderInto(reader client.Reader, i interface{}) (bool, error) {
 
 // Config is used by the ControllerManager to inject Config into Sources, EventHandlers, Predicates, and
 // Reconciles.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 type Config interface {
 	InjectConfig(*rest.Config) error
 }
 
 // ConfigInto will set config on i and return the result if it implements Config.  Returns
 // false if i does not implement Config.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 func ConfigInto(config *rest.Config, i interface{}) (bool, error) {
 	if s, ok := i.(Config); ok {
 		return true, s.InjectConfig(config)
@@ -74,12 +87,16 @@ func ConfigInto(config *rest.Config, i interface{}) (bool, error) {
 
 // Client is used by the ControllerManager to inject client into Sources, EventHandlers, Predicates, and
 // Reconciles.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 type Client interface {
 	InjectClient(client.Client) error
 }
 
 // ClientInto will set client on i and return the result if it implements Client. Returns
 // false if i does not implement Client.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 func ClientInto(client client.Client, i interface{}) (bool, error) {
 	if s, ok := i.(Client); ok {
 		return true, s.InjectClient(client)
@@ -89,12 +106,16 @@ func ClientInto(client client.Client, i interface{}) (bool, error) {
 
 // Scheme is used by the ControllerManager to inject Scheme into Sources, EventHandlers, Predicates, and
 // Reconciles.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 type Scheme interface {
 	InjectScheme(scheme *runtime.Scheme) error
 }
 
 // SchemeInto will set scheme and return the result on i if it implements Scheme.  Returns
 // false if i does not implement Scheme.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 func SchemeInto(scheme *runtime.Scheme, i interface{}) (bool, error) {
 	if is, ok := i.(Scheme); ok {
 		return true, is.InjectScheme(scheme)
@@ -102,28 +123,17 @@ func SchemeInto(scheme *runtime.Scheme, i interface{}) (bool, error) {
 	return false, nil
 }
 
-// Stoppable is used by the ControllerManager to inject stop channel into Sources,
-// EventHandlers, Predicates, and Reconciles.
-type Stoppable interface {
-	InjectStopChannel(<-chan struct{}) error
-}
-
-// StopChannelInto will set stop channel on i and return the result if it implements Stoppable.
-// Returns false if i does not implement Stoppable.
-func StopChannelInto(stop <-chan struct{}, i interface{}) (bool, error) {
-	if s, ok := i.(Stoppable); ok {
-		return true, s.InjectStopChannel(stop)
-	}
-	return false, nil
-}
-
 // Mapper is used to inject the rest mapper to components that may need it.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 type Mapper interface {
 	InjectMapper(meta.RESTMapper) error
 }
 
 // MapperInto will set the rest mapper on i and return the result if it implements Mapper.
 // Returns false if i does not implement Mapper.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 func MapperInto(mapper meta.RESTMapper, i interface{}) (bool, error) {
 	if m, ok := i.(Mapper); ok {
 		return true, m.InjectMapper(mapper)
@@ -132,15 +142,21 @@ func MapperInto(mapper meta.RESTMapper, i interface{}) (bool, error) {
 }
 
 // Func injects dependencies into i.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 type Func func(i interface{}) error
 
 // Injector is used by the ControllerManager to inject Func into Controllers.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 type Injector interface {
 	InjectFunc(f Func) error
 }
 
 // InjectorInto will set f and return the result on i if it implements Injector.  Returns
 // false if i does not implement Injector.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 func InjectorInto(f Func, i interface{}) (bool, error) {
 	if ii, ok := i.(Injector); ok {
 		return true, ii.InjectFunc(f)
@@ -150,12 +166,16 @@ func InjectorInto(f Func, i interface{}) (bool, error) {
 
 // Logger is used to inject Loggers into components that need them
 // and don't otherwise have opinions.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 type Logger interface {
 	InjectLogger(l logr.Logger) error
 }
 
 // LoggerInto will set the logger on the given object if it implements inject.Logger,
 // returning true if a InjectLogger was called, and false otherwise.
+//
+// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
 func LoggerInto(l logr.Logger, i interface{}) (bool, error) {
 	if injectable, wantsLogger := i.(Logger); wantsLogger {
 		return true, injectable.InjectLogger(l)

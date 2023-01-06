@@ -156,7 +156,6 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 		},
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
 		CacheSyncTimeout:        options.CacheSyncTimeout,
-		SetFields:               mgr.SetFields,
 		Name:                    name,
 		LogConstructor:          options.LogConstructor,
 		RecoverPanic:            options.RecoverPanic,

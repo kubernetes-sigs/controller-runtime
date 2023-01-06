@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
@@ -40,7 +41,6 @@ var _ = Describe("Eventhandler", func() {
 	var instance handler.EnqueueRequestForObject
 	var pod *corev1.Pod
 	var mapper meta.RESTMapper
-	t := true
 	BeforeEach(func() {
 		q = controllertest.Queue{Interface: workqueue.New()}
 		pod = &corev1.Pod{
@@ -303,11 +303,7 @@ var _ = Describe("Eventhandler", func() {
 
 	Describe("EnqueueRequestForOwner", func() {
 		It("should enqueue a Request with the Owner of the object in the CreateEvent.", func() {
-			instance := handler.EnqueueRequestForOwner{
-				OwnerType: &appsv1.ReplicaSet{},
-			}
-			Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-			Expect(instance.InjectMapper(mapper)).To(Succeed())
+			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -328,11 +324,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		It("should enqueue a Request with the Owner of the object in the DeleteEvent.", func() {
-			instance := handler.EnqueueRequestForOwner{
-				OwnerType: &appsv1.ReplicaSet{},
-			}
-			Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-			Expect(instance.InjectMapper(mapper)).To(Succeed())
+			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -357,11 +349,7 @@ var _ = Describe("Eventhandler", func() {
 			newPod.Name = pod.Name + "2"
 			newPod.Namespace = pod.Namespace + "2"
 
-			instance := handler.EnqueueRequestForOwner{
-				OwnerType: &appsv1.ReplicaSet{},
-			}
-			Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-			Expect(instance.InjectMapper(mapper)).To(Succeed())
+			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -398,11 +386,7 @@ var _ = Describe("Eventhandler", func() {
 			newPod := pod.DeepCopy()
 			newPod.Name = pod.Name + "2"
 
-			instance := handler.EnqueueRequestForOwner{
-				OwnerType: &appsv1.ReplicaSet{},
-			}
-			Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-			Expect(instance.InjectMapper(mapper)).To(Succeed())
+			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -431,12 +415,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		It("should enqueue a Request with the Owner of the object in the GenericEvent.", func() {
-			instance := handler.EnqueueRequestForOwner{
-				OwnerType: &appsv1.ReplicaSet{},
-			}
-			Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-			Expect(instance.InjectMapper(mapper)).To(Succeed())
-
+			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
 					Name:       "foo-parent",
@@ -456,12 +435,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		It("should not enqueue a Request if there are no owners matching Group and Kind.", func() {
-			instance := handler.EnqueueRequestForOwner{
-				OwnerType:    &appsv1.ReplicaSet{},
-				IsController: t,
-			}
-			Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-			Expect(instance.InjectMapper(mapper)).To(Succeed())
+			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{}, handler.OnlyControllerOwner())
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{ // Wrong group
 					Name:       "foo1-parent",
@@ -483,11 +457,7 @@ var _ = Describe("Eventhandler", func() {
 
 		It("should enqueue a Request if there are owners matching Group "+
 			"and Kind with a different version.", func() {
-			instance := handler.EnqueueRequestForOwner{
-				OwnerType: &autoscalingv1.HorizontalPodAutoscaler{},
-			}
-			Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-			Expect(instance.InjectMapper(mapper)).To(Succeed())
+			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &autoscalingv1.HorizontalPodAutoscaler{})
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
 					Name:       "foo-parent",
@@ -507,11 +477,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		It("should enqueue a Request for a owner that is cluster scoped", func() {
-			instance := handler.EnqueueRequestForOwner{
-				OwnerType: &corev1.Node{},
-			}
-			Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-			Expect(instance.InjectMapper(mapper)).To(Succeed())
+			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &corev1.Node{})
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
 					Name:       "node-1",
@@ -532,11 +498,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		It("should not enqueue a Request if there are no owners.", func() {
-			instance := handler.EnqueueRequestForOwner{
-				OwnerType: &appsv1.ReplicaSet{},
-			}
-			Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-			Expect(instance.InjectMapper(mapper)).To(Succeed())
+			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 			evt := event.CreateEvent{
 				Object: pod,
 			}
@@ -547,12 +509,7 @@ var _ = Describe("Eventhandler", func() {
 		Context("with the Controller field set to true", func() {
 			It("should enqueue reconcile.Requests for only the first the Controller if there are "+
 				"multiple Controller owners.", func() {
-				instance := handler.EnqueueRequestForOwner{
-					OwnerType:    &appsv1.ReplicaSet{},
-					IsController: t,
-				}
-				Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-				Expect(instance.InjectMapper(mapper)).To(Succeed())
+				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{}, handler.OnlyControllerOwner())
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
 						Name:       "foo1-parent",
@@ -563,7 +520,7 @@ var _ = Describe("Eventhandler", func() {
 						Name:       "foo2-parent",
 						Kind:       "ReplicaSet",
 						APIVersion: "apps/v1",
-						Controller: &t,
+						Controller: pointer.Bool(true),
 					},
 					{
 						Name:       "foo3-parent",
@@ -574,7 +531,7 @@ var _ = Describe("Eventhandler", func() {
 						Name:       "foo4-parent",
 						Kind:       "ReplicaSet",
 						APIVersion: "apps/v1",
-						Controller: &t,
+						Controller: pointer.Bool(true),
 					},
 					{
 						Name:       "foo5-parent",
@@ -593,12 +550,7 @@ var _ = Describe("Eventhandler", func() {
 			})
 
 			It("should not enqueue reconcile.Requests if there are no Controller owners.", func() {
-				instance := handler.EnqueueRequestForOwner{
-					OwnerType:    &appsv1.ReplicaSet{},
-					IsController: t,
-				}
-				Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-				Expect(instance.InjectMapper(mapper)).To(Succeed())
+				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{}, handler.OnlyControllerOwner())
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
 						Name:       "foo1-parent",
@@ -624,12 +576,7 @@ var _ = Describe("Eventhandler", func() {
 			})
 
 			It("should not enqueue reconcile.Requests if there are no owners.", func() {
-				instance := handler.EnqueueRequestForOwner{
-					OwnerType:    &appsv1.ReplicaSet{},
-					IsController: t,
-				}
-				Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-				Expect(instance.InjectMapper(mapper)).To(Succeed())
+				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{}, handler.OnlyControllerOwner())
 				evt := event.CreateEvent{
 					Object: pod,
 				}
@@ -640,11 +587,7 @@ var _ = Describe("Eventhandler", func() {
 
 		Context("with the Controller field set to false", func() {
 			It("should enqueue a reconcile.Requests for all owners.", func() {
-				instance := handler.EnqueueRequestForOwner{
-					OwnerType: &appsv1.ReplicaSet{},
-				}
-				Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-				Expect(instance.InjectMapper(mapper)).To(Succeed())
+				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
 						Name:       "foo1-parent",
@@ -684,11 +627,7 @@ var _ = Describe("Eventhandler", func() {
 
 		Context("with a nil object", func() {
 			It("should do nothing.", func() {
-				instance := handler.EnqueueRequestForOwner{
-					OwnerType: &appsv1.ReplicaSet{},
-				}
-				Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-				Expect(instance.InjectMapper(mapper)).To(Succeed())
+				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
 						Name:       "foo1-parent",
@@ -704,76 +643,17 @@ var _ = Describe("Eventhandler", func() {
 			})
 		})
 
-		Context("with a multiple matching kinds", func() {
-			It("should do nothing.", func() {
-				instance := handler.EnqueueRequestForOwner{
-					OwnerType: &metav1.ListOptions{},
-				}
-				Expect(instance.InjectScheme(scheme.Scheme)).NotTo(Succeed())
-				Expect(instance.InjectMapper(mapper)).To(Succeed())
-				pod.OwnerReferences = []metav1.OwnerReference{
-					{
-						Name:       "foo1-parent",
-						Kind:       "ListOptions",
-						APIVersion: "meta/v1",
-					},
-				}
-				evt := event.CreateEvent{
-					Object: pod,
-				}
-				instance.Create(evt, q)
-				Expect(q.Len()).To(Equal(0))
-			})
-		})
-		Context("with an OwnerType that cannot be resolved", func() {
-			It("should do nothing.", func() {
-				instance := handler.EnqueueRequestForOwner{
-					OwnerType: &controllertest.ErrorType{},
-				}
-				Expect(instance.InjectScheme(scheme.Scheme)).NotTo(Succeed())
-				Expect(instance.InjectMapper(mapper)).To(Succeed())
-				pod.OwnerReferences = []metav1.OwnerReference{
-					{
-						Name:       "foo1-parent",
-						Kind:       "ListOptions",
-						APIVersion: "meta/v1",
-					},
-				}
-				evt := event.CreateEvent{
-					Object: pod,
-				}
-				instance.Create(evt, q)
-				Expect(q.Len()).To(Equal(0))
-			})
-		})
-
 		Context("with a nil OwnerType", func() {
-			It("should do nothing.", func() {
-				instance := handler.EnqueueRequestForOwner{}
-				Expect(instance.InjectScheme(scheme.Scheme)).NotTo(Succeed())
-				Expect(instance.InjectMapper(mapper)).To(Succeed())
-				pod.OwnerReferences = []metav1.OwnerReference{
-					{
-						Name:       "foo1-parent",
-						Kind:       "OwnerType",
-						APIVersion: "meta/v1",
-					},
-				}
-				evt := event.CreateEvent{
-					Object: pod,
-				}
-				instance.Create(evt, q)
-				Expect(q.Len()).To(Equal(0))
+			It("should panic", func() {
+				Expect(func() {
+					handler.EnqueueRequestForOwner(nil, nil, nil)
+				}).To(Panic())
 			})
 		})
 
 		Context("with an invalid APIVersion in the OwnerReference", func() {
 			It("should do nothing.", func() {
-				instance := handler.EnqueueRequestForOwner{
-					OwnerType: &appsv1.ReplicaSet{},
-				}
-				Expect(instance.InjectScheme(scheme.Scheme)).To(Succeed())
-				Expect(instance.InjectMapper(mapper)).To(Succeed())
+				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
 						Name:       "foo1-parent",

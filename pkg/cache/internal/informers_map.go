@@ -163,32 +163,18 @@ func (ip *InformersMap) Start(ctx context.Context) error {
 		ip.mu.Lock()
 		defer ip.mu.Unlock()
 
-		// Set the stop channel so it can be passed to informers that are added later
+		// Set the context so it can be passed to informers that are added later
 		ip.ctx = ctx
-
-		ip.waitGroup.Add(len(ip.informers.Structured) + len(ip.informers.Unstructured) + len(ip.informers.Metadata))
 
 		// Start each informer
 		for _, i := range ip.informers.Structured {
-			i := i
-			go func() {
-				defer ip.waitGroup.Done()
-				i.Informer.Run(ctx.Done())
-			}()
+			ip.startInformerLocked(i.Informer)
 		}
 		for _, i := range ip.informers.Unstructured {
-			i := i
-			go func() {
-				defer ip.waitGroup.Done()
-				i.Informer.Run(ctx.Done())
-			}()
+			ip.startInformerLocked(i.Informer)
 		}
 		for _, i := range ip.informers.Metadata {
-			i := i
-			go func() {
-				defer ip.waitGroup.Done()
-				i.Informer.Run(ctx.Done())
-			}()
+			ip.startInformerLocked(i.Informer)
 		}
 
 		// Set started to true so we immediately start any informers added later.
@@ -201,6 +187,21 @@ func (ip *InformersMap) Start(ctx context.Context) error {
 	ip.mu.Unlock()
 	ip.waitGroup.Wait() // Block until all informers have stopped
 	return nil
+}
+
+func (ip *InformersMap) startInformerLocked(informer cache.SharedIndexInformer) {
+	// Don't start the informer in case we are already waiting for the items in
+	// the waitGroup to finish, since waitGroups don't support waiting and adding
+	// at the same time.
+	if ip.stopped {
+		return
+	}
+
+	ip.waitGroup.Add(1)
+	go func() {
+		defer ip.waitGroup.Done()
+		informer.Run(ip.ctx.Done())
+	}()
 }
 
 func (ip *InformersMap) waitForStarted(ctx context.Context) bool {
@@ -331,15 +332,10 @@ func (ip *InformersMap) addInformerToMap(gvk schema.GroupVersionKind, obj runtim
 	}
 	ip.informersByType(obj)[gvk] = i
 
-	// Start the Informer if need by
-	// TODO(seans): write thorough tests and document what happens here - can you add indexers?
-	// can you add eventhandlers?
-	if ip.started && !ip.stopped {
-		ip.waitGroup.Add(1)
-		go func() {
-			defer ip.waitGroup.Done()
-			i.Informer.Run(ip.ctx.Done())
-		}()
+	// Start the informer in case the InformersMap has started, otherwise it will be
+	// started when the InformersMap starts.
+	if ip.started {
+		ip.startInformerLocked(i.Informer)
 	}
 	return i, ip.started, nil
 }

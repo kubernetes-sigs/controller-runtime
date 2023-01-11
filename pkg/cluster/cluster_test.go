@@ -144,13 +144,6 @@ var _ = Describe("cluster.Cluster", func() {
 
 			expected := fmt.Errorf("expected error")
 			err = c.SetFields(&injectable{
-				client: func(client client.Client) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
-
-			err = c.SetFields(&injectable{
 				scheme: func(scheme *runtime.Scheme) error {
 					return expected
 				},
@@ -219,7 +212,6 @@ var _ = Describe("cluster.Cluster", func() {
 	})
 })
 
-var _ inject.Client = &injectable{}
 var _ inject.Scheme = &injectable{}
 var _ inject.Logger = &injectable{}
 

@@ -26,7 +26,6 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 var instance *testSource
@@ -38,28 +37,6 @@ var _ = Describe("runtime inject", func() {
 	BeforeEach(func() {
 		instance = &testSource{}
 		uninjectable = &failSource{}
-	})
-
-	It("should set client", func() {
-		client, err := client.NewDelegatingClient(client.NewDelegatingClientInput{Client: fake.NewClientBuilder().Build()})
-		Expect(err).NotTo(HaveOccurred())
-
-		By("Validating injecting client")
-		res, err := ClientInto(client, instance)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(true))
-		Expect(client).To(Equal(instance.GetClient()))
-
-		By("Returning false if the type does not implement inject.Client")
-		res, err = ClientInto(client, uninjectable)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(false))
-		Expect(uninjectable.GetClient()).To(BeNil())
-
-		By("Returning an error if client injection fails")
-		res, err = ClientInto(nil, instance)
-		Expect(err).To(Equal(errInjectFail))
-		Expect(res).To(Equal(true))
 	})
 
 	It("should set scheme", func() {

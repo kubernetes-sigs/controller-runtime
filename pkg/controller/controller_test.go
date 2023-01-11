@@ -35,7 +35,6 @@ import (
 	internalcontroller "sigs.k8s.io/controller-runtime/pkg/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -226,7 +225,6 @@ var _ = Describe("controller.Controller", func() {
 })
 
 var _ reconcile.Reconciler = &failRec{}
-var _ inject.Client = &failRec{}
 
 type failRec struct{}
 
@@ -234,6 +232,6 @@ func (*failRec) Reconcile(context.Context, reconcile.Request) (reconcile.Result,
 	return reconcile.Result{}, nil
 }
 
-func (*failRec) InjectClient(client.Client) error {
+func (*failRec) InjectFunc(client.Client) error {
 	return fmt.Errorf("expected error")
 }

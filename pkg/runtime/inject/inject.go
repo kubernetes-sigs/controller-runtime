@@ -23,28 +23,7 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// Client is used by the ControllerManager to inject client into Sources, EventHandlers, Predicates, and
-// Reconciles.
-//
-// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
-type Client interface {
-	InjectClient(client.Client) error
-}
-
-// ClientInto will set client on i and return the result if it implements Client. Returns
-// false if i does not implement Client.
-//
-// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
-func ClientInto(client client.Client, i interface{}) (bool, error) {
-	if s, ok := i.(Client); ok {
-		return true, s.InjectClient(client)
-	}
-	return false, nil
-}
 
 // Scheme is used by the ControllerManager to inject Scheme into Sources, EventHandlers, Predicates, and
 // Reconciles.

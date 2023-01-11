@@ -1554,13 +1554,6 @@ var _ = Describe("manger.Manager", func() {
 
 			expected := fmt.Errorf("expected error")
 			err = m.SetFields(&injectable{
-				client: func(client client.Client) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
-
-			err = m.SetFields(&injectable{
 				scheme: func(scheme *runtime.Scheme) error {
 					return expected
 				},
@@ -1685,7 +1678,6 @@ var _ = Describe("manger.Manager", func() {
 })
 
 var _ reconcile.Reconciler = &failRec{}
-var _ inject.Client = &failRec{}
 
 type failRec struct{}
 
@@ -1697,12 +1689,11 @@ func (*failRec) Start(context.Context) error {
 	return nil
 }
 
-func (*failRec) InjectClient(client.Client) error {
+func (*failRec) InjectFunc(client.Client) error {
 	return fmt.Errorf("expected error")
 }
 
 var _ inject.Injector = &injectable{}
-var _ inject.Client = &injectable{}
 var _ inject.Scheme = &injectable{}
 var _ inject.Logger = &injectable{}
 

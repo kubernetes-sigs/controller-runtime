@@ -139,11 +139,6 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 		options.RateLimiter = workqueue.DefaultControllerRateLimiter()
 	}
 
-	// Inject dependencies into Reconciler
-	if err := mgr.SetFields(options.Reconciler); err != nil {
-		return nil, err
-	}
-
 	if options.RecoverPanic == nil {
 		options.RecoverPanic = mgr.GetControllerOptions().RecoverPanic
 	}

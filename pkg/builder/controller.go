@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 
@@ -29,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	internalsource "sigs.k8s.io/controller-runtime/pkg/internal/source"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -196,16 +198,18 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 	return blder.ctrl, nil
 }
 
-func (blder *Builder) project(obj client.Object, proj objectProjection) (source.Source, error) {
-	src := source.Kind(blder.mgr.GetCache(), obj)
+func (blder *Builder) project(obj client.Object, proj objectProjection) (client.Object, error) {
 	switch proj {
 	case projectAsNormal:
-		return src, nil
+		return obj, nil
 	case projectAsMetadata:
-		if err := source.KindAsPartialMetadata(src, blder.mgr.GetScheme()); err != nil {
-			return nil, err
+		metaObj := &metav1.PartialObjectMetadata{}
+		gvk, err := getGvk(obj, blder.mgr.GetScheme())
+		if err != nil {
+			return nil, fmt.Errorf("unable to determine GVK of %T for a metadata-only watch: %w", obj, err)
 		}
-		return src, nil
+		metaObj.SetGroupVersionKind(gvk)
+		return metaObj, nil
 	default:
 		panic(fmt.Sprintf("unexpected projection type %v on type %T, should not be possible since this is an internal field", proj, obj))
 	}
@@ -214,10 +218,11 @@ func (blder *Builder) project(obj client.Object, proj objectProjection) (source.
 func (blder *Builder) doWatch() error {
 	// Reconcile type
 	if blder.forInput.object != nil {
-		src, err := blder.project(blder.forInput.object, blder.forInput.objectProjection)
+		obj, err := blder.project(blder.forInput.object, blder.forInput.objectProjection)
 		if err != nil {
 			return err
 		}
+		src := source.Kind(blder.mgr.GetCache(), obj)
 		hdler := &handler.EnqueueRequestForObject{}
 		allPredicates := append(blder.globalPredicates, blder.forInput.predicates...)
 		if err := blder.ctrl.Watch(src, hdler, allPredicates...); err != nil {
@@ -230,10 +235,11 @@ func (blder *Builder) doWatch() error {
 		return errors.New("Owns() can only be used together with For()")
 	}
 	for _, own := range blder.ownsInput {
-		src, err := blder.project(own.object, own.objectProjection)
+		obj, err := blder.project(own.object, own.objectProjection)
 		if err != nil {
 			return err
 		}
+		src := source.Kind(blder.mgr.GetCache(), obj)
 		hdler := handler.EnqueueRequestForOwner(
 			blder.mgr.GetScheme(), blder.mgr.GetRESTMapper(),
 			blder.forInput.object,
@@ -254,13 +260,13 @@ func (blder *Builder) doWatch() error {
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)
 
-		// If the source of this watch is of type *source.Kind, project it.
-		if srckind, ok := w.src.(source.SyncingSource); ok {
-			if w.objectProjection == projectAsMetadata {
-				if err := source.KindAsPartialMetadata(srckind, blder.mgr.GetScheme()); err != nil {
-					return err
-				}
+		// If the source of this watch is of type Kind, project it.
+		if srckind, ok := w.src.(*internalsource.Kind); ok {
+			typeForSrc, err := blder.project(srckind.Type, w.objectProjection)
+			if err != nil {
+				return err
 			}
+			srckind.Type = typeForSrc
 		}
 
 		if err := blder.ctrl.Watch(w.src, w.eventhandler, allPredicates...); err != nil {

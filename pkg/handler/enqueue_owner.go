@@ -46,9 +46,9 @@ type OwnerOption func(e *enqueueRequestForOwner)
 // - a source.Kind Source with Type of Pod.
 //
 // - a handler.enqueueRequestForOwner EventHandler with an OwnerType of ReplicaSet and OnlyControllerOwner set to true.
-func EnqueueRequestForOwner(scheme *runtime.Scheme, mapper meta.RESTMapper, owner client.Object, opts ...OwnerOption) EventHandler {
+func EnqueueRequestForOwner(scheme *runtime.Scheme, mapper meta.RESTMapper, ownerType client.Object, opts ...OwnerOption) EventHandler {
 	e := &enqueueRequestForOwner{
-		ownerType: owner,
+		ownerType: ownerType,
 		mapper:    mapper,
 	}
 	if err := e.parseOwnerTypeGroupKind(scheme); err != nil {

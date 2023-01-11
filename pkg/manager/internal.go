@@ -192,18 +192,18 @@ func (cm *controllerManager) Add(r Runnable) error {
 
 func (cm *controllerManager) add(r Runnable) error {
 	// Set dependencies on the object
-	if err := cm.SetFields(r); err != nil {
+	if err := cm.setFields(r); err != nil {
 		return err
 	}
 	return cm.runnables.Add(r)
 }
 
 // Deprecated: use the equivalent Options field to set a field. This method will be removed in v0.10.
-func (cm *controllerManager) SetFields(i interface{}) error {
-	if err := cm.cluster.SetFields(i); err != nil {
+func (cm *controllerManager) setFields(i interface{}) error {
+	if _, err := inject.SchemeInto(cm.cluster.GetScheme(), i); err != nil {
 		return err
 	}
-	if _, err := inject.InjectorInto(cm.SetFields, i); err != nil {
+	if _, err := inject.InjectorInto(cm.setFields, i); err != nil {
 		return err
 	}
 	if _, err := inject.LoggerInto(cm.logger, i); err != nil {

@@ -51,11 +51,9 @@ import (
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -1516,58 +1514,6 @@ var _ = Describe("manger.Manager", func() {
 
 		})
 	})
-	Describe("SetFields", func() {
-		It("should inject field values", func() {
-			m, err := New(cfg, Options{
-				NewCache: func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
-					return &informertest.FakeInformers{}, nil
-				},
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Injecting the dependencies")
-			err = m.SetFields(&injectable{
-				scheme: func(scheme *runtime.Scheme) error {
-					defer GinkgoRecover()
-					Expect(scheme).To(Equal(m.GetScheme()))
-					return nil
-				},
-				client: func(client client.Client) error {
-					defer GinkgoRecover()
-					Expect(client).To(Equal(m.GetClient()))
-					return nil
-				},
-				f: func(f inject.Func) error {
-					defer GinkgoRecover()
-					Expect(f).NotTo(BeNil())
-					return nil
-				},
-				log: func(logger logr.Logger) error {
-					defer GinkgoRecover()
-					Expect(logger).To(Equal(log.Log))
-					return nil
-				},
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Returning an error if dependency injection fails")
-
-			expected := fmt.Errorf("expected error")
-			err = m.SetFields(&injectable{
-				scheme: func(scheme *runtime.Scheme) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
-
-			err = m.SetFields(&injectable{
-				f: func(c inject.Func) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
-		})
-	})
 
 	It("should not leak goroutines when stopped", func() {
 		currentGRs := goleak.IgnoreCurrent()
@@ -1691,49 +1637,6 @@ func (*failRec) Start(context.Context) error {
 
 func (*failRec) InjectScheme(*runtime.Scheme) error {
 	return fmt.Errorf("expected error")
-}
-
-var _ inject.Injector = &injectable{}
-var _ inject.Scheme = &injectable{}
-var _ inject.Logger = &injectable{}
-
-type injectable struct {
-	scheme func(scheme *runtime.Scheme) error
-	client func(client.Client) error
-	f      func(inject.Func) error
-	log    func(logger logr.Logger) error
-}
-
-func (i *injectable) InjectClient(c client.Client) error {
-	if i.client == nil {
-		return nil
-	}
-	return i.client(c)
-}
-
-func (i *injectable) InjectScheme(scheme *runtime.Scheme) error {
-	if i.scheme == nil {
-		return nil
-	}
-	return i.scheme(scheme)
-}
-
-func (i *injectable) InjectFunc(f inject.Func) error {
-	if i.f == nil {
-		return nil
-	}
-	return i.f(f)
-}
-
-func (i *injectable) InjectLogger(log logr.Logger) error {
-	if i.log == nil {
-		return nil
-	}
-	return i.log(log)
-}
-
-func (i *injectable) Start(<-chan struct{}) error {
-	return nil
 }
 
 type runnableError struct {

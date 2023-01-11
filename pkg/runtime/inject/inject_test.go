@@ -23,9 +23,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var instance *testSource
@@ -64,50 +61,13 @@ var _ = Describe("runtime inject", func() {
 })
 
 type testSource struct {
-	scheme    *runtime.Scheme
-	cache     cache.Cache
-	config    *rest.Config
-	client    client.Client
-	apiReader client.Reader
-	f         Func
-	stop      <-chan struct{}
-}
-
-func (s *testSource) InjectConfig(config *rest.Config) error {
-	if config != nil {
-		s.config = config
-		return nil
-	}
-	return fmt.Errorf("injection fails")
-}
-
-func (s *testSource) InjectClient(client client.Client) error {
-	if client != nil {
-		s.client = client
-		return nil
-	}
-	return fmt.Errorf("injection fails")
+	scheme *runtime.Scheme
+	f      Func
 }
 
 func (s *testSource) InjectScheme(scheme *runtime.Scheme) error {
 	if scheme != nil {
 		s.scheme = scheme
-		return nil
-	}
-	return fmt.Errorf("injection fails")
-}
-
-func (s *testSource) InjectStopChannel(stop <-chan struct{}) error {
-	if stop != nil {
-		s.stop = stop
-		return nil
-	}
-	return fmt.Errorf("injection fails")
-}
-
-func (s *testSource) InjectAPIReader(reader client.Reader) error {
-	if reader != nil {
-		s.apiReader = reader
 		return nil
 	}
 	return fmt.Errorf("injection fails")
@@ -121,68 +81,23 @@ func (s *testSource) InjectFunc(f Func) error {
 	return fmt.Errorf("injection fails")
 }
 
-func (s *testSource) GetCache() cache.Cache {
-	return s.cache
-}
-
-func (s *testSource) GetConfig() *rest.Config {
-	return s.config
-}
-
 func (s *testSource) GetScheme() *runtime.Scheme {
 	return s.scheme
-}
-
-func (s *testSource) GetClient() client.Client {
-	return s.client
-}
-
-func (s *testSource) GetAPIReader() client.Reader {
-	return s.apiReader
 }
 
 func (s *testSource) GetFunc() Func {
 	return s.f
 }
 
-func (s *testSource) GetStop() <-chan struct{} {
-	return s.stop
-}
-
 type failSource struct {
-	scheme    *runtime.Scheme
-	cache     cache.Cache
-	config    *rest.Config
-	client    client.Client
-	apiReader client.Reader
-	f         Func
-	stop      <-chan struct{}
-}
-
-func (s *failSource) GetCache() cache.Cache {
-	return s.cache
-}
-
-func (s *failSource) GetConfig() *rest.Config {
-	return s.config
+	scheme *runtime.Scheme
+	f      Func
 }
 
 func (s *failSource) GetScheme() *runtime.Scheme {
 	return s.scheme
 }
 
-func (s *failSource) GetClient() client.Client {
-	return s.client
-}
-
-func (s *failSource) GetAPIReader() client.Reader {
-	return s.apiReader
-}
-
 func (s *failSource) GetFunc() Func {
 	return s.f
-}
-
-func (s *failSource) GetStop() <-chan struct{} {
-	return s.stop
 }

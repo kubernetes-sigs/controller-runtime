@@ -28,7 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 type cluster struct {
@@ -62,13 +61,6 @@ type cluster struct {
 	// Logger is the logger that should be used by this manager.
 	// If none is set, it defaults to log.Log global logger.
 	logger logr.Logger
-}
-
-func (c *cluster) SetFields(i interface{}) error {
-	if _, err := inject.SchemeInto(c.scheme, i); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (c *cluster) GetConfig() *rest.Config {

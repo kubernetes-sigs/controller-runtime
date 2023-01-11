@@ -18,14 +18,12 @@ package controller_test
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/goleak"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
@@ -59,16 +57,6 @@ var _ = Describe("controller.Controller", func() {
 			c, err := controller.New("foo", m, controller.Options{})
 			Expect(c).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Reconciler"))
-		})
-
-		It("NewController should return an error if injecting Reconciler fails", func() {
-			m, err := manager.New(cfg, manager.Options{})
-			Expect(err).NotTo(HaveOccurred())
-
-			c, err := controller.New("foo", m, controller.Options{Reconciler: &failRec{}})
-			Expect(c).To(BeNil())
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("expected error"))
 		})
 
 		It("should not return an error if two controllers are registered with different names", func() {
@@ -223,15 +211,3 @@ var _ = Describe("controller.Controller", func() {
 		})
 	})
 })
-
-var _ reconcile.Reconciler = &failRec{}
-
-type failRec struct{}
-
-func (*failRec) Reconcile(context.Context, reconcile.Request) (reconcile.Result, error) {
-	return reconcile.Result{}, nil
-}
-
-func (*failRec) InjectScheme(*runtime.Scheme) error {
-	return fmt.Errorf("expected error")
-}

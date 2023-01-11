@@ -178,7 +178,7 @@ var _ = Describe("Source", func() {
 			})
 		})
 
-		It("should return an error from Start if informers were provided", func() {
+		It("should return an error from Start cache was not provided", func() {
 			instance := source.Kind(nil, &corev1.Pod{})
 			err := instance.Start(ctx, nil, nil)
 			Expect(err).To(HaveOccurred())

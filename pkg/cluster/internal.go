@@ -71,9 +71,6 @@ func (c *cluster) SetFields(i interface{}) error {
 	if _, err := inject.ClientInto(c.client, i); err != nil {
 		return err
 	}
-	if _, err := inject.APIReaderInto(c.apiReader, i); err != nil {
-		return err
-	}
 	if _, err := inject.SchemeInto(c.scheme, i); err != nil {
 		return err
 	}

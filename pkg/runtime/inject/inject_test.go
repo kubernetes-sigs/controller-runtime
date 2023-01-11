@@ -106,28 +106,6 @@ var _ = Describe("runtime inject", func() {
 		Expect(res).To(Equal(true))
 	})
 
-	It("should set api reader", func() {
-		apiReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{Client: fake.NewClientBuilder().Build()})
-		Expect(err).NotTo(HaveOccurred())
-
-		By("Validating injecting client")
-		res, err := APIReaderInto(apiReader, instance)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(true))
-		Expect(apiReader).To(Equal(instance.GetAPIReader()))
-
-		By("Returning false if the type does not implement inject.Client")
-		res, err = APIReaderInto(apiReader, uninjectable)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(false))
-		Expect(uninjectable.GetAPIReader()).To(BeNil())
-
-		By("Returning an error if client injection fails")
-		res, err = APIReaderInto(nil, instance)
-		Expect(err).To(Equal(errInjectFail))
-		Expect(res).To(Equal(true))
-	})
-
 	It("should set dependencies", func() {
 
 		f := func(interface{}) error { return nil }

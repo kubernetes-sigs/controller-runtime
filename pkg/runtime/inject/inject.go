@@ -28,24 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// APIReader is used by the Manager to inject the APIReader into necessary types.
-//
-// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
-type APIReader interface {
-	InjectAPIReader(client.Reader) error
-}
-
-// APIReaderInto will set APIReader on i and return the result if it implements APIReaderInto.
-// Returns false if i does not implement APIReader.
-//
-// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
-func APIReaderInto(reader client.Reader, i interface{}) (bool, error) {
-	if s, ok := i.(APIReader); ok {
-		return true, s.InjectAPIReader(reader)
-	}
-	return false, nil
-}
-
 // Config is used by the ControllerManager to inject Config into Sources, EventHandlers, Predicates, and
 // Reconciles.
 //

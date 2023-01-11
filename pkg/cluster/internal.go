@@ -65,9 +65,6 @@ type cluster struct {
 }
 
 func (c *cluster) SetFields(i interface{}) error {
-	if _, err := inject.ConfigInto(c.config, i); err != nil {
-		return err
-	}
 	if _, err := inject.ClientInto(c.client, i); err != nil {
 		return err
 	}

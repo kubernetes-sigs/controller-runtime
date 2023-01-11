@@ -23,29 +23,9 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// Config is used by the ControllerManager to inject Config into Sources, EventHandlers, Predicates, and
-// Reconciles.
-//
-// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
-type Config interface {
-	InjectConfig(*rest.Config) error
-}
-
-// ConfigInto will set config on i and return the result if it implements Config.  Returns
-// false if i does not implement Config.
-//
-// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
-func ConfigInto(config *rest.Config, i interface{}) (bool, error) {
-	if s, ok := i.(Config); ok {
-		return true, s.InjectConfig(config)
-	}
-	return false, nil
-}
 
 // Client is used by the ControllerManager to inject client into Sources, EventHandlers, Predicates, and
 // Reconciles.

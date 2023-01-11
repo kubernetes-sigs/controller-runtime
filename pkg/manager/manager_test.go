@@ -1532,11 +1532,6 @@ var _ = Describe("manger.Manager", func() {
 					Expect(scheme).To(Equal(m.GetScheme()))
 					return nil
 				},
-				config: func(config *rest.Config) error {
-					defer GinkgoRecover()
-					Expect(config).To(Equal(m.GetConfig()))
-					return nil
-				},
 				client: func(client client.Client) error {
 					defer GinkgoRecover()
 					Expect(client).To(Equal(m.GetClient()))
@@ -1567,13 +1562,6 @@ var _ = Describe("manger.Manager", func() {
 
 			err = m.SetFields(&injectable{
 				scheme: func(scheme *runtime.Scheme) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
-
-			err = m.SetFields(&injectable{
-				config: func(config *rest.Config) error {
 					return expected
 				},
 			})
@@ -1716,22 +1704,13 @@ func (*failRec) InjectClient(client.Client) error {
 var _ inject.Injector = &injectable{}
 var _ inject.Client = &injectable{}
 var _ inject.Scheme = &injectable{}
-var _ inject.Config = &injectable{}
 var _ inject.Logger = &injectable{}
 
 type injectable struct {
 	scheme func(scheme *runtime.Scheme) error
 	client func(client.Client) error
-	config func(config *rest.Config) error
 	f      func(inject.Func) error
 	log    func(logger logr.Logger) error
-}
-
-func (i *injectable) InjectConfig(config *rest.Config) error {
-	if i.config == nil {
-		return nil
-	}
-	return i.config(config)
 }
 
 func (i *injectable) InjectClient(c client.Client) error {

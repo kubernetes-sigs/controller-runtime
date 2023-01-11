@@ -40,28 +40,6 @@ var _ = Describe("runtime inject", func() {
 		uninjectable = &failSource{}
 	})
 
-	It("should set config", func() {
-
-		cfg := &rest.Config{}
-
-		By("Validating injecting config")
-		res, err := ConfigInto(cfg, instance)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(true))
-		Expect(cfg).To(Equal(instance.GetConfig()))
-
-		By("Returning false if the type does not implement inject.Config")
-		res, err = ConfigInto(cfg, uninjectable)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(false))
-		Expect(uninjectable.GetConfig()).To(BeNil())
-
-		By("Returning an error if config injection fails")
-		res, err = ConfigInto(nil, instance)
-		Expect(err).To(Equal(errInjectFail))
-		Expect(res).To(Equal(true))
-	})
-
 	It("should set client", func() {
 		client, err := client.NewDelegatingClient(client.NewDelegatingClientInput{Client: fake.NewClientBuilder().Build()})
 		Expect(err).NotTo(HaveOccurred())

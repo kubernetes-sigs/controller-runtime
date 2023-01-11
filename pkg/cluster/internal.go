@@ -68,9 +68,6 @@ func (c *cluster) SetFields(i interface{}) error {
 	if _, err := inject.SchemeInto(c.scheme, i); err != nil {
 		return err
 	}
-	if _, err := inject.MapperInto(c.mapper, i); err != nil {
-		return err
-	}
 	return nil
 }
 

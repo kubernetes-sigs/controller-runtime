@@ -39,28 +39,6 @@ var _ = Describe("runtime inject", func() {
 		uninjectable = &failSource{}
 	})
 
-	It("should set scheme", func() {
-
-		scheme := runtime.NewScheme()
-
-		By("Validating injecting scheme")
-		res, err := SchemeInto(scheme, instance)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(true))
-		Expect(scheme).To(Equal(instance.GetScheme()))
-
-		By("Returning false if the type does not implement inject.Scheme")
-		res, err = SchemeInto(scheme, uninjectable)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(false))
-		Expect(uninjectable.GetScheme()).To(BeNil())
-
-		By("Returning an error if scheme injection fails")
-		res, err = SchemeInto(nil, instance)
-		Expect(err).To(Equal(errInjectFail))
-		Expect(res).To(Equal(true))
-	})
-
 	It("should set dependencies", func() {
 
 		f := func(interface{}) error { return nil }

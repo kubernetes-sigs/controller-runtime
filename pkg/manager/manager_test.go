@@ -1689,7 +1689,7 @@ func (*failRec) Start(context.Context) error {
 	return nil
 }
 
-func (*failRec) InjectFunc(client.Client) error {
+func (*failRec) InjectScheme(*runtime.Scheme) error {
 	return fmt.Errorf("expected error")
 }
 

@@ -25,9 +25,9 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/goleak"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -232,6 +232,6 @@ func (*failRec) Reconcile(context.Context, reconcile.Request) (reconcile.Result,
 	return reconcile.Result{}, nil
 }
 
-func (*failRec) InjectFunc(client.Client) error {
+func (*failRec) InjectScheme(*runtime.Scheme) error {
 	return fmt.Errorf("expected error")
 }

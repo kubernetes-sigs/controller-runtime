@@ -21,7 +21,6 @@ package inject
 
 import (
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -40,24 +39,6 @@ type Scheme interface {
 func SchemeInto(scheme *runtime.Scheme, i interface{}) (bool, error) {
 	if is, ok := i.(Scheme); ok {
 		return true, is.InjectScheme(scheme)
-	}
-	return false, nil
-}
-
-// Mapper is used to inject the rest mapper to components that may need it.
-//
-// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
-type Mapper interface {
-	InjectMapper(meta.RESTMapper) error
-}
-
-// MapperInto will set the rest mapper on i and return the result if it implements Mapper.
-// Returns false if i does not implement Mapper.
-//
-// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
-func MapperInto(mapper meta.RESTMapper, i interface{}) (bool, error) {
-	if m, ok := i.(Mapper); ok {
-		return true, m.InjectMapper(mapper)
 	}
 	return false, nil
 }

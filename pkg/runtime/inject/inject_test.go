@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -33,35 +32,12 @@ import (
 var instance *testSource
 var uninjectable *failSource
 var errInjectFail = fmt.Errorf("injection fails")
-var expectedFalse = false
 
 var _ = Describe("runtime inject", func() {
 
 	BeforeEach(func() {
 		instance = &testSource{}
 		uninjectable = &failSource{}
-	})
-
-	It("should set informers", func() {
-		injectedCache := &informertest.FakeInformers{}
-
-		By("Validating injecting the informer")
-		res, err := CacheInto(injectedCache, instance)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(true))
-		Expect(injectedCache).To(Equal(instance.GetCache()))
-
-		By("Returning false if the type does not implement inject.Cache")
-		res, err = CacheInto(injectedCache, uninjectable)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(expectedFalse))
-		Expect(uninjectable.GetCache()).To(BeNil())
-
-		By("Returning an error if informer injection fails")
-		res, err = CacheInto(nil, instance)
-		Expect(err).To(Equal(errInjectFail))
-		Expect(res).To(Equal(true))
-
 	})
 
 	It("should set config", func() {
@@ -184,14 +160,6 @@ type testSource struct {
 	apiReader client.Reader
 	f         Func
 	stop      <-chan struct{}
-}
-
-func (s *testSource) InjectCache(c cache.Cache) error {
-	if c != nil {
-		s.cache = c
-		return nil
-	}
-	return fmt.Errorf("injection fails")
 }
 
 func (s *testSource) InjectConfig(config *rest.Config) error {

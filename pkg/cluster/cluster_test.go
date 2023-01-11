@@ -137,11 +137,6 @@ var _ = Describe("cluster.Cluster", func() {
 					Expect(client).To(Equal(c.GetClient()))
 					return nil
 				},
-				cache: func(cache cache.Cache) error {
-					defer GinkgoRecover()
-					Expect(cache).To(Equal(c.GetCache()))
-					return nil
-				},
 				log: func(logger logr.Logger) error {
 					defer GinkgoRecover()
 					Expect(logger).To(Equal(logf.RuntimeLog.WithName("cluster")))
@@ -169,13 +164,6 @@ var _ = Describe("cluster.Cluster", func() {
 
 			err = c.SetFields(&injectable{
 				config: func(config *rest.Config) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
-
-			err = c.SetFields(&injectable{
-				cache: func(c cache.Cache) error {
 					return expected
 				},
 			})
@@ -243,7 +231,6 @@ var _ = Describe("cluster.Cluster", func() {
 	})
 })
 
-var _ inject.Cache = &injectable{}
 var _ inject.Client = &injectable{}
 var _ inject.Scheme = &injectable{}
 var _ inject.Config = &injectable{}
@@ -253,15 +240,7 @@ type injectable struct {
 	scheme func(scheme *runtime.Scheme) error
 	client func(client.Client) error
 	config func(config *rest.Config) error
-	cache  func(cache.Cache) error
 	log    func(logger logr.Logger) error
-}
-
-func (i *injectable) InjectCache(c cache.Cache) error {
-	if i.cache == nil {
-		return nil
-	}
-	return i.cache(c)
 }
 
 func (i *injectable) InjectConfig(config *rest.Config) error {

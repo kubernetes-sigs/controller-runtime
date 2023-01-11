@@ -25,28 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// Cache is used by the ControllerManager to inject Cache into Sources, EventHandlers, Predicates, and
-// Reconciles.
-//
-// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
-type Cache interface {
-	InjectCache(cache cache.Cache) error
-}
-
-// CacheInto will set informers on i and return the result if it implements Cache.  Returns
-// false if i does not implement Cache.
-//
-// Deprecated: Dependency injection methods are deprecated and going to be removed in a future version.
-func CacheInto(c cache.Cache, i interface{}) (bool, error) {
-	if s, ok := i.(Cache); ok {
-		return true, s.InjectCache(c)
-	}
-	return false, nil
-}
 
 // APIReader is used by the Manager to inject the APIReader into necessary types.
 //

@@ -39,8 +39,8 @@ const (
 
 var _ = Describe("ip.objectTypeForListObject", func() {
 	ip := &informerCache{
-		scheme:       scheme.Scheme,
-		InformersMap: &internal.InformersMap{},
+		scheme:    scheme.Scheme,
+		Informers: &internal.Informers{},
 	}
 
 	It("should find the object type for unstructured lists", func() {

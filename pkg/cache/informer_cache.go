@@ -19,10 +19,10 @@ package cache
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -97,36 +97,28 @@ func (ip *informerCache) objectTypeForListObject(list client.ObjectList) (*schem
 		return nil, nil, err
 	}
 
-	// we need the non-list GVK, so chop off the "List" from the end of the kind
-	if strings.HasSuffix(gvk.Kind, "List") && apimeta.IsListType(list) {
-		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
-	}
+	// We need the non-list GVK, so chop off the "List" from the end of the kind.
+	gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
 
-	_, isUnstructured := list.(*unstructured.UnstructuredList)
-	var cacheTypeObj runtime.Object
-	if isUnstructured {
+	// Handle unstructured.UnstructuredList.
+	if _, isUnstructured := list.(*unstructured.UnstructuredList); isUnstructured {
 		u := &unstructured.Unstructured{}
 		u.SetGroupVersionKind(gvk)
-		cacheTypeObj = u
-	} else {
-		itemsPtr, err := apimeta.GetItemsPtr(list)
-		if err != nil {
-			return nil, nil, err
-		}
-		// http://knowyourmeme.com/memes/this-is-fine
-		elemType := reflect.Indirect(reflect.ValueOf(itemsPtr)).Type().Elem()
-		if elemType.Kind() != reflect.Ptr {
-			elemType = reflect.PtrTo(elemType)
-		}
-
-		cacheTypeValue := reflect.Zero(elemType)
-		var ok bool
-		cacheTypeObj, ok = cacheTypeValue.Interface().(runtime.Object)
-		if !ok {
-			return nil, nil, fmt.Errorf("cannot get cache for %T, its element %T is not a runtime.Object", list, cacheTypeValue.Interface())
-		}
+		return &gvk, u, nil
+	}
+	// Handle metav1.PartialObjectMetadataList.
+	if _, isPartialObjectMetadata := list.(*metav1.PartialObjectMetadataList); isPartialObjectMetadata {
+		pom := &metav1.PartialObjectMetadata{}
+		pom.SetGroupVersionKind(gvk)
+		return &gvk, pom, nil
 	}
 
+	// Any other list type should have a corresponding non-list type registered
+	// in the scheme. Use that to create a new instance of the non-list type.
+	cacheTypeObj, err := ip.scheme.New(gvk)
+	if err != nil {
+		return nil, nil, err
+	}
 	return &gvk, cacheTypeObj, nil
 }
 

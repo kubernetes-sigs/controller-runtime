@@ -183,12 +183,12 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 
 	return &informerCache{
 		scheme: opts.Scheme,
-		InformersMap: internal.NewInformersMap(config, &internal.InformersMapOptions{
+		Informers: internal.NewInformers(config, &internal.InformersOpts{
 			Scheme:       opts.Scheme,
 			Mapper:       opts.Mapper,
 			ResyncPeriod: *opts.Resync,
 			Namespace:    opts.Namespace,
-			ByGVK: internal.InformersMapOptionsByGVK{
+			ByGVK: internal.InformersOptsByGVK{
 				Selectors:       internalSelectorsByGVK,
 				DisableDeepCopy: disableDeepCopyByGVK,
 				Transformers:    transformByGVK,

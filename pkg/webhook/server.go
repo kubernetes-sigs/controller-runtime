@@ -275,10 +275,11 @@ func (s *Server) Start(ctx context.Context) error {
 	idleConnsClosed := make(chan struct{})
 	go func() {
 		<-ctx.Done()
-		log.Info("shutting down webhook server")
+		log.Info("Shutting down webhook server with timeout of 1 minute")
 
-		// TODO: use a context with reasonable timeout
-		if err := srv.Shutdown(context.Background()); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
 			// Error from closing listeners, or context timeout
 			log.Error(err, "error shutting down the HTTP server")
 		}

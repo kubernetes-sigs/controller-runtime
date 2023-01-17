@@ -27,7 +27,7 @@ import (
 // or passes if ErrorToReturn is nil.
 type FakeValidator struct {
 	// ErrorToReturn is the error for which the FakeValidator rejects all requests
-	ErrorToReturn error `json:"ErrorToReturn,omitempty"`
+	ErrorToReturn error `json:"errorToReturn,omitempty"`
 	// GVKToReturn is the GroupVersionKind that the webhook operates on
 	GVKToReturn schema.GroupVersionKind
 }

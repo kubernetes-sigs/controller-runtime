@@ -1,12 +1,17 @@
 linters:
   disable-all: true
   enable:
+  - asasalint
   - asciicheck
+  - bidichk
   - bodyclose
   - depguard
   - dogsled
+  - dupl
   - errcheck
+  - errchkjson
   - errorlint
+  - exhaustive
   - exportloopref
   - goconst
   - gocritic
@@ -19,15 +24,16 @@ linters:
   - govet
   - importas
   - ineffassign
+  - makezero
   - misspell
   - nakedret
   - nilerr
   - nolintlint
   - prealloc
   - revive
-  - rowserrcheck
   - staticcheck
   - stylecheck
+  - tagliatelle
   - typecheck
   - unconvert
   - unparam
@@ -127,6 +133,9 @@ issues:
   - linters:
     - revive
     text: "package-comments: should have a package comment"
+  - linters:
+    - dupl
+    path: _test\.go
 
 run:
   timeout: 10m

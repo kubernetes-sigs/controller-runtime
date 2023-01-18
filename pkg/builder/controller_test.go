@@ -118,7 +118,7 @@ var _ = Describe("application", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
-				Watches(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueRequestForObject{}).
+				Watches(source.Kind(m.GetCache(), &appsv1.ReplicaSet{}), &handler.EnqueueRequestForObject{}).
 				Build(noop)
 			Expect(err).To(MatchError(ContainSubstring("one of For() or Named() must be called")))
 			Expect(instance).To(BeNil())
@@ -157,7 +157,7 @@ var _ = Describe("application", func() {
 
 			instance, err := ControllerManagedBy(m).
 				Named("my_controller").
-				Watches(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueRequestForObject{}).
+				Watches(source.Kind(m.GetCache(), &appsv1.ReplicaSet{}), &handler.EnqueueRequestForObject{}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())
@@ -369,8 +369,9 @@ var _ = Describe("application", func() {
 			bldr := ControllerManagedBy(m).
 				For(&appsv1.Deployment{}).
 				Watches( // Equivalent of Owns
-					&source.Kind{Type: &appsv1.ReplicaSet{}},
-					&handler.EnqueueRequestForOwner{OwnerType: &appsv1.Deployment{}, IsController: true})
+					source.Kind(m.GetCache(), &appsv1.ReplicaSet{}),
+					handler.EnqueueRequestForOwner(m.GetScheme(), m.GetRESTMapper(), &appsv1.Deployment{}, handler.OnlyControllerOwner()),
+				)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -384,10 +385,11 @@ var _ = Describe("application", func() {
 			bldr := ControllerManagedBy(m).
 				Named("Deployment").
 				Watches( // Equivalent of For
-						&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForObject{}).
+						source.Kind(m.GetCache(), &appsv1.Deployment{}), &handler.EnqueueRequestForObject{}).
 				Watches( // Equivalent of Owns
-					&source.Kind{Type: &appsv1.ReplicaSet{}},
-					&handler.EnqueueRequestForOwner{OwnerType: &appsv1.Deployment{}, IsController: true})
+					source.Kind(m.GetCache(), &appsv1.ReplicaSet{}),
+					handler.EnqueueRequestForOwner(m.GetScheme(), m.GetRESTMapper(), &appsv1.Deployment{}, handler.OnlyControllerOwner()),
+				)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -481,7 +483,7 @@ var _ = Describe("application", func() {
 			bldr := ControllerManagedBy(mgr).
 				For(&appsv1.Deployment{}, OnlyMetadata).
 				Owns(&appsv1.ReplicaSet{}, OnlyMetadata).
-				Watches(&source.Kind{Type: &appsv1.StatefulSet{}},
+				Watches(source.Kind(mgr.GetCache(), &appsv1.StatefulSet{}),
 					handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
 						defer GinkgoRecover()
 

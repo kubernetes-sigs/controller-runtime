@@ -21,7 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 // MapFunc is the signature required for enqueueing requests from a generic function.
@@ -84,14 +83,4 @@ func (e *enqueueRequestsFromMapFunc) mapAndEnqueue(q workqueue.RateLimitingInter
 			reqs[req] = empty{}
 		}
 	}
-}
-
-// EnqueueRequestsFromMapFunc can inject fields into the mapper.
-
-// InjectFunc implements inject.Injector.
-func (e *enqueueRequestsFromMapFunc) InjectFunc(f inject.Func) error {
-	if f == nil {
-		return nil
-	}
-	return f(e.toRequests)
 }

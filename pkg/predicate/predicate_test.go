@@ -848,12 +848,6 @@ var _ = Describe("Predicate", func() {
 				Expect(a.Delete(event.DeleteEvent{})).To(BeTrue())
 				Expect(a.Generic(event.GenericEvent{})).To(BeTrue())
 			})
-			It("should inject into its predicates", func() {
-				prct := &injectablePredicate{}
-				a := predicate.And(prct)
-				Expect(injectFunc(a)).To(Succeed())
-				Expect(prct.injected).To(BeTrue())
-			})
 		})
 		Describe("When checking an Or predicate", func() {
 			It("should return true when one of its predicates returns true", func() {
@@ -870,12 +864,6 @@ var _ = Describe("Predicate", func() {
 				Expect(o.Delete(event.DeleteEvent{})).To(BeFalse())
 				Expect(o.Generic(event.GenericEvent{})).To(BeFalse())
 			})
-			It("should inject into its predicates", func() {
-				prct := &injectablePredicate{}
-				a := predicate.Or(prct)
-				Expect(injectFunc(a)).To(Succeed())
-				Expect(prct.injected).To(BeTrue())
-			})
 		})
 		Describe("When checking a Not predicate", func() {
 			It("should return false when its predicate returns true", func() {
@@ -891,12 +879,6 @@ var _ = Describe("Predicate", func() {
 				Expect(n.Update(event.UpdateEvent{})).To(BeTrue())
 				Expect(n.Delete(event.DeleteEvent{})).To(BeTrue())
 				Expect(n.Generic(event.GenericEvent{})).To(BeTrue())
-			})
-			It("should inject into its predicate", func() {
-				prct := &injectablePredicate{}
-				n := predicate.Not(prct)
-				Expect(injectFunc(n)).To(Succeed())
-				Expect(prct.injected).To(BeTrue())
 			})
 		})
 	})
@@ -982,13 +964,3 @@ var _ = Describe("Predicate", func() {
 		})
 	})
 })
-
-type injectablePredicate struct {
-	injected bool
-	predicate.Funcs
-}
-
-func (i *injectablePredicate) InjectFunc(f inject.Func) error {
-	i.injected = true
-	return nil
-}

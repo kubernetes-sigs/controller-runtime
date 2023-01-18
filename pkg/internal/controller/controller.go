@@ -33,11 +33,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
-
-var _ inject.Injector = &Controller{}
 
 // Controller implements controller.Controller.
 type Controller struct {
@@ -60,10 +57,6 @@ type Controller struct {
 	// Queue is an listeningQueue that listens for events from Informers and adds object keys to
 	// the Queue for processing
 	Queue workqueue.RateLimitingInterface
-
-	// SetFields is used to inject dependencies into other objects such as Sources, EventHandlers and Predicates
-	// Deprecated: the caller should handle injected fields itself.
-	SetFields func(i interface{}) error
 
 	// mu is used to synchronize Controller setup
 	mu sync.Mutex
@@ -129,19 +122,6 @@ func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (_ re
 func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prct ...predicate.Predicate) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	// Inject Cache into arguments
-	if err := c.SetFields(src); err != nil {
-		return err
-	}
-	if err := c.SetFields(evthdler); err != nil {
-		return err
-	}
-	for _, pr := range prct {
-		if err := c.SetFields(pr); err != nil {
-			return err
-		}
-	}
 
 	// Controller hasn't started yet, store the watches locally and return.
 	//
@@ -360,12 +340,6 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 // GetLogger returns this controller's logger.
 func (c *Controller) GetLogger() logr.Logger {
 	return c.LogConstructor(nil)
-}
-
-// InjectFunc implement SetFields.Injector.
-func (c *Controller) InjectFunc(f inject.Func) error {
-	c.SetFields = f
-	return nil
 }
 
 // updateMetrics updates prometheus metrics within the controller.

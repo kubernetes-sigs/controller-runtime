@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	internalsource "sigs.k8s.io/controller-runtime/pkg/internal/source"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -217,11 +218,11 @@ func (blder *Builder) project(obj client.Object, proj objectProjection) (client.
 func (blder *Builder) doWatch() error {
 	// Reconcile type
 	if blder.forInput.object != nil {
-		typeForSrc, err := blder.project(blder.forInput.object, blder.forInput.objectProjection)
+		obj, err := blder.project(blder.forInput.object, blder.forInput.objectProjection)
 		if err != nil {
 			return err
 		}
-		src := &source.Kind{Type: typeForSrc}
+		src := source.Kind(blder.mgr.GetCache(), obj)
 		hdler := &handler.EnqueueRequestForObject{}
 		allPredicates := append(blder.globalPredicates, blder.forInput.predicates...)
 		if err := blder.ctrl.Watch(src, hdler, allPredicates...); err != nil {
@@ -234,15 +235,16 @@ func (blder *Builder) doWatch() error {
 		return errors.New("Owns() can only be used together with For()")
 	}
 	for _, own := range blder.ownsInput {
-		typeForSrc, err := blder.project(own.object, own.objectProjection)
+		obj, err := blder.project(own.object, own.objectProjection)
 		if err != nil {
 			return err
 		}
-		src := &source.Kind{Type: typeForSrc}
-		hdler := &handler.EnqueueRequestForOwner{
-			OwnerType:    blder.forInput.object,
-			IsController: true,
-		}
+		src := source.Kind(blder.mgr.GetCache(), obj)
+		hdler := handler.EnqueueRequestForOwner(
+			blder.mgr.GetScheme(), blder.mgr.GetRESTMapper(),
+			blder.forInput.object,
+			handler.OnlyControllerOwner(),
+		)
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, own.predicates...)
 		if err := blder.ctrl.Watch(src, hdler, allPredicates...); err != nil {
@@ -258,8 +260,8 @@ func (blder *Builder) doWatch() error {
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)
 
-		// If the source of this watch is of type *source.Kind, project it.
-		if srckind, ok := w.src.(*source.Kind); ok {
+		// If the source of this watch is of type Kind, project it.
+		if srckind, ok := w.src.(*internalsource.Kind); ok {
 			typeForSrc, err := blder.project(srckind.Type, w.objectProjection)
 			if err != nil {
 				return err

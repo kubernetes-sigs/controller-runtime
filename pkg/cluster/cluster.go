@@ -37,13 +37,11 @@ import (
 
 // Cluster provides various methods to interact with a cluster.
 type Cluster interface {
-	// SetFields will set any dependencies on an object for which the object has implemented the inject
-	// interface - e.g. inject.Client.
-	// Deprecated: use the equivalent Options field to set a field. This method will be removed in v0.10.
-	SetFields(interface{}) error
-
 	// GetConfig returns an initialized Config
 	GetConfig() *rest.Config
+
+	// GetCache returns a cache.Cache
+	GetCache() cache.Cache
 
 	// GetScheme returns an initialized Scheme
 	GetScheme() *runtime.Scheme
@@ -56,9 +54,6 @@ type Cluster interface {
 
 	// GetFieldIndexer returns a client.FieldIndexer configured with the client
 	GetFieldIndexer() client.FieldIndexer
-
-	// GetCache returns a cache.Cache
-	GetCache() cache.Cache
 
 	// GetEventRecorderFor returns a new EventRecorder for the provided name
 	GetEventRecorderFor(name string) record.EventRecorder

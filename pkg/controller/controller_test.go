@@ -18,7 +18,6 @@ package controller_test
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -27,7 +26,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -35,7 +33,6 @@ import (
 	internalcontroller "sigs.k8s.io/controller-runtime/pkg/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -62,16 +59,6 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err.Error()).To(ContainSubstring("must specify Reconciler"))
 		})
 
-		It("NewController should return an error if injecting Reconciler fails", func() {
-			m, err := manager.New(cfg, manager.Options{})
-			Expect(err).NotTo(HaveOccurred())
-
-			c, err := controller.New("foo", m, controller.Options{Reconciler: &failRec{}})
-			Expect(c).To(BeNil())
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("expected error"))
-		})
-
 		It("should not return an error if two controllers are registered with different names", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
@@ -88,6 +75,7 @@ var _ = Describe("controller.Controller", func() {
 		It("should not leak goroutines when stopped", func() {
 			currentGRs := goleak.IgnoreCurrent()
 
+			ctx, cancel := context.WithCancel(context.Background())
 			watchChan := make(chan event.GenericEvent, 1)
 			watch := &source.Channel{Source: watchChan}
 			watchChan <- event.GenericEvent{Object: &corev1.Pod{}}
@@ -114,7 +102,6 @@ var _ = Describe("controller.Controller", func() {
 			Expect(c.Watch(watch, &handler.EnqueueRequestForObject{})).To(Succeed())
 			Expect(err).NotTo(HaveOccurred())
 
-			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
 				defer GinkgoRecover()
 				Expect(m.Start(ctx)).To(Succeed())
@@ -224,16 +211,3 @@ var _ = Describe("controller.Controller", func() {
 		})
 	})
 })
-
-var _ reconcile.Reconciler = &failRec{}
-var _ inject.Client = &failRec{}
-
-type failRec struct{}
-
-func (*failRec) Reconcile(context.Context, reconcile.Request) (reconcile.Result, error) {
-	return reconcile.Result{}, nil
-}
-
-func (*failRec) InjectClient(client.Client) error {
-	return fmt.Errorf("expected error")
-}

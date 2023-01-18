@@ -71,6 +71,9 @@ func (h *validatorForType) Handle(ctx context.Context, req Request) Response {
 
 	var err error
 	switch req.Operation {
+	case v1.Connect:
+		// No validation for connect requests.
+		// TODO(vincepri): Should we validate CONNECT requests? In what cases?
 	case v1.Create:
 		if err := h.decoder.Decode(req, obj); err != nil {
 			return Errored(http.StatusBadRequest, err)

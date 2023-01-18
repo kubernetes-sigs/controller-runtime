@@ -634,7 +634,7 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 			},
 		},
 	}
-	err := mgr.GetClient().Create(context.TODO(), dep)
+	err := mgr.GetClient().Create(ctx, dep)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Waiting for the Deployment Reconcile")
@@ -664,7 +664,7 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 			Template: dep.Spec.Template,
 		},
 	}
-	err = mgr.GetClient().Create(context.TODO(), rs)
+	err = mgr.GetClient().Create(ctx, rs)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Waiting for the ReplicaSet Reconcile")

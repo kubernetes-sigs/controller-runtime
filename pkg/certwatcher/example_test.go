@@ -64,7 +64,9 @@ func Example() {
 	// Start goroutine for handling server shutdown.
 	go func() {
 		<-ctx.Done()
-		if err := srv.Shutdown(context.Background()); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
 			panic(err)
 		}
 	}()

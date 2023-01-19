@@ -20,6 +20,7 @@ limitations under the License.
 package apiutil
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -70,6 +71,36 @@ func NewDiscoveryRESTMapper(c *rest.Config) (meta.RESTMapper, error) {
 		return nil, err
 	}
 	return restmapper.NewDiscoveryRESTMapper(gr), nil
+}
+
+// IsObjectNamespaced returns true if the object is namespace scoped.
+// For unstructured objects the gvk is found from the object itself.
+func IsObjectNamespaced(obj runtime.Object, scheme *runtime.Scheme, restmapper meta.RESTMapper) (bool, error) {
+	gvk, err := GVKForObject(obj, scheme)
+	if err != nil {
+		return false, err
+	}
+
+	return IsGVKNamespaced(gvk, restmapper)
+}
+
+// IsGVKNamespaced returns true if the object having the provided
+// GVK is namespace scoped.
+func IsGVKNamespaced(gvk schema.GroupVersionKind, restmapper meta.RESTMapper) (bool, error) {
+	restmapping, err := restmapper.RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind})
+	if err != nil {
+		return false, fmt.Errorf("failed to get restmapping: %w", err)
+	}
+
+	scope := restmapping.Scope.Name()
+	if scope == "" {
+		return false, errors.New("scope cannot be identified, empty scope returned")
+	}
+
+	if scope != meta.RESTScopeNameRoot {
+		return true, nil
+	}
+	return false, nil
 }
 
 // GVKForObject finds the GroupVersionKind associated with the given object, if there is only a single such GVK.

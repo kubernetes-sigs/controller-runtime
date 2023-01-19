@@ -87,6 +87,16 @@ func (d *delegatingClient) RESTMapper() meta.RESTMapper {
 	return d.mapper
 }
 
+// GroupVersionKindFor returns the GroupVersionKind for the given object.
+func (d *delegatingClient) GroupVersionKindFor(obj Object) (schema.GroupVersionKind, error) {
+	return apiutil.GVKForObject(obj, d.scheme)
+}
+
+// IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
+func (d *delegatingClient) IsObjectNamespaced(obj Object) (bool, error) {
+	return apiutil.IsObjectNamespaced(obj, d.scheme, d.mapper)
+}
+
 // delegatingReader forms a Reader that will cause Get and List requests for
 // unstructured types to use the ClientReader while requests for any other type
 // of object with use the CacheReader.  This avoids accidentally caching the

@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -44,7 +45,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 type typedNoop struct{}
@@ -118,7 +118,7 @@ var _ = Describe("application", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
-				Watches(source.Kind(m.GetCache(), &appsv1.ReplicaSet{}), &handler.EnqueueRequestForObject{}).
+				Watches(&appsv1.ReplicaSet{}, &handler.EnqueueRequestForObject{}).
 				Build(noop)
 			Expect(err).To(MatchError(ContainSubstring("one of For() or Named() must be called")))
 			Expect(instance).To(BeNil())
@@ -157,7 +157,7 @@ var _ = Describe("application", func() {
 
 			instance, err := ControllerManagedBy(m).
 				Named("my_controller").
-				Watches(source.Kind(m.GetCache(), &appsv1.ReplicaSet{}), &handler.EnqueueRequestForObject{}).
+				Watches(&appsv1.ReplicaSet{}, &handler.EnqueueRequestForObject{}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())
@@ -362,6 +362,19 @@ var _ = Describe("application", func() {
 			doReconcileTest(ctx, "3", m, false, bldr)
 		})
 
+		It("should Reconcile Owns objects for every owner", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			bldr := ControllerManagedBy(m).
+				For(&appsv1.Deployment{}).
+				Owns(&appsv1.ReplicaSet{}, MatchEveryOwner)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			doReconcileTest(ctx, "12", m, false, bldr)
+		})
+
 		It("should Reconcile Watches objects", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
@@ -369,7 +382,7 @@ var _ = Describe("application", func() {
 			bldr := ControllerManagedBy(m).
 				For(&appsv1.Deployment{}).
 				Watches( // Equivalent of Owns
-					source.Kind(m.GetCache(), &appsv1.ReplicaSet{}),
+					&appsv1.ReplicaSet{},
 					handler.EnqueueRequestForOwner(m.GetScheme(), m.GetRESTMapper(), &appsv1.Deployment{}, handler.OnlyControllerOwner()),
 				)
 
@@ -385,9 +398,9 @@ var _ = Describe("application", func() {
 			bldr := ControllerManagedBy(m).
 				Named("Deployment").
 				Watches( // Equivalent of For
-						source.Kind(m.GetCache(), &appsv1.Deployment{}), &handler.EnqueueRequestForObject{}).
+						&appsv1.Deployment{}, &handler.EnqueueRequestForObject{}).
 				Watches( // Equivalent of Owns
-					source.Kind(m.GetCache(), &appsv1.ReplicaSet{}),
+					&appsv1.ReplicaSet{},
 					handler.EnqueueRequestForOwner(m.GetScheme(), m.GetRESTMapper(), &appsv1.Deployment{}, handler.OnlyControllerOwner()),
 				)
 
@@ -483,7 +496,7 @@ var _ = Describe("application", func() {
 			bldr := ControllerManagedBy(mgr).
 				For(&appsv1.Deployment{}, OnlyMetadata).
 				Owns(&appsv1.ReplicaSet{}, OnlyMetadata).
-				Watches(source.Kind(mgr.GetCache(), &appsv1.StatefulSet{}),
+				Watches(&appsv1.StatefulSet{},
 					handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
 						defer GinkgoRecover()
 
@@ -645,7 +658,6 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 
 	By("Creating a ReplicaSet")
 	// Expect a Reconcile when an Owned object is managedObjects.
-	t := true
 	rs := &appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -656,7 +668,7 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 					Name:       deployName,
 					Kind:       "Deployment",
 					APIVersion: "apps/v1",
-					Controller: &t,
+					Controller: pointer.Bool(true),
 					UID:        dep.UID,
 				},
 			},

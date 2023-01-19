@@ -97,14 +97,20 @@ func (blder *Builder) For(object client.Object, opts ...ForOption) *Builder {
 
 // OwnsInput represents the information set by Owns method.
 type OwnsInput struct {
+	matchEveryOwner  bool
 	object           client.Object
 	predicates       []predicate.Predicate
 	objectProjection objectProjection
 }
 
 // Owns defines types of Objects being *generated* by the ControllerManagedBy, and configures the ControllerManagedBy to respond to
-// create / delete / update events by *reconciling the owner object*.  This is the equivalent of calling
-// Watches(&source.Kind{Type: <ForType-forInput>}, &handler.EnqueueRequestForOwner{OwnerType: apiType, IsController: true}).
+// create / delete / update events by *reconciling the owner object*.
+//
+// The default behavior reconciles only the first controller-type OwnerReference of the given type.
+// Use Owns(object, builder.MatchEveryOwner) to reconcile all owners.
+//
+// By default, this is the equivalent of calling
+// Watches(object, handler.EnqueueRequestForOwner([...], ownerType, OnlyControllerOwner())).
 func (blder *Builder) Owns(object client.Object, opts ...OwnsOption) *Builder {
 	input := OwnsInput{object: object}
 	for _, opt := range opts {
@@ -123,10 +129,54 @@ type WatchesInput struct {
 	objectProjection objectProjection
 }
 
-// Watches exposes the lower-level ControllerManagedBy Watches functions through the builder.  Consider using
-// Owns or For instead of Watches directly.
+// Watches defines the type of Object to watch, and configures the ControllerManagedBy to respond to create / delete /
+// update events by *reconciling the object* with the given EventHandler.
+//
+// This is the equivalent of calling
+// WatchesRawSource(source.Kind(scheme, object), eventhandler, opts...).
+func (blder *Builder) Watches(object client.Object, eventhandler handler.EventHandler, opts ...WatchesOption) *Builder {
+	src := source.Kind(blder.mgr.GetCache(), object)
+	return blder.WatchesRawSource(src, eventhandler, opts...)
+}
+
+// WatchesMetadata is the same as Watches, but forces the internal cache to only watch PartialObjectMetadata.
+//
+// This is useful when watching lots of objects, really big objects, or objects for which you only know
+// the GVK, but not the structure.  You'll need to pass metav1.PartialObjectMetadata to the client
+// when fetching objects in your reconciler, otherwise you'll end up with a duplicate structured or unstructured cache.
+//
+// When watching a resource with metadata only, for example the v1.Pod, you should not Get and List using the v1.Pod type.
+// Instead, you should use the special metav1.PartialObjectMetadata type.
+//
+// ❌ Incorrect:
+//
+//	pod := &v1.Pod{}
+//	mgr.GetClient().Get(ctx, nsAndName, pod)
+//
+// ✅ Correct:
+//
+//	pod := &metav1.PartialObjectMetadata{}
+//	pod.SetGroupVersionKind(schema.GroupVersionKind{
+//	    Group:   "",
+//	    Version: "v1",
+//	    Kind:    "Pod",
+//	})
+//	mgr.GetClient().Get(ctx, nsAndName, pod)
+//
+// In the first case, controller-runtime will create another cache for the
+// concrete type on top of the metadata cache; this increases memory
+// consumption and leads to race conditions as caches are not in sync.
+func (blder *Builder) WatchesMetadata(object client.Object, eventhandler handler.EventHandler, opts ...WatchesOption) *Builder {
+	opts = append(opts, OnlyMetadata)
+	return blder.Watches(object, eventhandler, opts...)
+}
+
+// WatchesRawSource exposes the lower-level ControllerManagedBy Watches functions through the builder.
 // Specified predicates are registered only for given source.
-func (blder *Builder) Watches(src source.Source, eventhandler handler.EventHandler, opts ...WatchesOption) *Builder {
+//
+// STOP! Consider using For(...), Owns(...), Watches(...), WatchesMetadata(...) instead.
+// This method is only exposed for more advanced use cases, most users should use higher level functions.
+func (blder *Builder) WatchesRawSource(src source.Source, eventhandler handler.EventHandler, opts ...WatchesOption) *Builder {
 	input := WatchesInput{src: src, eventhandler: eventhandler}
 	for _, opt := range opts {
 		opt.ApplyToWatches(&input)
@@ -240,10 +290,14 @@ func (blder *Builder) doWatch() error {
 			return err
 		}
 		src := source.Kind(blder.mgr.GetCache(), obj)
+		opts := []handler.OwnerOption{}
+		if !own.matchEveryOwner {
+			opts = append(opts, handler.OnlyControllerOwner())
+		}
 		hdler := handler.EnqueueRequestForOwner(
 			blder.mgr.GetScheme(), blder.mgr.GetRESTMapper(),
 			blder.forInput.object,
-			handler.OnlyControllerOwner(),
+			opts...,
 		)
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, own.predicates...)

@@ -138,7 +138,7 @@ var _ = Describe("Start method", func() {
 						echo 'i started' >&2
 					`,
 				}
-				processState.StartTimeout = 1 * time.Second
+				processState.StartTimeout = 5 * time.Second
 
 				Expect(processState.Start(stdout, stderr)).To(Succeed())
 				Eventually(processState.Exited).Should(BeTrue())

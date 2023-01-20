@@ -44,40 +44,9 @@ func ExampleFile() {
 }
 
 // This example will load the file from a custom path.
-func ExampleDeferredFileLoader_atPath() {
+func ExampleFile_atPath() {
 	loader := config.File().AtPath("/var/run/controller-runtime/config.yaml")
 	if _, err := loader.Complete(); err != nil {
-		fmt.Println("failed to load config")
-		os.Exit(1)
-	}
-}
-
-// This example sets up loader with a custom scheme.
-func ExampleDeferredFileLoader_injectScheme() {
-	loader := config.File()
-	err := loader.InjectScheme(scheme)
-	if err != nil {
-		fmt.Println("failed to inject scheme")
-		os.Exit(1)
-	}
-
-	_, err = loader.Complete()
-	if err != nil {
-		fmt.Println("failed to load config")
-		os.Exit(1)
-	}
-}
-
-// This example sets up the loader with a custom scheme and custom type.
-func ExampleDeferredFileLoader_ofKind() {
-	loader := config.File().OfKind(&v1alpha1.CustomControllerManagerConfiguration{})
-	err := loader.InjectScheme(scheme)
-	if err != nil {
-		fmt.Println("failed to inject scheme")
-		os.Exit(1)
-	}
-	_, err = loader.Complete()
-	if err != nil {
 		fmt.Println("failed to load config")
 		os.Exit(1)
 	}

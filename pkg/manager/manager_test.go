@@ -52,7 +52,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
@@ -1485,12 +1484,6 @@ var _ = Describe("manger.Manager", func() {
 			<-c1
 		})
 
-		It("should fail if SetFields fails", func() {
-			m, err := New(cfg, Options{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(m.Add(&failRec{})).To(HaveOccurred())
-		})
-
 		It("should fail if attempted to start a second time", func() {
 			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
@@ -1622,22 +1615,6 @@ var _ = Describe("manger.Manager", func() {
 		Expect(m.GetAPIReader()).NotTo(BeNil())
 	})
 })
-
-var _ reconcile.Reconciler = &failRec{}
-
-type failRec struct{}
-
-func (*failRec) Reconcile(context.Context, reconcile.Request) (reconcile.Result, error) {
-	return reconcile.Result{}, nil
-}
-
-func (*failRec) Start(context.Context) error {
-	return nil
-}
-
-func (*failRec) InjectScheme(*runtime.Scheme) error {
-	return fmt.Errorf("expected error")
-}
 
 type runnableError struct {
 }

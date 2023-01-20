@@ -45,18 +45,6 @@ type Webhook struct {
 	decoder *Decoder
 }
 
-// InjectScheme injects a scheme into the webhook, in order to construct a Decoder.
-func (wh *Webhook) InjectScheme(s *runtime.Scheme) error {
-	var err error
-	wh.scheme = s
-	wh.decoder, err = NewDecoder(s)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // ensure Webhook implements http.Handler
 var _ http.Handler = &Webhook{}
 

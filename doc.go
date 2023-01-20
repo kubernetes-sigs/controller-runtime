@@ -52,7 +52,7 @@ limitations under the License.
 //
 // Every controller and webhook is ultimately run by a Manager (pkg/manager). A
 // manager is responsible for running controllers and webhooks, and setting up
-// common dependencies (pkg/runtime/inject), like shared caches and clients, as
+// common dependencies, like shared caches and clients, as
 // well as managing leader election (pkg/leaderelection).  Managers are
 // generally configured to gracefully shut down controllers on pod termination
 // by wiring up a signal handler (pkg/manager/signals).

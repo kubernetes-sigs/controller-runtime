@@ -37,7 +37,6 @@ import (
 // ReplicaSetReconciler.
 //
 // * Start the application.
-// TODO(pwittrock): Update this example when we have better dependency injection support.
 func Example() {
 	var log = ctrl.Log.WithName("builder-examples")
 
@@ -75,7 +74,6 @@ func Example() {
 // ReplicaSetReconciler.
 //
 // * Start the application.
-// TODO(pwittrock): Update this example when we have better dependency injection support.
 func Example_updateLeaderElectionDurations() {
 	var log = ctrl.Log.WithName("builder-examples")
 	leaseDuration := 100 * time.Second

@@ -80,8 +80,6 @@ issues:
   - Subprocess launch(ed with variable|ing should be audited)
   - (G204|G104|G307)
   - "ST1000: at least one file in a package should have a package comment"
-  - "SA1019: \"sigs.k8s.io/controller-runtime/pkg/runtime/inject\""
-  - "SA1019: inject.*"
   exclude-rules:
   - linters:
     - gosec

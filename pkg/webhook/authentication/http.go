@@ -52,7 +52,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var reviewResponse Response
 	if r.Body == nil {
 		err = errors.New("request body is empty")
-		wh.log.Error(err, "bad request")
+		wh.getLogger(nil).Error(err, "bad request")
 		reviewResponse = Errored(err)
 		wh.writeResponse(w, reviewResponse)
 		return
@@ -60,7 +60,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	defer r.Body.Close()
 	if body, err = io.ReadAll(r.Body); err != nil {
-		wh.log.Error(err, "unable to read the body from the incoming request")
+		wh.getLogger(nil).Error(err, "unable to read the body from the incoming request")
 		reviewResponse = Errored(err)
 		wh.writeResponse(w, reviewResponse)
 		return
@@ -69,7 +69,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// verify the content type is accurate
 	if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
 		err = fmt.Errorf("contentType=%s, expected application/json", contentType)
-		wh.log.Error(err, "unable to process a request with an unknown content type", "content type", contentType)
+		wh.getLogger(nil).Error(err, "unable to process a request with an unknown content type", "content type", contentType)
 		reviewResponse = Errored(err)
 		wh.writeResponse(w, reviewResponse)
 		return
@@ -89,16 +89,16 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ar.SetGroupVersionKind(authenticationv1.SchemeGroupVersion.WithKind("TokenReview"))
 	_, actualTokRevGVK, err := authenticationCodecs.UniversalDeserializer().Decode(body, nil, &ar)
 	if err != nil {
-		wh.log.Error(err, "unable to decode the request")
+		wh.getLogger(&req).Error(err, "unable to decode the request")
 		reviewResponse = Errored(err)
 		wh.writeResponse(w, reviewResponse)
 		return
 	}
-	wh.log.V(1).Info("received request", "UID", req.UID, "kind", req.Kind)
+	wh.getLogger(&req).V(1).Info("received request", "UID", req.UID, "kind", req.Kind)
 
 	if req.Spec.Token == "" {
 		err = errors.New("token is empty")
-		wh.log.Error(err, "bad request")
+		wh.getLogger(&req).Error(err, "bad request")
 		reviewResponse = Errored(err)
 		wh.writeResponse(w, reviewResponse)
 		return
@@ -131,12 +131,12 @@ func (wh *Webhook) writeResponseTyped(w io.Writer, response Response, tokRevGVK 
 // writeTokenResponse writes ar to w.
 func (wh *Webhook) writeTokenResponse(w io.Writer, ar authenticationv1.TokenReview) {
 	if err := json.NewEncoder(w).Encode(ar); err != nil {
-		wh.log.Error(err, "unable to encode the response")
+		wh.getLogger(nil).Error(err, "unable to encode the response")
 		wh.writeResponse(w, Errored(err))
 	}
 	res := ar
-	if log := wh.log; log.V(1).Enabled() {
-		log.V(1).Info("wrote response", "UID", res.UID, "authenticated", res.Status.Authenticated)
+	if wh.getLogger(nil).V(1).Enabled() {
+		wh.getLogger(nil).V(1).Info("wrote response", "UID", res.UID, "authenticated", res.Status.Authenticated)
 	}
 }
 

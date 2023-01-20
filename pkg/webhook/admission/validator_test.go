@@ -37,7 +37,7 @@ var fakeValidatorVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v
 
 var _ = Describe("validatingHandler", func() {
 
-	decoder, _ := NewDecoder(scheme.Scheme)
+	decoder := NewDecoder(scheme.Scheme)
 
 	Context("when dealing with successful results", func() {
 

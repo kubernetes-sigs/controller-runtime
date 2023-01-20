@@ -115,8 +115,6 @@ func runTests(admissionReviewVersion string) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		// TODO: we may want to improve it to make it be able to inject dependencies,
-		// but not always try to load certs and return not found error.
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -191,8 +189,6 @@ func runTests(admissionReviewVersion string) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		// TODO: we may want to improve it to make it be able to inject dependencies,
-		// but not always try to load certs and return not found error.
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -208,7 +204,7 @@ func runTests(admissionReviewVersion string) {
 		By("sanity checking the response contains reasonable fields")
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":500`))
-		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"message":"panic: injected panic [recovered]`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"message":"panic: fake panic test [recovered]`))
 	})
 
 	It("should scaffold a defaulting webhook with a custom defaulter", func() {
@@ -260,8 +256,6 @@ func runTests(admissionReviewVersion string) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		// TODO: we may want to improve it to make it be able to inject dependencies,
-		// but not always try to load certs and return not found error.
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -337,8 +331,6 @@ func runTests(admissionReviewVersion string) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		// TODO: we may want to improve it to make it be able to inject dependencies,
-		// but not always try to load certs and return not found error.
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -411,8 +403,6 @@ func runTests(admissionReviewVersion string) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		// TODO: we may want to improve it to make it be able to inject dependencies,
-		// but not always try to load certs and return not found error.
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -430,7 +420,7 @@ func runTests(admissionReviewVersion string) {
 		By("sanity checking the response contains reasonable field")
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":500`))
-		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"message":"panic: injected panic [recovered]`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"message":"panic: fake panic test [recovered]`))
 	})
 
 	It("should scaffold a validating webhook with a custom validator", func() {
@@ -463,12 +453,12 @@ func runTests(admissionReviewVersion string) {
     "kind":{
       "group":"foo.test.org",
       "version":"v1",
-      "kind":"TestDefaulter"
+      "kind":"TestValidator"
     },
     "resource":{
       "group":"foo.test.org",
       "version":"v1",
-      "resource":"testdefaulter"
+      "resource":"testvalidator"
     },
     "namespace":"default",
     "name":"foo",
@@ -484,8 +474,6 @@ func runTests(admissionReviewVersion string) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		// TODO: we may want to improve it to make it be able to inject dependencies,
-		// but not always try to load certs and return not found error.
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -511,7 +499,7 @@ func runTests(admissionReviewVersion string) {
 		By("sanity checking the response contains reasonable field")
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":403`))
-		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Validating object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaulter"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
+		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Validating object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testvalidator"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
 	})
 
 	It("should scaffold defaulting and validating webhooks if the type implements both Defaulter and Validator interfaces", func() {
@@ -558,8 +546,6 @@ func runTests(admissionReviewVersion string) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		// TODO: we may want to improve it to make it be able to inject dependencies,
-		// but not always try to load certs and return not found error.
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -636,8 +622,6 @@ func runTests(admissionReviewVersion string) {
 }`)
 
 		cancel()
-		// TODO: we may want to improve it to make it be able to inject dependencies,
-		// but not always try to load certs and return not found error.
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -724,7 +708,7 @@ func (*TestDefaulterList) DeepCopyObject() runtime.Object   { return nil }
 
 func (d *TestDefaulter) Default() {
 	if d.Panic {
-		panic("injected panic")
+		panic("fake panic test")
 	}
 	if d.Replica < 2 {
 		d.Replica = 2
@@ -767,7 +751,7 @@ var _ admission.Validator = &TestValidator{}
 
 func (v *TestValidator) ValidateCreate() error {
 	if v.Panic {
-		panic("injected panic")
+		panic("fake panic test")
 	}
 	if v.Replica < 0 {
 		return errors.New("number of replica should be greater than or equal to 0")
@@ -777,7 +761,7 @@ func (v *TestValidator) ValidateCreate() error {
 
 func (v *TestValidator) ValidateUpdate(old runtime.Object) error {
 	if v.Panic {
-		panic("injected panic")
+		panic("fake panic test")
 	}
 	if v.Replica < 0 {
 		return errors.New("number of replica should be greater than or equal to 0")
@@ -792,7 +776,7 @@ func (v *TestValidator) ValidateUpdate(old runtime.Object) error {
 
 func (v *TestValidator) ValidateDelete() error {
 	if v.Panic {
-		panic("injected panic")
+		panic("fake panic test")
 	}
 	if v.Replica > 0 {
 		return errors.New("number of replica should be less than or equal to 0 to delete")

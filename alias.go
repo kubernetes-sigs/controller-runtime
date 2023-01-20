@@ -139,7 +139,7 @@ var (
 	// The logger, when used with controllers, can be expected to contain basic information about the object
 	// that's being reconciled like:
 	// - `reconciler group` and `reconciler kind` coming from the For(...) object passed in when building a controller.
-	// - `name` and `namespace` injected from the reconciliation request.
+	// - `name` and `namespace` from the reconciliation request.
 	//
 	// This is meant to be used with the context supplied in a struct that satisfies the Reconciler interface.
 	LoggerFrom = log.FromContext

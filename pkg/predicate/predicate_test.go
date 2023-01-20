@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -826,12 +825,6 @@ var _ = Describe("Predicate", func() {
 		}
 		passFuncs := funcs(true)
 		failFuncs := funcs(false)
-
-		var injectFunc inject.Func
-		injectFunc = func(i interface{}) error {
-			_, err := inject.InjectorInto(injectFunc, i)
-			return err
-		}
 
 		Describe("When checking an And predicate", func() {
 			It("should return false when one of its predicates returns false", func() {

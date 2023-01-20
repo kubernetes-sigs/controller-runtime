@@ -83,12 +83,6 @@ func (d *DeferredFileLoader) OfKind(obj ControllerManagerConfiguration) *Deferre
 	return d
 }
 
-// InjectScheme will configure the scheme to be used for decoding the file.
-func (d *DeferredFileLoader) InjectScheme(scheme *runtime.Scheme) error {
-	d.scheme = scheme
-	return nil
-}
-
 // loadFile is used from the mutex.Once to load the file.
 func (d *DeferredFileLoader) loadFile() {
 	if d.scheme == nil {

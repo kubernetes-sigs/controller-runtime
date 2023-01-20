@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/rest"
 	toolscache "k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/internal/objectutil"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // NewCacheFunc - Function for creating a new cache from the options and a rest config.
@@ -89,7 +89,7 @@ func (c *multiNamespaceCache) GetInformer(ctx context.Context, obj client.Object
 
 	// If the object is clusterscoped, get the informer from clusterCache,
 	// if not use the namespaced caches.
-	isNamespaced, err := objectutil.IsAPINamespaced(obj, c.Scheme, c.RESTMapper)
+	isNamespaced, err := apiutil.IsObjectNamespaced(obj, c.Scheme, c.RESTMapper)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema
 
 	// If the object is clusterscoped, get the informer from clusterCache,
 	// if not use the namespaced caches.
-	isNamespaced, err := objectutil.IsAPINamespacedWithGVK(gvk, c.Scheme, c.RESTMapper)
+	isNamespaced, err := apiutil.IsGVKNamespaced(gvk, c.RESTMapper)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +183,7 @@ func (c *multiNamespaceCache) WaitForCacheSync(ctx context.Context) bool {
 }
 
 func (c *multiNamespaceCache) IndexField(ctx context.Context, obj client.Object, field string, extractValue client.IndexerFunc) error {
-	isNamespaced, err := objectutil.IsAPINamespaced(obj, c.Scheme, c.RESTMapper)
+	isNamespaced, err := apiutil.IsObjectNamespaced(obj, c.Scheme, c.RESTMapper)
 	if err != nil {
 		return nil //nolint:nilerr
 	}
@@ -201,7 +201,7 @@ func (c *multiNamespaceCache) IndexField(ctx context.Context, obj client.Object,
 }
 
 func (c *multiNamespaceCache) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-	isNamespaced, err := objectutil.IsAPINamespaced(obj, c.Scheme, c.RESTMapper)
+	isNamespaced, err := apiutil.IsObjectNamespaced(obj, c.Scheme, c.RESTMapper)
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 	listOpts := client.ListOptions{}
 	listOpts.ApplyOptions(opts)
 
-	isNamespaced, err := objectutil.IsAPINamespaced(list, c.Scheme, c.RESTMapper)
+	isNamespaced, err := apiutil.IsObjectNamespaced(list, c.Scheme, c.RESTMapper)
 	if err != nil {
 		return err
 	}

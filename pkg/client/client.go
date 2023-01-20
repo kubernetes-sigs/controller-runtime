@@ -168,6 +168,16 @@ func (c *client) resetGroupVersionKind(obj runtime.Object, gvk schema.GroupVersi
 	}
 }
 
+// GroupVersionKindFor returns the GroupVersionKind for the given object.
+func (c *client) GroupVersionKindFor(obj Object) (schema.GroupVersionKind, error) {
+	return apiutil.GVKForObject(obj, c.scheme)
+}
+
+// IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
+func (c *client) IsObjectNamespaced(obj Object) (bool, error) {
+	return apiutil.IsObjectNamespaced(obj, c.scheme, c.mapper)
+}
+
 // Scheme returns the scheme this client is using.
 func (c *client) Scheme() *runtime.Scheme {
 	return c.scheme

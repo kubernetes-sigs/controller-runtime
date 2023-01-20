@@ -563,6 +563,16 @@ func (c *fakeClient) RESTMapper() meta.RESTMapper {
 	return c.restMapper
 }
 
+// GroupVersionKindFor returns the GroupVersionKind for the given object.
+func (c *fakeClient) GroupVersionKindFor(obj client.Object) (schema.GroupVersionKind, error) {
+	return apiutil.GVKForObject(obj, c.scheme)
+}
+
+// IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
+func (c *fakeClient) IsObjectNamespaced(obj client.Object) (bool, error) {
+	return apiutil.IsObjectNamespaced(obj, c.scheme, c.restMapper)
+}
+
 func (c *fakeClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 	createOptions := &client.CreateOptions{}
 	createOptions.ApplyOptions(opts)

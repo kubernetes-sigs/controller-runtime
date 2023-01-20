@@ -22,7 +22,9 @@ import (
 	"net/http"
 
 	corev1 "k8s.io/api/core/v1"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -36,12 +38,16 @@ type podValidator struct {
 
 // podValidator admits a pod if a specific annotation exists.
 func (v *podValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
-	pod := &corev1.Pod{}
+	// set up a convenient log object so we don't have to type request over and over again
+	log := logf.FromContext(ctx)
 
+	pod := &corev1.Pod{}
 	err := v.decoder.Decode(req, pod)
 	if err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
+
+	log.Info("Validating Pod")
 
 	key := "example-mutating-admission-webhook"
 	anno, found := pod.Annotations[key]

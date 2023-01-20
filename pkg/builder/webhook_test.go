@@ -20,18 +20,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -49,11 +54,17 @@ var _ = Describe("webhook", func() {
 })
 
 func runTests(admissionReviewVersion string) {
-	var stop chan struct{}
+	var (
+		stop          chan struct{}
+		logBuffer     *gbytes.Buffer
+		testingLogger logr.Logger
+	)
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
 		newController = controller.New
+		logBuffer = gbytes.NewBuffer()
+		testingLogger = zap.New(zap.JSONEncoder(), zap.WriteTo(io.MultiWriter(logBuffer, GinkgoWriter)))
 	})
 
 	AfterEach(func() {
@@ -214,6 +225,9 @@ func runTests(admissionReviewVersion string) {
 		err = WebhookManagedBy(m).
 			WithDefaulter(&TestCustomDefaulter{}).
 			For(&TestDefaulter{}).
+			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
+				return admission.DefaultLogConstructor(testingLogger, req)
+			}).
 			Complete()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 		svr := m.GetWebhookServer()
@@ -225,16 +239,17 @@ func runTests(admissionReviewVersion string) {
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
-      "group":"",
+      "group":"foo.test.org",
       "version":"v1",
       "kind":"TestDefaulter"
     },
     "resource":{
-      "group":"",
+      "group":"foo.test.org",
       "version":"v1",
       "resource":"testdefaulter"
     },
     "namespace":"default",
+    "name":"foo",
     "operation":"CREATE",
     "object":{
       "replica":1
@@ -263,6 +278,7 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":true`))
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"patch":`))
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":200`))
+		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Defaulting object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaulter"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
 
 		By("sending a request to a validating webhook path that doesn't exist")
 		path = generateValidatePath(testDefaulterGVK)
@@ -431,6 +447,9 @@ func runTests(admissionReviewVersion string) {
 		err = WebhookManagedBy(m).
 			WithValidator(&TestCustomValidator{}).
 			For(&TestValidator{}).
+			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
+				return admission.DefaultLogConstructor(testingLogger, req)
+			}).
 			Complete()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 		svr := m.GetWebhookServer()
@@ -442,16 +461,17 @@ func runTests(admissionReviewVersion string) {
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
-      "group":"",
+      "group":"foo.test.org",
       "version":"v1",
-      "kind":"TestValidator"
+      "kind":"TestDefaulter"
     },
     "resource":{
-      "group":"",
+      "group":"foo.test.org",
       "version":"v1",
-      "resource":"testvalidator"
+      "resource":"testdefaulter"
     },
     "namespace":"default",
+    "name":"foo",
     "operation":"UPDATE",
     "object":{
       "replica":1
@@ -491,6 +511,7 @@ func runTests(admissionReviewVersion string) {
 		By("sanity checking the response contains reasonable field")
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":403`))
+		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Validating object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaulter"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
 	})
 
 	It("should scaffold defaulting and validating webhooks if the type implements both Defaulter and Validator interfaces", func() {
@@ -845,6 +866,7 @@ func (dv *TestDefaultValidator) ValidateDelete() error {
 type TestCustomDefaulter struct{}
 
 func (*TestCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
+	logf.FromContext(ctx).Info("Defaulting object")
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("expected admission.Request in ctx: %w", err)
@@ -867,6 +889,7 @@ var _ admission.CustomDefaulter = &TestCustomDefaulter{}
 type TestCustomValidator struct{}
 
 func (*TestCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) error {
+	logf.FromContext(ctx).Info("Validating object")
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("expected admission.Request in ctx: %w", err)
@@ -883,6 +906,7 @@ func (*TestCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Obje
 }
 
 func (*TestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
+	logf.FromContext(ctx).Info("Validating object")
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("expected admission.Request in ctx: %w", err)
@@ -903,6 +927,7 @@ func (*TestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj r
 }
 
 func (*TestCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) error {
+	logf.FromContext(ctx).Info("Validating object")
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("expected admission.Request in ctx: %w", err)

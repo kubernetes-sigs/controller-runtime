@@ -22,6 +22,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -30,7 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 func init() {
@@ -71,13 +71,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup webhooks
-	entryLog.Info("setting up webhook server")
-	hookServer := mgr.GetWebhookServer()
-
-	entryLog.Info("registering webhooks to the webhook server")
-	hookServer.Register("/mutate-v1-pod", &webhook.Admission{Handler: &podAnnotator{Client: mgr.GetClient()}})
-	hookServer.Register("/validate-v1-pod", &webhook.Admission{Handler: &podValidator{Client: mgr.GetClient()}})
+	if err := builder.WebhookManagedBy(mgr).
+		For(&corev1.Pod{}).
+		WithDefaulter(&podAnnotator{}).
+		WithValidator(&podValidator{}).
+		Complete(); err != nil {
+		entryLog.Error(err, "unable to create webhook", "webhook", "Pod")
+		os.Exit(1)
+	}
 
 	entryLog.Info("starting manager")
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {

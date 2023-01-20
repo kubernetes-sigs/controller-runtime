@@ -34,14 +34,8 @@ type cluster struct {
 	// config is the rest.config used to talk to the apiserver.  Required.
 	config *rest.Config
 
-	// scheme is the scheme injected into Controllers, EventHandlers, Sources and Predicates.  Defaults
-	// to scheme.scheme.
 	scheme *runtime.Scheme
-
-	cache cache.Cache
-
-	// TODO(directxman12): Provide an escape hatch to get individual indexers
-	// client is the client injected into Controllers (and EventHandlers, Sources and Predicates).
+	cache  cache.Cache
 	client client.Client
 
 	// apiReader is the reader that will make requests to the api server and not the cache.

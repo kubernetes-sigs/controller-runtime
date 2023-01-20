@@ -212,7 +212,7 @@ var _ = Describe("controller", func() {
 		It("should process events from source.Channel", func() {
 			// channel to be closed when event is processed
 			processed := make(chan struct{})
-			// source channel to be injected
+			// source channel
 			ch := make(chan event.GenericEvent, 1)
 
 			ctx, cancel := context.WithCancel(context.TODO())

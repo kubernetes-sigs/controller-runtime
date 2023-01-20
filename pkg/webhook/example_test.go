@@ -20,7 +20,6 @@ import (
 	"context"
 	"net/http"
 
-	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -87,7 +86,7 @@ func Example() {
 // Note that this assumes and requires a valid TLS
 // cert and key at the default locations
 // tls.crt and tls.key.
-func ExampleServer_StartStandalone() {
+func ExampleServer_Start() {
 	// Create a webhook server
 	hookServer := &Server{
 		Port: 8443,
@@ -98,7 +97,7 @@ func ExampleServer_StartStandalone() {
 	hookServer.Register("/validating", validatingHook)
 
 	// Start the server without a manger
-	err := hookServer.StartStandalone(signals.SetupSignalHandler(), scheme.Scheme)
+	err := hookServer.Start(signals.SetupSignalHandler())
 	if err != nil {
 		// handle error
 		panic(err)
@@ -118,7 +117,6 @@ func ExampleStandaloneWebhook() {
 
 	// Create the standalone HTTP handlers from our webhooks
 	mutatingHookHandler, err := admission.StandaloneWebhook(mutatingHook, admission.StandaloneOptions{
-		Scheme: scheme.Scheme,
 		// Logger let's you optionally pass
 		// a custom logger (defaults to log.Log global Logger)
 		Logger: logf.RuntimeLog.WithName("mutating-webhook"),
@@ -134,7 +132,6 @@ func ExampleStandaloneWebhook() {
 	}
 
 	validatingHookHandler, err := admission.StandaloneWebhook(validatingHook, admission.StandaloneOptions{
-		Scheme:      scheme.Scheme,
 		Logger:      logf.RuntimeLog.WithName("validating-webhook"),
 		MetricsPath: "/validating",
 	})

@@ -29,13 +29,10 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	machinerytypes "k8s.io/apimachinery/pkg/types"
 
-	internallog "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 var _ = Describe("Admission Webhooks", func() {
@@ -61,7 +58,6 @@ var _ = Describe("Admission Webhooks", func() {
 		}
 		webhook := &Webhook{
 			Handler: handler,
-			log:     internallog.RuntimeLog.WithName("webhook"),
 		}
 
 		return webhook
@@ -111,7 +107,6 @@ var _ = Describe("Admission Webhooks", func() {
 					},
 				}
 			}),
-			log: internallog.RuntimeLog.WithName("webhook"),
 		}
 
 		By("invoking the webhook")
@@ -128,7 +123,6 @@ var _ = Describe("Admission Webhooks", func() {
 			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
 				return Patched("", jsonpatch.Operation{Operation: "add", Path: "/a", Value: 2}, jsonpatch.Operation{Operation: "replace", Path: "/b", Value: 4})
 			}),
-			log: internallog.RuntimeLog.WithName("webhook"),
 		}
 
 		By("invoking the webhook")
@@ -204,86 +198,17 @@ var _ = Describe("Admission Webhooks", func() {
 		Eventually(logBuffer).Should(gbytes.Say(`"msg":"Received request","operation":"CREATE","requestID":"test123"}`))
 	})
 
-	Describe("dependency injection", func() {
-		It("should set dependencies passed in on the handler", func() {
-			By("setting up a webhook and injecting it with a injection func that injects a string")
-			setFields := func(target interface{}) error {
-				inj, ok := target.(stringInjector)
-				if !ok {
-					return nil
-				}
-
-				return inj.InjectString("something")
-			}
-			handler := &fakeHandler{}
-			webhook := &Webhook{
-				Handler: handler,
-				log:     internallog.RuntimeLog.WithName("webhook"),
-			}
-			Expect(setFields(webhook)).To(Succeed())
-			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
-
-			By("checking that the string was injected")
-			Expect(handler.injectedString).To(Equal("something"))
-		})
-
-		It("should inject a decoder into the handler", func() {
-			By("setting up a webhook and injecting it with a injection func that injects a scheme")
-			setFields := func(target interface{}) error {
-				if _, err := inject.SchemeInto(runtime.NewScheme(), target); err != nil {
-					return err
-				}
-				return nil
-			}
-			handler := &fakeHandler{}
-			webhook := &Webhook{
-				Handler: handler,
-				log:     internallog.RuntimeLog.WithName("webhook"),
-			}
-			Expect(setFields(webhook)).To(Succeed())
-			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
-
-			By("checking that the decoder was injected")
-			Expect(handler.decoder).NotTo(BeNil())
-		})
-
-		It("should pass a setFields that also injects a decoder into sub-dependencies", func() {
-			By("setting up a webhook and injecting it with a injection func that injects a scheme")
-			setFields := func(target interface{}) error {
-				if _, err := inject.SchemeInto(runtime.NewScheme(), target); err != nil {
-					return err
-				}
-				return nil
-			}
-			handler := &handlerWithSubDependencies{
-				Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
-					return Response{}
-				}),
-				dep: &subDep{},
-			}
-			webhook := &Webhook{
-				Handler: handler,
-			}
-			Expect(setFields(webhook)).To(Succeed())
-			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
-
-			By("checking that setFields sets the decoder as well")
-			Expect(handler.dep.decoder).NotTo(BeNil())
-		})
-	})
-
 	Describe("panic recovery", func() {
 		It("should recover panic if RecoverPanic is true", func() {
 			panicHandler := func() *Webhook {
 				handler := &fakeHandler{
 					fn: func(ctx context.Context, req Request) Response {
-						panic("injected panic")
+						panic("fake panic test")
 					},
 				}
 				webhook := &Webhook{
 					Handler:      handler,
 					RecoverPanic: true,
-					log:          internallog.RuntimeLog.WithName("webhook"),
 				}
 
 				return webhook
@@ -298,19 +223,18 @@ var _ = Describe("Admission Webhooks", func() {
 			By("checking that it errored the request")
 			Expect(resp.Allowed).To(BeFalse())
 			Expect(resp.Result.Code).To(Equal(int32(http.StatusInternalServerError)))
-			Expect(resp.Result.Message).To(Equal("panic: injected panic [recovered]"))
+			Expect(resp.Result.Message).To(Equal("panic: fake panic test [recovered]"))
 		})
 
 		It("should not recover panic if RecoverPanic is false by default", func() {
 			panicHandler := func() *Webhook {
 				handler := &fakeHandler{
 					fn: func(ctx context.Context, req Request) Response {
-						panic("injected panic")
+						panic("fake panic test")
 					},
 				}
 				webhook := &Webhook{
 					Handler: handler,
-					log:     internallog.RuntimeLog.WithName("webhook"),
 				}
 
 				return webhook
@@ -342,25 +266,3 @@ var _ = Describe("Should be able to write/read admission.Request to/from context
 	Expect(err).To(Not(HaveOccurred()))
 	Expect(gotRequest).To(Equal(testRequest))
 })
-
-type stringInjector interface {
-	InjectString(s string) error
-}
-
-type handlerWithSubDependencies struct {
-	Handler
-	dep *subDep
-}
-
-func (h *handlerWithSubDependencies) InjectFunc(f inject.Func) error {
-	return f(h.dep)
-}
-
-type subDep struct {
-	decoder *Decoder
-}
-
-func (d *subDep) InjectDecoder(dec *Decoder) error {
-	d.decoder = dec
-	return nil
-}

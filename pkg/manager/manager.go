@@ -44,7 +44,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -55,8 +54,7 @@ type Manager interface {
 	cluster.Cluster
 
 	// Add will set requested dependencies on the component, and cause the component to be
-	// started when Start is called.  Add will inject any dependencies for which the argument
-	// implements the inject interface - e.g. inject.Client.
+	// started when Start is called.
 	// Depending on if a Runnable implements LeaderElectionRunnable interface, a Runnable can be run in either
 	// non-leaderelection mode (always running) or leader election mode (managed by leader election if enabled).
 	Add(Runnable) error
@@ -457,13 +455,6 @@ func New(config *rest.Config, options Options) (Manager, error) {
 // any options already set on Options will be ignored, this is used to allow
 // cli flags to override anything specified in the config file.
 func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options, error) {
-	if inj, wantsScheme := loader.(inject.Scheme); wantsScheme {
-		err := inj.InjectScheme(o.Scheme)
-		if err != nil {
-			return o, err
-		}
-	}
-
 	newObj, err := loader.Complete()
 	if err != nil {
 		return o, err

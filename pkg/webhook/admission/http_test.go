@@ -29,9 +29,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	admissionv1 "k8s.io/api/admission/v1"
-
-	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 var _ = Describe("Admission Webhooks", func() {
@@ -50,8 +47,6 @@ var _ = Describe("Admission Webhooks", func() {
 			respRecorder = &httptest.ResponseRecorder{
 				Body: bytes.NewBuffer(nil),
 			}
-			_, err := inject.LoggerInto(log.WithName("test-webhook"), webhook)
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should return bad-request when given an empty body", func() {
@@ -96,7 +91,6 @@ var _ = Describe("Admission Webhooks", func() {
 			}
 			webhook := &Webhook{
 				Handler: &fakeHandler{},
-				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
@@ -112,7 +106,6 @@ var _ = Describe("Admission Webhooks", func() {
 			}
 			webhook := &Webhook{
 				Handler: &fakeHandler{},
-				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
@@ -128,7 +121,6 @@ var _ = Describe("Admission Webhooks", func() {
 			}
 			webhook := &Webhook{
 				Handler: &fakeHandler{},
-				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
@@ -152,7 +144,6 @@ var _ = Describe("Admission Webhooks", func() {
 						return Allowed(ctx.Value(key).(string))
 					},
 				},
-				log: logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"message":%q,"code":200}}}
@@ -180,7 +171,6 @@ var _ = Describe("Admission Webhooks", func() {
 				WithContextFunc: func(ctx context.Context, r *http.Request) context.Context {
 					return context.WithValue(ctx, key, r.Header["Content-Type"][0])
 				},
-				log: logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"message":%q,"code":200}}}
@@ -199,7 +189,6 @@ var _ = Describe("Admission Webhooks", func() {
 			}
 			webhook := &Webhook{
 				Handler: &fakeHandler{},
-				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
 			bw := &brokenWriter{ResponseWriter: respRecorder}
@@ -219,20 +208,8 @@ type nopCloser struct {
 func (nopCloser) Close() error { return nil }
 
 type fakeHandler struct {
-	invoked        bool
-	fn             func(context.Context, Request) Response
-	decoder        *Decoder
-	injectedString string
-}
-
-func (h *fakeHandler) InjectDecoder(d *Decoder) error {
-	h.decoder = d
-	return nil
-}
-
-func (h *fakeHandler) InjectString(s string) error {
-	h.injectedString = s
-	return nil
+	invoked bool
+	fn      func(context.Context, Request) Response
 }
 
 func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {

@@ -43,7 +43,7 @@ var _ = Describe("Conversion Webhook", func() {
 	var respRecorder *httptest.ResponseRecorder
 	var decoder *Decoder
 	var scheme *runtime.Scheme
-	webhook := Webhook{}
+	var webhook *Webhook
 
 	BeforeEach(func() {
 		respRecorder = &httptest.ResponseRecorder{
@@ -55,12 +55,9 @@ var _ = Describe("Conversion Webhook", func() {
 		Expect(jobsv1.AddToScheme(scheme)).To(Succeed())
 		Expect(jobsv2.AddToScheme(scheme)).To(Succeed())
 		Expect(jobsv3.AddToScheme(scheme)).To(Succeed())
-		Expect(webhook.InjectScheme(scheme)).To(Succeed())
 
-		var err error
-		decoder, err = NewDecoder(scheme)
-		Expect(err).NotTo(HaveOccurred())
-
+		decoder = NewDecoder(scheme)
+		webhook = &Webhook{scheme: scheme, decoder: decoder}
 	})
 
 	doRequest := func(convReq *apix.ConversionReview) *apix.ConversionReview {

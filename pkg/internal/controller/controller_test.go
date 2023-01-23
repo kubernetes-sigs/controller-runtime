@@ -235,7 +235,7 @@ var _ = Describe("controller", func() {
 			ctrl.startWatches = []watchDescription{{
 				src: ins,
 				handler: handler.Funcs{
-					GenericFunc: func(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						close(processed)
 					},

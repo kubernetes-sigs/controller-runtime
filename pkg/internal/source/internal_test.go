@@ -17,6 +17,8 @@ limitations under the License.
 package internal_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/tools/cache"
@@ -34,48 +36,45 @@ import (
 )
 
 var _ = Describe("Internal", func() {
-
-	var instance internal.EventHandler
+	var ctx = context.Background()
+	var instance *internal.EventHandler
 	var funcs, setfuncs *handler.Funcs
 	var set bool
 	BeforeEach(func() {
 		funcs = &handler.Funcs{
-			CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
+			CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect CreateEvent to be called.")
 			},
-			DeleteFunc: func(e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect DeleteEvent to be called.")
 			},
-			UpdateFunc: func(event.UpdateEvent, workqueue.RateLimitingInterface) {
+			UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect UpdateEvent to be called.")
 			},
-			GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {
+			GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Fail("Did not expect GenericEvent to be called.")
 			},
 		}
 
 		setfuncs = &handler.Funcs{
-			CreateFunc: func(event.CreateEvent, workqueue.RateLimitingInterface) {
+			CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
 				set = true
 			},
-			DeleteFunc: func(e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
 				set = true
 			},
-			UpdateFunc: func(event.UpdateEvent, workqueue.RateLimitingInterface) {
+			UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
 				set = true
 			},
-			GenericFunc: func(event.GenericEvent, workqueue.RateLimitingInterface) {
+			GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
 				set = true
 			},
 		}
-		instance = internal.EventHandler{
-			Queue:        controllertest.Queue{},
-			EventHandler: funcs,
-		}
+		instance = internal.NewEventHandler(ctx, controllertest.Queue{}, funcs, nil)
 	})
 
 	Describe("EventHandler", func() {
@@ -92,55 +91,49 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should create a CreateEvent", func() {
-			funcs.CreateFunc = func(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
+			funcs.CreateFunc = func(ctx context.Context, evt event.CreateEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
-				Expect(q).To(Equal(instance.Queue))
 				Expect(evt.Object).To(Equal(pod))
 			}
 			instance.OnAdd(pod)
 		})
 
 		It("should used Predicates to filter CreateEvents", func() {
-			instance = internal.EventHandler{
-				Queue:        controllertest.Queue{},
-				EventHandler: setfuncs,
-			}
-
-			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
-			}
+			})
+			set = false
 			instance.OnAdd(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
-			}
+			})
 			instance.OnAdd(pod)
 			Expect(set).To(BeTrue())
 
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
-			}
+			})
 			instance.OnAdd(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
-			}
+			})
 			instance.OnAdd(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
-			}
+			})
 			instance.OnAdd(pod)
 			Expect(set).To(BeTrue())
 		})
@@ -154,10 +147,8 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should create an UpdateEvent", func() {
-			funcs.UpdateFunc = func(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+			funcs.UpdateFunc = func(ctx context.Context, evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
-				Expect(q).To(Equal(instance.Queue))
-
 				Expect(evt.ObjectOld).To(Equal(pod))
 				Expect(evt.ObjectNew).To(Equal(newPod))
 			}
@@ -165,46 +156,41 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should used Predicates to filter UpdateEvents", func() {
-			instance = internal.EventHandler{
-				Queue:        controllertest.Queue{},
-				EventHandler: setfuncs,
-			}
-
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{UpdateFunc: func(updateEvent event.UpdateEvent) bool { return false }},
-			}
+			})
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
-			}
+			})
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeTrue())
 
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return false }},
-			}
+			})
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return false }},
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
-			}
+			})
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
-			}
+			})
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeTrue())
 		})
@@ -220,56 +206,49 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should create a DeleteEvent", func() {
-			funcs.DeleteFunc = func(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			funcs.DeleteFunc = func(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
-				Expect(q).To(Equal(instance.Queue))
-
 				Expect(evt.Object).To(Equal(pod))
 			}
 			instance.OnDelete(pod)
 		})
 
 		It("should used Predicates to filter DeleteEvents", func() {
-			instance = internal.EventHandler{
-				Queue:        controllertest.Queue{},
-				EventHandler: setfuncs,
-			}
-
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
-			}
+			})
 			instance.OnDelete(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
-			}
+			})
 			instance.OnDelete(pod)
 			Expect(set).To(BeTrue())
 
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
-			}
+			})
 			instance.OnDelete(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
-			}
+			})
 			instance.OnDelete(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance.Predicates = []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
-			}
+			})
 			instance.OnDelete(pod)
 			Expect(set).To(BeTrue())
 		})
@@ -287,9 +266,8 @@ var _ = Describe("Internal", func() {
 			tombstone := cache.DeletedFinalStateUnknown{
 				Obj: pod,
 			}
-			funcs.DeleteFunc = func(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			funcs.DeleteFunc = func(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
-				Expect(q).To(Equal(instance.Queue))
 				Expect(evt.Object).To(Equal(pod))
 			}
 

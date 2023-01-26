@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package conversion
+package conversion_test
 
 import (
 	"bytes"
@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 
+	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 	jobsv1 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v1"
 	jobsv2 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v2"
 	jobsv3 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v3"
@@ -41,9 +42,9 @@ import (
 var _ = Describe("Conversion Webhook", func() {
 
 	var respRecorder *httptest.ResponseRecorder
-	var decoder *Decoder
+	var decoder *conversion.Decoder
 	var scheme *runtime.Scheme
-	var webhook *Webhook
+	var wh http.Handler
 
 	BeforeEach(func() {
 		respRecorder = &httptest.ResponseRecorder{
@@ -56,8 +57,8 @@ var _ = Describe("Conversion Webhook", func() {
 		Expect(jobsv2.AddToScheme(scheme)).To(Succeed())
 		Expect(jobsv3.AddToScheme(scheme)).To(Succeed())
 
-		decoder = NewDecoder(scheme)
-		webhook = &Webhook{scheme: scheme, decoder: decoder}
+		decoder = conversion.NewDecoder(scheme)
+		wh = conversion.NewWebhookHandler(scheme)
 	})
 
 	doRequest := func(convReq *apix.ConversionReview) *apix.ConversionReview {
@@ -69,7 +70,7 @@ var _ = Describe("Conversion Webhook", func() {
 		req := &http.Request{
 			Body: io.NopCloser(bytes.NewReader(payload.Bytes())),
 		}
-		webhook.ServeHTTP(respRecorder, req)
+		wh.ServeHTTP(respRecorder, req)
 		Expect(json.NewDecoder(respRecorder.Result().Body).Decode(convReview)).To(Succeed())
 		return convReview
 	}
@@ -313,7 +314,7 @@ var _ = Describe("IsConvertible", func() {
 	It("should not error for uninitialized types", func() {
 		obj := &jobsv2.ExternalJob{}
 
-		ok, err := IsConvertible(scheme, obj)
+		ok, err := conversion.IsConvertible(scheme, obj)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ok).To(BeTrue())
 	})
@@ -326,7 +327,7 @@ var _ = Describe("IsConvertible", func() {
 			},
 		}
 
-		ok, err := IsConvertible(scheme, obj)
+		ok, err := conversion.IsConvertible(scheme, obj)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ok).To(BeTrue())
 	})
@@ -339,7 +340,7 @@ var _ = Describe("IsConvertible", func() {
 			},
 		}
 
-		ok, err := IsConvertible(scheme, obj)
+		ok, err := conversion.IsConvertible(scheme, obj)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ok).To(BeTrue())
 	})
@@ -352,7 +353,7 @@ var _ = Describe("IsConvertible", func() {
 			},
 		}
 
-		ok, err := IsConvertible(scheme, obj)
+		ok, err := conversion.IsConvertible(scheme, obj)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ok).ToNot(BeTrue())
 	})

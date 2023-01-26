@@ -135,9 +135,6 @@ type Webhook struct {
 	// outside the context of requests.
 	LogConstructor func(base logr.Logger, req *Request) logr.Logger
 
-	// decoder is constructed on receiving a scheme and passed down to then handler
-	decoder *Decoder
-
 	setupLogOnce sync.Once
 	log          logr.Logger
 }
@@ -202,12 +199,6 @@ func DefaultLogConstructor(base logr.Logger, req *Request) logr.Logger {
 		)
 	}
 	return base
-}
-
-// GetDecoder returns a decoder to decode the objects embedded in admission requests.
-// It may be nil if we haven't received a scheme to use to determine object types yet.
-func (wh *Webhook) GetDecoder() *Decoder {
-	return wh.decoder
 }
 
 // StandaloneOptions let you configure a StandaloneWebhook.

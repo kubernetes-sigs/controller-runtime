@@ -213,7 +213,7 @@ func (blder *WebhookBuilder) registerConversionWebhook() error {
 	}
 	if ok {
 		if !blder.isAlreadyHandled("/convert") {
-			blder.mgr.GetWebhookServer().Register("/convert", &conversion.Webhook{})
+			blder.mgr.GetWebhookServer().Register("/convert", conversion.NewWebhookHandler(blder.mgr.GetScheme()))
 		}
 		log.Info("Conversion webhook enabled", "GVK", blder.gvk)
 	}

@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
@@ -33,7 +34,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 var _ = Describe("controller", func() {
@@ -50,7 +50,7 @@ var _ = Describe("controller", func() {
 
 		It("should reconcile", func() {
 			By("Creating the Manager")
-			cm, err := manager.New(cfg, manager.Options{})
+			cm, err := builder.Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")

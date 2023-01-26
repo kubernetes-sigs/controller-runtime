@@ -39,6 +39,7 @@ import (
 	"k8s.io/client-go/rest"
 	kcache "k8s.io/client-go/tools/cache"
 
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -117,6 +118,13 @@ var _ = Describe("Informer Cache", func() {
 	CacheTest(cache.New, cache.Options{})
 })
 var _ = Describe("Multi-Namespace Informer Cache", func() {
+	CacheTest(builder.Cache().
+		RestrictedView().
+		With(testNamespaceOne).
+		With(testNamespaceTwo).
+		With("default").
+		Factory(),
+		cache.Options{})
 	CacheTest(cache.MultiNamespacedCacheBuilder([]string{testNamespaceOne, testNamespaceTwo, "default"}), cache.Options{})
 })
 var _ = Describe("Informer Cache without DeepCopy", func() {
@@ -183,8 +191,8 @@ var _ = Describe("Cache with transformers", func() {
 		knownPod6.GetObjectKind().SetGroupVersionKind(podGVK)
 
 		By("creating the informer cache")
-		informerCache, err = cache.New(cfg, cache.Options{
-			DefaultTransform: func(i interface{}) (interface{}, error) {
+		informerCache, err = builder.Cache().
+			SetGlobalTransform(func(i interface{}) (interface{}, error) {
 				obj := i.(runtime.Object)
 				Expect(obj).NotTo(BeNil())
 
@@ -203,29 +211,27 @@ var _ = Describe("Cache with transformers", func() {
 				annotations["transformed"] = "default"
 				accessor.SetAnnotations(annotations)
 				return i, nil
-			},
-			TransformByObject: cache.TransformByObject{
-				&corev1.Pod{}: func(i interface{}) (interface{}, error) {
-					obj := i.(runtime.Object)
-					Expect(obj).NotTo(BeNil())
-					accessor, err := meta.Accessor(obj)
-					Expect(err).To(BeNil())
+			}).
+			Transform(&corev1.Pod{}, func(i interface{}) (interface{}, error) {
+				obj := i.(runtime.Object)
+				Expect(obj).NotTo(BeNil())
+				accessor, err := meta.Accessor(obj)
+				Expect(err).To(BeNil())
 
-					annotations := accessor.GetAnnotations()
-					if _, exists := annotations["transformed"]; exists {
-						// Avoid performing transformation multiple times.
-						return i, nil
-					}
-
-					if annotations == nil {
-						annotations = make(map[string]string)
-					}
-					annotations["transformed"] = "explicit"
-					accessor.SetAnnotations(annotations)
+				annotations := accessor.GetAnnotations()
+				if _, exists := annotations["transformed"]; exists {
+					// Avoid performing transformation multiple times.
 					return i, nil
-				},
-			},
-		})
+				}
+
+				if annotations == nil {
+					annotations = make(map[string]string)
+				}
+				annotations["transformed"] = "explicit"
+				accessor.SetAnnotations(annotations)
+				return i, nil
+			}).
+			Build(cfg)
 		Expect(err).NotTo(HaveOccurred())
 		By("running the cache and waiting for it to sync")
 		// pass as an arg so that we don't race between close and re-assign
@@ -925,8 +931,11 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				})
 				It("test multinamespaced cache for cluster scoped resources", func() {
 					By("creating a multinamespaced cache to watch specific namespaces")
-					multi := cache.MultiNamespacedCacheBuilder([]string{"default", testNamespaceOne})
-					m, err := multi(cfg, cache.Options{})
+					m, err := builder.Cache().
+						RestrictedView().
+						With("default").
+						With(testNamespaceOne).
+						Build(cfg)
 					Expect(err).NotTo(HaveOccurred())
 
 					By("running the cache and waiting it for sync")
@@ -1065,7 +1074,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to restrict cache to a namespace", func() {
 					By("creating a namespaced cache")
-					namespacedCache, err := cache.New(cfg, cache.Options{Namespace: testNamespaceOne})
+					namespacedCache, err := builder.Cache().RestrictedView().With(testNamespaceOne).Build(cfg)
 					Expect(err).NotTo(HaveOccurred())
 
 					By("running the cache and waiting for it to sync")

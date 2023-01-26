@@ -30,17 +30,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func ExampleBuilder_metadata_only() {
+func ExampleControllerBuilder_metadata_only() {
 	logf.SetLogger(zap.New())
 
 	var log = logf.Log.WithName("builder-examples")
 
-	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
+	mgr, err := builder.Manager(config.GetConfigOrDie()).Build()
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)
@@ -92,12 +91,12 @@ func ExampleBuilder_metadata_only() {
 // ReplicaSetReconciler.
 //
 // * Start the application.
-func ExampleBuilder() {
+func ExampleControllerBuilder() {
 	logf.SetLogger(zap.New())
 
 	var log = logf.Log.WithName("builder-examples")
 
-	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
+	mgr, err := builder.Manager(config.GetConfigOrDie()).Build()
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)

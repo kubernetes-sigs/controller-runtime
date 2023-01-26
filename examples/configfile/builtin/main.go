@@ -44,9 +44,11 @@ func main() {
 
 	// Setup a Manager
 	entryLog.Info("setting up manager")
-	mgr, err := ctrl.NewManager(config.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
-	}.AndFromOrDie(cfg.File()))
+	mgr, err := ctrl.
+		NewManager(config.GetConfigOrDie()).
+		Scheme(scheme).
+		WithConfig(cfg.File()).
+		Build()
 	if err != nil {
 		entryLog.Error(err, "unable to set up overall controller manager")
 		os.Exit(1)

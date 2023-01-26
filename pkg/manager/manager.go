@@ -215,6 +215,8 @@ type Options struct {
 	// Note: If a namespace is specified, controllers can still Watch for a
 	// cluster-scoped resource (e.g Node). For namespaced resources, the cache
 	// will only hold objects from the desired namespace.
+	//
+	// Deprecated: Use builder.Manager().Cache().RestrictedView().With(...) instead.
 	Namespace string
 
 	// MetricsBindAddress is the TCP address that the controller should bind to
@@ -310,6 +312,20 @@ type Options struct {
 	newHealthProbeListener func(addr string) (net.Listener, error)
 }
 
+// SetOptions is an interface that can be implemented to configure
+// a Manager upon creation.
+type SetOptions interface {
+	ApplyToManager(o *Options) error
+}
+
+// SetOptionsFunc is a function that implements SetOptions.
+type SetOptionsFunc func(*Options) error
+
+// ApplyToManager implements SetOptions.
+func (f SetOptionsFunc) ApplyToManager(o *Options) error {
+	return f(o)
+}
+
 // BaseContextFunc is a function used to provide a base Context to Runnables
 // managed by a Manager.
 type BaseContextFunc func() context.Context
@@ -342,6 +358,8 @@ type LeaderElectionRunnable interface {
 }
 
 // New returns a new Manager for creating Controllers.
+//
+// Deprecated: Use builder.Manager() instead.
 func New(config *rest.Config, options Options) (Manager, error) {
 	// Set default values for options fields
 	options = setOptionsDefaults(options)
@@ -356,7 +374,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		clusterOptions.NewClient = options.NewClient
 		clusterOptions.ClientDisableCacheFor = options.ClientDisableCacheFor
 		clusterOptions.DryRunClient = options.DryRunClient
-		clusterOptions.EventBroadcaster = options.EventBroadcaster //nolint:staticcheck
+		clusterOptions.EventBroadcaster = options.EventBroadcaster
 	})
 	if err != nil {
 		return nil, err
@@ -454,6 +472,8 @@ func New(config *rest.Config, options Options) (Manager, error) {
 // AndFrom will use a supplied type and convert to Options
 // any options already set on Options will be ignored, this is used to allow
 // cli flags to override anything specified in the config file.
+//
+// Deprecated: Use builder.Manager().WithConfig() instead.
 func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options, error) {
 	newObj, err := loader.Complete()
 	if err != nil {
@@ -499,10 +519,12 @@ func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options,
 	}
 
 	if newObj.Controller != nil {
+		if o.Controller.RecoverPanic == nil && newObj.Controller.RecoverPanic != nil {
+			o.Controller.RecoverPanic = newObj.Controller.RecoverPanic
+		}
 		if o.Controller.CacheSyncTimeout == nil && newObj.Controller.CacheSyncTimeout != nil {
 			o.Controller.CacheSyncTimeout = newObj.Controller.CacheSyncTimeout
 		}
-
 		if len(o.Controller.GroupKindConcurrency) == 0 && len(newObj.Controller.GroupKindConcurrency) > 0 {
 			o.Controller.GroupKindConcurrency = newObj.Controller.GroupKindConcurrency
 		}
@@ -512,6 +534,8 @@ func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options,
 }
 
 // AndFromOrDie will use options.AndFrom() and will panic if there are errors.
+//
+// Deprecated: Use builder.Manager().WithConfig() instead.
 func (o Options) AndFromOrDie(loader config.ControllerManagerConfiguration) Options {
 	o, err := o.AndFrom(loader)
 	if err != nil {

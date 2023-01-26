@@ -22,7 +22,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -39,7 +38,7 @@ var _ admission.Validator = &examplegroup.ChaosPod{}
 func ExampleWebhookBuilder() {
 	var log = logf.Log.WithName("webhookbuilder-example")
 
-	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
+	mgr, err := builder.Manager(config.GetConfigOrDie()).Build()
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)

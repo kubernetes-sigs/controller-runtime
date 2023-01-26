@@ -20,7 +20,7 @@ import (
 	"context"
 	"os"
 
-	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	conf "sigs.k8s.io/controller-runtime/pkg/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -58,9 +58,10 @@ func ExampleNew_multinamespaceCache() {
 		os.Exit(1)
 	}
 
-	mgr, err := manager.New(cfg, manager.Options{
-		NewCache: cache.MultiNamespacedCacheBuilder([]string{"namespace1", "namespace2"}),
-	})
+	mgr, err := builder.Manager(cfg).
+		Cache(builder.Cache().
+			RestrictedView().With("namespace1").With("namespace2"),
+		).Build()
 	if err != nil {
 		log.Error(err, "unable to set up manager")
 		os.Exit(1)

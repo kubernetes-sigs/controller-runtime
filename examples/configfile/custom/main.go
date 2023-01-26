@@ -48,9 +48,11 @@ func main() {
 	entryLog.Info("setting up manager")
 	ctrlConfig := v1alpha1.CustomControllerManagerConfiguration{}
 
-	mgr, err := ctrl.NewManager(config.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
-	}.AndFromOrDie(cfg.File().OfKind(&ctrlConfig)))
+	mgr, err := ctrl.
+		NewManager(config.GetConfigOrDie()).
+		Scheme(scheme).
+		WithConfig(cfg.File().OfKind(&ctrlConfig)).
+		Build()
 	if err != nil {
 		entryLog.Error(err, "unable to set up overall controller manager")
 		os.Exit(1)

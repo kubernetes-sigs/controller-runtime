@@ -104,7 +104,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 func main() {
 	ctrl.SetLogger(zap.New())
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie()).Build()
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)

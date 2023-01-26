@@ -37,7 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
@@ -73,7 +72,7 @@ func runTests(admissionReviewVersion string) {
 
 	It("should scaffold a defaulting webhook if the type implements the Defaulter interface", func() {
 		By("creating a controller manager")
-		m, err := manager.New(cfg, manager.Options{})
+		m, err := Manager(cfg).Build()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 		By("registering the type in the Scheme")
@@ -145,7 +144,7 @@ func runTests(admissionReviewVersion string) {
 
 	It("should scaffold a defaulting webhook which recovers from panics", func() {
 		By("creating a controller manager")
-		m, err := manager.New(cfg, manager.Options{})
+		m, err := Manager(cfg).Build()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 		By("registering the type in the Scheme")
@@ -209,7 +208,7 @@ func runTests(admissionReviewVersion string) {
 
 	It("should scaffold a defaulting webhook with a custom defaulter", func() {
 		By("creating a controller manager")
-		m, err := manager.New(cfg, manager.Options{})
+		m, err := Manager(cfg).Build()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 		By("registering the type in the Scheme")
@@ -287,7 +286,7 @@ func runTests(admissionReviewVersion string) {
 
 	It("should scaffold a validating webhook if the type implements the Validator interface", func() {
 		By("creating a controller manager")
-		m, err := manager.New(cfg, manager.Options{})
+		m, err := Manager(cfg).Build()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 		By("registering the type in the Scheme")
@@ -360,7 +359,7 @@ func runTests(admissionReviewVersion string) {
 
 	It("should scaffold a validating webhook which recovers from panics", func() {
 		By("creating a controller manager")
-		m, err := manager.New(cfg, manager.Options{})
+		m, err := Manager(cfg).Build()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 		By("registering the type in the Scheme")
@@ -425,7 +424,7 @@ func runTests(admissionReviewVersion string) {
 
 	It("should scaffold a validating webhook with a custom validator", func() {
 		By("creating a controller manager")
-		m, err := manager.New(cfg, manager.Options{})
+		m, err := Manager(cfg).Build()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 		By("registering the type in the Scheme")
@@ -504,7 +503,7 @@ func runTests(admissionReviewVersion string) {
 
 	It("should scaffold defaulting and validating webhooks if the type implements both Defaulter and Validator interfaces", func() {
 		By("creating a controller manager")
-		m, err := manager.New(cfg, manager.Options{})
+		m, err := Manager(cfg).Build()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 		By("registering the type in the Scheme")
@@ -581,7 +580,7 @@ func runTests(admissionReviewVersion string) {
 		By("creating a controller manager")
 		ctx, cancel := context.WithCancel(context.Background())
 
-		m, err := manager.New(cfg, manager.Options{})
+		m, err := Manager(cfg).Build()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 		By("registering the type in the Scheme")

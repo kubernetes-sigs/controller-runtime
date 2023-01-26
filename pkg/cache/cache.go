@@ -37,7 +37,10 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
 
-var log = logf.RuntimeLog.WithName("object-cache")
+var (
+	log               = logf.RuntimeLog.WithName("object-cache")
+	defaultResyncTime = 10 * time.Hour
+)
 
 // Cache knows how to load Kubernetes objects, fetch informers to request
 // to receive events for Kubernetes objects (at a low-level),
@@ -154,7 +157,22 @@ type Options struct {
 	DefaultTransform toolscache.TransformFunc
 }
 
-var defaultResyncTime = 10 * time.Hour
+// SetOptions is an interface that can be implemented to configure
+// a Manager upon creation.
+type SetOptions interface {
+	ApplyToCache(o *Options) error
+}
+
+// SetOptionsFunc is a function that implements SetOptions.
+type SetOptionsFunc func(*Options) error
+
+// ApplyToCache implements SetOptions.
+func (f SetOptionsFunc) ApplyToCache(o *Options) error {
+	return f(o)
+}
+
+// NewCacheFunc - Function for creating a new cache from the options and a rest config.
+type NewCacheFunc func(config *rest.Config, opts Options) (Cache, error)
 
 // New initializes and returns a new Cache.
 func New(config *rest.Config, opts Options) (Cache, error) {
@@ -204,6 +222,9 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 // returned.
 // WARNING: If UnsafeDisableDeepCopy is enabled, you must DeepCopy any object
 // returned from cache get/list before mutating it.
+//
+// Deprecated: Use builder.Manager().Cache(builder.Cache()) instead of
+// this function when creating a new manager.
 func BuilderWithOptions(options Options) NewCacheFunc {
 	return func(config *rest.Config, inherited Options) (Cache, error) {
 		var err error

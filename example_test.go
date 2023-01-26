@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	// since we invoke tests with -ginkgo.junit-report we need to import ginkgo.
@@ -40,7 +41,7 @@ import (
 func Example() {
 	var log = ctrl.Log.WithName("builder-examples")
 
-	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
+	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie()).Build()
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)
@@ -76,16 +77,13 @@ func Example() {
 // * Start the application.
 func Example_updateLeaderElectionDurations() {
 	var log = ctrl.Log.WithName("builder-examples")
-	leaseDuration := 100 * time.Second
-	renewDeadline := 80 * time.Second
-	retryPeriod := 20 * time.Second
-	manager, err := ctrl.NewManager(
-		ctrl.GetConfigOrDie(),
-		ctrl.Options{
-			LeaseDuration: &leaseDuration,
-			RenewDeadline: &renewDeadline,
-			RetryPeriod:   &retryPeriod,
-		})
+	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie()).
+		UseLeaderElection(builder.LeaderElectionOpts{
+			LeaseDuration: 100 * time.Second,
+			RenewDeadline: 80 * time.Second,
+			RetryPeriod:   20 * time.Second,
+		}).
+		Build()
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)

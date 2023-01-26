@@ -31,7 +31,7 @@ import (
 )
 
 // Builder builds an Application ControllerManagedBy (e.g. Operator) and returns a manager.Manager to start it.
-type Builder = builder.Builder
+type Builder = builder.ControllerBuilder
 
 // Request contains the information necessary to reconcile a Kubernetes object.  This includes the
 // information to uniquely identify the object - its Name and Namespace.  It does NOT contain information about
@@ -108,7 +108,7 @@ var (
 	NewWebhookManagedBy = builder.WebhookManagedBy
 
 	// NewManager returns a new Manager for creating Controllers.
-	NewManager = manager.New
+	NewManager = builder.Manager
 
 	// CreateOrUpdate creates or updates the given object obj in the Kubernetes
 	// cluster. The object's desired state should be reconciled with the existing

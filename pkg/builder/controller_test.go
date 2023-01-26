@@ -87,7 +87,7 @@ var _ = Describe("application", func() {
 	Describe("New", func() {
 		It("should return success if given valid objects", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -100,7 +100,7 @@ var _ = Describe("application", func() {
 
 		It("should return error if given two apiType objects in For function", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -114,7 +114,7 @@ var _ = Describe("application", func() {
 
 		It("should return an error if For and Named function are not called", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -126,7 +126,7 @@ var _ = Describe("application", func() {
 
 		It("should return an error when using Owns without For", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -140,7 +140,7 @@ var _ = Describe("application", func() {
 
 		It("should return an error when there are no watches", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -152,7 +152,7 @@ var _ = Describe("application", func() {
 
 		It("should allow creating a controllerw without calling For", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -165,7 +165,7 @@ var _ = Describe("application", func() {
 
 		It("should return an error if there is no GVK for an object, and thus we can't default the controller name", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			By("creating a controller with a bad For type")
@@ -188,7 +188,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -211,7 +211,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -234,13 +234,15 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{
-				Controller: v1alpha1.ControllerConfigurationSpec{
-					GroupKindConcurrency: map[string]int{
-						"ReplicaSet.apps": maxConcurrentReconciles,
+			m, err := Manager(cfg).WithConfig(&v1alpha1.ControllerManagerConfiguration{
+				ControllerManagerConfigurationSpec: v1alpha1.ControllerManagerConfigurationSpec{
+					Controller: &v1alpha1.ControllerConfigurationSpec{
+						GroupKindConcurrency: map[string]int{
+							"ReplicaSet.apps": maxConcurrentReconciles,
+						},
 					},
 				},
-			})
+			}).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -261,7 +263,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -284,7 +286,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -307,7 +309,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -321,7 +323,7 @@ var _ = Describe("application", func() {
 
 		It("should allow multiple controllers for the same kind", func() {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -350,7 +352,7 @@ var _ = Describe("application", func() {
 
 	Describe("Start with ControllerManagedBy", func() {
 		It("should Reconcile Owns objects", func() {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			bldr := ControllerManagedBy(m).
@@ -363,7 +365,7 @@ var _ = Describe("application", func() {
 		})
 
 		It("should Reconcile Owns objects for every owner", func() {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			bldr := ControllerManagedBy(m).
@@ -376,7 +378,7 @@ var _ = Describe("application", func() {
 		})
 
 		It("should Reconcile Watches objects", func() {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			bldr := ControllerManagedBy(m).
@@ -392,7 +394,7 @@ var _ = Describe("application", func() {
 		})
 
 		It("should Reconcile without For", func() {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			bldr := ControllerManagedBy(m).
@@ -412,7 +414,7 @@ var _ = Describe("application", func() {
 
 	Describe("Set custom predicates", func() {
 		It("should execute registered predicates only for assigned kind", func() {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := Manager(cfg).Build()
 			Expect(err).NotTo(HaveOccurred())
 
 			var (
@@ -476,7 +478,7 @@ var _ = Describe("application", func() {
 			// use a cache that intercepts requests for fully typed objects to
 			// ensure we use the projected versions
 			var err error
-			mgr, err = manager.New(cfg, manager.Options{NewCache: newNonTypedOnlyCache})
+			mgr, err = Manager(cfg).Cache(RawCacheFactory(newNonTypedOnlyCache)).Build()
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -590,7 +592,7 @@ func (c *nonTypedOnlyCache) GetInformerForKind(ctx context.Context, gvk schema.G
 
 // TODO(directxman12): this function has too many arguments, and the whole
 // "nameSuffix" think is a bit of a hack It should be cleaned up significantly by someone with a bit of time.
-func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager, complete bool, blders ...*Builder) {
+func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager, complete bool, blders ...*ControllerBuilder) {
 	deployName := "deploy-name-" + nameSuffix
 	rsName := "rs-name-" + nameSuffix
 

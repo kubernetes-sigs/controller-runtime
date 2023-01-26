@@ -497,7 +497,7 @@ var _ = Describe("application", func() {
 				For(&appsv1.Deployment{}, OnlyMetadata).
 				Owns(&appsv1.ReplicaSet{}, OnlyMetadata).
 				Watches(&appsv1.StatefulSet{},
-					handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
+					handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
 						defer GinkgoRecover()
 
 						ometa := o.(*metav1.PartialObjectMetadata)

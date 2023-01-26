@@ -17,6 +17,7 @@ limitations under the License.
 package handler
 
 import (
+	"context"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -82,7 +83,7 @@ type enqueueRequestForOwner struct {
 }
 
 // Create implements EventHandler.
-func (e *enqueueRequestForOwner) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
+func (e *enqueueRequestForOwner) Create(ctx context.Context, evt event.CreateEvent, q workqueue.RateLimitingInterface) {
 	reqs := map[reconcile.Request]empty{}
 	e.getOwnerReconcileRequest(evt.Object, reqs)
 	for req := range reqs {
@@ -91,7 +92,7 @@ func (e *enqueueRequestForOwner) Create(evt event.CreateEvent, q workqueue.RateL
 }
 
 // Update implements EventHandler.
-func (e *enqueueRequestForOwner) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+func (e *enqueueRequestForOwner) Update(ctx context.Context, evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 	reqs := map[reconcile.Request]empty{}
 	e.getOwnerReconcileRequest(evt.ObjectOld, reqs)
 	e.getOwnerReconcileRequest(evt.ObjectNew, reqs)
@@ -101,7 +102,7 @@ func (e *enqueueRequestForOwner) Update(evt event.UpdateEvent, q workqueue.RateL
 }
 
 // Delete implements EventHandler.
-func (e *enqueueRequestForOwner) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+func (e *enqueueRequestForOwner) Delete(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 	reqs := map[reconcile.Request]empty{}
 	e.getOwnerReconcileRequest(evt.Object, reqs)
 	for req := range reqs {
@@ -110,7 +111,7 @@ func (e *enqueueRequestForOwner) Delete(evt event.DeleteEvent, q workqueue.RateL
 }
 
 // Generic implements EventHandler.
-func (e *enqueueRequestForOwner) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+func (e *enqueueRequestForOwner) Generic(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
 	reqs := map[reconcile.Request]empty{}
 	e.getOwnerReconcileRequest(evt.Object, reqs)
 	for req := range reqs {

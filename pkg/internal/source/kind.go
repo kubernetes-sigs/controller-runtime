@@ -79,7 +79,7 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 			return
 		}
 
-		_, err := i.AddEventHandler(EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
+		_, err := i.AddEventHandler(NewEventHandler(ctx, queue, handler, prct))
 		if err != nil {
 			ks.started <- err
 			return

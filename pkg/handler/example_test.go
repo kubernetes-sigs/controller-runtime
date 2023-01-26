@@ -17,6 +17,8 @@ limitations under the License.
 package handler_test
 
 import (
+	"context"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -65,7 +67,7 @@ func ExampleEnqueueRequestsFromMapFunc() {
 	// controller is a controller.controller
 	err := c.Watch(
 		source.Kind(mgr.GetCache(), &appsv1.Deployment{}),
-		handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
+		handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a client.Object) []reconcile.Request {
 			return []reconcile.Request{
 				{NamespacedName: types.NamespacedName{
 					Name:      a.GetName() + "-1",
@@ -89,25 +91,25 @@ func ExampleFuncs() {
 	err := c.Watch(
 		source.Kind(mgr.GetCache(), &corev1.Pod{}),
 		handler.Funcs{
-			CreateFunc: func(e event.CreateEvent, q workqueue.RateLimitingInterface) {
+			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.Object.GetName(),
 					Namespace: e.Object.GetNamespace(),
 				}})
 			},
-			UpdateFunc: func(e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+			UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.ObjectNew.GetName(),
 					Namespace: e.ObjectNew.GetNamespace(),
 				}})
 			},
-			DeleteFunc: func(e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.Object.GetName(),
 					Namespace: e.Object.GetNamespace(),
 				}})
 			},
-			GenericFunc: func(e event.GenericEvent, q workqueue.RateLimitingInterface) {
+			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.Object.GetName(),
 					Namespace: e.Object.GetNamespace(),

@@ -133,7 +133,11 @@ func (cs *Channel) Start(
 			}
 
 			if shouldHandle {
-				handler.Generic(evt, queue)
+				func() {
+					ctx, cancel := context.WithCancel(ctx)
+					defer cancel()
+					handler.Generic(ctx, evt, queue)
+				}()
 			}
 		}
 	}()
@@ -200,7 +204,7 @@ func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, que
 		return fmt.Errorf("must specify Informer.Informer")
 	}
 
-	_, err := is.Informer.AddEventHandler(internal.EventHandler{Queue: queue, EventHandler: handler, Predicates: prct})
+	_, err := is.Informer.AddEventHandler(internal.NewEventHandler(ctx, queue, handler, prct))
 	if err != nil {
 		return err
 	}

@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
@@ -153,19 +154,6 @@ func RESTClientForGVK(gvk schema.GroupVersionKind, isUnstructured bool, baseConf
 	return rest.RESTClientFor(createRestConfig(gvk, isUnstructured, baseConfig, codecs))
 }
 
-// serializerWithDecodedGVK is a CodecFactory that overrides the DecoderToVersion of a WithoutConversionCodecFactory
-// in order to avoid clearing the GVK from the decoded object.
-//
-// See https://github.com/kubernetes/kubernetes/issues/80609.
-type serializerWithDecodedGVK struct {
-	serializer.WithoutConversionCodecFactory
-}
-
-// DecoderToVersion returns an decoder that does not do conversion.
-func (f serializerWithDecodedGVK) DecoderToVersion(serializer runtime.Decoder, _ runtime.GroupVersioner) runtime.Decoder {
-	return serializer
-}
-
 // createRestConfig copies the base config and updates needed fields for a new rest config.
 func createRestConfig(gvk schema.GroupVersionKind, isUnstructured bool, baseConfig *rest.Config, codecs serializer.CodecFactory) *rest.Config {
 	gv := gvk.GroupVersion()
@@ -190,9 +178,8 @@ func createRestConfig(gvk schema.GroupVersionKind, isUnstructured bool, baseConf
 	}
 
 	if isUnstructured {
-		// If the object is unstructured, we need to preserve the GVK information.
-		// Use our own custom serializer.
-		cfg.NegotiatedSerializer = serializerWithDecodedGVK{serializer.WithoutConversionCodecFactory{CodecFactory: codecs}}
+		// If the object is unstructured, we use the client-go dynamic serializer.
+		cfg = dynamic.ConfigFor(cfg)
 	} else {
 		cfg.NegotiatedSerializer = serializerWithTargetZeroingDecode{NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: codecs}}
 	}

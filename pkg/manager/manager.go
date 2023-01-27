@@ -262,9 +262,9 @@ type Options struct {
 	NewCache cache.NewCacheFunc
 
 	// NewClient is the func that creates the client to be used by the manager.
-	// If not set this will create the default DelegatingClient that will
-	// use the cache for reads and the client for writes.
-	NewClient cluster.NewClientFunc
+	// If not set this will create a Client backed by a Cache for read operations
+	// and a direct Client for write operations.
+	NewClient client.NewClientFunc
 
 	// BaseContext is the function that provides Context values to Runnables
 	// managed by the Manager. If a BaseContext function isn't provided, Runnables

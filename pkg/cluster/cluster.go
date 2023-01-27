@@ -105,10 +105,10 @@ type Options struct {
 	NewCache cache.NewCacheFunc
 
 	// NewClient is the func that creates the client to be used by the manager.
-	// If not set this will create the default DelegatingClient that will
-	// use the cache for reads and the client for writes.
+	// If not set this will create a Client backed by a Cache for read operations
+	// and a direct Client for write operations.
 	// NOTE: The default client will not cache Unstructured.
-	NewClient NewClientFunc
+	NewClient client.NewClientFunc
 
 	// ClientDisableCacheFor tells the client that, if any cache is used, to bypass it
 	// for the given objects.
@@ -163,20 +163,26 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 		return nil, err
 	}
 
-	clientOptions := client.Options{Scheme: options.Scheme, Mapper: mapper}
-
-	apiReader, err := client.New(config, clientOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	writeObj, err := options.NewClient(cache, config, clientOptions, options.ClientDisableCacheFor...)
+	writeObj, err := options.NewClient(config, client.Options{
+		Scheme: options.Scheme,
+		Mapper: mapper,
+		Cache: &client.CacheOptions{
+			Reader:     cache,
+			DisableFor: options.ClientDisableCacheFor,
+		},
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	if options.DryRunClient {
 		writeObj = client.NewDryRunClient(writeObj)
+	}
+
+	// Create the API Reader, a client with no cache.
+	apiReader, err := client.New(config, client.Options{Scheme: options.Scheme, Mapper: mapper})
+	if err != nil {
+		return nil, err
 	}
 
 	// Create the recorder provider to inject event recorders for the components.
@@ -215,7 +221,7 @@ func setOptionsDefaults(options Options) Options {
 
 	// Allow users to define how to create a new client
 	if options.NewClient == nil {
-		options.NewClient = DefaultNewClient
+		options.NewClient = client.New
 	}
 
 	// Allow newCache to be mocked
@@ -246,38 +252,4 @@ func setOptionsDefaults(options Options) Options {
 	}
 
 	return options
-}
-
-// NewClientFunc allows a user to define how to create a client.
-type NewClientFunc func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error)
-
-// ClientOptions are the optional arguments for tuning the caching client.
-type ClientOptions struct {
-	UncachedObjects   []client.Object
-	CacheUnstructured bool
-}
-
-// DefaultNewClient creates the default caching client, that will never cache Unstructured.
-func DefaultNewClient(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
-	return ClientBuilderWithOptions(ClientOptions{})(cache, config, options, uncachedObjects...)
-}
-
-// ClientBuilderWithOptions returns a Client constructor that will build a client
-// honoring the options argument
-func ClientBuilderWithOptions(options ClientOptions) NewClientFunc {
-	return func(cache cache.Cache, config *rest.Config, clientOpts client.Options, uncachedObjects ...client.Object) (client.Client, error) {
-		options.UncachedObjects = append(options.UncachedObjects, uncachedObjects...)
-
-		c, err := client.New(config, clientOpts)
-		if err != nil {
-			return nil, err
-		}
-
-		return client.NewDelegatingClient(client.NewDelegatingClientInput{
-			CacheReader:       cache,
-			Client:            c,
-			UncachedObjects:   options.UncachedObjects,
-			CacheUnstructured: options.CacheUnstructured,
-		})
-	}
 }

@@ -36,6 +36,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+// Options are creation options for a Client.
+type Options struct {
+	// Scheme, if provided, will be used to map go structs to GroupVersionKinds
+	Scheme *runtime.Scheme
+
+	// Mapper, if provided, will be used to map GroupVersionKinds to Resources
+	Mapper meta.RESTMapper
+
+	// Cache, if provided, is used to read objects from the cache.
+	Cache *CacheOptions
+
+	// WarningHandler is used to configure the warning handler responsible for
+	// surfacing and handling warnings messages sent by the API server.
+	WarningHandler WarningHandlerOptions
+}
+
 // WarningHandlerOptions are options for configuring a
 // warning handler for the client which is responsible
 // for surfacing API Server warnings.
@@ -50,18 +66,20 @@ type WarningHandlerOptions struct {
 	AllowDuplicateLogs bool
 }
 
-// Options are creation options for a Client.
-type Options struct {
-	// Scheme, if provided, will be used to map go structs to GroupVersionKinds
-	Scheme *runtime.Scheme
-
-	// Mapper, if provided, will be used to map GroupVersionKinds to Resources
-	Mapper meta.RESTMapper
-
-	// Opts is used to configure the warning handler responsible for
-	// surfacing and handling warnings messages sent by the API server.
-	Opts WarningHandlerOptions
+// CacheOptions are options for creating a cache-backed client.
+type CacheOptions struct {
+	// Reader is a cache-backed reader that will be used to read objects from the cache.
+	// +required
+	Reader Reader
+	// DisableFor is a list of objects that should not be read from the cache.
+	DisableFor []Object
+	// Unstructured is a flag that indicates whether the cache-backed client should
+	// read unstructured objects or lists from the cache.
+	Unstructured bool
 }
+
+// NewClientFunc allows a user to define how to create a client.
+type NewClientFunc func(config *rest.Config, options Options) (Client, error)
 
 // New returns a new Client using the provided config and Options.
 // The returned client reads *and* writes directly from the server
@@ -82,7 +100,7 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 		return nil, fmt.Errorf("must provide non-nil rest.Config to client.New")
 	}
 
-	if !options.Opts.SuppressWarnings {
+	if !options.WarningHandler.SuppressWarnings {
 		// surface warnings
 		logger := log.Log.WithName("KubeAPIWarningLogger")
 		// Set a WarningHandler, the default WarningHandler
@@ -93,7 +111,7 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 		config.WarningHandler = log.NewKubeAPIWarningLogger(
 			logger,
 			log.KubeAPIWarningLoggerOptions{
-				Deduplicate: !options.Opts.AllowDuplicateLogs,
+				Deduplicate: !options.WarningHandler.AllowDuplicateLogs,
 			},
 		)
 	}
@@ -143,7 +161,24 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 		scheme: options.Scheme,
 		mapper: options.Mapper,
 	}
+	if options.Cache == nil || options.Cache.Reader == nil {
+		return c, nil
+	}
 
+	// We want a cache if we're here.
+	// Set the cache.
+	c.cache = options.Cache.Reader
+
+	// Load uncached GVKs.
+	c.cacheUnstructured = options.Cache.Unstructured
+	uncachedGVKs := map[schema.GroupVersionKind]struct{}{}
+	for _, obj := range options.Cache.DisableFor {
+		gvk, err := c.GroupVersionKindFor(obj)
+		if err != nil {
+			return nil, err
+		}
+		uncachedGVKs[gvk] = struct{}{}
+	}
 	return c, nil
 }
 
@@ -157,6 +192,35 @@ type client struct {
 	metadataClient     metadataClient
 	scheme             *runtime.Scheme
 	mapper             meta.RESTMapper
+
+	cache             Reader
+	uncachedGVKs      map[schema.GroupVersionKind]struct{}
+	cacheUnstructured bool
+}
+
+func (c *client) shouldBypassCache(obj runtime.Object) (bool, error) {
+	if c.cache == nil {
+		return true, nil
+	}
+
+	gvk, err := c.GroupVersionKindFor(obj)
+	if err != nil {
+		return false, err
+	}
+	// TODO: this is producing unsafe guesses that don't actually work,
+	// but it matches ~99% of the cases out there.
+	if meta.IsListType(obj) {
+		gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
+	}
+	if _, isUncached := c.uncachedGVKs[gvk]; isUncached {
+		return true, nil
+	}
+	if !c.cacheUnstructured {
+		_, isUnstructured := obj.(*unstructured.Unstructured)
+		_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
+		return isUnstructured || isUnstructuredList, nil
+	}
+	return false, nil
 }
 
 // resetGroupVersionKind is a helper function to restore and preserve GroupVersionKind on an object.
@@ -169,12 +233,12 @@ func (c *client) resetGroupVersionKind(obj runtime.Object, gvk schema.GroupVersi
 }
 
 // GroupVersionKindFor returns the GroupVersionKind for the given object.
-func (c *client) GroupVersionKindFor(obj Object) (schema.GroupVersionKind, error) {
+func (c *client) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
 	return apiutil.GVKForObject(obj, c.scheme)
 }
 
 // IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
-func (c *client) IsObjectNamespaced(obj Object) (bool, error) {
+func (c *client) IsObjectNamespaced(obj runtime.Object) (bool, error) {
 	return apiutil.IsObjectNamespaced(obj, c.scheme, c.mapper)
 }
 
@@ -252,6 +316,12 @@ func (c *client) Patch(ctx context.Context, obj Object, patch Patch, opts ...Pat
 
 // Get implements client.Client.
 func (c *client) Get(ctx context.Context, key ObjectKey, obj Object, opts ...GetOption) error {
+	if isUncached, err := c.shouldBypassCache(obj); err != nil {
+		return err
+	} else if !isUncached {
+		return c.cache.Get(ctx, key, obj, opts...)
+	}
+
 	switch obj.(type) {
 	case *unstructured.Unstructured:
 		return c.unstructuredClient.Get(ctx, key, obj, opts...)
@@ -266,6 +336,12 @@ func (c *client) Get(ctx context.Context, key ObjectKey, obj Object, opts ...Get
 
 // List implements client.Client.
 func (c *client) List(ctx context.Context, obj ObjectList, opts ...ListOption) error {
+	if isUncached, err := c.shouldBypassCache(obj); err != nil {
+		return err
+	} else if !isUncached {
+		return c.cache.List(ctx, obj, opts...)
+	}
+
 	switch x := obj.(type) {
 	case *unstructured.UnstructuredList:
 		return c.unstructuredClient.List(ctx, obj, opts...)

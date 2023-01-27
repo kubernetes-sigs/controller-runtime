@@ -48,12 +48,12 @@ func (c *dryRunClient) RESTMapper() meta.RESTMapper {
 }
 
 // GroupVersionKindFor returns the GroupVersionKind for the given object.
-func (c *dryRunClient) GroupVersionKindFor(obj Object) (schema.GroupVersionKind, error) {
+func (c *dryRunClient) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
 	return c.client.GroupVersionKindFor(obj)
 }
 
 // IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
-func (c *dryRunClient) IsObjectNamespaced(obj Object) (bool, error) {
+func (c *dryRunClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
 	return c.client.IsObjectNamespaced(obj)
 }
 

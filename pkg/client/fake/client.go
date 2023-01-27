@@ -564,12 +564,12 @@ func (c *fakeClient) RESTMapper() meta.RESTMapper {
 }
 
 // GroupVersionKindFor returns the GroupVersionKind for the given object.
-func (c *fakeClient) GroupVersionKindFor(obj client.Object) (schema.GroupVersionKind, error) {
+func (c *fakeClient) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
 	return apiutil.GVKForObject(obj, c.scheme)
 }
 
 // IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
-func (c *fakeClient) IsObjectNamespaced(obj client.Object) (bool, error) {
+func (c *fakeClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
 	return apiutil.IsObjectNamespaced(obj, c.scheme, c.restMapper)
 }
 

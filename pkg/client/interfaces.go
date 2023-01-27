@@ -171,9 +171,9 @@ type Client interface {
 	// RESTMapper returns the rest this client is using.
 	RESTMapper() meta.RESTMapper
 	// GroupVersionKindFor returns the GroupVersionKind for the given object.
-	GroupVersionKindFor(obj Object) (schema.GroupVersionKind, error)
+	GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error)
 	// IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
-	IsObjectNamespaced(obj Object) (bool, error)
+	IsObjectNamespaced(obj runtime.Object) (bool, error)
 }
 
 // WithWatch supports Watch on top of the CRUD operations supported by

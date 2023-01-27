@@ -73,7 +73,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should return an error it can't create a client.Client", func() {
 			m, err := New(cfg, Options{
-				NewClient: func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
+				NewClient: func(config *rest.Config, options client.Options) (client.Client, error) {
 					return nil, errors.New("expected error")
 				},
 			})
@@ -95,7 +95,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should create a client defined in by the new client function", func() {
 			m, err := New(cfg, Options{
-				NewClient: func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
+				NewClient: func(config *rest.Config, options client.Options) (client.Client, error) {
 					return nil, nil
 				},
 			})

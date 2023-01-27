@@ -44,7 +44,7 @@ var _ = Describe("controller.Controller", func() {
 
 	Describe("New", func() {
 		It("should return an error if Name is not Specified", func() {
-			m, err := builder.Manager(cfg).Build()
+			m, err := manager.New(cfg)
 			Expect(err).NotTo(HaveOccurred())
 			c, err := controller.New("", m, controller.Options{Reconciler: rec})
 			Expect(c).To(BeNil())
@@ -52,7 +52,7 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should return an error if Reconciler is not Specified", func() {
-			m, err := builder.Manager(cfg).Build()
+			m, err := manager.New(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("foo", m, controller.Options{})
@@ -61,7 +61,7 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should not return an error if two controllers are registered with different names", func() {
-			m, err := builder.Manager(cfg).Build()
+			m, err := manager.New(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			c1, err := controller.New("c1", m, controller.Options{Reconciler: rec})
@@ -96,7 +96,7 @@ var _ = Describe("controller.Controller", func() {
 				return reconcile.Result{}, nil
 			})
 
-			m, err := builder.Manager(cfg).Build()
+			m, err := manager.New(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{Reconciler: rec})
@@ -122,7 +122,7 @@ var _ = Describe("controller.Controller", func() {
 		It("should not create goroutines if never started", func() {
 			currentGRs := goleak.IgnoreCurrent()
 
-			m, err := builder.Manager(cfg).Build()
+			m, err := manager.New(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = controller.New("new-controller", m, controller.Options{Reconciler: rec})
@@ -135,11 +135,11 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should default RecoverPanic from the manager", func() {
-			m, err := builder.Manager(cfg).WithConfig(&v1alpha1.ControllerManagerConfiguration{
+			m, err := manager.New(cfg, builder.Manager().WithConfig(&v1alpha1.ControllerManagerConfiguration{
 				ControllerManagerConfigurationSpec: v1alpha1.ControllerManagerConfigurationSpec{
 					Controller: &v1alpha1.ControllerConfigurationSpec{RecoverPanic: pointer.Bool(true)},
 				},
-			}).Build()
+			}))
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{
@@ -155,11 +155,11 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should not override RecoverPanic on the controller", func() {
-			m, err := builder.Manager(cfg).WithConfig(&v1alpha1.ControllerManagerConfiguration{
+			m, err := manager.New(cfg, builder.Manager().WithConfig(&v1alpha1.ControllerManagerConfiguration{
 				ControllerManagerConfigurationSpec: v1alpha1.ControllerManagerConfigurationSpec{
 					Controller: &v1alpha1.ControllerConfigurationSpec{RecoverPanic: pointer.Bool(true)},
 				},
-			}).Build()
+			}))
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{
@@ -176,7 +176,7 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should default NeedLeaderElection on the controller to true", func() {
-			m, err := builder.Manager(cfg).Build()
+			m, err := manager.New(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{
@@ -191,7 +191,7 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should allow for setting leaderElected to false", func() {
-			m, err := builder.Manager(cfg).Build()
+			m, err := manager.New(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{
@@ -207,7 +207,7 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should implement manager.LeaderElectionRunnable", func() {
-			m, err := builder.Manager(cfg).Build()
+			m, err := manager.New(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{

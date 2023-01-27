@@ -26,6 +26,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/examples/configfile/custom/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	cfg "sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -49,10 +50,10 @@ func main() {
 	ctrlConfig := v1alpha1.CustomControllerManagerConfiguration{}
 
 	mgr, err := ctrl.
-		NewManager(config.GetConfigOrDie()).
-		Scheme(scheme).
-		WithConfig(cfg.File().OfKind(&ctrlConfig)).
-		Build()
+		NewManager(config.GetConfigOrDie(), builder.Manager().
+			Scheme(scheme).
+			WithConfig(cfg.File().OfKind(&ctrlConfig)),
+		)
 	if err != nil {
 		entryLog.Error(err, "unable to set up overall controller manager")
 		os.Exit(1)

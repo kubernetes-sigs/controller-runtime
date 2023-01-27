@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	conf "sigs.k8s.io/controller-runtime/pkg/config"
@@ -42,7 +43,7 @@ func ExampleNew() {
 		os.Exit(1)
 	}
 
-	mgr, err := manager.New(cfg, manager.Options{})
+	mgr, err := ctrl.NewManager(cfg)
 	if err != nil {
 		log.Error(err, "unable to set up manager")
 		os.Exit(1)
@@ -58,10 +59,12 @@ func ExampleNew_multinamespaceCache() {
 		os.Exit(1)
 	}
 
-	mgr, err := builder.Manager(cfg).
-		Cache(builder.Cache().
-			RestrictedView().With("namespace1").With("namespace2"),
-		).Build()
+	mgr, err := ctrl.NewManager(cfg,
+		builder.Manager().
+			Cache(
+				builder.Cache().RestrictedView().With("namespace1").With("namespace2"),
+			),
+	)
 	if err != nil {
 		log.Error(err, "unable to set up manager")
 		os.Exit(1)
@@ -91,37 +94,14 @@ func ExampleManager_start() {
 
 // This example will populate Options from a custom config file
 // using defaults.
-func ExampleOptions_andFrom() {
-	opts := manager.Options{}
-	if _, err := opts.AndFrom(conf.File()); err != nil {
-		log.Error(err, "unable to load config")
-		os.Exit(1)
-	}
-
+func ExampleNew_withConfig() {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		log.Error(err, "unable to get kubeconfig")
 		os.Exit(1)
 	}
 
-	mgr, err := manager.New(cfg, opts)
-	if err != nil {
-		log.Error(err, "unable to set up manager")
-		os.Exit(1)
-	}
-	log.Info("created manager", "manager", mgr)
-}
-
-// This example will populate Options from a custom config file
-// using defaults and will panic if there are errors.
-func ExampleOptions_andFromOrDie() {
-	cfg, err := config.GetConfig()
-	if err != nil {
-		log.Error(err, "unable to get kubeconfig")
-		os.Exit(1)
-	}
-
-	mgr, err := manager.New(cfg, manager.Options{}.AndFromOrDie(conf.File()))
+	mgr, err := ctrl.NewManager(cfg, builder.Manager().WithConfig(conf.File()))
 	if err != nil {
 		log.Error(err, "unable to set up manager")
 		os.Exit(1)

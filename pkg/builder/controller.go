@@ -207,6 +207,12 @@ func (blder *ControllerBuilder) WithLogConstructor(logConstructor func(*reconcil
 	return blder
 }
 
+// WithConcurrency sets the maximum number of concurrent reconciles for the controller.
+func (blder *ControllerBuilder) WithConcurrency(concurrency int) *ControllerBuilder {
+	blder.ctrlOptions.MaxConcurrentReconciles = concurrency
+	return blder
+}
+
 // Named sets the name of the controller to the given name.  The name shows up
 // in metrics, among other things, and thus should be a prometheus compatible name
 // (underscores and alphanumeric characters only).

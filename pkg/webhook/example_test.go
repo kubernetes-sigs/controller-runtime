@@ -55,7 +55,7 @@ var (
 func Example() {
 	// Create a manager
 	// Note: GetConfigOrDie will os.Exit(1) w/o any message if no kube-config can be found
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie()).Build()
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie())
 	if err != nil {
 		panic(err)
 	}

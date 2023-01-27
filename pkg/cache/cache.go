@@ -157,6 +157,38 @@ type Options struct {
 	DefaultTransform toolscache.TransformFunc
 }
 
+// ApplyToCache applies the options to the given Options.
+func (o Options) ApplyToCache(opts *Options) error {
+	if o.Scheme != nil {
+		opts.Scheme = o.Scheme
+	}
+	if o.Mapper != nil {
+		opts.Mapper = o.Mapper
+	}
+	if o.Resync != nil {
+		opts.Resync = o.Resync
+	}
+	if o.Namespace != "" {
+		opts.Namespace = o.Namespace
+	}
+	if o.SelectorsByObject != nil {
+		opts.SelectorsByObject = o.SelectorsByObject
+	}
+	if !o.DefaultSelector.Field.Empty() || !o.DefaultSelector.Label.Empty() {
+		opts.DefaultSelector = o.DefaultSelector
+	}
+	if o.UnsafeDisableDeepCopyByObject != nil {
+		opts.UnsafeDisableDeepCopyByObject = o.UnsafeDisableDeepCopyByObject
+	}
+	if o.TransformByObject != nil {
+		opts.TransformByObject = o.TransformByObject
+	}
+	if o.DefaultTransform != nil {
+		opts.DefaultTransform = o.DefaultTransform
+	}
+	return nil
+}
+
 // SetOptions is an interface that can be implemented to configure
 // a Manager upon creation.
 type SetOptions interface {
@@ -175,7 +207,8 @@ func (f SetOptionsFunc) ApplyToCache(o *Options) error {
 type NewCacheFunc func(config *rest.Config, opts Options) (Cache, error)
 
 // New initializes and returns a new Cache.
-func New(config *rest.Config, opts Options) (Cache, error) {
+func New(config *rest.Config, options ...SetOptions) (Cache, error) {
+
 	opts, err := defaultOpts(config, opts)
 	if err != nil {
 		return nil, err

@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	cfg "sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -44,9 +45,6 @@ type Result = reconcile.Result
 // Manager initializes shared dependencies such as Caches and Clients, and provides them to Runnables.
 // A Manager is required to create Controllers.
 type Manager = manager.Manager
-
-// Options are the arguments for creating a new Manager.
-type Options = manager.Options
 
 // SchemeBuilder builds a new Scheme for mapping go types to Kubernetes GroupVersionKinds.
 type SchemeBuilder = scheme.Builder
@@ -107,8 +105,11 @@ var (
 	// NewWebhookManagedBy returns a new webhook builder that will be started by the provided Manager.
 	NewWebhookManagedBy = builder.WebhookManagedBy
 
-	// NewManager returns a new Manager for creating Controllers.
-	NewManager = builder.Manager
+	// NewManager returns a new builder to create Managers.
+	NewManager = manager.New
+
+	// NewCache returns a new builder to create Caches.
+	NewCache = cache.New
 
 	// CreateOrUpdate creates or updates the given object obj in the Kubernetes
 	// cluster. The object's desired state should be reconciled with the existing

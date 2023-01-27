@@ -27,6 +27,7 @@ import (
 	toolscache "k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/internal/manager"
 )
 
 // Cache is a builder for a cache.Cache.
@@ -43,23 +44,35 @@ type rawCacheFactory struct {
 	factory cache.NewCacheFunc
 }
 
-func (r *rawCacheFactory) Factory() cache.NewCacheFunc {
+func (r *rawCacheFactory) Factory(*ManagerBuilder) cache.NewCacheFunc {
 	return r.factory
 }
 
 // CacheFactory has a Factory method that builds a cache.NewCacheFunc.
 type CacheFactory interface {
 	// Factory builds a cache.NewCacheFunc from the CacheBuilder.
-	Factory() cache.NewCacheFunc
+	Factory(m *ManagerBuilder) cache.NewCacheFunc
 }
 
 // CacheBuilder builds a cache.Cache.
 type CacheBuilder struct {
+	mgr  *ManagerBuilder
 	opts []cache.SetOptions
 }
 
+// ApplyToCache applies the cache options to the given cache.Options.
+func (c *CacheBuilder) ApplyToCache(o *cache.Options) error {
+	for _, opt := range c.opts {
+		if err := opt.ApplyToCache(o); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Factory builds a cache.NewCacheFunc from the CacheBuilder.
-func (c *CacheBuilder) Factory() cache.NewCacheFunc {
+func (c *CacheBuilder) Factory(m *ManagerBuilder) cache.NewCacheFunc {
+	c.mgr = m
 	return func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 		for _, opt := range c.opts {
 			if err := opt.ApplyToCache(&opts); err != nil {
@@ -68,11 +81,6 @@ func (c *CacheBuilder) Factory() cache.NewCacheFunc {
 		}
 		return cache.New(config, opts)
 	}
-}
-
-// Build builds a cache.Cache from the CacheBuilder.
-func (c *CacheBuilder) Build(config *rest.Config) (cache.Cache, error) {
-	return c.Factory()(config, cache.Options{})
 }
 
 // Scheme sets the scheme for the cache.
@@ -98,9 +106,16 @@ func (c *CacheBuilder) RESTMapper(mapper apimeta.RESTMapper) *CacheBuilder {
 }
 
 // SyncEvery sets the resync period for the cache.
-func (c *CacheBuilder) SyncEvery(dur *time.Duration) *CacheBuilder {
+func (c *CacheBuilder) SyncEvery(interval time.Duration) *CacheBuilder {
 	c.opts = append(c.opts, cache.SetOptionsFunc(func(o *cache.Options) error {
-		o.Resync = dur
+		if c.mgr != nil {
+			c.mgr.opts = append(c.mgr.opts, manager.SetOptionsFunc(func(o *manager.Options) error {
+				o.SyncPeriod = &interval
+				return nil
+			}))
+		}
+
+		o.Resync = &interval
 		return nil
 	}))
 	return c
@@ -182,6 +197,16 @@ type RestrictedViewCacheBuilder struct {
 	namespaces []string
 }
 
+// ApplyToCache applies the options to the cache.Options.
+func (r *RestrictedViewCacheBuilder) ApplyToCache(o *cache.Options) error {
+	for _, opt := range r.global.opts {
+		if err := opt.ApplyToCache(o); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // With sets the namespace to restrict the cache to.
 // This can be called multiple times to restrict the cache to multiple namespaces.
 //
@@ -195,7 +220,7 @@ func (r *RestrictedViewCacheBuilder) With(namespace string) *RestrictedViewCache
 }
 
 // Factory builds a cache.NewCacheFunc from the RestrictedCacheBuilder.
-func (r *RestrictedViewCacheBuilder) Factory() cache.NewCacheFunc {
+func (r *RestrictedViewCacheBuilder) Factory(m *ManagerBuilder) cache.NewCacheFunc {
 	return func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 		for _, opt := range r.global.opts {
 			if err := opt.ApplyToCache(&opts); err != nil {
@@ -215,9 +240,16 @@ func (r *RestrictedViewCacheBuilder) Factory() cache.NewCacheFunc {
 		}
 
 		if ns.Len() == 1 {
+			if m != nil {
+				m.opts = append(m.opts, manager.SetOptionsFunc(func(o *manager.Options) error {
+					o.Namespace = ns.UnsortedList()[0]
+					return nil
+				}))
+			}
+
 			// If there's only one namespace, use the regular cache builder.
 			opts.Namespace = ns.UnsortedList()[0]
-			return r.global.Factory()(config, opts)
+			return r.global.Factory(m)(config, opts)
 		}
 
 		// We're using the deprecated function here because we're building a restricted view of the cache.
@@ -225,9 +257,4 @@ func (r *RestrictedViewCacheBuilder) Factory() cache.NewCacheFunc {
 		// in favor of a new function that allows to set options on each namespace.
 		return cache.MultiNamespacedCacheBuilder(ns.UnsortedList())(config, opts) //nolint:staticcheck
 	}
-}
-
-// Build builds a cache.Cache from the RestrictedCacheBuilder.
-func (r *RestrictedViewCacheBuilder) Build(config *rest.Config) (cache.Cache, error) {
-	return r.Factory()(config, cache.Options{})
 }

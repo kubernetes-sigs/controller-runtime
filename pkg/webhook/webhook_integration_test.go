@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
@@ -72,14 +73,14 @@ var _ = Describe("Webhook", func() {
 	})
 	Context("when running a webhook server with a manager", func() {
 		It("should reject create request for webhook that rejects all requests", func() {
-			m, err := builder.Manager(cfg).WithWebhook(builder.WebhookOpts{
+			m, err := manager.New(cfg, builder.Manager().WithWebhook(builder.WebhookOpts{
 				Port:    testenv.WebhookInstallOptions.LocalServingPort,
 				Host:    testenv.WebhookInstallOptions.LocalServingHost,
 				CertDir: testenv.WebhookInstallOptions.LocalServingCertDir,
 				TLSOpts: []func(*tls.Config){
 					func(config *tls.Config) {},
 				},
-			}).Build()
+			}))
 			Expect(err).NotTo(HaveOccurred())
 			server := m.GetWebhookServer()
 			server.Register("/failing", &webhook.Admission{Handler: &rejectingValidator{d: admission.NewDecoder(testenv.Scheme)}})
@@ -98,14 +99,14 @@ var _ = Describe("Webhook", func() {
 			cancel()
 		})
 		It("should reject create request for multi-webhook that rejects all requests", func() {
-			m, err := builder.Manager(cfg).WithWebhook(builder.WebhookOpts{
+			m, err := manager.New(cfg, builder.Manager().WithWebhook(builder.WebhookOpts{
 				Port:    testenv.WebhookInstallOptions.LocalServingPort,
 				Host:    testenv.WebhookInstallOptions.LocalServingHost,
 				CertDir: testenv.WebhookInstallOptions.LocalServingCertDir,
 				TLSOpts: []func(*tls.Config){
 					func(config *tls.Config) {},
 				},
-			}).Build()
+			}))
 			server := m.GetWebhookServer()
 			server.Register("/failing", &webhook.Admission{Handler: admission.MultiValidatingHandler(&rejectingValidator{d: admission.NewDecoder(testenv.Scheme)})})
 

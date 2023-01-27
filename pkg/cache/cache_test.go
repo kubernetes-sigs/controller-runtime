@@ -931,11 +931,11 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				})
 				It("test multinamespaced cache for cluster scoped resources", func() {
 					By("creating a multinamespaced cache to watch specific namespaces")
-					m, err := builder.Cache().
+					m, err := cache.New(cfg, builder.Cache().
 						RestrictedView().
 						With("default").
-						With(testNamespaceOne).
-						Build(cfg)
+						With(testNamespaceOne),
+					)
 					Expect(err).NotTo(HaveOccurred())
 
 					By("running the cache and waiting it for sync")

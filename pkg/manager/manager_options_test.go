@@ -5,6 +5,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/internal/manager"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -15,17 +16,16 @@ var _ = Describe("manager.Options", func() {
 	Describe("AndFrom", func() {
 		Describe("reading custom type using OfKind", func() {
 			var (
-				o   Options
+				o   manager.Options
 				c   customConfig
 				err error
 			)
 
 			JustBeforeEach(func() {
 				s := runtime.NewScheme()
-				o = Options{Scheme: s}
+				o = manager.Options{Scheme: s}
 				c = customConfig{}
-
-				_, err = o.AndFrom(config.File().AtPath("./testdata/custom-config.yaml").OfKind(&c))
+				err = o.AndFrom(config.File().AtPath("./testdata/custom-config.yaml").OfKind(&c))
 			})
 
 			It("should not panic or fail", func() {

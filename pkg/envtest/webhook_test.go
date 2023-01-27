@@ -31,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
@@ -39,14 +40,16 @@ var _ = Describe("Test", func() {
 
 	Describe("Webhook", func() {
 		It("should reject create request for webhook that rejects all requests", func() {
-			m, err := builder.Manager(env.Config).WithWebhook(builder.WebhookOpts{
-				Port:    env.WebhookInstallOptions.LocalServingPort,
-				Host:    env.WebhookInstallOptions.LocalServingHost,
-				CertDir: env.WebhookInstallOptions.LocalServingCertDir,
-				TLSOpts: []func(*tls.Config){
-					func(config *tls.Config) {},
-				},
-			}).Build()
+			m, err := manager.New(env.Config, builder.Manager().
+				WithWebhook(builder.WebhookOpts{
+					Port:    env.WebhookInstallOptions.LocalServingPort,
+					Host:    env.WebhookInstallOptions.LocalServingHost,
+					CertDir: env.WebhookInstallOptions.LocalServingCertDir,
+					TLSOpts: []func(*tls.Config){
+						func(config *tls.Config) {},
+					},
+				}),
+			)
 			Expect(err).NotTo(HaveOccurred())
 			server := m.GetWebhookServer()
 			server.Register("/failing", &webhook.Admission{Handler: &rejectingValidator{}})

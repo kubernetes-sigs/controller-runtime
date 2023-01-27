@@ -41,7 +41,7 @@ import (
 func Example() {
 	var log = ctrl.Log.WithName("builder-examples")
 
-	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie()).Build()
+	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie())
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)
@@ -77,13 +77,12 @@ func Example() {
 // * Start the application.
 func Example_updateLeaderElectionDurations() {
 	var log = ctrl.Log.WithName("builder-examples")
-	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie()).
+	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), builder.Manager().
 		UseLeaderElection(builder.LeaderElectionOpts{
 			LeaseDuration: 100 * time.Second,
 			RenewDeadline: 80 * time.Second,
 			RetryPeriod:   20 * time.Second,
-		}).
-		Build()
+		}))
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)

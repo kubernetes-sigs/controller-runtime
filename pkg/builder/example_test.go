@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -39,7 +40,7 @@ func ExampleControllerBuilder_metadata_only() {
 
 	var log = logf.Log.WithName("builder-examples")
 
-	mgr, err := builder.Manager(config.GetConfigOrDie()).Build()
+	mgr, err := manager.New(config.GetConfigOrDie())
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)
@@ -96,7 +97,7 @@ func ExampleControllerBuilder() {
 
 	var log = logf.Log.WithName("builder-examples")
 
-	mgr, err := builder.Manager(config.GetConfigOrDie()).Build()
+	mgr, err := manager.New(config.GetConfigOrDie())
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)

@@ -21,43 +21,34 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/config"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/internal/manager"
 )
 
 // Manager is a builder for a Manager.
-func Manager(config *rest.Config) *ManagerBuilder {
-	return &ManagerBuilder{cfg: config}
+func Manager() *ManagerBuilder {
+	return &ManagerBuilder{}
 }
 
 // ManagerBuilder builds a Manager.
 type ManagerBuilder struct {
-	cfg *rest.Config
-
-	cmConfigLoader config.ControllerManagerConfiguration
-	opts           []manager.SetOptions
+	opts []manager.SetOptions
 }
 
-// Build builds a Manager.
-func (m *ManagerBuilder) Build() (manager.Manager, error) {
-	opts := manager.Options{}
+// ApplyToManager applies the options to the Manager,
+// this allows the ManagerBuilder to be used as a second parameter to manager.New(cfg, [...]).
+func (m *ManagerBuilder) ApplyToManager(o *manager.Options) error {
 	for _, opt := range m.opts {
-		if err := opt.ApplyToManager(&opts); err != nil {
-			return nil, err
+		if err := opt.ApplyToManager(o); err != nil {
+			return err
 		}
 	}
-	if m.cmConfigLoader != nil {
-		var err error
-		opts, err = opts.AndFrom(m.cmConfigLoader) //nolint:staticcheck
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to load controller manager configuration")
-		}
-	}
-	return manager.New(m.cfg, opts) //nolint:staticcheck
+	return nil
 }
 
 // Scheme sets the scheme for the Manager.
@@ -99,10 +90,37 @@ func (m *ManagerBuilder) SetMetricsAddress(addr string) *ManagerBuilder {
 	return m
 }
 
+// SetHealthProbeAddress sets the address the health probe endpoint binds to.
+func (m *ManagerBuilder) SetHealthProbeAddress(addr string) *ManagerBuilder {
+	m.opts = append(m.opts, manager.SetOptionsFunc(func(o *manager.Options) error {
+		o.HealthProbeBindAddress = addr
+		return nil
+	}))
+	return m
+}
+
 // Cache sets the NewCache function used by the Manager with the provided CacheBuilder.
 func (m *ManagerBuilder) Cache(builder CacheFactory) *ManagerBuilder {
 	m.opts = append(m.opts, manager.SetOptionsFunc(func(o *manager.Options) error {
-		o.NewCache = builder.Factory()
+		o.NewCache = builder.Factory(m)
+		return nil
+	}))
+	return m
+}
+
+// WithMapperProvider sets the MapperProvider function used by the Manager.
+func (m *ManagerBuilder) WithMapperProvider(provider func(c *rest.Config) (meta.RESTMapper, error)) *ManagerBuilder {
+	m.opts = append(m.opts, manager.SetOptionsFunc(func(o *manager.Options) error {
+		o.MapperProvider = provider
+		return nil
+	}))
+	return m
+}
+
+// WithClientProvider sets the NewClient function used by the Manager.
+func (m *ManagerBuilder) WithClientProvider(provider cluster.NewClientFunc) *ManagerBuilder {
+	m.opts = append(m.opts, manager.SetOptionsFunc(func(o *manager.Options) error {
+		o.NewClient = provider
 		return nil
 	}))
 	return m
@@ -112,7 +130,9 @@ func (m *ManagerBuilder) Cache(builder CacheFactory) *ManagerBuilder {
 // This will override any other configuration options set on the Manager,
 // it's usually useful for loading configuration from a file, or configmap.
 func (m *ManagerBuilder) WithConfig(cfg config.ControllerManagerConfiguration) *ManagerBuilder {
-	m.cmConfigLoader = cfg
+	m.opts = append(m.opts, manager.SetOptionsFunc(func(o *manager.Options) error {
+		return o.AndFrom(cfg)
+	}))
 	return m
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	"sigs.k8s.io/controller-runtime/pkg/manager/api"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -15,7 +16,7 @@ var (
 // readyRunnable encapsulates a runnable with
 // a ready check.
 type readyRunnable struct {
-	Runnable
+	api.Runnable
 	Check       runnableCheck
 	signalReady bool
 }
@@ -25,18 +26,18 @@ type readyRunnable struct {
 // if the returned result is false, the runnable is considered not ready and failed.
 type runnableCheck func(ctx context.Context) bool
 
-// runnables handles all the runnables for a manager by grouping them accordingly to their
+// Runnables handles all the Runnables for a manager by grouping them accordingly to their
 // type (webhooks, caches etc.).
-type runnables struct {
+type Runnables struct {
 	Webhooks       *runnableGroup
 	Caches         *runnableGroup
 	LeaderElection *runnableGroup
 	Others         *runnableGroup
 }
 
-// newRunnables creates a new runnables object.
-func newRunnables(baseContext BaseContextFunc, errChan chan error) *runnables {
-	return &runnables{
+// NewRunnables creates a new runnables object.
+func NewRunnables(baseContext api.BaseContextFunc, errChan chan error) *Runnables {
+	return &Runnables{
 		Webhooks:       newRunnableGroup(baseContext, errChan),
 		Caches:         newRunnableGroup(baseContext, errChan),
 		LeaderElection: newRunnableGroup(baseContext, errChan),
@@ -50,7 +51,7 @@ func newRunnables(baseContext BaseContextFunc, errChan chan error) *runnables {
 // Add should return an error when called during StopAndWait.
 // The runnables added before Start are started when Start is called.
 // The runnables added after Start are started directly.
-func (r *runnables) Add(fn Runnable) error {
+func (r *Runnables) Add(fn api.Runnable) error {
 	switch runnable := fn.(type) {
 	case hasCache:
 		return r.Caches.Add(fn, func(ctx context.Context) bool {
@@ -58,7 +59,7 @@ func (r *runnables) Add(fn Runnable) error {
 		})
 	case *webhook.Server:
 		return r.Webhooks.Add(fn, nil)
-	case LeaderElectionRunnable:
+	case api.LeaderElectionRunnable:
 		if !runnable.NeedLeaderElection() {
 			return r.Others.Add(fn, nil)
 		}
@@ -100,7 +101,7 @@ type runnableGroup struct {
 	wg *sync.WaitGroup
 }
 
-func newRunnableGroup(baseContext BaseContextFunc, errChan chan error) *runnableGroup {
+func newRunnableGroup(baseContext api.BaseContextFunc, errChan chan error) *runnableGroup {
 	r := &runnableGroup{
 		startReadyCh: make(chan *readyRunnable),
 		errChan:      errChan,
@@ -225,7 +226,7 @@ func (r *runnableGroup) reconcile() {
 
 // Add should be able to be called before and after Start, but not after StopAndWait.
 // Add should return an error when called during StopAndWait.
-func (r *runnableGroup) Add(rn Runnable, ready runnableCheck) error {
+func (r *runnableGroup) Add(rn api.Runnable, ready runnableCheck) error {
 	r.stop.RLock()
 	if r.stopped {
 		r.stop.RUnlock()

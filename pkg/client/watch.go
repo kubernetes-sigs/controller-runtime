@@ -23,7 +23,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 )
 
@@ -33,16 +32,11 @@ func NewWithWatch(config *rest.Config, options Options) (WithWatch, error) {
 	if err != nil {
 		return nil, err
 	}
-	dynamicClient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-	return &watchingClient{client: client, dynamic: dynamicClient}, nil
+	return &watchingClient{client: client}, nil
 }
 
 type watchingClient struct {
 	*client
-	dynamic dynamic.Interface
 }
 
 func (w *watchingClient) Watch(ctx context.Context, list ObjectList, opts ...ListOption) (watch.Interface, error) {
@@ -82,9 +76,6 @@ func (w *watchingClient) metadataWatch(ctx context.Context, obj *metav1.PartialO
 }
 
 func (w *watchingClient) unstructuredWatch(ctx context.Context, obj *unstructured.UnstructuredList, opts ...ListOption) (watch.Interface, error) {
-	gvk := obj.GroupVersionKind()
-	gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
-
 	r, err := w.client.unstructuredClient.resources.getResource(obj)
 	if err != nil {
 		return nil, err
@@ -92,10 +83,11 @@ func (w *watchingClient) unstructuredWatch(ctx context.Context, obj *unstructure
 
 	listOpts := w.listOpts(opts...)
 
-	if listOpts.Namespace != "" && r.isNamespaced() {
-		return w.dynamic.Resource(r.mapping.Resource).Namespace(listOpts.Namespace).Watch(ctx, *listOpts.AsListOptions())
-	}
-	return w.dynamic.Resource(r.mapping.Resource).Watch(ctx, *listOpts.AsListOptions())
+	return r.Get().
+		NamespaceIfScoped(listOpts.Namespace, r.isNamespaced()).
+		Resource(r.resource()).
+		VersionedParams(listOpts.AsListOptions(), w.client.unstructuredClient.paramCodec).
+		Watch(ctx)
 }
 
 func (w *watchingClient) typedWatch(ctx context.Context, obj ObjectList, opts ...ListOption) (watch.Interface, error) {

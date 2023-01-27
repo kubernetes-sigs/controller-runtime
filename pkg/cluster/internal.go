@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -34,9 +35,10 @@ type cluster struct {
 	// config is the rest.config used to talk to the apiserver.  Required.
 	config *rest.Config
 
-	scheme *runtime.Scheme
-	cache  cache.Cache
-	client client.Client
+	httpClient *http.Client
+	scheme     *runtime.Scheme
+	cache      cache.Cache
+	client     client.Client
 
 	// apiReader is the reader that will make requests to the api server and not the cache.
 	apiReader client.Reader
@@ -59,6 +61,10 @@ type cluster struct {
 
 func (c *cluster) GetConfig() *rest.Config {
 	return c.config
+}
+
+func (c *cluster) GetHTTPClient() *http.Client {
+	return c.httpClient
 }
 
 func (c *cluster) GetClient() client.Client {

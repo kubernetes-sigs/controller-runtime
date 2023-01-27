@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -38,6 +39,9 @@ import (
 
 // Options are creation options for a Client.
 type Options struct {
+	// HTTPClient is the HTTP client to use for requests.
+	HTTPClient *http.Client
+
 	// Scheme, if provided, will be used to map go structs to GroupVersionKinds
 	Scheme *runtime.Scheme
 
@@ -116,6 +120,15 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 		)
 	}
 
+	// Use the rest HTTP client for the provided config if unset
+	if options.HTTPClient == nil {
+		var err error
+		options.HTTPClient, err = rest.HTTPClientFor(config)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Init a scheme if none provided
 	if options.Scheme == nil {
 		options.Scheme = scheme.Scheme
@@ -124,23 +137,24 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 	// Init a Mapper if none provided
 	if options.Mapper == nil {
 		var err error
-		options.Mapper, err = apiutil.NewDynamicRESTMapper(config)
+		options.Mapper, err = apiutil.NewDynamicRESTMapper(config, options.HTTPClient)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	resources := &clientRestResources{
-		config: config,
-		scheme: options.Scheme,
-		mapper: options.Mapper,
-		codecs: serializer.NewCodecFactory(options.Scheme),
+		httpClient: options.HTTPClient,
+		config:     config,
+		scheme:     options.Scheme,
+		mapper:     options.Mapper,
+		codecs:     serializer.NewCodecFactory(options.Scheme),
 
 		structuredResourceByType:   make(map[schema.GroupVersionKind]*resourceMeta),
 		unstructuredResourceByType: make(map[schema.GroupVersionKind]*resourceMeta),
 	}
 
-	rawMetaClient, err := metadata.NewForConfig(config)
+	rawMetaClient, err := metadata.NewForConfigAndClient(config, options.HTTPClient)
 	if err != nil {
 		return nil, fmt.Errorf("unable to construct metadata-only client for use as part of client: %w", err)
 	}

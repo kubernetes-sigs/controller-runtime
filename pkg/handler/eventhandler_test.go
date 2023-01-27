@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -51,8 +52,9 @@ var _ = Describe("Eventhandler", func() {
 		}
 		Expect(cfg).NotTo(BeNil())
 
-		var err error
-		mapper, err = apiutil.NewDiscoveryRESTMapper(cfg)
+		httpClient, err := rest.HTTPClientFor(cfg)
+		Expect(err).ShouldNot(HaveOccurred())
+		mapper, err = apiutil.NewDiscoveryRESTMapper(cfg, httpClient)
 		Expect(err).ShouldNot(HaveOccurred())
 	})
 

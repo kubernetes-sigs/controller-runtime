@@ -103,7 +103,7 @@ type Options struct {
 	Scheme *runtime.Scheme
 
 	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs
-	MapperProvider func(c *rest.Config) (meta.RESTMapper, error)
+	MapperProvider func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error)
 
 	// SyncPeriod determines the minimum frequency at which watched resources are
 	// reconciled. A lower period will correct entropy more quickly, but reduce
@@ -304,7 +304,7 @@ type Options struct {
 	makeBroadcaster intrec.EventBroadcasterProducer
 
 	// Dependency injection for testing
-	newRecorderProvider    func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error)
+	newRecorderProvider    func(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error)
 	newResourceLock        func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
 	newMetricsListener     func(addr string) (net.Listener, error)
 	newHealthProbeListener func(addr string) (net.Listener, error)
@@ -365,7 +365,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Create the recorder provider to inject event recorders for the components.
 	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.
-	recorderProvider, err := options.newRecorderProvider(config, cluster.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
+	recorderProvider, err := options.newRecorderProvider(config, cluster.GetHTTPClient(), cluster.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +379,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		leaderRecorderProvider = recorderProvider
 	} else {
 		leaderConfig = rest.CopyConfig(options.LeaderElectionConfig)
-		leaderRecorderProvider, err = options.newRecorderProvider(leaderConfig, cluster.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
+		leaderRecorderProvider, err = options.newRecorderProvider(leaderConfig, cluster.GetHTTPClient(), cluster.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
 		if err != nil {
 			return nil, err
 		}

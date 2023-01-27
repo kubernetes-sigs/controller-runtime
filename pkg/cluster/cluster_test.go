@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -45,7 +46,7 @@ var _ = Describe("cluster.Cluster", func() {
 		It("should return an error if it can't create a RestMapper", func() {
 			expected := fmt.Errorf("expected error: RestMapper")
 			c, err := New(cfg, func(o *Options) {
-				o.MapperProvider = func(c *rest.Config) (meta.RESTMapper, error) { return nil, expected }
+				o.MapperProvider = func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error) { return nil, expected }
 			})
 			Expect(c).To(BeNil())
 			Expect(err).To(Equal(expected))
@@ -87,7 +88,7 @@ var _ = Describe("cluster.Cluster", func() {
 
 		It("should return an error it can't create a recorder.Provider", func() {
 			c, err := New(cfg, func(o *Options) {
-				o.newRecorderProvider = func(_ *rest.Config, _ *runtime.Scheme, _ logr.Logger, _ intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
+				o.newRecorderProvider = func(_ *rest.Config, _ *http.Client, _ *runtime.Scheme, _ logr.Logger, _ intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
 					return nil, fmt.Errorf("expected error")
 				}
 			})

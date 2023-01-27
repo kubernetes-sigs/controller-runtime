@@ -249,6 +249,10 @@ func (cm *controllerManager) AddReadyzCheck(name string, check healthz.Checker) 
 	return nil
 }
 
+func (cm *controllerManager) GetHTTPClient() *http.Client {
+	return cm.cluster.GetHTTPClient()
+}
+
 func (cm *controllerManager) GetConfig() *rest.Config {
 	return cm.cluster.GetConfig()
 }

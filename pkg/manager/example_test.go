@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -50,7 +51,7 @@ func ExampleNew() {
 }
 
 // This example creates a new Manager that has a cache scoped to a list of namespaces.
-func ExampleNew_multinamespaceCache() {
+func ExampleNew_limitToNamespaces() {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		log.Error(err, "unable to get kubeconfig")
@@ -58,8 +59,11 @@ func ExampleNew_multinamespaceCache() {
 	}
 
 	mgr, err := manager.New(cfg, manager.Options{
-		NewCache: cache.MultiNamespacedCacheBuilder([]string{"namespace1", "namespace2"}),
-	})
+		NewCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
+			opts.View.Namespaces = []string{"namespace1", "namespace2"}
+			return cache.New(config, opts)
+		}},
+	)
 	if err != nil {
 		log.Error(err, "unable to set up manager")
 		os.Exit(1)

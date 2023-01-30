@@ -120,7 +120,13 @@ var _ = Describe("Multi-Namespace Informer Cache", func() {
 	CacheTest(cache.MultiNamespacedCacheBuilder([]string{testNamespaceOne, testNamespaceTwo, "default"}), cache.Options{})
 })
 var _ = Describe("Informer Cache without DeepCopy", func() {
-	CacheTest(cache.New, cache.Options{UnsafeDisableDeepCopyByObject: cache.DisableDeepCopyByObject{cache.ObjectAll{}: true}})
+	CacheTest(cache.New, cache.Options{
+		View: cache.ViewOptions{
+			ByObject: cache.ViewByObject{
+				UnsafeDisableDeepCopy: cache.DisableDeepCopyByObject{cache.ObjectAll{}: true},
+			},
+		},
+	})
 })
 
 var _ = Describe("Cache with transformers", func() {
@@ -184,34 +190,15 @@ var _ = Describe("Cache with transformers", func() {
 
 		By("creating the informer cache")
 		informerCache, err = cache.New(cfg, cache.Options{
-			DefaultTransform: func(i interface{}) (interface{}, error) {
-				obj := i.(runtime.Object)
-				Expect(obj).NotTo(BeNil())
-
-				accessor, err := meta.Accessor(obj)
-				Expect(err).To(BeNil())
-				annotations := accessor.GetAnnotations()
-
-				if _, exists := annotations["transformed"]; exists {
-					// Avoid performing transformation multiple times.
-					return i, nil
-				}
-
-				if annotations == nil {
-					annotations = make(map[string]string)
-				}
-				annotations["transformed"] = "default"
-				accessor.SetAnnotations(annotations)
-				return i, nil
-			},
-			TransformByObject: cache.TransformByObject{
-				&corev1.Pod{}: func(i interface{}) (interface{}, error) {
+			View: cache.ViewOptions{
+				DefaultTransform: func(i interface{}) (interface{}, error) {
 					obj := i.(runtime.Object)
 					Expect(obj).NotTo(BeNil())
+
 					accessor, err := meta.Accessor(obj)
 					Expect(err).To(BeNil())
-
 					annotations := accessor.GetAnnotations()
+
 					if _, exists := annotations["transformed"]; exists {
 						// Avoid performing transformation multiple times.
 						return i, nil
@@ -220,9 +207,32 @@ var _ = Describe("Cache with transformers", func() {
 					if annotations == nil {
 						annotations = make(map[string]string)
 					}
-					annotations["transformed"] = "explicit"
+					annotations["transformed"] = "default"
 					accessor.SetAnnotations(annotations)
 					return i, nil
+				},
+				ByObject: cache.ViewByObject{
+					Transform: cache.TransformByObject{
+						&corev1.Pod{}: func(i interface{}) (interface{}, error) {
+							obj := i.(runtime.Object)
+							Expect(obj).NotTo(BeNil())
+							accessor, err := meta.Accessor(obj)
+							Expect(err).To(BeNil())
+
+							annotations := accessor.GetAnnotations()
+							if _, exists := annotations["transformed"]; exists {
+								// Avoid performing transformation multiple times.
+								return i, nil
+							}
+
+							if annotations == nil {
+								annotations = make(map[string]string)
+							}
+							annotations["transformed"] = "explicit"
+							accessor.SetAnnotations(annotations)
+							return i, nil
+						},
+					},
 				},
 			},
 		})
@@ -360,10 +370,14 @@ var _ = Describe("Cache with selectors", func() {
 		}
 
 		opts := cache.Options{
-			SelectorsByObject: cache.SelectorsByObject{
-				&corev1.ServiceAccount{}: {Field: fields.OneTermEqualSelector("metadata.namespace", testNamespaceOne)},
+			View: cache.ViewOptions{
+				DefaultSelector: cache.ObjectSelector{Field: fields.OneTermEqualSelector("metadata.namespace", testNamespaceTwo)},
+				ByObject: cache.ViewByObject{
+					Selectors: cache.SelectorsByObject{
+						&corev1.ServiceAccount{}: {Field: fields.OneTermEqualSelector("metadata.namespace", testNamespaceOne)},
+					},
+				},
 			},
-			DefaultSelector: cache.ObjectSelector{Field: fields.OneTermEqualSelector("metadata.namespace", testNamespaceTwo)},
 		}
 
 		By("creating the informer cache")
@@ -784,7 +798,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to restrict cache to a namespace", func() {
 					By("creating a namespaced cache")
-					namespacedCache, err := cache.New(cfg, cache.Options{Namespace: testNamespaceOne})
+					namespacedCache, err := cache.New(cfg, cache.Options{View: cache.ViewOptions{Namespaces: []string{testNamespaceOne}}})
 					Expect(err).NotTo(HaveOccurred())
 
 					By("running the cache and waiting for it to sync")
@@ -1065,7 +1079,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to restrict cache to a namespace", func() {
 					By("creating a namespaced cache")
-					namespacedCache, err := cache.New(cfg, cache.Options{Namespace: testNamespaceOne})
+					namespacedCache, err := cache.New(cfg, cache.Options{View: cache.ViewOptions{Namespaces: []string{testNamespaceOne}}})
 					Expect(err).NotTo(HaveOccurred())
 
 					By("running the cache and waiting for it to sync")
@@ -1219,10 +1233,14 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				By("creating the cache")
 				builder := cache.BuilderWithOptions(
 					cache.Options{
-						SelectorsByObject: cache.SelectorsByObject{
-							&corev1.Pod{}: {
-								Label: labels.Set(tc.labelSelectors).AsSelector(),
-								Field: fields.Set(tc.fieldSelectors).AsSelector(),
+						View: cache.ViewOptions{
+							ByObject: cache.ViewByObject{
+								Selectors: cache.SelectorsByObject{
+									&corev1.Pod{}: {
+										Label: labels.Set(tc.labelSelectors).AsSelector(),
+										Field: fields.Set(tc.fieldSelectors).AsSelector(),
+									},
+								},
 							},
 						},
 					},
@@ -1804,11 +1822,11 @@ func isKubeService(svc metav1.Object) bool {
 }
 
 func isPodDisableDeepCopy(opts cache.Options) bool {
-	if d, ok := opts.UnsafeDisableDeepCopyByObject[&corev1.Pod{}]; ok {
+	if d, ok := opts.View.ByObject.UnsafeDisableDeepCopy[&corev1.Pod{}]; ok {
 		return d
-	} else if d, ok = opts.UnsafeDisableDeepCopyByObject[cache.ObjectAll{}]; ok {
+	} else if d, ok = opts.View.ByObject.UnsafeDisableDeepCopy[cache.ObjectAll{}]; ok {
 		return d
-	} else if d, ok = opts.UnsafeDisableDeepCopyByObject[&cache.ObjectAll{}]; ok {
+	} else if d, ok = opts.View.ByObject.UnsafeDisableDeepCopy[&cache.ObjectAll{}]; ok {
 		return d
 	}
 	return false

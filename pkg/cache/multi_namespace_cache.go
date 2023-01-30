@@ -43,31 +43,43 @@ const globalCache = "_cluster-scope"
 // a global cache for cluster scoped resource. Note that this is not intended
 // to be used for excluding namespaces, this is better done via a Predicate. Also note that
 // you may face performance issues when using this with a high number of namespaces.
+//
+// Deprecated: Use cache.Options.View.Namespaces instead.
 func MultiNamespacedCacheBuilder(namespaces []string) NewCacheFunc {
 	return func(config *rest.Config, opts Options) (Cache, error) {
-		opts, err := defaultOpts(config, opts)
+		opts.View.Namespaces = namespaces
+		return newMultiNamespaceCache(config, opts)
+	}
+}
+
+func newMultiNamespaceCache(config *rest.Config, opts Options) (Cache, error) {
+	if len(opts.View.Namespaces) < 2 {
+		return nil, fmt.Errorf("must specify more than one namespace to use multi-namespace cache")
+	}
+	opts, err := defaultOpts(config, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create every namespace cache.
+	caches := map[string]Cache{}
+	for _, ns := range opts.View.Namespaces {
+		opts.View.Namespaces = []string{ns}
+		c, err := New(config, opts)
 		if err != nil {
 			return nil, err
 		}
-
-		caches := map[string]Cache{}
-
-		// create a cache for cluster scoped resources
-		gCache, err := New(config, opts)
-		if err != nil {
-			return nil, fmt.Errorf("error creating global cache: %w", err)
-		}
-
-		for _, ns := range namespaces {
-			opts.Namespace = ns
-			c, err := New(config, opts)
-			if err != nil {
-				return nil, err
-			}
-			caches[ns] = c
-		}
-		return &multiNamespaceCache{namespaceToCache: caches, Scheme: opts.Scheme, RESTMapper: opts.Mapper, clusterCache: gCache}, nil
+		caches[ns] = c
 	}
+
+	// Create a cache for cluster scoped resources.
+	opts.View.Namespaces = []string{}
+	gCache, err := New(config, opts)
+	if err != nil {
+		return nil, fmt.Errorf("error creating global cache: %w", err)
+	}
+
+	return &multiNamespaceCache{namespaceToCache: caches, Scheme: opts.Scheme, RESTMapper: opts.Mapper, clusterCache: gCache}, nil
 }
 
 // multiNamespaceCache knows how to handle multiple namespaced caches

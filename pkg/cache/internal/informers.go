@@ -313,7 +313,7 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 			opts.Watch = true // Watch needs to be set to true separately
 			return listWatcher.WatchFunc(opts)
 		},
-	}, obj, resyncPeriod(ip.resync)(), cache.Indexers{
+	}, obj, calculateResyncPeriod(ip.resync), cache.Indexers{
 		cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 	})
 
@@ -506,15 +506,13 @@ func newGVKFixupWatcher(gvk schema.GroupVersionKind, watcher watch.Interface) wa
 	)
 }
 
-// resyncPeriod returns a function which generates a duration each time it is
-// invoked; this is so that multiple controllers don't get into lock-step and all
+// calculateResyncPeriod returns a duration based on the desired input
+// this is so that multiple controllers don't get into lock-step and all
 // hammer the apiserver with list requests simultaneously.
-func resyncPeriod(resync time.Duration) func() time.Duration {
-	return func() time.Duration {
-		// the factor will fall into [0.9, 1.1)
-		factor := rand.Float64()/5.0 + 0.9 //nolint:gosec
-		return time.Duration(float64(resync.Nanoseconds()) * factor)
-	}
+func calculateResyncPeriod(resync time.Duration) time.Duration {
+	// the factor will fall into [0.9, 1.1)
+	factor := rand.Float64()/5.0 + 0.9 //nolint:gosec
+	return time.Duration(float64(resync.Nanoseconds()) * factor)
 }
 
 // restrictNamespaceBySelector returns either a global restriction for all ListWatches

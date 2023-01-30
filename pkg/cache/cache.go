@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -118,44 +119,59 @@ type Options struct {
 	// Mapper is the RESTMapper to use for mapping GroupVersionKinds to Resources
 	Mapper meta.RESTMapper
 
-	// Resync is the base frequency the informers are resynced.
+	// ResyncEvery is the base frequency the informers are resynced.
 	// Defaults to defaultResyncTime.
-	// A 10 percent jitter will be added to the Resync period between informers
+	// A 10 percent jitter will be added to the ResyncEvery period between informers
 	// So that all informers will not send list requests simultaneously.
-	Resync *time.Duration
+	ResyncEvery *time.Duration
 
-	// Namespace restricts the cache's ListWatch to the desired namespace
+	// View restricts the cache's ListWatch to the desired fields per GVK
+	// Default watches all fields and all namespaces.
+	View ViewOptions
+}
+
+// ViewOptions are the optional arguments for creating a cache view.
+// A cache view restricts the Get(), List(), and internal ListWatch operations
+// to the desired parameter.
+type ViewOptions struct {
+	// Namespaces restricts the cache's ListWatch to the desired namespaces
 	// Default watches all namespaces
-	Namespace string
-
-	// SelectorsByObject restricts the cache's ListWatch to the desired
-	// fields per GVK at the specified object, the map's value must implement
-	// Selector [1] using for example a Set [2]
-	// [1] https://pkg.go.dev/k8s.io/apimachinery/pkg/fields#Selector
-	// [2] https://pkg.go.dev/k8s.io/apimachinery/pkg/fields#Set
-	SelectorsByObject SelectorsByObject
+	Namespaces []string
 
 	// DefaultSelector will be used as selectors for all object types
-	// that do not have a selector in SelectorsByObject defined.
+	// unless they have a more specific selector set in ByObject.
 	DefaultSelector ObjectSelector
 
-	// UnsafeDisableDeepCopyByObject indicates not to deep copy objects during get or
-	// list objects per GVK at the specified object.
-	// Be very careful with this, when enabled you must DeepCopy any object before mutating it,
-	// otherwise you will mutate the object in the cache.
-	UnsafeDisableDeepCopyByObject DisableDeepCopyByObject
+	// DefaultTransform will be used as transform for all object types
+	// unless they have a more specific transform set in ByObject.
+	DefaultTransform toolscache.TransformFunc
 
-	// TransformByObject is a map from GVKs to transformer functions which
+	// ByObject restricts the cache's ListWatch to the desired fields per GVK at the specified object.
+	ByObject ViewByObject
+}
+
+// ViewByObject offers more fine-grained control over the cache's ListWatch by object.
+type ViewByObject struct {
+	// Selectors restricts the cache's ListWatch to the desired
+	// fields per GVK at the specified object, the map's value must implement
+	// Selectors [1] using for example a Set [2]
+	// [1] https://pkg.go.dev/k8s.io/apimachinery/pkg/fields#Selectors
+	// [2] https://pkg.go.dev/k8s.io/apimachinery/pkg/fields#Set
+	Selectors SelectorsByObject
+
+	// Transform is a map from objects to transformer functions which
 	// get applied when objects of the transformation are about to be committed
 	// to cache.
 	//
 	// This function is called both for new objects to enter the cache,
-	// 	and for updated objects.
-	TransformByObject TransformByObject
+	// and for updated objects.
+	Transform TransformByObject
 
-	// DefaultTransform is the transform used for all GVKs which do
-	// not have an explicit transform func set in TransformByObject
-	DefaultTransform toolscache.TransformFunc
+	// UnsafeDisableDeepCopy indicates not to deep copy objects during get or
+	// list objects per GVK at the specified object.
+	// Be very careful with this, when enabled you must DeepCopy any object before mutating it,
+	// otherwise you will mutate the object in the cache.
+	UnsafeDisableDeepCopy DisableDeepCopyByObject
 }
 
 var defaultResyncTime = 10 * time.Hour
@@ -166,15 +182,15 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 	if err != nil {
 		return nil, err
 	}
-	selectorsByGVK, err := convertToByGVK(opts.SelectorsByObject, opts.DefaultSelector, opts.Scheme)
+	selectorsByGVK, err := convertToByGVK(opts.View.ByObject.Selectors, opts.View.DefaultSelector, opts.Scheme)
 	if err != nil {
 		return nil, err
 	}
-	disableDeepCopyByGVK, err := convertToDisableDeepCopyByGVK(opts.UnsafeDisableDeepCopyByObject, opts.Scheme)
+	disableDeepCopyByGVK, err := convertToDisableDeepCopyByGVK(opts.View.ByObject.UnsafeDisableDeepCopy, opts.Scheme)
 	if err != nil {
 		return nil, err
 	}
-	transformers, err := convertToByGVK(opts.TransformByObject, opts.DefaultTransform, opts.Scheme)
+	transformers, err := convertToByGVK(opts.View.ByObject.Transform, opts.View.DefaultTransform, opts.Scheme)
 	if err != nil {
 		return nil, err
 	}
@@ -185,14 +201,22 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 		internalSelectorsByGVK[gvk] = internal.Selector(selector)
 	}
 
+	if len(opts.View.Namespaces) == 0 {
+		opts.View.Namespaces = []string{metav1.NamespaceAll}
+	}
+
+	if len(opts.View.Namespaces) > 1 {
+		return newMultiNamespaceCache(config, opts)
+	}
+
 	return &informerCache{
 		scheme: opts.Scheme,
 		Informers: internal.NewInformers(config, &internal.InformersOpts{
 			HTTPClient:   opts.HTTPClient,
 			Scheme:       opts.Scheme,
 			Mapper:       opts.Mapper,
-			ResyncPeriod: *opts.Resync,
-			Namespace:    opts.Namespace,
+			ResyncPeriod: *opts.ResyncEvery,
+			Namespace:    opts.View.Namespaces[0],
 			ByGVK: internal.InformersOptsByGVK{
 				Selectors:       internalSelectorsByGVK,
 				DisableDeepCopy: disableDeepCopyByGVK,
@@ -235,17 +259,17 @@ func (options Options) inheritFrom(inherited Options) (*Options, error) {
 	)
 	combined.Scheme = combineScheme(inherited.Scheme, options.Scheme)
 	combined.Mapper = selectMapper(inherited.Mapper, options.Mapper)
-	combined.Resync = selectResync(inherited.Resync, options.Resync)
-	combined.Namespace = selectNamespace(inherited.Namespace, options.Namespace)
-	combined.SelectorsByObject, combined.DefaultSelector, err = combineSelectors(inherited, options, combined.Scheme)
+	combined.ResyncEvery = selectResync(inherited.ResyncEvery, options.ResyncEvery)
+	combined.View.Namespaces = selectNamespaces(inherited.View.Namespaces, options.View.Namespaces)
+	combined.View.ByObject.Selectors, combined.View.DefaultSelector, err = combineSelectors(inherited, options, combined.Scheme)
 	if err != nil {
 		return nil, err
 	}
-	combined.UnsafeDisableDeepCopyByObject, err = combineUnsafeDeepCopy(inherited, options, combined.Scheme)
+	combined.View.ByObject.UnsafeDisableDeepCopy, err = combineUnsafeDeepCopy(inherited, options, combined.Scheme)
 	if err != nil {
 		return nil, err
 	}
-	combined.TransformByObject, combined.DefaultTransform, err = combineTransforms(inherited, options, combined.Scheme)
+	combined.View.ByObject.Transform, combined.View.DefaultTransform, err = combineTransforms(inherited, options, combined.Scheme)
 	if err != nil {
 		return nil, err
 	}
@@ -282,8 +306,8 @@ func selectResync(def, override *time.Duration) *time.Duration {
 	return def
 }
 
-func selectNamespace(def, override string) string {
-	if override != "" {
+func selectNamespaces(def, override []string) []string {
+	if len(override) > 0 {
 		return override
 	}
 	return def
@@ -297,11 +321,11 @@ func combineSelectors(inherited, options Options, scheme *runtime.Scheme) (Selec
 	//
 	// There is a bunch of complexity here because we need to convert to SelectorsByGVK
 	// to be able to match keys between options and inherited and then convert back to SelectorsByObject
-	optionsSelectorsByGVK, err := convertToByGVK(options.SelectorsByObject, options.DefaultSelector, scheme)
+	optionsSelectorsByGVK, err := convertToByGVK(options.View.ByObject.Selectors, options.View.DefaultSelector, scheme)
 	if err != nil {
 		return nil, ObjectSelector{}, err
 	}
-	inheritedSelectorsByGVK, err := convertToByGVK(inherited.SelectorsByObject, inherited.DefaultSelector, inherited.Scheme)
+	inheritedSelectorsByGVK, err := convertToByGVK(inherited.View.ByObject.Selectors, inherited.View.DefaultSelector, inherited.Scheme)
 	if err != nil {
 		return nil, ObjectSelector{}, err
 	}
@@ -360,11 +384,11 @@ func combineFieldSelectors(fs ...fields.Selector) fields.Selector {
 func combineUnsafeDeepCopy(inherited, options Options, scheme *runtime.Scheme) (DisableDeepCopyByObject, error) {
 	// UnsafeDisableDeepCopyByObject is combined via precedence. Only if a value for a particular GVK is unset
 	// in options will a value from inherited be used.
-	optionsDisableDeepCopyByGVK, err := convertToDisableDeepCopyByGVK(options.UnsafeDisableDeepCopyByObject, options.Scheme)
+	optionsDisableDeepCopyByGVK, err := convertToDisableDeepCopyByGVK(options.View.ByObject.UnsafeDisableDeepCopy, options.Scheme)
 	if err != nil {
 		return nil, err
 	}
-	inheritedDisableDeepCopyByGVK, err := convertToDisableDeepCopyByGVK(inherited.UnsafeDisableDeepCopyByObject, inherited.Scheme)
+	inheritedDisableDeepCopyByGVK, err := convertToDisableDeepCopyByGVK(inherited.View.ByObject.UnsafeDisableDeepCopy, inherited.Scheme)
 	if err != nil {
 		return nil, err
 	}
@@ -384,11 +408,11 @@ func combineTransforms(inherited, options Options, scheme *runtime.Scheme) (Tran
 	// Transform functions are combined via chaining. If both inherited and options define a transform
 	// function, the transform function from inherited will be called first, and the transform function from
 	// options will be called second.
-	optionsTransformByGVK, err := convertToByGVK(options.TransformByObject, options.DefaultTransform, options.Scheme)
+	optionsTransformByGVK, err := convertToByGVK(options.View.ByObject.Transform, options.View.DefaultTransform, options.Scheme)
 	if err != nil {
 		return nil, nil, err
 	}
-	inheritedTransformByGVK, err := convertToByGVK(inherited.TransformByObject, inherited.DefaultTransform, inherited.Scheme)
+	inheritedTransformByGVK, err := convertToByGVK(inherited.View.ByObject.Transform, inherited.View.DefaultTransform, inherited.Scheme)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -447,8 +471,8 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 	}
 
 	// Default the resync period to 10 hours if unset
-	if opts.Resync == nil {
-		opts.Resync = &defaultResyncTime
+	if opts.ResyncEvery == nil {
+		opts.ResyncEvery = &defaultResyncTime
 	}
 	return opts, nil
 }

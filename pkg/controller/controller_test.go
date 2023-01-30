@@ -26,7 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -134,7 +134,7 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should default RecoverPanic from the manager", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: v1alpha1.ControllerConfigurationSpec{RecoverPanic: pointer.Bool(true)}})
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{RecoverPanic: pointer.Bool(true)}})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{
@@ -150,12 +150,14 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should not override RecoverPanic on the controller", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: v1alpha1.ControllerConfigurationSpec{RecoverPanic: pointer.Bool(true)}})
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{RecoverPanic: pointer.Bool(true)}})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{
-				Reconciler:   reconcile.Func(nil),
-				RecoverPanic: pointer.Bool(false),
+				Controller: config.Controller{
+					RecoverPanic: pointer.Bool(false),
+				},
+				Reconciler: reconcile.Func(nil),
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -186,8 +188,10 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{
-				Reconciler:         rec,
-				NeedLeaderElection: pointer.Bool(false),
+				Controller: config.Controller{
+					NeedLeaderElection: pointer.Bool(false),
+				},
+				Reconciler: rec,
 			})
 			Expect(err).NotTo(HaveOccurred())
 

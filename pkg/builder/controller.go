@@ -370,8 +370,8 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 	}
 
 	// Setup cache sync timeout.
-	if ctrlOptions.CacheSyncTimeout == 0 && globalOpts.CacheSyncTimeout != nil {
-		ctrlOptions.CacheSyncTimeout = *globalOpts.CacheSyncTimeout
+	if ctrlOptions.CacheSyncTimeout == 0 && globalOpts.CacheSyncTimeout > 0 {
+		ctrlOptions.CacheSyncTimeout = globalOpts.CacheSyncTimeout
 	}
 
 	controllerName, err := blder.getControllerName(gvk, hasGVK)

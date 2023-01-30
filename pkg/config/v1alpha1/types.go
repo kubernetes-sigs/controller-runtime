@@ -25,6 +25,8 @@ import (
 )
 
 // ControllerManagerConfigurationSpec defines the desired state of GenericControllerManagerConfiguration.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type ControllerManagerConfigurationSpec struct {
 	// SyncPeriod determines the minimum frequency at which watched resources are
 	// reconciled. A lower period will correct entropy more quickly, but reduce
@@ -75,6 +77,8 @@ type ControllerManagerConfigurationSpec struct {
 
 // ControllerConfigurationSpec defines the global configuration for
 // controllers registered with the manager.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type ControllerConfigurationSpec struct {
 	// GroupKindConcurrency is a map from a Kind to the number of concurrent reconciliation
 	// allowed for that controller.
@@ -101,6 +105,8 @@ type ControllerConfigurationSpec struct {
 }
 
 // ControllerMetrics defines the metrics configs.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type ControllerMetrics struct {
 	// BindAddress is the TCP address that the controller should bind to
 	// for serving prometheus metrics.
@@ -110,6 +116,8 @@ type ControllerMetrics struct {
 }
 
 // ControllerHealth defines the health configs.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type ControllerHealth struct {
 	// HealthProbeBindAddress is the TCP address that the controller should bind to
 	// for serving health probes
@@ -127,6 +135,8 @@ type ControllerHealth struct {
 }
 
 // ControllerWebhook defines the webhook server for the controller.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type ControllerWebhook struct {
 	// Port is the port that the webhook server serves at.
 	// It is used to set webhook.Server.Port.
@@ -149,6 +159,8 @@ type ControllerWebhook struct {
 // +kubebuilder:object:root=true
 
 // ControllerManagerConfiguration is the Schema for the GenericControllerManagerConfigurations API.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type ControllerManagerConfiguration struct {
 	metav1.TypeMeta `json:",inline"`
 
@@ -157,6 +169,8 @@ type ControllerManagerConfiguration struct {
 }
 
 // Complete returns the configuration for controller-runtime.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 func (c *ControllerManagerConfigurationSpec) Complete() (ControllerManagerConfigurationSpec, error) {
 	return *c, nil
 }

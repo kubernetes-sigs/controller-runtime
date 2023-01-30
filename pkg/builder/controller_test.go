@@ -37,7 +37,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -217,7 +217,7 @@ var _ = Describe("application", func() {
 			instance, err := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
-				WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
+				WithOptions(controller.Options{Controller: config.Controller{MaxConcurrentReconciles: maxConcurrentReconciles}}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())
@@ -235,7 +235,7 @@ var _ = Describe("application", func() {
 
 			By("creating a controller manager")
 			m, err := manager.New(cfg, manager.Options{
-				Controller: v1alpha1.ControllerConfigurationSpec{
+				Controller: config.Controller{
 					GroupKindConcurrency: map[string]int{
 						"ReplicaSet.apps": maxConcurrentReconciles,
 					},

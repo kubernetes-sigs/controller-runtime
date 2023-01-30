@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -36,8 +37,7 @@ import (
 
 // Options are the arguments for creating a new Controller.
 type Options struct {
-	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
-	MaxConcurrentReconciles int
+	config.Controller
 
 	// Reconciler reconciles an object
 	Reconciler reconcile.Reconciler
@@ -50,18 +50,6 @@ type Options struct {
 	// LogConstructor is used to construct a logger used for this controller and passed
 	// to each reconciliation via the context field.
 	LogConstructor func(request *reconcile.Request) logr.Logger
-
-	// CacheSyncTimeout refers to the time limit set to wait for syncing caches.
-	// Defaults to 2 minutes if not set.
-	CacheSyncTimeout time.Duration
-
-	// RecoverPanic indicates whether the panic caused by reconcile should be recovered.
-	// Defaults to the Controller.RecoverPanic setting from the Manager if unset.
-	RecoverPanic *bool
-
-	// NeedLeaderElection indicates whether the controller needs to use leader election.
-	// Defaults to true, which means the controller will use leader election.
-	NeedLeaderElection *bool
 }
 
 // Controller implements a Kubernetes API.  A Controller manages a work queue fed reconcile.Requests

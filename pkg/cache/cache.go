@@ -427,7 +427,7 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 		opts.HTTPClient, err = rest.HTTPClientFor(config)
 		if err != nil {
 			logger.Error(err, "Failed to get HTTP client")
-			return opts, fmt.Errorf("could not create HTTP client from config")
+			return opts, fmt.Errorf("could not create HTTP client from config: %w", err)
 		}
 	}
 
@@ -442,7 +442,7 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 		opts.Mapper, err = apiutil.NewDiscoveryRESTMapper(config, opts.HTTPClient)
 		if err != nil {
 			logger.Error(err, "Failed to get API Group-Resources")
-			return opts, fmt.Errorf("could not create RESTMapper from config")
+			return opts, fmt.Errorf("could not create RESTMapper from config: %w", err)
 		}
 	}
 

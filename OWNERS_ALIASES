@@ -23,6 +23,7 @@ aliases:
   # file)
   controller-runtime-reviewers:
   - varshaprasad96
+  - inteon
 
   # folks to can approve things in the directly-ported
   # testing_frameworks portions of the codebase

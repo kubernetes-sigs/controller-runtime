@@ -17,6 +17,7 @@ limitations under the License.
 package client
 
 import (
+	"net/http"
 	"strings"
 	"sync"
 
@@ -32,6 +33,9 @@ import (
 
 // clientRestResources creates and stores rest clients and metadata for Kubernetes types.
 type clientRestResources struct {
+	// httpClient is the http client to use for requests
+	httpClient *http.Client
+
 	// config is the rest.Config to talk to an apiserver
 	config *rest.Config
 
@@ -59,7 +63,7 @@ func (c *clientRestResources) newResource(gvk schema.GroupVersionKind, isList, i
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 	}
 
-	client, err := apiutil.RESTClientForGVK(gvk, isUnstructured, c.config, c.codecs)
+	client, err := apiutil.RESTClientForGVK(gvk, isUnstructured, c.config, c.codecs, c.httpClient)
 	if err != nil {
 		return nil, err
 	}

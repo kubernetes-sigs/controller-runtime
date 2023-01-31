@@ -19,6 +19,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"reflect"
 	"time"
 
@@ -108,6 +109,9 @@ type SelectorsByObject map[client.Object]ObjectSelector
 
 // Options are the optional arguments for creating a new InformersMap object.
 type Options struct {
+	// HTTPClient is the http client to use for the REST client
+	HTTPClient *http.Client
+
 	// Scheme is the scheme to use for mapping objects to GroupVersionKinds
 	Scheme *runtime.Scheme
 
@@ -184,6 +188,7 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 	return &informerCache{
 		scheme: opts.Scheme,
 		Informers: internal.NewInformers(config, &internal.InformersOpts{
+			HTTPClient:   opts.HTTPClient,
 			Scheme:       opts.Scheme,
 			Mapper:       opts.Mapper,
 			ResyncPeriod: *opts.Resync,
@@ -414,6 +419,18 @@ func combineTransform(inherited, current toolscache.TransformFunc) toolscache.Tr
 }
 
 func defaultOpts(config *rest.Config, opts Options) (Options, error) {
+	logger := log.WithName("setup")
+
+	// Use the rest HTTP client for the provided config if unset
+	if opts.HTTPClient == nil {
+		var err error
+		opts.HTTPClient, err = rest.HTTPClientFor(config)
+		if err != nil {
+			logger.Error(err, "Failed to get HTTP client")
+			return opts, fmt.Errorf("could not create HTTP client from config")
+		}
+	}
+
 	// Use the default Kubernetes Scheme if unset
 	if opts.Scheme == nil {
 		opts.Scheme = scheme.Scheme
@@ -422,9 +439,9 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 	// Construct a new Mapper if unset
 	if opts.Mapper == nil {
 		var err error
-		opts.Mapper, err = apiutil.NewDiscoveryRESTMapper(config)
+		opts.Mapper, err = apiutil.NewDiscoveryRESTMapper(config, opts.HTTPClient)
 		if err != nil {
-			log.WithName("setup").Error(err, "Failed to get API Group-Resources")
+			logger.Error(err, "Failed to get API Group-Resources")
 			return opts, fmt.Errorf("could not create RESTMapper from config")
 		}
 	}

@@ -22,6 +22,7 @@ package apiutil
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"sync"
 
@@ -61,9 +62,13 @@ func AddToProtobufScheme(addToScheme func(*runtime.Scheme) error) error {
 
 // NewDiscoveryRESTMapper constructs a new RESTMapper based on discovery
 // information fetched by a new client with the given config.
-func NewDiscoveryRESTMapper(c *rest.Config) (meta.RESTMapper, error) {
+func NewDiscoveryRESTMapper(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error) {
+	if httpClient == nil {
+		panic("httpClient must not be nil")
+	}
+
 	// Get a mapper
-	dc, err := discovery.NewDiscoveryClientForConfig(c)
+	dc, err := discovery.NewDiscoveryClientForConfigAndClient(c, httpClient)
 	if err != nil {
 		return nil, err
 	}
@@ -150,8 +155,11 @@ func GVKForObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersi
 // RESTClientForGVK constructs a new rest.Interface capable of accessing the resource associated
 // with the given GroupVersionKind. The REST client will be configured to use the negotiated serializer from
 // baseConfig, if set, otherwise a default serializer will be set.
-func RESTClientForGVK(gvk schema.GroupVersionKind, isUnstructured bool, baseConfig *rest.Config, codecs serializer.CodecFactory) (rest.Interface, error) {
-	return rest.RESTClientFor(createRestConfig(gvk, isUnstructured, baseConfig, codecs))
+func RESTClientForGVK(gvk schema.GroupVersionKind, isUnstructured bool, baseConfig *rest.Config, codecs serializer.CodecFactory, httpClient *http.Client) (rest.Interface, error) {
+	if httpClient == nil {
+		panic("httpClient must not be nil")
+	}
+	return rest.RESTClientForConfigAndClient(createRestConfig(gvk, isUnstructured, baseConfig, codecs), httpClient)
 }
 
 // createRestConfig copies the base config and updates needed fields for a new rest config.

@@ -27,6 +27,7 @@ import (
 	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/rest"
 )
 
 var (
@@ -50,8 +51,10 @@ var _ = Describe("Dynamic REST Mapper", func() {
 			baseMapper.Add(targetGVK, meta.RESTScopeNamespace)
 		}
 
+		httpClient, err := rest.HTTPClientFor(cfg)
+		Expect(err).ToNot(HaveOccurred())
 		lim = rate.NewLimiter(rate.Limit(5), 5)
-		mapper, err = NewDynamicRESTMapper(cfg, WithLimiter(lim), WithCustomMapper(func() (meta.RESTMapper, error) {
+		mapper, err = NewDynamicRESTMapper(cfg, httpClient, WithLimiter(lim), WithCustomMapper(func() (meta.RESTMapper, error) {
 			baseMapper := meta.NewDefaultRESTMapper(nil)
 			addToMapper(baseMapper)
 
@@ -150,7 +153,9 @@ var _ = Describe("Dynamic REST Mapper", func() {
 			var err error
 			var failedOnce bool
 			mockErr := fmt.Errorf("mock failed once")
-			mapper, err = NewDynamicRESTMapper(cfg, WithLazyDiscovery, WithCustomMapper(func() (meta.RESTMapper, error) {
+			httpClient, err := rest.HTTPClientFor(cfg)
+			Expect(err).ToNot(HaveOccurred())
+			mapper, err = NewDynamicRESTMapper(cfg, httpClient, WithLazyDiscovery, WithCustomMapper(func() (meta.RESTMapper, error) {
 				// Make newMapper fail once
 				if !failedOnce {
 					failedOnce = true

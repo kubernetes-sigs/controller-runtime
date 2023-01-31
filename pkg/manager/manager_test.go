@@ -64,7 +64,7 @@ var _ = Describe("manger.Manager", func() {
 		It("should return an error if it can't create a RestMapper", func() {
 			expected := fmt.Errorf("expected error: RestMapper")
 			m, err := New(cfg, Options{
-				MapperProvider: func(c *rest.Config) (meta.RESTMapper, error) { return nil, expected },
+				MapperProvider: func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error) { return nil, expected },
 			})
 			Expect(m).To(BeNil())
 			Expect(err).To(Equal(expected))
@@ -106,7 +106,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should return an error it can't create a recorder.Provider", func() {
 			m, err := New(cfg, Options{
-				newRecorderProvider: func(_ *rest.Config, _ *runtime.Scheme, _ logr.Logger, _ intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
+				newRecorderProvider: func(_ *rest.Config, _ *http.Client, _ *runtime.Scheme, _ logr.Logger, _ intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
 					return nil, fmt.Errorf("expected error")
 				},
 			})

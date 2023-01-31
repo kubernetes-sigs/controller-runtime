@@ -19,6 +19,7 @@ package cluster
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -37,6 +38,9 @@ import (
 
 // Cluster provides various methods to interact with a cluster.
 type Cluster interface {
+	// GetHTTPClient returns an HTTP client that can be used to talk to the apiserver
+	GetHTTPClient() *http.Client
+
 	// GetConfig returns an initialized Config
 	GetConfig() *rest.Config
 
@@ -78,7 +82,7 @@ type Options struct {
 	Scheme *runtime.Scheme
 
 	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs
-	MapperProvider func(c *rest.Config) (meta.RESTMapper, error)
+	MapperProvider func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error)
 
 	// Logger is the logger that should be used by this Cluster.
 	// If none is set, it defaults to log.Log global logger.
@@ -99,6 +103,11 @@ type Options struct {
 	// cluster-scoped resource (e.g Node).  For namespaced resources the cache
 	// will only hold objects from the desired namespace.
 	Namespace string
+
+	// HTTPClient is the http client that will be used to create the default
+	// Cache and Client. If not set the rest.HTTPClientFor function will be used
+	// to create the http client.
+	HTTPClient *http.Client
 
 	// NewCache is the function that will create the cache to be used
 	// by the manager. If not set this will use the default new cache function.
@@ -132,7 +141,7 @@ type Options struct {
 	makeBroadcaster intrec.EventBroadcasterProducer
 
 	// Dependency injection for testing
-	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error)
+	newRecorderProvider func(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error)
 }
 
 // Option can be used to manipulate Options.
@@ -148,24 +157,29 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	for _, opt := range opts {
 		opt(&options)
 	}
-	options = setOptionsDefaults(options)
+	options, err := setOptionsDefaults(options, config)
+	if err != nil {
+		options.Logger.Error(err, "Failed to set defaults")
+		return nil, err
+	}
 
 	// Create the mapper provider
-	mapper, err := options.MapperProvider(config)
+	mapper, err := options.MapperProvider(config, options.HTTPClient)
 	if err != nil {
 		options.Logger.Error(err, "Failed to get API Group-Resources")
 		return nil, err
 	}
 
 	// Create the cache for the cached read client and registering informers
-	cache, err := options.NewCache(config, cache.Options{Scheme: options.Scheme, Mapper: mapper, Resync: options.SyncPeriod, Namespace: options.Namespace})
+	cache, err := options.NewCache(config, cache.Options{HTTPClient: options.HTTPClient, Scheme: options.Scheme, Mapper: mapper, Resync: options.SyncPeriod, Namespace: options.Namespace})
 	if err != nil {
 		return nil, err
 	}
 
 	writeObj, err := options.NewClient(config, client.Options{
-		Scheme: options.Scheme,
-		Mapper: mapper,
+		HTTPClient: options.HTTPClient,
+		Scheme:     options.Scheme,
+		Mapper:     mapper,
 		Cache: &client.CacheOptions{
 			Reader:     cache,
 			DisableFor: options.ClientDisableCacheFor,
@@ -188,13 +202,14 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	// Create the recorder provider to inject event recorders for the components.
 	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.
-	recorderProvider, err := options.newRecorderProvider(config, options.Scheme, options.Logger.WithName("events"), options.makeBroadcaster)
+	recorderProvider, err := options.newRecorderProvider(config, options.HTTPClient, options.Scheme, options.Logger.WithName("events"), options.makeBroadcaster)
 	if err != nil {
 		return nil, err
 	}
 
 	return &cluster{
 		config:           config,
+		httpClient:       options.HTTPClient,
 		scheme:           options.Scheme,
 		cache:            cache,
 		fieldIndexes:     cache,
@@ -207,15 +222,23 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 }
 
 // setOptionsDefaults set default values for Options fields.
-func setOptionsDefaults(options Options) Options {
+func setOptionsDefaults(options Options, config *rest.Config) (Options, error) {
+	if options.HTTPClient == nil {
+		var err error
+		options.HTTPClient, err = rest.HTTPClientFor(config)
+		if err != nil {
+			return options, err
+		}
+	}
+
 	// Use the Kubernetes client-go scheme if none is specified
 	if options.Scheme == nil {
 		options.Scheme = scheme.Scheme
 	}
 
 	if options.MapperProvider == nil {
-		options.MapperProvider = func(c *rest.Config) (meta.RESTMapper, error) {
-			return apiutil.NewDynamicRESTMapper(c)
+		options.MapperProvider = func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error) {
+			return apiutil.NewDynamicRESTMapper(c, httpClient)
 		}
 	}
 
@@ -251,5 +274,5 @@ func setOptionsDefaults(options Options) Options {
 		options.Logger = logf.RuntimeLog.WithName("cluster")
 	}
 
-	return options
+	return options, nil
 }

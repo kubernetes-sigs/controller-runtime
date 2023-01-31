@@ -17,6 +17,7 @@ limitations under the License.
 package recorder_test
 
 import (
+	"net/http"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -35,6 +36,7 @@ func TestRecorder(t *testing.T) {
 
 var testenv *envtest.Environment
 var cfg *rest.Config
+var httpClient *http.Client
 var clientset *kubernetes.Clientset
 
 var _ = BeforeSuite(func() {
@@ -45,6 +47,9 @@ var _ = BeforeSuite(func() {
 	var err error
 	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
+
+	httpClient, err = rest.HTTPClientFor(cfg)
+	Expect(err).ToNot(HaveOccurred())
 
 	clientset, err = kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())

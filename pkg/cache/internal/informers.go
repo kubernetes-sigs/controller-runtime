@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"sync"
 	"time"
 
@@ -44,6 +45,7 @@ func init() {
 
 // InformersOpts configures an InformerMap.
 type InformersOpts struct {
+	HTTPClient   *http.Client
 	Scheme       *runtime.Scheme
 	Mapper       meta.RESTMapper
 	ResyncPeriod time.Duration
@@ -62,9 +64,10 @@ type InformersOptsByGVK struct {
 // NewInformers creates a new InformersMap that can create informers under the hood.
 func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 	return &Informers{
-		config: config,
-		scheme: options.Scheme,
-		mapper: options.Mapper,
+		config:     config,
+		httpClient: options.HTTPClient,
+		scheme:     options.Scheme,
+		mapper:     options.Mapper,
 		tracker: tracker{
 			Structured:   make(map[schema.GroupVersionKind]*Cache),
 			Unstructured: make(map[schema.GroupVersionKind]*Cache),
@@ -99,6 +102,9 @@ type tracker struct {
 // Informers create and caches Informers for (runtime.Object, schema.GroupVersionKind) pairs.
 // It uses a standard parameter codec constructed based on the given generated Scheme.
 type Informers struct {
+	// httpClient is used to create a new REST client
+	httpClient *http.Client
+
 	// scheme maps runtime.Objects to GroupVersionKinds
 	scheme *runtime.Scheme
 
@@ -364,7 +370,7 @@ func (ip *Informers) makeListWatcher(gvk schema.GroupVersionKind, obj runtime.Ob
 		// we should remove it and use the one that the dynamic client sets for us.
 		cfg := rest.CopyConfig(ip.config)
 		cfg.NegotiatedSerializer = nil
-		dynamicClient, err := dynamic.NewForConfig(cfg)
+		dynamicClient, err := dynamic.NewForConfigAndClient(cfg, ip.httpClient)
 		if err != nil {
 			return nil, err
 		}
@@ -394,7 +400,7 @@ func (ip *Informers) makeListWatcher(gvk schema.GroupVersionKind, obj runtime.Ob
 		cfg.NegotiatedSerializer = nil
 
 		// Grab the metadata metadataClient.
-		metadataClient, err := metadata.NewForConfig(cfg)
+		metadataClient, err := metadata.NewForConfigAndClient(cfg, ip.httpClient)
 		if err != nil {
 			return nil, err
 		}
@@ -435,7 +441,7 @@ func (ip *Informers) makeListWatcher(gvk schema.GroupVersionKind, obj runtime.Ob
 	// Structured.
 	//
 	default:
-		client, err := apiutil.RESTClientForGVK(gvk, false, ip.config, ip.codecs)
+		client, err := apiutil.RESTClientForGVK(gvk, false, ip.config, ip.codecs, ip.httpClient)
 		if err != nil {
 			return nil, err
 		}

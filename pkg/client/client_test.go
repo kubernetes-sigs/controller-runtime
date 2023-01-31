@@ -3541,20 +3541,19 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 	})
 })
 
-var _ = Describe("DelegatingClient", func() {
+var _ = Describe("ClientWithCache", func() {
 	Describe("Get", func() {
 		It("should call cache reader when structured object", func() {
 			cachedReader := &fakeReader{}
-			cl, err := client.New(cfg, client.Options{})
-			Expect(err).NotTo(HaveOccurred())
-			dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
-				CacheReader: cachedReader,
-				Client:      cl,
+			cl, err := client.New(cfg, client.Options{
+				Cache: &client.CacheOptions{
+					Reader: cachedReader,
+				},
 			})
 			Expect(err).NotTo(HaveOccurred())
 			var actual appsv1.Deployment
 			key := client.ObjectKey{Namespace: "ns", Name: "name"}
-			Expect(dReader.Get(context.TODO(), key, &actual)).To(Succeed())
+			Expect(cl.Get(context.TODO(), key, &actual)).To(Succeed())
 			Expect(1).To(Equal(cachedReader.Called))
 		})
 
@@ -3590,11 +3589,10 @@ var _ = Describe("DelegatingClient", func() {
 			})
 			It("should call client reader when not cached", func() {
 				cachedReader := &fakeReader{}
-				cl, err := client.New(cfg, client.Options{})
-				Expect(err).NotTo(HaveOccurred())
-				dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
-					CacheReader: cachedReader,
-					Client:      cl,
+				cl, err := client.New(cfg, client.Options{
+					Cache: &client.CacheOptions{
+						Reader: cachedReader,
+					},
 				})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -3606,17 +3604,16 @@ var _ = Describe("DelegatingClient", func() {
 				})
 				actual.SetName(dep.Name)
 				key := client.ObjectKey{Namespace: dep.Namespace, Name: dep.Name}
-				Expect(dReader.Get(context.TODO(), key, actual)).To(Succeed())
+				Expect(cl.Get(context.TODO(), key, actual)).To(Succeed())
 				Expect(0).To(Equal(cachedReader.Called))
 			})
 			It("should call cache reader when cached", func() {
 				cachedReader := &fakeReader{}
-				cl, err := client.New(cfg, client.Options{})
-				Expect(err).NotTo(HaveOccurred())
-				dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
-					CacheReader:       cachedReader,
-					Client:            cl,
-					CacheUnstructured: true,
+				cl, err := client.New(cfg, client.Options{
+					Cache: &client.CacheOptions{
+						Reader:       cachedReader,
+						Unstructured: true,
+					},
 				})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -3628,7 +3625,7 @@ var _ = Describe("DelegatingClient", func() {
 				})
 				actual.SetName(dep.Name)
 				key := client.ObjectKey{Namespace: dep.Namespace, Name: dep.Name}
-				Expect(dReader.Get(context.TODO(), key, actual)).To(Succeed())
+				Expect(cl.Get(context.TODO(), key, actual)).To(Succeed())
 				Expect(1).To(Equal(cachedReader.Called))
 			})
 		})
@@ -3636,26 +3633,24 @@ var _ = Describe("DelegatingClient", func() {
 	Describe("List", func() {
 		It("should call cache reader when structured object", func() {
 			cachedReader := &fakeReader{}
-			cl, err := client.New(cfg, client.Options{})
-			Expect(err).NotTo(HaveOccurred())
-			dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
-				CacheReader: cachedReader,
-				Client:      cl,
+			cl, err := client.New(cfg, client.Options{
+				Cache: &client.CacheOptions{
+					Reader: cachedReader,
+				},
 			})
 			Expect(err).NotTo(HaveOccurred())
 			var actual appsv1.DeploymentList
-			Expect(dReader.List(context.Background(), &actual)).To(Succeed())
+			Expect(cl.List(context.Background(), &actual)).To(Succeed())
 			Expect(1).To(Equal(cachedReader.Called))
 		})
 
 		When("listing unstructured objects", func() {
 			It("should call client reader when not cached", func() {
 				cachedReader := &fakeReader{}
-				cl, err := client.New(cfg, client.Options{})
-				Expect(err).NotTo(HaveOccurred())
-				dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
-					CacheReader: cachedReader,
-					Client:      cl,
+				cl, err := client.New(cfg, client.Options{
+					Cache: &client.CacheOptions{
+						Reader: cachedReader,
+					},
 				})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -3665,17 +3660,16 @@ var _ = Describe("DelegatingClient", func() {
 					Kind:    "DeploymentList",
 					Version: "v1",
 				})
-				Expect(dReader.List(context.Background(), actual)).To(Succeed())
+				Expect(cl.List(context.Background(), actual)).To(Succeed())
 				Expect(0).To(Equal(cachedReader.Called))
 			})
 			It("should call cache reader when cached", func() {
 				cachedReader := &fakeReader{}
-				cl, err := client.New(cfg, client.Options{})
-				Expect(err).NotTo(HaveOccurred())
-				dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
-					CacheReader:       cachedReader,
-					Client:            cl,
-					CacheUnstructured: true,
+				cl, err := client.New(cfg, client.Options{
+					Cache: &client.CacheOptions{
+						Reader:       cachedReader,
+						Unstructured: true,
+					},
 				})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -3685,7 +3679,7 @@ var _ = Describe("DelegatingClient", func() {
 					Kind:    "DeploymentList",
 					Version: "v1",
 				})
-				Expect(dReader.List(context.Background(), actual)).To(Succeed())
+				Expect(cl.List(context.Background(), actual)).To(Succeed())
 				Expect(1).To(Equal(cachedReader.Called))
 			})
 		})

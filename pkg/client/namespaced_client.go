@@ -53,12 +53,12 @@ func (n *namespacedClient) RESTMapper() meta.RESTMapper {
 }
 
 // GroupVersionKindFor returns the GroupVersionKind for the given object.
-func (n *namespacedClient) GroupVersionKindFor(obj Object) (schema.GroupVersionKind, error) {
+func (n *namespacedClient) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
 	return n.client.GroupVersionKindFor(obj)
 }
 
 // IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
-func (n *namespacedClient) IsObjectNamespaced(obj Object) (bool, error) {
+func (n *namespacedClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
 	return n.client.IsObjectNamespaced(obj)
 }
 

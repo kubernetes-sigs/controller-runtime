@@ -84,12 +84,12 @@ var _ = Describe("Webhook", func() {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
-				err = server.Start(ctx)
+				err := server.Start(ctx)
 				Expect(err).NotTo(HaveOccurred())
 			}()
 
 			Eventually(func() bool {
-				err = c.Create(context.TODO(), obj)
+				err := c.Create(context.TODO(), obj)
 				return err != nil && strings.HasSuffix(err.Error(), "Always denied") && apierrors.ReasonForError(err) == metav1.StatusReasonForbidden
 			}, 1*time.Second).Should(BeTrue())
 

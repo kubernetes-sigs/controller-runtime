@@ -171,7 +171,15 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	}
 
 	// Create the cache for the cached read client and registering informers
-	cache, err := options.NewCache(config, cache.Options{HTTPClient: options.HTTPClient, Scheme: options.Scheme, Mapper: mapper, Resync: options.SyncPeriod, Namespace: options.Namespace})
+	cache, err := options.NewCache(config, cache.Options{
+		HTTPClient:  options.HTTPClient,
+		Scheme:      options.Scheme,
+		Mapper:      mapper,
+		ResyncEvery: options.SyncPeriod,
+		View: cache.ViewOptions{
+			Namespaces: []string{options.Namespace},
+		},
+	})
 	if err != nil {
 		return nil, err
 	}

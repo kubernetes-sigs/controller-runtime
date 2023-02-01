@@ -60,7 +60,7 @@ func ExampleNew_limitToNamespaces() {
 
 	mgr, err := manager.New(cfg, manager.Options{
 		NewCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
-			opts.View.Namespaces = []string{"namespace1", "namespace2"}
+			opts.Namespaces = []string{"namespace1", "namespace2"}
 			return cache.New(config, opts)
 		}},
 	)

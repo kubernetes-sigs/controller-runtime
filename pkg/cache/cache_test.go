@@ -38,6 +38,7 @@ import (
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	kcache "k8s.io/client-go/tools/cache"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -119,13 +120,10 @@ var _ = Describe("Informer Cache", func() {
 var _ = Describe("Multi-Namespace Informer Cache", func() {
 	CacheTest(cache.MultiNamespacedCacheBuilder([]string{testNamespaceOne, testNamespaceTwo, "default"}), cache.Options{})
 })
-var _ = Describe("Informer Cache without DeepCopy", func() {
+
+var _ = Describe("Informer Cache without global DeepCopy", func() {
 	CacheTest(cache.New, cache.Options{
-		View: cache.ViewOptions{
-			ByObject: cache.ViewByObject{
-				UnsafeDisableDeepCopy: cache.DisableDeepCopyByObject{cache.ObjectAll{}: true},
-			},
-		},
+		UnsafeDisableDeepCopy: pointer.Bool(true),
 	})
 })
 
@@ -190,48 +188,46 @@ var _ = Describe("Cache with transformers", func() {
 
 		By("creating the informer cache")
 		informerCache, err = cache.New(cfg, cache.Options{
-			View: cache.ViewOptions{
-				DefaultTransform: func(i interface{}) (interface{}, error) {
-					obj := i.(runtime.Object)
-					Expect(obj).NotTo(BeNil())
+			DefaultTransform: func(i interface{}) (interface{}, error) {
+				obj := i.(runtime.Object)
+				Expect(obj).NotTo(BeNil())
 
-					accessor, err := meta.Accessor(obj)
-					Expect(err).To(BeNil())
-					annotations := accessor.GetAnnotations()
+				accessor, err := meta.Accessor(obj)
+				Expect(err).To(BeNil())
+				annotations := accessor.GetAnnotations()
 
-					if _, exists := annotations["transformed"]; exists {
-						// Avoid performing transformation multiple times.
-						return i, nil
-					}
-
-					if annotations == nil {
-						annotations = make(map[string]string)
-					}
-					annotations["transformed"] = "default"
-					accessor.SetAnnotations(annotations)
+				if _, exists := annotations["transformed"]; exists {
+					// Avoid performing transformation multiple times.
 					return i, nil
-				},
-				ByObject: cache.ViewByObject{
-					Transform: cache.TransformByObject{
-						&corev1.Pod{}: func(i interface{}) (interface{}, error) {
-							obj := i.(runtime.Object)
-							Expect(obj).NotTo(BeNil())
-							accessor, err := meta.Accessor(obj)
-							Expect(err).To(BeNil())
+				}
 
-							annotations := accessor.GetAnnotations()
-							if _, exists := annotations["transformed"]; exists {
-								// Avoid performing transformation multiple times.
-								return i, nil
-							}
+				if annotations == nil {
+					annotations = make(map[string]string)
+				}
+				annotations["transformed"] = "default"
+				accessor.SetAnnotations(annotations)
+				return i, nil
+			},
+			ByObject: map[client.Object]cache.ByObject{
+				&corev1.Pod{}: {
+					Transform: func(i interface{}) (interface{}, error) {
+						obj := i.(runtime.Object)
+						Expect(obj).NotTo(BeNil())
+						accessor, err := meta.Accessor(obj)
+						Expect(err).To(BeNil())
 
-							if annotations == nil {
-								annotations = make(map[string]string)
-							}
-							annotations["transformed"] = "explicit"
-							accessor.SetAnnotations(annotations)
+						annotations := accessor.GetAnnotations()
+						if _, exists := annotations["transformed"]; exists {
+							// Avoid performing transformation multiple times.
 							return i, nil
-						},
+						}
+
+						if annotations == nil {
+							annotations = make(map[string]string)
+						}
+						annotations["transformed"] = "explicit"
+						accessor.SetAnnotations(annotations)
+						return i, nil
 					},
 				},
 			},
@@ -370,13 +366,9 @@ var _ = Describe("Cache with selectors", func() {
 		}
 
 		opts := cache.Options{
-			View: cache.ViewOptions{
-				DefaultSelector: cache.ObjectSelector{Field: fields.OneTermEqualSelector("metadata.namespace", testNamespaceTwo)},
-				ByObject: cache.ViewByObject{
-					Selectors: cache.SelectorsByObject{
-						&corev1.ServiceAccount{}: {Field: fields.OneTermEqualSelector("metadata.namespace", testNamespaceOne)},
-					},
-				},
+			DefaultFieldSelector: fields.OneTermEqualSelector("metadata.namespace", testNamespaceTwo),
+			ByObject: map[client.Object]cache.ByObject{
+				&corev1.ServiceAccount{}: {Field: fields.OneTermEqualSelector("metadata.namespace", testNamespaceOne)},
 			},
 		}
 
@@ -798,7 +790,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to restrict cache to a namespace", func() {
 					By("creating a namespaced cache")
-					namespacedCache, err := cache.New(cfg, cache.Options{View: cache.ViewOptions{Namespaces: []string{testNamespaceOne}}})
+					namespacedCache, err := cache.New(cfg, cache.Options{Namespaces: []string{testNamespaceOne}})
 					Expect(err).NotTo(HaveOccurred())
 
 					By("running the cache and waiting for it to sync")
@@ -1079,7 +1071,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to restrict cache to a namespace", func() {
 					By("creating a namespaced cache")
-					namespacedCache, err := cache.New(cfg, cache.Options{View: cache.ViewOptions{Namespaces: []string{testNamespaceOne}}})
+					namespacedCache, err := cache.New(cfg, cache.Options{Namespaces: []string{testNamespaceOne}})
 					Expect(err).NotTo(HaveOccurred())
 
 					By("running the cache and waiting for it to sync")
@@ -1233,14 +1225,10 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				By("creating the cache")
 				builder := cache.BuilderWithOptions(
 					cache.Options{
-						View: cache.ViewOptions{
-							ByObject: cache.ViewByObject{
-								Selectors: cache.SelectorsByObject{
-									&corev1.Pod{}: {
-										Label: labels.Set(tc.labelSelectors).AsSelector(),
-										Field: fields.Set(tc.fieldSelectors).AsSelector(),
-									},
-								},
+						ByObject: map[client.Object]cache.ByObject{
+							&corev1.Pod{}: {
+								Label: labels.Set(tc.labelSelectors).AsSelector(),
+								Field: fields.Set(tc.fieldSelectors).AsSelector(),
 							},
 						},
 					},
@@ -1822,12 +1810,11 @@ func isKubeService(svc metav1.Object) bool {
 }
 
 func isPodDisableDeepCopy(opts cache.Options) bool {
-	if d, ok := opts.View.ByObject.UnsafeDisableDeepCopy[&corev1.Pod{}]; ok {
-		return d
-	} else if d, ok = opts.View.ByObject.UnsafeDisableDeepCopy[cache.ObjectAll{}]; ok {
-		return d
-	} else if d, ok = opts.View.ByObject.UnsafeDisableDeepCopy[&cache.ObjectAll{}]; ok {
-		return d
+	if opts.ByObject[&corev1.Pod{}].UnsafeDisableDeepCopy != nil {
+		return *opts.ByObject[&corev1.Pod{}].UnsafeDisableDeepCopy
+	}
+	if opts.UnsafeDisableDeepCopy != nil {
+		return *opts.UnsafeDisableDeepCopy
 	}
 	return false
 }

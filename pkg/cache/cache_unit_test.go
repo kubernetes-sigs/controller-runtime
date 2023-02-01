@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -110,184 +109,231 @@ var _ = Describe("cache.inheritFrom", func() {
 		})
 	})
 	Context("Namespace", func() {
-		It("has zero length when View.Namespaces specified and inherited are unset", func() {
-			Expect(checkError(specified.inheritFrom(inherited)).View.Namespaces).To(HaveLen(0))
+		It("has zero length when Namespaces specified and inherited are unset", func() {
+			Expect(checkError(specified.inheritFrom(inherited)).Namespaces).To(HaveLen(0))
 		})
 		It("is unchanged when only specified is set", func() {
-			specified.View.Namespaces = []string{"specified"}
-			Expect(checkError(specified.inheritFrom(inherited)).View.Namespaces).To(Equal(specified.View.Namespaces))
+			specified.Namespaces = []string{"specified"}
+			Expect(checkError(specified.inheritFrom(inherited)).Namespaces).To(Equal(specified.Namespaces))
 		})
 		It("is inherited when only inherited is set", func() {
-			inherited.View.Namespaces = []string{"inherited"}
-			Expect(checkError(specified.inheritFrom(inherited)).View.Namespaces).To(Equal(inherited.View.Namespaces))
+			inherited.Namespaces = []string{"inherited"}
+			Expect(checkError(specified.inheritFrom(inherited)).Namespaces).To(Equal(inherited.Namespaces))
 		})
 		It("in unchanged when both inherited and specified are set", func() {
-			specified.View.Namespaces = []string{"specified"}
-			inherited.View.Namespaces = []string{"inherited"}
-			Expect(checkError(specified.inheritFrom(inherited)).View.Namespaces).To(Equal(specified.View.Namespaces))
+			specified.Namespaces = []string{"specified"}
+			inherited.Namespaces = []string{"inherited"}
+			Expect(checkError(specified.inheritFrom(inherited)).Namespaces).To(Equal(specified.Namespaces))
 		})
 	})
 	Context("SelectorsByObject", func() {
 		It("is unchanged when specified and inherited are unset", func() {
-			Expect(checkError(specified.inheritFrom(inherited)).View.ByObject.Selectors).To(BeNil())
+			Expect(checkError(specified.inheritFrom(inherited)).ByObject).To(HaveLen(0))
 		})
 		It("is unchanged when only specified is set", func() {
 			specified.Scheme = coreScheme
-			specified.View.ByObject.Selectors = map[client.Object]ObjectSelector{&corev1.Pod{}: {}}
-			Expect(checkError(specified.inheritFrom(inherited)).View.ByObject.Selectors).To(HaveLen(1))
+			specified.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {},
+			}
+			Expect(checkError(specified.inheritFrom(inherited)).ByObject).To(HaveLen(1))
 		})
 		It("is inherited when only inherited is set", func() {
 			inherited.Scheme = coreScheme
-			inherited.View.ByObject.Selectors = map[client.Object]ObjectSelector{&corev1.ConfigMap{}: {}}
-			Expect(checkError(specified.inheritFrom(inherited)).View.ByObject.Selectors).To(HaveLen(1))
+			inherited.ByObject = map[client.Object]ByObject{
+				&corev1.ConfigMap{}: {},
+			}
+			Expect(checkError(specified.inheritFrom(inherited)).ByObject).To(HaveLen(1))
 		})
 		It("is combined when both inherited and specified are set", func() {
 			specified.Scheme = coreScheme
 			inherited.Scheme = coreScheme
-			specified.View.ByObject.Selectors = map[client.Object]ObjectSelector{&corev1.Pod{}: {}}
-			inherited.View.ByObject.Selectors = map[client.Object]ObjectSelector{&corev1.ConfigMap{}: {}}
-			Expect(checkError(specified.inheritFrom(inherited)).View.ByObject.Selectors).To(HaveLen(2))
+			specified.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {},
+			}
+			inherited.ByObject = map[client.Object]ByObject{
+				&corev1.ConfigMap{}: {},
+			}
+			Expect(checkError(specified.inheritFrom(inherited)).ByObject).To(HaveLen(2))
 		})
 		It("combines selectors if specified and inherited specify selectors for the same object", func() {
 			specified.Scheme = coreScheme
 			inherited.Scheme = coreScheme
-			specified.View.ByObject.Selectors = map[client.Object]ObjectSelector{&corev1.Pod{}: {
-				Label: labels.Set{"specified": "true"}.AsSelector(),
-				Field: fields.Set{"metadata.name": "specified"}.AsSelector(),
-			}}
-			inherited.View.ByObject.Selectors = map[client.Object]ObjectSelector{&corev1.Pod{}: {
-				Label: labels.Set{"inherited": "true"}.AsSelector(),
-				Field: fields.Set{"metadata.namespace": "inherited"}.AsSelector(),
-			}}
-			combined := checkError(specified.inheritFrom(inherited)).View.ByObject.Selectors
+			specified.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {
+					Label: labels.Set{"specified": "true"}.AsSelector(),
+					Field: fields.Set{"metadata.name": "specified"}.AsSelector(),
+				},
+			}
+			inherited.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {
+					Label: labels.Set{"inherited": "true"}.AsSelector(),
+					Field: fields.Set{"metadata.namespace": "inherited"}.AsSelector(),
+				},
+			}
+			combined := checkError(specified.inheritFrom(inherited)).ByObject
 			Expect(combined).To(HaveLen(1))
 			var (
 				obj      client.Object
-				selector ObjectSelector
+				byObject ByObject
 			)
-			for obj, selector = range combined {
+			for obj, byObject = range combined {
 			}
 			Expect(obj).To(BeAssignableToTypeOf(&corev1.Pod{}))
 
-			Expect(selector.Label.Matches(labels.Set{"specified": "true"})).To(BeFalse())
-			Expect(selector.Label.Matches(labels.Set{"inherited": "true"})).To(BeFalse())
-			Expect(selector.Label.Matches(labels.Set{"specified": "true", "inherited": "true"})).To(BeTrue())
+			Expect(byObject.Label.Matches(labels.Set{"specified": "true"})).To(BeFalse())
+			Expect(byObject.Label.Matches(labels.Set{"inherited": "true"})).To(BeFalse())
+			Expect(byObject.Label.Matches(labels.Set{"specified": "true", "inherited": "true"})).To(BeTrue())
 
-			Expect(selector.Field.Matches(fields.Set{"metadata.name": "specified", "metadata.namespace": "other"})).To(BeFalse())
-			Expect(selector.Field.Matches(fields.Set{"metadata.name": "other", "metadata.namespace": "inherited"})).To(BeFalse())
-			Expect(selector.Field.Matches(fields.Set{"metadata.name": "specified", "metadata.namespace": "inherited"})).To(BeTrue())
+			Expect(byObject.Field.Matches(fields.Set{"metadata.name": "specified", "metadata.namespace": "other"})).To(BeFalse())
+			Expect(byObject.Field.Matches(fields.Set{"metadata.name": "other", "metadata.namespace": "inherited"})).To(BeFalse())
+			Expect(byObject.Field.Matches(fields.Set{"metadata.name": "specified", "metadata.namespace": "inherited"})).To(BeTrue())
 		})
 		It("uses inherited scheme for inherited selectors", func() {
 			inherited.Scheme = coreScheme
-			inherited.View.ByObject.Selectors = map[client.Object]ObjectSelector{&corev1.ConfigMap{}: {}}
-			Expect(checkError(specified.inheritFrom(inherited)).View.ByObject.Selectors).To(HaveLen(1))
-		})
-		It("does not use specified scheme for inherited selectors", func() {
-			inherited.Scheme = runtime.NewScheme()
-			specified.Scheme = coreScheme
-			inherited.View.ByObject.Selectors = map[client.Object]ObjectSelector{&corev1.ConfigMap{}: {}}
-			_, err := specified.inheritFrom(inherited)
-			Expect(err).To(WithTransform(runtime.IsNotRegisteredError, BeTrue()))
+			inherited.ByObject = map[client.Object]ByObject{
+				&corev1.ConfigMap{}: {},
+			}
+			Expect(checkError(specified.inheritFrom(inherited)).ByObject).To(HaveLen(1))
 		})
 		It("uses inherited scheme for specified selectors", func() {
 			inherited.Scheme = coreScheme
-			specified.View.ByObject.Selectors = map[client.Object]ObjectSelector{&corev1.ConfigMap{}: {}}
-			Expect(checkError(specified.inheritFrom(inherited)).View.ByObject.Selectors).To(HaveLen(1))
+			specified.ByObject = map[client.Object]ByObject{
+				&corev1.ConfigMap{}: {},
+			}
+			Expect(checkError(specified.inheritFrom(inherited)).ByObject).To(HaveLen(1))
 		})
 		It("uses specified scheme for specified selectors", func() {
 			specified.Scheme = coreScheme
-			specified.View.ByObject.Selectors = map[client.Object]ObjectSelector{&corev1.ConfigMap{}: {}}
-			Expect(checkError(specified.inheritFrom(inherited)).View.ByObject.Selectors).To(HaveLen(1))
+			specified.ByObject = map[client.Object]ByObject{
+				&corev1.ConfigMap{}: {},
+			}
+			Expect(checkError(specified.inheritFrom(inherited)).ByObject).To(HaveLen(1))
 		})
 	})
 	Context("DefaultSelector", func() {
 		It("is unchanged when specified and inherited are unset", func() {
-			Expect(specified.View.DefaultSelector).To(Equal(ObjectSelector{}))
-			Expect(inherited.View.DefaultSelector).To(Equal(ObjectSelector{}))
-			Expect(checkError(specified.inheritFrom(inherited)).View.DefaultSelector).To(Equal(ObjectSelector{}))
+			Expect(specified.DefaultLabelSelector).To(BeNil())
+			Expect(inherited.DefaultLabelSelector).To(BeNil())
+			Expect(specified.DefaultFieldSelector).To(BeNil())
+			Expect(inherited.DefaultFieldSelector).To(BeNil())
+			Expect(checkError(specified.inheritFrom(inherited)).DefaultLabelSelector).To(BeNil())
+			Expect(checkError(specified.inheritFrom(inherited)).DefaultFieldSelector).To(BeNil())
 		})
 		It("is unchanged when only specified is set", func() {
-			specified.View.DefaultSelector = ObjectSelector{Label: labels.Set{"specified": "true"}.AsSelector()}
-			Expect(checkError(specified.inheritFrom(inherited)).View.DefaultSelector).To(Equal(specified.View.DefaultSelector))
+			specified.DefaultLabelSelector = labels.Set{"specified": "true"}.AsSelector()
+			specified.DefaultFieldSelector = fields.Set{"specified": "true"}.AsSelector()
+			Expect(checkError(specified.inheritFrom(inherited)).DefaultLabelSelector).To(Equal(specified.DefaultLabelSelector))
+			Expect(checkError(specified.inheritFrom(inherited)).DefaultFieldSelector).To(Equal(specified.DefaultFieldSelector))
 		})
 		It("is inherited when only inherited is set", func() {
-			inherited.View.DefaultSelector = ObjectSelector{Label: labels.Set{"inherited": "true"}.AsSelector()}
-			Expect(checkError(specified.inheritFrom(inherited)).View.DefaultSelector).To(Equal(inherited.View.DefaultSelector))
+			inherited.DefaultLabelSelector = labels.Set{"inherited": "true"}.AsSelector()
+			inherited.DefaultFieldSelector = fields.Set{"inherited": "true"}.AsSelector()
+			Expect(checkError(specified.inheritFrom(inherited)).DefaultLabelSelector).To(Equal(inherited.DefaultLabelSelector))
+			Expect(checkError(specified.inheritFrom(inherited)).DefaultFieldSelector).To(Equal(inherited.DefaultFieldSelector))
 		})
 		It("is combined when both inherited and specified are set", func() {
-			specified.View.DefaultSelector = ObjectSelector{
-				Label: labels.Set{"specified": "true"}.AsSelector(),
-				Field: fields.Set{"metadata.name": "specified"}.AsSelector(),
-			}
-			inherited.View.DefaultSelector = ObjectSelector{
-				Label: labels.Set{"inherited": "true"}.AsSelector(),
-				Field: fields.Set{"metadata.namespace": "inherited"}.AsSelector(),
-			}
-			combined := checkError(specified.inheritFrom(inherited)).View.DefaultSelector
-			Expect(combined).NotTo(BeNil())
-			Expect(combined.Label.Matches(labels.Set{"specified": "true"})).To(BeFalse())
-			Expect(combined.Label.Matches(labels.Set{"inherited": "true"})).To(BeFalse())
-			Expect(combined.Label.Matches(labels.Set{"specified": "true", "inherited": "true"})).To(BeTrue())
+			specified.DefaultLabelSelector = labels.Set{"specified": "true"}.AsSelector()
+			specified.DefaultFieldSelector = fields.Set{"metadata.name": "specified"}.AsSelector()
 
-			Expect(combined.Field.Matches(fields.Set{"metadata.name": "specified", "metadata.namespace": "other"})).To(BeFalse())
-			Expect(combined.Field.Matches(fields.Set{"metadata.name": "other", "metadata.namespace": "inherited"})).To(BeFalse())
-			Expect(combined.Field.Matches(fields.Set{"metadata.name": "specified", "metadata.namespace": "inherited"})).To(BeTrue())
+			inherited.DefaultLabelSelector = labels.Set{"inherited": "true"}.AsSelector()
+			inherited.DefaultFieldSelector = fields.Set{"metadata.namespace": "inherited"}.AsSelector()
+			{
+				combined := checkError(specified.inheritFrom(inherited)).DefaultLabelSelector
+				Expect(combined).NotTo(BeNil())
+				Expect(combined.Matches(labels.Set{"specified": "true"})).To(BeFalse())
+				Expect(combined.Matches(labels.Set{"inherited": "true"})).To(BeFalse())
+				Expect(combined.Matches(labels.Set{"specified": "true", "inherited": "true"})).To(BeTrue())
+			}
+
+			{
+				combined := checkError(specified.inheritFrom(inherited)).DefaultFieldSelector
+				Expect(combined.Matches(fields.Set{"metadata.name": "specified", "metadata.namespace": "other"})).To(BeFalse())
+				Expect(combined.Matches(fields.Set{"metadata.name": "other", "metadata.namespace": "inherited"})).To(BeFalse())
+				Expect(combined.Matches(fields.Set{"metadata.name": "specified", "metadata.namespace": "inherited"})).To(BeTrue())
+			}
+
 		})
 	})
 	Context("UnsafeDisableDeepCopyByObject", func() {
 		It("is unchanged when specified and inherited are unset", func() {
-			Expect(checkError(specified.inheritFrom(inherited)).View.ByObject.UnsafeDisableDeepCopy).To(BeNil())
+			Expect(checkError(specified.inheritFrom(inherited)).ByObject).To(HaveLen(0))
 		})
 		It("is unchanged when only specified is set", func() {
 			specified.Scheme = coreScheme
-			specified.View.ByObject.UnsafeDisableDeepCopy = map[client.Object]bool{ObjectAll{}: true}
-			Expect(checkError(specified.inheritFrom(inherited)).View.ByObject.UnsafeDisableDeepCopy).To(HaveLen(1))
+			specified.UnsafeDisableDeepCopy = pointer.Bool(true)
+			Expect(*(checkError(specified.inheritFrom(inherited)).UnsafeDisableDeepCopy)).To(BeTrue())
 		})
 		It("is inherited when only inherited is set", func() {
 			inherited.Scheme = coreScheme
-			inherited.View.ByObject.UnsafeDisableDeepCopy = map[client.Object]bool{ObjectAll{}: true}
-			Expect(checkError(specified.inheritFrom(inherited)).View.ByObject.UnsafeDisableDeepCopy).To(HaveLen(1))
+			inherited.UnsafeDisableDeepCopy = pointer.Bool(true)
+			Expect(*(checkError(specified.inheritFrom(inherited)).UnsafeDisableDeepCopy)).To(BeTrue())
 		})
 		It("is combined when both inherited and specified are set for different keys", func() {
 			specified.Scheme = coreScheme
 			inherited.Scheme = coreScheme
-			specified.View.ByObject.UnsafeDisableDeepCopy = map[client.Object]bool{&corev1.Pod{}: true}
-			inherited.View.ByObject.UnsafeDisableDeepCopy = map[client.Object]bool{&corev1.ConfigMap{}: true}
-			Expect(checkError(specified.inheritFrom(inherited)).View.ByObject.UnsafeDisableDeepCopy).To(HaveLen(2))
+			specified.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {
+					UnsafeDisableDeepCopy: pointer.Bool(true),
+				},
+			}
+			inherited.ByObject = map[client.Object]ByObject{
+				&corev1.ConfigMap{}: {
+					UnsafeDisableDeepCopy: pointer.Bool(true),
+				},
+			}
+			Expect(checkError(specified.inheritFrom(inherited)).ByObject).To(HaveLen(2))
 		})
 		It("is true when inherited=false and specified=true for the same key", func() {
 			specified.Scheme = coreScheme
 			inherited.Scheme = coreScheme
-			specified.View.ByObject.UnsafeDisableDeepCopy = map[client.Object]bool{&corev1.Pod{}: true}
-			inherited.View.ByObject.UnsafeDisableDeepCopy = map[client.Object]bool{&corev1.Pod{}: false}
-			combined := checkError(specified.inheritFrom(inherited)).View.ByObject.UnsafeDisableDeepCopy
+			specified.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {
+					UnsafeDisableDeepCopy: pointer.Bool(true),
+				},
+			}
+			inherited.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {
+					UnsafeDisableDeepCopy: pointer.Bool(false),
+				},
+			}
+			combined := checkError(specified.inheritFrom(inherited)).ByObject
 			Expect(combined).To(HaveLen(1))
 
 			var (
-				obj             client.Object
-				disableDeepCopy bool
+				obj      client.Object
+				byObject ByObject
 			)
-			for obj, disableDeepCopy = range combined {
+			for obj, byObject = range combined {
 			}
 			Expect(obj).To(BeAssignableToTypeOf(&corev1.Pod{}))
-			Expect(disableDeepCopy).To(BeTrue())
+			Expect(byObject.UnsafeDisableDeepCopy).ToNot(BeNil())
+			Expect(*byObject.UnsafeDisableDeepCopy).To(BeTrue())
 		})
 		It("is false when inherited=true and specified=false for the same key", func() {
 			specified.Scheme = coreScheme
 			inherited.Scheme = coreScheme
-			specified.View.ByObject.UnsafeDisableDeepCopy = map[client.Object]bool{&corev1.Pod{}: false}
-			inherited.View.ByObject.UnsafeDisableDeepCopy = map[client.Object]bool{&corev1.Pod{}: true}
-			combined := checkError(specified.inheritFrom(inherited)).View.ByObject.UnsafeDisableDeepCopy
+			specified.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {
+					UnsafeDisableDeepCopy: pointer.Bool(false),
+				},
+			}
+			inherited.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {
+					UnsafeDisableDeepCopy: pointer.Bool(true),
+				},
+			}
+			combined := checkError(specified.inheritFrom(inherited)).ByObject
 			Expect(combined).To(HaveLen(1))
 
 			var (
-				obj             client.Object
-				disableDeepCopy bool
+				obj      client.Object
+				byObject ByObject
 			)
-			for obj, disableDeepCopy = range combined {
+			for obj, byObject = range combined {
 			}
 			Expect(obj).To(BeAssignableToTypeOf(&corev1.Pod{}))
-			Expect(disableDeepCopy).To(BeFalse())
+			Expect(byObject.UnsafeDisableDeepCopy).ToNot(BeNil())
+			Expect(*byObject.UnsafeDisableDeepCopy).To(BeFalse())
 		})
 	})
 	Context("TransformByObject", func() {
@@ -302,20 +348,24 @@ var _ = Describe("cache.inheritFrom", func() {
 			tx = transformed{}
 		})
 		It("is unchanged when specified and inherited are unset", func() {
-			Expect(checkError(specified.inheritFrom(inherited)).View.ByObject.Transform).To(BeNil())
+			Expect(checkError(specified.inheritFrom(inherited)).ByObject).To(HaveLen(0))
 		})
 		It("is unchanged when only specified is set", func() {
 			specified.Scheme = coreScheme
-			specified.View.ByObject.Transform = map[client.Object]cache.TransformFunc{&corev1.Pod{}: func(i interface{}) (interface{}, error) {
-				ti := i.(transformed)
-				ti.podSpecified = true
-				return ti, nil
-			}}
-			combined := checkError(specified.inheritFrom(inherited)).View.ByObject.Transform
+			specified.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {
+					Transform: func(i interface{}) (interface{}, error) {
+						ti := i.(transformed)
+						ti.podSpecified = true
+						return ti, nil
+					},
+				},
+			}
+			combined := checkError(specified.inheritFrom(inherited)).ByObject
 			Expect(combined).To(HaveLen(1))
-			for obj, fn := range combined {
+			for obj, byObject := range combined {
 				Expect(obj).To(BeAssignableToTypeOf(&corev1.Pod{}))
-				out, _ := fn(tx)
+				out, _ := byObject.Transform(tx)
 				Expect(out).To(And(
 					BeAssignableToTypeOf(tx),
 					WithTransform(func(i transformed) bool { return i.podSpecified }, BeTrue()),
@@ -325,16 +375,20 @@ var _ = Describe("cache.inheritFrom", func() {
 		})
 		It("is inherited when only inherited is set", func() {
 			inherited.Scheme = coreScheme
-			inherited.View.ByObject.Transform = map[client.Object]cache.TransformFunc{&corev1.Pod{}: func(i interface{}) (interface{}, error) {
-				ti := i.(transformed)
-				ti.podInherited = true
-				return ti, nil
-			}}
-			combined := checkError(specified.inheritFrom(inherited)).View.ByObject.Transform
+			inherited.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {
+					Transform: func(i interface{}) (interface{}, error) {
+						ti := i.(transformed)
+						ti.podInherited = true
+						return ti, nil
+					},
+				},
+			}
+			combined := checkError(specified.inheritFrom(inherited)).ByObject
 			Expect(combined).To(HaveLen(1))
-			for obj, fn := range combined {
+			for obj, byObject := range combined {
 				Expect(obj).To(BeAssignableToTypeOf(&corev1.Pod{}))
-				out, _ := fn(tx)
+				out, _ := byObject.Transform(tx)
 				Expect(out).To(And(
 					BeAssignableToTypeOf(tx),
 					WithTransform(func(i transformed) bool { return i.podSpecified }, BeFalse()),
@@ -345,20 +399,28 @@ var _ = Describe("cache.inheritFrom", func() {
 		It("is combined when both inherited and specified are set for different keys", func() {
 			specified.Scheme = coreScheme
 			inherited.Scheme = coreScheme
-			specified.View.ByObject.Transform = map[client.Object]cache.TransformFunc{&corev1.Pod{}: func(i interface{}) (interface{}, error) {
-				ti := i.(transformed)
-				ti.podSpecified = true
-				return ti, nil
-			}}
-			inherited.View.ByObject.Transform = map[client.Object]cache.TransformFunc{&corev1.ConfigMap{}: func(i interface{}) (interface{}, error) {
-				ti := i.(transformed)
-				ti.configmapInherited = true
-				return ti, nil
-			}}
-			combined := checkError(specified.inheritFrom(inherited)).View.ByObject.Transform
+			specified.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {
+					Transform: func(i interface{}) (interface{}, error) {
+						ti := i.(transformed)
+						ti.podSpecified = true
+						return ti, nil
+					},
+				},
+			}
+			inherited.ByObject = map[client.Object]ByObject{
+				&corev1.ConfigMap{}: {
+					Transform: func(i interface{}) (interface{}, error) {
+						ti := i.(transformed)
+						ti.configmapInherited = true
+						return ti, nil
+					},
+				},
+			}
+			combined := checkError(specified.inheritFrom(inherited)).ByObject
 			Expect(combined).To(HaveLen(2))
-			for obj, fn := range combined {
-				out, _ := fn(tx)
+			for obj, byObject := range combined {
+				out, _ := byObject.Transform(tx)
 				if reflect.TypeOf(obj) == reflect.TypeOf(&corev1.Pod{}) {
 					Expect(out).To(And(
 						BeAssignableToTypeOf(tx),
@@ -382,21 +444,29 @@ var _ = Describe("cache.inheritFrom", func() {
 		It("is combined into a single transform function when both inherited and specified are set for the same key", func() {
 			specified.Scheme = coreScheme
 			inherited.Scheme = coreScheme
-			specified.View.ByObject.Transform = map[client.Object]cache.TransformFunc{&corev1.Pod{}: func(i interface{}) (interface{}, error) {
-				ti := i.(transformed)
-				ti.podSpecified = true
-				return ti, nil
-			}}
-			inherited.View.ByObject.Transform = map[client.Object]cache.TransformFunc{&corev1.Pod{}: func(i interface{}) (interface{}, error) {
-				ti := i.(transformed)
-				ti.podInherited = true
-				return ti, nil
-			}}
-			combined := checkError(specified.inheritFrom(inherited)).View.ByObject.Transform
+			specified.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {
+					Transform: func(i interface{}) (interface{}, error) {
+						ti := i.(transformed)
+						ti.podSpecified = true
+						return ti, nil
+					},
+				},
+			}
+			inherited.ByObject = map[client.Object]ByObject{
+				&corev1.Pod{}: {
+					Transform: func(i interface{}) (interface{}, error) {
+						ti := i.(transformed)
+						ti.podInherited = true
+						return ti, nil
+					},
+				},
+			}
+			combined := checkError(specified.inheritFrom(inherited)).ByObject
 			Expect(combined).To(HaveLen(1))
-			for obj, fn := range combined {
+			for obj, byObject := range combined {
 				Expect(obj).To(BeAssignableToTypeOf(&corev1.Pod{}))
-				out, _ := fn(tx)
+				out, _ := byObject.Transform(tx)
 				Expect(out).To(And(
 					BeAssignableToTypeOf(tx),
 					WithTransform(func(i transformed) bool { return i.podSpecified }, BeTrue()),
@@ -417,15 +487,15 @@ var _ = Describe("cache.inheritFrom", func() {
 			tx = transformed{}
 		})
 		It("is unchanged when specified and inherited are unset", func() {
-			Expect(checkError(specified.inheritFrom(inherited)).View.DefaultTransform).To(BeNil())
+			Expect(checkError(specified.inheritFrom(inherited)).DefaultTransform).To(BeNil())
 		})
 		It("is unchanged when only specified is set", func() {
-			specified.View.DefaultTransform = func(i interface{}) (interface{}, error) {
+			specified.DefaultTransform = func(i interface{}) (interface{}, error) {
 				ti := i.(transformed)
 				ti.specified = true
 				return ti, nil
 			}
-			combined := checkError(specified.inheritFrom(inherited)).View.DefaultTransform
+			combined := checkError(specified.inheritFrom(inherited)).DefaultTransform
 			out, _ := combined(tx)
 			Expect(out).To(And(
 				BeAssignableToTypeOf(tx),
@@ -434,12 +504,12 @@ var _ = Describe("cache.inheritFrom", func() {
 			))
 		})
 		It("is inherited when only inherited is set", func() {
-			inherited.View.DefaultTransform = func(i interface{}) (interface{}, error) {
+			inherited.DefaultTransform = func(i interface{}) (interface{}, error) {
 				ti := i.(transformed)
 				ti.inherited = true
 				return ti, nil
 			}
-			combined := checkError(specified.inheritFrom(inherited)).View.DefaultTransform
+			combined := checkError(specified.inheritFrom(inherited)).DefaultTransform
 			out, _ := combined(tx)
 			Expect(out).To(And(
 				BeAssignableToTypeOf(tx),
@@ -448,17 +518,17 @@ var _ = Describe("cache.inheritFrom", func() {
 			))
 		})
 		It("is combined when the transform function is defined in both inherited and specified", func() {
-			specified.View.DefaultTransform = func(i interface{}) (interface{}, error) {
+			specified.DefaultTransform = func(i interface{}) (interface{}, error) {
 				ti := i.(transformed)
 				ti.specified = true
 				return ti, nil
 			}
-			inherited.View.DefaultTransform = func(i interface{}) (interface{}, error) {
+			inherited.DefaultTransform = func(i interface{}) (interface{}, error) {
 				ti := i.(transformed)
 				ti.inherited = true
 				return ti, nil
 			}
-			combined := checkError(specified.inheritFrom(inherited)).View.DefaultTransform
+			combined := checkError(specified.inheritFrom(inherited)).DefaultTransform
 			Expect(combined).NotTo(BeNil())
 			out, _ := combined(tx)
 			Expect(out).To(And(

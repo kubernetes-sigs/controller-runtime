@@ -64,7 +64,7 @@ func AddToProtobufScheme(addToScheme func(*runtime.Scheme) error) error {
 // information fetched by a new client with the given config.
 func NewDiscoveryRESTMapper(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error) {
 	if httpClient == nil {
-		panic("httpClient must not be nil")
+		return nil, fmt.Errorf("httpClient must not be nil, consider using rest.HTTPClientFor(c) to create a client")
 	}
 
 	// Get a mapper
@@ -157,7 +157,7 @@ func GVKForObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersi
 // baseConfig, if set, otherwise a default serializer will be set.
 func RESTClientForGVK(gvk schema.GroupVersionKind, isUnstructured bool, baseConfig *rest.Config, codecs serializer.CodecFactory, httpClient *http.Client) (rest.Interface, error) {
 	if httpClient == nil {
-		panic("httpClient must not be nil")
+		return nil, fmt.Errorf("httpClient must not be nil, consider using rest.HTTPClientFor(c) to create a client")
 	}
 	return rest.RESTClientForConfigAndClient(createRestConfig(gvk, isUnstructured, baseConfig, codecs), httpClient)
 }

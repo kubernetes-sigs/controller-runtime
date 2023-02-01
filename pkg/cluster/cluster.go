@@ -202,7 +202,7 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	}
 
 	// Create the API Reader, a client with no cache.
-	apiReader, err := client.New(config, client.Options{Scheme: options.Scheme, Mapper: mapper})
+	apiReader, err := client.New(config, client.Options{HTTPClient: options.HTTPClient, Scheme: options.Scheme, Mapper: mapper})
 	if err != nil {
 		return nil, err
 	}

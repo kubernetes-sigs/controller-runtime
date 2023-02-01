@@ -28,7 +28,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1" //nolint:staticcheck
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -147,7 +147,7 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should default RecoverPanic from the manager", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: v1alpha1.ControllerConfigurationSpec{RecoverPanic: pointer.Bool(true)}})
+			m, err := manager.New(cfg, manager.Options{Controller: v1alpha1.ControllerConfigurationSpec{RecoverPanic: pointer.Bool(true)}}) //nolint:staticcheck
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{
@@ -163,7 +163,7 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should not override RecoverPanic on the controller", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: v1alpha1.ControllerConfigurationSpec{RecoverPanic: pointer.Bool(true)}})
+			m, err := manager.New(cfg, manager.Options{Controller: v1alpha1.ControllerConfigurationSpec{RecoverPanic: pointer.Bool(true)}}) //nolint:staticcheck
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{

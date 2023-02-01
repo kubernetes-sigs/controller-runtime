@@ -47,7 +47,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1" //nolint:staticcheck
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
@@ -127,8 +127,8 @@ var _ = Describe("manger.Manager", func() {
 			port := int(6090)
 			leaderElect := false
 
-			ccfg := &v1alpha1.ControllerManagerConfiguration{
-				ControllerManagerConfigurationSpec: v1alpha1.ControllerManagerConfigurationSpec{
+			ccfg := &v1alpha1.ControllerManagerConfiguration{ //nolint:staticcheck
+				ControllerManagerConfigurationSpec: v1alpha1.ControllerManagerConfigurationSpec{ //nolint:staticcheck
 					SyncPeriod: &duration,
 					LeaderElection: &configv1alpha1.LeaderElectionConfiguration{
 						LeaderElect:       &leaderElect,
@@ -183,8 +183,8 @@ var _ = Describe("manger.Manager", func() {
 			port := int(6090)
 			leaderElect := false
 
-			ccfg := &v1alpha1.ControllerManagerConfiguration{
-				ControllerManagerConfigurationSpec: v1alpha1.ControllerManagerConfigurationSpec{
+			ccfg := &v1alpha1.ControllerManagerConfiguration{ //nolint:staticcheck
+				ControllerManagerConfigurationSpec: v1alpha1.ControllerManagerConfigurationSpec{ //nolint:staticcheck
 					SyncPeriod: &duration,
 					LeaderElection: &configv1alpha1.LeaderElectionConfiguration{
 						LeaderElect:       &leaderElect,
@@ -1819,7 +1819,7 @@ type fakeDeferredLoader struct {
 	*v1alpha1.ControllerManagerConfiguration
 }
 
-func (f *fakeDeferredLoader) Complete() (v1alpha1.ControllerManagerConfigurationSpec, error) {
+func (f *fakeDeferredLoader) Complete() (v1alpha1.ControllerManagerConfigurationSpec, error) { //nolint:staticcheck
 	return f.ControllerManagerConfiguration.ControllerManagerConfigurationSpec, nil
 }
 

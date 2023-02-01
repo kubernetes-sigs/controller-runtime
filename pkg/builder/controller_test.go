@@ -36,7 +36,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1" //nolint:staticcheck
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -235,7 +235,7 @@ var _ = Describe("application", func() {
 
 			By("creating a controller manager")
 			m, err := manager.New(cfg, manager.Options{
-				Controller: v1alpha1.ControllerConfigurationSpec{
+				Controller: v1alpha1.ControllerConfigurationSpec{ //nolint:staticcheck
 					GroupKindConcurrency: map[string]int{
 						"ReplicaSet.apps": maxConcurrentReconciles,
 					},

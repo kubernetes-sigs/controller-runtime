@@ -21,9 +21,8 @@ import (
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/config"
-
 	"sigs.k8s.io/controller-runtime/examples/configfile/custom/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config" //nolint:staticcheck
 )
 
 var scheme = runtime.NewScheme()

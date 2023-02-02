@@ -19,7 +19,6 @@ package admission
 import (
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -65,9 +64,13 @@ func (d *Decoder) DecodeRaw(rawObj runtime.RawExtension, into runtime.Object) er
 	if len(rawObj.Raw) == 0 {
 		return fmt.Errorf("there is no content to decode")
 	}
-	if unstructuredInto, isUnstructured := into.(*unstructured.Unstructured); isUnstructured {
+	if unstructuredInto, isUnstructured := into.(runtime.Unstructured); isUnstructured {
 		// unmarshal into unstructured's underlying object to avoid calling the decoder
-		return json.Unmarshal(rawObj.Raw, &unstructuredInto.Object)
+		var object map[string]interface{}
+		if err := json.Unmarshal(rawObj.Raw, &object); err != nil {
+			return err
+		}
+		unstructuredInto.SetUnstructuredContent(object)
 	}
 
 	deserializer := d.codecs.UniversalDeserializer()

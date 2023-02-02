@@ -102,7 +102,7 @@ func (ic *informerCache) objectTypeForListObject(list client.ObjectList) (*schem
 	gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
 
 	// Handle unstructured.UnstructuredList.
-	if _, isUnstructured := list.(*unstructured.UnstructuredList); isUnstructured {
+	if _, isUnstructured := list.(runtime.Unstructured); isUnstructured {
 		u := &unstructured.Unstructured{}
 		u.SetGroupVersionKind(gvk)
 		return &gvk, u, nil

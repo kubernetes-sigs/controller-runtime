@@ -47,13 +47,13 @@ const globalCache = "_cluster-scope"
 // Deprecated: Use cache.Options.View.Namespaces instead.
 func MultiNamespacedCacheBuilder(namespaces []string) NewCacheFunc {
 	return func(config *rest.Config, opts Options) (Cache, error) {
-		opts.View.Namespaces = namespaces
+		opts.Namespaces = namespaces
 		return newMultiNamespaceCache(config, opts)
 	}
 }
 
 func newMultiNamespaceCache(config *rest.Config, opts Options) (Cache, error) {
-	if len(opts.View.Namespaces) < 2 {
+	if len(opts.Namespaces) < 2 {
 		return nil, fmt.Errorf("must specify more than one namespace to use multi-namespace cache")
 	}
 	opts, err := defaultOpts(config, opts)
@@ -63,8 +63,8 @@ func newMultiNamespaceCache(config *rest.Config, opts Options) (Cache, error) {
 
 	// Create every namespace cache.
 	caches := map[string]Cache{}
-	for _, ns := range opts.View.Namespaces {
-		opts.View.Namespaces = []string{ns}
+	for _, ns := range opts.Namespaces {
+		opts.Namespaces = []string{ns}
 		c, err := New(config, opts)
 		if err != nil {
 			return nil, err
@@ -73,7 +73,7 @@ func newMultiNamespaceCache(config *rest.Config, opts Options) (Cache, error) {
 	}
 
 	// Create a cache for cluster scoped resources.
-	opts.View.Namespaces = []string{}
+	opts.Namespaces = []string{}
 	gCache, err := New(config, opts)
 	if err != nil {
 		return nil, fmt.Errorf("error creating global cache: %w", err)

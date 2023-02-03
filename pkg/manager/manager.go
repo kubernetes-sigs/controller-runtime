@@ -348,15 +348,15 @@ func New(config *rest.Config, options Options) (Manager, error) {
 
 	cluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {
 		clusterOptions.Scheme = options.Scheme
-		clusterOptions.MapperProvider = options.MapperProvider
+		clusterOptions.MapperProvider = options.MapperProvider //nolint:staticcheck
 		clusterOptions.Logger = options.Logger
 		clusterOptions.SyncPeriod = options.SyncPeriod
-		clusterOptions.Namespace = options.Namespace
+		clusterOptions.Namespace = options.Namespace //nolint:staticcheck
 		clusterOptions.NewCache = options.NewCache
 		clusterOptions.NewClient = options.NewClient
-		clusterOptions.ClientDisableCacheFor = options.ClientDisableCacheFor
-		clusterOptions.DryRunClient = options.DryRunClient
-		clusterOptions.EventBroadcaster = options.EventBroadcaster //nolint:staticcheck
+		clusterOptions.ClientDisableCacheFor = options.ClientDisableCacheFor //nolint:staticcheck
+		clusterOptions.DryRunClient = options.DryRunClient                   //nolint:staticcheck
+		clusterOptions.EventBroadcaster = options.EventBroadcaster           //nolint:staticcheck
 	})
 	if err != nil {
 		return nil, err

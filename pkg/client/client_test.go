@@ -33,12 +33,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/examples/crd/pkg"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -221,8 +223,6 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 		Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 	})
 
-	// TODO(seans): Cast "cl" as "client" struct from "Client" interface. Then validate the
-	// instance values for the "client" struct.
 	Describe("New", func() {
 		It("should return a new Client", func() {
 			cl, err := client.New(cfg, client.Options{})
@@ -236,29 +236,46 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			Expect(cl).To(BeNil())
 		})
 
-		// TODO(seans): cast as client struct and inspect Scheme
 		It("should use the provided Scheme if provided", func() {
 			cl, err := client.New(cfg, client.Options{Scheme: scheme})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
+			Expect(cl.Scheme()).ToNot(BeNil())
+			Expect(cl.Scheme()).To(Equal(scheme))
 		})
 
-		// TODO(seans): cast as client struct and inspect Scheme
 		It("should default the Scheme if not provided", func() {
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
+			Expect(cl.Scheme()).ToNot(BeNil())
+			Expect(cl.Scheme()).To(Equal(kscheme.Scheme))
 		})
 
-		PIt("should use the provided Mapper if provided", func() {
-
+		It("should use the provided Mapper if provided", func() {
+			mapper := meta.NewDefaultRESTMapper([]schema.GroupVersion{})
+			cl, err := client.New(cfg, client.Options{Mapper: mapper})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+			Expect(cl.RESTMapper()).ToNot(BeNil())
+			Expect(cl.RESTMapper()).To(Equal(mapper))
 		})
 
-		// TODO(seans): cast as client struct and inspect Mapper
 		It("should create a Mapper if not provided", func() {
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
+			Expect(cl.RESTMapper()).ToNot(BeNil())
+		})
+
+		It("should use the provided reader cache if provided, on get and list", func() {
+			cache := &fakeReader{}
+			cl, err := client.New(cfg, client.Options{Cache: &client.CacheOptions{Reader: cache}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+			Expect(cl.Get(ctx, client.ObjectKey{Name: "test"}, &appsv1.Deployment{})).To(Succeed())
+			Expect(cl.List(ctx, &appsv1.DeploymentList{})).To(Succeed())
+			Expect(cache.Called).To(Equal(2))
 		})
 	})
 
@@ -350,7 +367,22 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			Context("with the DryRun option", func() {
-				It("should not create a new object", func() {
+				It("should not create a new object, global option", func() {
+					cl, err := client.New(cfg, client.Options{DryRun: pointer.Bool(true)})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(cl).NotTo(BeNil())
+
+					By("creating the object (with DryRun)")
+					err = cl.Create(context.TODO(), dep)
+					Expect(err).NotTo(HaveOccurred())
+
+					actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+					Expect(err).To(HaveOccurred())
+					Expect(apierrors.IsNotFound(err)).To(BeTrue())
+					Expect(actual).To(Equal(&appsv1.Deployment{}))
+				})
+
+				It("should not create a new object, inline option", func() {
 					cl, err := client.New(cfg, client.Options{})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cl).NotTo(BeNil())

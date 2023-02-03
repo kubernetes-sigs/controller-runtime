@@ -53,6 +53,9 @@ type Options struct {
 	// WarningHandler is used to configure the warning handler responsible for
 	// surfacing and handling warnings messages sent by the API server.
 	WarningHandler WarningHandlerOptions
+
+	// DryRun instructs the client to only perform dry run requests.
+	DryRun *bool
 }
 
 // WarningHandlerOptions are options for configuring a
@@ -94,8 +97,12 @@ type NewClientFunc func(config *rest.Config, options Options) (Client, error)
 // corresponding group, version, and kind for the given type.  In the
 // case of unstructured types, the group, version, and kind will be extracted
 // from the corresponding fields on the object.
-func New(config *rest.Config, options Options) (Client, error) {
-	return newClient(config, options)
+func New(config *rest.Config, options Options) (c Client, err error) {
+	c, err = newClient(config, options)
+	if err == nil && options.DryRun != nil && *options.DryRun {
+		c = NewDryRunClient(c)
+	}
+	return c, err
 }
 
 func newClient(config *rest.Config, options Options) (*client, error) {

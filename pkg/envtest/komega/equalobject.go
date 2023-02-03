@@ -22,7 +22,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/onsi/gomega/format"
 	"github.com/onsi/gomega/types"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -172,11 +171,11 @@ func (m *equalObjectMatcher) calculateDiff(actual interface{}) []diffPath {
 	var original interface{} = m.original
 	// Remove the wrapping Object from unstructured.Unstructured to make comparison behave similar to
 	// regular objects.
-	if u, isUnstructured := actual.(*unstructured.Unstructured); isUnstructured {
-		actual = u.Object
+	if u, isUnstructured := actual.(runtime.Unstructured); isUnstructured {
+		actual = u.UnstructuredContent()
 	}
-	if u, ok := m.original.(*unstructured.Unstructured); ok {
-		original = u.Object
+	if u, ok := m.original.(runtime.Unstructured); ok {
+		original = u.UnstructuredContent()
 	}
 	r := diffReporter{}
 	cmp.Diff(original, actual, cmp.Reporter(&r))

@@ -23,7 +23,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -82,9 +81,7 @@ func (c *clientRestResources) getResource(obj runtime.Object) (*resourceMeta, er
 		return nil, err
 	}
 
-	_, isUnstructured := obj.(*unstructured.Unstructured)
-	_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
-	isUnstructured = isUnstructured || isUnstructuredList
+	_, isUnstructured := obj.(runtime.Unstructured)
 
 	// It's better to do creation work twice than to not let multiple
 	// people make requests at once

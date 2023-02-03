@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 )
@@ -41,7 +41,7 @@ type watchingClient struct {
 
 func (w *watchingClient) Watch(ctx context.Context, list ObjectList, opts ...ListOption) (watch.Interface, error) {
 	switch l := list.(type) {
-	case *unstructured.UnstructuredList:
+	case runtime.Unstructured:
 		return w.unstructuredWatch(ctx, l, opts...)
 	case *metav1.PartialObjectMetadataList:
 		return w.metadataWatch(ctx, l, opts...)
@@ -75,7 +75,7 @@ func (w *watchingClient) metadataWatch(ctx context.Context, obj *metav1.PartialO
 	return resInt.Watch(ctx, *listOpts.AsListOptions())
 }
 
-func (w *watchingClient) unstructuredWatch(ctx context.Context, obj *unstructured.UnstructuredList, opts ...ListOption) (watch.Interface, error) {
+func (w *watchingClient) unstructuredWatch(ctx context.Context, obj runtime.Unstructured, opts ...ListOption) (watch.Interface, error) {
 	r, err := w.client.unstructuredClient.resources.getResource(obj)
 	if err != nil {
 		return nil, err

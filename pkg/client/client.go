@@ -25,7 +25,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -230,9 +229,8 @@ func (c *client) shouldBypassCache(obj runtime.Object) (bool, error) {
 		return true, nil
 	}
 	if !c.cacheUnstructured {
-		_, isUnstructured := obj.(*unstructured.Unstructured)
-		_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
-		return isUnstructured || isUnstructuredList, nil
+		_, isUnstructured := obj.(runtime.Unstructured)
+		return isUnstructured, nil
 	}
 	return false, nil
 }
@@ -269,7 +267,7 @@ func (c *client) RESTMapper() meta.RESTMapper {
 // Create implements client.Client.
 func (c *client) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
 	switch obj.(type) {
-	case *unstructured.Unstructured:
+	case runtime.Unstructured:
 		return c.unstructuredClient.Create(ctx, obj, opts...)
 	case *metav1.PartialObjectMetadata:
 		return fmt.Errorf("cannot create using only metadata")
@@ -282,7 +280,7 @@ func (c *client) Create(ctx context.Context, obj Object, opts ...CreateOption) e
 func (c *client) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	switch obj.(type) {
-	case *unstructured.Unstructured:
+	case runtime.Unstructured:
 		return c.unstructuredClient.Update(ctx, obj, opts...)
 	case *metav1.PartialObjectMetadata:
 		return fmt.Errorf("cannot update using only metadata -- did you mean to patch?")
@@ -294,7 +292,7 @@ func (c *client) Update(ctx context.Context, obj Object, opts ...UpdateOption) e
 // Delete implements client.Client.
 func (c *client) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
 	switch obj.(type) {
-	case *unstructured.Unstructured:
+	case runtime.Unstructured:
 		return c.unstructuredClient.Delete(ctx, obj, opts...)
 	case *metav1.PartialObjectMetadata:
 		return c.metadataClient.Delete(ctx, obj, opts...)
@@ -306,7 +304,7 @@ func (c *client) Delete(ctx context.Context, obj Object, opts ...DeleteOption) e
 // DeleteAllOf implements client.Client.
 func (c *client) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllOfOption) error {
 	switch obj.(type) {
-	case *unstructured.Unstructured:
+	case runtime.Unstructured:
 		return c.unstructuredClient.DeleteAllOf(ctx, obj, opts...)
 	case *metav1.PartialObjectMetadata:
 		return c.metadataClient.DeleteAllOf(ctx, obj, opts...)
@@ -319,7 +317,7 @@ func (c *client) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllO
 func (c *client) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
 	defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	switch obj.(type) {
-	case *unstructured.Unstructured:
+	case runtime.Unstructured:
 		return c.unstructuredClient.Patch(ctx, obj, patch, opts...)
 	case *metav1.PartialObjectMetadata:
 		return c.metadataClient.Patch(ctx, obj, patch, opts...)
@@ -337,7 +335,7 @@ func (c *client) Get(ctx context.Context, key ObjectKey, obj Object, opts ...Get
 	}
 
 	switch obj.(type) {
-	case *unstructured.Unstructured:
+	case runtime.Unstructured:
 		return c.unstructuredClient.Get(ctx, key, obj, opts...)
 	case *metav1.PartialObjectMetadata:
 		// Metadata only object should always preserve the GVK coming in from the caller.
@@ -357,7 +355,7 @@ func (c *client) List(ctx context.Context, obj ObjectList, opts ...ListOption) e
 	}
 
 	switch x := obj.(type) {
-	case *unstructured.UnstructuredList:
+	case runtime.Unstructured:
 		return c.unstructuredClient.List(ctx, obj, opts...)
 	case *metav1.PartialObjectMetadataList:
 		// Metadata only object should always preserve the GVK.
@@ -531,7 +529,7 @@ func (po *SubResourcePatchOptions) ApplyToSubResourcePatch(o *SubResourcePatchOp
 
 func (sc *subResourceClient) Get(ctx context.Context, obj Object, subResource Object, opts ...SubResourceGetOption) error {
 	switch obj.(type) {
-	case *unstructured.Unstructured:
+	case runtime.Unstructured:
 		return sc.client.unstructuredClient.GetSubResource(ctx, obj, subResource, sc.subResource, opts...)
 	case *metav1.PartialObjectMetadata:
 		return errors.New("can not get subresource using only metadata")
@@ -546,7 +544,7 @@ func (sc *subResourceClient) Create(ctx context.Context, obj Object, subResource
 	defer sc.client.resetGroupVersionKind(subResource, subResource.GetObjectKind().GroupVersionKind())
 
 	switch obj.(type) {
-	case *unstructured.Unstructured:
+	case runtime.Unstructured:
 		return sc.client.unstructuredClient.CreateSubResource(ctx, obj, subResource, sc.subResource, opts...)
 	case *metav1.PartialObjectMetadata:
 		return fmt.Errorf("cannot update status using only metadata -- did you mean to patch?")
@@ -559,7 +557,7 @@ func (sc *subResourceClient) Create(ctx context.Context, obj Object, subResource
 func (sc *subResourceClient) Update(ctx context.Context, obj Object, opts ...SubResourceUpdateOption) error {
 	defer sc.client.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	switch obj.(type) {
-	case *unstructured.Unstructured:
+	case runtime.Unstructured:
 		return sc.client.unstructuredClient.UpdateSubResource(ctx, obj, sc.subResource, opts...)
 	case *metav1.PartialObjectMetadata:
 		return fmt.Errorf("cannot update status using only metadata -- did you mean to patch?")
@@ -572,7 +570,7 @@ func (sc *subResourceClient) Update(ctx context.Context, obj Object, opts ...Sub
 func (sc *subResourceClient) Patch(ctx context.Context, obj Object, patch Patch, opts ...SubResourcePatchOption) error {
 	defer sc.client.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
 	switch obj.(type) {
-	case *unstructured.Unstructured:
+	case runtime.Unstructured:
 		return sc.client.unstructuredClient.PatchSubResource(ctx, obj, sc.subResource, patch, opts...)
 	case *metav1.PartialObjectMetadata:
 		return sc.client.metadataClient.PatchSubResource(ctx, obj, sc.subResource, patch, opts...)

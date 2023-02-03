@@ -27,7 +27,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -307,7 +306,7 @@ func (ip *Informers) Get(ctx context.Context, gvk schema.GroupVersionKind, obj r
 
 func (ip *Informers) informersByType(obj runtime.Object) map[schema.GroupVersionKind]*Cache {
 	switch obj.(type) {
-	case *unstructured.Unstructured, *unstructured.UnstructuredList:
+	case runtime.Unstructured:
 		return ip.tracker.Unstructured
 	case *metav1.PartialObjectMetadata, *metav1.PartialObjectMetadataList:
 		return ip.tracker.Metadata
@@ -394,7 +393,7 @@ func (ip *Informers) makeListWatcher(gvk schema.GroupVersionKind, obj runtime.Ob
 	//
 	// Unstructured
 	//
-	case *unstructured.Unstructured, *unstructured.UnstructuredList:
+	case runtime.Unstructured:
 		// If the rest configuration has a negotiated serializer passed in,
 		// we should remove it and use the one that the dynamic client sets for us.
 		cfg := rest.CopyConfig(ip.config)

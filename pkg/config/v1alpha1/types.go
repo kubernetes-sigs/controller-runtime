@@ -62,7 +62,7 @@ type ControllerManagerConfigurationSpec struct {
 	// +optional
 	Controller *ControllerConfigurationSpec `json:"controller,omitempty"`
 
-	// Metrics contains thw controller metrics configuration
+	// Metrics contains the controller metrics configuration
 	// +optional
 	Metrics ControllerMetrics `json:"metrics,omitempty"`
 

@@ -17,6 +17,7 @@ limitations under the License.
 package apiutil
 
 import (
+	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -78,7 +79,7 @@ func WithCustomMapper(newMapper func() (meta.RESTMapper, error)) DynamicRESTMapp
 // configure the RESTMapper.
 func NewDynamicRESTMapper(cfg *rest.Config, httpClient *http.Client, opts ...DynamicRESTMapperOption) (meta.RESTMapper, error) {
 	if httpClient == nil {
-		panic("httpClient must not be nil")
+		return nil, fmt.Errorf("httpClient must not be nil, consider using rest.HTTPClientFor(c) to create a client")
 	}
 
 	client, err := discovery.NewDiscoveryClientForConfigAndClient(cfg, httpClient)

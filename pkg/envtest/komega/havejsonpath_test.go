@@ -1,7 +1,6 @@
 package komega
 
 import (
-	"fmt"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -23,13 +22,13 @@ var _ = Describe("HaveJSONPathMatcher", func() {
 		Entry("should error when passed an invalid jsonpath",
 			&corev1.Pod{},
 			HaveJSONPath("{^}", BeTrue()),
-			MatchError(fmt.Errorf("JSON Path '{^}' is invalid: unrecognized character in action: U+005E '^'")),
+			MatchError("JSON Path '{^}' is invalid: unrecognized character in action: U+005E '^'"),
 			BeFalse(),
 		),
 		Entry("should error when passed a jsonpath to an invalid location",
 			&corev1.Pod{},
 			HaveJSONPath("{.foo}", BeTrue()),
-			MatchError(fmt.Errorf("JSON Path '{.foo}' failed: foo is not found")),
+			MatchError("JSON Path '{.foo}' failed: foo is not found"),
 			BeFalse(),
 		),
 		Entry("should succeed when passed a jsonpath to a valid location and correct matcher",

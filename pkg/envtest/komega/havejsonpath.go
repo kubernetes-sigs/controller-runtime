@@ -17,7 +17,7 @@ type haveJSONPathMatcher struct {
 }
 
 // HaveJSONPath returns the matcher for a given JSON path and subsequent matcher
-func HaveJSONPath(jsonpath string, matcher types.GomegaMatcher) *haveJSONPathMatcher {
+func HaveJSONPath(jsonpath string, matcher types.GomegaMatcher) types.GomegaMatcher {
 	return &haveJSONPathMatcher{
 		jsonpath: jsonpath,
 		matcher:  matcher,
@@ -29,7 +29,7 @@ func HaveJSONPath(jsonpath string, matcher types.GomegaMatcher) *haveJSONPathMat
 func (m *haveJSONPathMatcher) Match(actual interface{}) (success bool, err error) {
 	j := jsonpath.New("")
 	if err := j.Parse(m.jsonpath); err != nil {
-		return false, fmt.Errorf("JSON Path '%s' is invalid: %w", m.jsonpath, err.Error())
+		return false, fmt.Errorf("JSON Path '%s' is invalid: %w", m.jsonpath, err)
 	}
 
 	if o, ok := actual.(client.Object); ok {
@@ -47,7 +47,7 @@ func (m *haveJSONPathMatcher) Match(actual interface{}) (success bool, err error
 
 	results, err := j.FindResults(obj)
 	if err != nil {
-		return false, fmt.Errorf("JSON Path '%s' failed: %w", m.jsonpath, err.Error())
+		return false, fmt.Errorf("JSON Path '%s' failed: %w", m.jsonpath, err)
 	}
 
 	values := []interface{}{}

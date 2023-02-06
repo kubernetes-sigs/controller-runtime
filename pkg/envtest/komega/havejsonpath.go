@@ -9,24 +9,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type HaveJSONPathMatcher struct {
+type haveJSONPathMatcher struct {
 	jsonpath string
 	matcher  types.GomegaMatcher
 	name     string
 	value    interface{}
 }
 
-func HaveJSONPath(jsonpath string, matcher types.GomegaMatcher) *HaveJSONPathMatcher {
-	return &HaveJSONPathMatcher{
+// HaveJSONPath returns the matcher for a given JSON path and subsequent matcher
+func HaveJSONPath(jsonpath string, matcher types.GomegaMatcher) *haveJSONPathMatcher {
+	return &haveJSONPathMatcher{
 		jsonpath: jsonpath,
 		matcher:  matcher,
 	}
 }
 
-func (m *HaveJSONPathMatcher) Match(actual interface{}) (success bool, err error) {
+// Match transforms the current object to a specified JSON path and returns true if the subsequent
+// matcher passes
+func (m *haveJSONPathMatcher) Match(actual interface{}) (success bool, err error) {
 	j := jsonpath.New("")
 	if err := j.Parse(m.jsonpath); err != nil {
-		return false, fmt.Errorf("JSON Path '%s' is invalid: %s", m.jsonpath, err.Error())
+		return false, fmt.Errorf("JSON Path '%s' is invalid: %w", m.jsonpath, err.Error())
 	}
 
 	if o, ok := actual.(client.Object); ok {
@@ -44,7 +47,7 @@ func (m *HaveJSONPathMatcher) Match(actual interface{}) (success bool, err error
 
 	results, err := j.FindResults(obj)
 	if err != nil {
-		return false, fmt.Errorf("JSON Path '%s' failed: %s", m.jsonpath, err.Error())
+		return false, fmt.Errorf("JSON Path '%s' failed: %w", m.jsonpath, err.Error())
 	}
 
 	values := []interface{}{}
@@ -63,10 +66,12 @@ func (m *HaveJSONPathMatcher) Match(actual interface{}) (success bool, err error
 	return m.matcher.Match(m.value)
 }
 
-func (m *HaveJSONPathMatcher) FailureMessage(actual interface{}) (message string) {
+// FailureMessage returns a message comparing the expected and actual after an unexpected failure to match has occurred.
+func (m *haveJSONPathMatcher) FailureMessage(actual interface{}) (message string) {
 	return fmt.Sprintf("%s at %s: %s", m.name, m.jsonpath, m.matcher.FailureMessage(m.value))
 }
 
-func (m *HaveJSONPathMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+// NegatedFailureMessage returns a message comparing the expected and actual after an unexpected successful match has occurred.
+func (m *haveJSONPathMatcher) NegatedFailureMessage(actual interface{}) (message string) {
 	return fmt.Sprintf("%s at %s: %s", m.name, m.jsonpath, m.matcher.NegatedFailureMessage(m.value))
 }

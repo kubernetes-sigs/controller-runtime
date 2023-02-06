@@ -89,13 +89,14 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		// Then, for each new group it performs just one request to the API server:
 		// GET https://host/apis/<group>/<version>
 
-		httpClient, err := rest.HTTPClientFor(restCfg)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
+		var crt *countingRoundTripper
+		restCfg := rest.CopyConfig(restCfg)
+		restCfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+			crt = newCountingRoundTripper(rt)
+			return crt
+		}
 
-		crt := newCountingRoundTripper(httpClient.Transport)
-		httpClient.Transport = crt
-
-		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		// There are no requests before any call
@@ -138,13 +139,14 @@ func TestLazyRestMapperProvider(t *testing.T) {
 	t.Run("LazyRESTMapper should cache fetched data and doesn't perform any additional requests", func(t *testing.T) {
 		g := gmg.NewWithT(t)
 
-		httpClient, err := rest.HTTPClientFor(restCfg)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
+		var crt *countingRoundTripper
+		restCfg := rest.CopyConfig(restCfg)
+		restCfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+			crt = newCountingRoundTripper(rt)
+			return crt
+		}
 
-		crt := newCountingRoundTripper(httpClient.Transport)
-		httpClient.Transport = crt
-
-		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
@@ -175,13 +177,14 @@ func TestLazyRestMapperProvider(t *testing.T) {
 	t.Run("LazyRESTMapper should work correctly with empty versions list", func(t *testing.T) {
 		g := gmg.NewWithT(t)
 
-		httpClient, err := rest.HTTPClientFor(restCfg)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
+		var crt *countingRoundTripper
+		restCfg := rest.CopyConfig(restCfg)
+		restCfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+			crt = newCountingRoundTripper(rt)
+			return crt
+		}
 
-		crt := newCountingRoundTripper(httpClient.Transport)
-		httpClient.Transport = crt
-
-		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
@@ -211,13 +214,14 @@ func TestLazyRestMapperProvider(t *testing.T) {
 	t.Run("LazyRESTMapper should work correctly with multiple API group versions", func(t *testing.T) {
 		g := gmg.NewWithT(t)
 
-		httpClient, err := rest.HTTPClientFor(restCfg)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
+		var crt *countingRoundTripper
+		restCfg := rest.CopyConfig(restCfg)
+		restCfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+			crt = newCountingRoundTripper(rt)
+			return crt
+		}
 
-		crt := newCountingRoundTripper(httpClient.Transport)
-		httpClient.Transport = crt
-
-		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
@@ -246,13 +250,14 @@ func TestLazyRestMapperProvider(t *testing.T) {
 	t.Run("LazyRESTMapper should work correctly with different API group versions", func(t *testing.T) {
 		g := gmg.NewWithT(t)
 
-		httpClient, err := rest.HTTPClientFor(restCfg)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
+		var crt *countingRoundTripper
+		restCfg := rest.CopyConfig(restCfg)
+		restCfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+			crt = newCountingRoundTripper(rt)
+			return crt
+		}
 
-		crt := newCountingRoundTripper(httpClient.Transport)
-		httpClient.Transport = crt
-
-		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
@@ -290,13 +295,14 @@ func TestLazyRestMapperProvider(t *testing.T) {
 
 		// After initialization for each invalid group the mapper performs just 1 request to the API server.
 
-		httpClient, err := rest.HTTPClientFor(restCfg)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
+		var crt *countingRoundTripper
+		restCfg := rest.CopyConfig(restCfg)
+		restCfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+			crt = newCountingRoundTripper(rt)
+			return crt
+		}
 
-		crt := newCountingRoundTripper(httpClient.Transport)
-		httpClient.Transport = crt
-
-		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "INVALID1"}, "v1")
@@ -328,14 +334,14 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		g := gmg.NewWithT(t)
 
 		// After initialization for each invalid resource the mapper performs just 1 request to the API server.
+		var crt *countingRoundTripper
+		restCfg := rest.CopyConfig(restCfg)
+		restCfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+			crt = newCountingRoundTripper(rt)
+			return crt
+		}
 
-		httpClient, err := rest.HTTPClientFor(restCfg)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
-
-		crt := newCountingRoundTripper(httpClient.Transport)
-		httpClient.Transport = crt
-
-		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "INVALID"})
@@ -367,14 +373,14 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		g := gmg.NewWithT(t)
 
 		// After initialization, for each invalid resource mapper performs 1 requests to the API server.
+		var crt *countingRoundTripper
+		restCfg := rest.CopyConfig(restCfg)
+		restCfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+			crt = newCountingRoundTripper(rt)
+			return crt
+		}
 
-		httpClient, err := rest.HTTPClientFor(restCfg)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
-
-		crt := newCountingRoundTripper(httpClient.Transport)
-		httpClient.Transport = crt
-
-		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "deployment"}, "INVALID")

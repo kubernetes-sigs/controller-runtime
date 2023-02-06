@@ -24,7 +24,6 @@ import (
 	gmg "github.com/onsi/gomega"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -96,10 +95,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		crt := newCountingRoundTripper(httpClient.Transport)
 		httpClient.Transport = crt
 
-		discoveryClient, err := discovery.NewDiscoveryClientForConfigAndClient(restCfg, httpClient)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
-
-		lazyRestMapper, err := apiutil.NewLazyRESTMapperWithClient(discoveryClient)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		// There are no requests before any call
@@ -148,10 +144,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		crt := newCountingRoundTripper(httpClient.Transport)
 		httpClient.Transport = crt
 
-		discoveryClient, err := discovery.NewDiscoveryClientForConfigAndClient(restCfg, httpClient)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
-
-		lazyRestMapper, err := apiutil.NewLazyRESTMapperWithClient(discoveryClient)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
@@ -188,10 +181,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		crt := newCountingRoundTripper(httpClient.Transport)
 		httpClient.Transport = crt
 
-		discoveryClient, err := discovery.NewDiscoveryClientForConfigAndClient(restCfg, httpClient)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
-
-		lazyRestMapper, err := apiutil.NewLazyRESTMapperWithClient(discoveryClient)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
@@ -227,10 +217,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		crt := newCountingRoundTripper(httpClient.Transport)
 		httpClient.Transport = crt
 
-		discoveryClient, err := discovery.NewDiscoveryClientForConfigAndClient(restCfg, httpClient)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
-
-		lazyRestMapper, err := apiutil.NewLazyRESTMapperWithClient(discoveryClient)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
@@ -265,10 +252,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		crt := newCountingRoundTripper(httpClient.Transport)
 		httpClient.Transport = crt
 
-		discoveryClient, err := discovery.NewDiscoveryClientForConfigAndClient(restCfg, httpClient)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
-
-		lazyRestMapper, err := apiutil.NewLazyRESTMapperWithClient(discoveryClient)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
@@ -312,10 +296,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		crt := newCountingRoundTripper(httpClient.Transport)
 		httpClient.Transport = crt
 
-		discoveryClient, err := discovery.NewDiscoveryClientForConfigAndClient(restCfg, httpClient)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
-
-		lazyRestMapper, err := apiutil.NewLazyRESTMapperWithClient(discoveryClient)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "INVALID1"}, "v1")
@@ -354,10 +335,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		crt := newCountingRoundTripper(httpClient.Transport)
 		httpClient.Transport = crt
 
-		discoveryClient, err := discovery.NewDiscoveryClientForConfigAndClient(restCfg, httpClient)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
-
-		lazyRestMapper, err := apiutil.NewLazyRESTMapperWithClient(discoveryClient)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "INVALID"})
@@ -396,10 +374,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		crt := newCountingRoundTripper(httpClient.Transport)
 		httpClient.Transport = crt
 
-		discoveryClient, err := discovery.NewDiscoveryClientForConfigAndClient(restCfg, httpClient)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
-
-		lazyRestMapper, err := apiutil.NewLazyRESTMapperWithClient(discoveryClient)
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "deployment"}, "INVALID")

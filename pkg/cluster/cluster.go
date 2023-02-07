@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 
@@ -82,6 +83,8 @@ type Options struct {
 	Scheme *runtime.Scheme
 
 	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs
+	//
+	// Deprecated: Set Cache.Mapper and Client.Mapper directly instead.
 	MapperProvider func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error)
 
 	// Logger is the logger that should be used by this Cluster.
@@ -102,6 +105,8 @@ type Options struct {
 	// Note: If a namespace is specified, controllers can still Watch for a
 	// cluster-scoped resource (e.g Node).  For namespaced resources the cache
 	// will only hold objects from the desired namespace.
+	//
+	// Deprecated: Use Cache.Namespaces instead.
 	Namespace string
 
 	// HTTPClient is the http client that will be used to create the default
@@ -109,22 +114,45 @@ type Options struct {
 	// to create the http client.
 	HTTPClient *http.Client
 
+	// Cache is the cache.Options that will be used to create the default Cache.
+	// By default, the cache will watch and list requested objects in all namespaces.
+	Cache cache.Options
+
 	// NewCache is the function that will create the cache to be used
 	// by the manager. If not set this will use the default new cache function.
+	//
+	// When using a custom NewCache, the Cache options will be passed to the
+	// NewCache function.
+	//
+	// NOTE: LOW LEVEL PRIMITIVE!
+	// Only use a custom NewCache if you know what you are doing.
 	NewCache cache.NewCacheFunc
+
+	// Client is the client.Options that will be used to create the default Client.
+	// By default, the client will use the cache for reads and direct calls for writes.
+	Client client.Options
 
 	// NewClient is the func that creates the client to be used by the manager.
 	// If not set this will create a Client backed by a Cache for read operations
 	// and a direct Client for write operations.
-	// NOTE: The default client will not cache Unstructured.
+	//
+	// When using a custom NewClient, the Client options will be passed to the
+	// NewClient function.
+	//
+	// NOTE: LOW LEVEL PRIMITIVE!
+	// Only use a custom NewClient if you know what you are doing.
 	NewClient client.NewClientFunc
 
 	// ClientDisableCacheFor tells the client that, if any cache is used, to bypass it
 	// for the given objects.
+	//
+	// Deprecated: Use Client.Cache.DisableFor instead.
 	ClientDisableCacheFor []client.Object
 
 	// DryRunClient specifies whether the client should be configured to enforce
 	// dryRun mode.
+	//
+	// Deprecated: Use Client.DryRun instead.
 	DryRunClient bool
 
 	// EventBroadcaster records Events emitted by the manager and sends them to the Kubernetes API
@@ -171,36 +199,71 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	}
 
 	// Create the cache for the cached read client and registering informers
-	cache, err := options.NewCache(config, cache.Options{
-		HTTPClient:  options.HTTPClient,
-		Scheme:      options.Scheme,
-		Mapper:      mapper,
-		ResyncEvery: options.SyncPeriod,
-		Namespaces:  []string{options.Namespace},
-	})
+	cacheOpts := options.Cache
+	{
+		if cacheOpts.Scheme == nil {
+			cacheOpts.Scheme = options.Scheme
+		}
+		if cacheOpts.Mapper == nil {
+			cacheOpts.Mapper = mapper
+		}
+		if cacheOpts.HTTPClient == nil {
+			cacheOpts.HTTPClient = options.HTTPClient
+		}
+		if cacheOpts.ResyncEvery == nil {
+			cacheOpts.ResyncEvery = options.SyncPeriod
+		}
+		if len(cacheOpts.Namespaces) == 0 && options.Namespace != "" {
+			cacheOpts.Namespaces = []string{options.Namespace}
+		}
+	}
+	cache, err := options.NewCache(config, cacheOpts)
 	if err != nil {
 		return nil, err
 	}
 
-	writeObj, err := options.NewClient(config, client.Options{
-		HTTPClient: options.HTTPClient,
-		Scheme:     options.Scheme,
-		Mapper:     mapper,
-		Cache: &client.CacheOptions{
-			Reader:     cache,
-			DisableFor: options.ClientDisableCacheFor,
-		},
-	})
+	// Create the client, and default its options.
+	clientOpts := options.Client
+	{
+		if clientOpts.Scheme == nil {
+			clientOpts.Scheme = options.Scheme
+		}
+		if clientOpts.Mapper == nil {
+			clientOpts.Mapper = mapper
+		}
+		if clientOpts.HTTPClient == nil {
+			clientOpts.HTTPClient = options.HTTPClient
+		}
+		if clientOpts.Cache == nil {
+			clientOpts.Cache = &client.CacheOptions{
+				Unstructured: false,
+			}
+		}
+		if clientOpts.Cache.Reader == nil {
+			clientOpts.Cache.Reader = cache
+		}
+
+		// For backward compatibility, the ClientDisableCacheFor option should
+		// be appended to the DisableFor option in the client.
+		clientOpts.Cache.DisableFor = append(clientOpts.Cache.DisableFor, options.ClientDisableCacheFor...)
+
+		if clientOpts.DryRun == nil && options.DryRunClient {
+			// For backward compatibility, the DryRunClient (if set) option should override
+			// the DryRun option in the client (if unset).
+			clientOpts.DryRun = pointer.Bool(true)
+		}
+	}
+	clientWriter, err := options.NewClient(config, clientOpts)
 	if err != nil {
 		return nil, err
-	}
-
-	if options.DryRunClient {
-		writeObj = client.NewDryRunClient(writeObj)
 	}
 
 	// Create the API Reader, a client with no cache.
-	apiReader, err := client.New(config, client.Options{HTTPClient: options.HTTPClient, Scheme: options.Scheme, Mapper: mapper})
+	clientReader, err := client.New(config, client.Options{
+		HTTPClient: options.HTTPClient,
+		Scheme:     options.Scheme,
+		Mapper:     mapper,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -219,8 +282,8 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 		scheme:           options.Scheme,
 		cache:            cache,
 		fieldIndexes:     cache,
-		client:           writeObj,
-		apiReader:        apiReader,
+		client:           clientWriter,
+		apiReader:        clientReader,
 		recorderProvider: recorderProvider,
 		mapper:           mapper,
 		logger:           options.Logger,

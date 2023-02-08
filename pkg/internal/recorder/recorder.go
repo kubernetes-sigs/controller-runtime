@@ -19,13 +19,13 @@ package recorder
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
-	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 )
@@ -45,7 +45,7 @@ type Provider struct {
 	scheme *runtime.Scheme
 	// logger is the logger to use when logging diagnostic event info
 	logger          logr.Logger
-	evtClient       typedcorev1.EventInterface
+	evtClient       corev1client.EventInterface
 	makeBroadcaster EventBroadcasterProducer
 
 	broadcasterOnce sync.Once
@@ -98,10 +98,10 @@ func (p *Provider) getBroadcaster() record.EventBroadcaster {
 
 	p.broadcasterOnce.Do(func() {
 		broadcaster, stop := p.makeBroadcaster()
-		broadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: p.evtClient})
+		broadcaster.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: p.evtClient})
 		broadcaster.StartEventWatcher(
 			func(e *corev1.Event) {
-				p.logger.V(1).Info(e.Type, "object", e.InvolvedObject, "reason", e.Reason, "message", e.Message)
+				p.logger.V(1).Info(e.Message, "type", e.Type, "object", e.InvolvedObject, "reason", e.Reason)
 			})
 		p.broadcaster = broadcaster
 		p.stopBroadcaster = stop
@@ -111,13 +111,17 @@ func (p *Provider) getBroadcaster() record.EventBroadcaster {
 }
 
 // NewProvider create a new Provider instance.
-func NewProvider(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster EventBroadcasterProducer) (*Provider, error) {
-	clientSet, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to init clientSet: %w", err)
+func NewProvider(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster EventBroadcasterProducer) (*Provider, error) {
+	if httpClient == nil {
+		panic("httpClient must not be nil")
 	}
 
-	p := &Provider{scheme: scheme, logger: logger, makeBroadcaster: makeBroadcaster, evtClient: clientSet.CoreV1().Events("")}
+	corev1Client, err := corev1client.NewForConfigAndClient(config, httpClient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init client: %w", err)
+	}
+
+	p := &Provider{scheme: scheme, logger: logger, makeBroadcaster: makeBroadcaster, evtClient: corev1Client.Events("")}
 	return p, nil
 }
 

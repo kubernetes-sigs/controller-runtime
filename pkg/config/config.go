@@ -18,26 +18,30 @@ package config
 
 import (
 	"fmt"
-	ioutil "io/ioutil"
+	"os"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1" //nolint:staticcheck
 )
 
 // ControllerManagerConfiguration defines the functions necessary to parse a config file
 // and to configure the Options struct for the ctrl.Manager.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type ControllerManagerConfiguration interface {
 	runtime.Object
 
 	// Complete returns the versioned configuration
-	Complete() (v1alpha1.ControllerManagerConfigurationSpec, error)
+	Complete() (v1alpha1.ControllerManagerConfigurationSpec, error) //nolint:staticcheck
 }
 
 // DeferredFileLoader is used to configure the decoder for loading controller
 // runtime component config types.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type DeferredFileLoader struct {
 	ControllerManagerConfiguration
 	path   string
@@ -50,8 +54,10 @@ type DeferredFileLoader struct {
 // this will also configure the defaults for the loader if nothing is
 //
 // Defaults:
-//   Path: "./config.yaml"
-//   Kind: GenericControllerManagerConfiguration
+// * Path: "./config.yaml"
+// * Kind: GenericControllerManagerConfiguration
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 func File() *DeferredFileLoader {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
@@ -63,10 +69,10 @@ func File() *DeferredFileLoader {
 }
 
 // Complete will use sync.Once to set the scheme.
-func (d *DeferredFileLoader) Complete() (v1alpha1.ControllerManagerConfigurationSpec, error) {
+func (d *DeferredFileLoader) Complete() (v1alpha1.ControllerManagerConfigurationSpec, error) { //nolint:staticcheck
 	d.once.Do(d.loadFile)
 	if d.err != nil {
-		return v1alpha1.ControllerManagerConfigurationSpec{}, d.err
+		return v1alpha1.ControllerManagerConfigurationSpec{}, d.err //nolint:staticcheck
 	}
 	return d.ControllerManagerConfiguration.Complete()
 }
@@ -83,12 +89,6 @@ func (d *DeferredFileLoader) OfKind(obj ControllerManagerConfiguration) *Deferre
 	return d
 }
 
-// InjectScheme will configure the scheme to be used for decoding the file.
-func (d *DeferredFileLoader) InjectScheme(scheme *runtime.Scheme) error {
-	d.scheme = scheme
-	return nil
-}
-
 // loadFile is used from the mutex.Once to load the file.
 func (d *DeferredFileLoader) loadFile() {
 	if d.scheme == nil {
@@ -96,7 +96,7 @@ func (d *DeferredFileLoader) loadFile() {
 		return
 	}
 
-	content, err := ioutil.ReadFile(d.path)
+	content, err := os.ReadFile(d.path)
 	if err != nil {
 		d.err = fmt.Errorf("could not read file at %s", d.path)
 		return

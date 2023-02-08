@@ -17,7 +17,7 @@ limitations under the License.
 package admission
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -32,9 +32,7 @@ var _ = Describe("Admission Webhook Decoder", func() {
 	var decoder *Decoder
 	BeforeEach(func() {
 		By("creating a new decoder for a scheme")
-		var err error
-		decoder, err = NewDecoder(scheme.Scheme)
-		Expect(err).NotTo(HaveOccurred())
+		decoder = NewDecoder(scheme.Scheme)
 		Expect(decoder).NotTo(BeNil())
 	})
 

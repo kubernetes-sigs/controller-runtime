@@ -17,7 +17,7 @@ limitations under the License.
 package client_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,36 +74,45 @@ var _ = Describe("ListOptions", func() {
 	})
 })
 
+var _ = Describe("GetOptions", func() {
+	It("Should set Raw", func() {
+		o := &client.GetOptions{Raw: &metav1.GetOptions{ResourceVersion: "RV0"}}
+		newGetOpts := &client.GetOptions{}
+		o.ApplyToGet(newGetOpts)
+		Expect(newGetOpts).To(Equal(o))
+	})
+})
+
 var _ = Describe("CreateOptions", func() {
 	It("Should set DryRun", func() {
 		o := &client.CreateOptions{DryRun: []string{"Hello", "Theodore"}}
-		newCreatOpts := &client.CreateOptions{}
-		o.ApplyToCreate(newCreatOpts)
-		Expect(newCreatOpts).To(Equal(o))
+		newCreateOpts := &client.CreateOptions{}
+		o.ApplyToCreate(newCreateOpts)
+		Expect(newCreateOpts).To(Equal(o))
 	})
 	It("Should set FieldManager", func() {
 		o := &client.CreateOptions{FieldManager: "FieldManager"}
-		newCreatOpts := &client.CreateOptions{}
-		o.ApplyToCreate(newCreatOpts)
-		Expect(newCreatOpts).To(Equal(o))
+		newCreateOpts := &client.CreateOptions{}
+		o.ApplyToCreate(newCreateOpts)
+		Expect(newCreateOpts).To(Equal(o))
 	})
 	It("Should set Raw", func() {
 		o := &client.CreateOptions{Raw: &metav1.CreateOptions{DryRun: []string{"Bye", "Theodore"}}}
-		newCreatOpts := &client.CreateOptions{}
-		o.ApplyToCreate(newCreatOpts)
-		Expect(newCreatOpts).To(Equal(o))
+		newCreateOpts := &client.CreateOptions{}
+		o.ApplyToCreate(newCreateOpts)
+		Expect(newCreateOpts).To(Equal(o))
 	})
 	It("Should not set anything", func() {
 		o := &client.CreateOptions{}
-		newCreatOpts := &client.CreateOptions{}
-		o.ApplyToCreate(newCreatOpts)
-		Expect(newCreatOpts).To(Equal(o))
+		newCreateOpts := &client.CreateOptions{}
+		o.ApplyToCreate(newCreateOpts)
+		Expect(newCreateOpts).To(Equal(o))
 	})
 })
 
 var _ = Describe("DeleteOptions", func() {
 	It("Should set GracePeriodSeconds", func() {
-		o := &client.DeleteOptions{GracePeriodSeconds: utilpointer.Int64Ptr(42)}
+		o := &client.DeleteOptions{GracePeriodSeconds: utilpointer.Int64(42)}
 		newDeleteOpts := &client.DeleteOptions{}
 		o.ApplyToDelete(newDeleteOpts)
 		Expect(newDeleteOpts).To(Equal(o))
@@ -176,7 +185,7 @@ var _ = Describe("PatchOptions", func() {
 		Expect(newPatchOpts).To(Equal(o))
 	})
 	It("Should set Force", func() {
-		o := &client.PatchOptions{Force: utilpointer.BoolPtr(true)}
+		o := &client.PatchOptions{Force: utilpointer.Bool(true)}
 		newPatchOpts := &client.PatchOptions{}
 		o.ApplyToPatch(newPatchOpts)
 		Expect(newPatchOpts).To(Equal(o))
@@ -209,7 +218,7 @@ var _ = Describe("DeleteAllOfOptions", func() {
 		Expect(newDeleteAllOfOpts).To(Equal(o))
 	})
 	It("Should set DeleleteOptions", func() {
-		o := &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: utilpointer.Int64Ptr(44)}}
+		o := &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: utilpointer.Int64(44)}}
 		newDeleteAllOfOpts := &client.DeleteAllOfOptions{}
 		o.ApplyToDeleteAllOf(newDeleteAllOfOpts)
 		Expect(newDeleteAllOfOpts).To(Equal(o))
@@ -227,5 +236,44 @@ var _ = Describe("MatchingLabels", func() {
 		Expect(err).ToNot(BeNil())
 		expectedErrMsg := `values[0][k]: Invalid value: "axahm2EJ8Phiephe2eixohbee9eGeiyees1thuozi1xoh0GiuH3diewi8iem7Nui": must be no more than 63 characters`
 		Expect(err.Error()).To(Equal(expectedErrMsg))
+	})
+})
+
+var _ = Describe("FieldOwner", func() {
+	It("Should apply to PatchOptions", func() {
+		o := &client.PatchOptions{FieldManager: "bar"}
+		t := client.FieldOwner("foo")
+		t.ApplyToPatch(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to CreateOptions", func() {
+		o := &client.CreateOptions{FieldManager: "bar"}
+		t := client.FieldOwner("foo")
+		t.ApplyToCreate(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to UpdateOptions", func() {
+		o := &client.UpdateOptions{FieldManager: "bar"}
+		t := client.FieldOwner("foo")
+		t.ApplyToUpdate(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to SubResourcePatchOptions", func() {
+		o := &client.SubResourcePatchOptions{PatchOptions: client.PatchOptions{FieldManager: "bar"}}
+		t := client.FieldOwner("foo")
+		t.ApplyToSubResourcePatch(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to SubResourceCreateOptions", func() {
+		o := &client.SubResourceCreateOptions{CreateOptions: client.CreateOptions{FieldManager: "bar"}}
+		t := client.FieldOwner("foo")
+		t.ApplyToSubResourceCreate(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to SubResourceUpdateOptions", func() {
+		o := &client.SubResourceUpdateOptions{UpdateOptions: client.UpdateOptions{FieldManager: "bar"}}
+		t := client.FieldOwner("foo")
+		t.ApplyToSubResourceUpdate(o)
+		Expect(o.FieldManager).To(Equal("foo"))
 	})
 })

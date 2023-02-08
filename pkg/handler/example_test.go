@@ -17,6 +17,8 @@ limitations under the License.
 package handler_test
 
 import (
+	"context"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,10 +27,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+var mgr manager.Manager
 var c controller.Controller
 
 // This example watches Pods and enqueues Requests with the Name and Namespace of the Pod from
@@ -36,7 +40,7 @@ var c controller.Controller
 func ExampleEnqueueRequestForObject() {
 	// controller is a controller.controller
 	err := c.Watch(
-		&source.Kind{Type: &corev1.Pod{}},
+		source.Kind(mgr.GetCache(), &corev1.Pod{}),
 		&handler.EnqueueRequestForObject{},
 	)
 	if err != nil {
@@ -49,11 +53,8 @@ func ExampleEnqueueRequestForObject() {
 func ExampleEnqueueRequestForOwner() {
 	// controller is a controller.controller
 	err := c.Watch(
-		&source.Kind{Type: &appsv1.ReplicaSet{}},
-		&handler.EnqueueRequestForOwner{
-			OwnerType:    &appsv1.Deployment{},
-			IsController: true,
-		},
+		source.Kind(mgr.GetCache(), &appsv1.ReplicaSet{}),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &appsv1.Deployment{}, handler.OnlyControllerOwner()),
 	)
 	if err != nil {
 		// handle it
@@ -65,8 +66,8 @@ func ExampleEnqueueRequestForOwner() {
 func ExampleEnqueueRequestsFromMapFunc() {
 	// controller is a controller.controller
 	err := c.Watch(
-		&source.Kind{Type: &appsv1.Deployment{}},
-		handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
+		source.Kind(mgr.GetCache(), &appsv1.Deployment{}),
+		handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a client.Object) []reconcile.Request {
 			return []reconcile.Request{
 				{NamespacedName: types.NamespacedName{
 					Name:      a.GetName() + "-1",
@@ -88,27 +89,27 @@ func ExampleEnqueueRequestsFromMapFunc() {
 func ExampleFuncs() {
 	// controller is a controller.controller
 	err := c.Watch(
-		&source.Kind{Type: &corev1.Pod{}},
+		source.Kind(mgr.GetCache(), &corev1.Pod{}),
 		handler.Funcs{
-			CreateFunc: func(e event.CreateEvent, q workqueue.RateLimitingInterface) {
+			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.Object.GetName(),
 					Namespace: e.Object.GetNamespace(),
 				}})
 			},
-			UpdateFunc: func(e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+			UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.ObjectNew.GetName(),
 					Namespace: e.ObjectNew.GetNamespace(),
 				}})
 			},
-			DeleteFunc: func(e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.Object.GetName(),
 					Namespace: e.Object.GetNamespace(),
 				}})
 			},
-			GenericFunc: func(e event.GenericEvent, q workqueue.RateLimitingInterface) {
+			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
 				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name:      e.Object.GetName(),
 					Namespace: e.Object.GetNamespace(),

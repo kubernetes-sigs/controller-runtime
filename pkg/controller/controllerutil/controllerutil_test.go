@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -101,7 +101,6 @@ var _ = Describe("Controllerutil", func() {
 				APIVersion: "extensions/v1beta1",
 				UID:        "foo-uid-2",
 			}))
-
 		})
 	})
 
@@ -596,7 +595,7 @@ var _ = Describe("Controllerutil", func() {
 			assertLocalDeployWasUpdated(nil)
 
 			op, err = controllerutil.CreateOrPatch(context.TODO(), c, deploy, func() error {
-				deploy.Spec.Replicas = pointer.Int32Ptr(5)
+				deploy.Spec.Replicas = pointer.Int32(5)
 				deploy.Status.Conditions = []appsv1.DeploymentCondition{{
 					Type:   appsv1.DeploymentProgressing,
 					Status: corev1.ConditionTrue,
@@ -700,6 +699,62 @@ var _ = Describe("Controllerutil", func() {
 			})
 		})
 
+		Describe("AddFinalizer, which returns an indication of whether it modified the object's list of finalizers,", func() {
+			deploy = &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Finalizers: []string{},
+				},
+			}
+
+			When("the object's list of finalizers has no instances of the input finalizer", func() {
+				It("should return true", func() {
+					Expect(controllerutil.AddFinalizer(deploy, testFinalizer)).To(BeTrue())
+				})
+				It("should add the input finalizer to the object's list of finalizers", func() {
+					Expect(deploy.ObjectMeta.GetFinalizers()).To(Equal([]string{testFinalizer}))
+				})
+			})
+
+			When("the object's list of finalizers has an instance of the input finalizer", func() {
+				It("should return false", func() {
+					Expect(controllerutil.AddFinalizer(deploy, testFinalizer)).To(BeFalse())
+				})
+				It("should not modify the object's list of finalizers", func() {
+					Expect(deploy.ObjectMeta.GetFinalizers()).To(Equal([]string{testFinalizer}))
+				})
+			})
+		})
+
+		Describe("RemoveFinalizer, which returns an indication of whether it modified the object's list of finalizers,", func() {
+			When("the object's list of finalizers has no instances of the input finalizer", func() {
+				It("should return false", func() {
+					Expect(controllerutil.RemoveFinalizer(deploy, testFinalizer1)).To(BeFalse())
+				})
+				It("should not modify the object's list of finalizers", func() {
+					Expect(deploy.ObjectMeta.GetFinalizers()).To(Equal([]string{testFinalizer}))
+				})
+			})
+
+			When("the object's list of finalizers has one instance of the input finalizer", func() {
+				It("should return true", func() {
+					Expect(controllerutil.RemoveFinalizer(deploy, testFinalizer)).To(BeTrue())
+				})
+				It("should remove the instance of the input finalizer from the object's list of finalizers", func() {
+					Expect(deploy.ObjectMeta.GetFinalizers()).To(Equal([]string{}))
+				})
+			})
+
+			When("the object's list of finalizers has multiple instances of the input finalizer", func() {
+				It("should return true", func() {
+					deploy.SetFinalizers(append(deploy.Finalizers, testFinalizer, testFinalizer))
+					Expect(controllerutil.RemoveFinalizer(deploy, testFinalizer)).To(BeTrue())
+				})
+				It("should remove each instance of the input finalizer from the object's list of finalizers", func() {
+					Expect(deploy.ObjectMeta.GetFinalizers()).To(Equal([]string{}))
+				})
+			})
+		})
+
 		Describe("ContainsFinalizer", func() {
 			It("should check that finalizer is present", func() {
 				controllerutil.AddFinalizer(deploy, testFinalizer)
@@ -714,10 +769,15 @@ var _ = Describe("Controllerutil", func() {
 	})
 })
 
-const testFinalizer = "foo.bar.baz"
+const (
+	testFinalizer  = "foo.bar.baz"
+	testFinalizer1 = testFinalizer + "1"
+)
 
-var _ runtime.Object = &errRuntimeObj{}
-var _ metav1.Object = &errMetaObj{}
+var (
+	_ runtime.Object = &errRuntimeObj{}
+	_ metav1.Object  = &errMetaObj{}
+)
 
 type errRuntimeObj struct {
 	runtime.TypeMeta
@@ -775,6 +835,6 @@ type errorReader struct {
 	client.Client
 }
 
-func (e errorReader) Get(ctx context.Context, key client.ObjectKey, into client.Object) error {
+func (e errorReader) Get(ctx context.Context, key client.ObjectKey, into client.Object, opts ...client.GetOption) error {
 	return fmt.Errorf("unexpected error")
 }

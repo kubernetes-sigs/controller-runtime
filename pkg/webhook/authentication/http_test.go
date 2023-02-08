@@ -24,19 +24,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	authenticationv1 "k8s.io/api/authentication/v1"
-
-	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 var _ = Describe("Authentication Webhooks", func() {
 
 	const (
-		gvkJSONv1      = `"kind":"TokenReview","apiVersion":"authentication.k8s.io/v1"`
-		gvkJSONv1beta1 = `"kind":"TokenReview","apiVersion":"authentication.k8s.io/v1beta1"`
+		gvkJSONv1 = `"kind":"TokenReview","apiVersion":"authentication.k8s.io/v1"`
 	)
 
 	Describe("HTTP Handler", func() {
@@ -48,8 +44,6 @@ var _ = Describe("Authentication Webhooks", func() {
 			respRecorder = &httptest.ResponseRecorder{
 				Body: bytes.NewBuffer(nil),
 			}
-			_, err := inject.LoggerInto(log.WithName("test-webhook"), webhook)
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should return bad-request when given an empty body", func() {
@@ -108,7 +102,6 @@ var _ = Describe("Authentication Webhooks", func() {
 			}
 			webhook := &Webhook{
 				Handler: &fakeHandler{},
-				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{}}}
@@ -126,28 +119,10 @@ var _ = Describe("Authentication Webhooks", func() {
 			}
 			webhook := &Webhook{
 				Handler: &fakeHandler{},
-				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{}}}
 `, gvkJSONv1)
-			webhook.ServeHTTP(respRecorder, req)
-			Expect(respRecorder.Body.String()).To(Equal(expected))
-		})
-
-		It("should return the v1beta1 response given by the handler", func() {
-			req := &http.Request{
-				Header: http.Header{"Content-Type": []string{"application/json"}},
-				Method: http.MethodPost,
-				Body:   nopCloser{Reader: bytes.NewBufferString(fmt.Sprintf(`{%s,"spec":{"token":"foobar"}}`, gvkJSONv1beta1))},
-			}
-			webhook := &Webhook{
-				Handler: &fakeHandler{},
-				log:     logf.RuntimeLog.WithName("webhook"),
-			}
-
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{}}}
-`, gvkJSONv1beta1)
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
@@ -168,7 +143,6 @@ var _ = Describe("Authentication Webhooks", func() {
 						return Authenticated(ctx.Value(key).(string), authenticationv1.UserInfo{})
 					},
 				},
-				log: logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{},"error":%q}}
@@ -197,7 +171,6 @@ var _ = Describe("Authentication Webhooks", func() {
 				WithContextFunc: func(ctx context.Context, r *http.Request) context.Context {
 					return context.WithValue(ctx, key, r.Header["Content-Type"][0])
 				},
-				log: logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{},"error":%q}}
@@ -218,14 +191,8 @@ type nopCloser struct {
 func (nopCloser) Close() error { return nil }
 
 type fakeHandler struct {
-	invoked        bool
-	fn             func(context.Context, Request) Response
-	injectedString string
-}
-
-func (h *fakeHandler) InjectString(s string) error {
-	h.injectedString = s
-	return nil
+	invoked bool
+	fn      func(context.Context, Request) Response
 }
 
 func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {

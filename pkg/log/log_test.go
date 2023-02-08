@@ -21,11 +21,11 @@ import (
 	"errors"
 
 	"github.com/go-logr/logr"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var _ logr.Logger = &DelegatingLogger{}
+var _ logr.LogSink = &DelegatingLogSink{}
 
 // logInfo is the information for a particular fakeLogger message.
 type logInfo struct {
@@ -49,7 +49,10 @@ type fakeLogger struct {
 	root *fakeLoggerRoot
 }
 
-func (f *fakeLogger) WithName(name string) logr.Logger {
+func (f *fakeLogger) Init(info logr.RuntimeInfo) {
+}
+
+func (f *fakeLogger) WithName(name string) logr.LogSink {
 	names := append([]string(nil), f.name...)
 	names = append(names, name)
 	return &fakeLogger{
@@ -59,7 +62,7 @@ func (f *fakeLogger) WithName(name string) logr.Logger {
 	}
 }
 
-func (f *fakeLogger) WithValues(vals ...interface{}) logr.Logger {
+func (f *fakeLogger) WithValues(vals ...interface{}) logr.LogSink {
 	tags := append([]interface{}(nil), f.tags...)
 	tags = append(tags, vals...)
 	return &fakeLogger{
@@ -80,7 +83,7 @@ func (f *fakeLogger) Error(err error, msg string, vals ...interface{}) {
 	})
 }
 
-func (f *fakeLogger) Info(msg string, vals ...interface{}) {
+func (f *fakeLogger) Info(level int, msg string, vals ...interface{}) {
 	tags := append([]interface{}(nil), f.tags...)
 	tags = append(tags, vals...)
 	f.root.messages = append(f.root.messages, logInfo{
@@ -90,8 +93,7 @@ func (f *fakeLogger) Info(msg string, vals ...interface{}) {
 	})
 }
 
-func (f *fakeLogger) Enabled() bool         { return true }
-func (f *fakeLogger) V(lvl int) logr.Logger { return f }
+func (f *fakeLogger) Enabled(level int) bool { return true }
 
 var _ = Describe("logging", func() {
 
@@ -103,7 +105,7 @@ var _ = Describe("logging", func() {
 
 			By("actually setting the logger")
 			logger := &fakeLogger{root: &fakeLoggerRoot{}}
-			SetLogger(logger)
+			SetLogger(logr.New(logger))
 
 			By("grabbing another sub-logger and logging to both loggers")
 			l2 := Log.WithName("runtimeLog").WithValues("newtag", "newvalue2")
@@ -121,24 +123,24 @@ var _ = Describe("logging", func() {
 	Describe("lazy logger initialization", func() {
 		var (
 			root     *fakeLoggerRoot
-			baseLog  logr.Logger
-			delegLog *DelegatingLogger
+			baseLog  logr.LogSink
+			delegLog *DelegatingLogSink
 		)
 
 		BeforeEach(func() {
 			root = &fakeLoggerRoot{}
 			baseLog = &fakeLogger{root: root}
-			delegLog = NewDelegatingLogger(NullLogger{})
+			delegLog = NewDelegatingLogSink(NullLogSink{})
 		})
 
 		It("should delegate with name", func() {
 			By("asking for a logger with a name before fulfill, and logging")
-			befFulfill1 := delegLog.WithName("before-fulfill")
+			befFulfill1 := logr.New(delegLog).WithName("before-fulfill")
 			befFulfill2 := befFulfill1.WithName("two")
 			befFulfill1.Info("before fulfill")
 
 			By("logging on the base logger before fulfill")
-			delegLog.Info("before fulfill base")
+			logr.New(delegLog).Info("before fulfill base")
 
 			By("ensuring that no messages were actually recorded")
 			Expect(root.messages).To(BeEmpty())
@@ -154,7 +156,7 @@ var _ = Describe("logging", func() {
 			befFulfill1.WithName("after-from-before").Info("after 3")
 
 			By("logging with new loggers")
-			delegLog.WithName("after-fulfill").Info("after 4")
+			logr.New(delegLog).WithName("after-fulfill").Info("after 4")
 
 			By("ensuring that the messages are appropriately named")
 			Expect(root.messages).To(ConsistOf(
@@ -179,10 +181,10 @@ var _ = Describe("logging", func() {
 
 			// Constructing the child in the goroutine does not reliably
 			// trigger the race detector
-			child := delegLog.WithName("child")
+			child := logr.New(delegLog).WithName("child")
 			go func() {
 				defer GinkgoRecover()
-				delegLog.Fulfill(NullLogger{})
+				delegLog.Fulfill(NullLogSink{})
 				close(fulfillDone)
 			}()
 			go func() {
@@ -202,12 +204,12 @@ var _ = Describe("logging", func() {
 			}()
 			go func() {
 				defer GinkgoRecover()
-				delegLog.Enabled()
+				logr.New(delegLog).Enabled()
 				close(logEnabledDone)
 			}()
 			go func() {
 				defer GinkgoRecover()
-				delegLog.Info("hello world")
+				logr.New(delegLog).Info("hello world")
 				close(logInfoDone)
 			}()
 			go func() {
@@ -217,7 +219,7 @@ var _ = Describe("logging", func() {
 			}()
 			go func() {
 				defer GinkgoRecover()
-				delegLog.V(1)
+				logr.New(delegLog).V(1)
 				close(logVDone)
 			}()
 
@@ -233,12 +235,12 @@ var _ = Describe("logging", func() {
 
 		It("should delegate with tags", func() {
 			By("asking for a logger with a name before fulfill, and logging")
-			befFulfill1 := delegLog.WithValues("tag1", "val1")
+			befFulfill1 := logr.New(delegLog).WithValues("tag1", "val1")
 			befFulfill2 := befFulfill1.WithValues("tag2", "val2")
 			befFulfill1.Info("before fulfill")
 
 			By("logging on the base logger before fulfill")
-			delegLog.Info("before fulfill base")
+			logr.New(delegLog).Info("before fulfill base")
 
 			By("ensuring that no messages were actually recorded")
 			Expect(root.messages).To(BeEmpty())
@@ -254,7 +256,7 @@ var _ = Describe("logging", func() {
 			befFulfill1.WithValues("tag3", "val3").Info("after 3")
 
 			By("logging with new loggers")
-			delegLog.WithValues("tag3", "val3").Info("after 4")
+			logr.New(delegLog).WithValues("tag3", "val3").Info("after 4")
 
 			By("ensuring that the messages are appropriately named")
 			Expect(root.messages).To(ConsistOf(
@@ -270,13 +272,13 @@ var _ = Describe("logging", func() {
 			delegLog.Fulfill(baseLog)
 
 			By("logging a bit")
-			delegLog.Info("msg 1")
+			logr.New(delegLog).Info("msg 1")
 
 			By("fulfilling with a new logger")
 			delegLog.Fulfill(&fakeLogger{})
 
 			By("logging some more")
-			delegLog.Info("msg 2")
+			logr.New(delegLog).Info("msg 2")
 
 			By("checking that all log messages are present")
 			Expect(root.messages).To(ConsistOf(
@@ -296,7 +298,7 @@ var _ = Describe("logging", func() {
 			root := &fakeLoggerRoot{}
 			baseLog := &fakeLogger{root: root}
 
-			wantLog := baseLog.WithName("my-logger")
+			wantLog := logr.New(baseLog).WithName("my-logger")
 			ctx := IntoContext(context.Background(), wantLog)
 
 			gotLog := FromContext(ctx)
@@ -312,7 +314,7 @@ var _ = Describe("logging", func() {
 			root := &fakeLoggerRoot{}
 			baseLog := &fakeLogger{root: root}
 
-			wantLog := baseLog.WithName("my-logger")
+			wantLog := logr.New(baseLog).WithName("my-logger")
 			ctx := IntoContext(context.Background(), wantLog)
 
 			gotLog := FromContext(ctx, "tag1", "value1")

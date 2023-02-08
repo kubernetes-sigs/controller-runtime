@@ -20,20 +20,21 @@ source $(dirname ${BASH_SOURCE})/common.sh
 
 header_text "running go test"
 
-# On MacOS there is a strange race condition
-# between port allocation of envtest suites when go test
-# runs all the tests in parallel without any limits (spins up around 10+ environments).
-#
-# To avoid flakes, set we're setting the go-test parallel flag to
-# to limit the number of parallel executions.
-#
-# TODO(community): Investigate this behavior further.
-if [[ "${OSTYPE}" == "darwin"* ]]; then
-  P_FLAG="-p=1"
+if [[ -n ${ARTIFACTS:-} ]]; then
+  GINKGO_ARGS="-ginkgo.junit-report=junit-report.xml"
 fi
 
-go test -race ${P_FLAG} ${MOD_OPT} ./...
+result=0
+go test -v -race ${P_FLAG} ${MOD_OPT} ./... --ginkgo.fail-fast ${GINKGO_ARGS} || result=$?
 
 if [[ -n ${ARTIFACTS:-} ]]; then
-  if grep -Rin '<failure type="Failure">' ${ARTIFACTS}/*; then exit 1; fi
+  mkdir -p ${ARTIFACTS}
+  for file in `find . -name *junit-report.xml`; do
+    new_file=${file#./}
+    new_file=${new_file%/junit-report.xml}
+    new_file=${new_file//"/"/"-"}
+    mv "$file" "$ARTIFACTS/junit_${new_file}.xml"
+  done
 fi
+
+exit $result

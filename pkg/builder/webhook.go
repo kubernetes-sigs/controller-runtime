@@ -17,13 +17,17 @@ limitations under the License.
 package builder
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
+
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -32,10 +36,14 @@ import (
 
 // WebhookBuilder builds a Webhook.
 type WebhookBuilder struct {
-	apiType runtime.Object
-	gvk     schema.GroupVersionKind
-	mgr     manager.Manager
-	config  *rest.Config
+	apiType        runtime.Object
+	withDefaulter  admission.CustomDefaulter
+	withValidator  admission.CustomValidator
+	gvk            schema.GroupVersionKind
+	mgr            manager.Manager
+	config         *rest.Config
+	recoverPanic   bool
+	logConstructor func(base logr.Logger, req *admission.Request) logr.Logger
 }
 
 // WebhookManagedBy allows inform its manager.Manager.
@@ -53,10 +61,37 @@ func (blder *WebhookBuilder) For(apiType runtime.Object) *WebhookBuilder {
 	return blder
 }
 
+// WithDefaulter takes a admission.WithDefaulter interface, a MutatingWebhook will be wired for this type.
+func (blder *WebhookBuilder) WithDefaulter(defaulter admission.CustomDefaulter) *WebhookBuilder {
+	blder.withDefaulter = defaulter
+	return blder
+}
+
+// WithValidator takes a admission.WithValidator interface, a ValidatingWebhook will be wired for this type.
+func (blder *WebhookBuilder) WithValidator(validator admission.CustomValidator) *WebhookBuilder {
+	blder.withValidator = validator
+	return blder
+}
+
+// WithLogConstructor overrides the webhook's LogConstructor.
+func (blder *WebhookBuilder) WithLogConstructor(logConstructor func(base logr.Logger, req *admission.Request) logr.Logger) *WebhookBuilder {
+	blder.logConstructor = logConstructor
+	return blder
+}
+
+// RecoverPanic indicates whether the panic caused by webhook should be recovered.
+func (blder *WebhookBuilder) RecoverPanic() *WebhookBuilder {
+	blder.recoverPanic = true
+	return blder
+}
+
 // Complete builds the webhook.
 func (blder *WebhookBuilder) Complete() error {
 	// Set the Config
 	blder.loadRestConfig()
+
+	// Configure the default LogConstructor
+	blder.setLogConstructor()
 
 	// Set the Webhook if needed
 	return blder.registerWebhooks()
@@ -68,10 +103,33 @@ func (blder *WebhookBuilder) loadRestConfig() {
 	}
 }
 
+func (blder *WebhookBuilder) setLogConstructor() {
+	if blder.logConstructor == nil {
+		blder.logConstructor = func(base logr.Logger, req *admission.Request) logr.Logger {
+			log := base.WithValues(
+				"webhookGroup", blder.gvk.Group,
+				"webhookKind", blder.gvk.Kind,
+			)
+			if req != nil {
+				return log.WithValues(
+					blder.gvk.Kind, klog.KRef(req.Namespace, req.Name),
+					"namespace", req.Namespace, "name", req.Name,
+					"resource", req.Resource, "user", req.UserInfo.Username,
+				)
+			}
+			return log
+		}
+	}
+}
+
 func (blder *WebhookBuilder) registerWebhooks() error {
+	typ, err := blder.getType()
+	if err != nil {
+		return err
+	}
+
 	// Create webhook(s) for each type
-	var err error
-	blder.gvk, err = apiutil.GVKForObject(blder.apiType, blder.mgr.GetScheme())
+	blder.gvk, err = apiutil.GVKForObject(typ, blder.mgr.GetScheme())
 	if err != nil {
 		return err
 	}
@@ -88,13 +146,9 @@ func (blder *WebhookBuilder) registerWebhooks() error {
 
 // registerDefaultingWebhook registers a defaulting webhook if th.
 func (blder *WebhookBuilder) registerDefaultingWebhook() {
-	defaulter, isDefaulter := blder.apiType.(admission.Defaulter)
-	if !isDefaulter {
-		log.Info("skip registering a mutating webhook, admission.Defaulter interface is not implemented", "GVK", blder.gvk)
-		return
-	}
-	mwh := admission.DefaultingWebhookFor(defaulter)
+	mwh := blder.getDefaultingWebhook()
 	if mwh != nil {
+		mwh.LogConstructor = blder.logConstructor
 		path := generateMutatePath(blder.gvk)
 
 		// Checking if the path is already registered.
@@ -108,14 +162,23 @@ func (blder *WebhookBuilder) registerDefaultingWebhook() {
 	}
 }
 
-func (blder *WebhookBuilder) registerValidatingWebhook() {
-	validator, isValidator := blder.apiType.(admission.Validator)
-	if !isValidator {
-		log.Info("skip registering a validating webhook, admission.Validator interface is not implemented", "GVK", blder.gvk)
-		return
+func (blder *WebhookBuilder) getDefaultingWebhook() *admission.Webhook {
+	if defaulter := blder.withDefaulter; defaulter != nil {
+		return admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, defaulter).WithRecoverPanic(blder.recoverPanic)
 	}
-	vwh := admission.ValidatingWebhookFor(validator)
+	if defaulter, ok := blder.apiType.(admission.Defaulter); ok {
+		return admission.DefaultingWebhookFor(blder.mgr.GetScheme(), defaulter).WithRecoverPanic(blder.recoverPanic)
+	}
+	log.Info(
+		"skip registering a mutating webhook, object does not implement admission.Defaulter or WithDefaulter wasn't called",
+		"GVK", blder.gvk)
+	return nil
+}
+
+func (blder *WebhookBuilder) registerValidatingWebhook() {
+	vwh := blder.getValidatingWebhook()
 	if vwh != nil {
+		vwh.LogConstructor = blder.logConstructor
 		path := generateValidatePath(blder.gvk)
 
 		// Checking if the path is already registered.
@@ -129,20 +192,40 @@ func (blder *WebhookBuilder) registerValidatingWebhook() {
 	}
 }
 
+func (blder *WebhookBuilder) getValidatingWebhook() *admission.Webhook {
+	if validator := blder.withValidator; validator != nil {
+		return admission.WithCustomValidator(blder.mgr.GetScheme(), blder.apiType, validator).WithRecoverPanic(blder.recoverPanic)
+	}
+	if validator, ok := blder.apiType.(admission.Validator); ok {
+		return admission.ValidatingWebhookFor(blder.mgr.GetScheme(), validator).WithRecoverPanic(blder.recoverPanic)
+	}
+	log.Info(
+		"skip registering a validating webhook, object does not implement admission.Validator or WithValidator wasn't called",
+		"GVK", blder.gvk)
+	return nil
+}
+
 func (blder *WebhookBuilder) registerConversionWebhook() error {
 	ok, err := conversion.IsConvertible(blder.mgr.GetScheme(), blder.apiType)
 	if err != nil {
-		log.Error(err, "conversion check failed", "object", blder.apiType)
+		log.Error(err, "conversion check failed", "GVK", blder.gvk)
 		return err
 	}
 	if ok {
 		if !blder.isAlreadyHandled("/convert") {
-			blder.mgr.GetWebhookServer().Register("/convert", &conversion.Webhook{})
+			blder.mgr.GetWebhookServer().Register("/convert", conversion.NewWebhookHandler(blder.mgr.GetScheme()))
 		}
-		log.Info("conversion webhook enabled", "object", blder.apiType)
+		log.Info("Conversion webhook enabled", "GVK", blder.gvk)
 	}
 
 	return nil
+}
+
+func (blder *WebhookBuilder) getType() (runtime.Object, error) {
+	if blder.apiType != nil {
+		return blder.apiType, nil
+	}
+	return nil, errors.New("For() must be called with a valid object")
 }
 
 func (blder *WebhookBuilder) isAlreadyHandled(path string) bool {

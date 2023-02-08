@@ -23,7 +23,8 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	"github.com/go-logr/logr"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -32,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,7 +44,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -50,7 +51,6 @@ var _ = Describe("controller", func() {
 	var fakeReconcile *fakeReconciler
 	var ctrl *Controller
 	var queue *controllertest.Queue
-	var informers *informertest.FakeInformers
 	var reconciled chan reconcile.Request
 	var request = reconcile.Request{
 		NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
@@ -65,14 +65,14 @@ var _ = Describe("controller", func() {
 		queue = &controllertest.Queue{
 			Interface: workqueue.New(),
 		}
-		informers = &informertest.FakeInformers{}
 		ctrl = &Controller{
 			MaxConcurrentReconciles: 1,
 			Do:                      fakeReconcile,
 			MakeQueue:               func() workqueue.RateLimitingInterface { return queue },
-			Log:                     log.RuntimeLog.WithName("controller").WithName("test"),
+			LogConstructor: func(_ *reconcile.Request) logr.Logger {
+				return log.RuntimeLog.WithName("controller").WithName("test")
+			},
 		}
-		Expect(ctrl.InjectFunc(func(interface{}) error { return nil })).To(Succeed())
 	})
 
 	Describe("Reconciler", func() {
@@ -88,13 +88,46 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(reconcile.Result{Requeue: true}))
 		})
+
+		It("should not recover panic if RecoverPanic is false by default", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			defer func() {
+				Expect(recover()).ShouldNot(BeNil())
+			}()
+			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
+				var res *reconcile.Result
+				return *res, nil
+			})
+			_, _ = ctrl.Reconcile(ctx,
+				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+		})
+
+		It("should recover panic if RecoverPanic is true", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			defer func() {
+				Expect(recover()).To(BeNil())
+			}()
+			ctrl.RecoverPanic = pointer.Bool(true)
+			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
+				var res *reconcile.Result
+				return *res, nil
+			})
+			_, err := ctrl.Reconcile(ctx,
+				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("[recovered]"))
+		})
 	})
 
 	Describe("Start", func() {
 		It("should return an error if there is an error waiting for the informers", func() {
 			f := false
 			ctrl.startWatches = []watchDescription{{
-				src: source.NewKindWithCache(&corev1.Pod{}, &informertest.FakeInformers{Synced: &f}),
+				src: source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}),
 			}}
 			ctrl.Name = "foo"
 			ctx, cancel := context.WithCancel(context.Background())
@@ -112,13 +145,39 @@ var _ = Describe("controller", func() {
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 
 			ctrl.startWatches = []watchDescription{{
-				src: source.NewKindWithCache(&appsv1.Deployment{}, c),
+				src: source.Kind(c, &appsv1.Deployment{}),
 			}}
 			ctrl.Name = "testcontroller"
 
 			err = ctrl.Start(context.TODO())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync: timed out waiting for cache to be synced"))
+		})
+
+		It("should not error when context cancelled", func() {
+			ctrl.CacheSyncTimeout = 1 * time.Second
+
+			sourceSynced := make(chan struct{})
+			c, err := cache.New(cfg, cache.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			c = &cacheWithIndefinitelyBlockingGetInformer{c}
+			ctrl.startWatches = []watchDescription{{
+				src: &singnallingSourceWrapper{
+					SyncingSource: source.Kind(c, &appsv1.Deployment{}),
+					cacheSyncDone: sourceSynced,
+				},
+			}}
+			ctrl.Name = "testcontroller"
+
+			ctx, cancel := context.WithCancel(context.TODO())
+			go func() {
+				defer GinkgoRecover()
+				err = ctrl.Start(ctx)
+				Expect(err).To(Succeed())
+			}()
+
+			cancel()
+			<-sourceSynced
 		})
 
 		It("should not error when cache sync timeout is of sufficiently high", func() {
@@ -132,7 +191,7 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			ctrl.startWatches = []watchDescription{{
 				src: &singnallingSourceWrapper{
-					SyncingSource: source.NewKindWithCache(&appsv1.Deployment{}, c),
+					SyncingSource: source.Kind(c, &appsv1.Deployment{}),
 					cacheSyncDone: sourceSynced,
 				},
 			}}
@@ -148,12 +207,12 @@ var _ = Describe("controller", func() {
 			}()
 
 			<-sourceSynced
-		}, 10.0)
+		})
 
 		It("should process events from source.Channel", func() {
 			// channel to be closed when event is processed
 			processed := make(chan struct{})
-			// source channel to be injected
+			// source channel
 			ch := make(chan event.GenericEvent, 1)
 
 			ctx, cancel := context.WithCancel(context.TODO())
@@ -169,7 +228,6 @@ var _ = Describe("controller", func() {
 
 			ins := &source.Channel{Source: ch}
 			ins.DestBufferSize = 1
-			Expect(inject.StopChannelInto(ctx.Done(), ins)).To(BeTrue())
 
 			// send the event to the channel
 			ch <- evt
@@ -177,7 +235,7 @@ var _ = Describe("controller", func() {
 			ctrl.startWatches = []watchDescription{{
 				src: ins,
 				handler: handler.Funcs{
-					GenericFunc: func(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						close(processed)
 					},
@@ -191,31 +249,13 @@ var _ = Describe("controller", func() {
 			<-processed
 		})
 
-		It("should error when channel is passed as a source but stop channel is not injected", func() {
-			ch := make(chan event.GenericEvent)
-			ctx, cancel := context.WithCancel(context.TODO())
-			defer cancel()
-
-			ins := &source.Channel{Source: ch}
-			ctrl.startWatches = []watchDescription{{
-				src: ins,
-			}}
-
-			e := ctrl.Start(ctx)
-
-			Expect(e).NotTo(BeNil())
-			Expect(e.Error()).To(ContainSubstring("must call InjectStop on Channel before calling Start"))
-		})
-
 		It("should error when channel source is not specified", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			ins := &source.Channel{}
-			Expect(inject.StopChannelInto(make(<-chan struct{}), ins)).To(BeTrue())
-
 			ctrl.startWatches = []watchDescription{{
-				src: &source.Channel{},
+				src: ins,
 			}}
 
 			e := ctrl.Start(ctx)
@@ -271,126 +311,6 @@ var _ = Describe("controller", func() {
 			Expect(err.Error()).To(Equal("controller was started more than once. This is likely to be caused by being added to a manager multiple times"))
 		})
 
-	})
-
-	Describe("Watch", func() {
-		It("should inject dependencies into the Source", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			found := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == src {
-					found = true
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue(), "Source not injected")
-		})
-
-		It("should return an error if there is an error injecting into the Source", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			expected := fmt.Errorf("expect fail source")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == src {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
-		})
-
-		It("should inject dependencies into the EventHandler", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			found := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == evthdl {
-					found = true
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue(), "EventHandler not injected")
-		})
-
-		It("should return an error if there is an error injecting into the EventHandler", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			evthdl := &handler.EnqueueRequestForObject{}
-			expected := fmt.Errorf("expect fail eventhandler")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == evthdl {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
-		})
-
-		PIt("should inject dependencies into the Reconciler", func() {
-			// TODO(community): Write this
-		})
-
-		PIt("should return an error if there is an error injecting into the Reconciler", func() {
-			// TODO(community): Write this
-		})
-
-		It("should inject dependencies into all of the Predicates", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			pr1 := &predicate.Funcs{}
-			pr2 := &predicate.Funcs{}
-			found1 := false
-			found2 := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr1 {
-					found1 = true
-				}
-				if i == pr2 {
-					found2 = true
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).NotTo(HaveOccurred())
-			Expect(found1).To(BeTrue(), "First Predicated not injected")
-			Expect(found2).To(BeTrue(), "Second Predicated not injected")
-		})
-
-		It("should return an error if there is an error injecting into any of the Predicates", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			pr1 := &predicate.Funcs{}
-			pr2 := &predicate.Funcs{}
-			expected := fmt.Errorf("expect fail predicate")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr1 {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).To(Equal(expected))
-
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr2 {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).To(Equal(expected))
-		})
 	})
 
 	Describe("Processing queue items from a Controller", func() {
@@ -459,8 +379,8 @@ var _ = Describe("controller", func() {
 
 			By("Removing the item from the queue")
 			Eventually(queue.Len).Should(Equal(0))
-			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
-		}, 1.0)
+			Eventually(func() int { return queue.NumRequeues(request) }, 1.0).Should(Equal(0))
+		})
 
 		// TODO(directxman12): we should ensure that backoff occurrs with error requeue
 
@@ -636,7 +556,7 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-			}, 2.0)
+			})
 
 			It("should get updated on reconcile errors", func() {
 				Expect(func() error {
@@ -665,7 +585,7 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-			}, 2.0)
+			})
 
 			It("should get updated when reconcile returns with retry enabled", func() {
 				Expect(func() error {
@@ -695,7 +615,7 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-			}, 2.0)
+			})
 
 			It("should get updated when reconcile returns with retryAfter enabled", func() {
 				Expect(func() error {
@@ -724,7 +644,7 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-			}, 2.0)
+			})
 		})
 
 		Context("should update prometheus metrics", func() {
@@ -765,7 +685,7 @@ var _ = Describe("controller", func() {
 				By("Removing the item from the queue")
 				Eventually(queue.Len).Should(Equal(0))
 				Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
-			}, 2.0)
+			})
 
 			It("should add a reconcile time to the reconcile time histogram", func() {
 				var reconcileTime dto.Metric
@@ -806,8 +726,25 @@ var _ = Describe("controller", func() {
 					}
 					return nil
 				}, 2.0).Should(Succeed())
-			}, 4.0)
+			})
 		})
+	})
+})
+
+var _ = Describe("ReconcileIDFromContext function", func() {
+	It("should return an empty string if there is nothing in the context", func() {
+		ctx := context.Background()
+		reconcileID := ReconcileIDFromContext(ctx)
+
+		Expect(reconcileID).To(Equal(types.UID("")))
+	})
+
+	It("should return the correct reconcileID from context", func() {
+		const expectedReconcileID = types.UID("uuid")
+		ctx := addReconcileID(context.Background(), expectedReconcileID)
+		reconcileID := ReconcileIDFromContext(ctx)
+
+		Expect(reconcileID).To(Equal(expectedReconcileID))
 	})
 })
 

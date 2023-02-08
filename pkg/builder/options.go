@@ -101,12 +101,35 @@ func (p projectAs) ApplyToWatches(opts *WatchesInput) {
 
 var (
 	// OnlyMetadata tells the controller to *only* cache metadata, and to watch
-	// the the API server in metadata-only form.  This is useful when watching
+	// the API server in metadata-only form.  This is useful when watching
 	// lots of objects, really big objects, or objects for which you only know
-	// the the GVK, but not the structure.  You'll need to pass
+	// the GVK, but not the structure.  You'll need to pass
 	// metav1.PartialObjectMetadata to the client when fetching objects in your
 	// reconciler, otherwise you'll end up with a duplicate structured or
 	// unstructured cache.
+	//
+	// When watching a resource with OnlyMetadata, for example the v1.Pod, you
+	// should not Get and List using the v1.Pod type. Instead, you should use
+	// the special metav1.PartialObjectMetadata type.
+	//
+	// ❌ Incorrect:
+	//
+	//   pod := &v1.Pod{}
+	//   mgr.GetClient().Get(ctx, nsAndName, pod)
+	//
+	// ✅ Correct:
+	//
+	//   pod := &metav1.PartialObjectMetadata{}
+	//   pod.SetGroupVersionKind(schema.GroupVersionKind{
+	//       Group:   "",
+	//       Version: "v1",
+	//       Kind:    "Pod",
+	//   })
+	//   mgr.GetClient().Get(ctx, nsAndName, pod)
+	//
+	// In the first case, controller-runtime will create another cache for the
+	// concrete type on top of the metadata cache; this increases memory
+	// consumption and leads to race conditions as caches are not in sync.
 	OnlyMetadata = projectAs(projectAsMetadata)
 
 	_ ForOption     = OnlyMetadata
@@ -115,3 +138,19 @@ var (
 )
 
 // }}}
+
+// MatchEveryOwner determines whether the watch should be filtered based on
+// controller ownership. As in, when the OwnerReference.Controller field is set.
+//
+// If passed as an option,
+// the handler receives notification for every owner of the object with the given type.
+// If unset (default), the handler receives notification only for the first
+// OwnerReference with `Controller: true`.
+var MatchEveryOwner = &matchEveryOwner{}
+
+type matchEveryOwner struct{}
+
+// ApplyToOwns applies this configuration to the given OwnsInput options.
+func (o matchEveryOwner) ApplyToOwns(opts *OwnsInput) {
+	opts.matchEveryOwner = true
+}

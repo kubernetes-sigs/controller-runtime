@@ -20,7 +20,7 @@ import (
 	"net/url"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	. "sigs.k8s.io/controller-runtime/pkg/internal/testing/process"
@@ -224,12 +224,6 @@ var _ = Describe("Arguments Templates", func() {
 		})
 	})
 })
-
-type plainDefaults map[string][]string
-
-func (d plainDefaults) DefaultArgs() map[string][]string {
-	return d
-}
 
 var _ = Describe("Arguments", func() {
 	Context("when appending", func() {

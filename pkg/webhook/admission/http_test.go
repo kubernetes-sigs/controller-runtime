@@ -23,14 +23,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	admissionv1 "k8s.io/api/admission/v1"
-
-	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 var _ = Describe("Admission Webhooks", func() {
@@ -49,8 +47,6 @@ var _ = Describe("Admission Webhooks", func() {
 			respRecorder = &httptest.ResponseRecorder{
 				Body: bytes.NewBuffer(nil),
 			}
-			_, err := inject.LoggerInto(log.WithName("test-webhook"), webhook)
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should return bad-request when given an empty body", func() {
@@ -95,7 +91,6 @@ var _ = Describe("Admission Webhooks", func() {
 			}
 			webhook := &Webhook{
 				Handler: &fakeHandler{},
-				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
@@ -111,7 +106,6 @@ var _ = Describe("Admission Webhooks", func() {
 			}
 			webhook := &Webhook{
 				Handler: &fakeHandler{},
-				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
@@ -127,7 +121,6 @@ var _ = Describe("Admission Webhooks", func() {
 			}
 			webhook := &Webhook{
 				Handler: &fakeHandler{},
-				log:     logf.RuntimeLog.WithName("webhook"),
 			}
 
 			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"code":200}}}
@@ -151,10 +144,9 @@ var _ = Describe("Admission Webhooks", func() {
 						return Allowed(ctx.Value(key).(string))
 					},
 				},
-				log: logf.RuntimeLog.WithName("webhook"),
 			}
 
-			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"reason":%q,"code":200}}}
+			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"message":%q,"code":200}}}
 `, gvkJSONv1, value)
 
 			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), key, value))
@@ -179,16 +171,32 @@ var _ = Describe("Admission Webhooks", func() {
 				WithContextFunc: func(ctx context.Context, r *http.Request) context.Context {
 					return context.WithValue(ctx, key, r.Header["Content-Type"][0])
 				},
-				log: logf.RuntimeLog.WithName("webhook"),
 			}
 
-			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"reason":%q,"code":200}}}
+			expected := fmt.Sprintf(`{%s,"response":{"uid":"","allowed":true,"status":{"metadata":{},"message":%q,"code":200}}}
 `, gvkJSONv1, "application/json")
 
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 			webhook.ServeHTTP(respRecorder, req.WithContext(ctx))
 			Expect(respRecorder.Body.String()).To(Equal(expected))
+		})
+
+		It("should never run into circular calling if the writer has broken", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Body:   nopCloser{Reader: bytes.NewBufferString(fmt.Sprintf(`{%s,"request":{}}`, gvkJSONv1))},
+			}
+			webhook := &Webhook{
+				Handler: &fakeHandler{},
+			}
+
+			bw := &brokenWriter{ResponseWriter: respRecorder}
+			Eventually(func() int {
+				// This should not be blocked by the circular calling of writeResponse and writeAdmissionResponse
+				webhook.ServeHTTP(bw, req)
+				return respRecorder.Body.Len()
+			}, time.Second*3).Should(Equal(0))
 		})
 	})
 })
@@ -200,20 +208,8 @@ type nopCloser struct {
 func (nopCloser) Close() error { return nil }
 
 type fakeHandler struct {
-	invoked        bool
-	fn             func(context.Context, Request) Response
-	decoder        *Decoder
-	injectedString string
-}
-
-func (h *fakeHandler) InjectDecoder(d *Decoder) error {
-	h.decoder = d
-	return nil
-}
-
-func (h *fakeHandler) InjectString(s string) error {
-	h.injectedString = s
-	return nil
+	invoked bool
+	fn      func(context.Context, Request) Response
 }
 
 func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {
@@ -224,4 +220,12 @@ func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {
 	return Response{AdmissionResponse: admissionv1.AdmissionResponse{
 		Allowed: true,
 	}}
+}
+
+type brokenWriter struct {
+	http.ResponseWriter
+}
+
+func (bw *brokenWriter) Write(buf []byte) (int, error) {
+	return 0, fmt.Errorf("mock: write: broken pipe")
 }

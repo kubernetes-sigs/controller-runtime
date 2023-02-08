@@ -17,10 +17,11 @@ limitations under the License.
 package cache
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -38,7 +39,8 @@ const (
 
 var _ = Describe("ip.objectTypeForListObject", func() {
 	ip := &informerCache{
-		InformersMap: &internal.InformersMap{Scheme: scheme.Scheme},
+		scheme:    scheme.Scheme,
+		Informers: &internal.Informers{},
 	}
 
 	It("should find the object type for unstructured lists", func() {
@@ -54,7 +56,21 @@ var _ = Describe("ip.objectTypeForListObject", func() {
 		referenceUnstructured := &unstructured.Unstructured{}
 		referenceUnstructured.SetGroupVersionKind(*gvk)
 		Expect(obj).To(Equal(referenceUnstructured))
+	})
 
+	It("should find the object type for partial object metadata lists", func() {
+		partialList := &metav1.PartialObjectMetadataList{}
+		partialList.APIVersion = ("v1")
+		partialList.Kind = "PodList"
+
+		gvk, obj, err := ip.objectTypeForListObject(partialList)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(gvk.Group).To(Equal(""))
+		Expect(gvk.Version).To(Equal("v1"))
+		Expect(gvk.Kind).To(Equal("Pod"))
+		referencePartial := &metav1.PartialObjectMetadata{}
+		referencePartial.SetGroupVersionKind(*gvk)
+		Expect(obj).To(Equal(referencePartial))
 	})
 
 	It("should find the object type of a list with a slice of literals items field", func() {
@@ -63,21 +79,20 @@ var _ = Describe("ip.objectTypeForListObject", func() {
 		Expect(gvk.Group).To(Equal(""))
 		Expect(gvk.Version).To(Equal("v1"))
 		Expect(gvk.Kind).To(Equal("Pod"))
-		var referencePod *corev1.Pod
+		referencePod := &corev1.Pod{}
 		Expect(obj).To(Equal(referencePod))
-
 	})
 
 	It("should find the object type of a list with a slice of pointers items field", func() {
 		By("registering the type", func() {
-			ip.Scheme = runtime.NewScheme()
+			ip.scheme = runtime.NewScheme()
 			err := (&crscheme.Builder{
 				GroupVersion: schema.GroupVersion{Group: itemPointerSliceTypeGroupName, Version: itemPointerSliceTypeVersion},
 			}).
 				Register(
 					&controllertest.UnconventionalListType{},
 					&controllertest.UnconventionalListTypeList{},
-				).AddToScheme(ip.Scheme)
+				).AddToScheme(ip.scheme)
 			Expect(err).To(BeNil())
 		})
 
@@ -87,7 +102,7 @@ var _ = Describe("ip.objectTypeForListObject", func() {
 			Expect(gvk.Group).To(Equal(itemPointerSliceTypeGroupName))
 			Expect(gvk.Version).To(Equal(itemPointerSliceTypeVersion))
 			Expect(gvk.Kind).To(Equal("UnconventionalListType"))
-			var referenceObject *controllertest.UnconventionalListType
+			referenceObject := &controllertest.UnconventionalListType{}
 			Expect(obj).To(Equal(referenceObject))
 		})
 	})

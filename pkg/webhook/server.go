@@ -21,18 +21,17 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
-	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/internal/httpserver"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
@@ -72,20 +71,24 @@ type Server struct {
 
 	// TLSVersion is the minimum version of TLS supported. Accepts
 	// "", "1.0", "1.1", "1.2" and "1.3" only ("" is equivalent to "1.0" for backwards compatibility)
+	// Deprecated: Use TLSOpts instead.
 	TLSMinVersion string
+
+	// TLSOpts is used to allow configuring the TLS config used for the server
+	TLSOpts []func(*tls.Config)
 
 	// WebhookMux is the multiplexer that handles different webhooks.
 	WebhookMux *http.ServeMux
 
-	// webhooks keep track of all registered webhooks for dependency injection,
-	// and to provide better panic messages on duplicate webhook registration.
+	// webhooks keep track of all registered webhooks
 	webhooks map[string]http.Handler
-
-	// setFields allows injecting dependencies from an external source
-	setFields inject.Func
 
 	// defaultingOnce ensures that the default fields are only ever set once.
 	defaultingOnce sync.Once
+
+	// started is set to true immediately before the server is started
+	// and thus can be used to check if the server has been started
+	started bool
 
 	// mu protects access to the webhook map & setFields for Start, Register, etc
 	mu sync.Mutex
@@ -131,51 +134,11 @@ func (s *Server) Register(path string, hook http.Handler) {
 	if _, found := s.webhooks[path]; found {
 		panic(fmt.Errorf("can't register duplicate path: %v", path))
 	}
-	// TODO(directxman12): call setfields if we've already started the server
 	s.webhooks[path] = hook
 	s.WebhookMux.Handle(path, metrics.InstrumentedHook(path, hook))
 
 	regLog := log.WithValues("path", path)
-	regLog.Info("registering webhook")
-
-	// we've already been "started", inject dependencies here.
-	// Otherwise, InjectFunc will do this for us later.
-	if s.setFields != nil {
-		if err := s.setFields(hook); err != nil {
-			// TODO(directxman12): swallowing this error isn't great, but we'd have to
-			// change the signature to fix that
-			regLog.Error(err, "unable to inject fields into webhook during registration")
-		}
-
-		baseHookLog := log.WithName("webhooks")
-
-		// NB(directxman12): we don't propagate this further by wrapping setFields because it's
-		// unclear if this is how we want to deal with log propagation.  In this specific instance,
-		// we want to be able to pass a logger to webhooks because they don't know their own path.
-		if _, err := inject.LoggerInto(baseHookLog.WithValues("webhook", path), hook); err != nil {
-			regLog.Error(err, "unable to logger into webhook during registration")
-		}
-	}
-}
-
-// StartStandalone runs a webhook server without
-// a controller manager.
-func (s *Server) StartStandalone(ctx context.Context, scheme *runtime.Scheme) error {
-	// Use the Kubernetes client-go scheme if none is specified
-	if scheme == nil {
-		scheme = kscheme.Scheme
-	}
-
-	if err := s.InjectFunc(func(i interface{}) error {
-		if _, err := inject.SchemeInto(scheme, i); err != nil {
-			return err
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	return s.Start(ctx)
+	regLog.Info("Registering webhook")
 }
 
 // tlsVersion converts from human-readable TLS version (for example "1.1")
@@ -204,7 +167,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.defaultingOnce.Do(s.setDefaults)
 
 	baseHookLog := log.WithName("webhooks")
-	baseHookLog.Info("starting webhook server")
+	baseHookLog.Info("Starting webhook server")
 
 	certPath := filepath.Join(s.CertDir, s.CertName)
 	keyPath := filepath.Join(s.CertDir, s.KeyName)
@@ -234,9 +197,9 @@ func (s *Server) Start(ctx context.Context) error {
 	// load CA to verify client certificate
 	if s.ClientCAName != "" {
 		certPool := x509.NewCertPool()
-		clientCABytes, err := ioutil.ReadFile(filepath.Join(s.CertDir, s.ClientCAName))
+		clientCABytes, err := os.ReadFile(filepath.Join(s.CertDir, s.ClientCAName))
 		if err != nil {
-			return fmt.Errorf("failed to read client CA cert: %v", err)
+			return fmt.Errorf("failed to read client CA cert: %w", err)
 		}
 
 		ok := certPool.AppendCertsFromPEM(clientCABytes)
@@ -248,30 +211,37 @@ func (s *Server) Start(ctx context.Context) error {
 		cfg.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
+	// fallback TLS config ready, will now mutate if passer wants full control over it
+	for _, op := range s.TLSOpts {
+		op(cfg)
+	}
+
 	listener, err := tls.Listen("tcp", net.JoinHostPort(s.Host, strconv.Itoa(s.Port)), cfg)
 	if err != nil {
 		return err
 	}
 
-	log.Info("serving webhook server", "host", s.Host, "port", s.Port)
+	log.Info("Serving webhook server", "host", s.Host, "port", s.Port)
 
-	srv := &http.Server{
-		Handler: s.WebhookMux,
-	}
+	srv := httpserver.New(s.WebhookMux)
 
 	idleConnsClosed := make(chan struct{})
 	go func() {
 		<-ctx.Done()
-		log.Info("shutting down webhook server")
+		log.Info("Shutting down webhook server with timeout of 1 minute")
 
-		// TODO: use a context with reasonable timeout
-		if err := srv.Shutdown(context.Background()); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
 			// Error from closing listeners, or context timeout
 			log.Error(err, "error shutting down the HTTP server")
 		}
 		close(idleConnsClosed)
 	}()
 
+	s.mu.Lock()
+	s.started = true
+	s.mu.Unlock()
 	if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
 		return err
 	}
@@ -280,23 +250,30 @@ func (s *Server) Start(ctx context.Context) error {
 	return nil
 }
 
-// InjectFunc injects the field setter into the server.
-func (s *Server) InjectFunc(f inject.Func) error {
-	s.setFields = f
-
-	// inject fields here that weren't injected in Register because we didn't have setFields yet.
-	baseHookLog := log.WithName("webhooks")
-	for hookPath, webhook := range s.webhooks {
-		if err := s.setFields(webhook); err != nil {
-			return err
-		}
-
-		// NB(directxman12): we don't propagate this further by wrapping setFields because it's
-		// unclear if this is how we want to deal with log propagation.  In this specific instance,
-		// we want to be able to pass a logger to webhooks because they don't know their own path.
-		if _, err := inject.LoggerInto(baseHookLog.WithValues("webhook", hookPath), webhook); err != nil {
-			return err
-		}
+// StartedChecker returns an healthz.Checker which is healthy after the
+// server has been started.
+func (s *Server) StartedChecker() healthz.Checker {
+	config := &tls.Config{
+		InsecureSkipVerify: true, //nolint:gosec // config is used to connect to our own webhook port.
 	}
-	return nil
+	return func(req *http.Request) error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		if !s.started {
+			return fmt.Errorf("webhook server has not been started yet")
+		}
+
+		d := &net.Dialer{Timeout: 10 * time.Second}
+		conn, err := tls.DialWithDialer(d, "tcp", net.JoinHostPort(s.Host, strconv.Itoa(s.Port)), config)
+		if err != nil {
+			return fmt.Errorf("webhook server is not reachable: %w", err)
+		}
+
+		if err := conn.Close(); err != nil {
+			return fmt.Errorf("webhook server is not reachable: closing connection: %w", err)
+		}
+
+		return nil
+	}
 }

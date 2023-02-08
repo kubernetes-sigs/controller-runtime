@@ -20,11 +20,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes/fake"
 
 	appsv1 "k8s.io/api/apps/v1"
 	coordinationv1 "k8s.io/api/coordination/v1"
@@ -44,6 +48,7 @@ var _ = Describe("Fake client", func() {
 	var cl client.WithWatch
 
 	BeforeEach(func() {
+		replicas := int32(1)
 		dep = &appsv1.Deployment{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "apps/v1",
@@ -53,6 +58,12 @@ var _ = Describe("Fake client", func() {
 				Name:            "test-deployment",
 				Namespace:       "ns1",
 				ResourceVersion: trackerAddResourceVersion,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Strategy: appsv1.DeploymentStrategy{
+					Type: appsv1.RecreateDeploymentStrategyType,
+				},
 			},
 		}
 		dep2 = &appsv1.Deployment{
@@ -67,6 +78,9 @@ var _ = Describe("Fake client", func() {
 					"test-label": "label-value",
 				},
 				ResourceVersion: trackerAddResourceVersion,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
 			},
 		}
 		cm = &corev1.ConfigMap{
@@ -85,7 +99,7 @@ var _ = Describe("Fake client", func() {
 		}
 	})
 
-	AssertClientBehavior := func() {
+	AssertClientWithoutIndexBehavior := func() {
 		It("should be able to Get", func() {
 			By("Getting a deployment")
 			namespacedName := types.NamespacedName{
@@ -138,6 +152,51 @@ var _ = Describe("Fake client", func() {
 			err := cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).To(BeNil())
 			Expect(list.Items).To(HaveLen(2))
+		})
+
+		It("should be able to retrieve registered objects that got manipulated as unstructured", func() {
+			list := func() {
+				By("Listing all endpoints in a namespace")
+				list := &unstructured.UnstructuredList{}
+				list.SetAPIVersion("v1")
+				list.SetKind("EndpointsList")
+				err := cl.List(context.Background(), list, client.InNamespace("ns1"))
+				Expect(err).To(BeNil())
+				Expect(list.Items).To(HaveLen(1))
+			}
+
+			unstructuredEndpoint := func() *unstructured.Unstructured {
+				item := &unstructured.Unstructured{}
+				item.SetAPIVersion("v1")
+				item.SetKind("Endpoints")
+				item.SetName("test-endpoint")
+				item.SetNamespace("ns1")
+				return item
+			}
+
+			By("Adding the object during client initialization")
+			cl = NewFakeClient(unstructuredEndpoint())
+			list()
+			Expect(cl.Delete(context.Background(), unstructuredEndpoint())).To(BeNil())
+
+			By("Creating an object")
+			item := unstructuredEndpoint()
+			err := cl.Create(context.Background(), item)
+			Expect(err).To(BeNil())
+			list()
+
+			By("Updating the object")
+			item.SetAnnotations(map[string]string{"foo": "bar"})
+			err = cl.Update(context.Background(), item)
+			Expect(err).To(BeNil())
+			list()
+
+			By("Patching the object")
+			old := item.DeepCopy()
+			item.SetAnnotations(map[string]string{"bar": "baz"})
+			err = cl.Patch(context.Background(), item, client.MergeFrom(old))
+			Expect(err).To(BeNil())
+			list()
 		})
 
 		It("should be able to Create an unregistered type using unstructured", func() {
@@ -568,9 +627,50 @@ var _ = Describe("Fake client", func() {
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal(trackerAddResourceVersion))
 		})
 
-		It("should be able to Delete", func() {
+		It("should reject Delete with a mismatched ResourceVersion", func() {
+			bogusRV := "bogus"
+			By("Deleting with a mismatched ResourceVersion Precondition")
+			err := cl.Delete(context.Background(), dep, client.Preconditions{ResourceVersion: &bogusRV})
+			Expect(apierrors.IsConflict(err)).To(BeTrue())
+
+			list := &appsv1.DeploymentList{}
+			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(2))
+			Expect(list.Items).To(ConsistOf(*dep, *dep2))
+		})
+
+		It("should successfully Delete with a matching ResourceVersion", func() {
+			goodRV := trackerAddResourceVersion
+			By("Deleting with a matching ResourceVersion Precondition")
+			err := cl.Delete(context.Background(), dep, client.Preconditions{ResourceVersion: &goodRV})
+			Expect(err).To(BeNil())
+
+			list := &appsv1.DeploymentList{}
+			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(1))
+			Expect(list.Items).To(ConsistOf(*dep2))
+		})
+
+		It("should be able to Delete with no ResourceVersion Precondition", func() {
 			By("Deleting a deployment")
 			err := cl.Delete(context.Background(), dep)
+			Expect(err).To(BeNil())
+
+			By("Listing all deployments in the namespace")
+			list := &appsv1.DeploymentList{}
+			err = cl.List(context.Background(), list, client.InNamespace("ns1"))
+			Expect(err).To(BeNil())
+			Expect(list.Items).To(HaveLen(1))
+			Expect(list.Items).To(ConsistOf(*dep2))
+		})
+
+		It("should be able to Delete with no opts even if object's ResourceVersion doesn't match server", func() {
+			By("Deleting a deployment")
+			depCopy := dep.DeepCopy()
+			depCopy.ResourceVersion = "bogus"
+			err := cl.Delete(context.Background(), depCopy)
 			Expect(err).To(BeNil())
 
 			By("Listing all deployments in the namespace")
@@ -744,6 +844,27 @@ var _ = Describe("Fake client", func() {
 				Expect(obj).To(Equal(cm))
 				Expect(obj.ObjectMeta.ResourceVersion).To(Equal(trackerAddResourceVersion))
 			})
+
+			It("Should not Delete the object", func() {
+				By("Deleting a configmap with DryRun with Delete()")
+				err := cl.Delete(context.Background(), cm, client.DryRunAll)
+				Expect(err).To(BeNil())
+
+				By("Deleting a configmap with DryRun with DeleteAllOf()")
+				err = cl.DeleteAllOf(context.Background(), cm, client.DryRunAll)
+				Expect(err).To(BeNil())
+
+				By("Getting the configmap")
+				namespacedName := types.NamespacedName{
+					Name:      "test-cm",
+					Namespace: "ns2",
+				}
+				obj := &corev1.ConfigMap{}
+				err = cl.Get(context.Background(), namespacedName, obj)
+				Expect(err).To(BeNil())
+				Expect(obj).To(Equal(cm))
+				Expect(obj.ObjectMeta.ResourceVersion).To(Equal(trackerAddResourceVersion))
+			})
 		})
 
 		It("should be able to Patch", func() {
@@ -810,6 +931,47 @@ var _ = Describe("Fake client", func() {
 			err = cl.Get(context.Background(), namespacedName, obj)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
+
+		It("should remove finalizers of the object on Patch", func() {
+			namespacedName := types.NamespacedName{
+				Name:      "test-cm",
+				Namespace: "patch-finalizers-in-obj",
+			}
+			By("Creating a new object")
+			obj := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       namespacedName.Name,
+					Namespace:  namespacedName.Namespace,
+					Finalizers: []string{"finalizers.sigs.k8s.io/test"},
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+			err := cl.Create(context.Background(), obj)
+			Expect(err).To(BeNil())
+
+			By("Removing the finalizer")
+			mergePatch, err := json.Marshal(map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"$deleteFromPrimitiveList/finalizers": []string{
+						"finalizers.sigs.k8s.io/test",
+					},
+				},
+			})
+			Expect(err).To(BeNil())
+			err = cl.Patch(context.Background(), obj, client.RawPatch(types.StrategicMergePatchType, mergePatch))
+			Expect(err).To(BeNil())
+
+			By("Check the finalizer has been removed in the object")
+			Expect(len(obj.Finalizers)).To(Equal(0))
+
+			By("Check the finalizer has been removed in client")
+			newObj := &corev1.ConfigMap{}
+			err = cl.Get(context.Background(), namespacedName, newObj)
+			Expect(err).To(BeNil())
+			Expect(len(newObj.Finalizers)).To(Equal(0))
+		})
 	}
 
 	Context("with default scheme.Scheme", func() {
@@ -818,7 +980,7 @@ var _ = Describe("Fake client", func() {
 				WithObjects(dep, dep2, cm).
 				Build()
 		})
-		AssertClientBehavior()
+		AssertClientWithoutIndexBehavior()
 	})
 
 	Context("with given scheme", func() {
@@ -833,7 +995,162 @@ var _ = Describe("Fake client", func() {
 				WithLists(&appsv1.DeploymentList{Items: []appsv1.Deployment{*dep, *dep2}}).
 				Build()
 		})
-		AssertClientBehavior()
+		AssertClientWithoutIndexBehavior()
+	})
+
+	Context("with Indexes", func() {
+		depReplicasIndexer := func(obj client.Object) []string {
+			dep, ok := obj.(*appsv1.Deployment)
+			if !ok {
+				panic(fmt.Errorf("indexer function for type %T's spec.replicas field received"+
+					" object of type %T, this should never happen", appsv1.Deployment{}, obj))
+			}
+			indexVal := ""
+			if dep.Spec.Replicas != nil {
+				indexVal = strconv.Itoa(int(*dep.Spec.Replicas))
+			}
+			return []string{indexVal}
+		}
+
+		depStrategyTypeIndexer := func(obj client.Object) []string {
+			dep, ok := obj.(*appsv1.Deployment)
+			if !ok {
+				panic(fmt.Errorf("indexer function for type %T's spec.strategy.type field received"+
+					" object of type %T, this should never happen", appsv1.Deployment{}, obj))
+			}
+			return []string{string(dep.Spec.Strategy.Type)}
+		}
+
+		var cb *ClientBuilder
+		BeforeEach(func() {
+			cb = NewClientBuilder().
+				WithObjects(dep, dep2, cm).
+				WithIndex(&appsv1.Deployment{}, "spec.replicas", depReplicasIndexer)
+		})
+
+		Context("client has just one Index", func() {
+			BeforeEach(func() { cl = cb.Build() })
+
+			Context("behavior that doesn't use an Index", func() {
+				AssertClientWithoutIndexBehavior()
+			})
+
+			Context("filtered List using field selector", func() {
+				It("errors when there's no Index for the GroupVersionResource", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("key", "val"),
+					}
+					err := cl.List(context.Background(), &corev1.ConfigMapList{}, listOpts)
+					Expect(err).NotTo(BeNil())
+				})
+
+				It("errors when there's no Index matching the field name", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.paused", "false"),
+					}
+					err := cl.List(context.Background(), &appsv1.DeploymentList{}, listOpts)
+					Expect(err).NotTo(BeNil())
+				})
+
+				It("errors when field selector uses two requirements", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.AndSelectors(
+							fields.OneTermEqualSelector("spec.replicas", "1"),
+							fields.OneTermEqualSelector("spec.strategy.type", string(appsv1.RecreateDeploymentStrategyType)),
+						)}
+					err := cl.List(context.Background(), &appsv1.DeploymentList{}, listOpts)
+					Expect(err).NotTo(BeNil())
+				})
+
+				It("returns two deployments that match the only field selector requirement", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.replicas", "1"),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(ConsistOf(*dep, *dep2))
+				})
+
+				It("returns no object because no object matches the only field selector requirement", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.replicas", "2"),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(BeEmpty())
+				})
+
+				It("returns deployment that matches both the field and label selectors", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.replicas", "1"),
+						LabelSelector: labels.SelectorFromSet(dep2.Labels),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(ConsistOf(*dep2))
+				})
+
+				It("returns no object even if field selector matches because label selector doesn't", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.replicas", "1"),
+						LabelSelector: labels.Nothing(),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(BeEmpty())
+				})
+
+				It("returns no object even if label selector matches because field selector doesn't", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.replicas", "2"),
+						LabelSelector: labels.Everything(),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(BeEmpty())
+				})
+			})
+		})
+
+		Context("client has two Indexes", func() {
+			BeforeEach(func() {
+				cl = cb.WithIndex(&appsv1.Deployment{}, "spec.strategy.type", depStrategyTypeIndexer).Build()
+			})
+
+			Context("behavior that doesn't use an Index", func() {
+				AssertClientWithoutIndexBehavior()
+			})
+
+			Context("filtered List using field selector", func() {
+				It("uses the second index to retrieve the indexed objects when there are matches", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.strategy.type", string(appsv1.RecreateDeploymentStrategyType)),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(ConsistOf(*dep))
+				})
+
+				It("uses the second index to retrieve the indexed objects when there are no matches", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.strategy.type", string(appsv1.RollingUpdateDeploymentStrategyType)),
+					}
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(BeEmpty())
+				})
+
+				It("errors when field selector uses two requirements", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.AndSelectors(
+							fields.OneTermEqualSelector("spec.replicas", "1"),
+							fields.OneTermEqualSelector("spec.strategy.type", string(appsv1.RecreateDeploymentStrategyType)),
+						)}
+					err := cl.List(context.Background(), &appsv1.DeploymentList{}, listOpts)
+					Expect(err).NotTo(BeNil())
+				})
+			})
+		})
 	})
 
 	It("should set the ResourceVersion to 999 when adding an object to the tracker", func() {
@@ -853,5 +1170,69 @@ var _ = Describe("Fake client", func() {
 			},
 		}
 		Expect(retrieved).To(Equal(reference))
+	})
+
+	It("should be able to build with given tracker and get resource", func() {
+		clientSet := fake.NewSimpleClientset(dep)
+		cl := NewClientBuilder().WithRuntimeObjects(dep2).WithObjectTracker(clientSet.Tracker()).Build()
+
+		By("Getting a deployment")
+		namespacedName := types.NamespacedName{
+			Name:      "test-deployment",
+			Namespace: "ns1",
+		}
+		obj := &appsv1.Deployment{}
+		err := cl.Get(context.Background(), namespacedName, obj)
+		Expect(err).To(BeNil())
+		Expect(obj).To(Equal(dep))
+
+		By("Getting a deployment from clientSet")
+		csDep2, err := clientSet.AppsV1().Deployments("ns1").Get(context.Background(), "test-deployment-2", metav1.GetOptions{})
+		Expect(err).To(BeNil())
+		Expect(csDep2).To(Equal(dep2))
+
+		By("Getting a new deployment")
+		namespacedName3 := types.NamespacedName{
+			Name:      "test-deployment-3",
+			Namespace: "ns1",
+		}
+
+		dep3 := &appsv1.Deployment{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-3",
+				Namespace: "ns1",
+				Labels: map[string]string{
+					"test-label": "label-value",
+				},
+				ResourceVersion: trackerAddResourceVersion,
+			},
+		}
+
+		_, err = clientSet.AppsV1().Deployments("ns1").Create(context.Background(), dep3, metav1.CreateOptions{})
+		Expect(err).To(BeNil())
+
+		obj = &appsv1.Deployment{}
+		err = cl.Get(context.Background(), namespacedName3, obj)
+		Expect(err).To(BeNil())
+		Expect(obj).To(Equal(dep3))
+	})
+})
+
+var _ = Describe("Fake client builder", func() {
+	It("panics when an index with the same name and GroupVersionKind is registered twice", func() {
+		// We need any realistic GroupVersionKind, the choice of apps/v1 Deployment is arbitrary.
+		cb := NewClientBuilder().WithIndex(&appsv1.Deployment{},
+			"test-name",
+			func(client.Object) []string { return nil })
+
+		Expect(func() {
+			cb.WithIndex(&appsv1.Deployment{},
+				"test-name",
+				func(client.Object) []string { return []string{"foo"} })
+		}).To(Panic())
 	})
 })

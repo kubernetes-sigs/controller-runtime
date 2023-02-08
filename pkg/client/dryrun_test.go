@@ -21,13 +21,14 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -40,10 +41,10 @@ var _ = Describe("DryRunClient", func() {
 	ctx := context.Background()
 
 	getClient := func() client.Client {
-		nonDryRunClient, err := client.New(cfg, client.Options{})
+		cl, err := client.New(cfg, client.Options{DryRun: pointer.Bool(true)})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(nonDryRunClient).NotTo(BeNil())
-		return client.NewDryRunClient(nonDryRunClient)
+		Expect(cl).NotTo(BeNil())
+		return cl
 	}
 
 	BeforeEach(func() {
@@ -226,7 +227,7 @@ var _ = Describe("DryRunClient", func() {
 	It("should not change objects via update status with opts", func() {
 		changedDep := dep.DeepCopy()
 		changedDep.Status.Replicas = 99
-		opts := &client.UpdateOptions{DryRun: []string{"Bye", "Pippa"}}
+		opts := &client.SubResourceUpdateOptions{UpdateOptions: client.UpdateOptions{DryRun: []string{"Bye", "Pippa"}}}
 
 		Expect(getClient().Status().Update(ctx, changedDep, opts)).NotTo(HaveOccurred())
 
@@ -252,7 +253,7 @@ var _ = Describe("DryRunClient", func() {
 		changedDep := dep.DeepCopy()
 		changedDep.Status.Replicas = 99
 
-		opts := &client.PatchOptions{DryRun: []string{"Bye", "Pippa"}}
+		opts := &client.SubResourcePatchOptions{PatchOptions: client.PatchOptions{DryRun: []string{"Bye", "Pippa"}}}
 
 		Expect(getClient().Status().Patch(ctx, changedDep, client.MergeFrom(dep), opts)).ToNot(HaveOccurred())
 

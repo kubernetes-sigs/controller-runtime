@@ -26,6 +26,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	// since we invoke tests with -ginkgo.junit-report we need to import ginkgo.
+	_ "github.com/onsi/ginkgo/v2"
 )
 
 // This example creates a simple application Controller that is configured for ReplicaSets and Pods.
@@ -34,7 +37,6 @@ import (
 // ReplicaSetReconciler.
 //
 // * Start the application.
-// TODO(pwittrock): Update this example when we have better dependency injection support.
 func Example() {
 	var log = ctrl.Log.WithName("builder-examples")
 
@@ -63,16 +65,15 @@ func Example() {
 // This example creates a simple application Controller that is configured for ReplicaSets and Pods.
 // This application controller will be running leader election with the provided configuration in the manager options.
 // If leader election configuration is not provided, controller runs leader election with default values.
-// Default values taken from: https://github.com/kubernetes/apiserver/blob/master/pkg/apis/config/v1alpha1/defaults.go
-//	defaultLeaseDuration = 15 * time.Second
-//	defaultRenewDeadline = 10 * time.Second
-//	defaultRetryPeriod   = 2 * time.Second
+// Default values taken from: https://github.com/kubernetes/component-base/blob/master/config/v1alpha1/defaults.go
+// * defaultLeaseDuration = 15 * time.Second
+// * defaultRenewDeadline = 10 * time.Second
+// * defaultRetryPeriod   = 2 * time.Second
 //
 // * Create a new application for ReplicaSets that manages Pods owned by the ReplicaSet and calls into
 // ReplicaSetReconciler.
 //
 // * Start the application.
-// TODO(pwittrock): Update this example when we have better dependency injection support.
 func Example_updateLeaderElectionDurations() {
 	var log = ctrl.Log.WithName("builder-examples")
 	leaseDuration := 100 * time.Second
@@ -135,7 +136,7 @@ func (a *ReplicaSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Update the ReplicaSet
 	rs.Labels["pod-count"] = fmt.Sprintf("%v", len(pods.Items))
-	err = a.Update(context.TODO(), rs)
+	err = a.Update(ctx, rs)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

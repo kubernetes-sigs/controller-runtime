@@ -107,7 +107,9 @@ func ExampleBuilder() {
 		ControllerManagedBy(mgr).  // Create the ControllerManagedBy
 		For(&appsv1.ReplicaSet{}). // ReplicaSet is the Application API
 		Owns(&corev1.Pod{}).       // ReplicaSet owns Pods created by it
-		Complete(&ReplicaSetReconciler{})
+		Complete(&ReplicaSetReconciler{
+			Client: mgr.GetClient(),
+		})
 	if err != nil {
 		log.Error(err, "could not create controller")
 		os.Exit(1)
@@ -154,9 +156,4 @@ func (a *ReplicaSetReconciler) Reconcile(ctx context.Context, req reconcile.Requ
 	}
 
 	return reconcile.Result{}, nil
-}
-
-func (a *ReplicaSetReconciler) InjectClient(c client.Client) error {
-	a.Client = c
-	return nil
 }

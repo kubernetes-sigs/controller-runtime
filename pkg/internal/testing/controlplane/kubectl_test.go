@@ -17,9 +17,9 @@ limitations under the License.
 package controlplane_test
 
 import (
-	"io/ioutil"
+	"io"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
 	"k8s.io/client-go/rest"
@@ -36,7 +36,7 @@ var _ = Describe("Kubectl", func() {
 		stdout, stderr, err := k.Run(args...)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(stdout).To(ContainSubstring("something"))
-		bytes, err := ioutil.ReadAll(stderr)
+		bytes, err := io.ReadAll(stderr)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(bytes).To(BeEmpty())
 	})

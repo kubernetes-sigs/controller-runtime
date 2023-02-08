@@ -17,12 +17,11 @@ limitations under the License.
 package config
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -45,7 +44,7 @@ var _ = Describe("Config", func() {
 	BeforeEach(func() {
 		// create temporary directory for test case
 		var err error
-		dir, err = ioutil.TempDir("", "cr-test")
+		dir, err = os.MkdirTemp("", "cr-test")
 		Expect(err).NotTo(HaveOccurred())
 
 		// override $HOME/.kube/config
@@ -192,7 +191,7 @@ func setConfigs(tc testCase, dir string) {
 
 func createFiles(files map[string]string, dir string) error {
 	for path, data := range files {
-		if err := ioutil.WriteFile(filepath.Join(dir, path), []byte(data), 0644); err != nil { //nolint:gosec
+		if err := os.WriteFile(filepath.Join(dir, path), []byte(data), 0644); err != nil { //nolint:gosec
 			return err
 		}
 	}

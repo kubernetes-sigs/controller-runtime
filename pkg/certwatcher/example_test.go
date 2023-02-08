@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"net/http"
+	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
@@ -32,7 +33,7 @@ func Example() {
 	// Setup Context
 	ctx := ctrl.SetupSignalHandler()
 
-	// Initialize a new cert watcher with cert/key pari
+	// Initialize a new cert watcher with cert/key pair
 	watcher, err := certwatcher.New("ssl/tls.crt", "ssl/tls.key")
 	if err != nil {
 		panic(err)
@@ -56,13 +57,16 @@ func Example() {
 
 	// Initialize your tls server
 	srv := &http.Server{
-		Handler: &sampleServer{},
+		Handler:           &sampleServer{},
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	// Start goroutine for handling server shutdown.
 	go func() {
 		<-ctx.Done()
-		if err := srv.Shutdown(context.Background()); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
 			panic(err)
 		}
 	}()

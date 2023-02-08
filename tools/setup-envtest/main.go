@@ -192,7 +192,7 @@ Versions:
 	Z may also be '*' or 'x' to match a wildcard.
 	You may also just write X.Y, which means X.Y.*.
 
-	A version may be prefixed with '~' to match the the most recent Z release
+	A version may be prefixed with '~' to match the most recent Z release
 	in the given Y release ( [X.Y.Z, X.Y+1.0) ).
 
 	Finally, you may suffix the version with '!' to force checking the
@@ -203,7 +203,7 @@ Versions:
 		1.16.x / 1.16.* / 1.16 # any 1.16 version
 		~1.19.3                # any 1.19 version that's at least 1.19.3
 		<1.17                  # any release 1.17.x or below
-		1.22.x!                # the latest one 1.22 release avaible remotely
+		1.22.x!                # the latest one 1.22 release available remotely
 
 Output:
 

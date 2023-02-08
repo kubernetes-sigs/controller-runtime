@@ -19,21 +19,18 @@ package envtest
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
-	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
+
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "Envtest Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, "Envtest Suite")
 }
 
 var env *Environment
@@ -45,63 +42,24 @@ var _ = BeforeSuite(func() {
 	initializeWebhookInEnvironment()
 	_, err := env.Start()
 	Expect(err).NotTo(HaveOccurred())
-}, StartTimeout)
+})
 
 func initializeWebhookInEnvironment() {
-	namespacedScopeV1Beta1 := admissionv1beta1.NamespacedScope
 	namespacedScopeV1 := admissionv1.NamespacedScope
-	failedTypeV1Beta1 := admissionv1beta1.Fail
 	failedTypeV1 := admissionv1.Fail
-	equivalentTypeV1Beta1 := admissionv1beta1.Equivalent
 	equivalentTypeV1 := admissionv1.Equivalent
-	noSideEffectsV1Beta1 := admissionv1beta1.SideEffectClassNone
 	noSideEffectsV1 := admissionv1.SideEffectClassNone
 	webhookPathV1 := "/failing"
 
 	env.WebhookInstallOptions = WebhookInstallOptions{
-		ValidatingWebhooks: []client.Object{
-			&admissionv1beta1.ValidatingWebhookConfiguration{
+		ValidatingWebhooks: []*admissionv1.ValidatingWebhookConfiguration{
+			{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "deployment-validation-webhook-config",
 				},
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ValidatingWebhookConfiguration",
-					APIVersion: "admissionregistration.k8s.io/v1beta1",
-				},
-				Webhooks: []admissionv1beta1.ValidatingWebhook{
-					{
-						Name: "deployment-validation.kubebuilder.io",
-						Rules: []admissionv1beta1.RuleWithOperations{
-							{
-								Operations: []admissionv1beta1.OperationType{"CREATE", "UPDATE"},
-								Rule: admissionv1beta1.Rule{
-									APIGroups:   []string{"apps"},
-									APIVersions: []string{"v1"},
-									Resources:   []string{"deployments"},
-									Scope:       &namespacedScopeV1Beta1,
-								},
-							},
-						},
-						FailurePolicy: &failedTypeV1Beta1,
-						MatchPolicy:   &equivalentTypeV1Beta1,
-						SideEffects:   &noSideEffectsV1Beta1,
-						ClientConfig: admissionv1beta1.WebhookClientConfig{
-							Service: &admissionv1beta1.ServiceReference{
-								Name:      "deployment-validation-service",
-								Namespace: "default",
-								Path:      &webhookPathV1,
-							},
-						},
-					},
-				},
-			},
-			&admissionv1.ValidatingWebhookConfiguration{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "deployment-validation-webhook-config",
-				},
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "ValidatingWebhookConfiguration",
-					APIVersion: "admissionregistration.k8s.io/v1beta1",
+					APIVersion: "admissionregistration.k8s.io/v1",
 				},
 				Webhooks: []admissionv1.ValidatingWebhook{
 					{
@@ -127,6 +85,43 @@ func initializeWebhookInEnvironment() {
 								Path:      &webhookPathV1,
 							},
 						},
+						AdmissionReviewVersions: []string{"v1"},
+					},
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "deployment-validation-webhook-config",
+				},
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "ValidatingWebhookConfiguration",
+					APIVersion: "admissionregistration.k8s.io/v1",
+				},
+				Webhooks: []admissionv1.ValidatingWebhook{
+					{
+						Name: "deployment-validation.kubebuilder.io",
+						Rules: []admissionv1.RuleWithOperations{
+							{
+								Operations: []admissionv1.OperationType{"CREATE", "UPDATE"},
+								Rule: admissionv1.Rule{
+									APIGroups:   []string{"apps"},
+									APIVersions: []string{"v1"},
+									Resources:   []string{"deployments"},
+									Scope:       &namespacedScopeV1,
+								},
+							},
+						},
+						FailurePolicy: &failedTypeV1,
+						MatchPolicy:   &equivalentTypeV1,
+						SideEffects:   &noSideEffectsV1,
+						ClientConfig: admissionv1.WebhookClientConfig{
+							Service: &admissionv1.ServiceReference{
+								Name:      "deployment-validation-service",
+								Namespace: "default",
+								Path:      &webhookPathV1,
+							},
+						},
+						AdmissionReviewVersions: []string{"v1"},
 					},
 				},
 			},
@@ -136,4 +131,4 @@ func initializeWebhookInEnvironment() {
 
 var _ = AfterSuite(func() {
 	Expect(env.Stop()).NotTo(HaveOccurred())
-}, StopTimeout)
+})

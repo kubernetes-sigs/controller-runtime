@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -56,7 +56,7 @@ var _ = Describe("recorder", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Watching Resources")
-			err = instance.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForObject{})
+			err = instance.Watch(source.Kind(cm.GetCache(), &appsv1.Deployment{}), &handler.EnqueueRequestForObject{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting the Manager")

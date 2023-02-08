@@ -14,15 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apiutil_test
+package apiutil
 
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -30,8 +29,7 @@ import (
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "API Utilities Test Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, "API Utilities Test Suite")
 }
 
 var cfg *rest.Config
@@ -41,4 +39,4 @@ var _ = BeforeSuite(func() {
 
 	// for things that technically need a rest.Config for defaulting, but don't actually use them
 	cfg = &rest.Config{}
-}, 60)
+})

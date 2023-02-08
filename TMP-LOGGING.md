@@ -21,7 +21,7 @@ log.Printf("starting reconciliation for pod %s/%s", podNamespace, podName)
 In controller-runtime, we'd instead write:
 
 ```go
-logger.Info("starting reconciliation", "pod", req.NamespacedNamed)
+logger.Info("starting reconciliation", "pod", req.NamespacedName)
 ```
 
 or even write
@@ -51,7 +51,7 @@ You can configure the logging implementation using
 `"sigs.k8s.io/controller-runtime/pkg/log".SetLogger`.  That
 package also contains the convenience functions for setting up Zap.
 
-You can get a handle to the the "root" logger using
+You can get a handle to the "root" logger using
 `"sigs.k8s.io/controller-runtime/pkg/log".Log`, and can then call
 `WithName` to create individual named loggers.  You can call `WithName`
 repeatedly to chain names together:
@@ -75,7 +75,7 @@ allKubernetesObjectsEverywhere)
 ```
 
 While it's possible to use higher log levels, it's recommended that you
-stick with `V(1)` or V(0)` (which is equivalent to not specifying `V`),
+stick with `V(1)` or `V(0)` (which is equivalent to not specifying `V`),
 and then filter later based on key-value pairs or messages; different
 numbers tend to lose meaning easily over time, and you'll be left
 wondering why particular logs lines are at `V(5)` instead of `V(7)`.

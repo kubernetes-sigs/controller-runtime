@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -64,12 +64,13 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Watching Resources")
-			err = instance.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueRequestForOwner{
-				OwnerType: &appsv1.Deployment{},
-			})
+			err = instance.Watch(
+				source.Kind(cm.GetCache(), &appsv1.ReplicaSet{}),
+				handler.EnqueueRequestForOwner(cm.GetScheme(), cm.GetRESTMapper(), &appsv1.Deployment{}),
+			)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = instance.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForObject{})
+			err = instance.Watch(source.Kind(cm.GetCache(), &appsv1.Deployment{}), &handler.EnqueueRequestForObject{})
 			Expect(err).NotTo(HaveOccurred())
 
 			err = cm.GetClient().Get(ctx, types.NamespacedName{Name: "foo"}, &corev1.Namespace{})
@@ -169,7 +170,7 @@ var _ = Describe("controller", func() {
 			err = cm.GetClient().
 				List(context.Background(), &controllertest.UnconventionalListTypeList{})
 			Expect(err).NotTo(HaveOccurred())
-		}, 5)
+		})
 	})
 })
 

@@ -18,7 +18,6 @@ package process_test
 
 import (
 	"bytes"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -26,7 +25,7 @@ import (
 	"strconv"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
@@ -139,7 +138,7 @@ var _ = Describe("Start method", func() {
 						echo 'i started' >&2
 					`,
 				}
-				processState.StartTimeout = 1 * time.Second
+				processState.StartTimeout = 5 * time.Second
 
 				Expect(processState.Start(stdout, stderr)).To(Succeed())
 				Eventually(processState.Exited).Should(BeTrue())
@@ -297,7 +296,7 @@ var _ = Describe("Stop method", func() {
 			var err error
 
 			Expect(processState.Start(nil, nil)).To(Succeed())
-			processState.Dir, err = ioutil.TempDir("", "k8s_test_framework_")
+			processState.Dir, err = os.MkdirTemp("", "k8s_test_framework_")
 			Expect(err).NotTo(HaveOccurred())
 			processState.DirNeedsCleaning = true
 			processState.StopTimeout = 400 * time.Millisecond

@@ -18,14 +18,14 @@ package main
 
 import (
 	goflag "flag"
-	"io/ioutil"
 	"os"
 
 	flag "github.com/spf13/pflag"
+	"go.uber.org/zap"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	logzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 var (
@@ -36,8 +36,9 @@ var (
 
 // have a separate function so we can return an exit code w/o skipping defers
 func runMain() int {
-	loggerOpts := &zap.Options{
+	loggerOpts := &logzap.Options{
 		Development: true, // a sane default
+		ZapOpts:     []zap.Option{zap.AddCaller()},
 	}
 	{
 		var goFlagSet goflag.FlagSet
@@ -45,7 +46,8 @@ func runMain() int {
 		flag.CommandLine.AddGoFlagSet(&goFlagSet)
 	}
 	flag.Parse()
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(loggerOpts)))
+	ctrl.SetLogger(logzap.New(logzap.UseFlagOptions(loggerOpts)))
+	ctrl.Log.Info("Starting...")
 
 	log := ctrl.Log.WithName("main")
 
@@ -83,7 +85,7 @@ func runMain() int {
 	}
 
 	// TODO(directxman12): add support for writing to a new context in an existing file
-	kubeconfigFile, err := ioutil.TempFile("", "scratch-env-kubeconfig-")
+	kubeconfigFile, err := os.CreateTemp("", "scratch-env-kubeconfig-")
 	if err != nil {
 		log.Error(err, "unable to create kubeconfig file, continuing on without it")
 		return 1

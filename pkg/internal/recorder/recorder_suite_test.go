@@ -17,26 +17,26 @@ limitations under the License.
 package recorder_test
 
 import (
+	"net/http"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 func TestRecorder(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "Recorder Integration Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, "Recorder Integration Suite")
 }
 
 var testenv *envtest.Environment
 var cfg *rest.Config
+var httpClient *http.Client
 var clientset *kubernetes.Clientset
 
 var _ = BeforeSuite(func() {
@@ -48,9 +48,12 @@ var _ = BeforeSuite(func() {
 	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
 
+	httpClient, err = rest.HTTPClientFor(cfg)
+	Expect(err).ToNot(HaveOccurred())
+
 	clientset, err = kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())
-}, 60)
+})
 
 var _ = AfterSuite(func() {
 	Expect(testenv.Stop()).To(Succeed())

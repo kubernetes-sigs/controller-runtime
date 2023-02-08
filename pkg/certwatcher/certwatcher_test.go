@@ -23,14 +23,17 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"net"
 	"os"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
+	"sigs.k8s.io/controller-runtime/pkg/certwatcher/metrics"
 )
 
 var _ = Describe("CertWatcher", func() {
@@ -109,6 +112,64 @@ var _ = Describe("CertWatcher", func() {
 			ctxCancel()
 			Eventually(doneCh, "4s").Should(BeClosed())
 		})
+
+		Context("prometheus metric read_certificate_total", func() {
+			var readCertificateTotalBefore float64
+			var readCertificateErrorsBefore float64
+
+			BeforeEach(func() {
+				readCertificateTotalBefore = testutil.ToFloat64(metrics.ReadCertificateTotal)
+				readCertificateErrorsBefore = testutil.ToFloat64(metrics.ReadCertificateErrors)
+			})
+
+			It("should get updated on successful certificate read", func() {
+				doneCh := startWatcher()
+
+				Eventually(func() error {
+					readCertificateTotalAfter := testutil.ToFloat64(metrics.ReadCertificateTotal)
+					if readCertificateTotalAfter != readCertificateTotalBefore+1.0 {
+						return fmt.Errorf("metric read certificate total expected: %v and got: %v", readCertificateTotalBefore+1.0, readCertificateTotalAfter)
+					}
+					return nil
+				}, "4s").Should(Succeed())
+
+				ctxCancel()
+				Eventually(doneCh, "4s").Should(BeClosed())
+			})
+
+			It("should get updated on read certificate errors", func() {
+				doneCh := startWatcher()
+
+				Eventually(func() error {
+					readCertificateTotalAfter := testutil.ToFloat64(metrics.ReadCertificateTotal)
+					if readCertificateTotalAfter != readCertificateTotalBefore+1.0 {
+						return fmt.Errorf("metric read certificate total expected: %v and got: %v", readCertificateTotalBefore+1.0, readCertificateTotalAfter)
+					}
+					readCertificateTotalBefore = readCertificateTotalAfter
+					return nil
+				}, "4s").Should(Succeed())
+
+				Expect(os.Remove(keyPath)).To(BeNil())
+
+				Eventually(func() error {
+					readCertificateTotalAfter := testutil.ToFloat64(metrics.ReadCertificateTotal)
+					if readCertificateTotalAfter != readCertificateTotalBefore+1.0 {
+						return fmt.Errorf("metric read certificate total expected: %v and got: %v", readCertificateTotalBefore+1.0, readCertificateTotalAfter)
+					}
+					return nil
+				}, "4s").Should(Succeed())
+				Eventually(func() error {
+					readCertificateErrorsAfter := testutil.ToFloat64(metrics.ReadCertificateErrors)
+					if readCertificateErrorsAfter != readCertificateErrorsBefore+1.0 {
+						return fmt.Errorf("metric read certificate errors expected: %v and got: %v", readCertificateErrorsBefore+1.0, readCertificateErrorsAfter)
+					}
+					return nil
+				}, "4s").Should(Succeed())
+
+				ctxCancel()
+				Eventually(doneCh, "4s").Should(BeClosed())
+			})
+		})
 	})
 })
 
@@ -167,7 +228,7 @@ func writeCerts(certPath, keyPath, ip string) error {
 		return err
 	}
 
-	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600) //nolint:gosec
+	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}

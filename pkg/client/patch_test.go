@@ -45,12 +45,12 @@ func BenchmarkMergeFrom(b *testing.B) {
 			},
 		},
 		ReadinessProbe: &corev1.Probe{
-			Handler: corev1.Handler{
+			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{},
 			},
 		},
 		Lifecycle: &corev1.Lifecycle{
-			PreStop: &corev1.Handler{
+			PreStop: &corev1.LifecycleHandler{
 				HTTPGet: &corev1.HTTPGetAction{},
 			},
 		},

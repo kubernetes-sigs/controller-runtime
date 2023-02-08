@@ -21,12 +21,11 @@ import (
 	"net/http"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -34,8 +33,7 @@ import (
 
 func TestSource(t *testing.T) {
 	RegisterFailHandler(Fail)
-	suiteName := "Manager Suite"
-	RunSpecsWithDefaultAndCustomReporters(t, suiteName, []Reporter{printer.NewlineReporter{}, printer.NewProwReporter(suiteName)})
+	RunSpecs(t, "Manager Suite")
 }
 
 var testenv *envtest.Environment
@@ -72,7 +70,7 @@ var _ = BeforeSuite(func() {
 
 	// Prevent the metrics listener being created
 	metrics.DefaultBindAddress = "0"
-}, 60)
+})
 
 var _ = AfterSuite(func() {
 	Expect(testenv.Stop()).To(Succeed())

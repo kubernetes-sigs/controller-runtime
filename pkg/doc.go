@@ -18,21 +18,21 @@ limitations under the License.
 Package pkg provides libraries for building Controllers.  Controllers implement Kubernetes APIs
 and are foundational to building Operators, Workload APIs, Configuration APIs, Autoscalers, and more.
 
-Client
+# Client
 
 Client provides a Read + Write client for reading and writing Kubernetes objects.
 
-Cache
+# Cache
 
 Cache provides a Read client for reading objects from a local cache.
 A cache may register handlers to respond to events that update the cache.
 
-Manager
+# Manager
 
 Manager is required for creating a Controller and provides the Controller shared dependencies such as
 clients, caches, schemes, etc.  Controllers should be Started through the Manager by calling Manager.Start.
 
-Controller
+# Controller
 
 Controller implements a Kubernetes API by responding to events (object Create, Update, Delete) and ensuring that
 the state specified in the Spec of the object matches the state of the system.  This is called a reconcile.
@@ -49,7 +49,7 @@ system must be read for each reconcile.
 
 * Controllers require Watches to be configured to enqueue reconcile.Requests in response to events.
 
-Webhook
+# Webhook
 
 Admission Webhooks are a mechanism for extending kubernetes APIs. Webhooks can be configured with target
 event type (object Create, Update, Delete), the API server will send AdmissionRequests to them
@@ -62,7 +62,7 @@ Validating webhook is used to validate if an object meets certain requirements.
 
 * Admission Webhooks require Handler(s) to be provided to process the received AdmissionReview requests.
 
-Reconciler
+# Reconciler
 
 Reconciler is a function provided to a Controller that may be called at anytime with the Name and Namespace of an object.
 When called, the Reconciler will ensure that the state of the system matches what is specified in the object at the
@@ -84,7 +84,7 @@ a mapping (e.g. owner references) that maps the object that triggers the reconci
 - e.g. it doesn't matter whether a ReplicaSet was created or updated, Reconciler will always compare the number of
 Pods in the system against what is specified in the object at the time it is called.
 
-Source
+# Source
 
 resource.Source is an argument to Controller.Watch that provides a stream of events.
 Events typically come from watching Kubernetes APIs (e.g. Pod Create, Update, Delete).
@@ -97,7 +97,7 @@ through the Watch API.
 
 * Users SHOULD only use the provided Source implementations instead of implementing their own for nearly all cases.
 
-EventHandler
+# EventHandler
 
 handler.EventHandler is an argument to Controller.Watch that enqueues reconcile.Requests in response to events.
 
@@ -117,7 +117,7 @@ type - e.g. map a Node event to objects that respond to cluster resize events.
 * Users SHOULD only use the provided EventHandler implementations instead of implementing their own for almost
 all cases.
 
-Predicate
+# Predicate
 
 predicate.Predicate is an optional argument to Controller.Watch that filters events.  This allows common filters to be
 reused and composed.
@@ -129,7 +129,7 @@ reused and composed.
 * Users SHOULD use the provided Predicate implementations, but MAY implement additional
 Predicates e.g. generation changed, label selectors changed etc.
 
-PodController Diagram
+# PodController Diagram
 
 Source provides event:
 
@@ -143,14 +143,14 @@ Reconciler is called with the Request:
 
 * Reconciler(reconcile.Request{types.NamespaceName{Name: "foo", Namespace: "bar"}})
 
-Usage
+# Usage
 
 The following example shows creating a new Controller program which Reconciles ReplicaSet objects in response
 to Pod or ReplicaSet events.  The Reconciler function simply adds a label to the ReplicaSet.
 
 See the examples/builtins/main.go for a usage example.
 
-Controller Example
+Controller Example:
 
 1. Watch ReplicaSet and Pods Sources
 
@@ -167,7 +167,7 @@ Owning ReplicaSet Namespace and Name.
 
 2.3 Reconciler triggered by deletion of Pods from some other actor -> Read ReplicaSet and Pods, create replacement Pods.
 
-Watching and EventHandling
+# Watching and EventHandling
 
 Controllers may Watch multiple Kinds of objects (e.g. Pods, ReplicaSets and Deployments), but they reconcile
 only a single Type.  When one Type of object must be updated in response to changes in another Type of object,
@@ -185,7 +185,7 @@ Note: reconcile.Requests are deduplicated when they are enqueued.  Many Pod Even
 may trigger only 1 reconcile invocation as each Event results in the Handler trying to enqueue
 the same reconcile.Request for the ReplicaSet.
 
-Controller Writing Tips
+# Controller Writing Tips
 
 Reconciler Runtime Complexity:
 

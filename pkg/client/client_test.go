@@ -18,26 +18,33 @@ package client_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"sync/atomic"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/pointer"
 
+	"sigs.k8s.io/controller-runtime/examples/crd/pkg"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-const serverSideTimeoutSeconds = 10
 
 func deleteDeployment(ctx context.Context, dep *appsv1.Deployment, ns string) {
 	_, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
@@ -131,6 +138,8 @@ var _ = Describe("Client", func() {
 	var dep *appsv1.Deployment
 	var pod *corev1.Pod
 	var node *corev1.Node
+	var serviceAccount *corev1.ServiceAccount
+	var csr *certificatesv1.CertificateSigningRequest
 	var count uint64 = 0
 	var replicaCount int32 = 2
 	var ns = "default"
@@ -165,8 +174,32 @@ var _ = Describe("Client", func() {
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("node-name-%v", count)},
 			Spec:       corev1.NodeSpec{},
 		}
+		serviceAccount = &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("sa-%v", count), Namespace: ns}}
+		csr = &certificatesv1.CertificateSigningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("csr-%v", count)},
+			Spec: certificatesv1.CertificateSigningRequestSpec{
+				SignerName: "org.io/my-signer",
+				Request: []byte(`-----BEGIN CERTIFICATE REQUEST-----
+MIIChzCCAW8CAQAwQjELMAkGA1UEBhMCWFgxFTATBgNVBAcMDERlZmF1bHQgQ2l0
+eTEcMBoGA1UECgwTRGVmYXVsdCBDb21wYW55IEx0ZDCCASIwDQYJKoZIhvcNAQEB
+BQADggEPADCCAQoCggEBANe06dLX/bDNm6mVEnKdJexcJM6WKMFSt5o6BEdD1+Ki
+WyUcvfNgIBbwAZjkF9U1r7+KuDcc6XYFnb6ky1wPo4C+XwcIIx7Nnbf8IdWJukPb
+2BCsqO4NCsG6kKFavmH9J3q//nwKUvlQE+AJ2MPuOAZTwZ4KskghiGuS8hyk6/PZ
+XH9QhV7Jma43bDzQozd2C7OujRBhLsuP94KSu839RRFWd9ms3XHgTxLxb7nxwZDx
+9l7/ZVAObJoQYlHENqs12NCVP4gpJfbcY8/rd+IG4ftcZEmpeO4kKO+d2TpRKQqw
+bjCMoAdD5Y43iLTtyql4qRnbMe3nxYG2+1inEryuV/cCAwEAAaAAMA0GCSqGSIb3
+DQEBCwUAA4IBAQDH5hDByRN7wERQtC/o6uc8Y+yhjq9YcBJjjbnD6Vwru5pOdWtx
+qfKkkXI5KNOdEhWzLnJyOcWHjj8UoHqI3AjxGC7dTM95eGjxQGUpsUOX8JSd4MiZ
+cct4g4BKBj02AGqZLiEgN+PLCYAmEaYU7oZc4OAh6WzMrljNRsj66awMQpw8O1eY
+YuBa8vwz8ko8vn/pn7IrFu8cZ+EA3rluJ+budX/QrEGi1hijg27q7/Qr0wNI9f1v
+086mLKdqaBTkblXWEvF3WP4CcLNyrSNi4eu+G0fcAgGp1F/Nqh0MuWKSOLprv5Om
+U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
+-----END CERTIFICATE REQUEST-----`),
+				Usages: []certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
+			},
+		}
 		scheme = kscheme.Scheme
-	}, serverSideTimeoutSeconds)
+	})
 
 	var delOptions *metav1.DeleteOptions
 	AfterEach(func() {
@@ -183,10 +216,13 @@ var _ = Describe("Client", func() {
 			err = clientset.CoreV1().Nodes().Delete(ctx, node.Name, *delOptions)
 			Expect(err).NotTo(HaveOccurred())
 		}
-	}, serverSideTimeoutSeconds)
+		err = clientset.CoreV1().ServiceAccounts(ns).Delete(ctx, serviceAccount.Name, *delOptions)
+		Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 
-	// TODO(seans): Cast "cl" as "client" struct from "Client" interface. Then validate the
-	// instance values for the "client" struct.
+		err = clientset.CertificatesV1().CertificateSigningRequests().Delete(ctx, csr.Name, *delOptions)
+		Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
+	})
+
 	Describe("New", func() {
 		It("should return a new Client", func() {
 			cl, err := client.New(cfg, client.Options{})
@@ -200,29 +236,46 @@ var _ = Describe("Client", func() {
 			Expect(cl).To(BeNil())
 		})
 
-		// TODO(seans): cast as client struct and inspect Scheme
 		It("should use the provided Scheme if provided", func() {
 			cl, err := client.New(cfg, client.Options{Scheme: scheme})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
+			Expect(cl.Scheme()).ToNot(BeNil())
+			Expect(cl.Scheme()).To(Equal(scheme))
 		})
 
-		// TODO(seans): cast as client struct and inspect Scheme
 		It("should default the Scheme if not provided", func() {
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
+			Expect(cl.Scheme()).ToNot(BeNil())
+			Expect(cl.Scheme()).To(Equal(kscheme.Scheme))
 		})
 
-		PIt("should use the provided Mapper if provided", func() {
-
+		It("should use the provided Mapper if provided", func() {
+			mapper := meta.NewDefaultRESTMapper([]schema.GroupVersion{})
+			cl, err := client.New(cfg, client.Options{Mapper: mapper})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+			Expect(cl.RESTMapper()).ToNot(BeNil())
+			Expect(cl.RESTMapper()).To(Equal(mapper))
 		})
 
-		// TODO(seans): cast as client struct and inspect Mapper
 		It("should create a Mapper if not provided", func() {
 			cl, err := client.New(cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
+			Expect(cl.RESTMapper()).ToNot(BeNil())
+		})
+
+		It("should use the provided reader cache if provided, on get and list", func() {
+			cache := &fakeReader{}
+			cl, err := client.New(cfg, client.Options{Cache: &client.CacheOptions{Reader: cache}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+			Expect(cl.Get(ctx, client.ObjectKey{Name: "test"}, &appsv1.Deployment{})).To(Succeed())
+			Expect(cl.List(ctx, &appsv1.DeploymentList{})).To(Succeed())
+			Expect(cache.Called).To(Equal(2))
 		})
 	})
 
@@ -293,7 +346,7 @@ var _ = Describe("Client", func() {
 				Expect(err).To(HaveOccurred())
 				// TODO(seans): Add test to validate the returned error. Problems currently with
 				// different returned error locally versus travis.
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should fail if the object cannot be mapped to a GVK", func() {
 				By("creating client with empty Scheme")
@@ -314,7 +367,22 @@ var _ = Describe("Client", func() {
 			})
 
 			Context("with the DryRun option", func() {
-				It("should not create a new object", func() {
+				It("should not create a new object, global option", func() {
+					cl, err := client.New(cfg, client.Options{DryRun: pointer.Bool(true)})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(cl).NotTo(BeNil())
+
+					By("creating the object (with DryRun)")
+					err = cl.Create(context.TODO(), dep)
+					Expect(err).NotTo(HaveOccurred())
+
+					actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+					Expect(err).To(HaveOccurred())
+					Expect(apierrors.IsNotFound(err)).To(BeTrue())
+					Expect(actual).To(Equal(&appsv1.Deployment{}))
+				})
+
+				It("should not create a new object, inline option", func() {
 					cl, err := client.New(cfg, client.Options{})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cl).NotTo(BeNil())
@@ -430,7 +498,7 @@ var _ = Describe("Client", func() {
 				Expect(err).To(HaveOccurred())
 				// TODO(seans): Add test to validate the returned error. Problems currently with
 				// different returned error locally versus travis.
-			}, serverSideTimeoutSeconds)
+			})
 
 		})
 
@@ -703,6 +771,430 @@ var _ = Describe("Client", func() {
 				Expect(testOption.applied).To(Equal(true))
 			})
 		})
+	})
+
+	Describe("SubResourceClient", func() {
+		Context("with structured objects", func() {
+			It("should be able to read the Scale subresource", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("reading the scale subresource")
+				scale := &autoscalingv1.Scale{}
+				err = cl.SubResource("scale").Get(ctx, dep, scale)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(scale.Spec.Replicas).To(Equal(*dep.Spec.Replicas))
+			})
+			It("should be able to create ServiceAccount tokens", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating the serviceAccount")
+				_, err = clientset.CoreV1().ServiceAccounts(serviceAccount.Namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
+				Expect((err)).NotTo(HaveOccurred())
+
+				token := &authenticationv1.TokenRequest{}
+				err = cl.SubResource("token").Create(ctx, serviceAccount, token)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(token.Status.Token).NotTo(Equal(""))
+			})
+
+			It("should be able to create Pod evictions", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				// Make the pod valid
+				pod.Spec.Containers = []corev1.Container{{Name: "foo", Image: "busybox"}}
+
+				By("Creating the pod")
+				pod, err = clientset.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Creating the eviction")
+				eviction := &policyv1.Eviction{
+					DeleteOptions: &metav1.DeleteOptions{GracePeriodSeconds: ptr(int64(0))},
+				}
+				err = cl.SubResource("eviction").Create(ctx, pod, eviction)
+				Expect((err)).NotTo(HaveOccurred())
+
+				By("Asserting the pod is gone")
+				_, err = clientset.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			})
+
+			It("should be able to create Pod bindings", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				// Make the pod valid
+				pod.Spec.Containers = []corev1.Container{{Name: "foo", Image: "busybox"}}
+
+				By("Creating the pod")
+				pod, err = clientset.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Creating the binding")
+				binding := &corev1.Binding{
+					Target: corev1.ObjectReference{Name: node.Name},
+				}
+				err = cl.SubResource("binding").Create(ctx, pod, binding)
+				Expect((err)).NotTo(HaveOccurred())
+
+				By("Asserting the pod is bound")
+				pod, err = clientset.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(pod.Spec.NodeName).To(Equal(node.Name))
+			})
+
+			It("should be able to approve CSRs", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating the CSR")
+				csr, err := clientset.CertificatesV1().CertificateSigningRequests().Create(ctx, csr, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Approving the CSR")
+				csr.Status.Conditions = append(csr.Status.Conditions, certificatesv1.CertificateSigningRequestCondition{
+					Type:   certificatesv1.CertificateApproved,
+					Status: corev1.ConditionTrue,
+				})
+				err = cl.SubResource("approval").Update(ctx, csr)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Asserting the CSR is approved")
+				csr, err = clientset.CertificatesV1().CertificateSigningRequests().Get(ctx, csr.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesv1.CertificateApproved))
+				Expect(csr.Status.Conditions[0].Status).To(Equal(corev1.ConditionTrue))
+			})
+
+			It("should be able to approve CSRs using Patch", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating the CSR")
+				csr, err := clientset.CertificatesV1().CertificateSigningRequests().Create(ctx, csr, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Approving the CSR")
+				patch := client.MergeFrom(csr.DeepCopy())
+				csr.Status.Conditions = append(csr.Status.Conditions, certificatesv1.CertificateSigningRequestCondition{
+					Type:   certificatesv1.CertificateApproved,
+					Status: corev1.ConditionTrue,
+				})
+				err = cl.SubResource("approval").Patch(ctx, csr, patch)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Asserting the CSR is approved")
+				csr, err = clientset.CertificatesV1().CertificateSigningRequests().Get(ctx, csr.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesv1.CertificateApproved))
+				Expect(csr.Status.Conditions[0].Status).To(Equal(corev1.ConditionTrue))
+			})
+
+			It("should be able to update the scale subresource", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Updating the scale subresurce")
+				replicaCount := *dep.Spec.Replicas
+				scale := &autoscalingv1.Scale{Spec: autoscalingv1.ScaleSpec{Replicas: replicaCount}}
+				err = cl.SubResource("scale").Update(ctx, dep, client.WithSubResourceBody(scale))
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Asserting replicas got updated")
+				dep, err = clientset.AppsV1().Deployments(dep.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*dep.Spec.Replicas).To(Equal(replicaCount))
+			})
+
+			It("should be able to patch the scale subresource", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Updating the scale subresurce")
+				replicaCount := *dep.Spec.Replicas
+				patch := client.MergeFrom(&autoscalingv1.Scale{})
+				scale := &autoscalingv1.Scale{Spec: autoscalingv1.ScaleSpec{Replicas: replicaCount}}
+				err = cl.SubResource("scale").Patch(ctx, dep, patch, client.WithSubResourceBody(scale))
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Asserting replicas got updated")
+				dep, err = clientset.AppsV1().Deployments(dep.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*dep.Spec.Replicas).To(Equal(replicaCount))
+			})
+		})
+
+		Context("with unstructured objects", func() {
+			It("should be able to read the Scale subresource", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				dep.APIVersion = appsv1.SchemeGroupVersion.String()
+				dep.Kind = reflect.TypeOf(dep).Elem().Name()
+				depUnstructured, err := toUnstructured(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("reading the scale subresource")
+				scale := &unstructured.Unstructured{}
+				scale.SetAPIVersion("autoscaling/v1")
+				scale.SetKind("Scale")
+				err = cl.SubResource("scale").Get(ctx, depUnstructured, scale)
+				Expect(err).NotTo(HaveOccurred())
+
+				val, found, err := unstructured.NestedInt64(scale.UnstructuredContent(), "spec", "replicas")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(found).To(BeTrue())
+				Expect(int32(val)).To(Equal(*dep.Spec.Replicas))
+			})
+			It("should be able to create ServiceAccount tokens", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating the serviceAccount")
+				_, err = clientset.CoreV1().ServiceAccounts(serviceAccount.Namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
+				Expect((err)).NotTo(HaveOccurred())
+
+				serviceAccount.APIVersion = "v1"
+				serviceAccount.Kind = "ServiceAccount"
+				serviceAccountUnstructured, err := toUnstructured(serviceAccount)
+				Expect(err).NotTo(HaveOccurred())
+
+				token := &unstructured.Unstructured{}
+				token.SetAPIVersion("authentication.k8s.io/v1")
+				token.SetKind("TokenRequest")
+				err = cl.SubResource("token").Create(ctx, serviceAccountUnstructured, token)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(token.GetAPIVersion()).To(Equal("authentication.k8s.io/v1"))
+				Expect(token.GetKind()).To(Equal("TokenRequest"))
+
+				val, found, err := unstructured.NestedString(token.UnstructuredContent(), "status", "token")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(found).To(BeTrue())
+				Expect(val).NotTo(Equal(""))
+			})
+
+			It("should be able to create Pod evictions", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				// Make the pod valid
+				pod.Spec.Containers = []corev1.Container{{Name: "foo", Image: "busybox"}}
+
+				By("Creating the pod")
+				pod, err = clientset.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				pod.APIVersion = "v1"
+				pod.Kind = "Pod"
+				podUnstructured, err := toUnstructured(pod)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Creating the eviction")
+				eviction := &unstructured.Unstructured{}
+				eviction.SetAPIVersion("policy/v1")
+				eviction.SetKind("Eviction")
+				err = unstructured.SetNestedField(eviction.UnstructuredContent(), int64(0), "deleteOptions", "gracePeriodSeconds")
+				Expect(err).NotTo(HaveOccurred())
+				err = cl.SubResource("eviction").Create(ctx, podUnstructured, eviction)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(eviction.GetAPIVersion()).To(Equal("policy/v1"))
+				Expect(eviction.GetKind()).To(Equal("Eviction"))
+
+				By("Asserting the pod is gone")
+				_, err = clientset.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			})
+
+			It("should be able to create Pod bindings", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				// Make the pod valid
+				pod.Spec.Containers = []corev1.Container{{Name: "foo", Image: "busybox"}}
+
+				By("Creating the pod")
+				pod, err = clientset.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				pod.APIVersion = "v1"
+				pod.Kind = "Pod"
+				podUnstructured, err := toUnstructured(pod)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Creating the binding")
+				binding := &unstructured.Unstructured{}
+				binding.SetAPIVersion("v1")
+				binding.SetKind("Binding")
+				err = unstructured.SetNestedField(binding.UnstructuredContent(), node.Name, "target", "name")
+				Expect(err).NotTo(HaveOccurred())
+
+				err = cl.SubResource("binding").Create(ctx, podUnstructured, binding)
+				Expect((err)).NotTo(HaveOccurred())
+				Expect(binding.GetAPIVersion()).To(Equal("v1"))
+				Expect(binding.GetKind()).To(Equal("Binding"))
+
+				By("Asserting the pod is bound")
+				pod, err = clientset.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(pod.Spec.NodeName).To(Equal(node.Name))
+			})
+
+			It("should be able to approve CSRs", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating the CSR")
+				csr, err := clientset.CertificatesV1().CertificateSigningRequests().Create(ctx, csr, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Approving the CSR")
+				csr.Status.Conditions = append(csr.Status.Conditions, certificatesv1.CertificateSigningRequestCondition{
+					Type:   certificatesv1.CertificateApproved,
+					Status: corev1.ConditionTrue,
+				})
+				csr.APIVersion = "certificates.k8s.io/v1"
+				csr.Kind = "CertificateSigningRequest"
+				csrUnstructured, err := toUnstructured(csr)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = cl.SubResource("approval").Update(ctx, csrUnstructured)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(csrUnstructured.GetAPIVersion()).To(Equal("certificates.k8s.io/v1"))
+				Expect(csrUnstructured.GetKind()).To(Equal("CertificateSigningRequest"))
+
+				By("Asserting the CSR is approved")
+				csr, err = clientset.CertificatesV1().CertificateSigningRequests().Get(ctx, csr.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesv1.CertificateApproved))
+				Expect(csr.Status.Conditions[0].Status).To(Equal(corev1.ConditionTrue))
+			})
+
+			It("should be able to approve CSRs using Patch", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating the CSR")
+				csr, err := clientset.CertificatesV1().CertificateSigningRequests().Create(ctx, csr, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Approving the CSR")
+				patch := client.MergeFrom(csr.DeepCopy())
+				csr.Status.Conditions = append(csr.Status.Conditions, certificatesv1.CertificateSigningRequestCondition{
+					Type:   certificatesv1.CertificateApproved,
+					Status: corev1.ConditionTrue,
+				})
+				csr.APIVersion = "certificates.k8s.io/v1"
+				csr.Kind = "CertificateSigningRequest"
+				csrUnstructured, err := toUnstructured(csr)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = cl.SubResource("approval").Patch(ctx, csrUnstructured, patch)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(csrUnstructured.GetAPIVersion()).To(Equal("certificates.k8s.io/v1"))
+				Expect(csrUnstructured.GetKind()).To(Equal("CertificateSigningRequest"))
+
+				By("Asserting the CSR is approved")
+				csr, err = clientset.CertificatesV1().CertificateSigningRequests().Get(ctx, csr.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesv1.CertificateApproved))
+				Expect(csr.Status.Conditions[0].Status).To(Equal(corev1.ConditionTrue))
+			})
+
+			It("should be able to update the scale subresource", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				dep.APIVersion = "apps/v1"
+				dep.Kind = "Deployment"
+				depUnstructured, err := toUnstructured(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Updating the scale subresurce")
+				replicaCount := *dep.Spec.Replicas
+				scale := &unstructured.Unstructured{}
+				scale.SetAPIVersion("autoscaling/v1")
+				scale.SetKind("Scale")
+				Expect(unstructured.SetNestedField(scale.Object, int64(replicaCount), "spec", "replicas")).NotTo(HaveOccurred())
+				err = cl.SubResource("scale").Update(ctx, depUnstructured, client.WithSubResourceBody(scale))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(scale.GetAPIVersion()).To(Equal("autoscaling/v1"))
+				Expect(scale.GetKind()).To(Equal("Scale"))
+
+				By("Asserting replicas got updated")
+				dep, err = clientset.AppsV1().Deployments(dep.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*dep.Spec.Replicas).To(Equal(replicaCount))
+			})
+
+			It("should be able to patch the scale subresource", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				dep.APIVersion = "apps/v1"
+				dep.Kind = "Deployment"
+				depUnstructured, err := toUnstructured(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Updating the scale subresurce")
+				replicaCount := *dep.Spec.Replicas
+				scale := &unstructured.Unstructured{}
+				scale.SetAPIVersion("autoscaling/v1")
+				scale.SetKind("Scale")
+				patch := client.MergeFrom(scale.DeepCopy())
+				Expect(unstructured.SetNestedField(scale.Object, int64(replicaCount), "spec", "replicas")).NotTo(HaveOccurred())
+				err = cl.SubResource("scale").Patch(ctx, depUnstructured, patch, client.WithSubResourceBody(scale))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(scale.GetAPIVersion()).To(Equal("autoscaling/v1"))
+				Expect(scale.GetKind()).To(Equal("Scale"))
+
+				By("Asserting replicas got updated")
+				dep, err = clientset.AppsV1().Deployments(dep.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*dep.Spec.Replicas).To(Equal(replicaCount))
+			})
+		})
+
 	})
 
 	Describe("StatusClient", func() {
@@ -1109,7 +1601,7 @@ var _ = Describe("Client", func() {
 				By("initially creating two Deployments")
 
 				dep2 := dep.DeepCopy()
-				dep2.Name = dep2.Name + "-2"
+				dep2.Name += "-2"
 
 				dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1208,7 +1700,7 @@ var _ = Describe("Client", func() {
 				By("initially creating two Deployments")
 
 				dep2 := dep.DeepCopy()
-				dep2.Name = dep2.Name + "-2"
+				dep2.Name += "-2"
 
 				dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1294,7 +1786,7 @@ var _ = Describe("Client", func() {
 				By("initially creating two Deployments")
 
 				dep2 := dep.DeepCopy()
-				dep2.Name = dep2.Name + "-2"
+				dep2.Name += "-2"
 
 				dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1397,6 +1889,33 @@ var _ = Describe("Client", func() {
 			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 			})
+
+			// Test this with an integrated type and a CRD to make sure it covers both proto
+			// and json deserialization.
+			for idx, object := range []client.Object{&corev1.ConfigMap{}, &pkg.ChaosPod{}} {
+				idx, object := idx, object
+				It(fmt.Sprintf("should not retain any data in the obj variable that is not on the server for %T", object), func() {
+					cl, err := client.New(cfg, client.Options{})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(cl).NotTo(BeNil())
+
+					object.SetName(fmt.Sprintf("retain-test-%d", idx))
+					object.SetNamespace(ns)
+
+					By("First creating the object")
+					toCreate := object.DeepCopyObject().(client.Object)
+					Expect(cl.Create(ctx, toCreate)).NotTo(HaveOccurred())
+
+					By("Fetching it into a variable that has finalizers set")
+					toGetInto := object.DeepCopyObject().(client.Object)
+					toGetInto.SetFinalizers([]string{"some-finalizer"})
+					Expect(cl.Get(ctx, client.ObjectKeyFromObject(object), toGetInto)).NotTo(HaveOccurred())
+
+					By("Ensuring the created and the received object are equal")
+					Expect(toCreate).Should(Equal(toGetInto))
+				})
+			}
+
 		})
 
 		Context("with unstructured objects", func() {
@@ -1468,6 +1987,30 @@ var _ = Describe("Client", func() {
 				u := &unstructured.Unstructured{}
 				err = cl.Get(context.TODO(), key, u)
 				Expect(err).To(HaveOccurred())
+			})
+
+			It("should not retain any data in the obj variable that is not on the server", func() {
+				object := &unstructured.Unstructured{}
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				object.SetName("retain-unstructured")
+				object.SetNamespace(ns)
+				object.SetAPIVersion("chaosapps.metamagical.io/v1")
+				object.SetKind("ChaosPod")
+
+				By("First creating the object")
+				toCreate := object.DeepCopyObject().(client.Object)
+				Expect(cl.Create(ctx, toCreate)).NotTo(HaveOccurred())
+
+				By("Fetching it into a variable that has finalizers set")
+				toGetInto := object.DeepCopyObject().(client.Object)
+				toGetInto.SetFinalizers([]string{"some-finalizer"})
+				Expect(cl.Get(ctx, client.ObjectKeyFromObject(object), toGetInto)).NotTo(HaveOccurred())
+
+				By("Ensuring the created and the received object are equal")
+				Expect(toCreate).Should(Equal(toGetInto))
 			})
 		})
 		Context("with metadata objects", func() {
@@ -1547,6 +2090,27 @@ var _ = Describe("Client", func() {
 			PIt("should fail if the GVK cannot be mapped to a Resource", func() {
 
 			})
+
+			It("should not retain any data in the obj variable that is not on the server", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("First creating the object")
+				toCreate := &pkg.ChaosPod{ObjectMeta: metav1.ObjectMeta{Name: "retain-metadata", Namespace: ns}}
+				Expect(cl.Create(ctx, toCreate)).NotTo(HaveOccurred())
+
+				By("Fetching it into a variable that has finalizers set")
+				toGetInto := &metav1.PartialObjectMetadata{
+					TypeMeta:   metav1.TypeMeta{APIVersion: "chaosapps.metamagical.io/v1", Kind: "ChaosPod"},
+					ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "retain-metadata"},
+				}
+				toGetInto.SetFinalizers([]string{"some-finalizer"})
+				Expect(cl.Get(ctx, client.ObjectKeyFromObject(toGetInto), toGetInto)).NotTo(HaveOccurred())
+
+				By("Ensuring the created and the received objects metadata are equal")
+				Expect(toCreate.ObjectMeta).Should(Equal(toGetInto.ObjectMeta))
+			})
 		})
 	})
 
@@ -1573,7 +2137,7 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should fetch unstructured collection of objects", func() {
 				By("create an initial object")
@@ -1607,7 +2171,7 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should fetch unstructured collection of objects, even if scheme is empty", func() {
 				By("create an initial object")
@@ -1636,7 +2200,7 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should return an empty list if there are no matching objects", func() {
 				cl, err := client.New(cfg, client.Options{})
@@ -1648,7 +2212,7 @@ var _ = Describe("Client", func() {
 
 				By("validating no Deployments are returned")
 				Expect(deps.Items).To(BeEmpty())
-			}, serverSideTimeoutSeconds)
+			})
 
 			// TODO(seans): get label selector test working
 			It("should filter results by label selector", func() {
@@ -1709,7 +2273,7 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by namespace selector", func() {
 				By("creating a Deployment in test-namespace-1")
@@ -1768,7 +2332,7 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depBackend, "test-namespace-2")
 				deleteNamespace(ctx, tns1)
 				deleteNamespace(ctx, tns2)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by field selector", func() {
 				By("creating a Deployment with name deployment-frontend")
@@ -1820,7 +2384,7 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by namespace selector and label selector", func() {
 				By("creating a Deployment in test-namespace-3 with the app=frontend label")
@@ -1913,7 +2477,7 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depFrontend4, "test-namespace-4")
 				deleteNamespace(ctx, tns3)
 				deleteNamespace(ctx, tns4)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results using limit and continue options", func() {
 
@@ -1996,7 +2560,7 @@ var _ = Describe("Client", func() {
 				Expect(deps.Continue).To(BeEmpty())
 				Expect(deps.Items[0].Name).To(Equal(dep3.Name))
 				Expect(deps.Items[1].Name).To(Equal(dep4.Name))
-			}, serverSideTimeoutSeconds)
+			})
 
 			PIt("should fail if the object doesn't have meta", func() {
 
@@ -2039,7 +2603,7 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should return an empty list if there are no matching objects", func() {
 				cl, err := client.New(cfg, client.Options{})
@@ -2056,7 +2620,7 @@ var _ = Describe("Client", func() {
 
 				By("validating no Deployments are returned")
 				Expect(deps.Items).To(BeEmpty())
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by namespace selector", func() {
 				By("creating a Deployment in test-namespace-5")
@@ -2120,7 +2684,7 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depBackend, "test-namespace-6")
 				deleteNamespace(ctx, tns1)
 				deleteNamespace(ctx, tns2)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by field selector", func() {
 				By("creating a Deployment with name deployment-frontend")
@@ -2177,7 +2741,7 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by namespace selector and label selector", func() {
 				By("creating a Deployment in test-namespace-7 with the app=frontend label")
@@ -2273,7 +2837,7 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depFrontend4, "test-namespace-8")
 				deleteNamespace(ctx, tns3)
 				deleteNamespace(ctx, tns4)
-			}, serverSideTimeoutSeconds)
+			})
 
 			PIt("should fail if the object doesn't have meta", func() {
 
@@ -2321,7 +2885,7 @@ var _ = Describe("Client", func() {
 					}
 				}
 				Expect(hasDep).To(BeTrue())
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should return an empty list if there are no matching objects", func() {
 				cl, err := client.New(cfg, client.Options{})
@@ -2338,7 +2902,7 @@ var _ = Describe("Client", func() {
 
 				By("validating no Deployments are returned")
 				Expect(metaList.Items).To(BeEmpty())
-			}, serverSideTimeoutSeconds)
+			})
 
 			// TODO(seans): get label selector test working
 			It("should filter results by label selector", func() {
@@ -2404,7 +2968,7 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by namespace selector", func() {
 				By("creating a Deployment in test-namespace-1")
@@ -2468,7 +3032,7 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depBackend, "test-namespace-2")
 				deleteNamespace(ctx, tns1)
 				deleteNamespace(ctx, tns2)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by field selector", func() {
 				By("creating a Deployment with name deployment-frontend")
@@ -2525,7 +3089,7 @@ var _ = Describe("Client", func() {
 
 				deleteDeployment(ctx, depFrontend, ns)
 				deleteDeployment(ctx, depBackend, ns)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results by namespace selector and label selector", func() {
 				By("creating a Deployment in test-namespace-3 with the app=frontend label")
@@ -2623,7 +3187,7 @@ var _ = Describe("Client", func() {
 				deleteDeployment(ctx, depFrontend4, "test-namespace-4")
 				deleteNamespace(ctx, tns3)
 				deleteNamespace(ctx, tns4)
-			}, serverSideTimeoutSeconds)
+			})
 
 			It("should filter results using limit and continue options", func() {
 
@@ -2721,7 +3285,7 @@ var _ = Describe("Client", func() {
 				Expect(metaList.Continue).To(BeEmpty())
 				Expect(metaList.Items[0].Name).To(Equal(dep3.Name))
 				Expect(metaList.Items[1].Name).To(Equal(dep4.Name))
-			}, serverSideTimeoutSeconds)
+			})
 
 			PIt("should fail if the object doesn't have meta", func() {
 
@@ -2837,6 +3401,24 @@ var _ = Describe("Client", func() {
 			deleteOpts := do.AsDeleteOptions()
 			Expect(deleteOpts).NotTo(BeNil())
 			Expect(deleteOpts.GracePeriodSeconds).To(Equal(&gp))
+		})
+	})
+
+	Describe("GetOptions", func() {
+		It("should be convertable to metav1.GetOptions", func() {
+			o := (&client.GetOptions{}).ApplyOptions([]client.GetOption{
+				&client.GetOptions{Raw: &metav1.GetOptions{ResourceVersion: "RV0"}},
+			})
+			mo := o.AsGetOptions()
+			Expect(mo).NotTo(BeNil())
+			Expect(mo.ResourceVersion).To(Equal("RV0"))
+		})
+
+		It("should produce empty metav1.GetOptions if nil", func() {
+			var o *client.GetOptions
+			Expect(o.AsGetOptions()).To(Equal(&metav1.GetOptions{}))
+			o = &client.GetOptions{}
+			Expect(o.AsGetOptions()).To(Equal(&metav1.GetOptions{}))
 		})
 	})
 
@@ -2991,20 +3573,19 @@ var _ = Describe("Client", func() {
 	})
 })
 
-var _ = Describe("DelegatingClient", func() {
+var _ = Describe("ClientWithCache", func() {
 	Describe("Get", func() {
 		It("should call cache reader when structured object", func() {
 			cachedReader := &fakeReader{}
-			cl, err := client.New(cfg, client.Options{})
-			Expect(err).NotTo(HaveOccurred())
-			dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
-				CacheReader: cachedReader,
-				Client:      cl,
+			cl, err := client.New(cfg, client.Options{
+				Cache: &client.CacheOptions{
+					Reader: cachedReader,
+				},
 			})
 			Expect(err).NotTo(HaveOccurred())
 			var actual appsv1.Deployment
 			key := client.ObjectKey{Namespace: "ns", Name: "name"}
-			Expect(dReader.Get(context.TODO(), key, &actual)).To(Succeed())
+			Expect(cl.Get(context.TODO(), key, &actual)).To(Succeed())
 			Expect(1).To(Equal(cachedReader.Called))
 		})
 
@@ -3040,11 +3621,10 @@ var _ = Describe("DelegatingClient", func() {
 			})
 			It("should call client reader when not cached", func() {
 				cachedReader := &fakeReader{}
-				cl, err := client.New(cfg, client.Options{})
-				Expect(err).NotTo(HaveOccurred())
-				dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
-					CacheReader: cachedReader,
-					Client:      cl,
+				cl, err := client.New(cfg, client.Options{
+					Cache: &client.CacheOptions{
+						Reader: cachedReader,
+					},
 				})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -3056,17 +3636,16 @@ var _ = Describe("DelegatingClient", func() {
 				})
 				actual.SetName(dep.Name)
 				key := client.ObjectKey{Namespace: dep.Namespace, Name: dep.Name}
-				Expect(dReader.Get(context.TODO(), key, actual)).To(Succeed())
+				Expect(cl.Get(context.TODO(), key, actual)).To(Succeed())
 				Expect(0).To(Equal(cachedReader.Called))
 			})
 			It("should call cache reader when cached", func() {
 				cachedReader := &fakeReader{}
-				cl, err := client.New(cfg, client.Options{})
-				Expect(err).NotTo(HaveOccurred())
-				dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
-					CacheReader:       cachedReader,
-					Client:            cl,
-					CacheUnstructured: true,
+				cl, err := client.New(cfg, client.Options{
+					Cache: &client.CacheOptions{
+						Reader:       cachedReader,
+						Unstructured: true,
+					},
 				})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -3078,7 +3657,7 @@ var _ = Describe("DelegatingClient", func() {
 				})
 				actual.SetName(dep.Name)
 				key := client.ObjectKey{Namespace: dep.Namespace, Name: dep.Name}
-				Expect(dReader.Get(context.TODO(), key, actual)).To(Succeed())
+				Expect(cl.Get(context.TODO(), key, actual)).To(Succeed())
 				Expect(1).To(Equal(cachedReader.Called))
 			})
 		})
@@ -3086,26 +3665,24 @@ var _ = Describe("DelegatingClient", func() {
 	Describe("List", func() {
 		It("should call cache reader when structured object", func() {
 			cachedReader := &fakeReader{}
-			cl, err := client.New(cfg, client.Options{})
-			Expect(err).NotTo(HaveOccurred())
-			dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
-				CacheReader: cachedReader,
-				Client:      cl,
+			cl, err := client.New(cfg, client.Options{
+				Cache: &client.CacheOptions{
+					Reader: cachedReader,
+				},
 			})
 			Expect(err).NotTo(HaveOccurred())
 			var actual appsv1.DeploymentList
-			Expect(dReader.List(context.Background(), &actual)).To(Succeed())
+			Expect(cl.List(context.Background(), &actual)).To(Succeed())
 			Expect(1).To(Equal(cachedReader.Called))
 		})
 
 		When("listing unstructured objects", func() {
 			It("should call client reader when not cached", func() {
 				cachedReader := &fakeReader{}
-				cl, err := client.New(cfg, client.Options{})
-				Expect(err).NotTo(HaveOccurred())
-				dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
-					CacheReader: cachedReader,
-					Client:      cl,
+				cl, err := client.New(cfg, client.Options{
+					Cache: &client.CacheOptions{
+						Reader: cachedReader,
+					},
 				})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -3115,17 +3692,16 @@ var _ = Describe("DelegatingClient", func() {
 					Kind:    "DeploymentList",
 					Version: "v1",
 				})
-				Expect(dReader.List(context.Background(), actual)).To(Succeed())
+				Expect(cl.List(context.Background(), actual)).To(Succeed())
 				Expect(0).To(Equal(cachedReader.Called))
 			})
 			It("should call cache reader when cached", func() {
 				cachedReader := &fakeReader{}
-				cl, err := client.New(cfg, client.Options{})
-				Expect(err).NotTo(HaveOccurred())
-				dReader, err := client.NewDelegatingClient(client.NewDelegatingClientInput{
-					CacheReader:       cachedReader,
-					Client:            cl,
-					CacheUnstructured: true,
+				cl, err := client.New(cfg, client.Options{
+					Cache: &client.CacheOptions{
+						Reader:       cachedReader,
+						Unstructured: true,
+					},
 				})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -3135,7 +3711,7 @@ var _ = Describe("DelegatingClient", func() {
 					Kind:    "DeploymentList",
 					Version: "v1",
 				})
-				Expect(dReader.List(context.Background(), actual)).To(Succeed())
+				Expect(cl.List(context.Background(), actual)).To(Succeed())
 				Expect(1).To(Equal(cachedReader.Called))
 			})
 		})
@@ -3312,11 +3888,37 @@ var _ = Describe("IgnoreNotFound", func() {
 	})
 })
 
+var _ = Describe("IgnoreAlreadyExists", func() {
+	It("should return nil on a 'AlreadyExists' error", func() {
+		By("creating a AlreadyExists error")
+		err := apierrors.NewAlreadyExists(schema.GroupResource{}, "")
+
+		By("returning no error")
+		Expect(client.IgnoreAlreadyExists(err)).To(Succeed())
+	})
+
+	It("should return the error on a status other than already exists", func() {
+		By("creating a BadRequest error")
+		err := apierrors.NewBadRequest("")
+
+		By("returning an error")
+		Expect(client.IgnoreAlreadyExists(err)).To(HaveOccurred())
+	})
+
+	It("should return the error on a non-status error", func() {
+		By("creating an fmt error")
+		err := fmt.Errorf("arbitrary error")
+
+		By("returning an error")
+		Expect(client.IgnoreAlreadyExists(err)).To(HaveOccurred())
+	})
+})
+
 type fakeReader struct {
 	Called int
 }
 
-func (f *fakeReader) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+func (f *fakeReader) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	f.Called++
 	return nil
 }
@@ -3324,4 +3926,17 @@ func (f *fakeReader) Get(ctx context.Context, key client.ObjectKey, obj client.O
 func (f *fakeReader) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 	f.Called++
 	return nil
+}
+
+func ptr[T any](to T) *T {
+	return &to
+}
+
+func toUnstructured(o client.Object) (*unstructured.Unstructured, error) {
+	serialized, err := json.Marshal(o)
+	if err != nil {
+		return nil, err
+	}
+	u := &unstructured.Unstructured{}
+	return u, json.Unmarshal(serialized, u)
 }

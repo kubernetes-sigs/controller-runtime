@@ -25,6 +25,8 @@ import (
 )
 
 // ControllerManagerConfigurationSpec defines the desired state of GenericControllerManagerConfiguration.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type ControllerManagerConfigurationSpec struct {
 	// SyncPeriod determines the minimum frequency at which watched resources are
 	// reconciled. A lower period will correct entropy more quickly, but reduce
@@ -60,7 +62,7 @@ type ControllerManagerConfigurationSpec struct {
 	// +optional
 	Controller *ControllerConfigurationSpec `json:"controller,omitempty"`
 
-	// Metrics contains thw controller metrics configuration
+	// Metrics contains the controller metrics configuration
 	// +optional
 	Metrics ControllerMetrics `json:"metrics,omitempty"`
 
@@ -75,6 +77,8 @@ type ControllerManagerConfigurationSpec struct {
 
 // ControllerConfigurationSpec defines the global configuration for
 // controllers registered with the manager.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type ControllerConfigurationSpec struct {
 	// GroupKindConcurrency is a map from a Kind to the number of concurrent reconciliation
 	// allowed for that controller.
@@ -94,9 +98,15 @@ type ControllerConfigurationSpec struct {
 	// Defaults to 2 minutes if not set.
 	// +optional
 	CacheSyncTimeout *time.Duration `json:"cacheSyncTimeout,omitempty"`
+
+	// RecoverPanic indicates if panics should be recovered.
+	// +optional
+	RecoverPanic *bool `json:"recoverPanic,omitempty"`
 }
 
 // ControllerMetrics defines the metrics configs.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type ControllerMetrics struct {
 	// BindAddress is the TCP address that the controller should bind to
 	// for serving prometheus metrics.
@@ -106,9 +116,12 @@ type ControllerMetrics struct {
 }
 
 // ControllerHealth defines the health configs.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type ControllerHealth struct {
 	// HealthProbeBindAddress is the TCP address that the controller should bind to
 	// for serving health probes
+	// It can be set to "0" or "" to disable serving the health probe.
 	// +optional
 	HealthProbeBindAddress string `json:"healthProbeBindAddress,omitempty"`
 
@@ -122,6 +135,8 @@ type ControllerHealth struct {
 }
 
 // ControllerWebhook defines the webhook server for the controller.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type ControllerWebhook struct {
 	// Port is the port that the webhook server serves at.
 	// It is used to set webhook.Server.Port.
@@ -144,6 +159,8 @@ type ControllerWebhook struct {
 // +kubebuilder:object:root=true
 
 // ControllerManagerConfiguration is the Schema for the GenericControllerManagerConfigurations API.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 type ControllerManagerConfiguration struct {
 	metav1.TypeMeta `json:",inline"`
 
@@ -152,6 +169,8 @@ type ControllerManagerConfiguration struct {
 }
 
 // Complete returns the configuration for controller-runtime.
+//
+// Deprecated: This package has been deprecated and will be removed in a future release.
 func (c *ControllerManagerConfigurationSpec) Complete() (ControllerManagerConfigurationSpec, error) {
 	return *c, nil
 }

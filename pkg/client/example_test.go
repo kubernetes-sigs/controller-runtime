@@ -53,7 +53,7 @@ func ExampleNew() {
 	}
 }
 
-// This example shows how to use the client with typed and unstructured objects to retrieve a objects.
+// This example shows how to use the client with typed and unstructured objects to retrieve an object.
 func ExampleClient_get() {
 	// Using a typed object.
 	pod := &corev1.Pod{}

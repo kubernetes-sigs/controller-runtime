@@ -17,7 +17,7 @@ limitations under the License.
 package predicate_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -412,7 +412,6 @@ var _ = Describe("Predicate", func() {
 
 	// AnnotationChangedPredicate has almost identical test cases as LabelChangedPredicates,
 	// so the duplication linter should be muted on both two test suites.
-	// nolint:dupl
 	Describe("When checking an AnnotationChangedPredicate", func() {
 		instance := predicate.AnnotationChangedPredicate{}
 		Context("Where the old object is missing", func() {
@@ -611,7 +610,6 @@ var _ = Describe("Predicate", func() {
 
 	// LabelChangedPredicates has almost identical test cases as AnnotationChangedPredicates,
 	// so the duplication linter should be muted on both two test suites.
-	// nolint:dupl
 	Describe("When checking a LabelChangedPredicate", func() {
 		instance := predicate.LabelChangedPredicate{}
 		Context("Where the old object is missing", func() {
@@ -827,6 +825,7 @@ var _ = Describe("Predicate", func() {
 		}
 		passFuncs := funcs(true)
 		failFuncs := funcs(false)
+
 		Describe("When checking an And predicate", func() {
 			It("should return false when one of its predicates returns false", func() {
 				a := predicate.And(passFuncs, failFuncs)
@@ -857,6 +856,22 @@ var _ = Describe("Predicate", func() {
 				Expect(o.Update(event.UpdateEvent{})).To(BeFalse())
 				Expect(o.Delete(event.DeleteEvent{})).To(BeFalse())
 				Expect(o.Generic(event.GenericEvent{})).To(BeFalse())
+			})
+		})
+		Describe("When checking a Not predicate", func() {
+			It("should return false when its predicate returns true", func() {
+				n := predicate.Not(passFuncs)
+				Expect(n.Create(event.CreateEvent{})).To(BeFalse())
+				Expect(n.Update(event.UpdateEvent{})).To(BeFalse())
+				Expect(n.Delete(event.DeleteEvent{})).To(BeFalse())
+				Expect(n.Generic(event.GenericEvent{})).To(BeFalse())
+			})
+			It("should return true when its predicate returns false", func() {
+				n := predicate.Not(failFuncs)
+				Expect(n.Create(event.CreateEvent{})).To(BeTrue())
+				Expect(n.Update(event.UpdateEvent{})).To(BeTrue())
+				Expect(n.Delete(event.DeleteEvent{})).To(BeTrue())
+				Expect(n.Generic(event.GenericEvent{})).To(BeTrue())
 			})
 		})
 	})

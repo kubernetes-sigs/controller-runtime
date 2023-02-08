@@ -103,6 +103,11 @@ get_binaries() {
     linux/mips64le) BINARIES="golangci-lint" ;;
     linux/ppc64le) BINARIES="golangci-lint" ;;
     linux/s390x) BINARIES="golangci-lint" ;;
+    linux/riscv64) BINARIES="golangci-lint" ;;
+    netbsd/386) BINARIES="golangci-lint" ;;
+    netbsd/amd64) BINARIES="golangci-lint" ;;
+    netbsd/armv6) BINARIES="golangci-lint" ;;
+    netbsd/armv7) BINARIES="golangci-lint" ;;
     windows/386) BINARIES="golangci-lint" ;;
     windows/amd64) BINARIES="golangci-lint" ;;
     windows/arm64) BINARIES="golangci-lint" ;;
@@ -209,9 +214,10 @@ log_crit() {
 uname_os() {
   os=$(uname -s | tr '[:upper:]' '[:lower:]')
   case "$os" in
-    cygwin_nt*) os="windows" ;;
+    msys*) os="windows" ;;
     mingw*) os="windows" ;;
-    msys_nt*) os="windows" ;;
+    cygwin*) os="windows" ;;
+    win*) os="windows" ;;
   esac
   echo "$os"
 }
@@ -244,7 +250,7 @@ uname_os_check() {
     solaris) return 0 ;;
     windows) return 0 ;;
   esac
-  log_crit "uname_os_check '$(uname -s)' got converted to '$os' which is not a GOOS value. Please file bug at https://github.com/client9/shlib"
+  log_crit "uname_os_check '$(uname -s)' got converted to '$os' which is not a GOOS value."
   return 1
 }
 uname_arch_check() {
@@ -263,9 +269,10 @@ uname_arch_check() {
     mips64) return 0 ;;
     mips64le) return 0 ;;
     s390x) return 0 ;;
+    riscv64) return 0 ;;
     amd64p32) return 0 ;;
   esac
-  log_crit "uname_arch_check '$(uname -m)' got converted to '$arch' which is not a GOARCH value.  Please file bug report at https://github.com/client9/shlib"
+  log_crit "uname_arch_check '$(uname -m)' got converted to '$arch' which is not a GOARCH value."
   return 1
 }
 untar() {
@@ -327,11 +334,14 @@ http_copy() {
 github_release() {
   owner_repo=$1
   version=$2
-  test -z "$version" && version="latest"
-  giturl="https://github.com/${owner_repo}/releases/${version}"
+  if [ -z "$version" ]; then
+      giturl="https://api.github.com/repos/${owner_repo}/releases/latest"
+  else
+      giturl="https://api.github.com/repos/${owner_repo}/releases/tags/${version}"
+  fi
   json=$(http_copy "$giturl" "Accept:application/json")
   test -z "$json" && return 1
-  version=$(echo "$json" | tr -s '\n' ' ' | sed 's/.*"tag_name":"//' | sed 's/".*//')
+  version=$(echo "$json" | tr -s '\n' ' ' | sed 's/.*"tag_name": "//' | sed 's/".*//')
   test -z "$version" && return 1
   echo "$version"
 }

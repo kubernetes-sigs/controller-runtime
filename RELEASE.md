@@ -13,6 +13,22 @@ to create a new branch you will just need to ensure that all big fixes are cherr
 1. Create a new branch `git checkout -b release-<MAJOR.MINOR>` from master
 2. Push the new branch to the remote repository
 
+### Following semver to create to versioning releases
+
+The releases should follow [semver](https://semver.org/). Following an summary to help you out know the tag version that should be created:
+
+- PATCH versions should only have backwards compatible bug fixes (:bug:). (i.e.: 0.14.1, 0.14.2, 0.15.3)
+- MINOR versions can contain all changes because this project is not an stable API (< `1.0.0`) and no MAJOR releases are not made so far. In this way, any new functionality (:sparkles:) and Breaking Changes (:warning:) will be addressed into MINOR versions. (i.e. 0.15.0, 0.16.0)
+
+**What about backports**
+
+Backport a change for old release versions will result in a PATCH release. Therefore, only bug fixes can be backported (:bug:). Consumers who requires new functionalities can upgrade the version used in their project to use the upper versions always. However, we should not risk introduce breaking changes or regression bugs that could affected those who are updating their project with PATCH releases. 
+
+**What about Kubernetes dependencies updates**
+
+- PATCH Kubernetes releases (i.e. 0.26.1) can be addressed into PATCH release.
+- MINOR Kubernetes releases (i.e. 0.27.0) requires a MINOR release. 
+
 ### Now, let's generate the changelog
 
 1. Create the changelog from the new branch `release-<MAJOR.MINOR>` (`git checkout release-<MAJOR.MINOR>`). 

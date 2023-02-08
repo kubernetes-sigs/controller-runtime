@@ -18,7 +18,7 @@ to create a new branch you will just need to ensure that all big fixes are cherr
 The releases should follow [semver](https://semver.org/). Following an summary to help you out know the tag version that should be created:
 
 - PATCH versions should only have backwards compatible bug fixes (:bug:). (i.e.: 0.14.1, 0.14.2, 0.15.3)
-- MINOR versions can contain all changes because this project is not a stable API (< `1.0.0`) and no MAJOR releases will be made so far. (_Otherwise, if this project were a stable API then breaking changes and not backwards compatible features could only be addressed in MAJOR releases which is not our case._) In this way, any new functionality (:sparkles:) and Breaking Changes (:warning:) will be addressed into MINOR versions. (i.e. 0.15.0, 0.16.0)
+- MINOR versions can contain all changes because this project is not a stable API (< `1.0.0`) and no MAJOR releases will be made so far. (_Otherwise, if this project were a stable API then breaking changes and not backwards compatible features could only be addressed in MAJOR releases which is not our case._) In this way, any new functionality (:sparkles:) and Breaking Changes (:warning:) requires MINOR versions releases to be addressed. (i.e. 0.15.0, 0.16.0)
 
 **What about backports**
 

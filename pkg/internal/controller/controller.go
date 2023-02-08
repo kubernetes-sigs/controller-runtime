@@ -246,7 +246,7 @@ func (c *Controller) Start(ctx context.Context) error {
 // attempt to process it, by calling the reconcileHandler.
 func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 	obj, shutdown := c.Queue.Get()
-	c.Log.V(7).Info("queue get obj", "obj", obj, "shutdown", shutdown)
+	c.GetLogger().V(7).Info("queue get obj", "obj", obj, "shutdown", shutdown)
 	if shutdown {
 		// Stop working
 		return false
@@ -258,7 +258,7 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 	// put back on the workqueue and attempted again after a back-off
 	// period.
 	defer func() {
-		c.Log.V(7).Info("queue done obj", "obj", obj)
+		c.GetLogger().V(7).Info("queue done obj", "obj", obj)
 		c.Queue.Done(obj)
 	}()
 

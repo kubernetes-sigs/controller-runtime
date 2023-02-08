@@ -13,7 +13,7 @@ to create a new branch you will just need to ensure that all big fixes are cherr
 1. Create a new branch `git checkout -b release-<MAJOR.MINOR>` from master
 2. Push the new branch to the remote repository
 
-### Following semver to create to versioning releases
+### Following semver to create new releases
 
 The releases should follow [semver](https://semver.org/). Following an summary to help you out know the tag version that should be created:
 

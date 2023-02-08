@@ -580,14 +580,14 @@ func defaultBaseContext() context.Context {
 	return context.Background()
 }
 
-
 // NewProvider use spec managerBroadcaster to replace cluster's makeBroadcaster.
 func NewProvider(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
 	managerBroadcaster := func() (record.EventBroadcaster, bool) {
 		return record.NewBroadcaster(), true
 	}
-	return intrec.NewProvider(config,httpClient, scheme, logger, managerBroadcaster)
+	return intrec.NewProvider(config, httpClient, scheme, logger, managerBroadcaster)
 }
+
 // setOptionsDefaults set default values for Options fields.
 func setOptionsDefaults(options Options) Options {
 	// Allow newResourceLock to be mocked

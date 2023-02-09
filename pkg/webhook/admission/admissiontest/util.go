@@ -25,86 +25,42 @@ import (
 // It implements the admission.Validator interface and
 // rejects all requests with the same configured error
 // or passes if ErrorToReturn is nil.
+// And it would always return configured warning messages WarningsToReturn.
 type FakeValidator struct {
 	// ErrorToReturn is the error for which the FakeValidator rejects all requests
 	ErrorToReturn error `json:"errorToReturn,omitempty"`
 	// GVKToReturn is the GroupVersionKind that the webhook operates on
 	GVKToReturn schema.GroupVersionKind
+	// WarningsToReturn is the warnings for FakeValidator returns to all requests
+	WarningsToReturn []string
 }
 
-// ValidateCreate implements admission.Validator.
-func (v *FakeValidator) ValidateCreate() error {
-	return v.ErrorToReturn
+func (v *FakeValidator) ValidateCreate() (warnings []string, err error) {
+	return v.WarningsToReturn, v.ErrorToReturn
 }
 
-// ValidateUpdate implements admission.Validator.
-func (v *FakeValidator) ValidateUpdate(old runtime.Object) error {
-	return v.ErrorToReturn
+func (v *FakeValidator) ValidateUpdate(old runtime.Object) (warnings []string, err error) {
+	return v.WarningsToReturn, v.ErrorToReturn
 }
 
-// ValidateDelete implements admission.Validator.
-func (v *FakeValidator) ValidateDelete() error {
-	return v.ErrorToReturn
+func (v *FakeValidator) ValidateDelete() (warnings []string, err error) {
+	return v.WarningsToReturn, v.ErrorToReturn
 }
 
-// GetObjectKind implements admission.Validator.
-func (v *FakeValidator) GetObjectKind() schema.ObjectKind { return v }
-
-// DeepCopyObject implements admission.Validator.
-func (v *FakeValidator) DeepCopyObject() runtime.Object {
-	return &FakeValidator{ErrorToReturn: v.ErrorToReturn, GVKToReturn: v.GVKToReturn}
+func (v *FakeValidator) SetGroupVersionKind(kind schema.GroupVersionKind) {
+	v.GVKToReturn = kind
 }
 
-// GroupVersionKind implements admission.Validator.
 func (v *FakeValidator) GroupVersionKind() schema.GroupVersionKind {
 	return v.GVKToReturn
 }
 
-// SetGroupVersionKind implements admission.Validator.
-func (v *FakeValidator) SetGroupVersionKind(gvk schema.GroupVersionKind) {
-	v.GVKToReturn = gvk
-}
-
-// FakeValidatorWarn provides fake validating webhook functionality for testing
-// It implements the admission.ValidatorWarn interface and
-// rejects all requests with the same configured error
-// or passes if ErrorToReturn is nil.
-// And it would always return configured warning messages WarningsToReturn.
-type FakeValidatorWarn struct {
-	// ErrorToReturn is the error for which the FakeValidatorWarn rejects all requests
-	ErrorToReturn error `json:"ErrorToReturn,omitempty"`
-	// GVKToReturn is the GroupVersionKind that the webhook operates on
-	GVKToReturn schema.GroupVersionKind
-	// WarningsToReturn is the warnings for FakeValidatorWarn returns to all requests
-	WarningsToReturn []string
-}
-
-func (v *FakeValidatorWarn) ValidateCreate() (warnings []string, err error) {
-	return v.WarningsToReturn, v.ErrorToReturn
-}
-
-func (v *FakeValidatorWarn) ValidateUpdate(old runtime.Object) (warnings []string, err error) {
-	return v.WarningsToReturn, v.ErrorToReturn
-}
-
-func (v *FakeValidatorWarn) ValidateDelete() (warnings []string, err error) {
-	return v.WarningsToReturn, v.ErrorToReturn
-}
-
-func (v *FakeValidatorWarn) SetGroupVersionKind(kind schema.GroupVersionKind) {
-	v.GVKToReturn = kind
-}
-
-func (v *FakeValidatorWarn) GroupVersionKind() schema.GroupVersionKind {
-	return v.GVKToReturn
-}
-
-func (v *FakeValidatorWarn) GetObjectKind() schema.ObjectKind {
+func (v *FakeValidator) GetObjectKind() schema.ObjectKind {
 	return v
 }
 
-func (v *FakeValidatorWarn) DeepCopyObject() runtime.Object {
-	return &FakeValidatorWarn{ErrorToReturn: v.ErrorToReturn,
+func (v *FakeValidator) DeepCopyObject() runtime.Object {
+	return &FakeValidator{ErrorToReturn: v.ErrorToReturn,
 		GVKToReturn:      v.GVKToReturn,
 		WarningsToReturn: v.WarningsToReturn,
 	}

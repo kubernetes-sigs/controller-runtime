@@ -19,6 +19,7 @@ package admission
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	v1 "k8s.io/api/admission/v1"
@@ -29,9 +30,9 @@ import (
 // Validator defines functions for validating an operation.
 type Validator interface {
 	runtime.Object
-	ValidateCreate() error
-	ValidateUpdate(old runtime.Object) error
-	ValidateDelete() error
+	ValidateCreate() ([]string, error)
+	ValidateUpdate(old runtime.Object) ([]string, error)
+	ValidateDelete() ([]string, error)
 }
 
 // ValidatingWebhookFor creates a new Webhook for validating the provided type.
@@ -55,28 +56,26 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 		panic("validator should never be nil")
 	}
 
+	ctx = NewContextWithRequest(ctx, req)
+
 	// Get the object in the request
 	obj := h.validator.DeepCopyObject().(Validator)
-	if req.Operation == v1.Create {
-		err := h.decoder.Decode(req, obj)
+
+	var err error
+	var warnings []string
+
+	switch req.Operation {
+	case v1.Create:
+		err = h.decoder.Decode(req, obj)
 		if err != nil {
 			return Errored(http.StatusBadRequest, err)
 		}
 
-		err = obj.ValidateCreate()
-		if err != nil {
-			var apiStatus apierrors.APIStatus
-			if errors.As(err, &apiStatus) {
-				return validationResponseFromStatus(false, apiStatus.Status())
-			}
-			return Denied(err.Error())
-		}
-	}
-
-	if req.Operation == v1.Update {
+		warnings, err = obj.ValidateCreate()
+	case v1.Update:
 		oldObj := obj.DeepCopyObject()
 
-		err := h.decoder.DecodeRaw(req.Object, obj)
+		err = h.decoder.DecodeRaw(req.Object, obj)
 		if err != nil {
 			return Errored(http.StatusBadRequest, err)
 		}
@@ -85,33 +84,26 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 			return Errored(http.StatusBadRequest, err)
 		}
 
-		err = obj.ValidateUpdate(oldObj)
-		if err != nil {
-			var apiStatus apierrors.APIStatus
-			if errors.As(err, &apiStatus) {
-				return validationResponseFromStatus(false, apiStatus.Status())
-			}
-			return Denied(err.Error())
-		}
-	}
-
-	if req.Operation == v1.Delete {
+		warnings, err = obj.ValidateUpdate(oldObj)
+	case v1.Delete:
 		// In reference to PR: https://github.com/kubernetes/kubernetes/pull/76346
 		// OldObject contains the object being deleted
-		err := h.decoder.DecodeRaw(req.OldObject, obj)
+		err = h.decoder.DecodeRaw(req.OldObject, obj)
 		if err != nil {
 			return Errored(http.StatusBadRequest, err)
 		}
 
-		err = obj.ValidateDelete()
-		if err != nil {
-			var apiStatus apierrors.APIStatus
-			if errors.As(err, &apiStatus) {
-				return validationResponseFromStatus(false, apiStatus.Status())
-			}
-			return Denied(err.Error())
-		}
+		warnings, err = obj.ValidateDelete()
+	default:
+		return Errored(http.StatusBadRequest, fmt.Errorf("unknown operation request %q", req.Operation))
 	}
 
-	return Allowed("")
+	if err != nil {
+		var apiStatus apierrors.APIStatus
+		if errors.As(err, &apiStatus) {
+			return validationResponseFromStatus(false, apiStatus.Status())
+		}
+		return Denied(err.Error()).WithWarnings(warnings...)
+	}
+	return Allowed("").WithWarnings(warnings...)
 }

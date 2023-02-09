@@ -29,9 +29,9 @@ import (
 
 // CustomValidator defines functions for validating an operation.
 type CustomValidator interface {
-	ValidateCreate(ctx context.Context, obj runtime.Object) error
-	ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error
-	ValidateDelete(ctx context.Context, obj runtime.Object) error
+	ValidateCreate(ctx context.Context, obj runtime.Object) ([]string, error)
+	ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) ([]string, error)
+	ValidateDelete(ctx context.Context, obj runtime.Object) ([]string, error)
 }
 
 // WithCustomValidator creates a new Webhook for validating the provided type.
@@ -65,6 +65,8 @@ func (h *validatorForType) Handle(ctx context.Context, req Request) Response {
 	obj := h.object.DeepCopyObject()
 
 	var err error
+	var warnings []string
+
 	switch req.Operation {
 	case v1.Connect:
 		// No validation for connect requests.
@@ -74,7 +76,7 @@ func (h *validatorForType) Handle(ctx context.Context, req Request) Response {
 			return Errored(http.StatusBadRequest, err)
 		}
 
-		err = h.validator.ValidateCreate(ctx, obj)
+		warnings, err = h.validator.ValidateCreate(ctx, obj)
 	case v1.Update:
 		oldObj := obj.DeepCopyObject()
 		if err := h.decoder.DecodeRaw(req.Object, obj); err != nil {
@@ -84,7 +86,7 @@ func (h *validatorForType) Handle(ctx context.Context, req Request) Response {
 			return Errored(http.StatusBadRequest, err)
 		}
 
-		err = h.validator.ValidateUpdate(ctx, oldObj, obj)
+		warnings, err = h.validator.ValidateUpdate(ctx, oldObj, obj)
 	case v1.Delete:
 		// In reference to PR: https://github.com/kubernetes/kubernetes/pull/76346
 		// OldObject contains the object being deleted
@@ -92,7 +94,7 @@ func (h *validatorForType) Handle(ctx context.Context, req Request) Response {
 			return Errored(http.StatusBadRequest, err)
 		}
 
-		err = h.validator.ValidateDelete(ctx, obj)
+		warnings, err = h.validator.ValidateDelete(ctx, obj)
 	default:
 		return Errored(http.StatusBadRequest, fmt.Errorf("unknown operation request %q", req.Operation))
 	}
@@ -103,9 +105,9 @@ func (h *validatorForType) Handle(ctx context.Context, req Request) Response {
 		if errors.As(err, &apiStatus) {
 			return validationResponseFromStatus(false, apiStatus.Status())
 		}
-		return Denied(err.Error())
+		return Denied(err.Error()).WithWarnings(warnings...)
 	}
 
 	// Return allowed if everything succeeded.
-	return Allowed("")
+	return Allowed("").WithWarnings(warnings...)
 }

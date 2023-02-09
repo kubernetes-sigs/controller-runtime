@@ -55,9 +55,6 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 	if h.validator == nil {
 		panic("validator should never be nil")
 	}
-
-	ctx = NewContextWithRequest(ctx, req)
-
 	// Get the object in the request
 	obj := h.validator.DeepCopyObject().(Validator)
 
@@ -65,6 +62,9 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 	var warnings []string
 
 	switch req.Operation {
+	case v1.Connect:
+		// No validation for connect requests.
+		// TODO(vincepri): Should we validate CONNECT requests? In what cases?
 	case v1.Create:
 		err = h.decoder.Decode(req, obj)
 		if err != nil {

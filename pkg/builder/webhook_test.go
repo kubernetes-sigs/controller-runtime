@@ -749,39 +749,39 @@ func (*TestValidatorList) DeepCopyObject() runtime.Object   { return nil }
 
 var _ admission.Validator = &TestValidator{}
 
-func (v *TestValidator) ValidateCreate() error {
+func (v *TestValidator) ValidateCreate() ([]string, error) {
 	if v.Panic {
 		panic("fake panic test")
 	}
 	if v.Replica < 0 {
-		return errors.New("number of replica should be greater than or equal to 0")
+		return nil, errors.New("number of replica should be greater than or equal to 0")
 	}
-	return nil
+	return nil, nil
 }
 
-func (v *TestValidator) ValidateUpdate(old runtime.Object) error {
+func (v *TestValidator) ValidateUpdate(old runtime.Object) ([]string, error) {
 	if v.Panic {
 		panic("fake panic test")
 	}
 	if v.Replica < 0 {
-		return errors.New("number of replica should be greater than or equal to 0")
+		return nil, errors.New("number of replica should be greater than or equal to 0")
 	}
 	if oldObj, ok := old.(*TestValidator); !ok {
-		return fmt.Errorf("the old object is expected to be %T", oldObj)
+		return nil, fmt.Errorf("the old object is expected to be %T", oldObj)
 	} else if v.Replica < oldObj.Replica {
-		return fmt.Errorf("new replica %v should not be fewer than old replica %v", v.Replica, oldObj.Replica)
+		return nil, fmt.Errorf("new replica %v should not be fewer than old replica %v", v.Replica, oldObj.Replica)
 	}
-	return nil
+	return nil, nil
 }
 
-func (v *TestValidator) ValidateDelete() error {
+func (v *TestValidator) ValidateDelete() ([]string, error) {
 	if v.Panic {
 		panic("fake panic test")
 	}
 	if v.Replica > 0 {
-		return errors.New("number of replica should be less than or equal to 0 to delete")
+		return nil, errors.New("number of replica should be less than or equal to 0 to delete")
 	}
-	return nil
+	return nil, nil
 }
 
 // TestDefaultValidator.
@@ -824,25 +824,25 @@ func (dv *TestDefaultValidator) Default() {
 
 var _ admission.Validator = &TestDefaultValidator{}
 
-func (dv *TestDefaultValidator) ValidateCreate() error {
+func (dv *TestDefaultValidator) ValidateCreate() ([]string, error) {
 	if dv.Replica < 0 {
-		return errors.New("number of replica should be greater than or equal to 0")
+		return nil, errors.New("number of replica should be greater than or equal to 0")
 	}
-	return nil
+	return nil, nil
 }
 
-func (dv *TestDefaultValidator) ValidateUpdate(old runtime.Object) error {
+func (dv *TestDefaultValidator) ValidateUpdate(old runtime.Object) ([]string, error) {
 	if dv.Replica < 0 {
-		return errors.New("number of replica should be greater than or equal to 0")
+		return nil, errors.New("number of replica should be greater than or equal to 0")
 	}
-	return nil
+	return nil, nil
 }
 
-func (dv *TestDefaultValidator) ValidateDelete() error {
+func (dv *TestDefaultValidator) ValidateDelete() ([]string, error) {
 	if dv.Replica > 0 {
-		return errors.New("number of replica should be less than or equal to 0 to delete")
+		return nil, errors.New("number of replica should be less than or equal to 0 to delete")
 	}
-	return nil
+	return nil, nil
 }
 
 // TestCustomDefaulter.
@@ -872,59 +872,59 @@ var _ admission.CustomDefaulter = &TestCustomDefaulter{}
 
 type TestCustomValidator struct{}
 
-func (*TestCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) error {
+func (*TestCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) ([]string, error) {
 	logf.FromContext(ctx).Info("Validating object")
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
-		return fmt.Errorf("expected admission.Request in ctx: %w", err)
+		return nil, fmt.Errorf("expected admission.Request in ctx: %w", err)
 	}
 	if req.Kind.Kind != testValidatorKind {
-		return fmt.Errorf("expected Kind TestValidator got %q", req.Kind.Kind)
+		return nil, fmt.Errorf("expected Kind TestValidator got %q", req.Kind.Kind)
 	}
 
 	v := obj.(*TestValidator) //nolint:ifshort
 	if v.Replica < 0 {
-		return errors.New("number of replica should be greater than or equal to 0")
+		return nil, errors.New("number of replica should be greater than or equal to 0")
 	}
-	return nil
+	return nil, nil
 }
 
-func (*TestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
+func (*TestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) ([]string, error) {
 	logf.FromContext(ctx).Info("Validating object")
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
-		return fmt.Errorf("expected admission.Request in ctx: %w", err)
+		return nil, fmt.Errorf("expected admission.Request in ctx: %w", err)
 	}
 	if req.Kind.Kind != testValidatorKind {
-		return fmt.Errorf("expected Kind TestValidator got %q", req.Kind.Kind)
+		return nil, fmt.Errorf("expected Kind TestValidator got %q", req.Kind.Kind)
 	}
 
 	v := newObj.(*TestValidator)
 	old := oldObj.(*TestValidator)
 	if v.Replica < 0 {
-		return errors.New("number of replica should be greater than or equal to 0")
+		return nil, errors.New("number of replica should be greater than or equal to 0")
 	}
 	if v.Replica < old.Replica {
-		return fmt.Errorf("new replica %v should not be fewer than old replica %v", v.Replica, old.Replica)
+		return nil, fmt.Errorf("new replica %v should not be fewer than old replica %v", v.Replica, old.Replica)
 	}
-	return nil
+	return nil, nil
 }
 
-func (*TestCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) error {
+func (*TestCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) ([]string, error) {
 	logf.FromContext(ctx).Info("Validating object")
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
-		return fmt.Errorf("expected admission.Request in ctx: %w", err)
+		return nil, fmt.Errorf("expected admission.Request in ctx: %w", err)
 	}
 	if req.Kind.Kind != testValidatorKind {
-		return fmt.Errorf("expected Kind TestValidator got %q", req.Kind.Kind)
+		return nil, fmt.Errorf("expected Kind TestValidator got %q", req.Kind.Kind)
 	}
 
 	v := obj.(*TestValidator) //nolint:ifshort
 	if v.Replica > 0 {
-		return errors.New("number of replica should be less than or equal to 0 to delete")
+		return nil, errors.New("number of replica should be less than or equal to 0 to delete")
 	}
-	return nil
+	return nil, nil
 }
 
 var _ admission.CustomValidator = &TestCustomValidator{}

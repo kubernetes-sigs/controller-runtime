@@ -28,10 +28,23 @@ import (
 )
 
 // CustomValidator defines functions for validating an operation.
+// The object to be validated is passed into methods as a parameter.
 type CustomValidator interface {
-	ValidateCreate(ctx context.Context, obj runtime.Object) ([]string, error)
-	ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) ([]string, error)
-	ValidateDelete(ctx context.Context, obj runtime.Object) ([]string, error)
+
+	// ValidateCreate validates the object on creation.
+	// The optional warnings will be added to the response as warning messages.
+	// Return an error if the object is invalid.
+	ValidateCreate(ctx context.Context, obj runtime.Object) (warnings []string, err error)
+
+	// ValidateUpdate validates the object on update.
+	// The optional warnings will be added to the response as warning messages.
+	// Return an error if the object is invalid.
+	ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (warnings []string, err error)
+
+	// ValidateDelete validates the object on deletion.
+	// The optional warnings will be added to the response as warning messages.
+	// Return an error if the object is invalid.
+	ValidateDelete(ctx context.Context, obj runtime.Object) (warnings []string, err error)
 }
 
 // WithCustomValidator creates a new Webhook for validating the provided type.

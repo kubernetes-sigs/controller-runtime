@@ -148,6 +148,7 @@ var _ = Describe("manger.Manager", func() {
 					LeaderElectionID:        "test-leader-election-id-2",
 					HealthProbeBindAddress:  "0",
 					MetricsBindAddress:      "0",
+					PprofBindAddress:        "0",
 				})
 				Expect(err).To(BeNil())
 
@@ -193,6 +194,7 @@ var _ = Describe("manger.Manager", func() {
 					LeaderElectionID:        "test-leader-election-id-3",
 					HealthProbeBindAddress:  "0",
 					MetricsBindAddress:      "0",
+					PprofBindAddress:        "0",
 				})
 				Expect(err).To(BeNil())
 
@@ -227,6 +229,7 @@ var _ = Describe("manger.Manager", func() {
 					},
 					HealthProbeBindAddress: "0",
 					MetricsBindAddress:     "0",
+					PprofBindAddress:       "0",
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(m1).ToNot(BeNil())
@@ -247,6 +250,7 @@ var _ = Describe("manger.Manager", func() {
 					},
 					HealthProbeBindAddress: "0",
 					MetricsBindAddress:     "0",
+					PprofBindAddress:       "0",
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(m2).ToNot(BeNil())
@@ -1274,6 +1278,99 @@ var _ = Describe("manger.Manager", func() {
 			livenessEndpoint = fmt.Sprint("http://", listener.Addr().String(), path.Join(defaultLivenessEndpoint, namedCheck))
 			res = nil
 			resp, err = http.Get(livenessEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+		})
+	})
+
+	Context("should start serving pprof", func() {
+		var listener net.Listener
+		var opts Options
+
+		BeforeEach(func() {
+			listener = nil
+			opts = Options{
+				newPprofListener: func(addr string) (net.Listener, error) {
+					var err error
+					listener, err = defaultPprofListener(addr)
+					return listener, err
+				},
+			}
+		})
+
+		AfterEach(func() {
+			if listener != nil {
+				listener.Close()
+			}
+		})
+
+		It("should stop serving pprof when stop is called", func() {
+			opts.PprofBindAddress = ":0"
+			m, err := New(cfg, opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(ctx)).NotTo(HaveOccurred())
+			}()
+			<-m.Elected()
+
+			// Check the pprof started
+			endpoint := fmt.Sprintf("http://%s", listener.Addr().String())
+			_, err = http.Get(endpoint)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Shutdown the server
+			cancel()
+
+			// Expect the pprof server to shutdown
+			Eventually(func() error {
+				_, err = http.Get(endpoint)
+				return err
+			}, 10*time.Second).ShouldNot(Succeed())
+		})
+
+		It("should serve pprof endpoints", func() {
+			opts.PprofBindAddress = ":0"
+			m, err := New(cfg, opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(ctx)).NotTo(HaveOccurred())
+			}()
+			<-m.Elected()
+
+			pprofIndexEndpoint := fmt.Sprintf("http://%s/debug/pprof/", listener.Addr().String())
+			resp, err := http.Get(pprofIndexEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			pprofCmdlineEndpoint := fmt.Sprintf("http://%s/debug/pprof/cmdline", listener.Addr().String())
+			resp, err = http.Get(pprofCmdlineEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			pprofProfileEndpoint := fmt.Sprintf("http://%s/debug/pprof/profile", listener.Addr().String())
+			resp, err = http.Get(pprofProfileEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			pprofSymbolEndpoint := fmt.Sprintf("http://%s/debug/pprof/symbol", listener.Addr().String())
+			resp, err = http.Get(pprofSymbolEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			pprofTraceEndpoint := fmt.Sprintf("http://%s/debug/pprof/trace", listener.Addr().String())
+			resp, err = http.Get(pprofTraceEndpoint)
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))

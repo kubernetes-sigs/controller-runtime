@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -105,6 +106,9 @@ type controllerManager struct {
 
 	// Healthz probe handler
 	healthzHandler *healthz.Handler
+
+	// pprofListener is used to serve pprof
+	pprofListener net.Listener
 
 	// controllerConfig are the global controller options.
 	controllerConfig config.Controller
@@ -343,6 +347,24 @@ func (cm *controllerManager) serveHealthProbes() {
 	go cm.httpServe("health probe", cm.logger, server, cm.healthProbeListener)
 }
 
+func (cm *controllerManager) addPprofServer() error {
+	mux := http.NewServeMux()
+	srv := httpserver.New(mux)
+
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	return cm.add(&server{
+		Kind:     "pprof",
+		Log:      cm.logger,
+		Server:   srv,
+		Listener: cm.pprofListener,
+	})
+}
+
 func (cm *controllerManager) httpServe(kind string, log logr.Logger, server *http.Server, ln net.Listener) {
 	log = log.WithValues("kind", kind, "addr", ln.Addr())
 
@@ -438,6 +460,13 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 	// Serve health probes.
 	if cm.healthProbeListener != nil {
 		cm.serveHealthProbes()
+	}
+
+	// Add pprof server
+	if cm.pprofListener != nil {
+		if err := cm.addPprofServer(); err != nil {
+			return fmt.Errorf("failed to add pprof server: %w", err)
+		}
 	}
 
 	// First start any webhook servers, which includes conversion, validation, and defaulting

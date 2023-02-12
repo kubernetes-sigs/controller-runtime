@@ -24,12 +24,22 @@ cd "${REPO_ROOT}"
 header_text "running generate"
 make generate
 
-header_text "running golangci-lint"
-make lint
+# Only run verify-generate in CI, otherwise running generate
+# locally (which is a valid operation) causes `make test` to fail.
+if [[ -n ${CI} ]]; then
+    header_text "verifying generate"
+    make verify-generate
+fi
 
-# Only run module verification in CI, otherwise updating
+header_text "running modules"
+make modules
+
+# Only run verify-modules in CI, otherwise updating
 # go module locally (which is a valid operation) causes `make test` to fail.
 if [[ -n ${CI} ]]; then
     header_text "verifying modules"
-    make modules verify-modules
+    make verify-modules
 fi
+
+header_text "running golangci-lint"
+make lint

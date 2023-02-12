@@ -110,7 +110,7 @@ issues:
   - linters:
     - unparam
     text: always receives
-  # Dot imports for gomega or ginkgo are allowed
+  # Dot imports for gomega and ginkgo are allowed
   # within test files.
   - path: _test\.go
     text: should not use dot imports

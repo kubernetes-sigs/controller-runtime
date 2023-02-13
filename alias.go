@@ -101,7 +101,7 @@ var (
 	// the manager.
 	//
 	// Deprecated: This is deprecated in favor of using Options directly.
-	ConfigFile = cfg.File //nolint:staticcheck
+	ConfigFile = cfg.File
 
 	// NewControllerManagedBy returns a new controller builder that will be started by the provided Manager.
 	NewControllerManagedBy = builder.ControllerManagedBy

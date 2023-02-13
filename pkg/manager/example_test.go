@@ -22,7 +22,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	conf "sigs.k8s.io/controller-runtime/pkg/config" //nolint:staticcheck
+	conf "sigs.k8s.io/controller-runtime/pkg/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -92,7 +92,7 @@ func ExampleManager_start() {
 // using defaults.
 func ExampleOptions_andFrom() {
 	opts := manager.Options{}
-	if _, err := opts.AndFrom(conf.File()); err != nil { //nolint:staticcheck
+	if _, err := opts.AndFrom(conf.File()); err != nil {
 		log.Error(err, "unable to load config")
 		os.Exit(1)
 	}
@@ -120,7 +120,7 @@ func ExampleOptions_andFromOrDie() {
 		os.Exit(1)
 	}
 
-	mgr, err := manager.New(cfg, manager.Options{}.AndFromOrDie(conf.File())) //nolint:staticcheck
+	mgr, err := manager.New(cfg, manager.Options{}.AndFromOrDie(conf.File()))
 	if err != nil {
 		log.Error(err, "unable to set up manager")
 		os.Exit(1)

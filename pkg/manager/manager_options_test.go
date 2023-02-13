@@ -4,10 +4,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"sigs.k8s.io/controller-runtime/pkg/config"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/config"                         //nolint:staticcheck
-	configv1alpha1 "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1" //nolint:staticcheck
+	configv1alpha1 "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 )
 
 var _ = Describe("manager.Options", func() {
@@ -24,7 +25,7 @@ var _ = Describe("manager.Options", func() {
 				o = Options{Scheme: s}
 				c = customConfig{}
 
-				_, err = o.AndFrom(config.File().AtPath("./testdata/custom-config.yaml").OfKind(&c)) //nolint:staticcheck
+				_, err = o.AndFrom(config.File().AtPath("./testdata/custom-config.yaml").OfKind(&c))
 			})
 
 			It("should not panic or fail", func() {

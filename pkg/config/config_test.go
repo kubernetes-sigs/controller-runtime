@@ -19,8 +19,8 @@ package config_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/config"          //nolint:staticcheck
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1" //nolint:staticcheck
+	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 )
 
 var _ = Describe("config", func() {
@@ -33,7 +33,7 @@ var _ = Describe("config", func() {
 		})
 
 		It("should load a config from file", func() {
-			conf := v1alpha1.ControllerManagerConfiguration{} //nolint:staticcheck
+			conf := v1alpha1.ControllerManagerConfiguration{}
 			loader := config.File().AtPath("./testdata/config.yaml").OfKind(&conf)
 			Expect(conf.CacheNamespace).To(Equal(""))
 

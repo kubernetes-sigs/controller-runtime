@@ -1073,6 +1073,50 @@ var _ = Describe("manger.Manager", func() {
 				<-runnableStopped
 			})
 
+			It("should wait forever for runnables if gracefulShutdownTimeout is <0 (-1)", func() {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+				m.(*controllerManager).gracefulShutdownTimeout = time.Duration(-1)
+
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					<-ctx.Done()
+					time.Sleep(100 * time.Millisecond)
+					return nil
+				}))).ToNot(HaveOccurred())
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					<-ctx.Done()
+					time.Sleep(200 * time.Millisecond)
+					return nil
+				}))).ToNot(HaveOccurred())
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					<-ctx.Done()
+					time.Sleep(500 * time.Millisecond)
+					return nil
+				}))).ToNot(HaveOccurred())
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					<-ctx.Done()
+					time.Sleep(1500 * time.Millisecond)
+					return nil
+				}))).ToNot(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				managerStopDone := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+					close(managerStopDone)
+				}()
+				<-m.Elected()
+				cancel()
+
+				beforeDone := time.Now()
+				<-managerStopDone
+				Expect(time.Since(beforeDone)).To(BeNumerically(">=", 1500*time.Millisecond))
+			})
+
 		}
 
 		Context("with defaults", func() {

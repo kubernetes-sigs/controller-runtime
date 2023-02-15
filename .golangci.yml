@@ -92,7 +92,7 @@ issues:
       text: Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
     - linters:
         - staticcheck
-      text: "SA1019: .* The component config package has been deprecated and will be removed in a future release."
+      text: "SA1019: .*The component config package has been deprecated and will be removed in a future release."
     # With Go 1.16, the new embed directive can be used with an un-named import,
     # revive (previously, golint) only allows these to be imported in a main.go, which wouldn't work for us.
     # This directive allows the embed package to be imported with an underscore everywhere.

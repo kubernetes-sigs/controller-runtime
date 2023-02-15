@@ -455,7 +455,12 @@ func New(config *rest.Config, options Options) (Manager, error) {
 // any options already set on Options will be ignored, this is used to allow
 // cli flags to override anything specified in the config file.
 //
-// Deprecated: This function has been deprecated and will be removed in a future release.
+// Deprecated: This function has been deprecated and will be removed in a future release,
+// The Component Configuration package has been unmaintained for over a year and is no longer
+// actively developed. Users should migrate to their own configuration format
+// and configure Manager.Options directly.
+// See https://github.com/kubernetes-sigs/controller-runtime/issues/895
+// for more information, feedback, and comments.
 func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options, error) {
 	newObj, err := loader.Complete()
 	if err != nil {
@@ -515,7 +520,12 @@ func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options,
 
 // AndFromOrDie will use options.AndFrom() and will panic if there are errors.
 //
-// Deprecated: This function has been deprecated and will be removed in a future release.
+// Deprecated: This function has been deprecated and will be removed in a future release,
+// The Component Configuration package has been unmaintained for over a year and is no longer
+// actively developed. Users should migrate to their own configuration format
+// and configure Manager.Options directly.
+// See https://github.com/kubernetes-sigs/controller-runtime/issues/895
+// for more information, feedback, and comments.
 func (o Options) AndFromOrDie(loader config.ControllerManagerConfiguration) Options {
 	o, err := o.AndFrom(loader)
 	if err != nil {

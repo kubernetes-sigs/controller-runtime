@@ -257,11 +257,6 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 	// not call Forget if a transient error occurs, instead the item is
 	// put back on the workqueue and attempted again after a back-off
 	// period.
-	defer func() {
-		c.GetLogger().V(7).Info("queue done obj", "obj", obj)
-		c.Queue.Done(obj)
-	}()
-
 	ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(1)
 	defer ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(-1)
 
@@ -328,7 +323,6 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 		// to result.RequestAfter
 		c.Queue.Forget(obj)
 		c.Queue.AddAfter(req, result.RequeueAfter)
-		log.V(7).Info("queue add req", "req", req, "after", result.RequeueAfter.String())
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeueAfter).Inc()
 	case result.Requeue:
 		c.Queue.AddRateLimited(req)

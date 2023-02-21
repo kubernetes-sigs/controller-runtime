@@ -580,7 +580,8 @@ func defaultBaseContext() context.Context {
 	return context.Background()
 }
 
-// NewProvider use spec managerBroadcaster to replace cluster's makeBroadcaster.
+// NewProvider replace makeBroadcaster to create NewBroadcaster avoid conflict with cluster's makeBroadcaster
+// because manager's provider only used by leader election.
 func NewProvider(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
 	managerBroadcaster := func() (record.EventBroadcaster, bool) {
 		return record.NewBroadcaster(), true

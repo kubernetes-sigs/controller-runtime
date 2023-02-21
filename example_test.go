@@ -24,6 +24,8 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -60,6 +62,54 @@ func Example() {
 		log.Error(err, "could not start manager")
 		os.Exit(1)
 	}
+}
+
+// This example to test event broadcaster to set qps and burst size.
+func ExampleEventBroadcaster() {
+	var examplePod = &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "example",
+			Namespace: "default",
+		},
+	}
+	var log = ctrl.Log.WithName("event-examples")
+	// Controller have two diff recorderProvider
+	// 1.manager will create recorderProvider to resourceLock and push lease event.
+	// 2.cluster also create recorderProvider,when call manager.GetEventRecorderFor,will get the provider.
+	// When use the provider to push event like eventf(),provider will call getBroadcaster and StartEventWatcher.
+	// If use the EventBroadcaster options,the diff recorderProvider's makeBroadcaster func will return same broadcaster point
+	// Then call broadcaster.StartEventWatcher func duplicate,event will dunplicate push.
+	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		LeaderElectionID:        "123456qbcdqe",
+		LeaderElection:          true,
+		LeaderElectionNamespace: "test1",
+		EventBroadcaster: record.NewBroadcasterWithCorrelatorOptions(record.CorrelatorOptions{
+			BurstSize: 50,
+			QPS:       15,
+		}),
+	})
+	if err != nil {
+		log.Error(err, "could not create manager")
+		os.Exit(1)
+	}
+	go func() {
+		for {
+			select {
+			case <-ctrl.SetupSignalHandler().Done():
+				return
+			case <-time.After(time.Second * 10):
+				er := manager.GetEventRecorderFor("event-test")
+				// Like this,will push the same event two times.
+				er.Eventf(examplePod, corev1.EventTypeNormal, "event-test", "EventBroadcaster test")
+				log.V(1).Info("eventf end")
+			}
+		}
+	}()
+	if err := manager.Start(ctrl.SetupSignalHandler()); err != nil {
+		log.Error(err, "could not start manager")
+		os.Exit(1)
+	}
+	log.Info("success")
 }
 
 // This example creates a simple application Controller that is configured for ReplicaSets and Pods.

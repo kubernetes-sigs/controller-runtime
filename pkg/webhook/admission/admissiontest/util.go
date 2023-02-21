@@ -47,8 +47,8 @@ func (v *FakeValidator) ValidateDelete() (warnings []string, err error) {
 	return v.WarningsToReturn, v.ErrorToReturn
 }
 
-func (v *FakeValidator) SetGroupVersionKind(kind schema.GroupVersionKind) {
-	v.GVKToReturn = kind
+func (v *FakeValidator) SetGroupVersionKind(gvk schema.GroupVersionKind) {
+	v.GVKToReturn = gvk
 }
 
 func (v *FakeValidator) GroupVersionKind() schema.GroupVersionKind {
@@ -60,7 +60,8 @@ func (v *FakeValidator) GetObjectKind() schema.ObjectKind {
 }
 
 func (v *FakeValidator) DeepCopyObject() runtime.Object {
-	return &FakeValidator{ErrorToReturn: v.ErrorToReturn,
+	return &FakeValidator{
+		ErrorToReturn:    v.ErrorToReturn,
 		GVKToReturn:      v.GVKToReturn,
 		WarningsToReturn: v.WarningsToReturn,
 	}

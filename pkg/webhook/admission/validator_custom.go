@@ -109,7 +109,7 @@ func (h *validatorForType) Handle(ctx context.Context, req Request) Response {
 
 		warnings, err = h.validator.ValidateDelete(ctx, obj)
 	default:
-		return Errored(http.StatusBadRequest, fmt.Errorf("unknown operation request %q", req.Operation))
+		return Errored(http.StatusBadRequest, fmt.Errorf("unknown operation %q", req.Operation))
 	}
 
 	// Check the error message first.

@@ -80,8 +80,7 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 		// No validation for connect requests.
 		// TODO(vincepri): Should we validate CONNECT requests? In what cases?
 	case v1.Create:
-		err = h.decoder.Decode(req, obj)
-		if err != nil {
+		if err = h.decoder.Decode(req, obj); err != nil {
 			return Errored(http.StatusBadRequest, err)
 		}
 
@@ -109,7 +108,7 @@ func (h *validatingHandler) Handle(ctx context.Context, req Request) Response {
 
 		warnings, err = obj.ValidateDelete()
 	default:
-		return Errored(http.StatusBadRequest, fmt.Errorf("unknown operation request %q", req.Operation))
+		return Errored(http.StatusBadRequest, fmt.Errorf("unknown operation %q", req.Operation))
 	}
 
 	if err != nil {

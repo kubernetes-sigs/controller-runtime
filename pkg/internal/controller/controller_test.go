@@ -126,7 +126,7 @@ var _ = Describe("controller", func() {
 	Describe("Start", func() {
 		It("should return an error if there is an error waiting for the informers", func() {
 			f := false
-			ctrl.startWatches = []watchDescription{{
+			ctrl.startWatches = []*watchDescription{{
 				src: source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}),
 			}}
 			ctrl.Name = "foo"
@@ -144,7 +144,7 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 
-			ctrl.startWatches = []watchDescription{{
+			ctrl.startWatches = []*watchDescription{{
 				src: source.Kind(c, &appsv1.Deployment{}),
 			}}
 			ctrl.Name = "testcontroller"
@@ -161,7 +161,7 @@ var _ = Describe("controller", func() {
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
-			ctrl.startWatches = []watchDescription{{
+			ctrl.startWatches = []*watchDescription{{
 				src: &singnallingSourceWrapper{
 					SyncingSource: source.Kind(c, &appsv1.Deployment{}),
 					cacheSyncDone: sourceSynced,
@@ -189,7 +189,7 @@ var _ = Describe("controller", func() {
 			sourceSynced := make(chan struct{})
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
-			ctrl.startWatches = []watchDescription{{
+			ctrl.startWatches = []*watchDescription{{
 				src: &singnallingSourceWrapper{
 					SyncingSource: source.Kind(c, &appsv1.Deployment{}),
 					cacheSyncDone: sourceSynced,
@@ -232,7 +232,7 @@ var _ = Describe("controller", func() {
 			// send the event to the channel
 			ch <- evt
 
-			ctrl.startWatches = []watchDescription{{
+			ctrl.startWatches = []*watchDescription{{
 				src: ins,
 				handler: handler.Funcs{
 					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
@@ -254,7 +254,7 @@ var _ = Describe("controller", func() {
 			defer cancel()
 
 			ins := &source.Channel{}
-			ctrl.startWatches = []watchDescription{{
+			ctrl.startWatches = []*watchDescription{{
 				src: ins,
 			}}
 

@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -113,5 +114,13 @@ func (ks *Kind) WaitForSync(ctx context.Context) error {
 			return nil
 		}
 		return fmt.Errorf("timed out waiting for cache to be synced for Kind %T", ks.Type)
+	}
+}
+
+// DeepCopyFor implements cluster.AwareDeepCopy[Source].
+func (ks *Kind) DeepCopyFor(c cluster.Cluster) *Kind {
+	return &Kind{
+		Type:  ks.Type,
+		Cache: c.GetCache(),
 	}
 }

@@ -21,9 +21,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/logical-cluster"
 )
 
 var enqueueLog = logf.RuntimeLog.WithName("eventhandler").WithName("EnqueueRequestForObject")
@@ -35,7 +37,9 @@ var _ EventHandler = &EnqueueRequestForObject{}
 // EnqueueRequestForObject enqueues a Request containing the Name and Namespace of the object that is the source of the Event.
 // (e.g. the created / deleted / updated objects Name and Namespace).  handler.EnqueueRequestForObject is used by almost all
 // Controllers that have associated Resources (e.g. CRDs) to reconcile the associated Resource.
-type EnqueueRequestForObject struct{}
+type EnqueueRequestForObject struct {
+	cluster cluster.Cluster
+}
 
 // Create implements EventHandler.
 func (e *EnqueueRequestForObject) Create(ctx context.Context, evt event.CreateEvent, q workqueue.RateLimitingInterface) {
@@ -43,25 +47,43 @@ func (e *EnqueueRequestForObject) Create(ctx context.Context, evt event.CreateEv
 		enqueueLog.Error(nil, "CreateEvent received with no metadata", "event", evt)
 		return
 	}
-	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-		Name:      evt.Object.GetName(),
-		Namespace: evt.Object.GetNamespace(),
-	}})
+	var logicalClusterName logical.Name
+	if e.cluster != nil {
+		logicalClusterName = e.cluster.Name()
+	}
+	q.Add(reconcile.Request{
+		Cluster: logicalClusterName,
+		NamespacedName: types.NamespacedName{
+			Name:      evt.Object.GetName(),
+			Namespace: evt.Object.GetNamespace(),
+		},
+	})
 }
 
 // Update implements EventHandler.
 func (e *EnqueueRequestForObject) Update(ctx context.Context, evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+	var logicalClusterName logical.Name
+	if e.cluster != nil {
+		logicalClusterName = e.cluster.Name()
+	}
+
 	switch {
 	case evt.ObjectNew != nil:
-		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-			Name:      evt.ObjectNew.GetName(),
-			Namespace: evt.ObjectNew.GetNamespace(),
-		}})
+		q.Add(reconcile.Request{
+			Cluster: logicalClusterName,
+			NamespacedName: types.NamespacedName{
+				Name:      evt.ObjectNew.GetName(),
+				Namespace: evt.ObjectNew.GetNamespace(),
+			},
+		})
 	case evt.ObjectOld != nil:
-		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-			Name:      evt.ObjectOld.GetName(),
-			Namespace: evt.ObjectOld.GetNamespace(),
-		}})
+		q.Add(reconcile.Request{
+			Cluster: logicalClusterName,
+			NamespacedName: types.NamespacedName{
+				Name:      evt.ObjectOld.GetName(),
+				Namespace: evt.ObjectOld.GetNamespace(),
+			},
+		})
 	default:
 		enqueueLog.Error(nil, "UpdateEvent received with no metadata", "event", evt)
 	}
@@ -73,10 +95,17 @@ func (e *EnqueueRequestForObject) Delete(ctx context.Context, evt event.DeleteEv
 		enqueueLog.Error(nil, "DeleteEvent received with no metadata", "event", evt)
 		return
 	}
-	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-		Name:      evt.Object.GetName(),
-		Namespace: evt.Object.GetNamespace(),
-	}})
+	var logicalClusterName logical.Name
+	if e.cluster != nil {
+		logicalClusterName = e.cluster.Name()
+	}
+	q.Add(reconcile.Request{
+		Cluster: logicalClusterName,
+		NamespacedName: types.NamespacedName{
+			Name:      evt.Object.GetName(),
+			Namespace: evt.Object.GetNamespace(),
+		},
+	})
 }
 
 // Generic implements EventHandler.
@@ -85,8 +114,20 @@ func (e *EnqueueRequestForObject) Generic(ctx context.Context, evt event.Generic
 		enqueueLog.Error(nil, "GenericEvent received with no metadata", "event", evt)
 		return
 	}
-	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-		Name:      evt.Object.GetName(),
-		Namespace: evt.Object.GetNamespace(),
-	}})
+	var logicalClusterName logical.Name
+	if e.cluster != nil {
+		logicalClusterName = e.cluster.Name()
+	}
+	q.Add(reconcile.Request{
+		Cluster: logicalClusterName,
+		NamespacedName: types.NamespacedName{
+			Name:      evt.Object.GetName(),
+			Namespace: evt.Object.GetNamespace(),
+		},
+	})
+}
+
+// DeepCopyFor implements cluster.AwareDeepCopy[EventHandler].
+func (e *EnqueueRequestForObject) DeepCopyFor(c cluster.Cluster) EventHandler {
+	return &EnqueueRequestForObject{cluster: c}
 }

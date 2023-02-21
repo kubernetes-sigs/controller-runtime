@@ -31,14 +31,50 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/logical-cluster"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 )
 
+// AwareRunnable is an interface that can be implemented by runnable types
+// that are cluster-aware.
+type AwareRunnable interface {
+	// Engage gets called when the runnable should start operations for the given Cluster.
+	// The given context is tied to the Cluster's lifecycle and will be cancelled when the
+	// Cluster is removed or an error occurs.
+	//
+	// Implementers should return an error if they cannot start operations for the given Cluster,
+	// and should ensure this operation is re-entrant and non-blocking.
+	//
+	//	\_________________|)____.---'--`---.____
+	//              ||    \----.________.----/
+	//              ||     / /    `--'
+	//            __||____/ /_
+	//           |___         \
+	//               `--------'
+	Engage(context.Context, Cluster) error
+
+	// Disengage gets called when the runnable should stop operations for the given Cluster.
+	Disengage(context.Context, Cluster) error
+}
+
+// AwareDeepCopy is an interface that can be implemented by types
+// that are cluster-aware, and can return a copy of themselves
+// for a given cluster.
+type AwareDeepCopy[T any] interface {
+	DeepCopyFor(Cluster) T
+}
+
+// LogicalGetterFunc is a function that returns a cluster for a given logical cluster name.
+type LogicalGetterFunc func(context.Context, logical.Name) (Cluster, error)
+
 // Cluster provides various methods to interact with a cluster.
 type Cluster interface {
+	// Name returns the unique logical name of the cluster.
+	Name() logical.Name
+
 	// GetHTTPClient returns an HTTP client that can be used to talk to the apiserver
 	GetHTTPClient() *http.Client
 
@@ -77,6 +113,9 @@ type Cluster interface {
 
 // Options are the possible options that can be configured for a Cluster.
 type Options struct {
+	// Name is the unique name of the cluster.
+	Name logical.Name
+
 	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
 	// Defaults to the kubernetes/client-go scheme.Scheme, but it's almost always better
 	// idea to pass your own scheme in.  See the documentation in pkg/scheme for more information.
@@ -275,6 +314,7 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	}
 
 	return &cluster{
+		name:             options.Name,
 		config:           config,
 		httpClient:       options.HTTPClient,
 		scheme:           options.Scheme,
@@ -340,4 +380,14 @@ func setOptionsDefaults(options Options, config *rest.Config) (Options, error) {
 	}
 
 	return options, nil
+}
+
+// WithName sets the name of the cluster.
+func WithName(name logical.Name) Option {
+	return func(o *Options) {
+		if o.Name != "" {
+			panic("cluster name cannot be set more than once")
+		}
+		o.Name = name
+	}
 }

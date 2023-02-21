@@ -29,9 +29,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
+	"sigs.k8s.io/logical-cluster"
 )
 
 type cluster struct {
+	name logical.Name
+
 	// config is the rest.config used to talk to the apiserver.  Required.
 	config *rest.Config
 
@@ -57,6 +60,10 @@ type cluster struct {
 	// Logger is the logger that should be used by this manager.
 	// If none is set, it defaults to log.Log global logger.
 	logger logr.Logger
+}
+
+func (c *cluster) Name() logical.Name {
+	return c.name
 }
 
 func (c *cluster) GetConfig() *rest.Config {

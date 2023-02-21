@@ -28,6 +28,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	internalsource "sigs.k8s.io/controller-runtime/pkg/internal/source"
@@ -35,10 +36,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/logical-cluster"
 )
 
 // Supporting mocking out functions for testing.
-var newController = controller.New
+var newController = controller.NewUnmanaged
 var getGvk = apiutil.GVKForObject
 
 // project represents other forms that the we can use to
@@ -58,6 +60,8 @@ type Builder struct {
 	ownsInput        []OwnsInput
 	watchesInput     []WatchesInput
 	mgr              manager.Manager
+	cluster          cluster.Cluster
+	logicalName      logical.Name
 	globalPredicates []predicate.Predicate
 	ctrl             controller.Controller
 	ctrlOptions      controller.Options
@@ -66,7 +70,7 @@ type Builder struct {
 
 // ControllerManagedBy returns a new controller builder that will be started by the provided Manager.
 func ControllerManagedBy(m manager.Manager) *Builder {
-	return &Builder{mgr: m}
+	return &Builder{cluster: m, mgr: m}
 }
 
 // ForInput represents the information set by For method.
@@ -135,7 +139,7 @@ type WatchesInput struct {
 // This is the equivalent of calling
 // WatchesRawSource(source.Kind(scheme, object), eventhandler, opts...).
 func (blder *Builder) Watches(object client.Object, eventhandler handler.EventHandler, opts ...WatchesOption) *Builder {
-	src := source.Kind(blder.mgr.GetCache(), object)
+	src := source.Kind(blder.cluster.GetCache(), object)
 	return blder.WatchesRawSource(src, eventhandler, opts...)
 }
 
@@ -228,24 +232,33 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 	if r == nil {
 		return nil, fmt.Errorf("must provide a non-nil Reconciler")
 	}
-	if blder.mgr == nil {
+	if blder.mgr == nil || blder.cluster == nil {
 		return nil, fmt.Errorf("must provide a non-nil Manager")
 	}
 	if blder.forInput.err != nil {
 		return nil, blder.forInput.err
 	}
+	if err := blder.do(r); err != nil {
+		return nil, err
+	}
+	if err := blder.mgr.Add(blder.ctrl); err != nil {
+		return nil, err
+	}
+	return blder.ctrl, nil
+}
 
+func (blder *Builder) do(r reconcile.Reconciler) error {
 	// Set the ControllerManagedBy
 	if err := blder.doController(r); err != nil {
-		return nil, err
+		return err
 	}
 
 	// Set the Watch
 	if err := blder.doWatch(); err != nil {
-		return nil, err
+		return err
 	}
 
-	return blder.ctrl, nil
+	return nil
 }
 
 func (blder *Builder) project(obj client.Object, proj objectProjection) (client.Object, error) {
@@ -254,7 +267,7 @@ func (blder *Builder) project(obj client.Object, proj objectProjection) (client.
 		return obj, nil
 	case projectAsMetadata:
 		metaObj := &metav1.PartialObjectMetadata{}
-		gvk, err := getGvk(obj, blder.mgr.GetScheme())
+		gvk, err := getGvk(obj, blder.cluster.GetScheme())
 		if err != nil {
 			return nil, fmt.Errorf("unable to determine GVK of %T for a metadata-only watch: %w", obj, err)
 		}
@@ -272,7 +285,7 @@ func (blder *Builder) doWatch() error {
 		if err != nil {
 			return err
 		}
-		src := source.Kind(blder.mgr.GetCache(), obj)
+		src := source.Kind(blder.cluster.GetCache(), obj)
 		hdler := &handler.EnqueueRequestForObject{}
 		allPredicates := append(blder.globalPredicates, blder.forInput.predicates...)
 		if err := blder.ctrl.Watch(src, hdler, allPredicates...); err != nil {
@@ -289,13 +302,13 @@ func (blder *Builder) doWatch() error {
 		if err != nil {
 			return err
 		}
-		src := source.Kind(blder.mgr.GetCache(), obj)
+		src := source.Kind(blder.cluster.GetCache(), obj)
 		opts := []handler.OwnerOption{}
 		if !own.matchEveryOwner {
 			opts = append(opts, handler.OnlyControllerOwner())
 		}
 		hdler := handler.EnqueueRequestForOwner(
-			blder.mgr.GetScheme(), blder.mgr.GetRESTMapper(),
+			blder.cluster.GetScheme(), blder.cluster.GetRESTMapper(),
 			blder.forInput.object,
 			opts...,
 		)
@@ -321,6 +334,14 @@ func (blder *Builder) doWatch() error {
 				return err
 			}
 			srckind.Type = typeForSrc
+		} else if !ok {
+			// If we're building a logical controller, raw watches are not allowed
+			// given that the cache cannot be validated to be coming from the same cluter.
+			// In the future, we could consider allowing this by satisfying a new interface
+			// that sets and uses the cluster.
+			if blder.logicalName != "" {
+				return fmt.Errorf("when using a logical adapter, custom raw watches %T are not allowed", w.src)
+			}
 		}
 
 		if err := blder.ctrl.Watch(w.src, w.eventhandler, allPredicates...); err != nil {
@@ -354,7 +375,7 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 	hasGVK := blder.forInput.object != nil
 	if hasGVK {
 		var err error
-		gvk, err = getGvk(blder.forInput.object, blder.mgr.GetScheme())
+		gvk, err = getGvk(blder.forInput.object, blder.cluster.GetScheme())
 		if err != nil {
 			return err
 		}

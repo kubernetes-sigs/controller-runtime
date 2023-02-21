@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/logical-cluster"
 )
 
 // Result contains the result of a Reconciler invocation.
@@ -46,8 +47,21 @@ func (r *Result) IsZero() bool {
 // information to uniquely identify the object - its Name and Namespace.  It does NOT contain information about
 // any specific Event or the object contents itself.
 type Request struct {
+	// Cluster is the logical cluster that the object is in.
+	// The property is only populated when controllers are setup in a fleet manager.
+	// +optional
+	Cluster logical.Name
+
 	// NamespacedName is the name and namespace of the object to reconcile.
 	types.NamespacedName
+}
+
+// String returns the general purpose string representation.
+func (r Request) String() string {
+	if r.Cluster == "" {
+		return r.NamespacedName.String()
+	}
+	return "logical://" + string(r.Cluster) + string(types.Separator) + r.NamespacedName.String()
 }
 
 /*

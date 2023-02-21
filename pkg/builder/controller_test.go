@@ -37,6 +37,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -45,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
+	"sigs.k8s.io/logical-cluster"
 )
 
 type typedNoop struct{}
@@ -77,7 +79,7 @@ func (l *testLogger) WithName(name string) logr.LogSink {
 
 var _ = Describe("application", func() {
 	BeforeEach(func() {
-		newController = controller.New
+		newController = controller.NewUnmanaged
 	})
 
 	noop := reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
@@ -556,6 +558,145 @@ var _ = Describe("application", func() {
 			}).Should(BeTrue())
 		})
 	})
+
+	Context("with logical adapter", func() {
+		It("should support watching across clusters", func() {
+			adapter := &fakeClusterProvider{
+				list: []logical.Name{
+					"cluster1",
+					"cluster2",
+				},
+				watch: make(chan cluster.WatchEvent),
+			}
+			mgr, err := manager.New(cfg, manager.Options{}.WithExperimentalClusterProvider(adapter))
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			By("Starting the manager")
+			go func() {
+				defer GinkgoRecover()
+				Expect(mgr.Start(ctx)).NotTo(HaveOccurred())
+			}()
+
+			cluster1, err := mgr.GetCluster(ctx, "cluster1")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating a custom namespace")
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-multi-cluster-",
+				},
+			}
+			Expect(cluster1.GetClient().Create(ctx, ns)).To(Succeed())
+
+			ch1 := make(chan reconcile.Request, 1)
+			ch2 := make(chan reconcile.Request, 1)
+			Expect(
+				ControllerManagedBy(mgr).
+					For(&appsv1.Deployment{}).
+					Owns(&appsv1.ReplicaSet{}).
+					Complete(reconcile.Func(func(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
+						if req.Namespace != ns.Name {
+							return reconcile.Result{}, nil
+						}
+
+						defer GinkgoRecover()
+						switch req.Cluster {
+						case "cluster1":
+							ch1 <- req
+						case "cluster2":
+							ch2 <- req
+						default:
+							// Do nothing.
+						}
+						return reconcile.Result{}, nil
+					})),
+			).To(Succeed())
+
+			By("Creating a deployment")
+			dep := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deploy-multi-cluster",
+					Namespace: ns.Name,
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(cluster1.GetClient().Create(ctx, dep)).To(Succeed())
+
+			By("Waiting for the Deployment Reconcile on both clusters")
+			Eventually(ch1).Should(Receive(Equal(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      dep.Name,
+					Namespace: dep.Namespace,
+				},
+				Cluster: "cluster1",
+			})))
+			Eventually(ch2).Should(Receive(Equal(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      dep.Name,
+					Namespace: dep.Namespace,
+				},
+				Cluster: "cluster2",
+			})))
+
+			By("Creating a ReplicaSet")
+			// Expect a Reconcile when an Owned object is managedObjects.
+			rs := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: dep.Namespace,
+					Name:      "rs-multi-cluster",
+					Labels:    dep.Spec.Selector.MatchLabels,
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:       dep.Name,
+							Kind:       "Deployment",
+							APIVersion: "apps/v1",
+							Controller: pointer.Bool(true),
+							UID:        dep.UID,
+						},
+					},
+				},
+				Spec: appsv1.ReplicaSetSpec{
+					Selector: dep.Spec.Selector,
+					Template: dep.Spec.Template,
+				},
+			}
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cluster1.GetClient().Create(ctx, rs)).To(Succeed())
+
+			By("Waiting for the Deployment Reconcile on both clusters")
+			Eventually(ch1).Should(Receive(Equal(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      dep.Name,
+					Namespace: dep.Namespace,
+				},
+				Cluster: "cluster1",
+			})))
+			Eventually(ch2).Should(Receive(Equal(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      dep.Name,
+					Namespace: dep.Namespace,
+				},
+				Cluster: "cluster2",
+			})))
+		})
+	})
 })
 
 // newNonTypedOnlyCache returns a new cache that wraps the normal cache,
@@ -695,3 +836,33 @@ type fakeType struct {
 
 func (*fakeType) GetObjectKind() schema.ObjectKind { return nil }
 func (*fakeType) DeepCopyObject() runtime.Object   { return nil }
+
+type fakeClusterProvider struct {
+	list    []logical.Name
+	listErr error
+
+	watch chan cluster.WatchEvent
+}
+
+func (f *fakeClusterProvider) Get(ctx context.Context, name logical.Name, opts ...cluster.Option) (cluster.Cluster, error) {
+	return cluster.New(testenv.Config, opts...)
+}
+
+func (f *fakeClusterProvider) List() ([]logical.Name, error) {
+	return f.list, f.listErr
+}
+
+func (f *fakeClusterProvider) Watch() (cluster.Watcher, error) {
+	return &fakeLogicalWatcher{ch: f.watch}, nil
+}
+
+type fakeLogicalWatcher struct {
+	ch chan cluster.WatchEvent
+}
+
+func (f *fakeLogicalWatcher) Stop() {
+}
+
+func (f *fakeLogicalWatcher) ResultChan() <-chan cluster.WatchEvent {
+	return f.ch
+}

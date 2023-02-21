@@ -21,6 +21,7 @@ import (
 
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -48,6 +49,8 @@ func EnqueueRequestsFromMapFunc(fn MapFunc) EventHandler {
 var _ EventHandler = &enqueueRequestsFromMapFunc{}
 
 type enqueueRequestsFromMapFunc struct {
+	cluster cluster.Cluster
+
 	// Mapper transforms the argument into a slice of keys to be reconciled
 	toRequests MapFunc
 }
@@ -79,10 +82,23 @@ func (e *enqueueRequestsFromMapFunc) Generic(ctx context.Context, evt event.Gene
 
 func (e *enqueueRequestsFromMapFunc) mapAndEnqueue(ctx context.Context, q workqueue.RateLimitingInterface, object client.Object, reqs map[reconcile.Request]empty) {
 	for _, req := range e.toRequests(ctx, object) {
-		_, ok := reqs[req]
-		if !ok {
-			q.Add(req)
-			reqs[req] = empty{}
+		if _, ok := reqs[req]; ok {
+			// reqs is a map of requests to avoid enqueueing the same request multiple times.
+			continue
 		}
+		// If the request doesn't specify a cluster, use the cluster from the context.
+		if req.Cluster == "" && e.cluster != nil {
+			req.Cluster = e.cluster.Name()
+		}
+		// Enqueue the request and track it.
+		q.Add(req)
+		reqs[req] = empty{}
+	}
+}
+
+func (e *enqueueRequestsFromMapFunc) DeepCopyFor(c cluster.Cluster) EventHandler {
+	return &enqueueRequestsFromMapFunc{
+		cluster:    c,
+		toRequests: e.toRequests,
 	}
 }

@@ -112,6 +112,27 @@ var _ = Describe("CertWatcher", func() {
 			ctxCancel()
 			Eventually(doneCh, "4s").Should(BeClosed())
 		})
+		It("should reload currentCert when cert is remove and recreated", func() {
+			doneCh := startWatcher()
+
+			firstcert, _ := watcher.GetCertificate(nil)
+
+			// remove certs from file system
+			os.Remove(certPath)
+			os.Remove(keyPath)
+
+			err := writeCerts(certPath, keyPath, "192.168.0.1")
+			Expect(err).To(BeNil())
+
+			Eventually(func() bool {
+				secondcert, _ := watcher.GetCertificate(nil)
+				first := firstcert.PrivateKey.(*rsa.PrivateKey)
+				return first.Equal(secondcert.PrivateKey)
+			}).ShouldNot(BeTrue())
+
+			ctxCancel()
+			Eventually(doneCh, "4s").Should(BeClosed())
+		})
 
 		Context("prometheus metric read_certificate_total", func() {
 			var readCertificateTotalBefore float64

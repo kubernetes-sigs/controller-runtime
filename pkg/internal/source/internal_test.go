@@ -269,6 +269,7 @@ var _ = Describe("Internal", func() {
 			funcs.DeleteFunc = func(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 				defer GinkgoRecover()
 				Expect(evt.Object).To(Equal(pod))
+				Expect(evt.DeleteStateUnknown).Should(BeTrue())
 			}
 
 			instance.OnDelete(tombstone)

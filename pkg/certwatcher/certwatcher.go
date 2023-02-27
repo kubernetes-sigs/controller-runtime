@@ -117,6 +117,7 @@ func (cw *CertWatcher) Watch() {
 			if !ok {
 				return
 			}
+			fmt.Printf("Get watch event: %v\n", event)
 
 			cw.handleEvent(event)
 

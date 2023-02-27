@@ -41,7 +41,7 @@ import (
 
 var (
 	log               = logf.RuntimeLog.WithName("object-cache")
-	defaultResyncTime = 10 * time.Hour
+	defaultSyncPeriod = 10 * time.Hour
 )
 
 // Cache knows how to load Kubernetes objects, fetch informers to request
@@ -114,11 +114,32 @@ type Options struct {
 	// Mapper is the RESTMapper to use for mapping GroupVersionKinds to Resources
 	Mapper meta.RESTMapper
 
-	// ResyncEvery is the base frequency the informers are resynced.
-	// Defaults to defaultResyncTime.
-	// A 10 percent jitter will be added to the ResyncEvery period between informers
-	// So that all informers will not send list requests simultaneously.
-	ResyncEvery *time.Duration
+	// SyncPeriod determines the minimum frequency at which watched resources are
+	// reconciled. A lower period will correct entropy more quickly, but reduce
+	// responsiveness to change if there are many watched resources. Change this
+	// value only if you know what you are doing. Defaults to 10 hours if unset.
+	// there will a 10 percent jitter between the SyncPeriod of all controllers
+	// so that all controllers will not send list requests simultaneously.
+	//
+	// This applies to all controllers.
+	//
+	// A period sync happens for two reasons:
+	// 1. To insure against a bug in the controller that causes an object to not
+	// be requeued, when it otherwise should be requeued.
+	// 2. To insure against an unknown bug in controller-runtime, or its dependencies,
+	// that causes an object to not be requeued, when it otherwise should be
+	// requeued, or to be removed from the queue, when it otherwise should not
+	// be removed.
+	//
+	// If you want
+	// 1. to insure against missed watch events, or
+	// 2. to poll services that cannot be watched,
+	// then we recommend that, instead of changing the default period, the
+	// controller requeue, with a constant duration `t`, whenever the controller
+	// is "done" with an object, and would otherwise not requeue it, i.e., we
+	// recommend the `Reconcile` function return `reconcile.Result{RequeueAfter: t}`,
+	// instead of `reconcile.Result{}`.
+	SyncPeriod *time.Duration
 
 	// Namespaces restricts the cache's ListWatch to the desired namespaces
 	// Default watches all namespaces
@@ -203,7 +224,7 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 			HTTPClient:   opts.HTTPClient,
 			Scheme:       opts.Scheme,
 			Mapper:       opts.Mapper,
-			ResyncPeriod: *opts.ResyncEvery,
+			ResyncPeriod: *opts.SyncPeriod,
 			Namespace:    opts.Namespaces[0],
 			ByGVK:        byGVK,
 		}),
@@ -243,7 +264,7 @@ func (options Options) inheritFrom(inherited Options) (*Options, error) {
 	)
 	combined.Scheme = combineScheme(inherited.Scheme, options.Scheme)
 	combined.Mapper = selectMapper(inherited.Mapper, options.Mapper)
-	combined.ResyncEvery = selectResync(inherited.ResyncEvery, options.ResyncEvery)
+	combined.SyncPeriod = selectResync(inherited.SyncPeriod, options.SyncPeriod)
 	combined.Namespaces = selectNamespaces(inherited.Namespaces, options.Namespaces)
 	combined.DefaultLabelSelector = combineSelector(
 		internal.Selector{Label: inherited.DefaultLabelSelector},
@@ -416,8 +437,8 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 	}
 
 	// Default the resync period to 10 hours if unset
-	if opts.ResyncEvery == nil {
-		opts.ResyncEvery = &defaultResyncTime
+	if opts.SyncPeriod == nil {
+		opts.SyncPeriod = &defaultSyncPeriod
 	}
 	return opts, nil
 }

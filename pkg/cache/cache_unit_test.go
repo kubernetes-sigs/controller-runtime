@@ -92,20 +92,20 @@ var _ = Describe("cache.inheritFrom", func() {
 	})
 	Context("Resync", func() {
 		It("is nil when specified and inherited are unset", func() {
-			Expect(checkError(specified.inheritFrom(inherited)).ResyncEvery).To(BeNil())
+			Expect(checkError(specified.inheritFrom(inherited)).SyncPeriod).To(BeNil())
 		})
 		It("is unchanged when only specified is set", func() {
-			specified.ResyncEvery = pointer.Duration(time.Second)
-			Expect(checkError(specified.inheritFrom(inherited)).ResyncEvery).To(Equal(specified.ResyncEvery))
+			specified.SyncPeriod = pointer.Duration(time.Second)
+			Expect(checkError(specified.inheritFrom(inherited)).SyncPeriod).To(Equal(specified.SyncPeriod))
 		})
 		It("is inherited when only inherited is set", func() {
-			inherited.ResyncEvery = pointer.Duration(time.Second)
-			Expect(checkError(specified.inheritFrom(inherited)).ResyncEvery).To(Equal(inherited.ResyncEvery))
+			inherited.SyncPeriod = pointer.Duration(time.Second)
+			Expect(checkError(specified.inheritFrom(inherited)).SyncPeriod).To(Equal(inherited.SyncPeriod))
 		})
 		It("is unchanged when both inherited and specified are set", func() {
-			specified.ResyncEvery = pointer.Duration(time.Second)
-			inherited.ResyncEvery = pointer.Duration(time.Minute)
-			Expect(checkError(specified.inheritFrom(inherited)).ResyncEvery).To(Equal(specified.ResyncEvery))
+			specified.SyncPeriod = pointer.Duration(time.Second)
+			inherited.SyncPeriod = pointer.Duration(time.Minute)
+			Expect(checkError(specified.inheritFrom(inherited)).SyncPeriod).To(Equal(specified.SyncPeriod))
 		})
 	})
 	Context("Namespace", func() {

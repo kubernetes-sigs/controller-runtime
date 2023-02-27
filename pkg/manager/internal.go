@@ -18,7 +18,6 @@ package manager
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -126,17 +125,6 @@ type controllerManager struct {
 	// managers, either because it won a leader election or because no leader
 	// election was configured.
 	elected chan struct{}
-
-	// port is the port that the webhook server serves at.
-	port int
-	// host is the hostname that the webhook server binds to.
-	host string
-	// CertDir is the directory that contains the server key and certificate.
-	// if not set, webhook server would look up the server key and certificate in
-	// {TempDir}/k8s-webhook-server/serving-certs
-	certDir string
-	// tlsOpts is used to allow configuring the TLS config used for the webhook server.
-	tlsOpts []func(*tls.Config)
 
 	webhookServer *webhook.Server
 	// webhookServerOnce will be called in GetWebhookServer() to optionally initialize
@@ -288,12 +276,7 @@ func (cm *controllerManager) GetAPIReader() client.Reader {
 func (cm *controllerManager) GetWebhookServer() *webhook.Server {
 	cm.webhookServerOnce.Do(func() {
 		if cm.webhookServer == nil {
-			cm.webhookServer = &webhook.Server{
-				Port:    cm.port,
-				Host:    cm.host,
-				CertDir: cm.certDir,
-				TLSOpts: cm.tlsOpts,
-			}
+			panic("webhook should not be nil")
 		}
 		if err := cm.Add(cm.webhookServer); err != nil {
 			panic(fmt.Sprintf("unable to add webhook server to the controller manager: %s", err))
@@ -509,7 +492,12 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 	//
 	// The shutdown context immediately expires if the gracefulShutdownTimeout is not set.
 	var shutdownCancel context.CancelFunc
-	cm.shutdownCtx, shutdownCancel = context.WithTimeout(context.Background(), cm.gracefulShutdownTimeout)
+	if cm.gracefulShutdownTimeout < 0 {
+		// We want to wait forever for the runnables to stop.
+		cm.shutdownCtx, shutdownCancel = context.WithCancel(context.Background())
+	} else {
+		cm.shutdownCtx, shutdownCancel = context.WithTimeout(context.Background(), cm.gracefulShutdownTimeout)
+	}
 	defer shutdownCancel()
 
 	// Start draining the errors before acquiring the lock to make sure we don't deadlock

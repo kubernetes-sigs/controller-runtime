@@ -24,24 +24,24 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1" //nolint:staticcheck
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 )
 
 // ControllerManagerConfiguration defines the functions necessary to parse a config file
 // and to configure the Options struct for the ctrl.Manager.
 //
-// Deprecated: This package has been deprecated and will be removed in a future release.
+// Deprecated: The component config package has been deprecated and will be removed in a future release. Users should migrate to their own config implementation, please share feedback in https://github.com/kubernetes-sigs/controller-runtime/issues/895.
 type ControllerManagerConfiguration interface {
 	runtime.Object
 
 	// Complete returns the versioned configuration
-	Complete() (v1alpha1.ControllerManagerConfigurationSpec, error) //nolint:staticcheck
+	Complete() (v1alpha1.ControllerManagerConfigurationSpec, error)
 }
 
 // DeferredFileLoader is used to configure the decoder for loading controller
 // runtime component config types.
 //
-// Deprecated: This package has been deprecated and will be removed in a future release.
+// Deprecated: The component config package has been deprecated and will be removed in a future release. Users should migrate to their own config implementation, please share feedback in https://github.com/kubernetes-sigs/controller-runtime/issues/895.
 type DeferredFileLoader struct {
 	ControllerManagerConfiguration
 	path   string
@@ -57,7 +57,7 @@ type DeferredFileLoader struct {
 // * Path: "./config.yaml"
 // * Kind: GenericControllerManagerConfiguration
 //
-// Deprecated: This package has been deprecated and will be removed in a future release.
+// Deprecated: The component config package has been deprecated and will be removed in a future release. Users should migrate to their own config implementation, please share feedback in https://github.com/kubernetes-sigs/controller-runtime/issues/895.
 func File() *DeferredFileLoader {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
@@ -69,10 +69,10 @@ func File() *DeferredFileLoader {
 }
 
 // Complete will use sync.Once to set the scheme.
-func (d *DeferredFileLoader) Complete() (v1alpha1.ControllerManagerConfigurationSpec, error) { //nolint:staticcheck
+func (d *DeferredFileLoader) Complete() (v1alpha1.ControllerManagerConfigurationSpec, error) {
 	d.once.Do(d.loadFile)
 	if d.err != nil {
-		return v1alpha1.ControllerManagerConfigurationSpec{}, d.err //nolint:staticcheck
+		return v1alpha1.ControllerManagerConfigurationSpec{}, d.err
 	}
 	return d.ControllerManagerConfiguration.Complete()
 }

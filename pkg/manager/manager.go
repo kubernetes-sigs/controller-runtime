@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/config"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1" //nolint:staticcheck // TODO: remove this import when v1alpha1 is removed
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
@@ -100,10 +100,44 @@ type Options struct {
 	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources.
 	// Defaults to the kubernetes/client-go scheme.Scheme, but it's almost always better
 	// to pass your own scheme in. See the documentation in pkg/scheme for more information.
+	//
+	// If set, the Scheme will be used to create the default Client and Cache.
 	Scheme *runtime.Scheme
 
-	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs
+	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs.
+	//
+	// If set, the RESTMapper returned by this function is used to create the RESTMapper
+	// used by the Client and Cache.
 	MapperProvider func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error)
+
+	// Cache is the cache.Options that will be used to create the default Cache.
+	// By default, the cache will watch and list requested objects in all namespaces.
+	Cache cache.Options
+
+	// NewCache is the function that will create the cache to be used
+	// by the manager. If not set this will use the default new cache function.
+	//
+	// When using a custom NewCache, the Cache options will be passed to the
+	// NewCache function.
+	//
+	// NOTE: LOW LEVEL PRIMITIVE!
+	// Only use a custom NewCache if you know what you are doing.
+	NewCache cache.NewCacheFunc
+
+	// Client is the client.Options that will be used to create the default Client.
+	// By default, the client will use the cache for reads and direct calls for writes.
+	Client client.Options
+
+	// NewClient is the func that creates the client to be used by the manager.
+	// If not set this will create a Client backed by a Cache for read operations
+	// and a direct Client for write operations.
+	//
+	// When using a custom NewClient, the Client options will be passed to the
+	// NewClient function.
+	//
+	// NOTE: LOW LEVEL PRIMITIVE!
+	// Only use a custom NewClient if you know what you are doing.
+	NewClient client.NewClientFunc
 
 	// SyncPeriod determines the minimum frequency at which watched resources are
 	// reconciled. A lower period will correct entropy more quickly, but reduce
@@ -130,6 +164,8 @@ type Options struct {
 	// is "done" with an object, and would otherwise not requeue it, i.e., we
 	// recommend the `Reconcile` function return `reconcile.Result{RequeueAfter: t}`,
 	// instead of `reconcile.Result{}`.
+	//
+	// Deprecated: Use Cache.SyncPeriod instead.
 	SyncPeriod *time.Duration
 
 	// Logger is the logger that should be used by this manager.
@@ -215,6 +251,8 @@ type Options struct {
 	// Note: If a namespace is specified, controllers can still Watch for a
 	// cluster-scoped resource (e.g Node). For namespaced resources, the cache
 	// will only hold objects from the desired namespace.
+	//
+	// Deprecated: Use Cache.Namespaces instead.
 	Namespace string
 
 	// MetricsBindAddress is the TCP address that the controller should bind to
@@ -235,9 +273,13 @@ type Options struct {
 
 	// Port is the port that the webhook server serves at.
 	// It is used to set webhook.Server.Port if WebhookServer is not set.
+	//
+	// Deprecated: Use WebhookServer.Port instead.
 	Port int
 	// Host is the hostname that the webhook server binds to.
 	// It is used to set webhook.Server.Host if WebhookServer is not set.
+	//
+	// Deprecated: Use WebhookServer.Host instead.
 	Host string
 
 	// CertDir is the directory that contains the server key and certificate.
@@ -245,26 +287,19 @@ type Options struct {
 	// {TempDir}/k8s-webhook-server/serving-certs. The server key and certificate
 	// must be named tls.key and tls.crt, respectively.
 	// It is used to set webhook.Server.CertDir if WebhookServer is not set.
+	//
+	// Deprecated: Use WebhookServer.CertDir instead.
 	CertDir string
 
 	// TLSOpts is used to allow configuring the TLS config used for the webhook server.
+	//
+	// Deprecated: Use WebhookServer.TLSConfig instead.
 	TLSOpts []func(*tls.Config)
 
 	// WebhookServer is an externally configured webhook.Server. By default,
 	// a Manager will create a default server using Port, Host, and CertDir;
 	// if this is set, the Manager will use this server instead.
 	WebhookServer *webhook.Server
-
-	// Functions to allow for a user to customize values that will be injected.
-
-	// NewCache is the function that will create the cache to be used
-	// by the manager. If not set this will use the default new cache function.
-	NewCache cache.NewCacheFunc
-
-	// NewClient is the func that creates the client to be used by the manager.
-	// If not set this will create a Client backed by a Cache for read operations
-	// and a direct Client for write operations.
-	NewClient client.NewClientFunc
 
 	// BaseContext is the function that provides Context values to Runnables
 	// managed by the Manager. If a BaseContext function isn't provided, Runnables
@@ -273,10 +308,14 @@ type Options struct {
 
 	// ClientDisableCacheFor tells the client that, if any cache is used, to bypass it
 	// for the given objects.
+	//
+	// Deprecated: Use Client.Cache.DisableCacheFor instead.
 	ClientDisableCacheFor []client.Object
 
 	// DryRunClient specifies whether the client should be configured to enforce
 	// dryRun mode.
+	//
+	// Deprecated: Use Client.DryRun instead.
 	DryRunClient bool
 
 	// EventBroadcaster records Events emitted by the manager and sends them to the Kubernetes API
@@ -348,12 +387,14 @@ func New(config *rest.Config, options Options) (Manager, error) {
 
 	cluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {
 		clusterOptions.Scheme = options.Scheme
-		clusterOptions.MapperProvider = options.MapperProvider //nolint:staticcheck
+		clusterOptions.MapperProvider = options.MapperProvider
 		clusterOptions.Logger = options.Logger
 		clusterOptions.SyncPeriod = options.SyncPeriod
-		clusterOptions.Namespace = options.Namespace //nolint:staticcheck
 		clusterOptions.NewCache = options.NewCache
 		clusterOptions.NewClient = options.NewClient
+		clusterOptions.Cache = options.Cache
+		clusterOptions.Client = options.Client
+		clusterOptions.Namespace = options.Namespace                         //nolint:staticcheck
 		clusterOptions.ClientDisableCacheFor = options.ClientDisableCacheFor //nolint:staticcheck
 		clusterOptions.DryRunClient = options.DryRunClient                   //nolint:staticcheck
 		clusterOptions.EventBroadcaster = options.EventBroadcaster           //nolint:staticcheck
@@ -432,10 +473,6 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		controllerConfig:              options.Controller,
 		logger:                        options.Logger,
 		elected:                       make(chan struct{}),
-		port:                          options.Port,
-		host:                          options.Host,
-		certDir:                       options.CertDir,
-		tlsOpts:                       options.TLSOpts,
 		webhookServer:                 options.WebhookServer,
 		leaderElectionID:              options.LeaderElectionID,
 		leaseDuration:                 *options.LeaseDuration,
@@ -455,7 +492,12 @@ func New(config *rest.Config, options Options) (Manager, error) {
 // any options already set on Options will be ignored, this is used to allow
 // cli flags to override anything specified in the config file.
 //
-// Deprecated: This function has been deprecated and will be removed in a future release.
+// Deprecated: This function has been deprecated and will be removed in a future release,
+// The Component Configuration package has been unmaintained for over a year and is no longer
+// actively developed. Users should migrate to their own configuration format
+// and configure Manager.Options directly.
+// See https://github.com/kubernetes-sigs/controller-runtime/issues/895
+// for more information, feedback, and comments.
 func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options, error) {
 	newObj, err := loader.Complete()
 	if err != nil {
@@ -491,13 +533,18 @@ func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options,
 	if o.Port == 0 && newObj.Webhook.Port != nil {
 		o.Port = *newObj.Webhook.Port
 	}
-
 	if o.Host == "" && newObj.Webhook.Host != "" {
 		o.Host = newObj.Webhook.Host
 	}
-
 	if o.CertDir == "" && newObj.Webhook.CertDir != "" {
 		o.CertDir = newObj.Webhook.CertDir
+	}
+	if o.WebhookServer == nil {
+		o.WebhookServer = &webhook.Server{
+			Port:    o.Port,
+			Host:    o.Host,
+			CertDir: o.CertDir,
+		}
 	}
 
 	if newObj.Controller != nil {
@@ -515,7 +562,12 @@ func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options,
 
 // AndFromOrDie will use options.AndFrom() and will panic if there are errors.
 //
-// Deprecated: This function has been deprecated and will be removed in a future release.
+// Deprecated: This function has been deprecated and will be removed in a future release,
+// The Component Configuration package has been unmaintained for over a year and is no longer
+// actively developed. Users should migrate to their own configuration format
+// and configure Manager.Options directly.
+// See https://github.com/kubernetes-sigs/controller-runtime/issues/895
+// for more information, feedback, and comments.
 func (o Options) AndFromOrDie(loader config.ControllerManagerConfiguration) Options {
 	o, err := o.AndFrom(loader)
 	if err != nil {
@@ -524,7 +576,7 @@ func (o Options) AndFromOrDie(loader config.ControllerManagerConfiguration) Opti
 	return o
 }
 
-func (o Options) setLeaderElectionConfig(obj v1alpha1.ControllerManagerConfigurationSpec) Options { //nolint:staticcheck
+func (o Options) setLeaderElectionConfig(obj v1alpha1.ControllerManagerConfigurationSpec) Options {
 	if obj.LeaderElection == nil {
 		// The source does not have any configuration; noop
 		return o
@@ -654,6 +706,15 @@ func setOptionsDefaults(options Options) Options {
 
 	if options.BaseContext == nil {
 		options.BaseContext = defaultBaseContext
+	}
+
+	if options.WebhookServer == nil {
+		options.WebhookServer = &webhook.Server{
+			Host:    options.Host,
+			Port:    options.Port,
+			CertDir: options.CertDir,
+			TLSOpts: options.TLSOpts,
+		}
 	}
 
 	return options

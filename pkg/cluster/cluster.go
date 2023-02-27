@@ -83,8 +83,6 @@ type Options struct {
 	Scheme *runtime.Scheme
 
 	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs
-	//
-	// Deprecated: Set Cache.Mapper and Client.Mapper directly instead.
 	MapperProvider func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error)
 
 	// Logger is the logger that should be used by this Cluster.
@@ -210,8 +208,8 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 		if cacheOpts.HTTPClient == nil {
 			cacheOpts.HTTPClient = options.HTTPClient
 		}
-		if cacheOpts.ResyncEvery == nil {
-			cacheOpts.ResyncEvery = options.SyncPeriod
+		if cacheOpts.SyncPeriod == nil {
+			cacheOpts.SyncPeriod = options.SyncPeriod
 		}
 		if len(cacheOpts.Namespaces) == 0 && options.Namespace != "" {
 			cacheOpts.Namespaces = []string{options.Namespace}

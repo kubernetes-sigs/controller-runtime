@@ -37,8 +37,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
@@ -1435,6 +1437,45 @@ var _ = Describe("manger.Manager", func() {
 		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 
+	It("put event with event option", func() {
+
+		m, err := New(cfg, Options{
+			LeaderElectionID:        "123456qbcdqe",
+			LeaderElection:          true,
+			LeaderElectionNamespace: "default",
+			EventBroadcaster: NewFakeEventBroadcaster(record.CorrelatorOptions{
+				BurstSize:            100,
+				QPS:                  15,
+				MaxIntervalInSeconds: 30,
+			}),
+		})
+		Expect(err).NotTo(HaveOccurred())
+		test1 := &corev1.Namespace{}
+		test1.Name = "default"
+
+		By("starting the manager")
+		ctx, cancel := context.WithCancel(context.Background())
+		doneCh := make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			defer close(doneCh)
+			Expect(m.Start(ctx)).To(Succeed())
+		}()
+		<-m.Elected()
+		By("check Duplicate StartRecordingToSink")
+		Expect(func() {
+			recorder := m.GetEventRecorderFor("FakeEventBroadcaster")
+			recorder.Event(test1, "Warning", "FakeEventBroadcaster", "FakeEventBroadcaster")
+		}).NotTo(Panic())
+
+		cancel()
+		<-doneCh
+
+		// force-close keep-alive connections.  These'll time anyway (after
+		// like 30s or so) but force it to speed up the tests.
+		clientTransport.CloseIdleConnections()
+	})
+
 	It("should provide a function to get the Config", func() {
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
@@ -1539,4 +1580,25 @@ func (c *startClusterAfterManager) Start(ctx context.Context) error {
 
 func (c *startClusterAfterManager) GetCache() cache.Cache {
 	return c.informer
+}
+
+type FakeEventBroadcaster struct {
+	once sync.Once
+	record.EventBroadcaster
+}
+
+func (e *FakeEventBroadcaster) StartRecordingToSink(sink record.EventSink) watch.Interface {
+	doingOnce := false
+	e.once.Do(func() {
+		// e.EventBroadcaster.StartRecordingToSink(sink)
+		doingOnce = true
+	})
+	if !doingOnce {
+		panic("doing startRecordingToSink duplicate")
+	}
+	return nil
+}
+
+func NewFakeEventBroadcaster(options record.CorrelatorOptions) *FakeEventBroadcaster {
+	return &FakeEventBroadcaster{EventBroadcaster: record.NewBroadcasterWithCorrelatorOptions(options)}
 }

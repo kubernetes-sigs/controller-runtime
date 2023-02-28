@@ -2194,6 +2194,11 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(deps.Items).NotTo(BeEmpty())
 				hasDep := false
 				for _, item := range deps.Items {
+					Expect(item.GroupVersionKind()).To(Equal(schema.GroupVersionKind{
+						Group:   "apps",
+						Kind:    "Deployment",
+						Version: "v1",
+					}))
 					if item.GetName() == dep.Name && item.GetNamespace() == dep.Namespace {
 						hasDep = true
 						break

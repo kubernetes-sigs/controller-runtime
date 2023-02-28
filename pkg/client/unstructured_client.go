@@ -19,7 +19,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -198,13 +197,9 @@ func (uc *unstructuredClient) Get(ctx context.Context, key ObjectKey, obj Object
 
 // List implements client.Client.
 func (uc *unstructuredClient) List(ctx context.Context, obj ObjectList, opts ...ListOption) error {
-	u, ok := obj.(runtime.Unstructured)
-	if !ok {
+	if _, ok := obj.(runtime.Unstructured); !ok {
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
 	}
-
-	gvk := u.GetObjectKind().GroupVersionKind()
-	gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
 
 	r, err := uc.resources.getResource(obj)
 	if err != nil {

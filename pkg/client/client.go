@@ -363,7 +363,31 @@ func (c *client) List(ctx context.Context, obj ObjectList, opts ...ListOption) e
 
 	switch x := obj.(type) {
 	case runtime.Unstructured:
-		return c.unstructuredClient.List(ctx, obj, opts...)
+		// Call the list client.
+		if err := c.unstructuredClient.List(ctx, obj, opts...); err != nil {
+			return err
+		}
+
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		if !c.scheme.Recognizes(gvk) {
+			// If the scheme doesn't recognize the GVK, it will not be set on
+			// the list items. We can however produce an unsafe guess which
+			// will work for most cases, and eases consumption.
+			itemGVK := schema.GroupVersionKind{
+				Group:   gvk.Group,
+				Version: gvk.Version,
+				// TODO: this is producing unsafe guesses that don't actually work,
+				// but it matches ~99% of the cases out there.
+				Kind: strings.TrimSuffix(gvk.Kind, "List"),
+			}
+			// Restore the GVK for each item in the list.
+			_ = x.EachListItem(func(object runtime.Object) error {
+				object.GetObjectKind().SetGroupVersionKind(itemGVK)
+				return nil
+			})
+		}
+
+		return nil
 	case *metav1.PartialObjectMetadataList:
 		// Metadata only object should always preserve the GVK.
 		gvk := obj.GetObjectKind().GroupVersionKind()

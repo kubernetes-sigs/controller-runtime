@@ -17,14 +17,19 @@ limitations under the License.
 package apiutil_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
 	_ "github.com/onsi/ginkgo/v2"
 	gmg "github.com/onsi/gomega"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
@@ -83,10 +88,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 	t.Run("LazyRESTMapper should fetch data based on the request", func(t *testing.T) {
 		g := gmg.NewWithT(t)
 
-		// To initialize mapper does 2 requests:
-		// GET https://host/api
-		// GET https://host/apis
-		// Then, for each new group it performs just one request to the API server:
+		// For each new group it performs just one request to the API server:
 		// GET https://host/apis/<group>/<version>
 
 		httpClient, err := rest.HTTPClientFor(restCfg)
@@ -101,38 +103,38 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		// There are no requests before any call
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
 
-		mapping, err := lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "deployment"})
+		mapping, err := lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "deployment"}, "v1")
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(mapping.GroupVersionKind.Kind).To(gmg.Equal("deployment"))
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(3))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(1))
 
-		mappings, err := lazyRestMapper.RESTMappings(schema.GroupKind{Group: "", Kind: "pod"})
+		mappings, err := lazyRestMapper.RESTMappings(schema.GroupKind{Group: "", Kind: "pod"}, "v1")
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(len(mappings)).To(gmg.Equal(1))
 		g.Expect(mappings[0].GroupVersionKind.Kind).To(gmg.Equal("pod"))
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(2))
 
 		kind, err := lazyRestMapper.KindFor(schema.GroupVersionResource{Group: "networking.k8s.io", Version: "v1", Resource: "ingresses"})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(kind.Kind).To(gmg.Equal("Ingress"))
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(5))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(3))
 
 		kinds, err := lazyRestMapper.KindsFor(schema.GroupVersionResource{Group: "authentication.k8s.io", Version: "v1", Resource: "tokenreviews"})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(len(kinds)).To(gmg.Equal(1))
 		g.Expect(kinds[0].Kind).To(gmg.Equal("TokenReview"))
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(6))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
 
 		resource, err := lazyRestMapper.ResourceFor(schema.GroupVersionResource{Group: "scheduling.k8s.io", Version: "v1", Resource: "priorityclasses"})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(resource.Resource).To(gmg.Equal("priorityclasses"))
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(7))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(5))
 
 		resources, err := lazyRestMapper.ResourcesFor(schema.GroupVersionResource{Group: "policy", Version: "v1", Resource: "poddisruptionbudgets"})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(len(resources)).To(gmg.Equal(1))
 		g.Expect(resources[0].Resource).To(gmg.Equal("poddisruptionbudgets"))
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(8))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(6))
 	})
 
 	t.Run("LazyRESTMapper should cache fetched data and doesn't perform any additional requests", func(t *testing.T) {
@@ -327,7 +329,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 	t.Run("LazyRESTMapper should return an error if a resource doesn't exist", func(t *testing.T) {
 		g := gmg.NewWithT(t)
 
-		// After initialization for each invalid resource the mapper performs just 1 request to the API server.
+		// For each invalid resource the mapper performs just 1 request to the API server.
 
 		httpClient, err := rest.HTTPClientFor(restCfg)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
@@ -338,29 +340,29 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
-		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "INVALID"})
+		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "INVALID"}, "v1")
 		g.Expect(err).To(gmg.HaveOccurred())
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(3))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(1))
 
-		_, err = lazyRestMapper.RESTMappings(schema.GroupKind{Group: "", Kind: "INVALID"})
+		_, err = lazyRestMapper.RESTMappings(schema.GroupKind{Group: "", Kind: "INVALID"}, "v1")
 		g.Expect(err).To(gmg.HaveOccurred())
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(2))
 
 		_, err = lazyRestMapper.KindFor(schema.GroupVersionResource{Group: "networking.k8s.io", Version: "v1", Resource: "INVALID"})
 		g.Expect(err).To(gmg.HaveOccurred())
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(5))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(3))
 
 		_, err = lazyRestMapper.KindsFor(schema.GroupVersionResource{Group: "authentication.k8s.io", Version: "v1", Resource: "INVALID"})
 		g.Expect(err).To(gmg.HaveOccurred())
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(6))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
 
 		_, err = lazyRestMapper.ResourceFor(schema.GroupVersionResource{Group: "scheduling.k8s.io", Version: "v1", Resource: "INVALID"})
 		g.Expect(err).To(gmg.HaveOccurred())
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(7))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(5))
 
 		_, err = lazyRestMapper.ResourcesFor(schema.GroupVersionResource{Group: "policy", Version: "v1", Resource: "INVALID"})
 		g.Expect(err).To(gmg.HaveOccurred())
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(8))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(6))
 	})
 
 	t.Run("LazyRESTMapper should return an error if the version doesn't exist", func(t *testing.T) {
@@ -400,5 +402,82 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		_, err = lazyRestMapper.ResourcesFor(schema.GroupVersionResource{Group: "policy", Version: "INVALID", Resource: "poddisruptionbudgets"})
 		g.Expect(err).To(gmg.HaveOccurred())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(6))
+	})
+
+	t.Run("LazyRESTMapper can fetch CRDs if they were created at runtime", func(t *testing.T) {
+		g := gmg.NewWithT(t)
+
+		// To fetch all versions mapper does 2 requests:
+		// GET https://host/api
+		// GET https://host/apis
+		// Then, for each version it performs just one request to the API server as usual:
+		// GET https://host/apis/<group>/<version>
+
+		httpClient, err := rest.HTTPClientFor(restCfg)
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+
+		crt := newCountingRoundTripper(httpClient.Transport)
+		httpClient.Transport = crt
+
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient, apiutil.WithExperimentalLazyMapper)
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+
+		// There are no requests before any call
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
+
+		// Since we don't specify what version we expect, restmapper will fetch them all and search there.
+		// To fetch a list of available versions
+		//  #1: GET https://host/api
+		//  #2: GET https://host/apis
+		// Then, for each currently registered version:
+		// 	#3: GET https://host/apis/crew.example.com/v1
+		//	#4: GET https://host/apis/crew.example.com/v2
+		mapping, err := lazyRestMapper.RESTMapping(schema.GroupKind{Group: "crew.example.com", Kind: "driver"})
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+		g.Expect(mapping.GroupVersionKind.Kind).To(gmg.Equal("driver"))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
+
+		s := scheme.Scheme
+		err = apiextensionsv1.AddToScheme(s)
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+
+		c, err := client.New(restCfg, client.Options{Scheme: s})
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+
+		// Register another CRD in runtime - "riders.crew.example.com".
+
+		crd := &apiextensionsv1.CustomResourceDefinition{}
+		err = c.Get(context.TODO(), types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+		g.Expect(crd.Spec.Names.Kind).To(gmg.Equal("Driver"))
+
+		newCRD := &apiextensionsv1.CustomResourceDefinition{}
+		crd.DeepCopyInto(newCRD)
+		newCRD.Name = "riders.crew.example.com"
+		newCRD.Spec.Names = apiextensionsv1.CustomResourceDefinitionNames{
+			Kind:   "Rider",
+			Plural: "riders",
+		}
+		newCRD.ResourceVersion = ""
+
+		// Create the new CRD.
+		g.Expect(c.Create(context.TODO(), newCRD)).To(gmg.Succeed())
+
+		// Wait a bit until the CRD is registered.
+		g.Eventually(func() error {
+			_, err := lazyRestMapper.RESTMapping(schema.GroupKind{Group: "crew.example.com", Kind: "rider"})
+			return err
+		}).Should(gmg.Succeed())
+
+		// Since we don't specify what version we expect, restmapper will fetch them all and search there.
+		// To fetch a list of available versions
+		//  #1: GET https://host/api
+		//  #2: GET https://host/apis
+		// Then, for each currently registered version:
+		// 	#3: GET https://host/apis/crew.example.com/v1
+		//	#4: GET https://host/apis/crew.example.com/v2
+		mapping, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "crew.example.com", Kind: "rider"})
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+		g.Expect(mapping.GroupVersionKind.Kind).To(gmg.Equal("rider"))
 	})
 }

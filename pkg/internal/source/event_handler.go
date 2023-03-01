@@ -133,6 +133,9 @@ func (e *EventHandler) OnDelete(obj interface{}) {
 			return
 		}
 
+		// Set DeleteStateUnknown to true
+		d.DeleteStateUnknown = true
+
 		// Set obj to the tombstone obj
 		obj = tombstone.Obj
 	}

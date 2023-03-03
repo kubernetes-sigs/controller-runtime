@@ -305,42 +305,63 @@ type multiNamespaceInformer struct {
 	namespaceToInformer map[string]Informer
 }
 
+type handlerRegistration struct {
+	handles map[string]toolscache.ResourceEventHandlerRegistration
+}
+
+type syncer interface {
+	HasSynced() bool
+}
+
+// HasSynced asserts that the handler has been called for the full initial state of the informer.
+// This uses syncer to be compatible between client-go 1.27+ and older versions when the interface changed.
+func (h handlerRegistration) HasSynced() bool {
+	for _, reg := range h.handles {
+		if s, ok := reg.(syncer); ok {
+			if !s.HasSynced() {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 var _ Informer = &multiNamespaceInformer{}
 
 // AddEventHandler adds the handler to each namespaced informer.
 func (i *multiNamespaceInformer) AddEventHandler(handler toolscache.ResourceEventHandler) (toolscache.ResourceEventHandlerRegistration, error) {
-	handles := make(map[string]toolscache.ResourceEventHandlerRegistration, len(i.namespaceToInformer))
+	handles := handlerRegistration{handles: make(map[string]toolscache.ResourceEventHandlerRegistration, len(i.namespaceToInformer))}
 	for ns, informer := range i.namespaceToInformer {
 		registration, err := informer.AddEventHandler(handler)
 		if err != nil {
 			return nil, err
 		}
-		handles[ns] = registration
+		handles.handles[ns] = registration
 	}
 	return handles, nil
 }
 
 // AddEventHandlerWithResyncPeriod adds the handler with a resync period to each namespaced informer.
 func (i *multiNamespaceInformer) AddEventHandlerWithResyncPeriod(handler toolscache.ResourceEventHandler, resyncPeriod time.Duration) (toolscache.ResourceEventHandlerRegistration, error) {
-	handles := make(map[string]toolscache.ResourceEventHandlerRegistration, len(i.namespaceToInformer))
+	handles := handlerRegistration{handles: make(map[string]toolscache.ResourceEventHandlerRegistration, len(i.namespaceToInformer))}
 	for ns, informer := range i.namespaceToInformer {
 		registration, err := informer.AddEventHandlerWithResyncPeriod(handler, resyncPeriod)
 		if err != nil {
 			return nil, err
 		}
-		handles[ns] = registration
+		handles.handles[ns] = registration
 	}
 	return handles, nil
 }
 
 // RemoveEventHandler removes a formerly added event handler given by its registration handle.
 func (i *multiNamespaceInformer) RemoveEventHandler(h toolscache.ResourceEventHandlerRegistration) error {
-	handles, ok := h.(map[string]toolscache.ResourceEventHandlerRegistration)
+	handles, ok := h.(handlerRegistration)
 	if !ok {
 		return fmt.Errorf("it is not the registration returned by multiNamespaceInformer")
 	}
 	for ns, informer := range i.namespaceToInformer {
-		registration, ok := handles[ns]
+		registration, ok := handles.handles[ns]
 		if !ok {
 			continue
 		}

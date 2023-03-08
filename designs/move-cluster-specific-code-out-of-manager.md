@@ -159,30 +159,47 @@ secret found in `referenceCluster` if none of that name already exists. To keep 
 short, it won't compare the contents of the secrets.
 
 ```go
+import (
+	"context"
+
+	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
+
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
+)
+
 type secretMirrorReconciler struct {
 	referenceClusterClient, mirrorClusterClient client.Client
 }
 
-func (r *secretMirrorReconciler) Reconcile(r reconcile.Request)(reconcile.Result, error){
+func (r *secretMirrorReconciler) Reconcile(context context.Context, req reconcile.Request)(reconcile.Result, error){
 	s := &corev1.Secret{}
-	if err := r.referenceClusterClient.Get(context.TODO(), r.NamespacedName, s); err != nil {
-		if kerrors.IsNotFound{ return reconcile.Result{}, nil }
-		return reconcile.Result, err
+	if err := r.referenceClusterClient.Get(context.TODO(), req.NamespacedName, s); err != nil {
+		if kerrors.IsNotFound(err) {
+			return reconcile.Result{}, nil
+		}
+		return reconcile.Result{}, err
 	}
 
-	if err := r.mirrorClusterClient.Get(context.TODO(), r.NamespacedName, &corev1.Secret); err != nil {
+	if err := r.mirrorClusterClient.Get(context.TODO(), req.NamespacedName, &corev1.Secret); err != nil {
 		if !kerrors.IsNotFound(err) {
 			return reconcile.Result{}, err
 		}
-
-		mirrorSecret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Namespace: s.Namespace, Name: s.Name},
-			Data: s.Data,
-		}
-		return reconcile.Result{}, r.mirrorClusterClient.Create(context.TODO(), mirrorSecret)
 	}
 
-	return nil
+	mirrorSecret := &corev1.Secret {
+		ObjectMeta: metav1.ObjectMeta{Namespace: s.Namespace, Name: s.Name},
+		Data: s.Data,
+	}
+	return reconcile.Result{}, r.mirrorClusterClient.Create(context.TODO(), mirrorSecret)
 }
 
 func NewSecretMirrorReconciler(mgr manager.Manager, mirrorCluster cluster.Cluster) error {
@@ -198,13 +215,12 @@ func NewSecretMirrorReconciler(mgr manager.Manager, mirrorCluster cluster.Cluste
 			referenceClusterClient: mgr.GetClient(),
 			mirrorClusterClient:    mirrorCluster.GetClient(),
 		})
-	}
 }
 
 func main(){
 
-	mgr, err := manager.New( cfg1, manager.Options{})
-	if err != nil {
+	mgr, err := manager.New(cfg1, manager.Options{})
+	if err != nil
 		panic(err)
 	}
 

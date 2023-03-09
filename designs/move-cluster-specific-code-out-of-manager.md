@@ -193,13 +193,15 @@ func (r *secretMirrorReconciler) Reconcile(context context.Context, req reconcil
 		if !kerrors.IsNotFound(err) {
 			return reconcile.Result{}, err
 		}
+
+		mirrorSecret := &corev1.Secret {
+			ObjectMeta: metav1.ObjectMeta{Namespace: s.Namespace, Name: s.Name},
+			Data: s.Data,
+		}
+		return reconcile.Result{}, r.mirrorClusterClient.Create(context.TODO(), mirrorSecret)
 	}
 
-	mirrorSecret := &corev1.Secret {
-		ObjectMeta: metav1.ObjectMeta{Namespace: s.Namespace, Name: s.Name},
-		Data: s.Data,
-	}
-	return reconcile.Result{}, r.mirrorClusterClient.Create(context.TODO(), mirrorSecret)
+	return reconcile.Result{}, nil
 }
 
 func NewSecretMirrorReconciler(mgr manager.Manager, mirrorCluster cluster.Cluster) error {

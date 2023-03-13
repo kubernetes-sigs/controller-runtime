@@ -194,16 +194,18 @@ type ByObject struct {
 
 // New initializes and returns a new Cache.
 func New(config *rest.Config, opts Options) (Cache, error) {
-	opts, err := defaultOpts(config, opts)
-	if err != nil {
-		return nil, err
-	}
 	if len(opts.Namespaces) == 0 {
 		opts.Namespaces = []string{metav1.NamespaceAll}
 	}
 	if len(opts.Namespaces) > 1 {
 		return newMultiNamespaceCache(config, opts)
 	}
+
+	opts, err := defaultOpts(config, opts)
+	if err != nil {
+		return nil, err
+	}
+
 	byGVK, err := convertToInformerOptsByGVK(opts.ByObject, opts.Scheme)
 	if err != nil {
 		return nil, err

@@ -180,16 +180,16 @@ type secretMirrorReconciler struct {
 	referenceClusterClient, mirrorClusterClient client.Client
 }
 
-func (r *secretMirrorReconciler) Reconcile(context context.Context, req reconcile.Request)(reconcile.Result, error){
+func (r *secretMirrorReconciler) Reconcile(ctx context.Context, req reconcile.Request)(reconcile.Result, error){
 	s := &corev1.Secret{}
-	if err := r.referenceClusterClient.Get(context.TODO(), req.NamespacedName, s); err != nil {
+	if err := r.referenceClusterClient.Get(ctx, req.NamespacedName, s); err != nil {
 		if kerrors.IsNotFound(err) {
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, err
 	}
 
-	if err := r.mirrorClusterClient.Get(context.TODO(), req.NamespacedName, &corev1.Secret); err != nil {
+	if err := r.mirrorClusterClient.Get(ctx, req.NamespacedName, &corev1.Secret); err != nil {
 		if !kerrors.IsNotFound(err) {
 			return reconcile.Result{}, err
 		}
@@ -198,7 +198,7 @@ func (r *secretMirrorReconciler) Reconcile(context context.Context, req reconcil
 			ObjectMeta: metav1.ObjectMeta{Namespace: s.Namespace, Name: s.Name},
 			Data: s.Data,
 		}
-		return reconcile.Result{}, r.mirrorClusterClient.Create(context.TODO(), mirrorSecret)
+		return reconcile.Result{}, r.mirrorClusterClient.Create(ctx, mirrorSecret)
 	}
 
 	return reconcile.Result{}, nil

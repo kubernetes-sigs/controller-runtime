@@ -288,6 +288,12 @@ func (options Options) inheritFrom(inherited Options) (*Options, error) {
 }
 
 func combineScheme(inherited *runtime.Scheme, new *runtime.Scheme) *runtime.Scheme {
+	if inherited == nil {
+		return new
+	}
+	if new == nil {
+		return inherited
+	}
 	for gvk, t := range new.AllKnownTypes() {
 		inherited.AddKnownTypeWithName(gvk, reflect.New(t).Interface().(runtime.Object))
 	}

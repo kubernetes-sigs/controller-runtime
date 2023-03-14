@@ -287,20 +287,11 @@ func (options Options) inheritFrom(inherited Options) (*Options, error) {
 	return &combined, nil
 }
 
-func combineScheme(schemes ...*runtime.Scheme) *runtime.Scheme {
-	var out *runtime.Scheme
-	for _, sch := range schemes {
-		if sch == nil {
-			continue
-		}
-		for gvk, t := range sch.AllKnownTypes() {
-			if out == nil {
-				out = runtime.NewScheme()
-			}
-			out.AddKnownTypeWithName(gvk, reflect.New(t).Interface().(runtime.Object))
-		}
+func combineScheme(inherited *runtime.Scheme, new *runtime.Scheme) *runtime.Scheme {
+	for gvk, t := range new.AllKnownTypes() {
+		inherited.AddKnownTypeWithName(gvk, reflect.New(t).Interface().(runtime.Object))
 	}
-	return out
+	return inherited
 }
 
 func selectMapper(def, override meta.RESTMapper) meta.RESTMapper {

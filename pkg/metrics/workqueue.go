@@ -95,8 +95,18 @@ func init() {
 	Registry.MustRegister(unfinished)
 	Registry.MustRegister(longestRunningProcessor)
 	Registry.MustRegister(retries)
+}
 
-	workqueue.SetProvider(workqueueMetricsProvider{})
+// SetDefaultGlobalWorkqueueMetricsProvider registers the GlobalWorkqueueMetricsProvider
+// as the global workqueue.MetricsProvider.
+func SetDefaultGlobalWorkqueueMetricsProvider() {
+	workqueue.SetProvider(GlobalWorkqueueMetricsProvider())
+}
+
+// GlobalWorkqueueMetricsProvider constructs a workqueue.MetricsProvider
+// that registers metrics in the global Registry.
+func GlobalWorkqueueMetricsProvider() workqueue.MetricsProvider {
+	return workqueueMetricsProvider{}
 }
 
 type workqueueMetricsProvider struct{}

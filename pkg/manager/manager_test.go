@@ -38,11 +38,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 
 	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/examples/crd/pkg"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -1154,6 +1156,45 @@ var _ = Describe("manger.Manager", func() {
 					cm.onStoppedLeading = func() {}
 				},
 			)
+		})
+
+		Context("with custom object selector", func() {
+			It("created with BuilderWithOptions and scheme added to manager", func() {
+				opts := Options{
+					NewCache: cache.BuilderWithOptions(cache.Options{
+						ByObject: map[client.Object]cache.ByObject{
+							&corev1.Pod{}: {
+								Label: labels.SelectorFromSet(labels.Set{
+									"test-label": "true",
+								}),
+							},
+						},
+					}),
+				}
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				var wgRunnableStarted sync.WaitGroup
+				wgRunnableStarted.Add(1)
+				Expect(m.Add(RunnableFunc(func(context.Context) error {
+					defer GinkgoRecover()
+					wgRunnableStarted.Done()
+					return nil
+				}))).To(Succeed())
+
+				Expect(pkg.AddToScheme(m.GetScheme())).NotTo(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Elected()).ShouldNot(BeClosed())
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+				}()
+
+				<-m.Elected()
+				wgRunnableStarted.Wait()
+			})
 		})
 
 		Context("should start serving metrics", func() {

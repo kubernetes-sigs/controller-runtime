@@ -32,8 +32,6 @@ import (
 
 var log = logf.RuntimeLog.WithName("source").WithName("EventHandler")
 
-var _ cache.ResourceEventHandler = &EventHandler{}
-
 // NewEventHandler creates a new EventHandler.
 func NewEventHandler(ctx context.Context, queue workqueue.RateLimitingInterface, handler handler.EventHandler, predicates []predicate.Predicate) *EventHandler {
 	return &EventHandler{
@@ -53,6 +51,16 @@ type EventHandler struct {
 	handler    handler.EventHandler
 	queue      workqueue.RateLimitingInterface
 	predicates []predicate.Predicate
+}
+
+// HandlerFuncs converts EventHandler to a ResourceEventHandlerFuncs
+// TODO: switch to ResourceEventHandlerDetailedFuncs with client-go 1.27
+func (e *EventHandler) HandlerFuncs() cache.ResourceEventHandlerFuncs {
+	return cache.ResourceEventHandlerFuncs{
+		AddFunc:    e.OnAdd,
+		UpdateFunc: e.OnUpdate,
+		DeleteFunc: e.OnDelete,
+	}
 }
 
 // OnAdd creates CreateEvent and calls Create on EventHandler.

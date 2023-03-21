@@ -187,11 +187,6 @@ func (s *Store) Add(ctx context.Context, item Item, contents io.Reader) (resErr 
 	}
 	log.V(1).Info("unpacked archive")
 
-	log.V(1).Info("switching version-platform directory to read-only")
-	if err := itemPath.Chmod("", 0555); err != nil {
-		// don't bail, this isn't fatal
-		log.Error(err, "unable to make version-platform directory read-only")
-	}
 	return nil
 }
 

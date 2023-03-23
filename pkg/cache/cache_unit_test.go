@@ -126,6 +126,23 @@ var _ = Describe("cache.inheritFrom", func() {
 			Expect(checkError(specified.inheritFrom(inherited)).Namespaces).To(Equal(specified.Namespaces))
 		})
 	})
+	Context("ByObject", func() {
+		It("maintains GVKs of unstructured ByObject keys", func() {
+			gvk := gv.WithKind("Unstructured")
+			obj := &unstructured.Unstructured{}
+			obj.SetGroupVersionKind(gvk)
+			specified.Scheme = coreScheme
+			specified.Scheme.AddKnownTypeWithName(gvk, obj)
+			specified.ByObject = map[client.Object]ByObject{
+				obj: {},
+			}
+			byObject := checkError(specified.inheritFrom(inherited)).ByObject
+			Expect(byObject).To(HaveLen(1))
+			for obj := range byObject {
+				Expect(obj.GetObjectKind().GroupVersionKind()).To(Equal(gvk))
+			}
+		})
+	})
 	Context("SelectorsByObject", func() {
 		It("is unchanged when specified and inherited are unset", func() {
 			Expect(checkError(specified.inheritFrom(inherited)).ByObject).To(HaveLen(0))

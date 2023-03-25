@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -51,6 +52,7 @@ func EnqueueRequestForOwner(scheme *runtime.Scheme, mapper meta.RESTMapper, owne
 	e := &enqueueRequestForOwner{
 		ownerType: ownerType,
 		mapper:    mapper,
+		scheme:    scheme,
 	}
 	if err := e.parseOwnerTypeGroupKind(scheme); err != nil {
 		panic(err)
@@ -80,6 +82,9 @@ type enqueueRequestForOwner struct {
 
 	// mapper maps GroupVersionKinds to Resources
 	mapper meta.RESTMapper
+
+	// scheme is used to get the GroupVersionKind of the object
+	scheme *runtime.Scheme
 }
 
 // Create implements EventHandler.
@@ -122,26 +127,25 @@ func (e *enqueueRequestForOwner) Generic(ctx context.Context, evt event.GenericE
 // parseOwnerTypeGroupKind parses the OwnerType into a Group and Kind and caches the result.  Returns false
 // if the OwnerType could not be parsed using the scheme.
 func (e *enqueueRequestForOwner) parseOwnerTypeGroupKind(scheme *runtime.Scheme) error {
-	// Get the kinds of the type
-	kinds, _, err := scheme.ObjectKinds(e.ownerType)
+	gvk, err := apiutil.GVKForObject(e.ownerType, scheme)
 	if err != nil {
-		log.Error(err, "Could not get ObjectKinds for OwnerType", "owner type", fmt.Sprintf("%T", e.ownerType))
+		log.Error(err, "Could not get GVK for OwnerType", "owner type", fmt.Sprintf("%T", e.ownerType))
 		return err
 	}
-	// Expect only 1 kind.  If there is more than one kind this is probably an edge case such as ListOptions.
-	if len(kinds) != 1 {
-		err := fmt.Errorf("expected exactly 1 kind for OwnerType %T, but found %s kinds", e.ownerType, kinds)
-		log.Error(nil, "expected exactly 1 kind for OwnerType", "owner type", fmt.Sprintf("%T", e.ownerType), "kinds", kinds)
-		return err
-	}
+
 	// Cache the Group and Kind for the OwnerType
-	e.groupKind = schema.GroupKind{Group: kinds[0].Group, Kind: kinds[0].Kind}
+	e.groupKind = gvk.GroupKind()
 	return nil
 }
 
 // getOwnerReconcileRequest looks at object and builds a map of reconcile.Request to reconcile
 // owners of object that match e.OwnerType.
-func (e *enqueueRequestForOwner) getOwnerReconcileRequest(object metav1.Object, result map[reconcile.Request]empty) {
+func (e *enqueueRequestForOwner) getOwnerReconcileRequest(object client.Object, result map[reconcile.Request]empty) {
+	objectGvk, err := apiutil.GVKForObject(object, e.scheme)
+	if err != nil {
+		log.Error(err, "Could not get GVK for Object", "object Type", fmt.Sprintf("%T", object))
+	}
+
 	// Iterate through the OwnerReferences looking for a match on Group and Kind against what was requested
 	// by the user
 	for _, ref := range e.getOwnersReferences(object) {
@@ -159,9 +163,18 @@ func (e *enqueueRequestForOwner) getOwnerReconcileRequest(object metav1.Object, 
 		// object in the event.
 		if ref.Kind == e.groupKind.Kind && refGV.Group == e.groupKind.Group {
 			// Match found - add a Request for the object referred to in the OwnerReference
-			request := reconcile.Request{NamespacedName: types.NamespacedName{
-				Name: ref.Name,
-			}}
+			request := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name: ref.Name,
+				},
+				Source: &reconcile.RequestSource{
+					GroupVersionKind: objectGvk,
+					NamespacedName: types.NamespacedName{
+						Name:      object.GetName(),
+						Namespace: object.GetNamespace(),
+					},
+				},
+			}
 
 			// if owner is not namespaced then we should not set the namespace
 			mapping, err := e.mapper.RESTMapping(e.groupKind, refGV.Version)

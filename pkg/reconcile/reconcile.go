@@ -20,6 +20,7 @@ import (
 	"context"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -46,6 +47,20 @@ func (r *Result) IsZero() bool {
 // any specific Event or the object contents itself.
 type Request struct {
 	// NamespacedName is the name and namespace of the object to reconcile.
+	types.NamespacedName
+
+	// If specified, this is the name and namespace of the object that triggered the reconcile.
+	// This is for example useful to filter which child object should be updated when triggering
+	// a reconcile on a parent object.
+	Source *RequestSource
+}
+
+// RequestSource contains the information necessary to identify the source of a Request.
+type RequestSource struct {
+	// GroupVersionKind is the GroupVersionKind of the source.
+	schema.GroupVersionKind
+
+	// NamespacedName is the name and namespace of the source.
 	types.NamespacedName
 }
 

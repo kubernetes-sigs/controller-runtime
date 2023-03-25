@@ -102,7 +102,9 @@ modules: ## Runs go mod to ensure modules are up to date.
 
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Runs controller-gen for internal types for config file
-	$(CONTROLLER_GEN) object paths="./pkg/config/v1alpha1/...;./examples/configfile/custom/v1alpha1/..."
+	$(CONTROLLER_GEN) object \
+		object:headerFile="hack/boilerplate.go.txt" \
+		paths="./pkg/config/v1alpha1/...;./examples/configfile/custom/v1alpha1/...;./examples/crd/pkg/..."
 
 ## --------------------------------------
 ## Cleanup / Verification

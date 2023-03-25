@@ -104,7 +104,23 @@ modules: ## Runs go mod to ensure modules are up to date.
 generate: $(CONTROLLER_GEN) ## Runs controller-gen for internal types for config file
 	$(CONTROLLER_GEN) object \
 		object:headerFile="hack/boilerplate.go.txt" \
-		paths="./pkg/config/v1alpha1/...;./examples/configfile/custom/v1alpha1/...;./examples/crd/pkg/..."
+		paths="./pkg/config/v1alpha1/...;./examples/configfile/custom/v1alpha1/...;./examples/crd/pkg/...;./examples/crd-multi-target/api/v1/..."
+
+.PHONY: generate-manifests
+generate-manifests: $(CONTROLLER_GEN) ## Generate CustomResourceDefinition objects.
+	$(CONTROLLER_GEN) crd \
+		paths="./examples/crd-multi-target/api/v1/..." \
+		output:crd:artifacts:config=examples/crd-multi-target/crds
+	
+	yq 'del(.. | ."description"?)' ./examples/crd-multi-target/crds/myapps.metamagical.io_mypods.yaml > ./examples/crd-multi-target/crds/myapps.metamagical.io_mypods.clean.yaml
+	yq 'del(.. | ."description"?)' ./examples/crd-multi-target/crds/myapps.metamagical.io_myreplicasets.yaml > ./examples/crd-multi-target/crds/myapps.metamagical.io_myreplicasets.clean.yaml
+
+	yq '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.template.properties.metadata.properties = {"labels":{"type":"object","additionalProperties": true}}' \
+		./examples/crd-multi-target/crds/myapps.metamagical.io_myreplicasets.clean.yaml > ./examples/crd-multi-target/crds/myapps.metamagical.io_myreplicasets.patch.yaml
+
+	rm ./examples/crd-multi-target/crds/myapps.metamagical.io_myreplicasets.clean.yaml
+	mv ./examples/crd-multi-target/crds/myapps.metamagical.io_mypods.clean.yaml ./examples/crd-multi-target/crds/myapps.metamagical.io_mypods.yaml
+	mv ./examples/crd-multi-target/crds/myapps.metamagical.io_myreplicasets.patch.yaml ./examples/crd-multi-target/crds/myapps.metamagical.io_myreplicasets.yaml
 
 ## --------------------------------------
 ## Cleanup / Verification

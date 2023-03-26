@@ -481,6 +481,7 @@ func convertToByObject(in map[schema.GroupVersionKind]internal.InformersOptsByGV
 		if !ok {
 			return nil, fmt.Errorf("object %T for GVK %q does not implement client.Object", obj, gvk)
 		}
+		cObj.GetObjectKind().SetGroupVersionKind(gvk)
 		out[cObj] = ByObject{
 			Field:                 opts.Selector.Field,
 			Label:                 opts.Selector.Label,

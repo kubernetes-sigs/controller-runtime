@@ -468,6 +468,27 @@ var _ = Describe("cache.inheritFrom", func() {
 			))
 		})
 	})
+
+	Context("convertToByObject", func() {
+		It("embeds the GVK in the returned objects", func() {
+			gvk := gv.WithKind("Unstructured")
+			obj := &unstructured.Unstructured{}
+
+			sch := runtime.NewScheme()
+			sch.AddKnownTypeWithName(gvk, obj)
+
+			byObj, def, err := convertToByObject(map[schema.GroupVersionKind]struct{}{
+				gvk: {},
+			}, sch)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(def).To(Equal(struct{}{}))
+			Expect(byObj).To(HaveLen(1))
+			for obj := range byObj {
+				Expect(obj.GetObjectKind().GroupVersionKind()).To(Equal(gvk))
+			}
+		})
+	})
 })
 
 func checkError[T any](v T, err error) T {

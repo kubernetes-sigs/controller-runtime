@@ -209,6 +209,8 @@ var _ = Describe("Zap logger setup", func() {
 			})
 
 			It("should log a standard non-namespaced NamespacedName name", func() {
+				Skip("Skipping until we bumped k/k to v0.27.2")
+
 				name := types.NamespacedName{Name: "some-node"}
 				logger.Info("here's a kubernetes object", "thing", name)
 
@@ -243,6 +245,8 @@ var _ = Describe("Zap logger setup", func() {
 			})
 
 			It("should log a standard namespaced NamespacedName name and namespace", func() {
+				Skip("Skipping until we bumped k/k to v0.27.2")
+
 				name := types.NamespacedName{Name: "some-pod", Namespace: "some-ns"}
 				logger.Info("here's a kubernetes object", "thing", name)
 

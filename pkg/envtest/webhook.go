@@ -215,7 +215,7 @@ func WaitForWebhooks(config *rest.Config,
 
 	// Poll until all resources are found in discovery
 	p := &webhookPoller{config: config, waitingFor: waitingFor}
-	return wait.PollImmediate(options.PollInterval, options.MaxTime, p.poll)
+	return wait.PollUntilContextTimeout(context.TODO(), options.PollInterval, options.MaxTime, true, p.poll)
 }
 
 // poller checks if all the resources have been found in discovery, and returns false if not.
@@ -228,7 +228,7 @@ type webhookPoller struct {
 }
 
 // poll checks if all the resources have been found in discovery, and returns false if not.
-func (p *webhookPoller) poll() (done bool, err error) {
+func (p *webhookPoller) poll(ctx context.Context) (done bool, err error) {
 	// Create a new clientset to avoid any client caching of discovery
 	c, err := client.New(p.config, client.Options{})
 	if err != nil {

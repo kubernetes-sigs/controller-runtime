@@ -788,6 +788,11 @@ func (forceOwnership) ApplyToPatch(opts *PatchOptions) {
 	opts.Force = &definitelyTrue
 }
 
+func (forceOwnership) ApplyToSubResourcePatch(opts *SubResourcePatchOptions) {
+	definitelyTrue := true
+	opts.Force = &definitelyTrue
+}
+
 // }}}
 
 // {{{ DeleteAllOf Options

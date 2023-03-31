@@ -277,3 +277,18 @@ var _ = Describe("FieldOwner", func() {
 		Expect(o.FieldManager).To(Equal("foo"))
 	})
 })
+
+var _ = Describe("ForceOwnership", func() {
+	It("Should apply to PatchOptions", func() {
+		o := &client.PatchOptions{}
+		t := client.ForceOwnership
+		t.ApplyToPatch(o)
+		Expect(*o.Force).To(Equal(true))
+	})
+	It("Should apply to SubResourcePatchOptions", func() {
+		o := &client.SubResourcePatchOptions{PatchOptions: client.PatchOptions{}}
+		t := client.ForceOwnership
+		t.ApplyToSubResourcePatch(o)
+		Expect(*o.Force).To(Equal(true))
+	})
+})

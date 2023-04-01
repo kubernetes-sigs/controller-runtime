@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -972,6 +973,7 @@ var _ = Describe("Fake client", func() {
 			Expect(err).To(BeNil())
 			Expect(len(newObj.Finalizers)).To(Equal(0))
 		})
+
 	}
 
 	Context("with default scheme.Scheme", func() {
@@ -1219,6 +1221,218 @@ var _ = Describe("Fake client", func() {
 		err = cl.Get(context.Background(), namespacedName3, obj)
 		Expect(err).To(BeNil())
 		Expect(obj).To(Equal(dep3))
+	})
+
+	It("should not change the status of typed objects that have a status subresource on update", func() {
+		obj := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node",
+			},
+			Status: corev1.NodeStatus{
+				NodeInfo: corev1.NodeSystemInfo{MachineID: "machine-id"},
+			},
+		}
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+
+		obj.Status.NodeInfo.MachineID = "updated-machine-id"
+		Expect(cl.Update(context.Background(), obj)).To(BeNil())
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)).To(BeNil())
+
+		Expect(obj.Status).To(BeEquivalentTo(corev1.NodeStatus{NodeInfo: corev1.NodeSystemInfo{MachineID: "machine-id"}}))
+	})
+
+	It("should return a conflict error when an incorrect RV is used on status update", func() {
+		obj := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node",
+			},
+		}
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+
+		obj.Status.Phase = corev1.NodeRunning
+		obj.ResourceVersion = "invalid"
+		err := cl.Update(context.Background(), obj)
+		Expect(apierrors.IsConflict(err)).To(BeTrue())
+	})
+
+	It("should not change non-status field of typed objects that have a status subresource on status update", func() {
+		obj := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node",
+			},
+			Spec: corev1.NodeSpec{
+				PodCIDR: "old-cidr",
+			},
+			Status: corev1.NodeStatus{
+				NodeInfo: corev1.NodeSystemInfo{
+					MachineID: "machine-id",
+				},
+			},
+		}
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+		objOriginal := obj.DeepCopy()
+
+		obj.Spec.PodCIDR = "cidr-from-status-update"
+		obj.Status.NodeInfo.MachineID = "machine-id-from-status-update"
+		Expect(cl.Status().Update(context.Background(), obj)).NotTo(HaveOccurred())
+
+		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(actual), actual)).NotTo(HaveOccurred())
+
+		objOriginal.APIVersion = actual.APIVersion
+		objOriginal.Kind = actual.Kind
+		objOriginal.ResourceVersion = actual.ResourceVersion
+		objOriginal.Status.NodeInfo.MachineID = "machine-id-from-status-update"
+		Expect(cmp.Diff(objOriginal, actual)).To(BeEmpty())
+	})
+
+	It("should not change the status of typed objects that have a status subresource on patch", func() {
+		obj := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node",
+			},
+			Status: corev1.NodeStatus{
+				NodeInfo: corev1.NodeSystemInfo{
+					MachineID: "machine-id",
+				},
+			},
+		}
+		Expect(cl.Create(context.Background(), obj)).To(BeNil())
+		original := obj.DeepCopy()
+
+		obj.Status.NodeInfo.MachineID = "machine-id-from-patch"
+		Expect(cl.Patch(context.Background(), obj, client.MergeFrom(original))).To(BeNil())
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)).To(BeNil())
+
+		Expect(obj.Status).To(BeEquivalentTo(corev1.NodeStatus{NodeInfo: corev1.NodeSystemInfo{MachineID: "machine-id"}}))
+	})
+
+	It("should not change non-status field of typed objects that have a status subresource on status patch", func() {
+		obj := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node",
+			},
+			Spec: corev1.NodeSpec{
+				PodCIDR: "old-cidr",
+			},
+		}
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+		objOriginal := obj.DeepCopy()
+
+		obj.Spec.PodCIDR = "cidr-from-status-update"
+		obj.Status.NodeInfo.MachineID = "machine-id"
+		Expect(cl.Status().Patch(context.Background(), obj, client.MergeFrom(objOriginal))).NotTo(HaveOccurred())
+
+		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(actual), actual)).NotTo(HaveOccurred())
+
+		objOriginal.APIVersion = actual.APIVersion
+		objOriginal.Kind = actual.Kind
+		objOriginal.ResourceVersion = actual.ResourceVersion
+		objOriginal.Status.NodeInfo.MachineID = "machine-id"
+		Expect(cmp.Diff(objOriginal, actual)).To(BeEmpty())
+	})
+
+	It("should not change the status of unstructured objects that are configured to have a status subresource on update", func() {
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("foo/v1")
+		obj.SetKind("Foo")
+		obj.SetName("a-foo")
+
+		err := unstructured.SetNestedField(obj.Object, map[string]any{"state": "old"}, "status")
+		Expect(err).NotTo(HaveOccurred())
+
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+
+		err = unstructured.SetNestedField(obj.Object, map[string]any{"state": "new"}, "status")
+		Expect(err).To(BeNil())
+
+		Expect(cl.Update(context.Background(), obj)).To(BeNil())
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)).To(BeNil())
+
+		Expect(obj.Object["status"]).To(BeEquivalentTo(map[string]any{"state": "old"}))
+	})
+
+	It("should not change non-status fields of unstructured objects that are configured to have a status subresource on status update", func() {
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("foo/v1")
+		obj.SetKind("Foo")
+		obj.SetName("a-foo")
+
+		err := unstructured.SetNestedField(obj.Object, "original", "spec")
+		Expect(err).NotTo(HaveOccurred())
+
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+
+		err = unstructured.SetNestedField(obj.Object, "from-status-update", "spec")
+		Expect(err).NotTo(HaveOccurred())
+		err = unstructured.SetNestedField(obj.Object, map[string]any{"state": "new"}, "status")
+		Expect(err).To(BeNil())
+
+		Expect(cl.Status().Update(context.Background(), obj)).To(BeNil())
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)).To(BeNil())
+
+		Expect(obj.Object["status"]).To(BeEquivalentTo(map[string]any{"state": "new"}))
+		Expect(obj.Object["spec"]).To(BeEquivalentTo("original"))
+	})
+
+	It("should not change the status of unstructured objects that are configured to have a status subresource on patch", func() {
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("foo/v1")
+		obj.SetKind("Foo")
+		obj.SetName("a-foo")
+		cl := NewClientBuilder().WithStatusSubresource(obj).Build()
+
+		Expect(cl.Create(context.Background(), obj)).To(BeNil())
+		original := obj.DeepCopy()
+
+		err := unstructured.SetNestedField(obj.Object, map[string]interface{}{"count": int64(2)}, "status")
+		Expect(err).To(BeNil())
+		Expect(cl.Patch(context.Background(), obj, client.MergeFrom(original))).To(BeNil())
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)).To(BeNil())
+
+		Expect(obj.Object["status"]).To(BeNil())
+
+	})
+
+	It("should not change non-status fields of unstructured objects that are configured to have a status subresource on status patch", func() {
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("foo/v1")
+		obj.SetKind("Foo")
+		obj.SetName("a-foo")
+
+		err := unstructured.SetNestedField(obj.Object, "original", "spec")
+		Expect(err).NotTo(HaveOccurred())
+
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+		original := obj.DeepCopy()
+
+		err = unstructured.SetNestedField(obj.Object, "from-status-update", "spec")
+		Expect(err).NotTo(HaveOccurred())
+		err = unstructured.SetNestedField(obj.Object, map[string]any{"state": "new"}, "status")
+		Expect(err).To(BeNil())
+
+		Expect(cl.Status().Patch(context.Background(), obj, client.MergeFrom(original))).To(BeNil())
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)).To(BeNil())
+
+		Expect(obj.Object["status"]).To(BeEquivalentTo(map[string]any{"state": "new"}))
+		Expect(obj.Object["spec"]).To(BeEquivalentTo("original"))
+	})
+
+	It("should return not found on status update of resources that don't have a status subresource", func() {
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("foo/v1")
+		obj.SetKind("Foo")
+		obj.SetName("a-foo")
+
+		cl := NewClientBuilder().WithObjects(obj).Build()
+
+		err := cl.Status().Update(context.Background(), obj)
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 })
 

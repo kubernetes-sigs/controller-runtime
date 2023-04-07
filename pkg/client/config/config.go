@@ -152,6 +152,15 @@ func loadConfig(context string) (config *rest.Config, configErr error) {
 		loadingRules.Precedence = append(loadingRules.Precedence, filepath.Join(u.HomeDir, clientcmd.RecommendedHomeDir, clientcmd.RecommendedFileName))
 	}
 
+	// Add $SNAP_REAL_HOME when in snap and the path contains a `.kube\config` file
+	// https://github.com/snapcore/snapd/pull/9189
+	if value, ok := os.LookupEnv("SNAP_REAL_HOME"); ok {
+		location := filepath.Join(value, clientcmd.RecommendedHomeDir, clientcmd.RecommendedFileName)
+		if _, err := os.Stat(location); err == nil {
+			loadingRules.Precedence = append(loadingRules.Precedence, location)
+		}
+	}
+
 	return loadConfigWithContext("", loadingRules, context)
 }
 

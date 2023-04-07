@@ -98,22 +98,29 @@ func (p Funcs) Generic(e event.GenericEvent) bool {
 	return true
 }
 
+// FilterFunc implements Predicate.
+type FilterFunc[T client.Object] func(T) bool
+
 // NewPredicateFuncs returns a predicate funcs that applies the given filter function
 // on CREATE, UPDATE, DELETE and GENERIC events. For UPDATE events, the filter is applied
 // to the new object.
-func NewPredicateFuncs(filter func(object client.Object) bool) Funcs {
+func NewPredicateFuncs[T client.Object](filter FilterFunc[T]) Funcs {
 	return Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
-			return filter(e.Object)
+			v := e.Object.(T)
+			return filter(v)
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			return filter(e.ObjectNew)
+			v := e.ObjectNew.(T)
+			return filter(v)
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			return filter(e.Object)
+			v := e.Object.(T)
+			return filter(v)
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
-			return filter(e.Object)
+			v := e.Object.(T)
+			return filter(v)
 		},
 	}
 }

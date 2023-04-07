@@ -17,6 +17,8 @@ limitations under the License.
 package predicate_test
 
 import (
+	corev1 "k8s.io/api/core/v1"
+
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -30,4 +32,11 @@ func ExampleFuncs() {
 			return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
 		},
 	}
+}
+
+func ExampleNewPredicateFuncs() {
+	predicate.NewPredicateFuncs(func(obj *corev1.Pod) bool {
+		// example ignoring deleted pods
+		return obj.DeletionTimestamp.IsZero()
+	})
 }

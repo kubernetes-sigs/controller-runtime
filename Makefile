@@ -75,7 +75,7 @@ $(CONTROLLER_GEN): $(TOOLS_DIR)/go.mod # Build controller-gen from tools folder.
 $(GOLANGCI_LINT): .github/workflows/golangci-lint.yml # Download golanci-lint using hack script into tools folder.
 	hack/ensure-golangci-lint.sh \
 		-b $(TOOLS_BIN_DIR) \
-		$(shell cat .github/workflows/golangci-lint.yml | grep version | sed 's/.*version: //')
+		$(shell cat .github/workflows/golangci-lint.yml | grep "version: v" | sed 's/.*version: //')
 
 ## --------------------------------------
 ## Linting

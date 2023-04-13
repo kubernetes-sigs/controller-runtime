@@ -632,9 +632,9 @@ func defaultBaseContext() context.Context {
 	return context.Background()
 }
 
-// NewProvider replace makeBroadcaster to create NewBroadcaster avoid conflict with cluster's makeBroadcaster
+// newProvider replace makeBroadcaster to create NewBroadcaster avoid conflict with cluster's makeBroadcaster
 // because manager's provider only used by leader election.
-func NewProvider(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
+func newProvider(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
 	managerBroadcaster := func() (record.EventBroadcaster, bool) {
 		return record.NewBroadcaster(), true
 	}
@@ -650,7 +650,7 @@ func setOptionsDefaults(options Options) Options {
 
 	// Allow newRecorderProvider to be mocked
 	if options.newRecorderProvider == nil {
-		options.newRecorderProvider = NewProvider
+		options.newRecorderProvider = newProvider
 	}
 
 	// This is duplicated with pkg/cluster, we need it here

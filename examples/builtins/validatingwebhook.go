@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // +kubebuilder:webhook:path=/validate-v1-pod,mutating=false,failurePolicy=fail,groups="",resources=pods,verbs=create;update,versions=v1,name=vpod.kb.io
@@ -32,7 +33,7 @@ import (
 type podValidator struct{}
 
 // validate admits a pod if a specific annotation exists.
-func (v *podValidator) validate(ctx context.Context, obj runtime.Object) ([]string, error) {
+func (v *podValidator) validate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	log := logf.FromContext(ctx)
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
@@ -52,14 +53,14 @@ func (v *podValidator) validate(ctx context.Context, obj runtime.Object) ([]stri
 	return nil, nil
 }
 
-func (v *podValidator) ValidateCreate(ctx context.Context, obj runtime.Object) ([]string, error) {
+func (v *podValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	return v.validate(ctx, obj)
 }
 
-func (v *podValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) ([]string, error) {
+func (v *podValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	return v.validate(ctx, newObj)
 }
 
-func (v *podValidator) ValidateDelete(ctx context.Context, obj runtime.Object) ([]string, error) {
+func (v *podValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	return v.validate(ctx, obj)
 }

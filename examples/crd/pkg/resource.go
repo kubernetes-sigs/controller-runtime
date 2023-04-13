@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // ChaosPodSpec defines the desired state of ChaosPod
@@ -66,7 +67,7 @@ type ChaosPodList struct {
 var _ webhook.Validator = &ChaosPod{}
 
 // ValidateCreate implements webhookutil.validator so a webhook will be registered for the type
-func (c *ChaosPod) ValidateCreate() ([]string, error) {
+func (c *ChaosPod) ValidateCreate() (admission.Warnings, error) {
 	log.Info("validate create", "name", c.Name)
 
 	if c.Spec.NextStop.Before(&metav1.Time{Time: time.Now()}) {
@@ -76,7 +77,7 @@ func (c *ChaosPod) ValidateCreate() ([]string, error) {
 }
 
 // ValidateUpdate implements webhookutil.validator so a webhook will be registered for the type
-func (c *ChaosPod) ValidateUpdate(old runtime.Object) ([]string, error) {
+func (c *ChaosPod) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	log.Info("validate update", "name", c.Name)
 
 	if c.Spec.NextStop.Before(&metav1.Time{Time: time.Now()}) {
@@ -94,7 +95,7 @@ func (c *ChaosPod) ValidateUpdate(old runtime.Object) ([]string, error) {
 }
 
 // ValidateDelete implements webhookutil.validator so a webhook will be registered for the type
-func (c *ChaosPod) ValidateDelete() ([]string, error) {
+func (c *ChaosPod) ValidateDelete() (admission.Warnings, error) {
 	log.Info("validate delete", "name", c.Name)
 
 	if c.Spec.NextStop.Before(&metav1.Time{Time: time.Now()}) {

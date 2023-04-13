@@ -35,15 +35,15 @@ type fakeValidator struct {
 	WarningsToReturn []string
 }
 
-func (v *fakeValidator) ValidateCreate() (warnings []string, err error) {
+func (v *fakeValidator) ValidateCreate() (warnings Warnings, err error) {
 	return v.WarningsToReturn, v.ErrorToReturn
 }
 
-func (v *fakeValidator) ValidateUpdate(old runtime.Object) (warnings []string, err error) {
+func (v *fakeValidator) ValidateUpdate(old runtime.Object) (warnings Warnings, err error) {
 	return v.WarningsToReturn, v.ErrorToReturn
 }
 
-func (v *fakeValidator) ValidateDelete() (warnings []string, err error) {
+func (v *fakeValidator) ValidateDelete() (warnings Warnings, err error) {
 	return v.WarningsToReturn, v.ErrorToReturn
 }
 

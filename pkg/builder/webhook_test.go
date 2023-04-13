@@ -749,7 +749,7 @@ func (*TestValidatorList) DeepCopyObject() runtime.Object   { return nil }
 
 var _ admission.Validator = &TestValidator{}
 
-func (v *TestValidator) ValidateCreate() ([]string, error) {
+func (v *TestValidator) ValidateCreate() (admission.Warnings, error) {
 	if v.Panic {
 		panic("fake panic test")
 	}
@@ -759,7 +759,7 @@ func (v *TestValidator) ValidateCreate() ([]string, error) {
 	return nil, nil
 }
 
-func (v *TestValidator) ValidateUpdate(old runtime.Object) ([]string, error) {
+func (v *TestValidator) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	if v.Panic {
 		panic("fake panic test")
 	}
@@ -774,7 +774,7 @@ func (v *TestValidator) ValidateUpdate(old runtime.Object) ([]string, error) {
 	return nil, nil
 }
 
-func (v *TestValidator) ValidateDelete() ([]string, error) {
+func (v *TestValidator) ValidateDelete() (admission.Warnings, error) {
 	if v.Panic {
 		panic("fake panic test")
 	}
@@ -824,21 +824,21 @@ func (dv *TestDefaultValidator) Default() {
 
 var _ admission.Validator = &TestDefaultValidator{}
 
-func (dv *TestDefaultValidator) ValidateCreate() ([]string, error) {
+func (dv *TestDefaultValidator) ValidateCreate() (admission.Warnings, error) {
 	if dv.Replica < 0 {
 		return nil, errors.New("number of replica should be greater than or equal to 0")
 	}
 	return nil, nil
 }
 
-func (dv *TestDefaultValidator) ValidateUpdate(old runtime.Object) ([]string, error) {
+func (dv *TestDefaultValidator) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	if dv.Replica < 0 {
 		return nil, errors.New("number of replica should be greater than or equal to 0")
 	}
 	return nil, nil
 }
 
-func (dv *TestDefaultValidator) ValidateDelete() ([]string, error) {
+func (dv *TestDefaultValidator) ValidateDelete() (admission.Warnings, error) {
 	if dv.Replica > 0 {
 		return nil, errors.New("number of replica should be less than or equal to 0 to delete")
 	}
@@ -872,7 +872,7 @@ var _ admission.CustomDefaulter = &TestCustomDefaulter{}
 
 type TestCustomValidator struct{}
 
-func (*TestCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) ([]string, error) {
+func (*TestCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	logf.FromContext(ctx).Info("Validating object")
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
@@ -889,7 +889,7 @@ func (*TestCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Obje
 	return nil, nil
 }
 
-func (*TestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) ([]string, error) {
+func (*TestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	logf.FromContext(ctx).Info("Validating object")
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
@@ -910,7 +910,7 @@ func (*TestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj r
 	return nil, nil
 }
 
-func (*TestCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) ([]string, error) {
+func (*TestCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	logf.FromContext(ctx).Info("Validating object")
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {

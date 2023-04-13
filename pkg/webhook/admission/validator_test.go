@@ -23,8 +23,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/admissiontest"
-
 	admissionv1 "k8s.io/api/admission/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,7 +38,7 @@ var _ = Describe("validatingHandler", func() {
 	decoder := NewDecoder(scheme.Scheme)
 
 	Context("when dealing with successful results without warning", func() {
-		f := &admissiontest.FakeValidator{ErrorToReturn: nil, GVKToReturn: fakeValidatorVK, WarningsToReturn: nil}
+		f := &fakeValidator{ErrorToReturn: nil, GVKToReturn: fakeValidatorVK, WarningsToReturn: nil}
 		handler := validatingHandler{validator: f, decoder: decoder}
 
 		It("should return 200 in response when create succeeds", func() {
@@ -97,7 +95,7 @@ var _ = Describe("validatingHandler", func() {
 	const warningMessage = "warning message"
 	const anotherWarningMessage = "another warning message"
 	Context("when dealing with successful results with warning", func() {
-		f := &admissiontest.FakeValidator{ErrorToReturn: nil, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{
+		f := &fakeValidator{ErrorToReturn: nil, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{
 			warningMessage,
 			anotherWarningMessage,
 		}}
@@ -167,7 +165,7 @@ var _ = Describe("validatingHandler", func() {
 				Code:    http.StatusUnprocessableEntity,
 			},
 		}
-		f := &admissiontest.FakeValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{warningMessage, anotherWarningMessage}}
+		f := &fakeValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{warningMessage, anotherWarningMessage}}
 		handler := validatingHandler{validator: f, decoder: decoder}
 
 		It("should propagate the Status from ValidateCreate's return value to the HTTP response", func() {
@@ -241,7 +239,7 @@ var _ = Describe("validatingHandler", func() {
 				Code:    http.StatusUnprocessableEntity,
 			},
 		}
-		f := &admissiontest.FakeValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: nil}
+		f := &fakeValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: nil}
 		handler := validatingHandler{validator: f, decoder: decoder}
 
 		It("should propagate the Status from ValidateCreate's return value to the HTTP response", func() {
@@ -307,7 +305,7 @@ var _ = Describe("validatingHandler", func() {
 	Context("when dealing with non-status errors, without warning messages", func() {
 
 		expectedError := errors.New("some error")
-		f := &admissiontest.FakeValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK}
+		f := &fakeValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK}
 		handler := validatingHandler{validator: f, decoder: decoder}
 
 		It("should return 403 response when ValidateCreate with error message embedded", func() {
@@ -370,7 +368,7 @@ var _ = Describe("validatingHandler", func() {
 	Context("when dealing with non-status errors, with warning messages", func() {
 
 		expectedError := errors.New("some error")
-		f := &admissiontest.FakeValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{warningMessage, anotherWarningMessage}}
+		f := &fakeValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{warningMessage, anotherWarningMessage}}
 		handler := validatingHandler{validator: f, decoder: decoder}
 
 		It("should return 403 response when ValidateCreate with error message embedded", func() {

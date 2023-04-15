@@ -28,7 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-
+	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -680,6 +680,14 @@ var _ = Describe("Test", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 		})
+	})
+
+	It("should set a working KubeConfig", func() {
+		kubeconfigRESTConfig, err := clientcmd.RESTConfigFromKubeConfig(env.KubeConfig)
+		Expect(err).ToNot(HaveOccurred())
+		kubeconfigClient, err := client.New(kubeconfigRESTConfig, client.Options{Scheme: s})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kubeconfigClient.List(context.Background(), &apiextensionsv1.CustomResourceDefinitionList{})).To(Succeed())
 	})
 
 	It("should update CRDs if already present in the cluster", func() {

@@ -20,9 +20,9 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"crypto/rand"
 	"io"
 	"io/fs"
-	"math/rand"
 	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -214,7 +214,7 @@ func makeFakeArchive(magic string) io.Reader {
 		copy(chunk[:], magic)
 		copy(chunk[len(magic):], fileName)
 		start := len(magic) + len(fileName)
-		if _, err := rand.Read(chunk[start:]); err != nil { //nolint:gosec
+		if _, err := rand.Read(chunk[start:]); err != nil {
 			panic(err)
 		}
 

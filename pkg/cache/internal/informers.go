@@ -38,10 +38,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 // InformersOpts configures an InformerMap.
 type InformersOpts struct {
 	HTTPClient   *http.Client

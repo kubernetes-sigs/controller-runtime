@@ -8,8 +8,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/md5" //nolint:gosec
+	"crypto/rand"
 	"encoding/base64"
-	"math/rand"
 	"net/http"
 	"path/filepath"
 
@@ -105,7 +105,7 @@ func makeContents(names []string) []item {
 	for i, name := range names {
 		var chunk [1024 * 48]byte // 1.5 times our chunk read size in GetVersion
 		copy(chunk[:], name)
-		if _, err := rand.Read(chunk[len(name):]); err != nil { //nolint:gosec
+		if _, err := rand.Read(chunk[len(name):]); err != nil {
 			panic(err)
 		}
 		res[i] = verWith(name, chunk[:])

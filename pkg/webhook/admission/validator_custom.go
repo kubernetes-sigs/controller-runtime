@@ -116,7 +116,7 @@ func (h *validatorForType) Handle(ctx context.Context, req Request) Response {
 	if err != nil {
 		var apiStatus apierrors.APIStatus
 		if errors.As(err, &apiStatus) {
-			return validationResponseFromStatus(false, apiStatus.Status())
+			return validationResponseFromStatus(false, apiStatus.Status()).WithWarnings(warnings...)
 		}
 		return Denied(err.Error()).WithWarnings(warnings...)
 	}

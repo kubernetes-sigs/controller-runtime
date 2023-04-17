@@ -183,7 +183,8 @@ var _ = Describe("validatingHandler", func() {
 			Expect(response.Allowed).Should(BeFalse())
 			Expect(response.Result.Code).Should(Equal(expectedError.Status().Code))
 			Expect(*response.Result).Should(Equal(expectedError.Status()))
-			Expect(response.AdmissionResponse.Warnings).Should(BeEmpty())
+			Expect(response.AdmissionResponse.Warnings).Should(ContainElements(warningMessage))
+			Expect(response.AdmissionResponse.Warnings).Should(ContainElements(anotherWarningMessage))
 
 		})
 
@@ -206,7 +207,8 @@ var _ = Describe("validatingHandler", func() {
 			Expect(response.Allowed).Should(BeFalse())
 			Expect(response.Result.Code).Should(Equal(expectedError.Status().Code))
 			Expect(*response.Result).Should(Equal(expectedError.Status()))
-			Expect(response.AdmissionResponse.Warnings).Should(BeEmpty())
+			Expect(response.AdmissionResponse.Warnings).Should(ContainElements(warningMessage))
+			Expect(response.AdmissionResponse.Warnings).Should(ContainElements(anotherWarningMessage))
 
 		})
 
@@ -225,7 +227,8 @@ var _ = Describe("validatingHandler", func() {
 			Expect(response.Allowed).Should(BeFalse())
 			Expect(response.Result.Code).Should(Equal(expectedError.Status().Code))
 			Expect(*response.Result).Should(Equal(expectedError.Status()))
-			Expect(response.AdmissionResponse.Warnings).Should(BeEmpty())
+			Expect(response.AdmissionResponse.Warnings).Should(ContainElements(warningMessage))
+			Expect(response.AdmissionResponse.Warnings).Should(ContainElements(anotherWarningMessage))
 
 		})
 

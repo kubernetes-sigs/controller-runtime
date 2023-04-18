@@ -606,6 +606,11 @@ func (n InNamespace) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	n.ApplyToList(&opts.ListOptions)
 }
 
+// AsSelector returns a selector that matches objects in the given namespace.
+func (n InNamespace) AsSelector() fields.Selector {
+	return fields.SelectorFromSet(fields.Set{"metadata.namespace": string(n)})
+}
+
 // Limit specifies the maximum number of results to return from the server.
 // Limit does not implement DeleteAllOfOption interface because the server
 // does not support setting it for deletecollection operations.

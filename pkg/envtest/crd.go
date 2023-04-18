@@ -166,6 +166,8 @@ func WaitForCRDs(config *rest.Config, crds []*apiextensionsv1.CustomResourceDefi
 
 	// Poll until all resources are found in discovery
 	p := &poller{config: config, waitingFor: waitingFor}
+	//TODO: Fix deprecation
+	//nolint
 	return wait.PollImmediate(options.PollInterval, options.MaxTime, p.poll)
 }
 

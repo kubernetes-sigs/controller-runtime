@@ -45,8 +45,8 @@ var _ = BeforeSuite(func() {
 	var err error
 	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
-
 	clientset, err = kubernetes.NewForConfig(cfg)
+
 	Expect(err).NotTo(HaveOccurred())
 })
 

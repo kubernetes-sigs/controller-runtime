@@ -203,6 +203,8 @@ func WaitForWebhooks(config *rest.Config,
 
 	// Poll until all resources are found in discovery
 	p := &webhookPoller{config: config, waitingFor: waitingFor}
+	//TODO: Fix deprecation
+	//nolint
 	return wait.PollImmediate(options.PollInterval, options.MaxTime, p.poll)
 }
 

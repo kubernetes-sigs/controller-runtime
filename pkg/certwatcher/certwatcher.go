@@ -83,6 +83,8 @@ func (cw *CertWatcher) Start(ctx context.Context) error {
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		var watchErr error
+		//TODO: Fix deprecation
+		//nolint
 		if err := wait.PollImmediateUntilWithContext(ctx, 1*time.Second, func(ctx context.Context) (done bool, err error) {
 			for _, f := range files.UnsortedList() {
 				if err := cw.watcher.Add(f); err != nil {

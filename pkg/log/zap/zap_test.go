@@ -217,7 +217,8 @@ var _ = Describe("Zap logger setup", func() {
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
 				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
-					"name": name.Name,
+					"Name":      name.Name,
+					"Namespace": "",
 				}))
 			})
 
@@ -251,8 +252,8 @@ var _ = Describe("Zap logger setup", func() {
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
 				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
-					"name":      name.Name,
-					"namespace": name.Namespace,
+					"Name":      name.Name,
+					"Namespace": name.Namespace,
 				}))
 			})
 

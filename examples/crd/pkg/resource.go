@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // ChaosPodSpec defines the desired state of ChaosPod
@@ -66,41 +67,41 @@ type ChaosPodList struct {
 var _ webhook.Validator = &ChaosPod{}
 
 // ValidateCreate implements webhookutil.validator so a webhook will be registered for the type
-func (c *ChaosPod) ValidateCreate() error {
+func (c *ChaosPod) ValidateCreate() (admission.Warnings, error) {
 	log.Info("validate create", "name", c.Name)
 
 	if c.Spec.NextStop.Before(&metav1.Time{Time: time.Now()}) {
-		return fmt.Errorf(".spec.nextStop must be later than current time")
+		return nil, fmt.Errorf(".spec.nextStop must be later than current time")
 	}
-	return nil
+	return nil, nil
 }
 
 // ValidateUpdate implements webhookutil.validator so a webhook will be registered for the type
-func (c *ChaosPod) ValidateUpdate(old runtime.Object) error {
+func (c *ChaosPod) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	log.Info("validate update", "name", c.Name)
 
 	if c.Spec.NextStop.Before(&metav1.Time{Time: time.Now()}) {
-		return fmt.Errorf(".spec.nextStop must be later than current time")
+		return nil, fmt.Errorf(".spec.nextStop must be later than current time")
 	}
 
 	oldC, ok := old.(*ChaosPod)
 	if !ok {
-		return fmt.Errorf("expect old object to be a %T instead of %T", oldC, old)
+		return nil, fmt.Errorf("expect old object to be a %T instead of %T", oldC, old)
 	}
 	if c.Spec.NextStop.After(oldC.Spec.NextStop.Add(time.Hour)) {
-		return fmt.Errorf("it is not allowed to delay.spec.nextStop for more than 1 hour")
+		return nil, fmt.Errorf("it is not allowed to delay.spec.nextStop for more than 1 hour")
 	}
-	return nil
+	return nil, nil
 }
 
 // ValidateDelete implements webhookutil.validator so a webhook will be registered for the type
-func (c *ChaosPod) ValidateDelete() error {
+func (c *ChaosPod) ValidateDelete() (admission.Warnings, error) {
 	log.Info("validate delete", "name", c.Name)
 
 	if c.Spec.NextStop.Before(&metav1.Time{Time: time.Now()}) {
-		return fmt.Errorf(".spec.nextStop must be later than current time")
+		return nil, fmt.Errorf(".spec.nextStop must be later than current time")
 	}
-	return nil
+	return nil, nil
 }
 
 // +kubebuilder:webhook:path=/mutate-chaosapps-metamagical-io-v1-chaospod,mutating=true,failurePolicy=fail,groups=chaosapps.metamagical.io,resources=chaospods,verbs=create;update,versions=v1,name=mchaospod.kb.io

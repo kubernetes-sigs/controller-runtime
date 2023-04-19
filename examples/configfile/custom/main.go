@@ -17,20 +17,25 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"os"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/examples/configfile/custom/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	cfg "sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 var scheme = runtime.NewScheme()
@@ -59,12 +64,25 @@ func main() {
 	entryLog.Info("setting up cluster", "name", ctrlConfig.ClusterName)
 
 	// Watch ReplicaSets and enqueue ReplicaSet object key
-	err = ctrl.NewControllerManagedBy(mgr).
-		For(&appsv1.ReplicaSet{}).
-		Owns(&corev1.Pod{}).
-		Complete(&reconcileReplicaSet{
+	_, err = ctrl.NewControllerManagedBy(mgr,
+		&reconcileReplicaSet{
 			client: mgr.GetClient(),
-		})
+		},
+		builder.For(&appsv1.ReplicaSet{}),
+		builder.Owns(&corev1.Pod{}),
+		builder.Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(
+			func(ctx context.Context, secret *corev1.Secret) []reconcile.Request {
+				return []reconcile.Request{
+					{
+						NamespacedName: types.NamespacedName{
+							Namespace: secret.Name,
+							Name:      secret.Namespace,
+						},
+					},
+				}
+			},
+		)),
+	)
 	if err != nil {
 		entryLog.Error(err, "unable to create controller")
 		os.Exit(1)

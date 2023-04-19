@@ -19,7 +19,9 @@ package handler
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
@@ -41,65 +43,65 @@ import (
 //
 // Unless you are implementing your own EventHandler, you can ignore the functions on the EventHandler interface.
 // Most users shouldn't need to implement their own EventHandler.
-type EventHandler interface {
+type EventHandler[T client.ObjectConstraint] interface {
 	// Create is called in response to an create event - e.g. Pod Creation.
-	Create(context.Context, event.CreateEvent, workqueue.RateLimitingInterface)
+	Create(context.Context, event.CreateEvent[T], workqueue.RateLimitingInterface)
 
 	// Update is called in response to an update event -  e.g. Pod Updated.
-	Update(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface)
+	Update(context.Context, event.UpdateEvent[T], workqueue.RateLimitingInterface)
 
 	// Delete is called in response to a delete event - e.g. Pod Deleted.
-	Delete(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface)
+	Delete(context.Context, event.DeleteEvent[T], workqueue.RateLimitingInterface)
 
 	// Generic is called in response to an event of an unknown type or a synthetic event triggered as a cron or
 	// external trigger request - e.g. reconcile Autoscaling, or a Webhook.
-	Generic(context.Context, event.GenericEvent, workqueue.RateLimitingInterface)
+	Generic(context.Context, event.GenericEvent[T], workqueue.RateLimitingInterface)
 }
 
-var _ EventHandler = Funcs{}
+var _ EventHandler[*corev1.Pod] = Funcs[*corev1.Pod]{}
 
 // Funcs implements EventHandler.
-type Funcs struct {
+type Funcs[T client.ObjectConstraint] struct {
 	// Create is called in response to an add event.  Defaults to no-op.
 	// RateLimitingInterface is used to enqueue reconcile.Requests.
-	CreateFunc func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface)
+	CreateFunc func(context.Context, event.CreateEvent[T], workqueue.RateLimitingInterface)
 
 	// Update is called in response to an update event.  Defaults to no-op.
 	// RateLimitingInterface is used to enqueue reconcile.Requests.
-	UpdateFunc func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface)
+	UpdateFunc func(context.Context, event.UpdateEvent[T], workqueue.RateLimitingInterface)
 
 	// Delete is called in response to a delete event.  Defaults to no-op.
 	// RateLimitingInterface is used to enqueue reconcile.Requests.
-	DeleteFunc func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface)
+	DeleteFunc func(context.Context, event.DeleteEvent[T], workqueue.RateLimitingInterface)
 
 	// GenericFunc is called in response to a generic event.  Defaults to no-op.
 	// RateLimitingInterface is used to enqueue reconcile.Requests.
-	GenericFunc func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface)
+	GenericFunc func(context.Context, event.GenericEvent[T], workqueue.RateLimitingInterface)
 }
 
 // Create implements EventHandler.
-func (h Funcs) Create(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+func (h Funcs[T]) Create(ctx context.Context, e event.CreateEvent[T], q workqueue.RateLimitingInterface) {
 	if h.CreateFunc != nil {
 		h.CreateFunc(ctx, e, q)
 	}
 }
 
 // Delete implements EventHandler.
-func (h Funcs) Delete(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+func (h Funcs[T]) Delete(ctx context.Context, e event.DeleteEvent[T], q workqueue.RateLimitingInterface) {
 	if h.DeleteFunc != nil {
 		h.DeleteFunc(ctx, e, q)
 	}
 }
 
 // Update implements EventHandler.
-func (h Funcs) Update(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+func (h Funcs[T]) Update(ctx context.Context, e event.UpdateEvent[T], q workqueue.RateLimitingInterface) {
 	if h.UpdateFunc != nil {
 		h.UpdateFunc(ctx, e, q)
 	}
 }
 
 // Generic implements EventHandler.
-func (h Funcs) Generic(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
+func (h Funcs[T]) Generic(ctx context.Context, e event.GenericEvent[T], q workqueue.RateLimitingInterface) {
 	if h.GenericFunc != nil {
 		h.GenericFunc(ctx, e, q)
 	}

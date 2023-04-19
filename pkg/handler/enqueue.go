@@ -19,8 +19,10 @@ package handler
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -30,16 +32,17 @@ var enqueueLog = logf.RuntimeLog.WithName("eventhandler").WithName("EnqueueReque
 
 type empty struct{}
 
-var _ EventHandler = &EnqueueRequestForObject{}
+var _ EventHandler[*corev1.Pod] = &EnqueueRequestForObject[*corev1.Pod]{}
 
 // EnqueueRequestForObject enqueues a Request containing the Name and Namespace of the object that is the source of the Event.
 // (e.g. the created / deleted / updated objects Name and Namespace).  handler.EnqueueRequestForObject is used by almost all
 // Controllers that have associated Resources (e.g. CRDs) to reconcile the associated Resource.
-type EnqueueRequestForObject struct{}
+type EnqueueRequestForObject[T client.ObjectConstraint] struct{}
 
 // Create implements EventHandler.
-func (e *EnqueueRequestForObject) Create(ctx context.Context, evt event.CreateEvent, q workqueue.RateLimitingInterface) {
-	if evt.Object == nil {
+func (e *EnqueueRequestForObject[T]) Create(ctx context.Context, evt event.CreateEvent[T], q workqueue.RateLimitingInterface) {
+	var t T
+	if evt.Object == t {
 		enqueueLog.Error(nil, "CreateEvent received with no metadata", "event", evt)
 		return
 	}
@@ -50,14 +53,15 @@ func (e *EnqueueRequestForObject) Create(ctx context.Context, evt event.CreateEv
 }
 
 // Update implements EventHandler.
-func (e *EnqueueRequestForObject) Update(ctx context.Context, evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+func (e *EnqueueRequestForObject[T]) Update(ctx context.Context, evt event.UpdateEvent[T], q workqueue.RateLimitingInterface) {
+	var t T
 	switch {
-	case evt.ObjectNew != nil:
+	case evt.ObjectNew != t:
 		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 			Name:      evt.ObjectNew.GetName(),
 			Namespace: evt.ObjectNew.GetNamespace(),
 		}})
-	case evt.ObjectOld != nil:
+	case evt.ObjectOld != t:
 		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 			Name:      evt.ObjectOld.GetName(),
 			Namespace: evt.ObjectOld.GetNamespace(),
@@ -68,8 +72,9 @@ func (e *EnqueueRequestForObject) Update(ctx context.Context, evt event.UpdateEv
 }
 
 // Delete implements EventHandler.
-func (e *EnqueueRequestForObject) Delete(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
-	if evt.Object == nil {
+func (e *EnqueueRequestForObject[T]) Delete(ctx context.Context, evt event.DeleteEvent[T], q workqueue.RateLimitingInterface) {
+	var t T
+	if evt.Object == t {
 		enqueueLog.Error(nil, "DeleteEvent received with no metadata", "event", evt)
 		return
 	}
@@ -80,8 +85,9 @@ func (e *EnqueueRequestForObject) Delete(ctx context.Context, evt event.DeleteEv
 }
 
 // Generic implements EventHandler.
-func (e *EnqueueRequestForObject) Generic(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
-	if evt.Object == nil {
+func (e *EnqueueRequestForObject[T]) Generic(ctx context.Context, evt event.GenericEvent[T], q workqueue.RateLimitingInterface) {
+	var t T
+	if evt.Object == t {
 		enqueueLog.Error(nil, "GenericEvent received with no metadata", "event", evt)
 		return
 	}

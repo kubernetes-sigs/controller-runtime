@@ -47,6 +47,11 @@ type Object interface {
 	runtime.Object
 }
 
+type ObjectConstraint interface {
+	Object
+	comparable
+}
+
 // ObjectList is a Kubernetes object list, allows functions to work
 // indistinctly with any resource that implements both runtime.Object and
 // metav1.ListInterface interfaces.

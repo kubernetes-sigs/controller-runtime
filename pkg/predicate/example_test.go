@@ -23,12 +23,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-var p predicate.Predicate
+var p predicate.Predicate[*corev1.Pod]
 
 // This example creates a new Predicate to drop Update Events where the Generation has not changed.
 func ExampleFuncs() {
-	p = predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
+	p = predicate.Funcs[*corev1.Pod]{
+		UpdateFunc: func(e event.UpdateEvent[*corev1.Pod]) bool {
 			return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
 		},
 	}

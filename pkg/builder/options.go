@@ -17,27 +17,34 @@ limitations under the License.
 package builder
 
 import (
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // {{{ "Functional" Option Interfaces
 
 // ForOption is some configuration that modifies options for a For request.
-type ForOption interface {
+type ForOption[T client.ObjectConstraint] interface {
 	// ApplyToFor applies this configuration to the given for input.
-	ApplyToFor(*ForInput)
+	ApplyToFor(*ForInput[T])
 }
 
 // OwnsOption is some configuration that modifies options for a owns request.
-type OwnsOption interface {
+type OwnsOption[T client.ObjectConstraint] interface {
 	// ApplyToOwns applies this configuration to the given owns input.
-	ApplyToOwns(*OwnsInput)
+	ApplyToOwns(*OwnsInput[T])
 }
 
 // WatchesOption is some configuration that modifies options for a watches request.
-type WatchesOption interface {
+type WatchesOption[T client.ObjectConstraint] interface {
 	// ApplyToWatches applies this configuration to the given watches options.
-	ApplyToWatches(*WatchesInput)
+	ApplyToWatches(*WatchesInput[T])
+}
+
+type ApplyAll[T client.ObjectConstraint] interface {
+	ForOption[T]
+	OwnsOption[T]
+	WatchesOption[T]
 }
 
 // }}}
@@ -45,35 +52,38 @@ type WatchesOption interface {
 // {{{ Multi-Type Options
 
 // WithPredicates sets the given predicates list.
-func WithPredicates(predicates ...predicate.Predicate) Predicates {
-	return Predicates{
+func WithPredicates[T client.ObjectConstraint](predicates ...predicate.Predicate[T]) Predicates[T] {
+	return Predicates[T]{
 		predicates: predicates,
 	}
 }
 
 // Predicates filters events before enqueuing the keys.
-type Predicates struct {
-	predicates []predicate.Predicate
+type Predicates[T client.ObjectConstraint] struct {
+	predicates []predicate.Predicate[T]
 }
 
 // ApplyToFor applies this configuration to the given ForInput options.
-func (w Predicates) ApplyToFor(opts *ForInput) {
+func (w Predicates[T]) ApplyToFor(opts *ForInput[T]) {
 	opts.predicates = w.predicates
 }
 
 // ApplyToOwns applies this configuration to the given OwnsInput options.
-func (w Predicates) ApplyToOwns(opts *OwnsInput) {
+func (w Predicates[T]) ApplyToOwns(opts *OwnsInput[T]) {
 	opts.predicates = w.predicates
 }
 
 // ApplyToWatches applies this configuration to the given WatchesInput options.
-func (w Predicates) ApplyToWatches(opts *WatchesInput) {
+func (w Predicates[T]) ApplyToWatches(opts *WatchesInput[T]) {
 	opts.predicates = w.predicates
 }
 
-var _ ForOption = &Predicates{}
-var _ OwnsOption = &Predicates{}
-var _ WatchesOption = &Predicates{}
+// TODO(nikola-jokic)
+// var (
+// 	_ ForOption     = &Predicates{}
+// 	_ OwnsOption    = &Predicates{}
+// 	_ WatchesOption = &Predicates{}
+// )
 
 // }}}
 
@@ -82,60 +92,56 @@ var _ WatchesOption = &Predicates{}
 // asProjection configures the projection (currently only metadata) on the input.
 // Currently only metadata is supported.  We might want to expand
 // this to arbitrary non-special local projections in the future.
-type projectAs objectProjection
+type projectAs[T client.ObjectConstraint] objectProjection
 
 // ApplyToFor applies this configuration to the given ForInput options.
-func (p projectAs) ApplyToFor(opts *ForInput) {
+func (p projectAs[T]) ApplyToFor(opts *ForInput[T]) {
 	opts.objectProjection = objectProjection(p)
 }
 
 // ApplyToOwns applies this configuration to the given OwnsInput options.
-func (p projectAs) ApplyToOwns(opts *OwnsInput) {
+func (p projectAs[T]) ApplyToOwns(opts *OwnsInput[T]) {
 	opts.objectProjection = objectProjection(p)
 }
 
 // ApplyToWatches applies this configuration to the given WatchesInput options.
-func (p projectAs) ApplyToWatches(opts *WatchesInput) {
+func (p projectAs[T]) ApplyToWatches(opts *WatchesInput[T]) {
 	opts.objectProjection = objectProjection(p)
 }
 
-var (
-	// OnlyMetadata tells the controller to *only* cache metadata, and to watch
-	// the API server in metadata-only form.  This is useful when watching
-	// lots of objects, really big objects, or objects for which you only know
-	// the GVK, but not the structure.  You'll need to pass
-	// metav1.PartialObjectMetadata to the client when fetching objects in your
-	// reconciler, otherwise you'll end up with a duplicate structured or
-	// unstructured cache.
-	//
-	// When watching a resource with OnlyMetadata, for example the v1.Pod, you
-	// should not Get and List using the v1.Pod type. Instead, you should use
-	// the special metav1.PartialObjectMetadata type.
-	//
-	// ❌ Incorrect:
-	//
-	//   pod := &v1.Pod{}
-	//   mgr.GetClient().Get(ctx, nsAndName, pod)
-	//
-	// ✅ Correct:
-	//
-	//   pod := &metav1.PartialObjectMetadata{}
-	//   pod.SetGroupVersionKind(schema.GroupVersionKind{
-	//       Group:   "",
-	//       Version: "v1",
-	//       Kind:    "Pod",
-	//   })
-	//   mgr.GetClient().Get(ctx, nsAndName, pod)
-	//
-	// In the first case, controller-runtime will create another cache for the
-	// concrete type on top of the metadata cache; this increases memory
-	// consumption and leads to race conditions as caches are not in sync.
-	OnlyMetadata = projectAs(projectAsMetadata)
-
-	_ ForOption     = OnlyMetadata
-	_ OwnsOption    = OnlyMetadata
-	_ WatchesOption = OnlyMetadata
-)
+// OnlyMetadata tells the controller to *only* cache metadata, and to watch
+// the API server in metadata-only form.  This is useful when watching
+// lots of objects, really big objects, or objects for which you only know
+// the GVK, but not the structure.  You'll need to pass
+// metav1.PartialObjectMetadata to the client when fetching objects in your
+// reconciler, otherwise you'll end up with a duplicate structured or
+// unstructured cache.
+//
+// When watching a resource with OnlyMetadata, for example the v1.Pod, you
+// should not Get and List using the v1.Pod type. Instead, you should use
+// the special metav1.PartialObjectMetadata type.
+//
+// ❌ Incorrect:
+//
+//	pod := &v1.Pod{}
+//	mgr.GetClient().Get(ctx, nsAndName, pod)
+//
+// ✅ Correct:
+//
+//	pod := &metav1.PartialObjectMetadata{}
+//	pod.SetGroupVersionKind(schema.GroupVersionKind{
+//	    Group:   "",
+//	    Version: "v1",
+//	    Kind:    "Pod",
+//	})
+//	mgr.GetClient().Get(ctx, nsAndName, pod)
+//
+// In the first case, controller-runtime will create another cache for the
+// concrete type on top of the metadata cache; this increases memory
+// consumption and leads to race conditions as caches are not in sync.
+func OnlyMetadata[T client.ObjectConstraint]() ApplyAll[T] {
+	return projectAs[T](projectAsMetadata)
+}
 
 // }}}
 
@@ -146,11 +152,13 @@ var (
 // the handler receives notification for every owner of the object with the given type.
 // If unset (default), the handler receives notification only for the first
 // OwnerReference with `Controller: true`.
-var MatchEveryOwner = &matchEveryOwner{}
+func MatchEveryOwner[T client.ObjectConstraint]() *matchEveryOwner[T] {
+	return &matchEveryOwner[T]{}
+}
 
-type matchEveryOwner struct{}
+type matchEveryOwner[T client.ObjectConstraint] struct{}
 
 // ApplyToOwns applies this configuration to the given OwnsInput options.
-func (o matchEveryOwner) ApplyToOwns(opts *OwnsInput) {
+func (o matchEveryOwner[T]) ApplyToOwns(opts *OwnsInput[T]) {
 	opts.matchEveryOwner = true
 }

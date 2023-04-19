@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -76,9 +77,9 @@ var _ = Describe("controller.Controller", func() {
 			currentGRs := goleak.IgnoreCurrent()
 
 			ctx, cancel := context.WithCancel(context.Background())
-			watchChan := make(chan event.GenericEvent, 1)
-			watch := &source.Channel{Source: watchChan}
-			watchChan <- event.GenericEvent{Object: &corev1.Pod{}}
+			watchChan := make(chan event.GenericEvent[*corev1.Pod], 1)
+			watch := &source.Channel[*corev1.Pod]{Source: watchChan}
+			watchChan <- event.GenericEvent[*corev1.Pod]{Object: &corev1.Pod{}}
 
 			reconcileStarted := make(chan struct{})
 			controllerFinished := make(chan struct{})
@@ -99,7 +100,7 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{Reconciler: rec})
-			Expect(c.Watch(watch, &handler.EnqueueRequestForObject{})).To(Succeed())
+			Expect(c.Watch[client.Object](watch, &handler.EnqueueRequestForObject{})).To(Succeed())
 			Expect(err).NotTo(HaveOccurred())
 
 			go func() {

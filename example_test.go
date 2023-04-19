@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	// since we invoke tests with -ginkgo.junit-report we need to import ginkgo.
@@ -38,7 +39,7 @@ import (
 //
 // * Start the application.
 func Example() {
-	var log = ctrl.Log.WithName("builder-examples")
+	log := ctrl.Log.WithName("builder-examples")
 
 	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
 	if err != nil {
@@ -46,11 +47,13 @@ func Example() {
 		os.Exit(1)
 	}
 
-	err = ctrl.
-		NewControllerManagedBy(manager). // Create the Controller
-		For(&appsv1.ReplicaSet{}).       // ReplicaSet is the Application API
-		Owns(&corev1.Pod{}).             // ReplicaSet owns Pods created by it
-		Complete(&ReplicaSetReconciler{Client: manager.GetClient()})
+	_, err = ctrl.
+		NewControllerManagedBy(
+			manager,
+			&ReplicaSetReconciler{Client: manager.GetClient()},
+			builder.For(&appsv1.ReplicaSet{}),
+			builder.Owns(&corev1.Pod{}),
+		)
 	if err != nil {
 		log.Error(err, "could not create controller")
 		os.Exit(1)
@@ -75,7 +78,7 @@ func Example() {
 //
 // * Start the application.
 func Example_updateLeaderElectionDurations() {
-	var log = ctrl.Log.WithName("builder-examples")
+	log := ctrl.Log.WithName("builder-examples")
 	leaseDuration := 100 * time.Second
 	renewDeadline := 80 * time.Second
 	retryPeriod := 20 * time.Second
@@ -91,11 +94,14 @@ func Example_updateLeaderElectionDurations() {
 		os.Exit(1)
 	}
 
-	err = ctrl.
-		NewControllerManagedBy(manager). // Create the Controller
-		For(&appsv1.ReplicaSet{}).       // ReplicaSet is the Application API
-		Owns(&corev1.Pod{}).             // ReplicaSet owns Pods created by it
-		Complete(&ReplicaSetReconciler{Client: manager.GetClient()})
+	_, err = ctrl.
+		NewControllerManagedBy(
+			manager,
+			&ReplicaSetReconciler{Client: manager.GetClient()},
+			builder.For(&appsv1.ReplicaSet{}), // ReplicaSet is the Application API
+			builder.Owns(&corev1.Pod{}),       // ReplicaSet owns Pods created by it
+		)
+
 	if err != nil {
 		log.Error(err, "could not create controller")
 		os.Exit(1)

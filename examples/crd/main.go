@@ -28,14 +28,13 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	api "sigs.k8s.io/controller-runtime/examples/crd/pkg"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-var (
-	setupLog = ctrl.Log.WithName("setup")
-)
+var setupLog = ctrl.Log.WithName("setup")
 
 type reconciler struct {
 	client.Client
@@ -117,13 +116,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = ctrl.NewControllerManagedBy(mgr).
-		For(&api.ChaosPod{}).
-		Owns(&corev1.Pod{}).
-		Complete(&reconciler{
+	_, err = ctrl.NewControllerManagedBy(
+		mgr,
+		&reconciler{
 			Client: mgr.GetClient(),
 			scheme: mgr.GetScheme(),
-		})
+		},
+		builder.For(&api.ChaosPod{}),
+		builder.Owns(&corev1.Pod{}),
+	)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller")
 		os.Exit(1)

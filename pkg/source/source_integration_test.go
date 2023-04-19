@@ -36,11 +36,28 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
+type eventChannels[T client.ObjectConstraint] struct {
+	create chan event.CreateEvent[T]
+	update chan event.UpdateEvent[T]
+	delete chan event.DeleteEvent[T]
+}
+
+func (ec *eventChannels[T]) close() {
+	close(ec.create)
+	close(ec.update)
+	close(ec.delete)
+}
+
+func newEventChannels[T client.ObjectConstraint]() *eventChannels[T] {
+	return &eventChannels[T]{
+		create: make(chan event.CreateEvent[T]),
+		update: make(chan event.UpdateEvent[T]),
+		delete: make(chan event.DeleteEvent[T]),
+	}
+}
+
 var _ = Describe("Source", func() {
-	var instance1, instance2 source.Source
-	var obj client.Object
 	var q workqueue.RateLimitingInterface
-	var c1, c2 chan interface{}
 	var ns string
 	count := 0
 
@@ -54,25 +71,33 @@ var _ = Describe("Source", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		q = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-		c1 = make(chan interface{})
-		c2 = make(chan interface{})
-	})
-
-	JustBeforeEach(func() {
-		instance1 = source.Kind(icache, obj)
-		instance2 = source.Kind(icache, obj)
 	})
 
 	AfterEach(func() {
 		err := clientset.CoreV1().Namespaces().Delete(ctx, ns, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		close(c1)
-		close(c2)
 	})
 
 	Describe("Kind", func() {
 		Context("for a Deployment resource", func() {
-			obj = &appsv1.Deployment{}
+			obj := &appsv1.Deployment{}
+			var instance1, instance2 source.Source[*appsv1.Deployment]
+			var c1, c2 *eventChannels[*appsv1.Deployment]
+
+			BeforeEach(func() {
+				c1 = newEventChannels[*appsv1.Deployment]()
+				c2 = newEventChannels[*appsv1.Deployment]()
+			})
+
+			JustBeforeEach(func() {
+				instance1 = source.Kind(icache, obj)
+				instance2 = source.Kind(icache, obj)
+			})
+
+			AfterEach(func() {
+				c1.close()
+				c2.close()
+			})
 
 			It("should provide Deployment Events", func() {
 				var created, updated, deleted *appsv1.Deployment
@@ -101,22 +126,22 @@ var _ = Describe("Source", func() {
 				}
 
 				// Create an event handler to verify the events
-				newHandler := func(c chan interface{}) handler.Funcs {
-					return handler.Funcs{
-						CreateFunc: func(ctx context.Context, evt event.CreateEvent, rli workqueue.RateLimitingInterface) {
+				newHandler := func(evtChannels *eventChannels[*appsv1.Deployment]) handler.Funcs[*appsv1.Deployment] {
+					return handler.Funcs[*appsv1.Deployment]{
+						CreateFunc: func(ctx context.Context, evt event.CreateEvent[*appsv1.Deployment], rli workqueue.RateLimitingInterface) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))
-							c <- evt
+							evtChannels.create <- evt
 						},
-						UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, rli workqueue.RateLimitingInterface) {
+						UpdateFunc: func(ctx context.Context, evt event.UpdateEvent[*appsv1.Deployment], rli workqueue.RateLimitingInterface) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))
-							c <- evt
+							evtChannels.update <- evt
 						},
-						DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, rli workqueue.RateLimitingInterface) {
+						DeleteFunc: func(ctx context.Context, evt event.DeleteEvent[*appsv1.Deployment], rli workqueue.RateLimitingInterface) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))
-							c <- evt
+							evtChannels.delete <- evt
 						},
 					}
 				}
@@ -133,15 +158,11 @@ var _ = Describe("Source", func() {
 				Expect(created).NotTo(BeNil())
 
 				// Check first CreateEvent
-				evt := <-c1
-				createEvt, ok := evt.(event.CreateEvent)
-				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.CreateEvent{}))
+				createEvt := <-c1.create
 				Expect(createEvt.Object).To(Equal(created))
 
 				// Check second CreateEvent
-				evt = <-c2
-				createEvt, ok = evt.(event.CreateEvent)
-				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.CreateEvent{}))
+				createEvt = <-c2.create
 				Expect(createEvt.Object).To(Equal(created))
 
 				By("Updating a Deployment and expecting the UpdateEvent.")
@@ -151,19 +172,13 @@ var _ = Describe("Source", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// Check first UpdateEvent
-				evt = <-c1
-				updateEvt, ok := evt.(event.UpdateEvent)
-				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.UpdateEvent{}))
-
+				updateEvt := <-c1.update
 				Expect(updateEvt.ObjectNew).To(Equal(updated))
 
 				Expect(updateEvt.ObjectOld).To(Equal(created))
 
 				// Check second UpdateEvent
-				evt = <-c2
-				updateEvt, ok = evt.(event.UpdateEvent)
-				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.UpdateEvent{}))
-
+				updateEvt = <-c2.update
 				Expect(updateEvt.ObjectNew).To(Equal(updated))
 
 				Expect(updateEvt.ObjectOld).To(Equal(created))
@@ -174,15 +189,11 @@ var _ = Describe("Source", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				deleted.SetResourceVersion("")
-				evt = <-c1
-				deleteEvt, ok := evt.(event.DeleteEvent)
-				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.DeleteEvent{}))
+				deleteEvt := <-c1.delete
 				deleteEvt.Object.SetResourceVersion("")
 				Expect(deleteEvt.Object).To(Equal(deleted))
 
-				evt = <-c2
-				deleteEvt, ok = evt.(event.DeleteEvent)
-				Expect(ok).To(BeTrue(), fmt.Sprintf("expect %T to be %T", evt, event.DeleteEvent{}))
+				deleteEvt = <-c2.delete
 				deleteEvt.Object.SetResourceVersion("")
 				Expect(deleteEvt.Object).To(Equal(deleted))
 			})
@@ -191,7 +202,6 @@ var _ = Describe("Source", func() {
 		// TODO(pwittrock): Write this test
 		PContext("for a Foo CRD resource", func() {
 			It("should provide Foo Events", func() {
-
 			})
 		})
 	})

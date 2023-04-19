@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -50,7 +51,7 @@ func main() {
 
 	// Setup a new controller to reconcile ReplicaSets
 	entryLog.Info("Setting up controller")
-	c, err := controller.New("foo-controller", mgr, controller.Options{
+	c, err := controller.New[client.Object]("foo-controller", mgr, controller.Options{
 		Reconciler: &reconcileReplicaSet{client: mgr.GetClient()},
 	})
 	if err != nil {
@@ -59,14 +60,14 @@ func main() {
 	}
 
 	// Watch ReplicaSets and enqueue ReplicaSet object key
-	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.ReplicaSet{}), &handler.EnqueueRequestForObject{}); err != nil {
+	if err := c.Watch(source.Kind[client.Object](mgr.GetCache(), &appsv1.ReplicaSet{}), &handler.EnqueueRequestForObject[client.Object]{}); err != nil {
 		entryLog.Error(err, "unable to watch ReplicaSets")
 		os.Exit(1)
 	}
 
 	// Watch Pods and enqueue owning ReplicaSet key
-	if err := c.Watch(source.Kind(mgr.GetCache(), &corev1.Pod{}),
-		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &appsv1.ReplicaSet{}, handler.OnlyControllerOwner())); err != nil {
+	if err := c.Watch(source.Kind[client.Object](mgr.GetCache(), &corev1.Pod{}),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &appsv1.ReplicaSet{}, handler.OnlyControllerOwner[*appsv1.ReplicaSet]())); err != nil {
 		entryLog.Error(err, "unable to watch Pods")
 		os.Exit(1)
 	}

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -44,41 +45,41 @@ const (
 // * Use Channel for events originating outside the cluster (eh.g. GitHub Webhook callback, Polling external urls).
 //
 // Users may build their own Source implementations.
-type Source interface {
+type Source[T client.ObjectConstraint] interface {
 	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 	// to enqueue reconcile.Requests.
-	Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+	Start(context.Context, handler.EventHandler[T], workqueue.RateLimitingInterface, ...predicate.Predicate[T]) error
 }
 
 // SyncingSource is a source that needs syncing prior to being usable. The controller
 // will call its WaitForSync prior to starting workers.
-type SyncingSource interface {
-	Source
+type SyncingSource[T client.ObjectConstraint] interface {
+	Source[T]
 	WaitForSync(ctx context.Context) error
 }
 
 // Kind creates a KindSource with the given cache provider.
-func Kind(cache cache.Cache, object client.Object) SyncingSource {
-	return &internal.Kind{Type: object, Cache: cache}
+func Kind[T client.ObjectConstraint](cache cache.Cache, object T) SyncingSource[T] {
+	return &internal.Kind[T]{Type: object, Cache: cache}
 }
 
-var _ Source = &Channel{}
+var _ Source[*corev1.Pod] = &Channel[*corev1.Pod]{}
 
 // Channel is used to provide a source of events originating outside the cluster
 // (e.g. GitHub Webhook callback).  Channel requires the user to wire the external
 // source (eh.g. http handler) to write GenericEvents to the underlying channel.
-type Channel struct {
+type Channel[T client.ObjectConstraint] struct {
 	// once ensures the event distribution goroutine will be performed only once
 	once sync.Once
 
 	// Source is the source channel to fetch GenericEvents
-	Source <-chan event.GenericEvent
+	Source <-chan event.GenericEvent[T]
 
 	// stop is to end ongoing goroutine, and close the channels
 	stop <-chan struct{}
 
 	// dest is the destination channels of the added event handlers
-	dest []chan event.GenericEvent
+	dest []chan event.GenericEvent[T]
 
 	// DestBufferSize is the specified buffer size of dest channels.
 	// Default to 1024 if not specified.
@@ -88,16 +89,17 @@ type Channel struct {
 	destLock sync.Mutex
 }
 
-func (cs *Channel) String() string {
+func (cs *Channel[T]) String() string {
 	return fmt.Sprintf("channel source: %p", cs)
 }
 
 // Start implements Source and should only be called by the Controller.
-func (cs *Channel) Start(
+func (cs *Channel[T]) Start(
 	ctx context.Context,
-	handler handler.EventHandler,
+	handler handler.EventHandler[T],
 	queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
+	prct ...predicate.Predicate[T],
+) error {
 	// Source should have been specified by the user.
 	if cs.Source == nil {
 		return fmt.Errorf("must specify Channel.Source")
@@ -111,7 +113,7 @@ func (cs *Channel) Start(
 		cs.DestBufferSize = defaultBufferSize
 	}
 
-	dst := make(chan event.GenericEvent, cs.DestBufferSize)
+	dst := make(chan event.GenericEvent[T], cs.DestBufferSize)
 
 	cs.destLock.Lock()
 	cs.dest = append(cs.dest, dst)
@@ -145,7 +147,7 @@ func (cs *Channel) Start(
 	return nil
 }
 
-func (cs *Channel) doStop() {
+func (cs *Channel[T]) doStop() {
 	cs.destLock.Lock()
 	defer cs.destLock.Unlock()
 
@@ -154,7 +156,7 @@ func (cs *Channel) doStop() {
 	}
 }
 
-func (cs *Channel) distribute(evt event.GenericEvent) {
+func (cs *Channel[T]) distribute(evt event.GenericEvent[T]) {
 	cs.destLock.Lock()
 	defer cs.destLock.Unlock()
 
@@ -168,7 +170,7 @@ func (cs *Channel) distribute(evt event.GenericEvent) {
 	}
 }
 
-func (cs *Channel) syncLoop(ctx context.Context) {
+func (cs *Channel[T]) syncLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -188,17 +190,18 @@ func (cs *Channel) syncLoop(ctx context.Context) {
 }
 
 // Informer is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
-type Informer struct {
+type Informer[T client.ObjectConstraint] struct {
 	// Informer is the controller-runtime Informer
 	Informer cache.Informer
 }
 
-var _ Source = &Informer{}
+var _ Source[*corev1.Pod] = &Informer[*corev1.Pod]{}
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
+func (is *Informer[T]) Start(ctx context.Context, handler handler.EventHandler[T], queue workqueue.RateLimitingInterface,
+	prct ...predicate.Predicate[T],
+) error {
 	// Informer should have been specified by the user.
 	if is.Informer == nil {
 		return fmt.Errorf("must specify Informer.Informer")
@@ -211,21 +214,22 @@ func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, que
 	return nil
 }
 
-func (is *Informer) String() string {
+func (is *Informer[T]) String() string {
 	return fmt.Sprintf("informer source: %p", is.Informer)
 }
 
-var _ Source = Func(nil)
+var _ Source[*corev1.Pod] = Func[*corev1.Pod](nil)
 
 // Func is a function that implements Source.
-type Func func(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+type Func[T client.ObjectConstraint] func(context.Context, handler.EventHandler[T], workqueue.RateLimitingInterface, ...predicate.Predicate[T]) error
 
 // Start implements Source.
-func (f Func) Start(ctx context.Context, evt handler.EventHandler, queue workqueue.RateLimitingInterface,
-	pr ...predicate.Predicate) error {
+func (f Func[T]) Start(ctx context.Context, evt handler.EventHandler[T], queue workqueue.RateLimitingInterface,
+	pr ...predicate.Predicate[T],
+) error {
 	return f(ctx, evt, queue, pr...)
 }
 
-func (f Func) String() string {
+func (f Func[T]) String() string {
 	return fmt.Sprintf("func source: %p", f)
 }

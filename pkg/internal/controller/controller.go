@@ -28,6 +28,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -37,7 +38,7 @@ import (
 )
 
 // Controller implements controller.Controller.
-type Controller struct {
+type Controller[T client.ObjectConstraint] struct {
 	// Name is used to uniquely identify a Controller in tracing, logging and monitoring.  Name is required.
 	Name string
 
@@ -76,7 +77,7 @@ type Controller struct {
 	CacheSyncTimeout time.Duration
 
 	// startWatches maintains a list of sources, handlers, and predicates to start when the controller is started.
-	startWatches []watchDescription
+	startWatches []watchDescription[T]
 
 	// LogConstructor is used to construct a logger to then log messages to users during reconciliation,
 	// or for example when a watch is started.
@@ -92,14 +93,14 @@ type Controller struct {
 }
 
 // watchDescription contains all the information necessary to start a watch.
-type watchDescription struct {
-	src        source.Source
-	handler    handler.EventHandler
-	predicates []predicate.Predicate
+type watchDescription[T client.ObjectConstraint] struct {
+	src        source.Source[T]
+	handler    handler.EventHandler[T]
+	predicates []predicate.Predicate[T]
 }
 
 // Reconcile implements reconcile.Reconciler.
-func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (_ reconcile.Result, err error) {
+func (c *Controller[T]) Reconcile(ctx context.Context, req reconcile.Request) (_ reconcile.Result, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if c.RecoverPanic != nil && *c.RecoverPanic {
@@ -119,7 +120,7 @@ func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (_ re
 }
 
 // Watch implements controller.Controller.
-func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prct ...predicate.Predicate) error {
+func (c *Controller[T]) Watch(src source.Source[T], evthdler handler.EventHandler[T], prct ...predicate.Predicate[T]) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -127,7 +128,7 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	//
 	// These watches are going to be held on the controller struct until the manager or user calls Start(...).
 	if !c.Started {
-		c.startWatches = append(c.startWatches, watchDescription{src: src, handler: evthdler, predicates: prct})
+		c.startWatches = append(c.startWatches, watchDescription[T]{src: src, handler: evthdler, predicates: prct})
 		return nil
 	}
 
@@ -136,7 +137,7 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 }
 
 // NeedLeaderElection implements the manager.LeaderElectionRunnable interface.
-func (c *Controller) NeedLeaderElection() bool {
+func (c *Controller[T]) NeedLeaderElection() bool {
 	if c.LeaderElected == nil {
 		return true
 	}
@@ -144,7 +145,7 @@ func (c *Controller) NeedLeaderElection() bool {
 }
 
 // Start implements controller.Controller.
-func (c *Controller) Start(ctx context.Context) error {
+func (c *Controller[T]) Start(ctx context.Context) error {
 	// use an IIFE to get proper lock handling
 	// but lock outside to get proper handling of the queue shutdown
 	c.mu.Lock()
@@ -185,7 +186,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		c.LogConstructor(nil).Info("Starting Controller")
 
 		for _, watch := range c.startWatches {
-			syncingSource, ok := watch.src.(source.SyncingSource)
+			syncingSource, ok := watch.src.(source.SyncingSource[T])
 			if !ok {
 				continue
 			}
@@ -244,7 +245,7 @@ func (c *Controller) Start(ctx context.Context) error {
 
 // processNextWorkItem will read a single work item off the workqueue and
 // attempt to process it, by calling the reconcileHandler.
-func (c *Controller) processNextWorkItem(ctx context.Context) bool {
+func (c *Controller[T]) processNextWorkItem(ctx context.Context) bool {
 	obj, shutdown := c.Queue.Get()
 	if shutdown {
 		// Stop working
@@ -273,7 +274,7 @@ const (
 	labelSuccess      = "success"
 )
 
-func (c *Controller) initMetrics() {
+func (c *Controller[T]) initMetrics() {
 	ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Set(0)
 	ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Add(0)
 	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelError).Add(0)
@@ -283,7 +284,7 @@ func (c *Controller) initMetrics() {
 	ctrlmetrics.WorkerCount.WithLabelValues(c.Name).Set(float64(c.MaxConcurrentReconciles))
 }
 
-func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
+func (c *Controller[T]) reconcileHandler(ctx context.Context, obj interface{}) {
 	// Update metrics after processing each item
 	reconcileStartTS := time.Now()
 	defer func() {
@@ -338,12 +339,12 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 }
 
 // GetLogger returns this controller's logger.
-func (c *Controller) GetLogger() logr.Logger {
+func (c *Controller[T]) GetLogger() logr.Logger {
 	return c.LogConstructor(nil)
 }
 
 // updateMetrics updates prometheus metrics within the controller.
-func (c *Controller) updateMetrics(reconcileTime time.Duration) {
+func (c *Controller[T]) updateMetrics(reconcileTime time.Duration) {
 	ctrlmetrics.ReconcileTime.WithLabelValues(c.Name).Observe(reconcileTime.Seconds())
 }
 

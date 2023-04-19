@@ -25,6 +25,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	cfg "sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -53,12 +54,14 @@ func main() {
 	}
 
 	// Setup a new controller to reconcile ReplicaSets
-	err = ctrl.NewControllerManagedBy(mgr).
-		For(&appsv1.ReplicaSet{}).
-		Owns(&corev1.Pod{}).
-		Complete(&reconcileReplicaSet{
+	_, err = ctrl.NewControllerManagedBy(
+		mgr,
+		&reconcileReplicaSet{
 			client: mgr.GetClient(),
-		})
+		},
+		builder.For(&appsv1.ReplicaSet{}),
+		builder.Owns(&corev1.Pod{}),
+	)
 	if err != nil {
 		entryLog.Error(err, "unable to create controller")
 		os.Exit(1)

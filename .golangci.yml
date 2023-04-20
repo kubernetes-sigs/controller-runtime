@@ -66,6 +66,35 @@ linters-settings:
     include-go-root: true
     packages:
       - io/ioutil # https://go.dev/doc/go1.16#ioutil
+  revive:
+    rules:
+      # The following rules are recommended https://github.com/mgechev/revive#recommended-configuration
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: superfluous-else
+      - name: unreachable-code
+      - name: redefines-builtin-id
+      #
+      # Rules in addition to the recommended configuration above.
+      #
+      - name: bool-literal-in-expr
+      - name: constant-logical-expr
 
 issues:
   max-same-issues: 0
@@ -133,9 +162,6 @@ issues:
     - linters:
         - gosec
       text: "G304: Potential file inclusion via variable"
-    - linters:
-        - revive
-      text: "package-comments: should have a package comment"
     - linters:
         - dupl
       path: _test\.go

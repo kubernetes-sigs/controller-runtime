@@ -164,7 +164,7 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where the old object doesn't have a ResourceVersion or metadata", func() {
 			It("should return false", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "baz",
 						Namespace:       "biz",
@@ -172,7 +172,7 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					ObjectNew: new,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
@@ -183,7 +183,7 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where the new object doesn't have a ResourceVersion or metadata", func() {
 			It("should return false", func() {
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "baz",
 						Namespace:       "biz",
@@ -191,7 +191,7 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					ObjectOld: old,
+					ObjectOld: oldPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
@@ -203,14 +203,14 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where the ResourceVersion hasn't changed", func() {
 			It("should return false", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "baz",
 						Namespace:       "biz",
 						ResourceVersion: "v1",
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "baz",
 						Namespace:       "biz",
@@ -218,8 +218,8 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
@@ -231,22 +231,22 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where the ResourceVersion has changed", func() {
 			It("should return true", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "baz",
 						Namespace:       "biz",
 						ResourceVersion: "v1",
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "baz",
 						Namespace:       "biz",
 						ResourceVersion: "v2",
 					}}
 				passEvt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
@@ -258,23 +258,23 @@ var _ = Describe("Predicate", func() {
 		Context("Where the objects or metadata are missing", func() {
 
 			It("should return false", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "baz",
 						Namespace:       "biz",
 						ResourceVersion: "v1",
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "baz",
 						Namespace:       "biz",
 						ResourceVersion: "v1",
 					}}
 
-				failEvt1 := event.UpdateEvent{ObjectOld: old}
-				failEvt2 := event.UpdateEvent{ObjectNew: new}
-				failEvt3 := event.UpdateEvent{ObjectOld: old, ObjectNew: new}
+				failEvt1 := event.UpdateEvent{ObjectOld: oldPod}
+				failEvt2 := event.UpdateEvent{ObjectNew: newPod}
+				failEvt3 := event.UpdateEvent{ObjectOld: oldPod, ObjectNew: newPod}
 				Expect(instance.Create(event.CreateEvent{})).Should(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).Should(BeTrue())
 				Expect(instance.Generic(event.GenericEvent{})).Should(BeTrue())
@@ -290,7 +290,7 @@ var _ = Describe("Predicate", func() {
 		instance := predicate.GenerationChangedPredicate{}
 		Context("Where the old object doesn't have a Generation or metadata", func() {
 			It("should return false", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "baz",
 						Namespace:  "biz",
@@ -298,7 +298,7 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					ObjectNew: new,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -309,7 +309,7 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where the new object doesn't have a Generation or metadata", func() {
 			It("should return false", func() {
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "baz",
 						Namespace:  "biz",
@@ -317,7 +317,7 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					ObjectOld: old,
+					ObjectOld: oldPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -328,14 +328,14 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where the Generation hasn't changed", func() {
 			It("should return false", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "baz",
 						Namespace:  "biz",
 						Generation: 1,
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "baz",
 						Namespace:  "biz",
@@ -343,8 +343,8 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -355,22 +355,22 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where the Generation has changed", func() {
 			It("should return true", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "baz",
 						Namespace:  "biz",
 						Generation: 1,
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "baz",
 						Namespace:  "biz",
 						Generation: 2,
 					}}
 				passEvt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -382,23 +382,23 @@ var _ = Describe("Predicate", func() {
 		Context("Where the objects or metadata are missing", func() {
 
 			It("should return false", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "baz",
 						Namespace:  "biz",
 						Generation: 1,
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "baz",
 						Namespace:  "biz",
 						Generation: 1,
 					}}
 
-				failEvt1 := event.UpdateEvent{ObjectOld: old}
-				failEvt2 := event.UpdateEvent{ObjectNew: new}
-				failEvt3 := event.UpdateEvent{ObjectOld: old, ObjectNew: new}
+				failEvt1 := event.UpdateEvent{ObjectOld: oldPod}
+				failEvt2 := event.UpdateEvent{ObjectNew: newPod}
+				failEvt3 := event.UpdateEvent{ObjectOld: oldPod, ObjectNew: newPod}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
 				Expect(instance.Generic(event.GenericEvent{})).To(BeTrue())
@@ -416,7 +416,7 @@ var _ = Describe("Predicate", func() {
 		instance := predicate.AnnotationChangedPredicate{}
 		Context("Where the old object is missing", func() {
 			It("should return false", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -426,7 +426,7 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					ObjectNew: new,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -437,7 +437,7 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where the new object is missing", func() {
 			It("should return false", func() {
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -447,7 +447,7 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					ObjectOld: old,
+					ObjectOld: oldPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -458,21 +458,21 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where the annotations are empty", func() {
 			It("should return false", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
 					}}
 
 				failEvnt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -483,7 +483,7 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where the annotations haven't changed", func() {
 			It("should return false", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -492,7 +492,7 @@ var _ = Describe("Predicate", func() {
 						},
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -502,8 +502,8 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				failEvnt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -514,7 +514,7 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where an annotation value has changed", func() {
 			It("should return true", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -523,7 +523,7 @@ var _ = Describe("Predicate", func() {
 						},
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -533,8 +533,8 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				passEvt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -545,7 +545,7 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where an annotation has been added", func() {
 			It("should return true", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -554,7 +554,7 @@ var _ = Describe("Predicate", func() {
 						},
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -565,8 +565,8 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				passEvt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -577,7 +577,7 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where an annotation has been removed", func() {
 			It("should return true", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -587,7 +587,7 @@ var _ = Describe("Predicate", func() {
 						},
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -597,8 +597,8 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				passEvt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -614,7 +614,7 @@ var _ = Describe("Predicate", func() {
 		instance := predicate.LabelChangedPredicate{}
 		Context("Where the old object is missing", func() {
 			It("should return false", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -624,7 +624,7 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				evt := event.UpdateEvent{
-					ObjectNew: new,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -635,7 +635,7 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where the new object is missing", func() {
 			It("should return false", func() {
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -645,7 +645,7 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				evt := event.UpdateEvent{
-					ObjectOld: old,
+					ObjectOld: oldPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -656,21 +656,21 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where the labels are empty", func() {
 			It("should return false", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
 					}}
 
 				evt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -681,7 +681,7 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where the labels haven't changed", func() {
 			It("should return false", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -690,7 +690,7 @@ var _ = Describe("Predicate", func() {
 						},
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -700,8 +700,8 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				evt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -712,7 +712,7 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where a label value has changed", func() {
 			It("should return true", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -721,7 +721,7 @@ var _ = Describe("Predicate", func() {
 						},
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -731,8 +731,8 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				evt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -743,7 +743,7 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where a label has been added", func() {
 			It("should return true", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -752,7 +752,7 @@ var _ = Describe("Predicate", func() {
 						},
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -763,8 +763,8 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				evt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -775,7 +775,7 @@ var _ = Describe("Predicate", func() {
 
 		Context("Where a label has been removed", func() {
 			It("should return true", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -785,7 +785,7 @@ var _ = Describe("Predicate", func() {
 						},
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
@@ -795,8 +795,8 @@ var _ = Describe("Predicate", func() {
 					}}
 
 				evt := event.UpdateEvent{
-					ObjectOld: old,
-					ObjectNew: new,
+					ObjectOld: oldPod,
+					ObjectNew: newPod,
 				}
 				Expect(instance.Create(event.CreateEvent{})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{})).To(BeTrue())
@@ -885,42 +885,42 @@ var _ = Describe("Predicate", func() {
 		byNamespaceFuncs := predicate.NewPredicateFuncs(byNamespaceFilter("biz"))
 		Context("Where the namespace is matching", func() {
 			It("should return true", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
 					}}
-				passEvt1 := event.UpdateEvent{ObjectOld: old, ObjectNew: new}
-				Expect(byNamespaceFuncs.Create(event.CreateEvent{Object: new})).To(BeTrue())
-				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Object: old})).To(BeTrue())
-				Expect(byNamespaceFuncs.Generic(event.GenericEvent{Object: new})).To(BeTrue())
+				passEvt1 := event.UpdateEvent{ObjectOld: oldPod, ObjectNew: newPod}
+				Expect(byNamespaceFuncs.Create(event.CreateEvent{Object: newPod})).To(BeTrue())
+				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Object: oldPod})).To(BeTrue())
+				Expect(byNamespaceFuncs.Generic(event.GenericEvent{Object: newPod})).To(BeTrue())
 				Expect(byNamespaceFuncs.Update(passEvt1)).To(BeTrue())
 			})
 		})
 
 		Context("Where the namespace is not matching", func() {
 			It("should return false", func() {
-				new := &corev1.Pod{
+				newPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "bizz",
 					}}
 
-				old := &corev1.Pod{
+				oldPod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "baz",
 						Namespace: "biz",
 					}}
-				failEvt1 := event.UpdateEvent{ObjectOld: old, ObjectNew: new}
-				Expect(byNamespaceFuncs.Create(event.CreateEvent{Object: new})).To(BeFalse())
-				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Object: new})).To(BeFalse())
-				Expect(byNamespaceFuncs.Generic(event.GenericEvent{Object: new})).To(BeFalse())
+				failEvt1 := event.UpdateEvent{ObjectOld: oldPod, ObjectNew: newPod}
+				Expect(byNamespaceFuncs.Create(event.CreateEvent{Object: newPod})).To(BeFalse())
+				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Object: newPod})).To(BeFalse())
+				Expect(byNamespaceFuncs.Generic(event.GenericEvent{Object: newPod})).To(BeFalse())
 				Expect(byNamespaceFuncs.Update(failEvt1)).To(BeFalse())
 			})
 		})

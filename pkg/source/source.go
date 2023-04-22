@@ -103,9 +103,6 @@ func (cs *Channel) Start(
 		return fmt.Errorf("must specify Channel.Source")
 	}
 
-	// set the stop channel to be the context.
-	cs.stop = ctx.Done()
-
 	// use default value if DestBufferSize not specified
 	if cs.DestBufferSize == 0 {
 		cs.DestBufferSize = defaultBufferSize

@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -1448,5 +1450,18 @@ var _ = Describe("Fake client builder", func() {
 				"test-name",
 				func(client.Object) []string { return []string{"foo"} })
 		}).To(Panic())
+	})
+
+	It("should wrap the fake client with an interceptor when WithInterceptorFuncs is called", func() {
+		var called bool
+		cli := NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(ctx context.Context, client client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				called = true
+				return nil
+			},
+		}).Build()
+		err := cli.Get(context.Background(), client.ObjectKey{}, &corev1.Pod{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(called).To(BeTrue())
 	})
 })

@@ -28,6 +28,8 @@ import (
 	"strings"
 	"sync"
 
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -107,6 +109,7 @@ type ClientBuilder struct {
 	initRuntimeObjects    []runtime.Object
 	withStatusSubresource []client.Object
 	objectTracker         testing.ObjectTracker
+	interceptorFuncs      *interceptor.Funcs
 
 	// indexes maps each GroupVersionKind (GVK) to the indexes registered for that GVK.
 	// The inner map maps from index name to IndexerFunc.
@@ -192,9 +195,15 @@ func (f *ClientBuilder) WithIndex(obj runtime.Object, field string, extractValue
 }
 
 // WithStatusSubresource configures the passed object with a status subresource, which means
-// calls to Update and Patch will not alters its status.
+// calls to Update and Patch will not alter its status.
 func (f *ClientBuilder) WithStatusSubresource(o ...client.Object) *ClientBuilder {
 	f.withStatusSubresource = append(f.withStatusSubresource, o...)
+	return f
+}
+
+// WithInterceptorFuncs configures the client methods to be intercepted using the provided interceptor.Funcs.
+func (f *ClientBuilder) WithInterceptorFuncs(interceptorFuncs interceptor.Funcs) *ClientBuilder {
+	f.interceptorFuncs = &interceptorFuncs
 	return f
 }
 
@@ -240,13 +249,19 @@ func (f *ClientBuilder) Build() client.WithWatch {
 		}
 	}
 
-	return &fakeClient{
+	var result client.WithWatch = &fakeClient{
 		tracker:               tracker,
 		scheme:                f.scheme,
 		restMapper:            f.restMapper,
 		indexes:               f.indexes,
 		withStatusSubresource: withStatusSubResource,
 	}
+
+	if f.interceptorFuncs != nil {
+		result = interceptor.NewClient(result, *f.interceptorFuncs)
+	}
+
+	return result
 }
 
 const trackerAddResourceVersion = "999"

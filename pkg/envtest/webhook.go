@@ -147,6 +147,8 @@ func (o *WebhookInstallOptions) PrepWithoutInstalling() error {
 
 // Install installs specified webhooks to the API server.
 func (o *WebhookInstallOptions) Install(config *rest.Config) error {
+	defaultWebhookOptions(o)
+
 	if len(o.LocalServingCAData) == 0 {
 		if err := o.PrepWithoutInstalling(); err != nil {
 			return err
@@ -166,6 +168,16 @@ func (o *WebhookInstallOptions) Cleanup() error {
 		return os.RemoveAll(o.LocalServingCertDir)
 	}
 	return nil
+}
+
+// defaultWebhookOptions sets the default values for Webhooks.
+func defaultWebhookOptions(o *WebhookInstallOptions) {
+	if o.MaxTime == 0 {
+		o.MaxTime = defaultMaxWait
+	}
+	if o.PollInterval == 0 {
+		o.PollInterval = defaultPollInterval
+	}
 }
 
 // WaitForWebhooks waits for the Webhooks to be available through API server.

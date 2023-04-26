@@ -74,9 +74,6 @@ type Channel struct {
 	// Source is the source channel to fetch GenericEvents
 	Source <-chan event.GenericEvent
 
-	// stop is to end ongoing goroutine, and close the channels
-	stop <-chan struct{}
-
 	// dest is the destination channels of the added event handlers
 	dest []chan event.GenericEvent
 

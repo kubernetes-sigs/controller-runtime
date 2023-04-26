@@ -74,9 +74,6 @@ type Channel struct {
 	// Source is the source channel to fetch GenericEvents
 	Source <-chan event.GenericEvent
 
-	// stop is to end ongoing goroutine, and close the channels
-	stop <-chan struct{}
-
 	// dest is the destination channels of the added event handlers
 	dest []chan event.GenericEvent
 
@@ -102,9 +99,6 @@ func (cs *Channel) Start(
 	if cs.Source == nil {
 		return fmt.Errorf("must specify Channel.Source")
 	}
-
-	// set the stop channel to be the context.
-	cs.stop = ctx.Done()
 
 	// use default value if DestBufferSize not specified
 	if cs.DestBufferSize == 0 {

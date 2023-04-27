@@ -112,6 +112,6 @@ func (ks *Kind) WaitForSync(ctx context.Context) error {
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return nil
 		}
-		return errors.New("timed out waiting for cache to be synced")
+		return fmt.Errorf("timed out waiting for cache to be synced for Kind %T", ks.Type)
 	}
 }

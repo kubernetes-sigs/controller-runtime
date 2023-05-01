@@ -726,6 +726,54 @@ var _ = Describe("Fake client", func() {
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 
+		It("should reject changes to deletionTimestamp on Update", func() {
+			namespacedName := types.NamespacedName{
+				Name:      "test-cm",
+				Namespace: "reject-with-deletiontimestamp",
+			}
+			By("Updating a new object")
+			newObj := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      namespacedName.Name,
+					Namespace: namespacedName.Namespace,
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+			err := cl.Create(context.Background(), newObj)
+			Expect(err).To(BeNil())
+
+			By("Getting the object")
+			obj := &corev1.ConfigMap{}
+			err = cl.Get(context.Background(), namespacedName, obj)
+			Expect(err).To(BeNil())
+			Expect(obj.DeletionTimestamp).To(BeNil())
+
+			By("Adding deletionTimestamp")
+			now := metav1.Now()
+			obj.DeletionTimestamp = &now
+			err = cl.Update(context.Background(), obj)
+			Expect(err).NotTo(BeNil())
+
+			By("Deleting the object")
+			err = cl.Delete(context.Background(), newObj)
+			Expect(err).To(BeNil())
+
+			By("Changing the deletionTimestamp to new value")
+			obj = &corev1.ConfigMap{}
+			t := metav1.NewTime(time.Now().Add(time.Second))
+			obj.DeletionTimestamp = &t
+			err = cl.Update(context.Background(), obj)
+			Expect(err).NotTo(BeNil())
+
+			By("Removing deletionTimestamp")
+			obj.DeletionTimestamp = nil
+			err = cl.Update(context.Background(), obj)
+			Expect(err).NotTo(BeNil())
+
+		})
+
 		It("should be able to Delete a Collection", func() {
 			By("Deleting a deploymentList")
 			err := cl.DeleteAllOf(context.Background(), &appsv1.Deployment{}, client.InNamespace("ns1"))
@@ -897,12 +945,12 @@ var _ = Describe("Fake client", func() {
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1000"))
 		})
 
-		It("should handle finalizers on Patch", func() {
+		It("should ignore deletionTimestamp without finalizer on Create", func() {
 			namespacedName := types.NamespacedName{
 				Name:      "test-cm",
-				Namespace: "delete-with-finalizers",
+				Namespace: "ignore-deletiontimestamp",
 			}
-			By("Updating a new object")
+			By("Creating a new object")
 			now := metav1.Now()
 			newObj := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
@@ -915,10 +963,81 @@ var _ = Describe("Fake client", func() {
 					"test-key": "new-value",
 				},
 			}
+
 			err := cl.Create(context.Background(), newObj)
 			Expect(err).To(BeNil())
 
-			By("Removing the finalizer")
+			By("Getting the object")
+			obj := &corev1.ConfigMap{}
+			err = cl.Get(context.Background(), namespacedName, obj)
+			Expect(err).To(BeNil())
+			Expect(obj.DeletionTimestamp).To(BeNil())
+
+		})
+
+		It("should reject deletionTimestamp without finalizers on Build", func() {
+			namespacedName := types.NamespacedName{
+				Name:      "test-cm",
+				Namespace: "reject-deletiontimestamp-no-finalizers",
+			}
+			By("Build with a new object without finalizer")
+			now := metav1.Now()
+			obj := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              namespacedName.Name,
+					Namespace:         namespacedName.Namespace,
+					DeletionTimestamp: &now,
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+
+			Expect(func() { NewClientBuilder().WithObjects(obj).Build() }).To(Panic())
+
+			By("Build with a new object with finalizer")
+			newObj := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              namespacedName.Name,
+					Namespace:         namespacedName.Namespace,
+					Finalizers:        []string{"finalizers.sigs.k8s.io/test"},
+					DeletionTimestamp: &now,
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+
+			cl := NewClientBuilder().WithObjects(newObj).Build()
+
+			By("Getting the object")
+			obj = &corev1.ConfigMap{}
+			err := cl.Get(context.Background(), namespacedName, obj)
+			Expect(err).To(BeNil())
+
+		})
+
+		It("should reject changes to deletionTimestamp on Patch", func() {
+			namespacedName := types.NamespacedName{
+				Name:      "test-cm",
+				Namespace: "reject-deletiontimestamp",
+			}
+			By("Creating a new object")
+			now := metav1.Now()
+			newObj := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       namespacedName.Name,
+					Namespace:  namespacedName.Namespace,
+					Finalizers: []string{"finalizers.sigs.k8s.io/test"},
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+			err := cl.Create(context.Background(), newObj)
+			Expect(err).To(BeNil())
+
+			By("Add a deletionTimestamp")
 			obj := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              namespacedName.Name,
@@ -927,7 +1046,70 @@ var _ = Describe("Fake client", func() {
 					DeletionTimestamp: &now,
 				},
 			}
-			obj.Finalizers = []string{}
+			err = cl.Patch(context.Background(), obj, client.MergeFrom(newObj))
+			Expect(err).NotTo(BeNil())
+
+			By("Deleting the object")
+			err = cl.Delete(context.Background(), newObj)
+			Expect(err).To(BeNil())
+
+			By("Getting the object")
+			obj = &corev1.ConfigMap{}
+			err = cl.Get(context.Background(), namespacedName, obj)
+			Expect(err).To(BeNil())
+			Expect(obj.DeletionTimestamp).NotTo(BeNil())
+
+			By("Changing the deletionTimestamp to new value")
+			newObj = &corev1.ConfigMap{}
+			t := metav1.NewTime(time.Now().Add(time.Second))
+			newObj.DeletionTimestamp = &t
+			err = cl.Patch(context.Background(), newObj, client.MergeFrom(obj))
+			Expect(err).NotTo(BeNil())
+
+			By("Removing deletionTimestamp")
+			newObj = &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              namespacedName.Name,
+					Namespace:         namespacedName.Namespace,
+					DeletionTimestamp: nil,
+				},
+			}
+			err = cl.Patch(context.Background(), newObj, client.MergeFrom(obj))
+			Expect(err).NotTo(BeNil())
+
+		})
+
+		It("should handle finalizers on Patch", func() {
+			namespacedName := types.NamespacedName{
+				Name:      "test-cm",
+				Namespace: "delete-with-finalizers",
+			}
+			By("Creating a new object")
+			newObj := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       namespacedName.Name,
+					Namespace:  namespacedName.Namespace,
+					Finalizers: []string{"finalizers.sigs.k8s.io/test"},
+				},
+				Data: map[string]string{
+					"test-key": "new-value",
+				},
+			}
+			err := cl.Create(context.Background(), newObj)
+			Expect(err).To(BeNil())
+
+			By("Deleting the object")
+			err = cl.Delete(context.Background(), newObj)
+			Expect(err).To(BeNil())
+
+			By("Removing the finalizer")
+			obj := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       namespacedName.Name,
+					Namespace:  namespacedName.Namespace,
+					Finalizers: []string{},
+				},
+			}
 			err = cl.Patch(context.Background(), obj, client.MergeFrom(newObj))
 			Expect(err).To(BeNil())
 

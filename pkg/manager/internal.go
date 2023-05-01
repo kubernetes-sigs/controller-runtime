@@ -129,7 +129,7 @@ type controllerManager struct {
 	// election was configured.
 	elected chan struct{}
 
-	webhookServer *webhook.Server
+	webhookServer webhook.Server
 	// webhookServerOnce will be called in GetWebhookServer() to optionally initialize
 	// webhookServer if unset, and Add() it to controllerManager.
 	webhookServerOnce sync.Once
@@ -276,7 +276,7 @@ func (cm *controllerManager) GetAPIReader() client.Reader {
 	return cm.cluster.GetAPIReader()
 }
 
-func (cm *controllerManager) GetWebhookServer() *webhook.Server {
+func (cm *controllerManager) GetWebhookServer() webhook.Server {
 	cm.webhookServerOnce.Do(func() {
 		if cm.webhookServer == nil {
 			panic("webhook should not be nil")

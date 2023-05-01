@@ -122,11 +122,11 @@ var _ = Describe("Webhook", func() {
 	})
 	Context("when running a webhook server without a manager", func() {
 		It("should reject create request for webhook that rejects all requests", func() {
-			server := webhook.Server{
+			server := webhook.NewServer(webhook.Options{
 				Port:    testenv.WebhookInstallOptions.LocalServingPort,
 				Host:    testenv.WebhookInstallOptions.LocalServingHost,
 				CertDir: testenv.WebhookInstallOptions.LocalServingCertDir,
-			}
+			})
 			server.Register("/failing", &webhook.Admission{Handler: &rejectingValidator{d: admission.NewDecoder(testenv.Scheme)}})
 
 			ctx, cancel := context.WithCancel(context.Background())

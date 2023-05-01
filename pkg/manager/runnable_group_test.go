@@ -29,7 +29,7 @@ var _ = Describe("runnables", func() {
 	})
 
 	It("should add webhooks to the appropriate group", func() {
-		webhook := &webhook.Server{}
+		webhook := webhook.NewServer(webhook.Options{})
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(webhook)).To(Succeed())
 		Expect(r.Webhooks.startQueue).To(HaveLen(1))

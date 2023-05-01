@@ -86,7 +86,7 @@ type Manager interface {
 	Start(ctx context.Context) error
 
 	// GetWebhookServer returns a webhook.Server
-	GetWebhookServer() *webhook.Server
+	GetWebhookServer() webhook.Server
 
 	// GetLogger returns this manager's logger.
 	GetLogger() logr.Logger
@@ -306,7 +306,7 @@ type Options struct {
 	// WebhookServer is an externally configured webhook.Server. By default,
 	// a Manager will create a default server using Port, Host, and CertDir;
 	// if this is set, the Manager will use this server instead.
-	WebhookServer *webhook.Server
+	WebhookServer webhook.Server
 
 	// BaseContext is the function that provides Context values to Runnables
 	// managed by the Manager. If a BaseContext function isn't provided, Runnables
@@ -556,11 +556,11 @@ func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options,
 		o.CertDir = newObj.Webhook.CertDir
 	}
 	if o.WebhookServer == nil {
-		o.WebhookServer = &webhook.Server{
+		o.WebhookServer = webhook.NewServer(webhook.Options{
 			Port:    o.Port,
 			Host:    o.Host,
 			CertDir: o.CertDir,
-		}
+		})
 	}
 
 	if newObj.Controller != nil {
@@ -733,12 +733,12 @@ func setOptionsDefaults(options Options) Options {
 	}
 
 	if options.WebhookServer == nil {
-		options.WebhookServer = &webhook.Server{
+		options.WebhookServer = webhook.NewServer(webhook.Options{
 			Host:    options.Host,
 			Port:    options.Port,
 			CertDir: options.CertDir,
 			TLSOpts: options.TLSOpts,
-		}
+		})
 	}
 
 	return options

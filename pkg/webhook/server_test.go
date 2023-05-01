@@ -39,7 +39,7 @@ var _ = Describe("Webhook Server", func() {
 		ctxCancel    context.CancelFunc
 		testHostPort string
 		client       *http.Client
-		server       *webhook.Server
+		server       webhook.Server
 		servingOpts  envtest.WebhookInstallOptions
 	)
 
@@ -61,11 +61,11 @@ var _ = Describe("Webhook Server", func() {
 			Transport: clientTransport,
 		}
 
-		server = &webhook.Server{
+		server = webhook.NewServer(webhook.Options{
 			Host:    servingOpts.LocalServingHost,
 			Port:    servingOpts.LocalServingPort,
 			CertDir: servingOpts.LocalServingCertDir,
-		}
+		})
 	})
 	AfterEach(func() {
 		Expect(servingOpts.Cleanup()).To(Succeed())
@@ -172,7 +172,7 @@ var _ = Describe("Webhook Server", func() {
 			// save cfg after changes to test against
 			finalCfg = cfg
 		}
-		server = &webhook.Server{
+		server = webhook.NewServer(webhook.Options{
 			Host:          servingOpts.LocalServingHost,
 			Port:          servingOpts.LocalServingPort,
 			CertDir:       servingOpts.LocalServingCertDir,
@@ -180,7 +180,7 @@ var _ = Describe("Webhook Server", func() {
 			TLSOpts: []func(*tls.Config){
 				tlsCfgFunc,
 			},
-		}
+		})
 		server.Register("/somepath", &testHandler{})
 		doneCh := genericStartServer(func(ctx context.Context) {
 			Expect(server.Start(ctx)).To(Succeed())
@@ -212,7 +212,7 @@ var _ = Describe("Webhook Server", func() {
 		finalGetCertificate := func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) { //nolint:unparam
 			return &finalCert, nil
 		}
-		server = &webhook.Server{
+		server = &webhook.DefaultServer{Options: webhook.Options{
 			Host:          servingOpts.LocalServingHost,
 			Port:          servingOpts.LocalServingPort,
 			CertDir:       servingOpts.LocalServingCertDir,
@@ -224,7 +224,7 @@ var _ = Describe("Webhook Server", func() {
 					finalCfg = cfg
 				},
 			},
-		}
+		}}
 		server.Register("/somepath", &testHandler{})
 		doneCh := genericStartServer(func(ctx context.Context) {
 			Expect(server.Start(ctx)).To(Succeed())

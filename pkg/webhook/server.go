@@ -60,9 +60,13 @@ type Server struct {
 	CertDir string
 
 	// CertName is the server certificate name. Defaults to tls.crt.
+	//
+	// Note: This option should only be set when TLSOpts does not override GetCertificate.
 	CertName string
 
 	// KeyName is the server key name. Defaults to tls.key.
+	//
+	// Note: This option should only be set when TLSOpts does not override GetCertificate.
 	KeyName string
 
 	// ClientCAName is the CA certificate name which server used to verify remote(client)'s certificate.
@@ -169,32 +173,40 @@ func (s *Server) Start(ctx context.Context) error {
 	baseHookLog := log.WithName("webhooks")
 	baseHookLog.Info("Starting webhook server")
 
-	certPath := filepath.Join(s.CertDir, s.CertName)
-	keyPath := filepath.Join(s.CertDir, s.KeyName)
-
-	certWatcher, err := certwatcher.New(certPath, keyPath)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		if err := certWatcher.Start(ctx); err != nil {
-			log.Error(err, "certificate watcher error")
-		}
-	}()
-
 	tlsMinVersion, err := tlsVersion(s.TLSMinVersion)
 	if err != nil {
 		return err
 	}
 
 	cfg := &tls.Config{ //nolint:gosec
-		NextProtos:     []string{"h2"},
-		GetCertificate: certWatcher.GetCertificate,
-		MinVersion:     tlsMinVersion,
+		NextProtos: []string{"h2"},
+		MinVersion: tlsMinVersion,
+	}
+	// fallback TLS config ready, will now mutate if passer wants full control over it
+	for _, op := range s.TLSOpts {
+		op(cfg)
 	}
 
-	// load CA to verify client certificate
+	if cfg.GetCertificate == nil {
+		certPath := filepath.Join(s.CertDir, s.CertName)
+		keyPath := filepath.Join(s.CertDir, s.KeyName)
+
+		// Create the certificate watcher and
+		// set the config's GetCertificate on the TLSConfig
+		certWatcher, err := certwatcher.New(certPath, keyPath)
+		if err != nil {
+			return err
+		}
+		cfg.GetCertificate = certWatcher.GetCertificate
+
+		go func() {
+			if err := certWatcher.Start(ctx); err != nil {
+				log.Error(err, "certificate watcher error")
+			}
+		}()
+	}
+
+	// Load CA to verify client certificate, if configured.
 	if s.ClientCAName != "" {
 		certPool := x509.NewCertPool()
 		clientCABytes, err := os.ReadFile(filepath.Join(s.CertDir, s.ClientCAName))
@@ -209,11 +221,6 @@ func (s *Server) Start(ctx context.Context) error {
 
 		cfg.ClientCAs = certPool
 		cfg.ClientAuth = tls.RequireAndVerifyClientCert
-	}
-
-	// fallback TLS config ready, will now mutate if passer wants full control over it
-	for _, op := range s.TLSOpts {
-		op(cfg)
 	}
 
 	listener, err := tls.Listen("tcp", net.JoinHostPort(s.Host, strconv.Itoa(s.Port)), cfg)

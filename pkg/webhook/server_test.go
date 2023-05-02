@@ -23,6 +23,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"path"
+	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -181,7 +183,7 @@ var _ = Describe("Webhook Server", func() {
 		}
 		server.Register("/somepath", &testHandler{})
 		doneCh := genericStartServer(func(ctx context.Context) {
-			Expect(server.Start(ctx))
+			Expect(server.Start(ctx)).To(Succeed())
 		})
 
 		Eventually(func() ([]byte, error) {
@@ -195,6 +197,53 @@ var _ = Describe("Webhook Server", func() {
 			tls.TLS_AES_128_GCM_SHA256,
 			tls.TLS_AES_256_GCM_SHA384,
 		))
+
+		ctxCancel()
+		Eventually(doneCh, "4s").Should(BeClosed())
+	})
+
+	It("should prefer GetCertificate through TLSOpts", func() {
+		var finalCfg *tls.Config
+		finalCert, err := tls.LoadX509KeyPair(
+			path.Join(servingOpts.LocalServingCertDir, "tls.crt"),
+			path.Join(servingOpts.LocalServingCertDir, "tls.key"),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		finalGetCertificate := func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) { //nolint:unparam
+			return &finalCert, nil
+		}
+		server = &webhook.Server{
+			Host:          servingOpts.LocalServingHost,
+			Port:          servingOpts.LocalServingPort,
+			CertDir:       servingOpts.LocalServingCertDir,
+			TLSMinVersion: "1.2",
+			TLSOpts: []func(*tls.Config){
+				func(cfg *tls.Config) {
+					cfg.GetCertificate = finalGetCertificate
+					// save cfg after changes to test against
+					finalCfg = cfg
+				},
+			},
+		}
+		server.Register("/somepath", &testHandler{})
+		doneCh := genericStartServer(func(ctx context.Context) {
+			Expect(server.Start(ctx)).To(Succeed())
+		})
+
+		Eventually(func() ([]byte, error) {
+			resp, err := client.Get(fmt.Sprintf("https://%s/somepath", testHostPort))
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			return io.ReadAll(resp.Body)
+		}).Should(Equal([]byte("gadzooks!")))
+		Expect(finalCfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
+		// We can't compare the functions directly, but we can compare their pointers
+		if reflect.ValueOf(finalCfg.GetCertificate).Pointer() != reflect.ValueOf(finalGetCertificate).Pointer() {
+			Fail("GetCertificate was not set properly, or overwritten")
+		}
+		cert, err := finalCfg.GetCertificate(nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cert).To(BeEquivalentTo(&finalCert))
 
 		ctxCancel()
 		Eventually(doneCh, "4s").Should(BeClosed())

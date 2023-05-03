@@ -80,10 +80,8 @@ func (cw *CertWatcher) Start(ctx context.Context) error {
 	files := sets.New(cw.certPath, cw.keyPath)
 
 	{
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
 		var watchErr error
-		if err := wait.PollImmediateUntilWithContext(ctx, 1*time.Second, func(ctx context.Context) (done bool, err error) {
+		if err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Second, true, func(ctx context.Context) (done bool, err error) {
 			for _, f := range files.UnsortedList() {
 				if err := cw.watcher.Add(f); err != nil {
 					watchErr = err

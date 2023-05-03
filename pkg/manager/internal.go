@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
@@ -459,22 +458,22 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 	// between conversion webhooks and the cache sync (usually initial list) which causes the webhooks
 	// to never start because no cache can be populated.
 	if err := cm.runnables.Webhooks.Start(cm.internalCtx); err != nil {
-		if !errors.Is(err, wait.ErrWaitTimeout) {
-			return err
+		if err != nil {
+			return fmt.Errorf("failed to start webhooks: %w", err)
 		}
 	}
 
 	// Start and wait for caches.
 	if err := cm.runnables.Caches.Start(cm.internalCtx); err != nil {
-		if !errors.Is(err, wait.ErrWaitTimeout) {
-			return err
+		if err != nil {
+			return fmt.Errorf("failed to start caches: %w", err)
 		}
 	}
 
 	// Start the non-leaderelection Runnables after the cache has synced.
 	if err := cm.runnables.Others.Start(cm.internalCtx); err != nil {
-		if !errors.Is(err, wait.ErrWaitTimeout) {
-			return err
+		if err != nil {
+			return fmt.Errorf("failed to start other runnables: %w", err)
 		}
 	}
 

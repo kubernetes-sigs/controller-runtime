@@ -1223,17 +1223,14 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			}
 			DescribeTable(" and cache with selectors", func(tc selectorsTestCase) {
 				By("creating the cache")
-				builder := cache.BuilderWithOptions(
-					cache.Options{
-						ByObject: map[client.Object]cache.ByObject{
-							&corev1.Pod{}: {
-								Label: labels.Set(tc.labelSelectors).AsSelector(),
-								Field: fields.Set(tc.fieldSelectors).AsSelector(),
-							},
+				informer, err := cache.New(cfg, cache.Options{
+					ByObject: map[client.Object]cache.ByObject{
+						&corev1.Pod{}: {
+							Label: labels.Set(tc.labelSelectors).AsSelector(),
+							Field: fields.Set(tc.fieldSelectors).AsSelector(),
 						},
 					},
-				)
-				informer, err := builder(cfg, cache.Options{})
+				})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("running the cache and waiting for it to sync")

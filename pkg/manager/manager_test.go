@@ -226,12 +226,12 @@ var _ = Describe("manger.Manager", func() {
 				HealthProbeBindAddress:     "5000",
 				ReadinessEndpointName:      "/readiness",
 				LivenessEndpointName:       "/liveness",
-				WebhookServer: &webhook.Server{
+				WebhookServer: webhook.NewServer(webhook.Options{
 					Port:    8080,
 					Host:    "example.com",
 					CertDir: "/pki",
 					TLSOpts: optionsTlSOptsFuncs,
-				},
+				}),
 			}.AndFrom(&fakeDeferredLoader{ccfg})
 			Expect(err).To(BeNil())
 
@@ -248,23 +248,23 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.HealthProbeBindAddress).To(Equal("5000"))
 			Expect(m.ReadinessEndpointName).To(Equal("/readiness"))
 			Expect(m.LivenessEndpointName).To(Equal("/liveness"))
-			Expect(m.WebhookServer.Port).To(Equal(8080))
-			Expect(m.WebhookServer.Host).To(Equal("example.com"))
-			Expect(m.WebhookServer.CertDir).To(Equal("/pki"))
-			Expect(m.WebhookServer.TLSOpts).To(Equal(optionsTlSOptsFuncs))
+			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Port).To(Equal(8080))
+			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Host).To(Equal("example.com"))
+			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.CertDir).To(Equal("/pki"))
+			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.TLSOpts).To(Equal(optionsTlSOptsFuncs))
 		})
 
 		It("should lazily initialize a webhook server if needed", func() {
 			By("creating a manager with options")
-			m, err := New(cfg, Options{WebhookServer: &webhook.Server{Port: 9440, Host: "foo.com"}})
+			m, err := New(cfg, Options{WebhookServer: webhook.NewServer(webhook.Options{Port: 9440, Host: "foo.com"})})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m).NotTo(BeNil())
 
 			By("checking options are passed to the webhook server")
 			svr := m.GetWebhookServer()
 			Expect(svr).NotTo(BeNil())
-			Expect(svr.Port).To(Equal(9440))
-			Expect(svr.Host).To(Equal("foo.com"))
+			Expect(svr.(*webhook.DefaultServer).Options.Port).To(Equal(9440))
+			Expect(svr.(*webhook.DefaultServer).Options.Host).To(Equal("foo.com"))
 		})
 
 		It("should lazily initialize a webhook server if needed (deprecated)", func() {
@@ -276,13 +276,13 @@ var _ = Describe("manger.Manager", func() {
 			By("checking options are passed to the webhook server")
 			svr := m.GetWebhookServer()
 			Expect(svr).NotTo(BeNil())
-			Expect(svr.Port).To(Equal(9440))
-			Expect(svr.Host).To(Equal("foo.com"))
+			Expect(svr.(*webhook.DefaultServer).Options.Port).To(Equal(9440))
+			Expect(svr.(*webhook.DefaultServer).Options.Host).To(Equal("foo.com"))
 		})
 
 		It("should not initialize a webhook server if Options.WebhookServer is set", func() {
 			By("creating a manager with options")
-			srv := &webhook.Server{Port: 9440}
+			srv := webhook.NewServer(webhook.Options{Port: 9440})
 			m, err := New(cfg, Options{Port: 9441, WebhookServer: srv})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m).NotTo(BeNil())
@@ -291,7 +291,22 @@ var _ = Describe("manger.Manager", func() {
 			svr := m.GetWebhookServer()
 			Expect(svr).NotTo(BeNil())
 			Expect(svr).To(Equal(srv))
-			Expect(svr.Port).To(Equal(9440))
+			Expect(svr.(*webhook.DefaultServer).Options.Port).To(Equal(9440))
+		})
+
+		It("should allow passing a custom webhook.Server implementation", func() {
+			type customWebhook struct {
+				webhook.Server
+			}
+			m, err := New(cfg, Options{WebhookServer: customWebhook{}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(m).NotTo(BeNil())
+
+			svr := m.GetWebhookServer()
+			Expect(svr).NotTo(BeNil())
+
+			_, isCustomWebhook := svr.(customWebhook)
+			Expect(isCustomWebhook).To(BeTrue())
 		})
 
 		Context("with leader election enabled", func() {

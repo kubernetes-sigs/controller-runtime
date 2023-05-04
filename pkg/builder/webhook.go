@@ -229,10 +229,10 @@ func (blder *WebhookBuilder) getType() (runtime.Object, error) {
 }
 
 func (blder *WebhookBuilder) isAlreadyHandled(path string) bool {
-	if blder.mgr.GetWebhookServer().WebhookMux == nil {
+	if blder.mgr.GetWebhookServer().WebhookMux() == nil {
 		return false
 	}
-	h, p := blder.mgr.GetWebhookServer().WebhookMux.Handler(&http.Request{URL: &url.URL{Path: path}})
+	h, p := blder.mgr.GetWebhookServer().WebhookMux().Handler(&http.Request{URL: &url.URL{Path: path}})
 	if p == path && h != nil {
 		return true
 	}

@@ -61,9 +61,9 @@ func Example() {
 	}
 
 	// Create a webhook server.
-	hookServer := &Server{
+	hookServer := NewServer(Options{
 		Port: 8443,
-	}
+	})
 	if err := mgr.Add(hookServer); err != nil {
 		panic(err)
 	}
@@ -88,9 +88,9 @@ func Example() {
 // tls.crt and tls.key.
 func ExampleServer_Start() {
 	// Create a webhook server
-	hookServer := &Server{
+	hookServer := NewServer(Options{
 		Port: 8443,
-	}
+	})
 
 	// Register the webhooks in the server.
 	hookServer.Register("/mutating", mutatingHook)

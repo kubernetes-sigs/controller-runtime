@@ -33,7 +33,7 @@ var _ = Describe("informerCache", func() {
 
 		httpClient, err := rest.HTTPClientFor(cfg)
 		Expect(err).ToNot(HaveOccurred())
-		mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient, apiutil.WithLazyDiscovery)
+		mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
 		Expect(err).ToNot(HaveOccurred())
 
 		c, err := cache.New(cfg, cache.Options{Mapper: mapper})

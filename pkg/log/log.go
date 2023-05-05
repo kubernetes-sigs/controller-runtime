@@ -35,14 +35,13 @@ package log
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"runtime/debug"
+	"time"
 
 	"github.com/go-logr/logr"
 )
-
-// SetLogger sets a concrete logging implementation for all deferred Loggers.
-func SetLogger(l logr.Logger) {
-	dlog.Fulfill(l.GetSink())
-}
 
 // Log is the base logger used by kubebuilder.  It delegates
 // to another logr.Logger. You *must* call SetLogger to
@@ -50,9 +49,21 @@ func SetLogger(l logr.Logger) {
 // the first 30 seconds of a binaries lifetime, it will get
 // set to a NullLogSink.
 var (
-	dlog = NewDelegatingLogSink(NullLogSink{})
-	Log  = logr.New(dlog)
+	rootLog = newDelegatingRoot(NullLogSink{})
+	Log     = logr.New(rootLog)
 )
+
+// SetLogger sets a concrete logging implementation for all deferred Loggers.
+func SetLogger(l logr.Logger) {
+	rootLog.Fulfill(l.GetSink())
+}
+
+func eventuallyFulfillRoot() {
+	if !rootLog.fulfilled.Load() && time.Since(rootLog.created).Seconds() >= 30 {
+		fmt.Fprintf(os.Stderr, "[controller-runtime] log.SetLogger(...) was never called, logs will not be displayed:\n%s", debug.Stack())
+		SetLogger(logr.New(NullLogSink{}))
+	}
+}
 
 // FromContext returns a logger with predefined values from a context.Context.
 func FromContext(ctx context.Context, keysAndValues ...interface{}) logr.Logger {

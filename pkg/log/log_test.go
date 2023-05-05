@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ logr.LogSink = &DelegatingLogSink{}
+var _ logr.LogSink = &delegatingLogSink{}
 
 // logInfo is the information for a particular fakeLogger message.
 type logInfo struct {
@@ -124,13 +124,13 @@ var _ = Describe("logging", func() {
 		var (
 			root     *fakeLoggerRoot
 			baseLog  logr.LogSink
-			delegLog *DelegatingLogSink
+			delegLog *delegatingLogSink
 		)
 
 		BeforeEach(func() {
 			root = &fakeLoggerRoot{}
 			baseLog = &fakeLogger{root: root}
-			delegLog = NewDelegatingLogSink(NullLogSink{})
+			delegLog = newDelegatingRoot(NullLogSink{})
 		})
 
 		It("should delegate with name", func() {

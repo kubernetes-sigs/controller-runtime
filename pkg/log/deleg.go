@@ -18,6 +18,7 @@ package log
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -26,7 +27,7 @@ import (
 // loggerPromise knows how to populate a concrete logr.Logger
 // with options, given an actual base logger later on down the line.
 type loggerPromise struct {
-	logger        *DelegatingLogSink
+	delegating    *delegatingLogSink
 	childPromises []*loggerPromise
 	promisesLock  sync.Mutex
 
@@ -34,11 +35,10 @@ type loggerPromise struct {
 	tags []interface{}
 }
 
-func (p *loggerPromise) WithName(l *DelegatingLogSink, name string) *loggerPromise {
+func (p *loggerPromise) WithName(l *delegatingLogSink, name string) *loggerPromise {
 	res := &loggerPromise{
-		logger:       l,
-		name:         &name,
-		promisesLock: sync.Mutex{},
+		delegating: l,
+		name:       &name,
 	}
 
 	p.promisesLock.Lock()
@@ -48,11 +48,10 @@ func (p *loggerPromise) WithName(l *DelegatingLogSink, name string) *loggerPromi
 }
 
 // WithValues provides a new Logger with the tags appended.
-func (p *loggerPromise) WithValues(l *DelegatingLogSink, tags ...interface{}) *loggerPromise {
+func (p *loggerPromise) WithValues(l *delegatingLogSink, tags ...interface{}) *loggerPromise {
 	res := &loggerPromise{
-		logger:       l,
-		tags:         tags,
-		promisesLock: sync.Mutex{},
+		delegating: l,
+		tags:       tags,
 	}
 
 	p.promisesLock.Lock()
@@ -72,54 +71,47 @@ func (p *loggerPromise) Fulfill(parentLogSink logr.LogSink) {
 		sink = sink.WithValues(p.tags...)
 	}
 
-	p.logger.lock.Lock()
-	p.logger.logger = sink
+	p.delegating.logger.Store(&sink)
 	if withCallDepth, ok := sink.(logr.CallDepthLogSink); ok {
-		p.logger.logger = withCallDepth.WithCallDepth(1)
+		sinkWithCallDepth := withCallDepth.WithCallDepth(1)
+		p.delegating.logger.Store(&sinkWithCallDepth)
 	}
-	p.logger.promise = nil
-	p.logger.lock.Unlock()
+	p.delegating.promise.Store(nil)
 
+	p.promisesLock.Lock()
+	defer p.promisesLock.Unlock()
 	for _, childPromise := range p.childPromises {
 		childPromise.Fulfill(sink)
 	}
 }
 
-// DelegatingLogSink is a logsink that delegates to another logr.LogSink.
+// delegatingLogSink is a logsink that delegates to another logr.LogSink.
 // If the underlying promise is not nil, it registers calls to sub-loggers with
 // the logging factory to be populated later, and returns a new delegating
 // logger.  It expects to have *some* logr.Logger set at all times (generally
 // a no-op logger before the promises are fulfilled).
-type DelegatingLogSink struct {
+type delegatingLogSink struct {
 	created time.Time
-	lock    sync.RWMutex
-	logger  logr.LogSink
-	promise *loggerPromise
-	info    logr.RuntimeInfo
-}
 
-func (l *DelegatingLogSink) eventuallyFulfill() {
-	if l.promise == nil && time.Since(l.created).Seconds() >= 30 {
-		l.Fulfill(NullLogSink{})
-	}
+	info   atomic.Pointer[logr.RuntimeInfo]
+	logger atomic.Pointer[logr.LogSink]
+
+	fulfilled atomic.Bool
+	promise   atomic.Pointer[loggerPromise]
 }
 
 // Init implements logr.LogSink.
-func (l *DelegatingLogSink) Init(info logr.RuntimeInfo) {
-	l.lock.Lock()
-	defer l.lock.Unlock()
-	l.eventuallyFulfill()
-	l.info = info
+func (l *delegatingLogSink) Init(info logr.RuntimeInfo) {
+	eventuallyFulfillRoot()
+	l.info.Store(&info)
 }
 
 // Enabled tests whether this Logger is enabled.  For example, commandline
 // flags might be used to set the logging verbosity and disable some info
 // logs.
-func (l *DelegatingLogSink) Enabled(level int) bool {
-	l.lock.RLock()
-	defer l.lock.RUnlock()
-	l.eventuallyFulfill()
-	return l.logger.Enabled(level)
+func (l *delegatingLogSink) Enabled(level int) bool {
+	eventuallyFulfillRoot()
+	return (*l.logger.Load()).Enabled(level)
 }
 
 // Info logs a non-error message with the given key/value pairs as context.
@@ -128,11 +120,9 @@ func (l *DelegatingLogSink) Enabled(level int) bool {
 // the log line.  The key/value pairs can then be used to add additional
 // variable information.  The key/value pairs should alternate string
 // keys and arbitrary values.
-func (l *DelegatingLogSink) Info(level int, msg string, keysAndValues ...interface{}) {
-	l.lock.RLock()
-	defer l.lock.RUnlock()
-	l.eventuallyFulfill()
-	l.logger.Info(level, msg, keysAndValues...)
+func (l *delegatingLogSink) Info(level int, msg string, keysAndValues ...interface{}) {
+	eventuallyFulfillRoot()
+	(*l.logger.Load()).Info(level, msg, keysAndValues...)
 }
 
 // Error logs an error, with the given message and key/value pairs as context.
@@ -143,72 +133,66 @@ func (l *DelegatingLogSink) Info(level int, msg string, keysAndValues ...interfa
 // The msg field should be used to add context to any underlying error,
 // while the err field should be used to attach the actual error that
 // triggered this log line, if present.
-func (l *DelegatingLogSink) Error(err error, msg string, keysAndValues ...interface{}) {
-	l.lock.RLock()
-	defer l.lock.RUnlock()
-	l.eventuallyFulfill()
-	l.logger.Error(err, msg, keysAndValues...)
+func (l *delegatingLogSink) Error(err error, msg string, keysAndValues ...interface{}) {
+	eventuallyFulfillRoot()
+	(*l.logger.Load()).Error(err, msg, keysAndValues...)
 }
 
 // WithName provides a new Logger with the name appended.
-func (l *DelegatingLogSink) WithName(name string) logr.LogSink {
-	l.lock.RLock()
-	defer l.lock.RUnlock()
-	l.eventuallyFulfill()
+func (l *delegatingLogSink) WithName(name string) logr.LogSink {
+	eventuallyFulfillRoot()
 
-	if l.promise == nil {
-		sink := l.logger.WithName(name)
-		if withCallDepth, ok := sink.(logr.CallDepthLogSink); ok {
-			sink = withCallDepth.WithCallDepth(-1)
+	switch {
+	case l.promise.Load() != nil:
+		res := &delegatingLogSink{}
+		res.logger.Store(l.logger.Load())
+		promise := l.promise.Load().WithName(res, name)
+		res.promise.Store(promise)
+		return res
+	default:
+		res := (*l.logger.Load()).WithName(name)
+		if withCallDepth, ok := res.(logr.CallDepthLogSink); ok {
+			res = withCallDepth.WithCallDepth(-1)
 		}
-		return sink
+		return res
 	}
-
-	res := &DelegatingLogSink{logger: l.logger}
-	promise := l.promise.WithName(res, name)
-	res.promise = promise
-
-	return res
 }
 
 // WithValues provides a new Logger with the tags appended.
-func (l *DelegatingLogSink) WithValues(tags ...interface{}) logr.LogSink {
-	l.lock.RLock()
-	defer l.lock.RUnlock()
-	l.eventuallyFulfill()
+func (l *delegatingLogSink) WithValues(tags ...interface{}) logr.LogSink {
+	eventuallyFulfillRoot()
 
-	if l.promise == nil {
-		sink := l.logger.WithValues(tags...)
-		if withCallDepth, ok := sink.(logr.CallDepthLogSink); ok {
-			sink = withCallDepth.WithCallDepth(-1)
+	switch {
+	case l.promise.Load() != nil:
+		res := &delegatingLogSink{}
+		res.logger.Store(l.logger.Load())
+		promise := l.promise.Load().WithValues(res, tags...)
+		res.promise.Store(promise)
+		return res
+	default:
+		res := (*l.logger.Load()).WithValues(tags...)
+		if withCallDepth, ok := res.(logr.CallDepthLogSink); ok {
+			res = withCallDepth.WithCallDepth(-1)
 		}
-		return sink
+		return res
 	}
-
-	res := &DelegatingLogSink{logger: l.logger}
-	promise := l.promise.WithValues(res, tags...)
-	res.promise = promise
-
-	return res
 }
 
 // Fulfill switches the logger over to use the actual logger
 // provided, instead of the temporary initial one, if this method
 // has not been previously called.
-func (l *DelegatingLogSink) Fulfill(actual logr.LogSink) {
-	if l.promise != nil {
-		l.promise.Fulfill(actual)
+func (l *delegatingLogSink) Fulfill(actual logr.LogSink) {
+	if promise := l.promise.Load(); promise != nil {
+		promise.Fulfill(actual)
+		l.fulfilled.Store(true)
 	}
 }
 
-// NewDelegatingLogSink constructs a new DelegatingLogSink which uses
+// newDelegatingLogSink constructs a new DelegatingLogSink which uses
 // the given logger before its promise is fulfilled.
-func NewDelegatingLogSink(initial logr.LogSink) *DelegatingLogSink {
-	l := &DelegatingLogSink{
-		created: time.Now(),
-		logger:  initial,
-		promise: &loggerPromise{promisesLock: sync.Mutex{}},
-	}
-	l.promise.logger = l
-	return l
+func newDelegatingRoot(initial logr.LogSink) *delegatingLogSink {
+	root := &delegatingLogSink{created: time.Now()}
+	root.logger.Store(&initial)
+	root.promise.Store(&loggerPromise{delegating: root})
+	return root
 }

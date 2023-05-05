@@ -18,6 +18,7 @@ package log
 
 import (
 	"sync"
+	"time"
 
 	"github.com/go-logr/logr"
 )
@@ -90,16 +91,24 @@ func (p *loggerPromise) Fulfill(parentLogSink logr.LogSink) {
 // logger.  It expects to have *some* logr.Logger set at all times (generally
 // a no-op logger before the promises are fulfilled).
 type DelegatingLogSink struct {
+	created time.Time
 	lock    sync.RWMutex
 	logger  logr.LogSink
 	promise *loggerPromise
 	info    logr.RuntimeInfo
 }
 
+func (l *DelegatingLogSink) eventuallyFulfill() {
+	if l.promise == nil && time.Since(l.created).Seconds() >= 30 {
+		l.Fulfill(NullLogSink{})
+	}
+}
+
 // Init implements logr.LogSink.
 func (l *DelegatingLogSink) Init(info logr.RuntimeInfo) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
+	l.eventuallyFulfill()
 	l.info = info
 }
 
@@ -109,6 +118,7 @@ func (l *DelegatingLogSink) Init(info logr.RuntimeInfo) {
 func (l *DelegatingLogSink) Enabled(level int) bool {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
+	l.eventuallyFulfill()
 	return l.logger.Enabled(level)
 }
 
@@ -121,6 +131,7 @@ func (l *DelegatingLogSink) Enabled(level int) bool {
 func (l *DelegatingLogSink) Info(level int, msg string, keysAndValues ...interface{}) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
+	l.eventuallyFulfill()
 	l.logger.Info(level, msg, keysAndValues...)
 }
 
@@ -135,6 +146,7 @@ func (l *DelegatingLogSink) Info(level int, msg string, keysAndValues ...interfa
 func (l *DelegatingLogSink) Error(err error, msg string, keysAndValues ...interface{}) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
+	l.eventuallyFulfill()
 	l.logger.Error(err, msg, keysAndValues...)
 }
 
@@ -142,6 +154,7 @@ func (l *DelegatingLogSink) Error(err error, msg string, keysAndValues ...interf
 func (l *DelegatingLogSink) WithName(name string) logr.LogSink {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
+	l.eventuallyFulfill()
 
 	if l.promise == nil {
 		sink := l.logger.WithName(name)
@@ -162,6 +175,7 @@ func (l *DelegatingLogSink) WithName(name string) logr.LogSink {
 func (l *DelegatingLogSink) WithValues(tags ...interface{}) logr.LogSink {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
+	l.eventuallyFulfill()
 
 	if l.promise == nil {
 		sink := l.logger.WithValues(tags...)
@@ -191,6 +205,7 @@ func (l *DelegatingLogSink) Fulfill(actual logr.LogSink) {
 // the given logger before its promise is fulfilled.
 func NewDelegatingLogSink(initial logr.LogSink) *DelegatingLogSink {
 	l := &DelegatingLogSink{
+		created: time.Now(),
 		logger:  initial,
 		promise: &loggerPromise{promisesLock: sync.Mutex{}},
 	}

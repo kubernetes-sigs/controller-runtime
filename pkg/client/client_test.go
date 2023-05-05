@@ -277,6 +277,16 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			Expect(cl.List(ctx, &appsv1.DeploymentList{})).To(Succeed())
 			Expect(cache.Called).To(Equal(2))
 		})
+
+		It("should not use the provided reader cache if provided, on get and list for uncached GVKs", func() {
+			cache := &fakeReader{}
+			cl, err := client.New(cfg, client.Options{Cache: &client.CacheOptions{Reader: cache, DisableFor: []client.Object{&corev1.Namespace{}}}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+			Expect(cl.Get(ctx, client.ObjectKey{Name: "default"}, &corev1.Namespace{})).To(Succeed())
+			Expect(cl.List(ctx, &corev1.NamespaceList{})).To(Succeed())
+			Expect(cache.Called).To(Equal(0))
+		})
 	})
 
 	Describe("Create", func() {

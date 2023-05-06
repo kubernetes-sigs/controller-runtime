@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -27,6 +28,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -97,6 +99,11 @@ var _ = Describe("CertWatcher", func() {
 
 		It("should reload currentCert when changed", func() {
 			doneCh := startWatcher()
+			called := atomic.Int64{}
+			watcher.RegisterCallback(func(crt tls.Certificate) {
+				called.Add(1)
+				Expect(crt.Certificate).ToNot(BeEmpty())
+			})
 
 			firstcert, _ := watcher.GetCertificate(nil)
 
@@ -111,6 +118,7 @@ var _ = Describe("CertWatcher", func() {
 
 			ctxCancel()
 			Eventually(doneCh, "4s").Should(BeClosed())
+			Expect(called.Load()).To(BeNumerically(">=", 1))
 		})
 
 		Context("prometheus metric read_certificate_total", func() {

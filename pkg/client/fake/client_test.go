@@ -36,6 +36,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1435,6 +1437,54 @@ var _ = Describe("Fake client", func() {
 
 		err := cl.Status().Update(context.Background(), obj)
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	})
+
+	evictionTypes := []client.Object{
+		&policyv1beta1.Eviction{},
+		&policyv1.Eviction{},
+	}
+	for _, tp := range evictionTypes {
+		It("should delete a pod through the eviction subresource", func() {
+			pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+
+			cl := NewClientBuilder().WithObjects(pod).Build()
+
+			err := cl.SubResource("eviction").Create(context.Background(), pod, tp)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = cl.Get(context.Background(), client.ObjectKeyFromObject(pod), pod)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
+
+		It("should return not found when attempting to evict a pod that doesn't exist", func() {
+			cl := NewClientBuilder().Build()
+
+			pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+			err := cl.SubResource("eviction").Create(context.Background(), pod, tp)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
+
+		It("should return not found when attempting to evict something other than a pod", func() {
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+			cl := NewClientBuilder().WithObjects(ns).Build()
+
+			err := cl.SubResource("eviction").Create(context.Background(), ns, tp)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
+
+		It("should return an error when using the wrong subresource", func() {
+			cl := NewClientBuilder().Build()
+
+			err := cl.SubResource("eviction-subresource").Create(context.Background(), &corev1.Namespace{}, tp)
+			Expect(err).NotTo(BeNil())
+		})
+	}
+
+	It("should error when creating an eviction with the wrong type", func() {
+
+		cl := NewClientBuilder().Build()
+		err := cl.SubResource("eviction").Create(context.Background(), &corev1.Pod{}, &corev1.Namespace{})
+		Expect(apierrors.IsBadRequest(err)).To(BeTrue())
 	})
 })
 

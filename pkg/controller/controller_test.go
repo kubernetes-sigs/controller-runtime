@@ -154,10 +154,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{
-				Controller: config.Controller{
-					RecoverPanic: pointer.Bool(false),
-				},
-				Reconciler: reconcile.Func(nil),
+				RecoverPanic: pointer.Bool(false),
+				Reconciler:   reconcile.Func(nil),
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -166,6 +164,129 @@ var _ = Describe("controller.Controller", func() {
 
 			Expect(ctrl.RecoverPanic).NotTo(BeNil())
 			Expect(*ctrl.RecoverPanic).To(BeFalse())
+		})
+
+		It("should default NeedLeaderElection from the manager", func() {
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: pointer.Bool(true)}})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller)
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.NeedLeaderElection()).To(BeTrue())
+		})
+
+		It("should not override NeedLeaderElection on the controller", func() {
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: pointer.Bool(true)}})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				NeedLeaderElection: pointer.Bool(false),
+				Reconciler:         reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller)
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.NeedLeaderElection()).To(BeFalse())
+		})
+
+		It("Should default MaxConcurrentReconciles from the manager if set", func() {
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{MaxConcurrentReconciles: 5}})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller)
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.MaxConcurrentReconciles).To(BeEquivalentTo(5))
+		})
+
+		It("Should default MaxConcurrentReconciles to 1 if unset", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller)
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.MaxConcurrentReconciles).To(BeEquivalentTo(1))
+		})
+
+		It("Should leave MaxConcurrentReconciles if set", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				Reconciler:              reconcile.Func(nil),
+				MaxConcurrentReconciles: 5,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller)
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.MaxConcurrentReconciles).To(BeEquivalentTo(5))
+		})
+
+		It("Should default CacheSyncTimeout from the manager if set", func() {
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{CacheSyncTimeout: 5}})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller)
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.CacheSyncTimeout).To(BeEquivalentTo(5))
+		})
+
+		It("Should default CacheSyncTimeout to 2 minutes if unset", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller)
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.CacheSyncTimeout).To(BeEquivalentTo(2 * time.Minute))
+		})
+
+		It("Should leave CacheSyncTimeout if set", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				Reconciler:       reconcile.Func(nil),
+				CacheSyncTimeout: 5,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller)
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.CacheSyncTimeout).To(BeEquivalentTo(5))
 		})
 
 		It("should default NeedLeaderElection on the controller to true", func() {
@@ -188,10 +309,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{
-				Controller: config.Controller{
-					NeedLeaderElection: pointer.Bool(false),
-				},
-				Reconciler: rec,
+				NeedLeaderElection: pointer.Bool(false),
+				Reconciler:         rec,
 			})
 			Expect(err).NotTo(HaveOccurred())
 

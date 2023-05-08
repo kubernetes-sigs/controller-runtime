@@ -212,18 +212,6 @@ var _ = Describe("NewClient", func() {
 		_ = client.SubResource("")
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided SubResource function is nil", func() {
-		var called bool
-		client1 := NewClient(wrappedClient, Funcs{
-			SubResource: func(client client.WithWatch, subResource string) client.SubResourceClient {
-				called = true
-				return nil
-			},
-		})
-		client2 := NewClient(client1, Funcs{})
-		_ = client2.SubResource("")
-		Expect(called).To(BeTrue())
-	})
 	It("should call the provided SubResource function with 'status' when calling Status()", func() {
 		var called bool
 		client := NewClient(wrappedClient, Funcs{
@@ -237,115 +225,109 @@ var _ = Describe("NewClient", func() {
 		_ = client.Status()
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided SubResource function is nil when calling Status", func() {
-		var called bool
-		client1 := NewClient(wrappedClient, Funcs{
-			SubResource: func(client client.WithWatch, subResource string) client.SubResourceClient {
-				if subResource == "status" {
-					called = true
-				}
-				return nil
-			},
-		})
-		client2 := NewClient(client1, Funcs{})
-		_ = client2.Status()
-		Expect(called).To(BeTrue())
-	})
 })
 
 var _ = Describe("NewSubResourceClient", func() {
-	srClient := dummySubResourceClient{}
+	c := dummyClient{}
 	ctx := context.Background()
 	It("should call the provided Get function", func() {
 		var called bool
-		client := NewSubResourceClient(srClient, SubResourceFuncs{
-			Get: func(ctx context.Context, client client.SubResourceClient, obj client.Object, subResource client.Object, opts ...client.SubResourceGetOption) error {
+		c := NewClient(c, Funcs{
+			SubResourceGet: func(_ context.Context, client client.Client, subResourceName string, obj, subResource client.Object, opts ...client.SubResourceGetOption) error {
 				called = true
+				Expect(subResourceName).To(BeEquivalentTo("foo"))
 				return nil
 			},
 		})
-		_ = client.Get(ctx, nil, nil)
+		_ = c.SubResource("foo").Get(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
 	It("should call the underlying client if the provided Get function is nil", func() {
 		var called bool
-		client1 := NewSubResourceClient(srClient, SubResourceFuncs{
-			Get: func(ctx context.Context, client client.SubResourceClient, obj client.Object, subResource client.Object, opts ...client.SubResourceGetOption) error {
+		client1 := NewClient(c, Funcs{
+			SubResourceGet: func(_ context.Context, client client.Client, subResourceName string, obj, subResource client.Object, opts ...client.SubResourceGetOption) error {
 				called = true
+				Expect(subResourceName).To(BeEquivalentTo("foo"))
 				return nil
 			},
 		})
-		client2 := NewSubResourceClient(client1, SubResourceFuncs{})
-		_ = client2.Get(ctx, nil, nil)
+		client2 := NewClient(client1, Funcs{})
+		_ = client2.SubResource("foo").Get(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
 	It("should call the provided Update function", func() {
 		var called bool
-		client := NewSubResourceClient(srClient, SubResourceFuncs{
-			Update: func(ctx context.Context, client client.SubResourceClient, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+		client := NewClient(c, Funcs{
+			SubResourceUpdate: func(_ context.Context, client client.Client, subResourceName string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 				called = true
+				Expect(subResourceName).To(BeEquivalentTo("foo"))
 				return nil
 			},
 		})
-		_ = client.Update(ctx, nil, nil)
+		_ = client.SubResource("foo").Update(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
 	It("should call the underlying client if the provided Update function is nil", func() {
 		var called bool
-		client1 := NewSubResourceClient(srClient, SubResourceFuncs{
-			Update: func(ctx context.Context, client client.SubResourceClient, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+		client1 := NewClient(c, Funcs{
+			SubResourceUpdate: func(_ context.Context, client client.Client, subResourceName string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 				called = true
+				Expect(subResourceName).To(BeEquivalentTo("foo"))
 				return nil
 			},
 		})
-		client2 := NewSubResourceClient(client1, SubResourceFuncs{})
-		_ = client2.Update(ctx, nil, nil)
+		client2 := NewClient(client1, Funcs{})
+		_ = client2.SubResource("foo").Update(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
 	It("should call the provided Patch function", func() {
 		var called bool
-		client := NewSubResourceClient(srClient, SubResourceFuncs{
-			Patch: func(ctx context.Context, client client.SubResourceClient, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+		client := NewClient(c, Funcs{
+			SubResourcePatch: func(_ context.Context, client client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
 				called = true
+				Expect(subResourceName).To(BeEquivalentTo("foo"))
 				return nil
 			},
 		})
-		_ = client.Patch(ctx, nil, nil)
+		_ = client.SubResource("foo").Patch(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
 	It("should call the underlying client if the provided Patch function is nil", func() {
 		var called bool
-		client1 := NewSubResourceClient(srClient, SubResourceFuncs{
-			Patch: func(ctx context.Context, client client.SubResourceClient, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+		client1 := NewClient(c, Funcs{
+			SubResourcePatch: func(ctx context.Context, client client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
 				called = true
+				Expect(subResourceName).To(BeEquivalentTo("foo"))
 				return nil
 			},
 		})
-		client2 := NewSubResourceClient(client1, SubResourceFuncs{})
-		_ = client2.Patch(ctx, nil, nil)
+		client2 := NewClient(client1, Funcs{})
+		_ = client2.SubResource("foo").Patch(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
 	It("should call the provided Create function", func() {
 		var called bool
-		client := NewSubResourceClient(srClient, SubResourceFuncs{
-			Create: func(ctx context.Context, client client.SubResourceClient, obj client.Object, subResource client.Object, opts ...client.SubResourceCreateOption) error {
+		client := NewClient(c, Funcs{
+			SubResourceCreate: func(_ context.Context, client client.Client, subResourceName string, obj, subResource client.Object, opts ...client.SubResourceCreateOption) error {
 				called = true
+				Expect(subResourceName).To(BeEquivalentTo("foo"))
 				return nil
 			},
 		})
-		_ = client.Create(ctx, nil, nil)
+		_ = client.SubResource("foo").Create(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
 	It("should call the underlying client if the provided Create function is nil", func() {
 		var called bool
-		client1 := NewSubResourceClient(srClient, SubResourceFuncs{
-			Create: func(ctx context.Context, client client.SubResourceClient, obj client.Object, subResource client.Object, opts ...client.SubResourceCreateOption) error {
+		client1 := NewClient(c, Funcs{
+			SubResourceCreate: func(_ context.Context, client client.Client, subResourceName string, obj, subResource client.Object, opts ...client.SubResourceCreateOption) error {
 				called = true
+				Expect(subResourceName).To(BeEquivalentTo("foo"))
 				return nil
 			},
 		})
-		client2 := NewSubResourceClient(client1, SubResourceFuncs{})
-		_ = client2.Create(ctx, nil, nil)
+		client2 := NewClient(client1, Funcs{})
+		_ = client2.SubResource("foo").Create(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
 })
@@ -408,24 +390,4 @@ func (d dummyClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
 
 func (d dummyClient) Watch(ctx context.Context, obj client.ObjectList, opts ...client.ListOption) (watch.Interface, error) {
 	return nil, nil
-}
-
-type dummySubResourceClient struct{}
-
-var _ client.SubResourceClient = &dummySubResourceClient{}
-
-func (d dummySubResourceClient) Get(ctx context.Context, obj client.Object, subResource client.Object, opts ...client.SubResourceGetOption) error {
-	return nil
-}
-
-func (d dummySubResourceClient) Create(ctx context.Context, obj client.Object, subResource client.Object, opts ...client.SubResourceCreateOption) error {
-	return nil
-}
-
-func (d dummySubResourceClient) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
-	return nil
-}
-
-func (d dummySubResourceClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
-	return nil
 }

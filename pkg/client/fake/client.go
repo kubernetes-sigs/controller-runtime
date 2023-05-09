@@ -30,6 +30,9 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -931,7 +934,7 @@ func (c *fakeClient) Status() client.SubResourceWriter {
 }
 
 func (c *fakeClient) SubResource(subResource string) client.SubResourceClient {
-	return &fakeSubResourceClient{client: c}
+	return &fakeSubResourceClient{client: c, subResource: subResource}
 }
 
 func (c *fakeClient) deleteObject(gvr schema.GroupVersionResource, accessor metav1.Object) error {
@@ -961,7 +964,8 @@ func getGVRFromObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupV
 }
 
 type fakeSubResourceClient struct {
-	client *fakeClient
+	client      *fakeClient
+	subResource string
 }
 
 func (sw *fakeSubResourceClient) Get(ctx context.Context, obj, subResource client.Object, opts ...client.SubResourceGetOption) error {
@@ -969,7 +973,23 @@ func (sw *fakeSubResourceClient) Get(ctx context.Context, obj, subResource clien
 }
 
 func (sw *fakeSubResourceClient) Create(ctx context.Context, obj client.Object, subResource client.Object, opts ...client.SubResourceCreateOption) error {
-	panic("fakeSubResourceWriter does not support create")
+	switch sw.subResource {
+	case "eviction":
+		_, isEviction := subResource.(*policyv1beta1.Eviction)
+		if !isEviction {
+			_, isEviction = subResource.(*policyv1.Eviction)
+		}
+		if !isEviction {
+			return apierrors.NewBadRequest(fmt.Sprintf("got invalid type %t, expected Eviction", subResource))
+		}
+		if _, isPod := obj.(*corev1.Pod); !isPod {
+			return apierrors.NewNotFound(schema.GroupResource{}, "")
+		}
+
+		return sw.client.Delete(ctx, obj)
+	default:
+		return fmt.Errorf("fakeSubResourceWriter does not support create for %s", sw.subResource)
+	}
 }
 
 func (sw *fakeSubResourceClient) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {

@@ -240,11 +240,17 @@ func (blder *WebhookBuilder) isAlreadyHandled(path string) bool {
 }
 
 func generateMutatePath(gvk schema.GroupVersionKind) string {
-	return "/mutate-" + strings.ReplaceAll(gvk.Group, ".", "-") + "-" +
-		gvk.Version + "-" + strings.ToLower(gvk.Kind)
+	return strings.Join([]string{
+		"/mutate",
+		strings.ReplaceAll(strings.Replace(gvk.GroupVersion().String(), "/", "-", 1), ".", "-"),
+		strings.ToLower(gvk.Kind),
+	}, "-")
 }
 
 func generateValidatePath(gvk schema.GroupVersionKind) string {
-	return "/validate-" + strings.ReplaceAll(gvk.Group, ".", "-") + "-" +
-		gvk.Version + "-" + strings.ToLower(gvk.Kind)
+	return strings.Join([]string{
+		"/validate",
+		strings.ReplaceAll(strings.Replace(gvk.GroupVersion().String(), "/", "-", 1), ".", "-"),
+		strings.ToLower(gvk.Kind),
+	}, "-")
 }

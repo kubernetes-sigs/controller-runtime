@@ -217,7 +217,7 @@ var _ = Describe("application", func() {
 			instance, err := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
 				Owns(&appsv1.ReplicaSet{}).
-				WithOptions(controller.Options{Controller: config.Controller{MaxConcurrentReconciles: maxConcurrentReconciles}}).
+				WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())

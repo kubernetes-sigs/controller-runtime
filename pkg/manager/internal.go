@@ -317,9 +317,9 @@ func (cm *controllerManager) addMetricsServer() error {
 	})
 }
 
-func (cm *controllerManager) addHealthProbeServer() error {
+func (cm *controllerManager) serveHealthProbes() {
 	mux := http.NewServeMux()
-	srv := httpserver.New(mux)
+	server := httpserver.New(mux)
 
 	if cm.readyzHandler != nil {
 		mux.Handle(cm.readinessEndpointName, http.StripPrefix(cm.readinessEndpointName, cm.readyzHandler))
@@ -332,12 +332,7 @@ func (cm *controllerManager) addHealthProbeServer() error {
 		mux.Handle(cm.livenessEndpointName+"/", http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
 	}
 
-	return cm.add(&server{
-		Kind:     "health probe",
-		Log:      cm.logger,
-		Server:   srv,
-		Listener: cm.healthProbeListener,
-	})
+	go cm.httpServe("health probe", cm.logger, server, cm.healthProbeListener)
 }
 
 func (cm *controllerManager) addPprofServer() error {
@@ -356,6 +351,42 @@ func (cm *controllerManager) addPprofServer() error {
 		Server:   srv,
 		Listener: cm.pprofListener,
 	})
+}
+
+func (cm *controllerManager) httpServe(kind string, log logr.Logger, server *http.Server, ln net.Listener) {
+	log = log.WithValues("kind", kind, "addr", ln.Addr())
+
+	go func() {
+		log.Info("Starting server")
+		if err := server.Serve(ln); err != nil {
+			if errors.Is(err, http.ErrServerClosed) {
+				return
+			}
+			if atomic.LoadInt64(cm.stopProcedureEngaged) > 0 {
+				// There might be cases where connections are still open and we try to shutdown
+				// but not having enough time to close the connection causes an error in Serve
+				//
+				// In that case we want to avoid returning an error to the main error channel.
+				log.Error(err, "error on Serve after stop has been engaged")
+				return
+			}
+			cm.errChan <- err
+		}
+	}()
+
+	// Shutdown the server when stop is closed.
+	<-cm.internalProceduresStop
+	if err := server.Shutdown(cm.shutdownCtx); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			// Avoid logging context related errors.
+			return
+		}
+		if atomic.LoadInt64(cm.stopProcedureEngaged) > 0 {
+			cm.logger.Error(err, "error on Shutdown after stop has been engaged")
+			return
+		}
+		cm.errChan <- err
+	}
 }
 
 // Start starts the manager and waits indefinitely.
@@ -418,9 +449,7 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 
 	// Serve health probes.
 	if cm.healthProbeListener != nil {
-		if err := cm.addHealthProbeServer(); err != nil {
-			return fmt.Errorf("failed to add health probe server: %w", err)
-		}
+		cm.serveHealthProbes()
 	}
 
 	// Add pprof server

@@ -191,6 +191,9 @@ type ByObject struct {
 	UnsafeDisableDeepCopy *bool
 }
 
+// NewCacheFunc - Function for creating a new cache from the options and a rest config.
+type NewCacheFunc func(config *rest.Config, opts Options) (Cache, error)
+
 // New initializes and returns a new Cache.
 func New(config *rest.Config, opts Options) (Cache, error) {
 	if len(opts.Namespaces) == 0 {

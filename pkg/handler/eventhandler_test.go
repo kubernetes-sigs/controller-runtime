@@ -46,7 +46,7 @@ var _ = Describe("Eventhandler", func() {
 	var pod *corev1.Pod
 	var mapper meta.RESTMapper
 	BeforeEach(func() {
-		q = controllertest.Queue{Interface: workqueue.New()}
+		q = &controllertest.Queue{Interface: workqueue.New()}
 		pod = &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "biz", Name: "baz"},
 		}

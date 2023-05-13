@@ -230,7 +230,7 @@ func ExampleClient_delete() {
 	_ = c.Delete(context.Background(), u)
 }
 
-// This example shows how to use the client with typed and unstrucurted objects to delete collections of objects.
+// This example shows how to use the client with typed and unstructured objects to delete collections of objects.
 func ExampleClient_deleteAllOf() {
 	// Using a typed object.
 	// c is a created client.

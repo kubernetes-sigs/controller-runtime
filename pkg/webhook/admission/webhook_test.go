@@ -182,7 +182,7 @@ var _ = Describe("Admission Webhooks", func() {
 				}
 			}),
 			LogConstructor: func(base logr.Logger, req *Request) logr.Logger {
-				return base.WithValues("operation", req.Operation)
+				return base.WithValues("operation", req.Operation, "requestID", req.UID)
 			},
 			log: testLogger,
 		}

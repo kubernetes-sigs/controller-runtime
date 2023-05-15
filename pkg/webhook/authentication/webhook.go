@@ -119,6 +119,7 @@ func logConstructor(base logr.Logger, req *Request) logr.Logger {
 		return base.WithValues("object", klog.KRef(req.Namespace, req.Name),
 			"namespace", req.Namespace, "name", req.Name,
 			"user", req.Status.User.Username,
+			"requestID", req.UID,
 		)
 	}
 	return base

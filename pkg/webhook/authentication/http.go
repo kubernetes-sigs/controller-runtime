@@ -69,7 +69,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// verify the content type is accurate
 	if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
 		err = fmt.Errorf("contentType=%s, expected application/json", contentType)
-		wh.getLogger(nil).Error(err, "unable to process a request with an unknown content type", "content type", contentType)
+		wh.getLogger(nil).Error(err, "unable to process a request with unknown content type")
 		reviewResponse = Errored(err)
 		wh.writeResponse(w, reviewResponse)
 		return
@@ -94,7 +94,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		wh.writeResponse(w, reviewResponse)
 		return
 	}
-	wh.getLogger(&req).V(1).Info("received request", "UID", req.UID, "kind", req.Kind)
+	wh.getLogger(&req).V(1).Info("received request")
 
 	if req.Spec.Token == "" {
 		err = errors.New("token is empty")
@@ -136,7 +136,7 @@ func (wh *Webhook) writeTokenResponse(w io.Writer, ar authenticationv1.TokenRevi
 	}
 	res := ar
 	if wh.getLogger(nil).V(1).Enabled() {
-		wh.getLogger(nil).V(1).Info("wrote response", "UID", res.UID, "authenticated", res.Status.Authenticated)
+		wh.getLogger(nil).V(1).Info("wrote response", "requestID", res.UID, "authenticated", res.Status.Authenticated)
 	}
 }
 

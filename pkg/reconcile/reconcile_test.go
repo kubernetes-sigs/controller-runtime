@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -87,6 +88,13 @@ var _ = Describe("reconcile", func() {
 			actualResult, actualErr := instance.Reconcile(context.Background(), request)
 			Expect(actualResult).To(Equal(result))
 			Expect(actualErr).To(Equal(err))
+		})
+
+		It("should allow unwrapping inner error from terminal error", func() {
+			inner := apierrors.NewGone("")
+			terminalError := reconcile.TerminalError(inner)
+
+			Expect(apierrors.IsGone(terminalError)).To(BeTrue())
 		})
 	})
 })

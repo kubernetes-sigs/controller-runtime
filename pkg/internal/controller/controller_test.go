@@ -359,7 +359,6 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should requeue a Request if there is an error and continue processing items", func() {
-
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			go func() {
@@ -372,6 +371,9 @@ var _ = Describe("controller", func() {
 			By("Invoking Reconciler which will give an error")
 			fakeReconcile.AddResult(reconcile.Result{}, fmt.Errorf("expected error: reconcile"))
 			Expect(<-reconciled).To(Equal(request))
+			queue.AddedRateLimitedLock.Lock()
+			Expect(queue.AddedRatelimited).To(Equal([]any{request}))
+			queue.AddedRateLimitedLock.Unlock()
 
 			By("Invoking Reconciler a second time without error")
 			fakeReconcile.AddResult(reconcile.Result{}, nil)
@@ -380,6 +382,27 @@ var _ = Describe("controller", func() {
 			By("Removing the item from the queue")
 			Eventually(queue.Len).Should(Equal(0))
 			Eventually(func() int { return queue.NumRequeues(request) }, 1.0).Should(Equal(0))
+		})
+
+		It("should not requeue a Request if there is a terminal error", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
+			}()
+
+			queue.Add(request)
+
+			By("Invoking Reconciler which will give an error")
+			fakeReconcile.AddResult(reconcile.Result{}, reconcile.TerminalError(fmt.Errorf("expected error: reconcile")))
+			Expect(<-reconciled).To(Equal(request))
+
+			queue.AddedRateLimitedLock.Lock()
+			Expect(queue.AddedRatelimited).To(BeEmpty())
+			queue.AddedRateLimitedLock.Unlock()
+
+			Expect(queue.Len()).Should(Equal(0))
 		})
 
 		// TODO(directxman12): we should ensure that backoff occurrs with error requeue

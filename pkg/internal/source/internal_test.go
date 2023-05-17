@@ -74,7 +74,7 @@ var _ = Describe("Internal", func() {
 				set = true
 			},
 		}
-		instance = internal.NewEventHandler(ctx, controllertest.Queue{}, funcs, nil)
+		instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, funcs, nil)
 	})
 
 	Describe("EventHandler", func() {
@@ -99,7 +99,7 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should used Predicates to filter CreateEvents", func() {
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
 			})
 			set = false
@@ -107,14 +107,14 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 			})
 			instance.OnAdd(pod)
 			Expect(set).To(BeTrue())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
 			})
@@ -122,7 +122,7 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 			})
@@ -130,7 +130,7 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 			})
@@ -157,21 +157,21 @@ var _ = Describe("Internal", func() {
 
 		It("should used Predicates to filter UpdateEvents", func() {
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{UpdateFunc: func(updateEvent event.UpdateEvent) bool { return false }},
 			})
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
 			})
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeTrue())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return false }},
 			})
@@ -179,7 +179,7 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return false }},
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
 			})
@@ -187,7 +187,7 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 			})
@@ -215,21 +215,21 @@ var _ = Describe("Internal", func() {
 
 		It("should used Predicates to filter DeleteEvents", func() {
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
 			})
 			instance.OnDelete(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 			})
 			instance.OnDelete(pod)
 			Expect(set).To(BeTrue())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
 			})
@@ -237,7 +237,7 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 			})
@@ -245,7 +245,7 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 			})

@@ -89,12 +89,12 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ar.SetGroupVersionKind(authenticationv1.SchemeGroupVersion.WithKind("TokenReview"))
 	_, actualTokRevGVK, err := authenticationCodecs.UniversalDeserializer().Decode(body, nil, &ar)
 	if err != nil {
-		wh.getLogger(&req).Error(err, "unable to decode the request")
+		wh.getLogger(nil).Error(err, "unable to decode the request")
 		reviewResponse = Errored(err)
 		wh.writeResponse(w, reviewResponse)
 		return
 	}
-	wh.getLogger(&req).V(1).Info("received request")
+	wh.getLogger(&req).V(4).Info("received request")
 
 	if req.Spec.Token == "" {
 		err = errors.New("token is empty")
@@ -135,9 +135,7 @@ func (wh *Webhook) writeTokenResponse(w io.Writer, ar authenticationv1.TokenRevi
 		wh.writeResponse(w, Errored(err))
 	}
 	res := ar
-	if wh.getLogger(nil).V(1).Enabled() {
-		wh.getLogger(nil).V(1).Info("wrote response", "requestID", res.UID, "authenticated", res.Status.Authenticated)
-	}
+	wh.getLogger(nil).V(4).Info("wrote response", "requestID", res.UID, "authenticated", res.Status.Authenticated)
 }
 
 // unversionedTokenReview is used to decode both v1 and v1beta1 TokenReview types.

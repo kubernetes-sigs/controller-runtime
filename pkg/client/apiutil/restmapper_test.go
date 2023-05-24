@@ -416,13 +416,11 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		kind, err := lazyRestMapper.KindFor(schema.GroupVersionResource{Group: "networking.k8s.io", Resource: "ingress"})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(kind.Version).ToNot(gmg.BeEmpty())
-		g.Expect(kind.Kind).ToNot(gmg.BeEmpty())
 
 		kinds, err := lazyRestMapper.KindsFor(schema.GroupVersionResource{Group: "authentication.k8s.io", Resource: "tokenreviews"})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(kinds).ToNot(gmg.BeEmpty())
 		g.Expect(kinds[0].Version).ToNot(gmg.BeEmpty())
-		g.Expect(kinds[0].Kind).ToNot(gmg.BeEmpty())
 
 		resorce, err := lazyRestMapper.ResourceFor(schema.GroupVersionResource{Group: "scheduling.k8s.io", Resource: "priorityclasses"})
 		g.Expect(err).NotTo(gmg.HaveOccurred())

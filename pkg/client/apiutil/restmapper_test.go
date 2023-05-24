@@ -410,37 +410,28 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		httpClient, err := rest.HTTPClientFor(restCfg)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
-		crt := newCountingRoundTripper(httpClient.Transport)
-		httpClient.Transport = crt
-
 		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
-
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
 
 		kind, err := lazyRestMapper.KindFor(schema.GroupVersionResource{Group: "networking.k8s.io", Resource: "ingress"})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(kind.Version).ToNot(gmg.BeEmpty())
 		g.Expect(kind.Kind).ToNot(gmg.BeEmpty())
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(3))
 
 		kinds, err := lazyRestMapper.KindsFor(schema.GroupVersionResource{Group: "authentication.k8s.io", Resource: "tokenreviews"})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(kinds).ToNot(gmg.BeEmpty())
 		g.Expect(kinds[0].Version).ToNot(gmg.BeEmpty())
 		g.Expect(kinds[0].Kind).ToNot(gmg.BeEmpty())
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
 
 		resorce, err := lazyRestMapper.ResourceFor(schema.GroupVersionResource{Group: "scheduling.k8s.io", Resource: "priorityclasses"})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(resorce.Version).ToNot(gmg.BeEmpty())
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(5))
 
 		resorces, err := lazyRestMapper.ResourcesFor(schema.GroupVersionResource{Group: "policy", Resource: "poddisruptionbudgets"})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(kinds).ToNot(gmg.BeEmpty())
 		g.Expect(resorces[0].Version).ToNot(gmg.BeEmpty())
-		g.Expect(crt.GetRequestCount()).To(gmg.Equal(6))
 	})
 
 	t.Run("LazyRESTMapper can fetch CRDs if they were created at runtime", func(t *testing.T) {

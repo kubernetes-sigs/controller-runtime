@@ -155,7 +155,7 @@ func (m *mapper) addKnownGroupAndReload(groupName string, versions ...string) er
 	// versions will here be [""] if the forwarded Version value of
 	// GroupVersionResource (in calling method) was not specified.
 	if len(versions) == 1 && versions[0] == "" {
-		versions = []string{}
+		versions = nil
 	}
 
 	// If no specific versions are set by user, we will scan all available ones for the API group.

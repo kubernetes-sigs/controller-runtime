@@ -210,6 +210,28 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
 	})
 
+	t.Run("LazyRESTMapper KindsFor should work correctly with empty versions list", func(t *testing.T) {
+		g := gmg.NewWithT(t)
+
+		httpClient, err := rest.HTTPClientFor(restCfg)
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+
+		crt := newCountingRoundTripper(httpClient.Transport)
+		httpClient.Transport = crt
+
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
+
+		kinds, err := lazyRestMapper.KindsFor(schema.GroupVersionResource{Group: "autoscaling", Resource: "horizontalpodautoscaler"})
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+		g.Expect(len(kinds)).To(gmg.Equal(2))
+		g.Expect(kinds[0].Kind).To(gmg.Equal("HorizontalPodAutoscaler"))
+		g.Expect(kinds[1].Kind).To(gmg.Equal("HorizontalPodAutoscaler"))
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
+	})
+
 	t.Run("LazyRESTMapper should work correctly with multiple API group versions", func(t *testing.T) {
 		g := gmg.NewWithT(t)
 

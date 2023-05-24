@@ -403,7 +403,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		g.Expect(err).To(gmg.HaveOccurred())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(6))
 	})
-	
+
 	t.Run("LazyRESTMapper should work correctly if the version isn't specified", func(t *testing.T) {
 		g := gmg.NewWithT(t)
 

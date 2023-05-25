@@ -459,7 +459,17 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 		}
 	}
 
-	// First start any webhook servers, which includes conversion, validation, and defaulting
+	// First start any internal HTTP servers, which includes health probes, metrics and profiling if enabled.
+	//
+	// WARNING: Internal HTTP servers MUST start before any cache is populated, otherwise it would block
+	// conversion webhooks to be ready for serving which make the cache never get ready.
+	if err := cm.runnables.HTTPServers.Start(cm.internalCtx); err != nil {
+		if err != nil {
+			return fmt.Errorf("failed to start HTTP servers: %w", err)
+		}
+	}
+
+	// Start any webhook servers, which includes conversion, validation, and defaulting
 	// webhooks that are registered.
 	//
 	// WARNING: Webhooks MUST start before any cache is populated, otherwise there is a race condition
@@ -591,9 +601,12 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 		cm.logger.Info("Stopping and waiting for caches")
 		cm.runnables.Caches.StopAndWait(cm.shutdownCtx)
 
-		// Webhooks should come last, as they might be still serving some requests.
+		// Webhooks and internal HTTP servers should come last, as they might be still serving some requests.
 		cm.logger.Info("Stopping and waiting for webhooks")
 		cm.runnables.Webhooks.StopAndWait(cm.shutdownCtx)
+
+		cm.logger.Info("Stopping and waiting for HTTP servers")
+		cm.runnables.HTTPServers.StopAndWait(cm.shutdownCtx)
 
 		// Proceed to close the manager and overall shutdown context.
 		cm.logger.Info("Wait completed, proceeding to shutdown the manager")

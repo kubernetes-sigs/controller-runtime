@@ -75,6 +75,12 @@ func (m *mapper) KindFor(resource schema.GroupVersionResource) (schema.GroupVers
 
 // KindsFor implements Mapper.KindsFor.
 func (m *mapper) KindsFor(resource schema.GroupVersionResource) ([]schema.GroupVersionKind, error) {
+	if resource.Version == "" {
+		if err := m.addKnownGroupAndReload(resource.Group, resource.Version); err != nil {
+			return nil, err
+		}
+	}
+
 	res, err := m.getMapper().KindsFor(resource)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(resource.Group, resource.Version); err != nil {
@@ -101,6 +107,12 @@ func (m *mapper) ResourceFor(input schema.GroupVersionResource) (schema.GroupVer
 
 // ResourcesFor implements Mapper.ResourcesFor.
 func (m *mapper) ResourcesFor(input schema.GroupVersionResource) ([]schema.GroupVersionResource, error) {
+	if input.Version == "" {
+		if err := m.addKnownGroupAndReload(input.Group, input.Version); err != nil {
+			return nil, err
+		}
+	}
+
 	res, err := m.getMapper().ResourcesFor(input)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(input.Group, input.Version); err != nil {
@@ -127,6 +139,12 @@ func (m *mapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RES
 
 // RESTMappings implements Mapper.RESTMappings.
 func (m *mapper) RESTMappings(gk schema.GroupKind, versions ...string) ([]*meta.RESTMapping, error) {
+	if len(versions) == 0 {
+		if err := m.addKnownGroupAndReload(gk.Group, versions...); err != nil {
+			return nil, err
+		}
+	}
+
 	res, err := m.getMapper().RESTMappings(gk, versions...)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(gk.Group, versions...); err != nil {

@@ -210,6 +210,37 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
 	})
 
+	t.Run("LazyRESTMapper should trigger addKnownGroupAndReload when fetching multiple items and input is partial", func(t *testing.T) {
+		g := gmg.NewWithT(t)
+
+		httpClient, err := rest.HTTPClientFor(restCfg)
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+
+		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+
+		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "crew.example.com", Kind: "driver"}, "v1")
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+
+		mappings, err := lazyRestMapper.RESTMappings(schema.GroupKind{Group: "crew.example.com", Kind: "driver"})
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+		g.Expect(len(mappings)).To(gmg.BeNumerically(">", 1))
+
+		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "autoscaling", Kind: "horizontalpodautoscaler"}, "v1")
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+
+		kinds, err := lazyRestMapper.KindsFor(schema.GroupVersionResource{Group: "autoscaling", Resource: "horizontalpodautoscaler"})
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+		g.Expect(len(kinds)).To(gmg.BeNumerically(">", 1))
+
+		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "flowcontrol.apiserver.k8s.io", Kind: "prioritylevelconfiguration"}, "v1beta2")
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+
+		resources, err := lazyRestMapper.ResourcesFor(schema.GroupVersionResource{Group: "flowcontrol.apiserver.k8s.io", Resource: "prioritylevelconfiguration"})
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+		g.Expect(len(resources)).To(gmg.BeNumerically(">", 1))
+	})
+
 	t.Run("LazyRESTMapper should work correctly with multiple API group versions", func(t *testing.T) {
 		g := gmg.NewWithT(t)
 

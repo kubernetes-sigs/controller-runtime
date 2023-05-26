@@ -237,7 +237,7 @@ var _ = Describe("Webhook Server", func() {
 			resp, err := client.Get(fmt.Sprintf("https://%s/somepath", testHostPort))
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
-			return io.ReadAll(resp.Body)
+			return ioutil.ReadAll(resp.Body)
 		}).Should(Equal([]byte("gadzooks!")))
 		Expect(finalCfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
 		Expect(finalCfg.CipherSuites).To(ContainElements(

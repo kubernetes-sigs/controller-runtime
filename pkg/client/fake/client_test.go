@@ -1024,6 +1024,43 @@ var _ = Describe("Fake client", func() {
 
 		})
 
+		It("should allow deletionTimestamp without finalizer on Build for Pod", func() {
+			namespacedName := types.NamespacedName{
+				Name:      "test-pod",
+				Namespace: "allow-deletiontimestamp-no-finalizers-pod",
+			}
+
+			By("Build with a new Pod without finalizer and deletion grace period seconds")
+			obj := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              namespacedName.Name,
+					Namespace:         namespacedName.Namespace,
+					DeletionTimestamp: &metav1.Time{Time: time.Now()},
+				},
+			}
+			Expect(func() { NewClientBuilder().WithObjects(obj).Build() }).To(Panic())
+
+			By("Build with a scheduled Pod with deletion grace period seconds and without finalizer")
+			newObj := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:                       namespacedName.Name,
+					Namespace:                  namespacedName.Namespace,
+					DeletionTimestamp:          &metav1.Time{Time: time.Now()},
+					DeletionGracePeriodSeconds: ptr.To(int64(10)),
+				},
+				Spec: corev1.PodSpec{
+					NodeName: "node",
+				},
+			}
+
+			cl := NewClientBuilder().WithObjects(newObj).Build()
+
+			By("Getting the Pod")
+			obj = &corev1.Pod{}
+			err := cl.Get(context.Background(), namespacedName, obj)
+			Expect(err).To(BeNil())
+		})
+
 		It("should reject changes to deletionTimestamp on Patch", func() {
 			namespacedName := types.NamespacedName{
 				Name:      "test-cm",

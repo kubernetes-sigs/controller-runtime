@@ -50,6 +50,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/testing"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -278,9 +279,22 @@ func (t versionedTracker) Add(obj runtime.Object) error {
 		if err != nil {
 			return fmt.Errorf("failed to get accessor for object: %w", err)
 		}
-		if accessor.GetDeletionTimestamp() != nil && len(accessor.GetFinalizers()) == 0 {
-			return fmt.Errorf("refusing to create obj %s with metadata.deletionTimestamp but no finalizers", accessor.GetName())
+
+		gvk, err := apiutil.GVKForObject(obj, t.scheme)
+		if err != nil {
+			panic(fmt.Errorf("failed to get gvk for object %T: %w", obj, err))
 		}
+
+		if !allowsGracefulDelete(gvk, obj) {
+			if accessor.GetDeletionTimestamp() != nil && len(accessor.GetFinalizers()) == 0 {
+				return fmt.Errorf("refusing to create obj %s with metadata.deletionTimestamp but no finalizers", accessor.GetName())
+			}
+		} else {
+			if accessor.GetDeletionTimestamp() != nil && pointer.Int64Deref(accessor.GetDeletionGracePeriodSeconds(), 0) <= 0 {
+				return fmt.Errorf("refusing to create obj %s with metadata.deletionTimestamp and non-positive metadata.deletionGracePeriodSeconds", accessor.GetName())
+			}
+		}
+
 		if accessor.GetResourceVersion() == "" {
 			// We use a "magic" value of 999 here because this field
 			// is parsed as uint and and 0 is already used in Update.
@@ -1050,7 +1064,7 @@ func (c *fakeClient) deleteObject(gvr schema.GroupVersionResource, accessor meta
 		}
 	}
 
-	//TODO: implement propagation
+	// TODO: implement propagation
 	return c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
 }
 
@@ -1266,4 +1280,25 @@ func zero(x interface{}) {
 	}
 	res := reflect.ValueOf(x).Elem()
 	res.Set(reflect.Zero(res.Type()))
+}
+
+func allowsGracefulDelete(gvk schema.GroupVersionKind, obj runtime.Object) bool {
+	// If the object is a Pod, it can have the deletionTimestamp set without any finalizers.
+	// This is a special case allowed with graceful deletion. For more details, please see:
+	// https://github.com/kubernetes/kubernetes/blob/7935006af2925dc081605c17fcb5e656cedee286/pkg/registry/core/pod/strategy.go#L163-L194
+	if gvk.Group == corev1.GroupName && gvk.Kind == "Pod" && gvk.Version == "v1" {
+		pod := obj.(*corev1.Pod)
+		// If the pod is not scheduled, it will be deleted immediately.
+		if len(pod.Spec.NodeName) == 0 {
+			return false
+		}
+		// If the pod is already terminated, it will be deleted immediately.
+		if pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
+			return false
+		}
+		// No need to check the spec.terminationGracePeriodSeconds field because it can be
+		// overridden by the DeleteOptions.
+		return true
+	}
+	return false
 }

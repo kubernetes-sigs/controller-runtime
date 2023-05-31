@@ -1431,14 +1431,15 @@ var _ = Describe("Fake client", func() {
 	It("should return a conflict error when an incorrect RV is used on status update", func() {
 		obj := &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "node",
+				Name:            "node",
+				ResourceVersion: trackerAddResourceVersion,
 			},
 		}
 		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
 
 		obj.Status.Phase = corev1.NodeRunning
 		obj.ResourceVersion = "invalid"
-		err := cl.Update(context.Background(), obj)
+		err := cl.Status().Update(context.Background(), obj)
 		Expect(apierrors.IsConflict(err)).To(BeTrue())
 	})
 

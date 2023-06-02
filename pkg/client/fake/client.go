@@ -1286,7 +1286,7 @@ func allowsGracefulDelete(gvk schema.GroupVersionKind, obj runtime.Object) bool 
 	// If the object is a Pod, it can have the deletionTimestamp set without any finalizers.
 	// This is a special case allowed with graceful deletion. For more details, please see:
 	// https://github.com/kubernetes/kubernetes/blob/7935006af2925dc081605c17fcb5e656cedee286/pkg/registry/core/pod/strategy.go#L163-L194
-	if gvk.Group == corev1.GroupName && gvk.Kind == "Pod" && gvk.Version == "v1" {
+	if gvk == corev1.SchemeGroupVersion.WithKind("Pod") {
 		pod := obj.(*corev1.Pod)
 		// If the pod is not scheduled, it will be deleted immediately.
 		if len(pod.Spec.NodeName) == 0 {

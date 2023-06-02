@@ -286,6 +286,14 @@ var _ = Describe("logging", func() {
 				logInfo{msg: "msg 2"},
 			))
 		})
+
+		It("should handle nil sinks", func() {
+			By("fulfilling once")
+			delegLog.Fulfill(logr.Discard().GetSink())
+			By("grabbing a sub-logger and logging")
+			l1 := logr.New(delegLog).WithName("nilsink").WithValues("newtag", "newvalue2")
+			l1.Info("test")
+		})
 	})
 
 	Describe("logger from context", func() {

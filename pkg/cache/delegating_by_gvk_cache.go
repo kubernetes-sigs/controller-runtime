@@ -52,16 +52,16 @@ func (dbt *delegatingByGVKCache) List(ctx context.Context, list client.ObjectLis
 	return cache.List(ctx, list, opts...)
 }
 
-func (dbt *delegatingByGVKCache) GetInformer(ctx context.Context, obj client.Object) (Informer, error) {
+func (dbt *delegatingByGVKCache) GetInformer(ctx context.Context, obj client.Object, opts ...InformerGetOption) (Informer, error) {
 	cache, err := dbt.cacheForObject(obj)
 	if err != nil {
 		return nil, err
 	}
-	return cache.GetInformer(ctx, obj)
+	return cache.GetInformer(ctx, obj, opts...)
 }
 
-func (dbt *delegatingByGVKCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (Informer, error) {
-	return dbt.cacheForGVK(gvk).GetInformerForKind(ctx, gvk)
+func (dbt *delegatingByGVKCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, opts ...InformerGetOption) (Informer, error) {
+	return dbt.cacheForGVK(gvk).GetInformerForKind(ctx, gvk, opts...)
 }
 
 func (dbt *delegatingByGVKCache) Start(ctx context.Context) error {

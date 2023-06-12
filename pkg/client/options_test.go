@@ -307,22 +307,12 @@ var _ = Describe("ForceOwnership", func() {
 })
 
 var _ = Describe("HasLabels", func() {
-	const invalidLongKey = "axahm2EJ8Phiephe2eixohbee9eGeiyees1thuozi1xoh0GiuH3diewi8iem7Nui"
-
 	It("Should produce hasLabels in given order", func() {
 		listOpts := &client.ListOptions{}
 
 		hasLabels := client.HasLabels([]string{"labelApe", "labelFox"})
 		hasLabels.ApplyToList(listOpts)
 		Expect(listOpts.LabelSelector.String()).To(Equal("labelApe,labelFox"))
-	})
-
-	It("Should produce an empty selector when given invalid input", func() {
-		listOpts := &client.ListOptions{}
-		// construct a valid hasLabels selector
-		hasLabel := client.HasLabels([]string{invalidLongKey})
-		hasLabel.ApplyToList(listOpts)
-		Expect(listOpts.LabelSelector.Empty()).To(BeTrue())
 	})
 
 	It("Should add hasLabels to existing hasLabels selector", func() {

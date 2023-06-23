@@ -115,7 +115,7 @@ type ClientBuilder struct {
 	initObject            []client.Object
 	initLists             []client.ObjectList
 	initRuntimeObjects    []runtime.Object
-	withStatusSubresource []client.Object
+	withStatusSubresource []runtime.Object
 	objectTracker         testing.ObjectTracker
 	interceptorFuncs      *interceptor.Funcs
 
@@ -204,7 +204,7 @@ func (f *ClientBuilder) WithIndex(obj runtime.Object, field string, extractValue
 
 // WithStatusSubresource configures the passed object with a status subresource, which means
 // calls to Update and Patch will not alter its status.
-func (f *ClientBuilder) WithStatusSubresource(o ...client.Object) *ClientBuilder {
+func (f *ClientBuilder) WithStatusSubresource(o ...runtime.Object) *ClientBuilder {
 	f.withStatusSubresource = append(f.withStatusSubresource, o...)
 	return f
 }

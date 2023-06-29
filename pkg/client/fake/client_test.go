@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -1426,6 +1427,15 @@ var _ = Describe("Fake client", func() {
 		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)).To(BeNil())
 
 		Expect(obj.Status).To(BeEquivalentTo(corev1.NodeStatus{NodeInfo: corev1.NodeSystemInfo{MachineID: "machine-id"}}))
+	})
+
+	It("should compile with runtime objects", func() {
+		scheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+
+		obj, err := scheme.New(schema.GroupVersionKind{Version: "v1", Kind: "Node"})
+		Expect(err).To(Succeed())
+		_ = NewClientBuilder().WithStatusSubresource(obj).WithScheme(scheme).Build()
 	})
 
 	It("should return a conflict error when an incorrect RV is used on status update", func() {

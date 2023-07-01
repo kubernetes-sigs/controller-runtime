@@ -33,8 +33,8 @@ import (
 const KubeconfigFlagName = "kubeconfig"
 
 var (
-	kubeconfig string
-	log        = logf.RuntimeLog.WithName("client").WithName("config")
+	kubeconfigFlagVal flag.Value
+	log               = logf.RuntimeLog.WithName("client").WithName("config")
 )
 
 // init registers the "kubeconfig" flag to the default command line FlagSet.
@@ -51,9 +51,10 @@ func RegisterFlags(fs *flag.FlagSet) {
 		fs = flag.CommandLine
 	}
 	if f := fs.Lookup(KubeconfigFlagName); f != nil {
-		kubeconfig = f.Value.String()
+		kubeconfigFlagVal = f.Value
 	} else {
-		fs.StringVar(&kubeconfig, KubeconfigFlagName, "", "Paths to a kubeconfig. Only required if out-of-cluster.")
+		fs.String(KubeconfigFlagName, "", "Paths to a kubeconfig. Only required if out-of-cluster.")
+		kubeconfigFlagVal = fs.Lookup(KubeconfigFlagName).Value
 	}
 }
 
@@ -115,8 +116,8 @@ var loadInClusterConfig = rest.InClusterConfig
 // loadConfig loads a REST Config as per the rules specified in GetConfig.
 func loadConfig(context string) (config *rest.Config, configErr error) {
 	// If a flag is specified with the config location, use that
-	if len(kubeconfig) > 0 {
-		return loadConfigWithContext("", &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig}, context)
+	if kubeconfigFlagVal != nil && len(kubeconfigFlagVal.String()) > 0 {
+		return loadConfigWithContext("", &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigFlagVal.String()}, context)
 	}
 
 	// If the recommended kubeconfig env variable is not specified,

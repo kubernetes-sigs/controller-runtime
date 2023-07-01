@@ -17,6 +17,7 @@ limitations under the License.
 package config
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,7 +54,7 @@ var _ = Describe("Config", func() {
 
 	AfterEach(func() {
 		os.Unsetenv(clientcmd.RecommendedConfigPathEnvVar)
-		kubeconfig = ""
+		kubeconfigFlagVal = nil
 		clientcmd.RecommendedHomeFile = origRecommendedHomeFile
 
 		err := os.RemoveAll(dir)
@@ -176,7 +177,9 @@ var _ = Describe("Config", func() {
 func setConfigs(tc testCase, dir string) {
 	// Set kubeconfig flag value
 	if len(tc.kubeconfigFlag) > 0 {
-		kubeconfig = filepath.Join(dir, tc.kubeconfigFlag)
+		fs := flag.NewFlagSet("", flag.ContinueOnError)
+		fs.String(KubeconfigFlagName, filepath.Join(dir, tc.kubeconfigFlag), "")
+		kubeconfigFlagVal = fs.Lookup(KubeconfigFlagName).Value
 	}
 
 	// Set KUBECONFIG env value

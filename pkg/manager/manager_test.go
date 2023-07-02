@@ -25,7 +25,6 @@ import (
 	"net"
 	"net/http"
 	"path"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -43,6 +42,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 
 	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -500,7 +500,7 @@ var _ = Describe("manger.Manager", func() {
 			It("should use the specified ResourceLock", func() {
 				m, err := New(cfg, Options{
 					LeaderElection:             true,
-					LeaderElectionResourceLock: resourcelock.ConfigMapsLeasesResourceLock,
+					LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 					LeaderElectionID:           "controller-runtime",
 					LeaderElectionNamespace:    "my-ns",
 				})
@@ -508,14 +508,8 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).ToNot(HaveOccurred())
 				cm, ok := m.(*controllerManager)
 				Expect(ok).To(BeTrue())
-				multilock, isMultiLock := cm.resourceLock.(*resourcelock.MultiLock)
-				Expect(isMultiLock).To(BeTrue())
-				primaryLockType := reflect.TypeOf(multilock.Primary)
-				Expect(primaryLockType.Kind()).To(Equal(reflect.Ptr))
-				Expect(primaryLockType.Elem().PkgPath()).To(Equal("k8s.io/client-go/tools/leaderelection/resourcelock"))
-				Expect(primaryLockType.Elem().Name()).To(Equal("configMapLock"))
-				_, secondaryIsLeaseLock := multilock.Secondary.(*resourcelock.LeaseLock)
-				Expect(secondaryIsLeaseLock).To(BeTrue())
+				_, isLeaseLock := cm.resourceLock.(*resourcelock.LeaseLock)
+				Expect(isLeaseLock).To(BeTrue())
 			})
 			It("should release lease if ElectionReleaseOnCancel is true", func() {
 				var rl resourcelock.Interface

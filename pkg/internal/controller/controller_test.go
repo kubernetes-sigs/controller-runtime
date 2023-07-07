@@ -259,7 +259,7 @@ var _ = Describe("controller", func() {
 			}}
 
 			e := ctrl.Start(ctx)
-			Expect(e).NotTo(BeNil())
+			Expect(e).To(HaveOccurred())
 			Expect(e.Error()).To(ContainSubstring("must specify Channel.Source"))
 		})
 
@@ -305,9 +305,9 @@ var _ = Describe("controller", func() {
 			// Use a cancelled context so Start doesn't block
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
-			Expect(ctrl.Start(ctx)).To(BeNil())
+			Expect(ctrl.Start(ctx)).To(Succeed())
 			err := ctrl.Start(ctx)
-			Expect(err).NotTo(BeNil())
+			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("controller was started more than once. This is likely to be caused by being added to a manager multiple times"))
 		})
 

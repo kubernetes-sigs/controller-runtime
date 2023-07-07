@@ -758,12 +758,12 @@ var _ = Describe("Controllerutil", func() {
 		Describe("ContainsFinalizer", func() {
 			It("should check that finalizer is present", func() {
 				controllerutil.AddFinalizer(deploy, testFinalizer)
-				Expect(controllerutil.ContainsFinalizer(deploy, testFinalizer)).To(Equal(true))
+				Expect(controllerutil.ContainsFinalizer(deploy, testFinalizer)).To(BeTrue())
 			})
 
 			It("should check that finalizer is not present after RemoveFinalizer call", func() {
 				controllerutil.RemoveFinalizer(deploy, testFinalizer)
-				Expect(controllerutil.ContainsFinalizer(deploy, testFinalizer)).To(Equal(false))
+				Expect(controllerutil.ContainsFinalizer(deploy, testFinalizer)).To(BeFalse())
 			})
 		})
 	})

@@ -213,7 +213,7 @@ var _ = Describe("Source", func() {
 				instance := source.Kind(ic, &corev1.Pod{})
 				err := instance.Start(ctx, handler.Funcs{}, q)
 				Expect(err).NotTo(HaveOccurred())
-				Eventually(instance.WaitForSync(context.Background())).Should(HaveOccurred())
+				Eventually(instance.WaitForSync).WithArguments(context.Background()).Should(HaveOccurred())
 			})
 		})
 

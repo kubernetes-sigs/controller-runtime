@@ -100,8 +100,8 @@ var _ = Describe("Test", func() {
 			}
 			err := parseWebhook(&installOptions)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(installOptions.MutatingWebhooks)).To(Equal(2))
-			Expect(len(installOptions.ValidatingWebhooks)).To(Equal(2))
+			Expect(installOptions.MutatingWebhooks).To(HaveLen(2))
+			Expect(installOptions.ValidatingWebhooks).To(HaveLen(2))
 		})
 
 		It("should load webhooks from files", func() {
@@ -110,8 +110,8 @@ var _ = Describe("Test", func() {
 			}
 			err := parseWebhook(&installOptions)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(installOptions.MutatingWebhooks)).To(Equal(2))
-			Expect(len(installOptions.ValidatingWebhooks)).To(Equal(2))
+			Expect(installOptions.MutatingWebhooks).To(HaveLen(2))
+			Expect(installOptions.ValidatingWebhooks).To(HaveLen(2))
 		})
 	})
 })

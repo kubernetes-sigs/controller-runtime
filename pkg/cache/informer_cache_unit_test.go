@@ -93,7 +93,7 @@ var _ = Describe("ip.objectTypeForListObject", func() {
 					&controllertest.UnconventionalListType{},
 					&controllertest.UnconventionalListTypeList{},
 				).AddToScheme(ip.scheme)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		By("calling objectTypeForListObject", func() {

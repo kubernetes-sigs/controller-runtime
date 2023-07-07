@@ -176,14 +176,14 @@ func fakeStore(fs afero.Afero, dir string) {
 	}
 
 	By("making some fake non-store paths")
-	Expect(fs.Mkdir(filepath.Join(dir, "missing-binaries"), 0755))
+	Expect(fs.Mkdir(filepath.Join(dir, "missing-binaries"), 0755)).To(Succeed())
 
-	Expect(fs.Mkdir(filepath.Join(dir, "wrong-version"), 0755))
+	Expect(fs.Mkdir(filepath.Join(dir, "wrong-version"), 0755)).To(Succeed())
 	Expect(fs.WriteFile(filepath.Join(dir, "wrong-version", "kube-apiserver"), nil, 0755)).To(Succeed())
 	Expect(fs.WriteFile(filepath.Join(dir, "wrong-version", "kubectl"), nil, 0755)).To(Succeed())
 	Expect(fs.WriteFile(filepath.Join(dir, "wrong-version", "etcd"), nil, 0755)).To(Succeed())
 
-	Expect(fs.Mkdir(filepath.Join(dir, "good-version"), 0755))
+	Expect(fs.Mkdir(filepath.Join(dir, "good-version"), 0755)).To(Succeed())
 	Expect(fs.WriteFile(filepath.Join(dir, "good-version", "kube-apiserver"), nil, 0755)).To(Succeed())
 	Expect(fs.WriteFile(filepath.Join(dir, "good-version", "kubectl"), nil, 0755)).To(Succeed())
 	Expect(fs.WriteFile(filepath.Join(dir, "good-version", "etcd"), nil, 0755)).To(Succeed())

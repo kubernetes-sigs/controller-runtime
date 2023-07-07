@@ -42,7 +42,7 @@ var _ = Describe("CertWatcher", func() {
 	var _ = Describe("certwatcher New", func() {
 		It("should errors without cert/key", func() {
 			_, err := certwatcher.New("", "")
-			Expect(err).ToNot(BeNil())
+			Expect(err).To(HaveOccurred())
 		})
 	})
 
@@ -57,7 +57,7 @@ var _ = Describe("CertWatcher", func() {
 			ctx, ctxCancel = context.WithCancel(context.Background())
 
 			err := writeCerts(certPath, keyPath, "127.0.0.1")
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			Eventually(func() error {
 				for _, file := range []string{certPath, keyPath} {
@@ -72,7 +72,7 @@ var _ = Describe("CertWatcher", func() {
 			}).Should(Succeed())
 
 			watcher, err = certwatcher.New(certPath, keyPath)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		startWatcher := func() (done <-chan struct{}) {
@@ -108,7 +108,7 @@ var _ = Describe("CertWatcher", func() {
 			firstcert, _ := watcher.GetCertificate(nil)
 
 			err := writeCerts(certPath, keyPath, "192.168.0.1")
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			Eventually(func() bool {
 				secondcert, _ := watcher.GetCertificate(nil)
@@ -157,7 +157,7 @@ var _ = Describe("CertWatcher", func() {
 					return nil
 				}, "4s").Should(Succeed())
 
-				Expect(os.Remove(keyPath)).To(BeNil())
+				Expect(os.Remove(keyPath)).To(Succeed())
 
 				Eventually(func() error {
 					readCertificateTotalAfter := testutil.ToFloat64(metrics.ReadCertificateTotal)

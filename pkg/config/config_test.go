@@ -26,7 +26,7 @@ var _ = Describe("config", func() {
 		It("should error loading from non existent file", func() {
 			loader := config.File()
 			_, err := loader.Complete()
-			Expect(err).ToNot(BeNil())
+			Expect(err).To(HaveOccurred())
 		})
 
 		It("should load a config from file", func() {
@@ -35,9 +35,9 @@ var _ = Describe("config", func() {
 			Expect(conf.CacheNamespace).To(Equal(""))
 
 			_, err := loader.Complete()
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
-			Expect(*conf.LeaderElection.LeaderElect).To(Equal(true))
+			Expect(*conf.LeaderElection.LeaderElect).To(BeTrue())
 			Expect(conf.CacheNamespace).To(Equal("default"))
 			Expect(conf.Metrics.BindAddress).To(Equal(":8081"))
 		})

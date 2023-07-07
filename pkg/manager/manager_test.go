@@ -154,7 +154,7 @@ var _ = Describe("manger.Manager", func() {
 			}
 
 			m, err := Options{}.AndFrom(&fakeDeferredLoader{ccfg})
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			Expect(*m.SyncPeriod).To(Equal(duration.Duration))
 			Expect(m.LeaderElection).To(Equal(leaderElect))
@@ -233,10 +233,10 @@ var _ = Describe("manger.Manager", func() {
 					TLSOpts: optionsTlSOptsFuncs,
 				}),
 			}.AndFrom(&fakeDeferredLoader{ccfg})
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			Expect(m.SyncPeriod.String()).To(Equal(optDuration.String()))
-			Expect(m.LeaderElection).To(Equal(true))
+			Expect(m.LeaderElection).To(BeTrue())
 			Expect(m.LeaderElectionResourceLock).To(Equal("configmaps"))
 			Expect(m.LeaderElectionNamespace).To(Equal("ctrl"))
 			Expect(m.LeaderElectionID).To(Equal("ctrl-configmap"))
@@ -319,7 +319,7 @@ var _ = Describe("manger.Manager", func() {
 					MetricsBindAddress:      "0",
 					PprofBindAddress:        "0",
 				})
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 
 				runnableDone := make(chan struct{})
 				slowRunnable := RunnableFunc(func(ctx context.Context) error {
@@ -328,7 +328,7 @@ var _ = Describe("manger.Manager", func() {
 					close(runnableDone)
 					return nil
 				})
-				Expect(m.Add(slowRunnable)).To(BeNil())
+				Expect(m.Add(slowRunnable)).To(Succeed())
 
 				cm := m.(*controllerManager)
 				cm.gracefulShutdownTimeout = time.Second
@@ -341,7 +341,7 @@ var _ = Describe("manger.Manager", func() {
 				mgrDone := make(chan struct{})
 				go func() {
 					defer GinkgoRecover()
-					Expect(m.Start(ctx)).To(BeNil())
+					Expect(m.Start(ctx)).To(Succeed())
 					close(mgrDone)
 				}()
 				<-cm.Elected()
@@ -365,7 +365,7 @@ var _ = Describe("manger.Manager", func() {
 					MetricsBindAddress:      "0",
 					PprofBindAddress:        "0",
 				})
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
@@ -373,7 +373,7 @@ var _ = Describe("manger.Manager", func() {
 				go func() {
 					defer GinkgoRecover()
 					err := m.Start(ctx)
-					Expect(err).ToNot(BeNil())
+					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("leader election lost"))
 					close(mgrDone)
 				}()
@@ -525,7 +525,7 @@ var _ = Describe("manger.Manager", func() {
 						return rl, err
 					},
 				})
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 
 				ctx, cancel := context.WithCancel(context.Background())
 				doneCh := make(chan struct{})
@@ -541,7 +541,7 @@ var _ = Describe("manger.Manager", func() {
 				ctx, cancel = context.WithCancel(context.Background())
 				defer cancel()
 				record, _, err := rl.Get(ctx)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(record.HolderIdentity).To(BeEmpty())
 			})
 			When("using a custom LeaderElectionResourceLockInterface", func() {
@@ -821,7 +821,7 @@ var _ = Describe("manger.Manager", func() {
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				err = m.Start(ctx)
-				Expect(err).ToNot(BeNil())
+				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("expected error"))
 			})
 
@@ -993,7 +993,7 @@ var _ = Describe("manger.Manager", func() {
 				m.(*controllerManager).gracefulShutdownTimeout = 1 * time.Nanosecond
 				Expect(m.Add(RunnableFunc(func(context.Context) error {
 					return runnableError{}
-				})))
+				}))).To(Succeed())
 				testDone := make(chan struct{})
 				defer close(testDone)
 				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
@@ -1006,11 +1006,11 @@ var _ = Describe("manger.Manager", func() {
 					case <-timer.C:
 						return nil
 					}
-				})))
+				}))).To(Succeed())
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				err = m.Start(ctx)
-				Expect(err).ToNot(BeNil())
+				Expect(err).To(HaveOccurred())
 				eMsg := "[not feeling like that, failed waiting for all runnables to end within grace period of 1ns: context deadline exceeded]"
 				Expect(err.Error()).To(Equal(eMsg))
 				Expect(errors.Is(err, context.DeadlineExceeded)).To(BeTrue())
@@ -1027,7 +1027,7 @@ var _ = Describe("manger.Manager", func() {
 				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
 					<-ctx.Done()
 					return nil
-				})))
+				}))).To(Succeed())
 				testDone := make(chan struct{})
 				defer close(testDone)
 				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
@@ -1040,7 +1040,7 @@ var _ = Describe("manger.Manager", func() {
 					case <-timer.C:
 						return nil
 					}
-				}))).NotTo(HaveOccurred())
+				}))).To(Succeed())
 				ctx, cancel := context.WithCancel(context.Background())
 				managerStopDone := make(chan struct{})
 				go func() { err = m.Start(ctx); close(managerStopDone) }()
@@ -1049,7 +1049,7 @@ var _ = Describe("manger.Manager", func() {
 				<-m.(*controllerManager).elected
 				cancel()
 				<-managerStopDone
-				Expect(err).ToNot(BeNil())
+				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("failed waiting for all runnables to end within grace period of 1ns: context deadline exceeded"))
 				Expect(errors.Is(err, context.DeadlineExceeded)).To(BeTrue())
 				Expect(errors.Is(err, runnableError{})).ToNot(BeTrue())
@@ -1063,11 +1063,11 @@ var _ = Describe("manger.Manager", func() {
 				}
 				Expect(m.Add(RunnableFunc(func(context.Context) error {
 					return runnableError{}
-				})))
+				}))).To(Succeed())
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				err = m.Start(ctx)
-				Expect(err).ToNot(BeNil())
+				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("not feeling like that"))
 				Expect(errors.Is(err, context.DeadlineExceeded)).ToNot(BeTrue())
 				Expect(errors.Is(err, runnableError{})).To(BeTrue())
@@ -1669,7 +1669,7 @@ var _ = Describe("manger.Manager", func() {
 			}).Should(BeTrue())
 
 			err = m.Start(ctx)
-			Expect(err).ToNot(BeNil())
+			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("manager already started"))
 
 		})

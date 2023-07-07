@@ -57,7 +57,7 @@ var _ = BeforeSuite(func() {
 			&controllertest.UnconventionalListType{},
 			&controllertest.UnconventionalListTypeList{},
 		).AddToScheme(scheme.Scheme)
-	Expect(err).To(BeNil())
+	Expect(err).ToNot(HaveOccurred())
 
 	testenv = &envtest.Environment{
 		CRDDirectoryPaths: []string{"testdata/crds"},

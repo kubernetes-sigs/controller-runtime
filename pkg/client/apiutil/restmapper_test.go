@@ -110,7 +110,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 
 		mappings, err := lazyRestMapper.RESTMappings(schema.GroupKind{Group: "", Kind: "pod"}, "v1")
 		g.Expect(err).NotTo(gmg.HaveOccurred())
-		g.Expect(len(mappings)).To(gmg.Equal(1))
+		g.Expect(mappings).To(gmg.HaveLen(1))
 		g.Expect(mappings[0].GroupVersionKind.Kind).To(gmg.Equal("pod"))
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(2))
 
@@ -121,7 +121,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 
 		kinds, err := lazyRestMapper.KindsFor(schema.GroupVersionResource{Group: "authentication.k8s.io", Version: "v1", Resource: "tokenreviews"})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
-		g.Expect(len(kinds)).To(gmg.Equal(1))
+		g.Expect(kinds).To(gmg.HaveLen(1))
 		g.Expect(kinds[0].Kind).To(gmg.Equal("TokenReview"))
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
 
@@ -132,7 +132,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 
 		resources, err := lazyRestMapper.ResourcesFor(schema.GroupVersionResource{Group: "policy", Version: "v1", Resource: "poddisruptionbudgets"})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
-		g.Expect(len(resources)).To(gmg.Equal(1))
+		g.Expect(resources).To(gmg.HaveLen(1))
 		g.Expect(resources[0].Resource).To(gmg.Equal("poddisruptionbudgets"))
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(6))
 	})

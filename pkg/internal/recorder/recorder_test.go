@@ -39,7 +39,7 @@ var _ = Describe("recorder.Provider", func() {
 			cfg1 := *cfg
 			cfg1.Host = "invalid host"
 			_, err := recorder.NewProvider(&cfg1, httpClient, scheme.Scheme, logr.Discard(), makeBroadcaster)
-			Expect(err).NotTo(BeNil())
+			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to init client"))
 		})
 	})

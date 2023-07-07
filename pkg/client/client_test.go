@@ -778,7 +778,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(actual.Labels["foo"]).To(Equal("bar"))
 
 				By("validating patch options were applied")
-				Expect(testOption.applied).To(Equal(true))
+				Expect(testOption.applied).To(BeTrue())
 			})
 		})
 	})

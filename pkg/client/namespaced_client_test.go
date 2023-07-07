@@ -47,9 +47,9 @@ var _ = Describe("NamespacedClient", func() {
 		var sch = runtime.NewScheme()
 
 		err := rbacv1.AddToScheme(sch)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		err = appsv1.AddToScheme(sch)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		nonNamespacedClient, err := client.New(cfg, client.Options{Scheme: sch})
 		Expect(err).NotTo(HaveOccurred())

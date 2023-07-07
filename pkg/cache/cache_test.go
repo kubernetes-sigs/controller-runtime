@@ -193,7 +193,7 @@ var _ = Describe("Cache with transformers", func() {
 				Expect(obj).NotTo(BeNil())
 
 				accessor, err := meta.Accessor(obj)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				annotations := accessor.GetAnnotations()
 
 				if _, exists := annotations["transformed"]; exists {
@@ -214,7 +214,7 @@ var _ = Describe("Cache with transformers", func() {
 						obj := i.(runtime.Object)
 						Expect(obj).NotTo(BeNil())
 						accessor, err := meta.Accessor(obj)
-						Expect(err).To(BeNil())
+						Expect(err).ToNot(HaveOccurred())
 
 						annotations := accessor.GetAnnotations()
 						if _, exists := annotations["transformed"]; exists {
@@ -401,7 +401,7 @@ var _ = Describe("Cache with selectors", func() {
 		var sas corev1.ServiceAccountList
 		err := informerCache.List(informerCacheCtx, &sas)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(len(sas.Items)).To(Equal(1))
+		Expect(sas.Items).To(HaveLen(1))
 		Expect(sas.Items[0].Namespace).To(Equal(testNamespaceOne))
 	})
 
@@ -409,7 +409,7 @@ var _ = Describe("Cache with selectors", func() {
 		var svcs corev1.ServiceList
 		err := informerCache.List(informerCacheCtx, &svcs)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(len(svcs.Items)).To(Equal(1))
+		Expect(svcs.Items).To(HaveLen(1))
 		Expect(svcs.Items[0].Namespace).To(Equal(testNamespaceTwo))
 	})
 })
@@ -618,7 +618,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						Expect(informerCache.List(context.Background(), outList2, client.InNamespace(testNamespaceOne))).To(Succeed())
 
 						By("verifying the pointer fields in pod have the same addresses")
-						Expect(len(outList1.Items)).To(Equal(len(outList2.Items)))
+						Expect(outList1.Items).To(HaveLen(len(outList2.Items)))
 						sort.SliceStable(outList1.Items, func(i, j int) bool { return outList1.Items[i].Name <= outList1.Items[j].Name })
 						sort.SliceStable(outList2.Items, func(i, j int) bool { return outList2.Items[i].Name <= outList2.Items[j].Name })
 						for i := range outList1.Items {
@@ -798,7 +798,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						defer GinkgoRecover()
 						Expect(namespacedCache.Start(informerCacheCtx)).To(Succeed())
 					}()
-					Expect(namespacedCache.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
+					Expect(namespacedCache.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
 
 					By("listing pods in all namespaces")
 					out := &unstructured.UnstructuredList{}
@@ -893,7 +893,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						Expect(informerCache.List(context.Background(), outList2, client.InNamespace(testNamespaceOne))).To(Succeed())
 
 						By("verifying the pointer fields in pod have the same addresses")
-						Expect(len(outList1.Items)).To(Equal(len(outList2.Items)))
+						Expect(outList1.Items).To(HaveLen(len(outList2.Items)))
 						sort.SliceStable(outList1.Items, func(i, j int) bool { return outList1.Items[i].GetName() <= outList1.Items[j].GetName() })
 						sort.SliceStable(outList2.Items, func(i, j int) bool { return outList2.Items[i].GetName() <= outList2.Items[j].GetName() })
 						for i := range outList1.Items {
@@ -940,7 +940,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						defer GinkgoRecover()
 						Expect(m.Start(informerCacheCtx)).To(Succeed())
 					}()
-					Expect(m.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
+					Expect(m.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
 
 					By("should be able to fetch cluster scoped resource")
 					node := &corev1.Node{}
@@ -1079,7 +1079,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						defer GinkgoRecover()
 						Expect(namespacedCache.Start(informerCacheCtx)).To(Succeed())
 					}()
-					Expect(namespacedCache.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
+					Expect(namespacedCache.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
 
 					By("listing pods in all namespaces")
 					out := &metav1.PartialObjectMetadataList{}
@@ -1179,7 +1179,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						Expect(informerCache.List(context.Background(), outList2, client.InNamespace(testNamespaceOne))).To(Succeed())
 
 						By("verifying the pointer fields in pod have the same addresses")
-						Expect(len(outList1.Items)).To(Equal(len(outList2.Items)))
+						Expect(outList1.Items).To(HaveLen(len(outList2.Items)))
 						sort.SliceStable(outList1.Items, func(i, j int) bool { return outList1.Items[i].Name <= outList1.Items[j].Name })
 						sort.SliceStable(outList2.Items, func(i, j int) bool { return outList2.Items[i].Name <= outList2.Items[j].Name })
 						for i := range outList1.Items {
@@ -1238,7 +1238,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					defer GinkgoRecover()
 					Expect(informer.Start(informerCacheCtx)).To(Succeed())
 				}()
-				Expect(informer.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
+				Expect(informer.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
 
 				By("Checking with structured")
 				obtainedStructuredPodList := corev1.PodList{}
@@ -1415,7 +1415,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						defer GinkgoRecover()
 						Expect(informer.Start(informerCacheCtx)).To(Succeed())
 					}()
-					Expect(informer.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
+					Expect(informer.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
 
 					By("listing Pods with restartPolicyOnFailure")
 					listObj := &corev1.PodList{}
@@ -1484,7 +1484,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						defer GinkgoRecover()
 						Expect(informer.Start(informerCacheCtx)).To(Succeed())
 					}()
-					Expect(informer.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
+					Expect(informer.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
 
 					By("listing Namespaces with fixed indexer")
 					listObj := &corev1.NamespaceList{}
@@ -1574,7 +1574,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						defer GinkgoRecover()
 						Expect(informer.Start(informerCacheCtx)).To(Succeed())
 					}()
-					Expect(informer.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
+					Expect(informer.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
 
 					By("listing Pods with restartPolicyOnFailure")
 					listObj := &unstructured.UnstructuredList{}
@@ -1687,7 +1687,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						defer GinkgoRecover()
 						Expect(informer.Start(informerCacheCtx)).To(Succeed())
 					}()
-					Expect(informer.WaitForCacheSync(informerCacheCtx)).NotTo(BeFalse())
+					Expect(informer.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
 
 					By("listing Pods with restartPolicyOnFailure")
 					listObj := &metav1.PartialObjectMetadataList{}

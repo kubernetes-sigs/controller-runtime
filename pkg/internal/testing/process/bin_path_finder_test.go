@@ -28,12 +28,12 @@ var _ = Describe("BinPathFinder", func() {
 	BeforeEach(func() {
 		prevAssetPath = os.Getenv(EnvAssetsPath)
 		Expect(os.Unsetenv(EnvAssetsPath)).To(Succeed())
-		Expect(os.Unsetenv(EnvAssetOverridePrefix + "_SOME_FAKE"))
-		Expect(os.Unsetenv(EnvAssetOverridePrefix + "OTHERFAKE"))
+		Expect(os.Unsetenv(EnvAssetOverridePrefix + "_SOME_FAKE")).To(Succeed())
+		Expect(os.Unsetenv(EnvAssetOverridePrefix + "OTHERFAKE")).To(Succeed())
 	})
 	AfterEach(func() {
 		if prevAssetPath != "" {
-			Expect(os.Setenv(EnvAssetsPath, prevAssetPath))
+			Expect(os.Setenv(EnvAssetsPath, prevAssetPath)).To(Succeed())
 		}
 	})
 	Context("when individual overrides are present", func() {

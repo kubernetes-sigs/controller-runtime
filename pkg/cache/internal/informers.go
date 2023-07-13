@@ -230,7 +230,8 @@ func (ip *Informers) WaitForCacheSync(ctx context.Context) bool {
 	return cache.WaitForCacheSync(ctx.Done(), ip.getHasSyncedFuncs()...)
 }
 
-func (ip *Informers) get(gvk schema.GroupVersionKind, obj runtime.Object) (res *Cache, started bool, ok bool) {
+// Peek attempts to get the informer for the GVK, but does not start one if one does not exist.
+func (ip *Informers) Peek(gvk schema.GroupVersionKind, obj runtime.Object) (res *Cache, started bool, ok bool) {
 	ip.mu.RLock()
 	defer ip.mu.RUnlock()
 	i, ok := ip.informersByType(obj)[gvk]
@@ -241,7 +242,7 @@ func (ip *Informers) get(gvk schema.GroupVersionKind, obj runtime.Object) (res *
 // the Informer from the map.
 func (ip *Informers) Get(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object) (bool, *Cache, error) {
 	// Return the informer if it is found
-	i, started, ok := ip.get(gvk, obj)
+	i, started, ok := ip.Peek(gvk, obj)
 	if !ok {
 		var err error
 		if i, started, err = ip.addInformerToMap(gvk, obj); err != nil {

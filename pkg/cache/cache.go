@@ -145,6 +145,15 @@ type Options struct {
 	// instead of `reconcile.Result{}`.
 	SyncPeriod *time.Duration
 
+	// ReaderFailOnMissingInformer configures the cache to return a ErrResourceNotCached error when a user
+	// requests, using Get() and List(), a resource the cache does not already have an informer for.
+	//
+	// This error is distinct from an errors.NotFound.
+	//
+	// Defaults to false, which means that the cache will start a new informer
+	// for every new requested resource.
+	ReaderFailOnMissingInformer bool
+
 	// DefaultNamespaces maps namespace names to cache configs. If set, only
 	// the namespaces in here will be watched and it will by used to default
 	// ByObject.Namespaces for all objects if that is nil.
@@ -329,6 +338,7 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 				Transform:             config.Transform,
 				UnsafeDisableDeepCopy: pointer.BoolDeref(config.UnsafeDisableDeepCopy, false),
 			}),
+			readerFailOnMissingInformer: opts.ReaderFailOnMissingInformer,
 		}
 	}
 }

@@ -600,6 +600,16 @@ var _ = Describe("manger.Manager", func() {
 			cancel()
 		})
 
+		It("should be able to create a manager with a cache that fails on missing informer", func() {
+			m, err := New(cfg, Options{
+				Cache: cache.Options{
+					ReaderFailOnMissingInformer: true,
+				},
+			})
+			Expect(m).ToNot(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		It("should return an error if the metrics bind address is already in use", func() {
 			ln, err := net.Listen("tcp", ":0") //nolint:gosec
 			Expect(err).ShouldNot(HaveOccurred())

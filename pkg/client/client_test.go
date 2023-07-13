@@ -19,6 +19,7 @@ package client_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync/atomic"
@@ -43,6 +44,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/examples/crd/pkg"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -143,6 +145,7 @@ var _ = Describe("Client", func() {
 	var count uint64 = 0
 	var replicaCount int32 = 2
 	var ns = "default"
+	var errNotCached *cache.ErrResourceNotCached
 	ctx := context.TODO()
 
 	BeforeEach(func() {
@@ -276,6 +279,16 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			Expect(cl.Get(ctx, client.ObjectKey{Name: "test"}, &appsv1.Deployment{})).To(Succeed())
 			Expect(cl.List(ctx, &appsv1.DeploymentList{})).To(Succeed())
 			Expect(cache.Called).To(Equal(2))
+		})
+
+		It("should propagate ErrResourceNotCached errors", func() {
+			c := &fakeUncachedReader{}
+			cl, err := client.New(cfg, client.Options{Cache: &client.CacheOptions{Reader: c}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+			Expect(errors.As(cl.Get(ctx, client.ObjectKey{Name: "test"}, &appsv1.Deployment{}), &errNotCached)).To(BeTrue())
+			Expect(errors.As(cl.List(ctx, &appsv1.DeploymentList{}), &errNotCached)).To(BeTrue())
+			Expect(c.Called).To(Equal(2))
 		})
 
 		It("should not use the provided reader cache if provided, on get and list for uncached GVKs", func() {
@@ -3936,6 +3949,20 @@ func (f *fakeReader) Get(ctx context.Context, key client.ObjectKey, obj client.O
 func (f *fakeReader) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 	f.Called++
 	return nil
+}
+
+type fakeUncachedReader struct {
+	Called int
+}
+
+func (f *fakeUncachedReader) Get(_ context.Context, _ client.ObjectKey, _ client.Object, opts ...client.GetOption) error {
+	f.Called++
+	return &cache.ErrResourceNotCached{}
+}
+
+func (f *fakeUncachedReader) List(_ context.Context, _ client.ObjectList, _ ...client.ListOption) error {
+	f.Called++
+	return &cache.ErrResourceNotCached{}
 }
 
 func ptr[T any](to T) *T {

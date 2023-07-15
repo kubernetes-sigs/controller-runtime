@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,7 +44,6 @@ import (
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
@@ -64,13 +64,6 @@ type Manager interface {
 	// managers, either because it won a leader election or because no leader
 	// election was configured.
 	Elected() <-chan struct{}
-
-	// AddMetricsExtraHandler adds an extra handler served on path to the http server that serves metrics.
-	// Might be useful to register some diagnostic endpoints e.g. pprof. Note that these endpoints meant to be
-	// sensitive and shouldn't be exposed publicly.
-	// If the simple path -> handler mapping offered here is not enough, a new http server/listener should be added as
-	// Runnable to the manager via Add method.
-	AddMetricsExtraHandler(path string, handler http.Handler) error
 
 	// AddHealthzCheck allows you to add Healthz checker
 	AddHealthzCheck(name string, check healthz.Checker) error
@@ -219,10 +212,8 @@ type Options struct {
 	// between tries of actions. Default is 2 seconds.
 	RetryPeriod *time.Duration
 
-	// MetricsBindAddress is the TCP address that the controller should bind to
-	// for serving prometheus metrics.
-	// It can be set to "0" to disable the metrics serving.
-	MetricsBindAddress string
+	// Metrics are the metricsserver.Options that will be used to create the metricsserver.Server.
+	Metrics metricsserver.Options
 
 	// HealthProbeBindAddress is the TCP address that the controller should bind to
 	// for serving health probes
@@ -243,8 +234,8 @@ type Options struct {
 	PprofBindAddress string
 
 	// WebhookServer is an externally configured webhook.Server. By default,
-	// a Manager will create a default server using Port, Host, and CertDir;
-	// if this is set, the Manager will use this server instead.
+	// a Manager will create a server via webhook.NewServer with default settings.
+	// If this is set, the Manager will use this server instead.
 	WebhookServer webhook.Server
 
 	// BaseContext is the function that provides Context values to Runnables
@@ -279,7 +270,7 @@ type Options struct {
 	// Dependency injection for testing
 	newRecorderProvider    func(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error)
 	newResourceLock        func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
-	newMetricsListener     func(addr string) (net.Listener, error)
+	newMetricsServer       func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error)
 	newHealthProbeListener func(addr string) (net.Listener, error)
 	newPprofListener       func(addr string) (net.Listener, error)
 }
@@ -383,15 +374,11 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		}
 	}
 
-	// Create the metrics listener. This will throw an error if the metrics bind
-	// address is invalid or already in use.
-	metricsListener, err := options.newMetricsListener(options.MetricsBindAddress)
+	// Create the metrics server.
+	metricsServer, err := options.newMetricsServer(options.Metrics, config, cluster.GetHTTPClient())
 	if err != nil {
 		return nil, err
 	}
-
-	// By default we have no extra endpoints to expose on metrics http server.
-	metricsExtraHandlers := make(map[string]http.Handler)
 
 	// Create health probes listener. This will throw an error if the bind
 	// address is invalid or already in use.
@@ -417,8 +404,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		errChan:                       errChan,
 		recorderProvider:              recorderProvider,
 		resourceLock:                  resourceLock,
-		metricsListener:               metricsListener,
-		metricsExtraHandlers:          metricsExtraHandlers,
+		metricsServer:                 metricsServer,
 		controllerConfig:              options.Controller,
 		logger:                        options.Logger,
 		elected:                       make(chan struct{}),
@@ -464,8 +450,8 @@ func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options,
 		o.Cache.DefaultNamespaces = map[string]cache.Config{newObj.CacheNamespace: {}}
 	}
 
-	if o.MetricsBindAddress == "" && newObj.Metrics.BindAddress != "" {
-		o.MetricsBindAddress = newObj.Metrics.BindAddress
+	if o.Metrics.BindAddress == "" && newObj.Metrics.BindAddress != "" {
+		o.Metrics.BindAddress = newObj.Metrics.BindAddress
 	}
 
 	if o.HealthProbeBindAddress == "" && newObj.Health.HealthProbeBindAddress != "" {
@@ -616,8 +602,8 @@ func setOptionsDefaults(options Options) Options {
 		}
 	}
 
-	if options.newMetricsListener == nil {
-		options.newMetricsListener = metrics.NewListener
+	if options.newMetricsServer == nil {
+		options.newMetricsServer = metricsserver.NewServer
 	}
 	leaseDuration, renewDeadline, retryPeriod := defaultLeaseDuration, defaultRenewDeadline, defaultRetryPeriod
 	if options.LeaseDuration == nil {

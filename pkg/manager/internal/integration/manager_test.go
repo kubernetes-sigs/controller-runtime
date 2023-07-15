@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -145,7 +146,7 @@ var _ = Describe("manger.Manager Start", func() {
 			Scheme:                 scheme,
 			HealthProbeBindAddress: ":0",
 			// Disable metrics to avoid port conflicts.
-			MetricsBindAddress: "0",
+			Metrics: metricsserver.Options{BindAddress: "0"},
 			WebhookServer: webhook.NewServer(webhook.Options{
 				Port:    env.WebhookInstallOptions.LocalServingPort,
 				Host:    env.WebhookInstallOptions.LocalServingHost,

@@ -28,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -100,7 +101,7 @@ var _ = Describe("Webhook", func() {
 		})
 		It("should reject create request for multi-webhook that rejects all requests", func() {
 			m, err := manager.New(cfg, manager.Options{
-				MetricsBindAddress: "0",
+				Metrics: metricsserver.Options{BindAddress: "0"},
 				WebhookServer: webhook.NewServer(webhook.Options{
 					Port:    testenv.WebhookInstallOptions.LocalServingPort,
 					Host:    testenv.WebhookInstallOptions.LocalServingHost,

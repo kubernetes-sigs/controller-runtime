@@ -34,14 +34,16 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/goleak"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
-
 	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
@@ -52,6 +54,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
@@ -165,7 +169,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.RenewDeadline.String()).To(Equal(duration.Duration.String()))
 			Expect(m.RetryPeriod.String()).To(Equal(duration.Duration.String()))
 			Expect(m.Cache.DefaultNamespaces).To(Equal(map[string]cache.Config{"default": {}}))
-			Expect(m.MetricsBindAddress).To(Equal(":6000"))
+			Expect(m.Metrics.BindAddress).To(Equal(":6000"))
 			Expect(m.HealthProbeBindAddress).To(Equal("6060"))
 			Expect(m.ReadinessEndpointName).To(Equal("/readyz"))
 			Expect(m.LivenessEndpointName).To(Equal("/livez"))
@@ -224,7 +228,7 @@ var _ = Describe("manger.Manager", func() {
 				LeaseDuration:              &optDuration,
 				RenewDeadline:              &optDuration,
 				RetryPeriod:                &optDuration,
-				MetricsBindAddress:         ":7000",
+				Metrics:                    metricsserver.Options{BindAddress: ":7000"},
 				HealthProbeBindAddress:     "5000",
 				ReadinessEndpointName:      "/readiness",
 				LivenessEndpointName:       "/liveness",
@@ -246,7 +250,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.RenewDeadline.String()).To(Equal(optDuration.String()))
 			Expect(m.RetryPeriod.String()).To(Equal(optDuration.String()))
 			Expect(m.Cache.DefaultNamespaces).To(Equal(map[string]cache.Config{"ctrl": {}}))
-			Expect(m.MetricsBindAddress).To(Equal(":7000"))
+			Expect(m.Metrics.BindAddress).To(Equal(":7000"))
 			Expect(m.HealthProbeBindAddress).To(Equal("5000"))
 			Expect(m.ReadinessEndpointName).To(Equal("/readiness"))
 			Expect(m.LivenessEndpointName).To(Equal("/liveness"))
@@ -305,7 +309,7 @@ var _ = Describe("manger.Manager", func() {
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id-2",
 					HealthProbeBindAddress:  "0",
-					MetricsBindAddress:      "0",
+					Metrics:                 metricsserver.Options{BindAddress: "0"},
 					PprofBindAddress:        "0",
 				})
 				Expect(err).ToNot(HaveOccurred())
@@ -351,7 +355,7 @@ var _ = Describe("manger.Manager", func() {
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id-3",
 					HealthProbeBindAddress:  "0",
-					MetricsBindAddress:      "0",
+					Metrics:                 metricsserver.Options{BindAddress: "0"},
 					PprofBindAddress:        "0",
 				})
 				Expect(err).ToNot(HaveOccurred())
@@ -386,7 +390,7 @@ var _ = Describe("manger.Manager", func() {
 						return rl, err
 					},
 					HealthProbeBindAddress: "0",
-					MetricsBindAddress:     "0",
+					Metrics:                metricsserver.Options{BindAddress: "0"},
 					PprofBindAddress:       "0",
 				})
 				Expect(err).ToNot(HaveOccurred())
@@ -407,7 +411,7 @@ var _ = Describe("manger.Manager", func() {
 						return rl, err
 					},
 					HealthProbeBindAddress: "0",
-					MetricsBindAddress:     "0",
+					Metrics:                metricsserver.Options{BindAddress: "0"},
 					PprofBindAddress:       "0",
 				})
 				Expect(err).ToNot(HaveOccurred())
@@ -554,40 +558,97 @@ var _ = Describe("manger.Manager", func() {
 			})
 		})
 
-		It("should create a listener for the metrics if a valid address is provided", func() {
-			var listener net.Listener
+		It("should create a metrics server if a valid address is provided", func() {
+			var srv metricsserver.Server
 			m, err := New(cfg, Options{
-				MetricsBindAddress: ":0",
-				newMetricsListener: func(addr string) (net.Listener, error) {
+				Metrics: metricsserver.Options{BindAddress: ":0"},
+				newMetricsServer: func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error) {
 					var err error
-					listener, err = metrics.NewListener(addr)
-					return listener, err
+					srv, err = metricsserver.NewServer(options, config, httpClient)
+					return srv, err
 				},
 			})
 			Expect(m).ToNot(BeNil())
 			Expect(err).ToNot(HaveOccurred())
-			Expect(listener).ToNot(BeNil())
-			Expect(listener.Close()).ToNot(HaveOccurred())
+			Expect(srv).ToNot(BeNil())
+
+			// Triggering the metric server start here manually to test if it works.
+			// Usually this happens later during manager.Start().
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			Expect(srv.Start(ctx)).To(Succeed())
+			cancel()
+		})
+
+		It("should create a metrics server if a valid address is provided and secure serving is enabled", func() {
+			var srv metricsserver.Server
+			m, err := New(cfg, Options{
+				Metrics: metricsserver.Options{BindAddress: ":0", SecureServing: true},
+				newMetricsServer: func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error) {
+					var err error
+					srv, err = metricsserver.NewServer(options, config, httpClient)
+					return srv, err
+				},
+			})
+			Expect(m).ToNot(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(srv).ToNot(BeNil())
+
+			// Triggering the metric server start here manually to test if it works.
+			// Usually this happens later during manager.Start().
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			Expect(srv.Start(ctx)).To(Succeed())
+			cancel()
 		})
 
 		It("should return an error if the metrics bind address is already in use", func() {
-			ln, err := metrics.NewListener(":0")
+			ln, err := net.Listen("tcp", ":0") //nolint:gosec
 			Expect(err).ShouldNot(HaveOccurred())
 
-			var listener net.Listener
+			var srv metricsserver.Server
 			m, err := New(cfg, Options{
-				MetricsBindAddress: ln.Addr().String(),
-				newMetricsListener: func(addr string) (net.Listener, error) {
+				Metrics: metricsserver.Options{
+					BindAddress: ln.Addr().String(),
+				},
+				newMetricsServer: func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error) {
 					var err error
-					listener, err = metrics.NewListener(addr)
-					return listener, err
+					srv, err = metricsserver.NewServer(options, config, httpClient)
+					return srv, err
 				},
 			})
-			Expect(m).To(BeNil())
-			Expect(err).To(HaveOccurred())
-			Expect(listener).To(BeNil())
+			Expect(m).ToNot(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
-			Expect(ln.Close()).ToNot(HaveOccurred())
+			// Triggering the metric server start here manually to test if it works.
+			// Usually this happens later during manager.Start().
+			Expect(srv.Start(context.Background())).ToNot(Succeed())
+
+			Expect(ln.Close()).To(Succeed())
+		})
+
+		It("should return an error if the metrics bind address is already in use and secure serving enabled", func() {
+			ln, err := net.Listen("tcp", ":0") //nolint:gosec
+			Expect(err).ShouldNot(HaveOccurred())
+
+			var srv metricsserver.Server
+			m, err := New(cfg, Options{
+				Metrics: metricsserver.Options{
+					BindAddress:   ln.Addr().String(),
+					SecureServing: true,
+				},
+				newMetricsServer: func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error) {
+					var err error
+					srv, err = metricsserver.NewServer(options, config, httpClient)
+					return srv, err
+				},
+			})
+			Expect(m).ToNot(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+
+			// Triggering the metric server start here manually to test if it works.
+			// Usually this happens later during manager.Start().
+			Expect(srv.Start(context.Background())).ToNot(Succeed())
+
+			Expect(ln.Close()).To(Succeed())
 		})
 
 		It("should create a listener for the health probes if a valid address is provided", func() {
@@ -1159,28 +1220,28 @@ var _ = Describe("manger.Manager", func() {
 		})
 
 		Context("should start serving metrics", func() {
-			var listener net.Listener
+			var srv metricsserver.Server
+			var defaultServer metricsDefaultServer
 			var opts Options
 
 			BeforeEach(func() {
-				listener = nil
+				srv = nil
 				opts = Options{
-					newMetricsListener: func(addr string) (net.Listener, error) {
+					Metrics: metricsserver.Options{
+						BindAddress: ":0",
+					},
+					newMetricsServer: func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error) {
 						var err error
-						listener, err = metrics.NewListener(addr)
-						return listener, err
+						srv, err = metricsserver.NewServer(options, config, httpClient)
+						if srv != nil {
+							defaultServer = srv.(metricsDefaultServer)
+						}
+						return srv, err
 					},
 				}
 			})
 
-			AfterEach(func() {
-				if listener != nil {
-					listener.Close()
-				}
-			})
-
 			It("should stop serving metrics when stop is called", func() {
-				opts.MetricsBindAddress = ":0"
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1189,9 +1250,13 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
+				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
 
 				// Check the metrics started
-				endpoint := fmt.Sprintf("http://%s", listener.Addr().String())
+				endpoint := fmt.Sprintf("http://%s/metrics", defaultServer.GetBindAddr())
 				_, err = http.Get(endpoint)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1202,11 +1267,10 @@ var _ = Describe("manger.Manager", func() {
 				Eventually(func() error {
 					_, err = http.Get(endpoint)
 					return err
-				}).ShouldNot(Succeed())
+				}, 10*time.Second).ShouldNot(Succeed())
 			})
 
 			It("should serve metrics endpoint", func() {
-				opts.MetricsBindAddress = ":0"
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1217,15 +1281,17 @@ var _ = Describe("manger.Manager", func() {
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
 
-				metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
+				metricsEndpoint := fmt.Sprintf("http://%s/metrics", defaultServer.GetBindAddr())
 				resp, err := http.Get(metricsEndpoint)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(resp.StatusCode).To(Equal(200))
 			})
 
 			It("should not serve anything other than metrics endpoint by default", func() {
-				opts.MetricsBindAddress = ":0"
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1236,8 +1302,11 @@ var _ = Describe("manger.Manager", func() {
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
 
-				endpoint := fmt.Sprintf("http://%s/should-not-exist", listener.Addr().String())
+				endpoint := fmt.Sprintf("http://%s/should-not-exist", defaultServer.GetBindAddr())
 				resp, err := http.Get(endpoint)
 				Expect(err).NotTo(HaveOccurred())
 				defer resp.Body.Close()
@@ -1253,7 +1322,6 @@ var _ = Describe("manger.Manager", func() {
 				err := metrics.Registry.Register(one)
 				Expect(err).NotTo(HaveOccurred())
 
-				opts.MetricsBindAddress = ":0"
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1264,8 +1332,11 @@ var _ = Describe("manger.Manager", func() {
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
 
-				metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
+				metricsEndpoint := fmt.Sprintf("http://%s/metrics", defaultServer.GetBindAddr())
 				resp, err := http.Get(metricsEndpoint)
 				Expect(err).NotTo(HaveOccurred())
 				defer resp.Body.Close()
@@ -1285,20 +1356,13 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should serve extra endpoints", func() {
-				opts.MetricsBindAddress = ":0"
+				opts.Metrics.ExtraHandlers = map[string]http.Handler{
+					"/debug": http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+						_, _ = w.Write([]byte("Some debug info"))
+					}),
+				}
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
-
-				err = m.AddMetricsExtraHandler("/debug", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-					_, _ = w.Write([]byte("Some debug info"))
-				}))
-				Expect(err).NotTo(HaveOccurred())
-
-				// Should error when we add another extra endpoint on the already registered path.
-				err = m.AddMetricsExtraHandler("/debug", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-					_, _ = w.Write([]byte("Another debug info"))
-				}))
-				Expect(err).To(HaveOccurred())
 
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
@@ -1307,8 +1371,11 @@ var _ = Describe("manger.Manager", func() {
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
 
-				endpoint := fmt.Sprintf("http://%s/debug", listener.Addr().String())
+				endpoint := fmt.Sprintf("http://%s/debug", defaultServer.GetBindAddr())
 				resp, err := http.Get(endpoint)
 				Expect(err).NotTo(HaveOccurred())
 				defer resp.Body.Close()
@@ -1317,6 +1384,245 @@ var _ = Describe("manger.Manager", func() {
 				body, err := io.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(string(body)).To(Equal("Some debug info"))
+			})
+		})
+
+		Context("should start serving metrics with https and authn/authz", func() {
+			var srv metricsserver.Server
+			var defaultServer metricsDefaultServer
+			var opts Options
+			var httpClient *http.Client
+
+			BeforeEach(func() {
+				srv = nil
+				opts = Options{
+					Metrics: metricsserver.Options{
+						BindAddress:    ":0",
+						SecureServing:  true,
+						FilterProvider: filters.WithAuthenticationAndAuthorization,
+					},
+					newMetricsServer: func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error) {
+						var err error
+						srv, err = metricsserver.NewServer(options, config, httpClient)
+						if srv != nil {
+							defaultServer = srv.(metricsDefaultServer)
+						}
+						return srv, err
+					},
+				}
+				httpClient = &http.Client{Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+				}}
+			})
+
+			It("should stop serving metrics when stop is called", func() {
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+				}()
+				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
+
+				// Check the metrics started
+				// GET /metrics without token.
+				endpoint := fmt.Sprintf("https://%s/metrics", defaultServer.GetBindAddr())
+				resp, err := httpClient.Get(endpoint)
+				Expect(err).NotTo(HaveOccurred())
+				body, err := io.ReadAll(resp.Body)
+				Expect(resp.StatusCode).To(Equal(401))
+				Expect(err).NotTo(HaveOccurred())
+				// Unauthorized is the expected response if no bearer token is provided.
+				Expect(string(body)).To(ContainSubstring("Unauthorized"))
+
+				// Shutdown the server
+				cancel()
+
+				// Expect the metrics server to shutdown
+				Eventually(func() error {
+					_, err = http.Get(endpoint)
+					return err
+				}, 10*time.Second).ShouldNot(Succeed())
+			})
+
+			It("should serve metrics endpoint", func() {
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+				}()
+				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
+
+				// Setup service account with rights to "/metrics"
+				token, cleanup, err := setupServiceAccountForURL(ctx, m.GetClient(), "/metrics")
+				defer cleanup()
+				Expect(err).ToNot(HaveOccurred())
+
+				// GET /metrics with token.
+				metricsEndpoint := fmt.Sprintf("https://%s/metrics", defaultServer.GetBindAddr())
+				req, err := http.NewRequest("GET", metricsEndpoint, nil)
+				Expect(err).NotTo(HaveOccurred())
+				req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+				resp, err := httpClient.Do(req)
+				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
+				// This is expected as the token has rights for /metrics.
+				Expect(resp.StatusCode).To(Equal(200))
+				body, err := io.ReadAll(resp.Body)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(body)).To(ContainSubstring("rest_client_requests_total"))
+			})
+
+			It("should not serve anything other than metrics endpoint by default", func() {
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+				}()
+				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
+
+				endpoint := fmt.Sprintf("https://%s/should-not-exist", defaultServer.GetBindAddr())
+				resp, err := httpClient.Get(endpoint)
+				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
+				Expect(resp.StatusCode).To(Equal(404))
+			})
+
+			It("should serve metrics in its registry", func() {
+				one := prometheus.NewCounter(prometheus.CounterOpts{
+					Name: "test_one",
+					Help: "test metric for testing",
+				})
+				one.Inc()
+				err := metrics.Registry.Register(one)
+				Expect(err).NotTo(HaveOccurred())
+
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+				}()
+				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
+
+				// Setup service account with rights to "/metrics"
+				token, cleanup, err := setupServiceAccountForURL(ctx, m.GetClient(), "/metrics")
+				defer cleanup()
+				Expect(err).ToNot(HaveOccurred())
+
+				// GET /metrics with token.
+				metricsEndpoint := fmt.Sprintf("https://%s/metrics", defaultServer.GetBindAddr())
+				req, err := http.NewRequest("GET", metricsEndpoint, nil)
+				Expect(err).NotTo(HaveOccurred())
+				req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+				resp, err := httpClient.Do(req)
+				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
+				// This is expected as the token has rights for /metrics.
+				Expect(resp.StatusCode).To(Equal(200))
+
+				data, err := io.ReadAll(resp.Body)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(data)).To(ContainSubstring("%s\n%s\n%s\n",
+					`# HELP test_one test metric for testing`,
+					`# TYPE test_one counter`,
+					`test_one 1`,
+				))
+
+				// Unregister will return false if the metric was never registered
+				ok := metrics.Registry.Unregister(one)
+				Expect(ok).To(BeTrue())
+			})
+
+			It("should serve extra endpoints", func() {
+				opts.Metrics.ExtraHandlers = map[string]http.Handler{
+					"/debug": http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+						_, _ = w.Write([]byte("Some debug info"))
+					}),
+				}
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+				}()
+				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
+
+				// Setup service account with rights to "/debug"
+				token, cleanup, err := setupServiceAccountForURL(ctx, m.GetClient(), "/debug")
+				defer cleanup()
+				Expect(err).ToNot(HaveOccurred())
+
+				// GET /debug without token.
+				endpoint := fmt.Sprintf("https://%s/debug", defaultServer.GetBindAddr())
+				req, err := http.NewRequest("GET", endpoint, nil)
+				Expect(err).NotTo(HaveOccurred())
+				resp, err := httpClient.Do(req)
+				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
+				// This is expected as we didn't send a token.
+				Expect(resp.StatusCode).To(Equal(401))
+				body, err := io.ReadAll(resp.Body)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(body)).To(ContainSubstring("Unauthorized"))
+
+				// PUT /debug with token.
+				req, err = http.NewRequest("PUT", endpoint, nil)
+				Expect(err).NotTo(HaveOccurred())
+				req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+				resp, err = httpClient.Do(req)
+				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
+				// This is expected as the token has rights for /debug.
+				Expect(resp.StatusCode).To(Equal(200))
+				body, err = io.ReadAll(resp.Body)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(body)).To(Equal("Some debug info"))
+
+				// GET /metrics with token (but token only has rights for /debug).
+				metricsEndpoint := fmt.Sprintf("https://%s/metrics", defaultServer.GetBindAddr())
+				req, err = http.NewRequest("GET", metricsEndpoint, nil)
+				Expect(err).NotTo(HaveOccurred())
+				req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+				resp, err = httpClient.Do(req)
+				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
+				Expect(resp.StatusCode).To(Equal(403))
+				body, err = io.ReadAll(resp.Body)
+				Expect(err).NotTo(HaveOccurred())
+				// Authorization denied is expected as the token only has rights for /debug not for /metrics.
+				Expect(string(body)).To(ContainSubstring("Authorization denied for user system:serviceaccount:default:metrics-test"))
 			})
 		})
 	})
@@ -1772,6 +2078,79 @@ var _ = Describe("manger.Manager", func() {
 	})
 })
 
+func setupServiceAccountForURL(ctx context.Context, c client.Client, path string) (string, func(), error) {
+	createdObjects := []client.Object{}
+	cleanup := func() {
+		for _, obj := range createdObjects {
+			_ = c.Delete(ctx, obj)
+		}
+	}
+
+	sa := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "metrics-test",
+			Namespace: metav1.NamespaceDefault,
+		},
+	}
+	if err := c.Create(ctx, sa); err != nil {
+		return "", cleanup, err
+	}
+	createdObjects = append(createdObjects, sa)
+
+	cr := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "metrics-test",
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				Verbs:           []string{"get", "put"},
+				NonResourceURLs: []string{path},
+			},
+		},
+	}
+	if err := c.Create(ctx, cr); err != nil {
+		return "", cleanup, err
+	}
+	createdObjects = append(createdObjects, cr)
+
+	crb := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "metrics-test",
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Name:      "metrics-test",
+				Namespace: metav1.NamespaceDefault,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     "metrics-test",
+		},
+	}
+	if err := c.Create(ctx, crb); err != nil {
+		return "", cleanup, err
+	}
+	createdObjects = append(createdObjects, crb)
+
+	tokenRequest := &authenticationv1.TokenRequest{
+		Spec: authenticationv1.TokenRequestSpec{
+			ExpirationSeconds: pointer.Int64(2 * 60 * 60), // 2 hours.
+		},
+	}
+	if err := c.SubResource("token").Create(ctx, sa, tokenRequest); err != nil {
+		return "", cleanup, err
+	}
+
+	if tokenRequest.Status.Token == "" {
+		return "", cleanup, errors.New("failed to get ServiceAccount token: token should not be empty")
+	}
+
+	return tokenRequest.Status.Token, cleanup, nil
+}
+
 type runnableError struct {
 }
 
@@ -1844,4 +2223,11 @@ func (f *fakeDeferredLoader) Complete() (v1alpha1.ControllerManagerConfiguration
 
 func (f *fakeDeferredLoader) InjectScheme(scheme *runtime.Scheme) error {
 	return nil
+}
+
+// metricsDefaultServer is used to type check the default metrics server implementation
+// so we can retrieve the bind addr without having to make GetBindAddr a function on the
+// metricsserver.Server interface or resort to reflection.
+type metricsDefaultServer interface {
+	GetBindAddr() string
 }

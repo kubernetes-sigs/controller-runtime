@@ -390,6 +390,9 @@ type LeaderElectionRunnable interface {
 }
 
 // New returns a new Manager for creating Controllers.
+// Note that if ContentType in the given config is not set, "application/vnd.kubernetes.protobuf"
+// will be used for all built-in resources of Kubernetes, and "application/json" is for other types
+// including all CRD resources.
 func New(config *rest.Config, options Options) (Manager, error) {
 	// Set default values for options fields
 	options = setOptionsDefaults(options)

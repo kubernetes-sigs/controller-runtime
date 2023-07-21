@@ -1177,6 +1177,8 @@ func allowsUnconditionalUpdate(gvk schema.GroupVersionKind) bool {
 		case "PodSecurityPolicy":
 			return true
 		}
+	case "rbac":
+		fallthrough
 	case "rbac.authorization.k8s.io":
 		switch gvk.Kind {
 		case "ClusterRole", "ClusterRoleBinding", "Role", "RoleBinding":

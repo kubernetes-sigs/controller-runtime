@@ -114,13 +114,13 @@ func (c *typedClient) Patch(ctx context.Context, obj Object, patch Patch, opts .
 		return err
 	}
 
-	data, err := patch.Data(obj)
-	if err != nil {
-		return err
-	}
-
 	patchOpts := &PatchOptions{}
 	patchOpts.ApplyOptions(opts)
+
+	data, err := patch.Data(obj)
+	if err != nil || (!patchOpts.SendEmptyPatch && string(data) == "{}") {
+		return err
+	}
 
 	return o.Patch(patch.Type()).
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
@@ -263,7 +263,7 @@ func (c *typedClient) PatchSubResource(ctx context.Context, obj Object, subResou
 	}
 
 	data, err := patch.Data(body)
-	if err != nil {
+	if err != nil || (!patchOpts.SendEmptyPatch && string(data) == "{}") {
 		return err
 	}
 

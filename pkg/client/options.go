@@ -746,6 +746,9 @@ type PatchOptions struct {
 
 	// Raw represents raw PatchOptions, as passed to the API server.
 	Raw *metav1.PatchOptions
+
+	// SendEmptyPatch is going to send empty patch calls to the API server.
+	SendEmptyPatch bool
 }
 
 // ApplyOptions applies the given patch options on these options,
@@ -806,6 +809,16 @@ func (forceOwnership) ApplyToPatch(opts *PatchOptions) {
 func (forceOwnership) ApplyToSubResourcePatch(opts *SubResourcePatchOptions) {
 	definitelyTrue := true
 	opts.Force = &definitelyTrue
+}
+
+// SendEmptyPatch sets the "sendEmptyPatch" option to true.
+var SendEmptyPatch = sendEmptyPatch{}
+
+type sendEmptyPatch struct{}
+
+// ApplyToPatch applies this configuration to the given patch options.
+func (sendEmptyPatch) ApplyToPatch(opts *PatchOptions) {
+	opts.SendEmptyPatch = true
 }
 
 // }}}

@@ -344,6 +344,9 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 	globalOpts := blder.mgr.GetControllerOptions()
 
 	ctrlOptions := blder.ctrlOptions
+	if ctrlOptions.Reconciler != nil && r != nil {
+		return errors.New("reconciler was set via WithOptions() and via Build() or Complete()")
+	}
 	if ctrlOptions.Reconciler == nil {
 		ctrlOptions.Reconciler = r
 	}

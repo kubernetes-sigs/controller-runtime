@@ -298,7 +298,7 @@ var _ = Describe("application", func() {
 			Expect(instance).NotTo(BeNil())
 		})
 
-		It("should prefer reconciler from options during creation of controller", func() {
+		It("should not allow multiple reconcilers during creation of controller", func() {
 			newController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
 				if options.Reconciler != (typedNoop{}) {
 					return nil, fmt.Errorf("Custom reconciler expected %T but found %T", typedNoop{}, options.Reconciler)
@@ -315,8 +315,8 @@ var _ = Describe("application", func() {
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{Reconciler: typedNoop{}}).
 				Build(noop)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(instance).NotTo(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(instance).To(BeNil())
 		})
 
 		It("should allow multiple controllers for the same kind", func() {

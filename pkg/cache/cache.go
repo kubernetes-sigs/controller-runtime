@@ -47,10 +47,10 @@ var (
 // to receive events for Kubernetes objects (at a low-level),
 // and add indices to fields on the objects stored in the cache.
 type Cache interface {
-	// Cache acts as a client to objects stored in the cache.
+	// Reader acts as a client to objects stored in the cache.
 	client.Reader
 
-	// Cache loads informers and adds field indices.
+	// Informers loads informers and adds field indices.
 	Informers
 }
 
@@ -70,39 +70,43 @@ type Informers interface {
 	// It blocks.
 	Start(ctx context.Context) error
 
-	// WaitForCacheSync waits for all the caches to sync.  Returns false if it could not sync a cache.
+	// WaitForCacheSync waits for all the caches to sync. Returns false if it could not sync a cache.
 	WaitForCacheSync(ctx context.Context) bool
 
-	// Informers knows how to add indices to the caches (informers) that it manages.
+	// FieldIndexer adds indices to the managed informers.
 	client.FieldIndexer
 }
 
-// Informer - informer allows you interact with the underlying informer.
+// Informer allows you to interact with the underlying informer.
 type Informer interface {
 	// AddEventHandler adds an event handler to the shared informer using the shared informer's resync
-	// period.  Events to a single handler are delivered sequentially, but there is no coordination
+	// period. Events to a single handler are delivered sequentially, but there is no coordination
 	// between different handlers.
 	// It returns a registration handle for the handler that can be used to remove
-	// the handler again.
+	// the handler again and an error if the handler cannot be added.
 	AddEventHandler(handler toolscache.ResourceEventHandler) (toolscache.ResourceEventHandlerRegistration, error)
+
 	// AddEventHandlerWithResyncPeriod adds an event handler to the shared informer using the
-	// specified resync period.  Events to a single handler are delivered sequentially, but there is
+	// specified resync period. Events to a single handler are delivered sequentially, but there is
 	// no coordination between different handlers.
 	// It returns a registration handle for the handler that can be used to remove
 	// the handler again and an error if the handler cannot be added.
 	AddEventHandlerWithResyncPeriod(handler toolscache.ResourceEventHandler, resyncPeriod time.Duration) (toolscache.ResourceEventHandlerRegistration, error)
-	// RemoveEventHandler removes a formerly added event handler given by
+
+	// RemoveEventHandler removes a previously added event handler given by
 	// its registration handle.
-	// This function is guaranteed to be idempotent, and thread-safe.
+	// This function is guaranteed to be idempotent and thread-safe.
 	RemoveEventHandler(handle toolscache.ResourceEventHandlerRegistration) error
-	// AddIndexers adds more indexers to this store.  If you call this after you already have data
+
+	// AddIndexers adds indexers to this store. If this is called after there is already data
 	// in the store, the results are undefined.
 	AddIndexers(indexers toolscache.Indexers) error
+
 	// HasSynced return true if the informers underlying store has synced.
 	HasSynced() bool
 }
 
-// Options are the optional arguments for creating a new InformersMap object.
+// Options are the optional arguments for creating a new Cache object.
 type Options struct {
 	// HTTPClient is the http client to use for the REST client
 	HTTPClient *http.Client
@@ -141,23 +145,20 @@ type Options struct {
 	SyncPeriod *time.Duration
 
 	// Namespaces restricts the cache's ListWatch to the desired namespaces
-	// Default watches all namespaces
+	// Per default ListWatch watches all namespaces
 	Namespaces []string
 
-	// DefaultLabelSelector will be used as a label selectors for all object types
+	// DefaultLabelSelector will be used as a label selector for all object types
 	// unless they have a more specific selector set in ByObject.
 	DefaultLabelSelector labels.Selector
 
-	// DefaultFieldSelector will be used as a field selectors for all object types
+	// DefaultFieldSelector will be used as a field selector for all object types
 	// unless they have a more specific selector set in ByObject.
 	DefaultFieldSelector fields.Selector
 
 	// DefaultTransform will be used as transform for all object types
 	// unless they have a more specific transform set in ByObject.
 	DefaultTransform toolscache.TransformFunc
-
-	// ByObject restricts the cache's ListWatch to the desired fields per GVK at the specified object.
-	ByObject map[client.Object]ByObject
 
 	// UnsafeDisableDeepCopy indicates not to deep copy objects during get or
 	// list objects for EVERY object.
@@ -166,6 +167,9 @@ type Options struct {
 	//
 	// This is a global setting for all objects, and can be overridden by the ByObject setting.
 	UnsafeDisableDeepCopy *bool
+
+	// ByObject restricts the cache's ListWatch to the desired fields per GVK at the specified object.
+	ByObject map[client.Object]ByObject
 }
 
 // ByObject offers more fine-grained control over the cache's ListWatch by object.
@@ -176,9 +180,8 @@ type ByObject struct {
 	// Field represents a field selector for the object.
 	Field fields.Selector
 
-	// Transform is a map from objects to transformer functions which
-	// get applied when objects of the transformation are about to be committed
-	// to cache.
+	// Transform is a transformer function for the object which gets applied
+	// when objects of the transformation are about to be committed to the cache.
 	//
 	// This function is called both for new objects to enter the cache,
 	// and for updated objects.
@@ -236,15 +239,12 @@ func New(config *rest.Config, opts Options) (Cache, error) {
 }
 
 func defaultOpts(config *rest.Config, opts Options) (Options, error) {
-	logger := log.WithName("setup")
-
 	// Use the rest HTTP client for the provided config if unset
 	if opts.HTTPClient == nil {
 		var err error
 		opts.HTTPClient, err = rest.HTTPClientFor(config)
 		if err != nil {
-			logger.Error(err, "Failed to get HTTP client")
-			return opts, fmt.Errorf("could not create HTTP client from config: %w", err)
+			return Options{}, fmt.Errorf("could not create HTTP client from config: %w", err)
 		}
 	}
 
@@ -258,8 +258,7 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 		var err error
 		opts.Mapper, err = apiutil.NewDiscoveryRESTMapper(config, opts.HTTPClient)
 		if err != nil {
-			logger.Error(err, "Failed to get API Group-Resources")
-			return opts, fmt.Errorf("could not create RESTMapper from config: %w", err)
+			return Options{}, fmt.Errorf("could not create RESTMapper from config: %w", err)
 		}
 	}
 

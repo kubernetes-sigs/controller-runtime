@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
 	toolscache "k8s.io/client-go/tools/cache"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
@@ -52,14 +53,7 @@ func (c *FakeInformers) GetInformerForKind(ctx context.Context, gvk schema.Group
 
 // FakeInformerForKind implements Informers.
 func (c *FakeInformers) FakeInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (*controllertest.FakeInformer, error) {
-	if c.Scheme == nil {
-		c.Scheme = scheme.Scheme
-	}
-	obj, err := c.Scheme.New(gvk)
-	if err != nil {
-		return nil, err
-	}
-	i, err := c.informerFor(gvk, obj)
+	i, err := c.GetInformerForKind(ctx, gvk)
 	if err != nil {
 		return nil, err
 	}
@@ -88,16 +82,8 @@ func (c *FakeInformers) WaitForCacheSync(ctx context.Context) bool {
 }
 
 // FakeInformerFor implements Informers.
-func (c *FakeInformers) FakeInformerFor(obj runtime.Object) (*controllertest.FakeInformer, error) {
-	if c.Scheme == nil {
-		c.Scheme = scheme.Scheme
-	}
-	gvks, _, err := c.Scheme.ObjectKinds(obj)
-	if err != nil {
-		return nil, err
-	}
-	gvk := gvks[0]
-	i, err := c.informerFor(gvk, obj)
+func (c *FakeInformers) FakeInformerFor(ctx context.Context, obj client.Object) (*controllertest.FakeInformer, error) {
+	i, err := c.GetInformer(ctx, obj)
 	if err != nil {
 		return nil, err
 	}

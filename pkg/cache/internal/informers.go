@@ -35,6 +35,7 @@ import (
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
@@ -48,7 +49,7 @@ type InformersOpts struct {
 	ByGVK        map[schema.GroupVersionKind]InformersOptsByGVK
 }
 
-// InformersOptsByGVK configured additional by group version kind (or object)
+// InformersOptsByGVK configures additionally by group version kind (or object)
 // in an InformerMap.
 type InformersOptsByGVK struct {
 	Selector              Selector
@@ -186,7 +187,7 @@ func (ip *Informers) getDisableDeepCopy(gvk schema.GroupVersionKind) bool {
 	return false
 }
 
-// Start calls Run on each of the informers and sets started to true.  Blocks on the context.
+// Start calls Run on each of the informers and sets started to true. Blocks on the context.
 // It doesn't return start because it can't return an error, and it's not a runnable directly.
 func (ip *Informers) Start(ctx context.Context) error {
 	func() {
@@ -278,7 +279,7 @@ func (ip *Informers) get(gvk schema.GroupVersionKind, obj runtime.Object) (res *
 	return i, ip.started, ok
 }
 
-// Get will create a new Informer and add it to the map of specificInformersMap if none exists.  Returns
+// Get will create a new Informer and add it to the map of specificInformersMap if none exists. Returns
 // the Informer from the map.
 func (ip *Informers) Get(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object) (bool, *Cache, error) {
 	// Return the informer if it is found
@@ -311,11 +312,12 @@ func (ip *Informers) informersByType(obj runtime.Object) map[schema.GroupVersion
 	}
 }
 
+// addInformerToMap either returns an existing informer or creates a new informer, adds it to the map and returns it.
 func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.Object) (*Cache, bool, error) {
 	ip.mu.Lock()
 	defer ip.mu.Unlock()
 
-	// Check the cache to see if we already have an Informer.  If we do, return the Informer.
+	// Check the cache to see if we already have an Informer. If we do, return the Informer.
 	// This is for the case where 2 routines tried to get the informer when it wasn't in the map
 	// so neither returned early, but the first one created it.
 	if i, ok := ip.informersByType(obj)[gvk]; ok {

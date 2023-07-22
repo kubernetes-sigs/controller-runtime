@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	toolscache "k8s.io/client-go/tools/cache"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
@@ -36,7 +37,7 @@ const globalCache = "_cluster-scope"
 
 // MultiNamespacedCacheBuilder - Builder function to create a new multi-namespaced cache.
 // This will scope the cache to a list of namespaces. Listing for all namespaces
-// will list for all the namespaces that this knows about. By default this will create
+// will list for all the namespaces that this knows about. By default, this will create
 // a global cache for cluster scoped resource. Note that this is not intended
 // to be used for excluding namespaces, this is better done via a Predicate. Also note that
 // you may face performance issues when using this with a high number of namespaces.
@@ -71,12 +72,12 @@ func newMultiNamespaceCache(config *rest.Config, opts Options) (Cache, error) {
 
 	// Create a cache for cluster scoped resources.
 	opts.Namespaces = []string{}
-	gCache, err := New(config, opts)
+	clusterCache, err := New(config, opts)
 	if err != nil {
 		return nil, fmt.Errorf("error creating global cache: %w", err)
 	}
 
-	return &multiNamespaceCache{namespaceToCache: caches, Scheme: opts.Scheme, RESTMapper: opts.Mapper, clusterCache: gCache}, nil
+	return &multiNamespaceCache{namespaceToCache: caches, Scheme: opts.Scheme, RESTMapper: opts.Mapper, clusterCache: clusterCache}, nil
 }
 
 // multiNamespaceCache knows how to handle multiple namespaced caches
@@ -84,90 +85,93 @@ func newMultiNamespaceCache(config *rest.Config, opts Options) (Cache, error) {
 // operator to a list of namespaces instead of watching every namespace
 // in the cluster.
 type multiNamespaceCache struct {
-	namespaceToCache map[string]Cache
 	Scheme           *runtime.Scheme
 	RESTMapper       apimeta.RESTMapper
+	namespaceToCache map[string]Cache
 	clusterCache     Cache
 }
 
 var _ Cache = &multiNamespaceCache{}
 
 // Methods for multiNamespaceCache to conform to the Informers interface.
-func (c *multiNamespaceCache) GetInformer(ctx context.Context, obj client.Object) (Informer, error) {
-	informers := map[string]Informer{}
 
-	// If the object is clusterscoped, get the informer from clusterCache,
+func (c *multiNamespaceCache) GetInformer(ctx context.Context, obj client.Object) (Informer, error) {
+	// If the object is cluster scoped, get the informer from clusterCache,
 	// if not use the namespaced caches.
 	isNamespaced, err := apiutil.IsObjectNamespaced(obj, c.Scheme, c.RESTMapper)
 	if err != nil {
 		return nil, err
 	}
 	if !isNamespaced {
-		clusterCacheInf, err := c.clusterCache.GetInformer(ctx, obj)
+		clusterCacheInformer, err := c.clusterCache.GetInformer(ctx, obj)
 		if err != nil {
 			return nil, err
 		}
-		informers[globalCache] = clusterCacheInf
 
-		return &multiNamespaceInformer{namespaceToInformer: informers}, nil
+		return &multiNamespaceInformer{
+			namespaceToInformer: map[string]Informer{
+				globalCache: clusterCacheInformer,
+			},
+		}, nil
 	}
 
+	namespaceToInformer := map[string]Informer{}
 	for ns, cache := range c.namespaceToCache {
 		informer, err := cache.GetInformer(ctx, obj)
 		if err != nil {
 			return nil, err
 		}
-		informers[ns] = informer
+		namespaceToInformer[ns] = informer
 	}
 
-	return &multiNamespaceInformer{namespaceToInformer: informers}, nil
+	return &multiNamespaceInformer{namespaceToInformer: namespaceToInformer}, nil
 }
 
 func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (Informer, error) {
-	informers := map[string]Informer{}
-
-	// If the object is clusterscoped, get the informer from clusterCache,
+	// If the object is cluster scoped, get the informer from clusterCache,
 	// if not use the namespaced caches.
 	isNamespaced, err := apiutil.IsGVKNamespaced(gvk, c.RESTMapper)
 	if err != nil {
 		return nil, err
 	}
 	if !isNamespaced {
-		clusterCacheInf, err := c.clusterCache.GetInformerForKind(ctx, gvk)
+		clusterCacheInformer, err := c.clusterCache.GetInformerForKind(ctx, gvk)
 		if err != nil {
 			return nil, err
 		}
-		informers[globalCache] = clusterCacheInf
 
-		return &multiNamespaceInformer{namespaceToInformer: informers}, nil
+		return &multiNamespaceInformer{
+			namespaceToInformer: map[string]Informer{
+				globalCache: clusterCacheInformer,
+			},
+		}, nil
 	}
 
+	namespaceToInformer := map[string]Informer{}
 	for ns, cache := range c.namespaceToCache {
 		informer, err := cache.GetInformerForKind(ctx, gvk)
 		if err != nil {
 			return nil, err
 		}
-		informers[ns] = informer
+		namespaceToInformer[ns] = informer
 	}
 
-	return &multiNamespaceInformer{namespaceToInformer: informers}, nil
+	return &multiNamespaceInformer{namespaceToInformer: namespaceToInformer}, nil
 }
 
 func (c *multiNamespaceCache) Start(ctx context.Context) error {
 	// start global cache
 	go func() {
-		err := c.clusterCache.Start(ctx)
-		if err != nil {
-			log.Error(err, "cluster scoped cache failed to start")
+		if err := c.clusterCache.Start(ctx); err != nil {
+			log.Error(err, "multi-namespace cache failed to start cluster scoped cache")
 		}
 	}()
 
 	// start namespaced caches
 	for ns, cache := range c.namespaceToCache {
 		go func(ns string, cache Cache) {
-			err := cache.Start(ctx)
-			if err != nil {
-				log.Error(err, "multinamespace cache failed to start namespaced informer", "namespace", ns)
+			if err := cache.Start(ctx); err != nil {
+				log.Error(err, "multi-namespace cache failed to start namespaced informer", "namespace", ns)
 			}
 		}(ns, cache)
 	}
@@ -179,8 +183,8 @@ func (c *multiNamespaceCache) Start(ctx context.Context) error {
 func (c *multiNamespaceCache) WaitForCacheSync(ctx context.Context) bool {
 	synced := true
 	for _, cache := range c.namespaceToCache {
-		if s := cache.WaitForCacheSync(ctx); !s {
-			synced = s
+		if !cache.WaitForCacheSync(ctx) {
+			synced = false
 		}
 	}
 
@@ -224,7 +228,7 @@ func (c *multiNamespaceCache) Get(ctx context.Context, key client.ObjectKey, obj
 	if !ok {
 		return fmt.Errorf("unable to get: %v because of unknown namespace for the cache", key)
 	}
-	return cache.Get(ctx, key, obj)
+	return cache.Get(ctx, key, obj, opts...)
 }
 
 // List multi namespace cache will get all the objects in the namespaces that the cache is watching if asked for all namespaces.
@@ -245,7 +249,7 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 	if listOpts.Namespace != corev1.NamespaceAll {
 		cache, ok := c.namespaceToCache[listOpts.Namespace]
 		if !ok {
-			return fmt.Errorf("unable to get: %v because of unknown namespace for the cache", listOpts.Namespace)
+			return fmt.Errorf("unable to list: %v because of unknown namespace for the cache", listOpts.Namespace)
 		}
 		return cache.List(ctx, list, opts...)
 	}
@@ -278,12 +282,14 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 			return fmt.Errorf("object: %T must be a list type", list)
 		}
 		allItems = append(allItems, items...)
+
 		// The last list call should have the most correct resource version.
 		resourceVersion = accessor.GetResourceVersion()
 		if limitSet {
 			// decrement Limit by the number of items
 			// fetched from the current namespace.
 			listOpts.Limit -= int64(len(items))
+
 			// if a Limit was set and the number of
 			// items read has reached this set limit,
 			// then stop reading.
@@ -325,9 +331,12 @@ func (h handlerRegistration) HasSynced() bool {
 
 var _ Informer = &multiNamespaceInformer{}
 
-// AddEventHandler adds the handler to each namespaced informer.
+// AddEventHandler adds the handler to each informer.
 func (i *multiNamespaceInformer) AddEventHandler(handler toolscache.ResourceEventHandler) (toolscache.ResourceEventHandlerRegistration, error) {
-	handles := handlerRegistration{handles: make(map[string]toolscache.ResourceEventHandlerRegistration, len(i.namespaceToInformer))}
+	handles := handlerRegistration{
+		handles: make(map[string]toolscache.ResourceEventHandlerRegistration, len(i.namespaceToInformer)),
+	}
+
 	for ns, informer := range i.namespaceToInformer {
 		registration, err := informer.AddEventHandler(handler)
 		if err != nil {
@@ -335,12 +344,16 @@ func (i *multiNamespaceInformer) AddEventHandler(handler toolscache.ResourceEven
 		}
 		handles.handles[ns] = registration
 	}
+
 	return handles, nil
 }
 
 // AddEventHandlerWithResyncPeriod adds the handler with a resync period to each namespaced informer.
 func (i *multiNamespaceInformer) AddEventHandlerWithResyncPeriod(handler toolscache.ResourceEventHandler, resyncPeriod time.Duration) (toolscache.ResourceEventHandlerRegistration, error) {
-	handles := handlerRegistration{handles: make(map[string]toolscache.ResourceEventHandlerRegistration, len(i.namespaceToInformer))}
+	handles := handlerRegistration{
+		handles: make(map[string]toolscache.ResourceEventHandlerRegistration, len(i.namespaceToInformer)),
+	}
+
 	for ns, informer := range i.namespaceToInformer {
 		registration, err := informer.AddEventHandlerWithResyncPeriod(handler, resyncPeriod)
 		if err != nil {
@@ -348,14 +361,15 @@ func (i *multiNamespaceInformer) AddEventHandlerWithResyncPeriod(handler toolsca
 		}
 		handles.handles[ns] = registration
 	}
+
 	return handles, nil
 }
 
-// RemoveEventHandler removes a formerly added event handler given by its registration handle.
+// RemoveEventHandler removes a previously added event handler given by its registration handle.
 func (i *multiNamespaceInformer) RemoveEventHandler(h toolscache.ResourceEventHandlerRegistration) error {
 	handles, ok := h.(handlerRegistration)
 	if !ok {
-		return fmt.Errorf("it is not the registration returned by multiNamespaceInformer")
+		return fmt.Errorf("registration is not a registration returned by multiNamespaceInformer")
 	}
 	for ns, informer := range i.namespaceToInformer {
 		registration, ok := handles.handles[ns]
@@ -369,7 +383,7 @@ func (i *multiNamespaceInformer) RemoveEventHandler(h toolscache.ResourceEventHa
 	return nil
 }
 
-// AddIndexers adds the indexer for each namespaced informer.
+// AddIndexers adds the indexers to each informer.
 func (i *multiNamespaceInformer) AddIndexers(indexers toolscache.Indexers) error {
 	for _, informer := range i.namespaceToInformer {
 		err := informer.AddIndexers(indexers)
@@ -380,11 +394,11 @@ func (i *multiNamespaceInformer) AddIndexers(indexers toolscache.Indexers) error
 	return nil
 }
 
-// HasSynced checks if each namespaced informer has synced.
+// HasSynced checks if each informer has synced.
 func (i *multiNamespaceInformer) HasSynced() bool {
 	for _, informer := range i.namespaceToInformer {
-		if ok := informer.HasSynced(); !ok {
-			return ok
+		if !informer.HasSynced() {
+			return false
 		}
 	}
 	return true

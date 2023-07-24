@@ -28,6 +28,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/util/workqueue"
+
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -311,6 +312,7 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 
 	// RunInformersAndControllers the syncHandler, passing it the Namespace/Name string of the
 	// resource to be synced.
+	log.V(5).Info("Reconciling")
 	result, err := c.Reconcile(ctx, req)
 	switch {
 	case err != nil:
@@ -323,6 +325,7 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelError).Inc()
 		log.Error(err, "Reconciler error")
 	case result.RequeueAfter > 0:
+		log.V(5).Info(fmt.Sprintf("Reconcile done, requeueing after %s", result.RequeueAfter))
 		// The result.RequeueAfter request will be lost, if it is returned
 		// along with a non-nil error. But this is intended as
 		// We need to drive to stable reconcile loops before queuing due
@@ -331,9 +334,11 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 		c.Queue.AddAfter(req, result.RequeueAfter)
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeueAfter).Inc()
 	case result.Requeue:
+		log.V(5).Info("Reconcile done, requeueing")
 		c.Queue.AddRateLimited(req)
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeue).Inc()
 	default:
+		log.V(5).Info("Reconcile successful")
 		// Finally, if no error occurs we Forget this item so it does not
 		// get queued again until another change happens.
 		c.Queue.Forget(obj)

@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/cache"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache/internal"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -67,7 +68,7 @@ func (ic *informerCache) Get(ctx context.Context, key client.ObjectKey, out clie
 	if !started {
 		return &ErrCacheNotStarted{}
 	}
-	return cache.Reader.Get(ctx, key, out)
+	return cache.Reader.Get(ctx, key, out, opts...)
 }
 
 // List implements Reader.
@@ -135,7 +136,7 @@ func (ic *informerCache) GetInformerForKind(ctx context.Context, gvk schema.Grou
 	if err != nil {
 		return nil, err
 	}
-	return i.Informer, err
+	return i.Informer, nil
 }
 
 // GetInformer returns the informer for the obj.
@@ -149,7 +150,7 @@ func (ic *informerCache) GetInformer(ctx context.Context, obj client.Object) (In
 	if err != nil {
 		return nil, err
 	}
-	return i.Informer, err
+	return i.Informer, nil
 }
 
 // NeedLeaderElection implements the LeaderElectionRunnable interface
@@ -158,11 +159,11 @@ func (ic *informerCache) NeedLeaderElection() bool {
 	return false
 }
 
-// IndexField adds an indexer to the underlying cache, using extraction function to get
-// value(s) from the given field.  This index can then be used by passing a field selector
+// IndexField adds an indexer to the underlying informer, using extractValue function to get
+// value(s) from the given field. This index can then be used by passing a field selector
 // to List. For one-to-one compatibility with "normal" field selectors, only return one value.
-// The values may be anything.  They will automatically be prefixed with the namespace of the
-// given object, if present.  The objects passed are guaranteed to be objects of the correct type.
+// The values may be anything. They will automatically be prefixed with the namespace of the
+// given object, if present. The objects passed are guaranteed to be objects of the correct type.
 func (ic *informerCache) IndexField(ctx context.Context, obj client.Object, field string, extractValue client.IndexerFunc) error {
 	informer, err := ic.GetInformer(ctx, obj)
 	if err != nil {
@@ -171,7 +172,7 @@ func (ic *informerCache) IndexField(ctx context.Context, obj client.Object, fiel
 	return indexByField(informer, field, extractValue)
 }
 
-func indexByField(indexer Informer, field string, extractor client.IndexerFunc) error {
+func indexByField(informer Informer, field string, extractValue client.IndexerFunc) error {
 	indexFunc := func(objRaw interface{}) ([]string, error) {
 		// TODO(directxman12): check if this is the correct type?
 		obj, isObj := objRaw.(client.Object)
@@ -184,7 +185,7 @@ func indexByField(indexer Informer, field string, extractor client.IndexerFunc) 
 		}
 		ns := meta.GetNamespace()
 
-		rawVals := extractor(obj)
+		rawVals := extractValue(obj)
 		var vals []string
 		if ns == "" {
 			// if we're not doubling the keys for the namespaced case, just create a new slice with same length
@@ -207,5 +208,5 @@ func indexByField(indexer Informer, field string, extractor client.IndexerFunc) 
 		return vals, nil
 	}
 
-	return indexer.AddIndexers(cache.Indexers{internal.FieldIndexName(field): indexFunc})
+	return informer.AddIndexers(cache.Indexers{internal.FieldIndexName(field): indexFunc})
 }

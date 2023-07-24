@@ -164,7 +164,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.LeaseDuration.String()).To(Equal(duration.Duration.String()))
 			Expect(m.RenewDeadline.String()).To(Equal(duration.Duration.String()))
 			Expect(m.RetryPeriod.String()).To(Equal(duration.Duration.String()))
-			Expect(m.Cache.Namespaces).To(Equal([]string{"default"}))
+			Expect(m.Cache.DefaultNamespaces).To(Equal(map[string]cache.Config{"default": {}}))
 			Expect(m.MetricsBindAddress).To(Equal(":6000"))
 			Expect(m.HealthProbeBindAddress).To(Equal("6060"))
 			Expect(m.ReadinessEndpointName).To(Equal("/readyz"))
@@ -214,8 +214,8 @@ var _ = Describe("manger.Manager", func() {
 			}
 			m, err := Options{
 				Cache: cache.Options{
-					SyncPeriod: &optDuration,
-					Namespaces: []string{"ctrl"},
+					SyncPeriod:        &optDuration,
+					DefaultNamespaces: map[string]cache.Config{"ctrl": {}},
 				},
 				LeaderElection:             true,
 				LeaderElectionResourceLock: "configmaps",
@@ -245,7 +245,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.LeaseDuration.String()).To(Equal(optDuration.String()))
 			Expect(m.RenewDeadline.String()).To(Equal(optDuration.String()))
 			Expect(m.RetryPeriod.String()).To(Equal(optDuration.String()))
-			Expect(m.Cache.Namespaces).To(Equal([]string{"ctrl"}))
+			Expect(m.Cache.DefaultNamespaces).To(Equal(map[string]cache.Config{"ctrl": {}}))
 			Expect(m.MetricsBindAddress).To(Equal(":7000"))
 			Expect(m.HealthProbeBindAddress).To(Equal("5000"))
 			Expect(m.ReadinessEndpointName).To(Equal("/readiness"))

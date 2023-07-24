@@ -451,8 +451,8 @@ func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options,
 		o.Cache.SyncPeriod = &newObj.SyncPeriod.Duration
 	}
 
-	if len(o.Cache.Namespaces) == 0 && newObj.CacheNamespace != "" {
-		o.Cache.Namespaces = []string{newObj.CacheNamespace}
+	if len(o.Cache.DefaultNamespaces) == 0 && newObj.CacheNamespace != "" {
+		o.Cache.DefaultNamespaces = map[string]cache.Config{newObj.CacheNamespace: {}}
 	}
 
 	if o.MetricsBindAddress == "" && newObj.Metrics.BindAddress != "" {

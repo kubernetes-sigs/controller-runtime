@@ -25,7 +25,6 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
 	toolscache "k8s.io/client-go/tools/cache"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,34 +34,31 @@ import (
 // a new global namespaced cache to handle cluster scoped resources.
 const globalCache = "_cluster-scope"
 
-func newMultiNamespaceCache(config *rest.Config, opts Options) (Cache, error) {
-	if len(opts.Namespaces) < 2 {
-		return nil, fmt.Errorf("must specify more than one namespace to use multi-namespace cache")
-	}
-	opts, err := defaultOpts(config, opts)
-	if err != nil {
-		return nil, err
-	}
-
+func newMultiNamespaceCache(
+	newCache newCacheFunc,
+	scheme *runtime.Scheme,
+	restMapper apimeta.RESTMapper,
+	namespaces map[string]Config,
+	globalConfig *Config, // may be nil in which case no cache for cluster-scoped objects will be created
+) Cache {
 	// Create every namespace cache.
 	caches := map[string]Cache{}
-	for _, ns := range opts.Namespaces {
-		opts.Namespaces = []string{ns}
-		c, err := New(config, opts)
-		if err != nil {
-			return nil, err
-		}
-		caches[ns] = c
+	for namespace, config := range namespaces {
+		caches[namespace] = newCache(config, namespace)
 	}
 
-	// Create a cache for cluster scoped resources.
-	opts.Namespaces = []string{}
-	clusterCache, err := New(config, opts)
-	if err != nil {
-		return nil, fmt.Errorf("error creating global cache: %w", err)
+	// Create a cache for cluster scoped resources if requested
+	var clusterCache Cache
+	if globalConfig != nil {
+		clusterCache = newCache(*globalConfig, corev1.NamespaceAll)
 	}
 
-	return &multiNamespaceCache{namespaceToCache: caches, Scheme: opts.Scheme, RESTMapper: opts.Mapper, clusterCache: clusterCache}, nil
+	return &multiNamespaceCache{
+		namespaceToCache: caches,
+		Scheme:           scheme,
+		RESTMapper:       restMapper,
+		clusterCache:     clusterCache,
+	}
 }
 
 // multiNamespaceCache knows how to handle multiple namespaced caches
@@ -146,11 +142,14 @@ func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema
 
 func (c *multiNamespaceCache) Start(ctx context.Context) error {
 	// start global cache
-	go func() {
-		if err := c.clusterCache.Start(ctx); err != nil {
-			log.Error(err, "multi-namespace cache failed to start cluster scoped cache")
-		}
-	}()
+	if c.clusterCache != nil {
+		go func() {
+			err := c.clusterCache.Start(ctx)
+			if err != nil {
+				log.Error(err, "cluster scoped cache failed to start")
+			}
+		}()
+	}
 
 	// start namespaced caches
 	for ns, cache := range c.namespaceToCache {
@@ -174,7 +173,7 @@ func (c *multiNamespaceCache) WaitForCacheSync(ctx context.Context) bool {
 	}
 
 	// check if cluster scoped cache has synced
-	if !c.clusterCache.WaitForCacheSync(ctx) {
+	if c.clusterCache != nil && !c.clusterCache.WaitForCacheSync(ctx) {
 		synced = false
 	}
 	return synced

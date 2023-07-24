@@ -35,26 +35,19 @@ import (
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // InformersOpts configures an InformerMap.
 type InformersOpts struct {
-	HTTPClient   *http.Client
-	Scheme       *runtime.Scheme
-	Mapper       meta.RESTMapper
-	ResyncPeriod time.Duration
-	Namespace    string
-	ByGVK        map[schema.GroupVersionKind]InformersOptsByGVK
-}
-
-// InformersOptsByGVK configures additionally by group version kind (or object)
-// in an InformerMap.
-type InformersOptsByGVK struct {
+	HTTPClient            *http.Client
+	Scheme                *runtime.Scheme
+	Mapper                meta.RESTMapper
+	ResyncPeriod          time.Duration
+	Namespace             string
 	Selector              Selector
 	Transform             cache.TransformFunc
-	UnsafeDisableDeepCopy *bool
+	UnsafeDisableDeepCopy bool
 }
 
 // NewInformers creates a new InformersMap that can create informers under the hood.
@@ -69,12 +62,14 @@ func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 			Unstructured: make(map[schema.GroupVersionKind]*Cache),
 			Metadata:     make(map[schema.GroupVersionKind]*Cache),
 		},
-		codecs:     serializer.NewCodecFactory(options.Scheme),
-		paramCodec: runtime.NewParameterCodec(options.Scheme),
-		resync:     options.ResyncPeriod,
-		startWait:  make(chan struct{}),
-		namespace:  options.Namespace,
-		byGVK:      options.ByGVK,
+		codecs:                serializer.NewCodecFactory(options.Scheme),
+		paramCodec:            runtime.NewParameterCodec(options.Scheme),
+		resync:                options.ResyncPeriod,
+		startWait:             make(chan struct{}),
+		namespace:             options.Namespace,
+		selector:              options.Selector,
+		transform:             options.Transform,
+		unsafeDisableDeepCopy: options.UnsafeDisableDeepCopy,
 	}
 }
 
@@ -145,46 +140,9 @@ type Informers struct {
 	// default or empty string means all namespaces
 	namespace string
 
-	byGVK map[schema.GroupVersionKind]InformersOptsByGVK
-}
-
-func (ip *Informers) getSelector(gvk schema.GroupVersionKind) Selector {
-	if ip.byGVK == nil {
-		return Selector{}
-	}
-	if res, ok := ip.byGVK[gvk]; ok {
-		return res.Selector
-	}
-	if res, ok := ip.byGVK[schema.GroupVersionKind{}]; ok {
-		return res.Selector
-	}
-	return Selector{}
-}
-
-func (ip *Informers) getTransform(gvk schema.GroupVersionKind) cache.TransformFunc {
-	if ip.byGVK == nil {
-		return nil
-	}
-	if res, ok := ip.byGVK[gvk]; ok {
-		return res.Transform
-	}
-	if res, ok := ip.byGVK[schema.GroupVersionKind{}]; ok {
-		return res.Transform
-	}
-	return nil
-}
-
-func (ip *Informers) getDisableDeepCopy(gvk schema.GroupVersionKind) bool {
-	if ip.byGVK == nil {
-		return false
-	}
-	if res, ok := ip.byGVK[gvk]; ok && res.UnsafeDisableDeepCopy != nil {
-		return *res.UnsafeDisableDeepCopy
-	}
-	if res, ok := ip.byGVK[schema.GroupVersionKind{}]; ok && res.UnsafeDisableDeepCopy != nil {
-		return *res.UnsafeDisableDeepCopy
-	}
-	return false
+	selector              Selector
+	transform             cache.TransformFunc
+	unsafeDisableDeepCopy bool
 }
 
 // Start calls Run on each of the informers and sets started to true. Blocks on the context.
@@ -331,11 +289,11 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 	}
 	sharedIndexInformer := cache.NewSharedIndexInformer(&cache.ListWatch{
 		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
-			ip.getSelector(gvk).ApplyToList(&opts)
+			ip.selector.ApplyToList(&opts)
 			return listWatcher.ListFunc(opts)
 		},
 		WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
-			ip.getSelector(gvk).ApplyToList(&opts)
+			ip.selector.ApplyToList(&opts)
 			opts.Watch = true // Watch needs to be set to true separately
 			return listWatcher.WatchFunc(opts)
 		},
@@ -344,7 +302,7 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 	})
 
 	// Check to see if there is a transformer for this gvk
-	if err := sharedIndexInformer.SetTransform(ip.getTransform(gvk)); err != nil {
+	if err := sharedIndexInformer.SetTransform(ip.transform); err != nil {
 		return nil, false, err
 	}
 
@@ -360,7 +318,7 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 			indexer:          sharedIndexInformer.GetIndexer(),
 			groupVersionKind: gvk,
 			scopeName:        mapping.Scope.Name(),
-			disableDeepCopy:  ip.getDisableDeepCopy(gvk),
+			disableDeepCopy:  ip.unsafeDisableDeepCopy,
 		},
 	}
 	ip.informersByType(obj)[gvk] = i
@@ -384,7 +342,7 @@ func (ip *Informers) makeListWatcher(gvk schema.GroupVersionKind, obj runtime.Ob
 	// Figure out if the GVK we're dealing with is global, or namespace scoped.
 	var namespace string
 	if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
-		namespace = restrictNamespaceBySelector(ip.namespace, ip.getSelector(gvk))
+		namespace = restrictNamespaceBySelector(ip.namespace, ip.selector)
 	}
 
 	switch obj.(type) {

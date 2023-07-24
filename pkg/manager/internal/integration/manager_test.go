@@ -41,8 +41,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	crewv1 "sigs.k8s.io/controller-runtime/pkg/manager/integration/v1"
-	crewv2 "sigs.k8s.io/controller-runtime/pkg/manager/integration/v2"
+	crewv1 "sigs.k8s.io/controller-runtime/pkg/manager/internal/integration/api/v1"
+	crewv2 "sigs.k8s.io/controller-runtime/pkg/manager/internal/integration/api/v2"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
@@ -67,8 +67,8 @@ var (
 				{
 					Name:   crewv1.GroupVersion.Version,
 					Served: true,
-					// At creation v1 will be the storage version.
-					// During the test v2 will become the storage version.
+					// v1 will be the storage version.
+					// Reconciler and index will use v2 so we can validate the conversion webhook works.
 					Storage: true,
 					Schema: &apiextensionsv1.CustomResourceValidation{
 						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
@@ -91,7 +91,7 @@ var (
 	}
 )
 
-var _ = Describe("manger.Manager", func() {
+var _ = Describe("manger.Manager Start", func() {
 	// This test ensure the Manager starts without running into any deadlocks as it can be very tricky
 	// to start health probes, webhooks, caches (including informers) and reconcilers in the right order.
 	//
@@ -99,15 +99,14 @@ var _ = Describe("manger.Manager", func() {
 	// * Ensure Informer sync requires a functioning conversion webhook (and thus readiness probe)
 	//   * Driver CRD is deployed with v1 as storage version
 	//   * A Driver CR is created and stored in the v1 version
-	//   * The CRD is updated to make v2 the storage version
-	//   * This ensures every Driver list call goes through conversion.
 	// * Setup manager:
 	//   * Set up health probes
-	//   * Set up a Driver reconciler to verify reconciliation works
-	//   * Set up a conversion webhook which only works if readiness probe succeeds (just like a Kubernetes service)
+	//   * Set up a Driver v2 reconciler to verify reconciliation works
+	//   * Set up a conversion webhook which only works if readiness probe succeeds (just like via a Kubernetes service)
 	//   * Add an index on v2 Driver to ensure we start and wait for an informer during cache.Start (as part of manager.Start)
 	//     * Note: cache.Start would fail if the conversion webhook doesn't work (which in turn depends on the readiness probe)
-	Describe("Start should start all components without deadlock", func() {
+	//     * Note: Adding the index for v2 ensures the Driver list call during Informer sync goes through conversion.
+	It("should start all components without deadlock", func() {
 		ctx := ctrl.SetupSignalHandler()
 
 		// Set up schema.
@@ -123,6 +122,7 @@ var _ = Describe("manger.Manager", func() {
 				CRDs: []*apiextensionsv1.CustomResourceDefinition{driverCRD},
 			},
 		}
+		// Note: The test env configures a conversion webhook on driverCRD during Start.
 		cfg, err := env.Start()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg).NotTo(BeNil())
@@ -138,12 +138,6 @@ var _ = Describe("manger.Manager", func() {
 		driverV1.SetName("driver1")
 		driverV1.SetNamespace(metav1.NamespaceDefault)
 		Expect(c.Create(ctx, driverV1)).To(Succeed())
-
-		// Update driver CRD to make v2 the storage version.
-		driverCRDV2Storage := driverCRD.DeepCopy()
-		driverCRDV2Storage.Spec.Versions[0].Storage = false
-		driverCRDV2Storage.Spec.Versions[0].Storage = true
-		Expect(c.Patch(ctx, driverCRDV2Storage, client.MergeFrom(driverCRD))).To(Succeed())
 
 		// Set up Manager.
 		ctrl.SetLogger(zap.New())
@@ -164,17 +158,18 @@ var _ = Describe("manger.Manager", func() {
 		Expect(mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker())).To(Succeed())
 		Expect(mgr.AddHealthzCheck("webhook", mgr.GetWebhookServer().StartedChecker())).To(Succeed())
 
-		// Set up Driver reconciler.
+		// Set up Driver reconciler (using v2).
 		driverReconciler := &DriverReconciler{
 			Client: mgr.GetClient(),
 		}
-		Expect(ctrl.NewControllerManagedBy(mgr).For(&crewv1.Driver{}).Complete(driverReconciler)).To(Succeed())
+		Expect(ctrl.NewControllerManagedBy(mgr).For(&crewv2.Driver{}).Complete(driverReconciler)).To(Succeed())
 
 		// Set up a conversion webhook.
 		conversionWebhook := createConversionWebhook(mgr)
 		mgr.GetWebhookServer().Register("/convert", conversionWebhook)
 
-		// Add an index on v2 Driver.
+		// Add an index on Driver (using v2).
+		// Note: This triggers the creation of an Informer for Driver v2.
 		Expect(mgr.GetCache().IndexField(ctx, &crewv2.Driver{}, "name", func(object client.Object) []string {
 			return []string{object.GetName()}
 		})).To(Succeed())
@@ -183,11 +178,19 @@ var _ = Describe("manger.Manager", func() {
 		ctx, cancel := context.WithCancel(ctx)
 		go func() {
 			defer GinkgoRecover()
-			Expect(mgr.Start(ctx)).NotTo(HaveOccurred())
+			Expect(mgr.Start(ctx)).To(Succeed())
 		}()
 
 		// Verify manager.Start successfully started health probes, webhooks, caches (including informers) and reconcilers.
-		<-mgr.Elected()
+		// Notes:
+		// * The cache will only start successfully if the informer for v2 Driver is synced.
+		// * The informer for v2 Driver will only sync if a list on v2 Driver succeeds (which requires a working conversion webhook)
+		select {
+		case <-time.After(30 * time.Second):
+			// Don't wait forever if the manager doesn't come up.
+			Fail("Manager didn't start in time")
+		case <-mgr.Elected():
+		}
 
 		// Verify the reconciler reconciles.
 		Eventually(func(g Gomega) {
@@ -197,7 +200,8 @@ var _ = Describe("manger.Manager", func() {
 		// Verify conversion webhook was called.
 		Expect(atomic.LoadUint64(&conversionWebhook.ConversionCount)).Should(BeNumerically(">", 0))
 
-		// Verify the conversion webhook works.
+		// Verify the conversion webhook works by getting the Driver as v1 and v2.
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(driverV1), driverV1)).To(Succeed())
 		driverV2 := &unstructured.Unstructured{}
 		driverV2.SetGroupVersionKind(crewv2.GroupVersion.WithKind("Driver"))
 		driverV2.SetName("driver1")
@@ -234,6 +238,10 @@ func (r *DriverReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 	return reconcile.Result{}, nil
 }
 
+// ConversionWebhook is just a shim around the conversion handler from
+// the webhook package. We use it to simulate the behavior of a conversion
+// webhook in a real cluster, i.e. the conversion webhook only works after the
+// controller Pod is ready (the readiness probe is up).
 type ConversionWebhook struct {
 	httpClient        http.Client
 	conversionHandler http.Handler

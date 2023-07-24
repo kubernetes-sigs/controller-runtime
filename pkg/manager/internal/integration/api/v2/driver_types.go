@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
-	v1 "sigs.k8s.io/controller-runtime/pkg/manager/integration/v1"
+	v1 "sigs.k8s.io/controller-runtime/pkg/manager/internal/integration/api/v1"
 )
 
 // Driver is a test type.

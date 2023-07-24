@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestSource(t *testing.T) {
+func TestManager(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Manager Integration Suite")
 }

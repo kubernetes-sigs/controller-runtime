@@ -95,11 +95,6 @@ type Options struct {
 	// Defaults to "", which means server does not verify client's certificate.
 	ClientCAName string
 
-	// TLSVersion is the minimum version of TLS supported. Accepts
-	// "", "1.0", "1.1", "1.2" and "1.3" only ("" is equivalent to "1.0" for backwards compatibility)
-	// Deprecated: Use TLSOpts instead.
-	TLSMinVersion string
-
 	// TLSOpts is used to allow configuring the TLS config used for the server
 	TLSOpts []func(*tls.Config)
 
@@ -187,26 +182,6 @@ func (s *DefaultServer) Register(path string, hook http.Handler) {
 	regLog.Info("Registering webhook")
 }
 
-// tlsVersion converts from human-readable TLS version (for example "1.1")
-// to the values accepted by tls.Config (for example 0x301).
-func tlsVersion(version string) (uint16, error) {
-	switch version {
-	// default is previous behaviour
-	case "":
-		return tls.VersionTLS10, nil
-	case "1.0":
-		return tls.VersionTLS10, nil
-	case "1.1":
-		return tls.VersionTLS11, nil
-	case "1.2":
-		return tls.VersionTLS12, nil
-	case "1.3":
-		return tls.VersionTLS13, nil
-	default:
-		return 0, fmt.Errorf("invalid TLSMinVersion %v: expects 1.0, 1.1, 1.2, 1.3 or empty", version)
-	}
-}
-
 // Start runs the server.
 // It will install the webhook related resources depend on the server configuration.
 func (s *DefaultServer) Start(ctx context.Context) error {
@@ -215,14 +190,8 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 	baseHookLog := log.WithName("webhooks")
 	baseHookLog.Info("Starting webhook server")
 
-	tlsMinVersion, err := tlsVersion(s.Options.TLSMinVersion)
-	if err != nil {
-		return err
-	}
-
 	cfg := &tls.Config{ //nolint:gosec
 		NextProtos: []string{"h2"},
-		MinVersion: tlsMinVersion,
 	}
 	// fallback TLS config ready, will now mutate if passer wants full control over it
 	for _, op := range s.Options.TLSOpts {

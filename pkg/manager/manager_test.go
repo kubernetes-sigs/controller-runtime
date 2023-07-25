@@ -156,7 +156,7 @@ var _ = Describe("manger.Manager", func() {
 			m, err := Options{}.AndFrom(&fakeDeferredLoader{ccfg})
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(*m.SyncPeriod).To(Equal(duration.Duration))
+			Expect(*m.Cache.SyncPeriod).To(Equal(duration.Duration))
 			Expect(m.LeaderElection).To(Equal(leaderElect))
 			Expect(m.LeaderElectionResourceLock).To(Equal("leases"))
 			Expect(m.LeaderElectionNamespace).To(Equal("default"))
@@ -164,14 +164,14 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.LeaseDuration.String()).To(Equal(duration.Duration.String()))
 			Expect(m.RenewDeadline.String()).To(Equal(duration.Duration.String()))
 			Expect(m.RetryPeriod.String()).To(Equal(duration.Duration.String()))
-			Expect(m.Namespace).To(Equal("default"))
+			Expect(m.Cache.Namespaces).To(Equal([]string{"default"}))
 			Expect(m.MetricsBindAddress).To(Equal(":6000"))
 			Expect(m.HealthProbeBindAddress).To(Equal("6060"))
 			Expect(m.ReadinessEndpointName).To(Equal("/readyz"))
 			Expect(m.LivenessEndpointName).To(Equal("/livez"))
-			Expect(m.Port).To(Equal(port))
-			Expect(m.Host).To(Equal("localhost"))
-			Expect(m.CertDir).To(Equal("/certs"))
+			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Port).To(Equal(port))
+			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Host).To(Equal("localhost"))
+			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.CertDir).To(Equal("/certs"))
 		})
 
 		It("should be able to keep Options when cfg.ControllerManagerConfiguration set", func() {
@@ -213,7 +213,10 @@ var _ = Describe("manger.Manager", func() {
 				func(config *tls.Config) {},
 			}
 			m, err := Options{
-				SyncPeriod:                 &optDuration,
+				Cache: cache.Options{
+					SyncPeriod: &optDuration,
+					Namespaces: []string{"ctrl"},
+				},
 				LeaderElection:             true,
 				LeaderElectionResourceLock: "configmaps",
 				LeaderElectionNamespace:    "ctrl",
@@ -221,7 +224,6 @@ var _ = Describe("manger.Manager", func() {
 				LeaseDuration:              &optDuration,
 				RenewDeadline:              &optDuration,
 				RetryPeriod:                &optDuration,
-				Namespace:                  "ctrl",
 				MetricsBindAddress:         ":7000",
 				HealthProbeBindAddress:     "5000",
 				ReadinessEndpointName:      "/readiness",
@@ -235,7 +237,7 @@ var _ = Describe("manger.Manager", func() {
 			}.AndFrom(&fakeDeferredLoader{ccfg})
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(m.SyncPeriod.String()).To(Equal(optDuration.String()))
+			Expect(m.Cache.SyncPeriod.String()).To(Equal(optDuration.String()))
 			Expect(m.LeaderElection).To(BeTrue())
 			Expect(m.LeaderElectionResourceLock).To(Equal("configmaps"))
 			Expect(m.LeaderElectionNamespace).To(Equal("ctrl"))
@@ -243,7 +245,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.LeaseDuration.String()).To(Equal(optDuration.String()))
 			Expect(m.RenewDeadline.String()).To(Equal(optDuration.String()))
 			Expect(m.RetryPeriod.String()).To(Equal(optDuration.String()))
-			Expect(m.Namespace).To(Equal("ctrl"))
+			Expect(m.Cache.Namespaces).To(Equal([]string{"ctrl"}))
 			Expect(m.MetricsBindAddress).To(Equal(":7000"))
 			Expect(m.HealthProbeBindAddress).To(Equal("5000"))
 			Expect(m.ReadinessEndpointName).To(Equal("/readiness"))
@@ -267,23 +269,10 @@ var _ = Describe("manger.Manager", func() {
 			Expect(svr.(*webhook.DefaultServer).Options.Host).To(Equal("foo.com"))
 		})
 
-		It("should lazily initialize a webhook server if needed (deprecated)", func() {
-			By("creating a manager with options")
-			m, err := New(cfg, Options{Port: 9440, Host: "foo.com"})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(m).NotTo(BeNil())
-
-			By("checking options are passed to the webhook server")
-			svr := m.GetWebhookServer()
-			Expect(svr).NotTo(BeNil())
-			Expect(svr.(*webhook.DefaultServer).Options.Port).To(Equal(9440))
-			Expect(svr.(*webhook.DefaultServer).Options.Host).To(Equal("foo.com"))
-		})
-
 		It("should not initialize a webhook server if Options.WebhookServer is set", func() {
 			By("creating a manager with options")
 			srv := webhook.NewServer(webhook.Options{Port: 9440})
-			m, err := New(cfg, Options{Port: 9441, WebhookServer: srv})
+			m, err := New(cfg, Options{WebhookServer: srv})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m).NotTo(BeNil())
 

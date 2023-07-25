@@ -118,7 +118,9 @@ var _ = Describe("Informer Cache", func() {
 	CacheTest(cache.New, cache.Options{})
 })
 var _ = Describe("Multi-Namespace Informer Cache", func() {
-	CacheTest(cache.MultiNamespacedCacheBuilder([]string{testNamespaceOne, testNamespaceTwo, "default"}), cache.Options{})
+	CacheTest(cache.New, cache.Options{
+		Namespaces: []string{testNamespaceOne, testNamespaceTwo, "default"},
+	})
 })
 
 var _ = Describe("Informer Cache without global DeepCopy", func() {
@@ -931,8 +933,9 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				})
 				It("test multinamespaced cache for cluster scoped resources", func() {
 					By("creating a multinamespaced cache to watch specific namespaces")
-					multi := cache.MultiNamespacedCacheBuilder([]string{"default", testNamespaceOne})
-					m, err := multi(cfg, cache.Options{})
+					m, err := cache.New(cfg, cache.Options{
+						Namespaces: []string{"default", testNamespaceOne},
+					})
 					Expect(err).NotTo(HaveOccurred())
 
 					By("running the cache and waiting it for sync")

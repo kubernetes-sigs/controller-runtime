@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/pointer"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
@@ -389,9 +390,3 @@ func ContainsFinalizer(o client.Object, finalizer string) bool {
 	}
 	return false
 }
-
-// Object allows functions to work indistinctly with any resource that
-// implements both Object interfaces.
-//
-// Deprecated: Use client.Object instead.
-type Object = client.Object

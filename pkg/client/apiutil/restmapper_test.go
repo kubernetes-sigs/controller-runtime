@@ -18,17 +18,22 @@ package apiutil_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 
 	_ "github.com/onsi/ginkgo/v2"
 	gmg "github.com/onsi/gomega"
+	"github.com/onsi/gomega/format"
+	gomegatypes "github.com/onsi/gomega/types"
+	"k8s.io/apimachinery/pkg/api/meta"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -301,29 +306,62 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
+		// A version is specified but the group doesn't exist.
+		// For each group, we expect 1 call to the version-specific discovery endpoint:
+		// 	#1: GET https://host/apis/<group>/<version>
+
 		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "INVALID1"}, "v1")
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(1))
 
 		_, err = lazyRestMapper.RESTMappings(schema.GroupKind{Group: "INVALID2"}, "v1")
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(2))
 
 		_, err = lazyRestMapper.KindFor(schema.GroupVersionResource{Group: "INVALID3", Version: "v1"})
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(3))
 
 		_, err = lazyRestMapper.KindsFor(schema.GroupVersionResource{Group: "INVALID4", Version: "v1"})
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
 
 		_, err = lazyRestMapper.ResourceFor(schema.GroupVersionResource{Group: "INVALID5", Version: "v1"})
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(5))
 
 		_, err = lazyRestMapper.ResourcesFor(schema.GroupVersionResource{Group: "INVALID6", Version: "v1"})
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(6))
+
+		// No version is specified but the group doesn't exist.
+		// For each group, we expect 2 calls to discover all group versions:
+		// 	#1: GET https://host/api
+		// 	#2: GET https://host/apis
+
+		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "INVALID7"})
+		g.Expect(err).To(beNoMatchError())
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(8))
+
+		_, err = lazyRestMapper.RESTMappings(schema.GroupKind{Group: "INVALID8"})
+		g.Expect(err).To(beNoMatchError())
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(10))
+
+		_, err = lazyRestMapper.KindFor(schema.GroupVersionResource{Group: "INVALID9"})
+		g.Expect(err).To(beNoMatchError())
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(12))
+
+		_, err = lazyRestMapper.KindsFor(schema.GroupVersionResource{Group: "INVALID10"})
+		g.Expect(err).To(beNoMatchError())
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(14))
+
+		_, err = lazyRestMapper.ResourceFor(schema.GroupVersionResource{Group: "INVALID11"})
+		g.Expect(err).To(beNoMatchError())
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(16))
+
+		_, err = lazyRestMapper.ResourcesFor(schema.GroupVersionResource{Group: "INVALID12"})
+		g.Expect(err).To(beNoMatchError())
+		g.Expect(crt.GetRequestCount()).To(gmg.Equal(18))
 	})
 
 	t.Run("LazyRESTMapper should return an error if a resource doesn't exist", func(t *testing.T) {
@@ -341,27 +379,27 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "INVALID"}, "v1")
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(1))
 
 		_, err = lazyRestMapper.RESTMappings(schema.GroupKind{Group: "", Kind: "INVALID"}, "v1")
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(2))
 
 		_, err = lazyRestMapper.KindFor(schema.GroupVersionResource{Group: "networking.k8s.io", Version: "v1", Resource: "INVALID"})
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(3))
 
 		_, err = lazyRestMapper.KindsFor(schema.GroupVersionResource{Group: "authentication.k8s.io", Version: "v1", Resource: "INVALID"})
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
 
 		_, err = lazyRestMapper.ResourceFor(schema.GroupVersionResource{Group: "scheduling.k8s.io", Version: "v1", Resource: "INVALID"})
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(5))
 
 		_, err = lazyRestMapper.ResourcesFor(schema.GroupVersionResource{Group: "policy", Version: "v1", Resource: "INVALID"})
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(6))
 	})
 
@@ -380,27 +418,27 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
 		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "deployment"}, "INVALID")
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(1))
 
 		_, err = lazyRestMapper.RESTMappings(schema.GroupKind{Group: "", Kind: "pod"}, "INVALID")
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(2))
 
 		_, err = lazyRestMapper.KindFor(schema.GroupVersionResource{Group: "networking.k8s.io", Version: "INVALID", Resource: "ingresses"})
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(3))
 
 		_, err = lazyRestMapper.KindsFor(schema.GroupVersionResource{Group: "authentication.k8s.io", Version: "INVALID", Resource: "tokenreviews"})
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
 
 		_, err = lazyRestMapper.ResourceFor(schema.GroupVersionResource{Group: "scheduling.k8s.io", Version: "INVALID", Resource: "priorityclasses"})
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(5))
 
 		_, err = lazyRestMapper.ResourcesFor(schema.GroupVersionResource{Group: "policy", Version: "INVALID", Resource: "poddisruptionbudgets"})
-		g.Expect(err).To(gmg.HaveOccurred())
+		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(6))
 	})
 
@@ -508,4 +546,36 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(mapping.GroupVersionKind.Kind).To(gmg.Equal("rider"))
 	})
+}
+
+func beNoMatchError() gomegatypes.GomegaMatcher {
+	return &errorMatcher{
+		checkFunc: meta.IsNoMatchError,
+		message:   "NoMatch",
+	}
+}
+
+type errorMatcher struct {
+	checkFunc func(error) bool
+	message   string
+}
+
+func (e *errorMatcher) Match(actual interface{}) (success bool, err error) {
+	if actual == nil {
+		return false, nil
+	}
+
+	actualErr, actualOk := actual.(error)
+	if !actualOk {
+		return false, fmt.Errorf("expected an error-type. got:\n%s", format.Object(actual, 1))
+	}
+
+	return e.checkFunc(actualErr), nil
+}
+
+func (e *errorMatcher) FailureMessage(actual interface{}) (message string) {
+	return format.Message(actual, fmt.Sprintf("to be %s error", e.message))
+}
+func (e *errorMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	return format.Message(actual, fmt.Sprintf("not to be %s error", e.message))
 }

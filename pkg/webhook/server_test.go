@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/rest"
+
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
@@ -169,14 +170,14 @@ var _ = Describe("Webhook Server", func() {
 				tls.TLS_AES_128_GCM_SHA256,
 				tls.TLS_AES_256_GCM_SHA384,
 			}
+			cfg.MinVersion = tls.VersionTLS12
 			// save cfg after changes to test against
 			finalCfg = cfg
 		}
 		server = webhook.NewServer(webhook.Options{
-			Host:          servingOpts.LocalServingHost,
-			Port:          servingOpts.LocalServingPort,
-			CertDir:       servingOpts.LocalServingCertDir,
-			TLSMinVersion: "1.2",
+			Host:    servingOpts.LocalServingHost,
+			Port:    servingOpts.LocalServingPort,
+			CertDir: servingOpts.LocalServingCertDir,
 			TLSOpts: []func(*tls.Config){
 				tlsCfgFunc,
 			},
@@ -213,13 +214,14 @@ var _ = Describe("Webhook Server", func() {
 			return &finalCert, nil
 		}
 		server = &webhook.DefaultServer{Options: webhook.Options{
-			Host:          servingOpts.LocalServingHost,
-			Port:          servingOpts.LocalServingPort,
-			CertDir:       servingOpts.LocalServingCertDir,
-			TLSMinVersion: "1.2",
+			Host:    servingOpts.LocalServingHost,
+			Port:    servingOpts.LocalServingPort,
+			CertDir: servingOpts.LocalServingCertDir,
+
 			TLSOpts: []func(*tls.Config){
 				func(cfg *tls.Config) {
 					cfg.GetCertificate = finalGetCertificate
+					cfg.MinVersion = tls.VersionTLS12
 					// save cfg after changes to test against
 					finalCfg = cfg
 				},

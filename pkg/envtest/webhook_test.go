@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -40,12 +41,12 @@ var _ = Describe("Test", func() {
 	Describe("Webhook", func() {
 		It("should reject create request for webhook that rejects all requests", func() {
 			m, err := manager.New(env.Config, manager.Options{
-				Port:    env.WebhookInstallOptions.LocalServingPort,
-				Host:    env.WebhookInstallOptions.LocalServingHost,
-				CertDir: env.WebhookInstallOptions.LocalServingCertDir,
-				TLSOpts: []func(*tls.Config){
-					func(config *tls.Config) {},
-				},
+				WebhookServer: webhook.NewServer(webhook.Options{
+					Port:    env.WebhookInstallOptions.LocalServingPort,
+					Host:    env.WebhookInstallOptions.LocalServingHost,
+					CertDir: env.WebhookInstallOptions.LocalServingCertDir,
+					TLSOpts: []func(*tls.Config){func(config *tls.Config) {}},
+				}),
 			}) // we need manager here just to leverage manager.SetFields
 			Expect(err).NotTo(HaveOccurred())
 			server := m.GetWebhookServer()

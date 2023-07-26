@@ -28,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -73,10 +74,12 @@ var _ = Describe("Webhook", func() {
 	Context("when running a webhook server with a manager", func() {
 		It("should reject create request for webhook that rejects all requests", func() {
 			m, err := manager.New(cfg, manager.Options{
-				Port:    testenv.WebhookInstallOptions.LocalServingPort,
-				Host:    testenv.WebhookInstallOptions.LocalServingHost,
-				CertDir: testenv.WebhookInstallOptions.LocalServingCertDir,
-				TLSOpts: []func(*tls.Config){func(config *tls.Config) {}},
+				WebhookServer: webhook.NewServer(webhook.Options{
+					Port:    testenv.WebhookInstallOptions.LocalServingPort,
+					Host:    testenv.WebhookInstallOptions.LocalServingHost,
+					CertDir: testenv.WebhookInstallOptions.LocalServingCertDir,
+					TLSOpts: []func(*tls.Config){func(config *tls.Config) {}},
+				}),
 			}) // we need manager here just to leverage manager.SetFields
 			Expect(err).NotTo(HaveOccurred())
 			server := m.GetWebhookServer()
@@ -98,10 +101,12 @@ var _ = Describe("Webhook", func() {
 		It("should reject create request for multi-webhook that rejects all requests", func() {
 			m, err := manager.New(cfg, manager.Options{
 				MetricsBindAddress: "0",
-				Port:               testenv.WebhookInstallOptions.LocalServingPort,
-				Host:               testenv.WebhookInstallOptions.LocalServingHost,
-				CertDir:            testenv.WebhookInstallOptions.LocalServingCertDir,
-				TLSOpts:            []func(*tls.Config){func(config *tls.Config) {}},
+				WebhookServer: webhook.NewServer(webhook.Options{
+					Port:    testenv.WebhookInstallOptions.LocalServingPort,
+					Host:    testenv.WebhookInstallOptions.LocalServingHost,
+					CertDir: testenv.WebhookInstallOptions.LocalServingCertDir,
+					TLSOpts: []func(*tls.Config){func(config *tls.Config) {}},
+				}),
 			}) // we need manager here just to leverage manager.SetFields
 			Expect(err).NotTo(HaveOccurred())
 			server := m.GetWebhookServer()

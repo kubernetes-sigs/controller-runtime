@@ -35,21 +35,6 @@ import (
 // a new global namespaced cache to handle cluster scoped resources.
 const globalCache = "_cluster-scope"
 
-// MultiNamespacedCacheBuilder - Builder function to create a new multi-namespaced cache.
-// This will scope the cache to a list of namespaces. Listing for all namespaces
-// will list for all the namespaces that this knows about. By default, this will create
-// a global cache for cluster scoped resource. Note that this is not intended
-// to be used for excluding namespaces, this is better done via a Predicate. Also note that
-// you may face performance issues when using this with a high number of namespaces.
-//
-// Deprecated: Use cache.Options.Namespaces instead.
-func MultiNamespacedCacheBuilder(namespaces []string) NewCacheFunc {
-	return func(config *rest.Config, opts Options) (Cache, error) {
-		opts.Namespaces = namespaces
-		return newMultiNamespaceCache(config, opts)
-	}
-}
-
 func newMultiNamespaceCache(config *rest.Config, opts Options) (Cache, error) {
 	if len(opts.Namespaces) < 2 {
 		return nil, fmt.Errorf("must specify more than one namespace to use multi-namespace cache")

@@ -1058,7 +1058,7 @@ var _ = Describe("Fake client", func() {
 			By("Getting the Pod")
 			obj = &corev1.Pod{}
 			err := cl.Get(context.Background(), namespacedName, obj)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should reject changes to deletionTimestamp on Patch", func() {

@@ -84,6 +84,7 @@ type enqueueRequestForOwner struct {
 
 // Create implements EventHandler.
 func (e *enqueueRequestForOwner) Create(ctx context.Context, evt event.CreateEvent, q workqueue.RateLimitingInterface) {
+	e.logEvent("Create", evt.Object, nil)
 	reqs := map[reconcile.Request]empty{}
 	e.getOwnerReconcileRequest(evt.Object, reqs)
 	for req := range reqs {
@@ -93,6 +94,7 @@ func (e *enqueueRequestForOwner) Create(ctx context.Context, evt event.CreateEve
 
 // Update implements EventHandler.
 func (e *enqueueRequestForOwner) Update(ctx context.Context, evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+	e.logEvent("Update", evt.ObjectOld, evt.ObjectNew)
 	reqs := map[reconcile.Request]empty{}
 	e.getOwnerReconcileRequest(evt.ObjectOld, reqs)
 	e.getOwnerReconcileRequest(evt.ObjectNew, reqs)
@@ -103,6 +105,7 @@ func (e *enqueueRequestForOwner) Update(ctx context.Context, evt event.UpdateEve
 
 // Delete implements EventHandler.
 func (e *enqueueRequestForOwner) Delete(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+	e.logEvent("Delete", evt.Object, nil)
 	reqs := map[reconcile.Request]empty{}
 	e.getOwnerReconcileRequest(evt.Object, reqs)
 	for req := range reqs {
@@ -112,6 +115,7 @@ func (e *enqueueRequestForOwner) Delete(ctx context.Context, evt event.DeleteEve
 
 // Generic implements EventHandler.
 func (e *enqueueRequestForOwner) Generic(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+	e.logEvent("Generic", evt.Object, nil)
 	reqs := map[reconcile.Request]empty{}
 	e.getOwnerReconcileRequest(evt.Object, reqs)
 	for req := range reqs {
@@ -195,5 +199,51 @@ func (e *enqueueRequestForOwner) getOwnersReferences(object metav1.Object) []met
 		return []metav1.OwnerReference{*ownerRef}
 	}
 	// No Controller OwnerReference found
+	return nil
+}
+
+// logEvent logs an event with the version, kind and name of the object and its owner.
+func (e *enqueueRequestForOwner) logEvent(eventType string, object, newObject client.Object) {
+	var ownerReference *metav1.OwnerReference
+	if e.ownerType != nil && object != nil {
+		ownerReference = extractTypedOwnerReference(e.ownerType.GetObjectKind().GroupVersionKind(), object.GetOwnerReferences())
+		if ownerReference == nil && newObject != nil {
+			ownerReference = extractTypedOwnerReference(e.ownerType.GetObjectKind().GroupVersionKind(), newObject.GetOwnerReferences())
+		}
+	}
+
+	// If no ownerReference was found then it's probably not an event we care about
+	if ownerReference != nil {
+		kvs := []interface{}{
+			"Event type", eventType,
+			"GroupVersionKind", object.GetObjectKind().GroupVersionKind().String(),
+			"Name", object.GetName(),
+		}
+		if objectNs := object.GetNamespace(); objectNs != "" {
+			kvs = append(kvs, "Namespace", objectNs)
+		}
+		kvs = append(kvs,
+			"Owner APIVersion", ownerReference.APIVersion,
+			"Owner Kind", ownerReference.Kind,
+			"Owner Name", ownerReference.Name,
+		)
+
+		log.Info("OwnerReference handler event", kvs...)
+	}
+}
+
+func extractTypedOwnerReference(ownerGVK schema.GroupVersionKind, ownerReferences []metav1.OwnerReference) *metav1.OwnerReference {
+	for _, ownerRef := range ownerReferences {
+		refGV, err := schema.ParseGroupVersion(ownerRef.APIVersion)
+		if err != nil {
+			log.Error(err, "Could not parse OwnerReference APIVersion",
+				"api version", ownerRef.APIVersion)
+		}
+
+		if ownerGVK.Group == refGV.Group &&
+			ownerGVK.Kind == ownerRef.Kind {
+			return &ownerRef
+		}
+	}
 	return nil
 }

@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -50,6 +51,7 @@ var _ = Describe("Eventhandler", func() {
 		pod = &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "biz", Name: "baz"},
 		}
+		pod.SetGroupVersionKind(schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"})
 		Expect(cfg).NotTo(BeNil())
 
 		httpClient, err := rest.HTTPClientFor(cfg)
@@ -307,8 +309,15 @@ var _ = Describe("Eventhandler", func() {
 	})
 
 	Describe("EnqueueRequestForOwner", func() {
+		var repl *appsv1.ReplicaSet
+
+		BeforeEach(func() {
+			repl = &appsv1.ReplicaSet{}
+			repl.SetGroupVersionKind(schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "ReplicaSet"})
+		})
+
 		It("should enqueue a Request with the Owner of the object in the CreateEvent.", func() {
-			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
+			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, repl)
 
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -320,17 +329,20 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
+			logBuffer.Reset()
 			instance.Create(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
 			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
+			Expect(logBuffer.String()).To(MatchRegexp(
+				`controller-runtime.eventhandler.enqueueRequestForOwner.*OwnerReference.*handler.*event.*Create.*Owner.APIVersion.*Owner.Kind.*Owner.Name.*`,
+			))
 		})
 
 		It("should enqueue a Request with the Owner of the object in the DeleteEvent.", func() {
-			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
-
+			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, repl)
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
 					Name:       "foo-parent",
@@ -341,12 +353,16 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.DeleteEvent{
 				Object: pod,
 			}
+			logBuffer.Reset()
 			instance.Delete(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
 			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
+			Expect(logBuffer.String()).To(MatchRegexp(
+				`controller-runtime.eventhandler.enqueueRequestForOwner.*OwnerReference.*handler.*event.*Delete.*Owner.APIVersion.*Owner.Kind.*Owner.Name.*`,
+			))
 		})
 
 		It("should enqueue a Request with the Owners of both objects in the UpdateEvent.", func() {
@@ -354,7 +370,7 @@ var _ = Describe("Eventhandler", func() {
 			newPod.Name = pod.Name + "2"
 			newPod.Namespace = pod.Namespace + "2"
 
-			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
+			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, repl)
 
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -370,6 +386,7 @@ var _ = Describe("Eventhandler", func() {
 					APIVersion: "apps/v1",
 				},
 			}
+			logBuffer.Reset()
 			evt := event.UpdateEvent{
 				ObjectOld: pod,
 				ObjectNew: newPod,
@@ -384,6 +401,9 @@ var _ = Describe("Eventhandler", func() {
 					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo1-parent"}},
 				reconcile.Request{
 					NamespacedName: types.NamespacedName{Namespace: newPod.GetNamespace(), Name: "foo2-parent"}},
+			))
+			Expect(logBuffer.String()).To(MatchRegexp(
+				`controller-runtime.eventhandler.enqueueRequestForOwner.*OwnerReference.*handler.*event.*Update.*Owner.APIVersion.*Owner.Kind.*Owner.Name.*`,
 			))
 		})
 
@@ -420,7 +440,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		It("should enqueue a Request with the Owner of the object in the GenericEvent.", func() {
-			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
+			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, repl)
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
 					Name:       "foo-parent",
@@ -431,12 +451,16 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.GenericEvent{
 				Object: pod,
 			}
+			logBuffer.Reset()
 			instance.Generic(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
 
 			i, _ := q.Get()
 			Expect(i).To(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
+			Expect(logBuffer.String()).To(MatchRegexp(
+				`controller-runtime.eventhandler.enqueueRequestForOwner.*OwnerReference.*handler.*event.*Generic.*Owner.APIVersion.*Owner.Kind.*Owner.Name.*`,
+			))
 		})
 
 		It("should not enqueue a Request if there are no owners matching Group and Kind.", func() {
@@ -467,7 +491,7 @@ var _ = Describe("Eventhandler", func() {
 				{
 					Name:       "foo-parent",
 					Kind:       "HorizontalPodAutoscaler",
-					APIVersion: "autoscaling/v2beta1",
+					APIVersion: "autoscaling/v2",
 				},
 			}
 			evt := event.CreateEvent{

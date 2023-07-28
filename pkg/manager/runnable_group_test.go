@@ -21,6 +21,13 @@ var _ = Describe("runnables", func() {
 		Expect(newRunnables(defaultBaseContext, errCh)).ToNot(BeNil())
 	})
 
+	It("should add HTTP servers to the appropriate group", func() {
+		server := &server{}
+		r := newRunnables(defaultBaseContext, errCh)
+		Expect(r.Add(server)).To(Succeed())
+		Expect(r.HTTPServers.startQueue).To(HaveLen(1))
+	})
+
 	It("should add caches to the appropriate group", func() {
 		cache := &cacheProvider{cache: &informertest.FakeInformers{Error: fmt.Errorf("expected error")}}
 		r := newRunnables(defaultBaseContext, errCh)

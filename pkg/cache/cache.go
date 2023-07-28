@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	toolscache "k8s.io/client-go/tools/cache"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache/internal"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -144,36 +145,60 @@ type Options struct {
 	// instead of `reconcile.Result{}`.
 	SyncPeriod *time.Duration
 
-	// Namespaces restricts the cache's ListWatch to the desired namespaces
-	// Per default ListWatch watches all namespaces
-	Namespaces []string
+	// DefaultNamespaces maps namespace names to cache configs. If set, only
+	// the namespaces in here will be watched and it will by used to default
+	// ByObject.Namespaces for all objects if that is nil.
+	//
+	// The options in the Config that are nil will be defaulted from
+	// the respective Default* settings.
+	DefaultNamespaces map[string]Config
 
-	// DefaultLabelSelector will be used as a label selector for all object types
-	// unless they have a more specific selector set in ByObject.
+	// DefaultLabelSelector will be used as a label selector for all objects
+	// unless there is already one set in ByObject or DefaultNamespaces.
 	DefaultLabelSelector labels.Selector
 
 	// DefaultFieldSelector will be used as a field selector for all object types
-	// unless they have a more specific selector set in ByObject.
+	// unless there is already one set in ByObject or DefaultNamespaces.
 	DefaultFieldSelector fields.Selector
 
 	// DefaultTransform will be used as transform for all object types
-	// unless they have a more specific transform set in ByObject.
+	// unless there is already one set in ByObject or DefaultNamespaces.
 	DefaultTransform toolscache.TransformFunc
 
-	// UnsafeDisableDeepCopy indicates not to deep copy objects during get or
-	// list objects for EVERY object.
+	// DefaultUnsafeDisableDeepCopy is the default for UnsafeDisableDeepCopy
+	// for everything that doesn't specify this.
+	//
 	// Be very careful with this, when enabled you must DeepCopy any object before mutating it,
 	// otherwise you will mutate the object in the cache.
 	//
-	// This is a global setting for all objects, and can be overridden by the ByObject setting.
-	UnsafeDisableDeepCopy *bool
+	// This will be used for all object types, unless it is set in ByObject or
+	// DefaultNamespaces.
+	DefaultUnsafeDisableDeepCopy *bool
 
 	// ByObject restricts the cache's ListWatch to the desired fields per GVK at the specified object.
+	// object, this will fall through to Default* settings.
 	ByObject map[client.Object]ByObject
 }
 
 // ByObject offers more fine-grained control over the cache's ListWatch by object.
 type ByObject struct {
+	// Namespaces maps a namespace name to cache configs. If set, only the
+	// namespaces in this map will be cached.
+	//
+	// Settings in the map value that are unset will be defaulted.
+	// Use an empty value for the specific setting to prevent that.
+	//
+	// A nil map allows to default this to the cache's DefaultNamespaces setting.
+	// An empty map prevents this and means that all namespaces will be cached.
+	//
+	// The defaulting follows the following precedence order:
+	// 1. ByObject
+	// 2. DefaultNamespaces[namespace]
+	// 3. Default*
+	//
+	// This must be unset for cluster-scoped objects.
+	Namespaces map[string]Config
+
 	// Label represents a label selector for the object.
 	Label labels.Selector
 
@@ -194,48 +219,118 @@ type ByObject struct {
 	UnsafeDisableDeepCopy *bool
 }
 
+// Config describes all potential options for a given watch.
+type Config struct {
+	// LabelSelector specifies a label selector. A nil value allows to
+	// default this.
+	//
+	// Set to labels.Everything() if you don't want this defaulted.
+	LabelSelector labels.Selector
+
+	// FieldSelector specifics a field selector. A nil value allows to
+	// default this.
+	//
+	// Set to fields.Everything() if you don't want this defaulted.
+	FieldSelector fields.Selector
+
+	// Transform specifies a transform func. A nil value allows to default
+	// this.
+	//
+	// Set to an empty func to prevent this:
+	// func(in interface{}) (interface{}, error) { return in, nil }
+	Transform toolscache.TransformFunc
+
+	// UnsafeDisableDeepCopy specifies if List and Get requests against the
+	// cache should not DeepCopy. A nil value allows to default this.
+	UnsafeDisableDeepCopy *bool
+}
+
 // NewCacheFunc - Function for creating a new cache from the options and a rest config.
 type NewCacheFunc func(config *rest.Config, opts Options) (Cache, error)
 
 // New initializes and returns a new Cache.
-func New(config *rest.Config, opts Options) (Cache, error) {
-	if len(opts.Namespaces) == 0 {
-		opts.Namespaces = []string{metav1.NamespaceAll}
-	}
-	if len(opts.Namespaces) > 1 {
-		return newMultiNamespaceCache(config, opts)
-	}
-
-	opts, err := defaultOpts(config, opts)
+func New(cfg *rest.Config, opts Options) (Cache, error) {
+	opts, err := defaultOpts(cfg, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	byGVK, err := convertToInformerOptsByGVK(opts.ByObject, opts.Scheme)
-	if err != nil {
-		return nil, err
+	newCacheFunc := newCache(cfg, opts)
+
+	var defaultCache Cache
+	if len(opts.DefaultNamespaces) > 0 {
+		defaultConfig := optionDefaultsToConfig(&opts)
+		defaultCache = newMultiNamespaceCache(newCacheFunc, opts.Scheme, opts.Mapper, opts.DefaultNamespaces, &defaultConfig)
+	} else {
+		defaultCache = newCacheFunc(optionDefaultsToConfig(&opts), corev1.NamespaceAll)
 	}
-	// Set the default selector and transform.
-	byGVK[schema.GroupVersionKind{}] = internal.InformersOptsByGVK{
-		Selector: internal.Selector{
-			Label: opts.DefaultLabelSelector,
-			Field: opts.DefaultFieldSelector,
-		},
+
+	if len(opts.ByObject) == 0 {
+		return defaultCache, nil
+	}
+
+	delegating := &delegatingByGVKCache{
+		scheme:       opts.Scheme,
+		caches:       make(map[schema.GroupVersionKind]Cache, len(opts.ByObject)),
+		defaultCache: defaultCache,
+	}
+
+	for obj, config := range opts.ByObject {
+		gvk, err := apiutil.GVKForObject(obj, opts.Scheme)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get GVK for type %T: %w", obj, err)
+		}
+		var cache Cache
+		if len(config.Namespaces) > 0 {
+			cache = newMultiNamespaceCache(newCacheFunc, opts.Scheme, opts.Mapper, config.Namespaces, nil)
+		} else {
+			cache = newCacheFunc(byObjectToConfig(config), corev1.NamespaceAll)
+		}
+		delegating.caches[gvk] = cache
+	}
+
+	return delegating, nil
+}
+
+func optionDefaultsToConfig(opts *Options) Config {
+	return Config{
+		LabelSelector:         opts.DefaultLabelSelector,
+		FieldSelector:         opts.DefaultFieldSelector,
 		Transform:             opts.DefaultTransform,
-		UnsafeDisableDeepCopy: opts.UnsafeDisableDeepCopy,
+		UnsafeDisableDeepCopy: opts.DefaultUnsafeDisableDeepCopy,
 	}
+}
 
-	return &informerCache{
-		scheme: opts.Scheme,
-		Informers: internal.NewInformers(config, &internal.InformersOpts{
-			HTTPClient:   opts.HTTPClient,
-			Scheme:       opts.Scheme,
-			Mapper:       opts.Mapper,
-			ResyncPeriod: *opts.SyncPeriod,
-			Namespace:    opts.Namespaces[0],
-			ByGVK:        byGVK,
-		}),
-	}, nil
+func byObjectToConfig(byObject ByObject) Config {
+	return Config{
+		LabelSelector:         byObject.Label,
+		FieldSelector:         byObject.Field,
+		Transform:             byObject.Transform,
+		UnsafeDisableDeepCopy: byObject.UnsafeDisableDeepCopy,
+	}
+}
+
+type newCacheFunc func(config Config, namespace string) Cache
+
+func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
+	return func(config Config, namespace string) Cache {
+		return &informerCache{
+			scheme: opts.Scheme,
+			Informers: internal.NewInformers(restConfig, &internal.InformersOpts{
+				HTTPClient:   opts.HTTPClient,
+				Scheme:       opts.Scheme,
+				Mapper:       opts.Mapper,
+				ResyncPeriod: *opts.SyncPeriod,
+				Namespace:    namespace,
+				Selector: internal.Selector{
+					Label: config.LabelSelector,
+					Field: config.FieldSelector,
+				},
+				Transform:             config.Transform,
+				UnsafeDisableDeepCopy: pointer.BoolDeref(config.UnsafeDisableDeepCopy, false),
+			}),
+		}
+	}
 }
 
 func defaultOpts(config *rest.Config, opts Options) (Options, error) {
@@ -262,6 +357,50 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 		}
 	}
 
+	for namespace, cfg := range opts.DefaultNamespaces {
+		cfg = defaultConfig(cfg, optionDefaultsToConfig(&opts))
+		opts.DefaultNamespaces[namespace] = cfg
+	}
+
+	for obj, byObject := range opts.ByObject {
+		isNamespaced, err := apiutil.IsObjectNamespaced(obj, opts.Scheme, opts.Mapper)
+		if err != nil {
+			return opts, fmt.Errorf("failed to determine if %T is namespaced: %w", obj, err)
+		}
+		if !isNamespaced && byObject.Namespaces != nil {
+			return opts, fmt.Errorf("type %T is not namespaced, but its ByObject.Namespaces setting is not nil", obj)
+		}
+
+		// Default the namespace-level configs first, because they need to use the undefaulted type-level config.
+		for namespace, config := range byObject.Namespaces {
+			// 1. Default from the undefaulted type-level config
+			config = defaultConfig(config, byObjectToConfig(byObject))
+
+			// 2. Default from the namespace-level config. This was defaulted from the global default config earlier, but
+			//    might not have an entry for the current namespace.
+			if defaultNamespaceSettings, hasDefaultNamespace := opts.DefaultNamespaces[namespace]; hasDefaultNamespace {
+				config = defaultConfig(config, defaultNamespaceSettings)
+			}
+
+			// 3. Default from the global defaults
+			config = defaultConfig(config, optionDefaultsToConfig(&opts))
+
+			byObject.Namespaces[namespace] = config
+		}
+
+		defaultedConfig := defaultConfig(byObjectToConfig(byObject), optionDefaultsToConfig(&opts))
+		byObject.Label = defaultedConfig.LabelSelector
+		byObject.Field = defaultedConfig.FieldSelector
+		byObject.Transform = defaultedConfig.Transform
+		byObject.UnsafeDisableDeepCopy = defaultedConfig.UnsafeDisableDeepCopy
+
+		if byObject.Namespaces == nil {
+			byObject.Namespaces = opts.DefaultNamespaces
+		}
+
+		opts.ByObject[obj] = byObject
+	}
+
 	// Default the resync period to 10 hours if unset
 	if opts.SyncPeriod == nil {
 		opts.SyncPeriod = &defaultSyncPeriod
@@ -269,24 +408,19 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 	return opts, nil
 }
 
-func convertToInformerOptsByGVK(in map[client.Object]ByObject, scheme *runtime.Scheme) (map[schema.GroupVersionKind]internal.InformersOptsByGVK, error) {
-	out := map[schema.GroupVersionKind]internal.InformersOptsByGVK{}
-	for object, byObject := range in {
-		gvk, err := apiutil.GVKForObject(object, scheme)
-		if err != nil {
-			return nil, err
-		}
-		if _, ok := out[gvk]; ok {
-			return nil, fmt.Errorf("duplicate cache options for GVK %v, cache.Options.ByObject has multiple types with the same GroupVersionKind", gvk)
-		}
-		out[gvk] = internal.InformersOptsByGVK{
-			Selector: internal.Selector{
-				Field: byObject.Field,
-				Label: byObject.Label,
-			},
-			Transform:             byObject.Transform,
-			UnsafeDisableDeepCopy: byObject.UnsafeDisableDeepCopy,
-		}
+func defaultConfig(toDefault, defaultFrom Config) Config {
+	if toDefault.LabelSelector == nil {
+		toDefault.LabelSelector = defaultFrom.LabelSelector
 	}
-	return out, nil
+	if toDefault.FieldSelector == nil {
+		toDefault.FieldSelector = defaultFrom.FieldSelector
+	}
+	if toDefault.Transform == nil {
+		toDefault.Transform = defaultFrom.Transform
+	}
+	if toDefault.UnsafeDisableDeepCopy == nil {
+		toDefault.UnsafeDisableDeepCopy = defaultFrom.UnsafeDisableDeepCopy
+	}
+
+	return toDefault
 }

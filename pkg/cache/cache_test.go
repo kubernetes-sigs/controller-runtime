@@ -119,13 +119,17 @@ var _ = Describe("Informer Cache", func() {
 })
 var _ = Describe("Multi-Namespace Informer Cache", func() {
 	CacheTest(cache.New, cache.Options{
-		Namespaces: []string{testNamespaceOne, testNamespaceTwo, "default"},
+		DefaultNamespaces: map[string]cache.Config{
+			testNamespaceOne: {},
+			testNamespaceTwo: {},
+			"default":        {},
+		},
 	})
 })
 
 var _ = Describe("Informer Cache without global DeepCopy", func() {
 	CacheTest(cache.New, cache.Options{
-		UnsafeDisableDeepCopy: pointer.Bool(true),
+		DefaultUnsafeDisableDeepCopy: pointer.Bool(true),
 	})
 })
 
@@ -370,7 +374,9 @@ var _ = Describe("Cache with selectors", func() {
 		opts := cache.Options{
 			DefaultFieldSelector: fields.OneTermEqualSelector("metadata.namespace", testNamespaceTwo),
 			ByObject: map[client.Object]cache.ByObject{
-				&corev1.ServiceAccount{}: {Field: fields.OneTermEqualSelector("metadata.namespace", testNamespaceOne)},
+				&corev1.ServiceAccount{}: {
+					Field: fields.OneTermEqualSelector("metadata.namespace", testNamespaceOne),
+				},
 			},
 		}
 
@@ -790,61 +796,89 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					}
 				})
 
-				It("should be able to restrict cache to a namespace", func() {
-					By("creating a namespaced cache")
-					namespacedCache, err := cache.New(cfg, cache.Options{Namespaces: []string{testNamespaceOne}})
-					Expect(err).NotTo(HaveOccurred())
+				cacheRestrictSubTests := []struct {
+					nameSuffix string
+					cacheOpts  cache.Options
+				}{
+					{
+						nameSuffix: "by using the per-gvk setting",
+						cacheOpts: cache.Options{
+							ByObject: map[client.Object]cache.ByObject{
+								&corev1.Pod{}: {
+									Namespaces: map[string]cache.Config{
+										testNamespaceOne: {},
+									},
+								},
+							},
+						},
+					},
+					{
+						nameSuffix: "by using the global DefaultNamespaces setting",
+						cacheOpts: cache.Options{
+							DefaultNamespaces: map[string]cache.Config{
+								testNamespaceOne: {},
+							},
+						},
+					},
+				}
 
-					By("running the cache and waiting for it to sync")
-					go func() {
-						defer GinkgoRecover()
-						Expect(namespacedCache.Start(informerCacheCtx)).To(Succeed())
-					}()
-					Expect(namespacedCache.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
+				for _, tc := range cacheRestrictSubTests {
+					It("should be able to restrict cache to a namespace "+tc.nameSuffix, func() {
+						By("creating a namespaced cache")
+						namespacedCache, err := cache.New(cfg, tc.cacheOpts)
+						Expect(err).NotTo(HaveOccurred())
 
-					By("listing pods in all namespaces")
-					out := &unstructured.UnstructuredList{}
-					out.SetGroupVersionKind(schema.GroupVersionKind{
-						Group:   "",
-						Version: "v1",
-						Kind:    "PodList",
+						By("running the cache and waiting for it to sync")
+						go func() {
+							defer GinkgoRecover()
+							Expect(namespacedCache.Start(informerCacheCtx)).To(Succeed())
+						}()
+						Expect(namespacedCache.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
+
+						By("listing pods in all namespaces")
+						out := &unstructured.UnstructuredList{}
+						out.SetGroupVersionKind(schema.GroupVersionKind{
+							Group:   "",
+							Version: "v1",
+							Kind:    "PodList",
+						})
+						Expect(namespacedCache.List(context.Background(), out)).To(Succeed())
+
+						By("verifying the returned pod is from the watched namespace")
+						Expect(out.Items).NotTo(BeEmpty())
+						Expect(out.Items).Should(HaveLen(2))
+						for _, item := range out.Items {
+							Expect(item.GetNamespace()).To(Equal(testNamespaceOne))
+						}
+						By("listing all nodes - should still be able to list a cluster-scoped resource")
+						nodeList := &unstructured.UnstructuredList{}
+						nodeList.SetGroupVersionKind(schema.GroupVersionKind{
+							Group:   "",
+							Version: "v1",
+							Kind:    "NodeList",
+						})
+						Expect(namespacedCache.List(context.Background(), nodeList)).To(Succeed())
+
+						By("verifying the node list is not empty")
+						Expect(nodeList.Items).NotTo(BeEmpty())
+
+						By("getting a node - should still be able to get a cluster-scoped resource")
+						node := &unstructured.Unstructured{}
+						node.SetGroupVersionKind(schema.GroupVersionKind{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Node",
+						})
+
+						By("verifying that getting the node works with an empty namespace")
+						key1 := client.ObjectKey{Namespace: "", Name: testNodeOne}
+						Expect(namespacedCache.Get(context.Background(), key1, node)).To(Succeed())
+
+						By("verifying that the namespace is ignored when getting a cluster-scoped resource")
+						key2 := client.ObjectKey{Namespace: "random", Name: testNodeOne}
+						Expect(namespacedCache.Get(context.Background(), key2, node)).To(Succeed())
 					})
-					Expect(namespacedCache.List(context.Background(), out)).To(Succeed())
-
-					By("verifying the returned pod is from the watched namespace")
-					Expect(out.Items).NotTo(BeEmpty())
-					Expect(out.Items).Should(HaveLen(2))
-					for _, item := range out.Items {
-						Expect(item.GetNamespace()).To(Equal(testNamespaceOne))
-					}
-					By("listing all nodes - should still be able to list a cluster-scoped resource")
-					nodeList := &unstructured.UnstructuredList{}
-					nodeList.SetGroupVersionKind(schema.GroupVersionKind{
-						Group:   "",
-						Version: "v1",
-						Kind:    "NodeList",
-					})
-					Expect(namespacedCache.List(context.Background(), nodeList)).To(Succeed())
-
-					By("verifying the node list is not empty")
-					Expect(nodeList.Items).NotTo(BeEmpty())
-
-					By("getting a node - should still be able to get a cluster-scoped resource")
-					node := &unstructured.Unstructured{}
-					node.SetGroupVersionKind(schema.GroupVersionKind{
-						Group:   "",
-						Version: "v1",
-						Kind:    "Node",
-					})
-
-					By("verifying that getting the node works with an empty namespace")
-					key1 := client.ObjectKey{Namespace: "", Name: testNodeOne}
-					Expect(namespacedCache.Get(context.Background(), key1, node)).To(Succeed())
-
-					By("verifying that the namespace is ignored when getting a cluster-scoped resource")
-					key2 := client.ObjectKey{Namespace: "random", Name: testNodeOne}
-					Expect(namespacedCache.Get(context.Background(), key2, node)).To(Succeed())
-				})
+				}
 
 				if !isPodDisableDeepCopy(opts) {
 					It("should deep copy the object unless told otherwise", func() {
@@ -934,7 +968,10 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				It("test multinamespaced cache for cluster scoped resources", func() {
 					By("creating a multinamespaced cache to watch specific namespaces")
 					m, err := cache.New(cfg, cache.Options{
-						Namespaces: []string{"default", testNamespaceOne},
+						DefaultNamespaces: map[string]cache.Config{
+							"default":        {},
+							testNamespaceOne: {},
+						},
 					})
 					Expect(err).NotTo(HaveOccurred())
 
@@ -1074,7 +1111,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to restrict cache to a namespace", func() {
 					By("creating a namespaced cache")
-					namespacedCache, err := cache.New(cfg, cache.Options{Namespaces: []string{testNamespaceOne}})
+					namespacedCache, err := cache.New(cfg, cache.Options{DefaultNamespaces: map[string]cache.Config{testNamespaceOne: {}}})
 					Expect(err).NotTo(HaveOccurred())
 
 					By("running the cache and waiting for it to sync")
@@ -1220,20 +1257,12 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				})
 			})
 			type selectorsTestCase struct {
-				fieldSelectors map[string]string
-				labelSelectors map[string]string
-				expectedPods   []string
+				options      cache.Options
+				expectedPods []string
 			}
 			DescribeTable(" and cache with selectors", func(tc selectorsTestCase) {
 				By("creating the cache")
-				informer, err := cache.New(cfg, cache.Options{
-					ByObject: map[client.Object]cache.ByObject{
-						&corev1.Pod{}: {
-							Label: labels.Set(tc.labelSelectors).AsSelector(),
-							Field: fields.Set(tc.fieldSelectors).AsSelector(),
-						},
-					},
-				})
+				informer, err := cache.New(cfg, tc.options)
 				Expect(err).NotTo(HaveOccurred())
 
 				By("running the cache and waiting for it to sync")
@@ -1289,38 +1318,215 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				}, ConsistOf(tc.expectedPods)))
 			},
 				Entry("when selectors are empty it has to inform about all the pods", selectorsTestCase{
-					fieldSelectors: map[string]string{},
-					labelSelectors: map[string]string{},
-					expectedPods:   []string{"test-pod-1", "test-pod-2", "test-pod-3", "test-pod-4", "test-pod-5", "test-pod-6"},
+					expectedPods: []string{"test-pod-1", "test-pod-2", "test-pod-3", "test-pod-4", "test-pod-5", "test-pod-6"},
 				}),
-				Entry("when field matches one pod it has to inform about it", selectorsTestCase{
-					fieldSelectors: map[string]string{"metadata.name": "test-pod-2"},
-					expectedPods:   []string{"test-pod-2"},
+				Entry("type-level field selector matches one pod", selectorsTestCase{
+					options: cache.Options{ByObject: map[client.Object]cache.ByObject{
+						&corev1.Pod{}: {Field: fields.SelectorFromSet(map[string]string{
+							"metadata.name": "test-pod-2",
+						})},
+					}},
+					expectedPods: []string{"test-pod-2"},
 				}),
-				Entry("when field matches multiple pods it has to inform about all of them", selectorsTestCase{
-					fieldSelectors: map[string]string{"metadata.namespace": testNamespaceTwo},
-					expectedPods:   []string{"test-pod-2", "test-pod-3", "test-pod-6"},
+				Entry("global field selector matches one pod", selectorsTestCase{
+					options: cache.Options{
+						DefaultFieldSelector: fields.SelectorFromSet(map[string]string{
+							"metadata.name": "test-pod-2",
+						}),
+					},
+					expectedPods: []string{"test-pod-2"},
 				}),
-				Entry("when label matches one pod it has to inform about it", selectorsTestCase{
-					labelSelectors: map[string]string{"test-label": "test-pod-4"},
-					expectedPods:   []string{"test-pod-4"},
+				Entry("type-level field selectors matches multiple pods", selectorsTestCase{
+					options: cache.Options{ByObject: map[client.Object]cache.ByObject{
+						&corev1.Pod{}: {Field: fields.SelectorFromSet(map[string]string{
+							"metadata.namespace": testNamespaceTwo,
+						})},
+					}},
+					expectedPods: []string{"test-pod-2", "test-pod-3", "test-pod-6"},
 				}),
-				Entry("when label matches multiple pods it has to inform about all of them", selectorsTestCase{
-					labelSelectors: map[string]string{"common-label": "common"},
-					expectedPods:   []string{"test-pod-3", "test-pod-4"},
+				Entry("global field selectors matches multiple pods", selectorsTestCase{
+					options: cache.Options{
+						DefaultFieldSelector: fields.SelectorFromSet(map[string]string{
+							"metadata.namespace": testNamespaceTwo,
+						}),
+					},
+					expectedPods: []string{"test-pod-2", "test-pod-3", "test-pod-6"},
 				}),
-				Entry("when label and field matches one pod it has to inform about about it", selectorsTestCase{
-					labelSelectors: map[string]string{"common-label": "common"},
-					fieldSelectors: map[string]string{"metadata.namespace": testNamespaceTwo},
-					expectedPods:   []string{"test-pod-3"},
+				Entry("type-level label selector matches one pod", selectorsTestCase{
+					options: cache.Options{ByObject: map[client.Object]cache.ByObject{
+						&corev1.Pod{}: {Label: labels.SelectorFromSet(map[string]string{
+							"test-label": "test-pod-4",
+						})},
+					}},
+					expectedPods: []string{"test-pod-4"},
 				}),
-				Entry("when label does not match it does not has to inform", selectorsTestCase{
-					labelSelectors: map[string]string{"new-label": "new"},
-					expectedPods:   []string{},
+				Entry("global label selector matches one pod", selectorsTestCase{
+					options: cache.Options{
+						DefaultLabelSelector: labels.SelectorFromSet(map[string]string{
+							"test-label": "test-pod-4",
+						}),
+					},
+					expectedPods: []string{"test-pod-4"},
 				}),
-				Entry("when field does not match it does not has to inform", selectorsTestCase{
-					fieldSelectors: map[string]string{"metadata.namespace": "new"},
-					expectedPods:   []string{},
+				Entry("type-level label selector matches multiple pods", selectorsTestCase{
+					options: cache.Options{ByObject: map[client.Object]cache.ByObject{
+						&corev1.Pod{}: {Label: labels.SelectorFromSet(map[string]string{
+							"common-label": "common",
+						})},
+					}},
+					expectedPods: []string{"test-pod-3", "test-pod-4"},
+				}),
+				Entry("global label selector matches multiple pods", selectorsTestCase{
+					options: cache.Options{
+						DefaultLabelSelector: labels.SelectorFromSet(map[string]string{
+							"common-label": "common",
+						}),
+					},
+					expectedPods: []string{"test-pod-3", "test-pod-4"},
+				}),
+				Entry("type-level label and field selector, matches one pod", selectorsTestCase{
+					options: cache.Options{ByObject: map[client.Object]cache.ByObject{
+						&corev1.Pod{}: {
+							Label: labels.SelectorFromSet(map[string]string{"common-label": "common"}),
+							Field: fields.SelectorFromSet(map[string]string{"metadata.namespace": testNamespaceTwo}),
+						},
+					}},
+					expectedPods: []string{"test-pod-3"},
+				}),
+				Entry("global label and field selector, matches one pod", selectorsTestCase{
+					options: cache.Options{
+						DefaultLabelSelector: labels.SelectorFromSet(map[string]string{"common-label": "common"}),
+						DefaultFieldSelector: fields.SelectorFromSet(map[string]string{"metadata.namespace": testNamespaceTwo}),
+					},
+					expectedPods: []string{"test-pod-3"},
+				}),
+				Entry("type-level label selector does not match, no results", selectorsTestCase{
+					options: cache.Options{ByObject: map[client.Object]cache.ByObject{
+						&corev1.Pod{}: {Label: labels.SelectorFromSet(map[string]string{
+							"new-label": "new",
+						})},
+					}},
+					expectedPods: []string{},
+				}),
+				Entry("global label selector does not match, no results", selectorsTestCase{
+					options: cache.Options{
+						DefaultLabelSelector: labels.SelectorFromSet(map[string]string{
+							"new-label": "new",
+						}),
+					},
+					expectedPods: []string{},
+				}),
+				Entry("type-level field selector does not match, no results", selectorsTestCase{
+					options: cache.Options{ByObject: map[client.Object]cache.ByObject{
+						&corev1.Pod{}: {Field: fields.SelectorFromSet(map[string]string{
+							"metadata.namespace": "new",
+						})},
+					}},
+					expectedPods: []string{},
+				}),
+				Entry("global field selector does not match, no results", selectorsTestCase{
+					options: cache.Options{
+						DefaultFieldSelector: fields.SelectorFromSet(map[string]string{
+							"metadata.namespace": "new",
+						}),
+					},
+					expectedPods: []string{},
+				}),
+				Entry("type-level field selector on namespace matches one pod", selectorsTestCase{
+					options: cache.Options{ByObject: map[client.Object]cache.ByObject{
+						&corev1.Pod{}: {Namespaces: map[string]cache.Config{
+							testNamespaceTwo: {
+								FieldSelector: fields.SelectorFromSet(map[string]string{
+									"metadata.name": "test-pod-2",
+								}),
+							},
+						}},
+					}},
+					expectedPods: []string{"test-pod-2"},
+				}),
+				Entry("type-level field selector on namespace doesn't match", selectorsTestCase{
+					options: cache.Options{ByObject: map[client.Object]cache.ByObject{
+						&corev1.Pod{}: {Namespaces: map[string]cache.Config{
+							testNamespaceTwo: {
+								FieldSelector: fields.SelectorFromSet(map[string]string{
+									"metadata.name": "test-pod-doesn-exist",
+								}),
+							},
+						}},
+					}},
+					expectedPods: []string{},
+				}),
+				Entry("global field selector on namespace matches one pod", selectorsTestCase{
+					options: cache.Options{
+						DefaultNamespaces: map[string]cache.Config{
+							testNamespaceTwo: {
+								FieldSelector: fields.SelectorFromSet(map[string]string{
+									"metadata.name": "test-pod-2",
+								}),
+							},
+						},
+					},
+					expectedPods: []string{"test-pod-2"},
+				}),
+				Entry("global field selector on namespace doesn't match", selectorsTestCase{
+					options: cache.Options{
+						DefaultNamespaces: map[string]cache.Config{
+							testNamespaceTwo: {
+								FieldSelector: fields.SelectorFromSet(map[string]string{
+									"metadata.name": "test-pod-doesn-exist",
+								}),
+							},
+						},
+					},
+					expectedPods: []string{},
+				}),
+				Entry("type-level label selector on namespace matches one pod", selectorsTestCase{
+					options: cache.Options{ByObject: map[client.Object]cache.ByObject{
+						&corev1.Pod{}: {Namespaces: map[string]cache.Config{
+							testNamespaceTwo: {
+								LabelSelector: labels.SelectorFromSet(map[string]string{
+									"test-label": "test-pod-2",
+								}),
+							},
+						}},
+					}},
+					expectedPods: []string{"test-pod-2"},
+				}),
+				Entry("type-level label selector on namespace doesn't match", selectorsTestCase{
+					options: cache.Options{ByObject: map[client.Object]cache.ByObject{
+						&corev1.Pod{}: {Namespaces: map[string]cache.Config{
+							testNamespaceTwo: {
+								LabelSelector: labels.SelectorFromSet(map[string]string{
+									"test-label": "test-pod-doesn-exist",
+								}),
+							},
+						}},
+					}},
+					expectedPods: []string{},
+				}),
+				Entry("global label selector on namespace matches one pod", selectorsTestCase{
+					options: cache.Options{
+						DefaultNamespaces: map[string]cache.Config{
+							testNamespaceTwo: {
+								LabelSelector: labels.SelectorFromSet(map[string]string{
+									"test-label": "test-pod-2",
+								}),
+							},
+						},
+					},
+					expectedPods: []string{"test-pod-2"},
+				}),
+				Entry("global label selector on namespace doesn't match", selectorsTestCase{
+					options: cache.Options{
+						DefaultNamespaces: map[string]cache.Config{
+							testNamespaceTwo: {
+								LabelSelector: labels.SelectorFromSet(map[string]string{
+									"test-label": "test-pod-doesn-exist",
+								}),
+							},
+						},
+					},
+					expectedPods: []string{},
 				}),
 			)
 		})
@@ -1813,8 +2019,8 @@ func isPodDisableDeepCopy(opts cache.Options) bool {
 	if opts.ByObject[&corev1.Pod{}].UnsafeDisableDeepCopy != nil {
 		return *opts.ByObject[&corev1.Pod{}].UnsafeDisableDeepCopy
 	}
-	if opts.UnsafeDisableDeepCopy != nil {
-		return *opts.UnsafeDisableDeepCopy
+	if opts.DefaultUnsafeDisableDeepCopy != nil {
+		return *opts.DefaultUnsafeDisableDeepCopy
 	}
 	return false
 }

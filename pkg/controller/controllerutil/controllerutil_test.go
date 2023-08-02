@@ -131,6 +131,28 @@ var _ = Describe("Controllerutil", func() {
 			Expect(controllerutil.SetControllerReference(dep, rs, runtime.NewScheme())).To(HaveOccurred())
 		})
 
+		It("should set the OwnerReference if it can find the group version kind, even if not registered in the scheme", func() {
+			rs := &appsv1.ReplicaSet{}
+			dep := &extensionsv1beta1.Deployment{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "extensions/v1beta1",
+					Kind:       "Deployment",
+				},
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+			}
+
+			Expect(controllerutil.SetControllerReference(dep, rs, runtime.NewScheme())).NotTo(HaveOccurred())
+			t := true
+			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+				Name:               "foo",
+				Kind:               "Deployment",
+				APIVersion:         "extensions/v1beta1",
+				UID:                "foo-uid",
+				Controller:         &t,
+				BlockOwnerDeletion: &t,
+			}))
+		})
+
 		It("should return an error if the owner isn't a runtime.Object", func() {
 			rs := &appsv1.ReplicaSet{}
 			Expect(controllerutil.SetControllerReference(&errMetaObj{}, rs, scheme.Scheme)).To(HaveOccurred())

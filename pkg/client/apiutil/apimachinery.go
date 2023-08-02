@@ -135,6 +135,13 @@ func GVKForObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersi
 	// Use the given scheme to retrieve all the GVKs for the object.
 	gvks, isUnversioned, err := scheme.ObjectKinds(obj)
 	if err != nil {
+		if runtime.IsNotRegisteredError(err) && obj.GetObjectKind() != nil {
+			// Use object's current GVK as a last ditch attempt for a type not registered with the scheme.
+			currentGVK := obj.GetObjectKind().GroupVersionKind()
+			if !currentGVK.Empty() {
+				return currentGVK, nil
+			}
+		}
 		return schema.GroupVersionKind{}, err
 	}
 	if isUnversioned {

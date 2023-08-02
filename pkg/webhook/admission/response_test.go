@@ -17,8 +17,11 @@ limitations under the License.
 package admission
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -247,3 +250,38 @@ var _ = Describe("Admission Webhook Response Helpers", func() {
 		})
 	})
 })
+
+/*
+*
+BEFORE (without isByteArrayEqual)
+goos: darwin
+goarch: arm64
+pkg: sigs.k8s.io/controller-runtime/pkg/webhook/admission
+BenchmarkPatchResponseFromRaw
+BenchmarkPatchResponseFromRaw/benchmark_PatchResponseFromRaw_function
+BenchmarkPatchResponseFromRaw/benchmark_PatchResponseFromRaw_function-10         	   52371	     22572 ns/op
+
+AFTER (with isByteArrayEqual)
+goos: darwin
+goarch: arm64
+pkg: sigs.k8s.io/controller-runtime/pkg/webhook/admission
+BenchmarkPatchResponseFromRaw
+BenchmarkPatchResponseFromRaw/benchmark_PatchResponseFromRaw_function
+BenchmarkPatchResponseFromRaw/benchmark_PatchResponseFromRaw_function-10         	 5078506	       235.4 ns/op
+*/
+func BenchmarkPatchResponseFromRaw(b *testing.B) {
+	pod := createPodForBenchmark()
+
+	byteArray, err := json.Marshal(pod)
+	if err != nil {
+		fmt.Println("error marshalling pod")
+	}
+
+	b.Run("benchmark PatchResponseFromRaw function", func(b *testing.B) {
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			PatchResponseFromRaw(byteArray, byteArray)
+		}
+	})
+}

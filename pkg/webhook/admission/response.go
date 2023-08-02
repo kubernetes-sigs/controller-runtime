@@ -86,6 +86,17 @@ func ValidationResponse(allowed bool, message string) Response {
 // The original object should be passed in as raw bytes to avoid the roundtripping problem
 // described in https://github.com/kubernetes-sigs/kubebuilder/issues/510.
 func PatchResponseFromRaw(original, current []byte) Response {
+	if isByteArrayEqual(original, current) {
+		return Response{
+			Patches: []jsonpatch.JsonPatchOperation{},
+			AdmissionResponse: admissionv1.AdmissionResponse{
+				Allowed: true,
+				PatchType: func() *admissionv1.PatchType {
+					return nil
+				}(),
+			},
+		}
+	}
 	patches, err := jsonpatch.CreatePatch(original, current)
 	if err != nil {
 		return Errored(http.StatusInternalServerError, err)
@@ -103,6 +114,19 @@ func PatchResponseFromRaw(original, current []byte) Response {
 			}(),
 		},
 	}
+}
+
+// isByteArrayEqual takes 2 byte arrays and returns if they are equal.
+func isByteArrayEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, _ := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // validationResponseFromStatus returns a response for admitting a request with provided Status object.

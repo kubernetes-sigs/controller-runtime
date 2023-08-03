@@ -257,19 +257,23 @@ BEFORE (without isByteArrayEqual)
 goos: darwin
 goarch: arm64
 pkg: sigs.k8s.io/controller-runtime/pkg/webhook/admission
-BenchmarkPatchResponseFromRaw
-BenchmarkPatchResponseFromRaw/benchmark_PatchResponseFromRaw_function
-BenchmarkPatchResponseFromRaw/benchmark_PatchResponseFromRaw_function-10         	   52371	     22572 ns/op
+BenchmarkPatchResponseFromRawAndIsByteArrayEqual
+BenchmarkPatchResponseFromRawAndIsByteArrayEqual/benchmark_PatchResponseFromRaw_function
+BenchmarkPatchResponseFromRawAndIsByteArrayEqual/benchmark_PatchResponseFromRaw_function-10         	   52774	     22749 ns/op
+BenchmarkPatchResponseFromRawAndIsByteArrayEqual/benchmark_isByteArrayEqual_function
+BenchmarkPatchResponseFromRawAndIsByteArrayEqual/benchmark_isByteArrayEqual_function-10             	 5252599	       230.7 ns/op
 
 AFTER (with isByteArrayEqual)
 goos: darwin
 goarch: arm64
 pkg: sigs.k8s.io/controller-runtime/pkg/webhook/admission
-BenchmarkPatchResponseFromRaw
-BenchmarkPatchResponseFromRaw/benchmark_PatchResponseFromRaw_function
-BenchmarkPatchResponseFromRaw/benchmark_PatchResponseFromRaw_function-10         	 5078506	       235.4 ns/op
+BenchmarkPatchResponseFromRawAndIsByteArrayEqual
+BenchmarkPatchResponseFromRawAndIsByteArrayEqual/benchmark_PatchResponseFromRaw_function
+BenchmarkPatchResponseFromRawAndIsByteArrayEqual/benchmark_PatchResponseFromRaw_function-10         	 4915736	       244.7 ns/op
+BenchmarkPatchResponseFromRawAndIsByteArrayEqual/benchmark_isByteArrayEqual_function
+BenchmarkPatchResponseFromRawAndIsByteArrayEqual/benchmark_isByteArrayEqual_function-10             	 4981567	       239.0 ns/op
 */
-func BenchmarkPatchResponseFromRaw(b *testing.B) {
+func BenchmarkPatchResponseFromRawAndIsByteArrayEqual(b *testing.B) {
 	pod := createPodForBenchmark()
 
 	byteArray, err := json.Marshal(pod)
@@ -278,10 +282,16 @@ func BenchmarkPatchResponseFromRaw(b *testing.B) {
 	}
 
 	b.Run("benchmark PatchResponseFromRaw function", func(b *testing.B) {
-
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			PatchResponseFromRaw(byteArray, byteArray)
+		}
+	})
+
+	b.Run("benchmark isByteArrayEqual function", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			isByteArrayEqual(byteArray, byteArray)
 		}
 	})
 }

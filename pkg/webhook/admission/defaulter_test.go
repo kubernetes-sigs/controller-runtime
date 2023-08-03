@@ -80,35 +80,55 @@ goos: darwin
 goarch: arm64
 pkg: sigs.k8s.io/controller-runtime/pkg/webhook/admission
 BenchmarkHandle
-BenchmarkHandle/benchmark_handle_function
-BenchmarkHandle/benchmark_handle_function-10         	   22878	     50394 ns/op
+BenchmarkHandle/benchmark_handle_function_w/o_update
+BenchmarkHandle/benchmark_handle_function_w/o_update-10         	   22690	     50916 ns/op
+BenchmarkHandle/benchmark_handle_function_with_update
+BenchmarkHandle/benchmark_handle_function_with_update-10        	   23100	     51933 ns/op
 
 AFTER (with isByteArrayEqual)
 goos: darwin
 goarch: arm64
 pkg: sigs.k8s.io/controller-runtime/pkg/webhook/admission
 BenchmarkHandle
-BenchmarkHandle/benchmark_handle_function
-BenchmarkHandle/benchmark_handle_function-10         	   44620	     26178 ns/op
+BenchmarkHandle/benchmark_handle_function_w/o_update
+BenchmarkHandle/benchmark_handle_function_w/o_update-10         	   43891	     26766 ns/op
+BenchmarkHandle/benchmark_handle_function_with_update
+BenchmarkHandle/benchmark_handle_function_with_update-10        	   23234	     50426 ns/op
 */
 func BenchmarkHandle(b *testing.B) {
 	pod := createPodForBenchmark()
 
 	byteArray, err := json.Marshal(pod)
 	if err != nil {
-		fmt.Println("error marshalling pod")
+		fmt.Printf("error marshalling pod, %v. \n", err)
 	}
 
 	pa := &podAnnotator{}
 	handler := WithCustomDefaulter(admissionScheme, pod, pa)
 
-	b.Run("benchmark handle function", func(b *testing.B) {
-
+	b.Run("benchmark handle function w/o update", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-
 			// handler.Handle invokes PatchResponseFromRaw function, which is the func to be benchmarked.
 			handler.Handle(context.TODO(), Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Update,
+					Object: runtime.RawExtension{
+						Raw: byteArray,
+					},
+				},
+			})
+		}
+	})
+
+	psw := &podSchedulerWebhook{}
+	pswHandler := WithCustomDefaulter(admissionScheme, pod, psw)
+
+	b.Run("benchmark handle function with update", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			// handler.Handle invokes PatchResponseFromRaw function, which is the func to be benchmarked.
+			pswHandler.Handle(context.TODO(), Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
@@ -125,16 +145,25 @@ func BenchmarkHandle(b *testing.B) {
 type podAnnotator struct{}
 
 func (a *podAnnotator) Default(ctx context.Context, obj runtime.Object) error {
-
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		return fmt.Errorf("expected a Pod but got a %T", obj)
 	}
-
 	if pod.Annotations == nil {
 		pod.Annotations = map[string]string{}
 	}
+	return nil
+}
 
+// podSchedulerWebhook update a pod's scheduler name.
+type podSchedulerWebhook struct{}
+
+func (a *podSchedulerWebhook) Default(ctx context.Context, obj runtime.Object) error {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return fmt.Errorf("expected a Pod but got a %T", obj)
+	}
+	pod.Spec.SchedulerName = "new-scheduler"
 	return nil
 }
 

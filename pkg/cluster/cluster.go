@@ -158,6 +158,13 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 		return nil, errors.New("must specify Config")
 	}
 
+	originalConfig := config
+
+	config = rest.CopyConfig(config)
+	if config.UserAgent == "" {
+		config.UserAgent = rest.DefaultKubernetesUserAgent()
+	}
+
 	options := Options{}
 	for _, opt := range opts {
 		opt(&options)
@@ -241,7 +248,7 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	}
 
 	return &cluster{
-		config:           config,
+		config:           originalConfig,
 		httpClient:       options.HTTPClient,
 		scheme:           options.Scheme,
 		cache:            cache,

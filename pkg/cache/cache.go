@@ -334,6 +334,11 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 }
 
 func defaultOpts(config *rest.Config, opts Options) (Options, error) {
+	config = rest.CopyConfig(config)
+	if config.UserAgent == "" {
+		config.UserAgent = rest.DefaultKubernetesUserAgent()
+	}
+
 	// Use the rest HTTP client for the provided config if unset
 	if opts.HTTPClient == nil {
 		var err error

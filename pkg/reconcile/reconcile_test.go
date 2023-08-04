@@ -96,5 +96,10 @@ var _ = Describe("reconcile", func() {
 
 			Expect(apierrors.IsGone(terminalError)).To(BeTrue())
 		})
+
+		It("should handle nil terminal errors properly", func() {
+			err := reconcile.TerminalError(nil)
+			Expect(err.Error()).To(Equal("nil terminal error"))
+		})
 	})
 })

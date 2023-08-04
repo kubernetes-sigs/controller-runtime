@@ -18,6 +18,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -319,6 +320,9 @@ type LeaderElectionRunnable interface {
 // will be used for all built-in resources of Kubernetes, and "application/json" is for other types
 // including all CRD resources.
 func New(config *rest.Config, options Options) (Manager, error) {
+	if config == nil {
+		return nil, errors.New("must specify Config")
+	}
 	// Set default values for options fields
 	options = setOptionsDefaults(options)
 
@@ -334,6 +338,11 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	config = rest.CopyConfig(config)
+	if config.UserAgent == "" {
+		config.UserAgent = rest.DefaultKubernetesUserAgent()
 	}
 
 	// Create the recorder provider to inject event recorders for the components.

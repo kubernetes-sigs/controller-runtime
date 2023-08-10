@@ -688,6 +688,14 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(informerCache.List(context.Background(), listObj, labelOpt, limitOpt)).To(Succeed())
 					Expect(listObj.Items).Should(HaveLen(1))
 				})
+
+				It("should return an error if the continue list options is set", func() {
+					listObj := &corev1.PodList{}
+					continueOpt := client.Continue("token")
+					By("verifying that an error is returned")
+					err := informerCache.List(context.Background(), listObj, continueOpt)
+					Expect(err).To(HaveOccurred())
+				})
 			})
 
 			Context("with unstructured objects", func() {
@@ -1001,6 +1009,13 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("verifying the node list is not empty")
 					Expect(nodeList.Items).NotTo(BeEmpty())
 					Expect(len(nodeList.Items)).To(BeEquivalentTo(1))
+				})
+				It("should return an error if the continue list options is set", func() {
+					podList := &unstructured.Unstructured{}
+					continueOpt := client.Continue("token")
+					By("verifying that an error is returned")
+					err := informerCache.List(context.Background(), podList, continueOpt)
+					Expect(err).To(HaveOccurred())
 				})
 			})
 			Context("with metadata-only objects", func() {

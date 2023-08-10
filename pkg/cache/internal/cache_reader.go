@@ -111,6 +111,10 @@ func (c *CacheReader) List(_ context.Context, out client.ObjectList, opts ...cli
 	listOpts := client.ListOptions{}
 	listOpts.ApplyOptions(opts)
 
+	if listOpts.Continue != "" {
+		return fmt.Errorf("continue list option is not supported by the cache")
+	}
+
 	switch {
 	case listOpts.FieldSelector != nil:
 		// TODO(directxman12): support more complicated field selectors by

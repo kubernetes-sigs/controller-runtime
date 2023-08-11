@@ -77,32 +77,33 @@ type Options struct {
 	// It will be defaulted to 9443 if unspecified.
 	Port int
 
-	// CertDir is the directory that contains the server key and certificate. The
-	// server key and certificate.
+	// CertDir is the directory that contains the server key and certificate. Defaults to
+	// <temp-dir>/k8s-webhook-server/serving-certs.
 	CertDir string
 
 	// CertName is the server certificate name. Defaults to tls.crt.
 	//
-	// Note: This option should only be set when TLSOpts does not override GetCertificate.
+	// Note: This option is only used when TLSOpts does not set GetCertificate.
 	CertName string
 
 	// KeyName is the server key name. Defaults to tls.key.
 	//
-	// Note: This option should only be set when TLSOpts does not override GetCertificate.
+	// Note: This option is only used when TLSOpts does not set GetCertificate.
 	KeyName string
 
 	// ClientCAName is the CA certificate name which server used to verify remote(client)'s certificate.
 	// Defaults to "", which means server does not verify client's certificate.
 	ClientCAName string
 
-	// TLSOpts is used to allow configuring the TLS config used for the server
+	// TLSOpts is used to allow configuring the TLS config used for the server.
+	// This also allows providing a certificate via GetCertificate.
 	TLSOpts []func(*tls.Config)
 
 	// WebhookMux is the multiplexer that handles different webhooks.
 	WebhookMux *http.ServeMux
 }
 
-// NewServer constructs a new Server from the provided options.
+// NewServer constructs a new webhook.Server from the provided options.
 func NewServer(o Options) Server {
 	return &DefaultServer{
 		Options: o,
@@ -187,8 +188,7 @@ func (s *DefaultServer) Register(path string, hook http.Handler) {
 func (s *DefaultServer) Start(ctx context.Context) error {
 	s.defaultingOnce.Do(s.setDefaults)
 
-	baseHookLog := log.WithName("webhooks")
-	baseHookLog.Info("Starting webhook server")
+	log.Info("Starting webhook server")
 
 	cfg := &tls.Config{ //nolint:gosec
 		NextProtos: []string{"h2"},

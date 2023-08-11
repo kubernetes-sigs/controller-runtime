@@ -26,12 +26,12 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	crscheme "sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
@@ -79,12 +79,12 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Prevent the metrics listener being created
-	metrics.DefaultBindAddress = "0"
+	metricsserver.DefaultBindAddress = "0"
 })
 
 var _ = AfterSuite(func() {
 	Expect(testenv.Stop()).To(Succeed())
 
 	// Put the DefaultBindAddress back
-	metrics.DefaultBindAddress = ":8080"
+	metricsserver.DefaultBindAddress = ":8080"
 })

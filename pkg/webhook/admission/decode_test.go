@@ -123,6 +123,8 @@ var _ = Describe("Admission Webhook Decoder", func() {
 		}))
 	})
 
+	// NOTE: This will only pass if a GVK is provided. An unstructered object without a GVK may succeed
+	// in decoding to an alternate type.
 	It("should fail to decode if the object in the request doesn't match the passed-in type", func() {
 		By("trying to extract a pod from the quest into a node")
 		Expect(decoder.Decode(req, &corev1.Node{})).NotTo(Succeed())
@@ -151,5 +153,36 @@ var _ = Describe("Admission Webhook Decoder", func() {
 			"name":      "foo",
 			"namespace": "default",
 		}))
+	})
+
+	req2 := Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: "CREATE",
+			Object: runtime.RawExtension{
+				Raw: []byte(`{
+    "metadata": {
+        "name": "foo",
+        "namespace": "default"
+    },
+    "spec": {
+        "containers": [
+            {
+                "image": "bar:v2",
+                "name": "bar"
+            }
+        ]
+    }
+	}`),
+			},
+			OldObject: runtime.RawExtension{
+				Object: nil,
+			},
+		},
+	}
+
+	It("should decode a valid admission request without GVK", func() {
+		By("extracting the object from the request")
+		var target3 unstructured.Unstructured
+		Expect(decoder.DecodeRaw(req2.Object, &target3)).To(Succeed())
 	})
 })

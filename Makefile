@@ -112,6 +112,7 @@ generate: $(CONTROLLER_GEN) ## Runs controller-gen for internal types for config
 
 .PHONY: clean
 clean: ## Cleanup.
+	$(GOLANGCI_LINT) cache clean
 	$(MAKE) clean-bin
 
 .PHONY: clean-bin

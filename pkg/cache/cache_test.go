@@ -18,6 +18,7 @@ package cache_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -117,6 +118,11 @@ func deletePod(pod client.Object) {
 var _ = Describe("Informer Cache", func() {
 	CacheTest(cache.New, cache.Options{})
 })
+
+var _ = Describe("Informer Cache with ReaderFailOnMissingInformer", func() {
+	CacheTestReaderFailOnMissingInformer(cache.New, cache.Options{ReaderFailOnMissingInformer: true})
+})
+
 var _ = Describe("Multi-Namespace Informer Cache", func() {
 	CacheTest(cache.New, cache.Options{
 		DefaultNamespaces: map[string]cache.Config{
@@ -421,6 +427,85 @@ var _ = Describe("Cache with selectors", func() {
 		Expect(svcs.Items[0].Namespace).To(Equal(testNamespaceTwo))
 	})
 })
+
+func CacheTestReaderFailOnMissingInformer(createCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error), opts cache.Options) {
+	Describe("Cache test with ReaderFailOnMissingInformer = true", func() {
+		var (
+			informerCache       cache.Cache
+			informerCacheCtx    context.Context
+			informerCacheCancel context.CancelFunc
+			errNotCached        *cache.ErrResourceNotCached
+		)
+
+		BeforeEach(func() {
+			informerCacheCtx, informerCacheCancel = context.WithCancel(context.Background())
+			Expect(cfg).NotTo(BeNil())
+
+			By("creating the informer cache")
+			var err error
+			informerCache, err = createCacheFunc(cfg, opts)
+			Expect(err).NotTo(HaveOccurred())
+			By("running the cache and waiting for it to sync")
+			// pass as an arg so that we don't race between close and re-assign
+			go func(ctx context.Context) {
+				defer GinkgoRecover()
+				Expect(informerCache.Start(ctx)).To(Succeed())
+			}(informerCacheCtx)
+			Expect(informerCache.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
+		})
+
+		AfterEach(func() {
+			informerCacheCancel()
+		})
+
+		Describe("as a Reader", func() {
+			Context("with structured objects", func() {
+				It("should not be able to list objects that haven't been watched previously", func() {
+					By("listing all services in the cluster")
+					listObj := &corev1.ServiceList{}
+					Expect(errors.As(informerCache.List(context.Background(), listObj), &errNotCached)).To(BeTrue())
+				})
+
+				It("should not be able to get objects that haven't been watched previously", func() {
+					By("getting the Kubernetes service")
+					svc := &corev1.Service{}
+					svcKey := client.ObjectKey{Namespace: "default", Name: "kubernetes"}
+					Expect(errors.As(informerCache.Get(context.Background(), svcKey, svc), &errNotCached)).To(BeTrue())
+				})
+
+				It("should be able to list objects that are configured to be watched", func() {
+					By("indicating that we need to watch services")
+					_, err := informerCache.GetInformer(context.Background(), &corev1.Service{})
+					Expect(err).ToNot(HaveOccurred())
+
+					By("listing all services in the cluster")
+					svcList := &corev1.ServiceList{}
+					Expect(informerCache.List(context.Background(), svcList)).To(Succeed())
+
+					By("verifying that the returned service looks reasonable")
+					Expect(svcList.Items).To(HaveLen(1))
+					Expect(svcList.Items[0].Name).To(Equal("kubernetes"))
+					Expect(svcList.Items[0].Namespace).To(Equal("default"))
+				})
+
+				It("should be able to get objects that are configured to be watched", func() {
+					By("indicating that we need to watch services")
+					_, err := informerCache.GetInformer(context.Background(), &corev1.Service{})
+					Expect(err).ToNot(HaveOccurred())
+
+					By("getting the Kubernetes service")
+					svc := &corev1.Service{}
+					svcKey := client.ObjectKey{Namespace: "default", Name: "kubernetes"}
+					Expect(informerCache.Get(context.Background(), svcKey, svc)).To(Succeed())
+
+					By("verifying that the returned service looks reasonable")
+					Expect(svc.Name).To(Equal("kubernetes"))
+					Expect(svc.Namespace).To(Equal("default"))
+				})
+			})
+		})
+	})
+}
 
 func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error), opts cache.Options) {
 	Describe("Cache test", func() {

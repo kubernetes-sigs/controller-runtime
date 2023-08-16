@@ -46,11 +46,28 @@ func (*ErrCacheNotStarted) Error() string {
 	return "the cache is not started, can not read objects"
 }
 
+var _ error = (*ErrCacheNotStarted)(nil)
+
+// ErrResourceNotCached indicates that the resource type
+// the client asked the cache for is not cached, i.e. the
+// corresponding informer does not exist yet.
+type ErrResourceNotCached struct {
+	GVK schema.GroupVersionKind
+}
+
+// Error returns the error
+func (r ErrResourceNotCached) Error() string {
+	return fmt.Sprintf("%s is not cached", r.GVK.String())
+}
+
+var _ error = (*ErrResourceNotCached)(nil)
+
 // informerCache is a Kubernetes Object cache populated from internal.Informers.
 // informerCache wraps internal.Informers.
 type informerCache struct {
 	scheme *runtime.Scheme
 	*internal.Informers
+	readerFailOnMissingInformer bool
 }
 
 // Get implements Reader.
@@ -60,7 +77,7 @@ func (ic *informerCache) Get(ctx context.Context, key client.ObjectKey, out clie
 		return err
 	}
 
-	started, cache, err := ic.Informers.Get(ctx, gvk, out)
+	started, cache, err := ic.getInformerForKind(ctx, gvk, out)
 	if err != nil {
 		return err
 	}
@@ -78,7 +95,7 @@ func (ic *informerCache) List(ctx context.Context, out client.ObjectList, opts .
 		return err
 	}
 
-	started, cache, err := ic.Informers.Get(ctx, *gvk, cacheTypeObj)
+	started, cache, err := ic.getInformerForKind(ctx, *gvk, cacheTypeObj)
 	if err != nil {
 		return err
 	}
@@ -124,7 +141,7 @@ func (ic *informerCache) objectTypeForListObject(list client.ObjectList) (*schem
 	return &gvk, cacheTypeObj, nil
 }
 
-// GetInformerForKind returns the informer for the GroupVersionKind.
+// GetInformerForKind returns the informer for the GroupVersionKind. If no informer exists, one will be started.
 func (ic *informerCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (Informer, error) {
 	// Map the gvk to an object
 	obj, err := ic.scheme.New(gvk)
@@ -139,7 +156,7 @@ func (ic *informerCache) GetInformerForKind(ctx context.Context, gvk schema.Grou
 	return i.Informer, nil
 }
 
-// GetInformer returns the informer for the obj.
+// GetInformer returns the informer for the obj. If no informer exists, one will be started.
 func (ic *informerCache) GetInformer(ctx context.Context, obj client.Object) (Informer, error) {
 	gvk, err := apiutil.GVKForObject(obj, ic.scheme)
 	if err != nil {
@@ -151,6 +168,18 @@ func (ic *informerCache) GetInformer(ctx context.Context, obj client.Object) (In
 		return nil, err
 	}
 	return i.Informer, nil
+}
+
+func (ic *informerCache) getInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object) (bool, *internal.Cache, error) {
+	if ic.readerFailOnMissingInformer {
+		cache, started, ok := ic.Informers.Peek(gvk, obj)
+		if !ok {
+			return false, nil, &ErrResourceNotCached{GVK: gvk}
+		}
+		return started, cache, nil
+	}
+
+	return ic.Informers.Get(ctx, gvk, obj)
 }
 
 // NeedLeaderElection implements the LeaderElectionRunnable interface

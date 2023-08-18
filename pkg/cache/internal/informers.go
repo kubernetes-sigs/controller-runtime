@@ -271,7 +271,7 @@ func (ip *Informers) Get(ctx context.Context, gvk schema.GroupVersionKind, obj r
 		shouldBlock = *cfg.BlockUntilSynced
 	}
 
-	if started && !i.Informer.HasSynced() && shouldBlock {
+	if shouldBlock && started && !i.Informer.HasSynced() {
 		// Wait for it to sync before returning the Informer so that folks don't read from a stale cache.
 		if !cache.WaitForCacheSync(ctx.Done(), i.Informer.HasSynced) {
 			return started, nil, apierrors.NewTimeoutError(fmt.Sprintf("failed waiting for %T Informer to sync", obj), 0)

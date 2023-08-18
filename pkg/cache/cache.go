@@ -44,13 +44,15 @@ var (
 	defaultSyncPeriod = 10 * time.Hour
 )
 
+type InformerGetOptions internal.GetOptions
+
 // InformerGetOption defines an option that alters the behavior of how informers are retrieved.
-type InformerGetOption func(*internal.GetOptions)
+type InformerGetOption func(*InformerGetOptions)
 
 // BlockUntilSynced determines whether a get request for an informer should block
 // until the informer's cache has synced.
 func BlockUntilSynced(shouldBlock bool) InformerGetOption {
-	return func(opts *internal.GetOptions) {
+	return func(opts *InformerGetOptions) {
 		opts.BlockUntilSynced = &shouldBlock
 	}
 }

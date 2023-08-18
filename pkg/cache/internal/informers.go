@@ -267,8 +267,8 @@ func (ip *Informers) Get(ctx context.Context, gvk schema.GroupVersionKind, obj r
 	}
 
 	shouldBlock := true
-	if cfg.BlockUntilSynced != nil {
-		shouldBlock = *cfg.BlockUntilSynced
+	if opts.BlockUntilSynced != nil {
+		shouldBlock = *opts.BlockUntilSynced
 	}
 
 	if shouldBlock && started && !i.Informer.HasSynced() {

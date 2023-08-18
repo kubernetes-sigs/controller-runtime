@@ -142,11 +142,11 @@ func (ic *informerCache) objectTypeForListObject(list client.ObjectList) (*schem
 }
 
 func applyGetOptions(opts ...InformerGetOption) *internal.GetOptions {
-	cfg := &internal.GetOptions{}
+	cfg := &InformerGetOptions{}
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	return cfg
+	return (*internal.GetOptions)(cfg)
 }
 
 // GetInformerForKind returns the informer for the GroupVersionKind. If no informer exists, one will be started.

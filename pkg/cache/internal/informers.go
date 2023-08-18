@@ -256,7 +256,7 @@ func (ip *Informers) Peek(gvk schema.GroupVersionKind, obj runtime.Object) (res 
 
 // Get will create a new Informer and add it to the map of specificInformersMap if none exists. Returns
 // the Informer from the map.
-func (ip *Informers) Get(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object, cfg *GetOptions) (bool, *Cache, error) {
+func (ip *Informers) Get(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object, opts *GetOptions) (bool, *Cache, error) {
 	// Return the informer if it is found
 	i, started, ok := ip.Peek(gvk, obj)
 	if !ok {

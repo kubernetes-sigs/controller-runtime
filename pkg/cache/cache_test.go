@@ -545,12 +545,12 @@ func NonBlockingGetTest(createCacheFunc func(config *rest.Config, opts cache.Opt
 			By("creating the informer cache")
 			v := reflect.ValueOf(&opts).Elem()
 			newInformerField := v.FieldByName("newInformer")
-			newFakeInformer := func(lw kcache.ListerWatcher, o runtime.Object, d time.Duration, i kcache.Indexers) kcache.SharedIndexInformer {
+			newFakeInformer := func(_ kcache.ListerWatcher, _ runtime.Object, _ time.Duration, _ kcache.Indexers) kcache.SharedIndexInformer {
 				return &controllertest.FakeInformer{Synced: false}
 			}
-			reflect.NewAt(newInformerField.Type(), newInformerField.Addr().UnsafePointer()). //nolint:gosec // overriding informer with one that is guaranteed to block.
-														Elem().
-														Set(reflect.ValueOf(&newFakeInformer))
+			reflect.NewAt(newInformerField.Type(), newInformerField.Addr().UnsafePointer()).
+				Elem().
+				Set(reflect.ValueOf(&newFakeInformer))
 			informerCache, err = createCacheFunc(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 			By("running the cache and waiting for it to sync")

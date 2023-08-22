@@ -119,11 +119,7 @@ func deletePod(pod client.Object) {
 
 var _ = Describe("Informer Cache", func() {
 	CacheTest(cache.New, cache.Options{})
-	NonBlockingGetTest(cache.New, cache.Options{
-		NewInformer: func(lw kcache.ListerWatcher, o runtime.Object, d time.Duration, i kcache.Indexers) kcache.SharedIndexInformer {
-			return &controllertest.FakeInformer{Synced: false}
-		},
-	})
+	NonBlockingGetTest(cache.New, cache.Options{})
 })
 
 var _ = Describe("Informer Cache with ReaderFailOnMissingInformer", func() {
@@ -144,9 +140,6 @@ var _ = Describe("Multi-Namespace Informer Cache", func() {
 			testNamespaceTwo: {},
 			"default":        {},
 		},
-		NewInformer: func(lw kcache.ListerWatcher, o runtime.Object, d time.Duration, i kcache.Indexers) kcache.SharedIndexInformer {
-			return &controllertest.FakeInformer{Synced: false}
-		},
 	})
 })
 
@@ -156,9 +149,6 @@ var _ = Describe("Informer Cache without global DeepCopy", func() {
 	})
 	NonBlockingGetTest(cache.New, cache.Options{
 		DefaultUnsafeDisableDeepCopy: pointer.Bool(true),
-		NewInformer: func(lw kcache.ListerWatcher, o runtime.Object, d time.Duration, i kcache.Indexers) kcache.SharedIndexInformer {
-			return &controllertest.FakeInformer{Synced: false}
-		},
 	})
 })
 
@@ -553,6 +543,14 @@ func NonBlockingGetTest(createCacheFunc func(config *rest.Config, opts cache.Opt
 			Expect(err).NotTo(HaveOccurred())
 
 			By("creating the informer cache")
+			v := reflect.ValueOf(&opts).Elem()
+			newInformerField := v.FieldByName("newInformer")
+			newFakeInformer := func(lw kcache.ListerWatcher, o runtime.Object, d time.Duration, i kcache.Indexers) kcache.SharedIndexInformer {
+				return &controllertest.FakeInformer{Synced: false}
+			}
+			reflect.NewAt(newInformerField.Type(), newInformerField.Addr().UnsafePointer()). //nolint:gosec // overriding informer with one that is guaranteed to block.
+														Elem().
+														Set(reflect.ValueOf(&newFakeInformer))
 			informerCache, err = createCacheFunc(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 			By("running the cache and waiting for it to sync")

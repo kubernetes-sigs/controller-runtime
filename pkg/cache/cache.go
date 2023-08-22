@@ -44,6 +44,7 @@ var (
 	defaultSyncPeriod = 10 * time.Hour
 )
 
+// InformerGetOptions defines the behavior of how informers are retrieved.
 type InformerGetOptions internal.GetOptions
 
 // InformerGetOption defines an option that alters the behavior of how informers are retrieved.
@@ -201,8 +202,8 @@ type Options struct {
 	// object, this will fall through to Default* settings.
 	ByObject map[client.Object]ByObject
 
-	// NewInformer allows overriding of NewSharedIndexInformer for testing.
-	NewInformer func(toolscache.ListerWatcher, runtime.Object, time.Duration, toolscache.Indexers) toolscache.SharedIndexInformer
+	// newInformer allows overriding of NewSharedIndexInformer for testing.
+	newInformer *func(toolscache.ListerWatcher, runtime.Object, time.Duration, toolscache.Indexers) toolscache.SharedIndexInformer
 }
 
 // ByObject offers more fine-grained control over the cache's ListWatch by object.
@@ -353,7 +354,7 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 				},
 				Transform:             config.Transform,
 				UnsafeDisableDeepCopy: pointer.BoolDeref(config.UnsafeDisableDeepCopy, false),
-				NewInformer:           opts.NewInformer,
+				NewInformer:           opts.newInformer,
 			}),
 			readerFailOnMissingInformer: opts.ReaderFailOnMissingInformer,
 		}

@@ -45,7 +45,7 @@ type InformersOpts struct {
 	Mapper                meta.RESTMapper
 	ResyncPeriod          time.Duration
 	Namespace             string
-	NewInformer           func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
+	NewInformer           *func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
 	Selector              Selector
 	Transform             cache.TransformFunc
 	UnsafeDisableDeepCopy bool
@@ -55,7 +55,7 @@ type InformersOpts struct {
 func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 	newInformer := cache.NewSharedIndexInformer
 	if options.NewInformer != nil {
-		newInformer = options.NewInformer
+		newInformer = *options.NewInformer
 	}
 	return &Informers{
 		config:     config,

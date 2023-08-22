@@ -76,7 +76,7 @@ var _ Cache = &multiNamespaceCache{}
 
 // Methods for multiNamespaceCache to conform to the Informers interface.
 
-func (c *multiNamespaceCache) GetInformer(ctx context.Context, obj client.Object) (Informer, error) {
+func (c *multiNamespaceCache) GetInformer(ctx context.Context, obj client.Object, opts ...InformerGetOption) (Informer, error) {
 	// If the object is cluster scoped, get the informer from clusterCache,
 	// if not use the namespaced caches.
 	isNamespaced, err := apiutil.IsObjectNamespaced(obj, c.Scheme, c.RESTMapper)
@@ -84,7 +84,7 @@ func (c *multiNamespaceCache) GetInformer(ctx context.Context, obj client.Object
 		return nil, err
 	}
 	if !isNamespaced {
-		clusterCacheInformer, err := c.clusterCache.GetInformer(ctx, obj)
+		clusterCacheInformer, err := c.clusterCache.GetInformer(ctx, obj, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +98,7 @@ func (c *multiNamespaceCache) GetInformer(ctx context.Context, obj client.Object
 
 	namespaceToInformer := map[string]Informer{}
 	for ns, cache := range c.namespaceToCache {
-		informer, err := cache.GetInformer(ctx, obj)
+		informer, err := cache.GetInformer(ctx, obj, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +108,7 @@ func (c *multiNamespaceCache) GetInformer(ctx context.Context, obj client.Object
 	return &multiNamespaceInformer{namespaceToInformer: namespaceToInformer}, nil
 }
 
-func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (Informer, error) {
+func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, opts ...InformerGetOption) (Informer, error) {
 	// If the object is cluster scoped, get the informer from clusterCache,
 	// if not use the namespaced caches.
 	isNamespaced, err := apiutil.IsGVKNamespaced(gvk, c.RESTMapper)
@@ -116,7 +116,7 @@ func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema
 		return nil, err
 	}
 	if !isNamespaced {
-		clusterCacheInformer, err := c.clusterCache.GetInformerForKind(ctx, gvk)
+		clusterCacheInformer, err := c.clusterCache.GetInformerForKind(ctx, gvk, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +130,7 @@ func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema
 
 	namespaceToInformer := map[string]Informer{}
 	for ns, cache := range c.namespaceToCache {
-		informer, err := cache.GetInformerForKind(ctx, gvk)
+		informer, err := cache.GetInformerForKind(ctx, gvk, opts...)
 		if err != nil {
 			return nil, err
 		}

@@ -576,15 +576,15 @@ type nonTypedOnlyCache struct {
 	cache.Cache
 }
 
-func (c *nonTypedOnlyCache) GetInformer(ctx context.Context, obj client.Object) (cache.Informer, error) {
+func (c *nonTypedOnlyCache) GetInformer(ctx context.Context, obj client.Object, opts ...cache.InformerGetOption) (cache.Informer, error) {
 	switch obj.(type) {
 	case (*metav1.PartialObjectMetadata):
-		return c.Cache.GetInformer(ctx, obj)
+		return c.Cache.GetInformer(ctx, obj, opts...)
 	default:
 		return nil, fmt.Errorf("did not want to provide an informer for normal type %T", obj)
 	}
 }
-func (c *nonTypedOnlyCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (cache.Informer, error) {
+func (c *nonTypedOnlyCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, opts ...cache.InformerGetOption) (cache.Informer, error) {
 	return nil, fmt.Errorf("don't try to sidestep the restriction on informer types by calling GetInformerForKind")
 }
 

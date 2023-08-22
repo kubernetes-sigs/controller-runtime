@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -43,6 +44,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 )
 
 const testNodeOne = "test-node-1"
@@ -117,6 +119,7 @@ func deletePod(pod client.Object) {
 
 var _ = Describe("Informer Cache", func() {
 	CacheTest(cache.New, cache.Options{})
+	NonBlockingGetTest(cache.New, cache.Options{})
 })
 
 var _ = Describe("Informer Cache with ReaderFailOnMissingInformer", func() {
@@ -131,10 +134,20 @@ var _ = Describe("Multi-Namespace Informer Cache", func() {
 			"default":        {},
 		},
 	})
+	NonBlockingGetTest(cache.New, cache.Options{
+		DefaultNamespaces: map[string]cache.Config{
+			testNamespaceOne: {},
+			testNamespaceTwo: {},
+			"default":        {},
+		},
+	})
 })
 
 var _ = Describe("Informer Cache without global DeepCopy", func() {
 	CacheTest(cache.New, cache.Options{
+		DefaultUnsafeDisableDeepCopy: pointer.Bool(true),
+	})
+	NonBlockingGetTest(cache.New, cache.Options{
 		DefaultUnsafeDisableDeepCopy: pointer.Bool(true),
 	})
 })
@@ -440,7 +453,6 @@ func CacheTestReaderFailOnMissingInformer(createCacheFunc func(config *rest.Conf
 		BeforeEach(func() {
 			informerCacheCtx, informerCacheCancel = context.WithCancel(context.Background())
 			Expect(cfg).NotTo(BeNil())
-
 			By("creating the informer cache")
 			var err error
 			informerCache, err = createCacheFunc(cfg, opts)
@@ -502,6 +514,83 @@ func CacheTestReaderFailOnMissingInformer(createCacheFunc func(config *rest.Conf
 					Expect(svc.Name).To(Equal("kubernetes"))
 					Expect(svc.Namespace).To(Equal("default"))
 				})
+			})
+		})
+	})
+}
+
+func NonBlockingGetTest(createCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error), opts cache.Options) {
+	Describe("non-blocking get test", func() {
+		var (
+			informerCache       cache.Cache
+			informerCacheCtx    context.Context
+			informerCacheCancel context.CancelFunc
+		)
+		BeforeEach(func() {
+			informerCacheCtx, informerCacheCancel = context.WithCancel(context.Background())
+			Expect(cfg).NotTo(BeNil())
+
+			By("creating expected namespaces")
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			err = ensureNode(testNodeOne, cl)
+			Expect(err).NotTo(HaveOccurred())
+			err = ensureNamespace(testNamespaceOne, cl)
+			Expect(err).NotTo(HaveOccurred())
+			err = ensureNamespace(testNamespaceTwo, cl)
+			Expect(err).NotTo(HaveOccurred())
+			err = ensureNamespace(testNamespaceThree, cl)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("creating the informer cache")
+			v := reflect.ValueOf(&opts).Elem()
+			newInformerField := v.FieldByName("newInformer")
+			newFakeInformer := func(_ kcache.ListerWatcher, _ runtime.Object, _ time.Duration, _ kcache.Indexers) kcache.SharedIndexInformer {
+				return &controllertest.FakeInformer{Synced: false}
+			}
+			reflect.NewAt(newInformerField.Type(), newInformerField.Addr().UnsafePointer()).
+				Elem().
+				Set(reflect.ValueOf(&newFakeInformer))
+			informerCache, err = createCacheFunc(cfg, opts)
+			Expect(err).NotTo(HaveOccurred())
+			By("running the cache and waiting for it to sync")
+			// pass as an arg so that we don't race between close and re-assign
+			go func(ctx context.Context) {
+				defer GinkgoRecover()
+				Expect(informerCache.Start(ctx)).To(Succeed())
+			}(informerCacheCtx)
+			Expect(informerCache.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
+		})
+
+		AfterEach(func() {
+			By("cleaning up created pods")
+			informerCacheCancel()
+		})
+
+		Describe("as an Informer", func() {
+			It("should be able to get informer for the object without blocking", func() {
+				By("getting a shared index informer for a pod")
+				pod := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "informer-obj",
+						Namespace: "default",
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx",
+							},
+						},
+					},
+				}
+
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				sii, err := informerCache.GetInformer(ctx, pod, cache.BlockUntilSynced(false))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(sii).NotTo(BeNil())
+				Expect(sii.HasSynced()).To(BeFalse())
 			})
 		})
 	})

@@ -44,6 +44,20 @@ var (
 	defaultSyncPeriod = 10 * time.Hour
 )
 
+// InformerGetOptions defines the behavior of how informers are retrieved.
+type InformerGetOptions internal.GetOptions
+
+// InformerGetOption defines an option that alters the behavior of how informers are retrieved.
+type InformerGetOption func(*InformerGetOptions)
+
+// BlockUntilSynced determines whether a get request for an informer should block
+// until the informer's cache has synced.
+func BlockUntilSynced(shouldBlock bool) InformerGetOption {
+	return func(opts *InformerGetOptions) {
+		opts.BlockUntilSynced = &shouldBlock
+	}
+}
+
 // Cache knows how to load Kubernetes objects, fetch informers to request
 // to receive events for Kubernetes objects (at a low-level),
 // and add indices to fields on the objects stored in the cache.
@@ -61,11 +75,11 @@ type Cache interface {
 type Informers interface {
 	// GetInformer fetches or constructs an informer for the given object that corresponds to a single
 	// API kind and resource.
-	GetInformer(ctx context.Context, obj client.Object) (Informer, error)
+	GetInformer(ctx context.Context, obj client.Object, opts ...InformerGetOption) (Informer, error)
 
 	// GetInformerForKind is similar to GetInformer, except that it takes a group-version-kind, instead
 	// of the underlying object.
-	GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (Informer, error)
+	GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, opts ...InformerGetOption) (Informer, error)
 
 	// Start runs all the informers known to this cache until the context is closed.
 	// It blocks.
@@ -187,6 +201,9 @@ type Options struct {
 	// ByObject restricts the cache's ListWatch to the desired fields per GVK at the specified object.
 	// object, this will fall through to Default* settings.
 	ByObject map[client.Object]ByObject
+
+	// newInformer allows overriding of NewSharedIndexInformer for testing.
+	newInformer *func(toolscache.ListerWatcher, runtime.Object, time.Duration, toolscache.Indexers) toolscache.SharedIndexInformer
 }
 
 // ByObject offers more fine-grained control over the cache's ListWatch by object.
@@ -337,6 +354,7 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 				},
 				Transform:             config.Transform,
 				UnsafeDisableDeepCopy: pointer.BoolDeref(config.UnsafeDisableDeepCopy, false),
+				NewInformer:           opts.newInformer,
 			}),
 			readerFailOnMissingInformer: opts.ReaderFailOnMissingInformer,
 		}

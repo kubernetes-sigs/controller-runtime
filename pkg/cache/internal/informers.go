@@ -45,6 +45,7 @@ type InformersOpts struct {
 	Mapper                meta.RESTMapper
 	ResyncPeriod          time.Duration
 	Namespace             string
+	NewInformer           *func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
 	Selector              Selector
 	Transform             cache.TransformFunc
 	UnsafeDisableDeepCopy bool
@@ -52,6 +53,10 @@ type InformersOpts struct {
 
 // NewInformers creates a new InformersMap that can create informers under the hood.
 func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
+	newInformer := cache.NewSharedIndexInformer
+	if options.NewInformer != nil {
+		newInformer = *options.NewInformer
+	}
 	return &Informers{
 		config:     config,
 		httpClient: options.HTTPClient,
@@ -70,6 +75,7 @@ func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 		selector:              options.Selector,
 		transform:             options.Transform,
 		unsafeDisableDeepCopy: options.UnsafeDisableDeepCopy,
+		newInformer:           newInformer,
 	}
 }
 
@@ -86,6 +92,13 @@ type tracker struct {
 	Structured   map[schema.GroupVersionKind]*Cache
 	Unstructured map[schema.GroupVersionKind]*Cache
 	Metadata     map[schema.GroupVersionKind]*Cache
+}
+
+// GetOptions provides configuration to customize the behavior when
+// getting an informer.
+type GetOptions struct {
+	// BlockUntilSynced controls if the informer retrieval will block until the informer is synced. Defaults to `true`.
+	BlockUntilSynced *bool
 }
 
 // Informers create and caches Informers for (runtime.Object, schema.GroupVersionKind) pairs.
@@ -143,6 +156,9 @@ type Informers struct {
 	selector              Selector
 	transform             cache.TransformFunc
 	unsafeDisableDeepCopy bool
+
+	// NewInformer allows overriding of the shared index informer constructor for testing.
+	newInformer func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
 }
 
 // Start calls Run on each of the informers and sets started to true. Blocks on the context.
@@ -240,7 +256,7 @@ func (ip *Informers) Peek(gvk schema.GroupVersionKind, obj runtime.Object) (res 
 
 // Get will create a new Informer and add it to the map of specificInformersMap if none exists. Returns
 // the Informer from the map.
-func (ip *Informers) Get(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object) (bool, *Cache, error) {
+func (ip *Informers) Get(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object, opts *GetOptions) (bool, *Cache, error) {
 	// Return the informer if it is found
 	i, started, ok := ip.Peek(gvk, obj)
 	if !ok {
@@ -250,7 +266,12 @@ func (ip *Informers) Get(ctx context.Context, gvk schema.GroupVersionKind, obj r
 		}
 	}
 
-	if started && !i.Informer.HasSynced() {
+	shouldBlock := true
+	if opts.BlockUntilSynced != nil {
+		shouldBlock = *opts.BlockUntilSynced
+	}
+
+	if shouldBlock && started && !i.Informer.HasSynced() {
 		// Wait for it to sync before returning the Informer so that folks don't read from a stale cache.
 		if !cache.WaitForCacheSync(ctx.Done(), i.Informer.HasSynced) {
 			return started, nil, apierrors.NewTimeoutError(fmt.Sprintf("failed waiting for %T Informer to sync", obj), 0)
@@ -288,7 +309,7 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 	if err != nil {
 		return nil, false, err
 	}
-	sharedIndexInformer := cache.NewSharedIndexInformer(&cache.ListWatch{
+	sharedIndexInformer := ip.newInformer(&cache.ListWatch{
 		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 			ip.selector.ApplyToList(&opts)
 			return listWatcher.ListFunc(opts)

@@ -141,15 +141,23 @@ func (ic *informerCache) objectTypeForListObject(list client.ObjectList) (*schem
 	return &gvk, cacheTypeObj, nil
 }
 
+func applyGetOptions(opts ...InformerGetOption) *internal.GetOptions {
+	cfg := &InformerGetOptions{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return (*internal.GetOptions)(cfg)
+}
+
 // GetInformerForKind returns the informer for the GroupVersionKind. If no informer exists, one will be started.
-func (ic *informerCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (Informer, error) {
+func (ic *informerCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, opts ...InformerGetOption) (Informer, error) {
 	// Map the gvk to an object
 	obj, err := ic.scheme.New(gvk)
 	if err != nil {
 		return nil, err
 	}
 
-	_, i, err := ic.Informers.Get(ctx, gvk, obj)
+	_, i, err := ic.Informers.Get(ctx, gvk, obj, applyGetOptions(opts...))
 	if err != nil {
 		return nil, err
 	}
@@ -157,13 +165,13 @@ func (ic *informerCache) GetInformerForKind(ctx context.Context, gvk schema.Grou
 }
 
 // GetInformer returns the informer for the obj. If no informer exists, one will be started.
-func (ic *informerCache) GetInformer(ctx context.Context, obj client.Object) (Informer, error) {
+func (ic *informerCache) GetInformer(ctx context.Context, obj client.Object, opts ...InformerGetOption) (Informer, error) {
 	gvk, err := apiutil.GVKForObject(obj, ic.scheme)
 	if err != nil {
 		return nil, err
 	}
 
-	_, i, err := ic.Informers.Get(ctx, gvk, obj)
+	_, i, err := ic.Informers.Get(ctx, gvk, obj, applyGetOptions(opts...))
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +187,7 @@ func (ic *informerCache) getInformerForKind(ctx context.Context, gvk schema.Grou
 		return started, cache, nil
 	}
 
-	return ic.Informers.Get(ctx, gvk, obj)
+	return ic.Informers.Get(ctx, gvk, obj, &internal.GetOptions{})
 }
 
 // NeedLeaderElection implements the LeaderElectionRunnable interface

@@ -873,7 +873,7 @@ type cacheWithIndefinitelyBlockingGetInformer struct {
 	cache.Cache
 }
 
-func (c *cacheWithIndefinitelyBlockingGetInformer) GetInformer(ctx context.Context, obj client.Object) (cache.Informer, error) {
+func (c *cacheWithIndefinitelyBlockingGetInformer) GetInformer(ctx context.Context, obj client.Object, opts ...cache.InformerGetOption) (cache.Informer, error) {
 	<-ctx.Done()
 	return nil, errors.New("GetInformer timed out")
 }

@@ -91,6 +91,27 @@ func SetControllerReference(owner, controlled metav1.Object, scheme *runtime.Sch
 	return nil
 }
 
+// RemoveControllerReference is a helper method to make sure the given object removes an controller reference to the object provided.
+// This allows you to remove the owner to establish a new owner of the object in a subsequent call.
+func RemoveControllerReference(owner, controlled metav1.Object) error {
+	owners := controlled.GetOwnerReferences()
+	length := len(owners)
+	if length < 1 {
+		return fmt.Errorf("%T does not have any owner references", controlled)
+	}
+	index := 0
+	for i := 0; i < length; i++ {
+		if owners[i].Name == owner.GetName() {
+			owners = append(owners[:index], owners[index+1:]...)
+		}
+		index++
+	}
+	if length == len(owners) {
+		return fmt.Errorf("%T does not have an owner reference for %T", controlled, owner)
+	}
+	return nil
+}
+
 // SetOwnerReference is a helper method to make sure the given object contains an object reference to the object provided.
 // This allows you to declare that owner has a dependency on the object without specifying it as a controller.
 // If a reference to the same object already exists, it'll be overwritten with the newly provided version.

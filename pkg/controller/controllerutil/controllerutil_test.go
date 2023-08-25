@@ -272,8 +272,8 @@ var _ = Describe("Controllerutil", func() {
 				Controller:         &t,
 				BlockOwnerDeletion: &t,
 			}))
-
 			Expect(controllerutil.RemoveControllerReference(dep, rs)).NotTo(HaveOccurred())
+			Expect(len(rs.GetOwnerReferences())).To(BeEquivalentTo(0))
 		})
 		It("should fail and return an error if the length is less than 1", func() {
 			rs := &appsv1.ReplicaSet{}
@@ -292,6 +292,20 @@ var _ = Describe("Controllerutil", func() {
 			}
 			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
 			Expect(controllerutil.RemoveControllerReference(dep2, rs)).To(HaveOccurred())
+		})
+		It("should only delete the controller reference and not the other owner references", func() {
+			rs := &appsv1.ReplicaSet{}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+			}
+			dep2 := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "bar", UID: "bar-uid"},
+			}
+			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
+			Expect(controllerutil.SetOwnerReference(dep2, rs, scheme.Scheme)).NotTo(HaveOccurred())
+			Expect(len(rs.GetOwnerReferences())).To(BeEquivalentTo(2))
+			Expect(controllerutil.RemoveControllerReference(dep, rs)).NotTo(HaveOccurred())
+			Expect(len(rs.GetOwnerReferences())).To(BeEquivalentTo(1))
 		})
 
 	})

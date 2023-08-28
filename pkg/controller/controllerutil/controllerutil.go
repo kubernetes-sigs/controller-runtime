@@ -93,23 +93,32 @@ func SetControllerReference(owner, controlled metav1.Object, scheme *runtime.Sch
 
 // RemoveControllerReference is a helper method to make sure the given object removes a controller reference to the object provided.
 // This allows you to remove the owner to establish a new owner of the object in a subsequent call.
-func RemoveControllerReference(owner, object metav1.Object) error {
+func RemoveControllerReference(owner, object metav1.Object, scheme *runtime.Scheme) error {
 	owners := object.GetOwnerReferences()
 	length := len(owners)
-	result := []metav1.OwnerReference{}
 	if length < 1 {
 		return fmt.Errorf("%T does not have any owner references", object)
 	}
-	for _, ownerref := range owners {
-		if ownerref.Name == owner.GetName() {
-			continue
-		}
-		result = append(result, ownerref)
+	ro, ok := owner.(runtime.Object)
+	if !ok {
+		return fmt.Errorf("%T is not a runtime.Object, cannot call RemoveControllerReference", owner)
 	}
-	if len(result) == len(owners) {
+	gvk, err := apiutil.GVKForObject(ro, scheme)
+	if err != nil {
+		return err
+	}
+
+	index := indexOwnerRef(owners, metav1.OwnerReference{
+		APIVersion: gvk.GroupVersion().String(),
+		Name:       owner.GetName(),
+		Kind:       gvk.Kind,
+	})
+	if index == -1 {
 		return fmt.Errorf("%T does not have an owner reference for %T", object, owner)
 	}
-	object.SetOwnerReferences(result)
+
+	owners = append(owners[:index], owners[index+1:]...)
+	object.SetOwnerReferences(owners)
 	return nil
 }
 

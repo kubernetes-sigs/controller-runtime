@@ -34,10 +34,12 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/goleak"
+	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
@@ -308,7 +310,10 @@ var _ = Describe("manger.Manager", func() {
 					PprofBindAddress:        "0",
 				})
 				Expect(err).ToNot(HaveOccurred())
-
+				gvkcorev1 := schema.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "ConfigMap"}
+				gvkcoordinationv1 := schema.GroupVersionKind{Group: coordinationv1.SchemeGroupVersion.Group, Version: coordinationv1.SchemeGroupVersion.Version, Kind: "Lease"}
+				Expect(m.GetScheme().Recognizes(gvkcorev1)).To(BeTrue())
+				Expect(m.GetScheme().Recognizes(gvkcoordinationv1)).To(BeTrue())
 				runnableDone := make(chan struct{})
 				slowRunnable := RunnableFunc(func(ctx context.Context) error {
 					<-ctx.Done()

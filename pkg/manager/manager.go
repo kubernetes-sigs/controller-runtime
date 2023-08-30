@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	coordinationv1 "k8s.io/api/coordination/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -353,7 +355,16 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		leaderRecorderProvider = recorderProvider
 	} else {
 		leaderConfig = rest.CopyConfig(options.LeaderElectionConfig)
-		leaderRecorderProvider, err = options.newRecorderProvider(leaderConfig, cluster.GetHTTPClient(), cluster.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
+		scheme := cluster.GetScheme()
+		err := corev1.AddToScheme(scheme)
+		if err != nil {
+			return nil, err
+		}
+		err = coordinationv1.AddToScheme(scheme)
+		if err != nil {
+			return nil, err
+		}
+		leaderRecorderProvider, err = options.newRecorderProvider(leaderConfig, cluster.GetHTTPClient(), scheme, options.Logger.WithName("events"), options.makeBroadcaster)
 		if err != nil {
 			return nil, err
 		}
@@ -396,7 +407,6 @@ func New(config *rest.Config, options Options) (Manager, error) {
 
 	errChan := make(chan error)
 	runnables := newRunnables(options.BaseContext, errChan)
-
 	return &controllerManager{
 		stopProcedureEngaged:          pointer.Int64(0),
 		cluster:                       cluster,

@@ -102,6 +102,99 @@ var _ = Describe("Controllerutil", func() {
 				UID:        "foo-uid-2",
 			}))
 		})
+		It("should remove the owner reference", func() {
+			rs := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:       "foo",
+							Kind:       "Deployment",
+							APIVersion: "extensions/v1alpha1",
+							UID:        "foo-uid-1",
+						},
+					},
+				},
+			}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+			}
+
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+				Name:       "foo",
+				Kind:       "Deployment",
+				APIVersion: "extensions/v1beta1",
+				UID:        "foo-uid-2",
+			}))
+			Expect(controllerutil.RemoveOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(rs.GetOwnerReferences()).To(BeEmpty())
+		})
+		It("should remove the owner reference established by the SetControllerReference function", func() {
+			rs := &appsv1.ReplicaSet{}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+			}
+
+			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
+			t := true
+			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+				Name:               "foo",
+				Kind:               "Deployment",
+				APIVersion:         "extensions/v1beta1",
+				UID:                "foo-uid",
+				Controller:         &t,
+				BlockOwnerDeletion: &t,
+			}))
+			Expect(controllerutil.RemoveOwnerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
+			Expect(rs.GetOwnerReferences()).To(BeEmpty())
+		})
+		It("should error when trying to remove the reference that doesn't exist", func() {
+			rs := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{},
+			}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+			}
+			Expect(controllerutil.RemoveOwnerReference(dep, rs, scheme.Scheme)).To(HaveOccurred())
+			Expect(rs.GetOwnerReferences()).To(BeEmpty())
+		})
+		It("should error when trying to remove the reference that doesn't abide by the scheme", func() {
+			rs := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{},
+			}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+			}
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(controllerutil.RemoveOwnerReference(dep, rs, runtime.NewScheme())).To(HaveOccurred())
+			Expect(rs.GetOwnerReferences()).To(HaveLen(1))
+		})
+		It("should error when trying to remove the owner when setting the owner as a non runtime.Object", func() {
+			var obj metav1.Object
+			rs := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{},
+			}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+			}
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(controllerutil.RemoveOwnerReference(obj, rs, scheme.Scheme)).To(HaveOccurred())
+			Expect(rs.GetOwnerReferences()).To(HaveLen(1))
+		})
+		It("should error when trying to remove an owner that doesn't exist", func() {
+			rs := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{},
+			}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+			}
+			dep2 := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "bar", UID: "bar-uid-3"},
+			}
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(controllerutil.RemoveOwnerReference(dep2, rs, scheme.Scheme)).To(HaveOccurred())
+			Expect(rs.GetOwnerReferences()).To(HaveLen(1))
+		})
 	})
 
 	Describe("SetControllerReference", func() {

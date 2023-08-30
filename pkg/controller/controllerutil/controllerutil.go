@@ -121,6 +121,37 @@ func SetOwnerReference(owner, object metav1.Object, scheme *runtime.Scheme) erro
 	return nil
 }
 
+// RemoveOwnerReference is a helper method to make sure the given object removes an owner reference to the object provided.
+// This allows you to remove the owner to establish a new owner of the object in a subsequent call.
+func RemoveOwnerReference(owner, object metav1.Object, scheme *runtime.Scheme) error {
+	owners := object.GetOwnerReferences()
+	length := len(owners)
+	if length < 1 {
+		return fmt.Errorf("%T does not have any owner references", object)
+	}
+	ro, ok := owner.(runtime.Object)
+	if !ok {
+		return fmt.Errorf("%T is not a runtime.Object, cannot call RemoveOwnerReference", owner)
+	}
+	gvk, err := apiutil.GVKForObject(ro, scheme)
+	if err != nil {
+		return err
+	}
+
+	index := indexOwnerRef(owners, metav1.OwnerReference{
+		APIVersion: gvk.GroupVersion().String(),
+		Name:       owner.GetName(),
+		Kind:       gvk.Kind,
+	})
+	if index == -1 {
+		return fmt.Errorf("%T does not have an owner reference for %T", object, owner)
+	}
+
+	owners = append(owners[:index], owners[index+1:]...)
+	object.SetOwnerReferences(owners)
+	return nil
+}
+
 func upsertOwnerRef(ref metav1.OwnerReference, object metav1.Object) {
 	owners := object.GetOwnerReferences()
 	if idx := indexOwnerRef(owners, ref); idx == -1 {

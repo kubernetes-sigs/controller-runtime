@@ -343,7 +343,7 @@ var _ = Describe("Controllerutil", func() {
 			}
 			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
 			Expect(len(rs.GetOwnerReferences())).To(BeEquivalentTo(1))
-			Expect(controllerutil.RemoveControllerReference(obj, rs, runtime.NewScheme())).To(HaveOccurred())
+			Expect(controllerutil.RemoveControllerReference(obj, rs, scheme.Scheme)).To(HaveOccurred())
 			Expect(len(rs.GetOwnerReferences())).To(BeEquivalentTo(1))
 		})
 	})

@@ -364,7 +364,11 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		if err != nil {
 			return nil, err
 		}
-		leaderRecorderProvider, err = options.newRecorderProvider(leaderConfig, cluster.GetHTTPClient(), scheme, options.Logger.WithName("events"), options.makeBroadcaster)
+		httpClient, err := rest.HTTPClientFor(options.LeaderElectionConfig)
+		if err != nil {
+			return nil, err
+		}
+		leaderRecorderProvider, err = options.newRecorderProvider(leaderConfig, httpClient, scheme, options.Logger.WithName("events"), options.makeBroadcaster)
 		if err != nil {
 			return nil, err
 		}

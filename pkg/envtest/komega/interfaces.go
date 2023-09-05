@@ -49,6 +49,27 @@ type Komega interface {
 	// By calling the returned function directly it can also be used as gomega.Expect(k.Update(...)()).To(...)
 	Update(client.Object, func(), ...client.UpdateOption) func() error
 
+	// Patch returns a function that applies the provided patch on the resource and returns the occurring error.
+	// It can be used with gomega.Eventually() like this:
+	//   deployment := appsv1.Deployment{ ... }
+	//   gomega.Eventually(k.Patch(&deployment, client.RawPatch(types.StrategicMergePatchType, patch)).To(gomega.Succeed())
+	// By calling the returned function directly it can also be used as gomega.Expect(k.PatchStatus(...)()).To(...)
+	Patch(client.Object, client.Patch, ...client.PatchOption) func() error
+
+	// Delete returns a function that deletes a resource and returns the occurring error.
+	// It can be used with gomega.Eventually() like this:
+	//   deployment := appsv1.Deployment{ ... }
+	//   gomega.Eventually(k.Delete(&deployment).To(gomega.Succeed())
+	// By calling the returned function directly it can also be used as gomega.Expect(k.Delete(...)()).To(...)
+	Delete(client.Object, ...client.DeleteOption) func() error
+
+	// DeleteAllOf returns a function that deletes a list of resources and returns the occurring error.
+	// It can be used with gomega.Eventually() like this:
+	//   deployments := appsv1.Deployment{ ... }
+	//   gomega.Eventually(k.DeleteAllOf(&deployments, client.InNamespace("default")).To(gomega.Succeed())
+	// By calling the returned function directly it can also be used as gomega.Expect(k.DeleteAllOf(...)()).To(...)
+	DeleteAllOf(client.Object, ...client.DeleteAllOfOption) func() error
+
 	// UpdateStatus returns a function that fetches a resource, applies the provided update function and then updates the resource's status.
 	// It can be used with gomega.Eventually() like this:
 	//   deployment := appsv1.Deployment{ ... }
@@ -58,6 +79,13 @@ type Komega interface {
 	//   })).To(gomega.Succeed())
 	// By calling the returned function directly it can also be used as gomega.Expect(k.UpdateStatus(...)()).To(...)
 	UpdateStatus(client.Object, func(), ...client.SubResourceUpdateOption) func() error
+
+	// PatchStatus returns a function that applies the provided patch on the resource status and returns the occurring error.
+	// It can be used with gomega.Eventually() like this:
+	//   deployment := appsv1.Deployment{ ... }
+	//   gomega.Eventually(k.PatchStatus(&deployment, client.RawPatch(types.StrategicMergePatchType, patch)).To(gomega.Succeed())
+	// By calling the returned function directly it can also be used as gomega.Expect(k.PatchStatus(...)()).To(...)
+	PatchStatus(client.Object, client.Patch, ...client.SubResourcePatchOption) func() error
 
 	// Object returns a function that fetches a resource and returns the object.
 	// It can be used with gomega.Eventually() like this:

@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -101,6 +102,63 @@ func TestUpdateStatus(t *testing.T) {
 		ObjectMeta: exampleDeployment().ObjectMeta,
 	}
 	g.Expect(k.Object(&fetched)()).To(HaveField("Status.AvailableReplicas", BeEquivalentTo(1)))
+}
+
+func TestPatch(t *testing.T) {
+	g := NewWithT(t)
+
+	fc := createFakeClient()
+	k := New(fc)
+
+	patch := []byte(`{"metadata":{"annotations":{"updated": "true"}}}`)
+	patchDeployment := appsv1.Deployment{
+		ObjectMeta: exampleDeployment().ObjectMeta,
+	}
+	g.Eventually(k.Patch(&patchDeployment, client.RawPatch(types.StrategicMergePatchType, patch))).Should(Succeed())
+	g.Expect(patchDeployment.GetAnnotations()["updated"]).To(Equal("true"))
+}
+
+func TestPatchStatus(t *testing.T) {
+	g := NewWithT(t)
+
+	fc := createFakeClient()
+	k := New(fc)
+	patch := []byte(`{"status":{"replicas":2}}`)
+	patchDeployment := appsv1.Deployment{
+		ObjectMeta: exampleDeployment().ObjectMeta,
+	}
+	g.Eventually(k.PatchStatus(&patchDeployment, client.RawPatch(types.StrategicMergePatchType, patch))).Should(Succeed())
+	g.Expect(patchDeployment.Status.Replicas).To(Equal(int32(2)))
+}
+
+func TestDelete(t *testing.T) {
+	g := NewWithT(t)
+
+	fc := createFakeClient()
+	k := New(fc)
+
+	fetched := appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "test",
+		},
+	}
+	g.Eventually(k.Delete(&fetched)).Should(Succeed())
+}
+
+func TestDeleteAllOf(t *testing.T) {
+	g := NewWithT(t)
+
+	fc := createFakeClient()
+	k := New(fc)
+
+	fetched := appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "test",
+		},
+	}
+	g.Eventually(k.DeleteAllOf(&fetched, client.InNamespace("default"))).Should(Succeed())
 }
 
 func TestObject(t *testing.T) {

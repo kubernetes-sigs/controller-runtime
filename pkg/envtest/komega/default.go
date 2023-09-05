@@ -79,6 +79,30 @@ func UpdateStatus(obj client.Object, f func(), opts ...client.SubResourceUpdateO
 	return defaultK.UpdateStatus(obj, f, opts...)
 }
 
+// Delete returns a function that deletes a resource and returns the occurring error.
+// It can be used with gomega.Eventually() like this:
+//
+//	deployment := appsv1.Deployment{ ... }
+//	gomega.Eventually(k.Delete(&deployment).To(gomega.Succeed())
+//
+// By calling the returned function directly it can also be used as gomega.Expect(k.Delete(...)()).To(...)
+func Delete(obj client.Object, opts ...client.DeleteOption) func() error {
+	checkDefaultClient()
+	return defaultK.Delete(obj, opts...)
+}
+
+// DeleteAllOf returns a function that deletes a list of resources and returns the occurring error.
+// It can be used with gomega.Eventually() like this:
+//
+//	deployments := appsv1.Deployment{ ... }
+//	gomega.Eventually(k.DeleteAllOf(&deployments, client.InNamespace("default")).To(gomega.Succeed())
+//
+// By calling the returned function directly it can also be used as gomega.Expect(k.DeleteAllOf(...)()).To(...)
+func DeleteAllOf(obj client.Object, opts ...client.DeleteAllOfOption) func() error {
+	checkDefaultClient()
+	return defaultK.DeleteAllOf(obj, opts...)
+}
+
 // Object returns a function that fetches a resource and returns the object.
 // It can be used with gomega.Eventually() like this:
 //

@@ -80,6 +80,34 @@ func (k *komega) Update(obj client.Object, updateFunc func(), opts ...client.Upd
 	}
 }
 
+// Delete returns a function that deletes a resource and returns the occurring error.
+func (k *komega) Delete(obj client.Object, opts ...client.DeleteOption) func() error {
+	return func() error {
+		return k.client.Delete(k.ctx, obj, opts...)
+	}
+}
+
+// Patch returns a function that applies the provided patch on the resource and returns the occurring error.
+func (k *komega) Patch(obj client.Object, patch client.Patch, opts ...client.PatchOption) func() error {
+	return func() error {
+		return k.client.Patch(k.ctx, obj, patch, opts...)
+	}
+}
+
+// PatchStatus returns a function that applies the provided patch on the resource status and returns the occurring error.
+func (k *komega) PatchStatus(obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) func() error {
+	return func() error {
+		return k.client.Status().Patch(k.ctx, obj, patch, opts...)
+	}
+}
+
+// DeleteAllOf returns a function that deletes a list of resources and returns the occurring error.
+func (k *komega) DeleteAllOf(obj client.Object, opts ...client.DeleteAllOfOption) func() error {
+	return func() error {
+		return k.client.DeleteAllOf(k.ctx, obj, opts...)
+	}
+}
+
 // UpdateStatus returns a function that fetches a resource, applies the provided update function and then updates the resource's status.
 func (k *komega) UpdateStatus(obj client.Object, updateFunc func(), opts ...client.SubResourceUpdateOption) func() error {
 	key := types.NamespacedName{

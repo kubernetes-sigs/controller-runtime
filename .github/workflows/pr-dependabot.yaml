@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Check out code
-      uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # tag=v3.5.3
+      uses: actions/checkout@v4 # tag=v3.5.3
     - name: Set up Go
       uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # tag=v4.0.1
       with:

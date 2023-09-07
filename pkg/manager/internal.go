@@ -284,7 +284,7 @@ func (cm *controllerManager) addHealthProbeServer() error {
 		mux.Handle(cm.livenessEndpointName+"/", http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
 	}
 
-	return cm.add(&server{
+	return cm.add(&Server{
 		Kind:     "health probe",
 		Log:      cm.logger,
 		Server:   srv,
@@ -302,7 +302,7 @@ func (cm *controllerManager) addPprofServer() error {
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
-	return cm.add(&server{
+	return cm.add(&Server{
 		Kind:     "pprof",
 		Log:      cm.logger,
 		Server:   srv,
@@ -384,10 +384,10 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 		}
 	}
 
-	// First start any internal HTTP servers, which includes health probes, metrics and profiling if enabled.
+	// First start any HTTP servers, which includes health probes and profiling, if enabled.
 	//
-	// WARNING: Internal HTTP servers MUST start before any cache is populated, otherwise it would block
-	// conversion webhooks to be ready for serving which make the cache never get ready.
+	// WARNING: HTTPServers includes the health probes, which MUST start before any cache is populated, otherwise
+	// it would block conversion webhooks to be ready for serving which make the cache never get ready.
 	if err := cm.runnables.HTTPServers.Start(cm.internalCtx); err != nil {
 		if err != nil {
 			return fmt.Errorf("failed to start HTTP servers: %w", err)

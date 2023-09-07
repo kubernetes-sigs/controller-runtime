@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/utils/ptr"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
@@ -22,7 +23,7 @@ var _ = Describe("runnables", func() {
 	})
 
 	It("should add HTTP servers to the appropriate group", func() {
-		server := &server{}
+		server := &Server{}
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(server)).To(Succeed())
 		Expect(r.HTTPServers.startQueue).To(HaveLen(1))

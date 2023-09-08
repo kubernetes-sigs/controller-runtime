@@ -1108,12 +1108,30 @@ func (sw *fakeSubResourceClient) Create(ctx context.Context, obj client.Object, 
 func (sw *fakeSubResourceClient) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 	updateOptions := client.SubResourceUpdateOptions{}
 	updateOptions.ApplyOptions(opts)
-
-	body := obj
-	if updateOptions.SubResourceBody != nil {
-		body = updateOptions.SubResourceBody
+	gvr, err := getGVRFromObject(obj, sw.client.scheme)
+	if err != nil {
+		return err
 	}
-	return sw.client.update(body, true, &updateOptions.UpdateOptions)
+	o, err := sw.client.tracker.Get(gvr, obj.GetNamespace(), obj.GetName())
+	if err != nil {
+		return err
+	}
+	gvk, err := apiutil.GVKForObject(obj, sw.client.scheme)
+	if err != nil {
+		return err
+	}
+	body := o
+	if sw.client.tracker.withStatusSubresource.Has(gvk) {
+		err := copyStatusFrom(obj, body)
+		if err != nil {
+			return err
+		}
+	}
+	bodyObj := body.(client.Object)
+	if bodyObj.GetResourceVersion() != obj.GetResourceVersion() {
+		return apierrors.NewConflict(gvr.GroupResource(), obj.GetName(), fmt.Errorf("resource version conflict"))
+	}
+	return sw.client.update(bodyObj, true, &updateOptions.UpdateOptions)
 }
 
 func (sw *fakeSubResourceClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {

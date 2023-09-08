@@ -990,21 +990,8 @@ func copyNonStatusFrom(old, new runtime.Object) error {
 
 // copyStatusFrom copies the status from old into new
 func copyStatusFrom(old, new runtime.Object) error {
-	oldMapStringAny, err := toMapStringAny(old)
-	if err != nil {
-		return fmt.Errorf("failed to convert old to *unstructured.Unstructured: %w", err)
-	}
-	newMapStringAny, err := toMapStringAny(new)
-	if err != nil {
-		return fmt.Errorf("failed to convert new to *unststructured.Unstructured: %w", err)
-	}
-
-	newMapStringAny["status"] = oldMapStringAny["status"]
-
-	if err := fromMapStringAny(newMapStringAny, new); err != nil {
-		return fmt.Errorf("failed to convert back from map[string]any: %w", err)
-	}
-
+	reflect.ValueOf(new).Elem().FieldByName("Status").Set(
+		reflect.ValueOf(old).Elem().FieldByName("Status"))
 	return nil
 }
 

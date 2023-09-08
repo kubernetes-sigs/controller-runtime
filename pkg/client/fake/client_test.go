@@ -1427,6 +1427,23 @@ var _ = Describe("Fake client", func() {
 		Expect(obj.Status).To(BeEquivalentTo(corev1.NodeStatus{NodeInfo: corev1.NodeSystemInfo{MachineID: "machine-id"}}))
 	})
 
+	It("should not change the status of typed objects that have a status subresource on update with omitempty fields", func() {
+		obj := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node",
+			},
+		}
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+
+		obj.Status.Config = &corev1.NodeConfigStatus{}
+		obj.Status.Config.Error = "some string"
+		Expect(cl.Update(context.Background(), obj)).To(Succeed())
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)).To(Succeed())
+
+		Expect(obj.Status).To(BeEquivalentTo(corev1.NodeStatus{}))
+	})
+
 	It("should return a conflict error when an incorrect RV is used on status update", func() {
 		obj := &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{

@@ -1460,6 +1460,13 @@ var _ = Describe("Fake client", func() {
 		objOriginal := obj.DeepCopy()
 
 		obj.Spec.PodCIDR = "cidr-from-status-update"
+		obj.Annotations = map[string]string{
+			"some-annotation-key": "some-annotation-value",
+		}
+		obj.Labels = map[string]string{
+			"some-label-key": "some-label-value",
+		}
+
 		obj.Status.NodeInfo.MachineID = "machine-id-from-status-update"
 		Expect(cl.Status().Update(context.Background(), obj)).NotTo(HaveOccurred())
 

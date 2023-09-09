@@ -1479,6 +1479,36 @@ var _ = Describe("Fake client", func() {
 		objOriginal.Status.NodeInfo.MachineID = "machine-id-from-status-update"
 		Expect(cmp.Diff(objOriginal, actual)).To(BeEmpty())
 	})
+	It("should not overwrite status fields of typed objects that have a status subresource on status update", func() {
+		obj := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node",
+			},
+			Spec: corev1.NodeSpec{
+				PodCIDR: "old-cidr",
+			},
+			Status: corev1.NodeStatus{
+				NodeInfo: corev1.NodeSystemInfo{
+					MachineID: "machine-id",
+				},
+			},
+		}
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+		objOriginal := obj.DeepCopy()
+
+		obj.Status.Phase = corev1.NodeRunning
+		Expect(cl.Status().Update(context.Background(), obj)).NotTo(HaveOccurred())
+
+		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(actual), actual)).NotTo(HaveOccurred())
+
+		objOriginal.APIVersion = actual.APIVersion
+		objOriginal.Kind = actual.Kind
+		objOriginal.ResourceVersion = actual.ResourceVersion
+		Expect(cmp.Diff(objOriginal, actual)).ToNot(BeEmpty())
+		Expect(objOriginal.Status.NodeInfo.MachineID).To(Equal(actual.Status.NodeInfo.MachineID))
+		Expect(objOriginal.Status.Phase).ToNot(Equal(actual.Status.Phase))
+	})
 
 	It("should not change the status of typed objects that have a status subresource on patch", func() {
 		obj := &corev1.Node{

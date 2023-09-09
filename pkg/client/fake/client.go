@@ -400,9 +400,10 @@ func (t versionedTracker) update(gvr schema.GroupVersionResource, obj runtime.Ob
 
 	if t.withStatusSubresource.Has(gvk) {
 		if isStatus { // copy everything but status and metadata.ResourceVersion from original object
-			if err := copyNonStatusFrom(oldObject, obj); err != nil {
+			if err := copyStatusFrom(obj, oldObject); err != nil {
 				return fmt.Errorf("failed to copy non-status field for object with status subresouce: %w", err)
 			}
+			obj = oldObject.DeepCopyObject().(client.Object)
 		} else { // copy status from original object
 			if err := copyStatusFrom(oldObject, obj); err != nil {
 				return fmt.Errorf("failed to copy the status for object with status subresource: %w", err)
@@ -949,6 +950,7 @@ func dryPatch(action testing.PatchActionImpl, tracker testing.ObjectTracker) (ru
 	return obj, nil
 }
 
+//lint:ignore U1000 function is causing errors with status updates
 func copyNonStatusFrom(old, new runtime.Object) error {
 	newClientObject, ok := new.(client.Object)
 	if !ok {
@@ -1108,30 +1110,12 @@ func (sw *fakeSubResourceClient) Create(ctx context.Context, obj client.Object, 
 func (sw *fakeSubResourceClient) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 	updateOptions := client.SubResourceUpdateOptions{}
 	updateOptions.ApplyOptions(opts)
-	gvr, err := getGVRFromObject(obj, sw.client.scheme)
-	if err != nil {
-		return err
+
+	body := obj
+	if updateOptions.SubResourceBody != nil {
+		body = updateOptions.SubResourceBody
 	}
-	o, err := sw.client.tracker.Get(gvr, obj.GetNamespace(), obj.GetName())
-	if err != nil {
-		return err
-	}
-	gvk, err := apiutil.GVKForObject(obj, sw.client.scheme)
-	if err != nil {
-		return err
-	}
-	body := o
-	if sw.client.tracker.withStatusSubresource.Has(gvk) {
-		err := copyStatusFrom(obj, body)
-		if err != nil {
-			return err
-		}
-	}
-	bodyObj := body.(client.Object)
-	if bodyObj.GetResourceVersion() != obj.GetResourceVersion() {
-		return apierrors.NewConflict(gvr.GroupResource(), obj.GetName(), fmt.Errorf("resource version conflict"))
-	}
-	return sw.client.update(bodyObj, true, &updateOptions.UpdateOptions)
+	return sw.client.update(body, true, &updateOptions.UpdateOptions)
 }
 
 func (sw *fakeSubResourceClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {

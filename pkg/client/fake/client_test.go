@@ -1479,7 +1479,7 @@ var _ = Describe("Fake client", func() {
 		objOriginal.Status.NodeInfo.MachineID = "machine-id-from-status-update"
 		Expect(cmp.Diff(objOriginal, actual)).To(BeEmpty())
 	})
-	It("should not overwrite status fields of typed objects that have a status subresource on status update", func() {
+	It("Should only override status fields of typed objects that have a status subresource on status update", func() {
 		obj := &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "node",

@@ -48,6 +48,7 @@ import (
 )
 
 const testNodeOne = "test-node-1"
+const testNodeTwo = "test-node-2"
 const testNamespaceOne = "test-namespace-1"
 const testNamespaceTwo = "test-namespace-2"
 const testNamespaceThree = "test-namespace-3"
@@ -619,6 +620,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			Expect(err).NotTo(HaveOccurred())
 			err = ensureNode(testNodeOne, cl)
 			Expect(err).NotTo(HaveOccurred())
+			err = ensureNode(testNodeTwo, cl)
+			Expect(err).NotTo(HaveOccurred())
 			err = ensureNamespace(testNamespaceOne, cl)
 			Expect(err).NotTo(HaveOccurred())
 			err = ensureNamespace(testNamespaceTwo, cl)
@@ -1182,7 +1185,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 					By("verifying the node list is not empty")
 					Expect(nodeList.Items).NotTo(BeEmpty())
-					Expect(len(nodeList.Items)).To(BeEquivalentTo(1))
+					Expect(len(nodeList.Items)).To(BeEquivalentTo(2))
 				})
 				It("should return an error if the continue list options is set", func() {
 					podList := &unstructured.Unstructured{}
@@ -1352,6 +1355,75 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("verifying that the namespace is ignored when getting a cluster-scoped resource")
 					key2 := client.ObjectKey{Namespace: "random", Name: testNodeOne}
 					Expect(namespacedCache.Get(context.Background(), key2, node)).To(Succeed())
+				})
+
+				It("should be able to restrict cache to a namespace for namespaced object and to given selectors for non namespaced object", func() {
+					By("creating a namespaced cache")
+					namespacedCache, err := cache.New(cfg, cache.Options{
+						DefaultNamespaces: map[string]cache.Config{testNamespaceOne: {}},
+						ByObject: map[client.Object]cache.ByObject{
+							&corev1.Node{}: {
+								Label: labels.SelectorFromSet(labels.Set{"name": testNodeTwo}),
+							},
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					By("running the cache and waiting for it to sync")
+					go func() {
+						defer GinkgoRecover()
+						Expect(namespacedCache.Start(informerCacheCtx)).To(Succeed())
+					}()
+					Expect(namespacedCache.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
+
+					By("listing pods in all namespaces")
+					out := &metav1.PartialObjectMetadataList{}
+					out.SetGroupVersionKind(schema.GroupVersionKind{
+						Group:   "",
+						Version: "v1",
+						Kind:    "PodList",
+					})
+					Expect(namespacedCache.List(context.Background(), out)).To(Succeed())
+
+					By("verifying the returned pod is from the watched namespace")
+					Expect(out.Items).NotTo(BeEmpty())
+					Expect(out.Items).Should(HaveLen(2))
+					for _, item := range out.Items {
+						Expect(item.Namespace).To(Equal(testNamespaceOne))
+					}
+					By("listing all nodes - should still be able to list a cluster-scoped resource")
+					nodeList := &metav1.PartialObjectMetadataList{}
+					nodeList.SetGroupVersionKind(schema.GroupVersionKind{
+						Group:   "",
+						Version: "v1",
+						Kind:    "NodeList",
+					})
+					Expect(namespacedCache.List(context.Background(), nodeList)).To(Succeed())
+
+					By("verifying the node list is not empty")
+					Expect(nodeList.Items).NotTo(BeEmpty())
+
+					By("getting a node - should still be able to get a cluster-scoped resource")
+					node := &metav1.PartialObjectMetadata{}
+					node.SetGroupVersionKind(schema.GroupVersionKind{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Node",
+					})
+
+					By("verifying that getting the node works with an empty namespace")
+					key1 := client.ObjectKey{Namespace: "", Name: testNodeTwo}
+					Expect(namespacedCache.Get(context.Background(), key1, node)).To(Succeed())
+
+					By("verifying that the namespace is ignored when getting a cluster-scoped resource")
+					key2 := client.ObjectKey{Namespace: "random", Name: testNodeTwo}
+					Expect(namespacedCache.Get(context.Background(), key2, node)).To(Succeed())
+
+					By("verifying that an error is returned for node with not matching label")
+					key3 := client.ObjectKey{Namespace: "", Name: testNodeOne}
+					err = namespacedCache.Get(context.Background(), key3, node)
+					Expect(err).To(HaveOccurred())
+					Expect(apierrors.IsNotFound(err)).To(BeTrue())
 				})
 
 				if !isPodDisableDeepCopy(opts) {
@@ -2184,7 +2256,8 @@ func ensureNamespace(namespace string, client client.Client) error {
 func ensureNode(name string, client client.Client) error {
 	node := corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:   name,
+			Labels: map[string]string{"name": name},
 		},
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Node",

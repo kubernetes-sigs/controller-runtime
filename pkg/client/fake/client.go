@@ -995,6 +995,7 @@ func fromMapStringAny(u map[string]any, target runtime.Object) error {
 		return fmt.Errorf("failed to serialize: %w", err)
 	}
 
+	zero(target)
 	if err := json.Unmarshal(serialized, &target); err != nil {
 		return fmt.Errorf("failed to deserialize: %w", err)
 	}

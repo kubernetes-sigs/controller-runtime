@@ -1409,22 +1409,19 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("should not change the status of typed objects that have a status subresource on update", func() {
-		obj := &corev1.Node{
+		obj := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "node",
-			},
-			Status: corev1.NodeStatus{
-				NodeInfo: corev1.NodeSystemInfo{MachineID: "machine-id"},
+				Name: "pod",
 			},
 		}
 		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
 
-		obj.Status.NodeInfo.MachineID = "updated-machine-id"
+		obj.Status.Phase = "Running"
 		Expect(cl.Update(context.Background(), obj)).To(Succeed())
 
 		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)).To(Succeed())
 
-		Expect(obj.Status).To(BeEquivalentTo(corev1.NodeStatus{NodeInfo: corev1.NodeSystemInfo{MachineID: "machine-id"}}))
+		Expect(obj.Status).To(BeEquivalentTo(corev1.PodStatus{}))
 	})
 
 	It("should return a conflict error when an incorrect RV is used on status update", func() {
@@ -1511,25 +1508,20 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("should not change the status of typed objects that have a status subresource on patch", func() {
-		obj := &corev1.Node{
+		obj := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "node",
-			},
-			Status: corev1.NodeStatus{
-				NodeInfo: corev1.NodeSystemInfo{
-					MachineID: "machine-id",
-				},
 			},
 		}
 		Expect(cl.Create(context.Background(), obj)).To(Succeed())
 		original := obj.DeepCopy()
 
-		obj.Status.NodeInfo.MachineID = "machine-id-from-patch"
+		obj.Status.Phase = "Running"
 		Expect(cl.Patch(context.Background(), obj, client.MergeFrom(original))).To(Succeed())
 
 		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)).To(Succeed())
 
-		Expect(obj.Status).To(BeEquivalentTo(corev1.NodeStatus{NodeInfo: corev1.NodeSystemInfo{MachineID: "machine-id"}}))
+		Expect(obj.Status).To(BeEquivalentTo(corev1.PodStatus{}))
 	})
 
 	It("should not change non-status field of typed objects that have a status subresource on status patch", func() {

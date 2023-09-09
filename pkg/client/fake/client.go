@@ -950,46 +950,6 @@ func dryPatch(action testing.PatchActionImpl, tracker testing.ObjectTracker) (ru
 	return obj, nil
 }
 
-//lint:ignore U1000 function is causing errors with status updates
-func copyNonStatusFrom(old, new runtime.Object) error {
-	newClientObject, ok := new.(client.Object)
-	if !ok {
-		return fmt.Errorf("%T is not a client.Object", new)
-	}
-	// The only thing other than status we have to retain
-	rv := newClientObject.GetResourceVersion()
-
-	oldMapStringAny, err := toMapStringAny(old)
-	if err != nil {
-		return fmt.Errorf("failed to convert old to *unstructured.Unstructured: %w", err)
-	}
-	newMapStringAny, err := toMapStringAny(new)
-	if err != nil {
-		return fmt.Errorf("failed to convert new to *unststructured.Unstructured: %w", err)
-	}
-
-	// delete everything other than status in case it has fields that were not present in
-	// the old object
-	for k := range newMapStringAny {
-		if k != "status" {
-			delete(newMapStringAny, k)
-		}
-	}
-	// copy everything other than status from the old object
-	for k := range oldMapStringAny {
-		if k != "status" {
-			newMapStringAny[k] = oldMapStringAny[k]
-		}
-	}
-
-	if err := fromMapStringAny(newMapStringAny, new); err != nil {
-		return fmt.Errorf("failed to convert back from map[string]any: %w", err)
-	}
-	newClientObject.SetResourceVersion(rv)
-
-	return nil
-}
-
 // copyStatusFrom copies the status from old into new
 func copyStatusFrom(old, new runtime.Object) error {
 	oldMapStringAny, err := toMapStringAny(old)

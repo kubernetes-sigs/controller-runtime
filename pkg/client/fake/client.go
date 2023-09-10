@@ -403,7 +403,9 @@ func (t versionedTracker) update(gvr schema.GroupVersionResource, obj runtime.Ob
 			if err := copyStatusFrom(obj, oldObject); err != nil {
 				return fmt.Errorf("failed to copy non-status field for object with status subresouce: %w", err)
 			}
-			obj = oldObject.DeepCopyObject().(client.Object)
+			passedRV := accessor.GetResourceVersion()
+			reflect.ValueOf(obj).Elem().Set(reflect.ValueOf(oldObject.DeepCopyObject()).Elem())
+			accessor.SetResourceVersion(passedRV)
 		} else { // copy status from original object
 			if err := copyStatusFrom(oldObject, obj); err != nil {
 				return fmt.Errorf("failed to copy the status for object with status subresource: %w", err)

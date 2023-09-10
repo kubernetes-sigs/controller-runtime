@@ -1476,6 +1476,84 @@ var _ = Describe("Fake client", func() {
 		objOriginal.Status.NodeInfo.MachineID = "machine-id-from-status-update"
 		Expect(cmp.Diff(objOriginal, actual)).To(BeEmpty())
 	})
+
+	It("should be able to update an object after updating an object's status", func() {
+		obj := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node",
+			},
+			Spec: corev1.NodeSpec{
+				PodCIDR: "old-cidr",
+			},
+			Status: corev1.NodeStatus{
+				NodeInfo: corev1.NodeSystemInfo{
+					MachineID: "machine-id",
+				},
+			},
+		}
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+		expectedObj := obj.DeepCopy()
+
+		obj.Status.NodeInfo.MachineID = "machine-id-from-status-update"
+		Expect(cl.Status().Update(context.Background(), obj)).NotTo(HaveOccurred())
+
+		obj.Annotations = map[string]string{
+			"some-annotation-key": "some",
+		}
+		expectedObj.Annotations = map[string]string{
+			"some-annotation-key": "some",
+		}
+		Expect(cl.Update(context.Background(), obj)).NotTo(HaveOccurred())
+
+		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(actual), actual)).NotTo(HaveOccurred())
+
+		expectedObj.APIVersion = actual.APIVersion
+		expectedObj.Kind = actual.Kind
+		expectedObj.ResourceVersion = actual.ResourceVersion
+		expectedObj.Status.NodeInfo.MachineID = "machine-id-from-status-update"
+		Expect(cmp.Diff(expectedObj, actual)).To(BeEmpty())
+	})
+
+	It("should be able to update an object's status after updating an object", func() {
+		obj := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node",
+			},
+			Spec: corev1.NodeSpec{
+				PodCIDR: "old-cidr",
+			},
+			Status: corev1.NodeStatus{
+				NodeInfo: corev1.NodeSystemInfo{
+					MachineID: "machine-id",
+				},
+			},
+		}
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+		expectedObj := obj.DeepCopy()
+
+		obj.Annotations = map[string]string{
+			"some-annotation-key": "some",
+		}
+		expectedObj.Annotations = map[string]string{
+			"some-annotation-key": "some",
+		}
+		Expect(cl.Update(context.Background(), obj)).NotTo(HaveOccurred())
+
+		obj.Spec.PodCIDR = "cidr-from-status-update"
+		obj.Status.NodeInfo.MachineID = "machine-id-from-status-update"
+		Expect(cl.Status().Update(context.Background(), obj)).NotTo(HaveOccurred())
+
+		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(actual), actual)).NotTo(HaveOccurred())
+
+		expectedObj.APIVersion = actual.APIVersion
+		expectedObj.Kind = actual.Kind
+		expectedObj.ResourceVersion = actual.ResourceVersion
+		expectedObj.Status.NodeInfo.MachineID = "machine-id-from-status-update"
+		Expect(cmp.Diff(expectedObj, actual)).To(BeEmpty())
+	})
+
 	It("Should only override status fields of typed objects that have a status subresource on status update", func() {
 		obj := &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{

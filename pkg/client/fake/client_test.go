@@ -45,6 +45,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
+const (
+	machineIDFromStatusUpdate = "machine-id-from-status-update"
+	cidrFromStatusUpdate      = "cidr-from-status-update"
+)
+
 var _ = Describe("Fake client", func() {
 	var dep *appsv1.Deployment
 	var dep2 *appsv1.Deployment
@@ -1456,7 +1461,7 @@ var _ = Describe("Fake client", func() {
 		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
 		objOriginal := obj.DeepCopy()
 
-		obj.Spec.PodCIDR = "cidr-from-status-update"
+		obj.Spec.PodCIDR = cidrFromStatusUpdate
 		obj.Annotations = map[string]string{
 			"some-annotation-key": "some-annotation-value",
 		}
@@ -1464,7 +1469,7 @@ var _ = Describe("Fake client", func() {
 			"some-label-key": "some-label-value",
 		}
 
-		obj.Status.NodeInfo.MachineID = "machine-id-from-status-update"
+		obj.Status.NodeInfo.MachineID = machineIDFromStatusUpdate
 		Expect(cl.Status().Update(context.Background(), obj)).NotTo(HaveOccurred())
 
 		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
@@ -1473,7 +1478,7 @@ var _ = Describe("Fake client", func() {
 		objOriginal.APIVersion = actual.APIVersion
 		objOriginal.Kind = actual.Kind
 		objOriginal.ResourceVersion = actual.ResourceVersion
-		objOriginal.Status.NodeInfo.MachineID = "machine-id-from-status-update"
+		objOriginal.Status.NodeInfo.MachineID = machineIDFromStatusUpdate
 		Expect(cmp.Diff(objOriginal, actual)).To(BeEmpty())
 	})
 
@@ -1494,7 +1499,7 @@ var _ = Describe("Fake client", func() {
 		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
 		expectedObj := obj.DeepCopy()
 
-		obj.Status.NodeInfo.MachineID = "machine-id-from-status-update"
+		obj.Status.NodeInfo.MachineID = machineIDFromStatusUpdate
 		Expect(cl.Status().Update(context.Background(), obj)).NotTo(HaveOccurred())
 
 		obj.Annotations = map[string]string{
@@ -1511,7 +1516,7 @@ var _ = Describe("Fake client", func() {
 		expectedObj.APIVersion = actual.APIVersion
 		expectedObj.Kind = actual.Kind
 		expectedObj.ResourceVersion = actual.ResourceVersion
-		expectedObj.Status.NodeInfo.MachineID = "machine-id-from-status-update"
+		expectedObj.Status.NodeInfo.MachineID = machineIDFromStatusUpdate
 		Expect(cmp.Diff(expectedObj, actual)).To(BeEmpty())
 	})
 
@@ -1540,8 +1545,8 @@ var _ = Describe("Fake client", func() {
 		}
 		Expect(cl.Update(context.Background(), obj)).NotTo(HaveOccurred())
 
-		obj.Spec.PodCIDR = "cidr-from-status-update"
-		obj.Status.NodeInfo.MachineID = "machine-id-from-status-update"
+		obj.Spec.PodCIDR = cidrFromStatusUpdate
+		obj.Status.NodeInfo.MachineID = machineIDFromStatusUpdate
 		Expect(cl.Status().Update(context.Background(), obj)).NotTo(HaveOccurred())
 
 		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
@@ -1550,7 +1555,7 @@ var _ = Describe("Fake client", func() {
 		expectedObj.APIVersion = actual.APIVersion
 		expectedObj.Kind = actual.Kind
 		expectedObj.ResourceVersion = actual.ResourceVersion
-		expectedObj.Status.NodeInfo.MachineID = "machine-id-from-status-update"
+		expectedObj.Status.NodeInfo.MachineID = machineIDFromStatusUpdate
 		Expect(cmp.Diff(expectedObj, actual)).To(BeEmpty())
 	})
 
@@ -1614,7 +1619,7 @@ var _ = Describe("Fake client", func() {
 		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
 		objOriginal := obj.DeepCopy()
 
-		obj.Spec.PodCIDR = "cidr-from-status-update"
+		obj.Spec.PodCIDR = cidrFromStatusUpdate
 		obj.Status.NodeInfo.MachineID = "machine-id"
 		Expect(cl.Status().Patch(context.Background(), obj, client.MergeFrom(objOriginal))).NotTo(HaveOccurred())
 

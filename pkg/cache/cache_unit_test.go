@@ -73,6 +73,21 @@ var _ = Describe("cache.inheritFrom", func() {
 			Expect(checkError(specified.inheritFrom(inherited)).Scheme.AllKnownTypes()).To(HaveLen(2))
 		})
 	})
+	Context("Post defaulting of specified", func() {
+		It("inherited not lost", func() {
+			inherited.Scheme = runtime.NewScheme()
+			inherited.Scheme.AddKnownTypes(gv, &unstructured.Unstructured{})
+			Expect(inherited.Scheme.KnownTypes(gv)).To(HaveLen(1))
+			inherited.Mapper = meta.NewDefaultRESTMapper([]schema.GroupVersion{gv})
+			inherited.Resync = pointer.Duration(time.Minute)
+
+			combined := checkError(specified.combinedOpts(nil, inherited))
+			Expect(combined.Mapper).To(Equal(inherited.Mapper))
+			Expect(combined.Resync).To(Equal(inherited.Resync))
+			Expect(combined.Scheme).NotTo(BeNil())
+			Expect(combined.Scheme.KnownTypes(gv)).To(HaveLen(1))
+		})
+	})
 	Context("Mapper", func() {
 		It("is nil when specified and inherited are unset", func() {
 			Expect(checkError(specified.inheritFrom(inherited)).Mapper).To(BeNil())

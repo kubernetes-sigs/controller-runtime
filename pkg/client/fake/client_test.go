@@ -1677,6 +1677,52 @@ var _ = Describe("Fake client", func() {
 		Expect(obj.Object["spec"]).To(BeEquivalentTo("original"))
 	})
 
+	It("should not change the status of known unstructured objects that have a status subresource on update", func() {
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("v1")
+		obj.SetKind("Pod")
+		obj.SetName("pod")
+		err := unstructured.SetNestedField(obj.Object, "Always", "spec", "restartPolicy")
+		Expect(err).NotTo(HaveOccurred())
+		err = unstructured.SetNestedField(obj.Object, "Pending", "status", "phase")
+		Expect(err).NotTo(HaveOccurred())
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+
+		err = unstructured.SetNestedField(obj.Object, "Never", "spec", "restartPolicy")
+		Expect(err).NotTo(HaveOccurred())
+		err = unstructured.SetNestedField(obj.Object, "Running", "status", "phase")
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(cl.Update(context.Background(), obj)).To(Succeed())
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)).To(Succeed())
+
+		Expect(obj.Object["spec"].(map[string]any)["restartPolicy"]).To(Equal("Never"))
+		Expect(obj.Object["status"].(map[string]any)["phase"]).To(Equal("Pending"))
+	})
+
+	It("should not change non-status field of known unstructured objects that have a status subresource on status update", func() {
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("v1")
+		obj.SetKind("Pod")
+		obj.SetName("pod")
+		err := unstructured.SetNestedField(obj.Object, "Always", "spec", "restartPolicy")
+		Expect(err).NotTo(HaveOccurred())
+		err = unstructured.SetNestedField(obj.Object, "Pending", "status", "phase")
+		Expect(err).NotTo(HaveOccurred())
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+
+		err = unstructured.SetNestedField(obj.Object, "Never", "spec", "restartPolicy")
+		Expect(err).NotTo(HaveOccurred())
+		err = unstructured.SetNestedField(obj.Object, "Running", "status", "phase")
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(cl.Status().Update(context.Background(), obj)).To(Succeed())
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)).To(Succeed())
+
+		Expect(obj.Object["spec"].(map[string]any)["restartPolicy"]).To(Equal("Always"))
+		Expect(obj.Object["status"].(map[string]any)["phase"]).To(Equal("Running"))
+	})
+
 	It("should not change the status of unstructured objects that are configured to have a status subresource on patch", func() {
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("foo/v1")

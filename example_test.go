@@ -24,8 +24,14 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	// since we invoke tests with -ginkgo.junit-report we need to import ginkgo.
 	_ "github.com/onsi/ginkgo/v2"
@@ -38,7 +44,7 @@ import (
 //
 // * Start the application.
 func Example() {
-	var log = ctrl.Log.WithName("builder-examples")
+	log := ctrl.Log.WithName("builder-examples")
 
 	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
 	if err != nil {
@@ -51,6 +57,80 @@ func Example() {
 		For(&appsv1.ReplicaSet{}).       // ReplicaSet is the Application API
 		Owns(&corev1.Pod{}).             // ReplicaSet owns Pods created by it
 		Complete(&ReplicaSetReconciler{Client: manager.GetClient()})
+	if err != nil {
+		log.Error(err, "could not create controller")
+		os.Exit(1)
+	}
+
+	if err := manager.Start(ctrl.SetupSignalHandler()); err != nil {
+		log.Error(err, "could not start manager")
+		os.Exit(1)
+	}
+}
+
+type ExampleCRDWithConfigMapRef struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	ConfigMapRef      corev1.LocalObjectReference `json:"configMapRef"`
+}
+
+// DeepCopyObject implements client.Object.
+func (*ExampleCRDWithConfigMapRef) DeepCopyObject() runtime.Object {
+	panic("unimplemented")
+}
+
+type ExampleCRDWithConfigMapRefList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ExampleCRDWithConfigMapRef `json:"items"`
+}
+
+// DeepCopyObject implements client.ObjectList.
+func (*ExampleCRDWithConfigMapRefList) DeepCopyObject() runtime.Object {
+	panic("unimplemented")
+}
+
+// This example creates a simple application Controller that is configured for ExampleCRDWithConfigMapRef CRD.
+// Any change in the configMap referenced in this Custom Resource will cause the re-reconcile of the parent ExampleCRDWithConfigMapRef
+// due to the implementation of the .Watches method of "sigs.k8s.io/controller-runtime/pkg/builder".Builder.
+func Example_watches() {
+	log := ctrl.Log.WithName("builder-examples")
+
+	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
+	if err != nil {
+		log.Error(err, "could not create manager")
+		os.Exit(1)
+	}
+
+	err = ctrl.
+		NewControllerManagedBy(manager).
+		For(&ExampleCRDWithConfigMapRef{}).
+		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, cm client.Object) []ctrl.Request {
+			// map a change to referenced configMap to ExampleCRDWithConfigMapRef, which causes its re-reconcile
+			crList := &ExampleCRDWithConfigMapRefList{}
+			if err := manager.GetClient().List(ctx, crList); err != nil {
+				manager.GetLogger().Error(err, "while listing ExampleCRDWithConfigMapRefs")
+				return nil
+			}
+
+			reqs := make([]ctrl.Request, 0, len(crList.Items))
+			for _, item := range crList.Items {
+				if item.ConfigMapRef.Name == cm.GetName() {
+					reqs = append(reqs, ctrl.Request{
+						NamespacedName: types.NamespacedName{
+							Namespace: item.GetNamespace(),
+							Name:      item.GetName(),
+						},
+					})
+				}
+			}
+
+			return reqs
+		})).
+		Complete(reconcile.Func(func(ctx context.Context, r reconcile.Request) (reconcile.Result, error) {
+			// Your business logic to implement the API by creating, updating, deleting objects goes here.
+			return reconcile.Result{}, nil
+		}))
 	if err != nil {
 		log.Error(err, "could not create controller")
 		os.Exit(1)
@@ -75,7 +155,7 @@ func Example() {
 //
 // * Start the application.
 func Example_updateLeaderElectionDurations() {
-	var log = ctrl.Log.WithName("builder-examples")
+	log := ctrl.Log.WithName("builder-examples")
 	leaseDuration := 100 * time.Second
 	renewDeadline := 80 * time.Second
 	retryPeriod := 20 * time.Second

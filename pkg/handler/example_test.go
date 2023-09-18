@@ -32,8 +32,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var mgr manager.Manager
-var c controller.Controller
+var (
+	mgr manager.Manager
+	c   controller.Controller
+)
 
 // This example watches Pods and enqueues Requests with the Name and Namespace of the Pod from
 // the Event (i.e. change caused by a Create, Update, Delete).

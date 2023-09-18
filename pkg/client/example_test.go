@@ -25,11 +25,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 var (
@@ -159,7 +162,7 @@ func ExampleClient_update() {
 		Namespace: "namespace",
 		Name:      "name",
 	}, pod)
-	pod.SetFinalizers(append(pod.GetFinalizers(), "new-finalizer"))
+	controllerutil.AddFinalizer(pod, "new-finalizer")
 	_ = c.Update(context.Background(), pod)
 
 	// Using a unstructured object.
@@ -173,7 +176,7 @@ func ExampleClient_update() {
 		Namespace: "namespace",
 		Name:      "name",
 	}, u)
-	u.SetFinalizers(append(u.GetFinalizers(), "new-finalizer"))
+	controllerutil.AddFinalizer(u, "new-finalizer")
 	_ = c.Update(context.Background(), u)
 }
 
@@ -186,6 +189,16 @@ func ExampleClient_patch() {
 			Name:      "name",
 		},
 	}, client.RawPatch(types.StrategicMergePatchType, patch))
+}
+
+// This example shows how to use the client with unstructured objects to create/patch objects using Server Side Apply,
+func ExampleClient_apply() {
+	// Using a typed object.
+	configMap := corev1ac.ConfigMap("name", "namespace").WithData(map[string]string{"key": "value"})
+	// c is a created client.
+	u := &unstructured.Unstructured{}
+	u.Object, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(configMap)
+	_ = c.Patch(context.Background(), u, client.Apply, client.ForceOwnership, client.FieldOwner("field-owner"))
 }
 
 // This example shows how to use the client with typed and unstructured objects to patch objects' status.

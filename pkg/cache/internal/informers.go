@@ -55,12 +55,8 @@ type InformersOpts struct {
 // NewInformers creates a new InformersMap that can create informers under the hood.
 func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 	newInformer := cache.NewSharedIndexInformer
-	watchErrorHandler := cache.DefaultWatchErrorHandler
 	if options.NewInformer != nil {
 		newInformer = *options.NewInformer
-	}
-	if options.WatchErrorHandler != nil {
-		watchErrorHandler = options.WatchErrorHandler
 	}
 	return &Informers{
 		config:     config,
@@ -81,7 +77,7 @@ func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 		transform:             options.Transform,
 		unsafeDisableDeepCopy: options.UnsafeDisableDeepCopy,
 		newInformer:           newInformer,
-		watchErrorHandler:     watchErrorHandler,
+		watchErrorHandler:     options.WatchErrorHandler,
 	}
 }
 
@@ -166,6 +162,9 @@ type Informers struct {
 	// NewInformer allows overriding of the shared index informer constructor for testing.
 	newInformer func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
 
+	// WatchErrorHandler allows the shared index informer's
+	// watchErrorHandler to be set by overriding the options
+	// or to use the default watchErrorHandler
 	watchErrorHandler cache.WatchErrorHandler
 }
 
@@ -331,9 +330,11 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 		cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 	})
 
-	// Set WatchErrorHandler on SharedIndexInformer
-	if err := sharedIndexInformer.SetWatchErrorHandler(ip.watchErrorHandler); err != nil {
-		return nil, false, err
+	// Set WatchErrorHandler on SharedIndexInformer if set
+	if ip.watchErrorHandler != nil {
+		if err := sharedIndexInformer.SetWatchErrorHandler(ip.watchErrorHandler); err != nil {
+			return nil, false, err
+		}
 	}
 
 	// Check to see if there is a transformer for this gvk

@@ -15,7 +15,7 @@ require (
 	github.com/prometheus/client_golang v1.16.0
 	github.com/prometheus/client_model v0.4.0
 	go.uber.org/goleak v1.2.1
-	go.uber.org/zap v1.25.0
+	go.uber.org/zap v1.26.0
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e
 	golang.org/x/sys v0.12.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0

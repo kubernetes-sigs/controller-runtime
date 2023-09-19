@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/evanphx/json-patch v5.6.0+incompatible
-	github.com/evanphx/json-patch/v5 v5.6.0
+	github.com/evanphx/json-patch/v5 v5.7.0
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-logr/logr v1.2.4
 	github.com/go-logr/zapr v1.2.4

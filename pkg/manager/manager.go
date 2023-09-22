@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -119,6 +120,11 @@ type Options struct {
 	// NOTE: LOW LEVEL PRIMITIVE!
 	// Only use a custom NewCache if you know what you are doing.
 	NewCache cache.NewCacheFunc
+
+	// UserAgentID is the name of the manager to represent itself in the client requests.
+	//
+	// If set, the UserAgentID will be used to override the first part of rest.DefaultKubernetesUserAgent()
+	UserAgentID string
 
 	// Client is the client.Options that will be used to create the default Client.
 	// By default, the client will use the cache for reads and direct calls for writes.
@@ -319,6 +325,16 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Set default values for options fields
 	options = setOptionsDefaults(options)
 
+	config = rest.CopyConfig(config)
+	if config.UserAgent == "" {
+		config.UserAgent = rest.DefaultKubernetesUserAgent()
+		if options.UserAgentID != "" {
+			if _, suffix, ok := strings.Cut(config.UserAgent, "/"); ok {
+				config.UserAgent = options.UserAgentID + "/" + suffix
+			}
+		}
+	}
+
 	cluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {
 		clusterOptions.Scheme = options.Scheme
 		clusterOptions.MapperProvider = options.MapperProvider
@@ -331,11 +347,6 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	})
 	if err != nil {
 		return nil, err
-	}
-
-	config = rest.CopyConfig(config)
-	if config.UserAgent == "" {
-		config.UserAgent = rest.DefaultKubernetesUserAgent()
 	}
 
 	// Create the recorder provider to inject event recorders for the components.

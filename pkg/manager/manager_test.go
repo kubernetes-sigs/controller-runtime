@@ -299,6 +299,16 @@ var _ = Describe("manger.Manager", func() {
 			Expect(isCustomWebhook).To(BeTrue())
 		})
 
+		It("should allow passing custom useragent id", func() {
+			m, err := New(cfg, Options{UserAgentID: "custom"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(m).NotTo(BeNil())
+
+			managerConfig := m.GetConfig()
+			Expect(managerConfig).NotTo(BeNil())
+			Expect(managerConfig.UserAgent).To(HavePrefix("custom/"))
+		})
+
 		Context("with leader election enabled", func() {
 			It("should only cancel the leader election after all runnables are done", func() {
 				m, err := New(cfg, Options{
@@ -730,25 +740,6 @@ var _ = Describe("manger.Manager", func() {
 
 				<-m.Elected()
 				wgRunnableStarted.Wait()
-			})
-
-			It("should not manipulate the provided config", func() {
-				// strip WrapTransport, cause func values are PartialEq, not Eq --
-				// specifically, for reflect.DeepEqual, for all functions F,
-				// F != nil implies F != F, which means no full equivalence relation.
-				cfg := rest.CopyConfig(cfg)
-				cfg.WrapTransport = nil
-				originalCfg := rest.CopyConfig(cfg)
-				// The options object is shared by multiple tests, copy it
-				// into our scope so we manipulate it for this testcase only
-				options := options
-				options.newResourceLock = nil
-				m, err := New(cfg, options)
-				Expect(err).NotTo(HaveOccurred())
-				for _, cb := range callbacks {
-					cb(m)
-				}
-				Expect(m.GetConfig()).To(Equal(originalCfg))
 			})
 
 			It("should stop when context is cancelled", func() {

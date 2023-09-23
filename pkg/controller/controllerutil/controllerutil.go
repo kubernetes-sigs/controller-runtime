@@ -152,6 +152,28 @@ func RemoveOwnerReference(owner, object metav1.Object, scheme *runtime.Scheme) e
 	return nil
 }
 
+// HasControllerReference returns true if the object
+// has an owner ref with controller equal to true
+func HasControllerReference(object metav1.Object) bool {
+	owners := object.GetOwnerReferences()
+	for _, owner := range owners {
+		isTrue := owner.Controller
+		if owner.Controller != nil && *isTrue {
+			return true
+		}
+	}
+	return false
+}
+
+// RemoveControllerReference removes an owner reference where the controller
+// equals true
+func RemoveControllerReference(owner, object metav1.Object, scheme *runtime.Scheme) error {
+	if ok := HasControllerReference(object); !ok {
+		return fmt.Errorf("%T does not have a owner reference with controller equals true", object)
+	}
+	return RemoveOwnerReference(owner, object, scheme)
+}
+
 func upsertOwnerRef(ref metav1.OwnerReference, object metav1.Object) {
 	owners := object.GetOwnerReferences()
 	if idx := indexOwnerRef(owners, ref); idx == -1 {

@@ -40,6 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -1588,6 +1589,28 @@ var _ = Describe("Fake client", func() {
 		Expect(cmp.Diff(objOriginal, actual)).ToNot(BeEmpty())
 		Expect(objOriginal.Status.NodeInfo.MachineID).To(Equal(actual.Status.NodeInfo.MachineID))
 		Expect(objOriginal.Status.Phase).ToNot(Equal(actual.Status.Phase))
+	})
+
+	It("should be able to change typed objects that have a scale subresource on patch", func() {
+		obj := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "deploy",
+			},
+		}
+		cl := NewClientBuilder().WithObjects(obj).Build()
+		objOriginal := obj.DeepCopy()
+
+		patch := []byte(fmt.Sprintf(`{"spec":{"replicas":%d}}`, 2))
+		Expect(cl.SubResource("scale").Patch(context.Background(), obj, client.RawPatch(types.MergePatchType, patch))).NotTo(HaveOccurred())
+
+		actual := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(actual), actual)).To(Succeed())
+
+		objOriginal.APIVersion = actual.APIVersion
+		objOriginal.Kind = actual.Kind
+		objOriginal.ResourceVersion = actual.ResourceVersion
+		objOriginal.Spec.Replicas = pointer.Int32(2)
+		Expect(cmp.Diff(objOriginal, actual)).To(BeEmpty())
 	})
 
 	It("should not change the status of typed objects that have a status subresource on patch", func() {

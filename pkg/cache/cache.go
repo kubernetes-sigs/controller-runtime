@@ -188,6 +188,12 @@ type Options struct {
 	// unless there is already one set in ByObject or DefaultNamespaces.
 	DefaultTransform toolscache.TransformFunc
 
+	// DefaultWatchErrorHandler will be used to the WatchErrorHandler which is called
+	// whenever ListAndWatch drops the connection with an error.
+	//
+	// After calling this handler, the informer will backoff and retry.
+	DefaultWatchErrorHandler toolscache.WatchErrorHandler
+
 	// DefaultUnsafeDisableDeepCopy is the default for UnsafeDisableDeepCopy
 	// for everything that doesn't specify this.
 	//
@@ -353,6 +359,7 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 					Field: config.FieldSelector,
 				},
 				Transform:             config.Transform,
+				WatchErrorHandler:     opts.DefaultWatchErrorHandler,
 				UnsafeDisableDeepCopy: pointer.BoolDeref(config.UnsafeDisableDeepCopy, false),
 				NewInformer:           opts.newInformer,
 			}),

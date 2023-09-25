@@ -1333,14 +1333,15 @@ var _ = Describe("Fake client", func() {
 					Expect(list.Items).To(BeEmpty())
 				})
 
-				It("errors when field selector uses two requirements", func() {
+				It("no error when field selector uses two requirements", func() {
 					listOpts := &client.ListOptions{
 						FieldSelector: fields.AndSelectors(
 							fields.OneTermEqualSelector("spec.replicas", "1"),
 							fields.OneTermEqualSelector("spec.strategy.type", string(appsv1.RecreateDeploymentStrategyType)),
 						)}
-					err := cl.List(context.Background(), &appsv1.DeploymentList{}, listOpts)
-					Expect(err).To(HaveOccurred())
+					list := &appsv1.DeploymentList{}
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(ConsistOf(*dep))
 				})
 			})
 		})

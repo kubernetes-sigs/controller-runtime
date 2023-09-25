@@ -1941,13 +1941,13 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(err).NotTo(HaveOccurred())
 
 					By("indexing the Namespace objects with fixed values before starting")
-					pod := &corev1.Namespace{}
+					ns := &corev1.Namespace{}
 					indexerValues := []string{"a", "b", "c"}
 					fieldName := "fixedValues"
 					indexFunc := func(obj client.Object) []string {
 						return indexerValues
 					}
-					Expect(informer.IndexField(context.TODO(), pod, fieldName, indexFunc)).To(Succeed())
+					Expect(informer.IndexField(context.TODO(), ns, fieldName, indexFunc)).To(Succeed())
 
 					By("running the cache and waiting for it to sync")
 					go func() {
@@ -1967,6 +1967,51 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(indexerValues[0]).To(Equal("a"))
 					Expect(indexerValues[1]).To(Equal("b"))
 					Expect(indexerValues[2]).To(Equal("c"))
+				})
+
+				It("should be able to matching fields with multiple indexes", func() {
+					By("creating the cache")
+					informer, err := cache.New(cfg, cache.Options{})
+					Expect(err).NotTo(HaveOccurred())
+
+					pod := &corev1.Pod{}
+					By("indexing pods with label before starting")
+					fieldName1 := "indexByLabel"
+					indexFunc1 := func(obj client.Object) []string {
+						return []string{obj.(*corev1.Pod).Labels["common-label"]}
+					}
+					Expect(informer.IndexField(context.TODO(), pod, fieldName1, indexFunc1)).To(Succeed())
+					By("indexing pods with restart policy before starting")
+					fieldName2 := "indexByPolicy"
+					indexFunc2 := func(obj client.Object) []string {
+						return []string{string(obj.(*corev1.Pod).Spec.RestartPolicy)}
+					}
+					Expect(informer.IndexField(context.TODO(), pod, fieldName2, indexFunc2)).To(Succeed())
+
+					By("running the cache and waiting for it to sync")
+					go func() {
+						defer GinkgoRecover()
+						Expect(informer.Start(informerCacheCtx)).To(Succeed())
+					}()
+					Expect(informer.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
+
+					By("listing pods with label index")
+					listObj := &corev1.PodList{}
+					Expect(informer.List(context.Background(), listObj,
+						client.MatchingFields{fieldName1: "common"})).To(Succeed())
+					Expect(listObj.Items).To(HaveLen(2))
+
+					By("listing pods with restart policy index")
+					listObj = &corev1.PodList{}
+					Expect(informer.List(context.Background(), listObj,
+						client.MatchingFields{fieldName2: string(corev1.RestartPolicyNever)})).To(Succeed())
+					Expect(listObj.Items).To(HaveLen(3))
+
+					By("listing pods with both fixed indexers 1 and 2")
+					listObj = &corev1.PodList{}
+					Expect(informer.List(context.Background(), listObj,
+						client.MatchingFields{fieldName1: "common", fieldName2: string(corev1.RestartPolicyNever)})).To(Succeed())
+					Expect(listObj.Items).To(HaveLen(1))
 				})
 			})
 			Context("with unstructured objects", func() {

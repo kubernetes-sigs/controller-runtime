@@ -1968,6 +1968,50 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(indexerValues[1]).To(Equal("b"))
 					Expect(indexerValues[2]).To(Equal("c"))
 				})
+
+				It("should work with multiple indexes", func() {
+					By("creating the cache")
+					informer, err := cache.New(cfg, cache.Options{})
+					Expect(err).NotTo(HaveOccurred())
+
+					By("indexing the Namespace objects with fixed values before starting")
+					pod := &corev1.Namespace{}
+					indexerValues1 := []string{"a", "b", "c"}
+					fieldName1 := "fixedValues1"
+					indexFunc1 := func(obj client.Object) []string {
+						return indexerValues1
+					}
+					Expect(informer.IndexField(context.TODO(), pod, fieldName1, indexFunc1)).To(Succeed())
+					indexerValues2 := []string{"b", "c", "d"}
+					fieldName2 := "fixedValues2"
+					indexFunc2 := func(obj client.Object) []string {
+						return indexerValues2
+					}
+					Expect(informer.IndexField(context.TODO(), pod, fieldName2, indexFunc2)).To(Succeed())
+
+					By("running the cache and waiting for it to sync")
+					go func() {
+						defer GinkgoRecover()
+						Expect(informer.Start(informerCacheCtx)).To(Succeed())
+					}()
+					Expect(informer.WaitForCacheSync(informerCacheCtx)).To(BeTrue())
+
+					By("listing Namespaces with fixed indexer 1")
+					listObj := &corev1.NamespaceList{}
+					Expect(informer.List(context.Background(), listObj,
+						client.MatchingFields{fieldName1: "a"})).To(Succeed())
+					Expect(listObj.Items).To(HaveLen(1))
+					By("listing Namespaces with fixed indexer 2")
+					listObj = &corev1.NamespaceList{}
+					Expect(informer.List(context.Background(), listObj,
+						client.MatchingFields{fieldName2: "b"})).To(Succeed())
+					Expect(listObj.Items).To(HaveLen(1))
+					By("listing Namespaces with both fixed indexers 1 and 2")
+					listObj = &corev1.NamespaceList{}
+					Expect(informer.List(context.Background(), listObj,
+						client.MatchingFields{fieldName1: "b", fieldName2: "b"})).To(Succeed())
+					Expect(listObj.Items).To(HaveLen(1))
+				})
 			})
 			Context("with unstructured objects", func() {
 				It("should be able to get informer for the object", func() {

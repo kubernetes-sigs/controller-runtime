@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -117,16 +118,14 @@ func (c *CacheReader) List(_ context.Context, out client.ObjectList, opts ...cli
 
 	switch {
 	case listOpts.FieldSelector != nil:
-		// TODO(directxman12): support more complicated field selectors by
-		// combining multiple indices, GetIndexers, etc
-		field, val, requiresExact := selector.RequiresExactMatch(listOpts.FieldSelector)
+		requires, requiresExact := selector.RequiresExactMatch(listOpts.FieldSelector)
 		if !requiresExact {
 			return fmt.Errorf("non-exact field matches are not supported by the cache")
 		}
 		// list all objects by the field selector. If this is namespaced and we have one, ask for the
 		// namespaced index key. Otherwise, ask for the non-namespaced variant by using the fake "all namespaces"
 		// namespace.
-		objs, err = c.indexer.ByIndex(FieldIndexName(field), KeyToNamespacedKey(listOpts.Namespace, val))
+		objs, err = byIndexes(c.indexer, requires, listOpts.Namespace)
 	case listOpts.Namespace != "":
 		objs, err = c.indexer.ByIndex(cache.NamespaceIndex, listOpts.Namespace)
 	default:
@@ -176,6 +175,42 @@ func (c *CacheReader) List(_ context.Context, out client.ObjectList, opts ...cli
 		runtimeObjs = append(runtimeObjs, outObj)
 	}
 	return apimeta.SetList(out, runtimeObjs)
+}
+
+func byIndexes(indexer cache.Indexer, requires map[string]string, namespace string) ([]interface{}, error) {
+	var (
+		keysSet = sets.NewString()
+		keys    []string
+		err     error
+	)
+	for fieldKey, fieldVal := range requires {
+		keys, err = indexer.IndexKeys(FieldIndexName(fieldKey), KeyToNamespacedKey(namespace, fieldVal))
+		if err != nil {
+			return nil, err
+		}
+		if len(keys) == 0 {
+			return nil, nil
+		}
+		if keysSet.Len() == 0 {
+			keysSet = keysSet.Insert(keys...)
+		} else {
+			keysSet = keysSet.Intersection(sets.NewString(keys...))
+			if keysSet.Len() == 0 {
+				return nil, nil
+			}
+		}
+	}
+	objs := make([]interface{}, 0, keysSet.Len())
+	for key := range keysSet {
+		obj, exist, err := indexer.GetByKey(key)
+		if err != nil {
+			return nil, err
+		}
+		if exist {
+			objs = append(objs, obj)
+		}
+	}
+	return objs, nil
 }
 
 // objectKeyToStorageKey converts an object key to store key.

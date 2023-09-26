@@ -192,6 +192,8 @@ func ExampleClient_patch() {
 }
 
 // This example shows how to use the client with unstructured objects to create/patch objects using Server Side Apply,
+// "k8s.io/apimachinery/pkg/runtime".DefaultUnstructuredConverter.ToUnstructured is used to convert an object into map[string]any representation,
+// which is then set as an "Object" field in *unstructured.Unstructured struct, which implements client.Object.
 func ExampleClient_apply() {
 	// Using a typed object.
 	configMap := corev1ac.ConfigMap("name", "namespace").WithData(map[string]string{"key": "value"})

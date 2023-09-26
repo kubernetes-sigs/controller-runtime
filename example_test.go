@@ -18,6 +18,7 @@ package controllerruntime_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -74,9 +75,23 @@ type ExampleCRDWithConfigMapRef struct {
 	ConfigMapRef      corev1.LocalObjectReference `json:"configMapRef"`
 }
 
+func deepCopyObject(arg any) runtime.Object {
+	// DO NOT use this code in production code, this is only for presentation purposes.
+	// in real code you should generate DeepCopy methods by using controller-gen CLI tool.
+	argBytes, err := json.Marshal(arg)
+	if err != nil {
+		panic(err)
+	}
+	out := &ExampleCRDWithConfigMapRefList{}
+	if err := json.Unmarshal(argBytes, out); err != nil {
+		panic(err)
+	}
+	return out
+}
+
 // DeepCopyObject implements client.Object.
-func (*ExampleCRDWithConfigMapRef) DeepCopyObject() runtime.Object {
-	panic("unimplemented")
+func (in *ExampleCRDWithConfigMapRef) DeepCopyObject() runtime.Object {
+	return deepCopyObject(in)
 }
 
 type ExampleCRDWithConfigMapRefList struct {
@@ -86,14 +101,14 @@ type ExampleCRDWithConfigMapRefList struct {
 }
 
 // DeepCopyObject implements client.ObjectList.
-func (*ExampleCRDWithConfigMapRefList) DeepCopyObject() runtime.Object {
-	panic("unimplemented")
+func (in *ExampleCRDWithConfigMapRefList) DeepCopyObject() runtime.Object {
+	return deepCopyObject(in)
 }
 
 // This example creates a simple application Controller that is configured for ExampleCRDWithConfigMapRef CRD.
 // Any change in the configMap referenced in this Custom Resource will cause the re-reconcile of the parent ExampleCRDWithConfigMapRef
 // due to the implementation of the .Watches method of "sigs.k8s.io/controller-runtime/pkg/builder".Builder.
-func Example_watches() {
+func Example_customHandler() {
 	log := ctrl.Log.WithName("builder-examples")
 
 	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
@@ -106,7 +121,7 @@ func Example_watches() {
 		NewControllerManagedBy(manager).
 		For(&ExampleCRDWithConfigMapRef{}).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, cm client.Object) []ctrl.Request {
-			// map a change to referenced configMap to ExampleCRDWithConfigMapRef, which causes its re-reconcile
+			// map a change from referenced configMap to ExampleCRDWithConfigMapRef, which causes its re-reconcile
 			crList := &ExampleCRDWithConfigMapRefList{}
 			if err := manager.GetClient().List(ctx, crList); err != nil {
 				manager.GetLogger().Error(err, "while listing ExampleCRDWithConfigMapRefs")

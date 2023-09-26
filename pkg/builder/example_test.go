@@ -38,7 +38,7 @@ import (
 func ExampleBuilder_metadata_only() {
 	logf.SetLogger(zap.New())
 
-	var log = logf.Log.WithName("builder-examples")
+	log := logf.Log.WithName("builder-examples")
 
 	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
 	if err != nil {
@@ -95,7 +95,7 @@ func ExampleBuilder_metadata_only() {
 func ExampleBuilder() {
 	logf.SetLogger(zap.New())
 
-	var log = logf.Log.WithName("builder-examples")
+	log := logf.Log.WithName("builder-examples")
 
 	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
 	if err != nil {

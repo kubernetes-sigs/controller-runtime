@@ -101,6 +101,10 @@ type Options struct {
 	// TLSOpts is used to allow configuring the TLS config used for the server.
 	// This also allows providing a certificate via GetCertificate.
 	TLSOpts []func(*tls.Config)
+
+	// ListenConfig contains options for listening to an address on the metric server.
+	// Note: This does not work with SecureServing=true
+	ListenConfig net.ListenConfig
 }
 
 // Filter is a func that is added around metrics and extra handlers on the metrics server.
@@ -249,7 +253,7 @@ func (s *defaultServer) Start(ctx context.Context) error {
 
 func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (net.Listener, error) {
 	if !s.options.SecureServing {
-		return net.Listen("tcp", s.options.BindAddress)
+		return s.options.ListenConfig.Listen(context.Background(), "tcp", s.options.BindAddress)
 	}
 
 	cfg := &tls.Config{ //nolint:gosec

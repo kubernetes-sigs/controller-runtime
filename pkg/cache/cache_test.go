@@ -442,6 +442,34 @@ var _ = Describe("Cache with selectors", func() {
 	})
 })
 
+var _ = Describe("Cache with NewFunc configuration", func() {
+	It("should invoke configured NewFunc functions", func() {
+		var serviceAccountCache, configMapCache bool
+
+		opts := cache.Options{
+			ByObject: map[client.Object]cache.ByObject{
+				&corev1.ServiceAccount{}: {
+					NewCache: func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+						serviceAccountCache = true
+						return nil, nil
+					},
+				},
+				&corev1.ConfigMap{}: {
+					NewCache: func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+						configMapCache = true
+						return nil, nil
+					},
+				},
+			},
+		}
+
+		_, err := cache.New(cfg, opts)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(serviceAccountCache).To(BeTrue())
+		Expect(configMapCache).To(BeTrue())
+	})
+})
+
 func CacheTestReaderFailOnMissingInformer(createCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error), opts cache.Options) {
 	Describe("Cache test with ReaderFailOnMissingInformer = true", func() {
 		var (

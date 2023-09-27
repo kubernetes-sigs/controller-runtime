@@ -249,6 +249,12 @@ type ByObject struct {
 	// Be very careful with this, when enabled you must DeepCopy any object before mutating it,
 	// otherwise you will mutate the object in the cache.
 	UnsafeDisableDeepCopy *bool
+
+	// NewCache allows to use a custom cache creation function for the object.
+	//
+	// NOTE: LOW LEVEL PRIMITIVE!
+	// Only use a custom NewCache if you know what you are doing.
+	NewCache NewCacheFunc
 }
 
 // Config describes all potential options for a given watch.
@@ -313,9 +319,16 @@ func New(cfg *rest.Config, opts Options) (Cache, error) {
 			return nil, fmt.Errorf("failed to get GVK for type %T: %w", obj, err)
 		}
 		var cache Cache
-		if len(config.Namespaces) > 0 {
+
+		switch {
+		case config.NewCache != nil:
+			cache, err = config.NewCache(cfg, opts)
+			if err != nil {
+				return nil, err
+			}
+		case len(config.Namespaces) > 0:
 			cache = newMultiNamespaceCache(newCacheFunc, opts.Scheme, opts.Mapper, config.Namespaces, nil)
-		} else {
+		default:
 			cache = newCacheFunc(byObjectToConfig(config), corev1.NamespaceAll)
 		}
 		delegating.caches[gvk] = cache

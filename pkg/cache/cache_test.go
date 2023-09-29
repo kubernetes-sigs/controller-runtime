@@ -449,13 +449,27 @@ var _ = Describe("Cache with NewFunc configuration", func() {
 		opts := cache.Options{
 			ByObject: map[client.Object]cache.ByObject{
 				&corev1.ServiceAccount{}: {
-					NewCache: func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+					UnsafeDisableDeepCopy: pointer.Bool(true),
+					NewCache: func(_ *rest.Config, opts cache.Options) (cache.Cache, error) {
+						Expect(opts.ByObject).To(HaveLen(1))
+						for obj, config := range opts.ByObject {
+							Expect(obj).To(Equal(&corev1.ServiceAccount{}))
+							Expect(config.UnsafeDisableDeepCopy).To(Equal(pointer.Bool(true)))
+						}
+
 						serviceAccountCache = true
 						return nil, nil
 					},
 				},
 				&corev1.ConfigMap{}: {
-					NewCache: func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+					Label: labels.Nothing(),
+					NewCache: func(_ *rest.Config, opts cache.Options) (cache.Cache, error) {
+						Expect(opts.ByObject).To(HaveLen(1))
+						for obj, config := range opts.ByObject {
+							Expect(obj).To(Equal(&corev1.ConfigMap{}))
+							Expect(config.Label).To(Equal(labels.Nothing()))
+						}
+
 						configMapCache = true
 						return nil, nil
 					},

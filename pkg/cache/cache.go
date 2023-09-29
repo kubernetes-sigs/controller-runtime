@@ -251,6 +251,8 @@ type ByObject struct {
 	UnsafeDisableDeepCopy *bool
 
 	// NewCache allows to use a custom cache creation function for the object.
+	// The Options object passed to the NewCache function is pruned to only contain
+	// the object's relevant ByObject configuration.
 	//
 	// NOTE: LOW LEVEL PRIMITIVE!
 	// Only use a custom NewCache if you know what you are doing.
@@ -322,7 +324,8 @@ func New(cfg *rest.Config, opts Options) (Cache, error) {
 
 		switch {
 		case config.NewCache != nil:
-			cache, err = config.NewCache(cfg, opts)
+			object := obj
+			cache, err = config.NewCache(cfg, byObjectOptions(object, opts, config))
 			if err != nil {
 				return nil, err
 			}
@@ -353,6 +356,13 @@ func byObjectToConfig(byObject ByObject) Config {
 		Transform:             byObject.Transform,
 		UnsafeDisableDeepCopy: byObject.UnsafeDisableDeepCopy,
 	}
+}
+
+func byObjectOptions(obj client.Object, opts Options, byObject ByObject) Options {
+	opts.ByObject = map[client.Object]ByObject{
+		obj: byObject,
+	}
+	return opts
 }
 
 type newCacheFunc func(config Config, namespace string) Cache

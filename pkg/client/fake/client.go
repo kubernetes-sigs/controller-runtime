@@ -404,7 +404,9 @@ func (t versionedTracker) update(gvr schema.GroupVersionResource, obj runtime.Ob
 				return fmt.Errorf("failed to copy non-status field for object with status subresouce: %w", err)
 			}
 			passedRV := accessor.GetResourceVersion()
-			reflect.ValueOf(obj).Elem().Set(reflect.ValueOf(oldObject.DeepCopyObject()).Elem())
+			if err := copyFrom(oldObject, obj); err != nil {
+				return fmt.Errorf("failed to restore non-status fields: %w", err)
+			}
 			accessor.SetResourceVersion(passedRV)
 		} else { // copy status from original object
 			if err := copyStatusFrom(oldObject, obj); err != nil {
@@ -966,6 +968,19 @@ func copyStatusFrom(old, new runtime.Object) error {
 	newMapStringAny["status"] = oldMapStringAny["status"]
 
 	if err := fromMapStringAny(newMapStringAny, new); err != nil {
+		return fmt.Errorf("failed to convert back from map[string]any: %w", err)
+	}
+
+	return nil
+}
+
+// copyFrom copies from old into new
+func copyFrom(old, new runtime.Object) error {
+	oldMapStringAny, err := toMapStringAny(old)
+	if err != nil {
+		return fmt.Errorf("failed to convert old to *unstructured.Unstructured: %w", err)
+	}
+	if err := fromMapStringAny(oldMapStringAny, new); err != nil {
 		return fmt.Errorf("failed to convert back from map[string]any: %w", err)
 	}
 

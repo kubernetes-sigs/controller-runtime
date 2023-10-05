@@ -1700,6 +1700,84 @@ var _ = Describe("Fake client", func() {
 		Expect(obj.Object["spec"]).To(BeEquivalentTo("original"))
 	})
 
+	It("should not change the status of known unstructured objects that have a status subresource on update", func() {
+		obj := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "pod",
+			},
+			Spec: corev1.PodSpec{
+				RestartPolicy: corev1.RestartPolicyAlways,
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+			},
+		}
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+
+		// update using unstructured
+		u := &unstructured.Unstructured{}
+		u.SetAPIVersion("v1")
+		u.SetKind("Pod")
+		u.SetName(obj.Name)
+		err := cl.Get(context.Background(), client.ObjectKeyFromObject(u), u)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = unstructured.SetNestedField(u.Object, string(corev1.RestartPolicyNever), "spec", "restartPolicy")
+		Expect(err).NotTo(HaveOccurred())
+		err = unstructured.SetNestedField(u.Object, string(corev1.PodRunning), "status", "phase")
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(cl.Update(context.Background(), u)).To(Succeed())
+
+		actual := &corev1.Pod{}
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), actual)).To(Succeed())
+		obj.APIVersion = u.GetAPIVersion()
+		obj.Kind = u.GetKind()
+		obj.ResourceVersion = actual.ResourceVersion
+		// only the spec mutation should persist
+		obj.Spec.RestartPolicy = corev1.RestartPolicyNever
+		Expect(cmp.Diff(obj, actual)).To(BeEmpty())
+	})
+
+	It("should not change non-status field of known unstructured objects that have a status subresource on status update", func() {
+		obj := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "pod",
+			},
+			Spec: corev1.PodSpec{
+				RestartPolicy: corev1.RestartPolicyAlways,
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+			},
+		}
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+
+		// status update using unstructured
+		u := &unstructured.Unstructured{}
+		u.SetAPIVersion("v1")
+		u.SetKind("Pod")
+		u.SetName(obj.Name)
+		err := cl.Get(context.Background(), client.ObjectKeyFromObject(u), u)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = unstructured.SetNestedField(u.Object, string(corev1.RestartPolicyNever), "spec", "restartPolicy")
+		Expect(err).NotTo(HaveOccurred())
+		err = unstructured.SetNestedField(u.Object, string(corev1.PodRunning), "status", "phase")
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(cl.Status().Update(context.Background(), u)).To(Succeed())
+
+		actual := &corev1.Pod{}
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), actual)).To(Succeed())
+		obj.APIVersion = "v1"
+		obj.Kind = "Pod"
+		obj.ResourceVersion = actual.ResourceVersion
+		// only the status mutation should persist
+		obj.Status.Phase = corev1.PodRunning
+		Expect(cmp.Diff(obj, actual)).To(BeEmpty())
+	})
+
 	It("should not change the status of unstructured objects that are configured to have a status subresource on patch", func() {
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("foo/v1")

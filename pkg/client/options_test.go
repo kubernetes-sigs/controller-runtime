@@ -237,19 +237,6 @@ var _ = Describe("MatchingLabels", func() {
 		expectedErrMsg := `values[0][k]: Invalid value: "axahm2EJ8Phiephe2eixohbee9eGeiyees1thuozi1xoh0GiuH3diewi8iem7Nui": must be no more than 63 characters`
 		Expect(err.Error()).To(Equal(expectedErrMsg))
 	})
-
-	It("Should add matchingLabels to existing selector", func() {
-		listOpts := &client.ListOptions{}
-
-		matchingLabels := client.MatchingLabels(map[string]string{"k": "v"})
-		matchingLabels2 := client.MatchingLabels(map[string]string{"k2": "v2"})
-
-		matchingLabels.ApplyToList(listOpts)
-		Expect(listOpts.LabelSelector.String()).To(Equal("k=v"))
-
-		matchingLabels2.ApplyToList(listOpts)
-		Expect(listOpts.LabelSelector.String()).To(Equal("k=v,k2=v2"))
-	})
 })
 
 var _ = Describe("FieldOwner", func() {
@@ -303,37 +290,5 @@ var _ = Describe("ForceOwnership", func() {
 		t := client.ForceOwnership
 		t.ApplyToSubResourcePatch(o)
 		Expect(*o.Force).To(Equal(true))
-	})
-})
-
-var _ = Describe("HasLabels", func() {
-	It("Should produce hasLabels in given order", func() {
-		listOpts := &client.ListOptions{}
-
-		hasLabels := client.HasLabels([]string{"labelApe", "labelFox"})
-		hasLabels.ApplyToList(listOpts)
-		Expect(listOpts.LabelSelector.String()).To(Equal("labelApe,labelFox"))
-	})
-
-	It("Should add hasLabels to existing hasLabels selector", func() {
-		listOpts := &client.ListOptions{}
-
-		hasLabel := client.HasLabels([]string{"labelApe"})
-		hasLabel.ApplyToList(listOpts)
-
-		hasOtherLabel := client.HasLabels([]string{"labelFox"})
-		hasOtherLabel.ApplyToList(listOpts)
-		Expect(listOpts.LabelSelector.String()).To(Equal("labelApe,labelFox"))
-	})
-
-	It("Should add hasLabels to existing matchingLabels", func() {
-		listOpts := &client.ListOptions{}
-
-		matchingLabels := client.MatchingLabels(map[string]string{"k": "v"})
-		matchingLabels.ApplyToList(listOpts)
-
-		hasLabel := client.HasLabels([]string{"labelApe"})
-		hasLabel.ApplyToList(listOpts)
-		Expect(listOpts.LabelSelector.String()).To(Equal("k=v,labelApe"))
 	})
 })

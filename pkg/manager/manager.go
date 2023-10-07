@@ -409,7 +409,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, fmt.Errorf("failed to new pprof listener: %w", err)
 	}
 
-	errChan := make(chan error)
+	errChan := make(chan error, 1)
 	runnables := newRunnables(options.BaseContext, errChan)
 	return &controllerManager{
 		stopProcedureEngaged:          pointer.Int64(0),

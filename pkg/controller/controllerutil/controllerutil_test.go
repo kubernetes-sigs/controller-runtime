@@ -195,6 +195,51 @@ var _ = Describe("Controllerutil", func() {
 			Expect(controllerutil.RemoveOwnerReference(dep2, rs, scheme.Scheme)).To(HaveOccurred())
 			Expect(rs.GetOwnerReferences()).To(HaveLen(1))
 		})
+
+		It("should return true when HasControllerReference evaluates owner reference set by SetControllerReference", func() {
+			rs := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{},
+			}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+			}
+			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(controllerutil.HasControllerReference(rs)).To(BeTrue())
+		})
+
+		It("should return false when HasControllerReference evaluates owner reference set by SetOwnerReference", func() {
+			rs := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{},
+			}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+			}
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(controllerutil.HasControllerReference(rs)).To(BeFalse())
+		})
+
+		It("should error when RemoveControllerReference owner's controller is set to false", func() {
+			rs := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{},
+			}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+			}
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(controllerutil.RemoveControllerReference(dep, rs, scheme.Scheme)).To(HaveOccurred())
+		})
+
+		It("should not error when RemoveControllerReference owner's controller is set to true", func() {
+			rs := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{},
+			}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+			}
+			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(controllerutil.RemoveControllerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(rs.GetOwnerReferences()).To(BeEmpty())
+		})
 	})
 
 	Describe("SetControllerReference", func() {

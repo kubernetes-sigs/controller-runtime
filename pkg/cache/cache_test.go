@@ -1543,6 +1543,9 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					}
 					return obtainedPodNames
 				}, ConsistOf(tc.expectedPods)))
+				for _, pod := range obtainedStructuredPodList.Items {
+					Expect(informer.Get(context.Background(), client.ObjectKeyFromObject(&pod), &pod)).To(Succeed()) //nolint:gosec // We don't retain the pointer
+				}
 
 				By("Checking with unstructured")
 				obtainedUnstructuredPodList := unstructured.UnstructuredList{}
@@ -1560,6 +1563,9 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					}
 					return obtainedPodNames
 				}, ConsistOf(tc.expectedPods)))
+				for _, pod := range obtainedUnstructuredPodList.Items {
+					Expect(informer.Get(context.Background(), client.ObjectKeyFromObject(&pod), &pod)).To(Succeed()) //nolint:gosec // We don't retain the pointer
+				}
 
 				By("Checking with metadata")
 				obtainedMetadataPodList := metav1.PartialObjectMetadataList{}
@@ -1577,6 +1583,9 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					}
 					return obtainedPodNames
 				}, ConsistOf(tc.expectedPods)))
+				for _, pod := range obtainedMetadataPodList.Items {
+					Expect(informer.Get(context.Background(), client.ObjectKeyFromObject(&pod), &pod)).To(Succeed()) //nolint:gosec // We don't retain the pointer
+				}
 			},
 				Entry("when selectors are empty it has to inform about all the pods", selectorsTestCase{
 					expectedPods: []string{"test-pod-1", "test-pod-2", "test-pod-3", "test-pod-4", "test-pod-5", "test-pod-6"},
@@ -1788,6 +1797,54 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						},
 					},
 					expectedPods: []string{},
+				}),
+				Entry("Only NamespaceAll in DefaultNamespaces returns all pods", selectorsTestCase{
+					options: cache.Options{
+						DefaultNamespaces: map[string]cache.Config{
+							metav1.NamespaceAll: {},
+						},
+					},
+					expectedPods: []string{"test-pod-1", "test-pod-2", "test-pod-3", "test-pod-4", "test-pod-5", "test-pod-6"},
+				}),
+				Entry("Only NamespaceAll in ByObject.Namespaces returns all pods", selectorsTestCase{
+					options: cache.Options{
+						ByObject: map[client.Object]cache.ByObject{
+							&corev1.Pod{}: {
+								Namespaces: map[string]cache.Config{
+									metav1.NamespaceAll: {},
+								},
+							},
+						},
+					},
+					expectedPods: []string{"test-pod-1", "test-pod-2", "test-pod-3", "test-pod-4", "test-pod-5", "test-pod-6"},
+				}),
+				Entry("NamespaceAll in DefaultNamespaces creates a cache for all Namespaces that are not in DefaultNamespaces", selectorsTestCase{
+					options: cache.Options{
+						DefaultNamespaces: map[string]cache.Config{
+							metav1.NamespaceAll: {},
+							testNamespaceOne: {
+								// labels.Nothing when serialized matches everything, so we have to construct our own "match nothing" selector
+								LabelSelector: labels.SelectorFromSet(labels.Set{"no-present": "not-present"})},
+						},
+					},
+					// All pods that are not in NamespaceOne
+					expectedPods: []string{"test-pod-2", "test-pod-3", "test-pod-4", "test-pod-6"},
+				}),
+				Entry("NamespaceAll in ByObject.Namespaces creates a cache for all Namespaces that are not in ByObject.Namespaces", selectorsTestCase{
+					options: cache.Options{
+						ByObject: map[client.Object]cache.ByObject{
+							&corev1.Pod{}: {
+								Namespaces: map[string]cache.Config{
+									metav1.NamespaceAll: {},
+									testNamespaceOne: {
+										// labels.Nothing when serialized matches everything, so we have to construct our own "match nothing" selector
+										LabelSelector: labels.SelectorFromSet(labels.Set{"no-present": "not-present"})},
+								},
+							},
+						},
+					},
+					// All pods that are not in NamespaceOne
+					expectedPods: []string{"test-pod-2", "test-pod-3", "test-pod-4", "test-pod-6"},
 				}),
 			)
 		})

@@ -467,7 +467,7 @@ var _ = Describe("Eventhandler", func() {
 				{
 					Name:       "foo-parent",
 					Kind:       "HorizontalPodAutoscaler",
-					APIVersion: "autoscaling/v2beta1",
+					APIVersion: "autoscaling/v2",
 				},
 			}
 			evt := event.CreateEvent{

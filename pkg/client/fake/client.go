@@ -588,9 +588,7 @@ func (c *fakeClient) filterList(list []runtime.Object, gvk schema.GroupVersionKi
 }
 
 func (c *fakeClient) filterWithFields(list []runtime.Object, gvk schema.GroupVersionKind, fs fields.Selector) ([]runtime.Object, error) {
-	// We only allow filtering on the basis of a single field to ensure consistency with the
-	// behavior of the cache reader (which we're faking here).
-	fieldKey, fieldVal, requiresExact := selector.RequiresExactMatch(fs)
+	requiresExact := selector.RequiresExactMatch(fs)
 	if !requiresExact {
 		return nil, fmt.Errorf("field selector %s is not in one of the two supported forms \"key==val\" or \"key=val\"",
 			fs)
@@ -599,15 +597,24 @@ func (c *fakeClient) filterWithFields(list []runtime.Object, gvk schema.GroupVer
 	// Field selection is mimicked via indexes, so there's no sane answer this function can give
 	// if there are no indexes registered for the GroupVersionKind of the objects in the list.
 	indexes := c.indexes[gvk]
-	if len(indexes) == 0 || indexes[fieldKey] == nil {
-		return nil, fmt.Errorf("List on GroupVersionKind %v specifies selector on field %s, but no "+
-			"index with name %s has been registered for GroupVersionKind %v", gvk, fieldKey, fieldKey, gvk)
+	for _, req := range fs.Requirements() {
+		if len(indexes) == 0 || indexes[req.Field] == nil {
+			return nil, fmt.Errorf("List on GroupVersionKind %v specifies selector on field %s, but no "+
+				"index with name %s has been registered for GroupVersionKind %v", gvk, req.Field, req.Field, gvk)
+		}
 	}
 
-	indexExtractor := indexes[fieldKey]
 	filteredList := make([]runtime.Object, 0, len(list))
 	for _, obj := range list {
-		if c.objMatchesFieldSelector(obj, indexExtractor, fieldVal) {
+		matches := true
+		for _, req := range fs.Requirements() {
+			indexExtractor := indexes[req.Field]
+			if !c.objMatchesFieldSelector(obj, indexExtractor, req.Value) {
+				matches = false
+				break
+			}
+		}
+		if matches {
 			filteredList = append(filteredList, obj)
 		}
 	}

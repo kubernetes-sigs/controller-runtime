@@ -262,7 +262,7 @@ func ExampleClient_deleteAllOf() {
 }
 
 // This example shows how to set up and consume a field selector over a pod's volumes' secretName field.
-func ExampleFieldIndexer_secretName() {
+func ExampleFieldIndexer_secretNameNode() {
 	// someIndexer is a FieldIndexer over a Cache
 	_ = someIndexer.IndexField(context.TODO(), &corev1.Pod{}, "spec.volumes.secret.secretName", func(o client.Object) []string {
 		var res []string
@@ -276,8 +276,20 @@ func ExampleFieldIndexer_secretName() {
 		return res
 	})
 
+	_ = someIndexer.IndexField(context.TODO(), &corev1.Pod{}, "spec.NodeName", func(o client.Object) []string {
+		nodeName := o.(*corev1.Pod).Spec.NodeName
+		if nodeName != "" {
+			return []string{nodeName}
+		}
+		return nil
+	})
+
 	// elsewhere (e.g. in your reconciler)
 	mySecretName := "someSecret" // derived from the reconcile.Request, for instance
+	myNode := "master-0"
 	var podsWithSecrets corev1.PodList
-	_ = c.List(context.Background(), &podsWithSecrets, client.MatchingFields{"spec.volumes.secret.secretName": mySecretName})
+	_ = c.List(context.Background(), &podsWithSecrets, client.MatchingFields{
+		"spec.volumes.secret.secretName": mySecretName,
+		"spec.NodeName":                  myNode,
+	})
 }

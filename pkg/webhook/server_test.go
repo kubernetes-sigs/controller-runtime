@@ -23,6 +23,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path"
 	"reflect"
 
@@ -31,6 +32,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -161,6 +163,33 @@ var _ = Describe("Webhook Server", func() {
 
 			Expect(io.ReadAll(resp.Body)).To(Equal([]byte("gadzooks!")))
 		})
+	})
+
+	It("should respect environment overrides", func() {
+		port, host, err := addr.Suggest("")
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(os.Setenv(webhook.OverrideCertDirEnvVar, servingOpts.LocalServingCertDir)).To(Succeed())
+		Expect(os.Setenv(webhook.OverrideHostEnvVar, host)).To(Succeed())
+		Expect(os.Setenv(webhook.OverridePortEnvVar, fmt.Sprintf("%d", port))).To(Succeed())
+
+		testHostPort = net.JoinHostPort(host, fmt.Sprintf("%d", port))
+
+		server = webhook.NewServer(webhook.Options{})
+		server.Register("/somepath", &testHandler{})
+		doneCh := genericStartServer(func(ctx context.Context) {
+			Expect(server.Start(ctx)).To(Succeed())
+		})
+
+		Eventually(func() ([]byte, error) {
+			resp, err := client.Get(fmt.Sprintf("https://%s/somepath", testHostPort))
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			return io.ReadAll(resp.Body)
+		}).Should(Equal([]byte("gadzooks!")))
+
+		ctxCancel()
+		Eventually(doneCh, "4s").Should(BeClosed())
 	})
 
 	It("should respect passed in TLS configurations", func() {

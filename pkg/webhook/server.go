@@ -35,6 +35,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
+const (
+	// OverrideHostEnvVar is the environment variable that can be used to override the default host.
+	OverrideHostEnvVar = "CONTROLLER_RUNTIME_WEBHOOK_HOST"
+	// OverridePortEnvVar is the environment variable that can be used to override the default port.
+	OverridePortEnvVar = "CONTROLLER_RUNTIME_WEBHOOK_PORT"
+	// OverrideCertDirEnvVar is the environment variable that can be used to override the default cert dir.
+	OverrideCertDirEnvVar = "CONTROLLER_RUNTIME_WEBHOOK_CERT_DIR"
+)
+
 // DefaultPort is the default port that the webhook server serves.
 var DefaultPort = 9443
 
@@ -136,12 +145,29 @@ func (o *Options) setDefaults() {
 		o.WebhookMux = http.NewServeMux()
 	}
 
+	if o.Host == "" {
+		if host := os.Getenv(OverrideHostEnvVar); len(host) > 0 {
+			o.Host = host
+		}
+	}
+
 	if o.Port <= 0 {
-		o.Port = DefaultPort
+		if port := os.Getenv(OverridePortEnvVar); len(port) > 0 {
+			p, err := strconv.Atoi(port)
+			if err == nil {
+				o.Port = p
+			}
+		} else {
+			o.Port = DefaultPort
+		}
 	}
 
 	if len(o.CertDir) == 0 {
-		o.CertDir = filepath.Join(os.TempDir(), "k8s-webhook-server", "serving-certs")
+		if dir := os.Getenv(OverrideCertDirEnvVar); len(dir) > 0 {
+			o.CertDir = dir
+		} else {
+			o.CertDir = filepath.Join(os.TempDir(), "k8s-webhook-server", "serving-certs")
+		}
 	}
 
 	if len(o.CertName) == 0 {

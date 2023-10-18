@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/sethvargo/go-envconfig"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -318,6 +319,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}
 	// Set default values for options fields
 	options = setOptionsDefaults(options)
+	options = setOptionsFromEnv(options)
 
 	cluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {
 		clusterOptions.Scheme = options.Scheme
@@ -663,6 +665,69 @@ func setOptionsDefaults(options Options) Options {
 
 	if options.WebhookServer == nil {
 		options.WebhookServer = webhook.NewServer(webhook.Options{})
+	}
+
+	return options
+}
+
+type envOptions struct {
+	// Override determines whether or not to use environment variables to override
+	// controller global configuration options.
+	Override bool `env:"ENV_OVERRIDE"`
+
+	MetricsSecureServing   *bool   `env:"METRICS_SERVER_SECURE_SERVING,noinit"`
+	MetricsBindAddress     *string `env:"METRICS_SERVER_BIND_ADDRESS,noinit"`
+	MetricsCertDir         *string `env:"METRICS_SERVER_CERT_DIR,noinit"`
+	HealthProbeBindAddress *string `env:"HEALTH_PROBE_BIND_ADDRESS,noinit"`
+	PprofBindAddress       *string `env:"PPROF_BIND_ADDRESS,noinit"`
+	WebhookPort            *int    `env:"WEBHOOK_SERVER_PORT,noinit"`
+	WebhookHost            *string `env:"WEBHOOK_SERVER_HOST,noinit"`
+	WebhookCertDir         *string `env:"WEBHOOK_SERVER_CERT_DIR,noinit"`
+}
+
+func setOptionsFromEnv(options Options) Options {
+	env := &envOptions{}
+	look := envconfig.PrefixLookuper("CONTROLLER_RUNTIME_", envconfig.OsLookuper())
+	if err := envconfig.ProcessWith(context.Background(), env, look); err != nil {
+		// If there was an error processing the environment variables, log, and continue.
+		options.Logger.Error(err, "error processing environment variables")
+		return options
+	}
+
+	// If the override flag is not set, return the options as is.
+	if !env.Override {
+		return options
+	}
+
+	if env.MetricsSecureServing != nil {
+		options.Metrics.SecureServing = *env.MetricsSecureServing
+	}
+	if env.MetricsBindAddress != nil {
+		options.Metrics.BindAddress = *env.MetricsBindAddress
+	}
+	if env.MetricsCertDir != nil {
+		options.Metrics.CertDir = *env.MetricsCertDir
+	}
+
+	if env.HealthProbeBindAddress != nil {
+		options.HealthProbeBindAddress = *env.HealthProbeBindAddress
+	}
+	if env.PprofBindAddress != nil {
+		options.PprofBindAddress = *env.PprofBindAddress
+	}
+
+	if dh, ok := options.WebhookServer.(*webhook.DefaultServer); ok {
+		current := &dh.Options
+		if env.WebhookPort != nil {
+			current.Port = *env.WebhookPort
+		}
+		if env.WebhookHost != nil {
+			current.Host = *env.WebhookHost
+		}
+		if env.WebhookCertDir != nil {
+			current.CertDir = *env.WebhookCertDir
+		}
+		dh.Options = *current
 	}
 
 	return options

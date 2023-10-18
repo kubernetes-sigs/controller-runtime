@@ -388,6 +388,30 @@ func modifyConversionWebhooks(crds []*apiextensionsv1.CustomResourceDefinition, 
 				Webhook: &apiextensionsv1.WebhookConversion{},
 			}
 		}
+
+		// If we have a list of namespaced name services, we only want to enable
+		// the webhook for those services.
+		if len(webhookOptions.NamespacedNameServices) > 0 {
+			clientConfig := crds[i].Spec.Conversion.Webhook.ClientConfig
+			if clientConfig == nil {
+				// If the client config is nil, and we have a selector, ignore.
+				continue
+			}
+
+			// If the client config is not nil, and we have a selector,
+			// look for a match.
+			found := false
+			for _, nsName := range webhookOptions.NamespacedNameServices {
+				if nsName.Namespace == clientConfig.Service.Namespace && nsName.Name == clientConfig.Service.Name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+
 		crds[i].Spec.Conversion.Strategy = apiextensionsv1.WebhookConverter
 		crds[i].Spec.Conversion.Webhook.ConversionReviewVersions = []string{"v1", "v1beta1"}
 		crds[i].Spec.Conversion.Webhook.ClientConfig = &apiextensionsv1.WebhookClientConfig{

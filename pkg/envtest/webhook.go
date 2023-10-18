@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -42,6 +43,11 @@ import (
 type WebhookInstallOptions struct {
 	// Paths is a list of paths to the directories or files containing the mutating or validating webhooks yaml or json configs.
 	Paths []string
+
+	// NamespacedNameServices is a list of services to use for the webhook client config.
+	// Upon install, envtest will replace the service spec with the host and port of the webhook server, and remove the service spec.
+	// Use this if you want to limit which services are replaced.
+	NamespacedNameServices []types.NamespacedName
 
 	// MutatingWebhooks is a list of MutatingWebhookConfigurations to install
 	MutatingWebhooks []*admissionv1.MutatingWebhookConfiguration
@@ -91,25 +97,43 @@ func (o *WebhookInstallOptions) ModifyWebhookDefinitions() error {
 
 	for i := range o.MutatingWebhooks {
 		for j := range o.MutatingWebhooks[i].Webhooks {
-			updateClientConfig(&o.MutatingWebhooks[i].Webhooks[j].ClientConfig, hostPort, caData)
+			updateClientConfig(o.NamespacedNameServices, &o.MutatingWebhooks[i].Webhooks[j].ClientConfig, hostPort, caData)
 		}
 	}
 
 	for i := range o.ValidatingWebhooks {
 		for j := range o.ValidatingWebhooks[i].Webhooks {
-			updateClientConfig(&o.ValidatingWebhooks[i].Webhooks[j].ClientConfig, hostPort, caData)
+			updateClientConfig(o.NamespacedNameServices, &o.ValidatingWebhooks[i].Webhooks[j].ClientConfig, hostPort, caData)
 		}
 	}
 	return nil
 }
 
-func updateClientConfig(cc *admissionv1.WebhookClientConfig, hostPort string, caData []byte) {
+func updateClientConfig(selectors []types.NamespacedName, cc *admissionv1.WebhookClientConfig, hostPort string, caData []byte) {
 	cc.CABundle = caData
-	if cc.Service != nil && cc.Service.Path != nil {
-		url := fmt.Sprintf("https://%s/%s", hostPort, *cc.Service.Path)
-		cc.URL = &url
-		cc.Service = nil
+	if cc.Service == nil || cc.Service.Path == nil {
+		return
 	}
+
+	// If we have a list of namespaced name services, we only want to enable
+	// the webhook for those services.
+	if len(selectors) > 0 {
+		// look for a match.
+		found := false
+		for _, nsName := range selectors {
+			if nsName.Namespace == cc.Service.Namespace && nsName.Name == cc.Service.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return
+		}
+	}
+
+	url := fmt.Sprintf("https://%s/%s", hostPort, *cc.Service.Path)
+	cc.URL = &url
+	cc.Service = nil
 }
 
 func (o *WebhookInstallOptions) generateHostPort() (string, error) {
@@ -184,7 +208,8 @@ func defaultWebhookOptions(o *WebhookInstallOptions) {
 func WaitForWebhooks(config *rest.Config,
 	mutatingWebhooks []*admissionv1.MutatingWebhookConfiguration,
 	validatingWebhooks []*admissionv1.ValidatingWebhookConfiguration,
-	options WebhookInstallOptions) error {
+	options WebhookInstallOptions,
+) error {
 	waitingFor := map[schema.GroupVersionKind]*sets.Set[string]{}
 
 	for _, hook := range mutatingWebhooks {
@@ -242,7 +267,7 @@ func (p *webhookPoller) poll(ctx context.Context) (done bool, err error) {
 			continue
 		}
 		for _, name := range names.UnsortedList() {
-			var obj = &unstructured.Unstructured{}
+			obj := &unstructured.Unstructured{}
 			obj.SetGroupVersionKind(gvk)
 			err := c.Get(context.Background(), client.ObjectKey{
 				Namespace: "",
@@ -288,10 +313,10 @@ func (o *WebhookInstallOptions) setupCA() error {
 		return fmt.Errorf("unable to marshal webhook serving certs: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(localServingCertsDir, "tls.crt"), certData, 0640); err != nil { //nolint:gosec
+	if err := os.WriteFile(filepath.Join(localServingCertsDir, "tls.crt"), certData, 0o640); err != nil { //nolint:gosec
 		return fmt.Errorf("unable to write webhook serving cert to disk: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(localServingCertsDir, "tls.key"), keyData, 0640); err != nil { //nolint:gosec
+	if err := os.WriteFile(filepath.Join(localServingCertsDir, "tls.key"), keyData, 0o640); err != nil { //nolint:gosec
 		return fmt.Errorf("unable to write webhook serving key to disk: %w", err)
 	}
 

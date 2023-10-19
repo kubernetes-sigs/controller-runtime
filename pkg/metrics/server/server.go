@@ -103,7 +103,7 @@ type Options struct {
 	TLSOpts []func(*tls.Config)
 
 	// ListenConfig contains options for listening to an address on the metric server.
-	ListenConfig *net.ListenConfig
+	ListenConfig net.ListenConfig
 }
 
 // Filter is a func that is added around metrics and extra handlers on the metrics server.
@@ -252,11 +252,7 @@ func (s *defaultServer) Start(ctx context.Context) error {
 
 func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (net.Listener, error) {
 	if !s.options.SecureServing {
-		if s.options.ListenConfig == nil {
-			return net.Listen("tcp", s.options.BindAddress)
-		} else {
-			return s.options.ListenConfig.Listen(context.Background(), "tcp", s.options.BindAddress)
-		}
+		return s.options.ListenConfig.Listen(ctx, "tcp", s.options.BindAddress)
 	}
 
 	cfg := &tls.Config{ //nolint:gosec
@@ -309,14 +305,7 @@ func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (ne
 		cfg.Certificates = []tls.Certificate{keyPair}
 	}
 
-	var l net.Listener
-	var err error
-
-	if s.options.ListenConfig == nil {
-		l, err = net.Listen("tcp", s.options.BindAddress)
-	} else {
-		l, err = s.options.ListenConfig.Listen(context.Background(), "tcp", s.options.BindAddress)
-	}
+	l, err := s.options.ListenConfig.Listen(ctx, "tcp", s.options.BindAddress)
 
 	return tls.NewListener(l, cfg), err
 }

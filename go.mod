@@ -17,11 +17,11 @@ require (
 	golang.org/x/sys v0.13.0
 	golang.org/x/time v0.3.0
 	gomodules.xyz/jsonpatch/v2 v2.2.0
-	k8s.io/api v0.26.1
-	k8s.io/apiextensions-apiserver v0.26.1
-	k8s.io/apimachinery v0.26.1
-	k8s.io/client-go v0.26.1
-	k8s.io/component-base v0.26.1
+	k8s.io/api v0.26.10
+	k8s.io/apiextensions-apiserver v0.26.10
+	k8s.io/apimachinery v0.26.10
+	k8s.io/client-go v0.26.10
+	k8s.io/component-base v0.26.10
 	k8s.io/klog/v2 v2.80.1
 	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448
 	sigs.k8s.io/yaml v1.3.0
@@ -41,7 +41,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
-	github.com/google/uuid v1.1.2 // indirect
+	github.com/google/uuid v1.3.0 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect

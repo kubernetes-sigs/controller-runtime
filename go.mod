@@ -17,11 +17,11 @@ require (
 	go.uber.org/zap v1.24.0
 	golang.org/x/sys v0.13.0
 	gomodules.xyz/jsonpatch/v2 v2.3.0
-	k8s.io/api v0.27.2
-	k8s.io/apiextensions-apiserver v0.27.2
-	k8s.io/apimachinery v0.27.2
-	k8s.io/client-go v0.27.2
-	k8s.io/component-base v0.27.2
+	k8s.io/api v0.27.7
+	k8s.io/apiextensions-apiserver v0.27.7
+	k8s.io/apimachinery v0.27.7
+	k8s.io/client-go v0.27.7
+	k8s.io/component-base v0.27.7
 	k8s.io/klog/v2 v2.90.1
 	k8s.io/utils v0.0.0-20230209194617-a36077c30491
 	sigs.k8s.io/yaml v1.3.0

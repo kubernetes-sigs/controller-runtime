@@ -64,7 +64,7 @@ type mapper struct {
 func (m *mapper) KindFor(resource schema.GroupVersionResource) (schema.GroupVersionKind, error) {
 	res, err := m.getMapper().KindFor(resource)
 	if meta.IsNoMatchError(err) {
-		if err := m.addKnownGroupAndReload(resource.Group, resource.Version); err != nil {
+		if err := m.addKnownGroupAndReload(resource.Group); err != nil {
 			return schema.GroupVersionKind{}, err
 		}
 		res, err = m.getMapper().KindFor(resource)
@@ -77,7 +77,7 @@ func (m *mapper) KindFor(resource schema.GroupVersionResource) (schema.GroupVers
 func (m *mapper) KindsFor(resource schema.GroupVersionResource) ([]schema.GroupVersionKind, error) {
 	res, err := m.getMapper().KindsFor(resource)
 	if meta.IsNoMatchError(err) {
-		if err := m.addKnownGroupAndReload(resource.Group, resource.Version); err != nil {
+		if err := m.addKnownGroupAndReload(resource.Group); err != nil {
 			return nil, err
 		}
 		res, err = m.getMapper().KindsFor(resource)
@@ -90,7 +90,7 @@ func (m *mapper) KindsFor(resource schema.GroupVersionResource) ([]schema.GroupV
 func (m *mapper) ResourceFor(input schema.GroupVersionResource) (schema.GroupVersionResource, error) {
 	res, err := m.getMapper().ResourceFor(input)
 	if meta.IsNoMatchError(err) {
-		if err := m.addKnownGroupAndReload(input.Group, input.Version); err != nil {
+		if err := m.addKnownGroupAndReload(input.Group); err != nil {
 			return schema.GroupVersionResource{}, err
 		}
 		res, err = m.getMapper().ResourceFor(input)
@@ -103,7 +103,7 @@ func (m *mapper) ResourceFor(input schema.GroupVersionResource) (schema.GroupVer
 func (m *mapper) ResourcesFor(input schema.GroupVersionResource) ([]schema.GroupVersionResource, error) {
 	res, err := m.getMapper().ResourcesFor(input)
 	if meta.IsNoMatchError(err) {
-		if err := m.addKnownGroupAndReload(input.Group, input.Version); err != nil {
+		if err := m.addKnownGroupAndReload(input.Group); err != nil {
 			return nil, err
 		}
 		res, err = m.getMapper().ResourcesFor(input)
@@ -116,7 +116,7 @@ func (m *mapper) ResourcesFor(input schema.GroupVersionResource) ([]schema.Group
 func (m *mapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
 	res, err := m.getMapper().RESTMapping(gk, versions...)
 	if meta.IsNoMatchError(err) {
-		if err := m.addKnownGroupAndReload(gk.Group, versions...); err != nil {
+		if err := m.addKnownGroupAndReload(gk.Group); err != nil {
 			return nil, err
 		}
 		res, err = m.getMapper().RESTMapping(gk, versions...)
@@ -129,7 +129,7 @@ func (m *mapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RES
 func (m *mapper) RESTMappings(gk schema.GroupKind, versions ...string) ([]*meta.RESTMapping, error) {
 	res, err := m.getMapper().RESTMappings(gk, versions...)
 	if meta.IsNoMatchError(err) {
-		if err := m.addKnownGroupAndReload(gk.Group, versions...); err != nil {
+		if err := m.addKnownGroupAndReload(gk.Group); err != nil {
 			return nil, err
 		}
 		res, err = m.getMapper().RESTMappings(gk, versions...)
@@ -150,25 +150,17 @@ func (m *mapper) getMapper() meta.RESTMapper {
 }
 
 // addKnownGroupAndReload reloads the mapper with updated information about missing API group.
-// versions can be specified for partial updates, for instance for v1beta1 version only.
-func (m *mapper) addKnownGroupAndReload(groupName string, versions ...string) error {
-	// versions will here be [""] if the forwarded Version value of
-	// GroupVersionResource (in calling method) was not specified.
-	if len(versions) == 1 && versions[0] == "" {
-		versions = nil
-	}
-
-	// If no specific versions are set by user, we will scan all available ones for the API group.
+func (m *mapper) addKnownGroupAndReload(groupName string) error {
+	// We will scan all available ones for the API group.
 	// This operation requires 2 requests: /api and /apis, but only once. For all subsequent calls
 	// this data will be taken from cache.
-	if len(versions) == 0 {
-		apiGroup, err := m.findAPIGroupByName(groupName)
-		if err != nil {
-			return err
-		}
-		for _, version := range apiGroup.Versions {
-			versions = append(versions, version.Version)
-		}
+	var versions []string
+	apiGroup, err := m.findAPIGroupByName(groupName)
+	if err != nil {
+		return err
+	}
+	for _, version := range apiGroup.Versions {
+		versions = append(versions, version.Version)
 	}
 
 	m.mu.Lock()

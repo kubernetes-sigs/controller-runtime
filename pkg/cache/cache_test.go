@@ -1887,6 +1887,42 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("verifying the object is received on the channel")
 					Eventually(out).Should(Receive(Equal(pod)))
 				})
+				It("should be able to stop and restart informers", func() {
+					By("getting a shared index informer for a pod")
+					pod := &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "informer-obj",
+							Namespace: "default",
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx",
+								},
+							},
+						},
+					}
+					sii, err := informerCache.GetInformer(context.TODO(), pod)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(sii).NotTo(BeNil())
+					Expect(sii.HasSynced()).To(BeTrue())
+
+					By("removing the existing informer")
+					Expect(informerCache.RemoveInformer(context.TODO(), pod)).To(Succeed())
+					Eventually(sii.IsStopped).WithTimeout(5 * time.Second).Should(BeTrue())
+
+					By("recreating the informer")
+
+					sii2, err := informerCache.GetInformer(context.TODO(), pod)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(sii2).NotTo(BeNil())
+					Expect(sii2.HasSynced()).To(BeTrue())
+
+					By("validating the two informers are in different states")
+					Expect(sii.IsStopped()).To(BeTrue())
+					Expect(sii2.IsStopped()).To(BeFalse())
+				})
 				It("should be able to get an informer by group/version/kind", func() {
 					By("getting an shared index informer for gvk = core/v1/pod")
 					gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
@@ -2114,6 +2150,48 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 					By("verifying the object is received on the channel")
 					Eventually(out).Should(Receive(Equal(pod)))
+				})
+
+				It("should be able to stop and restart informers", func() {
+					By("getting a shared index informer for a pod")
+					pod := &unstructured.Unstructured{
+						Object: map[string]interface{}{
+							"spec": map[string]interface{}{
+								"containers": []map[string]interface{}{
+									{
+										"name":  "nginx",
+										"image": "nginx",
+									},
+								},
+							},
+						},
+					}
+					pod.SetName("informer-obj2")
+					pod.SetNamespace("default")
+					pod.SetGroupVersionKind(schema.GroupVersionKind{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Pod",
+					})
+					sii, err := informerCache.GetInformer(context.TODO(), pod)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(sii).NotTo(BeNil())
+					Expect(sii.HasSynced()).To(BeTrue())
+
+					By("removing the existing informer")
+					Expect(informerCache.RemoveInformer(context.TODO(), pod)).To(Succeed())
+					Eventually(sii.IsStopped).WithTimeout(5 * time.Second).Should(BeTrue())
+
+					By("recreating the informer")
+
+					sii2, err := informerCache.GetInformer(context.TODO(), pod)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(sii2).NotTo(BeNil())
+					Expect(sii2.HasSynced()).To(BeTrue())
+
+					By("validating the two informers are in different states")
+					Expect(sii.IsStopped()).To(BeTrue())
+					Expect(sii2.IsStopped()).To(BeFalse())
 				})
 
 				It("should be able to index an object field then retrieve objects by that field", func() {

@@ -83,6 +83,9 @@ type Informers interface {
 	// of the underlying object.
 	GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, opts ...InformerGetOption) (Informer, error)
 
+	// RemoveInformer removes an informer entry and stops it if it was running.
+	RemoveInformer(ctx context.Context, obj client.Object) error
+
 	// Start runs all the informers known to this cache until the context is closed.
 	// It blocks.
 	Start(ctx context.Context) error
@@ -121,6 +124,8 @@ type Informer interface {
 
 	// HasSynced return true if the informers underlying store has synced.
 	HasSynced() bool
+	// IsStopped returns true if the informer has been stopped.
+	IsStopped() bool
 }
 
 // AllNamespaces should be used as the map key to deliminate namespace settings

@@ -73,6 +73,20 @@ func (c *FakeInformers) GetInformer(ctx context.Context, obj client.Object, opts
 	return c.informerFor(gvk, obj)
 }
 
+// RemoveInformer implements Informers.
+func (c *FakeInformers) RemoveInformer(ctx context.Context, obj client.Object) error {
+	if c.Scheme == nil {
+		c.Scheme = scheme.Scheme
+	}
+	gvks, _, err := c.Scheme.ObjectKinds(obj)
+	if err != nil {
+		return err
+	}
+	gvk := gvks[0]
+	delete(c.InformersByGVK, gvk)
+	return nil
+}
+
 // WaitForCacheSync implements Informers.
 func (c *FakeInformers) WaitForCacheSync(ctx context.Context) bool {
 	if c.Synced == nil {

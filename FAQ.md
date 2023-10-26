@@ -1,4 +1,4 @@
-# FAQ
+# FAQ 
 
 ### Q: How do I know which type of object a controller references?
 

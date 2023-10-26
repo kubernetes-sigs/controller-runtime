@@ -9,19 +9,19 @@ require (
 	github.com/go-logr/zapr v1.2.3
 	github.com/google/go-cmp v0.5.8
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.19.0
+	github.com/onsi/gomega v1.20.1
 	github.com/prometheus/client_golang v1.12.2
 	github.com/prometheus/client_model v0.2.0
-	go.uber.org/goleak v1.1.12
+	go.uber.org/goleak v1.2.0
 	go.uber.org/zap v1.21.0
 	golang.org/x/sys v0.13.0
 	golang.org/x/time v0.0.0-20220609170525-579cf78fd858
 	gomodules.xyz/jsonpatch/v2 v2.2.0
-	k8s.io/api v0.25.0
-	k8s.io/apiextensions-apiserver v0.25.0
-	k8s.io/apimachinery v0.25.0
-	k8s.io/client-go v0.25.0
-	k8s.io/component-base v0.25.0
+	k8s.io/api v0.25.15
+	k8s.io/apiextensions-apiserver v0.25.15
+	k8s.io/apimachinery v0.25.15
+	k8s.io/client-go v0.25.15
+	k8s.io/component-base v0.25.15
 	k8s.io/klog/v2 v2.70.1
 	k8s.io/utils v0.0.0-20220728103510-ee6ede2d64ed
 	sigs.k8s.io/yaml v1.3.0
@@ -44,7 +44,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
-	github.com/google/uuid v1.1.2 // indirect
+	github.com/google/uuid v1.3.0 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect

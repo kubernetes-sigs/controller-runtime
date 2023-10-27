@@ -352,16 +352,7 @@ var _ = Describe("Init", func() {
 })
 
 var simpleBashScript = []string{
-	"-c",
-	`
-		i=0
-		while true
-		do
-			echo "loop $i" >&2
-			let 'i += 1'
-			sleep 0.2
-		done
-	`,
+	"-c", "tail -f /dev/null",
 }
 
 func getServerURL(server *ghttp.Server) url.URL {

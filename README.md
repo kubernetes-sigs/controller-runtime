@@ -1,7 +1,7 @@
 [![Go Report Card](https://goreportcard.com/badge/sigs.k8s.io/controller-runtime)](https://goreportcard.com/report/sigs.k8s.io/controller-runtime)
 [![godoc](https://pkg.go.dev/badge/sigs.k8s.io/controller-runtime)](https://pkg.go.dev/sigs.k8s.io/controller-runtime)
 
-# Kubernetes controller-runtime Project
+# Kubernetes controller-runtime Projec
 
 The Kubernetes controller-runtime Project is a set of go libraries for building
 Controllers. It is leveraged by [Kubebuilder](https://book.kubebuilder.io/) and

@@ -6,7 +6,7 @@ require (
 	github.com/evanphx/json-patch v5.7.0+incompatible
 	github.com/evanphx/json-patch/v5 v5.7.0
 	github.com/fsnotify/fsnotify v1.7.0
-	github.com/go-logr/logr v1.2.4
+	github.com/go-logr/logr v1.3.0
 	github.com/go-logr/zapr v1.2.4
 	github.com/google/go-cmp v0.6.0
 	github.com/google/gofuzz v1.2.0

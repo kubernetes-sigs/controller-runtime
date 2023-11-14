@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/util/uuid"
 	coordinationv1client "k8s.io/client-go/kubernetes/typed/coordination/v1"
@@ -123,5 +124,5 @@ func getInClusterNamespace() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error reading namespace file: %w", err)
 	}
-	return string(namespace), nil
+	return strings.TrimSuffix(string(namespace), "\n"), nil
 }

@@ -332,12 +332,12 @@ func (blder *Builder) doWatch() error {
 			}
 			srcKind.Type = typeForSrc
 		} else if !ok {
-			// If we're building a logical controller, raw watches are not allowed
-			// given that the cache cannot be validated to be coming from the same cluter.
+			// If we're building a cluster-aware controller, raw watches are not allowed
+			// given that the cache cannot be validated to be coming from the same cluster.
 			// In the future, we could consider allowing this by satisfying a new interface
 			// that sets and uses the cluster.
 			if blder.clusterName != "" {
-				return fmt.Errorf("when using a logical adapter, custom raw watches %T are not allowed", w.src)
+				return fmt.Errorf("when using a cluster adapter, custom raw watches %T are not allowed", w.src)
 			}
 		}
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)

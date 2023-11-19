@@ -65,7 +65,7 @@ var _ Runnable = &controllerManager{}
 var _ Manager = &controllerManager{}
 var _ cluster.ByNameGetterFunc = (&controllerManager{}).GetCluster
 
-type logicalCluster struct {
+type engagedCluster struct {
 	cluster.Cluster
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -83,10 +83,10 @@ type controllerManager struct {
 	defaultCluster        cluster.Cluster
 	defaultClusterOptions cluster.Option
 
-	logicalProvider cluster.Provider
+	clusterProvider cluster.Provider
 
 	clusterLock           sync.RWMutex // protects clusters
-	clusters              map[string]*logicalCluster
+	clusters              map[string]*engagedCluster
 	clusterAwareRunnables []cluster.AwareRunnable
 
 	// recorderProvider is used to generate event recorders that will be injected into Controllers
@@ -282,8 +282,8 @@ func (cm *controllerManager) engageClusterAwareRunnables() {
 	cm.Lock()
 	defer cm.Unlock()
 
-	// If we don't have a logical adapter, we cannot sync the runnables.
-	if cm.logicalProvider == nil {
+	// If we don't have a cluster provider, we cannot sync the runnables.
+	if cm.clusterProvider == nil {
 		return
 	}
 
@@ -299,11 +299,11 @@ func (cm *controllerManager) engageClusterAwareRunnables() {
 	}
 }
 
-func (cm *controllerManager) getCluster(ctx context.Context, clusterName string) (c *logicalCluster, err error) {
-	// Check if the manager was configured with a logical adapter,
+func (cm *controllerManager) getCluster(ctx context.Context, clusterName string) (c *engagedCluster, err error) {
+	// Check if the manager was configured with a cluster provider,
 	// otherwise we cannot retrieve the cluster.
-	if cm.logicalProvider == nil {
-		return nil, fmt.Errorf("manager was not configured with a logical adapter, cannot retrieve %q", clusterName)
+	if cm.clusterProvider == nil {
+		return nil, fmt.Errorf("manager was not configured with a cluster provider, cannot retrieve %q", clusterName)
 	}
 
 	// Check if the cluster already exists.
@@ -332,13 +332,13 @@ func (cm *controllerManager) getCluster(ctx context.Context, clusterName string)
 		defer cancel()
 		var watchErr error
 		if err := wait.PollImmediateUntilWithContext(ctx, 1*time.Second, func(ctx context.Context) (done bool, err error) {
-			cl, watchErr = cm.logicalProvider.Get(ctx, clusterName, cm.defaultClusterOptions, cluster.WithName(clusterName))
+			cl, watchErr = cm.clusterProvider.Get(ctx, clusterName, cm.defaultClusterOptions, cluster.WithName(clusterName))
 			if watchErr != nil {
 				return false, nil //nolint:nilerr // We want to keep trying.
 			}
 			return true, nil
 		}); err != nil {
-			return nil, fmt.Errorf("failed  create logical cluster %q: %w", clusterName, kerrors.NewAggregate([]error{err, watchErr}))
+			return nil, fmt.Errorf("failed create cluster %q: %w", clusterName, kerrors.NewAggregate([]error{err, watchErr}))
 		}
 	}
 
@@ -348,11 +348,11 @@ func (cm *controllerManager) getCluster(ctx context.Context, clusterName string)
 	// Once added, if the manager has already started, it waits for the Cache to sync before returning
 	// otherwise it enqueues the Runnable to be started when the manager starts.
 	if err := cm.Add(cl); err != nil {
-		return nil, fmt.Errorf("cannot add logical cluster %q to manager: %w", clusterName, err)
+		return nil, fmt.Errorf("cannot add cluster %q to manager: %w", clusterName, err)
 	}
 	// Create a new context for the Cluster, so that it can be stopped independently.
 	ctx, cancel := context.WithCancel(context.Background())
-	c = &logicalCluster{
+	c = &engagedCluster{
 		Cluster: cl,
 		ctx:     ctx,
 		cancel:  cancel,
@@ -364,8 +364,8 @@ func (cm *controllerManager) getCluster(ctx context.Context, clusterName string)
 func (cm *controllerManager) removeLogicalCluster(clusterName string) error {
 	// Check if the manager was configured with a logical adapter,
 	// otherwise we cannot retrieve the cluster.
-	if cm.logicalProvider == nil {
-		return fmt.Errorf("manager was not configured with a logical adapter, cannot retrieve %q", clusterName)
+	if cm.clusterProvider == nil {
+		return fmt.Errorf("manager was not configured with a cluster provider, cannot retrieve %q", clusterName)
 	}
 
 	cm.clusterLock.Lock()
@@ -578,11 +578,11 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) { //nolint:g
 		}()
 	}
 
-	// If the manager has been configured with a logical adapter, start it.
-	if cm.logicalProvider != nil {
+	// If the manager has been configured with a cluster provider, start it.
+	if cm.clusterProvider != nil {
 		if err := cm.add(RunnableFunc(func(ctx context.Context) error {
 			resync := func() error {
-				clusterList, err := cm.logicalProvider.List()
+				clusterList, err := cm.clusterProvider.List(ctx)
 				if err != nil {
 					return err
 				}
@@ -610,7 +610,7 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) { //nolint:g
 			}
 
 			// Create a watcher and start watching for changes.
-			watcher, err := cm.logicalProvider.Watch()
+			watcher, err := cm.clusterProvider.Watch()
 			if err != nil {
 				return err
 			}
@@ -648,7 +648,7 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) { //nolint:g
 				}
 			}
 		})); err != nil {
-			return fmt.Errorf("failed to add logical adapter to runnables: %w", err)
+			return fmt.Errorf("failed to add cluster provider to runnables: %w", err)
 		}
 	}
 

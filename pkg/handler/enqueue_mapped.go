@@ -86,7 +86,7 @@ func (e *enqueueRequestsFromMapFunc) mapAndEnqueue(ctx context.Context, q workqu
 			// reqs is a map of requests to avoid enqueueing the same request multiple times.
 			continue
 		}
-		// If the request doesn't specify a cluster, use the cluster from the context.
+		// If the request doesn't specify a cluster, use the cluster from the handler.
 		if req.ClusterName == "" && e.cluster != nil {
 			req.ClusterName = e.cluster.Name()
 		}

@@ -14,14 +14,18 @@ import (
 // clusters that are backed by Cluster API resources, which can live
 // in multiple namespaces in a single management cluster.
 type Provider interface {
+	// Get returns a cluster for the given identifying cluster name. The
+	// options are passed to the cluster constructor in case the cluster has
+	// not been created yet. Get returns an existing cluster if it has been
+	// created before.
 	Get(ctx context.Context, clusterName string, opts ...Option) (Cluster, error)
 
-	// List returns a list of logical clusters.
-	// This method is used to discover the initial set of logical clusters
-	// and to refresh the list of logical clusters periodically.
-	List() ([]string, error)
+	// List returns a list of known identifying clusters names.
+	// This method is used to discover the initial set of known cluster names
+	// and to refresh the list of cluster names periodically.
+	List(ctx context.Context) ([]string, error)
 
-	// Watch returns a Watcher that watches for changes to a list of logical clusters
+	// Watch returns a Watcher that watches for changes to a list of known clusters
 	// and react to potential changes.
 	Watch() (Watcher, error)
 }
@@ -44,15 +48,15 @@ type WatchEvent struct {
 	// Type is the type of event that occurred.
 	//
 	// - ADDED or MODIFIED
-	//	 	The logical cluster was added or updated: a new RESTConfig is available, or needs to be refreshed.
+	//	 	The cluster was added or updated: a new RESTConfig is available, or needs to be refreshed.
 	// - DELETED
-	// 		The logical cluster was deleted: the cluster is removed.
+	// 		The cluster was deleted: the cluster is removed.
 	// - ERROR
-	// 		An error occurred while watching the logical cluster: the cluster is removed.
+	// 		An error occurred while watching the cluster: the cluster is removed.
 	// - BOOKMARK
 	// 		A periodic event is sent that contains no new data: ignored.
 	Type watch.EventType
 
-	// ClusterName is the name of the cluster related to the event.
+	// ClusterName is the identifying name of the cluster related to the event.
 	ClusterName string
 }

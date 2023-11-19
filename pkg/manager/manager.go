@@ -79,7 +79,7 @@ type Manager interface {
 	// lock was lost.
 	Start(ctx context.Context) error
 
-	// GetCluster retrieves a Cluster from a given logical name.
+	// GetCluster retrieves a Cluster from a given identifying cluster name.
 	GetCluster(ctx context.Context, clusterName string) (cluster.Cluster, error)
 
 	// GetWebhookServer returns a webhook.Server
@@ -277,10 +277,10 @@ type Options struct {
 	newHealthProbeListener func(addr string) (net.Listener, error)
 	newPprofListener       func(addr string) (net.Listener, error)
 
-	// logicalClusterProvider is an EXPERIMENTAL feature that allows the manager to
+	// clusterProvider is an EXPERIMENTAL feature that allows the manager to
 	// operate against many Kubernetes clusters at once.
-	// It can be used by invoking WithExperimentalLogicalAdapter(adapter) on Options.
-	logicalClusterProvider cluster.Provider
+	// It can be used by invoking WithExperimentalClusterProvider(adapter) on Options.
+	clusterProvider cluster.Provider
 }
 
 // BaseContextFunc is a function used to provide a base Context to Runnables
@@ -422,8 +422,8 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		stopProcedureEngaged:          ptr.To(int64(0)),
 		defaultCluster:                cluster,
 		defaultClusterOptions:         clusterOptions,
-		logicalProvider:               options.logicalClusterProvider,
-		clusters:                      make(map[string]*logicalCluster),
+		clusterProvider:               options.clusterProvider,
+		clusters:                      make(map[string]*engagedCluster),
 		runnables:                     newRunnables(options.BaseContext, errChan),
 		errChan:                       errChan,
 		recorderProvider:              recorderProvider,
@@ -531,13 +531,13 @@ func (o Options) AndFromOrDie(loader config.ControllerManagerConfiguration) Opti
 	return o
 }
 
-// WithExperimentalClusterProvider sets the logical adapter to use for the manager.
+// WithExperimentalClusterProvider sets the cluster adapter to use for the manager.
 // This is an EXPERIMENTAL feature that allows a Manager to be used against a fleet
 // of Kubernetes clusters.
 //
 // NOTE: The method signature may change or be removed in the future.
 func (o Options) WithExperimentalClusterProvider(provider cluster.Provider) Options {
-	o.logicalClusterProvider = provider
+	o.clusterProvider = provider
 	return o
 }
 

@@ -84,7 +84,7 @@ type Controller struct {
 	// clusterAwareWatches maintains a list of cluster aware sources, handlers, and predicates to start when the controller is started.
 	clusterAwareWatches []*watchDescription
 
-	// clustersByName is used to manage the logical clustersByName.
+	// clustersByName is used to manage the fleet of clusters.
 	clustersByName map[string]*clusterDescription
 
 	// LogConstructor is used to construct a logger to then log messages to users during reconciliation,

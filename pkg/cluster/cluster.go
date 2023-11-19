@@ -64,7 +64,7 @@ type AwareDeepCopy[T any] interface {
 	DeepCopyFor(Cluster) T
 }
 
-// ByNameGetterFunc is a function that returns a cluster for a given logical cluster name.
+// ByNameGetterFunc is a function that returns a cluster for a given identifying cluster name.
 type ByNameGetterFunc func(ctx context.Context, clusterName string) (Cluster, error)
 
 // Cluster provides various methods to interact with a cluster.

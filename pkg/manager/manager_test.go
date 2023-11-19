@@ -1849,8 +1849,8 @@ var _ = Describe("manger.Manager", func() {
 		Expect(m.GetAPIReader()).NotTo(BeNil())
 	})
 
-	Context("with logical clusters", func() {
-		It("should be able to create a manager with a logical cluster", func() {
+	Context("with cluster provider", func() {
+		It("should be able to create a manager with a cluster provider", func() {
 			adapter := &fakeClusterAdapter{
 				clusterNameList: []string{
 					"test-cluster",
@@ -2027,7 +2027,7 @@ func (f *fakeClusterAdapter) Get(ctx context.Context, clusterName string, opts .
 	return cluster.New(testenv.Config, opts...)
 }
 
-func (f *fakeClusterAdapter) List() ([]string, error) {
+func (f *fakeClusterAdapter) List(ctx context.Context) ([]string, error) {
 	return f.clusterNameList, f.listErr
 }
 

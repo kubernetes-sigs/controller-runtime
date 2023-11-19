@@ -558,7 +558,7 @@ var _ = Describe("application", func() {
 		})
 	})
 
-	Context("with logical adapter", func() {
+	Context("with cluster provider", func() {
 		It("should support watching across clusters", func() {
 			adapter := &fakeClusterProvider{
 				clusterNameList: []string{
@@ -847,7 +847,7 @@ func (f *fakeClusterProvider) Get(ctx context.Context, clusterName string, opts 
 	return cluster.New(testenv.Config, opts...)
 }
 
-func (f *fakeClusterProvider) List() ([]string, error) {
+func (f *fakeClusterProvider) List(ctx context.Context) ([]string, error) {
 	return f.clusterNameList, f.listErr
 }
 

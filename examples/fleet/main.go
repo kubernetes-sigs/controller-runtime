@@ -110,7 +110,7 @@ func (k *KindClusterProvider) Get(ctx context.Context, clusterName string, opts 
 	return cluster.New(cfg, opts...)
 }
 
-func (k *KindClusterProvider) List() ([]string, error) {
+func (k *KindClusterProvider) List(ctx context.Context) ([]string, error) {
 	provider := kind.NewProvider()
 	list, err := provider.List()
 	if err != nil {
@@ -144,6 +144,7 @@ func (k *KindWatcher) Stop() {
 	k.wg.Wait()
 	close(k.ch)
 }
+
 func (k *KindWatcher) ResultChan() <-chan cluster.WatchEvent {
 	k.init.Do(func() {
 		ctx, cancel := context.WithCancel(context.Background())

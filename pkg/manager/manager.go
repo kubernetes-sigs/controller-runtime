@@ -80,7 +80,7 @@ type Manager interface {
 	Start(ctx context.Context) error
 
 	// GetCluster retrieves a Cluster from a given logical name.
-	GetCluster(context.Context, logical.Name) (cluster.Cluster, error)
+	GetCluster(ctx context.Context, clusterName string) (cluster.Cluster, error)
 
 	// GetWebhookServer returns a webhook.Server
 	GetWebhookServer() webhook.Server
@@ -423,7 +423,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		defaultCluster:                cluster,
 		defaultClusterOptions:         clusterOptions,
 		logicalProvider:               options.logicalClusterProvider,
-		logicalClusters:               make(map[logical.Name]*logicalCluster),
+		clusters:                      make(map[string]*logicalCluster),
 		runnables:                     newRunnables(options.BaseContext, errChan),
 		errChan:                       errChan,
 		recorderProvider:              recorderProvider,

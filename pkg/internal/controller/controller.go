@@ -29,8 +29,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/util/workqueue"
-	"sigs.k8s.io/logical-cluster"
-
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
@@ -86,8 +84,8 @@ type Controller struct {
 	// clusterAwareWatches maintains a list of cluster aware sources, handlers, and predicates to start when the controller is started.
 	clusterAwareWatches []*watchDescription
 
-	// clusters is used to manage the logical clusters.
-	clusters map[logical.Name]*clusterDescription
+	// clustersByName is used to manage the logical clustersByName.
+	clustersByName map[string]*clusterDescription
 
 	// LogConstructor is used to construct a logger to then log messages to users during reconciliation,
 	// or for example when a watch is started.
@@ -197,7 +195,7 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	// If the watch is cluster aware, start it for all the clusters
 	// This covers the case where a Watch was added later to the controller.
 	if watchDesc.IsClusterAware() {
-		for _, cldesc := range c.clusters {
+		for _, cldesc := range c.clustersByName {
 			if err := c.startClusterAwareWatchLocked(cldesc, watchDesc); err != nil {
 				errs = append(errs, err)
 			}
@@ -215,14 +213,14 @@ func (c *Controller) Engage(ctx context.Context, cluster cluster.Cluster) error 
 	}
 
 	var errs []error
-	cldesc := c.clusters[cluster.Name()]
+	cldesc := c.clustersByName[cluster.Name()]
 	if cldesc == nil {
 		// Initialize the cluster description.
-		c.clusters[cluster.Name()] = &clusterDescription{
+		c.clustersByName[cluster.Name()] = &clusterDescription{
 			ctx:     ctx,
 			Cluster: cluster,
 		}
-		cldesc = c.clusters[cluster.Name()]
+		cldesc = c.clustersByName[cluster.Name()]
 	}
 	for i, watchDesc := range c.clusterAwareWatches {
 		if i < len(cldesc.sources) {
@@ -246,7 +244,7 @@ func (c *Controller) Disengage(ctx context.Context, cluster cluster.Cluster) err
 
 	c.LogConstructor(nil).Info("Disengaging Cluster", "cluster", cluster.Name())
 	// TODO(vincepri): Stop the sources for this cluster before removing it, once we have a way to do that.
-	delete(c.clusters, cluster.Name())
+	delete(c.clustersByName, cluster.Name())
 	return nil
 }
 
@@ -279,7 +277,7 @@ func (c *Controller) Start(ctx context.Context) error {
 	if c.Started {
 		return errors.New("controller was started more than once. This is likely to be caused by being added to a manager multiple times")
 	}
-	c.clusters = make(map[logical.Name]*clusterDescription)
+	c.clustersByName = make(map[string]*clusterDescription)
 	c.initMetrics()
 
 	// Set the internal context.
@@ -436,8 +434,8 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 	log = log.WithValues("reconcileID", reconcileID)
 	ctx = logf.IntoContext(ctx, log)
 	ctx = addReconcileID(ctx, reconcileID)
-	if req.Cluster != "" {
-		log = log.WithValues("cluster", req.Cluster)
+	if req.ClusterName != "" {
+		log = log.WithValues("cluster", req.ClusterName)
 	}
 
 	// RunInformersAndControllers the syncHandler, passing it the Namespace/Name string of the

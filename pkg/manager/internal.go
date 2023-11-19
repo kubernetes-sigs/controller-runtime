@@ -48,7 +48,6 @@ import (
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/logical-cluster"
 )
 
 const (
@@ -64,7 +63,7 @@ const (
 
 var _ Runnable = &controllerManager{}
 var _ Manager = &controllerManager{}
-var _ cluster.LogicalGetterFunc = (&controllerManager{}).GetCluster
+var _ cluster.ByNameGetterFunc = (&controllerManager{}).GetCluster
 
 type logicalCluster struct {
 	cluster.Cluster
@@ -86,9 +85,9 @@ type controllerManager struct {
 
 	logicalProvider cluster.Provider
 
-	logicalLock                  sync.RWMutex // protects logicalClusters
-	logicalClusters              map[logical.Name]*logicalCluster
-	logicalClusterAwareRunnables []cluster.AwareRunnable
+	clusterLock           sync.RWMutex // protects clusters
+	clusters              map[string]*logicalCluster
+	clusterAwareRunnables []cluster.AwareRunnable
 
 	// recorderProvider is used to generate event recorders that will be injected into Controllers
 	// (and EventHandlers, Sources and Predicates).
@@ -196,7 +195,7 @@ func (cm *controllerManager) Add(r Runnable) error {
 
 func (cm *controllerManager) add(r Runnable) error {
 	if aware, ok := r.(cluster.AwareRunnable); ok {
-		cm.logicalClusterAwareRunnables = append(cm.logicalClusterAwareRunnables, aware)
+		cm.clusterAwareRunnables = append(cm.clusterAwareRunnables, aware)
 	}
 	return cm.runnables.Add(r)
 }
@@ -235,12 +234,12 @@ func (cm *controllerManager) AddReadyzCheck(name string, check healthz.Checker) 
 	return nil
 }
 
-func (cm *controllerManager) Name() logical.Name {
+func (cm *controllerManager) Name() string {
 	return cm.defaultCluster.Name()
 }
 
-func (cm *controllerManager) GetCluster(ctx context.Context, name logical.Name) (cluster.Cluster, error) {
-	return cm.getLogicalCluster(ctx, name)
+func (cm *controllerManager) GetCluster(ctx context.Context, clusterName string) (cluster.Cluster, error) {
+	return cm.getCluster(ctx, clusterName)
 }
 
 func (cm *controllerManager) GetHTTPClient() *http.Client {
@@ -290,8 +289,8 @@ func (cm *controllerManager) engageClusterAwareRunnables() {
 
 	// If we successfully retrieved the cluster, check
 	// that we schedule all the cluster aware runnables.
-	for name, cluster := range cm.logicalClusters {
-		for _, aware := range cm.logicalClusterAwareRunnables {
+	for name, cluster := range cm.clusters {
+		for _, aware := range cm.clusterAwareRunnables {
 			if err := aware.Engage(cluster.ctx, cluster); err != nil {
 				cm.logger.Error(err, "failed to engage cluster with runnable, won't retry", "clusterName", name, "runnable", aware)
 				continue
@@ -300,27 +299,27 @@ func (cm *controllerManager) engageClusterAwareRunnables() {
 	}
 }
 
-func (cm *controllerManager) getLogicalCluster(ctx context.Context, name logical.Name) (c *logicalCluster, err error) {
+func (cm *controllerManager) getCluster(ctx context.Context, clusterName string) (c *logicalCluster, err error) {
 	// Check if the manager was configured with a logical adapter,
 	// otherwise we cannot retrieve the cluster.
 	if cm.logicalProvider == nil {
-		return nil, fmt.Errorf("manager was not configured with a logical adapter, cannot retrieve %q", name)
+		return nil, fmt.Errorf("manager was not configured with a logical adapter, cannot retrieve %q", clusterName)
 	}
 
 	// Check if the cluster already exists.
-	cm.logicalLock.RLock()
-	c, ok := cm.logicalClusters[name]
-	cm.logicalLock.RUnlock()
+	cm.clusterLock.RLock()
+	c, ok := cm.clusters[clusterName]
+	cm.clusterLock.RUnlock()
 	if ok {
 		return c, nil
 	}
 
 	// Lock the whole function to avoid creating multiple clusters for the same name.
-	cm.logicalLock.Lock()
-	defer cm.logicalLock.Unlock()
+	cm.clusterLock.Lock()
+	defer cm.clusterLock.Unlock()
 
 	// Check again in case another goroutine already created the cluster.
-	c, ok = cm.logicalClusters[name]
+	c, ok = cm.clusters[clusterName]
 	if ok {
 		return c, nil
 	}
@@ -333,13 +332,13 @@ func (cm *controllerManager) getLogicalCluster(ctx context.Context, name logical
 		defer cancel()
 		var watchErr error
 		if err := wait.PollImmediateUntilWithContext(ctx, 1*time.Second, func(ctx context.Context) (done bool, err error) {
-			cl, watchErr = cm.logicalProvider.Get(ctx, name, cm.defaultClusterOptions, cluster.WithName(name))
+			cl, watchErr = cm.logicalProvider.Get(ctx, clusterName, cm.defaultClusterOptions, cluster.WithName(clusterName))
 			if watchErr != nil {
 				return false, nil //nolint:nilerr // We want to keep trying.
 			}
 			return true, nil
 		}); err != nil {
-			return nil, fmt.Errorf("failed  create logical cluster %q: %w", name, kerrors.NewAggregate([]error{err, watchErr}))
+			return nil, fmt.Errorf("failed  create logical cluster %q: %w", clusterName, kerrors.NewAggregate([]error{err, watchErr}))
 		}
 	}
 
@@ -349,7 +348,7 @@ func (cm *controllerManager) getLogicalCluster(ctx context.Context, name logical
 	// Once added, if the manager has already started, it waits for the Cache to sync before returning
 	// otherwise it enqueues the Runnable to be started when the manager starts.
 	if err := cm.Add(cl); err != nil {
-		return nil, fmt.Errorf("cannot add logical cluster %q to manager: %w", name, err)
+		return nil, fmt.Errorf("cannot add logical cluster %q to manager: %w", clusterName, err)
 	}
 	// Create a new context for the Cluster, so that it can be stopped independently.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -358,26 +357,26 @@ func (cm *controllerManager) getLogicalCluster(ctx context.Context, name logical
 		ctx:     ctx,
 		cancel:  cancel,
 	}
-	cm.logicalClusters[name] = c
+	cm.clusters[clusterName] = c
 	return c, nil
 }
 
-func (cm *controllerManager) removeLogicalCluster(name logical.Name) error {
+func (cm *controllerManager) removeLogicalCluster(clusterName string) error {
 	// Check if the manager was configured with a logical adapter,
 	// otherwise we cannot retrieve the cluster.
 	if cm.logicalProvider == nil {
-		return fmt.Errorf("manager was not configured with a logical adapter, cannot retrieve %q", name)
+		return fmt.Errorf("manager was not configured with a logical adapter, cannot retrieve %q", clusterName)
 	}
 
-	cm.logicalLock.Lock()
-	defer cm.logicalLock.Unlock()
-	c, ok := cm.logicalClusters[name]
+	cm.clusterLock.Lock()
+	defer cm.clusterLock.Unlock()
+	c, ok := cm.clusters[clusterName]
 	if !ok {
 		return nil
 	}
 
 	// Disengage all the runnables.
-	for _, aware := range cm.logicalClusterAwareRunnables {
+	for _, aware := range cm.clusterAwareRunnables {
 		if err := aware.Disengage(c.ctx, c); err != nil {
 			return fmt.Errorf("failed to disengage cluster aware runnable: %w", err)
 		}
@@ -385,7 +384,7 @@ func (cm *controllerManager) removeLogicalCluster(name logical.Name) error {
 
 	// Cancel the context and remove the cluster from the map.
 	c.cancel()
-	delete(cm.logicalClusters, name)
+	delete(cm.clusters, clusterName)
 	return nil
 }
 
@@ -588,12 +587,12 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) { //nolint:g
 					return err
 				}
 				for _, name := range clusterList {
-					if _, err := cm.getLogicalCluster(ctx, name); err != nil {
+					if _, err := cm.getCluster(ctx, name); err != nil {
 						return err
 					}
 				}
 				clusterListSet := sets.New(clusterList...)
-				for name := range cm.logicalClusters {
+				for name := range cm.clusters {
 					if clusterListSet.Has(name) {
 						continue
 					}
@@ -633,12 +632,12 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) { //nolint:g
 				case event := <-watcher.ResultChan():
 					switch event.Type {
 					case watch.Added, watch.Modified:
-						if _, err := cm.getLogicalCluster(ctx, event.Name); err != nil {
+						if _, err := cm.getCluster(ctx, event.ClusterName); err != nil {
 							return err
 						}
 						cm.engageClusterAwareRunnables()
 					case watch.Deleted, watch.Error:
-						if err := cm.removeLogicalCluster(event.Name); err != nil {
+						if err := cm.removeLogicalCluster(event.ClusterName); err != nil {
 							return err
 						}
 					case watch.Bookmark:

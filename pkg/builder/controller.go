@@ -36,7 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"sigs.k8s.io/logical-cluster"
 )
 
 // Supporting mocking out functions for testing.
@@ -61,7 +60,7 @@ type Builder struct {
 	watchesInput     []WatchesInput
 	mgr              manager.Manager
 	cluster          cluster.Cluster
-	logicalName      logical.Name
+	clusterName      string
 	globalPredicates []predicate.Predicate
 	ctrl             controller.Controller
 	ctrlOptions      controller.Options
@@ -337,7 +336,7 @@ func (blder *Builder) doWatch() error {
 			// given that the cache cannot be validated to be coming from the same cluter.
 			// In the future, we could consider allowing this by satisfying a new interface
 			// that sets and uses the cluster.
-			if blder.logicalName != "" {
+			if blder.clusterName != "" {
 				return fmt.Errorf("when using a logical adapter, custom raw watches %T are not allowed", w.src)
 			}
 		}

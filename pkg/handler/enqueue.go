@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/logical-cluster"
 )
 
 var enqueueLog = logf.RuntimeLog.WithName("eventhandler").WithName("EnqueueRequestForObject")
@@ -47,12 +46,12 @@ func (e *EnqueueRequestForObject) Create(ctx context.Context, evt event.CreateEv
 		enqueueLog.Error(nil, "CreateEvent received with no metadata", "event", evt)
 		return
 	}
-	var logicalClusterName logical.Name
+	var clusterName string
 	if e.cluster != nil {
-		logicalClusterName = e.cluster.Name()
+		clusterName = e.cluster.Name()
 	}
 	q.Add(reconcile.Request{
-		Cluster: logicalClusterName,
+		ClusterName: clusterName,
 		NamespacedName: types.NamespacedName{
 			Name:      evt.Object.GetName(),
 			Namespace: evt.Object.GetNamespace(),
@@ -62,15 +61,15 @@ func (e *EnqueueRequestForObject) Create(ctx context.Context, evt event.CreateEv
 
 // Update implements EventHandler.
 func (e *EnqueueRequestForObject) Update(ctx context.Context, evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
-	var logicalClusterName logical.Name
+	var clusterName string
 	if e.cluster != nil {
-		logicalClusterName = e.cluster.Name()
+		clusterName = e.cluster.Name()
 	}
 
 	switch {
 	case evt.ObjectNew != nil:
 		q.Add(reconcile.Request{
-			Cluster: logicalClusterName,
+			ClusterName: clusterName,
 			NamespacedName: types.NamespacedName{
 				Name:      evt.ObjectNew.GetName(),
 				Namespace: evt.ObjectNew.GetNamespace(),
@@ -78,7 +77,7 @@ func (e *EnqueueRequestForObject) Update(ctx context.Context, evt event.UpdateEv
 		})
 	case evt.ObjectOld != nil:
 		q.Add(reconcile.Request{
-			Cluster: logicalClusterName,
+			ClusterName: clusterName,
 			NamespacedName: types.NamespacedName{
 				Name:      evt.ObjectOld.GetName(),
 				Namespace: evt.ObjectOld.GetNamespace(),
@@ -95,12 +94,12 @@ func (e *EnqueueRequestForObject) Delete(ctx context.Context, evt event.DeleteEv
 		enqueueLog.Error(nil, "DeleteEvent received with no metadata", "event", evt)
 		return
 	}
-	var logicalClusterName logical.Name
+	var clusterName string
 	if e.cluster != nil {
-		logicalClusterName = e.cluster.Name()
+		clusterName = e.cluster.Name()
 	}
 	q.Add(reconcile.Request{
-		Cluster: logicalClusterName,
+		ClusterName: clusterName,
 		NamespacedName: types.NamespacedName{
 			Name:      evt.Object.GetName(),
 			Namespace: evt.Object.GetNamespace(),
@@ -114,12 +113,12 @@ func (e *EnqueueRequestForObject) Generic(ctx context.Context, evt event.Generic
 		enqueueLog.Error(nil, "GenericEvent received with no metadata", "event", evt)
 		return
 	}
-	var logicalClusterName logical.Name
+	var clusterName string
 	if e.cluster != nil {
-		logicalClusterName = e.cluster.Name()
+		clusterName = e.cluster.Name()
 	}
 	q.Add(reconcile.Request{
-		Cluster: logicalClusterName,
+		ClusterName: clusterName,
 		NamespacedName: types.NamespacedName{
 			Name:      evt.Object.GetName(),
 			Namespace: evt.Object.GetNamespace(),

@@ -27,7 +27,6 @@ require (
 	k8s.io/component-base v0.30.0-beta.0
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
-	sigs.k8s.io/logical-cluster v0.0.1-alpha.0
 	sigs.k8s.io/yaml v1.4.0
 )
 

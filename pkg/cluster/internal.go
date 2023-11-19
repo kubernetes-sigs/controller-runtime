@@ -29,11 +29,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
-	"sigs.k8s.io/logical-cluster"
 )
 
 type cluster struct {
-	name logical.Name
+	name string
 
 	// config is the rest.config used to talk to the apiserver.  Required.
 	config *rest.Config
@@ -62,7 +61,7 @@ type cluster struct {
 	logger logr.Logger
 }
 
-func (c *cluster) Name() logical.Name {
+func (c *cluster) Name() string {
 	return c.name
 }
 

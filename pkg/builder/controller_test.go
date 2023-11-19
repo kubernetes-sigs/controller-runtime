@@ -46,7 +46,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
-	"sigs.k8s.io/logical-cluster"
 )
 
 type typedNoop struct{}
@@ -562,7 +561,7 @@ var _ = Describe("application", func() {
 	Context("with logical adapter", func() {
 		It("should support watching across clusters", func() {
 			adapter := &fakeClusterProvider{
-				list: []logical.Name{
+				clusterNameList: []string{
 					"cluster1",
 					"cluster2",
 				},
@@ -602,7 +601,7 @@ var _ = Describe("application", func() {
 						}
 
 						defer GinkgoRecover()
-						switch req.Cluster {
+						switch req.ClusterName {
 						case "cluster1":
 							ch1 <- req
 						case "cluster2":
@@ -645,14 +644,14 @@ var _ = Describe("application", func() {
 					Name:      dep.Name,
 					Namespace: dep.Namespace,
 				},
-				Cluster: "cluster1",
+				ClusterName: "cluster1",
 			})))
 			Eventually(ch2).Should(Receive(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      dep.Name,
 					Namespace: dep.Namespace,
 				},
-				Cluster: "cluster2",
+				ClusterName: "cluster2",
 			})))
 
 			By("Creating a ReplicaSet")
@@ -686,14 +685,14 @@ var _ = Describe("application", func() {
 					Name:      dep.Name,
 					Namespace: dep.Namespace,
 				},
-				Cluster: "cluster1",
+				ClusterName: "cluster1",
 			})))
 			Eventually(ch2).Should(Receive(Equal(reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      dep.Name,
 					Namespace: dep.Namespace,
 				},
-				Cluster: "cluster2",
+				ClusterName: "cluster2",
 			})))
 		})
 	})
@@ -838,18 +837,18 @@ func (*fakeType) GetObjectKind() schema.ObjectKind { return nil }
 func (*fakeType) DeepCopyObject() runtime.Object   { return nil }
 
 type fakeClusterProvider struct {
-	list    []logical.Name
-	listErr error
+	clusterNameList []string
+	listErr         error
 
 	watch chan cluster.WatchEvent
 }
 
-func (f *fakeClusterProvider) Get(ctx context.Context, name logical.Name, opts ...cluster.Option) (cluster.Cluster, error) {
+func (f *fakeClusterProvider) Get(ctx context.Context, clusterName string, opts ...cluster.Option) (cluster.Cluster, error) {
 	return cluster.New(testenv.Config, opts...)
 }
 
-func (f *fakeClusterProvider) List() ([]logical.Name, error) {
-	return f.list, f.listErr
+func (f *fakeClusterProvider) List() ([]string, error) {
+	return f.clusterNameList, f.listErr
 }
 
 func (f *fakeClusterProvider) Watch() (cluster.Watcher, error) {

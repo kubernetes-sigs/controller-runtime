@@ -28,8 +28,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
-	"sigs.k8s.io/logical-cluster"
-
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -66,13 +64,13 @@ type AwareDeepCopy[T any] interface {
 	DeepCopyFor(Cluster) T
 }
 
-// LogicalGetterFunc is a function that returns a cluster for a given logical cluster name.
-type LogicalGetterFunc func(context.Context, logical.Name) (Cluster, error)
+// ByNameGetterFunc is a function that returns a cluster for a given logical cluster name.
+type ByNameGetterFunc func(ctx context.Context, clusterName string) (Cluster, error)
 
 // Cluster provides various methods to interact with a cluster.
 type Cluster interface {
-	// Name returns the unique logical name of the cluster.
-	Name() logical.Name
+	// Name returns the identifying name of the cluster.
+	Name() string
 
 	// GetHTTPClient returns an HTTP client that can be used to talk to the apiserver
 	GetHTTPClient() *http.Client
@@ -112,8 +110,8 @@ type Cluster interface {
 
 // Options are the possible options that can be configured for a Cluster.
 type Options struct {
-	// Name is the unique name of the cluster.
-	Name logical.Name
+	// Name is the identifying name of the cluster.
+	Name string
 
 	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
 	// Defaults to the kubernetes/client-go scheme.Scheme, but it's almost always better
@@ -196,7 +194,7 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	if config == nil {
 		return nil, errors.New("must specify Config")
 	}
-	
+
 	config = rest.CopyConfig(config)
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()
@@ -354,7 +352,7 @@ func setOptionsDefaults(options Options, config *rest.Config) (Options, error) {
 }
 
 // WithName sets the name of the cluster.
-func WithName(name logical.Name) Option {
+func WithName(name string) Option {
 	return func(o *Options) {
 		if o.Name != "" {
 			panic("cluster name cannot be set more than once")

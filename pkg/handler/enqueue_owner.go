@@ -168,7 +168,7 @@ func (e *enqueueRequestForOwner) getOwnerReconcileRequest(_ context.Context, obj
 				},
 			}
 			if e.cluster != nil {
-				request.Cluster = e.cluster.Name()
+				request.ClusterName = e.cluster.Name()
 			}
 
 			// if owner is not namespaced then we should not set the namespace

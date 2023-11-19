@@ -44,8 +44,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
-	"sigs.k8s.io/logical-cluster"
-
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -1853,8 +1851,8 @@ var _ = Describe("manger.Manager", func() {
 
 	Context("with logical clusters", func() {
 		It("should be able to create a manager with a logical cluster", func() {
-			adapter := &fakeLogicalAdapter{
-				list: []logical.Name{
+			adapter := &fakeClusterAdapter{
+				clusterNameList: []string{
 					"test-cluster",
 				},
 			}
@@ -1875,7 +1873,7 @@ var _ = Describe("manger.Manager", func() {
 			}()
 			<-m.Elected()
 
-			Eventually(func() []logical.Name {
+			Eventually(func() []string {
 				aware.Lock()
 				defer aware.Unlock()
 				return aware.engaged
@@ -1887,9 +1885,9 @@ var _ = Describe("manger.Manager", func() {
 		})
 
 		It("should cancel only the removed cluster runnables", func() {
-			adapter := &fakeLogicalAdapter{
+			adapter := &fakeClusterAdapter{
 				watch: make(chan cluster.WatchEvent),
-				list: []logical.Name{
+				clusterNameList: []string{
 					"test-cluster",
 					"removed-cluster",
 				},
@@ -1911,24 +1909,24 @@ var _ = Describe("manger.Manager", func() {
 			}()
 			<-m.Elected()
 
-			Eventually(func() []logical.Name {
+			Eventually(func() []string {
 				aware.Lock()
 				defer aware.Unlock()
 				return aware.engaged
 			}).Should(HaveLen(2))
-			Expect(aware.engaged).To(ConsistOf(logical.Name("test-cluster"), logical.Name("removed-cluster")))
+			Expect(aware.engaged).To(ConsistOf("test-cluster", "removed-cluster"))
 
 			By("Deleting a cluster")
 			adapter.watch <- cluster.WatchEvent{
-				Type: watch.Deleted,
-				Name: "removed-cluster",
+				Type:        watch.Deleted,
+				ClusterName: "removed-cluster",
 			}
-			Eventually(func() []logical.Name {
+			Eventually(func() []string {
 				aware.Lock()
 				defer aware.Unlock()
 				return aware.disengaged
 			}).Should(HaveLen(1))
-			Expect(aware.disengaged).To(ConsistOf(logical.Name("removed-cluster")))
+			Expect(aware.disengaged).To(ConsistOf("removed-cluster"))
 
 			By("making sure there's no extra go routines still running after we stop")
 			cancel()
@@ -2018,22 +2016,22 @@ type metricsDefaultServer interface {
 	GetBindAddr() string
 }
 
-type fakeLogicalAdapter struct {
-	list    []logical.Name
-	listErr error
+type fakeClusterAdapter struct {
+	clusterNameList []string
+	listErr         error
 
 	watch chan cluster.WatchEvent
 }
 
-func (f *fakeLogicalAdapter) Get(ctx context.Context, name logical.Name, opts ...cluster.Option) (cluster.Cluster, error) {
+func (f *fakeClusterAdapter) Get(ctx context.Context, clusterName string, opts ...cluster.Option) (cluster.Cluster, error) {
 	return cluster.New(testenv.Config, opts...)
 }
 
-func (f *fakeLogicalAdapter) List() ([]logical.Name, error) {
-	return f.list, f.listErr
+func (f *fakeClusterAdapter) List() ([]string, error) {
+	return f.clusterNameList, f.listErr
 }
 
-func (f *fakeLogicalAdapter) Watch() (cluster.Watcher, error) {
+func (f *fakeClusterAdapter) Watch() (cluster.Watcher, error) {
 	return &fakeLogicalClusterProvider{ch: f.watch}, nil
 }
 
@@ -2050,8 +2048,8 @@ func (f *fakeLogicalClusterProvider) ResultChan() <-chan cluster.WatchEvent {
 
 type fakeClusterAwareRunnable struct {
 	sync.Mutex
-	engaged    []logical.Name
-	disengaged []logical.Name
+	engaged    []string
+	disengaged []string
 }
 
 func (f *fakeClusterAwareRunnable) Start(ctx context.Context) error {

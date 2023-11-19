@@ -21,7 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	kind "sigs.k8s.io/kind/pkg/cluster"
-	"sigs.k8s.io/logical-cluster"
 )
 
 func init() {
@@ -63,7 +62,7 @@ func main() {
 		func(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 			log := log.FromContext(ctx)
 
-			cluster, err := mgr.GetCluster(ctx, req.Cluster)
+			cluster, err := mgr.GetCluster(ctx, req.ClusterName)
 			if err != nil {
 				return reconcile.Result{}, err
 			}
@@ -97,9 +96,9 @@ func main() {
 // KindClusterProvider is a cluster provider that works with a local Kind instance.
 type KindClusterProvider struct{}
 
-func (k *KindClusterProvider) Get(ctx context.Context, name logical.Name, opts ...cluster.Option) (cluster.Cluster, error) {
+func (k *KindClusterProvider) Get(ctx context.Context, clusterName string, opts ...cluster.Option) (cluster.Cluster, error) {
 	provider := kind.NewProvider()
-	kubeconfig, err := provider.KubeConfig(string(name), false)
+	kubeconfig, err := provider.KubeConfig(clusterName, false)
 	if err != nil {
 		return nil, err
 	}
@@ -111,18 +110,18 @@ func (k *KindClusterProvider) Get(ctx context.Context, name logical.Name, opts .
 	return cluster.New(cfg, opts...)
 }
 
-func (k *KindClusterProvider) List() ([]logical.Name, error) {
+func (k *KindClusterProvider) List() ([]string, error) {
 	provider := kind.NewProvider()
 	list, err := provider.List()
 	if err != nil {
 		return nil, err
 	}
-	res := make([]logical.Name, 0, len(list))
+	res := make([]string, 0, len(list))
 	for _, cluster := range list {
 		if !strings.HasPrefix(cluster, "fleet-") {
 			continue
 		}
-		res = append(res, logical.Name(cluster))
+		res = append(res, cluster)
 	}
 	return res, nil
 }
@@ -169,8 +168,8 @@ func (k *KindWatcher) ResultChan() <-chan cluster.WatchEvent {
 							continue
 						}
 						k.ch <- cluster.WatchEvent{
-							Type: watch.Added,
-							Name: logical.Name(cl),
+							Type:        watch.Added,
+							ClusterName: cl,
 						}
 					}
 					// Check for deleted clusters.
@@ -179,8 +178,8 @@ func (k *KindWatcher) ResultChan() <-chan cluster.WatchEvent {
 							continue
 						}
 						k.ch <- cluster.WatchEvent{
-							Type: watch.Deleted,
-							Name: logical.Name(cl),
+							Type:        watch.Deleted,
+							ClusterName: cl,
 						}
 					}
 					set = newSet

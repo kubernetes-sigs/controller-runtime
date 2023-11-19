@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/watch"
-	"sigs.k8s.io/logical-cluster"
 )
 
 // Provider defines methods to retrieve, list, and watch fleet of clusters.
@@ -15,12 +14,12 @@ import (
 // clusters that are backed by Cluster API resources, which can live
 // in multiple namespaces in a single management cluster.
 type Provider interface {
-	Get(ctx context.Context, name logical.Name, opts ...Option) (Cluster, error)
+	Get(ctx context.Context, clusterName string, opts ...Option) (Cluster, error)
 
 	// List returns a list of logical clusters.
 	// This method is used to discover the initial set of logical clusters
 	// and to refresh the list of logical clusters periodically.
-	List() ([]logical.Name, error)
+	List() ([]string, error)
 
 	// Watch returns a Watcher that watches for changes to a list of logical clusters
 	// and react to potential changes.
@@ -54,6 +53,6 @@ type WatchEvent struct {
 	// 		A periodic event is sent that contains no new data: ignored.
 	Type watch.EventType
 
-	// Name is the name of the logical cluster related to the event.
-	Name logical.Name
+	// ClusterName is the name of the cluster related to the event.
+	ClusterName string
 }

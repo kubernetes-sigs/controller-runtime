@@ -87,8 +87,8 @@ func (e *enqueueRequestsFromMapFunc) mapAndEnqueue(ctx context.Context, q workqu
 			continue
 		}
 		// If the request doesn't specify a cluster, use the cluster from the context.
-		if req.Cluster == "" && e.cluster != nil {
-			req.Cluster = e.cluster.Name()
+		if req.ClusterName == "" && e.cluster != nil {
+			req.ClusterName = e.cluster.Name()
 		}
 		// Enqueue the request and track it.
 		q.Add(req)

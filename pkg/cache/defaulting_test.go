@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -187,23 +187,23 @@ func TestDefaultOpts(t *testing.T) {
 			name: "ByObject.UnsafeDisableDeepCopy gets defaulted from DefaultUnsafeDisableDeepCopy",
 			in: Options{
 				ByObject:                     map[client.Object]ByObject{pod: {}},
-				DefaultUnsafeDisableDeepCopy: pointer.Bool(true),
+				DefaultUnsafeDisableDeepCopy: ptr.To(true),
 			},
 
 			verification: func(o Options) string {
-				expected := pointer.Bool(true)
+				expected := ptr.To(true)
 				return cmp.Diff(expected, o.ByObject[pod].UnsafeDisableDeepCopy)
 			},
 		},
 		{
 			name: "ByObject.UnsafeDisableDeepCopy doesn't get defaulted when set",
 			in: Options{
-				ByObject:                     map[client.Object]ByObject{pod: {UnsafeDisableDeepCopy: pointer.Bool(false)}},
-				DefaultUnsafeDisableDeepCopy: pointer.Bool(true),
+				ByObject:                     map[client.Object]ByObject{pod: {UnsafeDisableDeepCopy: ptr.To(false)}},
+				DefaultUnsafeDisableDeepCopy: ptr.To(true),
 			},
 
 			verification: func(o Options) string {
-				expected := pointer.Bool(false)
+				expected := ptr.To(false)
 				return cmp.Diff(expected, o.ByObject[pod].UnsafeDisableDeepCopy)
 			},
 		},

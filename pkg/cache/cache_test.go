@@ -40,7 +40,7 @@ import (
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	kcache "k8s.io/client-go/tools/cache"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -146,10 +146,10 @@ var _ = Describe("Multi-Namespace Informer Cache", func() {
 
 var _ = Describe("Informer Cache without global DeepCopy", func() {
 	CacheTest(cache.New, cache.Options{
-		DefaultUnsafeDisableDeepCopy: pointer.Bool(true),
+		DefaultUnsafeDisableDeepCopy: ptr.To(true),
 	})
 	NonBlockingGetTest(cache.New, cache.Options{
-		DefaultUnsafeDisableDeepCopy: pointer.Bool(true),
+		DefaultUnsafeDisableDeepCopy: ptr.To(true),
 	})
 })
 

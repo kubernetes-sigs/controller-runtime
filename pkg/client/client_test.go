@@ -41,7 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/examples/crd/pkg"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -391,7 +391,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 			Context("with the DryRun option", func() {
 				It("should not create a new object, global option", func() {
-					cl, err := client.New(cfg, client.Options{DryRun: pointer.Bool(true)})
+					cl, err := client.New(cfg, client.Options{DryRun: ptr.To(true)})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cl).NotTo(BeNil())
 
@@ -843,7 +843,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("Creating the eviction")
 				eviction := &policyv1.Eviction{
-					DeleteOptions: &metav1.DeleteOptions{GracePeriodSeconds: ptr(int64(0))},
+					DeleteOptions: &metav1.DeleteOptions{GracePeriodSeconds: ptr.To(int64(0))},
 				}
 				err = cl.SubResource("eviction").Create(ctx, pod, eviction)
 				Expect((err)).NotTo(HaveOccurred())
@@ -3963,10 +3963,6 @@ func (f *fakeUncachedReader) Get(_ context.Context, _ client.ObjectKey, _ client
 func (f *fakeUncachedReader) List(_ context.Context, _ client.ObjectList, _ ...client.ListOption) error {
 	f.Called++
 	return &cache.ErrResourceNotCached{}
-}
-
-func ptr[T any](to T) *T {
-	return &to
 }
 
 func toUnstructured(o client.Object) (*unstructured.Unstructured, error) {

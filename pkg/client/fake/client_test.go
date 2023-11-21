@@ -40,7 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -1610,7 +1610,7 @@ var _ = Describe("Fake client", func() {
 		objOriginal.APIVersion = actual.APIVersion
 		objOriginal.Kind = actual.Kind
 		objOriginal.ResourceVersion = actual.ResourceVersion
-		objOriginal.Spec.Replicas = pointer.Int32(2)
+		objOriginal.Spec.Replicas = ptr.To(int32(2))
 		Expect(cmp.Diff(objOriginal, actual)).To(BeEmpty())
 	})
 

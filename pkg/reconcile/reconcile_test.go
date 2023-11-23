@@ -151,7 +151,7 @@ var _ = Describe("reconcile", func() {
 
 			It("should Get the object and call the ObjectReconciler", func() {
 				var actual *corev1.ConfigMap
-				reconciler := reconcile.AsReconciler(testClient, &mockObjectReconciler{
+				reconciler := reconcile.AsReconciler[*corev1.ConfigMap](testClient, &mockObjectReconciler{
 					reconcileFunc: func(ctx context.Context, cm *corev1.ConfigMap) (reconcile.Result, error) {
 						actual = cm
 						return reconcile.Result{}, nil
@@ -170,7 +170,7 @@ var _ = Describe("reconcile", func() {
 		Context("with an object that doesn't exist", func() {
 			It("should not call the ObjectReconciler", func() {
 				called := false
-				reconciler := reconcile.AsReconciler(testClient, &mockObjectReconciler{
+				reconciler := reconcile.AsReconciler[*corev1.ConfigMap](testClient, &mockObjectReconciler{
 					reconcileFunc: func(ctx context.Context, cm *corev1.ConfigMap) (reconcile.Result, error) {
 						called = true
 						return reconcile.Result{}, nil

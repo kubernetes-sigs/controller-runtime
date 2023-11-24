@@ -171,7 +171,32 @@ func RemoveControllerReference(owner, object metav1.Object, scheme *runtime.Sche
 	if ok := HasControllerReference(object); !ok {
 		return fmt.Errorf("%T does not have a owner reference with controller equals true", object)
 	}
-	return RemoveOwnerReference(owner, object, scheme)
+	ro, ok := owner.(runtime.Object)
+	if !ok {
+		return fmt.Errorf("%T is not a runtime.Object, cannot call RemoveControllerReference", owner)
+	}
+	gvk, err := apiutil.GVKForObject(ro, scheme)
+	if err != nil {
+		return err
+	}
+	ownerRefs := object.GetOwnerReferences()
+	index := indexOwnerRef(ownerRefs, metav1.OwnerReference{
+		APIVersion: gvk.GroupVersion().String(),
+		Name:       owner.GetName(),
+		Kind:       gvk.Kind,
+	})
+
+	if index == -1 {
+		return fmt.Errorf("%T does not have an controller reference for %T", object, owner)
+	}
+
+	if ownerRefs[index].Controller == nil || !*ownerRefs[index].Controller {
+		return fmt.Errorf("%T owner is not the controller reference for %T", owner, object)
+	}
+
+	ownerRefs = append(ownerRefs[:index], ownerRefs[index+1:]...)
+	object.SetOwnerReferences(ownerRefs)
+	return nil
 }
 
 func upsertOwnerRef(ref metav1.OwnerReference, object metav1.Object) {
@@ -219,7 +244,6 @@ func referSameObject(a, b metav1.OwnerReference) bool {
 	if err != nil {
 		return false
 	}
-
 	return aGV.Group == bGV.Group && a.Kind == b.Kind && a.Name == b.Name
 }
 

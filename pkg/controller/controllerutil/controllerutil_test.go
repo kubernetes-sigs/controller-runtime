@@ -181,6 +181,7 @@ var _ = Describe("Controllerutil", func() {
 			Expect(controllerutil.RemoveOwnerReference(obj, rs, scheme.Scheme)).To(HaveOccurred())
 			Expect(rs.GetOwnerReferences()).To(HaveLen(1))
 		})
+
 		It("should error when trying to remove an owner that doesn't exist", func() {
 			rs := &appsv1.ReplicaSet{
 				ObjectMeta: metav1.ObjectMeta{},
@@ -227,6 +228,22 @@ var _ = Describe("Controllerutil", func() {
 			}
 			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 			Expect(controllerutil.RemoveControllerReference(dep, rs, scheme.Scheme)).To(HaveOccurred())
+		})
+
+		It("should error when RemoveControllerReference passed in owner is not the owner", func() {
+			rs := &appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{},
+			}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+			}
+			dep2 := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo-2", UID: "foo-uid-42"},
+			}
+			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(controllerutil.SetOwnerReference(dep2, rs, scheme.Scheme)).ToNot(HaveOccurred())
+			Expect(controllerutil.RemoveControllerReference(dep2, rs, scheme.Scheme)).To(HaveOccurred())
+			Expect(rs.GetOwnerReferences()).To(HaveLen(2))
 		})
 
 		It("should not error when RemoveControllerReference owner's controller is set to true", func() {

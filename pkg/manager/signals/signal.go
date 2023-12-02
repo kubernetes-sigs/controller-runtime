@@ -23,7 +23,11 @@ import (
 	"time"
 )
 
-var onlyOneSignalHandler = make(chan struct{})
+var (
+	onlyOneSignalHandler = make(chan struct{})
+	// Define global signal channel for testing
+	signalCh = make(chan os.Signal, 2)
+)
 
 // SetupSignalHandlerWithDelay registers for SIGTERM and SIGINT. A context is
 // returned which is canceled on one of these signals after waiting for the
@@ -37,17 +41,16 @@ func SetupSignalHandlerWithDelay(delay time.Duration) context.Context {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	c := make(chan os.Signal, 2)
-	signal.Notify(c, shutdownSignals...)
+	signal.Notify(signalCh, shutdownSignals...)
 	go func() {
-		<-c
+		<-signalCh
 		// Cancel the context after delaying for the specified duration but
 		// avoid blocking if a second signal is caught
 		go func() {
 			<-time.After(delay)
 			cancel()
 		}()
-		<-c
+		<-signalCh
 		os.Exit(1) // second signal. Exit directly.
 	}()
 

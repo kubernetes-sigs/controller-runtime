@@ -53,9 +53,8 @@ func List(list client.ObjectList, opts ...client.ListOption) func() error {
 // It can be used with gomega.Eventually() like this:
 //
 //	deployment := appsv1.Deployment{ ... }
-//	gomega.Eventually(k.Update(&deployment, func (o client.Object) {
+//	gomega.Eventually(k.Update(&deployment, func() {
 //	  deployment.Spec.Replicas = 3
-//	  return &deployment
 //	})).To(gomega.Succeed())
 //
 // By calling the returned function directly it can also be used as gomega.Expect(k.Update(...)()).To(...)
@@ -68,9 +67,8 @@ func Update(obj client.Object, f func(), opts ...client.UpdateOption) func() err
 // It can be used with gomega.Eventually() like this:
 //
 //	deployment := appsv1.Deployment{ ... }
-//	gomega.Eventually(k.UpdateStatus(&deployment, func (o client.Object) {
+//	gomega.Eventually(k.UpdateStatus(&deployment, func() {
 //	  deployment.Status.AvailableReplicas = 1
-//	  return &deployment
 //	})).To(gomega.Succeed())
 //
 // By calling the returned function directly it can also be used as gomega.Expect(k.UpdateStatus(...)()).To(...)

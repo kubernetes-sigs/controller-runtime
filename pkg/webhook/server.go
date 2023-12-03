@@ -101,6 +101,12 @@ type Options struct {
 
 	// WebhookMux is the multiplexer that handles different webhooks.
 	WebhookMux *http.ServeMux
+
+	// ShutdownDelay delays server shutdown to wait for clients to stop opening
+	// new connections before closing server listeners. HTTP keep-alives are
+	// disabled during this time to allow persistent connections to be closed
+	// gracefully. Defaults to 0.
+	ShutdownDelay time.Duration
 }
 
 // NewServer constructs a new webhook.Server from the provided options.
@@ -247,9 +253,16 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		log.Info("Shutting down webhook server with timeout of 1 minute")
-
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 		defer cancel()
+		// Disable HTTP keep-alives to close persistent connections gracefully
+		srv.SetKeepAlivesEnabled(false)
+		// Wait for the specified shutdown delay or until the shutdown context
+		// expires, whichever happens first
+		select {
+		case <-time.After(s.Options.ShutdownDelay):
+		case <-ctx.Done():
+		}
 		if err := srv.Shutdown(ctx); err != nil {
 			// Error from closing listeners, or context timeout
 			log.Error(err, "error shutting down the HTTP server")

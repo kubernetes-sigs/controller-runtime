@@ -20,45 +20,26 @@ import (
 	"context"
 	"os"
 	"os/signal"
-	"time"
 )
 
-var (
-	onlyOneSignalHandler = make(chan struct{})
-	// Define global signal channel for testing
-	signalCh = make(chan os.Signal, 2)
-)
+var onlyOneSignalHandler = make(chan struct{})
 
-// SetupSignalHandlerWithDelay registers for SIGTERM and SIGINT. A context is
-// returned which is canceled on one of these signals after waiting for the
-// specified delay. In particular, the delay can be used to give external
-// Kubernetes controllers (such as kube-proxy) time to observe the termination
-// of this manager before starting shutdown of any webhook servers to avoid
-// receiving connection attempts after closing webhook listeners. If a second
-// signal is caught, the program is terminated with exit code 1.
-func SetupSignalHandlerWithDelay(delay time.Duration) context.Context {
+// SetupSignalHandler registers for SIGTERM and SIGINT. A context is returned
+// which is canceled on one of these signals. If a second signal is caught, the program
+// is terminated with exit code 1.
+func SetupSignalHandler() context.Context {
 	close(onlyOneSignalHandler) // panics when called twice
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	signal.Notify(signalCh, shutdownSignals...)
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, shutdownSignals...)
 	go func() {
-		<-signalCh
-		// Cancel the context after delaying for the specified duration but
-		// avoid blocking if a second signal is caught
-		go func() {
-			<-time.After(delay)
-			cancel()
-		}()
-		<-signalCh
+		<-c
+		cancel()
+		<-c
 		os.Exit(1) // second signal. Exit directly.
 	}()
 
 	return ctx
-}
-
-// SetupSignalHandler is a special case of SetupSignalHandlerWithDelay with no
-// delay for backwards compatibility
-func SetupSignalHandler() context.Context {
-	return SetupSignalHandlerWithDelay(time.Duration(0))
 }

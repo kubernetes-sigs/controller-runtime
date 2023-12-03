@@ -84,6 +84,19 @@ var _ = Describe("Admission Webhooks", func() {
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
 
+		It("should error when given a NoBody", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Method: http.MethodPost,
+				Body:   http.NoBody,
+			}
+
+			expected := `{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"request body is empty","code":400}}}
+`
+			webhook.ServeHTTP(respRecorder, req)
+			Expect(respRecorder.Body.String()).To(Equal(expected))
+		})
+
 		It("should return the response given by the handler with version defaulted to v1", func() {
 			req := &http.Request{
 				Header: http.Header{"Content-Type": []string{"application/json"}},

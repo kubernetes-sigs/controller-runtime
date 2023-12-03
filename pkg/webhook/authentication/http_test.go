@@ -19,6 +19,7 @@ package authentication
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"net/http"
@@ -102,6 +103,19 @@ var _ = Describe("Authentication Webhooks", func() {
 			}
 
 			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"request body is empty"}}
+`
+			webhook.ServeHTTP(respRecorder, req)
+			Expect(respRecorder.Body.String()).To(Equal(expected))
+		})
+
+		It("should error when given an infinite body", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Method: http.MethodPost,
+				Body:   nopCloser{Reader: rand.Reader},
+			}
+
+			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"request entity is too large; limit is 3145728 bytes"}}
 `
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))

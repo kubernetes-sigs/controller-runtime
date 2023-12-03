@@ -34,6 +34,9 @@ import (
 var admissionScheme = runtime.NewScheme()
 var admissionCodecs = serializer.NewCodecFactory(admissionScheme)
 
+// based on https://github.com/kubernetes/kubernetes/blob/c28c2009181fcc44c5f6b47e10e62dacf53e4da0/staging/src/k8s.io/pod-security-admission/cmd/webhook/server/server.go
+var maxRequestSize = int64(3 * 1024 * 1024)
+
 func init() {
 	utilruntime.Must(v1.AddToScheme(admissionScheme))
 	utilruntime.Must(v1beta1.AddToScheme(admissionScheme))
@@ -55,9 +58,16 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer r.Body.Close()
-	body, err := io.ReadAll(r.Body)
+	limitedReader := &io.LimitedReader{R: r.Body, N: maxRequestSize}
+	body, err := io.ReadAll(limitedReader)
 	if err != nil {
 		wh.getLogger(nil).Error(err, "unable to read the body from the incoming request")
+		wh.writeResponse(w, Errored(http.StatusBadRequest, err))
+		return
+	}
+	if limitedReader.N <= 0 {
+		err := fmt.Errorf("request entity is too large; limit is %d bytes", maxRequestSize)
+		wh.getLogger(nil).Error(err, "unable to read the body from the incoming request; limit reached")
 		wh.writeResponse(w, Errored(http.StatusBadRequest, err))
 		return
 	}

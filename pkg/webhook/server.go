@@ -253,6 +253,7 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		log.Info("Shutting down webhook server with timeout of 1 minute")
+
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 		defer cancel()
 		// Disable HTTP keep-alives to close persistent connections gracefully

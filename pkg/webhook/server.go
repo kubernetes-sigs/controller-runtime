@@ -260,6 +260,7 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 		<-time.After(s.Options.ShutdownDelay)
 
 		log.Info("Shutting down webhook server with timeout of 1 minute")
+
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {

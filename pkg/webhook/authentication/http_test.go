@@ -181,6 +181,33 @@ var _ = Describe("Authentication Webhooks", func() {
 			webhook.ServeHTTP(respRecorder, req.WithContext(ctx))
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
+
+		It("should handle crashes", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Method: http.MethodPost,
+				Body:   nopCloser{Reader: bytes.NewBufferString(`{"spec":{"token":"foobar"}}`)},
+			}
+			webhook := &Webhook{
+				Handler: &fakeHandler{
+					fn: func(ctx context.Context, req Request) Response {
+						panic("boom")
+					},
+				},
+			}
+
+			expected := `internal server error
+`
+			(func() {
+				defer func() {
+					if r := recover(); r != nil {
+						Expect(r).To(Equal("boom"))
+					}
+				}()
+				webhook.ServeHTTP(respRecorder, req)
+			})()
+			Expect(respRecorder.Body.String()).To(Equal(expected))
+		})
 	})
 })
 

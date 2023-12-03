@@ -42,6 +42,11 @@ func init() {
 var _ http.Handler = &Webhook{}
 
 func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer utilruntime.HandleCrash(func(_ interface{}) {
+		// Assume the crash happened before the response was written.
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	})
+
 	ctx := r.Context()
 	if wh.WithContextFunc != nil {
 		ctx = wh.WithContextFunc(ctx, r)

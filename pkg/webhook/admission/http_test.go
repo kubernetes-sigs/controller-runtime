@@ -198,6 +198,33 @@ var _ = Describe("Admission Webhooks", func() {
 				return respRecorder.Body.Len()
 			}, time.Second*3).Should(Equal(0))
 		})
+
+		It("should handle crashes", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Method: http.MethodPost,
+				Body:   nopCloser{Reader: bytes.NewBufferString(`{"spec":{"token":"foobar"}}`)},
+			}
+			webhook := &Webhook{
+				Handler: &fakeHandler{
+					fn: func(ctx context.Context, req Request) Response {
+						panic("boom")
+					},
+				},
+			}
+
+			expected := `internal server error
+`
+			(func() {
+				defer func() {
+					if r := recover(); r != nil {
+						Expect(r).To(Equal("boom"))
+					}
+				}()
+				webhook.ServeHTTP(respRecorder, req)
+			})()
+			Expect(respRecorder.Body.String()).To(Equal(expected))
+		})
 	})
 })
 

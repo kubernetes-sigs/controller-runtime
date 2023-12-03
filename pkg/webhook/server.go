@@ -103,9 +103,7 @@ type Options struct {
 	WebhookMux *http.ServeMux
 
 	// ShutdownDelay delays server shutdown to wait for clients to stop opening
-	// new connections before closing server listeners. HTTP keep-alives are
-	// disabled during this time to allow persistent connections to be closed
-	// gracefully. Defaults to 0.
+	// new connections before closing server listeners. Defaults to 0.
 	ShutdownDelay time.Duration
 }
 
@@ -256,8 +254,6 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 		defer cancel()
-		// Disable HTTP keep-alives to close persistent connections gracefully
-		srv.SetKeepAlivesEnabled(false)
 		// Wait for the specified shutdown delay or until the shutdown context
 		// expires, whichever happens first
 		select {

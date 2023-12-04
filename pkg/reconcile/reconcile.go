@@ -97,7 +97,7 @@ type Reconciler interface {
 	// If the error is nil and the returned Result has a non-zero result.RequeueAfter, the request
 	// will be requeued after the specified duration.
 	//
-	// If the error is nil and result.RequeueAfter is zero and result.Reque is true, the request
+	// If the error is nil and result.RequeueAfter is zero and result.Requeue is true, the request
 	// will be requeued using exponential backoff.
 	Reconcile(context.Context, Request) (Result, error)
 }

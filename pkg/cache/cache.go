@@ -412,7 +412,7 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 	// Construct a new Mapper if unset
 	if opts.Mapper == nil {
 		var err error
-		opts.Mapper, err = apiutil.NewDiscoveryRESTMapper(config, opts.HTTPClient)
+		opts.Mapper, err = apiutil.NewDynamicRESTMapper(config, opts.HTTPClient)
 		if err != nil {
 			return Options{}, fmt.Errorf("could not create RESTMapper from config: %w", err)
 		}

@@ -54,7 +54,7 @@ var _ = Describe("Eventhandler", func() {
 
 		httpClient, err := rest.HTTPClientFor(cfg)
 		Expect(err).ShouldNot(HaveOccurred())
-		mapper, err = apiutil.NewDiscoveryRESTMapper(cfg, httpClient)
+		mapper, err = apiutil.NewDynamicRESTMapper(cfg, httpClient)
 		Expect(err).ShouldNot(HaveOccurred())
 	})
 

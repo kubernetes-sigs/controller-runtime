@@ -257,7 +257,7 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 		// migrating clients to server instances that are not about to shutdown
 		srv.SetKeepAlivesEnabled(false)
 		// Wait before shutting down webhook server
-		<-time.After(s.Options.ShutdownDelay)
+		time.Sleep(s.Options.ShutdownDelay)
 
 		log.Info("Shutting down webhook server with timeout of 1 minute")
 

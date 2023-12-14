@@ -1254,6 +1254,8 @@ func inTreeResourcesWithStatus() []schema.GroupVersionKind {
 
 		{Group: "flowcontrol.apiserver.k8s.io", Version: "v1beta2", Kind: "FlowSchema"},
 		{Group: "flowcontrol.apiserver.k8s.io", Version: "v1beta2", Kind: "PriorityLevelConfiguration"},
+		{Group: "flowcontrol.apiserver.k8s.io", Version: "v1", Kind: "FlowSchema"},
+		{Group: "flowcontrol.apiserver.k8s.io", Version: "v1", Kind: "PriorityLevelConfiguration"},
 	}
 }
 

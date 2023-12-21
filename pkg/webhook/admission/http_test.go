@@ -105,7 +105,7 @@ var _ = Describe("Admission Webhooks", func() {
 				Body:   nopCloser{Reader: rand.Reader},
 			}
 
-			expected := `{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"request entity is too large; limit is 3145728 bytes","code":400}}}
+			expected := `{"response":{"uid":"","allowed":false,"status":{"metadata":{},"message":"request entity is too large; limit is 7340032 bytes","code":400}}}
 `
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))

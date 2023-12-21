@@ -34,8 +34,23 @@ import (
 var admissionScheme = runtime.NewScheme()
 var admissionCodecs = serializer.NewCodecFactory(admissionScheme)
 
-// based on https://github.com/kubernetes/kubernetes/blob/c28c2009181fcc44c5f6b47e10e62dacf53e4da0/staging/src/k8s.io/pod-security-admission/cmd/webhook/server/server.go
-var maxRequestSize = int64(3 * 1024 * 1024)
+// adapted from https://github.com/kubernetes/kubernetes/blob/c28c2009181fcc44c5f6b47e10e62dacf53e4da0/staging/src/k8s.io/pod-security-admission/cmd/webhook/server/server.go
+//
+// From https://github.com/kubernetes/apiserver/blob/d6876a0600de06fef75968c4641c64d7da499f25/pkg/server/config.go#L433-L442C5:
+//
+//	     1.5MB is the recommended client request size in byte
+//		 the etcd server should accept. See
+//		 https://github.com/etcd-io/etcd/blob/release-3.4/embed/config.go#L56.
+//		 A request body might be encoded in json, and is converted to
+//		 proto when persisted in etcd, so we allow 2x as the largest request
+//		 body size to be accepted and decoded in a write request.
+//
+// For the admission request, we can infer that it contains at most two objects
+// (the old and new versions of the object being admitted), each of which can
+// be at most 3MB in size. For the rest of the request, we can assume that
+// it will be less than 1MB in size. Therefore, we can set the max request
+// size to 7MB.
+var maxRequestSize = int64(7 * 1024 * 1024)
 
 func init() {
 	utilruntime.Must(v1.AddToScheme(admissionScheme))

@@ -834,7 +834,7 @@ var _ = Describe("Controllerutil", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("returning OperationResultUpdatedStatus")
-			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreatedStatus))
 
 			By("setting the spec")
 			Expect(*deploy.Spec.Replicas).To(Equal(replicas))

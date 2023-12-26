@@ -261,6 +261,8 @@ const ( // They should complete the sentence "Deployment default/foo has been ..
 	OperationResultUpdatedStatus OperationResult = "updatedStatus"
 	// OperationResultUpdatedStatusOnly means that only an existing status is updated.
 	OperationResultUpdatedStatusOnly OperationResult = "updatedStatusOnly"
+	// OperationResultCreatedStatus means that an object was created and its status updated
+	OperationResultCreatedStatus OperationResult = "createdStatus"
 )
 
 // CreateOrUpdate creates or updates the given object in the Kubernetes
@@ -309,19 +311,12 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f M
 // It returns the executed operation and an error.
 func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
 	key := client.ObjectKeyFromObject(obj)
+	exists := true
 	if err := c.Get(ctx, key, obj); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return OperationResultNone, err
 		}
-		if f != nil {
-			if err := mutate(f, key, obj); err != nil {
-				return OperationResultNone, err
-			}
-		}
-		if err := c.Create(ctx, obj); err != nil {
-			return OperationResultNone, err
-		}
-		return OperationResultCreated, nil
+		exists = false
 	}
 
 	// Create patches for the object and its possible status.
@@ -374,7 +369,12 @@ func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f Mu
 
 	result := OperationResultNone
 
-	if !reflect.DeepEqual(before, after) {
+	if !exists {
+		if err := c.Create(ctx, obj); err != nil {
+			return result, err
+		}
+		result = OperationResultCreated
+	} else if !reflect.DeepEqual(before, after) {
 		// Only issue a Patch if the before and after resources (minus status) differ
 		if err := c.Patch(ctx, obj, objPatch); err != nil {
 			return result, err
@@ -385,7 +385,7 @@ func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f Mu
 	if (hasBeforeStatus || hasAfterStatus) && !reflect.DeepEqual(beforeStatus, afterStatus) {
 		// Only issue a Status Patch if the resource has a status and the beforeStatus
 		// and afterStatus copies differ
-		if result == OperationResultUpdated {
+		if result == OperationResultUpdated || result == OperationResultCreated {
 			// If Status was replaced by Patch before, set it to afterStatus
 			objectAfterPatch, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 			if err != nil {
@@ -402,9 +402,13 @@ func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f Mu
 		if err := c.Status().Patch(ctx, obj, statusPatch); err != nil {
 			return result, err
 		}
-		if result == OperationResultUpdated {
+		//nolint:golint,exhaustive
+		switch result {
+		case OperationResultUpdated:
 			result = OperationResultUpdatedStatus
-		} else {
+		case OperationResultCreated:
+			result = OperationResultCreatedStatus
+		default:
 			result = OperationResultUpdatedStatusOnly
 		}
 	}

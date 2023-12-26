@@ -818,6 +818,32 @@ var _ = Describe("Controllerutil", func() {
 			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
 			Expect(err).To(HaveOccurred())
 		})
+
+		It("creates the object and patches the status", func() {
+			replicas := int32(3)
+			deployStatus := appsv1.DeploymentStatus{
+				ReadyReplicas: 1,
+				Replicas:      replicas,
+			}
+			op, err := controllerutil.CreateOrPatch(context.TODO(), c, deploy, func() error {
+				Expect(specr()).To(Succeed())
+				Expect(deploymentScaler(deploy, replicas)()).To(Succeed())
+				return deploymentStatusr(deploy, deployStatus)()
+			})
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultUpdatedStatus")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
+
+			By("setting the spec")
+			Expect(*deploy.Spec.Replicas).To(Equal(replicas))
+
+			By("updating the status")
+			Expect(deploy.Status.Replicas).To(Equal(replicas))
+
+			assertLocalDeployWasUpdated(nil)
+		})
 	})
 
 	Describe("Finalizers", func() {

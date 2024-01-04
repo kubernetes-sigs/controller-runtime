@@ -271,8 +271,8 @@ const ( // They should complete the sentence "Deployment default/foo has been ..
 //
 // It returns the executed operation and an error.
 //
-// Note: CreateOrUpdate does not update the status of the resource. Any
-// change made to it will be ignored
+// Note: changes made by MutateFn to any sub-resource (status...), will be
+// discarded.
 func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
 	key := client.ObjectKeyFromObject(obj)
 	if err := c.Get(ctx, key, obj); err != nil {
@@ -311,10 +311,11 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f M
 //
 // It returns the executed operation and an error.
 //
-// Note: CreateOrPatch will patch the status if MutateFn makes change to it
-// and the resource already exists. If the resource does not exist, changes
-// to the status are ignored. A simple solution in that case is to requeue
-// the current element if OperationResult is equal to OperationResultCreated
+// Note: changes to any sub-resource other than status will be ignored.
+// Changes to the status sub-resource will only be applied if the object
+// already exist. To change the status on object creation, the easiest
+// way is to requeue the object in the controller if OperationResult is
+// OperationResultCreated
 func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
 	key := client.ObjectKeyFromObject(obj)
 	if err := c.Get(ctx, key, obj); err != nil {

@@ -270,6 +270,9 @@ const ( // They should complete the sentence "Deployment default/foo has been ..
 // The MutateFn is called regardless of creating or updating an object.
 //
 // It returns the executed operation and an error.
+//
+// Note: CreateOrUpdate does not update the status of the resource. Any
+// change made to it will be ignored
 func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
 	key := client.ObjectKeyFromObject(obj)
 	if err := c.Get(ctx, key, obj); err != nil {
@@ -307,6 +310,11 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f M
 // The MutateFn is called regardless of creating or updating an object.
 //
 // It returns the executed operation and an error.
+//
+// Note: CreateOrPatch will patch the status if MutateFn makes change to it
+// and the resource already exists. If the resource does not exist, changes
+// to the status are ignored. A simple solution in that case is to requeue
+// the current element if OperationResult is equal to OperationResultCreated
 func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
 	key := client.ObjectKeyFromObject(obj)
 	if err := c.Get(ctx, key, obj); err != nil {

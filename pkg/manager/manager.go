@@ -176,13 +176,13 @@ type Options struct {
 	// act on the same resources concurrently.
 	LeaderElectionResourceLock string
 
-	// LeaderElectionNamespace determines the namespace in which the leader
-	// election resource will be created.
-	LeaderElectionNamespace string
+	// LeaderElectionLockNamespace determines the namespace of the leader election lock
+	// resource will be created in.
+	LeaderElectionLockNamespace string
 
-	// LeaderElectionID determines the name of the resource that leader election
+	// LeaderElectionLockName determines the name of the resource that leader election
 	// will use for holding the leader lock.
-	LeaderElectionID string
+	LeaderElectionLockName string
 
 	// LeaderElectionConfig can be specified to override the default configuration
 	// that is used to build the leader election client.
@@ -196,7 +196,7 @@ type Options struct {
 	LeaderElectionReleaseOnCancel bool
 
 	// LeaderElectionResourceLockInterface allows to provide a custom resourcelock.Interface that was created outside
-	// of the controller-runtime. If this value is set the options LeaderElectionID, LeaderElectionNamespace,
+	// of the controller-runtime. If this value is set the options LeaderElectionLockName, LeaderElectionLockNamespace,
 	// LeaderElectionResourceLock, LeaseDuration, RenewDeadline and RetryPeriod will be ignored. This can be useful if you
 	// want to use a locking mechanism that is currently not supported, like a MultiLock across two Kubernetes clusters.
 	LeaderElectionResourceLockInterface resourcelock.Interface
@@ -379,10 +379,10 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		resourceLock = options.LeaderElectionResourceLockInterface
 	} else {
 		resourceLock, err = options.newResourceLock(leaderConfig, leaderRecorderProvider, leaderelection.Options{
-			LeaderElection:             options.LeaderElection,
-			LeaderElectionResourceLock: options.LeaderElectionResourceLock,
-			LeaderElectionID:           options.LeaderElectionID,
-			LeaderElectionNamespace:    options.LeaderElectionNamespace,
+			LeaderElection: options.LeaderElection,
+			ResourceLock:   options.LeaderElectionResourceLock,
+			LockName:       options.LeaderElectionLockName,
+			LockNamespace:  options.LeaderElectionLockNamespace,
 		})
 		if err != nil {
 			return nil, err
@@ -423,7 +423,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		logger:                        options.Logger,
 		elected:                       make(chan struct{}),
 		webhookServer:                 options.WebhookServer,
-		leaderElectionID:              options.LeaderElectionID,
+		leaderElectionLockName:        options.LeaderElectionLockName,
 		leaseDuration:                 *options.LeaseDuration,
 		renewDeadline:                 *options.RenewDeadline,
 		retryPeriod:                   *options.RetryPeriod,
@@ -535,12 +535,12 @@ func (o Options) setLeaderElectionConfig(obj v1alpha1.ControllerManagerConfigura
 		o.LeaderElectionResourceLock = obj.LeaderElection.ResourceLock
 	}
 
-	if o.LeaderElectionNamespace == "" && obj.LeaderElection.ResourceNamespace != "" {
-		o.LeaderElectionNamespace = obj.LeaderElection.ResourceNamespace
+	if o.LeaderElectionLockNamespace == "" && obj.LeaderElection.ResourceNamespace != "" {
+		o.LeaderElectionLockNamespace = obj.LeaderElection.ResourceNamespace
 	}
 
-	if o.LeaderElectionID == "" && obj.LeaderElection.ResourceName != "" {
-		o.LeaderElectionID = obj.LeaderElection.ResourceName
+	if o.LeaderElectionLockName == "" && obj.LeaderElection.ResourceName != "" {
+		o.LeaderElectionLockName = obj.LeaderElection.ResourceName
 	}
 
 	if o.LeaseDuration == nil && !reflect.DeepEqual(obj.LeaderElection.LeaseDuration, metav1.Duration{}) {

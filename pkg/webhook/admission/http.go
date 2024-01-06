@@ -83,7 +83,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if limitedReader.N <= 0 {
 		err := fmt.Errorf("request entity is too large; limit is %d bytes", maxRequestSize)
 		wh.getLogger(nil).Error(err, "unable to read the body from the incoming request; limit reached")
-		wh.writeResponse(w, Errored(http.StatusBadRequest, err))
+		wh.writeResponse(w, Errored(http.StatusRequestEntityTooLarge, err))
 		return
 	}
 

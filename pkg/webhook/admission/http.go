@@ -50,6 +50,8 @@ var admissionCodecs = serializer.NewCodecFactory(admissionScheme)
 // be at most 3MB in size. For the rest of the request, we can assume that
 // it will be less than 1MB in size. Therefore, we can set the max request
 // size to 7MB.
+// If your use case requires larger max request sizes, please
+// open an issue (https://github.com/kubernetes-sigs/controller-runtime/issues/new).
 var maxRequestSize = int64(7 * 1024 * 1024)
 
 func init() {

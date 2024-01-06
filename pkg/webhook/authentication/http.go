@@ -34,19 +34,12 @@ import (
 var authenticationScheme = runtime.NewScheme()
 var authenticationCodecs = serializer.NewCodecFactory(authenticationScheme)
 
-// adapted from https://github.com/kubernetes/kubernetes/blob/c28c2009181fcc44c5f6b47e10e62dacf53e4da0/staging/src/k8s.io/pod-security-admission/cmd/webhook/server/server.go
-//
-// From https://github.com/kubernetes/apiserver/blob/d6876a0600de06fef75968c4641c64d7da499f25/pkg/server/config.go#L433-L442C5:
-//
-//	     1.5MB is the recommended client request size in byte
-//		 the etcd server should accept. See
-//		 https://github.com/etcd-io/etcd/blob/release-3.4/embed/config.go#L56.
-//		 A request body might be encoded in json, and is converted to
-//		 proto when persisted in etcd, so we allow 2x as the largest request
-//		 body size to be accepted and decoded in a write request.
-//
-// For the TokenReview request, we can assume that it too will be less than 3MB in size.
-var maxRequestSize = int64(3 * 1024 * 1024)
+// The TokenReview resource mostly contains a bearer token which
+// at most should have a few KB's of size, so we picked 1 MB to
+// have plenty of buffer.
+// If your use case requires larger max request sizes, please
+// open an issue (https://github.com/kubernetes-sigs/controller-runtime/issues/new).
+var maxRequestSize = int64(1 * 1024 * 1024)
 
 func init() {
 	utilruntime.Must(authenticationv1.AddToScheme(authenticationScheme))

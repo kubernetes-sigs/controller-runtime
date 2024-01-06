@@ -115,7 +115,7 @@ var _ = Describe("Authentication Webhooks", func() {
 				Body:   nopCloser{Reader: rand.Reader},
 			}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"request entity is too large; limit is 3145728 bytes"}}
+			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"request entity is too large; limit is 1048576 bytes"}}
 `
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))

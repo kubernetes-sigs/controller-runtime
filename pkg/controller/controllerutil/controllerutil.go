@@ -270,6 +270,9 @@ const ( // They should complete the sentence "Deployment default/foo has been ..
 // The MutateFn is called regardless of creating or updating an object.
 //
 // It returns the executed operation and an error.
+//
+// Note: changes made by MutateFn to any sub-resource (status...), will be
+// discarded.
 func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
 	key := client.ObjectKeyFromObject(obj)
 	if err := c.Get(ctx, key, obj); err != nil {
@@ -307,6 +310,12 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f M
 // The MutateFn is called regardless of creating or updating an object.
 //
 // It returns the executed operation and an error.
+//
+// Note: changes to any sub-resource other than status will be ignored.
+// Changes to the status sub-resource will only be applied if the object
+// already exist. To change the status on object creation, the easiest
+// way is to requeue the object in the controller if OperationResult is
+// OperationResultCreated
 func CreateOrPatch(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
 	key := client.ObjectKeyFromObject(obj)
 	if err := c.Get(ctx, key, obj); err != nil {

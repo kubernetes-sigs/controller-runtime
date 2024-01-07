@@ -24,15 +24,9 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	examplegroup "sigs.k8s.io/controller-runtime/examples/crd/pkg"
 )
-
-// examplegroup.ChaosPod has implemented both admission.Defaulter and
-// admission.Validator interfaces.
-var _ admission.Defaulter = &examplegroup.ChaosPod{}
-var _ admission.Validator = &examplegroup.ChaosPod{}
 
 // This example use webhook builder to create a simple webhook that is managed
 // by a manager for CRD ChaosPod. And then start the manager.

@@ -17,14 +17,8 @@ limitations under the License.
 package pkg
 
 import (
-	"fmt"
-	"time"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // ChaosPodSpec defines the desired state of ChaosPod
@@ -60,61 +54,6 @@ type ChaosPodList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ChaosPod `json:"items"`
-}
-
-// +kubebuilder:webhook:path=/validate-chaosapps-metamagical-io-v1-chaospod,mutating=false,failurePolicy=fail,groups=chaosapps.metamagical.io,resources=chaospods,verbs=create;update,versions=v1,name=vchaospod.kb.io
-
-var _ webhook.Validator = &ChaosPod{}
-
-// ValidateCreate implements webhookutil.validator so a webhook will be registered for the type
-func (c *ChaosPod) ValidateCreate() (admission.Warnings, error) {
-	log.Info("validate create", "name", c.Name)
-
-	if c.Spec.NextStop.Before(&metav1.Time{Time: time.Now()}) {
-		return nil, fmt.Errorf(".spec.nextStop must be later than current time")
-	}
-	return nil, nil
-}
-
-// ValidateUpdate implements webhookutil.validator so a webhook will be registered for the type
-func (c *ChaosPod) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	log.Info("validate update", "name", c.Name)
-
-	if c.Spec.NextStop.Before(&metav1.Time{Time: time.Now()}) {
-		return nil, fmt.Errorf(".spec.nextStop must be later than current time")
-	}
-
-	oldC, ok := old.(*ChaosPod)
-	if !ok {
-		return nil, fmt.Errorf("expect old object to be a %T instead of %T", oldC, old)
-	}
-	if c.Spec.NextStop.After(oldC.Spec.NextStop.Add(time.Hour)) {
-		return nil, fmt.Errorf("it is not allowed to delay.spec.nextStop for more than 1 hour")
-	}
-	return nil, nil
-}
-
-// ValidateDelete implements webhookutil.validator so a webhook will be registered for the type
-func (c *ChaosPod) ValidateDelete() (admission.Warnings, error) {
-	log.Info("validate delete", "name", c.Name)
-
-	if c.Spec.NextStop.Before(&metav1.Time{Time: time.Now()}) {
-		return nil, fmt.Errorf(".spec.nextStop must be later than current time")
-	}
-	return nil, nil
-}
-
-// +kubebuilder:webhook:path=/mutate-chaosapps-metamagical-io-v1-chaospod,mutating=true,failurePolicy=fail,groups=chaosapps.metamagical.io,resources=chaospods,verbs=create;update,versions=v1,name=mchaospod.kb.io
-
-var _ webhook.Defaulter = &ChaosPod{}
-
-// Default implements webhookutil.defaulter so a webhook will be registered for the type
-func (c *ChaosPod) Default() {
-	log.Info("default", "name", c.Name)
-
-	if c.Spec.NextStop.Before(&metav1.Time{Time: time.Now()}) {
-		c.Spec.NextStop = metav1.Time{Time: time.Now().Add(time.Minute)}
-	}
 }
 
 func init() {

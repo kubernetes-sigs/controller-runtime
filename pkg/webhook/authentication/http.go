@@ -39,7 +39,7 @@ var authenticationCodecs = serializer.NewCodecFactory(authenticationScheme)
 // have plenty of buffer.
 // If your use case requires larger max request sizes, please
 // open an issue (https://github.com/kubernetes-sigs/controller-runtime/issues/new).
-var maxRequestSize = int64(1 * 1024 * 1024)
+const maxRequestSize = int64(1 * 1024 * 1024)
 
 func init() {
 	utilruntime.Must(authenticationv1.AddToScheme(authenticationScheme))

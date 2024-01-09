@@ -23,10 +23,22 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+type mockObjectReconciler struct {
+	reconcileFunc func(context.Context, *corev1.ConfigMap) (reconcile.Result, error)
+}
+
+func (r *mockObjectReconciler) Reconcile(ctx context.Context, cm *corev1.ConfigMap) (reconcile.Result, error) {
+	return r.reconcileFunc(ctx, cm)
+}
 
 var _ = Describe("reconcile", func() {
 	Describe("Result", func() {
@@ -100,6 +112,77 @@ var _ = Describe("reconcile", func() {
 		It("should handle nil terminal errors properly", func() {
 			err := reconcile.TerminalError(nil)
 			Expect(err.Error()).To(Equal("nil terminal error"))
+		})
+	})
+
+	Describe("AsReconciler", func() {
+		var testenv *envtest.Environment
+		var testClient client.Client
+
+		BeforeEach(func() {
+			testenv = &envtest.Environment{}
+
+			cfg, err := testenv.Start()
+			Expect(err).NotTo(HaveOccurred())
+
+			testClient, err = client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			Expect(testenv.Stop()).NotTo(HaveOccurred())
+		})
+
+		Context("with an existing object", func() {
+			var key client.ObjectKey
+
+			BeforeEach(func() {
+				cm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "default",
+						Name:      "test",
+					},
+				}
+				key = client.ObjectKeyFromObject(cm)
+
+				err := testClient.Create(context.Background(), cm)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should Get the object and call the ObjectReconciler", func() {
+				var actual *corev1.ConfigMap
+				reconciler := reconcile.AsReconciler(testClient, &mockObjectReconciler{
+					reconcileFunc: func(ctx context.Context, cm *corev1.ConfigMap) (reconcile.Result, error) {
+						actual = cm
+						return reconcile.Result{}, nil
+					},
+				})
+
+				res, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: key})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(res).To(BeZero())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.ObjectMeta.Name).To(Equal(key.Name))
+				Expect(actual.ObjectMeta.Namespace).To(Equal(key.Namespace))
+			})
+		})
+
+		Context("with an object that doesn't exist", func() {
+			It("should not call the ObjectReconciler", func() {
+				called := false
+				reconciler := reconcile.AsReconciler(testClient, &mockObjectReconciler{
+					reconcileFunc: func(ctx context.Context, cm *corev1.ConfigMap) (reconcile.Result, error) {
+						called = true
+						return reconcile.Result{}, nil
+					},
+				})
+
+				key := types.NamespacedName{Namespace: "default", Name: "fake-obj"}
+				res, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: key})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(res).To(BeZero())
+				Expect(called).To(BeFalse())
+			})
 		})
 	})
 })

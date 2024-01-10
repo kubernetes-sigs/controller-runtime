@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/authentication/authenticatorfactory"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/authorization/authorizerfactory"
-	"k8s.io/apiserver/pkg/server/options"
 	authenticationv1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/client-go/rest"
@@ -47,7 +47,14 @@ func WithAuthenticationAndAuthorization(config *rest.Config, httpClient *http.Cl
 		CacheTTL:                 1 * time.Minute,
 		TokenAccessReviewClient:  authenticationV1Client,
 		TokenAccessReviewTimeout: 10 * time.Second,
-		WebhookRetryBackoff:      options.DefaultAuthWebhookRetryBackoff(),
+		// wait.Backoff is copied from: https://github.com/kubernetes/apiserver/blob/v0.29.0/pkg/server/options/authentication.go#L43-L50
+		// options.DefaultAuthWebhookRetryBackoff is not used to avoid a dependency on "k8s.io/apiserver/pkg/server/options".
+		WebhookRetryBackoff: &wait.Backoff{
+			Duration: 500 * time.Millisecond,
+			Factor:   1.5,
+			Jitter:   0.2,
+			Steps:    5,
+		},
 	}
 	delegatingAuthenticator, _, err := authenticatorConfig.New()
 	if err != nil {
@@ -58,7 +65,14 @@ func WithAuthenticationAndAuthorization(config *rest.Config, httpClient *http.Cl
 		SubjectAccessReviewClient: authorizationV1Client,
 		AllowCacheTTL:             5 * time.Minute,
 		DenyCacheTTL:              30 * time.Second,
-		WebhookRetryBackoff:       options.DefaultAuthWebhookRetryBackoff(),
+		// wait.Backoff is copied from: https://github.com/kubernetes/apiserver/blob/v0.29.0/pkg/server/options/authentication.go#L43-L50
+		// options.DefaultAuthWebhookRetryBackoff is not used to avoid a dependency on "k8s.io/apiserver/pkg/server/options".
+		WebhookRetryBackoff: &wait.Backoff{
+			Duration: 500 * time.Millisecond,
+			Factor:   1.5,
+			Jitter:   0.2,
+			Steps:    5,
+		},
 	}
 	delegatingAuthorizer, err := authorizerConfig.New()
 	if err != nil {

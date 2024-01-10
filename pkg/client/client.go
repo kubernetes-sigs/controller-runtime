@@ -90,10 +90,11 @@ type CacheOptions struct {
 type NewClientFunc func(config *rest.Config, options Options) (Client, error)
 
 // New returns a new Client using the provided config and Options.
-// The returned client reads *and* writes directly from the server
-// (it doesn't use object caches).  It understands how to work with
-// normal types (both custom resources and aggregated/built-in resources),
-// as well as unstructured types.
+// The returned client reads from a local cache or directly from the API server,
+// and writes are always performed directly on the API server.
+// (read operations may use object caches, but write operations do not).
+// It understands how to work with normal types (both custom resources
+// and aggregated/built-in resources), as well as unstructured types.
 //
 // In the case of normal types, the scheme will be used to look up the
 // corresponding group, version, and kind for the given type.  In the
@@ -210,7 +211,8 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 
 var _ Client = &client{}
 
-// client is a client.Client that reads and writes directly from/to an API server.
+// client is a client.Client configured to either read from a local cache or directly from the API server.
+// Write operations are always performed directly on the API server.
 // It lazily initializes new clients at the time they are used.
 type client struct {
 	typedClient        typedClient

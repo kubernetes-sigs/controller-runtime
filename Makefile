@@ -116,10 +116,6 @@ modules: ## Runs go mod to ensure modules are up to date.
 	cd $(ENVTEST_DIR); go mod tidy
 	cd $(SCRATCH_ENV_DIR); go mod tidy
 
-.PHONY: generate
-generate: $(CONTROLLER_GEN) ## Runs controller-gen for internal types for config file
-	$(CONTROLLER_GEN) object paths="./pkg/config/v1alpha1/...;./examples/configfile/custom/v1alpha1/..."
-
 ## --------------------------------------
 ## Cleanup / Verification
 ## --------------------------------------
@@ -152,3 +148,4 @@ verify-generate: generate ## Verify generated files are up to date
 		git diff; \
 		echo "generated files are out of date, run make generate"; exit 1; \
 	fi
+

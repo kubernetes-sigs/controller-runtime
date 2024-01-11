@@ -44,7 +44,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
@@ -1848,18 +1847,6 @@ func (c *startClusterAfterManager) Start(ctx context.Context) error {
 
 func (c *startClusterAfterManager) GetCache() cache.Cache {
 	return c.informer
-}
-
-type fakeDeferredLoader struct {
-	*v1alpha1.ControllerManagerConfiguration
-}
-
-func (f *fakeDeferredLoader) Complete() (v1alpha1.ControllerManagerConfigurationSpec, error) {
-	return f.ControllerManagerConfiguration.ControllerManagerConfigurationSpec, nil
-}
-
-func (f *fakeDeferredLoader) InjectScheme(scheme *runtime.Scheme) error {
-	return nil
 }
 
 // metricsDefaultServer is used to type check the default metrics server implementation

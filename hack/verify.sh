@@ -21,16 +21,6 @@ source $(dirname ${BASH_SOURCE})/common.sh
 REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 cd "${REPO_ROOT}"
 
-header_text "running generate"
-make generate
-
-# Only run verify-generate in CI, otherwise running generate
-# locally (which is a valid operation) causes `make test` to fail.
-if [[ -n ${CI} ]]; then
-    header_text "verifying generate"
-    make verify-generate
-fi
-
 header_text "running modules"
 make modules
 

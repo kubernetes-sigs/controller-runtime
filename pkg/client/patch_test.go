@@ -19,9 +19,13 @@ package client
 import (
 	"testing"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func BenchmarkMergeFrom(b *testing.B) {
@@ -93,3 +97,26 @@ func BenchmarkMergeFrom(b *testing.B) {
 		}
 	})
 }
+
+var _ = Describe("MergeFrom", func() {
+	It("should successfully create a patch for two large and similar in64s", func() {
+		var largeInt64 int64 = 9223372036854775807
+		var similarLargeInt64 int64 = 9223372036854775800
+		j := batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "test",
+				Name:      "test",
+			},
+			Spec: batchv1.JobSpec{
+				ActiveDeadlineSeconds: &largeInt64,
+			},
+		}
+		patch := MergeFrom(j.DeepCopy())
+
+		j.Spec.ActiveDeadlineSeconds = &similarLargeInt64
+
+		data, err := patch.Data(&j)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(data).To(Equal([]byte(`{"spec":{"activeDeadlineSeconds":9223372036854775800}}`)))
+	})
+})

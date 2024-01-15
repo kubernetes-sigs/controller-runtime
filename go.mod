@@ -5,7 +5,7 @@ go 1.21
 toolchain go1.21.0
 
 require (
-	github.com/evanphx/json-patch v4.12.0+incompatible // Using v4 to match upstream
+	github.com/evanphx/json-patch v5.8.0+incompatible // Using v4 to match upstream
 	github.com/evanphx/json-patch/v5 v5.8.0
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-logr/logr v1.4.1

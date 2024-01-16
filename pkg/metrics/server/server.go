@@ -306,6 +306,9 @@ func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (ne
 	}
 
 	l, err := s.options.ListenConfig.Listen(ctx, "tcp", s.options.BindAddress)
+	if err != nil {
+		return nil, err
+	}
 
 	return tls.NewListener(l, cfg), err
 }

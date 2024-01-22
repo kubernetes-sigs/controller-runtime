@@ -310,7 +310,7 @@ func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (ne
 		return nil, err
 	}
 
-	return tls.NewListener(l, cfg), err
+	return tls.NewListener(l, cfg), nil
 }
 
 func (s *defaultServer) GetBindAddr() string {

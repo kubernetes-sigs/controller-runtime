@@ -182,9 +182,6 @@ func (m *mapper) addKnownGroupAndReload(groupName string, versions ...string) er
 		Group:              metav1.APIGroup{Name: groupName},
 		VersionedResources: make(map[string][]metav1.APIResource),
 	}
-	if _, ok := m.knownGroups[groupName]; ok {
-		groupResources = m.knownGroups[groupName]
-	}
 
 	// Update information for group resources about versioned resources.
 	// The number of API calls is equal to the number of versions: /apis/<group>/<version>.
@@ -192,13 +189,19 @@ func (m *mapper) addKnownGroupAndReload(groupName string, versions ...string) er
 	if err != nil {
 		return fmt.Errorf("failed to get API group resources: %w", err)
 	}
+
+	if _, ok := m.knownGroups[groupName]; ok {
+		groupResources = m.knownGroups[groupName]
+	}
+
 	for version, resources := range groupVersionResources {
 		groupResources.VersionedResources[version.Version] = resources.APIResources
 	}
 
 	// Update information for group resources about the API group by adding new versions.
 	// Ignore the versions that are already registered.
-	for _, version := range versions {
+	for groupVersion := range groupVersionResources {
+		version := groupVersion.Version
 		found := false
 		for _, v := range groupResources.Group.Versions {
 			if v.Version == version {
@@ -266,6 +269,7 @@ func (m *mapper) findAPIGroupByName(groupName string) (*metav1.APIGroup, error) 
 }
 
 // fetchGroupVersionResources fetches the resources for the specified group and its versions.
+// This method might modify the cache so it needs to be called under the lock.
 func (m *mapper) fetchGroupVersionResources(groupName string, versions ...string) (map[schema.GroupVersion]*metav1.APIResourceList, error) {
 	groupVersionResources := make(map[schema.GroupVersion]*metav1.APIResourceList)
 	failedGroups := make(map[schema.GroupVersion]error)
@@ -274,9 +278,15 @@ func (m *mapper) fetchGroupVersionResources(groupName string, versions ...string
 		groupVersion := schema.GroupVersion{Group: groupName, Version: version}
 
 		apiResourceList, err := m.client.ServerResourcesForGroupVersion(groupVersion.String())
-		if err != nil && !apierrors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) && m.isGroupVersionCached(groupVersion) {
+			// If the version is not found, we remove the group from the cache
+			// so it gets refreshed on the next call.
+			delete(m.apiGroups, groupName)
+			delete(m.knownGroups, groupName)
+		} else if err != nil {
 			failedGroups[groupVersion] = err
 		}
+
 		if apiResourceList != nil {
 			// even in case of error, some fallback might have been returned.
 			groupVersionResources[groupVersion] = apiResourceList
@@ -289,4 +299,14 @@ func (m *mapper) fetchGroupVersionResources(groupName string, versions ...string
 	}
 
 	return groupVersionResources, nil
+}
+
+// isGroupVersionCached checks if a version for a group is cached in the known groups cache.
+func (m *mapper) isGroupVersionCached(gv schema.GroupVersion) bool {
+	if cachedGroup, ok := m.knownGroups[gv.Group]; ok {
+		_, cached := cachedGroup.VersionedResources[gv.Version]
+		return cached
+	}
+
+	return false
 }

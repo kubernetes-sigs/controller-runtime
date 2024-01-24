@@ -21,9 +21,3 @@ methods to implement authorization webhook handlers.
 See examples/subjectaccessreview/ for an example of authorization webhooks.
 */
 package authorization
-
-import (
-	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
-)
-
-var log = logf.RuntimeLog.WithName("authorization")

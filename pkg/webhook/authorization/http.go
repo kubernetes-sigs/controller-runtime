@@ -52,7 +52,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var reviewResponse Response
 	if r.Body == nil {
 		err = errors.New("request body is empty")
-		wh.log.Error(err, "bad request")
+		wh.getLogger(nil).Error(err, "bad request")
 		reviewResponse = Errored(err)
 		wh.writeResponse(w, reviewResponse)
 		return
@@ -60,7 +60,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	defer r.Body.Close()
 	if body, err = io.ReadAll(r.Body); err != nil {
-		wh.log.Error(err, "unable to read the body from the incoming request")
+		wh.getLogger(nil).Error(err, "unable to read the body from the incoming request")
 		reviewResponse = Errored(err)
 		wh.writeResponse(w, reviewResponse)
 		return
@@ -70,7 +70,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
 	if contentType != "application/json" {
 		err = fmt.Errorf("contentType=%s, expected application/json", contentType)
-		wh.log.Error(err, "unable to process a request with an unknown content type", "content type", contentType)
+		wh.getLogger(nil).Error(err, "unable to process a request with unknown content type")
 		reviewResponse = Errored(err)
 		wh.writeResponse(w, reviewResponse)
 		return
@@ -79,12 +79,12 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Decode request body into authorizationv1.SubjectAccessReviewSpec structure
 	sar, actualTokRevGVK, err := wh.decodeRequestBody(body)
 	if err != nil {
-		wh.log.Error(err, "unable to decode the request")
+		wh.getLogger(nil).Error(err, "unable to decode the request")
 		reviewResponse = Errored(err)
 		wh.writeResponse(w, reviewResponse)
 		return
 	}
-	wh.log.V(1).Info("received request", "UID", sar.UID, "kind", sar.Kind)
+	wh.getLogger(nil).V(5).Info("received request")
 
 	reviewResponse = wh.Handle(ctx, Request{sar.SubjectAccessReview})
 	wh.writeResponseTyped(w, reviewResponse, actualTokRevGVK)
@@ -113,13 +113,12 @@ func (wh *Webhook) writeResponseTyped(w io.Writer, response Response, subjRevGVK
 // writeSubjectAccessReviewResponse writes ar to w.
 func (wh *Webhook) writeSubjectAccessReviewResponse(w io.Writer, ar authorizationv1.SubjectAccessReview) {
 	if err := json.NewEncoder(w).Encode(ar); err != nil {
-		wh.log.Error(err, "unable to encode the response")
+		wh.getLogger(nil).Error(err, "unable to encode the response")
 		wh.writeResponse(w, Errored(err))
 	}
 	res := ar
-	if log := wh.log; log.V(1).Enabled() {
-		log.V(1).Info("wrote response", "UID", res.UID, "authorized", res.Status.Allowed)
-	}
+	wh.getLogger(nil).V(5).Info("wrote response", "authorized", res.Status.Allowed)
+
 	return
 }
 

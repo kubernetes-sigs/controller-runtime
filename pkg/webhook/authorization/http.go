@@ -47,7 +47,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx = wh.WithContextFunc(ctx, r)
 	}
 
-	if r.Body == nil {
+	if r.Body == nil || r.Body == http.NoBody {
 		err := errors.New("request body is empty")
 		wh.getLogger(nil).Error(err, "bad request")
 		wh.writeResponse(w, Errored(err))

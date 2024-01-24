@@ -186,6 +186,19 @@ var _ = Describe("Authentication Webhooks", func() {
 			webhook.ServeHTTP(respRecorder, req.WithContext(ctx))
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
+
+		It("should error when given a NoBody", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Method: http.MethodPost,
+				Body:   http.NoBody,
+			}
+
+			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"request body is empty"}}
+	`
+			webhook.ServeHTTP(respRecorder, req)
+			Expect(respRecorder.Body.String()).To(Equal(expected))
+		})
 	})
 })
 

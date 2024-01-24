@@ -42,37 +42,31 @@ func init() {
 var _ http.Handler = &Webhook{}
 
 func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var body []byte
-	var err error
 	ctx := r.Context()
 	if wh.WithContextFunc != nil {
 		ctx = wh.WithContextFunc(ctx, r)
 	}
 
-	var reviewResponse Response
 	if r.Body == nil {
-		err = errors.New("request body is empty")
+		err := errors.New("request body is empty")
 		wh.getLogger(nil).Error(err, "bad request")
-		reviewResponse = Errored(err)
-		wh.writeResponse(w, reviewResponse)
+		wh.writeResponse(w, Errored(err))
 		return
 	}
 
 	defer r.Body.Close()
-	if body, err = io.ReadAll(r.Body); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		wh.getLogger(nil).Error(err, "unable to read the body from the incoming request")
-		reviewResponse = Errored(err)
-		wh.writeResponse(w, reviewResponse)
+		wh.writeResponse(w, Errored(err))
 		return
 	}
 
 	// verify the content type is accurate
-	contentType := r.Header.Get("Content-Type")
-	if contentType != "application/json" {
+	if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
 		err = fmt.Errorf("contentType=%s, expected application/json", contentType)
 		wh.getLogger(nil).Error(err, "unable to process a request with unknown content type")
-		reviewResponse = Errored(err)
-		wh.writeResponse(w, reviewResponse)
+		wh.writeResponse(w, Errored(err))
 		return
 	}
 
@@ -80,14 +74,14 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sar, actualTokRevGVK, err := wh.decodeRequestBody(body)
 	if err != nil {
 		wh.getLogger(nil).Error(err, "unable to decode the request")
-		reviewResponse = Errored(err)
-		wh.writeResponse(w, reviewResponse)
+		wh.writeResponse(w, Errored(err))
 		return
 	}
-	wh.getLogger(nil).V(5).Info("received request")
+	req := Request{}
+	req.SubjectAccessReview = sar.SubjectAccessReview
+	wh.getLogger(&req).V(5).Info("received request")
 
-	reviewResponse = wh.Handle(ctx, Request{sar.SubjectAccessReview})
-	wh.writeResponseTyped(w, reviewResponse, actualTokRevGVK)
+	wh.writeResponseTyped(w, wh.Handle(ctx, req), actualTokRevGVK)
 }
 
 // writeResponse writes response to w generically, i.e. without encoding GVK information.
@@ -118,8 +112,6 @@ func (wh *Webhook) writeSubjectAccessReviewResponse(w io.Writer, ar authorizatio
 	}
 	res := ar
 	wh.getLogger(nil).V(5).Info("wrote response", "authorized", res.Status.Allowed)
-
-	return
 }
 
 func (wh *Webhook) decodeRequestBody(body []byte) (unversionedSubjectAccessReview, *schema.GroupVersionKind, error) {

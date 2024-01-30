@@ -50,7 +50,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/testing"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -290,7 +290,7 @@ func (t versionedTracker) Add(obj runtime.Object) error {
 				return fmt.Errorf("refusing to create obj %s with metadata.deletionTimestamp but no finalizers", accessor.GetName())
 			}
 		} else {
-			if accessor.GetDeletionTimestamp() != nil && pointer.Int64Deref(accessor.GetDeletionGracePeriodSeconds(), 0) <= 0 {
+			if accessor.GetDeletionTimestamp() != nil && ptr.Deref(accessor.GetDeletionGracePeriodSeconds(), 0) <= 0 {
 				return fmt.Errorf("refusing to create obj %s with metadata.deletionTimestamp and non-positive metadata.deletionGracePeriodSeconds", accessor.GetName())
 			}
 		}

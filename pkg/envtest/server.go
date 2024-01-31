@@ -339,7 +339,7 @@ func (te *Environment) waitForDefaultNamespace(config *rest.Config) error {
 		return fmt.Errorf("unable to create client: %w", err)
 	}
 	// It shouldn't take longer than 5s for the default namespace to be brought up in etcd
-	return wait.PollUntilContextTimeout(context.TODO(), time.Millisecond*500, time.Second*5, true, func(ctx context.Context) (bool, error) {
+	return wait.PollUntilContextTimeout(context.TODO(), time.Millisecond*50, time.Second*5, true, func(ctx context.Context) (bool, error) {
 		if err = cs.Get(ctx, types.NamespacedName{Name: "default"}, &corev1.Namespace{}); err != nil {
 			return false, nil //nolint:nilerr
 		}

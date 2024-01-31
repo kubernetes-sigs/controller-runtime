@@ -135,6 +135,10 @@ type ControllerHealth struct {
 	// LivenessEndpointName, defaults to "healthz"
 	// +optional
 	LivenessEndpointName string `json:"livenessEndpointName,omitempty"`
+
+	// StartupEndpointName, defaults to "startz"
+	// +optional
+	StartupEndpointName string `json:"startupEndpointName,omitempty"`
 }
 
 // ControllerWebhook defines the webhook server for the controller.

@@ -158,6 +158,7 @@ var _ = Describe("manger.Manager Start", func() {
 		// Configure health probes.
 		Expect(mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker())).To(Succeed())
 		Expect(mgr.AddHealthzCheck("webhook", mgr.GetWebhookServer().StartedChecker())).To(Succeed())
+		Expect(mgr.AddStartzCheck("webhook", mgr.GetWebhookServer().StartedChecker())).To(Succeed())
 
 		// Set up Driver reconciler (using v2).
 		driverReconciler := &DriverReconciler{

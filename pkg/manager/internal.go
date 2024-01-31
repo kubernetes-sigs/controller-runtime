@@ -56,6 +56,7 @@ const (
 
 	defaultReadinessEndpoint = "/readyz"
 	defaultLivenessEndpoint  = "/healthz"
+	defaultStartupEndpoint   = "/startz"
 )
 
 var _ Runnable = &controllerManager{}
@@ -94,11 +95,17 @@ type controllerManager struct {
 	// Liveness probe endpoint name
 	livenessEndpointName string
 
+	// Startup probe endpoint name
+	startupEndpointName string
+
 	// Readyz probe handler
 	readyzHandler *healthz.Handler
 
 	// Healthz probe handler
 	healthzHandler *healthz.Handler
+
+	// Startz probe handler
+	startzHandler *healthz.Handler
 
 	// pprofListener is used to serve pprof
 	pprofListener net.Listener
@@ -213,6 +220,23 @@ func (cm *controllerManager) AddReadyzCheck(name string, check healthz.Checker) 
 	return nil
 }
 
+// AddStartzCheck allows you to add Startz checker.
+func (cm *controllerManager) AddStartzCheck(name string, check healthz.Checker) error {
+	cm.Lock()
+	defer cm.Unlock()
+
+	if cm.started {
+		return fmt.Errorf("unable to add new checker because healthz endpoint has already been created")
+	}
+
+	if cm.startzHandler == nil {
+		cm.startzHandler = &healthz.Handler{Checks: map[string]healthz.Checker{}}
+	}
+
+	cm.startzHandler.Checks[name] = check
+	return nil
+}
+
 func (cm *controllerManager) GetHTTPClient() *http.Client {
 	return cm.cluster.GetHTTPClient()
 }
@@ -282,6 +306,11 @@ func (cm *controllerManager) addHealthProbeServer() error {
 		mux.Handle(cm.livenessEndpointName, http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
 		// Append '/' suffix to handle subpaths
 		mux.Handle(cm.livenessEndpointName+"/", http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
+	}
+	if cm.startzHandler != nil {
+		mux.Handle(cm.startupEndpointName, http.StripPrefix(cm.startupEndpointName, cm.startzHandler))
+		// Append '/' suffix to handle subpaths
+		mux.Handle(cm.startupEndpointName+"/", http.StripPrefix(cm.startupEndpointName, cm.startzHandler))
 	}
 
 	return cm.add(&server{

@@ -1,7 +1,7 @@
 # ComponentConfig Controller Runtime Support
 Author: @christopherhein
 
-Last Updated on: 03/02/2020
+Last Updated on: 31/01/2024
 
 ## Table of Contents
 
@@ -91,6 +91,7 @@ type ManagerConfiguration interface {
 
 	GetReadinessEndpointName() string
 	GetLivenessEndpointName() string
+	GetStartupEndpointName() string
 
 	GetPort() int
 	GetHost() string
@@ -161,6 +162,7 @@ type ControllerManagerConfigurationHealth struct {
 
 	ReadinessEndpointName string `json:"readinessEndpointName,omitempty"`
 	LivenessEndpointName  string `json:"livenessEndpointName,omitempty"`
+	StartupEndpointName  string `json:"startupEndpointName,omitempty"`
 }
 ```
 

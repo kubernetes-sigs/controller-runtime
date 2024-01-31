@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package healthz contains helpers from supporting liveness and readiness endpoints.
-// (often referred to as healthz and readyz, respectively).
+// Package healthz contains helpers from supporting liveness, readiness and startup endpoints.
+// (often referred to as healthz, readyz and startz, respectively).
 //
 // This package draws heavily from the apiserver's healthz package
 // ( https://github.com/kubernetes/apiserver/tree/master/pkg/server/healthz )

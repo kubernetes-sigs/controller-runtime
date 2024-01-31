@@ -145,6 +145,7 @@ var _ = Describe("manger.Manager", func() {
 						HealthProbeBindAddress: "6060",
 						ReadinessEndpointName:  "/readyz",
 						LivenessEndpointName:   "/livez",
+						StartupEndpointName:    "/startz",
 					},
 					Webhook: v1alpha1.ControllerWebhook{
 						Port:    &port,
@@ -170,6 +171,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.HealthProbeBindAddress).To(Equal("6060"))
 			Expect(m.ReadinessEndpointName).To(Equal("/readyz"))
 			Expect(m.LivenessEndpointName).To(Equal("/livez"))
+			Expect(m.StartupEndpointName).To(Equal("/startz"))
 			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Port).To(Equal(port))
 			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Host).To(Equal("localhost"))
 			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.CertDir).To(Equal("/certs"))
@@ -201,6 +203,7 @@ var _ = Describe("manger.Manager", func() {
 						HealthProbeBindAddress: "6060",
 						ReadinessEndpointName:  "/readyz",
 						LivenessEndpointName:   "/livez",
+						StartupEndpointName:    "/startz",
 					},
 					Webhook: v1alpha1.ControllerWebhook{
 						Port:    &port,
@@ -229,6 +232,7 @@ var _ = Describe("manger.Manager", func() {
 				HealthProbeBindAddress:     "5000",
 				ReadinessEndpointName:      "/readiness",
 				LivenessEndpointName:       "/liveness",
+				StartupEndpointName:        "/startup",
 				WebhookServer: webhook.NewServer(webhook.Options{
 					Port:    8080,
 					Host:    "example.com",
@@ -251,6 +255,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.HealthProbeBindAddress).To(Equal("5000"))
 			Expect(m.ReadinessEndpointName).To(Equal("/readiness"))
 			Expect(m.LivenessEndpointName).To(Equal("/liveness"))
+			Expect(m.StartupEndpointName).To(Equal("/startup"))
 			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Port).To(Equal(8080))
 			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Host).To(Equal("example.com"))
 			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.CertDir).To(Equal("/pki"))
@@ -1399,6 +1404,11 @@ var _ = Describe("manger.Manager", func() {
 	})
 
 	Context("should start serving health probes", func() {
+
+		const (
+			namedCheck = "check"
+		)
+
 		var listener net.Listener
 		var opts Options
 
@@ -1452,7 +1462,6 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			res := fmt.Errorf("not ready yet")
-			namedCheck := "check"
 			err = m.AddReadyzCheck(namedCheck, func(_ *http.Request) error { return res })
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1507,7 +1516,6 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			res := fmt.Errorf("not alive")
-			namedCheck := "check"
 			err = m.AddHealthzCheck(namedCheck, func(_ *http.Request) error { return res })
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1547,10 +1555,64 @@ var _ = Describe("manger.Manager", func() {
 			defer resp.Body.Close()
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
-			// Check readiness path for individual check
+			// Check liveness path for individual check
 			livenessEndpoint = fmt.Sprint("http://", listener.Addr().String(), path.Join(defaultLivenessEndpoint, namedCheck))
 			res = nil
 			resp, err = http.Get(livenessEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+		})
+
+		It("should serve startup endpoint", func() {
+			opts.HealthProbeBindAddress = ":0"
+			m, err := New(cfg, opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			res := fmt.Errorf("not alive")
+			err = m.AddStartzCheck(namedCheck, func(_ *http.Request) error { return res })
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(ctx)).NotTo(HaveOccurred())
+			}()
+			<-m.Elected()
+
+			startupEndpoint := fmt.Sprint("http://", listener.Addr().String(), defaultStartupEndpoint)
+
+			// Controller is not ready
+			resp, err := http.Get(startupEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
+
+			// Controller is ready
+			res = nil
+			resp, err = http.Get(startupEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			// Check startup path without trailing slash without redirect
+			startupEndpoint = fmt.Sprint("http://", listener.Addr().String(), defaultStartupEndpoint)
+			res = nil
+			httpClient := http.Client{
+				CheckRedirect: func(req *http.Request, via []*http.Request) error {
+					return http.ErrUseLastResponse // Do not follow redirect
+				},
+			}
+			resp, err = httpClient.Get(startupEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			// Check startup path for individual check
+			startupEndpoint = fmt.Sprint("http://", listener.Addr().String(), path.Join(defaultStartupEndpoint, namedCheck))
+			res = nil
+			resp, err = http.Get(startupEndpoint)
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))

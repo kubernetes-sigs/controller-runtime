@@ -73,6 +73,9 @@ type Manager interface {
 	// AddReadyzCheck allows you to add Readyz checker
 	AddReadyzCheck(name string, check healthz.Checker) error
 
+	// AddStartzCheck allows you to add Startz checker
+	AddStartzCheck(name string, check healthz.Checker) error
+
 	// Start starts all registered Controllers and blocks until the context is cancelled.
 	// Returns an error if there is an error starting any controller.
 	//
@@ -227,6 +230,9 @@ type Options struct {
 
 	// Liveness probe endpoint name, defaults to "healthz"
 	LivenessEndpointName string
+
+	// Startup probe endpoint name, defaults to "healthz"
+	StartupEndpointName string
 
 	// PprofBindAddress is the TCP address that the controller should bind to
 	// for serving pprof.
@@ -430,6 +436,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		healthProbeListener:           healthProbeListener,
 		readinessEndpointName:         options.ReadinessEndpointName,
 		livenessEndpointName:          options.LivenessEndpointName,
+		startupEndpointName:           options.StartupEndpointName,
 		pprofListener:                 pprofListener,
 		gracefulShutdownTimeout:       *options.GracefulShutdownTimeout,
 		internalProceduresStop:        make(chan struct{}),
@@ -478,6 +485,10 @@ func (o Options) AndFrom(loader config.ControllerManagerConfiguration) (Options,
 
 	if o.LivenessEndpointName == "" && newObj.Health.LivenessEndpointName != "" {
 		o.LivenessEndpointName = newObj.Health.LivenessEndpointName
+	}
+
+	if o.StartupEndpointName == "" && newObj.Health.StartupEndpointName != "" {
+		o.StartupEndpointName = newObj.Health.StartupEndpointName
 	}
 
 	if o.WebhookServer == nil {
@@ -638,6 +649,10 @@ func setOptionsDefaults(options Options) Options {
 
 	if options.LivenessEndpointName == "" {
 		options.LivenessEndpointName = defaultLivenessEndpoint
+	}
+
+	if options.StartupEndpointName == "" {
+		options.StartupEndpointName = defaultStartupEndpoint
 	}
 
 	if options.newHealthProbeListener == nil {

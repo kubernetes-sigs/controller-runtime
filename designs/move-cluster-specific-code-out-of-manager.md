@@ -116,6 +116,9 @@ type Manager interface {
 	// AddReadyzCheck allows you to add Readyz checker
 	AddReadyzCheck(name string, check healthz.Checker) error
 
+	// AddStartzCheck allows you to add Startz checker
+	AddStartzCheck(name string, check healthz.Checker) error
+
 	// Start starts all registered Controllers and blocks until the Stop channel is closed.
 	// Returns an error if there is an error starting any controller.
 	// If LeaderElection is used, the binary must be exited immediately after this returns,

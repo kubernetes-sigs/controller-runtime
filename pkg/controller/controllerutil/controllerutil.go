@@ -25,6 +25,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
@@ -274,6 +275,11 @@ const ( // They should complete the sentence "Deployment default/foo has been ..
 // Note: changes made by MutateFn to any sub-resource (status...), will be
 // discarded.
 func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f MutateFn) (OperationResult, error) {
+	return CreateOrUpdateWithEqualities(ctx, c, obj, equality.Semantic, f)
+}
+
+// CreateOrUpdateWithEqualities is like CreateOrUpdate but allows customizing the equality check.
+func CreateOrUpdateWithEqualities(ctx context.Context, c client.Client, obj client.Object, eq conversion.Equalities, f MutateFn) (OperationResult, error) {
 	key := client.ObjectKeyFromObject(obj)
 	if err := c.Get(ctx, key, obj); err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -293,7 +299,7 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f M
 		return OperationResultNone, err
 	}
 
-	if equality.Semantic.DeepEqual(existing, obj) {
+	if eq.DeepEqual(existing, obj) {
 		return OperationResultNone, nil
 	}
 

@@ -85,11 +85,14 @@ func init() {
 	)
 }
 
+// register the metrics with the passed registry
 func RegisterReconciliationMetrics(customRegistry metrics.RegistererGatherer) {
-	customRegistry.MustRegister(ReconcileTotal,
+	customRegistry.MustRegister(
+		ReconcileTotal,
 		ReconcileErrors,
 		TerminalReconcileErrors,
 		ReconcileTime,
 		WorkerCount,
-		ActiveWorkers)
+		ActiveWorkers,
+	)
 }

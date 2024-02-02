@@ -65,7 +65,11 @@ func init() {
 
 // register the metrics with the passed registry
 func RegisterRequestMetrics(customRegistry metrics.RegistererGatherer) {
-	customRegistry.MustRegister(RequestLatency, RequestTotal, RequestInFlight)
+	customRegistry.MustRegister(
+		RequestLatency,
+		RequestTotal,
+		RequestInFlight,
+	)
 }
 
 // InstrumentedHook adds some instrumentation on top of the given webhook.

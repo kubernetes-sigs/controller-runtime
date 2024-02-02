@@ -21,6 +21,11 @@ func init() {
 	leaderelection.SetProvider(leaderelectionMetricsProvider{})
 }
 
+// register the metrics with the passed registry
+func RegisterLeaderElection(customRegistry RegistererGatherer) {
+	customRegistry.MustRegister(leaderGauge)
+}
+
 type leaderelectionMetricsProvider struct{}
 
 func (leaderelectionMetricsProvider) NewLeaderMetric() leaderelection.SwitchMetric {

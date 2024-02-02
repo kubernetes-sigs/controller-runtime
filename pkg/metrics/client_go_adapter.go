@@ -43,6 +43,11 @@ func init() {
 	registerClientMetrics()
 }
 
+// register the metrics with the passed registry
+func RegisterClientMetrics(customRegistry RegistererGatherer) {
+	customRegistry.MustRegister(requestResult)
+}
+
 // registerClientMetrics sets up the client latency metrics from client-go.
 func registerClientMetrics() {
 	// register the metrics with our registry

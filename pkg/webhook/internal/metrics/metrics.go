@@ -63,6 +63,11 @@ func init() {
 	metrics.Registry.MustRegister(RequestLatency, RequestTotal, RequestInFlight)
 }
 
+// register the metrics with the passed registry
+func RegisterRequestMetrics(customRegistry metrics.RegistererGatherer) {
+	customRegistry.MustRegister(RequestLatency, RequestTotal, RequestInFlight)
+}
+
 // InstrumentedHook adds some instrumentation on top of the given webhook.
 func InstrumentedHook(path string, hookRaw http.Handler) http.Handler {
 	lbl := prometheus.Labels{"webhook": path}

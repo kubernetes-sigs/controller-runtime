@@ -99,6 +99,11 @@ func init() {
 	workqueue.SetProvider(workqueueMetricsProvider{})
 }
 
+// register the metrics with the passed registry
+func RegisterWorkqueueMetrics(customRegistry RegistererGatherer) {
+	customRegistry.MustRegister(depth, adds, latency, workDuration, unfinished, longestRunningProcessor, retries)
+}
+
 type workqueueMetricsProvider struct{}
 
 func (workqueueMetricsProvider) NewDepthMetric(name string) workqueue.GaugeMetric {

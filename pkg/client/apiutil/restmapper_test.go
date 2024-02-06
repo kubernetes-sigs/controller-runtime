@@ -571,12 +571,24 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		c, err := client.New(restCfg, client.Options{Scheme: s})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
-		// Register a new CRD ina  new group to avoid collisions when deleting versions - "taxi.inventory.example.com".
+		// Register a new CRD ina  new group to avoid collisions when deleting versions - "taxis.inventory.example.com".
 		group := "inventory.example.com"
 		kind := "Taxi"
 		plural := "taxis"
 		crdName := plural + "." + group
-		crd := createNewCRD(ctx, g, c, group, kind, plural)
+		// Create a CRD with two versions: v1alpha1 and v1 where both are served and
+		// v1 is the storage version so we can easily remove v1alpha1 later.
+		crd := newCRD(ctx, g, c, group, kind, plural)
+		v1alpha1 := crd.Spec.Versions[0]
+		v1alpha1.Name = "v1alpha1"
+		v1alpha1.Storage = false
+		v1alpha1.Served = true
+		v1 := crd.Spec.Versions[0]
+		v1.Name = "v1"
+		v1.Storage = true
+		v1.Served = true
+		crd.Spec.Versions = []apiextensionsv1.CustomResourceDefinitionVersion{v1alpha1, v1}
+		g.Expect(c.Create(ctx, crd)).To(gmg.Succeed())
 		t.Cleanup(func() {
 			g.Expect(c.Delete(ctx, crd)).To(gmg.Succeed())
 		})
@@ -599,8 +611,8 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		//  #1: GET https://host/api
 		//  #2: GET https://host/apis
 		// Then, for all available versions:
-		// 	#3: GET https://host/apis/inventory.example.com/v1
-		//	#4: GET https://host/apis/inventory.example.com/v2
+		// 	#3: GET https://host/apis/inventory.example.com/v1alpha1
+		//	#4: GET https://host/apis/inventory.example.com/v1
 		// This should fill the cache for apiGroups and versions.
 		mapping, err := lazyRestMapper.RESTMapping(schema.GroupKind{Group: group, Kind: kind})
 		g.Expect(err).NotTo(gmg.HaveOccurred())
@@ -608,54 +620,67 @@ func TestLazyRestMapperProvider(t *testing.T) {
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(4))
 		crt.Reset() // We reset the counter to check how many additional requests are made later.
 
-		// At this point v2 should be cached
-		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: group, Kind: kind}, "v2")
+		// At this point v1alpha1 should be cached
+		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: group, Kind: kind}, "v1alpha1")
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
 
 		// We update the CRD to only have v1 version.
 		g.Expect(c.Get(ctx, types.NamespacedName{Name: crdName}, crd)).To(gmg.Succeed())
-		var v1 apiextensionsv1.CustomResourceDefinitionVersion
-		for i, version := range crd.Spec.Versions {
+		for _, version := range crd.Spec.Versions {
 			if version.Name == "v1" {
-				crd.Spec.Versions[i].Storage = true
 				v1 = version
-				v1.Storage = true
+				break
 			}
 		}
 		crd.Spec.Versions = []apiextensionsv1.CustomResourceDefinitionVersion{v1}
 		g.Expect(c.Update(ctx, crd)).To(gmg.Succeed())
 
-		// We wait until v2 is not available anymore.
+		// We wait until v1alpha1 is not available anymore.
 		g.Eventually(func(g gmg.Gomega) {
-			_, err = discClient.ServerResourcesForGroupVersion(group + "/v2")
-			g.Expect(apierrors.IsNotFound(err)).To(gmg.BeTrue(), "v2 should not be available anymore")
+			_, err = discClient.ServerResourcesForGroupVersion(group + "/v1alpha1")
+			g.Expect(apierrors.IsNotFound(err)).To(gmg.BeTrue(), "v1alpha1 should not be available anymore")
 		}).Should(gmg.Succeed())
 
-		// Although v2 is not available anymore, the cache is not invalidated yet so it should return a mapping.
-		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: group, Kind: kind}, "v2")
+		// Although v1alpha1 is not available anymore, the cache is not invalidated yet so it should return a mapping.
+		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: group, Kind: kind}, "v1alpha1")
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
 
 		// We request Limo, which is not in the mapper because it doesn't exist.
 		// This will trigger a reload of the lazy mapper cache.
 		// Reloading the cache will read v2 again and since it's not available anymore, it should invalidate the cache.
-		// 	#1: GET https://host/apis/inventory.example.com/v1
-		// 	#2: GET https://host/apis/inventory.example.com/v2
+		// 	#1: GET https://host/apis/inventory.example.com/v1alpha1
+		// 	#2: GET https://host/apis/inventory.example.com/v1
 		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: group, Kind: "Limo"})
 		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(2))
 		crt.Reset()
 
-		// Now we request v2 again and it should return an error since the cache was invalidated.
-		// 	#1: GET https://host/apis/inventory.example.com/v2
-		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: group, Kind: kind}, "v2")
+		// Now we request v1alpha1 again and it should return an error since the cache was invalidated.
+		// 	#1: GET https://host/apis/inventory.example.com/v1alpha1
+		_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: group, Kind: kind}, "v1alpha1")
 		g.Expect(err).To(beNoMatchError())
 		g.Expect(crt.GetRequestCount()).To(gmg.Equal(1))
+
+		// Verify that when requesting the mapping without a version, it doesn't error
+		// and it returns v1.
+		mapping, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: group, Kind: kind})
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+		g.Expect(mapping.Resource.Version).To(gmg.Equal("v1"))
 	})
 }
 
+// createNewCRD creates a new CRD with the given group, kind, and plural and returns it.
 func createNewCRD(ctx context.Context, g gmg.Gomega, c client.Client, group, kind, plural string) *apiextensionsv1.CustomResourceDefinition {
+	newCRD := newCRD(ctx, g, c, group, kind, plural)
+	g.Expect(c.Create(ctx, newCRD)).To(gmg.Succeed())
+
+	return newCRD
+}
+
+// newCRD returns a new CRD with the given group, kind, and plural.
+func newCRD(ctx context.Context, g gmg.Gomega, c client.Client, group, kind, plural string) *apiextensionsv1.CustomResourceDefinition {
 	crd := &apiextensionsv1.CustomResourceDefinition{}
 	err := c.Get(ctx, types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
 	g.Expect(err).NotTo(gmg.HaveOccurred())
@@ -670,9 +695,6 @@ func createNewCRD(ctx context.Context, g gmg.Gomega, c client.Client, group, kin
 		Plural: plural,
 	}
 	newCRD.ResourceVersion = ""
-
-	// Create the new CRD.
-	g.Expect(c.Create(ctx, newCRD)).To(gmg.Succeed())
 
 	return newCRD
 }

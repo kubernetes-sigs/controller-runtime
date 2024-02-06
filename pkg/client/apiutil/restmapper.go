@@ -185,7 +185,11 @@ func (m *mapper) addKnownGroupAndReload(groupName string, versions ...string) er
 
 	// Update information for group resources about versioned resources.
 	// The number of API calls is equal to the number of versions: /apis/<group>/<version>.
-	groupVersionResources, err := m.fetchGroupVersionResources(groupName, versions...)
+	// If we encounter a missing API version (NotFound error), we will remove the group from
+	// the m.apiGroups and m.knownGroups caches.
+	// If this happens, in the next call the group will be added back to apiGroups
+	// and only the existing versions will be loaded in knownGroups.
+	groupVersionResources, err := m.fetchGroupVersionResourcesLocked(groupName, versions...)
 	if err != nil {
 		return fmt.Errorf("failed to get API group resources: %w", err)
 	}
@@ -194,14 +198,12 @@ func (m *mapper) addKnownGroupAndReload(groupName string, versions ...string) er
 		groupResources = m.knownGroups[groupName]
 	}
 
-	for version, resources := range groupVersionResources {
-		groupResources.VersionedResources[version.Version] = resources.APIResources
-	}
-
 	// Update information for group resources about the API group by adding new versions.
 	// Ignore the versions that are already registered.
-	for groupVersion := range groupVersionResources {
+	for groupVersion, resources := range groupVersionResources {
 		version := groupVersion.Version
+
+		groupResources.VersionedResources[version] = resources.APIResources
 		found := false
 		for _, v := range groupResources.Group.Versions {
 			if v.Version == version {
@@ -268,9 +270,9 @@ func (m *mapper) findAPIGroupByName(groupName string) (*metav1.APIGroup, error) 
 	return m.apiGroups[groupName], nil
 }
 
-// fetchGroupVersionResources fetches the resources for the specified group and its versions.
+// fetchGroupVersionResourcesLocked fetches the resources for the specified group and its versions.
 // This method might modify the cache so it needs to be called under the lock.
-func (m *mapper) fetchGroupVersionResources(groupName string, versions ...string) (map[schema.GroupVersion]*metav1.APIResourceList, error) {
+func (m *mapper) fetchGroupVersionResourcesLocked(groupName string, versions ...string) (map[schema.GroupVersion]*metav1.APIResourceList, error) {
 	groupVersionResources := make(map[schema.GroupVersion]*metav1.APIResourceList)
 	failedGroups := make(map[schema.GroupVersion]error)
 
@@ -283,6 +285,7 @@ func (m *mapper) fetchGroupVersionResources(groupName string, versions ...string
 			// so it gets refreshed on the next call.
 			delete(m.apiGroups, groupName)
 			delete(m.knownGroups, groupName)
+			continue
 		} else if err != nil {
 			failedGroups[groupVersion] = err
 		}

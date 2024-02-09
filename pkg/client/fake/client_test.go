@@ -359,6 +359,26 @@ var _ = Describe("Fake client", func() {
 			Expect(list.Items).To(ConsistOf(*dep2))
 		})
 
+		It("should reject apply patches, they are not supported in the fake client", func() {
+			By("Creating a new configmap")
+			cm := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "new-test-cm",
+					Namespace: "ns2",
+				},
+			}
+			err := cl.Create(context.Background(), cm)
+			Expect(err).ToNot(HaveOccurred())
+
+			cm.Data = map[string]string{"foo": "bar"}
+			err = cl.Patch(context.Background(), cm, client.Apply, client.ForceOwnership)
+			Expect(err).To(MatchError(ContainSubstring("apply patches are not supported in the fake client")))
+		})
+
 		It("should be able to Create", func() {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{

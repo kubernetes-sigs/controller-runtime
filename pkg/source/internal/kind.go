@@ -1,3 +1,19 @@
+/*
+Copyright 2018 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package internal
 
 import (
@@ -91,6 +107,23 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 		close(ks.started)
 	}()
 
+	return nil
+}
+
+// ProjectObject sets the Kind's object to the given object.
+// This function should only be called by the Controller builder.
+// NOTE: make sure to update pkg/builder/controller.go if you change this function.
+func (ks *Kind) ProjectObject(fn func(client.Object) (client.Object, error)) error {
+	if ks.startCancel != nil {
+		return fmt.Errorf("cannot project object after Start has been called")
+	}
+
+	newType, err := fn(ks.Type)
+	if err != nil {
+		return err
+	}
+
+	ks.Type = newType
 	return nil
 }
 

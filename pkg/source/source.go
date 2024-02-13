@@ -36,9 +36,23 @@ import (
 //
 // Users may build their own Source implementations.
 type Source interface {
-	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
-	// to enqueue reconcile.Requests.
+	// Start is internal and should be called only by the Controller to start a goroutine that enqueues
+	// reconcile.Requests. It should NOT block, instead, it should start a goroutine and return immediately.
+	// The context passed to Start can be used to cancel the blocking operations in the Start method. To cancel the
+	// goroutine/ shutdown the source a user should call Stop.
 	Start(context.Context, workqueue.RateLimitingInterface) error
+
+	// Shutdown marks a Source as shutting down. At that point no new
+	// informers can be started anymore and Start will return without
+	// doing anything.
+	//
+	// In addition, Shutdown blocks until all goroutines have terminated. For that
+	// to happen, the close channel(s) that they were started with must be closed,
+	// either before Shutdown gets called or while it is waiting.
+	//
+	// Shutdown may be called multiple times, even concurrently. All such calls will
+	// block until all goroutines have terminated.
+	Shutdown() error
 }
 
 // SyncingSource is a source that needs syncing prior to being usable. The controller
@@ -51,8 +65,9 @@ type SyncingSource interface {
 var _ Source = &internal.Kind{}
 var _ SyncingSource = &internal.Kind{}
 var _ Source = &internal.Informer{}
+var _ SyncingSource = &internal.Informer{}
 var _ Source = &internal.Channel{}
-var _ Source = internal.Func(nil)
+var _ Source = &internal.FuncSource{}
 
 // Kind creates a KindSource with the given cache provider.
 func Kind(cache cache.Cache, object client.Object, eventhandler handler.EventHandler) SyncingSource {
@@ -99,7 +114,27 @@ func Informer(informer cache.Informer, eventhandler handler.EventHandler) Source
 	return &internal.Informer{Informer: informer, EventHandler: eventhandler}
 }
 
+// StartFunc is a function that starts a goroutine and returns immediately.
+type StartFunc = internal.StartFunc
+
+// FuncOption is a functional option for configuring a Func source.
+type FuncOption func(*internal.FuncOptions)
+
+// WithShutdownFunc specifies the ShutdownFunc of the Func source.
+func WithShutdownFunc(fn func() error) FuncOption {
+	return func(o *internal.FuncOptions) {
+		o.ShutdownFunc = fn
+	}
+}
+
 // Func creates a FuncSource with the given function.
-func Func(f internal.Func) Source {
-	return f
+func Func(f StartFunc, options ...FuncOption) Source {
+	opts := internal.FuncOptions{}
+	for _, o := range options {
+		if o == nil {
+			continue // ignore nil options
+		}
+		o(&opts)
+	}
+	return &internal.FuncSource{StartFunc: f, Options: opts}
 }

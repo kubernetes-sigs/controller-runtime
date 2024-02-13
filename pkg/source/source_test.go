@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -36,12 +37,63 @@ import (
 )
 
 var _ = Describe("Source", func() {
+	Describe("Informer", func() {
+		var inf *controllertest.FakeInformer
+		var ctx context.Context
+		var cancel context.CancelFunc
+
+		BeforeEach(func() {
+			ctx, cancel = context.WithCancel(context.Background())
+			inf = &controllertest.FakeInformer{}
+		})
+
+		AfterEach(func() {
+			cancel()
+		})
+
+		Context("should error", func() {
+			It("if no Informer specified", func() {
+				instance := source.Informer(nil, nil)
+				err := instance.Start(ctx, nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("must create Informer with a non-nil Informer"))
+			})
+
+			It("when Start is called twice", func() {
+				instance := source.Informer(inf, &handler.EnqueueRequestForObject{})
+				Expect(instance.Start(ctx, nil)).To(Succeed())
+				err := instance.Start(ctx, nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("cannot start an already started Informer source"))
+			})
+		})
+
+		Context("should not panic", func() {
+			It("when Shutdown is called before Start", func() {
+				instance := source.Informer(inf, nil)
+				err := instance.Shutdown()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("when Shutdown is called twice", func() {
+				instance := source.Informer(inf, &handler.EnqueueRequestForObject{})
+				Expect(instance.Start(ctx, nil)).To(Succeed())
+				cancel()
+				Expect(instance.Shutdown()).To(Succeed())
+				Expect(instance.Shutdown()).To(Succeed())
+			})
+		})
+	})
+
 	Describe("Kind", func() {
 		var c chan struct{}
 		var p *corev1.Pod
 		var ic *informertest.FakeInformers
+		var ctx context.Context
+		var cancel context.CancelFunc
 
 		BeforeEach(func() {
+			ctx, cancel = context.WithCancel(context.Background())
 			ic = &informertest.FakeInformers{}
 			c = make(chan struct{})
 			p = &corev1.Pod{
@@ -51,6 +103,10 @@ var _ = Describe("Source", func() {
 					},
 				},
 			}
+		})
+
+		AfterEach(func() {
+			cancel()
 		})
 
 		Context("for a Pod resource", func() {
@@ -204,9 +260,11 @@ var _ = Describe("Source", func() {
 			f := false
 			instance := source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}, &handler.EnqueueRequestForObject{})
 			Expect(instance.Start(context.Background(), nil)).NotTo(HaveOccurred())
-			err := instance.WaitForSync(context.Background())
+			timeoutCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			defer cancel()
+			err := instance.WaitForSync(timeoutCtx)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("cache did not sync"))
+			Expect(err.Error()).To(Equal("informer did not sync in time: context deadline exceeded"))
 
 		})
 
@@ -221,7 +279,7 @@ var _ = Describe("Source", func() {
 				instance := source.Kind(ic, &corev1.Pod{}, handler.Funcs{})
 				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
-				Eventually(instance.WaitForSync).WithArguments(context.Background()).Should(HaveOccurred())
+				Eventually(instance.WaitForSync).WithArguments(ctx).Should(HaveOccurred())
 			})
 		})
 
@@ -229,10 +287,52 @@ var _ = Describe("Source", func() {
 			f := false
 			instance := source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}, &handler.EnqueueRequestForObject{})
 			Expect(instance.Start(context.Background(), nil)).NotTo(HaveOccurred())
-			err := instance.WaitForSync(context.Background())
+			timeoutCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			defer cancel()
+			err := instance.WaitForSync(timeoutCtx)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("cache did not sync"))
+			Expect(err.Error()).To(Equal("informer did not sync in time: context deadline exceeded"))
 
+		})
+
+		Context("should error", func() {
+			It("if no cache specified", func() {
+				instance := source.Kind(nil, &corev1.Pod{}, nil)
+				err := instance.Start(ctx, nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("must create Kind with a non-nil Cache"))
+			})
+
+			It("if no type specified", func() {
+				instance := source.Kind(ic, nil, nil)
+				err := instance.Start(ctx, nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("must create Kind with a non-nil Type"))
+			})
+
+			It("when Start is called twice", func() {
+				instance := source.Kind(ic, &corev1.Pod{}, &handler.EnqueueRequestForObject{})
+				Expect(instance.Start(ctx, nil)).To(Succeed())
+				err := instance.Start(ctx, nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("cannot start an already started Kind source"))
+			})
+		})
+
+		Context("should not panic", func() {
+			It("when Shutdown is called before Start", func() {
+				instance := source.Kind(ic, &corev1.Pod{}, nil)
+				err := instance.Shutdown()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("when Shutdown is called twice", func() {
+				instance := source.Kind(ic, &corev1.Pod{}, &handler.EnqueueRequestForObject{})
+				Expect(instance.Start(ctx, nil)).To(Succeed())
+				cancel()
+				Expect(instance.Shutdown()).To(Succeed())
+				Expect(instance.Shutdown()).To(Succeed())
+			})
 		})
 	})
 
@@ -468,6 +568,7 @@ var _ = Describe("Source", func() {
 				Eventually(processed).Should(Receive())
 				Consistently(processed).ShouldNot(Receive())
 			})
+
 			It("should get error if no source specified", func() {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := source.Channel(nil, handler.Funcs{})
@@ -529,6 +630,42 @@ var _ = Describe("Source", func() {
 
 				// Validate the two handlers received same event
 				Expect(resEvent1).To(Equal(resEvent2))
+			})
+		})
+
+		Context("should error", func() {
+			It("if no source specified", func() {
+				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
+				instance := source.Channel(nil, handler.Funcs{})
+				err := instance.Start(ctx, q)
+				Expect(err).To(Equal(fmt.Errorf("must create Channel with a non-nil Broadcaster")))
+			})
+
+			It("when Start is called twice", func() {
+				ch := make(chan event.GenericEvent)
+				instance := source.Channel(source.NewChannelBroadcaster(ch), &handler.EnqueueRequestForObject{})
+				Expect(instance.Start(ctx, nil)).To(Succeed())
+				err := instance.Start(ctx, nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("cannot start an already started Channel source"))
+			})
+		})
+
+		Context("should not panic", func() {
+			It("when Shutdown is called before Start", func() {
+				ch := make(chan event.GenericEvent)
+				instance := source.Channel(source.NewChannelBroadcaster(ch), nil)
+				err := instance.Shutdown()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("when Shutdown is called twice", func() {
+				ch := make(chan event.GenericEvent)
+				instance := source.Channel(source.NewChannelBroadcaster(ch), &handler.EnqueueRequestForObject{})
+				Expect(instance.Start(ctx, nil)).To(Succeed())
+				cancel()
+				Expect(instance.Shutdown()).To(Succeed())
+				Expect(instance.Shutdown()).To(Succeed())
 			})
 		})
 	})

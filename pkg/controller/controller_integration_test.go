@@ -172,6 +172,102 @@ var _ = Describe("controller", func() {
 				List(context.Background(), &controllertest.UnconventionalListTypeList{})
 			Expect(err).NotTo(HaveOccurred())
 		})
+
+		It("should not reconcile after watch is stopped", func() {
+			By("Creating the Manager")
+			cm, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating the Controller")
+			instance, err := controller.New("foo-controller", cm, controller.Options{
+				Reconciler: reconcile.Func(
+					func(_ context.Context, request reconcile.Request) (reconcile.Result, error) {
+						reconciled <- request
+						return reconcile.Result{}, nil
+					}),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Watching Resources")
+			deploySource := source.Kind(cm.GetCache(), &appsv1.Deployment{}, &handler.EnqueueRequestForObject{})
+			err = instance.Watch(
+				deploySource,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Starting the Manager")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				Expect(cm.Start(ctx)).NotTo(HaveOccurred())
+			}()
+
+			deploymentDefinition := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "deployment-name"},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx",
+									SecurityContext: &corev1.SecurityContext{
+										Privileged: truePtr(),
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			deployment := deploymentDefinition.DeepCopy()
+			expectedReconcileRequest := reconcile.Request{NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "deployment-name",
+			}}
+
+			By("Invoking Reconciling for Create")
+			deployment, err = clientset.AppsV1().Deployments("default").Create(ctx, deployment, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
+
+			By("Stopping the deployment watch")
+			Expect(instance.StopWatch(deploySource)).NotTo(HaveOccurred())
+
+			By("Test No Reconciling for Update")
+			newDeployment := deployment.DeepCopy()
+			newDeployment.Labels = map[string]string{"foo": "bar"}
+			_, err = clientset.AppsV1().Deployments("default").Update(ctx, newDeployment, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Consistently(reconciled).ShouldNot(Receive())
+
+			By("Test No Reconciling for Delete")
+			err = clientset.AppsV1().Deployments("default").
+				Delete(ctx, "deployment-name", metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Consistently(reconciled).ShouldNot(Receive())
+
+			By("Try starting the old deployment watch")
+			Expect(instance.Watch(deploySource)).To(MatchError("cannot start an already started Kind source"))
+
+			By("Starting a new deployment watch")
+			deploySource = source.Kind(cm.GetCache(), &appsv1.Deployment{}, &handler.EnqueueRequestForObject{})
+			Expect(instance.Watch(deploySource)).NotTo(HaveOccurred())
+
+			deployment = deploymentDefinition.DeepCopy()
+
+			By("Invoking Reconciling for Update")
+			newDeployment = deployment.DeepCopy()
+			newDeployment.Labels = map[string]string{"foo": "bar"}
+			_, err = clientset.AppsV1().Deployments("default").Create(ctx, newDeployment, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
+		})
 	})
 })
 

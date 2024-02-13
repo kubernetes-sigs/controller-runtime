@@ -74,6 +74,12 @@ type Controller interface {
 	// in response to the events.
 	Watch(src source.Source) error
 
+	// StopWatch stops watching a source that was previously registered by Watch().
+	//
+	// StopWatch may be called multiple times, even concurrently. All such calls will
+	// block until all goroutines have terminated.
+	StopWatch(src source.Source) error
+
 	// Start starts the controller.  Start blocks until the context is closed or a
 	// controller has an error starting.
 	Start(ctx context.Context) error

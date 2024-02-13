@@ -56,11 +56,17 @@ type Controller struct {
 	// the Queue for processing
 	Queue workqueue.RateLimitingInterface
 
+	// startedSources maintains a list of sources that have already started.
+	startedSources []cancelableSource
+
 	// mu is used to synchronize Controller setup
 	mu sync.Mutex
 
 	// Started is true if the Controller has been Started
 	Started bool
+
+	// Stopped is true if the Controller has been Stopped
+	Stopped bool
 
 	// ctx is the context that was passed to Start() and used when starting watches.
 	//
@@ -119,6 +125,10 @@ func (c *Controller) Watch(src source.Source) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if c.Stopped {
+		return fmt.Errorf("can not start watch in a stopped controller")
+	}
+
 	// Controller hasn't started yet, store the watches locally and return.
 	//
 	// These watches are going to be held on the controller struct until the manager or user calls Start(...).
@@ -128,7 +138,54 @@ func (c *Controller) Watch(src source.Source) error {
 	}
 
 	c.LogConstructor(nil).Info("Starting EventSource", "source", src)
-	return src.Start(c.ctx, c.Queue)
+	return c.startWatch(src)
+}
+
+type cancelableSource struct {
+	source.Source
+	cancel context.CancelFunc
+}
+
+func (c *Controller) startWatch(src source.Source) error {
+	watchCtx, watchCancel := context.WithCancel(c.ctx)
+	if err := src.Start(watchCtx, c.Queue); err != nil {
+		watchCancel()
+		return err
+	}
+
+	c.startedSources = append(c.startedSources, cancelableSource{
+		Source: src,
+		cancel: watchCancel,
+	})
+
+	return nil
+}
+
+// StopWatch implements controller.Controller.
+func (c *Controller) StopWatch(src source.Source) error {
+	err := func() error {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+
+		if c.Stopped {
+			return fmt.Errorf("can not stop watch in a stopped controller")
+		}
+
+		for i, startedSrc := range c.startedSources {
+			if startedSrc.Source == src {
+				c.startedSources = append(c.startedSources[:i], c.startedSources[i+1:]...)
+				startedSrc.cancel()
+				return startedSrc.Source.Shutdown()
+			}
+		}
+
+		return nil
+	}()
+	if err != nil {
+		return err
+	}
+
+	return src.Shutdown()
 }
 
 // NeedLeaderElection implements the manager.LeaderElectionRunnable interface.
@@ -144,6 +201,9 @@ func (c *Controller) Start(ctx context.Context) error {
 	// use an IIFE to get proper lock handling
 	// but lock outside to get proper handling of the queue shutdown
 	c.mu.Lock()
+	if c.Stopped {
+		return fmt.Errorf("can not restart a stopped controller, you should create a new one")
+	}
 	if c.Started {
 		return errors.New("controller was started more than once. This is likely to be caused by being added to a manager multiple times")
 	}
@@ -151,15 +211,33 @@ func (c *Controller) Start(ctx context.Context) error {
 	c.initMetrics()
 
 	// Set the internal context.
-	c.ctx = ctx
-
-	c.Queue = c.MakeQueue()
-	go func() {
-		<-ctx.Done()
-		c.Queue.ShutDown()
-	}()
+	var cancelAllSources context.CancelFunc
+	c.ctx, cancelAllSources = context.WithCancel(ctx)
 
 	wg := &sync.WaitGroup{}
+
+	c.Queue = c.MakeQueue()
+	defer func() {
+		var startedSources []cancelableSource
+		c.mu.Lock()
+		c.Stopped = true
+		startedSources = c.startedSources
+		c.mu.Unlock()
+
+		c.Queue.ShutDown() // Stop receiving new items in the queue
+
+		cancelAllSources() // cancel the context to stop all the sources
+		for _, src := range startedSources {
+			if err := src.Shutdown(); err != nil {
+				c.LogConstructor(nil).Error(err, "Failed to stop watch source when controller stopping", "source", src)
+			}
+		}
+		c.LogConstructor(nil).Info("All watch sources finished")
+
+		wg.Wait() // Wait for workers to finish
+		c.LogConstructor(nil).Info("All workers finished")
+	}()
+
 	err := func() error {
 		defer c.mu.Unlock()
 
@@ -172,7 +250,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		for _, watch := range c.startWatches {
 			c.LogConstructor(nil).Info("Starting EventSource", "source", fmt.Sprintf("%s", watch.src))
 
-			if err := watch.src.Start(ctx, c.Queue); err != nil {
+			if err := c.startWatch(watch.src); err != nil {
 				return err
 			}
 		}
@@ -233,8 +311,6 @@ func (c *Controller) Start(ctx context.Context) error {
 
 	<-ctx.Done()
 	c.LogConstructor(nil).Info("Shutdown signal received, waiting for all workers to finish")
-	wg.Wait()
-	c.LogConstructor(nil).Info("All workers finished")
 	return nil
 }
 

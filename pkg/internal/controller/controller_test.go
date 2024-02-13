@@ -150,7 +150,7 @@ var _ = Describe("controller", func() {
 
 			err = ctrl.Start(context.TODO())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync: timed out waiting for cache to be synced"))
+			Expect(err.Error()).To(ContainSubstring("timed out trying to get an informer from cache for Kind *v1.Deployment"))
 		})
 
 		It("should not error when context cancelled", func() {
@@ -321,7 +321,7 @@ var _ = Describe("controller", func() {
 			Expect(ctrl.Start(ctx)).To(Succeed())
 			err := ctrl.Start(ctx)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("controller was started more than once. This is likely to be caused by being added to a manager multiple times"))
+			Expect(err.Error()).To(Equal("can not restart a stopped controller, you should create a new one"))
 		})
 
 	})

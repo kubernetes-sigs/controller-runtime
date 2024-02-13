@@ -36,7 +36,6 @@ import (
 type Kind struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
 	Type client.Object
-
 	// Cache used to watch APIs
 	Cache cache.Cache
 
@@ -51,10 +50,14 @@ type Kind struct {
 func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
 	if ks.Type == nil {
-		return fmt.Errorf("must create Kind with a non-nil object")
+		return fmt.Errorf("must create Kind with a non-nil Type")
 	}
 	if ks.Cache == nil {
-		return fmt.Errorf("must create Kind with a non-nil cache")
+		return fmt.Errorf("must create Kind with a non-nil Cache")
+	}
+
+	if ks.started != nil {
+		return fmt.Errorf("cannot start an already started Kind source")
 	}
 
 	// cache.GetInformer will block until its context is cancelled if the cache was already started and it can not

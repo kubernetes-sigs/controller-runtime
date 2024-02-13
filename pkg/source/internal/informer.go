@@ -19,6 +19,7 @@ package internal
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -30,16 +31,26 @@ import (
 type Informer struct {
 	// Informer is the controller-runtime Informer
 	Informer cache.Informer
+
+	mu sync.Mutex
+	// isStarted is true if the source has been started. A source can only be started once.
+	isStarted bool
 }
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
 func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
-	// Informer should have been specified by the user.
 	if is.Informer == nil {
-		return fmt.Errorf("must specify Informer.Informer")
+		return fmt.Errorf("must create Informer with a non-nil Informer")
 	}
+
+	is.mu.Lock()
+	defer is.mu.Unlock()
+	if is.isStarted {
+		return fmt.Errorf("cannot start an already started Informer source")
+	}
+	is.isStarted = true
 
 	_, err := is.Informer.AddEventHandler(NewEventHandler(ctx, queue, handler, prct).HandlerFuncs())
 	if err != nil {

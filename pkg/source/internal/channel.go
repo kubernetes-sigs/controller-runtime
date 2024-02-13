@@ -27,30 +27,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-const (
-	// defaultBufferSize is the default number of event notifications that can be buffered.
-	defaultBufferSize = 1024
-)
+// ChannelOptions contains the options for the Channel source.
+type ChannelOptions struct {
+	// DestBufferSize is the specified buffer size of dest channels.
+	// Default to 1024 if not specified.
+	DestBufferSize int
+}
 
 // Channel is used to provide a source of events originating outside the cluster
 // (e.g. GitHub Webhook callback).  Channel requires the user to wire the external
 // source (eh.g. http handler) to write GenericEvents to the underlying channel.
 type Channel struct {
-	// once ensures the event distribution goroutine will be performed only once
-	once sync.Once
+	Options ChannelOptions
 
-	// Source is the source channel to fetch GenericEvents
-	Source <-chan event.GenericEvent
+	// Broadcaster contains the source channel for events.
+	Broadcaster *ChannelBroadcaster
 
-	// dest is the destination channels of the added event handlers
-	dest []chan event.GenericEvent
-
-	// DestBufferSize is the specified buffer size of dest channels.
-	// Default to 1024 if not specified.
-	DestBufferSize int
-
-	// destLock is to ensure the destination channels are safely added/removed
-	destLock sync.Mutex
+	mu sync.Mutex
+	// isStarted is true if the source has been started. A source can only be started once.
+	isStarted bool
 }
 
 func (cs *Channel) String() string {
@@ -63,88 +58,67 @@ func (cs *Channel) Start(
 	handler handler.EventHandler,
 	queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
-	// Source should have been specified by the user.
-	if cs.Source == nil {
-		return fmt.Errorf("must specify Channel.Source")
+	// Broadcaster should have been specified by the user.
+	if cs.Broadcaster == nil {
+		return fmt.Errorf("must create Channel with a non-nil Broadcaster")
 	}
 
-	// use default value if DestBufferSize not specified
-	if cs.DestBufferSize == 0 {
-		cs.DestBufferSize = defaultBufferSize
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if cs.isStarted {
+		return fmt.Errorf("cannot start an already started Channel source")
 	}
+	cs.isStarted = true
 
-	dst := make(chan event.GenericEvent, cs.DestBufferSize)
-
-	cs.destLock.Lock()
-	cs.dest = append(cs.dest, dst)
-	cs.destLock.Unlock()
-
-	cs.once.Do(func() {
-		// Distribute GenericEvents to all EventHandler / Queue pairs Watching this source
-		go cs.syncLoop(ctx)
-	})
+	// Create a destination channel for the event handler
+	// and add it to the list of destinations
+	destination := make(chan event.GenericEvent, cs.Options.DestBufferSize)
+	cs.Broadcaster.AddListener(destination)
 
 	go func() {
-		for evt := range dst {
-			shouldHandle := true
-			for _, p := range prct {
-				if !p.Generic(evt) {
-					shouldHandle = false
-					break
-				}
-			}
+		// Remove the listener and wait for the broadcaster
+		// to stop sending events to the destination channel.
+		defer cs.Broadcaster.RemoveListener(destination)
 
-			if shouldHandle {
-				func() {
-					ctx, cancel := context.WithCancel(ctx)
-					defer cancel()
-					handler.Generic(ctx, evt, queue)
-				}()
-			}
-		}
+		cs.processReceivedEvents(
+			ctx,
+			destination,
+			queue,
+			handler,
+			prct,
+		)
 	}()
 
 	return nil
 }
 
-func (cs *Channel) doStop() {
-	cs.destLock.Lock()
-	defer cs.destLock.Unlock()
-
-	for _, dst := range cs.dest {
-		close(dst)
-	}
-}
-
-func (cs *Channel) distribute(evt event.GenericEvent) {
-	cs.destLock.Lock()
-	defer cs.destLock.Unlock()
-
-	for _, dst := range cs.dest {
-		// We cannot make it under goroutine here, or we'll meet the
-		// race condition of writing message to closed channels.
-		// To avoid blocking, the dest channels are expected to be of
-		// proper buffer size. If we still see it blocked, then
-		// the controller is thought to be in an abnormal state.
-		dst <- evt
-	}
-}
-
-func (cs *Channel) syncLoop(ctx context.Context) {
+func (cs *Channel) processReceivedEvents(
+	ctx context.Context,
+	destination <-chan event.GenericEvent,
+	queue workqueue.RateLimitingInterface,
+	eventHandler handler.EventHandler,
+	predicates []predicate.Predicate,
+) {
+eventloop:
 	for {
 		select {
 		case <-ctx.Done():
-			// Close destination channels
-			cs.doStop()
 			return
-		case evt, stillOpen := <-cs.Source:
+		case event, stillOpen := <-destination:
 			if !stillOpen {
-				// if the source channel is closed, we're never gonna get
-				// anything more on it, so stop & bail
-				cs.doStop()
 				return
 			}
-			cs.distribute(evt)
+
+			// Check predicates against the event first
+			// and continue the outer loop if any of them fail.
+			for _, p := range predicates {
+				if !p.Generic(event) {
+					continue eventloop
+				}
+			}
+
+			// Call the event handler with the event.
+			eventHandler.Generic(ctx, event, queue)
 		}
 	}
 }

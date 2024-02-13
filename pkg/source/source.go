@@ -22,10 +22,10 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	internal "sigs.k8s.io/controller-runtime/pkg/source/internal"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // Source is a source of events (eh.g. Create, Update, Delete operations on Kubernetes Objects, Webhook callbacks, etc)
@@ -49,24 +49,58 @@ type SyncingSource interface {
 	WaitForSync(ctx context.Context) error
 }
 
-// Kind creates a KindSource with the given cache provider.
-func Kind(cache cache.Cache, object client.Object) SyncingSource {
-	return &internal.Kind{Type: object, Cache: cache}
-}
-
-// Informer is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
-type Informer = internal.Informer
-
-// Channel is used to provide a source of events originating outside the cluster
-// (e.g. GitHub Webhook callback).  Channel requires the user to wire the external
-// source (eh.g. http handler) to write GenericEvents to the underlying channel.
-type Channel = internal.Channel
-
-// Func is a function that implements Source.
-type Func = internal.Func
-
 var _ Source = &internal.Kind{}
 var _ SyncingSource = &internal.Kind{}
 var _ Source = &internal.Informer{}
 var _ Source = &internal.Channel{}
 var _ Source = internal.Func(nil)
+
+// Kind creates a KindSource with the given cache provider.
+func Kind(cache cache.Cache, object client.Object) SyncingSource {
+	return &internal.Kind{Cache: cache, Type: object}
+}
+
+// NewChannelBroadcaster creates a new ChannelBroadcaster for the given channel.
+// A ChannelBroadcaster is a wrapper around a channel that allows multiple listeners to all
+// receive the events from the channel.
+var NewChannelBroadcaster = internal.NewChannelBroadcaster
+
+// ChannelOption is a functional option for configuring a Channel source.
+type ChannelOption func(*internal.ChannelOptions)
+
+// WithDestBufferSize specifies the buffer size of dest channels.
+func WithDestBufferSize(destBufferSize int) ChannelOption {
+	return func(o *internal.ChannelOptions) {
+		if destBufferSize <= 0 {
+			return // ignore invalid buffer size
+		}
+
+		o.DestBufferSize = destBufferSize
+	}
+}
+
+// Channel creates a ChannelSource with the given buffer size.
+func Channel(broadcaster *internal.ChannelBroadcaster, options ...ChannelOption) Source {
+	opts := internal.ChannelOptions{
+		// 1024 is the default number of event notifications that can be buffered.
+		DestBufferSize: 1024,
+	}
+	for _, o := range options {
+		if o == nil {
+			continue // ignore nil options
+		}
+		o(&opts)
+	}
+
+	return &internal.Channel{Options: opts, Broadcaster: broadcaster}
+}
+
+// Informer creates an InformerSource with the given cache provider.
+func Informer(informer cache.Informer) Source {
+	return &internal.Informer{Informer: informer}
+}
+
+// Func creates a FuncSource with the given function.
+func Func(f internal.Func) Source {
+	return f
+}

@@ -77,7 +77,7 @@ var _ = Describe("controller.Controller", func() {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			watchChan := make(chan event.GenericEvent, 1)
-			watch := &source.Channel{Source: watchChan}
+			watch := source.Channel(source.NewChannelBroadcaster(watchChan))
 			watchChan <- event.GenericEvent{Object: &corev1.Pod{}}
 
 			reconcileStarted := make(chan struct{})

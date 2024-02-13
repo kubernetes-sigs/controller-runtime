@@ -24,13 +24,15 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // Informer is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
 type Informer struct {
 	// Informer is the controller-runtime Informer
 	Informer cache.Informer
+
+	// EventHandler is the handler to call when events are received.
+	EventHandler handler.EventHandler
 
 	mu sync.Mutex
 	// isStarted is true if the source has been started. A source can only be started once.
@@ -39,10 +41,12 @@ type Informer struct {
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
+func (is *Informer) Start(ctx context.Context, queue workqueue.RateLimitingInterface) error {
 	if is.Informer == nil {
 		return fmt.Errorf("must create Informer with a non-nil Informer")
+	}
+	if is.EventHandler == nil {
+		return fmt.Errorf("must create Informer with a non-nil EventHandler")
 	}
 
 	is.mu.Lock()
@@ -52,7 +56,7 @@ func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, que
 	}
 	is.isStarted = true
 
-	_, err := is.Informer.AddEventHandler(NewEventHandler(ctx, queue, handler, prct).HandlerFuncs())
+	_, err := is.Informer.AddEventHandler(NewEventHandler(ctx, queue, is.EventHandler).HandlerFuncs())
 	if err != nil {
 		return err
 	}

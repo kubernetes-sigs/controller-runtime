@@ -22,7 +22,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	internal "sigs.k8s.io/controller-runtime/pkg/source/internal"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -39,7 +38,7 @@ import (
 type Source interface {
 	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 	// to enqueue reconcile.Requests.
-	Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+	Start(context.Context, workqueue.RateLimitingInterface) error
 }
 
 // SyncingSource is a source that needs syncing prior to being usable. The controller
@@ -56,8 +55,8 @@ var _ Source = &internal.Channel{}
 var _ Source = internal.Func(nil)
 
 // Kind creates a KindSource with the given cache provider.
-func Kind(cache cache.Cache, object client.Object) SyncingSource {
-	return &internal.Kind{Cache: cache, Type: object}
+func Kind(cache cache.Cache, object client.Object, eventhandler handler.EventHandler) SyncingSource {
+	return &internal.Kind{Cache: cache, Type: object, EventHandler: eventhandler}
 }
 
 // NewChannelBroadcaster creates a new ChannelBroadcaster for the given channel.
@@ -80,7 +79,7 @@ func WithDestBufferSize(destBufferSize int) ChannelOption {
 }
 
 // Channel creates a ChannelSource with the given buffer size.
-func Channel(broadcaster *internal.ChannelBroadcaster, options ...ChannelOption) Source {
+func Channel(broadcaster *internal.ChannelBroadcaster, eventhandler handler.EventHandler, options ...ChannelOption) Source {
 	opts := internal.ChannelOptions{
 		// 1024 is the default number of event notifications that can be buffered.
 		DestBufferSize: 1024,
@@ -92,12 +91,12 @@ func Channel(broadcaster *internal.ChannelBroadcaster, options ...ChannelOption)
 		o(&opts)
 	}
 
-	return &internal.Channel{Options: opts, Broadcaster: broadcaster}
+	return &internal.Channel{Options: opts, Broadcaster: broadcaster, EventHandler: eventhandler}
 }
 
 // Informer creates an InformerSource with the given cache provider.
-func Informer(informer cache.Informer) Source {
-	return &internal.Informer{Informer: informer}
+func Informer(informer cache.Informer, eventhandler handler.EventHandler) Source {
+	return &internal.Informer{Informer: informer, EventHandler: eventhandler}
 }
 
 // Func creates a FuncSource with the given function.

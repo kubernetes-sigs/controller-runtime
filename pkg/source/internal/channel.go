@@ -24,7 +24,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // ChannelOptions contains the options for the Channel source.
@@ -43,6 +42,9 @@ type Channel struct {
 	// Broadcaster contains the source channel for events.
 	Broadcaster *ChannelBroadcaster
 
+	// EventHandler is the handler to call when events are received.
+	EventHandler handler.EventHandler
+
 	mu sync.Mutex
 	// isStarted is true if the source has been started. A source can only be started once.
 	isStarted bool
@@ -53,14 +55,12 @@ func (cs *Channel) String() string {
 }
 
 // Start implements Source and should only be called by the Controller.
-func (cs *Channel) Start(
-	ctx context.Context,
-	handler handler.EventHandler,
-	queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
-	// Broadcaster should have been specified by the user.
+func (cs *Channel) Start(ctx context.Context, queue workqueue.RateLimitingInterface) error {
 	if cs.Broadcaster == nil {
 		return fmt.Errorf("must create Channel with a non-nil Broadcaster")
+	}
+	if cs.EventHandler == nil {
+		return fmt.Errorf("must create Channel with a non-nil EventHandler")
 	}
 
 	cs.mu.Lock()
@@ -84,8 +84,6 @@ func (cs *Channel) Start(
 			ctx,
 			destination,
 			queue,
-			handler,
-			prct,
 		)
 	}()
 
@@ -96,10 +94,7 @@ func (cs *Channel) processReceivedEvents(
 	ctx context.Context,
 	destination <-chan event.GenericEvent,
 	queue workqueue.RateLimitingInterface,
-	eventHandler handler.EventHandler,
-	predicates []predicate.Predicate,
 ) {
-eventloop:
 	for {
 		select {
 		case <-ctx.Done():
@@ -109,16 +104,8 @@ eventloop:
 				return
 			}
 
-			// Check predicates against the event first
-			// and continue the outer loop if any of them fail.
-			for _, p := range predicates {
-				if !p.Generic(event) {
-					continue eventloop
-				}
-			}
-
 			// Call the event handler with the event.
-			eventHandler.Generic(ctx, event, queue)
+			cs.EventHandler.Generic(ctx, event, queue)
 		}
 	}
 }

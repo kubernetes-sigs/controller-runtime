@@ -21,17 +21,14 @@ import (
 	"fmt"
 
 	"k8s.io/client-go/util/workqueue"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // Func is a function that implements Source.
-type Func func(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+type Func func(context.Context, workqueue.RateLimitingInterface) error
 
 // Start implements Source.
-func (f Func) Start(ctx context.Context, evt handler.EventHandler, queue workqueue.RateLimitingInterface,
-	pr ...predicate.Predicate) error {
-	return f(ctx, evt, queue, pr...)
+func (f Func) Start(ctx context.Context, queue workqueue.RateLimitingInterface) error {
+	return f(ctx, queue)
 }
 
 func (f Func) String() string {

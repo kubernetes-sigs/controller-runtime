@@ -29,7 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // Kind is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
@@ -39,6 +38,9 @@ type Kind struct {
 	// Cache used to watch APIs
 	Cache cache.Cache
 
+	// EventHandler is the handler to call when events are received.
+	EventHandler handler.EventHandler
+
 	// started may contain an error if one was encountered during startup. If its closed and does not
 	// contain an error, startup and syncing finished.
 	started     chan error
@@ -47,13 +49,15 @@ type Kind struct {
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
+func (ks *Kind) Start(ctx context.Context, queue workqueue.RateLimitingInterface) error {
 	if ks.Type == nil {
 		return fmt.Errorf("must create Kind with a non-nil Type")
 	}
 	if ks.Cache == nil {
 		return fmt.Errorf("must create Kind with a non-nil Cache")
+	}
+	if ks.EventHandler == nil {
+		return fmt.Errorf("must create Kind with a non-nil EventHandler")
 	}
 
 	if ks.started != nil {
@@ -98,7 +102,7 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 			return
 		}
 
-		_, err := i.AddEventHandler(NewEventHandler(ctx, queue, handler, prct).HandlerFuncs())
+		_, err := i.AddEventHandler(NewEventHandler(ctx, queue, ks.EventHandler).HandlerFuncs())
 		if err != nil {
 			ks.started <- err
 			return
@@ -110,23 +114,6 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 		close(ks.started)
 	}()
 
-	return nil
-}
-
-// ProjectObject sets the Kind's object to the given object.
-// This function should only be called by the Controller builder.
-// NOTE: make sure to update pkg/builder/controller.go if you change this function.
-func (ks *Kind) ProjectObject(fn func(client.Object) (client.Object, error)) error {
-	if ks.startCancel != nil {
-		return fmt.Errorf("cannot project object after Start has been called")
-	}
-
-	newType, err := fn(ks.Type)
-	if err != nil {
-		return err
-	}
-
-	ks.Type = newType
 	return nil
 }
 

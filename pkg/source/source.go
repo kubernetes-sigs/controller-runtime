@@ -48,6 +48,7 @@ type Source interface {
 	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 	// to enqueue reconcile.Requests.
 	Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+	SetPredicates(...predicate.PredicateConstraint)
 }
 
 // SyncingSource is a source that needs syncing prior to being usable. The controller
@@ -196,14 +197,14 @@ var _ Source = &Informer{}
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
+func (is *Informer) Start(ctx context.Context, h handler.EventHandler, queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
 	// Informer should have been specified by the user.
 	if is.Informer == nil {
 		return fmt.Errorf("must specify Informer.Informer")
 	}
 
-	_, err := is.Informer.AddEventHandler(internal.NewEventHandler[client.Object](ctx, queue, handler, prct).HandlerFuncs())
+	_, err := is.Informer.AddEventHandler(internal.NewEventHandler(ctx, queue, handler.ObjectFuncAdapter[client.Object](h), predicate.ObjectPredicatesAdapter[client.Object](prct...)).HandlerFuncs())
 	if err != nil {
 		return err
 	}

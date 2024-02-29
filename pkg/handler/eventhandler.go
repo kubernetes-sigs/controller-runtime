@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
@@ -54,6 +55,21 @@ type EventHandler interface {
 	// Generic is called in response to an event of an unknown type or a synthetic event triggered as a cron or
 	// external trigger request - e.g. reconcile Autoscaling, or a Webhook.
 	Generic(context.Context, event.GenericEvent, workqueue.RateLimitingInterface)
+}
+
+// ObjectHandler filters events for type before enqueuing the keys.
+type ObjectHandler[T any] interface {
+	// Create returns true if the Create event should be processed
+	OnCreate(ctx context.Context, obj T, queue workqueue.RateLimitingInterface)
+
+	// Delete returns true if the Delete event should be processed
+	OnDelete(ctx context.Context, obj T, queue workqueue.RateLimitingInterface)
+
+	// Update returns true if the Update event should be processed
+	OnUpdate(ctx context.Context, old, new T, queue workqueue.RateLimitingInterface)
+
+	// Generic returns true if the Generic event should be processed
+	OnGeneric(ctx context.Context, obj T, queue workqueue.RateLimitingInterface)
 }
 
 var _ EventHandler = Funcs{}
@@ -102,5 +118,136 @@ func (h Funcs) Update(ctx context.Context, e event.UpdateEvent, q workqueue.Rate
 func (h Funcs) Generic(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
 	if h.GenericFunc != nil {
 		h.GenericFunc(ctx, e, q)
+	}
+}
+
+var _ EventHandler = Funcs{}
+var _ EventHandler = ObjectFuncs[any]{}
+var _ ObjectHandler[any] = ObjectFuncs[any]{}
+
+// Funcs is a function that implements Predicate.
+type ObjectFuncs[T any] struct {
+	// Create is called in response to an add event.  Defaults to no-op.
+	// RateLimitingInterface is used to enqueue reconcile.Requests.
+	CreateFunc func(ctx context.Context, obj T, queue workqueue.RateLimitingInterface)
+
+	// Update is called in response to an update event.  Defaults to no-op.
+	// RateLimitingInterface is used to enqueue reconcile.Requests.
+	UpdateFunc func(ctx context.Context, old, new T, queue workqueue.RateLimitingInterface)
+
+	// Delete is called in response to a delete event.  Defaults to no-op.
+	// RateLimitingInterface is used to enqueue reconcile.Requests.
+	DeleteFunc func(ctx context.Context, obj T, queue workqueue.RateLimitingInterface)
+
+	// GenericFunc is called in response to a generic event.  Defaults to no-op.
+	// RateLimitingInterface is used to enqueue reconcile.Requests.
+	GenericFunc func(ctx context.Context, obj T, queue workqueue.RateLimitingInterface)
+}
+
+// Update implements Predicate.
+func (p ObjectFuncs[T]) Update(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+	new, ok := e.ObjectNew.(T)
+	old, oldOk := e.ObjectOld.(T)
+	if ok && oldOk {
+		p.OnUpdate(ctx, old, new, q)
+	}
+}
+
+// Generic implements Predicate.
+func (p ObjectFuncs[T]) Generic(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
+	obj, ok := e.Object.(T)
+	if ok {
+		p.OnGeneric(ctx, obj, q)
+	}
+}
+
+// Create implements Predicate.
+func (p ObjectFuncs[T]) Create(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+	obj, ok := e.Object.(T)
+	if ok {
+		p.OnCreate(ctx, obj, q)
+	}
+}
+
+// Delete implements Predicate.
+func (p ObjectFuncs[T]) Delete(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+	obj, ok := e.Object.(T)
+	if ok {
+		p.OnDelete(ctx, obj, q)
+	}
+}
+
+// Update implements Predicate.
+func (p ObjectFuncs[T]) OnUpdate(ctx context.Context, old, new T, q workqueue.RateLimitingInterface) {
+	if p.UpdateFunc != nil {
+		p.UpdateFunc(ctx, old, new, q)
+	}
+}
+
+// Generic implements Predicate.
+func (p ObjectFuncs[T]) OnGeneric(ctx context.Context, obj T, q workqueue.RateLimitingInterface) {
+	if p.GenericFunc != nil {
+		p.GenericFunc(ctx, obj, q)
+	}
+}
+
+// Create implements Predicate.
+func (p ObjectFuncs[T]) OnCreate(ctx context.Context, obj T, q workqueue.RateLimitingInterface) {
+	if p.CreateFunc != nil {
+		p.CreateFunc(ctx, obj, q)
+	}
+}
+
+// Delete implements Predicate.
+func (p ObjectFuncs[T]) OnDelete(ctx context.Context, obj T, q workqueue.RateLimitingInterface) {
+	if p.DeleteFunc != nil {
+		p.DeleteFunc(ctx, obj, q)
+	}
+}
+
+func ObjectFuncAdapter[T client.Object](h EventHandler) ObjectHandler[T] {
+	return ObjectFuncs[T]{
+		CreateFunc: func(ctx context.Context, obj T, queue workqueue.RateLimitingInterface) {
+			h.Create(ctx, event.CreateEvent{Object: obj}, queue)
+		},
+		DeleteFunc: func(ctx context.Context, obj T, queue workqueue.RateLimitingInterface) {
+			h.Delete(ctx, event.DeleteEvent{Object: obj}, queue)
+		},
+		GenericFunc: func(ctx context.Context, obj T, queue workqueue.RateLimitingInterface) {
+			h.Generic(ctx, event.GenericEvent{Object: obj}, queue)
+		},
+		UpdateFunc: func(ctx context.Context, old, new T, queue workqueue.RateLimitingInterface) {
+			h.Update(ctx, event.UpdateEvent{ObjectOld: old, ObjectNew: new}, queue)
+		},
+	}
+}
+
+func EventHandlerAdapter[T client.Object](h ObjectHandler[T]) EventHandler {
+	return Funcs{
+		CreateFunc: func(ctx context.Context, e event.CreateEvent, queue workqueue.RateLimitingInterface) {
+			obj, ok := e.Object.(T)
+			if ok {
+				h.OnCreate(ctx, obj, queue)
+			}
+		},
+		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, queue workqueue.RateLimitingInterface) {
+			obj, ok := e.Object.(T)
+			if ok {
+				h.OnDelete(ctx, obj, queue)
+			}
+		},
+		GenericFunc: func(ctx context.Context, e event.GenericEvent, queue workqueue.RateLimitingInterface) {
+			obj, ok := e.Object.(T)
+			if ok {
+				h.OnGeneric(ctx, obj, queue)
+			}
+		},
+		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, queue workqueue.RateLimitingInterface) {
+			new, ok := e.ObjectNew.(T)
+			old, oldOk := e.ObjectOld.(T)
+			if ok && oldOk {
+				h.OnUpdate(ctx, old, new, queue)
+			}
+		},
 	}
 }

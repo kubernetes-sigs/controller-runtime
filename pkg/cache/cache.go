@@ -96,6 +96,14 @@ type Informers interface {
 	client.FieldIndexer
 }
 
+type ObjectInformers[T any] interface {
+	Informer
+
+	// GetInformer fetches or constructs an informer for the given object that corresponds to a single
+	// API kind and resource.
+	GetInformer(ctx context.Context, obj T, opts ...InformerGetOption) (Informer, error)
+}
+
 // Informer allows you to interact with the underlying informer.
 type Informer interface {
 	// AddEventHandler adds an event handler to the shared informer using the shared informer's resync

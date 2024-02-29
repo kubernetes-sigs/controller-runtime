@@ -40,6 +40,12 @@ type WatchesOption interface {
 	ApplyToWatches(*WatchesInput)
 }
 
+type Option interface {
+	ForOption
+	OwnsOption
+	WatchesOption
+}
+
 // }}}
 
 // {{{ Multi-Type Options
@@ -74,6 +80,36 @@ func (w Predicates) ApplyToWatches(opts *WatchesInput) {
 var _ ForOption = &Predicates{}
 var _ OwnsOption = &Predicates{}
 var _ WatchesOption = &Predicates{}
+
+// WithPredicates sets the given predicates list.
+func WithObjectPredicates[T any](predicates ...predicate.ObjectPredicate[T]) ObjectPredicates[T] {
+	return ObjectPredicates[T]{
+		predicates: predicates,
+	}
+}
+
+type ObjectPredicates[T any] struct {
+	predicates []predicate.ObjectPredicate[T]
+}
+
+// ApplyToOwns implements OwnsOption.
+func (o *ObjectPredicates[T]) ApplyToOwns(*OwnsInput) {
+	panic("unimplemented")
+}
+
+// ApplyToWatches implements WatchesOption.
+func (o *ObjectPredicates[T]) ApplyToWatches(*WatchesInput) {
+	panic("unimplemented")
+}
+
+// ApplyToFor implements ForOption.
+func (o *ObjectPredicates[T]) ApplyToFor(*ForInput) {
+	panic("unimplemented")
+}
+
+var _ ForOption = &ObjectPredicates[any]{}
+var _ OwnsOption = &ObjectPredicates[any]{}
+var _ WatchesOption = &ObjectPredicates[any]{}
 
 // }}}
 
@@ -153,4 +189,12 @@ type matchEveryOwner struct{}
 // ApplyToOwns applies this configuration to the given OwnsInput options.
 func (o matchEveryOwner) ApplyToOwns(opts *OwnsInput) {
 	opts.matchEveryOwner = true
+}
+
+// ApplyToFor applies this configuration to the given OwnsInput options.
+func (o matchEveryOwner) ApplyToFor(opts *ForInput) {
+}
+
+// ApplyToWatches applies this configuration to the given OwnsInput options.
+func (o matchEveryOwner) ApplyToWatches(opts *WatchesInput) {
 }

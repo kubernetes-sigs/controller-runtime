@@ -22,8 +22,6 @@ import (
 
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 
@@ -33,7 +31,7 @@ import (
 var log = logf.RuntimeLog.WithName("source").WithName("EventHandler")
 
 // NewEventHandler creates a new EventHandler.
-func NewEventHandler[T client.Object](ctx context.Context, queue workqueue.RateLimitingInterface, handler handler.EventHandler, predicates []predicate.Predicate) *EventHandler[T] {
+func NewEventHandler[T any](ctx context.Context, queue workqueue.RateLimitingInterface, handler handler.ObjectHandler[T], predicates []predicate.ObjectPredicate[T]) *EventHandler[T] {
 	return &EventHandler[T]{
 		ctx:        ctx,
 		handler:    handler,
@@ -43,14 +41,14 @@ func NewEventHandler[T client.Object](ctx context.Context, queue workqueue.RateL
 }
 
 // EventHandler adapts a handler.EventHandler interface to a cache.ResourceEventHandler interface.
-type EventHandler[T client.Object] struct {
+type EventHandler[T any] struct {
 	// ctx stores the context that created the event handler
 	// that is used to propagate cancellation signals to each handler function.
 	ctx context.Context
 
-	handler    handler.EventHandler
+	handler    handler.ObjectHandler[T]
 	queue      workqueue.RateLimitingInterface
-	predicates []predicate.Predicate
+	predicates []predicate.ObjectPredicate[T]
 }
 
 // HandlerFuncs converts EventHandler to a ResourceEventHandlerFuncs
@@ -65,11 +63,11 @@ func (e *EventHandler[T]) HandlerFuncs() cache.ResourceEventHandlerFuncs {
 
 // OnAdd creates CreateEvent and calls Create on EventHandler.
 func (e *EventHandler[T]) OnAdd(obj interface{}) {
-	c := event.CreateEvent{}
+	var object T
 
 	// Pull Object out of the object
 	if o, ok := obj.(T); ok {
-		c.Object = o
+		object = o
 	} else {
 		log.Error(nil, "OnAdd missing Object",
 			"object", obj, "type", fmt.Sprintf("%T", obj))
@@ -77,7 +75,7 @@ func (e *EventHandler[T]) OnAdd(obj interface{}) {
 	}
 
 	for _, p := range e.predicates {
-		if !p.Create(c) {
+		if !p.OnCreate(object) {
 			return
 		}
 	}
@@ -85,15 +83,15 @@ func (e *EventHandler[T]) OnAdd(obj interface{}) {
 	// Invoke create handler
 	ctx, cancel := context.WithCancel(e.ctx)
 	defer cancel()
-	e.handler.Create(ctx, c, e.queue)
+	e.handler.OnCreate(ctx, object, e.queue)
 }
 
 // OnUpdate creates UpdateEvent and calls Update on EventHandler.
 func (e *EventHandler[T]) OnUpdate(oldObj, newObj interface{}) {
-	u := event.UpdateEvent{}
+	var objOld, objNew T
 
 	if o, ok := oldObj.(T); ok {
-		u.ObjectOld = o
+		objOld = o
 	} else {
 		log.Error(nil, "OnUpdate missing ObjectOld",
 			"object", oldObj, "type", fmt.Sprintf("%T", oldObj))
@@ -102,7 +100,7 @@ func (e *EventHandler[T]) OnUpdate(oldObj, newObj interface{}) {
 
 	// Pull Object out of the object
 	if o, ok := newObj.(T); ok {
-		u.ObjectNew = o
+		objNew = o
 	} else {
 		log.Error(nil, "OnUpdate missing ObjectNew",
 			"object", newObj, "type", fmt.Sprintf("%T", newObj))
@@ -110,7 +108,7 @@ func (e *EventHandler[T]) OnUpdate(oldObj, newObj interface{}) {
 	}
 
 	for _, p := range e.predicates {
-		if !p.Update(u) {
+		if !p.OnUpdate(objOld, objNew) {
 			return
 		}
 	}
@@ -118,12 +116,12 @@ func (e *EventHandler[T]) OnUpdate(oldObj, newObj interface{}) {
 	// Invoke update handler
 	ctx, cancel := context.WithCancel(e.ctx)
 	defer cancel()
-	e.handler.Update(ctx, u, e.queue)
+	e.handler.OnUpdate(ctx, objOld, objNew, e.queue)
 }
 
 // OnDelete creates DeleteEvent and calls Delete on EventHandler.
 func (e *EventHandler[T]) OnDelete(obj interface{}) {
-	d := event.DeleteEvent{}
+	var object T
 
 	// Deal with tombstone events by pulling the object out.  Tombstone events wrap the object in a
 	// DeleteFinalStateUnknown struct, so the object needs to be pulled out.
@@ -141,16 +139,13 @@ func (e *EventHandler[T]) OnDelete(obj interface{}) {
 			return
 		}
 
-		// Set DeleteStateUnknown to true
-		d.DeleteStateUnknown = true
-
 		// Set obj to the tombstone obj
 		obj = tombstone.Obj
 	}
 
 	// Pull Object out of the object
 	if o, ok := obj.(T); ok {
-		d.Object = o
+		object = o
 	} else {
 		log.Error(nil, "OnDelete missing Object",
 			"object", obj, "type", fmt.Sprintf("%T", obj))
@@ -158,7 +153,7 @@ func (e *EventHandler[T]) OnDelete(obj interface{}) {
 	}
 
 	for _, p := range e.predicates {
-		if !p.Delete(d) {
+		if !p.OnDelete(object) {
 			return
 		}
 	}
@@ -166,5 +161,5 @@ func (e *EventHandler[T]) OnDelete(obj interface{}) {
 	// Invoke delete handler
 	ctx, cancel := context.WithCancel(e.ctx)
 	defer cancel()
-	e.handler.Delete(ctx, d, e.queue)
+	e.handler.OnDelete(ctx, object, e.queue)
 }

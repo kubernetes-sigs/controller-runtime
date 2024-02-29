@@ -69,6 +69,37 @@ func Example() {
 	}
 }
 
+// This example creates a generic application Controller that is configured for ReplicaSets and Pods.
+//
+// * Create a new application for ReplicaSets that manages Pods owned by the ReplicaSet and calls into
+// ReplicaSetReconciler.
+//
+// * Start the application.
+func GenericExample() {
+	log := ctrl.Log.WithName("builder-examples")
+
+	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
+	if err != nil {
+		log.Error(err, "could not create manager")
+		os.Exit(1)
+	}
+
+	err = ctrl.
+		NewControllerManagedBy(manager).         // Create the Controller
+		With(ctrl.Object(&appsv1.ReplicaSet{})). // ReplicaSet is the Application API
+		Own(ctrl.Object(&corev1.Pod{})).         // ReplicaSet owns Pods created by it
+		Complete(&ReplicaSetReconciler{Client: manager.GetClient()})
+	if err != nil {
+		log.Error(err, "could not create controller")
+		os.Exit(1)
+	}
+
+	if err := manager.Start(ctrl.SetupSignalHandler()); err != nil {
+		log.Error(err, "could not start manager")
+		os.Exit(1)
+	}
+}
+
 type ExampleCRDWithConfigMapRef struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

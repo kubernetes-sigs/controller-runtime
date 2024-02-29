@@ -28,6 +28,10 @@ import (
 
 var log = logf.RuntimeLog.WithName("predicate").WithName("eventFilters")
 
+type PredicateConstraint interface {
+	Register()
+}
+
 // Predicate filters events before enqueuing the keys.
 type Predicate interface {
 	// Create returns true if the Create event should be processed
@@ -43,6 +47,21 @@ type Predicate interface {
 	Generic(event.GenericEvent) bool
 }
 
+// ObjectPredicate filters events for type before enqueuing the keys.
+type ObjectPredicate[T any] interface {
+	// Create returns true if the Create event should be processed
+	OnCreate(obj T) bool
+
+	// Delete returns true if the Delete event should be processed
+	OnDelete(obj T) bool
+
+	// Update returns true if the Update event should be processed
+	OnUpdate(old, new T) bool
+
+	// Generic returns true if the Generic event should be processed
+	OnGeneric(obj T) bool
+}
+
 var _ Predicate = Funcs{}
 var _ Predicate = ResourceVersionChangedPredicate{}
 var _ Predicate = GenerationChangedPredicate{}
@@ -50,6 +69,9 @@ var _ Predicate = AnnotationChangedPredicate{}
 var _ Predicate = or{}
 var _ Predicate = and{}
 var _ Predicate = not{}
+var _ Predicate = ObjectFuncs[any]{}
+var _ ObjectPredicate[any] = ObjectFuncs[any]{}
+var _ Predicate = ObjectFuncs[any]{}
 
 // Funcs is a function that implements Predicate.
 type Funcs struct {
@@ -98,6 +120,66 @@ func (p Funcs) Generic(e event.GenericEvent) bool {
 	return true
 }
 
+// Funcs is a function that implements Predicate.
+type ObjectFuncs[T any] struct {
+	// Create returns true if the Create event should be processed
+	CreateFunc func(obj T) bool
+
+	// Delete returns true if the Delete event should be processed
+	DeleteFunc func(obj T) bool
+
+	// Update returns true if the Update event should be processed
+	UpdateFunc func(old, new T) bool
+
+	// Generic returns true if the Generic event should be processed
+	GenericFunc func(obj T) bool
+}
+
+// Update implements Predicate.
+func (p ObjectFuncs[T]) Update(e event.UpdateEvent) bool {
+	new, ok := e.ObjectNew.(T)
+	old, oldOk := e.ObjectOld.(T)
+	return ok && oldOk && p.OnUpdate(old, new)
+}
+
+// Generic implements Predicate.
+func (p ObjectFuncs[T]) Generic(e event.GenericEvent) bool {
+	obj, ok := e.Object.(T)
+	return ok && p.OnGeneric(obj)
+}
+
+// Create implements Predicate.
+func (p ObjectFuncs[T]) Create(e event.CreateEvent) bool {
+	obj, ok := e.Object.(T)
+	return ok && p.OnCreate(obj)
+}
+
+// Delete implements Predicate.
+func (p ObjectFuncs[T]) Delete(e event.DeleteEvent) bool {
+	obj, ok := e.Object.(T)
+	return ok && p.OnDelete(obj)
+}
+
+// Update implements Predicate.
+func (p ObjectFuncs[T]) OnUpdate(old, new T) bool {
+	return p.UpdateFunc == nil || p.UpdateFunc(old, new)
+}
+
+// Generic implements Predicate.
+func (p ObjectFuncs[T]) OnGeneric(obj T) bool {
+	return p.GenericFunc == nil || p.GenericFunc(obj)
+}
+
+// Create implements Predicate.
+func (p ObjectFuncs[T]) OnCreate(obj T) bool {
+	return p.CreateFunc == nil || p.CreateFunc(obj)
+}
+
+// Delete implements Predicate.
+func (p ObjectFuncs[T]) OnDelete(obj T) bool {
+	return p.DeleteFunc == nil || p.DeleteFunc(obj)
+}
+
 // NewPredicateFuncs returns a predicate funcs that applies the given filter function
 // on CREATE, UPDATE, DELETE and GENERIC events. For UPDATE events, the filter is applied
 // to the new object.
@@ -114,6 +196,20 @@ func NewPredicateFuncs(filter func(object client.Object) bool) Funcs {
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
 			return filter(e.Object)
+		},
+	}
+}
+
+// NewPredicateFuncs returns a predicate funcs that applies the given filter function
+// on CREATE, UPDATE, DELETE and GENERIC events. For UPDATE events, the filter is applied
+// to the new object.
+func NewObjectPredicateFuncs[T any](filter func(object T) bool) ObjectFuncs[T] {
+	return ObjectFuncs[T]{
+		CreateFunc:  filter,
+		DeleteFunc:  filter,
+		GenericFunc: filter,
+		UpdateFunc: func(_, new T) bool {
+			return filter(new)
 		},
 	}
 }
@@ -277,6 +373,59 @@ func (a and) Generic(e event.GenericEvent) bool {
 	return true
 }
 
+// All returns a composite predicate that implements a logical AND of the predicates passed to it.
+func All[T any](predicates ...ObjectPredicate[T]) ObjectPredicate[T] {
+	return all[T]{predicates}
+}
+
+type all[T any] struct {
+	predicates []ObjectPredicate[T]
+}
+
+// OnCreate implements ObjectPredicate.
+func (a all[T]) OnCreate(obj T) bool {
+	for _, p := range a.predicates {
+		if !p.OnCreate(obj) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// OnDelete implements ObjectPredicate.
+func (a all[T]) OnDelete(obj T) bool {
+	for _, p := range a.predicates {
+		if !p.OnDelete(obj) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// OnGeneric implements ObjectPredicate.
+func (a all[T]) OnGeneric(obj T) bool {
+	for _, p := range a.predicates {
+		if !p.OnGeneric(obj) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// OnUpdate implements ObjectPredicate.
+func (a all[T]) OnUpdate(old, new T) bool {
+	for _, p := range a.predicates {
+		if !p.OnUpdate(old, new) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Or returns a composite predicate that implements a logical OR of the predicates passed to it.
 func Or(predicates ...Predicate) Predicate {
 	return or{predicates}
@@ -322,6 +471,59 @@ func (o or) Generic(e event.GenericEvent) bool {
 	return false
 }
 
+// Any returns a composite predicate that implements a logical OR of the predicates passed to it.
+func Any[T any](predicates ...ObjectPredicate[T]) ObjectPredicate[T] {
+	return anyOf[T]{predicates}
+}
+
+type anyOf[T any] struct {
+	predicates []ObjectPredicate[T]
+}
+
+// OnCreate implements ObjectPredicate.
+func (a anyOf[T]) OnCreate(obj T) bool {
+	for _, p := range a.predicates {
+		if p.OnCreate(obj) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// OnDelete implements ObjectPredicate.
+func (a anyOf[T]) OnDelete(obj T) bool {
+	for _, p := range a.predicates {
+		if p.OnDelete(obj) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// OnGeneric implements ObjectPredicate.
+func (a anyOf[T]) OnGeneric(obj T) bool {
+	for _, p := range a.predicates {
+		if p.OnGeneric(obj) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// OnUpdate implements ObjectPredicate.
+func (a anyOf[T]) OnUpdate(old, new T) bool {
+	for _, p := range a.predicates {
+		if p.OnUpdate(old, new) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Not returns a predicate that implements a logical NOT of the predicate passed to it.
 func Not(predicate Predicate) Predicate {
 	return not{predicate}
@@ -347,6 +549,35 @@ func (n not) Generic(e event.GenericEvent) bool {
 	return !n.predicate.Generic(e)
 }
 
+// Neg returns a predicate that implements a logical NOT of the predicate passed to it.
+func Neg[T any](predicate ObjectPredicate[T]) ObjectPredicate[T] {
+	return neg[T]{predicate}
+}
+
+type neg[T any] struct {
+	predicate ObjectPredicate[T]
+}
+
+// OnCreate implements ObjectPredicate.
+func (n neg[T]) OnCreate(obj T) bool {
+	return !n.predicate.OnCreate(obj)
+}
+
+// OnDelete implements ObjectPredicate.
+func (n neg[T]) OnDelete(obj T) bool {
+	return !n.predicate.OnDelete(obj)
+}
+
+// OnGeneric implements ObjectPredicate.
+func (n neg[T]) OnGeneric(obj T) bool {
+	return !n.predicate.OnGeneric(obj)
+}
+
+// OnUpdate implements ObjectPredicate.
+func (n neg[T]) OnUpdate(old T, new T) bool {
+	return !n.predicate.OnUpdate(old, new)
+}
+
 // LabelSelectorPredicate constructs a Predicate from a LabelSelector.
 // Only objects matching the LabelSelector will be admitted.
 func LabelSelectorPredicate(s metav1.LabelSelector) (Predicate, error) {
@@ -357,4 +588,29 @@ func LabelSelectorPredicate(s metav1.LabelSelector) (Predicate, error) {
 	return NewPredicateFuncs(func(o client.Object) bool {
 		return selector.Matches(labels.Set(o.GetLabels()))
 	}), nil
+}
+
+func ObjectPredicateAdapter[T client.Object](h Predicate) ObjectPredicate[T] {
+	return ObjectFuncs[T]{
+		CreateFunc: func(obj T) bool {
+			return h.Create(event.CreateEvent{Object: obj})
+		},
+		DeleteFunc: func(obj T) bool {
+			return h.Delete(event.DeleteEvent{Object: obj})
+		},
+		GenericFunc: func(obj T) bool {
+			return h.Generic(event.GenericEvent{Object: obj})
+		},
+		UpdateFunc: func(old, new T) bool {
+			return h.Update(event.UpdateEvent{ObjectOld: old, ObjectNew: new})
+		},
+	}
+}
+
+func ObjectPredicatesAdapter[T client.Object](predicates ...Predicate) (prdt []ObjectPredicate[T]) {
+	for _, p := range predicates {
+		prdt = append(prdt, ObjectPredicatesAdapter[T](p)...)
+	}
+
+	return
 }

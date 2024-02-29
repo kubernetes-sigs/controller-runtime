@@ -31,10 +31,20 @@ type Kind[T client.Object] struct {
 	startCancel func()
 }
 
+// SetPredicates implements source.SyncingSource.
+func (ks *Kind[T]) SetPredicates(...predicate.PredicateConstraint) {
+	panic("unimplemented")
+}
+
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (ks *Kind[T]) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
+func (ks *Kind[T]) Start(ctx context.Context, h handler.EventHandler, queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
+	return ks.Run(ctx, handler.ObjectFuncAdapter[T](h), queue, predicate.ObjectPredicatesAdapter[T](prct...)...)
+}
+
+func (ks *Kind[T]) Run(ctx context.Context, handler handler.ObjectHandler[T], queue workqueue.RateLimitingInterface,
+	prct ...predicate.ObjectPredicate[T]) error {
 	if reflect.DeepEqual(ks.Type, *new(T)) {
 		return fmt.Errorf("must create Kind with a non-nil object")
 	}
@@ -80,7 +90,7 @@ func (ks *Kind[T]) Start(ctx context.Context, handler handler.EventHandler, queu
 			return
 		}
 
-		_, err := i.AddEventHandler(NewEventHandler[T](ctx, queue, handler, prct).HandlerFuncs())
+		_, err := i.AddEventHandler(NewEventHandler(ctx, queue, handler, prct).HandlerFuncs())
 		if err != nil {
 			ks.started <- err
 			return

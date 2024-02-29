@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -17,9 +18,9 @@ import (
 )
 
 // Kind is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
-type Kind struct {
+type Kind[T client.Object] struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
-	Type client.Object
+	Type T
 
 	// Cache used to watch APIs
 	Cache cache.Cache
@@ -32,9 +33,9 @@ type Kind struct {
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
+func (ks *Kind[T]) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
 	prct ...predicate.Predicate) error {
-	if ks.Type == nil {
+	if reflect.DeepEqual(ks.Type, *new(T)) {
 		return fmt.Errorf("must create Kind with a non-nil object")
 	}
 	if ks.Cache == nil {
@@ -79,7 +80,7 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 			return
 		}
 
-		_, err := i.AddEventHandler(NewEventHandler(ctx, queue, handler, prct).HandlerFuncs())
+		_, err := i.AddEventHandler(NewEventHandler[T](ctx, queue, handler, prct).HandlerFuncs())
 		if err != nil {
 			ks.started <- err
 			return
@@ -94,8 +95,8 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 	return nil
 }
 
-func (ks *Kind) String() string {
-	if ks.Type != nil {
+func (ks *Kind[T]) String() string {
+	if !reflect.DeepEqual(ks.Type, *new(T)) {
 		return fmt.Sprintf("kind source: %T", ks.Type)
 	}
 	return "kind source: unknown type"
@@ -103,7 +104,7 @@ func (ks *Kind) String() string {
 
 // WaitForSync implements SyncingSource to allow controllers to wait with starting
 // workers until the cache is synced.
-func (ks *Kind) WaitForSync(ctx context.Context) error {
+func (ks *Kind[T]) WaitForSync(ctx context.Context) error {
 	select {
 	case err := <-ks.started:
 		return err

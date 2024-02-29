@@ -59,7 +59,12 @@ type SyncingSource interface {
 
 // Kind creates a KindSource with the given cache provider.
 func Kind(cache cache.Cache, object client.Object) SyncingSource {
-	return &internal.Kind{Type: object, Cache: cache}
+	return &internal.Kind[client.Object]{Type: object, Cache: cache}
+}
+
+// ObjectKind creates a typed KindSource with the given cache provider.
+func ObjectKind[T client.Object](cache cache.Cache, object T) SyncingSource {
+	return &internal.Kind[T]{Type: object, Cache: cache}
 }
 
 var _ Source = &Channel{}
@@ -198,7 +203,7 @@ func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, que
 		return fmt.Errorf("must specify Informer.Informer")
 	}
 
-	_, err := is.Informer.AddEventHandler(internal.NewEventHandler(ctx, queue, handler, prct).HandlerFuncs())
+	_, err := is.Informer.AddEventHandler(internal.NewEventHandler[client.Object](ctx, queue, handler, prct).HandlerFuncs())
 	if err != nil {
 		return err
 	}

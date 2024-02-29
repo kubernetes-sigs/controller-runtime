@@ -37,7 +37,8 @@ import (
 
 var _ = Describe("Internal", func() {
 	var ctx = context.Background()
-	var instance *internal.EventHandler
+	var instance *internal.EventHandler[*corev1.Pod]
+	var partialMetadataInstance *internal.EventHandler[*metav1.PartialObjectMetadata]
 	var funcs, setfuncs *handler.Funcs
 	var set bool
 	BeforeEach(func() {
@@ -74,11 +75,13 @@ var _ = Describe("Internal", func() {
 				set = true
 			},
 		}
-		instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, funcs, nil)
+		instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, funcs, nil)
+		partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, funcs, nil)
 	})
 
 	Describe("EventHandler", func() {
 		var pod, newPod *corev1.Pod
+		var pom, newPom *metav1.PartialObjectMetadata
 
 		BeforeEach(func() {
 			pod = &corev1.Pod{
@@ -88,6 +91,9 @@ var _ = Describe("Internal", func() {
 			}
 			newPod = pod.DeepCopy()
 			newPod.Labels = map[string]string{"foo": "bar"}
+			pom = &metav1.PartialObjectMetadata{}
+			newPom = pom.DeepCopy()
+			newPom.Labels = map[string]string{"foo": "bar"}
 		})
 
 		It("should create a CreateEvent", func() {
@@ -99,7 +105,7 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should used Predicates to filter CreateEvents", func() {
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
 			})
 			set = false
@@ -107,14 +113,14 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 			})
 			instance.OnAdd(pod)
 			Expect(set).To(BeTrue())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
 			})
@@ -122,7 +128,7 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 			})
@@ -130,11 +136,51 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 			})
 			instance.OnAdd(pod)
+			Expect(set).To(BeTrue())
+		})
+
+		It("should use Predicates to filter CreateEvents on PartialObjectMetadata", func() {
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
+			})
+			set = false
+			partialMetadataInstance.OnAdd(pom)
+			Expect(set).To(BeFalse())
+
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+			})
+			partialMetadataInstance.OnAdd(pom)
+			Expect(set).To(BeTrue())
+
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
+			})
+			partialMetadataInstance.OnAdd(pom)
+			Expect(set).To(BeFalse())
+
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+			})
+			partialMetadataInstance.OnAdd(pom)
+			Expect(set).To(BeFalse())
+
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+			})
+			partialMetadataInstance.OnAdd(pom)
 			Expect(set).To(BeTrue())
 		})
 
@@ -142,8 +188,16 @@ var _ = Describe("Internal", func() {
 			instance.OnAdd(&metav1.ObjectMeta{})
 		})
 
+		It("should not call Create EventHandler if an object is not 'that' object", func() {
+			instance.OnAdd(&corev1.Secret{})
+		})
+
 		It("should not call Create EventHandler if the object does not have metadata", func() {
 			instance.OnAdd(FooRuntimeObject{})
+		})
+
+		It("should not call Create EventHandler if an object is not a partial object metadata object", func() {
+			partialMetadataInstance.OnAdd(&corev1.Secret{})
 		})
 
 		It("should create an UpdateEvent", func() {
@@ -157,21 +211,21 @@ var _ = Describe("Internal", func() {
 
 		It("should used Predicates to filter UpdateEvents", func() {
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{UpdateFunc: func(updateEvent event.UpdateEvent) bool { return false }},
 			})
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
 			})
 			instance.OnUpdate(pod, newPod)
 			Expect(set).To(BeTrue())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return false }},
 			})
@@ -179,7 +233,7 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return false }},
 				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
 			})
@@ -187,11 +241,51 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 			})
 			instance.OnUpdate(pod, newPod)
+			Expect(set).To(BeTrue())
+		})
+
+		It("should use Predicates to filter UpdateEvents on PartialObjectMetadata", func() {
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{UpdateFunc: func(updateEvent event.UpdateEvent) bool { return false }},
+			})
+			partialMetadataInstance.OnUpdate(pom, newPom)
+			Expect(set).To(BeFalse())
+
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
+			})
+			partialMetadataInstance.OnUpdate(pom, newPom)
+			Expect(set).To(BeTrue())
+
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
+				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return false }},
+			})
+			partialMetadataInstance.OnUpdate(pom, newPom)
+			Expect(set).To(BeFalse())
+
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return false }},
+				predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return true }},
+			})
+			partialMetadataInstance.OnUpdate(pom, newPom)
+			Expect(set).To(BeFalse())
+
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
+			})
+			partialMetadataInstance.OnUpdate(pom, newPom)
 			Expect(set).To(BeTrue())
 		})
 
@@ -200,9 +294,21 @@ var _ = Describe("Internal", func() {
 			instance.OnUpdate(&corev1.Pod{}, &metav1.ObjectMeta{})
 		})
 
+		It("should not call Update EventHandler if an object is not 'that' object", func() {
+			instance.OnUpdate(&corev1.Secret{}, &corev1.Pod{})
+			instance.OnUpdate(&corev1.Pod{}, &corev1.ConfigMap{})
+		})
+
+		It("should not call Update EventHandler if an object is not a partial object metadata object", func() {
+			partialMetadataInstance.OnUpdate(&corev1.Secret{}, &corev1.Pod{})
+			partialMetadataInstance.OnUpdate(&metav1.PartialObjectMetadata{}, &corev1.ConfigMap{})
+			partialMetadataInstance.OnUpdate(&corev1.ConfigMap{}, &metav1.PartialObjectMetadata{})
+		})
+
 		It("should not call Update EventHandler if the object does not have metadata", func() {
-			instance.OnUpdate(FooRuntimeObject{}, &corev1.Pod{})
 			instance.OnUpdate(&corev1.Pod{}, FooRuntimeObject{})
+			instance.OnUpdate(FooRuntimeObject{}, &corev1.Pod{})
+			instance.OnUpdate(FooRuntimeObject{}, FooRuntimeObject{})
 		})
 
 		It("should create a DeleteEvent", func() {
@@ -215,21 +321,21 @@ var _ = Describe("Internal", func() {
 
 		It("should used Predicates to filter DeleteEvents", func() {
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
 			})
 			instance.OnDelete(pod)
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 			})
 			instance.OnDelete(pod)
 			Expect(set).To(BeTrue())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
 			})
@@ -237,7 +343,7 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 			})
@@ -245,7 +351,7 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeFalse())
 
 			set = false
-			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+			instance = internal.NewEventHandler[*corev1.Pod](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 			})
@@ -253,8 +359,52 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeTrue())
 		})
 
+		It("should use Predicates to filter DeleteEvents", func() {
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
+			})
+			partialMetadataInstance.OnDelete(pom)
+			Expect(set).To(BeFalse())
+
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
+			})
+			partialMetadataInstance.OnDelete(pom)
+			Expect(set).To(BeTrue())
+
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
+			})
+			partialMetadataInstance.OnDelete(pom)
+			Expect(set).To(BeFalse())
+
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
+			})
+			partialMetadataInstance.OnDelete(pom)
+			Expect(set).To(BeFalse())
+
+			set = false
+			partialMetadataInstance = internal.NewEventHandler[*metav1.PartialObjectMetadata](ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
+				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
+			})
+			partialMetadataInstance.OnDelete(pom)
+			Expect(set).To(BeTrue())
+		})
+
 		It("should not call Delete EventHandler if the object is not a runtime.Object", func() {
 			instance.OnDelete(&metav1.ObjectMeta{})
+		})
+
+		It("should not call Delete EventHandler if an object is not 'that' object", func() {
+			instance.OnDelete(&corev1.Secret{})
 		})
 
 		It("should not call Delete EventHandler if the object does not have metadata", func() {
@@ -273,6 +423,10 @@ var _ = Describe("Internal", func() {
 			}
 
 			instance.OnDelete(tombstone)
+		})
+
+		It("should not call Delete EventHandler if an object is not a partial object metadata object", func() {
+			partialMetadataInstance.OnDelete(&corev1.Secret{})
 		})
 
 		It("should ignore tombstone objects without meta", func() {

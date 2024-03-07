@@ -20,6 +20,8 @@ import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/json"
 )
 
 var _ Reader = &typedClient{}
@@ -127,6 +129,25 @@ func (c *typedClient) Patch(ctx context.Context, obj Object, patch Patch, opts .
 		Resource(o.resource()).
 		Name(o.GetName()).
 		VersionedParams(patchOpts.AsPatchOptions(), c.paramCodec).
+		Body(data).
+		Do(ctx).
+		Into(obj)
+}
+
+func (c *typedClient) Apply(ctx context.Context, obj Object, fieldOwner string) error {
+	o, err := c.resources.getObjMeta(obj)
+	if err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(o)
+	if err != nil {
+		return err
+	}
+	return o.Patch(types.ApplyPatchType).
+		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
+		Resource(o.resource()).
+		Name(o.GetName()).
 		Body(data).
 		Do(ctx).
 		Into(obj)

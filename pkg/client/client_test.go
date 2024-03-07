@@ -795,7 +795,30 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 		})
 	})
-
+	Describe("Server side apply", func() {
+		Context("with a core k8s object", func() {
+			It("should not error", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+				cm := &corev1.ConfigMap{
+					TypeMeta: metav1.TypeMeta{
+						APIVersion: "v1",
+						Kind:       "ConfigMap",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "config-map",
+						Namespace: "default",
+					},
+					Data: map[string]string{
+						"key": "value",
+					},
+				}
+				err = cl.Apply(ctx, cm, "test-client")
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+	})
 	Describe("SubResourceClient", func() {
 		Context("with structured objects", func() {
 			It("should be able to read the Scale subresource", func() {

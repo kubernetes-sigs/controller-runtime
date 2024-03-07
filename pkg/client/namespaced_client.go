@@ -147,6 +147,23 @@ func (n *namespacedClient) Patch(ctx context.Context, obj Object, patch Patch, o
 	return n.client.Patch(ctx, obj, patch, opts...)
 }
 
+func (n *namespacedClient) Apply(ctx context.Context, obj Object, fieldOwner string) error {
+	isNamespaceScoped, err := n.IsObjectNamespaced(obj)
+	if err != nil {
+		return fmt.Errorf("error finding the scope of the object: %w", err)
+	}
+
+	objectNamespace := obj.GetNamespace()
+	if objectNamespace != n.namespace && objectNamespace != "" {
+		return fmt.Errorf("namespace %s of the object %s does not match the namespace %s on the client", objectNamespace, obj.GetName(), n.namespace)
+	}
+
+	if isNamespaceScoped && objectNamespace == "" {
+		obj.SetNamespace(n.namespace)
+	}
+	return n.client.Apply(ctx, obj, fieldOwner)
+}
+
 // Get implements client.Client.
 func (n *namespacedClient) Get(ctx context.Context, key ObjectKey, obj Object, opts ...GetOption) error {
 	isNamespaceScoped, err := n.IsObjectNamespaced(obj)

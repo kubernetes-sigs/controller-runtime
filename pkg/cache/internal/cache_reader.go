@@ -30,10 +30,13 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/internal/field/selector"
+	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
 
 // CacheReader is a client.Reader.
 var _ client.Reader = &CacheReader{}
+
+var log = logf.RuntimeLog.WithName("cache-reader")
 
 // CacheReader wraps a cache.Index to implement the client.CacheReader interface for a single type.
 type CacheReader struct {
@@ -57,6 +60,9 @@ func (c *CacheReader) Get(_ context.Context, key client.ObjectKey, out client.Ob
 	if c.scopeName == apimeta.RESTScopeNameRoot {
 		key.Namespace = ""
 	}
+	log.WithName("sleeveless").WithValues(
+		"level", "controller-runtime",
+	).Info("cache_reader.go Get")
 	storeKey := objectKeyToStoreKey(key)
 
 	// Lookup the object from the indexer cache

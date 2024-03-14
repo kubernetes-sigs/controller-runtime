@@ -54,6 +54,10 @@ type informerCache struct {
 
 // Get implements Reader.
 func (ic *informerCache) Get(ctx context.Context, key client.ObjectKey, out client.Object, opts ...client.GetOption) error {
+	log.WithName("sleeveless").WithValues(
+		"level", "controller-runtime",
+	).Info("informer_cache.go Get")
+
 	gvk, err := apiutil.GVKForObject(out, ic.scheme)
 	if err != nil {
 		return err
@@ -72,6 +76,9 @@ func (ic *informerCache) Get(ctx context.Context, key client.ObjectKey, out clie
 
 // List implements Reader.
 func (ic *informerCache) List(ctx context.Context, out client.ObjectList, opts ...client.ListOption) error {
+	// log.WithName("sleeveless").WithValues(
+	// 	"level", "controller-runtime",
+	// ).Info("informer_cache.go List")
 	gvk, cacheTypeObj, err := ic.objectTypeForListObject(out)
 	if err != nil {
 		return err

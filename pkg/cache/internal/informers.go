@@ -341,6 +341,9 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 		cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 	})
 
+	// SLEEVELESS
+	sharedIndexInformer.SetGroupVersionKind(gvk.String())
+
 	// Check to see if there is a transformer for this gvk
 	if err := sharedIndexInformer.SetTransform(ip.getTransform(gvk)); err != nil {
 		return nil, false, err

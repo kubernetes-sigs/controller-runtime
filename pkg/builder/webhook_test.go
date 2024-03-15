@@ -42,6 +42,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
+const (
+	admissionReviewGV = `{
+  "kind":"AdmissionReview",
+  "apiVersion":"admission.k8s.io/`
+
+	svcBaseAddr = "http://svc-name.svc-ns.svc"
+)
+
 var _ = Describe("webhook", func() {
 	Describe("New", func() {
 		Context("v1 AdmissionReview", func() {
@@ -89,9 +97,7 @@ func runTests(admissionReviewVersion string) {
 		svr := m.GetWebhookServer()
 		ExpectWithOffset(1, svr).NotTo(BeNil())
 
-		reader := strings.NewReader(`{
-  "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
+		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -122,7 +128,7 @@ func runTests(admissionReviewVersion string) {
 
 		By("sending a request to a mutating webhook path")
 		path := generateMutatePath(testDefaulterGVK)
-		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)
@@ -136,7 +142,7 @@ func runTests(admissionReviewVersion string) {
 		path = generateValidatePath(testDefaulterGVK)
 		_, err = reader.Seek(0, 0)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)
@@ -162,9 +168,7 @@ func runTests(admissionReviewVersion string) {
 		svr := m.GetWebhookServer()
 		ExpectWithOffset(1, svr).NotTo(BeNil())
 
-		reader := strings.NewReader(`{
-  "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
+		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -196,7 +200,7 @@ func runTests(admissionReviewVersion string) {
 
 		By("sending a request to a mutating webhook path")
 		path := generateMutatePath(testDefaulterGVK)
-		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)
@@ -229,9 +233,7 @@ func runTests(admissionReviewVersion string) {
 		svr := m.GetWebhookServer()
 		ExpectWithOffset(1, svr).NotTo(BeNil())
 
-		reader := strings.NewReader(`{
-  "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
+		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -263,7 +265,7 @@ func runTests(admissionReviewVersion string) {
 
 		By("sending a request to a mutating webhook path")
 		path := generateMutatePath(testDefaulterGVK)
-		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)
@@ -278,7 +280,7 @@ func runTests(admissionReviewVersion string) {
 		path = generateValidatePath(testDefaulterGVK)
 		_, err = reader.Seek(0, 0)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)
@@ -303,9 +305,7 @@ func runTests(admissionReviewVersion string) {
 		svr := m.GetWebhookServer()
 		ExpectWithOffset(1, svr).NotTo(BeNil())
 
-		reader := strings.NewReader(`{
-  "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
+		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -338,7 +338,7 @@ func runTests(admissionReviewVersion string) {
 
 		By("sending a request to a mutating webhook path that doesn't exist")
 		path := generateMutatePath(testValidatorGVK)
-		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)
@@ -348,7 +348,7 @@ func runTests(admissionReviewVersion string) {
 		path = generateValidatePath(testValidatorGVK)
 		_, err = reader.Seek(0, 0)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)
@@ -377,9 +377,7 @@ func runTests(admissionReviewVersion string) {
 		svr := m.GetWebhookServer()
 		ExpectWithOffset(1, svr).NotTo(BeNil())
 
-		reader := strings.NewReader(`{
-  "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
+		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -412,7 +410,7 @@ func runTests(admissionReviewVersion string) {
 		path := generateValidatePath(testValidatorGVK)
 		_, err = reader.Seek(0, 0)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)
@@ -445,9 +443,7 @@ func runTests(admissionReviewVersion string) {
 		svr := m.GetWebhookServer()
 		ExpectWithOffset(1, svr).NotTo(BeNil())
 
-		reader := strings.NewReader(`{
-  "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
+		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -481,7 +477,7 @@ func runTests(admissionReviewVersion string) {
 
 		By("sending a request to a mutating webhook path that doesn't exist")
 		path := generateMutatePath(testValidatorGVK)
-		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)
@@ -491,7 +487,7 @@ func runTests(admissionReviewVersion string) {
 		path = generateValidatePath(testValidatorGVK)
 		_, err = reader.Seek(0, 0)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)
@@ -520,9 +516,7 @@ func runTests(admissionReviewVersion string) {
 		svr := m.GetWebhookServer()
 		ExpectWithOffset(1, svr).NotTo(BeNil())
 
-		reader := strings.NewReader(`{
-  "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
+		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -553,7 +547,7 @@ func runTests(admissionReviewVersion string) {
 
 		By("sending a request to a mutating webhook path")
 		path := generateMutatePath(testDefaultValidatorGVK)
-		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)
@@ -567,7 +561,7 @@ func runTests(admissionReviewVersion string) {
 		path = generateValidatePath(testDefaultValidatorGVK)
 		_, err = reader.Seek(0, 0)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)
@@ -597,9 +591,7 @@ func runTests(admissionReviewVersion string) {
 		svr := m.GetWebhookServer()
 		ExpectWithOffset(1, svr).NotTo(BeNil())
 
-		reader := strings.NewReader(`{
-  "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
+		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -629,7 +621,7 @@ func runTests(admissionReviewVersion string) {
 
 		By("sending a request to a validating webhook path to check for failed delete")
 		path := generateValidatePath(testValidatorGVK)
-		req := httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)
@@ -638,9 +630,7 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":403`))
 
-		reader = strings.NewReader(`{
-  "kind":"AdmissionReview",
-  "apiVersion":"admission.k8s.io/` + admissionReviewVersion + `",
+		reader = strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -663,7 +653,7 @@ func runTests(admissionReviewVersion string) {
 }`)
 		By("sending a request to a validating webhook path with correct request")
 		path = generateValidatePath(testValidatorGVK)
-		req = httptest.NewRequest("POST", "http://svc-name.svc-ns.svc"+path, reader)
+		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
 		req.Header.Add("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		svr.WebhookMux().ServeHTTP(w, req)

@@ -47,8 +47,8 @@ var _ = Describe("TinyCA", func() {
 		})
 
 		It("should be usable for signing & verifying", func() {
-			Expect(ca.CA.Cert.KeyUsage&x509.KeyUsageCertSign).NotTo(Equal(0), "should be usable for cert signing")
-			Expect(ca.CA.Cert.KeyUsage&x509.KeyUsageDigitalSignature).NotTo(Equal(0), "should be usable for signature verifying")
+			Expect(ca.CA.Cert.KeyUsage&x509.KeyUsageCertSign).NotTo(BeEquivalentTo(0), "should be usable for cert signing")
+			Expect(ca.CA.Cert.KeyUsage&x509.KeyUsageDigitalSignature).NotTo(BeEquivalentTo(0), "should be usable for signature verifying")
 		})
 	})
 
@@ -141,8 +141,8 @@ var _ = Describe("TinyCA", func() {
 			cert, err := ca.NewServingCert()
 			Expect(err).NotTo(HaveOccurred(), "should be able to generate a serving cert")
 
-			Expect(cert.Cert.KeyUsage&x509.KeyUsageKeyEncipherment).NotTo(Equal(0), "should be usable for key enciphering")
-			Expect(cert.Cert.KeyUsage&x509.KeyUsageDigitalSignature).NotTo(Equal(0), "should be usable for signature verifying")
+			Expect(cert.Cert.KeyUsage&x509.KeyUsageKeyEncipherment).NotTo(BeEquivalentTo(0), "should be usable for key enciphering")
+			Expect(cert.Cert.KeyUsage&x509.KeyUsageDigitalSignature).NotTo(BeEquivalentTo(0), "should be usable for signature verifying")
 			Expect(cert.Cert.ExtKeyUsage).To(ContainElement(x509.ExtKeyUsageServerAuth), "should be usable for server auth")
 
 		})
@@ -172,8 +172,8 @@ var _ = Describe("TinyCA", func() {
 		})
 
 		It("should be usable for client auth, verifying, and enciphering", func() {
-			Expect(cert.Cert.KeyUsage&x509.KeyUsageKeyEncipherment).NotTo(Equal(0), "should be usable for key enciphering")
-			Expect(cert.Cert.KeyUsage&x509.KeyUsageDigitalSignature).NotTo(Equal(0), "should be usable for signature verifying")
+			Expect(cert.Cert.KeyUsage&x509.KeyUsageKeyEncipherment).NotTo(BeEquivalentTo(0), "should be usable for key enciphering")
+			Expect(cert.Cert.KeyUsage&x509.KeyUsageDigitalSignature).NotTo(BeEquivalentTo(0), "should be usable for signature verifying")
 			Expect(cert.Cert.ExtKeyUsage).To(ContainElement(x509.ExtKeyUsageClientAuth), "should be usable for client auth")
 		})
 

@@ -254,7 +254,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Port).To(Equal(8080))
 			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Host).To(Equal("example.com"))
 			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.CertDir).To(Equal("/pki"))
-			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.TLSOpts).To(Equal(optionsTlSOptsFuncs))
+			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.TLSOpts).To(BeEquivalentTo(optionsTlSOptsFuncs))
 		})
 
 		It("should lazily initialize a webhook server if needed", func() {

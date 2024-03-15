@@ -23,13 +23,6 @@ source $(dirname ${BASH_SOURCE})/common.sh
 REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 cd "${REPO_ROOT}"
 
-APIDIFF="hack/tools/bin/go-apidiff"
-
-header_text "fetching and building go-apidiff"
-make "${APIDIFF}"
-
-git status
-
 header_text "verifying api diff"
-header_text "invoking: '${APIDIFF} ${PULL_BASE_SHA} --print-compatible'"
-"${APIDIFF}" "${PULL_BASE_SHA}" --print-compatible
+echo "*** Running go-apidiff ***"
+APIDIFF_OLD_COMMIT="${PULL_BASE_SHA}" make verify-apidiff

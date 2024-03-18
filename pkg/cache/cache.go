@@ -221,7 +221,7 @@ type Options struct {
 	DefaultUnsafeDisableDeepCopy *bool
 
 	// ByObject restricts the cache's ListWatch to the desired fields per GVK at the specified object.
-	// If unset, this will fall through to Default* settings.
+	// If unset, this will fall through to the Default* settings.
 	ByObject map[client.Object]ByObject
 
 	// newInformer allows overriding of NewSharedIndexInformer for testing.

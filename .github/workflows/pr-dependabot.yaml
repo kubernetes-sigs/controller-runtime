@@ -23,7 +23,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # tag=v5.0.0
       with:
-        go-version: '1.21'
+        go-version: '1.22'
     - name: Update all modules
       run: make modules
     - uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # tag=v9.1.4

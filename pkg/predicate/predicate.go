@@ -177,9 +177,13 @@ func (GenerationChangedPredicate) Update(e event.UpdateEvent) bool {
 // It is intended to be used in conjunction with the GenerationChangedPredicate, as in the following example:
 //
 //	Controller.Watch(
-//		&source.Kind{Type: v1.MyCustomKind},
-//		&handler.EnqueueRequestForObject{},
-//		predicate.Or(predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{}))
+//		source.Kind(
+//			mgr.GetCache(),
+//			v1.MyCustomKind,
+//			&handler.EnqueueRequestForObject{},
+//			predicate.Or(predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{}))
+//		),
+//	)
 //
 // This is mostly useful for controllers that needs to trigger both when the resource's generation is incremented
 // (i.e., when the resource' .spec changes), or an annotation changes (e.g., for a staging/alpha API).
@@ -206,11 +210,14 @@ func (AnnotationChangedPredicate) Update(e event.UpdateEvent) bool {
 // This predicate will skip update events that have no change in the object's label.
 // It is intended to be used in conjunction with the GenerationChangedPredicate, as in the following example:
 //
-// Controller.Watch(
-//
-//	&source.Kind{Type: v1.MyCustomKind},
-//	&handler.EnqueueRequestForObject{},
-//	predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))
+//	Controller.Watch(
+//		source.Kind(
+//			mgr.GetCache(),
+//			v1.MyCustomKind,
+//			&handler.EnqueueRequestForObject{},
+//			predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))
+//		),
+//	)
 //
 // This will be helpful when object's labels is carrying some extra specification information beyond object's spec,
 // and the controller will be triggered if any valid spec change (not only in spec, but also in labels) happens.

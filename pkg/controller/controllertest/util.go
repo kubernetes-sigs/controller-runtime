@@ -17,6 +17,8 @@ limitations under the License.
 package controllertest
 
 import (
+	"fmt"
+	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +35,8 @@ type FakeInformer struct {
 	// RunCount is incremented each time RunInformersAndControllers is called
 	RunCount int
 
-	handlers []eventHandlerWrapper
+	mu       sync.RWMutex
+	handlers []*eventHandlerWrapper
 }
 
 type modernResourceEventHandler interface {
@@ -51,7 +54,8 @@ type legacyResourceEventHandler interface {
 // eventHandlerWrapper wraps a ResourceEventHandler in a manner that is compatible with client-go 1.27+ and older.
 // The interface was changed in these versions.
 type eventHandlerWrapper struct {
-	handler any
+	handler   any
+	hasSynced bool
 }
 
 func (e eventHandlerWrapper) OnAdd(obj interface{}) {
@@ -78,6 +82,10 @@ func (e eventHandlerWrapper) OnDelete(obj interface{}) {
 	e.handler.(legacyResourceEventHandler).OnDelete(obj)
 }
 
+func (e eventHandlerWrapper) HasSynced() bool {
+	return e.hasSynced
+}
+
 // AddIndexers does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) AddIndexers(indexers cache.Indexers) error {
 	return nil
@@ -98,10 +106,13 @@ func (f *FakeInformer) HasSynced() bool {
 	return f.Synced
 }
 
-// AddEventHandler implements the Informer interface.  Adds an EventHandler to the fake Informers. TODO(community): Implement Registration.
+// AddEventHandler implements the Informer interface.  Adds an EventHandler to the fake Informers.
 func (f *FakeInformer) AddEventHandler(handler cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
-	f.handlers = append(f.handlers, eventHandlerWrapper{handler})
-	return nil, nil
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	eh := &eventHandlerWrapper{handler, f.Synced}
+	f.handlers = append(f.handlers, eh)
+	return eh, nil
 }
 
 // Run implements the Informer interface.  Increments f.RunCount.
@@ -111,6 +122,8 @@ func (f *FakeInformer) Run(<-chan struct{}) {
 
 // Add fakes an Add event for obj.
 func (f *FakeInformer) Add(obj metav1.Object) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	for _, h := range f.handlers {
 		h.OnAdd(obj)
 	}
@@ -118,6 +131,8 @@ func (f *FakeInformer) Add(obj metav1.Object) {
 
 // Update fakes an Update event for obj.
 func (f *FakeInformer) Update(oldObj, newObj metav1.Object) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	for _, h := range f.handlers {
 		h.OnUpdate(oldObj, newObj)
 	}
@@ -125,6 +140,8 @@ func (f *FakeInformer) Update(oldObj, newObj metav1.Object) {
 
 // Delete fakes an Delete event for obj.
 func (f *FakeInformer) Delete(obj metav1.Object) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	for _, h := range f.handlers {
 		h.OnDelete(obj)
 	}
@@ -135,8 +152,25 @@ func (f *FakeInformer) AddEventHandlerWithResyncPeriod(handler cache.ResourceEve
 	return nil, nil
 }
 
-// RemoveEventHandler does nothing.  TODO(community): Implement this.
+// RemoveEventHandler removes an EventHandler to the fake Informers.
 func (f *FakeInformer) RemoveEventHandler(handle cache.ResourceEventHandlerRegistration) error {
+	eh, ok := handle.(*eventHandlerWrapper)
+	if !ok {
+		return fmt.Errorf("invalid registration type %t", handle)
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	handlers := make([]*eventHandlerWrapper, 0, len(f.handlers))
+	for _, h := range f.handlers {
+		if h == eh {
+			continue
+		}
+		handlers = append(handlers, h)
+	}
+	f.handlers = handlers
+
 	return nil
 }
 

@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
 	toolscache "k8s.io/client-go/tools/cache"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -89,10 +90,7 @@ func (c *FakeInformers) RemoveInformer(ctx context.Context, obj client.Object) e
 
 // WaitForCacheSync implements Informers.
 func (c *FakeInformers) WaitForCacheSync(ctx context.Context) bool {
-	if c.Synced == nil {
-		return true
-	}
-	return *c.Synced
+	return ptr.Deref(c.Synced, true)
 }
 
 // FakeInformerFor implements Informers.
@@ -116,7 +114,7 @@ func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, _ runtime.Objec
 		return informer, nil
 	}
 
-	c.InformersByGVK[gvk] = &controllertest.FakeInformer{}
+	c.InformersByGVK[gvk] = &controllertest.FakeInformer{Synced: ptr.Deref(c.Synced, true)}
 	return c.InformersByGVK[gvk], nil
 }
 

@@ -1,3 +1,19 @@
+/*
+Copyright 2018 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package internal
 
 import (
@@ -13,16 +29,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // Kind is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
 type Kind struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
 	Type client.Object
-
 	// Cache used to watch APIs
 	Cache cache.Cache
+
+	// EventHandler is the handler to call when events are received.
+	EventHandler handler.EventHandler
 
 	// started may contain an error if one was encountered during startup. If its closed and does not
 	// contain an error, startup and syncing finished.
@@ -32,13 +49,19 @@ type Kind struct {
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
+func (ks *Kind) Start(ctx context.Context, queue workqueue.RateLimitingInterface) error {
 	if ks.Type == nil {
-		return fmt.Errorf("must create Kind with a non-nil object")
+		return fmt.Errorf("must create Kind with a non-nil Type")
 	}
 	if ks.Cache == nil {
-		return fmt.Errorf("must create Kind with a non-nil cache")
+		return fmt.Errorf("must create Kind with a non-nil Cache")
+	}
+	if ks.EventHandler == nil {
+		return fmt.Errorf("must create Kind with a non-nil EventHandler")
+	}
+
+	if ks.started != nil {
+		return fmt.Errorf("cannot start an already started Kind source")
 	}
 
 	// cache.GetInformer will block until its context is cancelled if the cache was already started and it can not
@@ -79,7 +102,7 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 			return
 		}
 
-		_, err := i.AddEventHandler(NewEventHandler(ctx, queue, handler, prct).HandlerFuncs())
+		_, err := i.AddEventHandler(NewEventHandler(ctx, queue, ks.EventHandler).HandlerFuncs())
 		if err != nil {
 			ks.started <- err
 			return

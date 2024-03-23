@@ -18,22 +18,13 @@ package source
 
 import (
 	"context"
-	"fmt"
-	"sync"
 
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	internal "sigs.k8s.io/controller-runtime/pkg/internal/source"
+	internal "sigs.k8s.io/controller-runtime/pkg/source/internal"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-)
-
-const (
-	// defaultBufferSize is the default number of event notifications that can be buffered.
-	defaultBufferSize = 1024
 )
 
 // Source is a source of events (eh.g. Create, Update, Delete operations on Kubernetes Objects, Webhook callbacks, etc)
@@ -47,7 +38,7 @@ const (
 type Source interface {
 	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 	// to enqueue reconcile.Requests.
-	Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+	Start(context.Context, workqueue.RateLimitingInterface) error
 }
 
 // SyncingSource is a source that needs syncing prior to being usable. The controller
@@ -57,169 +48,58 @@ type SyncingSource interface {
 	WaitForSync(ctx context.Context) error
 }
 
+var _ Source = &internal.Kind{}
+var _ SyncingSource = &internal.Kind{}
+var _ Source = &internal.Informer{}
+var _ Source = &internal.Channel{}
+var _ Source = internal.Func(nil)
+
 // Kind creates a KindSource with the given cache provider.
-func Kind(cache cache.Cache, object client.Object) SyncingSource {
-	return &internal.Kind{Type: object, Cache: cache}
+func Kind(cache cache.Cache, object client.Object, eventhandler handler.EventHandler) SyncingSource {
+	return &internal.Kind{Cache: cache, Type: object, EventHandler: eventhandler}
 }
 
-var _ Source = &Channel{}
+// NewChannelBroadcaster creates a new ChannelBroadcaster for the given channel.
+// A ChannelBroadcaster is a wrapper around a channel that allows multiple listeners to all
+// receive the events from the channel.
+var NewChannelBroadcaster = internal.NewChannelBroadcaster
 
-// Channel is used to provide a source of events originating outside the cluster
-// (e.g. GitHub Webhook callback).  Channel requires the user to wire the external
-// source (eh.g. http handler) to write GenericEvents to the underlying channel.
-type Channel struct {
-	// once ensures the event distribution goroutine will be performed only once
-	once sync.Once
+// ChannelOption is a functional option for configuring a Channel source.
+type ChannelOption func(*internal.ChannelOptions)
 
-	// Source is the source channel to fetch GenericEvents
-	Source <-chan event.GenericEvent
-
-	// dest is the destination channels of the added event handlers
-	dest []chan event.GenericEvent
-
-	// DestBufferSize is the specified buffer size of dest channels.
-	// Default to 1024 if not specified.
-	DestBufferSize int
-
-	// destLock is to ensure the destination channels are safely added/removed
-	destLock sync.Mutex
-}
-
-func (cs *Channel) String() string {
-	return fmt.Sprintf("channel source: %p", cs)
-}
-
-// Start implements Source and should only be called by the Controller.
-func (cs *Channel) Start(
-	ctx context.Context,
-	handler handler.EventHandler,
-	queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
-	// Source should have been specified by the user.
-	if cs.Source == nil {
-		return fmt.Errorf("must specify Channel.Source")
-	}
-
-	// use default value if DestBufferSize not specified
-	if cs.DestBufferSize == 0 {
-		cs.DestBufferSize = defaultBufferSize
-	}
-
-	dst := make(chan event.GenericEvent, cs.DestBufferSize)
-
-	cs.destLock.Lock()
-	cs.dest = append(cs.dest, dst)
-	cs.destLock.Unlock()
-
-	cs.once.Do(func() {
-		// Distribute GenericEvents to all EventHandler / Queue pairs Watching this source
-		go cs.syncLoop(ctx)
-	})
-
-	go func() {
-		for evt := range dst {
-			shouldHandle := true
-			for _, p := range prct {
-				if !p.Generic(evt) {
-					shouldHandle = false
-					break
-				}
-			}
-
-			if shouldHandle {
-				func() {
-					ctx, cancel := context.WithCancel(ctx)
-					defer cancel()
-					handler.Generic(ctx, evt, queue)
-				}()
-			}
+// WithDestBufferSize specifies the buffer size of dest channels.
+func WithDestBufferSize(destBufferSize int) ChannelOption {
+	return func(o *internal.ChannelOptions) {
+		if destBufferSize <= 0 {
+			return // ignore invalid buffer size
 		}
-	}()
 
-	return nil
-}
-
-func (cs *Channel) doStop() {
-	cs.destLock.Lock()
-	defer cs.destLock.Unlock()
-
-	for _, dst := range cs.dest {
-		close(dst)
+		o.DestBufferSize = destBufferSize
 	}
 }
 
-func (cs *Channel) distribute(evt event.GenericEvent) {
-	cs.destLock.Lock()
-	defer cs.destLock.Unlock()
-
-	for _, dst := range cs.dest {
-		// We cannot make it under goroutine here, or we'll meet the
-		// race condition of writing message to closed channels.
-		// To avoid blocking, the dest channels are expected to be of
-		// proper buffer size. If we still see it blocked, then
-		// the controller is thought to be in an abnormal state.
-		dst <- evt
+// Channel creates a ChannelSource with the given buffer size.
+func Channel(broadcaster *internal.ChannelBroadcaster, eventhandler handler.EventHandler, options ...ChannelOption) Source {
+	opts := internal.ChannelOptions{
+		// 1024 is the default number of event notifications that can be buffered.
+		DestBufferSize: 1024,
 	}
-}
-
-func (cs *Channel) syncLoop(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			// Close destination channels
-			cs.doStop()
-			return
-		case evt, stillOpen := <-cs.Source:
-			if !stillOpen {
-				// if the source channel is closed, we're never gonna get
-				// anything more on it, so stop & bail
-				cs.doStop()
-				return
-			}
-			cs.distribute(evt)
+	for _, o := range options {
+		if o == nil {
+			continue // ignore nil options
 		}
-	}
-}
-
-// Informer is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
-type Informer struct {
-	// Informer is the controller-runtime Informer
-	Informer cache.Informer
-}
-
-var _ Source = &Informer{}
-
-// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
-// to enqueue reconcile.Requests.
-func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
-	// Informer should have been specified by the user.
-	if is.Informer == nil {
-		return fmt.Errorf("must specify Informer.Informer")
+		o(&opts)
 	}
 
-	_, err := is.Informer.AddEventHandler(internal.NewEventHandler(ctx, queue, handler, prct).HandlerFuncs())
-	if err != nil {
-		return err
-	}
-	return nil
+	return &internal.Channel{Options: opts, Broadcaster: broadcaster, EventHandler: eventhandler}
 }
 
-func (is *Informer) String() string {
-	return fmt.Sprintf("informer source: %p", is.Informer)
+// Informer creates an InformerSource with the given cache provider.
+func Informer(informer cache.Informer, eventhandler handler.EventHandler) Source {
+	return &internal.Informer{Informer: informer, EventHandler: eventhandler}
 }
 
-var _ Source = Func(nil)
-
-// Func is a function that implements Source.
-type Func func(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
-
-// Start implements Source.
-func (f Func) Start(ctx context.Context, evt handler.EventHandler, queue workqueue.RateLimitingInterface,
-	pr ...predicate.Predicate) error {
-	return f(ctx, evt, queue, pr...)
-}
-
-func (f Func) String() string {
-	return fmt.Sprintf("func source: %p", f)
+// Func creates a FuncSource with the given function.
+func Func(f internal.Func) Source {
+	return f
 }

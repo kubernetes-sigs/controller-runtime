@@ -65,8 +65,7 @@ var _ = Describe("Source", func() {
 				}
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := source.Kind(ic, &corev1.Pod{})
-				err := instance.Start(ctx, handler.Funcs{
+				instance := source.Kind(ic, &corev1.Pod{}, handler.Funcs{
 					CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Expect(q2).To(Equal(q))
@@ -85,7 +84,8 @@ var _ = Describe("Source", func() {
 						defer GinkgoRecover()
 						Fail("Unexpected GenericEvent")
 					},
-				}, q)
+				})
+				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(instance.WaitForSync(context.Background())).NotTo(HaveOccurred())
 
@@ -102,8 +102,7 @@ var _ = Describe("Source", func() {
 
 				ic := &informertest.FakeInformers{}
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := source.Kind(ic, &corev1.Pod{})
-				err := instance.Start(ctx, handler.Funcs{
+				instance := source.Kind(ic, &corev1.Pod{}, handler.Funcs{
 					CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Fail("Unexpected CreateEvent")
@@ -125,7 +124,8 @@ var _ = Describe("Source", func() {
 						defer GinkgoRecover()
 						Fail("Unexpected GenericEvent")
 					},
-				}, q)
+				})
+				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(instance.WaitForSync(context.Background())).NotTo(HaveOccurred())
 
@@ -147,8 +147,7 @@ var _ = Describe("Source", func() {
 				}
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := source.Kind(ic, &corev1.Pod{})
-				err := instance.Start(ctx, handler.Funcs{
+				instance := source.Kind(ic, &corev1.Pod{}, handler.Funcs{
 					CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						Fail("Unexpected DeleteEvent")
@@ -167,7 +166,8 @@ var _ = Describe("Source", func() {
 						defer GinkgoRecover()
 						Fail("Unexpected GenericEvent")
 					},
-				}, q)
+				})
+				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(instance.WaitForSync(context.Background())).NotTo(HaveOccurred())
 
@@ -179,24 +179,31 @@ var _ = Describe("Source", func() {
 			})
 		})
 
-		It("should return an error from Start cache was not provided", func() {
-			instance := source.Kind(nil, &corev1.Pod{})
-			err := instance.Start(ctx, nil, nil)
+		It("should return an error from Start eventhandler was not provided", func() {
+			instance := source.Kind(ic, &corev1.Pod{}, nil)
+			err := instance.Start(ctx, nil)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must create Kind with a non-nil cache"))
+			Expect(err.Error()).To(ContainSubstring("must create Kind with a non-nil EventHandler"))
+		})
+
+		It("should return an error from Start cache was not provided", func() {
+			instance := source.Kind(nil, &corev1.Pod{}, &handler.EnqueueRequestForObject{})
+			err := instance.Start(ctx, nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("must create Kind with a non-nil Cache"))
 		})
 
 		It("should return an error from Start if a type was not provided", func() {
-			instance := source.Kind(ic, nil)
-			err := instance.Start(ctx, nil, nil)
+			instance := source.Kind(ic, nil, &handler.EnqueueRequestForObject{})
+			err := instance.Start(ctx, nil)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must create Kind with a non-nil object"))
+			Expect(err.Error()).To(ContainSubstring("must create Kind with a non-nil Type"))
 		})
 
 		It("should return an error if syncing fails", func() {
 			f := false
-			instance := source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{})
-			Expect(instance.Start(context.Background(), nil, nil)).NotTo(HaveOccurred())
+			instance := source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}, &handler.EnqueueRequestForObject{})
+			Expect(instance.Start(context.Background(), nil)).NotTo(HaveOccurred())
 			err := instance.WaitForSync(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("cache did not sync"))
@@ -211,8 +218,8 @@ var _ = Describe("Source", func() {
 				ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 				defer cancel()
 
-				instance := source.Kind(ic, &corev1.Pod{})
-				err := instance.Start(ctx, handler.Funcs{}, q)
+				instance := source.Kind(ic, &corev1.Pod{}, handler.Funcs{})
+				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(instance.WaitForSync).WithArguments(context.Background()).Should(HaveOccurred())
 			})
@@ -220,8 +227,8 @@ var _ = Describe("Source", func() {
 
 		It("should return an error if syncing fails", func() {
 			f := false
-			instance := source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{})
-			Expect(instance.Start(context.Background(), nil, nil)).NotTo(HaveOccurred())
+			instance := source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}, &handler.EnqueueRequestForObject{})
+			Expect(instance.Start(context.Background(), nil)).NotTo(HaveOccurred())
 			err := instance.WaitForSync(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("cache did not sync"))
@@ -232,24 +239,18 @@ var _ = Describe("Source", func() {
 	Describe("Func", func() {
 		It("should be called from Start", func() {
 			run := false
-			instance := source.Func(func(
-				context.Context,
-				handler.EventHandler,
-				workqueue.RateLimitingInterface, ...predicate.Predicate) error {
+			instance := source.Func(func(context.Context, workqueue.RateLimitingInterface) error {
 				run = true
 				return nil
 			})
-			Expect(instance.Start(ctx, nil, nil)).NotTo(HaveOccurred())
+			Expect(instance.Start(ctx, nil)).NotTo(HaveOccurred())
 			Expect(run).To(BeTrue())
 
 			expected := fmt.Errorf("expected error: Func")
-			instance = source.Func(func(
-				context.Context,
-				handler.EventHandler,
-				workqueue.RateLimitingInterface, ...predicate.Predicate) error {
+			instance = source.Func(func(context.Context, workqueue.RateLimitingInterface) error {
 				return expected
 			})
-			Expect(instance.Start(ctx, nil, nil)).To(Equal(expected))
+			Expect(instance.Start(ctx, nil)).To(Equal(expected))
 		})
 	})
 
@@ -289,29 +290,35 @@ var _ = Describe("Source", func() {
 				}
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.Channel{Source: ch}
-				err := instance.Start(ctx, handler.Funcs{
-					CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected CreateEvent")
-					},
-					UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected UpdateEvent")
-					},
-					DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected DeleteEvent")
-					},
-					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						// The empty event should have been filtered out by the predicates,
-						// and will not be passed to the handler.
-						Expect(q2).To(BeIdenticalTo(q))
-						Expect(evt.Object).To(Equal(p))
-						close(c)
-					},
-				}, q, prct)
+				instance := source.Channel(
+					source.NewChannelBroadcaster(ch),
+					handler.WithPredicates(
+						handler.Funcs{
+							CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
+								defer GinkgoRecover()
+								Fail("Unexpected CreateEvent")
+							},
+							UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+								defer GinkgoRecover()
+								Fail("Unexpected UpdateEvent")
+							},
+							DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+								defer GinkgoRecover()
+								Fail("Unexpected DeleteEvent")
+							},
+							GenericFunc: func(ctx context.Context, evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
+								defer GinkgoRecover()
+								// The empty event should have been filtered out by the predicates,
+								// and will not be passed to the handler.
+								Expect(q2).To(BeIdenticalTo(q))
+								Expect(evt.Object).To(Equal(p))
+								close(c)
+							},
+						},
+						prct,
+					),
+				)
+				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 
 				ch <- invalidEvt
@@ -327,34 +334,37 @@ var _ = Describe("Source", func() {
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				// Add a handler to get distribution blocked
-				instance := &source.Channel{Source: ch}
-				instance.DestBufferSize = 1
-				err := instance.Start(ctx, handler.Funcs{
-					CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected CreateEvent")
-					},
-					UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected UpdateEvent")
-					},
-					DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected DeleteEvent")
-					},
-					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						// Block for the first time
-						if eventCount == 0 {
-							<-unblock
-						}
-						eventCount++
+				instance := source.Channel(
+					source.NewChannelBroadcaster(ch),
+					handler.Funcs{
+						CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected CreateEvent")
+						},
+						UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected UpdateEvent")
+						},
+						DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected DeleteEvent")
+						},
+						GenericFunc: func(ctx context.Context, evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							// Block for the first time
+							if eventCount == 0 {
+								<-unblock
+							}
+							eventCount++
 
-						if eventCount == 3 {
-							close(processed)
-						}
+							if eventCount == 3 {
+								close(processed)
+							}
+						},
 					},
-				}, q)
+					source.WithDestBufferSize(1),
+				)
+				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Write 3 events into the source channel.
@@ -383,28 +393,31 @@ var _ = Describe("Source", func() {
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				// Add a handler to get distribution blocked
-				instance := &source.Channel{Source: ch}
-				instance.DestBufferSize = 1
+				instance := source.Channel(
+					source.NewChannelBroadcaster(ch),
+					handler.Funcs{
+						CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected CreateEvent")
+						},
+						UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected UpdateEvent")
+						},
+						DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected DeleteEvent")
+						},
+						GenericFunc: func(ctx context.Context, evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
 
-				err := instance.Start(ctx, handler.Funcs{
-					CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected CreateEvent")
+							close(processed)
+						},
 					},
-					UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected UpdateEvent")
-					},
-					DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected DeleteEvent")
-					},
-					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
+					source.WithDestBufferSize(1),
+				)
 
-						close(processed)
-					},
-				}, q)
+				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 
 				<-processed
@@ -421,31 +434,34 @@ var _ = Describe("Source", func() {
 				ch <- evt
 				close(ch)
 
-				By("feeding that channel to a channel source")
-				src := &source.Channel{Source: ch}
-
 				processed := make(chan struct{})
 				defer close(processed)
 
-				err := src.Start(ctx, handler.Funcs{
-					CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected CreateEvent")
-					},
-					UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected UpdateEvent")
-					},
-					DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected DeleteEvent")
-					},
-					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
+				By("feeding that channel to a channel source")
+				src := source.Channel(
+					source.NewChannelBroadcaster(ch),
+					handler.Funcs{
+						CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected CreateEvent")
+						},
+						UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected UpdateEvent")
+						},
+						DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected DeleteEvent")
+						},
+						GenericFunc: func(ctx context.Context, evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
 
-						processed <- struct{}{}
+							processed <- struct{}{}
+						},
 					},
-				}, q)
+				)
+
+				err := src.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 
 				By("expecting to only get one event")
@@ -454,9 +470,9 @@ var _ = Describe("Source", func() {
 			})
 			It("should get error if no source specified", func() {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.Channel{ /*no source specified*/ }
-				err := instance.Start(ctx, handler.Funcs{}, q)
-				Expect(err).To(Equal(fmt.Errorf("must specify Channel.Source")))
+				instance := source.Channel(nil, handler.Funcs{})
+				err := instance.Start(ctx, q)
+				Expect(err).To(Equal(fmt.Errorf("must create Channel with a non-nil Broadcaster")))
 			})
 		})
 		Context("for multi sources (handlers)", func() {
@@ -469,61 +485,47 @@ var _ = Describe("Source", func() {
 					Object: p,
 				}
 
-				var resEvent1, resEvent2 event.GenericEvent
-				c1 := make(chan struct{})
-				c2 := make(chan struct{})
-
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.Channel{Source: ch}
-				err := instance.Start(ctx, handler.Funcs{
-					CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected CreateEvent")
-					},
-					UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected UpdateEvent")
-					},
-					DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected DeleteEvent")
-					},
-					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Expect(q2).To(BeIdenticalTo(q))
-						Expect(evt.Object).To(Equal(p))
-						resEvent1 = evt
-						close(c1)
-					},
-				}, q)
+				channelSource := source.NewChannelBroadcaster(ch)
+
+				createInstance := func(c chan event.GenericEvent) source.Source {
+					return source.Channel(
+						channelSource,
+						handler.Funcs{
+							CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
+								defer GinkgoRecover()
+								Fail("Unexpected CreateEvent")
+							},
+							UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+								defer GinkgoRecover()
+								Fail("Unexpected UpdateEvent")
+							},
+							DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+								defer GinkgoRecover()
+								Fail("Unexpected DeleteEvent")
+							},
+							GenericFunc: func(ctx context.Context, evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
+								defer GinkgoRecover()
+								Expect(q2).To(BeIdenticalTo(q))
+								Expect(evt.Object).To(Equal(p))
+								c <- evt
+							},
+						},
+					)
+				}
+
+				c1 := make(chan event.GenericEvent)
+				c2 := make(chan event.GenericEvent)
+
+				err := createInstance(c1).Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = instance.Start(ctx, handler.Funcs{
-					CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected CreateEvent")
-					},
-					UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected UpdateEvent")
-					},
-					DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected DeleteEvent")
-					},
-					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q2 workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Expect(q2).To(BeIdenticalTo(q))
-						Expect(evt.Object).To(Equal(p))
-						resEvent2 = evt
-						close(c2)
-					},
-				}, q)
+				err = createInstance(c2).Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 
 				ch <- evt
-				<-c1
-				<-c2
+				resEvent1 := <-c1
+				resEvent2 := <-c2
 
 				// Validate the two handlers received same event
 				Expect(resEvent1).To(Equal(resEvent2))

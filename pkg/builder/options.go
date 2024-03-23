@@ -34,10 +34,10 @@ type OwnsOption interface {
 	ApplyToOwns(*OwnsInput)
 }
 
-// WatchesOption is some configuration that modifies options for a watches request.
-type WatchesOption interface {
-	// ApplyToWatches applies this configuration to the given watches options.
-	ApplyToWatches(*WatchesInput)
+// WatchesObjectOption is some configuration that modifies options for a watches request.
+type WatchesObjectOption interface {
+	// ApplyToWatchesObject applies this configuration to the given watches options.
+	ApplyToWatchesObject(*WatchesObjectInput)
 }
 
 // }}}
@@ -66,14 +66,14 @@ func (w Predicates) ApplyToOwns(opts *OwnsInput) {
 	opts.predicates = w.predicates
 }
 
-// ApplyToWatches applies this configuration to the given WatchesInput options.
-func (w Predicates) ApplyToWatches(opts *WatchesInput) {
+// ApplyToWatchesObject applies this configuration to the given WatchesInput options.
+func (w Predicates) ApplyToWatchesObject(opts *WatchesObjectInput) {
 	opts.predicates = w.predicates
 }
 
 var _ ForOption = &Predicates{}
 var _ OwnsOption = &Predicates{}
-var _ WatchesOption = &Predicates{}
+var _ WatchesObjectOption = &Predicates{}
 
 // }}}
 
@@ -94,8 +94,8 @@ func (p projectAs) ApplyToOwns(opts *OwnsInput) {
 	opts.objectProjection = objectProjection(p)
 }
 
-// ApplyToWatches applies this configuration to the given WatchesInput options.
-func (p projectAs) ApplyToWatches(opts *WatchesInput) {
+// ApplyToWatchesObject applies this configuration to the given WatchesObjectInput options.
+func (p projectAs) ApplyToWatchesObject(opts *WatchesObjectInput) {
 	opts.objectProjection = objectProjection(p)
 }
 
@@ -132,9 +132,9 @@ var (
 	// consumption and leads to race conditions as caches are not in sync.
 	OnlyMetadata = projectAs(projectAsMetadata)
 
-	_ ForOption     = OnlyMetadata
-	_ OwnsOption    = OnlyMetadata
-	_ WatchesOption = OnlyMetadata
+	_ ForOption           = OnlyMetadata
+	_ OwnsOption          = OnlyMetadata
+	_ WatchesObjectOption = OnlyMetadata
 )
 
 // }}}

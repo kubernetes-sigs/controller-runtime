@@ -226,8 +226,7 @@ var _ = Describe("controller", func() {
 				Object: p,
 			}
 
-			ins := &source.Channel{Source: ch}
-			ins.DestBufferSize = 1
+			ins := source.Channel(source.NewChannelBroadcaster(ch), source.WithDestBufferSize(1))
 
 			// send the event to the channel
 			ch <- evt
@@ -249,18 +248,18 @@ var _ = Describe("controller", func() {
 			<-processed
 		})
 
-		It("should error when channel source is not specified", func() {
+		It("should error when ChannelBroadcaster is not specified", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			ins := &source.Channel{}
+			ins := source.Channel(nil)
 			ctrl.startWatches = []watchDescription{{
 				src: ins,
 			}}
 
 			e := ctrl.Start(ctx)
 			Expect(e).To(HaveOccurred())
-			Expect(e.Error()).To(ContainSubstring("must specify Channel.Source"))
+			Expect(e.Error()).To(ContainSubstring("must create Channel with a non-nil Broadcaster"))
 		})
 
 		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {

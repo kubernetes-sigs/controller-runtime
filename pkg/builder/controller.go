@@ -30,7 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	internalsource "sigs.k8s.io/controller-runtime/pkg/internal/source"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -313,12 +312,14 @@ func (blder *Builder) doWatch() error {
 	}
 	for _, w := range blder.watchesInput {
 		// If the source of this watch is of type Kind, project it.
-		if srcKind, ok := w.src.(*internalsource.Kind); ok {
-			typeForSrc, err := blder.project(srcKind.Type, w.objectProjection)
-			if err != nil {
+		if srcKind, ok := w.src.(interface {
+			ProjectObject(func(client.Object) (client.Object, error)) error
+		}); ok {
+			if err := srcKind.ProjectObject(func(o client.Object) (client.Object, error) {
+				return blder.project(o, w.objectProjection)
+			}); err != nil {
 				return err
 			}
-			srcKind.Type = typeForSrc
 		}
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)

@@ -241,7 +241,7 @@ var _ = Describe("Source", func() {
 				c := make(chan struct{})
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.Informer{Informer: depInformer}
+				instance := source.Informer(depInformer)
 				err := instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
@@ -282,7 +282,7 @@ var _ = Describe("Source", func() {
 				rs2.SetLabels(map[string]string{"biz": "baz"})
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.Informer{Informer: depInformer}
+				instance := source.Informer(depInformer)
 				err = instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
 					},
@@ -319,7 +319,7 @@ var _ = Describe("Source", func() {
 				c := make(chan struct{})
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.Informer{Informer: depInformer}
+				instance := source.Informer(depInformer)
 				err := instance.Start(ctx, handler.Funcs{
 					CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
 					},

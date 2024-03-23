@@ -62,7 +62,7 @@ func (r Request) String() string {
 	if r.ClusterName == "" {
 		return r.NamespacedName.String()
 	}
-	return "logical://" + string(r.ClusterName) + string(types.Separator) + r.NamespacedName.String()
+	return "cluster://" + string(r.ClusterName) + string(types.Separator) + r.NamespacedName.String()
 }
 
 /*

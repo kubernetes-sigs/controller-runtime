@@ -32,6 +32,9 @@ import (
 )
 
 type cluster struct {
+	// name is the name of the cluster. It identifies the cluster in the manager
+	// if that is attached to a cluster provider. The value is usually empty for
+	// the default cluster of a manager.
 	name string
 
 	// config is the rest.config used to talk to the apiserver.  Required.

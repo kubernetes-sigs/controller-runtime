@@ -49,6 +49,7 @@ func EnqueueRequestsFromMapFunc(fn MapFunc) EventHandler {
 var _ EventHandler = &enqueueRequestsFromMapFunc{}
 
 type enqueueRequestsFromMapFunc struct {
+	// cluster is the source of the requeue request.
 	cluster cluster.Cluster
 
 	// Mapper transforms the argument into a slice of keys to be reconciled

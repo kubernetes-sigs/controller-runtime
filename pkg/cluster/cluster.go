@@ -69,7 +69,9 @@ type ByNameGetterFunc func(ctx context.Context, clusterName string) (Cluster, er
 
 // Cluster provides various methods to interact with a cluster.
 type Cluster interface {
-	// Name returns the identifying name of the cluster.
+	// Name returns the name of the cluster. It identifies the cluster in the
+	// manager if that is attached to a cluster provider. The value is usually
+	// empty for the default cluster of a manager.
 	Name() string
 
 	// GetHTTPClient returns an HTTP client that can be used to talk to the apiserver
@@ -110,7 +112,9 @@ type Cluster interface {
 
 // Options are the possible options that can be configured for a Cluster.
 type Options struct {
-	// Name is the identifying name of the cluster.
+	// name is the name of the cluster. It identifies the cluster in the manager
+	// if that is attached to a cluster provider. The value is usually empty for
+	// the default cluster of a manager.
 	Name string
 
 	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
@@ -194,6 +198,10 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	if config == nil {
 		return nil, errors.New("must specify Config")
 	}
+
+	// the config returned by GetConfig() is not to be modified. Hence, we have
+	// copy it before modifying it.
+	originalConfig := config
 
 	config = rest.CopyConfig(config)
 	if config.UserAgent == "" {
@@ -284,7 +292,7 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 
 	return &cluster{
 		name:             options.Name,
-		config:           config,
+		config:           originalConfig,
 		httpClient:       options.HTTPClient,
 		scheme:           options.Scheme,
 		cache:            cache,
@@ -351,7 +359,7 @@ func setOptionsDefaults(options Options, config *rest.Config) (Options, error) {
 	return options, nil
 }
 
-// WithName sets the name of the cluster.
+// WithName sets the name of the cluster. The name can only be set once.
 func WithName(name string) Option {
 	return func(o *Options) {
 		if o.Name != "" {

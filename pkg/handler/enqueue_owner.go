@@ -70,6 +70,7 @@ func OnlyControllerOwner() OwnerOption {
 }
 
 type enqueueRequestForOwner struct {
+	// cluster is the source of the requeue request.
 	cluster cluster.Cluster
 
 	// ownerType is the type of the Owner object to look for in OwnerReferences.  Only Group and Kind are compared.

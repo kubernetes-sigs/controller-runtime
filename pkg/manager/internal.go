@@ -331,7 +331,7 @@ func (cm *controllerManager) getCluster(ctx context.Context, clusterName string)
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		var watchErr error
-		if err := wait.PollImmediateUntilWithContext(ctx, 1*time.Second, func(ctx context.Context) (done bool, err error) {
+		if err := wait.PollUntilContextCancel(ctx, 1*time.Second, true, func(ctx context.Context) (done bool, err error) {
 			cl, watchErr = cm.clusterProvider.Get(ctx, clusterName, cm.defaultClusterOptions, cluster.WithName(clusterName))
 			if watchErr != nil {
 				return false, nil //nolint:nilerr // We want to keep trying.
@@ -350,8 +350,10 @@ func (cm *controllerManager) getCluster(ctx context.Context, clusterName string)
 	if err := cm.Add(cl); err != nil {
 		return nil, fmt.Errorf("cannot add cluster %q to manager: %w", clusterName, err)
 	}
+
 	// Create a new context for the Cluster, so that it can be stopped independently.
 	ctx, cancel := context.WithCancel(context.Background())
+
 	c = &engagedCluster{
 		Cluster: cl,
 		ctx:     ctx,
@@ -361,8 +363,8 @@ func (cm *controllerManager) getCluster(ctx context.Context, clusterName string)
 	return c, nil
 }
 
-func (cm *controllerManager) removeLogicalCluster(clusterName string) error {
-	// Check if the manager was configured with a logical adapter,
+func (cm *controllerManager) removeNamedCluster(clusterName string) error {
+	// Check if the manager was configured with a cluster provider,
 	// otherwise we cannot retrieve the cluster.
 	if cm.clusterProvider == nil {
 		return fmt.Errorf("manager was not configured with a cluster provider, cannot retrieve %q", clusterName)
@@ -596,7 +598,7 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) { //nolint:g
 					if clusterListSet.Has(name) {
 						continue
 					}
-					if err := cm.removeLogicalCluster(name); err != nil {
+					if err := cm.removeNamedCluster(name); err != nil {
 						return err
 					}
 				}
@@ -637,7 +639,7 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) { //nolint:g
 						}
 						cm.engageClusterAwareRunnables()
 					case watch.Deleted, watch.Error:
-						if err := cm.removeLogicalCluster(event.ClusterName); err != nil {
+						if err := cm.removeNamedCluster(event.ClusterName); err != nil {
 							return err
 						}
 					case watch.Bookmark:

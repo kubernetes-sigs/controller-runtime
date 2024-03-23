@@ -280,6 +280,7 @@ type Options struct {
 	// clusterProvider is an EXPERIMENTAL feature that allows the manager to
 	// operate against many Kubernetes clusters at once.
 	// It can be used by invoking WithExperimentalClusterProvider(adapter) on Options.
+	// Individual clusters can be accessed by calling GetCluster on the Manager.
 	clusterProvider cluster.Provider
 }
 

@@ -378,6 +378,85 @@ var _ = Describe("manger.Manager", func() {
 
 				Expect(cm.gracefulShutdownTimeout.Nanoseconds()).To(Equal(int64(0)))
 			})
+
+			It("should prevent leader election when shutting down a non-elected manager", func() {
+				var rl resourcelock.Interface
+				m1, err := New(cfg, Options{
+					LeaderElection:          true,
+					LeaderElectionNamespace: "default",
+					LeaderElectionID:        "test-leader-election-id",
+					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+						var err error
+						rl, err = leaderelection.NewResourceLock(config, recorderProvider, options)
+						return rl, err
+					},
+					HealthProbeBindAddress: "0",
+					Metrics:                metricsserver.Options{BindAddress: "0"},
+					PprofBindAddress:       "0",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(m1).ToNot(BeNil())
+				Expect(rl.Describe()).To(Equal("default/test-leader-election-id"))
+
+				m1cm, ok := m1.(*controllerManager)
+				Expect(ok).To(BeTrue())
+				m1cm.onStoppedLeading = func() {}
+
+				m2, err := New(cfg, Options{
+					LeaderElection:          true,
+					LeaderElectionNamespace: "default",
+					LeaderElectionID:        "test-leader-election-id",
+					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+						var err error
+						rl, err = leaderelection.NewResourceLock(config, recorderProvider, options)
+						return rl, err
+					},
+					HealthProbeBindAddress: "0",
+					Metrics:                metricsserver.Options{BindAddress: "0"},
+					PprofBindAddress:       "0",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(m2).ToNot(BeNil())
+				Expect(rl.Describe()).To(Equal("default/test-leader-election-id"))
+
+				m1done := make(chan struct{})
+				Expect(m1.Add(RunnableFunc(func(ctx context.Context) error {
+					defer GinkgoRecover()
+					close(m1done)
+					return nil
+				}))).To(Succeed())
+
+				ctx1, cancel1 := context.WithCancel(context.Background())
+				defer cancel1()
+				go func() {
+					defer GinkgoRecover()
+					Expect(m1.Elected()).ShouldNot(BeClosed())
+					Expect(m1.Start(ctx1)).NotTo(HaveOccurred())
+				}()
+				<-m1.Elected()
+				<-m1done
+
+				electionRunnable := &needElection{make(chan struct{})}
+
+				Expect(m2.Add(electionRunnable)).To(Succeed())
+
+				ctx2, cancel2 := context.WithCancel(context.Background())
+				m2done := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					Expect(m2.Start(ctx2)).NotTo(HaveOccurred())
+					close(m2done)
+				}()
+				Consistently(m2.Elected()).ShouldNot(Receive())
+
+				go func() {
+					defer GinkgoRecover()
+					Consistently(electionRunnable.ch).ShouldNot(Receive())
+				}()
+				cancel2()
+				<-m2done
+			})
+
 			It("should default ID to controller-runtime if ID is not set", func() {
 				var rl resourcelock.Interface
 				m1, err := New(cfg, Options{
@@ -1928,4 +2007,17 @@ func (f *fakeDeferredLoader) InjectScheme(scheme *runtime.Scheme) error {
 // metricsserver.Server interface or resort to reflection.
 type metricsDefaultServer interface {
 	GetBindAddr() string
+}
+
+type needElection struct {
+	ch chan struct{}
+}
+
+func (n *needElection) Start(_ context.Context) error {
+	n.ch <- struct{}{}
+	return nil
+}
+
+func (n *needElection) NeedLeaderElection() bool {
+	return true
 }

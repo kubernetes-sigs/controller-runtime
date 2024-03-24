@@ -17,6 +17,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
+type Source interface {
+	Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+}
+
+type SyncingSource interface {
+	Source
+	WaitForSync(ctx context.Context) error
+}
+
+type DeepCopyableSyncingSource interface {
+	SyncingSource
+	DeepCopyFor(cluster cluster.Cluster) DeepCopyableSyncingSource
+}
+
 // Kind is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
 type Kind struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
@@ -118,7 +132,7 @@ func (ks *Kind) WaitForSync(ctx context.Context) error {
 }
 
 // DeepCopyFor implements cluster.AwareDeepCopy[Source].
-func (ks *Kind) DeepCopyFor(c cluster.Cluster) *Kind {
+func (ks *Kind) DeepCopyFor(c cluster.Cluster) DeepCopyableSyncingSource {
 	return &Kind{
 		Type:  ks.Type,
 		Cache: c.GetCache(),

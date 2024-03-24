@@ -127,6 +127,6 @@ func (e *EnqueueRequestForObject) Generic(ctx context.Context, evt event.Generic
 }
 
 // DeepCopyFor implements cluster.AwareDeepCopy[EventHandler].
-func (e *EnqueueRequestForObject) DeepCopyFor(c cluster.Cluster) EventHandler {
+func (e *EnqueueRequestForObject) DeepCopyFor(c cluster.Cluster) DeepCopyableEventHandler {
 	return &EnqueueRequestForObject{cluster: c}
 }

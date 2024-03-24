@@ -207,7 +207,7 @@ func (e *enqueueRequestForOwner) getOwnersReferences(object metav1.Object) []met
 	return nil
 }
 
-func (e *enqueueRequestForOwner) DeepCopyFor(c cluster.Cluster) EventHandler {
+func (e *enqueueRequestForOwner) DeepCopyFor(c cluster.Cluster) DeepCopyableEventHandler {
 	copy := &enqueueRequestForOwner{
 		cluster:      c,
 		ownerType:    e.ownerType,

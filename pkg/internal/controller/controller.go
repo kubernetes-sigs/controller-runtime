@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
-	internal "sigs.k8s.io/controller-runtime/pkg/internal/source"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -82,7 +81,7 @@ type Controller struct {
 	startWatches []*watchDescription
 
 	// clusterAwareWatches maintains a list of cluster aware sources, handlers, and predicates to start when the controller is started.
-	clusterAwareWatches []*watchDescription
+	clusterAwareWatches []*deepcopyableWatchDescription
 
 	// clustersByName is used to manage the fleet of clusters.
 	clustersByName map[string]*clusterDescription
@@ -124,37 +123,13 @@ type watchDescription struct {
 	predicates []predicate.Predicate
 }
 
-func (w *watchDescription) IsClusterAware() bool {
-	if _, ok := w.src.(cluster.AwareDeepCopy[*internal.Kind]); !ok {
-		if _, ok := w.src.(cluster.AwareDeepCopy[source.Source]); !ok {
-			return false
-		}
-	}
-	if _, ok := w.handler.(cluster.AwareDeepCopy[handler.EventHandler]); !ok {
-		return false
-	}
-	return true
-}
-
-func (w *watchDescription) DeepCopyFor(c cluster.Cluster) *watchDescription {
-	copy := &watchDescription{
-		predicates: w.predicates,
-	}
-	if clusterAwareSource, ok := w.src.(cluster.AwareDeepCopy[*internal.Kind]); ok {
-		copy.src = clusterAwareSource.DeepCopyFor(c)
-	} else if clusterAwareSource, ok := w.src.(cluster.AwareDeepCopy[source.Source]); ok {
-		copy.src = clusterAwareSource.DeepCopyFor(c)
-	} else {
-		return nil
-	}
-
-	if clusterAwareHandler, ok := w.handler.(cluster.AwareDeepCopy[handler.EventHandler]); ok {
-		copy.handler = clusterAwareHandler.DeepCopyFor(c)
-	} else {
-		return nil
-	}
-
-	return copy
+// deepcopyableWatchDescription contains all the information necessary to start
+// a watch. In addition to watchDescription it also contains the DeepCopyFor
+// method to adapt it to a different cluster.
+type deepcopyableWatchDescription struct {
+	src        source.DeepCopyableSyncingSource
+	handler    handler.DeepCopyableEventHandler
+	predicates []predicate.Predicate
 }
 
 // Reconcile implements reconcile.Reconciler.
@@ -182,14 +157,22 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	watchDesc := &watchDescription{src: src, handler: evthdler, predicates: prct}
-
 	// If the source is cluster aware, store it in a separate list.
-	_, forceDefaultClsuter := src.(ClusterAwareSource)
-	if c.WatchProviderClusters && !forceDefaultClsuter {
-		if !watchDesc.IsClusterAware() {
-			return fmt.Errorf("source %s is not cluster aware, but WatchProviderClusters is true", src)
+	var forceDefaultCluster bool
+	if src, ok := src.(ClusterAwareSource); ok {
+		forceDefaultCluster = src.ForceDefaultCluster()
+	}
+	if c.WatchProviderClusters && !forceDefaultCluster {
+		src, ok := src.(source.DeepCopyableSyncingSource)
+		if !ok {
+			return fmt.Errorf("source %T is not cluster aware, but WatchProviderClusters is true", src)
 		}
+		evthdler, ok := evthdler.(handler.DeepCopyableEventHandler)
+		if !ok {
+			return fmt.Errorf("handler %T is not cluster aware, but WatchProviderClusters is true", evthdler)
+		}
+
+		watchDesc := &deepcopyableWatchDescription{src: src, handler: evthdler, predicates: prct}
 		c.clusterAwareWatches = append(c.clusterAwareWatches, watchDesc)
 
 		// If the watch is cluster aware, start it for all the clusters
@@ -208,7 +191,7 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	//
 	// These watches are going to be held on the controller struct until the manager or user calls Start(...).
 	if !c.Started {
-		c.startWatches = append(c.startWatches, watchDesc)
+		c.startWatches = append(c.startWatches, &watchDescription{src: src, handler: evthdler, predicates: prct})
 		return nil
 	}
 
@@ -260,8 +243,8 @@ func (c *Controller) Disengage(ctx context.Context, cluster cluster.Cluster) err
 	return nil
 }
 
-func (c *Controller) startClusterAwareWatchLocked(cldesc *clusterDescription, watchDesc *watchDescription) error {
-	watch := watchDesc.DeepCopyFor(cldesc)
+func (c *Controller) startClusterAwareWatchLocked(cldesc *clusterDescription, watchDesc *deepcopyableWatchDescription) error {
+	watch := &deepcopyableWatchDescription{src: watchDesc.src.DeepCopyFor(cldesc.Cluster), handler: watchDesc.handler.DeepCopyFor(cldesc.Cluster), predicates: watchDesc.predicates}
 	if watch == nil {
 		return nil
 	}

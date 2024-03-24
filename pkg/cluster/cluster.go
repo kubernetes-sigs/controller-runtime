@@ -57,13 +57,6 @@ type AwareRunnable interface {
 	Disengage(context.Context, Cluster) error
 }
 
-// AwareDeepCopy is an interface that can be implemented by types
-// that are cluster-aware, and can return a copy of themselves
-// for a given cluster.
-type AwareDeepCopy[T any] interface {
-	DeepCopyFor(Cluster) T
-}
-
 // ByNameGetterFunc is a function that returns a cluster for a given identifying cluster name.
 type ByNameGetterFunc func(ctx context.Context, clusterName string) (Cluster, error)
 

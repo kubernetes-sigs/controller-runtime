@@ -97,7 +97,7 @@ func (e *enqueueRequestsFromMapFunc) mapAndEnqueue(ctx context.Context, q workqu
 	}
 }
 
-func (e *enqueueRequestsFromMapFunc) DeepCopyFor(c cluster.Cluster) EventHandler {
+func (e *enqueueRequestsFromMapFunc) DeepCopyFor(c cluster.Cluster) DeepCopyableEventHandler {
 	return &enqueueRequestsFromMapFunc{
 		cluster:    c,
 		toRequests: e.toRequests,

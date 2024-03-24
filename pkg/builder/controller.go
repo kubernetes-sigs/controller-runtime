@@ -288,8 +288,8 @@ func (blder *Builder) doWatch() error {
 			return err
 		}
 		src := clusterAwareSource{
-			Source:              source.Kind(blder.cluster.GetCache(), obj),
-			forceDefaultCluster: blder.forInput.forceDefaultCluster,
+			DeepCopyableSyncingSource: source.Kind(blder.cluster.GetCache(), obj),
+			forceDefaultCluster:       blder.forInput.forceDefaultCluster,
 		}
 		hdler := &handler.EnqueueRequestForObject{}
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
@@ -309,8 +309,8 @@ func (blder *Builder) doWatch() error {
 			return err
 		}
 		src := clusterAwareSource{
-			Source:              source.Kind(blder.cluster.GetCache(), obj),
-			forceDefaultCluster: own.forceDefaultCluster,
+			DeepCopyableSyncingSource: source.Kind(blder.cluster.GetCache(), obj),
+			forceDefaultCluster:       own.forceDefaultCluster,
 		}
 		opts := []handler.OwnerOption{}
 		if !own.matchEveryOwner {
@@ -334,12 +334,17 @@ func (blder *Builder) doWatch() error {
 	}
 	for _, w := range blder.watchesInput {
 		// If the source of this watch is of type Kind, project it.
+		src := w.src
 		if srcKind, ok := w.src.(*internalsource.Kind); ok {
 			typeForSrc, err := blder.project(srcKind.Type, w.objectProjection)
 			if err != nil {
 				return err
 			}
 			srcKind.Type = typeForSrc
+			src = clusterAwareSource{
+				DeepCopyableSyncingSource: srcKind,
+				forceDefaultCluster:       w.forceDefaultCluster,
+			}
 		} else if !ok {
 			// If we're building a cluster-aware controller, raw watches are not allowed
 			// given that the cache cannot be validated to be coming from the same cluster.
@@ -351,10 +356,7 @@ func (blder *Builder) doWatch() error {
 		}
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)
-		if err := blder.ctrl.Watch(
-			clusterAwareSource{Source: w.src, forceDefaultCluster: w.forceDefaultCluster},
-			w.eventHandler, allPredicates...,
-		); err != nil {
+		if err := blder.ctrl.Watch(src, w.eventHandler, allPredicates...); err != nil {
 			return err
 		}
 	}
@@ -445,7 +447,7 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 }
 
 type clusterAwareSource struct {
-	source.Source
+	source.DeepCopyableSyncingSource
 	forceDefaultCluster bool
 }
 

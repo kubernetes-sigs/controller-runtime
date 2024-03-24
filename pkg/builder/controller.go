@@ -74,10 +74,11 @@ func ControllerManagedBy(m manager.Manager) *Builder {
 
 // ForInput represents the information set by the For method.
 type ForInput struct {
-	object           client.Object
-	predicates       []predicate.Predicate
-	objectProjection objectProjection
-	err              error
+	object              client.Object
+	forceDefaultCluster bool // in cluster-aware mode, force the object to be watched in the default cluster
+	predicates          []predicate.Predicate
+	objectProjection    objectProjection
+	err                 error
 }
 
 // For defines the type of Object being *reconciled*, and configures the ControllerManagedBy to respond to create / delete /
@@ -100,10 +101,11 @@ func (blder *Builder) For(object client.Object, opts ...ForOption) *Builder {
 
 // OwnsInput represents the information set by Owns method.
 type OwnsInput struct {
-	matchEveryOwner  bool
-	object           client.Object
-	predicates       []predicate.Predicate
-	objectProjection objectProjection
+	matchEveryOwner     bool
+	object              client.Object
+	forceDefaultCluster bool // in cluster-aware mode, force the object to be watched in the default cluster
+	predicates          []predicate.Predicate
+	objectProjection    objectProjection
 }
 
 // Owns defines types of Objects being *generated* by the ControllerManagedBy, and configures the ControllerManagedBy to respond to
@@ -126,10 +128,11 @@ func (blder *Builder) Owns(object client.Object, opts ...OwnsOption) *Builder {
 
 // WatchesInput represents the information set by Watches method.
 type WatchesInput struct {
-	src              source.Source
-	eventHandler     handler.EventHandler
-	predicates       []predicate.Predicate
-	objectProjection objectProjection
+	src                 source.Source
+	forceDefaultCluster bool // in cluster-aware mode, force the object to be watched in the default cluster
+	eventHandler        handler.EventHandler
+	predicates          []predicate.Predicate
+	objectProjection    objectProjection
 }
 
 // Watches defines the type of Object to watch, and configures the ControllerManagedBy to respond to create / delete /
@@ -284,7 +287,10 @@ func (blder *Builder) doWatch() error {
 		if err != nil {
 			return err
 		}
-		src := source.Kind(blder.cluster.GetCache(), obj)
+		src := clusterAwareSource{
+			Source:              source.Kind(blder.cluster.GetCache(), obj),
+			forceDefaultCluster: blder.forInput.forceDefaultCluster,
+		}
 		hdler := &handler.EnqueueRequestForObject{}
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, blder.forInput.predicates...)
@@ -302,7 +308,10 @@ func (blder *Builder) doWatch() error {
 		if err != nil {
 			return err
 		}
-		src := source.Kind(blder.cluster.GetCache(), obj)
+		src := clusterAwareSource{
+			Source:              source.Kind(blder.cluster.GetCache(), obj),
+			forceDefaultCluster: own.forceDefaultCluster,
+		}
 		opts := []handler.OwnerOption{}
 		if !own.matchEveryOwner {
 			opts = append(opts, handler.OnlyControllerOwner())
@@ -342,7 +351,10 @@ func (blder *Builder) doWatch() error {
 		}
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)
-		if err := blder.ctrl.Watch(w.src, w.eventHandler, allPredicates...); err != nil {
+		if err := blder.ctrl.Watch(
+			clusterAwareSource{Source: w.src, forceDefaultCluster: w.forceDefaultCluster},
+			w.eventHandler, allPredicates...,
+		); err != nil {
 			return err
 		}
 	}
@@ -430,4 +442,13 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 	// Build the controller and return.
 	blder.ctrl, err = newController(controllerName, blder.mgr, ctrlOptions)
 	return err
+}
+
+type clusterAwareSource struct {
+	source.Source
+	forceDefaultCluster bool
+}
+
+func (s clusterAwareSource) ForceDefaultCluster() bool {
+	return s.forceDefaultCluster
 }

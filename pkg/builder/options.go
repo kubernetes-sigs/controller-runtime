@@ -154,3 +154,21 @@ type matchEveryOwner struct{}
 func (o matchEveryOwner) ApplyToOwns(opts *OwnsInput) {
 	opts.matchEveryOwner = true
 }
+
+// InDefaultCluster configures the input to only watch objects on the default
+// cluster, even if a cluster provider is set.
+var InDefaultCluster = inDefaultCluster{}
+
+type inDefaultCluster struct{}
+
+func (f inDefaultCluster) ApplyToFor(opts *ForInput) {
+	opts.forceDefaultCluster = true
+}
+
+func (f inDefaultCluster) ApplyToOwns(opts *OwnsInput) {
+	opts.forceDefaultCluster = true
+}
+
+func (f inDefaultCluster) ApplyToWatches(opts *WatchesInput) {
+	opts.forceDefaultCluster = true
+}

@@ -686,5 +686,9 @@ func setOptionsDefaults(options Options) Options {
 		options.WebhookServer = webhook.NewServer(webhook.Options{})
 	}
 
+	if options.Controller.WatchProviderClusters == nil {
+		options.Controller.WatchProviderClusters = ptr.To(options.clusterProvider != nil)
+	}
+
 	return options
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/internal/controller"
@@ -62,6 +63,11 @@ type Options struct {
 	// LogConstructor is used to construct a logger used for this controller and passed
 	// to each reconciliation via the context field.
 	LogConstructor func(request *reconcile.Request) logr.Logger
+
+	// WatchProviderClusters indicates whether the controller should
+	// only watch clusters that are engaged by the cluster provider. Defaults to false
+	// if no provider is set, and to true if a provider is set.
+	WatchProviderClusters *bool
 }
 
 // Controller implements a Kubernetes API.  A Controller manages a work queue fed reconcile.Requests
@@ -155,6 +161,13 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 		options.NeedLeaderElection = mgr.GetControllerOptions().NeedLeaderElection
 	}
 
+	if options.WatchProviderClusters == nil {
+		options.WatchProviderClusters = mgr.GetControllerOptions().WatchProviderClusters
+		if options.WatchProviderClusters == nil { // should never happen
+			options.WatchProviderClusters = pointer.Bool(false)
+		}
+	}
+
 	// Create controller with dependencies set
 	return &controller.Controller{
 		Do: options.Reconciler,
@@ -169,6 +182,7 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 		LogConstructor:          options.LogConstructor,
 		RecoverPanic:            options.RecoverPanic,
 		LeaderElected:           options.NeedLeaderElection,
+		WatchProviderClusters:   *options.WatchProviderClusters,
 	}, nil
 }
 

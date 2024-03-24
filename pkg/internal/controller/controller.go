@@ -86,6 +86,10 @@ type Controller struct {
 
 	// clustersByName is used to manage the fleet of clusters.
 	clustersByName map[string]*clusterDescription
+	// WatchProviderClusters indicates whether the controller should
+	// only watch clusters that are engaged by the cluster provider. Defaults to false
+	// if no provider is set, and to true if a provider is set.
+	WatchProviderClusters bool
 
 	// LogConstructor is used to construct a logger to then log messages to users during reconciliation,
 	// or for example when a watch is started.
@@ -98,6 +102,13 @@ type Controller struct {
 
 	// LeaderElected indicates whether the controller is leader elected or always running.
 	LeaderElected *bool
+}
+
+// ClusterAwareSource is a source that knows whether to watch in the default cluster
+// in the clusters engaged by the cluster provider.
+type ClusterAwareSource interface {
+	source.Source
+	ForceDefaultCluster() bool
 }
 
 type clusterDescription struct {
@@ -174,8 +185,23 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	watchDesc := &watchDescription{src: src, handler: evthdler, predicates: prct}
 
 	// If the source is cluster aware, store it in a separate list.
-	if watchDesc.IsClusterAware() {
+	_, forceDefaultClsuter := src.(ClusterAwareSource)
+	if c.WatchProviderClusters && !forceDefaultClsuter {
+		if !watchDesc.IsClusterAware() {
+			return fmt.Errorf("source %s is not cluster aware, but WatchProviderClusters is true", src)
+		}
 		c.clusterAwareWatches = append(c.clusterAwareWatches, watchDesc)
+
+		// If the watch is cluster aware, start it for all the clusters
+		// This covers the case where a Watch was added later to the controller.
+		var errs []error
+		for _, cldesc := range c.clustersByName {
+			if err := c.startClusterAwareWatchLocked(cldesc, watchDesc); err != nil {
+				errs = append(errs, err)
+			}
+		}
+
+		return kerrors.NewAggregate(errs)
 	}
 
 	// Controller hasn't started yet, store the watches locally and return.
@@ -186,22 +212,8 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 		return nil
 	}
 
-	var errs []error
 	c.LogConstructor(nil).Info("Starting EventSource", "source", src)
-	if err := src.Start(c.ctx, evthdler, c.Queue, prct...); err != nil {
-		errs = append(errs, err)
-	}
-
-	// If the watch is cluster aware, start it for all the clusters
-	// This covers the case where a Watch was added later to the controller.
-	if watchDesc.IsClusterAware() {
-		for _, cldesc := range c.clustersByName {
-			if err := c.startClusterAwareWatchLocked(cldesc, watchDesc); err != nil {
-				errs = append(errs, err)
-			}
-		}
-	}
-	return kerrors.NewAggregate(errs)
+	return src.Start(c.ctx, evthdler, c.Queue, prct...)
 }
 
 // Engage implements cluster.AwareRunnable.

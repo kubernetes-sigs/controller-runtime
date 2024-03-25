@@ -560,6 +560,9 @@ var _ = Describe("application", func() {
 
 	Context("with cluster provider", func() {
 		It("should support watching across clusters", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			adapter := &fakeClusterProvider{
 				clusterNameList: []string{
 					"cluster1",
@@ -570,24 +573,13 @@ var _ = Describe("application", func() {
 			mgr, err := manager.New(cfg, manager.Options{}.WithExperimentalClusterProvider(adapter))
 			Expect(err).NotTo(HaveOccurred())
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			By("Starting the manager")
-			go func() {
-				defer GinkgoRecover()
-				Expect(mgr.Start(ctx)).NotTo(HaveOccurred())
-			}()
-
-			cluster1, err := mgr.GetCluster(ctx, "cluster1")
-			Expect(err).NotTo(HaveOccurred())
-
 			By("Creating a custom namespace")
 			ns := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "test-multi-cluster-",
 				},
 			}
-			Expect(cluster1.GetClient().Create(ctx, ns)).To(Succeed())
+			Expect(mgr.GetClient().Create(ctx, ns)).To(Succeed())
 
 			ch1 := make(chan reconcile.Request, 1)
 			ch2 := make(chan reconcile.Request, 1)
@@ -612,6 +604,15 @@ var _ = Describe("application", func() {
 						return reconcile.Result{}, nil
 					})),
 			).To(Succeed())
+
+			By("Starting the manager")
+			go func() {
+				defer GinkgoRecover()
+				Expect(mgr.Start(ctx)).NotTo(HaveOccurred())
+			}()
+
+			cluster1, err := mgr.GetCluster(ctx, "cluster1")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a deployment")
 			dep := &appsv1.Deployment{

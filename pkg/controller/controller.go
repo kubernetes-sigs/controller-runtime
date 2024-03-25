@@ -24,7 +24,7 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/internal/controller"
@@ -164,7 +164,7 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 	if options.WatchProviderClusters == nil {
 		options.WatchProviderClusters = mgr.GetControllerOptions().WatchProviderClusters
 		if options.WatchProviderClusters == nil { // should never happen
-			options.WatchProviderClusters = pointer.Bool(false)
+			options.WatchProviderClusters = ptr.To(false)
 		}
 	}
 

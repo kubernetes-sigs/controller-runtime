@@ -253,11 +253,7 @@ func (blder *Builder) do(r reconcile.Reconciler) error {
 	}
 
 	// Set the Watch
-	if err := blder.doWatch(); err != nil {
-		return err
-	}
-
-	return nil
+	return blder.doWatch()
 }
 
 func (blder *Builder) project(obj client.Object, proj objectProjection) (client.Object, error) {

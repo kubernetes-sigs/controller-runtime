@@ -208,14 +208,14 @@ func (e *enqueueRequestForOwner) getOwnersReferences(object metav1.Object) []met
 }
 
 func (e *enqueueRequestForOwner) DeepCopyFor(c cluster.Cluster) DeepCopyableEventHandler {
-	copy := &enqueueRequestForOwner{
+	cpy := &enqueueRequestForOwner{
 		cluster:      c,
 		ownerType:    e.ownerType,
 		isController: e.isController,
 		mapper:       c.GetRESTMapper(),
 	}
-	if err := copy.parseOwnerTypeGroupKind(c.GetScheme()); err != nil {
+	if err := cpy.parseOwnerTypeGroupKind(c.GetScheme()); err != nil {
 		panic(err)
 	}
-	return copy
+	return cpy
 }

@@ -17,15 +17,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
+// Source is a source of events (eh.g. Create, Update, Delete operations on Kubernetes Objects, Webhook callbacks, etc)
+// which should be processed by event.EventHandlers to enqueue reconcile.Requests.
+//
+// * Use Kind for events originating in the cluster (e.g. Pod Create, Pod Update, Deployment Update).
+//
+// * Use Channel for events originating outside the cluster (eh.g. GitHub Webhook callback, Polling external urls).
+//
+// Users may build their own Source implementations.
 type Source interface {
 	Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
 }
 
+// SyncingSource is a source that needs syncing prior to being usable. The controller
+// will call its WaitForSync prior to starting workers.
 type SyncingSource interface {
 	Source
 	WaitForSync(ctx context.Context) error
 }
 
+// DeepCopyableSyncingSource is a source that can be deep copied for a specific cluster.
+// It is used in setups with a cluster provider set in the manager.
 type DeepCopyableSyncingSource interface {
 	SyncingSource
 	DeepCopyFor(cluster cluster.Cluster) DeepCopyableSyncingSource

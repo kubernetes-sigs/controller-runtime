@@ -666,7 +666,7 @@ var _ = Describe("application", func() {
 							Name:       dep.Name,
 							Kind:       "Deployment",
 							APIVersion: "apps/v1",
-							Controller: pointer.Bool(true),
+							Controller: ptr.To(true),
 							UID:        dep.UID,
 						},
 					},

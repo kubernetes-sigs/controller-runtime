@@ -234,9 +234,6 @@ func (c *Controller) Disengage(ctx context.Context, cluster cluster.Cluster) err
 
 func (c *Controller) startClusterAwareWatchLocked(cldesc *clusterDescription, watchDesc *deepcopyableWatchDescription) error {
 	watch := &deepcopyableWatchDescription{src: watchDesc.src.DeepCopyFor(cldesc.Cluster), handler: watchDesc.handler.DeepCopyFor(cldesc.Cluster), predicates: watchDesc.predicates}
-	if watch == nil {
-		return nil
-	}
 	c.LogConstructor(nil).Info("Starting Cluster-Aware EventSource", "cluster", cldesc.Name(), "source", watch.src)
 	if err := watch.src.Start(cldesc.ctx, watch.handler, c.Queue, watch.predicates...); err != nil {
 		return err

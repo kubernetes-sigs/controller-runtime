@@ -126,7 +126,7 @@ func (k *KindClusterProvider) List(ctx context.Context) ([]string, error) {
 	return res, nil
 }
 
-func (k *KindClusterProvider) Watch() (cluster.Watcher, error) {
+func (k *KindClusterProvider) Watch(_ context.Context) (cluster.Watcher, error) {
 	return &KindWatcher{ch: make(chan cluster.WatchEvent)}, nil
 }
 

@@ -27,7 +27,7 @@ type Provider interface {
 
 	// Watch returns a Watcher that watches for changes to a list of known clusters
 	// and react to potential changes.
-	Watch() (Watcher, error)
+	Watch(ctx context.Context) (Watcher, error)
 }
 
 // Watcher watches for changes to clusters and provides events to a channel

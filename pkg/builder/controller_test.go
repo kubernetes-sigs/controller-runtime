@@ -851,7 +851,7 @@ func (f *fakeClusterProvider) List(ctx context.Context) ([]string, error) {
 	return f.clusterNameList, f.listErr
 }
 
-func (f *fakeClusterProvider) Watch() (cluster.Watcher, error) {
+func (f *fakeClusterProvider) Watch(ctx context.Context) (cluster.Watcher, error) {
 	return &fakeLogicalWatcher{ch: f.watch}, nil
 }
 

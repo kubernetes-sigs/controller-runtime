@@ -612,7 +612,7 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) { //nolint:g
 			}
 
 			// Create a watcher and start watching for changes.
-			watcher, err := cm.clusterProvider.Watch()
+			watcher, err := cm.clusterProvider.Watch(ctx)
 			if err != nil {
 				return err
 			}

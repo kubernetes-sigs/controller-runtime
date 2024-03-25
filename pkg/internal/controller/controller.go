@@ -103,13 +103,6 @@ type Controller struct {
 	LeaderElected *bool
 }
 
-// ClusterAwareSource is a source that knows whether to watch in the default cluster
-// in the clusters engaged by the cluster provider.
-type ClusterAwareSource interface {
-	source.Source
-	ForceDefaultCluster() bool
-}
-
 type clusterDescription struct {
 	cluster.Cluster
 	ctx     context.Context
@@ -157,12 +150,8 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// If the source is cluster aware, store it in a separate list.
-	var forceDefaultCluster bool
-	if src, ok := src.(ClusterAwareSource); ok {
-		forceDefaultCluster = src.ForceDefaultCluster()
-	}
-	if c.WatchProviderClusters && !forceDefaultCluster {
+	// If a cluster provider is in-place, run src for every provided cluster
+	if c.WatchProviderClusters {
 		src, ok := src.(source.DeepCopyableSyncingSource)
 		if !ok {
 			return fmt.Errorf("source %T is not cluster aware, but WatchProviderClusters is true", src)

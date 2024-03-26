@@ -550,6 +550,38 @@ var _ = Describe("Fake client", func() {
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1000"))
 		})
 
+		It("should allow patch with non-set ResourceVersion for a resource that doesn't allow unconditional updates", func() {
+			schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
+			schemeBuilder.Register(&WithPointerMeta{}, &WithPointerMetaList{})
+
+			scheme := runtime.NewScheme()
+			Expect(schemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+
+			cl := NewClientBuilder().WithScheme(scheme).Build()
+			original := &WithPointerMeta{
+				ObjectMeta: &metav1.ObjectMeta{
+					Name:      "obj",
+					Namespace: "ns2",
+				}}
+
+			err := cl.Create(context.Background(), original)
+			Expect(err).ToNot(HaveOccurred())
+
+			newObj := &WithPointerMeta{
+				ObjectMeta: &metav1.ObjectMeta{
+					Name:      original.Name,
+					Namespace: original.Namespace,
+					Annotations: map[string]string{
+						"foo": "bar",
+					},
+				}}
+			Expect(cl.Patch(context.Background(), newObj, client.MergeFrom(original))).To(Succeed())
+
+			patched := &WithPointerMeta{}
+			Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(original), patched)).To(Succeed())
+			Expect(patched.Annotations).To(Equal(map[string]string{"foo": "bar"}))
+		})
+
 		It("should reject updates with non-set ResourceVersion for a resource that doesn't allow unconditional updates", func() {
 			By("Creating a new binding")
 			binding := &corev1.Binding{

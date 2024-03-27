@@ -1,6 +1,6 @@
 module sigs.k8s.io/controller-runtime/tools/setup-envtest
 
-go 1.22.0
+go 1.22
 
 require (
 	github.com/go-logr/logr v1.2.4

@@ -29,7 +29,7 @@ import (
 )
 
 var _ = Describe("Admission Webhook Decoder", func() {
-	var decoder *Decoder
+	var decoder Decoder
 	BeforeEach(func() {
 		By("creating a new decoder for a scheme")
 		decoder = NewDecoder(scheme.Scheme)

@@ -1,6 +1,6 @@
 module sigs.k8s.io/controller-runtime
 
-go 1.22.0
+go 1.22
 
 require (
 	github.com/evanphx/json-patch v4.12.0+incompatible // Using v4 to match upstream

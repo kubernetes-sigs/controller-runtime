@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
@@ -54,6 +55,13 @@ type EventHandler interface {
 	// Generic is called in response to an event of an unknown type or a synthetic event triggered as a cron or
 	// external trigger request - e.g. reconcile Autoscaling, or a Webhook.
 	Generic(context.Context, event.GenericEvent, workqueue.RateLimitingInterface)
+}
+
+// DeepCopyableEventHandler is an EventHandler that can be deep copied for use
+// in a different Cluster. This is used if a cluster provider is set in a manager.
+type DeepCopyableEventHandler interface {
+	EventHandler
+	DeepCopyFor(c cluster.Cluster) DeepCopyableEventHandler
 }
 
 var _ EventHandler = Funcs{}

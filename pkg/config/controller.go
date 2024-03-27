@@ -46,4 +46,9 @@ type Controller struct {
 	// NeedLeaderElection indicates whether the controller needs to use leader election.
 	// Defaults to true, which means the controller will use leader election.
 	NeedLeaderElection *bool
+
+	// WatchProviderClusters indicates whether the controller should
+	// only watch clusters that are engaged by the cluster provider. Defaults to false
+	// if no provider is set, and to true if a provider is set.
+	WatchProviderClusters *bool
 }

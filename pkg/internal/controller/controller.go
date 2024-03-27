@@ -25,10 +25,11 @@ import (
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/util/workqueue"
-
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -77,7 +78,17 @@ type Controller struct {
 	CacheSyncTimeout time.Duration
 
 	// startWatches maintains a list of sources, handlers, and predicates to start when the controller is started.
-	startWatches []watchDescription
+	startWatches []*watchDescription
+
+	// clusterAwareWatches maintains a list of cluster aware sources, handlers, and predicates to start when the controller is started.
+	clusterAwareWatches []*deepcopyableWatchDescription
+
+	// clustersByName is used to manage the fleet of clusters.
+	clustersByName map[string]*clusterDescription
+	// WatchProviderClusters indicates whether the controller should
+	// only watch clusters that are engaged by the cluster provider. Defaults to false
+	// if no provider is set, and to true if a provider is set.
+	WatchProviderClusters bool
 
 	// LogConstructor is used to construct a logger to then log messages to users during reconciliation,
 	// or for example when a watch is started.
@@ -92,10 +103,25 @@ type Controller struct {
 	LeaderElected *bool
 }
 
+type clusterDescription struct {
+	cluster.Cluster
+	ctx     context.Context
+	sources []source.Source
+}
+
 // watchDescription contains all the information necessary to start a watch.
 type watchDescription struct {
 	src        source.Source
 	handler    handler.EventHandler
+	predicates []predicate.Predicate
+}
+
+// deepcopyableWatchDescription contains all the information necessary to start
+// a watch. In addition to watchDescription it also contains the DeepCopyFor
+// method to adapt it to a different cluster.
+type deepcopyableWatchDescription struct {
+	src        source.DeepCopyableSyncingSource
+	handler    handler.DeepCopyableEventHandler
 	predicates []predicate.Predicate
 }
 
@@ -124,16 +150,96 @@ func (c *Controller) Watch(src source.Source, evthdler handler.EventHandler, prc
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// If a cluster provider is in-place, run src for every provided cluster
+	if c.WatchProviderClusters {
+		src, ok := src.(source.DeepCopyableSyncingSource)
+		if !ok {
+			return fmt.Errorf("source %T is not cluster aware, but WatchProviderClusters is true", src)
+		}
+		evthdler, ok := evthdler.(handler.DeepCopyableEventHandler)
+		if !ok {
+			return fmt.Errorf("handler %T is not cluster aware, but WatchProviderClusters is true", evthdler)
+		}
+
+		watchDesc := &deepcopyableWatchDescription{src: src, handler: evthdler, predicates: prct}
+		c.clusterAwareWatches = append(c.clusterAwareWatches, watchDesc)
+
+		// If the watch is cluster aware, start it for all the clusters
+		// This covers the case where a Watch was added later to the controller.
+		var errs []error
+		for _, cldesc := range c.clustersByName {
+			if err := c.startClusterAwareWatchLocked(cldesc, watchDesc); err != nil {
+				errs = append(errs, err)
+			}
+		}
+
+		return kerrors.NewAggregate(errs)
+	}
+
 	// Controller hasn't started yet, store the watches locally and return.
 	//
 	// These watches are going to be held on the controller struct until the manager or user calls Start(...).
 	if !c.Started {
-		c.startWatches = append(c.startWatches, watchDescription{src: src, handler: evthdler, predicates: prct})
+		c.startWatches = append(c.startWatches, &watchDescription{src: src, handler: evthdler, predicates: prct})
 		return nil
 	}
 
 	c.LogConstructor(nil).Info("Starting EventSource", "source", src)
 	return src.Start(c.ctx, evthdler, c.Queue, prct...)
+}
+
+// Engage implements cluster.AwareRunnable.
+func (c *Controller) Engage(ctx context.Context, cluster cluster.Cluster) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.Started {
+		return errors.New("controller must be started before calling Engage")
+	}
+
+	var errs []error
+	cldesc := c.clustersByName[cluster.Name()]
+	if cldesc == nil {
+		// Initialize the cluster description.
+		c.clustersByName[cluster.Name()] = &clusterDescription{
+			ctx:     ctx,
+			Cluster: cluster,
+		}
+		cldesc = c.clustersByName[cluster.Name()]
+	}
+	for i, watchDesc := range c.clusterAwareWatches {
+		if i < len(cldesc.sources) {
+			// The source has already been started for this cluster.
+			continue
+		}
+		if err := c.startClusterAwareWatchLocked(cldesc, watchDesc); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return kerrors.NewAggregate(errs)
+}
+
+// Disengage implements cluster.AwareRunnable.
+func (c *Controller) Disengage(ctx context.Context, cluster cluster.Cluster) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.Started {
+		return errors.New("controller must be started before calling Disengage")
+	}
+
+	c.LogConstructor(nil).Info("Disengaging Cluster", "cluster", cluster.Name())
+	// TODO(vincepri): Stop the sources for this cluster before removing it, once we have a way to do that.
+	delete(c.clustersByName, cluster.Name())
+	return nil
+}
+
+func (c *Controller) startClusterAwareWatchLocked(cldesc *clusterDescription, watchDesc *deepcopyableWatchDescription) error {
+	watch := &deepcopyableWatchDescription{src: watchDesc.src.DeepCopyFor(cldesc.Cluster), handler: watchDesc.handler.DeepCopyFor(cldesc.Cluster), predicates: watchDesc.predicates}
+	c.LogConstructor(nil).Info("Starting Cluster-Aware EventSource", "cluster", cldesc.Name(), "source", watch.src)
+	if err := watch.src.Start(cldesc.ctx, watch.handler, c.Queue, watch.predicates...); err != nil {
+		return err
+	}
+	cldesc.sources = append(cldesc.sources, watch.src)
+	return nil
 }
 
 // NeedLeaderElection implements the manager.LeaderElectionRunnable interface.
@@ -152,7 +258,7 @@ func (c *Controller) Start(ctx context.Context) error {
 	if c.Started {
 		return errors.New("controller was started more than once. This is likely to be caused by being added to a manager multiple times")
 	}
-
+	c.clustersByName = make(map[string]*clusterDescription)
 	c.initMetrics()
 
 	// Set the internal context.
@@ -309,6 +415,9 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 	log = log.WithValues("reconcileID", reconcileID)
 	ctx = logf.IntoContext(ctx, log)
 	ctx = addReconcileID(ctx, reconcileID)
+	if req.ClusterName != "" {
+		log = log.WithValues("cluster", req.ClusterName)
+	}
 
 	// RunInformersAndControllers the syncHandler, passing it the Namespace/Name string of the
 	// resource to be synced.

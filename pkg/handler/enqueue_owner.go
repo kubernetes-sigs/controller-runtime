@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -69,8 +70,11 @@ func OnlyControllerOwner() OwnerOption {
 }
 
 type enqueueRequestForOwner struct {
+	// cluster is the source of the requeue request.
+	cluster cluster.Cluster
+
 	// ownerType is the type of the Owner object to look for in OwnerReferences.  Only Group and Kind are compared.
-	ownerType runtime.Object
+	ownerType client.Object
 
 	// isController if set will only look at the first OwnerReference with Controller: true.
 	isController bool
@@ -85,7 +89,7 @@ type enqueueRequestForOwner struct {
 // Create implements EventHandler.
 func (e *enqueueRequestForOwner) Create(ctx context.Context, evt event.CreateEvent, q workqueue.RateLimitingInterface) {
 	reqs := map[reconcile.Request]empty{}
-	e.getOwnerReconcileRequest(evt.Object, reqs)
+	e.getOwnerReconcileRequest(ctx, evt.Object, reqs)
 	for req := range reqs {
 		q.Add(req)
 	}
@@ -94,8 +98,8 @@ func (e *enqueueRequestForOwner) Create(ctx context.Context, evt event.CreateEve
 // Update implements EventHandler.
 func (e *enqueueRequestForOwner) Update(ctx context.Context, evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
 	reqs := map[reconcile.Request]empty{}
-	e.getOwnerReconcileRequest(evt.ObjectOld, reqs)
-	e.getOwnerReconcileRequest(evt.ObjectNew, reqs)
+	e.getOwnerReconcileRequest(ctx, evt.ObjectOld, reqs)
+	e.getOwnerReconcileRequest(ctx, evt.ObjectNew, reqs)
 	for req := range reqs {
 		q.Add(req)
 	}
@@ -104,7 +108,7 @@ func (e *enqueueRequestForOwner) Update(ctx context.Context, evt event.UpdateEve
 // Delete implements EventHandler.
 func (e *enqueueRequestForOwner) Delete(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 	reqs := map[reconcile.Request]empty{}
-	e.getOwnerReconcileRequest(evt.Object, reqs)
+	e.getOwnerReconcileRequest(ctx, evt.Object, reqs)
 	for req := range reqs {
 		q.Add(req)
 	}
@@ -113,7 +117,7 @@ func (e *enqueueRequestForOwner) Delete(ctx context.Context, evt event.DeleteEve
 // Generic implements EventHandler.
 func (e *enqueueRequestForOwner) Generic(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
 	reqs := map[reconcile.Request]empty{}
-	e.getOwnerReconcileRequest(evt.Object, reqs)
+	e.getOwnerReconcileRequest(ctx, evt.Object, reqs)
 	for req := range reqs {
 		q.Add(req)
 	}
@@ -141,7 +145,7 @@ func (e *enqueueRequestForOwner) parseOwnerTypeGroupKind(scheme *runtime.Scheme)
 
 // getOwnerReconcileRequest looks at object and builds a map of reconcile.Request to reconcile
 // owners of object that match e.OwnerType.
-func (e *enqueueRequestForOwner) getOwnerReconcileRequest(object metav1.Object, result map[reconcile.Request]empty) {
+func (e *enqueueRequestForOwner) getOwnerReconcileRequest(_ context.Context, object metav1.Object, result map[reconcile.Request]empty) {
 	// Iterate through the OwnerReferences looking for a match on Group and Kind against what was requested
 	// by the user
 	for _, ref := range e.getOwnersReferences(object) {
@@ -159,9 +163,14 @@ func (e *enqueueRequestForOwner) getOwnerReconcileRequest(object metav1.Object, 
 		// object in the event.
 		if ref.Kind == e.groupKind.Kind && refGV.Group == e.groupKind.Group {
 			// Match found - add a Request for the object referred to in the OwnerReference
-			request := reconcile.Request{NamespacedName: types.NamespacedName{
-				Name: ref.Name,
-			}}
+			request := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name: ref.Name,
+				},
+			}
+			if e.cluster != nil {
+				request.ClusterName = e.cluster.Name()
+			}
 
 			// if owner is not namespaced then we should not set the namespace
 			mapping, err := e.mapper.RESTMapping(e.groupKind, refGV.Version)
@@ -196,4 +205,17 @@ func (e *enqueueRequestForOwner) getOwnersReferences(object metav1.Object) []met
 	}
 	// No Controller OwnerReference found
 	return nil
+}
+
+func (e *enqueueRequestForOwner) DeepCopyFor(c cluster.Cluster) DeepCopyableEventHandler {
+	cpy := &enqueueRequestForOwner{
+		cluster:      c,
+		ownerType:    e.ownerType,
+		isController: e.isController,
+		mapper:       c.GetRESTMapper(),
+	}
+	if err := cpy.parseOwnerTypeGroupKind(c.GetScheme()); err != nil {
+		panic(err)
+	}
+	return cpy
 }

@@ -12,9 +12,36 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
+
+// Source is a source of events (eh.g. Create, Update, Delete operations on Kubernetes Objects, Webhook callbacks, etc)
+// which should be processed by event.EventHandlers to enqueue reconcile.Requests.
+//
+// * Use Kind for events originating in the cluster (e.g. Pod Create, Pod Update, Deployment Update).
+//
+// * Use Channel for events originating outside the cluster (eh.g. GitHub Webhook callback, Polling external urls).
+//
+// Users may build their own Source implementations.
+type Source interface {
+	Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+}
+
+// SyncingSource is a source that needs syncing prior to being usable. The controller
+// will call its WaitForSync prior to starting workers.
+type SyncingSource interface {
+	Source
+	WaitForSync(ctx context.Context) error
+}
+
+// DeepCopyableSyncingSource is a source that can be deep copied for a specific cluster.
+// It is used in setups with a cluster provider set in the manager.
+type DeepCopyableSyncingSource interface {
+	SyncingSource
+	DeepCopyFor(cluster cluster.Cluster) DeepCopyableSyncingSource
+}
 
 // Kind is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
 type Kind struct {
@@ -113,5 +140,13 @@ func (ks *Kind) WaitForSync(ctx context.Context) error {
 			return nil
 		}
 		return fmt.Errorf("timed out waiting for cache to be synced for Kind %T", ks.Type)
+	}
+}
+
+// DeepCopyFor implements cluster.AwareDeepCopy[Source].
+func (ks *Kind) DeepCopyFor(c cluster.Cluster) DeepCopyableSyncingSource {
+	return &Kind{
+		Type:  ks.Type,
+		Cache: c.GetCache(),
 	}
 }

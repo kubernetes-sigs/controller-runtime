@@ -44,21 +44,18 @@ const (
 // * Use Channel for events originating outside the cluster (e.g. GitHub Webhook callback, Polling external urls).
 //
 // Users may build their own Source implementations.
-type Source interface {
-	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
-	// to enqueue reconcile.Requests.
-	Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
-}
+type Source = internal.Source
 
 // SyncingSource is a source that needs syncing prior to being usable. The controller
 // will call its WaitForSync prior to starting workers.
-type SyncingSource interface {
-	Source
-	WaitForSync(ctx context.Context) error
-}
+type SyncingSource = internal.SyncingSource
+
+// DeepCopyableSyncingSource is a source that can be deep copied for a specific cluster.
+// It is used in setups with a cluster provider set in the manager.
+type DeepCopyableSyncingSource = internal.DeepCopyableSyncingSource
 
 // Kind creates a KindSource with the given cache provider.
-func Kind(cache cache.Cache, object client.Object) SyncingSource {
+func Kind(cache cache.Cache, object client.Object) DeepCopyableSyncingSource {
 	return &internal.Kind{Type: object, Cache: cache}
 }
 

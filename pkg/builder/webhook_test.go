@@ -662,6 +662,24 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":true`))
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":200`))
 	})
+
+	It("should send an error when trying to register a webhook with more than one For", func() {
+		By("creating a controller manager")
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
+		builder.Register(&TestDefaulter{}, &TestDefaulterList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		err = WebhookManagedBy(m).
+			For(&TestDefaulter{}).
+			For(&TestDefaulter{}).
+			Complete()
+		Expect(err).To(HaveOccurred())
+	})
 }
 
 // TestDefaulter.

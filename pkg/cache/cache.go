@@ -170,6 +170,12 @@ type Options struct {
 	// instead of `reconcile.Result{}`.
 	SyncPeriod *time.Duration
 
+	// WatchTimeoutPeriod is the timeout for the watch request. If the watch request
+	// times out, the cache will close the watch and reconnect.
+	//
+	// Defaults to a random duration between 5 and 10 minutes if unset.
+	WatchTimeoutPeriod *time.Duration
+
 	// ReaderFailOnMissingInformer configures the cache to return a ErrResourceNotCached error when a user
 	// requests, using Get() and List(), a resource the cache does not already have an informer for.
 	//
@@ -383,6 +389,7 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 				WatchErrorHandler:     opts.DefaultWatchErrorHandler,
 				UnsafeDisableDeepCopy: ptr.Deref(config.UnsafeDisableDeepCopy, false),
 				NewInformer:           opts.newInformer,
+				WatchTimeoutPeriod:    opts.WatchTimeoutPeriod,
 			}),
 			readerFailOnMissingInformer: opts.ReaderFailOnMissingInformer,
 		}

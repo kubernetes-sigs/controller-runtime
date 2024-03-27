@@ -153,7 +153,7 @@ var _ = Describe("Webhook", func() {
 })
 
 type rejectingValidator struct {
-	d *admission.Decoder
+	d admission.Decoder
 }
 
 func (v *rejectingValidator) Handle(ctx context.Context, req admission.Request) admission.Response {

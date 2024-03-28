@@ -17,6 +17,7 @@ limitations under the License.
 package handler_test
 
 import (
+	"bytes"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -34,9 +35,10 @@ func TestEventhandler(t *testing.T) {
 
 var testenv *envtest.Environment
 var cfg *rest.Config
+var logBuffer bytes.Buffer
 
 var _ = BeforeSuite(func() {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+	logf.SetLogger(zap.New(zap.WriteTo(&logBuffer), zap.UseDevMode(true)))
 
 	testenv = &envtest.Environment{}
 	var err error

@@ -18,24 +18,46 @@ package metrics
 
 import (
 	"context"
+	"net/url"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	clientmetrics "k8s.io/client-go/tools/metrics"
 )
 
-// this file contains setup logic to initialize the myriad of places
-// that client-go registers metrics.  We copy the names and formats
-// from Kubernetes so that we match the core controllers.
-
 var (
-	// client metrics.
-
 	requestResult = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "rest_client_requests_total",
 			Help: "Number of HTTP requests, partitioned by status code, method, and host.",
 		},
 		[]string{"code", "method", "host"},
+	)
+
+	requestLatency = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "rest_client_request_duration_seconds",
+			Help:    "Request latency in seconds. Broken down by verb. Intentionally not by host to avoid high cardinality.",
+			Buckets: []float64{0.005, 0.025, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 60.0},
+		},
+		[]string{"verb"},
+	)
+
+	rateLimiterLatency = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "rest_client_rate_limiter_duration_seconds",
+			Help:    "Client side rate limiter latency in seconds. Broken down by verb. Intentionally not by host to avoid high cardinality.",
+			Buckets: []float64{0.005, 0.025, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 60.0},
+		},
+		[]string{"verb"},
+	)
+
+	requestRetry = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rest_client_request_retries_total",
+			Help: "Number of request retries, partitioned by status code and verb. Intentionally not by host to avoid high cardinality.",
+		},
+		[]string{"code", "verb"},
 	)
 )
 
@@ -47,10 +69,16 @@ func init() {
 func registerClientMetrics() {
 	// register the metrics with our registry
 	Registry.MustRegister(requestResult)
+	Registry.MustRegister(requestLatency)
+	Registry.MustRegister(rateLimiterLatency)
+	Registry.MustRegister(requestRetry)
 
 	// register the metrics with client-go
 	clientmetrics.Register(clientmetrics.RegisterOpts{
-		RequestResult: &resultAdapter{metric: requestResult},
+		RequestResult:      &resultAdapter{metric: requestResult},
+		RequestLatency:     &latencyAdapter{metric: requestLatency},
+		RateLimiterLatency: &latencyAdapter{metric: rateLimiterLatency},
+		RequestRetry:       &retryAdapter{requestRetry},
 	})
 }
 
@@ -68,4 +96,24 @@ type resultAdapter struct {
 
 func (r *resultAdapter) Increment(_ context.Context, code, method, host string) {
 	r.metric.WithLabelValues(code, method, host).Inc()
+}
+
+type latencyAdapter struct {
+	metric *prometheus.HistogramVec
+}
+
+// Observe increments the request latency metric for the given verb.
+// URL is ignored to avoid high cardinality.
+func (l *latencyAdapter) Observe(_ context.Context, verb string, _ url.URL, latency time.Duration) {
+	l.metric.WithLabelValues(verb).Observe(latency.Seconds())
+}
+
+type retryAdapter struct {
+	metric *prometheus.CounterVec
+}
+
+// IncrementRetry increments the retry metric for the given code and method.
+// host is ignored to avoid high cardinality.
+func (r *retryAdapter) IncrementRetry(_ context.Context, code, method, _ string) {
+	r.metric.WithLabelValues(code, method).Inc()
 }

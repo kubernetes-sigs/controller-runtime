@@ -26,6 +26,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -500,6 +501,30 @@ var _ = Describe("Controllerutil", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			op, err = controllerutil.CreateOrUpdate(context.TODO(), c, deploy, deploymentIdentity)
+			By("returning no error")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("returning OperationResultNone")
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultNone))
+		})
+
+		It("uses custom equality check as-is", func() {
+			op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, specr)
+
+			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
+			Expect(err).NotTo(HaveOccurred())
+
+			eq := equality.Semantic.Copy()
+			eq.AddFunc(func(a, b appsv1.DeploymentStrategy) bool {
+				// intentionallity ignore and return true
+				return true
+			})
+			op, err = controllerutil.CreateOrUpdateWithEqualities(context.TODO(), c, deploy, eq, func() error {
+				deploy.Spec.Strategy = appsv1.DeploymentStrategy{
+					Type: appsv1.RecreateDeploymentStrategyType, // just any change
+				}
+				return nil
+			})
 			By("returning no error")
 			Expect(err).NotTo(HaveOccurred())
 

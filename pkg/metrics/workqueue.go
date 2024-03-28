@@ -87,14 +87,18 @@ var (
 	}, []string{"name"})
 )
 
+var WorkqueueRegistry = prometheus.NewRegistry()
+
 func init() {
-	Registry.MustRegister(depth)
-	Registry.MustRegister(adds)
-	Registry.MustRegister(latency)
-	Registry.MustRegister(workDuration)
-	Registry.MustRegister(unfinished)
-	Registry.MustRegister(longestRunningProcessor)
-	Registry.MustRegister(retries)
+	WorkqueueRegistry.MustRegister(depth)
+	WorkqueueRegistry.MustRegister(adds)
+	WorkqueueRegistry.MustRegister(latency)
+	WorkqueueRegistry.MustRegister(workDuration)
+	WorkqueueRegistry.MustRegister(unfinished)
+	WorkqueueRegistry.MustRegister(longestRunningProcessor)
+	WorkqueueRegistry.MustRegister(retries)
+
+	Registry.Register(WorkqueueRegistry)
 
 	workqueue.SetProvider(workqueueMetricsProvider{})
 }

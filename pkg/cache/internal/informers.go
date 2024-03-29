@@ -35,7 +35,6 @@ import (
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/internal/syncs"
 )
@@ -52,7 +51,7 @@ type InformersOpts struct {
 	Transform             cache.TransformFunc
 	UnsafeDisableDeepCopy bool
 	WatchErrorHandler     cache.WatchErrorHandler
-	WatchTimeoutPeriod    *time.Duration
+	MinWatchTimeoutPeriod *time.Duration
 }
 
 // NewInformers creates a new InformersMap that can create informers under the hood.
@@ -81,7 +80,7 @@ func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 		unsafeDisableDeepCopy: options.UnsafeDisableDeepCopy,
 		newInformer:           newInformer,
 		watchErrorHandler:     options.WatchErrorHandler,
-		watchTimeoutPeriod:    options.WatchTimeoutPeriod,
+		minWatchTimeoutPeriod: options.MinWatchTimeoutPeriod,
 	}
 }
 
@@ -150,8 +149,8 @@ type Informers struct {
 	// so that all informers will not send list requests simultaneously.
 	resync time.Duration
 
-	// watchTimeoutPeriod is the timeout period for watch requests
-	watchTimeoutPeriod *time.Duration
+	// minWatchTimeoutPeriod is the timeout period for watch requests
+	minWatchTimeoutPeriod *time.Duration
 
 	// mu guards access to the map
 	mu sync.RWMutex
@@ -360,8 +359,9 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 		WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
 			ip.selector.ApplyToList(&opts)
 			opts.Watch = true // Watch needs to be set to true separately
-			if ip.watchTimeoutPeriod != nil {
-				opts.TimeoutSeconds = ptr.To(int64(ip.watchTimeoutPeriod.Seconds()))
+			if ip.minWatchTimeoutPeriod != nil {
+				watchTimeoutSeconds := int64(ip.minWatchTimeoutPeriod.Seconds() * (rand.Float64() + 1.0))
+				opts.TimeoutSeconds = &watchTimeoutSeconds
 			}
 			return listWatcher.WatchFunc(opts)
 		},

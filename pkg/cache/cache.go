@@ -170,11 +170,14 @@ type Options struct {
 	// instead of `reconcile.Result{}`.
 	SyncPeriod *time.Duration
 
-	// RewatchPeriod is the timeout for the watch request. If the watch request
+	// MinRewatchPeriod is the mininum rewatch period. If the watch request
 	// times out, the cache will close the watch and reconnect.
 	//
-	// Defaults to a random duration between 5 and 10 minutes if unset.
-	RewatchPeriod *time.Duration
+	// We try to spread the load on apiserver by setting timeouts for
+	// watch requests - it is random in [MinRewatchPeriod, 2*MinRewatchPeriod].
+	//
+	// Defaults to 5 minutes if unset.
+	MinRewatchPeriod *time.Duration
 
 	// ReaderFailOnMissingInformer configures the cache to return a ErrResourceNotCached error when a user
 	// requests, using Get() and List(), a resource the cache does not already have an informer for.
@@ -389,7 +392,7 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 				WatchErrorHandler:     opts.DefaultWatchErrorHandler,
 				UnsafeDisableDeepCopy: ptr.Deref(config.UnsafeDisableDeepCopy, false),
 				NewInformer:           opts.newInformer,
-				WatchTimeoutPeriod:    opts.RewatchPeriod,
+				MinWatchTimeoutPeriod: opts.MinRewatchPeriod,
 			}),
 			readerFailOnMissingInformer: opts.ReaderFailOnMissingInformer,
 		}

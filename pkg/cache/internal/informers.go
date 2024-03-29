@@ -362,7 +362,7 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 			ip.selector.ApplyToList(&opts)
 			opts.Watch = true // Watch needs to be set to true separately
 			if ip.minWatchTimeout != nil {
-				watchTimeoutSeconds := int64(ip.minWatchTimeout.Seconds() * (rand.Float64() + 1.0))
+				watchTimeoutSeconds := int64(ip.minWatchTimeout.Seconds() * (rand.Float64() + 1.0)) //nolint:gosec
 				opts.TimeoutSeconds = &watchTimeoutSeconds
 			}
 			return listWatcher.WatchFunc(opts)

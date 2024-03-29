@@ -392,7 +392,7 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 				WatchErrorHandler:     opts.DefaultWatchErrorHandler,
 				UnsafeDisableDeepCopy: ptr.Deref(config.UnsafeDisableDeepCopy, false),
 				NewInformer:           opts.newInformer,
-				MinWatchTimeoutPeriod: opts.MinRewatchPeriod,
+				MinWatchTimeout:       opts.MinRewatchPeriod,
 			}),
 			readerFailOnMissingInformer: opts.ReaderFailOnMissingInformer,
 		}

@@ -51,7 +51,7 @@ type InformersOpts struct {
 	Transform             cache.TransformFunc
 	UnsafeDisableDeepCopy bool
 	WatchErrorHandler     cache.WatchErrorHandler
-	MinWatchTimeoutPeriod *time.Duration
+	MinWatchTimeout       *time.Duration
 }
 
 // NewInformers creates a new InformersMap that can create informers under the hood.
@@ -80,7 +80,7 @@ func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 		unsafeDisableDeepCopy: options.UnsafeDisableDeepCopy,
 		newInformer:           newInformer,
 		watchErrorHandler:     options.WatchErrorHandler,
-		minWatchTimeoutPeriod: options.MinWatchTimeoutPeriod,
+		minWatchTimeout:       options.MinWatchTimeout,
 	}
 }
 
@@ -149,8 +149,10 @@ type Informers struct {
 	// so that all informers will not send list requests simultaneously.
 	resync time.Duration
 
-	// minWatchTimeoutPeriod is the timeout period for watch requests
-	minWatchTimeoutPeriod *time.Duration
+	// minWatchTimeout is the minimum timeout period for watch requests
+	// We try to spread the load on apiserver by setting timeouts for
+	// watch requests - it is random in [minWatchTimeout, 2*minWatchTimeout].
+	minWatchTimeout *time.Duration
 
 	// mu guards access to the map
 	mu sync.RWMutex
@@ -359,8 +361,8 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 		WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
 			ip.selector.ApplyToList(&opts)
 			opts.Watch = true // Watch needs to be set to true separately
-			if ip.minWatchTimeoutPeriod != nil {
-				watchTimeoutSeconds := int64(ip.minWatchTimeoutPeriod.Seconds() * (rand.Float64() + 1.0))
+			if ip.minWatchTimeout != nil {
+				watchTimeoutSeconds := int64(ip.minWatchTimeout.Seconds() * (rand.Float64() + 1.0))
 				opts.TimeoutSeconds = &watchTimeoutSeconds
 			}
 			return listWatcher.WatchFunc(opts)

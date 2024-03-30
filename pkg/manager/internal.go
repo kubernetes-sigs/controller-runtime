@@ -507,8 +507,8 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 				cm.internalCancel()
 			})
 			select {
-			case err, ok := <-cm.errChan:
-				if ok {
+			case err := <-cm.errChan:
+				if !errors.Is(err, context.Canceled) {
 					cm.logger.Error(err, "error received after stop sequence was engaged")
 				}
 			case <-stopComplete:

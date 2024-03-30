@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
@@ -980,6 +981,57 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					return nil
 				}))).NotTo(Succeed())
+			})
+
+			It("should not return runnables context.Canceled errors", func() {
+				Expect(options.Logger).To(BeZero(), "this test overrides Logger")
+
+				var log struct {
+					sync.Mutex
+					messages []string
+				}
+				options.Logger = funcr.NewJSON(func(object string) {
+					log.Lock()
+					log.messages = append(log.messages, object)
+					log.Unlock()
+				}, funcr.Options{})
+
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+
+				// Runnables may return ctx.Err() as shown in some [context.Context] examples.
+				started := make(chan struct{})
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					close(started)
+					<-ctx.Done()
+					return ctx.Err()
+				}))).To(Succeed())
+
+				stopped := make(chan error)
+				ctx, cancel := context.WithCancel(context.Background())
+				go func() {
+					stopped <- m.Start(ctx)
+				}()
+
+				// Wait for runnables to start, signal the manager, and wait for it to return.
+				<-started
+				cancel()
+				Expect(<-stopped).To(Succeed())
+
+				// The leader election goroutine emits one more log message after Start() returns.
+				// Take the lock here to avoid a race between it writing to log.messages and the
+				// following read from log.messages.
+				if options.LeaderElection {
+					log.Lock()
+					defer log.Unlock()
+				}
+
+				Expect(log.messages).To(Not(ContainElement(
+					ContainSubstring(context.Canceled.Error()),
+				)))
 			})
 
 			It("should return both runnables and stop errors when both error", func() {

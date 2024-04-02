@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -84,10 +85,10 @@ func GenericExample() {
 		os.Exit(1)
 	}
 
-	err = ctrl.
-		NewControllerManagedBy(manager).         // Create the Controller
-		With(ctrl.Object(&appsv1.ReplicaSet{})). // ReplicaSet is the Application API
-		Own(ctrl.Object(&corev1.Pod{})).         // ReplicaSet owns Pods created by it
+	b := ctrl.NewControllerManagedBy(manager) // Create the Controller
+	// ReplicaSet is the Application API
+	b.Add(builder.For(b, &appsv1.ReplicaSet{})).
+		Add(builder.Owns(b, &appsv1.ReplicaSet{}, &corev1.Pod{})). // ReplicaSet owns Pods created by it
 		Complete(&ReplicaSetReconciler{Client: manager.GetClient()})
 	if err != nil {
 		log.Error(err, "could not create controller")

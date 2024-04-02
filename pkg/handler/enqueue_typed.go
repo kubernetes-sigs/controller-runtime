@@ -30,7 +30,6 @@ var _ EventHandler = &EnqueueRequest[metav1.Object]{}
 var _ ObjectHandler[metav1.Object] = &EnqueueRequest[metav1.Object]{}
 
 type Request interface {
-	comparable
 	GetName() string
 	GetNamespace() string
 }
@@ -42,42 +41,34 @@ type EnqueueRequest[T Request] struct{}
 
 // OnCreate implements ObjectHandler.
 func (e *EnqueueRequest[T]) OnCreate(ctx context.Context, obj T, q workqueue.RateLimitingInterface) {
-	if obj != *new(T) {
-		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-			Name:      obj.GetName(),
-			Namespace: obj.GetNamespace(),
-		}})
-	}
+	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+		Name:      obj.GetName(),
+		Namespace: obj.GetNamespace(),
+	}})
 }
 
 // OnDelete implements ObjectHandler.
 func (e *EnqueueRequest[T]) OnDelete(ctx context.Context, obj T, q workqueue.RateLimitingInterface) {
-	if obj != *new(T) {
-		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-			Name:      obj.GetName(),
-			Namespace: obj.GetNamespace(),
-		}})
-	}
+	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+		Name:      obj.GetName(),
+		Namespace: obj.GetNamespace(),
+	}})
 }
 
 // OnGeneric implements ObjectHandler.
 func (e *EnqueueRequest[T]) OnGeneric(ctx context.Context, obj T, q workqueue.RateLimitingInterface) {
-	if obj != *new(T) {
-		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-			Name:      obj.GetName(),
-			Namespace: obj.GetNamespace(),
-		}})
-	}
+	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+		Name:      obj.GetName(),
+		Namespace: obj.GetNamespace(),
+	}})
 }
 
 // OnUpdate implements ObjectHandler.
 func (e *EnqueueRequest[T]) OnUpdate(ctx context.Context, oldObj T, newObj T, q workqueue.RateLimitingInterface) {
-	if oldObj != *new(T) {
-		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-			Name:      oldObj.GetName(),
-			Namespace: oldObj.GetNamespace(),
-		}})
-	}
+	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+		Name:      oldObj.GetName(),
+		Namespace: oldObj.GetNamespace(),
+	}})
 }
 
 // Create implements EventHandler.

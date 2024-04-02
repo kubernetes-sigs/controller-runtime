@@ -56,7 +56,9 @@ var _ = Describe("recorder", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Watching Resources")
-			err = instance.Watch(source.Kind(cm.GetCache(), &appsv1.Deployment{}), &handler.EnqueueRequestForObject{})
+			src := source.Kind(cm.GetCache(), &appsv1.Deployment{})
+			src.Prepare(&handler.EnqueueRequestForObject{})
+			err = instance.Watch(src)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting the Manager")

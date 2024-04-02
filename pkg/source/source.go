@@ -47,28 +47,52 @@ const (
 type Source interface {
 	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 	// to enqueue reconcile.Requests.
-	Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
-	SetPredicates(...predicate.PredicateConstraint)
+	// Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+	Start(context.Context, workqueue.RateLimitingInterface) error
+}
+
+type SourcePrepare interface {
+	Source
+	Prepare(handler.EventHandler, ...predicate.Predicate)
+}
+
+type ObjectSourcePrepare[T any] interface {
+	Source
+	PrepareObject(handler.ObjectHandler[T], ...predicate.ObjectPredicate[T])
 }
 
 // SyncingSource is a source that needs syncing prior to being usable. The controller
 // will call its WaitForSync prior to starting workers.
 type SyncingSource interface {
 	Source
+	Syncing
+}
+
+type PrepareSyncing interface {
+	SyncingSource
+	SourcePrepare
+}
+
+type ObjectPrepare[T any] interface {
+	SyncingSource
+	ObjectSourcePrepare[T]
+}
+
+type Syncing interface {
 	WaitForSync(ctx context.Context) error
 }
 
 // Kind creates a KindSource with the given cache provider.
-func Kind(cache cache.Cache, object client.Object) SyncingSource {
+func Kind(cache cache.Cache, object client.Object) PrepareSyncing {
 	return &internal.Kind[client.Object]{Type: object, Cache: cache}
 }
 
 // ObjectKind creates a typed KindSource with the given cache provider.
-func ObjectKind[T client.Object](cache cache.Cache, object T) SyncingSource {
+func ObjectKind[T client.Object](cache cache.Cache, object T) ObjectPrepare[T] {
 	return &internal.Kind[T]{Type: object, Cache: cache}
 }
 
-var _ Source = &Channel{}
+var _ SourcePrepare = &Channel{}
 
 // Channel is used to provide a source of events originating outside the cluster
 // (e.g. GitHub Webhook callback).  Channel requires the user to wire the external
@@ -89,21 +113,37 @@ type Channel struct {
 
 	// destLock is to ensure the destination channels are safely added/removed
 	destLock sync.Mutex
+
+	predicates []predicate.Predicate
+
+	handler handler.EventHandler
 }
 
 func (cs *Channel) String() string {
 	return fmt.Sprintf("channel source: %p", cs)
 }
 
+// Prepare implements Source preparation and should only be called when handler and predicates are available.
+func (cs *Channel) Prepare(
+	handler handler.EventHandler,
+	prct ...predicate.Predicate,
+) {
+	cs.predicates = prct
+	cs.handler = handler
+}
+
 // Start implements Source and should only be called by the Controller.
 func (cs *Channel) Start(
 	ctx context.Context,
-	handler handler.EventHandler,
 	queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
+) error {
 	// Source should have been specified by the user.
 	if cs.Source == nil {
 		return fmt.Errorf("must specify Channel.Source")
+	}
+
+	if cs.handler == nil {
+		return fmt.Errorf("must specify Channel.EventHandler")
 	}
 
 	// use default value if DestBufferSize not specified
@@ -125,7 +165,7 @@ func (cs *Channel) Start(
 	go func() {
 		for evt := range dst {
 			shouldHandle := true
-			for _, p := range prct {
+			for _, p := range cs.predicates {
 				if !p.Generic(evt) {
 					shouldHandle = false
 					break
@@ -136,7 +176,7 @@ func (cs *Channel) Start(
 				func() {
 					ctx, cancel := context.WithCancel(ctx)
 					defer cancel()
-					handler.Generic(ctx, evt, queue)
+					cs.handler.Generic(ctx, evt, queue)
 				}()
 			}
 		}
@@ -191,20 +231,36 @@ func (cs *Channel) syncLoop(ctx context.Context) {
 type Informer struct {
 	// Informer is the controller-runtime Informer
 	Informer cache.Informer
+
+	predicates []predicate.Predicate
+
+	handler handler.EventHandler
 }
 
-var _ Source = &Informer{}
+var _ SourcePrepare = &Informer{}
+
+func (is *Informer) Prepare(
+	h handler.EventHandler,
+	prct ...predicate.Predicate,
+) {
+	is.handler = h
+	is.predicates = prct
+}
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (is *Informer) Start(ctx context.Context, h handler.EventHandler, queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
+func (is *Informer) Start(ctx context.Context, queue workqueue.RateLimitingInterface) error {
 	// Informer should have been specified by the user.
 	if is.Informer == nil {
 		return fmt.Errorf("must specify Informer.Informer")
 	}
 
-	_, err := is.Informer.AddEventHandler(internal.NewEventHandler(ctx, queue, handler.ObjectFuncAdapter[client.Object](h), predicate.ObjectPredicatesAdapter[client.Object](prct...)).HandlerFuncs())
+	// handler should have been specified by the user.
+	if is.handler == nil {
+		return fmt.Errorf("must specify Informer.handler with Prepare()")
+	}
+
+	_, err := is.Informer.AddEventHandler(internal.NewEventHandler(ctx, queue, handler.ObjectFuncAdapter[client.Object](is.handler), predicate.ObjectPredicatesAdapter[client.Object](is.predicates...)).HandlerFuncs())
 	if err != nil {
 		return err
 	}
@@ -215,17 +271,18 @@ func (is *Informer) String() string {
 	return fmt.Sprintf("informer source: %p", is.Informer)
 }
 
-var _ Source = Func(nil)
+// // Func is no longer compatible
+// var _ Source = Func(nil)
 
-// Func is a function that implements Source.
-type Func func(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+// // Func is a function that implements Source.
+// type Func func(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
 
-// Start implements Source.
-func (f Func) Start(ctx context.Context, evt handler.EventHandler, queue workqueue.RateLimitingInterface,
-	pr ...predicate.Predicate) error {
-	return f(ctx, evt, queue, pr...)
-}
+// // Start implements Source.
+// func (f Func) Start(ctx context.Context, evt handler.EventHandler, queue workqueue.RateLimitingInterface,
+// 	pr ...predicate.Predicate) error {
+// 	return f(ctx, evt, queue, pr...)
+// }
 
-func (f Func) String() string {
-	return fmt.Sprintf("func source: %p", f)
-}
+// func (f Func) String() string {
+// 	return fmt.Sprintf("func source: %p", f)
+// }

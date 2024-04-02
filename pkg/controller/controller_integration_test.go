@@ -64,13 +64,14 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Watching Resources")
-			err = instance.Watch(
-				source.Kind(cm.GetCache(), &appsv1.ReplicaSet{}),
-				handler.EnqueueRequestForOwner(cm.GetScheme(), cm.GetRESTMapper(), &appsv1.Deployment{}),
-			)
+			src := source.Kind(cm.GetCache(), &appsv1.ReplicaSet{})
+			src.Prepare(handler.EnqueueRequestForOwner(cm.GetScheme(), cm.GetRESTMapper(), &appsv1.Deployment{}))
+			err = instance.Watch(src)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = instance.Watch(source.Kind(cm.GetCache(), &appsv1.Deployment{}), &handler.EnqueueRequestForObject{})
+			src = source.Kind(cm.GetCache(), &appsv1.Deployment{})
+			src.Prepare(&handler.EnqueueRequestForObject{})
+			err = instance.Watch(src)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = cm.GetClient().Get(ctx, types.NamespacedName{Name: "foo"}, &corev1.Namespace{})

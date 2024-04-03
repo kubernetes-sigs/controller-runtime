@@ -389,9 +389,7 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 	// WARNING: Internal HTTP servers MUST start before any cache is populated, otherwise it would block
 	// conversion webhooks to be ready for serving which make the cache never get ready.
 	if err := cm.runnables.HTTPServers.Start(cm.internalCtx); err != nil {
-		if err != nil {
-			return fmt.Errorf("failed to start HTTP servers: %w", err)
-		}
+		return fmt.Errorf("failed to start HTTP servers: %w", err)
 	}
 
 	// Start any webhook servers, which includes conversion, validation, and defaulting
@@ -401,23 +399,17 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 	// between conversion webhooks and the cache sync (usually initial list) which causes the webhooks
 	// to never start because no cache can be populated.
 	if err := cm.runnables.Webhooks.Start(cm.internalCtx); err != nil {
-		if err != nil {
-			return fmt.Errorf("failed to start webhooks: %w", err)
-		}
+		return fmt.Errorf("failed to start webhooks: %w", err)
 	}
 
 	// Start and wait for caches.
 	if err := cm.runnables.Caches.Start(cm.internalCtx); err != nil {
-		if err != nil {
-			return fmt.Errorf("failed to start caches: %w", err)
-		}
+		return fmt.Errorf("failed to start caches: %w", err)
 	}
 
 	// Start the non-leaderelection Runnables after the cache has synced.
 	if err := cm.runnables.Others.Start(cm.internalCtx); err != nil {
-		if err != nil {
-			return fmt.Errorf("failed to start other runnables: %w", err)
-		}
+		return fmt.Errorf("failed to start other runnables: %w", err)
 	}
 
 	// Start the leader election and all required runnables.

@@ -1849,6 +1849,12 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			)
 		})
 		Describe("as an Informer", func() {
+			It("should error when starting the cache a second time", func() {
+				err := informerCache.Start(context.Background())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("Informer already started"))
+			})
+
 			Context("with structured objects", func() {
 				It("should be able to get informer for the object", func() {
 					By("getting a shared index informer for a pod")

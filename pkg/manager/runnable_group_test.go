@@ -161,6 +161,42 @@ var _ = Describe("runnableGroup", func() {
 		}
 	})
 
+	It("should be able to handle adding runnables while stopping", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		rg := newRunnableGroup(defaultBaseContext, errCh)
+
+		go func() {
+			defer GinkgoRecover()
+			<-time.After(1 * time.Millisecond)
+			Expect(rg.Start(ctx)).To(Succeed())
+		}()
+		go func() {
+			defer GinkgoRecover()
+			<-time.After(1 * time.Millisecond)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			rg.StopAndWait(ctx)
+		}()
+
+		for i := 0; i < 200; i++ {
+			go func(i int) {
+				defer GinkgoRecover()
+
+				<-time.After(time.Duration(i) * time.Microsecond)
+				Expect(rg.Add(RunnableFunc(func(c context.Context) error {
+					<-ctx.Done()
+					return nil
+				}), func(_ context.Context) bool {
+					return true
+				})).To(SatisfyAny(
+					Succeed(),
+					Equal(errRunnableGroupStopped),
+				))
+			}(i)
+		}
+	})
+
 	It("should not turn ready if some readiness check fail", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()

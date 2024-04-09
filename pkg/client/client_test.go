@@ -809,7 +809,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("reading the scale subresource")
 				scale := &autoscalingv1.Scale{}
-				err = cl.SubResource("scale").Get(ctx, dep, scale)
+				err = cl.SubResource("scale").Get(ctx, dep, scale, &client.SubResourceGetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(scale.Spec.Replicas).To(Equal(*dep.Spec.Replicas))
 			})
@@ -823,7 +823,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect((err)).NotTo(HaveOccurred())
 
 				token := &authenticationv1.TokenRequest{}
-				err = cl.SubResource("token").Create(ctx, serviceAccount, token)
+				err = cl.SubResource("token").Create(ctx, serviceAccount, token, &client.SubResourceCreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(token.Status.Token).NotTo(Equal(""))
@@ -845,7 +845,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				eviction := &policyv1.Eviction{
 					DeleteOptions: &metav1.DeleteOptions{GracePeriodSeconds: ptr.To(int64(0))},
 				}
-				err = cl.SubResource("eviction").Create(ctx, pod, eviction)
+				err = cl.SubResource("eviction").Create(ctx, pod, eviction, &client.SubResourceCreateOptions{})
 				Expect((err)).NotTo(HaveOccurred())
 
 				By("Asserting the pod is gone")
@@ -869,7 +869,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				binding := &corev1.Binding{
 					Target: corev1.ObjectReference{Name: node.Name},
 				}
-				err = cl.SubResource("binding").Create(ctx, pod, binding)
+				err = cl.SubResource("binding").Create(ctx, pod, binding, &client.SubResourceCreateOptions{})
 				Expect((err)).NotTo(HaveOccurred())
 
 				By("Asserting the pod is bound")
@@ -892,7 +892,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 					Type:   certificatesv1.CertificateApproved,
 					Status: corev1.ConditionTrue,
 				})
-				err = cl.SubResource("approval").Update(ctx, csr)
+				err = cl.SubResource("approval").Update(ctx, csr, &client.SubResourceUpdateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Asserting the CSR is approved")
@@ -917,7 +917,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 					Type:   certificatesv1.CertificateApproved,
 					Status: corev1.ConditionTrue,
 				})
-				err = cl.SubResource("approval").Patch(ctx, csr, patch)
+				err = cl.SubResource("approval").Patch(ctx, csr, patch, &client.SubResourcePatchOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Asserting the CSR is approved")
@@ -936,10 +936,10 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				By("Updating the scale subresurce")
+				By("Updating the scale subresource")
 				replicaCount := *dep.Spec.Replicas
 				scale := &autoscalingv1.Scale{Spec: autoscalingv1.ScaleSpec{Replicas: replicaCount}}
-				err = cl.SubResource("scale").Update(ctx, dep, client.WithSubResourceBody(scale))
+				err = cl.SubResource("scale").Update(ctx, dep, client.WithSubResourceBody(scale), &client.SubResourceUpdateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Asserting replicas got updated")
@@ -961,7 +961,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				replicaCount := *dep.Spec.Replicas
 				patch := client.MergeFrom(&autoscalingv1.Scale{})
 				scale := &autoscalingv1.Scale{Spec: autoscalingv1.ScaleSpec{Replicas: replicaCount}}
-				err = cl.SubResource("scale").Patch(ctx, dep, patch, client.WithSubResourceBody(scale))
+				err = cl.SubResource("scale").Patch(ctx, dep, patch, client.WithSubResourceBody(scale), &client.SubResourcePatchOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Asserting replicas got updated")

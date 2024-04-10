@@ -43,6 +43,7 @@ import (
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -68,7 +69,7 @@ var _ = Describe("controller", func() {
 		ctrl = &Controller{
 			MaxConcurrentReconciles: 1,
 			Do:                      fakeReconcile,
-			MakeQueue:               func() workqueue.RateLimitingInterface { return queue },
+			NewQueue:                func(string, ratelimiter.RateLimiter) workqueue.RateLimitingInterface { return queue },
 			LogConstructor: func(_ *reconcile.Request) logr.Logger {
 				return log.RuntimeLog.WithName("controller").WithName("test")
 			},
@@ -408,8 +409,8 @@ var _ = Describe("controller", func() {
 		// TODO(directxman12): we should ensure that backoff occurrs with error requeue
 
 		It("should not reset backoff until there's a non-error result", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
-			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
+			dq := &DelegatingQueue{RateLimitingInterface: ctrl.NewQueue("controller1", nil)}
+			ctrl.NewQueue = func(string, ratelimiter.RateLimiter) workqueue.RateLimitingInterface { return dq }
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -444,8 +445,8 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should requeue a Request with rate limiting if the Result sets Requeue:true and continue processing items", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
-			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
+			dq := &DelegatingQueue{RateLimitingInterface: ctrl.NewQueue("controller1", nil)}
+			ctrl.NewQueue = func(string, ratelimiter.RateLimiter) workqueue.RateLimitingInterface { return dq }
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -474,8 +475,8 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should requeue a Request after a duration (but not rate-limitted) if the Result sets RequeueAfter (regardless of Requeue)", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
-			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
+			dq := &DelegatingQueue{RateLimitingInterface: ctrl.NewQueue("controller1", nil)}
+			ctrl.NewQueue = func(string, ratelimiter.RateLimiter) workqueue.RateLimitingInterface { return dq }
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -504,8 +505,8 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should perform error behavior if error is not nil, regardless of RequeueAfter", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
-			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
+			dq := &DelegatingQueue{RateLimitingInterface: ctrl.NewQueue("controller1", nil)}
+			ctrl.NewQueue = func(string, ratelimiter.RateLimiter) workqueue.RateLimitingInterface { return dq }
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

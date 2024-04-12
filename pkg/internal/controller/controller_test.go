@@ -42,7 +42,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/internal/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -128,7 +127,7 @@ var _ = Describe("controller", func() {
 		It("should return an error if there is an error waiting for the informers", func() {
 			f := false
 			ctrl.startWatches = []watchDescription{{
-				src: source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}),
+				src: source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}, nil),
 			}}
 			ctrl.Name = "foo"
 			ctx, cancel := context.WithCancel(context.Background())
@@ -146,7 +145,7 @@ var _ = Describe("controller", func() {
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 
 			ctrl.startWatches = []watchDescription{{
-				src: source.Kind(c, &appsv1.Deployment{}),
+				src: source.Kind(c, &appsv1.Deployment{}, nil),
 			}}
 			ctrl.Name = "testcontroller"
 
@@ -164,7 +163,7 @@ var _ = Describe("controller", func() {
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 			ctrl.startWatches = []watchDescription{{
 				src: &singnallingSourceWrapper{
-					SyncingSource: source.Kind(c, &appsv1.Deployment{}),
+					SyncingSource: source.Kind(c, &appsv1.Deployment{}, nil),
 					cacheSyncDone: sourceSynced,
 				},
 			}}
@@ -192,7 +191,7 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			ctrl.startWatches = []watchDescription{{
 				src: &singnallingSourceWrapper{
-					SyncingSource: source.Kind(c, &appsv1.Deployment{}),
+					SyncingSource: source.Kind(c, &appsv1.Deployment{}, nil),
 					cacheSyncDone: sourceSynced,
 				},
 			}}
@@ -227,7 +226,15 @@ var _ = Describe("controller", func() {
 				Object: p,
 			}
 
-			ins := &source.Channel{Source: ch}
+			ins := &source.Channel{
+				Source: ch,
+				Handler: handler.Funcs{
+					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+						defer GinkgoRecover()
+						close(processed)
+					},
+				},
+			}
 			ins.DestBufferSize = 1
 
 			// send the event to the channel
@@ -235,12 +242,6 @@ var _ = Describe("controller", func() {
 
 			ctrl.startWatches = []watchDescription{{
 				src: ins,
-				handler: handler.Funcs{
-					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						close(processed)
-					},
-				},
 			}}
 
 			go func() {
@@ -265,20 +266,15 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {
-			pr1 := &predicate.Funcs{}
-			pr2 := &predicate.Funcs{}
-			evthdl := &handler.EnqueueRequestForObject{}
 			started := false
-			src := source.Func(func(ctx context.Context, e handler.EventHandler, q workqueue.RateLimitingInterface, p ...predicate.Predicate) error {
+			src := source.Func(func(ctx context.Context, q workqueue.RateLimitingInterface) error {
 				defer GinkgoRecover()
-				Expect(e).To(Equal(evthdl))
 				Expect(q).To(Equal(ctrl.Queue))
-				Expect(p).To(ConsistOf(pr1, pr2))
 
 				started = true
 				return nil
 			})
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).NotTo(HaveOccurred())
+			Expect(ctrl.Watch(src)).NotTo(HaveOccurred())
 
 			// Use a cancelled context so Start doesn't block
 			ctx, cancel := context.WithCancel(context.Background())
@@ -289,13 +285,13 @@ var _ = Describe("controller", func() {
 
 		It("should return an error if there is an error starting sources", func() {
 			err := fmt.Errorf("Expected Error: could not start source")
-			src := source.Func(func(context.Context, handler.EventHandler,
+			src := source.Func(func(context.Context,
 				workqueue.RateLimitingInterface,
-				...predicate.Predicate) error {
+			) error {
 				defer GinkgoRecover()
 				return err
 			})
-			Expect(ctrl.Watch(src, &handler.EnqueueRequestForObject{})).To(Succeed())
+			Expect(ctrl.Watch(src)).To(Succeed())
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

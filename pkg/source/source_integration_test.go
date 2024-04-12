@@ -58,11 +58,6 @@ var _ = Describe("Source", func() {
 		c2 = make(chan interface{})
 	})
 
-	JustBeforeEach(func() {
-		instance1 = source.Kind(icache, obj)
-		instance2 = source.Kind(icache, obj)
-	})
-
 	AfterEach(func() {
 		err := clientset.CoreV1().Namespaces().Delete(ctx, ns, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -124,8 +119,10 @@ var _ = Describe("Source", func() {
 				handler2 := newHandler(c2)
 
 				// Create 2 instances
-				Expect(instance1.Start(ctx, handler1, q)).To(Succeed())
-				Expect(instance2.Start(ctx, handler2, q)).To(Succeed())
+				instance1 = source.Kind(icache, obj, handler1)
+				instance2 = source.Kind(icache, obj, handler2)
+				Expect(instance1.Start(ctx, q)).To(Succeed())
+				Expect(instance2.Start(ctx, q)).To(Succeed())
 
 				By("Creating a Deployment and expecting the CreateEvent.")
 				created, err = client.Create(ctx, deployment, metav1.CreateOptions{})
@@ -241,31 +238,34 @@ var _ = Describe("Source", func() {
 				c := make(chan struct{})
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.Informer{Informer: depInformer}
-				err := instance.Start(ctx, handler.Funcs{
-					CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						var err error
-						rs, err := clientset.AppsV1().ReplicaSets("default").Get(ctx, rs.Name, metav1.GetOptions{})
-						Expect(err).NotTo(HaveOccurred())
+				instance := &source.Informer{
+					Informer: depInformer,
+					Handler: handler.Funcs{
+						CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							var err error
+							rs, err := clientset.AppsV1().ReplicaSets("default").Get(ctx, rs.Name, metav1.GetOptions{})
+							Expect(err).NotTo(HaveOccurred())
 
-						Expect(q2).To(BeIdenticalTo(q))
-						Expect(evt.Object).To(Equal(rs))
-						close(c)
+							Expect(q2).To(BeIdenticalTo(q))
+							Expect(evt.Object).To(Equal(rs))
+							close(c)
+						},
+						UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected UpdateEvent")
+						},
+						DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected DeleteEvent")
+						},
+						GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected GenericEvent")
+						},
 					},
-					UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected UpdateEvent")
-					},
-					DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected DeleteEvent")
-					},
-					GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected GenericEvent")
-					},
-				}, q)
+				}
+				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 
 				_, err = clientset.AppsV1().ReplicaSets("default").Create(ctx, rs, metav1.CreateOptions{})
@@ -282,32 +282,35 @@ var _ = Describe("Source", func() {
 				rs2.SetLabels(map[string]string{"biz": "baz"})
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.Informer{Informer: depInformer}
-				err = instance.Start(ctx, handler.Funcs{
-					CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
-					},
-					UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						var err error
-						rs2, err := clientset.AppsV1().ReplicaSets("default").Get(ctx, rs.Name, metav1.GetOptions{})
-						Expect(err).NotTo(HaveOccurred())
+				instance := &source.Informer{
+					Informer: depInformer,
+					Handler: handler.Funcs{
+						CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
+						},
+						UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							var err error
+							rs2, err := clientset.AppsV1().ReplicaSets("default").Get(ctx, rs.Name, metav1.GetOptions{})
+							Expect(err).NotTo(HaveOccurred())
 
-						Expect(q2).To(Equal(q))
-						Expect(evt.ObjectOld).To(Equal(rs))
+							Expect(q2).To(Equal(q))
+							Expect(evt.ObjectOld).To(Equal(rs))
 
-						Expect(evt.ObjectNew).To(Equal(rs2))
+							Expect(evt.ObjectNew).To(Equal(rs2))
 
-						close(c)
+							close(c)
+						},
+						DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected DeleteEvent")
+						},
+						GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected GenericEvent")
+						},
 					},
-					DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected DeleteEvent")
-					},
-					GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected GenericEvent")
-					},
-				}, q)
+				}
+				err = instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 
 				_, err = clientset.AppsV1().ReplicaSets("default").Update(ctx, rs2, metav1.UpdateOptions{})
@@ -319,23 +322,26 @@ var _ = Describe("Source", func() {
 				c := make(chan struct{})
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := &source.Informer{Informer: depInformer}
-				err := instance.Start(ctx, handler.Funcs{
-					CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
+				instance := &source.Informer{
+					Informer: depInformer,
+					Handler: handler.Funcs{
+						CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
+						},
+						UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+						},
+						DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Expect(q2).To(Equal(q))
+							Expect(evt.Object.GetName()).To(Equal(rs.Name))
+							close(c)
+						},
+						GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected GenericEvent")
+						},
 					},
-					UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
-					},
-					DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Expect(q2).To(Equal(q))
-						Expect(evt.Object.GetName()).To(Equal(rs.Name))
-						close(c)
-					},
-					GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected GenericEvent")
-					},
-				}, q)
+				}
+				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = clientset.AppsV1().ReplicaSets("default").Delete(ctx, rs.Name, metav1.DeleteOptions{})

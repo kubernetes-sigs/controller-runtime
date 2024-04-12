@@ -18,6 +18,7 @@ package source
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -47,7 +48,7 @@ const (
 type Source interface {
 	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 	// to enqueue reconcile.Requests.
-	Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+	Start(context.Context, workqueue.RateLimitingInterface) error
 }
 
 // SyncingSource is a source that needs syncing prior to being usable. The controller
@@ -58,8 +59,13 @@ type SyncingSource interface {
 }
 
 // Kind creates a KindSource with the given cache provider.
-func Kind(cache cache.Cache, object client.Object) SyncingSource {
-	return &internal.Kind{Type: object, Cache: cache}
+func Kind(cache cache.Cache, object client.Object, handler handler.EventHandler, predicates ...predicate.Predicate) SyncingSource {
+	return &internal.Kind{
+		Type:       object,
+		Cache:      cache,
+		Handler:    handler,
+		Predicates: predicates,
+	}
 }
 
 var _ Source = &Channel{}
@@ -73,6 +79,10 @@ type Channel struct {
 
 	// Source is the source channel to fetch GenericEvents
 	Source <-chan event.GenericEvent
+
+	Handler handler.EventHandler
+
+	Predicates []predicate.Predicate
 
 	// dest is the destination channels of the added event handlers
 	dest []chan event.GenericEvent
@@ -92,12 +102,14 @@ func (cs *Channel) String() string {
 // Start implements Source and should only be called by the Controller.
 func (cs *Channel) Start(
 	ctx context.Context,
-	handler handler.EventHandler,
 	queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
+) error {
 	// Source should have been specified by the user.
 	if cs.Source == nil {
 		return fmt.Errorf("must specify Channel.Source")
+	}
+	if cs.Handler == nil {
+		return errors.New("must specify Channel.Handler")
 	}
 
 	// use default value if DestBufferSize not specified
@@ -119,7 +131,7 @@ func (cs *Channel) Start(
 	go func() {
 		for evt := range dst {
 			shouldHandle := true
-			for _, p := range prct {
+			for _, p := range cs.Predicates {
 				if !p.Generic(evt) {
 					shouldHandle = false
 					break
@@ -130,7 +142,7 @@ func (cs *Channel) Start(
 				func() {
 					ctx, cancel := context.WithCancel(ctx)
 					defer cancel()
-					handler.Generic(ctx, evt, queue)
+					cs.Handler.Generic(ctx, evt, queue)
 				}()
 			}
 		}
@@ -184,21 +196,25 @@ func (cs *Channel) syncLoop(ctx context.Context) {
 // Informer is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
 type Informer struct {
 	// Informer is the controller-runtime Informer
-	Informer cache.Informer
+	Informer   cache.Informer
+	Handler    handler.EventHandler
+	Predicates []predicate.Predicate
 }
 
 var _ Source = &Informer{}
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (is *Informer) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
+func (is *Informer) Start(ctx context.Context, queue workqueue.RateLimitingInterface) error {
 	// Informer should have been specified by the user.
 	if is.Informer == nil {
 		return fmt.Errorf("must specify Informer.Informer")
 	}
+	if is.Handler == nil {
+		return errors.New("must specify Informer.Handler")
+	}
 
-	_, err := is.Informer.AddEventHandler(internal.NewEventHandler(ctx, queue, handler, prct).HandlerFuncs())
+	_, err := is.Informer.AddEventHandler(internal.NewEventHandler(ctx, queue, is.Handler, is.Predicates).HandlerFuncs())
 	if err != nil {
 		return err
 	}
@@ -212,12 +228,11 @@ func (is *Informer) String() string {
 var _ Source = Func(nil)
 
 // Func is a function that implements Source.
-type Func func(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
+type Func func(context.Context, workqueue.RateLimitingInterface) error
 
 // Start implements Source.
-func (f Func) Start(ctx context.Context, evt handler.EventHandler, queue workqueue.RateLimitingInterface,
-	pr ...predicate.Predicate) error {
-	return f(ctx, evt, queue, pr...)
+func (f Func) Start(ctx context.Context, queue workqueue.RateLimitingInterface) error {
+	return f(ctx, queue)
 }
 
 func (f Func) String() string {

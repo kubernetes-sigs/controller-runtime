@@ -124,7 +124,6 @@ func (blder *Builder) Owns(object client.Object, opts ...OwnsOption) *Builder {
 // WatchesInput represents the information set by Watches method.
 type WatchesInput struct {
 	src              source.Source
-	eventHandler     handler.EventHandler
 	predicates       []predicate.Predicate
 	objectProjection objectProjection
 }
@@ -135,8 +134,13 @@ type WatchesInput struct {
 // This is the equivalent of calling
 // WatchesRawSource(source.Kind(cache, object), eventHandler, opts...).
 func (blder *Builder) Watches(object client.Object, eventHandler handler.EventHandler, opts ...WatchesOption) *Builder {
-	src := source.Kind(blder.mgr.GetCache(), object)
-	return blder.WatchesRawSource(src, eventHandler, opts...)
+	input := WatchesInput{}
+	for _, opt := range opts {
+		opt.ApplyToWatches(&input)
+	}
+	src := source.Kind(blder.mgr.GetCache(), object, eventHandler, input.predicates...)
+
+	return blder.WatchesRawSource(src, opts...)
 }
 
 // WatchesMetadata is the same as Watches, but forces the internal cache to only watch PartialObjectMetadata.
@@ -176,8 +180,8 @@ func (blder *Builder) WatchesMetadata(object client.Object, eventHandler handler
 //
 // STOP! Consider using For(...), Owns(...), Watches(...), WatchesMetadata(...) instead.
 // This method is only exposed for more advanced use cases, most users should use one of the higher level functions.
-func (blder *Builder) WatchesRawSource(src source.Source, eventHandler handler.EventHandler, opts ...WatchesOption) *Builder {
-	input := WatchesInput{src: src, eventHandler: eventHandler}
+func (blder *Builder) WatchesRawSource(src source.Source, opts ...WatchesOption) *Builder {
+	input := WatchesInput{src: src}
 	for _, opt := range opts {
 		opt.ApplyToWatches(&input)
 	}
@@ -272,11 +276,11 @@ func (blder *Builder) doWatch() error {
 		if err != nil {
 			return err
 		}
-		src := source.Kind(blder.mgr.GetCache(), obj)
 		hdler := &handler.EnqueueRequestForObject{}
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, blder.forInput.predicates...)
-		if err := blder.ctrl.Watch(src, hdler, allPredicates...); err != nil {
+		src := source.Kind(blder.mgr.GetCache(), obj, hdler, allPredicates...)
+		if err := blder.ctrl.Watch(src); err != nil {
 			return err
 		}
 	}
@@ -290,7 +294,6 @@ func (blder *Builder) doWatch() error {
 		if err != nil {
 			return err
 		}
-		src := source.Kind(blder.mgr.GetCache(), obj)
 		opts := []handler.OwnerOption{}
 		if !own.matchEveryOwner {
 			opts = append(opts, handler.OnlyControllerOwner())
@@ -302,7 +305,8 @@ func (blder *Builder) doWatch() error {
 		)
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, own.predicates...)
-		if err := blder.ctrl.Watch(src, hdler, allPredicates...); err != nil {
+		src := source.Kind(blder.mgr.GetCache(), obj, hdler, allPredicates...)
+		if err := blder.ctrl.Watch(src); err != nil {
 			return err
 		}
 	}
@@ -311,18 +315,19 @@ func (blder *Builder) doWatch() error {
 	if len(blder.watchesInput) == 0 && blder.forInput.object == nil {
 		return errors.New("there are no watches configured, controller will never get triggered. Use For(), Owns() or Watches() to set them up")
 	}
+	allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 	for _, w := range blder.watchesInput {
 		// If the source of this watch is of type Kind, project it.
 		if srcKind, ok := w.src.(*internalsource.Kind); ok {
+			allPredicates := append(allPredicates, w.predicates...)
 			typeForSrc, err := blder.project(srcKind.Type, w.objectProjection)
 			if err != nil {
 				return err
 			}
 			srcKind.Type = typeForSrc
+			srcKind.Predicates = append(srcKind.Predicates, allPredicates...)
 		}
-		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
-		allPredicates = append(allPredicates, w.predicates...)
-		if err := blder.ctrl.Watch(w.src, w.eventHandler, allPredicates...); err != nil {
+		if err := blder.ctrl.Watch(w.src); err != nil {
 			return err
 		}
 	}

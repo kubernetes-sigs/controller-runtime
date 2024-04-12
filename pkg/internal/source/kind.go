@@ -24,6 +24,10 @@ type Kind struct {
 	// Cache used to watch APIs
 	Cache cache.Cache
 
+	Handler handler.EventHandler
+
+	Predicates []predicate.Predicate
+
 	// started may contain an error if one was encountered during startup. If its closed and does not
 	// contain an error, startup and syncing finished.
 	started     chan error
@@ -32,8 +36,7 @@ type Kind struct {
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer
 // to enqueue reconcile.Requests.
-func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue workqueue.RateLimitingInterface,
-	prct ...predicate.Predicate) error {
+func (ks *Kind) Start(ctx context.Context, queue workqueue.RateLimitingInterface) error {
 	if ks.Type == nil {
 		return fmt.Errorf("must create Kind with a non-nil object")
 	}
@@ -79,7 +82,7 @@ func (ks *Kind) Start(ctx context.Context, handler handler.EventHandler, queue w
 			return
 		}
 
-		_, err := i.AddEventHandler(NewEventHandler(ctx, queue, handler, prct).HandlerFuncs())
+		_, err := i.AddEventHandler(NewEventHandler(ctx, queue, ks.Handler, ks.Predicates).HandlerFuncs())
 		if err != nil {
 			ks.started <- err
 			return

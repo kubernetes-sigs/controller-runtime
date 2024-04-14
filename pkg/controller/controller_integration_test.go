@@ -66,12 +66,12 @@ var _ = Describe("controller", func() {
 			By("Watching Resources")
 			err = instance.Watch(
 				source.Kind(cm.GetCache(), &appsv1.ReplicaSet{},
-					handler.EnqueueRequestForOwner(cm.GetScheme(), cm.GetRESTMapper(), &appsv1.Deployment{}),
+					handler.TypedEnqueueRequestForOwner[*appsv1.ReplicaSet](cm.GetScheme(), cm.GetRESTMapper(), &appsv1.Deployment{}),
 				),
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = instance.Watch(source.Kind(cm.GetCache(), &appsv1.Deployment{}, &handler.EnqueueRequestForObject{}))
+			err = instance.Watch(source.Kind(cm.GetCache(), &appsv1.Deployment{}, &handler.TypedEnqueueRequestForObject[*appsv1.Deployment]{}))
 			Expect(err).NotTo(HaveOccurred())
 
 			err = cm.GetClient().Get(ctx, types.NamespacedName{Name: "foo"}, &corev1.Namespace{})

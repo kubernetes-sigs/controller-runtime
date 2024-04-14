@@ -126,9 +126,9 @@ var _ = Describe("controller", func() {
 	Describe("Start", func() {
 		It("should return an error if there is an error waiting for the informers", func() {
 			f := false
-			ctrl.startWatches = []watchDescription{{
-				src: source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}, nil),
-			}}
+			ctrl.startWatches = []source.Source{
+				source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
+			}
 			ctrl.Name = "foo"
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -144,9 +144,9 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 
-			ctrl.startWatches = []watchDescription{{
-				src: source.Kind(c, &appsv1.Deployment{}, nil),
-			}}
+			ctrl.startWatches = []source.Source{
+				source.Kind(c, &appsv1.Deployment{}, &handler.TypedEnqueueRequestForObject[*appsv1.Deployment]{}),
+			}
 			ctrl.Name = "testcontroller"
 
 			err = ctrl.Start(context.TODO())
@@ -161,12 +161,12 @@ var _ = Describe("controller", func() {
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
-			ctrl.startWatches = []watchDescription{{
-				src: &singnallingSourceWrapper{
-					SyncingSource: source.Kind(c, &appsv1.Deployment{}, nil),
+			ctrl.startWatches = []source.Source{
+				&singnallingSourceWrapper{
+					SyncingSource: source.Kind[client.Object](c, &appsv1.Deployment{}, &handler.EnqueueRequestForObject{}),
 					cacheSyncDone: sourceSynced,
 				},
-			}}
+			}
 			ctrl.Name = "testcontroller"
 
 			ctx, cancel := context.WithCancel(context.TODO())
@@ -189,12 +189,12 @@ var _ = Describe("controller", func() {
 			sourceSynced := make(chan struct{})
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
-			ctrl.startWatches = []watchDescription{{
-				src: &singnallingSourceWrapper{
-					SyncingSource: source.Kind(c, &appsv1.Deployment{}, nil),
+			ctrl.startWatches = []source.Source{
+				&singnallingSourceWrapper{
+					SyncingSource: source.Kind[client.Object](c, &appsv1.Deployment{}, &handler.EnqueueRequestForObject{}),
 					cacheSyncDone: sourceSynced,
 				},
-			}}
+			}
 
 			go func() {
 				defer GinkgoRecover()
@@ -226,23 +226,20 @@ var _ = Describe("controller", func() {
 				Object: p,
 			}
 
-			ins := &source.Channel{
-				Source: ch,
-				Handler: handler.Funcs{
+			ins := source.Channel(
+				ch,
+				handler.Funcs{
 					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
 						close(processed)
 					},
 				},
-			}
-			ins.DestBufferSize = 1
+			)
 
 			// send the event to the channel
 			ch <- evt
 
-			ctrl.startWatches = []watchDescription{{
-				src: ins,
-			}}
+			ctrl.startWatches = []source.Source{ins}
 
 			go func() {
 				defer GinkgoRecover()
@@ -255,10 +252,8 @@ var _ = Describe("controller", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			ins := &source.Channel{}
-			ctrl.startWatches = []watchDescription{{
-				src: ins,
-			}}
+			ins := source.Channel[string](nil, nil)
+			ctrl.startWatches = []source.Source{ins}
 
 			e := ctrl.Start(ctx)
 			Expect(e).To(HaveOccurred())

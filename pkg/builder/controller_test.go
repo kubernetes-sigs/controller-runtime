@@ -146,7 +146,7 @@ var _ = Describe("application", func() {
 			instance, err := ControllerManagedBy(m).
 				Named("my_controller").
 				Build(noop)
-			Expect(err).To(MatchError(ContainSubstring("there are no watches configured, controller will never get triggered. Use For(), Owns() or Watches() to set them up")))
+			Expect(err).To(MatchError(ContainSubstring("there are no watches configured, controller will never get triggered. Use For(), Owns(), Watches() or WatchesRawSource() to set them up")))
 			Expect(instance).To(BeNil())
 		})
 

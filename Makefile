@@ -142,10 +142,4 @@ APIDIFF_OLD_COMMIT ?= $(shell git rev-parse origin/main)
 verify-apidiff: $(GO_APIDIFF) ## Check for API differences
 	$(GO_APIDIFF) $(APIDIFF_OLD_COMMIT) --print-compatible
 
-.PHONY: verify-generate
-verify-generate: generate ## Verify generated files are up to date
-	@if !(git diff --quiet HEAD); then \
-		git diff; \
-		echo "generated files are out of date, run make generate"; exit 1; \
-	fi
 

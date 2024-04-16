@@ -124,7 +124,7 @@ func (blder *Builder) Owns(object client.Object, opts ...OwnsOption) *Builder {
 
 // WatchesInput represents the information set by Watches method.
 type WatchesInput struct {
-	src              source.SourcePrepare
+	src              source.PrepareSyncing
 	eventHandler     handler.EventHandler
 	predicates       []predicate.Predicate
 	objectProjection objectProjection
@@ -177,7 +177,7 @@ func (blder *Builder) WatchesMetadata(object client.Object, eventHandler handler
 //
 // STOP! Consider using For(...), Owns(...), Watches(...), WatchesMetadata(...) instead.
 // This method is only exposed for more advanced use cases, most users should use one of the higher level functions.
-func (blder *Builder) WatchesRawSource(src source.SourcePrepare, eventHandler handler.EventHandler, opts ...WatchesOption) *Builder {
+func (blder *Builder) WatchesRawSource(src source.PrepareSyncing, eventHandler handler.EventHandler, opts ...WatchesOption) *Builder {
 	input := WatchesInput{src: src, eventHandler: eventHandler}
 	for _, opt := range opts {
 		opt.ApplyToWatches(&input)
@@ -188,29 +188,24 @@ func (blder *Builder) WatchesRawSource(src source.SourcePrepare, eventHandler ha
 }
 
 func For[T client.Object](blder *Builder, object T, prct ...predicate.ObjectPredicate[T]) source.Source {
-	src := source.ObjectKind(blder.mgr.GetCache(), object)
-	src.PrepareObject(&handler.EnqueueRequest[T]{}, prct...)
+	blder.forInput = ForInput{object: object}
 
-	return src
+	return source.ObjectKind(blder.mgr.GetCache(), object).PrepareObject(&handler.EnqueueRequest[T]{}, prct...)
 }
 
-func Owns[F, T client.Object](blder *Builder, owner F, owned T) source.Source {
+func Owns[F, T client.Object](blder *Builder, owner F, owned T, prct ...predicate.ObjectPredicate[T]) source.Source {
 	src := source.ObjectKind(blder.mgr.GetCache(), owned)
 
 	hdler := handler.EnqueueRequestForOwner(
 		blder.mgr.GetScheme(), blder.mgr.GetRESTMapper(),
 		owner,
 	)
-	src.PrepareObject(handler.ObjectFuncAdapter[T](hdler))
 
-	return src
+	return src.PrepareObject(handler.ObjectFuncAdapter[T](hdler), prct...)
 }
 
 func Watches[T client.Object](blder *Builder, object T, eventHandler handler.ObjectHandler[T], prct ...predicate.ObjectPredicate[T]) source.Source {
-	src := source.ObjectKind(blder.mgr.GetCache(), object)
-	src.PrepareObject(eventHandler, prct...)
-
-	return src
+	return source.ObjectKind(blder.mgr.GetCache(), object).PrepareObject(eventHandler, prct...)
 }
 
 func (blder *Builder) Add(src source.Source) *Builder {
@@ -308,8 +303,7 @@ func (blder *Builder) doWatch() error {
 		hdler := &handler.EnqueueRequestForObject{}
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, blder.forInput.predicates...)
-		src.Prepare(hdler, allPredicates...)
-		if err := blder.ctrl.Watch(src); err != nil {
+		if err := blder.ctrl.Watch(src.Prepare(hdler, allPredicates...)); err != nil {
 			return err
 		}
 	}
@@ -335,8 +329,7 @@ func (blder *Builder) doWatch() error {
 		)
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, own.predicates...)
-		src.Prepare(hdler, allPredicates...)
-		if err := blder.ctrl.Watch(src); err != nil {
+		if err := blder.ctrl.Watch(src.Prepare(hdler, allPredicates...)); err != nil {
 			return err
 		}
 	}
@@ -356,8 +349,7 @@ func (blder *Builder) doWatch() error {
 		}
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)
-		w.src.Prepare(w.eventHandler, allPredicates...)
-		if err := blder.ctrl.Watch(w.src); err != nil {
+		if err := blder.ctrl.Watch(w.src.Prepare(w.eventHandler, allPredicates...)); err != nil {
 			return err
 		}
 	}

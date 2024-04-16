@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/interfaces"
 	internal "sigs.k8s.io/controller-runtime/pkg/internal/source"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -36,50 +37,14 @@ const (
 	defaultBufferSize = 1024
 )
 
-// Source is a source of events (e.g. Create, Update, Delete operations on Kubernetes Objects, Webhook callbacks, etc)
-// which should be processed by event.EventHandlers to enqueue reconcile.Requests.
-//
-// * Use Kind for events originating in the cluster (e.g. Pod Create, Pod Update, Deployment Update).
-//
-// * Use Channel for events originating outside the cluster (e.g. GitHub Webhook callback, Polling external urls).
-//
-// Users may build their own Source implementations.
-type Source interface {
-	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
-	// to enqueue reconcile.Requests.
-	// Start(context.Context, handler.EventHandler, workqueue.RateLimitingInterface, ...predicate.Predicate) error
-	Start(context.Context, workqueue.RateLimitingInterface) error
-}
+type Source = interfaces.Source
+type Syncing = interfaces.Syncing
+type SyncingSource = interfaces.SyncingSource
+type PrepareSyncing = interfaces.PrepareSyncing
+type PrepareSource = interfaces.PrepareSource
 
-type SourcePrepare interface {
-	Source
-	Prepare(handler.EventHandler, ...predicate.Predicate)
-}
-
-type ObjectSourcePrepare[T any] interface {
-	Source
-	PrepareObject(handler.ObjectHandler[T], ...predicate.ObjectPredicate[T])
-}
-
-// SyncingSource is a source that needs syncing prior to being usable. The controller
-// will call its WaitForSync prior to starting workers.
-type SyncingSource interface {
-	Source
-	Syncing
-}
-
-type PrepareSyncing interface {
-	SyncingSource
-	SourcePrepare
-}
-
-type ObjectPrepare[T any] interface {
-	SyncingSource
-	ObjectSourcePrepare[T]
-}
-
-type Syncing interface {
-	WaitForSync(ctx context.Context) error
+type PrepareSyncingObject[T any] interface {
+	interfaces.PrepareSyncingObject[T]
 }
 
 // Kind creates a KindSource with the given cache provider.
@@ -88,11 +53,11 @@ func Kind(cache cache.Cache, object client.Object) PrepareSyncing {
 }
 
 // ObjectKind creates a typed KindSource with the given cache provider.
-func ObjectKind[T client.Object](cache cache.Cache, object T) ObjectPrepare[T] {
+func ObjectKind[T client.Object](cache cache.Cache, object T) PrepareSyncingObject[T] {
 	return &internal.Kind[T]{Type: object, Cache: cache}
 }
 
-var _ SourcePrepare = &Channel{}
+var _ PrepareSource = &Channel{}
 
 // Channel is used to provide a source of events originating outside the cluster
 // (e.g. GitHub Webhook callback).  Channel requires the user to wire the external
@@ -123,13 +88,19 @@ func (cs *Channel) String() string {
 	return fmt.Sprintf("channel source: %p", cs)
 }
 
+func (cs *Channel) WaitForSync(ctx context.Context) error {
+	return nil
+}
+
 // Prepare implements Source preparation and should only be called when handler and predicates are available.
 func (cs *Channel) Prepare(
 	handler handler.EventHandler,
 	prct ...predicate.Predicate,
-) {
+) SyncingSource {
 	cs.predicates = prct
 	cs.handler = handler
+
+	return cs
 }
 
 // Start implements Source and should only be called by the Controller.
@@ -237,14 +208,20 @@ type Informer struct {
 	handler handler.EventHandler
 }
 
-var _ SourcePrepare = &Informer{}
+var _ PrepareSource = &Informer{}
 
 func (is *Informer) Prepare(
 	h handler.EventHandler,
 	prct ...predicate.Predicate,
-) {
+) SyncingSource {
 	is.handler = h
 	is.predicates = prct
+
+	return is
+}
+
+func (cs *Informer) WaitForSync(ctx context.Context) error {
+	return nil
 }
 
 // Start is internal and should be called only by the Controller to register an EventHandler with the Informer

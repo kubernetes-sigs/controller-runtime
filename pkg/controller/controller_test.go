@@ -101,8 +101,7 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{Reconciler: rec})
-			watch.Prepare(&handler.EnqueueRequestForObject{})
-			Expect(c.Watch(watch)).To(Succeed())
+			Expect(c.Watch(watch.Prepare(&handler.EnqueueRequestForObject{}))).To(Succeed())
 			Expect(err).NotTo(HaveOccurred())
 
 			go func() {

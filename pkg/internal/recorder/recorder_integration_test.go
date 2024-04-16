@@ -56,8 +56,7 @@ var _ = Describe("recorder", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Watching Resources")
-			src := source.Kind(cm.GetCache(), &appsv1.Deployment{})
-			src.Prepare(&handler.EnqueueRequestForObject{})
+			src := source.Kind(cm.GetCache(), &appsv1.Deployment{}).Prepare(&handler.EnqueueRequestForObject{})
 			err = instance.Watch(src)
 			Expect(err).NotTo(HaveOccurred())
 

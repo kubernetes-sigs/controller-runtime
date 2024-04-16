@@ -71,9 +71,7 @@ func ExampleController() {
 	}
 
 	// Watch for Pod create / update / delete events and call Reconcile
-	src := source.Kind(mgr.GetCache(), &corev1.Pod{})
-	src.Prepare(&handler.EnqueueRequestForObject{})
-	err = c.Watch(src)
+	err = c.Watch(source.Kind(mgr.GetCache(), &corev1.Pod{}).Prepare(&handler.EnqueueRequestForObject{}))
 	if err != nil {
 		log.Error(err, "unable to watch pods")
 		os.Exit(1)
@@ -111,8 +109,7 @@ func ExampleController_unstructured() {
 	})
 	// Watch for Pod create / update / delete events and call Reconcile
 	src := source.Kind(mgr.GetCache(), u)
-	src.Prepare(&handler.EnqueueRequestForObject{})
-	err = c.Watch(src)
+	err = c.Watch(src.Prepare(&handler.EnqueueRequestForObject{}))
 	if err != nil {
 		log.Error(err, "unable to watch pods")
 		os.Exit(1)
@@ -144,8 +141,7 @@ func ExampleNewUnmanaged() {
 	}
 
 	src := source.Kind(mgr.GetCache(), &corev1.Pod{})
-	src.Prepare(&handler.EnqueueRequestForObject{})
-	if err := c.Watch(src); err != nil {
+	if err := c.Watch(src.Prepare(&handler.EnqueueRequestForObject{})); err != nil {
 		log.Error(err, "unable to watch pods")
 		os.Exit(1)
 	}

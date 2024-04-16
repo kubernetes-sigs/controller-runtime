@@ -66,27 +66,27 @@ var _ = Describe("Source", func() {
 				}
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := source.Kind(ic, &corev1.Pod{})
-				instance.Prepare(handler.Funcs{
-					CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Expect(q2).To(Equal(q))
-						Expect(evt.Object).To(Equal(p))
-						close(c)
-					},
-					UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected UpdateEvent")
-					},
-					DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected DeleteEvent")
-					},
-					GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected GenericEvent")
-					},
-				})
+				instance := source.Kind(ic, &corev1.Pod{}).
+					Prepare(handler.Funcs{
+						CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Expect(q2).To(Equal(q))
+							Expect(evt.Object).To(Equal(p))
+							close(c)
+						},
+						UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected UpdateEvent")
+						},
+						DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected DeleteEvent")
+						},
+						GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected GenericEvent")
+						},
+					})
 				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(instance.WaitForSync(context.Background())).NotTo(HaveOccurred())
@@ -104,30 +104,30 @@ var _ = Describe("Source", func() {
 
 				ic := &informertest.FakeInformers{}
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := source.Kind(ic, &corev1.Pod{})
-				instance.Prepare(handler.Funcs{
-					CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected CreateEvent")
-					},
-					UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Expect(q2).To(BeIdenticalTo(q))
-						Expect(evt.ObjectOld).To(Equal(p))
+				instance := source.Kind(ic, &corev1.Pod{}).
+					Prepare(handler.Funcs{
+						CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected CreateEvent")
+						},
+						UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Expect(q2).To(BeIdenticalTo(q))
+							Expect(evt.ObjectOld).To(Equal(p))
 
-						Expect(evt.ObjectNew).To(Equal(p2))
+							Expect(evt.ObjectNew).To(Equal(p2))
 
-						close(c)
-					},
-					DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected DeleteEvent")
-					},
-					GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected GenericEvent")
-					},
-				})
+							close(c)
+						},
+						DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected DeleteEvent")
+						},
+						GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected GenericEvent")
+						},
+					})
 				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(instance.WaitForSync(context.Background())).NotTo(HaveOccurred())
@@ -150,27 +150,27 @@ var _ = Describe("Source", func() {
 				}
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
-				instance := source.Kind(ic, &corev1.Pod{})
-				instance.Prepare(handler.Funcs{
-					CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected DeleteEvent")
-					},
-					UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected UpdateEvent")
-					},
-					DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Expect(q2).To(BeIdenticalTo(q))
-						Expect(evt.Object).To(Equal(p))
-						close(c)
-					},
-					GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
-						defer GinkgoRecover()
-						Fail("Unexpected GenericEvent")
-					},
-				})
+				instance := source.Kind(ic, &corev1.Pod{}).
+					Prepare(handler.Funcs{
+						CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected DeleteEvent")
+						},
+						UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected UpdateEvent")
+						},
+						DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Expect(q2).To(BeIdenticalTo(q))
+							Expect(evt.Object).To(Equal(p))
+							close(c)
+						},
+						GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
+							defer GinkgoRecover()
+							Fail("Unexpected GenericEvent")
+						},
+					})
 				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(instance.WaitForSync(context.Background())).NotTo(HaveOccurred())
@@ -230,8 +230,7 @@ var _ = Describe("Source", func() {
 				defer cancel()
 
 				instance := source.Kind(ic, &corev1.Pod{})
-				instance.Prepare(handler.Funcs{})
-				err := instance.Start(ctx, q)
+				err := instance.Prepare(handler.Funcs{}).Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(instance.WaitForSync).WithArguments(context.Background()).Should(HaveOccurred())
 			})

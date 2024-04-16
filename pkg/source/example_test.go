@@ -32,8 +32,7 @@ var ctrl controller.Controller
 // with the Name and Namespace of the Pod.
 func ExampleKind() {
 	instance := source.Kind(mgr.GetCache(), &corev1.Pod{})
-	instance.Prepare(&handler.EnqueueRequestForObject{})
-	err := ctrl.Watch(instance)
+	err := ctrl.Watch(instance.Prepare(&handler.EnqueueRequestForObject{}))
 	if err != nil {
 		// handle it
 	}

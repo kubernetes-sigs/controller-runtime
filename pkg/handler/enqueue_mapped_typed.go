@@ -57,6 +57,22 @@ func EnqueueRequestsFromObjectMapFunc[T any](fn ObjectMapFunc[T]) EventHandler {
 	}
 }
 
+// EnqueueRequestsFromObjectMap enqueues Requests by running a transformation function that outputs a collection
+// of reconcile.Requests on each Event.  The reconcile.Requests may be for an arbitrary set of objects
+// defined by some user specified transformation of the source Event.  (e.g. trigger Reconciler for a set of objects
+// in response to a cluster resize event caused by adding or deleting a Node)
+//
+// EnqueueRequestsFromObjectMap is frequently used to fan-out updates from one object to one or more other
+// objects of a differing type.
+//
+// For UpdateEvents which contain both a new and old object, the transformation function is run on both
+// objects and both sets of Requests are enqueue.
+func EnqueueRequestsFromObjectMap[T any](fn ObjectMapFunc[T]) ObjectHandler[T] {
+	return &enqueueRequestsFromObjectMapFunc[T]{
+		toRequests: fn,
+	}
+}
+
 var _ EventHandler = &enqueueRequestsFromObjectMapFunc[any]{}
 var _ ObjectHandler[any] = &enqueueRequestsFromObjectMapFunc[any]{}
 

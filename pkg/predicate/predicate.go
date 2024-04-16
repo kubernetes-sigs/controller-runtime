@@ -609,7 +609,7 @@ func ObjectPredicateAdapter[T client.Object](h Predicate) ObjectPredicate[T] {
 
 func ObjectPredicatesAdapter[T client.Object](predicates ...Predicate) (prdt []ObjectPredicate[T]) {
 	for _, p := range predicates {
-		prdt = append(prdt, ObjectPredicatesAdapter[T](p)...)
+		prdt = append(prdt, ObjectPredicateAdapter[T](p))
 	}
 
 	return

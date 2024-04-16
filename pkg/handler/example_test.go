@@ -42,8 +42,7 @@ var (
 func ExampleEnqueueRequestForObject() {
 	// controller is a controller.controller
 	src := source.Kind(mgr.GetCache(), &corev1.Pod{})
-	src.Prepare(&handler.EnqueueRequestForObject{})
-	err := c.Watch(src)
+	err := c.Watch(src.Prepare(&handler.EnqueueRequestForObject{}))
 	if err != nil {
 		// handle it
 	}
@@ -65,19 +64,19 @@ func ExampleEnqueueRequestForOwner() {
 // objects (of Type: MyKind) using a mapping function defined by the user.
 func ExampleEnqueueRequestsFromMapFunc() {
 	// controller is a controller.controller
-	src := source.Kind(mgr.GetCache(), &appsv1.Deployment{})
-	src.Prepare(handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a client.Object) []reconcile.Request {
-		return []reconcile.Request{
-			{NamespacedName: types.NamespacedName{
-				Name:      a.GetName() + "-1",
-				Namespace: a.GetNamespace(),
-			}},
-			{NamespacedName: types.NamespacedName{
-				Name:      a.GetName() + "-2",
-				Namespace: a.GetNamespace(),
-			}},
-		}
-	}))
+	src := source.Kind(mgr.GetCache(), &appsv1.Deployment{}).
+		Prepare(handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a client.Object) []reconcile.Request {
+			return []reconcile.Request{
+				{NamespacedName: types.NamespacedName{
+					Name:      a.GetName() + "-1",
+					Namespace: a.GetNamespace(),
+				}},
+				{NamespacedName: types.NamespacedName{
+					Name:      a.GetName() + "-2",
+					Namespace: a.GetNamespace(),
+				}},
+			}
+		}))
 	err := c.Watch(src)
 	if err != nil {
 		// handle it
@@ -87,33 +86,33 @@ func ExampleEnqueueRequestsFromMapFunc() {
 // This example implements handler.EnqueueRequestForObject.
 func ExampleFuncs() {
 	// controller is a controller.controller
-	src := source.Kind(mgr.GetCache(), &corev1.Pod{})
-	src.Prepare(handler.Funcs{
-		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
-			q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-				Name:      e.Object.GetName(),
-				Namespace: e.Object.GetNamespace(),
-			}})
-		},
-		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
-			q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-				Name:      e.ObjectNew.GetName(),
-				Namespace: e.ObjectNew.GetNamespace(),
-			}})
-		},
-		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
-			q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-				Name:      e.Object.GetName(),
-				Namespace: e.Object.GetNamespace(),
-			}})
-		},
-		GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
-			q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-				Name:      e.Object.GetName(),
-				Namespace: e.Object.GetNamespace(),
-			}})
-		},
-	})
+	src := source.Kind(mgr.GetCache(), &corev1.Pod{}).
+		Prepare(handler.Funcs{
+			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+					Name:      e.Object.GetName(),
+					Namespace: e.Object.GetNamespace(),
+				}})
+			},
+			UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+					Name:      e.ObjectNew.GetName(),
+					Namespace: e.ObjectNew.GetNamespace(),
+				}})
+			},
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+					Name:      e.Object.GetName(),
+					Namespace: e.Object.GetNamespace(),
+				}})
+			},
+			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
+				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+					Name:      e.Object.GetName(),
+					Namespace: e.Object.GetNamespace(),
+				}})
+			},
+		})
 
 	err := c.Watch(src)
 	if err != nil {

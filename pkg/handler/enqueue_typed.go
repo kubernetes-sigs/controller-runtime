@@ -29,6 +29,7 @@ import (
 var _ EventHandler = &EnqueueRequest[metav1.Object]{}
 var _ ObjectHandler[metav1.Object] = &EnqueueRequest[metav1.Object]{}
 
+// Request is a minimal subset of a client.Object interface, allowing to enact on non kubernetes resources.
 type Request interface {
 	GetName() string
 	GetNamespace() string

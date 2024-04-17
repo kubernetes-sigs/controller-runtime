@@ -125,7 +125,7 @@ var _ EventHandler = Funcs{}
 var _ EventHandler = ObjectFuncs[any]{}
 var _ ObjectHandler[any] = ObjectFuncs[any]{}
 
-// Funcs is a function that implements Predicate.
+// ObjectFuncs is a function that implements ObjectPredicate.
 type ObjectFuncs[T any] struct {
 	// Create is called in response to an add event.  Defaults to no-op.
 	// RateLimitingInterface is used to enqueue reconcile.Requests.
@@ -146,10 +146,10 @@ type ObjectFuncs[T any] struct {
 
 // Update implements Predicate.
 func (p ObjectFuncs[T]) Update(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
-	new, ok := e.ObjectNew.(T)
-	old, oldOk := e.ObjectOld.(T)
-	if ok && oldOk {
-		p.OnUpdate(ctx, old, new, q)
+	objNew, newOk := e.ObjectNew.(T)
+	objOld, oldOk := e.ObjectOld.(T)
+	if newOk && oldOk {
+		p.OnUpdate(ctx, objOld, objNew, q)
 	}
 }
 
@@ -177,34 +177,35 @@ func (p ObjectFuncs[T]) Delete(ctx context.Context, e event.DeleteEvent, q workq
 	}
 }
 
-// Update implements Predicate.
+// OnUpdate implements ObjectPredicate.
 func (p ObjectFuncs[T]) OnUpdate(ctx context.Context, old, new T, q workqueue.RateLimitingInterface) {
 	if p.UpdateFunc != nil {
 		p.UpdateFunc(ctx, old, new, q)
 	}
 }
 
-// Generic implements Predicate.
+// OnGeneric implements ObjectPredicate.
 func (p ObjectFuncs[T]) OnGeneric(ctx context.Context, obj T, q workqueue.RateLimitingInterface) {
 	if p.GenericFunc != nil {
 		p.GenericFunc(ctx, obj, q)
 	}
 }
 
-// Create implements Predicate.
+// OnCreate implements ObjectPredicate.
 func (p ObjectFuncs[T]) OnCreate(ctx context.Context, obj T, q workqueue.RateLimitingInterface) {
 	if p.CreateFunc != nil {
 		p.CreateFunc(ctx, obj, q)
 	}
 }
 
-// Delete implements Predicate.
+// OnDelete implements ObjectPredicate.
 func (p ObjectFuncs[T]) OnDelete(ctx context.Context, obj T, q workqueue.RateLimitingInterface) {
 	if p.DeleteFunc != nil {
 		p.DeleteFunc(ctx, obj, q)
 	}
 }
 
+// ObjectFuncAdapter allows to reuse existing EventHandler for a typed ObjectHandler
 func ObjectFuncAdapter[T client.Object](h EventHandler) ObjectHandler[T] {
 	return ObjectFuncs[T]{
 		CreateFunc: func(ctx context.Context, obj T, queue workqueue.RateLimitingInterface) {
@@ -222,6 +223,7 @@ func ObjectFuncAdapter[T client.Object](h EventHandler) ObjectHandler[T] {
 	}
 }
 
+// EventHandlerAdapter allows to reuse existing typed event handler as EventHandler
 func EventHandlerAdapter[T client.Object](h ObjectHandler[T]) EventHandler {
 	return Funcs{
 		CreateFunc: func(ctx context.Context, e event.CreateEvent, queue workqueue.RateLimitingInterface) {
@@ -243,10 +245,10 @@ func EventHandlerAdapter[T client.Object](h ObjectHandler[T]) EventHandler {
 			}
 		},
 		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, queue workqueue.RateLimitingInterface) {
-			new, ok := e.ObjectNew.(T)
-			old, oldOk := e.ObjectOld.(T)
-			if ok && oldOk {
-				h.OnUpdate(ctx, old, new, queue)
+			objNew, newOk := e.ObjectNew.(T)
+			objOld, oldOk := e.ObjectOld.(T)
+			if newOk && oldOk {
+				h.OnUpdate(ctx, objOld, objNew, queue)
 			}
 		},
 	}

@@ -38,7 +38,9 @@ type MapFunc func(context.Context, client.Object) []reconcile.Request
 // For UpdateEvents which contain both a new and old object, the transformation function is run on both
 // objects and both sets of Requests are enqueue.
 func EnqueueRequestsFromMapFunc(fn MapFunc) EventHandler {
-	return &enqueueRequestsFromObjectMapFunc[any]{
-		toRequests: MapFuncAdapter(fn),
+	return &enqueueRequestsFromObjectMapFunc[client.Object]{
+		toRequests: func(ctx context.Context, obj client.Object) (reqs []reconcile.Request) {
+			return fn(ctx, obj)
+		},
 	}
 }

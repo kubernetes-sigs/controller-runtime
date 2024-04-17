@@ -35,11 +35,7 @@ type Kind[T client.Object] struct {
 	handler    handler.ObjectHandler[T]
 }
 
-// SetPredicates implements source.SyncingSource.
-func (ks *Kind[T]) SetPredicates(...predicate.PredicateConstraint) {
-	panic("unimplemented")
-}
-
+// PrepareObject implements PrepareSyncingObject preparation and should only be called when handler and predicates are available.
 func (ks *Kind[T]) PrepareObject(h handler.ObjectHandler[T], prct ...predicate.ObjectPredicate[T]) interfaces.SyncingSource {
 	ks.handler = h
 	ks.predicates = prct
@@ -47,6 +43,7 @@ func (ks *Kind[T]) PrepareObject(h handler.ObjectHandler[T], prct ...predicate.O
 	return ks
 }
 
+// Prepare implements Source preparation and should only be called when handler and predicates are available.
 func (ks *Kind[T]) Prepare(h handler.EventHandler, prct ...predicate.Predicate) interfaces.SyncingSource {
 	ks.handler = handler.ObjectFuncAdapter[T](h)
 	ks.predicates = predicate.ObjectPredicatesAdapter[T](prct...)
@@ -59,10 +56,10 @@ func (ks *Kind[T]) Start(
 	ctx context.Context,
 	queue workqueue.RateLimitingInterface,
 ) error {
-	return ks.Run(ctx, ks.handler, queue, ks.predicates...)
+	return ks.run(ctx, ks.handler, queue, ks.predicates...)
 }
 
-func (ks *Kind[T]) Run(ctx context.Context, handler handler.ObjectHandler[T], queue workqueue.RateLimitingInterface,
+func (ks *Kind[T]) run(ctx context.Context, handler handler.ObjectHandler[T], queue workqueue.RateLimitingInterface,
 	prct ...predicate.ObjectPredicate[T]) error {
 	if reflect.DeepEqual(ks.Type, *new(T)) {
 		return fmt.Errorf("must create Kind with a non-nil object")

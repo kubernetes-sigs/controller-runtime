@@ -87,7 +87,7 @@ func GenericExample() {
 
 	b := ctrl.NewControllerManagedBy(manager) // Create the Controller
 	// ReplicaSet is the Application API
-	b.Add(builder.For(manager, &appsv1.ReplicaSet{})).
+	err = b.Add(builder.For(manager, &appsv1.ReplicaSet{})).
 		Add(builder.Owns(manager, &appsv1.ReplicaSet{}, &corev1.Pod{})). // ReplicaSet owns Pods created by it
 		Complete(&ReplicaSetReconciler{Client: manager.GetClient()})
 	if err != nil {

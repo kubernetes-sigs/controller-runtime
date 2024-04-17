@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	internal "sigs.k8s.io/controller-runtime/pkg/internal/source"
 
@@ -59,16 +58,16 @@ func newFunc[T any](_ T) *handler.ObjectFuncs[T] {
 func newSetFunc[T any](_ T, set *bool) *handler.ObjectFuncs[T] {
 	return &handler.ObjectFuncs[T]{
 		CreateFunc: func(context.Context, T, workqueue.RateLimitingInterface) {
-			set = ptr.To(true)
+			*set = true
 		},
 		DeleteFunc: func(context.Context, T, workqueue.RateLimitingInterface) {
-			set = ptr.To(true)
+			*set = true
 		},
 		UpdateFunc: func(context.Context, T, T, workqueue.RateLimitingInterface) {
-			set = ptr.To(true)
+			*set = true
 		},
 		GenericFunc: func(context.Context, T, workqueue.RateLimitingInterface) {
-			set = ptr.To(true)
+			*set = true
 		},
 	}
 }
@@ -125,7 +124,9 @@ var _ = Describe("Internal", func() {
 
 			set = false
 			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.ObjectPredicate[*corev1.Pod]{
-				predicate.ObjectFuncs[*corev1.Pod]{CreateFunc: func(*corev1.Pod) bool { return true }},
+				predicate.ObjectFuncs[*corev1.Pod]{CreateFunc: func(*corev1.Pod) bool {
+					return true
+				}},
 			})
 			instance.OnAdd(pod)
 			Expect(set).To(BeTrue())

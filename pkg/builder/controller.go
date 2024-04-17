@@ -187,10 +187,12 @@ func (blder *Builder) WatchesRawSource(src source.PrepareSyncing, eventHandler h
 	return blder
 }
 
+// For defines the type of Object being reconciled and allows to respond to object events inheriting the object type at all cases.
 func For[T client.Object](mgr manager.Manager, object T, prct ...predicate.ObjectPredicate[T]) source.Source {
 	return source.ObjectKind(mgr.GetCache(), object).PrepareObject(&handler.EnqueueRequest[T]{}, prct...)
 }
 
+// Owns defines the type of owner and owned objects to watch with predicates inheriting the owned object type applying to owned object.
 func Owns[F, T client.Object](mgr manager.Manager, owner F, owned T, prct ...predicate.ObjectPredicate[T]) source.Source {
 	src := source.ObjectKind(mgr.GetCache(), owned)
 
@@ -202,10 +204,12 @@ func Owns[F, T client.Object](mgr manager.Manager, owner F, owned T, prct ...pre
 	return src.PrepareObject(handler.ObjectFuncAdapter[T](hdler), prct...)
 }
 
+// Watches defines the type of object to watch with ObjectHandler and predicates inheriting the object type.
 func Watches[T client.Object](mgr manager.Manager, object T, eventHandler handler.ObjectHandler[T], prct ...predicate.ObjectPredicate[T]) source.Source {
 	return source.ObjectKind(mgr.GetCache(), object).PrepareObject(eventHandler, prct...)
 }
 
+// Add allows to pass a prepared source object with a fully defined event handler and predicates list.
 func (blder *Builder) Add(src source.Source) *Builder {
 	blder.rawWatches = append(blder.rawWatches, src)
 	return blder

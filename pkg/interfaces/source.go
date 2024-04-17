@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package interfaces
 
 import (
@@ -37,12 +38,12 @@ type Source interface {
 	Start(context.Context, workqueue.RateLimitingInterface) error
 }
 
-// PrepareSource: Prepares a Source to be used with EventHandler and predicates
+// PrepareSource - Prepares a Source to be used with EventHandler and predicates
 type PrepareSource interface {
 	Prepare(handler.EventHandler, ...predicate.Predicate) SyncingSource
 }
 
-// PrepareSourceObject[T]: Prepares a Source preserving the object type
+// PrepareSourceObject - Prepares a Source preserving the object type
 type PrepareSourceObject[T any] interface {
 	PrepareObject(handler.ObjectHandler[T], ...predicate.ObjectPredicate[T]) SyncingSource
 }
@@ -59,13 +60,13 @@ type SyncingSource interface {
 	Syncing
 }
 
-// PrepareSyncing: A SyncingSource that also implements SourcePrepare and has WaitForSync method
+// PrepareSyncing - a SyncingSource that also implements SourcePrepare and has WaitForSync method
 type PrepareSyncing interface {
 	SyncingSource
 	PrepareSource
 }
 
-// PrepareSyncingObject[T]: A SyncingSource that also implements PrepareSourceObject[T] and has WaitForSync method
+// PrepareSyncingObject - a SyncingSource that also implements PrepareSourceObject[T] and has WaitForSync method
 type PrepareSyncingObject[T any] interface {
 	SyncingSource
 	PrepareSourceObject[T]

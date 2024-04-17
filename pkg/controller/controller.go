@@ -192,13 +192,13 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 // ReconcileIDFromContext gets the reconcileID from the current context.
 var ReconcileIDFromContext = controller.ReconcileIDFromContext
 
-// ControllerAdapter is an adapter for old controller implementations
-type ControllerAdapter struct {
+// Adapter is an adapter for old controller implementations
+type Adapter struct {
 	Controller
 }
 
 // Watch implements old controller Watch interface
-func (c *ControllerAdapter) Watch(src source.Source, handler handler.EventHandler, predicates ...predicate.Predicate) error {
+func (c *Adapter) Watch(src source.Source, handler handler.EventHandler, predicates ...predicate.Predicate) error {
 	source, ok := src.(source.PrepareSource)
 	if !ok {
 		return fmt.Errorf("expected source to fulfill SourcePrepare interface")

@@ -20,7 +20,6 @@ import (
 	"context"
 
 	"k8s.io/client-go/util/workqueue"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -29,17 +28,6 @@ import (
 // This type is usually used with EnqueueRequestsFromTypeMapFunc when registering an event handler.
 // Unlike MapFunc, a specific object type can be used to process and create mapping requests.
 type ObjectMapFunc[T any] func(context.Context, T) []reconcile.Request
-
-func MapFuncAdapter(m MapFunc) ObjectMapFunc[any] {
-	return func(ctx context.Context, a any) (reqs []reconcile.Request) {
-		obj, ok := a.(client.Object)
-		if ok {
-			return m(ctx, obj)
-		}
-
-		return []reconcile.Request{}
-	}
-}
 
 // EnqueueRequestsFromObjectMapFunc enqueues Requests by running a transformation function that outputs a collection
 // of reconcile.Requests on each Event.  The reconcile.Requests may be for an arbitrary set of objects
@@ -116,10 +104,10 @@ func (e *enqueueRequestsFromObjectMapFunc[T]) Create(ctx context.Context, evt ev
 
 // Update implements EventHandler.
 func (e *enqueueRequestsFromObjectMapFunc[T]) Update(ctx context.Context, evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
-	old, okOld := evt.ObjectOld.(T)
-	new, okNew := evt.ObjectNew.(T)
+	oldObj, okOld := evt.ObjectOld.(T)
+	newObj, okNew := evt.ObjectNew.(T)
 	if okOld && okNew {
-		e.OnUpdate(ctx, old, new, q)
+		e.OnUpdate(ctx, oldObj, newObj, q)
 	}
 }
 

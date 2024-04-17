@@ -87,8 +87,8 @@ func GenericExample() {
 
 	b := ctrl.NewControllerManagedBy(manager) // Create the Controller
 	// ReplicaSet is the Application API
-	b.Add(builder.For(b, &appsv1.ReplicaSet{})).
-		Add(builder.Owns(b, &appsv1.ReplicaSet{}, &corev1.Pod{})). // ReplicaSet owns Pods created by it
+	b.Add(builder.For(manager, &appsv1.ReplicaSet{})).
+		Add(builder.Owns(manager, &appsv1.ReplicaSet{}, &corev1.Pod{})). // ReplicaSet owns Pods created by it
 		Complete(&ReplicaSetReconciler{Client: manager.GetClient()})
 	if err != nil {
 		log.Error(err, "could not create controller")
@@ -174,6 +174,58 @@ func Example_customHandler() {
 
 			return reqs
 		})).
+		Complete(reconcile.Func(func(ctx context.Context, r reconcile.Request) (reconcile.Result, error) {
+			// Your business logic to implement the API by creating, updating, deleting objects goes here.
+			return reconcile.Result{}, nil
+		}))
+	if err != nil {
+		log.Error(err, "could not create controller")
+		os.Exit(1)
+	}
+
+	if err := manager.Start(ctrl.SetupSignalHandler()); err != nil {
+		log.Error(err, "could not start manager")
+		os.Exit(1)
+	}
+}
+
+// This example creates a simple application Controller that is configured for ExampleCRDWithConfigMapRef CRD.
+// Any change in the configMap referenced in this Custom Resource will cause the re-reconcile of the parent ExampleCRDWithConfigMapRef
+// due to the implementation of the .Watches method of "sigs.k8s.io/controller-runtime/pkg/builder".Builder.
+func Example_generic_customHandler() {
+	log := ctrl.Log.WithName("builder-examples")
+
+	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
+	if err != nil {
+		log.Error(err, "could not create manager")
+		os.Exit(1)
+	}
+
+	err = ctrl.
+		NewControllerManagedBy(manager).
+		For(&ExampleCRDWithConfigMapRef{}).
+		Add(builder.Watches(manager, &corev1.ConfigMap{}, handler.EnqueueRequestsFromObjectMap(func(ctx context.Context, cm *corev1.ConfigMap) []ctrl.Request {
+			// map a change from referenced configMap to ExampleCRDWithConfigMapRef, which causes its re-reconcile
+			crList := &ExampleCRDWithConfigMapRefList{}
+			if err := manager.GetClient().List(ctx, crList); err != nil {
+				manager.GetLogger().Error(err, "while listing ExampleCRDWithConfigMapRefs")
+				return nil
+			}
+
+			reqs := make([]ctrl.Request, 0, len(crList.Items))
+			for _, item := range crList.Items {
+				if item.ConfigMapRef.Name == cm.Name && cm.Data["Namespace"] == item.GetNamespace() {
+					reqs = append(reqs, ctrl.Request{
+						NamespacedName: types.NamespacedName{
+							Namespace: item.GetNamespace(),
+							Name:      item.GetName(),
+						},
+					})
+				}
+			}
+
+			return reqs
+		}))).
 		Complete(reconcile.Func(func(ctx context.Context, r reconcile.Request) (reconcile.Result, error) {
 			// Your business logic to implement the API by creating, updating, deleting objects goes here.
 			return reconcile.Result{}, nil

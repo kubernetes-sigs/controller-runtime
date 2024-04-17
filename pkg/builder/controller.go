@@ -187,25 +187,23 @@ func (blder *Builder) WatchesRawSource(src source.PrepareSyncing, eventHandler h
 	return blder
 }
 
-func For[T client.Object](blder *Builder, object T, prct ...predicate.ObjectPredicate[T]) source.Source {
-	blder.forInput = ForInput{object: object}
-
-	return source.ObjectKind(blder.mgr.GetCache(), object).PrepareObject(&handler.EnqueueRequest[T]{}, prct...)
+func For[T client.Object](mgr manager.Manager, object T, prct ...predicate.ObjectPredicate[T]) source.Source {
+	return source.ObjectKind(mgr.GetCache(), object).PrepareObject(&handler.EnqueueRequest[T]{}, prct...)
 }
 
-func Owns[F, T client.Object](blder *Builder, owner F, owned T, prct ...predicate.ObjectPredicate[T]) source.Source {
-	src := source.ObjectKind(blder.mgr.GetCache(), owned)
+func Owns[F, T client.Object](mgr manager.Manager, owner F, owned T, prct ...predicate.ObjectPredicate[T]) source.Source {
+	src := source.ObjectKind(mgr.GetCache(), owned)
 
 	hdler := handler.EnqueueRequestForOwner(
-		blder.mgr.GetScheme(), blder.mgr.GetRESTMapper(),
+		mgr.GetScheme(), mgr.GetRESTMapper(),
 		owner,
 	)
 
 	return src.PrepareObject(handler.ObjectFuncAdapter[T](hdler), prct...)
 }
 
-func Watches[T client.Object](blder *Builder, object T, eventHandler handler.ObjectHandler[T], prct ...predicate.ObjectPredicate[T]) source.Source {
-	return source.ObjectKind(blder.mgr.GetCache(), object).PrepareObject(eventHandler, prct...)
+func Watches[T client.Object](mgr manager.Manager, object T, eventHandler handler.ObjectHandler[T], prct ...predicate.ObjectPredicate[T]) source.Source {
+	return source.ObjectKind(mgr.GetCache(), object).PrepareObject(eventHandler, prct...)
 }
 
 func (blder *Builder) Add(src source.Source) *Builder {

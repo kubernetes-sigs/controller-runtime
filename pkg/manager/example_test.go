@@ -23,7 +23,6 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	conf "sigs.k8s.io/controller-runtime/pkg/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -93,44 +92,4 @@ func ExampleManager_start() {
 		log.Error(err, "unable start the manager")
 		os.Exit(1)
 	}
-}
-
-// This example will populate Options from a custom config file
-// using defaults.
-func ExampleOptions_andFrom() {
-	opts := manager.Options{}
-	if _, err := opts.AndFrom(conf.File()); err != nil {
-		log.Error(err, "unable to load config")
-		os.Exit(1)
-	}
-
-	cfg, err := config.GetConfig()
-	if err != nil {
-		log.Error(err, "unable to get kubeconfig")
-		os.Exit(1)
-	}
-
-	mgr, err := manager.New(cfg, opts)
-	if err != nil {
-		log.Error(err, "unable to set up manager")
-		os.Exit(1)
-	}
-	log.Info("created manager", "manager", mgr)
-}
-
-// This example will populate Options from a custom config file
-// using defaults and will panic if there are errors.
-func ExampleOptions_andFromOrDie() {
-	cfg, err := config.GetConfig()
-	if err != nil {
-		log.Error(err, "unable to get kubeconfig")
-		os.Exit(1)
-	}
-
-	mgr, err := manager.New(cfg, manager.Options{}.AndFromOrDie(conf.File()))
-	if err != nil {
-		log.Error(err, "unable to set up manager")
-		os.Exit(1)
-	}
-	log.Info("created manager", "manager", mgr)
 }

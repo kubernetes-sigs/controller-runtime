@@ -45,8 +45,6 @@ ${hack_dir}/test-all.sh
 header_text "confirming examples compile (via go install)"
 go install ${MOD_OPT} ./examples/builtins
 go install ${MOD_OPT} ./examples/crd
-go install ${MOD_OPT} ./examples/configfile/builtin
-go install ${MOD_OPT} ./examples/configfile/custom
 
 echo "passed"
 exit 0

@@ -18,7 +18,6 @@ package manager
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -37,17 +36,14 @@ import (
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
-	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
@@ -118,143 +114,6 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
-		})
-
-		It("should be able to load Options from cfg.ControllerManagerConfiguration type", func() {
-			duration := metav1.Duration{Duration: 48 * time.Hour}
-			port := int(6090)
-			leaderElect := false
-
-			ccfg := &v1alpha1.ControllerManagerConfiguration{
-				ControllerManagerConfigurationSpec: v1alpha1.ControllerManagerConfigurationSpec{
-					SyncPeriod: &duration,
-					LeaderElection: &configv1alpha1.LeaderElectionConfiguration{
-						LeaderElect:       &leaderElect,
-						ResourceLock:      "leases",
-						ResourceNamespace: "default",
-						ResourceName:      "ctrl-lease",
-						LeaseDuration:     duration,
-						RenewDeadline:     duration,
-						RetryPeriod:       duration,
-					},
-					CacheNamespace: "default",
-					Metrics: v1alpha1.ControllerMetrics{
-						BindAddress: ":6000",
-					},
-					Health: v1alpha1.ControllerHealth{
-						HealthProbeBindAddress: "6060",
-						ReadinessEndpointName:  "/readyz",
-						LivenessEndpointName:   "/livez",
-					},
-					Webhook: v1alpha1.ControllerWebhook{
-						Port:    &port,
-						Host:    "localhost",
-						CertDir: "/certs",
-					},
-				},
-			}
-
-			m, err := Options{}.AndFrom(&fakeDeferredLoader{ccfg})
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(*m.Cache.SyncPeriod).To(Equal(duration.Duration))
-			Expect(m.LeaderElection).To(Equal(leaderElect))
-			Expect(m.LeaderElectionResourceLock).To(Equal("leases"))
-			Expect(m.LeaderElectionNamespace).To(Equal("default"))
-			Expect(m.LeaderElectionID).To(Equal("ctrl-lease"))
-			Expect(m.LeaseDuration.String()).To(Equal(duration.Duration.String()))
-			Expect(m.RenewDeadline.String()).To(Equal(duration.Duration.String()))
-			Expect(m.RetryPeriod.String()).To(Equal(duration.Duration.String()))
-			Expect(m.Cache.DefaultNamespaces).To(Equal(map[string]cache.Config{"default": {}}))
-			Expect(m.Metrics.BindAddress).To(Equal(":6000"))
-			Expect(m.HealthProbeBindAddress).To(Equal("6060"))
-			Expect(m.ReadinessEndpointName).To(Equal("/readyz"))
-			Expect(m.LivenessEndpointName).To(Equal("/livez"))
-			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Port).To(Equal(port))
-			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Host).To(Equal("localhost"))
-			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.CertDir).To(Equal("/certs"))
-		})
-
-		It("should be able to keep Options when cfg.ControllerManagerConfiguration set", func() {
-			optDuration := time.Duration(2)
-			duration := metav1.Duration{Duration: 48 * time.Hour}
-			port := int(6090)
-			leaderElect := false
-
-			ccfg := &v1alpha1.ControllerManagerConfiguration{
-				ControllerManagerConfigurationSpec: v1alpha1.ControllerManagerConfigurationSpec{
-					SyncPeriod: &duration,
-					LeaderElection: &configv1alpha1.LeaderElectionConfiguration{
-						LeaderElect:       &leaderElect,
-						ResourceLock:      "leases",
-						ResourceNamespace: "default",
-						ResourceName:      "ctrl-lease",
-						LeaseDuration:     duration,
-						RenewDeadline:     duration,
-						RetryPeriod:       duration,
-					},
-					CacheNamespace: "default",
-					Metrics: v1alpha1.ControllerMetrics{
-						BindAddress: ":6000",
-					},
-					Health: v1alpha1.ControllerHealth{
-						HealthProbeBindAddress: "6060",
-						ReadinessEndpointName:  "/readyz",
-						LivenessEndpointName:   "/livez",
-					},
-					Webhook: v1alpha1.ControllerWebhook{
-						Port:    &port,
-						Host:    "localhost",
-						CertDir: "/certs",
-					},
-				},
-			}
-
-			optionsTlSOptsFuncs := []func(*tls.Config){
-				func(config *tls.Config) {},
-			}
-			m, err := Options{
-				Cache: cache.Options{
-					SyncPeriod:        &optDuration,
-					DefaultNamespaces: map[string]cache.Config{"ctrl": {}},
-				},
-				LeaderElection:             true,
-				LeaderElectionResourceLock: "configmaps",
-				LeaderElectionNamespace:    "ctrl",
-				LeaderElectionID:           "ctrl-configmap",
-				LeaseDuration:              &optDuration,
-				RenewDeadline:              &optDuration,
-				RetryPeriod:                &optDuration,
-				Metrics:                    metricsserver.Options{BindAddress: ":7000"},
-				HealthProbeBindAddress:     "5000",
-				ReadinessEndpointName:      "/readiness",
-				LivenessEndpointName:       "/liveness",
-				WebhookServer: webhook.NewServer(webhook.Options{
-					Port:    8080,
-					Host:    "example.com",
-					CertDir: "/pki",
-					TLSOpts: optionsTlSOptsFuncs,
-				}),
-			}.AndFrom(&fakeDeferredLoader{ccfg})
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(m.Cache.SyncPeriod.String()).To(Equal(optDuration.String()))
-			Expect(m.LeaderElection).To(BeTrue())
-			Expect(m.LeaderElectionResourceLock).To(Equal("configmaps"))
-			Expect(m.LeaderElectionNamespace).To(Equal("ctrl"))
-			Expect(m.LeaderElectionID).To(Equal("ctrl-configmap"))
-			Expect(m.LeaseDuration.String()).To(Equal(optDuration.String()))
-			Expect(m.RenewDeadline.String()).To(Equal(optDuration.String()))
-			Expect(m.RetryPeriod.String()).To(Equal(optDuration.String()))
-			Expect(m.Cache.DefaultNamespaces).To(Equal(map[string]cache.Config{"ctrl": {}}))
-			Expect(m.Metrics.BindAddress).To(Equal(":7000"))
-			Expect(m.HealthProbeBindAddress).To(Equal("5000"))
-			Expect(m.ReadinessEndpointName).To(Equal("/readiness"))
-			Expect(m.LivenessEndpointName).To(Equal("/liveness"))
-			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Port).To(Equal(8080))
-			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.Host).To(Equal("example.com"))
-			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.CertDir).To(Equal("/pki"))
-			Expect(m.WebhookServer.(*webhook.DefaultServer).Options.TLSOpts).To(BeEquivalentTo(optionsTlSOptsFuncs))
 		})
 
 		It("should lazily initialize a webhook server if needed", func() {
@@ -1988,18 +1847,6 @@ func (c *startClusterAfterManager) Start(ctx context.Context) error {
 
 func (c *startClusterAfterManager) GetCache() cache.Cache {
 	return c.informer
-}
-
-type fakeDeferredLoader struct {
-	*v1alpha1.ControllerManagerConfiguration
-}
-
-func (f *fakeDeferredLoader) Complete() (v1alpha1.ControllerManagerConfigurationSpec, error) {
-	return f.ControllerManagerConfiguration.ControllerManagerConfigurationSpec, nil
-}
-
-func (f *fakeDeferredLoader) InjectScheme(scheme *runtime.Scheme) error {
-	return nil
 }
 
 // metricsDefaultServer is used to type check the default metrics server implementation

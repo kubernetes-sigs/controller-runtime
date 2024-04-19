@@ -382,7 +382,7 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 		}
 	}
 
-	// First start any HTTP servers, which includes health probes and profiling, if enabled.
+	// First start any HTTP servers, which includes health probes, metrics and profiling if enabled.
 	//
 	// WARNING: HTTPServers includes the health probes, which MUST start before any cache is populated, otherwise
 	// it would block conversion webhooks to be ready for serving which make the cache never get ready.

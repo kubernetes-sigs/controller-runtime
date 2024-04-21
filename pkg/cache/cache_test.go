@@ -2421,6 +2421,25 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 	})
 }
 
+var _ = Describe("TransformStripManagedFields", func() {
+	It("should strip managed fields from an object", func() {
+		obj := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			ManagedFields: []metav1.ManagedFieldsEntry{{
+				Manager: "foo",
+			}},
+		}}
+		transformed, err := cache.TransformStripManagedFields()(obj)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(transformed).To(Equal(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{}}))
+	})
+
+	It("should not trip over an unexpected object", func() {
+		transformed, err := cache.TransformStripManagedFields()("foo")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(transformed).To(Equal("foo"))
+	})
+})
+
 // ensureNamespace installs namespace of a given name if not exists.
 func ensureNamespace(namespace string, client client.Client) error {
 	ns := corev1.Namespace{

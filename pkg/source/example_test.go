@@ -31,7 +31,7 @@ var ctrl controller.Controller
 // This example Watches for Pod Events (e.g. Create / Update / Delete) and enqueues a reconcile.Request
 // with the Name and Namespace of the Pod.
 func ExampleKind() {
-	err := ctrl.Watch(source.Kind(mgr.GetCache(), &corev1.Pod{}), &handler.EnqueueRequestForObject{})
+	err := ctrl.Watch(source.Kind(mgr.GetCache(), &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}))
 	if err != nil {
 		// handle it
 	}
@@ -43,8 +43,10 @@ func ExampleChannel() {
 	events := make(chan event.GenericEvent)
 
 	err := ctrl.Watch(
-		&source.Channel{Source: events},
-		&handler.EnqueueRequestForObject{},
+		source.Channel(
+			events,
+			&handler.EnqueueRequestForObject{},
+		),
 	)
 	if err != nil {
 		// handle it

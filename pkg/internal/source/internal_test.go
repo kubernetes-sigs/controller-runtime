@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	internal "sigs.k8s.io/controller-runtime/pkg/internal/source"
@@ -37,7 +38,7 @@ import (
 
 var _ = Describe("Internal", func() {
 	var ctx = context.Background()
-	var instance *internal.EventHandler
+	var instance *internal.EventHandler[client.Object]
 	var funcs, setfuncs *handler.Funcs
 	var set bool
 	BeforeEach(func() {

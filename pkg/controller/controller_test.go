@@ -79,7 +79,7 @@ var _ = Describe("controller.Controller", func() {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			watchChan := make(chan event.GenericEvent, 1)
-			watch := &source.Channel{Source: watchChan}
+			watch := source.Channel(watchChan, &handler.EnqueueRequestForObject{})
 			watchChan <- event.GenericEvent{Object: &corev1.Pod{}}
 
 			reconcileStarted := make(chan struct{})
@@ -101,7 +101,7 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{Reconciler: rec})
-			Expect(c.Watch(watch, &handler.EnqueueRequestForObject{})).To(Succeed())
+			Expect(c.Watch(watch)).To(Succeed())
 			Expect(err).NotTo(HaveOccurred())
 
 			go func() {

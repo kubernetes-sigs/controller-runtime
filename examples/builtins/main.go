@@ -59,14 +59,14 @@ func main() {
 	}
 
 	// Watch ReplicaSets and enqueue ReplicaSet object key
-	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.ReplicaSet{}), &handler.EnqueueRequestForObject{}); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.ReplicaSet{}, &handler.TypedEnqueueRequestForObject[*appsv1.ReplicaSet]{})); err != nil {
 		entryLog.Error(err, "unable to watch ReplicaSets")
 		os.Exit(1)
 	}
 
 	// Watch Pods and enqueue owning ReplicaSet key
-	if err := c.Watch(source.Kind(mgr.GetCache(), &corev1.Pod{}),
-		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &appsv1.ReplicaSet{}, handler.OnlyControllerOwner())); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &corev1.Pod{},
+		handler.TypedEnqueueRequestForOwner[*corev1.Pod](mgr.GetScheme(), mgr.GetRESTMapper(), &appsv1.ReplicaSet{}, handler.OnlyControllerOwner()))); err != nil {
 		entryLog.Error(err, "unable to watch Pods")
 		os.Exit(1)
 	}

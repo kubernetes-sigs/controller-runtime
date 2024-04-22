@@ -318,7 +318,7 @@ var _ = Describe("Source", func() {
 							close(c)
 						},
 					},
-					source.WithPrededicates(prct),
+					source.WithPredicates(prct),
 				)
 				err := instance.Start(ctx, q)
 				Expect(err).NotTo(HaveOccurred())

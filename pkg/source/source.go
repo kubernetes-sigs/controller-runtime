@@ -69,8 +69,8 @@ var _ Source = &channel[string]{}
 // ChannelOpt allows to configure a source.Channel.
 type ChannelOpt[T any] func(*channel[T])
 
-// WithPrededicates adds the configured predicates to a source.Channel.
-func WithPrededicates[T any](p ...predicate.TypedPredicate[T]) ChannelOpt[T] {
+// WithPredicates adds the configured predicates to a source.Channel.
+func WithPredicates[T any](p ...predicate.TypedPredicate[T]) ChannelOpt[T] {
 	return func(c *channel[T]) {
 		c.predicates = append(c.predicates, p...)
 	}

@@ -1,3 +1,19 @@
+/*
+Copyright 2018 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package internal
 
 import (
@@ -5,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -30,6 +47,9 @@ type Kind[T client.Object] struct {
 
 	Predicates []predicate.TypedPredicate[T]
 
+	mu        sync.RWMutex
+	isStarted bool
+
 	// startedErr may contain an error if one was encountered during startup. If its closed and does not
 	// contain an error, startup and syncing finished.
 	startedErr  chan error
@@ -40,14 +60,21 @@ type Kind[T client.Object] struct {
 // to enqueue reconcile.Requests.
 func (ks *Kind[T]) Start(ctx context.Context, queue workqueue.RateLimitingInterface) error {
 	if isNil(ks.Type) {
-		return fmt.Errorf("must create Kind with a non-nil object")
+		return fmt.Errorf("must create Kind with a non-nil type")
 	}
 	if isNil(ks.Cache) {
 		return fmt.Errorf("must create Kind with a non-nil cache")
 	}
 	if isNil(ks.Handler) {
-		return errors.New("must create Kind with non-nil handler")
+		return errors.New("must create Kind with a non-nil handler")
 	}
+
+	ks.mu.Lock()
+	defer ks.mu.Unlock()
+	if ks.isStarted {
+		return fmt.Errorf("cannot start an already started Kind source")
+	}
+	ks.isStarted = true
 
 	// cache.GetInformer will block until its context is cancelled if the cache was already started and it can not
 	// sync that informer (most commonly due to RBAC issues).

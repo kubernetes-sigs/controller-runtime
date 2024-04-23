@@ -62,6 +62,8 @@ type EventHandler TypedEventHandler[client.Object]
 //
 // Unless you are implementing your own TypedEventHandler, you can ignore the functions on the TypedEventHandler interface.
 // Most users shouldn't need to implement their own TypedEventHandler.
+//
+// TypedEventHandler is experimental and subject to future change.
 type TypedEventHandler[T any] interface {
 	// Create is called in response to a create event - e.g. Pod Creation.
 	Create(context.Context, event.TypedCreateEvent[T], workqueue.RateLimitingInterface)
@@ -83,6 +85,8 @@ var _ EventHandler = Funcs{}
 type Funcs = TypedFuncs[client.Object]
 
 // TypedFuncs implements eventhandler.
+//
+// TypedFuncs is experimental and subject to future change.
 type TypedFuncs[T any] struct {
 	// Create is called in response to an add event.  Defaults to no-op.
 	// RateLimitingInterface is used to enqueue reconcile.Requests.

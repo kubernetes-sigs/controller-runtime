@@ -42,6 +42,8 @@ type EnqueueRequestForObject = TypedEnqueueRequestForObject[client.Object]
 // TypedEnqueueRequestForObject enqueues a Request containing the Name and Namespace of the object that is the source of the Event.
 // (e.g. the created / deleted / updated objects Name and Namespace).  handler.TypedEnqueueRequestForObject is used by almost all
 // Controllers that have associated Resources (e.g. CRDs) to reconcile the associated Resource.
+//
+// TypedEnqueueRequestForObject is experimental and subject to future change.
 type TypedEnqueueRequestForObject[T client.Object] struct{}
 
 // Create implements EventHandler.

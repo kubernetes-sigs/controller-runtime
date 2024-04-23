@@ -202,7 +202,7 @@ eventloop:
 // NewChannelBroadcaster creates a new ChannelBroadcaster for the given channel.
 // A ChannelBroadcaster is a wrapper around a channel that allows multiple listeners to all
 // receive the events from the channel.
-func NewChannelBroadcaster[T any](source <-chan event.TypedGenericEvent[T]) *channelBroadcaster[T] {
+func NewChannelBroadcaster[T any](source <-chan event.TypedGenericEvent[T]) *channelBroadcaster[T] { //nolint:revive
 	return &channelBroadcaster[T]{
 		source: source,
 	}

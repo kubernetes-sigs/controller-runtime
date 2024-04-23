@@ -31,6 +31,8 @@ type MapFunc = TypedMapFunc[client.Object]
 
 // TypedMapFunc is the signature required for enqueueing requests from a generic function.
 // This type is usually used with EnqueueRequestsFromTypedMapFunc when registering an event handler.
+//
+// TypedMapFunc is experimental and subject to future change.
 type TypedMapFunc[T any] func(context.Context, T) []reconcile.Request
 
 // EnqueueRequestsFromMapFunc enqueues Requests by running a transformation function that outputs a collection
@@ -57,6 +59,8 @@ func EnqueueRequestsFromMapFunc(fn MapFunc) EventHandler {
 //
 // For TypedUpdateEvents which contain both a new and old object, the transformation function is run on both
 // objects and both sets of Requests are enqueue.
+//
+// TypedEnqueueRequestsFromMapFunc is experimental and subject to future change.
 func TypedEnqueueRequestsFromMapFunc[T any](fn TypedMapFunc[T]) TypedEventHandler[T] {
 	return &enqueueRequestsFromMapFunc[T]{
 		toRequests: fn,

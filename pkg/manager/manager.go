@@ -76,7 +76,8 @@ type Manager interface {
 	// lock was lost.
 	Start(ctx context.Context) error
 
-	// GetCluster retrieves a Cluster from a given identifying cluster name.
+	// GetCluster retrieves a Cluster from a given identifying cluster name. An
+	// empty string will return the default cluster of the manager.
 	GetCluster(ctx context.Context, clusterName string) (cluster.Cluster, error)
 
 	// GetWebhookServer returns a webhook.Server
@@ -275,9 +276,8 @@ type Options struct {
 	newPprofListener       func(addr string) (net.Listener, error)
 
 	// ExperimentalClusterProvider is an EXPERIMENTAL feature that allows the manager to
-	// operate against many Kubernetes clusters at once.
-	// It can be used by invoking WithExperimentalClusterProvider(adapter) on Options.
-	// Individual clusters can be accessed by calling GetCluster on the Manager.
+	// operate against many Kubernetes clusters at once. Individual clusters can
+	// be accessed by calling GetCluster on the Manager.
 	ExperimentalClusterProvider cluster.Provider
 }
 

@@ -63,7 +63,6 @@ const (
 
 var _ Runnable = &controllerManager{}
 var _ Manager = &controllerManager{}
-var _ cluster.ByNameGetterFunc = (&controllerManager{}).GetCluster
 
 type engagedCluster struct {
 	cluster.Cluster

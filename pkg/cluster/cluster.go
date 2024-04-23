@@ -57,9 +57,6 @@ type AwareRunnable interface {
 	Disengage(context.Context, Cluster) error
 }
 
-// ByNameGetterFunc is a function that returns a cluster for a given identifying cluster name.
-type ByNameGetterFunc func(ctx context.Context, clusterName string) (Cluster, error)
-
 // Cluster provides various methods to interact with a cluster.
 type Cluster interface {
 	// Name returns the name of the cluster. It identifies the cluster in the

@@ -50,13 +50,14 @@ var _ = Describe("Start method", func() {
 			HealthCheck: HealthCheck{
 				URL: getServerURL(server),
 			},
+			StopTimeout: 2 * time.Second,
 		}
-		processState.Path = "bash"
 		processState.Args = simpleBashScript
 
 	})
 	AfterEach(func() {
 		server.Close()
+		Expect(processState.Stop()).To(Succeed())
 	})
 
 	Context("when process takes too long to start", func() {

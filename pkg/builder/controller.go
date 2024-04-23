@@ -17,6 +17,7 @@ limitations under the License.
 package builder
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -24,7 +25,9 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -37,7 +40,7 @@ import (
 )
 
 // Supporting mocking out functions for testing.
-var newController = controller.New
+var newController = controller.NewUnmanaged
 var getGvk = apiutil.GVKForObject
 
 // project represents other forms that we can use to
@@ -51,17 +54,24 @@ const (
 	projectAsMetadata
 )
 
-// Builder builds a Controller.
-type Builder struct {
+var _ controller.ClusterWatcher = &clusterWatcher{}
+
+// clusterWatcher sets up watches between a cluster and a controller.
+type clusterWatcher struct {
+	ctrl             controller.Controller
 	forInput         ForInput
 	ownsInput        []OwnsInput
-	rawSources       []source.Source
 	watchesInput     []WatchesInput
-	mgr              manager.Manager
 	globalPredicates []predicate.Predicate
-	ctrl             controller.Controller
-	ctrlOptions      controller.Options
-	name             string
+}
+
+// Builder builds a Controller.
+type Builder struct {
+	clusterWatcher
+	rawSources  []source.Source
+	mgr         manager.Manager
+	ctrlOptions controller.Options
+	name        string
 }
 
 // ControllerManagedBy returns a new controller builder that will be started by the provided Manager.
@@ -144,7 +154,6 @@ func (blder *Builder) Watches(object client.Object, eventHandler handler.EventHa
 	}
 
 	blder.watchesInput = append(blder.watchesInput, input)
-
 	return blder
 }
 
@@ -252,16 +261,25 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 		return nil, err
 	}
 
+	ctrl := blder.ctrl
+	if *blder.ctrlOptions.EngageWithProviderClusters {
+		// wrap as cluster.AwareRunnable to be engaged with provider clusters on demand
+		ctrl = controller.NewMultiClusterController(ctrl, &blder.clusterWatcher)
+	}
+	if err := blder.mgr.Add(ctrl); err != nil {
+		return nil, err
+	}
+
 	return blder.ctrl, nil
 }
 
-func (blder *Builder) project(obj client.Object, proj objectProjection) (client.Object, error) {
+func project(cl cluster.Cluster, obj client.Object, proj objectProjection) (client.Object, error) {
 	switch proj {
 	case projectAsNormal:
 		return obj, nil
 	case projectAsMetadata:
 		metaObj := &metav1.PartialObjectMetadata{}
-		gvk, err := getGvk(obj, blder.mgr.GetScheme())
+		gvk, err := getGvk(obj, cl.GetScheme())
 		if err != nil {
 			return nil, fmt.Errorf("unable to determine GVK of %T for a metadata-only watch: %w", obj, err)
 		}
@@ -272,28 +290,25 @@ func (blder *Builder) project(obj client.Object, proj objectProjection) (client.
 	}
 }
 
-func (blder *Builder) doWatch() error {
+func (cc *clusterWatcher) Watch(ctx context.Context, cl cluster.Cluster) error {
 	// Reconcile type
-	if blder.forInput.object != nil {
-		obj, err := blder.project(blder.forInput.object, blder.forInput.objectProjection)
+	if cc.forInput.object != nil {
+		obj, err := project(cl, cc.forInput.object, cc.forInput.objectProjection)
 		if err != nil {
 			return err
 		}
 		hdler := &handler.EnqueueRequestForObject{}
-		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
-		allPredicates = append(allPredicates, blder.forInput.predicates...)
-		src := source.Kind(blder.mgr.GetCache(), obj, hdler, allPredicates...)
-		if err := blder.ctrl.Watch(src); err != nil {
+		allPredicates := append([]predicate.Predicate(nil), cc.globalPredicates...)
+		allPredicates = append(allPredicates, cc.forInput.predicates...)
+		src := &ctxBoundedSyncingSource{ctx: ctx, src: source.Kind(cl.GetCache(), obj, handler.ForCluster(cl.Name(), hdler), allPredicates...)}
+		if err := cc.ctrl.Watch(src); err != nil {
 			return err
 		}
 	}
 
 	// Watches the managed types
-	if len(blder.ownsInput) > 0 && blder.forInput.object == nil {
-		return errors.New("Owns() can only be used together with For()")
-	}
-	for _, own := range blder.ownsInput {
-		obj, err := blder.project(own.object, own.objectProjection)
+	for _, own := range cc.ownsInput {
+		obj, err := project(cl, own.object, own.objectProjection)
 		if err != nil {
 			return err
 		}
@@ -302,33 +317,54 @@ func (blder *Builder) doWatch() error {
 			opts = append(opts, handler.OnlyControllerOwner())
 		}
 		hdler := handler.EnqueueRequestForOwner(
-			blder.mgr.GetScheme(), blder.mgr.GetRESTMapper(),
-			blder.forInput.object,
+			cl.GetScheme(), cl.GetRESTMapper(),
+			cc.forInput.object,
 			opts...,
 		)
-		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
+
+		allPredicates := append([]predicate.Predicate(nil), cc.globalPredicates...)
 		allPredicates = append(allPredicates, own.predicates...)
-		src := source.Kind(blder.mgr.GetCache(), obj, hdler, allPredicates...)
-		if err := blder.ctrl.Watch(src); err != nil {
+		src := &ctxBoundedSyncingSource{ctx: ctx, src: source.Kind(cl.GetCache(), obj, handler.ForCluster(cl.Name(), hdler), allPredicates...)}
+		if err := cc.ctrl.Watch(src); err != nil {
 			return err
 		}
 	}
 
-	// Do the watch requests
-	if len(blder.watchesInput) == 0 && blder.forInput.object == nil && len(blder.rawSources) == 0 {
-		return errors.New("there are no watches configured, controller will never get triggered. Use For(), Owns(), Watches() or WatchesRawSource() to set them up")
-	}
-	for _, w := range blder.watchesInput {
-		projected, err := blder.project(w.obj, w.objectProjection)
+	// Watches extra types
+	for _, w := range cc.watchesInput {
+		projected, err := project(cl, w.obj, w.objectProjection)
 		if err != nil {
 			return fmt.Errorf("failed to project for %T: %w", w.obj, err)
 		}
-		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
+		allPredicates := append([]predicate.Predicate(nil), cc.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)
-		if err := blder.ctrl.Watch(source.Kind(blder.mgr.GetCache(), projected, w.handler, allPredicates...)); err != nil {
+		src := &ctxBoundedSyncingSource{ctx: ctx, src: source.Kind(cl.GetCache(), projected, handler.ForCluster(cl.Name(), w.handler), allPredicates...)}
+		if err := cc.ctrl.Watch(src); err != nil {
 			return err
 		}
 	}
+
+	return nil
+}
+
+func (blder *Builder) doWatch() error {
+	// Pre-checks for a valid configuration
+	if len(blder.ownsInput) > 0 && blder.forInput.object == nil {
+		return errors.New("Owns() can only be used together with For()")
+	}
+	if len(blder.watchesInput) == 0 && blder.forInput.object == nil && len(blder.rawSources) == 0 {
+		return errors.New("there are no watches configured, controller will never get triggered. Use For(), Owns(), Watches() or WatchesRawSource() to set them up")
+	}
+	if *blder.ctrlOptions.EngageWithProviderClusters && len(blder.rawSources) > 0 {
+		return errors.New("when using a cluster adapter, custom raw watches are not allowed")
+	}
+
+	if *blder.ctrlOptions.EngageWithDefaultCluster {
+		if err := blder.Watch(unboundedContext, blder.mgr); err != nil {
+			return err
+		}
+	}
+
 	for _, src := range blder.rawSources {
 		if err := blder.ctrl.Watch(src); err != nil {
 			return err
@@ -350,12 +386,11 @@ func (blder *Builder) getControllerName(gvk schema.GroupVersionKind, hasGVK bool
 func (blder *Builder) doController(r reconcile.Reconciler) error {
 	globalOpts := blder.mgr.GetControllerOptions()
 
-	ctrlOptions := blder.ctrlOptions
-	if ctrlOptions.Reconciler != nil && r != nil {
+	if blder.ctrlOptions.Reconciler != nil && r != nil {
 		return errors.New("reconciler was set via WithOptions() and via Build() or Complete()")
 	}
-	if ctrlOptions.Reconciler == nil {
-		ctrlOptions.Reconciler = r
+	if blder.ctrlOptions.Reconciler == nil {
+		blder.ctrlOptions.Reconciler = r
 	}
 
 	// Retrieve the GVK from the object we're reconciling
@@ -371,17 +406,17 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 	}
 
 	// Setup concurrency.
-	if ctrlOptions.MaxConcurrentReconciles == 0 && hasGVK {
+	if blder.ctrlOptions.MaxConcurrentReconciles == 0 && hasGVK {
 		groupKind := gvk.GroupKind().String()
 
 		if concurrency, ok := globalOpts.GroupKindConcurrency[groupKind]; ok && concurrency > 0 {
-			ctrlOptions.MaxConcurrentReconciles = concurrency
+			blder.ctrlOptions.MaxConcurrentReconciles = concurrency
 		}
 	}
 
 	// Setup cache sync timeout.
-	if ctrlOptions.CacheSyncTimeout == 0 && globalOpts.CacheSyncTimeout > 0 {
-		ctrlOptions.CacheSyncTimeout = globalOpts.CacheSyncTimeout
+	if blder.ctrlOptions.CacheSyncTimeout == 0 && globalOpts.CacheSyncTimeout > 0 {
+		blder.ctrlOptions.CacheSyncTimeout = globalOpts.CacheSyncTimeout
 	}
 
 	controllerName, err := blder.getControllerName(gvk, hasGVK)
@@ -390,7 +425,7 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 	}
 
 	// Setup the logger.
-	if ctrlOptions.LogConstructor == nil {
+	if blder.ctrlOptions.LogConstructor == nil {
 		log := blder.mgr.GetLogger().WithValues(
 			"controller", controllerName,
 		)
@@ -401,7 +436,7 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 			)
 		}
 
-		ctrlOptions.LogConstructor = func(req *reconcile.Request) logr.Logger {
+		blder.ctrlOptions.LogConstructor = func(req *reconcile.Request) logr.Logger {
 			log := log
 			if req != nil {
 				if hasGVK {
@@ -415,7 +450,57 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 		}
 	}
 
+	// Default which clusters to engage with.
+	if blder.ctrlOptions.EngageWithDefaultCluster == nil {
+		blder.ctrlOptions.EngageWithDefaultCluster = globalOpts.EngageWithDefaultCluster
+	}
+	if blder.ctrlOptions.EngageWithProviderClusters == nil {
+		blder.ctrlOptions.EngageWithProviderClusters = globalOpts.EngageWithProviderClusters
+	}
+	if blder.ctrlOptions.EngageWithDefaultCluster == nil {
+		return errors.New("EngageWithDefaultCluster must not be nil") // should not happen due to defaulting
+	}
+	if blder.ctrlOptions.EngageWithProviderClusters == nil {
+		return errors.New("EngageWithProviderClusters must not be nil") // should not happen due to defaulting
+	}
+	if !*blder.ctrlOptions.EngageWithDefaultCluster && !*blder.ctrlOptions.EngageWithProviderClusters {
+		return errors.New("EngageWithDefaultCluster and EngageWithProviderClusters are both false, controller will never get triggered")
+	}
+
 	// Build the controller and return.
-	blder.ctrl, err = newController(controllerName, blder.mgr, ctrlOptions)
+	blder.ctrl, err = newController(controllerName, blder.mgr, blder.ctrlOptions)
 	return err
+}
+
+// ctxBoundedSyncingSource implements source.SyncingSource and wraps the ctx
+// passed to the methods into the life-cycle of another context, i.e. stop
+// whenever one of the contexts is done.
+type ctxBoundedSyncingSource struct {
+	ctx context.Context
+	src source.SyncingSource
+}
+
+var unboundedContext context.Context = nil //nolint:revive // keep nil explicit for clarity.
+
+var _ source.SyncingSource = &ctxBoundedSyncingSource{}
+
+func (s *ctxBoundedSyncingSource) Start(ctx context.Context, q workqueue.RateLimitingInterface) error {
+	return s.src.Start(joinContexts(ctx, s.ctx), q)
+}
+
+func (s *ctxBoundedSyncingSource) WaitForSync(ctx context.Context) error {
+	return s.src.WaitForSync(joinContexts(ctx, s.ctx))
+}
+
+func joinContexts(ctx, bound context.Context) context.Context {
+	if bound == unboundedContext {
+		return ctx
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		defer cancel()
+		<-bound.Done()
+	}()
+	return ctx
 }

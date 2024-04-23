@@ -421,6 +421,9 @@ func (s *APIServer) Stop() error {
 			return err
 		}
 	}
+	if s.Authn == nil {
+		return nil
+	}
 	return s.Authn.Stop()
 }
 

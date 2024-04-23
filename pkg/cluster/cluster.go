@@ -28,7 +28,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
-
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -36,8 +35,38 @@ import (
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 )
 
+// AwareRunnable is an interface that can be implemented by runnable types
+// that are cluster-aware.
+type AwareRunnable interface {
+	// Engage gets called when the runnable should start operations for the given Cluster.
+	// The given context is tied to the Cluster's lifecycle and will be cancelled when the
+	// Cluster is removed or an error occurs.
+	//
+	// Implementers should return an error if they cannot start operations for the given Cluster,
+	// and should ensure this operation is re-entrant and non-blocking.
+	//
+	//	\_________________|)____.---'--`---.____
+	//              ||    \----.________.----/
+	//              ||     / /    `--'
+	//            __||____/ /_
+	//           |___         \
+	//               `--------'
+	Engage(context.Context, Cluster) error
+
+	// Disengage gets called when the runnable should stop operations for the given Cluster.
+	Disengage(context.Context, Cluster) error
+}
+
+// ByNameGetterFunc is a function that returns a cluster for a given identifying cluster name.
+type ByNameGetterFunc func(ctx context.Context, clusterName string) (Cluster, error)
+
 // Cluster provides various methods to interact with a cluster.
 type Cluster interface {
+	// Name returns the name of the cluster. It identifies the cluster in the
+	// manager if that is attached to a cluster provider. The value is usually
+	// empty for the default cluster of a manager.
+	Name() string
+
 	// GetHTTPClient returns an HTTP client that can be used to talk to the apiserver
 	GetHTTPClient() *http.Client
 
@@ -76,6 +105,11 @@ type Cluster interface {
 
 // Options are the possible options that can be configured for a Cluster.
 type Options struct {
+	// name is the name of the cluster. It identifies the cluster in the manager
+	// if that is attached to a cluster provider. The value is usually empty for
+	// the default cluster of a manager.
+	Name string
+
 	// Scheme is the scheme used to resolve runtime.Objects to GroupVersionKinds / Resources
 	// Defaults to the kubernetes/client-go scheme.Scheme, but it's almost always better
 	// idea to pass your own scheme in.  See the documentation in pkg/scheme for more information.
@@ -158,6 +192,8 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 		return nil, errors.New("must specify Config")
 	}
 
+	// the config returned by GetConfig() is not to be modified. Hence, we have
+	// copy it before modifying it.
 	originalConfig := config
 
 	config = rest.CopyConfig(config)
@@ -248,6 +284,7 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	}
 
 	return &cluster{
+		name:             options.Name,
 		config:           originalConfig,
 		httpClient:       options.HTTPClient,
 		scheme:           options.Scheme,
@@ -313,4 +350,14 @@ func setOptionsDefaults(options Options, config *rest.Config) (Options, error) {
 	}
 
 	return options, nil
+}
+
+// WithName sets the name of the cluster. The name can only be set once.
+func WithName(name string) Option {
+	return func(o *Options) {
+		if o.Name != "" {
+			panic("cluster name cannot be set more than once")
+		}
+		o.Name = name
+	}
 }

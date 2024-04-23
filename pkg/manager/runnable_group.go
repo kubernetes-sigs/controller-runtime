@@ -53,6 +53,15 @@ func newRunnables(baseContext BaseContextFunc, errChan chan error) *runnables {
 // The runnables added before Start are started when Start is called.
 // The runnables added after Start are started directly.
 func (r *runnables) Add(fn Runnable) error {
+	// For wrapped logical runnables, we need to unwrap them to get the underlying runnable.
+	// And type switch on the unwrapped type. This is needed because the runnable
+	// might have a different type, but we want to override the Start method to control
+	// cancellation on a per cluster basis.
+	// unwrapped := fn
+	// if wrapped, ok := fn.(*logicalWrappedRunnable); ok {
+	// 	unwrapped = wrapped.Unwrap()
+	// }
+
 	switch runnable := fn.(type) {
 	case *Server:
 		if runnable.NeedLeaderElection() {

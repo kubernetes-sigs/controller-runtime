@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strings"
 
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -221,40 +220,5 @@ func (ic *informerCache) IndexField(ctx context.Context, obj client.Object, fiel
 }
 
 func indexByField(informer Informer, field string, extractValue client.IndexerFunc) error {
-	indexFunc := func(objRaw interface{}) ([]string, error) {
-		// TODO(directxman12): check if this is the correct type?
-		obj, isObj := objRaw.(client.Object)
-		if !isObj {
-			return nil, fmt.Errorf("object of type %T is not an Object", objRaw)
-		}
-		meta, err := apimeta.Accessor(obj)
-		if err != nil {
-			return nil, err
-		}
-		ns := meta.GetNamespace()
-
-		rawVals := extractValue(obj)
-		var vals []string
-		if ns == "" {
-			// if we're not doubling the keys for the namespaced case, just create a new slice with same length
-			vals = make([]string, len(rawVals))
-		} else {
-			// if we need to add non-namespaced versions too, double the length
-			vals = make([]string, len(rawVals)*2)
-		}
-		for i, rawVal := range rawVals {
-			// save a namespaced variant, so that we can ask
-			// "what are all the object matching a given index *in a given namespace*"
-			vals[i] = internal.KeyToNamespacedKey(ns, rawVal)
-			if ns != "" {
-				// if we have a namespace, also inject a special index key for listing
-				// regardless of the object namespace
-				vals[i+len(rawVals)] = internal.KeyToNamespacedKey("", rawVal)
-			}
-		}
-
-		return vals, nil
-	}
-
-	return informer.AddIndexers(cache.Indexers{internal.FieldIndexName(field): indexFunc})
+	return informer.AddIndexers(cache.Indexers{internal.FieldIndexName(field): internal.IndexFunc(extractValue)})
 }

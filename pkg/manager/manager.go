@@ -33,8 +33,6 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
@@ -43,12 +41,12 @@ import (
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
-// Manager initializes shared dependencies such as Caches and Clients, and provides them to Runnables.
-// A Manager is required to create Controllers.
+// Manager defines the interface that components must satisfy in order to be managed by a controller.
 type Manager interface {
 	// Cluster holds a variety of methods to interact with a cluster.
 	cluster.Cluster
@@ -77,6 +75,9 @@ type Manager interface {
 	// otherwise components that need leader election might continue to run after the leader
 	// lock was lost.
 	Start(ctx context.Context) error
+
+	// GetCluster retrieves a Cluster from a given identifying cluster name.
+	GetCluster(ctx context.Context, clusterName string) (cluster.Cluster, error)
 
 	// GetWebhookServer returns a webhook.Server
 	GetWebhookServer() webhook.Server
@@ -272,6 +273,12 @@ type Options struct {
 	newMetricsServer       func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error)
 	newHealthProbeListener func(addr string) (net.Listener, error)
 	newPprofListener       func(addr string) (net.Listener, error)
+
+	// ExperimentalClusterProvider is an EXPERIMENTAL feature that allows the manager to
+	// operate against many Kubernetes clusters at once.
+	// It can be used by invoking WithExperimentalClusterProvider(adapter) on Options.
+	// Individual clusters can be accessed by calling GetCluster on the Manager.
+	ExperimentalClusterProvider cluster.Provider
 }
 
 // BaseContextFunc is a function used to provide a base Context to Runnables
@@ -316,7 +323,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Set default values for options fields
 	options = setOptionsDefaults(options)
 
-	cluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {
+	clusterOptions := func(clusterOptions *cluster.Options) {
 		clusterOptions.Scheme = options.Scheme
 		clusterOptions.MapperProvider = options.MapperProvider
 		clusterOptions.Logger = options.Logger
@@ -325,7 +332,9 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		clusterOptions.Cache = options.Cache
 		clusterOptions.Client = options.Client
 		clusterOptions.EventBroadcaster = options.EventBroadcaster //nolint:staticcheck
-	})
+	}
+
+	cluster, err := cluster.New(config, clusterOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -407,11 +416,13 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}
 
 	errChan := make(chan error, 1)
-	runnables := newRunnables(options.BaseContext, errChan)
 	return &controllerManager{
 		stopProcedureEngaged:          ptr.To(int64(0)),
-		cluster:                       cluster,
-		runnables:                     runnables,
+		defaultCluster:                cluster,
+		defaultClusterOptions:         clusterOptions,
+		clusterProvider:               options.ExperimentalClusterProvider,
+		clusters:                      make(map[string]*engagedCluster),
+		runnables:                     newRunnables(options.BaseContext, errChan),
 		errChan:                       errChan,
 		recorderProvider:              recorderProvider,
 		resourceLock:                  resourceLock,
@@ -540,6 +551,11 @@ func setOptionsDefaults(options Options) Options {
 
 	if options.WebhookServer == nil {
 		options.WebhookServer = webhook.NewServer(webhook.Options{})
+	}
+
+	if options.Controller.EngageWithDefaultCluster == nil {
+		options.Controller.EngageWithDefaultCluster = ptr.To[bool](options.ExperimentalClusterProvider == nil)
+		options.Controller.EngageWithProviderClusters = ptr.To[bool](options.ExperimentalClusterProvider != nil)
 	}
 
 	return options

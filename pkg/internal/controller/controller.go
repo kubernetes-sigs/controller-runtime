@@ -304,6 +304,9 @@ func (c *Controller) reconcileHandler(ctx context.Context, obj interface{}) {
 	log = log.WithValues("reconcileID", reconcileID)
 	ctx = logf.IntoContext(ctx, log)
 	ctx = addReconcileID(ctx, reconcileID)
+	if req.ClusterName != "" {
+		log = log.WithValues("cluster", req.ClusterName)
+	}
 
 	// RunInformersAndControllers the syncHandler, passing it the Namespace/Name string of the
 	// resource to be synced.

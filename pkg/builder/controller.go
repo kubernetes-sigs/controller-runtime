@@ -58,11 +58,12 @@ var _ controller.ClusterWatcher = &clusterWatcher{}
 
 // clusterWatcher sets up watches between a cluster and a controller.
 type clusterWatcher struct {
-	ctrl             controller.Controller
-	forInput         ForInput
-	ownsInput        []OwnsInput
-	watchesInput     []WatchesInput
-	globalPredicates []predicate.Predicate
+	ctrl                   controller.Controller
+	forInput               ForInput
+	ownsInput              []OwnsInput
+	watchesInput           []WatchesInput
+	globalPredicates       []predicate.Predicate
+	clusterAwareRawSources []source.ClusterAwareSource
 }
 
 // Builder builds a Controller.
@@ -197,8 +198,12 @@ func (blder *Builder) WatchesMetadata(object client.Object, eventHandler handler
 //
 // WatchesRawSource does not respect predicates configured through WithEventFilter.
 func (blder *Builder) WatchesRawSource(src source.Source) *Builder {
-	blder.rawSources = append(blder.rawSources, src)
+	if src, ok := src.(source.ClusterAwareSource); ok {
+		blder.clusterAwareRawSources = append(blder.clusterAwareRawSources, src)
+		return blder
+	}
 
+	blder.rawSources = append(blder.rawSources, src)
 	return blder
 }
 
@@ -339,6 +344,12 @@ func (cc *clusterWatcher) Watch(ctx context.Context, cl cluster.Cluster) error {
 		allPredicates := append([]predicate.Predicate(nil), cc.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)
 		src := &ctxBoundedSyncingSource{ctx: ctx, src: source.Kind(cl.GetCache(), projected, handler.ForCluster(cl.Name(), w.handler), allPredicates...)}
+		if err := cc.ctrl.Watch(src); err != nil {
+			return err
+		}
+	}
+
+	for _, src := range cc.clusterAwareRawSources {
 		if err := cc.ctrl.Watch(src); err != nil {
 			return err
 		}

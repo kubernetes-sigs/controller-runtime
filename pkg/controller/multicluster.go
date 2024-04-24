@@ -32,6 +32,9 @@ type MultiClusterController interface {
 	Controller
 }
 
+// MultiClusterOption is a functional option for MultiClusterController.
+type MultiClusterOption func(*multiClusterController)
+
 // ClusterWatcher starts watches for a given Cluster. The ctx should be
 // used to cancel the watch when the Cluster is disengaged.
 type ClusterWatcher interface {
@@ -40,11 +43,24 @@ type ClusterWatcher interface {
 
 // NewMultiClusterController creates a new MultiClusterController for the given
 // controller with the given ClusterWatcher.
-func NewMultiClusterController(c Controller, watcher ClusterWatcher) MultiClusterController {
-	return &multiClusterController{
+func NewMultiClusterController(c Controller, watcher ClusterWatcher, opts ...MultiClusterOption) MultiClusterController {
+	mcc := &multiClusterController{
 		Controller: c,
 		watcher:    watcher,
 		clusters:   map[string]struct{}{},
+	}
+	for _, opt := range opts {
+		opt(mcc)
+	}
+
+	return mcc
+}
+
+// WithClusterAware adds the given cluster.Aware instances to the MultiClusterController,
+// being engaged and disengaged when the clusters are added or removed.
+func WithClusterAware(awares ...cluster.Aware) MultiClusterOption {
+	return func(c *multiClusterController) {
+		c.awares = append(c.awares, awares...)
 	}
 }
 
@@ -54,6 +70,7 @@ type multiClusterController struct {
 
 	lock     sync.Mutex
 	clusters map[string]struct{}
+	awares   []cluster.Aware
 }
 
 // Engage gets called when the runnable should start operations for the given Cluster.
@@ -82,6 +99,17 @@ func (c *multiClusterController) Engage(clusterCtx context.Context, cl cluster.C
 			return err
 		}
 		engaged = append(engaged, ctrl)
+	}
+
+	// engage cluster aware instances
+	for _, aware := range c.awares {
+		if err := aware.Engage(clusterCtx, cl); err != nil {
+			if err := disengage(); err != nil {
+				return err
+			}
+			return err
+		}
+		engaged = append(engaged, aware)
 	}
 
 	// start watches on the cluster

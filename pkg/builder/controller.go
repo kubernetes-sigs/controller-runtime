@@ -263,7 +263,7 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 
 	ctrl := blder.ctrl
 	if *blder.ctrlOptions.EngageWithProviderClusters {
-		// wrap as cluster.AwareRunnable to be engaged with provider clusters on demand
+		// wrap as cluster.Aware to be engaged with provider clusters on demand
 		ctrl = controller.NewMultiClusterController(ctrl, &blder.clusterWatcher)
 	}
 	if err := blder.mgr.Add(ctrl); err != nil {

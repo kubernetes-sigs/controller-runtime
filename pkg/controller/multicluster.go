@@ -27,7 +27,7 @@ import (
 // running in. It engage and disengage clusters dynamically, starting the
 // watches and stopping them.
 type MultiClusterController interface {
-	cluster.AwareRunnable
+	cluster.Aware
 	Controller
 }
 
@@ -65,7 +65,7 @@ func (c *multiClusterController) Engage(clusterCtx context.Context, cl cluster.C
 	}
 
 	// pass through in case the controller itself is cluster aware
-	if ctrl, ok := c.Controller.(cluster.AwareRunnable); ok {
+	if ctrl, ok := c.Controller.(cluster.Aware); ok {
 		if err := ctrl.Engage(clusterCtx, cl); err != nil {
 			return err
 		}

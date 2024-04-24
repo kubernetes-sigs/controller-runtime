@@ -86,7 +86,7 @@ type controllerManager struct {
 
 	clusterLock           sync.RWMutex // protects clusters
 	clusters              map[string]*engagedCluster
-	clusterAwareRunnables []cluster.AwareRunnable
+	clusterAwareRunnables []cluster.Aware
 
 	// recorderProvider is used to generate event recorders that will be injected into Controllers
 	// (and EventHandlers, Sources and Predicates).
@@ -193,7 +193,7 @@ func (cm *controllerManager) Add(r Runnable) error {
 }
 
 func (cm *controllerManager) add(r Runnable) error {
-	if aware, ok := r.(cluster.AwareRunnable); ok {
+	if aware, ok := r.(cluster.Aware); ok {
 		cm.clusterAwareRunnables = append(cm.clusterAwareRunnables, aware)
 	}
 	return cm.runnables.Add(r)

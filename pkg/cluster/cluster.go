@@ -35,10 +35,10 @@ import (
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 )
 
-// AwareRunnable is an interface that can be implemented by runnable types
-// that are cluster-aware.
-type AwareRunnable interface {
-	// Engage gets called when the runnable should start operations for the given Cluster.
+// Aware is an interface that can be implemented by components that
+// can engage and disengange when clusters are added or removed.
+type Aware interface {
+	// Engage gets called when the component should start operations for the given Cluster.
 	// The given context is tied to the Cluster's lifecycle and will be cancelled when the
 	// Cluster is removed or an error occurs.
 	//
@@ -53,7 +53,7 @@ type AwareRunnable interface {
 	//               `--------'
 	Engage(context.Context, Cluster) error
 
-	// Disengage gets called when the runnable should stop operations for the given Cluster.
+	// Disengage gets called when the component should stop operations for the given Cluster.
 	Disengage(context.Context, Cluster) error
 }
 

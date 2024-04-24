@@ -18,14 +18,16 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -44,6 +46,7 @@ func init() {
 }
 
 func main() {
+	ctx := signals.SetupSignalHandler()
 	entryLog := log.Log.WithName("entrypoint")
 
 	testEnv := &envtest.Environment{}
@@ -62,11 +65,15 @@ func main() {
 		}
 	}()
 
-	// Setup a Manager
+	// Setup a Manager, note that this not yet engages clusters, only makes them available.
 	entryLog.Info("Setting up manager")
+	provider := &KindClusterProvider{
+		log:      log.Log.WithName("kind-cluster-provider"),
+		clusters: map[string]cluster.Cluster{},
+	}
 	mgr, err := manager.New(
 		cfg,
-		manager.Options{ExperimentalClusterProvider: &KindClusterProvider{}},
+		manager.Options{ExperimentalClusterProvider: provider},
 	)
 	if err != nil {
 		entryLog.Error(err, "unable to set up overall controller manager")
@@ -102,109 +109,145 @@ func main() {
 		},
 	))
 
+	entryLog.Info("Starting provider")
+	go func() {
+		if err := provider.Run(ctx, mgr); err != nil {
+			entryLog.Error(err, "unable to run provider")
+			os.Exit(1)
+		}
+	}()
+
 	entryLog.Info("Starting manager")
-	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		entryLog.Error(err, "unable to run manager")
 		os.Exit(1)
 	}
 }
 
 // KindClusterProvider is a cluster provider that works with a local Kind instance.
-type KindClusterProvider struct{}
-
-func (k *KindClusterProvider) Get(ctx context.Context, clusterName string, opts ...cluster.Option) (cluster.Cluster, error) {
-	provider := kind.NewProvider()
-	kubeconfig, err := provider.KubeConfig(clusterName, false)
-	if err != nil {
-		return nil, err
-	}
-	// Parse the kubeconfig into a rest.Config.
-	cfg, err := clientcmd.RESTConfigFromKubeConfig([]byte(kubeconfig))
-	if err != nil {
-		return nil, err
-	}
-	return cluster.New(cfg, opts...)
+type KindClusterProvider struct {
+	Options   []cluster.Option
+	log       logr.Logger
+	lock      sync.RWMutex
+	clusters  map[string]cluster.Cluster
+	cancelFns map[string]context.CancelFunc
 }
 
-func (k *KindClusterProvider) List(ctx context.Context) ([]string, error) {
-	provider := kind.NewProvider()
-	list, err := provider.List()
-	if err != nil {
-		return nil, err
+var _ cluster.Provider = &KindClusterProvider{}
+
+func (k *KindClusterProvider) Get(ctx context.Context, clusterName string) (cluster.Cluster, error) {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
+	if cl, ok := k.clusters[clusterName]; ok {
+		return cl, nil
 	}
-	res := make([]string, 0, len(list))
-	for _, cluster := range list {
-		if !strings.HasPrefix(cluster, "fleet-") {
-			continue
+
+	return nil, fmt.Errorf("cluster %s not found", clusterName)
+}
+
+func (k *KindClusterProvider) Run(ctx context.Context, mgr manager.Manager) error {
+	provider := kind.NewProvider()
+
+	// initial list to smoke test
+	if _, err := provider.List(); err != nil {
+		return err
+	}
+
+	return wait.PollUntilContextCancel(ctx, time.Second*2, true, func(ctx context.Context) (done bool, err error) {
+		list, err := provider.List()
+		if err != nil {
+			k.log.Info("failed to list kind clusters", "error", err)
+			return false, nil // keep going
 		}
-		res = append(res, cluster)
-	}
-	return res, nil
-}
 
-func (k *KindClusterProvider) Watch(_ context.Context) (cluster.Watcher, error) {
-	return &KindWatcher{ch: make(chan cluster.WatchEvent)}, nil
-}
+		// start new clusters
+		for _, clusterName := range list {
+			log := k.log.WithValues("cluster", clusterName)
 
-type KindWatcher struct {
-	init   sync.Once
-	wg     sync.WaitGroup
-	ch     chan cluster.WatchEvent
-	cancel context.CancelFunc
-}
+			// skip?
+			if !strings.HasPrefix(clusterName, "fleet-") {
+				continue
+			}
+			k.lock.RLock()
+			if _, ok := k.clusters[clusterName]; ok {
+				continue
+			}
+			k.lock.RUnlock()
 
-func (k *KindWatcher) Stop() {
-	if k.cancel != nil {
-		k.cancel()
-	}
-	k.wg.Wait()
-	close(k.ch)
-}
-
-func (k *KindWatcher) ResultChan() <-chan cluster.WatchEvent {
-	k.init.Do(func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		k.cancel = cancel
-		set := sets.New[string]()
-		k.wg.Add(1)
-		go func() {
-			defer k.wg.Done()
-			for {
-				select {
-				case <-time.After(2 * time.Second):
-					provider := kind.NewProvider()
-					list, err := provider.List()
-					if err != nil {
-						klog.Error(err)
-						continue
-					}
-					newSet := sets.New(list...)
-					// Check for new clusters.
-					for _, cl := range newSet.Difference(set).UnsortedList() {
-						if !strings.HasPrefix(cl, "fleet-") {
-							continue
-						}
-						k.ch <- cluster.WatchEvent{
-							Type:        watch.Added,
-							ClusterName: cl,
-						}
-					}
-					// Check for deleted clusters.
-					for _, cl := range set.Difference(newSet).UnsortedList() {
-						if !strings.HasPrefix(cl, "fleet-") {
-							continue
-						}
-						k.ch <- cluster.WatchEvent{
-							Type:        watch.Deleted,
-							ClusterName: cl,
-						}
-					}
-					set = newSet
-				case <-ctx.Done():
+			// create a new cluster
+			kubeconfig, err := provider.KubeConfig(clusterName, false)
+			if err != nil {
+				k.log.Info("failed to get kind kubeconfig", "error", err)
+				return false, nil // keep going
+			}
+			cfg, err := clientcmd.RESTConfigFromKubeConfig([]byte(kubeconfig))
+			if err != nil {
+				k.log.Info("failed to create rest config", "error", err)
+				return false, nil // keep going
+			}
+			cl, err := cluster.New(cfg, k.Options...)
+			if err != nil {
+				k.log.Info("failed to create cluster", "error", err)
+				return false, nil // keep going
+			}
+			clusterCtx, cancel := context.WithCancel(ctx)
+			go func() {
+				if err := cl.Start(clusterCtx); err != nil {
+					log.Error(err, "failed to start cluster")
 					return
 				}
+			}()
+			if !cl.GetCache().WaitForCacheSync(ctx) {
+				cancel()
+				log.Info("failed to sync cache")
+				return false, nil
 			}
-		}()
+
+			// remember
+			k.lock.Lock()
+			k.clusters[clusterName] = cl
+			k.cancelFns[clusterName] = cancel
+			k.lock.Unlock()
+
+			// engage manager
+			if mgr != nil {
+				if err := mgr.Engage(clusterCtx, cl); err != nil {
+					log.Error(err, "failed to engage manager")
+					k.lock.Lock()
+					delete(k.clusters, clusterName)
+					delete(k.cancelFns, clusterName)
+					k.lock.Unlock()
+					return false, nil
+				}
+			}
+		}
+
+		// remove old clusters
+		kindNames := sets.New(list...)
+		k.lock.Lock()
+		clusterNames := make([]string, 0, len(k.clusters))
+		for name := range k.clusters {
+			clusterNames = append(clusterNames, name)
+		}
+		k.lock.Unlock()
+		for _, name := range clusterNames {
+			if !kindNames.Has(name) {
+				// disengage manager
+				if mgr != nil {
+					if err := mgr.Disengage(ctx, k.clusters[name]); err != nil {
+						k.log.Error(err, "failed to disengage manager")
+					}
+				}
+
+				// stop and forget
+				k.lock.Lock()
+				k.cancelFns[name]()
+				delete(k.clusters, name)
+				delete(k.cancelFns, name)
+				k.lock.Unlock()
+			}
+		}
+
+		return false, nil
 	})
-	return k.ch
 }

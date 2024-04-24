@@ -31,9 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
@@ -62,13 +59,8 @@ const (
 )
 
 var _ Runnable = &controllerManager{}
+var _ cluster.Aware = &controllerManager{}
 var _ Manager = &controllerManager{}
-
-type engagedCluster struct {
-	cluster.Cluster
-	ctx    context.Context
-	cancel context.CancelFunc
-}
 
 type controllerManager struct {
 	sync.Mutex
@@ -82,10 +74,9 @@ type controllerManager struct {
 	defaultCluster        cluster.Cluster
 	defaultClusterOptions cluster.Option
 
-	clusterProvider cluster.Provider
-
-	clusterLock           sync.RWMutex // protects clusters
-	clusters              map[string]*engagedCluster
+	// engagedCluster is a map of engaged clusters. The can come and go as the manager is running.
+	engagedClustersLock   sync.RWMutex
+	engagedClusters       map[string]cluster.Cluster
 	clusterAwareRunnables []cluster.Aware
 
 	// recorderProvider is used to generate event recorders that will be injected into Controllers
@@ -178,6 +169,9 @@ type controllerManager struct {
 	// internalProceduresStop channel is used internally to the manager when coordinating
 	// the proper shutdown of servers. This channel is also used for dependency injection.
 	internalProceduresStop chan struct{}
+
+	// clusterProvider is used to get clusters by name, beyond the default cluster.
+	clusterProvider cluster.Provider
 }
 
 type hasCache interface {
@@ -193,10 +187,43 @@ func (cm *controllerManager) Add(r Runnable) error {
 }
 
 func (cm *controllerManager) add(r Runnable) error {
+	var engaged []cluster.Aware
+	var errs []error
+	disengage := func() {
+		for _, aware := range engaged {
+			if err := aware.Disengage(cm.internalCtx, cm.defaultCluster); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	// engage with existing clusters (this is reversible)
+	if aware, ok := r.(cluster.Aware); ok {
+		cm.engagedClustersLock.RLock()
+		defer cm.engagedClustersLock.RUnlock()
+		for _, cl := range cm.engagedClusters {
+			if err := aware.Engage(cm.internalCtx, cl); err != nil {
+				errs = append(errs, err)
+				break
+			}
+			engaged = append(engaged, aware)
+		}
+		if len(errs) > 0 {
+			disengage()
+			return kerrors.NewAggregate(errs)
+		}
+	}
+
+	if err := cm.runnables.Add(r); err != nil {
+		disengage()
+		return err
+	}
+
 	if aware, ok := r.(cluster.Aware); ok {
 		cm.clusterAwareRunnables = append(cm.clusterAwareRunnables, aware)
 	}
-	return cm.runnables.Add(r)
+
+	return nil
 }
 
 // AddHealthzCheck allows you to add Healthz checker.
@@ -238,7 +265,17 @@ func (cm *controllerManager) Name() string {
 }
 
 func (cm *controllerManager) GetCluster(ctx context.Context, clusterName string) (cluster.Cluster, error) {
-	return cm.getCluster(ctx, clusterName)
+	if clusterName == "" || clusterName == cm.defaultCluster.Name() {
+		return cm.defaultCluster, nil
+	}
+
+	if cm.clusterProvider == nil {
+		return nil, fmt.Errorf("cluster %q not found, cluster provider is not set", clusterName)
+	}
+
+	// intentionally not returning from engaged clusters. This can be used
+	// without engaging clusters.
+	return cm.clusterProvider.Get(ctx, clusterName)
 }
 
 func (cm *controllerManager) GetHTTPClient() *http.Client {
@@ -275,118 +312,6 @@ func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
 
 func (cm *controllerManager) GetAPIReader() client.Reader {
 	return cm.defaultCluster.GetAPIReader()
-}
-
-func (cm *controllerManager) engageClusterAwareRunnables() {
-	cm.Lock()
-	defer cm.Unlock()
-
-	// If we don't have a cluster provider, we cannot sync the runnables.
-	if cm.clusterProvider == nil {
-		return
-	}
-
-	// If we successfully retrieved the cluster, check
-	// that we schedule all the cluster aware runnables.
-	for name, cluster := range cm.clusters {
-		for _, aware := range cm.clusterAwareRunnables {
-			if err := aware.Engage(cluster.ctx, cluster); err != nil {
-				cm.logger.Error(err, "failed to engage cluster with runnable, won't retry", "clusterName", name, "runnable", aware)
-				continue
-			}
-		}
-	}
-}
-
-func (cm *controllerManager) getCluster(ctx context.Context, clusterName string) (c *engagedCluster, err error) {
-	// Check if the manager was configured with a cluster provider,
-	// otherwise we cannot retrieve the cluster.
-	if cm.clusterProvider == nil {
-		return nil, fmt.Errorf("manager was not configured with a cluster provider, cannot retrieve %q", clusterName)
-	}
-
-	// Check if the cluster already exists.
-	cm.clusterLock.RLock()
-	c, ok := cm.clusters[clusterName]
-	cm.clusterLock.RUnlock()
-	if ok {
-		return c, nil
-	}
-
-	// Lock the whole function to avoid creating multiple clusters for the same name.
-	cm.clusterLock.Lock()
-	defer cm.clusterLock.Unlock()
-
-	// Check again in case another goroutine already created the cluster.
-	c, ok = cm.clusters[clusterName]
-	if ok {
-		return c, nil
-	}
-
-	// Create a new cluster.
-	var cl cluster.Cluster
-	{
-		// TODO(vincepri): Make this timeout configurable.
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-		var watchErr error
-		if err := wait.PollUntilContextCancel(ctx, 1*time.Second, true, func(ctx context.Context) (done bool, err error) {
-			cl, watchErr = cm.clusterProvider.Get(ctx, clusterName, cm.defaultClusterOptions, cluster.WithName(clusterName))
-			if watchErr != nil {
-				return false, nil //nolint:nilerr // We want to keep trying.
-			}
-			return true, nil
-		}); err != nil {
-			return nil, fmt.Errorf("failed create cluster %q: %w", clusterName, kerrors.NewAggregate([]error{err, watchErr}))
-		}
-	}
-
-	// We add the Cluster to the manager as a Runnable, which is going to be categorized
-	// as a Cache-backed Runnable.
-	//
-	// Once added, if the manager has already started, it waits for the Cache to sync before returning
-	// otherwise it enqueues the Runnable to be started when the manager starts.
-	if err := cm.Add(cl); err != nil {
-		return nil, fmt.Errorf("cannot add cluster %q to manager: %w", clusterName, err)
-	}
-
-	// Create a new context for the Cluster, so that it can be stopped independently.
-	ctx, cancel := context.WithCancel(context.Background())
-
-	c = &engagedCluster{
-		Cluster: cl,
-		ctx:     ctx,
-		cancel:  cancel,
-	}
-	cm.clusters[clusterName] = c
-	return c, nil
-}
-
-func (cm *controllerManager) removeNamedCluster(clusterName string) error {
-	// Check if the manager was configured with a cluster provider,
-	// otherwise we cannot retrieve the cluster.
-	if cm.clusterProvider == nil {
-		return fmt.Errorf("manager was not configured with a cluster provider, cannot retrieve %q", clusterName)
-	}
-
-	cm.clusterLock.Lock()
-	defer cm.clusterLock.Unlock()
-	c, ok := cm.clusters[clusterName]
-	if !ok {
-		return nil
-	}
-
-	// Disengage all the runnables.
-	for _, aware := range cm.clusterAwareRunnables {
-		if err := aware.Disengage(c.ctx, c); err != nil {
-			return fmt.Errorf("failed to disengage cluster aware runnable: %w", err)
-		}
-	}
-
-	// Cancel the context and remove the cluster from the map.
-	c.cancel()
-	delete(cm.clusters, clusterName)
-	return nil
 }
 
 func (cm *controllerManager) GetWebhookServer() webhook.Server {
@@ -570,80 +495,6 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) { //nolint:g
 		}()
 	}
 
-	// If the manager has been configured with a cluster provider, start it.
-	if cm.clusterProvider != nil {
-		if err := cm.add(RunnableFunc(func(ctx context.Context) error {
-			resync := func() error {
-				clusterList, err := cm.clusterProvider.List(ctx)
-				if err != nil {
-					return err
-				}
-				for _, name := range clusterList {
-					if _, err := cm.getCluster(ctx, name); err != nil {
-						return err
-					}
-				}
-				clusterListSet := sets.New(clusterList...)
-				for name := range cm.clusters {
-					if clusterListSet.Has(name) {
-						continue
-					}
-					if err := cm.removeNamedCluster(name); err != nil {
-						return err
-					}
-				}
-				cm.engageClusterAwareRunnables()
-				return nil
-			}
-
-			// Always do an initial full resync.
-			if err := resync(); err != nil {
-				return err
-			}
-
-			// Create a watcher and start watching for changes.
-			watcher, err := cm.clusterProvider.Watch(ctx)
-			if err != nil {
-				return err
-			}
-			defer func() {
-				go func() {
-					// Drain the watcher result channel to prevent a goroutine leak.
-					for range watcher.ResultChan() {
-					}
-				}()
-				watcher.Stop()
-			}()
-
-			for {
-				select {
-				case <-time.After(10 * time.Minute):
-					if err := resync(); err != nil {
-						return err
-					}
-				case event := <-watcher.ResultChan():
-					switch event.Type {
-					case watch.Added, watch.Modified:
-						if _, err := cm.getCluster(ctx, event.ClusterName); err != nil {
-							return err
-						}
-						cm.engageClusterAwareRunnables()
-					case watch.Deleted, watch.Error:
-						if err := cm.removeNamedCluster(event.ClusterName); err != nil {
-							return err
-						}
-					case watch.Bookmark:
-						continue
-					}
-				case <-ctx.Done():
-					return nil
-				}
-			}
-		})); err != nil {
-			return fmt.Errorf("failed to add cluster provider to runnables: %w", err)
-		}
-	}
-
 	// Manager is ready.
 	ready = true
 	cm.Unlock()
@@ -759,6 +610,69 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 	}
 
 	return nil
+}
+
+func (cm *controllerManager) Engage(ctx context.Context, cl cluster.Cluster) error {
+	cm.Lock()
+	defer cm.Unlock()
+
+	// be reentrant via noop
+	cm.engagedClustersLock.RLock()
+	if _, ok := cm.engagedClusters[cl.Name()]; ok {
+		cm.engagedClustersLock.RUnlock()
+		return nil
+	}
+
+	// add early because any engaged runnable could access it
+	cm.engagedClustersLock.Lock()
+	cm.engagedClusters[cl.Name()] = cl
+	cm.engagedClustersLock.Unlock()
+
+	// engage known runnables
+	var errs []error
+	var engaged []cluster.Aware
+	for _, r := range cm.clusterAwareRunnables {
+		if err := r.Engage(ctx, cl); err != nil {
+			errs = append(errs, err)
+			break
+		}
+		engaged = append(engaged, r)
+	}
+
+	// clean-up
+	if len(errs) > 0 {
+		for _, aware := range engaged {
+			if err := aware.Disengage(ctx, cl); err != nil {
+				errs = append(errs, err)
+			}
+		}
+
+		cm.engagedClustersLock.Lock()
+		delete(cm.engagedClusters, cl.Name())
+		cm.engagedClustersLock.Unlock()
+
+		return kerrors.NewAggregate(errs)
+	}
+
+	return nil
+}
+
+func (cm *controllerManager) Disengage(ctx context.Context, cl cluster.Cluster) error {
+	cm.Lock()
+	defer cm.Unlock()
+
+	var errs []error
+	for _, r := range cm.clusterAwareRunnables {
+		if err := r.Disengage(ctx, cl); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	cm.engagedClustersLock.Lock()
+	delete(cm.engagedClusters, cl.Name())
+	cm.engagedClustersLock.Unlock()
+
+	return kerrors.NewAggregate(errs)
 }
 
 func (cm *controllerManager) startLeaderElectionRunnables() error {

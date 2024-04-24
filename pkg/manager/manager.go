@@ -51,6 +51,11 @@ type Manager interface {
 	// Cluster holds a variety of methods to interact with a cluster.
 	cluster.Cluster
 
+	// Aware is an interface for dynamic cluster addition and removal. The
+	// Manager will call Engage and Disengage on cluster-aware runnables like
+	// controllers to e.g. watch multiple clusters.
+	cluster.Aware
+
 	// Add will set requested dependencies on the component, and cause the component to be
 	// started when Start is called.
 	// Depending on if a Runnable implements LeaderElectionRunnable interface, a Runnable can be run in either
@@ -334,7 +339,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		clusterOptions.EventBroadcaster = options.EventBroadcaster //nolint:staticcheck
 	}
 
-	cluster, err := cluster.New(config, clusterOptions)
+	cl, err := cluster.New(config, clusterOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +352,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Create the recorder provider to inject event recorders for the components.
 	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.
-	recorderProvider, err := options.newRecorderProvider(config, cluster.GetHTTPClient(), cluster.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
+	recorderProvider, err := options.newRecorderProvider(config, cl.GetHTTPClient(), cl.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
 	if err != nil {
 		return nil, err
 	}
@@ -361,7 +366,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		leaderRecorderProvider = recorderProvider
 	} else {
 		leaderConfig = rest.CopyConfig(options.LeaderElectionConfig)
-		scheme := cluster.GetScheme()
+		scheme := cl.GetScheme()
 		err := corev1.AddToScheme(scheme)
 		if err != nil {
 			return nil, err
@@ -396,7 +401,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}
 
 	// Create the metrics server.
-	metricsServer, err := options.newMetricsServer(options.Metrics, config, cluster.GetHTTPClient())
+	metricsServer, err := options.newMetricsServer(options.Metrics, config, cl.GetHTTPClient())
 	if err != nil {
 		return nil, err
 	}
@@ -418,10 +423,10 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	errChan := make(chan error, 1)
 	return &controllerManager{
 		stopProcedureEngaged:          ptr.To(int64(0)),
-		defaultCluster:                cluster,
+		defaultCluster:                cl,
 		defaultClusterOptions:         clusterOptions,
 		clusterProvider:               options.ExperimentalClusterProvider,
-		clusters:                      make(map[string]*engagedCluster),
+		engagedClusters:               make(map[string]cluster.Cluster),
 		runnables:                     newRunnables(options.BaseContext, errChan),
 		errChan:                       errChan,
 		recorderProvider:              recorderProvider,

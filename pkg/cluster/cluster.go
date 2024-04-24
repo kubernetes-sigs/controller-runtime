@@ -35,28 +35,6 @@ import (
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 )
 
-// Aware is an interface that can be implemented by components that
-// can engage and disengange when clusters are added or removed.
-type Aware interface {
-	// Engage gets called when the component should start operations for the given Cluster.
-	// The given context is tied to the Cluster's lifecycle and will be cancelled when the
-	// Cluster is removed or an error occurs.
-	//
-	// Implementers should return an error if they cannot start operations for the given Cluster,
-	// and should ensure this operation is re-entrant and non-blocking.
-	//
-	//	\_________________|)____.---'--`---.____
-	//              ||    \----.________.----/
-	//              ||     / /    `--'
-	//            __||____/ /_
-	//           |___         \
-	//               `--------'
-	Engage(context.Context, Cluster) error
-
-	// Disengage gets called when the component should stop operations for the given Cluster.
-	Disengage(context.Context, Cluster) error
-}
-
 // Cluster provides various methods to interact with a cluster.
 type Cluster interface {
 	// Name returns the name of the cluster. It identifies the cluster in the

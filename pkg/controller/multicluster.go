@@ -20,6 +20,7 @@ import (
 	"context"
 	"sync"
 
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 )
 
@@ -64,22 +65,33 @@ func (c *multiClusterController) Engage(clusterCtx context.Context, cl cluster.C
 		return nil
 	}
 
+	engaged := make([]cluster.Aware, 0, len(c.awares)+1)
+	disengage := func() error {
+		var errs []error
+		for _, aware := range engaged {
+			if err := aware.Disengage(clusterCtx, cl); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return kerrors.NewAggregate(errs)
+	}
+
 	// pass through in case the controller itself is cluster aware
 	if ctrl, ok := c.Controller.(cluster.Aware); ok {
 		if err := ctrl.Engage(clusterCtx, cl); err != nil {
 			return err
 		}
+		engaged = append(engaged, ctrl)
 	}
 
 	// start watches on the cluster
 	if err := c.watcher.Watch(clusterCtx, cl); err != nil {
-		if ctrl, ok := c.Controller.(cluster.AwareRunnable); ok {
-			if err := ctrl.Disengage(clusterCtx, cl); err != nil {
-				return err
-			}
+		if err := disengage(); err != nil {
+			return err
 		}
 		return err
 	}
+
 	c.clusters[cl.Name()] = struct{}{}
 
 	return nil
@@ -96,11 +108,12 @@ func (c *multiClusterController) Disengage(ctx context.Context, cl cluster.Clust
 	delete(c.clusters, cl.Name())
 
 	// pass through in case the controller itself is cluster aware
-	if ctrl, ok := c.Controller.(cluster.AwareRunnable); ok {
+	var errs []error
+	if ctrl, ok := c.Controller.(cluster.Aware); ok {
 		if err := ctrl.Disengage(ctx, cl); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
 
-	return nil
+	return kerrors.NewAggregate(errs)
 }

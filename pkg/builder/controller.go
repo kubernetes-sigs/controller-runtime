@@ -355,19 +355,19 @@ func (blder *Builder) doWatch() error {
 	if len(blder.watchesInput) == 0 && blder.forInput.object == nil && len(blder.rawSources) == 0 {
 		return errors.New("there are no watches configured, controller will never get triggered. Use For(), Owns(), Watches() or WatchesRawSource() to set them up")
 	}
-	if *blder.ctrlOptions.EngageWithProviderClusters && len(blder.rawSources) > 0 {
-		return errors.New("when using a cluster adapter, custom raw watches are not allowed")
+	if !*blder.ctrlOptions.EngageWithDefaultCluster && len(blder.rawSources) > 0 {
+		return errors.New("when using a cluster adapter without watching the default cluster, non-cluster-aware custom raw watches are not allowed")
 	}
 
 	if *blder.ctrlOptions.EngageWithDefaultCluster {
 		if err := blder.Watch(unboundedContext, blder.mgr); err != nil {
 			return err
 		}
-	}
 
-	for _, src := range blder.rawSources {
-		if err := blder.ctrl.Watch(src); err != nil {
-			return err
+		for _, src := range blder.rawSources {
+			if err := blder.ctrl.Watch(src); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

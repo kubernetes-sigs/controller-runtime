@@ -42,14 +42,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/internal/log"
-	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 var _ = Describe("controller", func() {
 	var fakeReconcile *fakeReconciler
-	var ctrl *Controller
+	var ctrl *Controller[reconcile.Request]
 	var queue *controllertest.Queue
 	var reconciled chan reconcile.Request
 	var request = reconcile.Request{
@@ -63,12 +62,14 @@ var _ = Describe("controller", func() {
 			results:  make(chan fakeReconcileResultPair, 10 /* chosen by the completely scientific approach of guessing */),
 		}
 		queue = &controllertest.Queue{
-			Interface: workqueue.New(),
+			TypedInterface: workqueue.NewTyped[reconcile.Request](),
 		}
-		ctrl = &Controller{
+		ctrl = &Controller[reconcile.Request]{
 			MaxConcurrentReconciles: 1,
 			Do:                      fakeReconcile,
-			NewQueue:                func(string, ratelimiter.RateLimiter) workqueue.RateLimitingInterface { return queue },
+			NewQueue: func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				return queue
+			},
 			LogConstructor: func(_ *reconcile.Request) logr.Logger {
 				return log.RuntimeLog.WithName("controller").WithName("test")
 			},
@@ -126,7 +127,7 @@ var _ = Describe("controller", func() {
 	Describe("Start", func() {
 		It("should return an error if there is an error waiting for the informers", func() {
 			f := false
-			ctrl.startWatches = []source.Source{
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
 			}
 			ctrl.Name = "foo"
@@ -144,7 +145,7 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 
-			ctrl.startWatches = []source.Source{
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Kind(c, &appsv1.Deployment{}, &handler.TypedEnqueueRequestForObject[*appsv1.Deployment]{}),
 			}
 			ctrl.Name = "testcontroller"
@@ -161,7 +162,7 @@ var _ = Describe("controller", func() {
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
-			ctrl.startWatches = []source.Source{
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				&singnallingSourceWrapper{
 					SyncingSource: source.Kind[client.Object](c, &appsv1.Deployment{}, &handler.EnqueueRequestForObject{}),
 					cacheSyncDone: sourceSynced,
@@ -189,7 +190,7 @@ var _ = Describe("controller", func() {
 			sourceSynced := make(chan struct{})
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
-			ctrl.startWatches = []source.Source{
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				&singnallingSourceWrapper{
 					SyncingSource: source.Kind[client.Object](c, &appsv1.Deployment{}, &handler.EnqueueRequestForObject{}),
 					cacheSyncDone: sourceSynced,
@@ -229,7 +230,7 @@ var _ = Describe("controller", func() {
 			ins := source.Channel(
 				ch,
 				handler.Funcs{
-					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 						defer GinkgoRecover()
 						close(processed)
 					},
@@ -239,7 +240,7 @@ var _ = Describe("controller", func() {
 			// send the event to the channel
 			ch <- evt
 
-			ctrl.startWatches = []source.Source{ins}
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{ins}
 
 			go func() {
 				defer GinkgoRecover()
@@ -253,7 +254,7 @@ var _ = Describe("controller", func() {
 			defer cancel()
 
 			ins := source.Channel[string](nil, nil)
-			ctrl.startWatches = []source.Source{ins}
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{ins}
 
 			e := ctrl.Start(ctx)
 			Expect(e).To(HaveOccurred())
@@ -262,7 +263,7 @@ var _ = Describe("controller", func() {
 
 		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {
 			started := false
-			src := source.Func(func(ctx context.Context, q workqueue.RateLimitingInterface) error {
+			src := source.Func(func(ctx context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(ctrl.Queue))
 
@@ -281,7 +282,7 @@ var _ = Describe("controller", func() {
 		It("should return an error if there is an error starting sources", func() {
 			err := fmt.Errorf("Expected Error: could not start source")
 			src := source.Func(func(context.Context,
-				workqueue.RateLimitingInterface,
+				workqueue.TypedRateLimitingInterface[reconcile.Request],
 			) error {
 				defer GinkgoRecover()
 				return err
@@ -320,28 +321,6 @@ var _ = Describe("controller", func() {
 			Expect(<-reconciled).To(Equal(request))
 
 			By("Removing the item from the queue")
-			Eventually(queue.Len).Should(Equal(0))
-			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
-		})
-
-		It("should continue to process additional queue items after the first", func() {
-			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
-				defer GinkgoRecover()
-				Fail("Reconciler should not have been called")
-				return reconcile.Result{}, nil
-			})
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			go func() {
-				defer GinkgoRecover()
-				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
-			}()
-
-			By("adding two bad items to the queue")
-			queue.Add("foo/bar1")
-			queue.Add("foo/bar2")
-
-			By("expecting both of them to be skipped")
 			Eventually(queue.Len).Should(Equal(0))
 			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
 		})
@@ -400,8 +379,10 @@ var _ = Describe("controller", func() {
 		// TODO(directxman12): we should ensure that backoff occurrs with error requeue
 
 		It("should not reset backoff until there's a non-error result", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.NewQueue("controller1", nil)}
-			ctrl.NewQueue = func(string, ratelimiter.RateLimiter) workqueue.RateLimitingInterface { return dq }
+			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
+			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				return dq
+			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -436,8 +417,10 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should requeue a Request with rate limiting if the Result sets Requeue:true and continue processing items", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.NewQueue("controller1", nil)}
-			ctrl.NewQueue = func(string, ratelimiter.RateLimiter) workqueue.RateLimitingInterface { return dq }
+			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
+			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				return dq
+			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -466,8 +449,10 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should requeue a Request after a duration (but not rate-limitted) if the Result sets RequeueAfter (regardless of Requeue)", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.NewQueue("controller1", nil)}
-			ctrl.NewQueue = func(string, ratelimiter.RateLimiter) workqueue.RateLimitingInterface { return dq }
+			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
+			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				return dq
+			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -496,8 +481,10 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should perform error behavior if error is not nil, regardless of RequeueAfter", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.NewQueue("controller1", nil)}
-			ctrl.NewQueue = func(string, ratelimiter.RateLimiter) workqueue.RateLimitingInterface { return dq }
+			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
+			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				return dq
+			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -764,7 +751,7 @@ var _ = Describe("ReconcileIDFromContext function", func() {
 })
 
 type DelegatingQueue struct {
-	workqueue.RateLimitingInterface
+	workqueue.TypedRateLimitingInterface[reconcile.Request]
 	mu sync.Mutex
 
 	countAddRateLimited int
@@ -772,36 +759,36 @@ type DelegatingQueue struct {
 	countAddAfter       int
 }
 
-func (q *DelegatingQueue) AddRateLimited(item interface{}) {
+func (q *DelegatingQueue) AddRateLimited(item reconcile.Request) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	q.countAddRateLimited++
-	q.RateLimitingInterface.AddRateLimited(item)
+	q.TypedRateLimitingInterface.AddRateLimited(item)
 }
 
-func (q *DelegatingQueue) AddAfter(item interface{}, d time.Duration) {
+func (q *DelegatingQueue) AddAfter(item reconcile.Request, d time.Duration) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	q.countAddAfter++
-	q.RateLimitingInterface.AddAfter(item, d)
+	q.TypedRateLimitingInterface.AddAfter(item, d)
 }
 
-func (q *DelegatingQueue) Add(item interface{}) {
+func (q *DelegatingQueue) Add(item reconcile.Request) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.countAdd++
 
-	q.RateLimitingInterface.Add(item)
+	q.TypedRateLimitingInterface.Add(item)
 }
 
-func (q *DelegatingQueue) Forget(item interface{}) {
+func (q *DelegatingQueue) Forget(item reconcile.Request) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.countAdd--
 
-	q.RateLimitingInterface.Forget(item)
+	q.TypedRateLimitingInterface.Forget(item)
 }
 
 type countInfo struct {

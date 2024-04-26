@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -39,7 +40,7 @@ import (
 var _ = Describe("Source", func() {
 	var instance1, instance2 source.Source
 	var obj client.Object
-	var q workqueue.RateLimitingInterface
+	var q workqueue.TypedRateLimitingInterface[reconcile.Request]
 	var c1, c2 chan interface{}
 	var ns string
 	count := 0
@@ -53,7 +54,11 @@ var _ = Describe("Source", func() {
 		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		q = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
+		q = workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.DefaultTypedControllerRateLimiter[reconcile.Request](),
+			workqueue.TypedRateLimitingQueueConfig[reconcile.Request]{
+				Name: "test",
+			})
 		c1 = make(chan interface{})
 		c2 = make(chan interface{})
 	})
@@ -98,17 +103,17 @@ var _ = Describe("Source", func() {
 				// Create an event handler to verify the events
 				newHandler := func(c chan interface{}) handler.Funcs {
 					return handler.Funcs{
-						CreateFunc: func(ctx context.Context, evt event.CreateEvent, rli workqueue.RateLimitingInterface) {
+						CreateFunc: func(ctx context.Context, evt event.CreateEvent, rli workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))
 							c <- evt
 						},
-						UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, rli workqueue.RateLimitingInterface) {
+						UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, rli workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))
 							c <- evt
 						},
-						DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, rli workqueue.RateLimitingInterface) {
+						DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, rli workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()
 							Expect(rli).To(Equal(q))
 							c <- evt
@@ -237,11 +242,15 @@ var _ = Describe("Source", func() {
 			It("should provide a ReplicaSet CreateEvent", func() {
 				c := make(chan struct{})
 
-				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
+				q := workqueue.NewTypedRateLimitingQueueWithConfig(
+					workqueue.DefaultTypedControllerRateLimiter[reconcile.Request](),
+					workqueue.TypedRateLimitingQueueConfig[reconcile.Request]{
+						Name: "test",
+					})
 				instance := &source.Informer{
 					Informer: depInformer,
 					Handler: handler.Funcs{
-						CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
+						CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()
 							var err error
 							rs, err := clientset.AppsV1().ReplicaSets("default").Get(ctx, rs.Name, metav1.GetOptions{})
@@ -251,15 +260,15 @@ var _ = Describe("Source", func() {
 							Expect(evt.Object).To(Equal(rs))
 							close(c)
 						},
-						UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+						UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()
 							Fail("Unexpected UpdateEvent")
 						},
-						DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+						DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()
 							Fail("Unexpected DeleteEvent")
 						},
-						GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
+						GenericFunc: func(context.Context, event.GenericEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()
 							Fail("Unexpected GenericEvent")
 						},
@@ -281,13 +290,17 @@ var _ = Describe("Source", func() {
 				rs2 := rs.DeepCopy()
 				rs2.SetLabels(map[string]string{"biz": "baz"})
 
-				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
+				q := workqueue.NewTypedRateLimitingQueueWithConfig(
+					workqueue.DefaultTypedControllerRateLimiter[reconcile.Request](),
+					workqueue.TypedRateLimitingQueueConfig[reconcile.Request]{
+						Name: "test",
+					})
 				instance := &source.Informer{
 					Informer: depInformer,
 					Handler: handler.Funcs{
-						CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.RateLimitingInterface) {
+						CreateFunc: func(ctx context.Context, evt event.CreateEvent, q2 workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 						},
-						UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
+						UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, q2 workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()
 							var err error
 							rs2, err := clientset.AppsV1().ReplicaSets("default").Get(ctx, rs.Name, metav1.GetOptions{})
@@ -300,11 +313,11 @@ var _ = Describe("Source", func() {
 
 							close(c)
 						},
-						DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+						DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()
 							Fail("Unexpected DeleteEvent")
 						},
-						GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
+						GenericFunc: func(context.Context, event.GenericEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()
 							Fail("Unexpected GenericEvent")
 						},
@@ -321,21 +334,25 @@ var _ = Describe("Source", func() {
 			It("should provide a ReplicaSet DeletedEvent", func() {
 				c := make(chan struct{})
 
-				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
+				q := workqueue.NewTypedRateLimitingQueueWithConfig(
+					workqueue.DefaultTypedControllerRateLimiter[reconcile.Request](),
+					workqueue.TypedRateLimitingQueueConfig[reconcile.Request]{
+						Name: "test",
+					})
 				instance := &source.Informer{
 					Informer: depInformer,
 					Handler: handler.Funcs{
-						CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
+						CreateFunc: func(context.Context, event.CreateEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 						},
-						UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+						UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 						},
-						DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
+						DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, q2 workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()
 							Expect(q2).To(Equal(q))
 							Expect(evt.Object.GetName()).To(Equal(rs.Name))
 							close(c)
 						},
-						GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
+						GenericFunc: func(context.Context, event.GenericEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()
 							Fail("Unexpected GenericEvent")
 						},

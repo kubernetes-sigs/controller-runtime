@@ -122,6 +122,10 @@ issues:
     - linters:
         - staticcheck
       text: "SA1019: .*The component config package has been deprecated and will be removed in a future release."
+    - linters:
+        - staticcheck
+       # Will be addressed separately.
+      text: "SA1019: workqueue.(RateLimitingInterface|DefaultControllerRateLimiter|New|NewItemExponentialFailureRateLimiter|NewRateLimitingQueueWithConfig|DefaultItemBasedRateLimiter|RateLimitingQueueConfig) is deprecated:"
     # With Go 1.16, the new embed directive can be used with an un-named import,
     # revive (previously, golint) only allows these to be imported in a main.go, which wouldn't work for us.
     # This directive allows the embed package to be imported with an underscore everywhere.

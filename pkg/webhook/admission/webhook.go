@@ -155,7 +155,7 @@ func (wh *Webhook) Handle(ctx context.Context, req Request) (response Response) 
 		defer func() {
 			if r := recover(); r != nil {
 				for _, fn := range utilruntime.PanicHandlers {
-					fn(r)
+					fn(ctx, r)
 				}
 				response = Errored(http.StatusInternalServerError, fmt.Errorf("panic: %v [recovered]", r))
 				return

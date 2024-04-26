@@ -100,7 +100,7 @@ func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (_ re
 		if r := recover(); r != nil {
 			if c.RecoverPanic != nil && *c.RecoverPanic {
 				for _, fn := range utilruntime.PanicHandlers {
-					fn(r)
+					fn(ctx, r)
 				}
 				err = fmt.Errorf("panic: %v [recovered]", r)
 				return

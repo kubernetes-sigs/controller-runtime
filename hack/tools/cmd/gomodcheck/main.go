@@ -80,29 +80,33 @@ func main() {
 	// then we add the version and the ref to the list of out of sync modules.
 	for mod, version := range projectModules {
 		if _, ok := excludedMods[mod]; ok {
-			logger.Infof("skipped excluded module: %s", mod)
+			logger.Infof("skipped: %s", mod)
 			continue
 		}
 
 		if versionToRef, ok := upstreamModules[mod]; ok {
-			upstreams := make([]upstream, 0)
+			outOfSyncUpstream := make([]upstream, 0)
 
 			for upstreamVersion, upstreamRef := range versionToRef {
-				if version != upstreamVersion {
-					upstreams = append(upstreams, upstream{
-						Ref:     upstreamRef,
-						Version: upstreamVersion,
-					})
+				if version == upstreamVersion { // pass if version in sync.
+					continue
 				}
-			}
 
-			if len(upstreams) > 0 {
-				oosMods = append(oosMods, oosMod{
-					Name:      mod,
-					Version:   version,
-					Upstreams: upstreams,
+				outOfSyncUpstream = append(outOfSyncUpstream, upstream{
+					Ref:     upstreamRef,
+					Version: upstreamVersion,
 				})
 			}
+
+			if len(outOfSyncUpstream) == 0 { // pass if no out of sync upstreams.
+				continue
+			}
+
+			oosMods = append(oosMods, oosMod{
+				Name:      mod,
+				Version:   version,
+				Upstreams: outOfSyncUpstream,
+			})
 		}
 	}
 

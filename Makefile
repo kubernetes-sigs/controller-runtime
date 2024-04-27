@@ -94,7 +94,7 @@ $(GOLANGCI_LINT): # Build golangci-lint from tools folder.
 
 GO_MOD_CHECK_DIR := $(abspath ./hack/tools/cmd/gomodcheck)
 GO_MOD_CHECK := $(abspath $(TOOLS_BIN_DIR)/gomodcheck)
-GO_MOD_CHECK_IGNORE := $(abspath ./hack/.gomodcheck.yaml)
+GO_MOD_CHECK_IGNORE := $(abspath .gomodcheck.yaml)
 .PHONY: $(GO_MOD_CHECK)
 $(GO_MOD_CHECK): # Build gomodcheck
 	go build -C $(GO_MOD_CHECK_DIR) -o $(GO_MOD_CHECK)
@@ -149,5 +149,3 @@ APIDIFF_OLD_COMMIT ?= $(shell git rev-parse origin/main)
 .PHONY: apidiff
 verify-apidiff: $(GO_APIDIFF) ## Check for API differences
 	$(GO_APIDIFF) $(APIDIFF_OLD_COMMIT) --print-compatible
-
-

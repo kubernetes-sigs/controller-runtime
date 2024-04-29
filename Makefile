@@ -92,6 +92,13 @@ GOLANGCI_LINT_PKG := github.com/golangci/golangci-lint/cmd/golangci-lint
 $(GOLANGCI_LINT): # Build golangci-lint from tools folder.
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(GOLANGCI_LINT_PKG) $(GOLANGCI_LINT_BIN) $(GOLANGCI_LINT_VER)
 
+GO_MOD_CHECK_DIR := $(abspath ./hack/tools/cmd/gomodcheck)
+GO_MOD_CHECK := $(abspath $(TOOLS_BIN_DIR)/gomodcheck)
+GO_MOD_CHECK_IGNORE := $(abspath .gomodcheck.yaml)
+.PHONY: $(GO_MOD_CHECK)
+$(GO_MOD_CHECK): # Build gomodcheck
+	go build -C $(GO_MOD_CHECK_DIR) -o $(GO_MOD_CHECK)
+
 ## --------------------------------------
 ## Linting
 ## --------------------------------------
@@ -130,16 +137,15 @@ clean-bin: ## Remove all generated binaries.
 	rm -rf hack/tools/bin
 
 .PHONY: verify-modules
-verify-modules: modules ## Verify go modules are up to date
+verify-modules: modules $(GO_MOD_CHECK) ## Verify go modules are up to date
 	@if !(git diff --quiet HEAD -- go.sum go.mod $(TOOLS_DIR)/go.mod $(TOOLS_DIR)/go.sum $(ENVTEST_DIR)/go.mod $(ENVTEST_DIR)/go.sum $(SCRATCH_ENV_DIR)/go.sum); then \
 		git diff; \
 		echo "go module files are out of date, please run 'make modules'"; exit 1; \
 	fi
+	$(GO_MOD_CHECK) $(GO_MOD_CHECK_IGNORE)
 
 APIDIFF_OLD_COMMIT ?= $(shell git rev-parse origin/main)
 
 .PHONY: apidiff
 verify-apidiff: $(GO_APIDIFF) ## Check for API differences
 	$(GO_APIDIFF) $(APIDIFF_OLD_COMMIT) --print-compatible
-
-

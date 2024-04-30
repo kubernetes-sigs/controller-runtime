@@ -9,7 +9,10 @@ import (
 	"compress/gzip"
 	"crypto/md5" //nolint:gosec
 	"crypto/rand"
+	"crypto/sha512"
 	"encoding/base64"
+	"encoding/hex"
+	"fmt"
 	"net/http"
 	"path/filepath"
 
@@ -17,12 +20,14 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
 	"github.com/spf13/afero"
+	"sigs.k8s.io/controller-runtime/tools/setup-envtest/remote"
+	"sigs.k8s.io/yaml"
 
 	"sigs.k8s.io/controller-runtime/tools/setup-envtest/versions"
 )
 
 var (
-	remoteNames = []string{
+	remoteNamesGCS = []string{
 		"kubebuilder-tools-1.10-darwin-amd64.tar.gz",
 		"kubebuilder-tools-1.10-linux-amd64.tar.gz",
 		"kubebuilder-tools-1.10.1-darwin-amd64.tar.gz",
@@ -59,8 +64,68 @@ var (
 		"kubebuilder-tools-v1.19.2-linux-arm64.tar.gz",
 		"kubebuilder-tools-v1.19.2-linux-ppc64le.tar.gz",
 	}
+	remoteVersionsGCS = makeContentsGCS(remoteNamesGCS)
 
-	remoteVersions = makeContents(remoteNames)
+	remoteNamesHTTP = remote.Index{
+		Releases: map[string]remote.Release{
+			"v1.10.0": map[string]remote.Archive{
+				"envtest-v1.10-darwin-amd64.tar.gz": {},
+				"envtest-v1.10-linux-amd64.tar.gz":  {},
+			},
+			"v1.10.1": map[string]remote.Archive{
+				"envtest-v1.10.1-darwin-amd64.tar.gz": {},
+				"envtest-v1.10.1-linux-amd64.tar.gz":  {},
+			},
+			"v1.11.0": map[string]remote.Archive{
+				"envtest-v1.11.0-darwin-amd64.tar.gz": {},
+				"envtest-v1.11.0-linux-amd64.tar.gz":  {},
+			},
+			"v1.11.1": map[string]remote.Archive{
+				"envtest-v1.11.1-potato-cherrypie.tar.gz": {},
+			},
+			"v1.12.3": map[string]remote.Archive{
+				"envtest-v1.12.3-darwin-amd64.tar.gz": {},
+				"envtest-v1.12.3-linux-amd64.tar.gz":  {},
+			},
+			"v1.13.1": map[string]remote.Archive{
+				"envtest-v1.13.1-darwin-amd64.tar.gz": {},
+				"envtest-v1.13.1-linux-amd64.tar.gz":  {},
+			},
+			"v1.14.1": map[string]remote.Archive{
+				"envtest-v1.14.1-darwin-amd64.tar.gz": {},
+				"envtest-v1.14.1-linux-amd64.tar.gz":  {},
+			},
+			"v1.15.5": map[string]remote.Archive{
+				"envtest-v1.15.5-darwin-amd64.tar.gz": {},
+				"envtest-v1.15.5-linux-amd64.tar.gz":  {},
+			},
+			"v1.16.4": map[string]remote.Archive{
+				"envtest-v1.16.4-darwin-amd64.tar.gz": {},
+				"envtest-v1.16.4-linux-amd64.tar.gz":  {},
+			},
+			"v1.17.9": map[string]remote.Archive{
+				"envtest-v1.17.9-darwin-amd64.tar.gz": {},
+				"envtest-v1.17.9-linux-amd64.tar.gz":  {},
+			},
+			"v1.19.0": map[string]remote.Archive{
+				"envtest-v1.19.0-darwin-amd64.tar.gz": {},
+				"envtest-v1.19.0-linux-amd64.tar.gz":  {},
+			},
+			"v1.19.2": map[string]remote.Archive{
+				"envtest-v1.19.2-darwin-amd64.tar.gz":  {},
+				"envtest-v1.19.2-linux-amd64.tar.gz":   {},
+				"envtest-v1.19.2-linux-arm64.tar.gz":   {},
+				"envtest-v1.19.2-linux-ppc64le.tar.gz": {},
+			},
+			"v1.20.2": map[string]remote.Archive{
+				"envtest-v1.20.2-darwin-amd64.tar.gz":  {},
+				"envtest-v1.20.2-linux-amd64.tar.gz":   {},
+				"envtest-v1.20.2-linux-arm64.tar.gz":   {},
+				"envtest-v1.20.2-linux-ppc64le.tar.gz": {},
+			},
+		},
+	}
+	remoteVersionsHTTP = makeContentsHTTP(remoteNamesHTTP)
 
 	// keep this sorted.
 	localVersions = []versions.Set{
@@ -100,7 +165,7 @@ type bucketObject struct {
 	Hash string `json:"md5Hash"`
 }
 
-func makeContents(names []string) []item {
+func makeContentsGCS(names []string) []item {
 	res := make([]item, len(names))
 	for i, name := range names {
 		var chunk [1024 * 48]byte // 1.5 times our chunk read size in GetVersion
@@ -108,12 +173,12 @@ func makeContents(names []string) []item {
 		if _, err := rand.Read(chunk[len(name):]); err != nil {
 			panic(err)
 		}
-		res[i] = verWith(name, chunk[:])
+		res[i] = verWithGCS(name, chunk[:])
 	}
 	return res
 }
 
-func verWith(name string, contents []byte) item {
+func verWithGCS(name string, contents []byte) item {
 	out := new(bytes.Buffer)
 	gzipWriter := gzip.NewWriter(out)
 	tarWriter := tar.NewWriter(gzipWriter)
@@ -140,7 +205,7 @@ func verWith(name string, contents []byte) item {
 	return res
 }
 
-func handleRemoteVersions(server *ghttp.Server, versions []item) {
+func handleRemoteVersionsGCS(server *ghttp.Server, versions []item) {
 	list := objectList{Items: make([]bucketObject, len(versions))}
 	for i, ver := range versions {
 		ver := ver // copy to avoid capturing the iteration variable
@@ -160,6 +225,107 @@ func handleRemoteVersions(server *ghttp.Server, versions []item) {
 	server.RouteToHandler("GET", "/storage/v1/b/kubebuilder-tools-test/o", ghttp.RespondWithJSONEncoded(
 		http.StatusOK,
 		list,
+	))
+}
+
+type itemsHTTP struct {
+	index    remote.Index
+	contents map[string][]byte
+}
+
+func makeContentsHTTP(index remote.Index) itemsHTTP {
+	// This creates a new copy of the index so modifying the index
+	// in some tests doesn't affect others.
+	res := itemsHTTP{
+		index: remote.Index{
+			Releases: map[string]remote.Release{},
+		},
+		contents: map[string][]byte{},
+	}
+
+	for releaseVersion, releases := range index.Releases {
+		res.index.Releases[releaseVersion] = remote.Release{}
+		for archiveName := range releases {
+			var chunk [1024 * 48]byte // 1.5 times our chunk read size in GetVersion
+			copy(chunk[:], archiveName)
+			if _, err := rand.Read(chunk[len(archiveName):]); err != nil {
+				panic(err)
+			}
+			content, hash := verWithHTTP(chunk[:])
+
+			res.index.Releases[releaseVersion][archiveName] = remote.Archive{
+				Hash: hash,
+				// Note: Only storing the name of the archive for now.
+				// This will be expanded later to a full URL once the server is running.
+				SelfLink: archiveName,
+			}
+			res.contents[archiveName] = content
+		}
+	}
+	return res
+}
+
+func verWithHTTP(contents []byte) ([]byte, string) {
+	out := new(bytes.Buffer)
+	gzipWriter := gzip.NewWriter(out)
+	tarWriter := tar.NewWriter(gzipWriter)
+	err := tarWriter.WriteHeader(&tar.Header{
+		Name: "controller-tools/envtest/some-file",
+		Size: int64(len(contents)),
+		Mode: 0777, // so we can check that we fix this later
+	})
+	if err != nil {
+		panic(err)
+	}
+	_, err = tarWriter.Write(contents)
+	if err != nil {
+		panic(err)
+	}
+	tarWriter.Close()
+	gzipWriter.Close()
+	content := out.Bytes()
+	// controller-tools is using sha512
+	hash := sha512.Sum512(content)
+	hashEncoded := hex.EncodeToString(hash[:])
+	return content, hashEncoded
+}
+
+func handleRemoteVersionsHTTP(server *ghttp.Server, items itemsHTTP) {
+	if server.HTTPTestServer == nil {
+		// Just return for test cases where server is closed in BeforeEach. Otherwise server.Addr() below panics.
+		return
+	}
+
+	// The index from items contains only relative SelfLinks.
+	// finalIndex will contain the full links based on server.Addr().
+	finalIndex := remote.Index{
+		Releases: map[string]remote.Release{},
+	}
+
+	for releaseVersion, releases := range items.index.Releases {
+		finalIndex.Releases[releaseVersion] = remote.Release{}
+
+		for archiveName, archive := range releases {
+			finalIndex.Releases[releaseVersion][archiveName] = remote.Archive{
+				Hash:     archive.Hash,
+				SelfLink: fmt.Sprintf("http://%s/%s", server.Addr(), archive.SelfLink),
+			}
+			content := items.contents[archiveName]
+
+			// Note: Using the relative path from archive here instead of the full path.
+			server.RouteToHandler("GET", "/"+archive.SelfLink, func(resp http.ResponseWriter, req *http.Request) {
+				resp.WriteHeader(http.StatusOK)
+				Expect(resp.Write(content)).To(Equal(len(content)))
+			})
+		}
+	}
+
+	indexYAML, err := yaml.Marshal(finalIndex)
+	Expect(err).ToNot(HaveOccurred())
+
+	server.RouteToHandler("GET", "/envtest-releases.yaml", ghttp.RespondWith(
+		http.StatusOK,
+		indexYAML,
 	))
 }
 

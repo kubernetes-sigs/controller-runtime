@@ -49,10 +49,17 @@ var (
 
 	binDir = flag.String("bin-dir", "",
 		"directory to store binary assets (default: $OS_SPECIFIC_DATA_DIR/envtest-binaries)")
-	remoteBucket = flag.String("remote-bucket", "kubebuilder-tools", "remote GCS bucket to download from")
+
+	useGCS = flag.Bool("use-gcs", false, "use GCS to fetch envtest binaries")
+
+	// These flags are only used with --use-gcs.
+	remoteBucket = flag.String("remote-bucket", "kubebuilder-tools", "remote GCS bucket to download from (only used with --use-gcs)")
 	remoteServer = flag.String("remote-server", "storage.googleapis.com",
 		"remote server to query from.  You can override this if you want to run "+
-			"an internal storage server instead, or for testing.")
+			"an internal storage server instead, or for testing. (only used with --use-gcs)")
+
+	// This flag is only used if --use-gcs is not set or false (default).
+	index = flag.String("index", remote.DefaultIndexURL, "index to discover envtest binaries (only used if --use-gcs is not set, or set to false)")
 )
 
 // TODO(directxman12): handle interrupts?
@@ -81,13 +88,26 @@ func setupEnv(globalLog logr.Logger, version string) *envp.Env {
 	}
 	log.V(1).Info("using binaries directory", "dir", *binDir)
 
-	env := &envp.Env{
-		Log: globalLog,
-		Client: &remote.Client{
+	var client remote.Client
+	if useGCS != nil && *useGCS {
+		client = &remote.GCSClient{
 			Log:    globalLog.WithName("storage-client"),
 			Bucket: *remoteBucket,
 			Server: *remoteServer,
-		},
+		}
+		log.V(1).Info("using GCS", "bucket", *remoteBucket, "server", *remoteServer)
+	} else {
+		client = &remote.HTTPClient{
+			Log:      globalLog.WithName("storage-client"),
+			IndexURL: *index,
+		}
+		log.V(1).Info("using HTTP", "index", *index)
+	}
+
+	env := &envp.Env{
+		Log:           globalLog,
+		UseGCS:        useGCS != nil && *useGCS,
+		Client:        client,
 		VerifySum:     *verify,
 		ForceDownload: *force,
 		NoDownload:    *installedOnly,

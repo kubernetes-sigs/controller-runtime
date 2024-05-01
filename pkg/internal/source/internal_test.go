@@ -286,6 +286,15 @@ var _ = Describe("Internal", func() {
 			instance.OnDelete(Foo{})
 		})
 	})
+
+	Describe("Kind", func() {
+		It("should return kind source type", func() {
+			kind := internal.Kind[*corev1.Pod]{
+				Type: &corev1.Pod{},
+			}
+			Expect(kind.String()).Should(Equal("kind source: *v1.Pod"))
+		})
+	})
 })
 
 type Foo struct{}

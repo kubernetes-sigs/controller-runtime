@@ -1630,6 +1630,26 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					}},
 					expectedPods: []string{"test-pod-4"},
 				}),
+				Entry("namespaces configured, type-level label selector matches everything, overrides global selector", selectorsTestCase{
+					options: cache.Options{
+						DefaultNamespaces: map[string]cache.Config{testNamespaceOne: {}},
+						ByObject: map[client.Object]cache.ByObject{
+							&corev1.Pod{}: {Label: labels.Everything()},
+						},
+						DefaultLabelSelector: labels.SelectorFromSet(map[string]string{"does-not": "match-anything"}),
+					},
+					expectedPods: []string{"test-pod-1", "test-pod-5"},
+				}),
+				Entry("namespaces configured, global selector is used", selectorsTestCase{
+					options: cache.Options{
+						DefaultNamespaces: map[string]cache.Config{testNamespaceTwo: {}},
+						ByObject: map[client.Object]cache.ByObject{
+							&corev1.Pod{}: {},
+						},
+						DefaultLabelSelector: labels.SelectorFromSet(map[string]string{"common-label": "common"}),
+					},
+					expectedPods: []string{"test-pod-3"},
+				}),
 				Entry("global label selector matches one pod", selectorsTestCase{
 					options: cache.Options{
 						DefaultLabelSelector: labels.SelectorFromSet(map[string]string{

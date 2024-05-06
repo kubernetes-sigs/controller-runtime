@@ -33,6 +33,10 @@ var _ Client = &GCSClient{}
 
 // GCSClient is a basic client for fetching versions of the envtest binary archives
 // from GCS.
+//
+// Deprecated: This client is deprecated and will be removed soon.
+// The kubebuilder GCS bucket that we use with this client might be shutdown at any time,
+// see: https://github.com/kubernetes/k8s.io/issues/2647.
 type GCSClient struct {
 	// Bucket is the bucket to fetch from.
 	Bucket string

@@ -79,7 +79,7 @@ func WorkflowTest(testMode string) {
 			var client remote.Client
 			switch testMode {
 			case gcsMode:
-				client = &remote.GCSClient{
+				client = &remote.GCSClient{ //nolint:staticcheck // deprecation accepted for now
 					Log:      testLog.WithName("gcs-client"),
 					Bucket:   "kubebuilder-tools-test", // test custom bucket functionality too
 					Server:   server.Addr(),

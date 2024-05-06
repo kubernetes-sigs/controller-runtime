@@ -2,8 +2,7 @@
 
 This is a small tool that manages binaries for envtest. It can be used to
 download new binaries, list currently installed and available ones, and
-clean up versions. Binaries can be downloaded either via HTTP via an index
-or from GCS.
+clean up versions.
 
 To use it, just go-install it on 1.16+ (it's a separate, self-contained
 module):
@@ -50,7 +49,8 @@ setup-envtest use --index https://custom.com/envtest-releases.yaml
 # To download from the kubebuilder-tools GCS bucket: (default behavior before v0.18)
 # Note: This is a Google-owned bucket and it might be shutdown at any time
 # see: https://github.com/kubernetes/k8s.io/issues/2647#event-12439345373
-setup-envtest use --use-gcs
+# Note: This flag will also be removed soon.
+setup-envtest use --use-deprecated-gcs
 ```
 
 ## Where does it put all those binaries?
@@ -119,7 +119,8 @@ Then, you have a few options for managing your binaries:
   https://raw.githubusercontent.com/kubernetes-sigs/controller-tools/master/envtest-releases.yaml
 
 - If you want to talk to some internal source in a GCS "style", you can use the
-  `--remote-bucket` and `--remote-server` options together with `--use-gcs`. The former sets which
+  `--remote-bucket` and `--remote-server` options together with `--use-deprecated-gcs`.
+  Note: This is deprecated and will be removed soon. The former sets which
   GCS bucket to download from, and the latter sets the host to talk to as
   if it were a GCS endpoint. Theoretically, you could use the latter
   version to run an internal "mirror" -- the tool expects

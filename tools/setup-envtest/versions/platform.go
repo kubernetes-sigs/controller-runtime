@@ -37,6 +37,7 @@ func (p Platform) BaseName(ver Concrete) string {
 }
 
 // ArchiveName returns the full archive name for this version and platform.
+// useGCS is deprecated and will be removed when the remote.GCSClient is removed.
 func (p Platform) ArchiveName(useGCS bool, ver Concrete) string {
 	if useGCS {
 		return "kubebuilder-tools-" + p.BaseName(ver) + ".tar.gz"

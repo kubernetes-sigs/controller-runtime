@@ -26,7 +26,7 @@ import (
 // envtest binaries.
 //
 // In general, the methods will use the Exit{,Cause} functions from this package
-// to indicate errors.  Catch them with a `defer HandleExitWithCode()`.
+// to indicate errors. Catch them with a `defer HandleExitWithCode()`.
 type Env struct {
 	// the following *must* be set on input
 
@@ -35,18 +35,18 @@ type Env struct {
 
 	// VerifySum indicates whether we should run checksums.
 	VerifySum bool
-	// NoDownload forces us to not contact GCS or download the index via HTTP,
+	// NoDownload forces us to not contact remote services,
 	// looking only at local files instead.
 	NoDownload bool
 	// ForceDownload forces us to ignore local files and always
-	// contact GCS or download the index via HTTP & re-download.
+	// contact remote services & re-download.
 	ForceDownload bool
 
-	// UseGCS signals if the GCS client is used.
-	UseGCS bool
+	// UseDeprecatedGCS signals if the GCS client is used.
+	// Note: This will be removed together with remote.GCSClient.
+	UseDeprecatedGCS bool
 
-	// Client is our remote client for contacting GCS or
-	// to download the index via HTTP.
+	// Client is our remote client for contacting remote services.
 	Client remote.Client
 
 	// Log allows us to log.
@@ -291,7 +291,7 @@ func (e *Env) Fetch(ctx context.Context) {
 		}
 	})
 
-	archiveOut, err := e.FS.TempFile("", "*-"+e.Platform.ArchiveName(e.UseGCS, *e.Version.AsConcrete()))
+	archiveOut, err := e.FS.TempFile("", "*-"+e.Platform.ArchiveName(e.UseDeprecatedGCS, *e.Version.AsConcrete()))
 	if err != nil {
 		ExitCause(2, err, "unable to open file to write downloaded archive to")
 	}

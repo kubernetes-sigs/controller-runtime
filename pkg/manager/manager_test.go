@@ -1312,6 +1312,12 @@ var _ = Describe("manger.Manager", func() {
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
+				// Should error when we add another extra endpoint on the already registered path.
+				err = m.AddMetricsServerExtraHandler("/debug", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+					_, _ = w.Write([]byte("Another debug info"))
+				}))
+				Expect(err).To(HaveOccurred())
+
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				go func() {

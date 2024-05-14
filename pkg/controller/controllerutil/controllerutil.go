@@ -310,9 +310,12 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f M
 		if !apierrors.IsNotFound(err) {
 			return OperationResultNone, err
 		}
-		if err := mutate(f, key, obj); err != nil {
-			return OperationResultNone, err
+		if f != nil {
+			if err := mutate(f, key, obj); err != nil {
+				return OperationResultNone, err
+			}
 		}
+
 		if err := c.Create(ctx, obj); err != nil {
 			return OperationResultNone, err
 		}
@@ -320,8 +323,10 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f M
 	}
 
 	existing := obj.DeepCopyObject()
-	if err := mutate(f, key, obj); err != nil {
-		return OperationResultNone, err
+	if f != nil {
+		if err := mutate(f, key, obj); err != nil {
+			return OperationResultNone, err
+		}
 	}
 
 	if equality.Semantic.DeepEqual(existing, obj) {

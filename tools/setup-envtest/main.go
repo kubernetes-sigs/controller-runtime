@@ -50,7 +50,7 @@ var (
 	binDir = flag.String("bin-dir", "",
 		"directory to store binary assets (default: $OS_SPECIFIC_DATA_DIR/envtest-binaries)")
 
-	useDeprecatedGCS = flag.Bool("use-deprecated-gcs", false, "use GCS to fetch envtest binaries. Note: This is deprecated and will be removed soon. For more details see: https://github.com/kubernetes-sigs/controller-runtime/pull/2811")
+	useDeprecatedGCS = flag.Bool("use-deprecated-gcs", true, "use GCS to fetch envtest binaries. Note: This is deprecated and will be removed soon. For more details see: https://github.com/kubernetes-sigs/controller-runtime/pull/2811. In controller-runtime v0.19.0 this flag will default to false")
 
 	// These flags are only used with --use-deprecated-gcs.
 	remoteBucket = flag.String("remote-bucket", "kubebuilder-tools", "remote GCS bucket to download from (only used with --use-deprecated-gcs)")
@@ -58,7 +58,7 @@ var (
 		"remote server to query from.  You can override this if you want to run "+
 			"an internal storage server instead, or for testing. (only used with --use-deprecated-gcs)")
 
-	// This flag is only used if --use-deprecated-gcs is not set or false (default).
+	// This flag is only used if --use-deprecated-gcs is set to false.
 	index = flag.String("index", remote.DefaultIndexURL, "index to discover envtest binaries (only used if --use-deprecated-gcs is not set, or set to false)")
 )
 

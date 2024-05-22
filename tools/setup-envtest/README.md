@@ -41,12 +41,13 @@ setup-envtest use -i --use-env
 # sideload a pre-downloaded tarball as Kubernetes 1.16.2 into our store
 setup-envtest sideload 1.16.2 < downloaded-envtest.tar.gz
 
-# Per default envtest binaries are downloaded from: 
+# If --use-deprecated-gcs is set to false envtest binaries are downloaded from: 
 # https://raw.githubusercontent.com/kubernetes-sigs/controller-tools/master/envtest-releases.yaml
 # To download from a custom index use the following:
-setup-envtest use --index https://custom.com/envtest-releases.yaml
+# Note: In controller-runtime v0.19.0 --use-deprecated-gcs will default to false.
+setup-envtest use --use-deprecated-gcs=false --index https://custom.com/envtest-releases.yaml
 
-# To download from the kubebuilder-tools GCS bucket: (default behavior before v0.18)
+# To download from the kubebuilder-tools GCS bucket: (default behavior until v0.18)
 # Note: This is a Google-owned bucket and it might be shutdown at any time
 # see: https://github.com/kubernetes/k8s.io/issues/2647#event-12439345373
 # Note: This flag will also be removed soon.

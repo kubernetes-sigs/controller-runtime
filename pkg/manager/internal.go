@@ -619,9 +619,9 @@ func (cm *controllerManager) Engage(ctx context.Context, cl cluster.Cluster) err
 	// be reentrant via noop
 	cm.engagedClustersLock.RLock()
 	if _, ok := cm.engagedClusters[cl.Name()]; ok {
-		cm.engagedClustersLock.RUnlock()
 		return nil
 	}
+	cm.engagedClustersLock.RUnlock()
 
 	// add early because any engaged runnable could access it
 	cm.engagedClustersLock.Lock()

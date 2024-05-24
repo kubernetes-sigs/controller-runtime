@@ -68,8 +68,9 @@ func main() {
 	// Setup a Manager, note that this not yet engages clusters, only makes them available.
 	entryLog.Info("Setting up manager")
 	provider := &KindClusterProvider{
-		log:      log.Log.WithName("kind-cluster-provider"),
-		clusters: map[string]cluster.Cluster{},
+		log:       log.Log.WithName("kind-cluster-provider"),
+		clusters:  map[string]cluster.Cluster{},
+		cancelFns: map[string]context.CancelFunc{},
 	}
 	mgr, err := manager.New(
 		cfg,
@@ -85,18 +86,18 @@ func main() {
 		func(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 			log := log.FromContext(ctx)
 
-			cluster, err := mgr.GetCluster(ctx, req.ClusterName)
+			cl, err := mgr.GetCluster(ctx, req.ClusterName)
 			if err != nil {
 				return reconcile.Result{}, err
 			}
-			client := cluster.GetClient()
+			client := cl.GetClient()
 
 			// Retrieve the pod from the cluster.
 			pod := &corev1.Pod{}
 			if err := client.Get(ctx, req.NamespacedName, pod); err != nil {
 				return reconcile.Result{}, err
 			}
-			log.Info("Reconciling pod", "name", pod.Name, "uuid", pod.UID)
+			log.Info(fmt.Sprintf("Retrieved pod %s:>%s/%s", cl.Name(), pod.Namespace, pod.Name))
 
 			// Print any annotations that start with fleet.
 			for k, v := range pod.Labels {
@@ -185,7 +186,10 @@ func (k *KindClusterProvider) Run(ctx context.Context, mgr manager.Manager) erro
 				k.log.Info("failed to create rest config", "error", err)
 				return false, nil // keep going
 			}
-			cl, err := cluster.New(cfg, k.Options...)
+			// Copy provider options and append the cluster name
+			clOptions := append(k.Options, cluster.WithName(clusterName))
+
+			cl, err := cluster.New(cfg, clOptions...)
 			if err != nil {
 				k.log.Info("failed to create cluster", "error", err)
 				return false, nil // keep going

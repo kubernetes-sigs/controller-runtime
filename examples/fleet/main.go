@@ -186,9 +186,7 @@ func (k *KindClusterProvider) Run(ctx context.Context, mgr manager.Manager) erro
 				k.log.Info("failed to create rest config", "error", err)
 				return false, nil // keep going
 			}
-			// Copy provider options and append the cluster name
-			clOptions := append(k.Options, cluster.WithName(clusterName))
-
+			clOptions := append([]cluster.Option{cluster.WithName(clusterName)}, k.Options...)
 			cl, err := cluster.New(cfg, clOptions...)
 			if err != nil {
 				k.log.Info("failed to create cluster", "error", err)

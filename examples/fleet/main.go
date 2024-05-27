@@ -97,7 +97,7 @@ func main() {
 			if err := client.Get(ctx, req.NamespacedName, pod); err != nil {
 				return reconcile.Result{}, err
 			}
-			log.Info(fmt.Sprintf("Retrieved pod %s:>%s/%s", cl.Name(), pod.Namespace, pod.Name))
+			log.Info("Reconciling pod", "ns", pod.GetNamespace(), "name", pod.Name, "uuid", pod.UID)
 
 			// Print any annotations that start with fleet.
 			for k, v := range pod.Labels {

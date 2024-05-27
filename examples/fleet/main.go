@@ -97,7 +97,7 @@ func main() {
 			if err := client.Get(ctx, req.NamespacedName, pod); err != nil {
 				return reconcile.Result{}, err
 			}
-			log.Info("Reconciling pod", "ns", pod.GetNamespace(), "name", pod.Name, "uuid", pod.UID)
+			log.Info("Reconciling pod", "cluster", cl.Name(), "ns", pod.GetNamespace(), "name", pod.Name, "uuid", pod.UID)
 
 			// Print any annotations that start with fleet.
 			for k, v := range pod.Labels {
@@ -171,6 +171,7 @@ func (k *KindClusterProvider) Run(ctx context.Context, mgr manager.Manager) erro
 			}
 			k.lock.RLock()
 			if _, ok := k.clusters[clusterName]; ok {
+				k.lock.RUnlock()
 				continue
 			}
 			k.lock.RUnlock()
@@ -247,6 +248,8 @@ func (k *KindClusterProvider) Run(ctx context.Context, mgr manager.Manager) erro
 				delete(k.clusters, name)
 				delete(k.cancelFns, name)
 				k.lock.Unlock()
+
+				k.log.Info("Cluster removed", "cluster", name)
 			}
 		}
 

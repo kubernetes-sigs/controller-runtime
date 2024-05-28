@@ -622,6 +622,7 @@ func (cm *controllerManager) Engage(ctx context.Context, cl cluster.Cluster) err
 		cm.engagedClustersLock.RUnlock()
 		return nil
 	}
+	cm.engagedClustersLock.RUnlock()
 
 	// add early because any engaged runnable could access it
 	cm.engagedClustersLock.Lock()

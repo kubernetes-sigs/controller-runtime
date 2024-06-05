@@ -51,6 +51,23 @@ var _ = Describe("Controllerutil", func() {
 			}))
 		})
 
+		It("should set the BlockOwnerDeletion if it is specified as an option", func() {
+			t := true
+			rs := &appsv1.ReplicaSet{}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+			}
+
+			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme, controllerutil.WithBlockOwnerDeletion(true))).ToNot(HaveOccurred())
+			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+				Name:               "foo",
+				Kind:               "Deployment",
+				APIVersion:         "extensions/v1beta1",
+				UID:                "foo-uid",
+				BlockOwnerDeletion: &t,
+			}))
+		})
+
 		It("should not duplicate owner references", func() {
 			rs := &appsv1.ReplicaSet{
 				ObjectMeta: metav1.ObjectMeta{
@@ -408,6 +425,25 @@ var _ = Describe("Controllerutil", func() {
 				UID:                "foo-uid",
 				Controller:         &t,
 				BlockOwnerDeletion: &t,
+			}))
+		})
+
+		It("should set the BlockOwnerDeletion if it is specified as an option", func() {
+			f := false
+			t := true
+			rs := &appsv1.ReplicaSet{}
+			dep := &extensionsv1beta1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+			}
+
+			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme, controllerutil.WithBlockOwnerDeletion(false))).NotTo(HaveOccurred())
+			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+				Name:               "foo",
+				Kind:               "Deployment",
+				APIVersion:         "extensions/v1beta1",
+				UID:                "foo-uid",
+				Controller:         &t,
+				BlockOwnerDeletion: &f,
 			}))
 		})
 	})

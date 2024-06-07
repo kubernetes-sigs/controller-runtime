@@ -4,11 +4,17 @@ This is a small tool that manages binaries for envtest. It can be used to
 download new binaries, list currently installed and available ones, and
 clean up versions.
 
-To use it, just go-install it on 1.19+ (it's a separate, self-contained
+To use it, just go-install it with Golang 1.22+ (it's a separate, self-contained
 module):
 
 ```shell
 go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+```
+
+If you are using Golang 1.20 or 1.21, use the `release-0.17` branch instead:
+
+```shell
+go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.17
 ```
 
 For full documentation, run it with the `--help` flag, but here are some

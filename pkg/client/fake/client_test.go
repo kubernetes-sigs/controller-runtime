@@ -27,10 +27,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -2067,6 +2069,70 @@ var _ = Describe("Fake client", func() {
 
 		err := cl.Get(context.Background(), client.ObjectKey{Name: "foo"}, obj)
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	})
+
+	It("disallows scale subresources on unsupported built-in types", func() {
+		scheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+		Expect(apiextensions.AddToScheme(scheme)).To(Succeed())
+
+		obj := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "foo",
+			},
+		}
+		cl := NewClientBuilder().WithScheme(scheme).WithObjects(obj).Build()
+
+		scale := &autoscalingv1.Scale{Spec: autoscalingv1.ScaleSpec{Replicas: 2}}
+		Expect(cl.SubResource(subResourceScale).Get(context.Background(), obj, scale)).ToNot(Succeed())
+		Expect(cl.SubResource(subResourceScale).Update(context.Background(), obj, client.WithSubResourceBody(scale))).ToNot(Succeed())
+	})
+
+	It("should be able to Get scale subresources", func() {
+		obj := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "deploy",
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: ptr.To[int32](2),
+			},
+		}
+		cl := NewClientBuilder().WithObjects(obj).Build()
+		objOriginal := obj.DeepCopy()
+
+		scale := &autoscalingv1.Scale{}
+		Expect(cl.SubResource(subResourceScale).Get(context.Background(), obj, scale)).NotTo(HaveOccurred())
+
+		actual := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(actual), actual)).To(Succeed())
+
+		objOriginal.APIVersion = scale.APIVersion
+		objOriginal.Kind = scale.Kind
+		objOriginal.ResourceVersion = scale.ResourceVersion
+		objOriginal.Spec.Replicas = ptr.To(scale.Spec.Replicas)
+		Expect(cmp.Diff(objOriginal, actual)).To(BeEmpty())
+	})
+
+	It("should be able to Update scale subresources", func() {
+		obj := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "deploy",
+			},
+		}
+		cl := NewClientBuilder().WithObjects(obj).Build()
+		objOriginal := obj.DeepCopy()
+
+		scale := &autoscalingv1.Scale{Spec: autoscalingv1.ScaleSpec{Replicas: 2}}
+		Expect(cl.SubResource(subResourceScale).Update(context.Background(), obj, client.WithSubResourceBody(scale))).NotTo(HaveOccurred())
+
+		actual := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(actual), actual)).To(Succeed())
+
+		objOriginal.APIVersion = actual.APIVersion
+		objOriginal.Kind = actual.Kind
+		objOriginal.ResourceVersion = actual.ResourceVersion
+		objOriginal.Spec.Replicas = ptr.To(int32(2))
+		Expect(cmp.Diff(objOriginal, actual)).To(BeEmpty())
 	})
 })
 

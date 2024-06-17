@@ -31,9 +31,12 @@ import (
 
 	// Using v4 to match upstream
 	jsonpatch "gopkg.in/evanphx/json-patch.v4"
+	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,6 +53,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/testing"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -83,6 +87,8 @@ const (
 	maxNameLength          = 63
 	randomLength           = 5
 	maxGeneratedNameLength = maxNameLength - randomLength
+
+	subResourceScale = "scale"
 )
 
 // NewFakeClient creates a new fake client for testing.
@@ -1080,7 +1086,26 @@ type fakeSubResourceClient struct {
 }
 
 func (sw *fakeSubResourceClient) Get(ctx context.Context, obj, subResource client.Object, opts ...client.SubResourceGetOption) error {
-	panic("fakeSubResourceClient does not support get")
+	switch sw.subResource {
+	case subResourceScale:
+		// Actual client looks up resource, then extracts the scale sub-resource:
+		// https://github.com/kubernetes/kubernetes/blob/fb6bbc9781d11a87688c398778525c4e1dcb0f08/pkg/registry/apps/deployment/storage/storage.go#L307
+		if err := sw.client.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
+			return err
+		}
+		scale, isScale := subResource.(*autoscalingv1.Scale)
+		if !isScale {
+			return apierrors.NewBadRequest(fmt.Sprintf("expected Scale, got %t", subResource))
+		}
+		scaleOut, err := extractScale(ctx, sw.client, obj)
+		if err != nil {
+			return err
+		}
+		*scale = *scaleOut
+		return nil
+	default:
+		return fmt.Errorf("fakeSubResourceClient does not support get for %s", sw.subResource)
+	}
 }
 
 func (sw *fakeSubResourceClient) Create(ctx context.Context, obj client.Object, subResource client.Object, opts ...client.SubResourceCreateOption) error {
@@ -1107,11 +1132,30 @@ func (sw *fakeSubResourceClient) Update(ctx context.Context, obj client.Object, 
 	updateOptions := client.SubResourceUpdateOptions{}
 	updateOptions.ApplyOptions(opts)
 
-	body := obj
-	if updateOptions.SubResourceBody != nil {
-		body = updateOptions.SubResourceBody
+	switch sw.subResource {
+	case subResourceScale:
+		if err := sw.client.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
+			return err
+		}
+		if updateOptions.SubResourceBody == nil {
+			return apierrors.NewBadRequest("missing SubResourceBody")
+		}
+
+		scale, isScale := updateOptions.SubResourceBody.(*autoscalingv1.Scale)
+		if !isScale {
+			return apierrors.NewBadRequest(fmt.Sprintf("expected Scale, got %t", updateOptions.SubResourceBody))
+		}
+		if err := applyScale(ctx, sw.client, obj, scale); err != nil {
+			return err
+		}
+		return sw.client.update(obj, false, &updateOptions.UpdateOptions)
+	default:
+		body := obj
+		if updateOptions.SubResourceBody != nil {
+			body = updateOptions.SubResourceBody
+		}
+		return sw.client.update(body, true, &updateOptions.UpdateOptions)
 	}
-	return sw.client.update(body, true, &updateOptions.UpdateOptions)
 }
 
 func (sw *fakeSubResourceClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
@@ -1277,4 +1321,127 @@ func zero(x interface{}) {
 	}
 	res := reflect.ValueOf(x).Elem()
 	res.Set(reflect.Zero(res.Type()))
+}
+
+func extractScale(ctx context.Context, c client.Client, obj client.Object) (*autoscalingv1.Scale, error) {
+	switch obj := obj.(type) {
+	case *appsv1.Deployment:
+		var replicas int32 = 1
+		if obj.Spec.Replicas != nil {
+			replicas = *obj.Spec.Replicas
+		}
+		return &autoscalingv1.Scale{
+			ObjectMeta: obj.ObjectMeta,
+			Spec: autoscalingv1.ScaleSpec{
+				Replicas: replicas,
+			},
+			Status: autoscalingv1.ScaleStatus{
+				Replicas: obj.Status.Replicas,
+				Selector: obj.Spec.Selector.String(),
+			},
+		}, nil
+	case *appsv1.ReplicaSet:
+		var replicas int32 = 1
+		if obj.Spec.Replicas != nil {
+			replicas = *obj.Spec.Replicas
+		}
+		return &autoscalingv1.Scale{
+			ObjectMeta: obj.ObjectMeta,
+			Spec: autoscalingv1.ScaleSpec{
+				Replicas: replicas,
+			},
+			Status: autoscalingv1.ScaleStatus{
+				Replicas: obj.Status.Replicas,
+				Selector: obj.Spec.Selector.String(),
+			},
+		}, nil
+	case *corev1.ReplicationController:
+		var replicas int32 = 1
+		if obj.Spec.Replicas != nil {
+			replicas = *obj.Spec.Replicas
+		}
+		return &autoscalingv1.Scale{
+			ObjectMeta: obj.ObjectMeta,
+			Spec: autoscalingv1.ScaleSpec{
+				Replicas: replicas,
+			},
+			Status: autoscalingv1.ScaleStatus{
+				Replicas: obj.Status.Replicas,
+				Selector: labels.Set(obj.Spec.Selector).String(),
+			},
+		}, nil
+	case *appsv1.StatefulSet:
+		var replicas int32 = 1
+		if obj.Spec.Replicas != nil {
+			replicas = *obj.Spec.Replicas
+		}
+		return &autoscalingv1.Scale{
+			ObjectMeta: obj.ObjectMeta,
+			Spec: autoscalingv1.ScaleSpec{
+				Replicas: replicas,
+			},
+			Status: autoscalingv1.ScaleStatus{
+				Replicas: obj.Status.Replicas,
+				Selector: obj.Spec.Selector.String(),
+			},
+		}, nil
+	default:
+		crd, err := getCustomResourceDefinition(ctx, c, obj)
+		if apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("resource %T does not support the scale subresource", obj)
+		} else if err != nil {
+			return nil, fmt.Errorf("get custom resource definition: %w", err)
+		}
+
+		if crd.Spec.Subresources != nil && crd.Spec.Subresources.Scale != nil {
+			// TODO: CRDs https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#scale-subresource
+			return nil, fmt.Errorf("unimplemented scale subresource for custom resources in fake client")
+		}
+		return nil, fmt.Errorf("resource %T does not support the scale subresource", obj)
+	}
+}
+
+func applyScale(ctx context.Context, c client.Client, obj client.Object, scale *autoscalingv1.Scale) error {
+	switch obj := obj.(type) {
+	case *appsv1.Deployment:
+		obj.Spec.Replicas = ptr.To(scale.Spec.Replicas)
+	case *appsv1.ReplicaSet:
+		obj.Spec.Replicas = ptr.To(scale.Spec.Replicas)
+	case *corev1.ReplicationController:
+		obj.Spec.Replicas = ptr.To(scale.Spec.Replicas)
+	case *appsv1.StatefulSet:
+		obj.Spec.Replicas = ptr.To(scale.Spec.Replicas)
+	default:
+		crd, err := getCustomResourceDefinition(ctx, c, obj)
+		if apierrors.IsNotFound(err) {
+			return fmt.Errorf("resource %T does not support the scale subresource", obj)
+		} else if err != nil {
+			return fmt.Errorf("get custom resource definition: %w", err)
+		}
+
+		if crd.Spec.Subresources != nil && crd.Spec.Subresources.Scale != nil {
+			// TODO: CRDs https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#scale-subresource
+			return fmt.Errorf("unimplemented scale subresource for custom resources in fake client")
+		}
+		return fmt.Errorf("resource %T does not support the scale subresource", obj)
+	}
+	return nil
+}
+
+func getCustomResourceDefinition(ctx context.Context, c client.Client, obj client.Object) (*apiextensions.CustomResourceDefinition, error) {
+	gvr, err := getGVRFromObject(obj, c.Scheme())
+	if err != nil {
+		return nil, err
+	}
+
+	crd := &apiextensions.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s.%s", gvr.Resource, gvr.Group),
+		},
+	}
+
+	if err := c.Get(ctx, client.ObjectKeyFromObject(crd), crd); err != nil {
+		return nil, err
+	}
+	return crd, nil
 }

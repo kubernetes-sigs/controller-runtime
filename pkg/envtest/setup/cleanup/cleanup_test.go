@@ -74,12 +74,13 @@ var _ = Describe("Cleanup", func() {
 		})
 
 		JustBeforeEach(func() {
-			Expect(cleanup.Cleanup(
+			_, err := cleanup.Cleanup(
 				ctx,
 				version,
 				cleanup.WithPlatform("linux", "amd64"),
 				cleanup.WithEnvOptions(defaultEnvOpts...),
-			)).To(Succeed())
+			)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should remove matching versions", func() {

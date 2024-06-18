@@ -17,7 +17,7 @@ require (
 	go.uber.org/zap v1.26.0
 	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc
 	golang.org/x/mod v0.17.0
-	golang.org/x/sys v0.20.0
+	golang.org/x/sys v0.21.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // Using v4 to match upstream
 	k8s.io/api v0.31.0-alpha.1

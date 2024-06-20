@@ -169,6 +169,39 @@ func (f FieldOwner) ApplyToSubResourceUpdate(opts *SubResourceUpdateOptions) {
 	opts.FieldManager = string(f)
 }
 
+// FieldValidation configures field validation for the given requests.
+type FieldValidation string
+
+// ApplyToPatch applies this configuration to the given patch options.
+func (f FieldValidation) ApplyToPatch(opts *PatchOptions) {
+	opts.FieldValidation = string(f)
+}
+
+// ApplyToCreate applies this configuration to the given create options.
+func (f FieldValidation) ApplyToCreate(opts *CreateOptions) {
+	opts.FieldValidation = string(f)
+}
+
+// ApplyToUpdate applies this configuration to the given update options.
+func (f FieldValidation) ApplyToUpdate(opts *UpdateOptions) {
+	opts.FieldValidation = string(f)
+}
+
+// ApplyToSubResourcePatch applies this configuration to the given patch options.
+func (f FieldValidation) ApplyToSubResourcePatch(opts *SubResourcePatchOptions) {
+	opts.FieldValidation = string(f)
+}
+
+// ApplyToSubResourceCreate applies this configuration to the given create options.
+func (f FieldValidation) ApplyToSubResourceCreate(opts *SubResourceCreateOptions) {
+	opts.FieldValidation = string(f)
+}
+
+// ApplyToSubResourceUpdate applies this configuration to the given update options.
+func (f FieldValidation) ApplyToSubResourceUpdate(opts *SubResourceUpdateOptions) {
+	opts.FieldValidation = string(f)
+}
+
 // }}}
 
 // {{{ Create Options

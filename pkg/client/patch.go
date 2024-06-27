@@ -19,7 +19,7 @@ package client
 import (
 	"fmt"
 
-	jsonpatch "github.com/evanphx/json-patch/v5"
+	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"

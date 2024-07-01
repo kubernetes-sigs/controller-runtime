@@ -191,13 +191,13 @@ var _ = Describe("Source", func() {
 			instance := source.Kind[client.Object](ic, nil, nil)
 			err := instance.Start(ctx, nil)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must create Kind with a non-nil object"))
+			Expect(err.Error()).To(ContainSubstring("must create Kind with a non-nil type"))
 		})
 		It("should return an error from Start if a handler was not provided", func() {
 			instance := source.Kind(ic, &corev1.Pod{}, nil)
 			err := instance.Start(ctx, nil)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must create Kind with non-nil handler"))
+			Expect(err.Error()).To(ContainSubstring("must create Kind with a non-nil handler"))
 		})
 
 		It("should return an error if syncing fails", func() {
@@ -295,7 +295,7 @@ var _ = Describe("Source", func() {
 
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := source.Channel(
-					ch,
+					source.NewChannelBroadcaster(ch),
 					handler.Funcs{
 						CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
 							defer GinkgoRecover()
@@ -337,7 +337,7 @@ var _ = Describe("Source", func() {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				// Add a handler to get distribution blocked
 				instance := source.Channel(
-					ch,
+					source.NewChannelBroadcaster(ch),
 					handler.Funcs{
 						CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
 							defer GinkgoRecover()
@@ -395,7 +395,7 @@ var _ = Describe("Source", func() {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				// Add a handler to get distribution blocked
 				instance := source.Channel(
-					ch,
+					source.NewChannelBroadcaster(ch),
 					handler.Funcs{
 						CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
 							defer GinkgoRecover()
@@ -438,7 +438,7 @@ var _ = Describe("Source", func() {
 				processed := make(chan struct{})
 				defer close(processed)
 				src := source.Channel(
-					ch,
+					source.NewChannelBroadcaster(ch),
 					handler.Funcs{
 						CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
 							defer GinkgoRecover()
@@ -467,11 +467,11 @@ var _ = Describe("Source", func() {
 				Eventually(processed).Should(Receive())
 				Consistently(processed).ShouldNot(Receive())
 			})
-			It("should get error if no source specified", func() {
+			It("should get error if no Broadcaster specified", func() {
 				q := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test")
 				instance := source.Channel[string](nil, nil /*no source specified*/)
 				err := instance.Start(ctx, q)
-				Expect(err).To(Equal(fmt.Errorf("must specify Channel.Source")))
+				Expect(err).To(Equal(fmt.Errorf("must create Channel with a non-nil broadcaster")))
 			})
 		})
 	})

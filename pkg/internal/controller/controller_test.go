@@ -227,7 +227,7 @@ var _ = Describe("controller", func() {
 			}
 
 			ins := source.Channel(
-				ch,
+				source.NewChannelBroadcaster(ch),
 				handler.Funcs{
 					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
 						defer GinkgoRecover()
@@ -248,7 +248,7 @@ var _ = Describe("controller", func() {
 			<-processed
 		})
 
-		It("should error when channel source is not specified", func() {
+		It("should error when ChannelBroadcaster is not specified", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -257,7 +257,7 @@ var _ = Describe("controller", func() {
 
 			e := ctrl.Start(ctx)
 			Expect(e).To(HaveOccurred())
-			Expect(e.Error()).To(ContainSubstring("must specify Channel.Source"))
+			Expect(e.Error()).To(ContainSubstring("must create Channel with a non-nil broadcaster"))
 		})
 
 		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {

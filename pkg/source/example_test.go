@@ -44,7 +44,7 @@ func ExampleChannel() {
 
 	err := ctrl.Watch(
 		source.Channel(
-			events,
+			source.NewChannelBroadcaster(events),
 			&handler.EnqueueRequestForObject{},
 		),
 	)

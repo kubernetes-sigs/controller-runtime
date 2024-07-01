@@ -145,18 +145,21 @@ func NewTypedPredicateFuncs[T any](filter func(object T) bool) TypedFuncs[T] {
 	}
 }
 
-// ResourceVersionChangedPredicate implements a default update predicate function on resource version change.
-type ResourceVersionChangedPredicate struct {
-	Funcs
+// GenerationChangedPredicate implements a default update predicate function on resource version change.
+type ResourceVersionChangedPredicate = TypedResourceVersionChangedPredicate[client.Object]
+
+// TypedResourceVersionChangedPredicate implements a default update predicate function on resource version change.
+type TypedResourceVersionChangedPredicate[T metav1.Object] struct {
+	TypedFuncs[T]
 }
 
 // Update implements default UpdateEvent filter for validating resource version change.
-func (ResourceVersionChangedPredicate) Update(e event.UpdateEvent) bool {
-	if e.ObjectOld == nil {
+func (TypedResourceVersionChangedPredicate[T]) Update(e event.TypedUpdateEvent[T]) bool {
+	if isNil(e.ObjectOld) {
 		log.Error(nil, "Update event has no old object to update", "event", e)
 		return false
 	}
-	if e.ObjectNew == nil {
+	if isNil(e.ObjectNew) {
 		log.Error(nil, "Update event has no new object to update", "event", e)
 		return false
 	}

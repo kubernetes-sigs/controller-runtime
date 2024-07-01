@@ -27,13 +27,15 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // Options are the arguments for creating a new Controller.
-type Options struct {
+type Options = TypedOptions[reconcile.Request]
+
+// TypedOptions are the arguments for creating a new Controller.
+type TypedOptions[request comparable] struct {
 	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 
@@ -50,12 +52,12 @@ type Options struct {
 	NeedLeaderElection *bool
 
 	// Reconciler reconciles an object
-	Reconciler reconcile.Reconciler
+	Reconciler reconcile.TypedReconciler[request]
 
 	// RateLimiter is used to limit how frequently requests may be queued.
 	// Defaults to MaxOfRateLimiter which has both overall and per-item rate limiting.
 	// The overall is a token bucket and the per-item is exponential.
-	RateLimiter ratelimiter.RateLimiter
+	RateLimiter workqueue.TypedRateLimiter[request]
 
 	// NewQueue constructs the queue for this controller once the controller is ready to start.
 	// With NewQueue a custom queue implementation can be used, e.g. a priority queue to prioritize with which
@@ -67,23 +69,26 @@ type Options struct {
 	//
 	// NOTE: LOW LEVEL PRIMITIVE!
 	// Only use a custom NewQueue if you know what you are doing.
-	NewQueue func(controllerName string, rateLimiter ratelimiter.RateLimiter) workqueue.RateLimitingInterface
+	NewQueue func(controllerName string, rateLimiter workqueue.TypedRateLimiter[request]) workqueue.TypedRateLimitingInterface[request]
 
 	// LogConstructor is used to construct a logger used for this controller and passed
 	// to each reconciliation via the context field.
-	LogConstructor func(request *reconcile.Request) logr.Logger
+	LogConstructor func(request *request) logr.Logger
 }
 
 // Controller implements a Kubernetes API.  A Controller manages a work queue fed reconcile.Requests
 // from source.Sources.  Work is performed through the reconcile.Reconciler for each enqueued item.
 // Work typically is reads and writes Kubernetes objects to make the system state match the state specified
 // in the object Spec.
-type Controller interface {
+type Controller = TypedController[reconcile.Request]
+
+// TypedController implements an API.
+type TypedController[request comparable] interface {
 	// Reconciler is called to reconcile an object by Namespace/Name
-	reconcile.Reconciler
+	reconcile.TypedReconciler[request]
 
 	// Watch watches the provided Source.
-	Watch(src source.Source) error
+	Watch(src source.TypedSource[request]) error
 
 	// Start starts the controller.  Start blocks until the context is closed or a
 	// controller has an error starting.
@@ -96,7 +101,12 @@ type Controller interface {
 // New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have
 // been synced before the Controller is Started.
 func New(name string, mgr manager.Manager, options Options) (Controller, error) {
-	c, err := NewUnmanaged(name, mgr, options)
+	return NewTyped(name, mgr, options)
+}
+
+// NewTyped returns a new typed controller registered with the Manager,
+func NewTyped[request comparable](name string, mgr manager.Manager, options TypedOptions[request]) (TypedController[request], error) {
+	c, err := NewTypedUnmanaged(name, mgr, options)
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +118,11 @@ func New(name string, mgr manager.Manager, options Options) (Controller, error) 
 // NewUnmanaged returns a new controller without adding it to the manager. The
 // caller is responsible for starting the returned controller.
 func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller, error) {
+	return NewTypedUnmanaged(name, mgr, options)
+}
+
+// NewTypedUnmanaged returns a new typed controller without adding it to the manager.
+func NewTypedUnmanaged[request comparable](name string, mgr manager.Manager, options TypedOptions[request]) (TypedController[request], error) {
 	if options.Reconciler == nil {
 		return nil, fmt.Errorf("must specify Reconciler")
 	}
@@ -120,9 +135,9 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 		log := mgr.GetLogger().WithValues(
 			"controller", name,
 		)
-		options.LogConstructor = func(req *reconcile.Request) logr.Logger {
+		options.LogConstructor = func(in *request) logr.Logger {
 			log := log
-			if req != nil {
+			if req, ok := any(in).(*reconcile.Request); ok && req != nil {
 				log = log.WithValues(
 					"object", klog.KRef(req.Namespace, req.Name),
 					"namespace", req.Namespace, "name", req.Name,
@@ -149,12 +164,12 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 	}
 
 	if options.RateLimiter == nil {
-		options.RateLimiter = workqueue.DefaultControllerRateLimiter()
+		options.RateLimiter = workqueue.DefaultTypedControllerRateLimiter[request]()
 	}
 
 	if options.NewQueue == nil {
-		options.NewQueue = func(controllerName string, rateLimiter ratelimiter.RateLimiter) workqueue.RateLimitingInterface {
-			return workqueue.NewRateLimitingQueueWithConfig(rateLimiter, workqueue.RateLimitingQueueConfig{
+		options.NewQueue = func(controllerName string, rateLimiter workqueue.TypedRateLimiter[request]) workqueue.TypedRateLimitingInterface[request] {
+			return workqueue.NewTypedRateLimitingQueueWithConfig(rateLimiter, workqueue.TypedRateLimitingQueueConfig[request]{
 				Name: controllerName,
 			})
 		}
@@ -169,7 +184,7 @@ func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller
 	}
 
 	// Create controller with dependencies set
-	return &controller.Controller{
+	return &controller.Controller[request]{
 		Do:                      options.Reconciler,
 		RateLimiter:             options.RateLimiter,
 		NewQueue:                options.NewQueue,

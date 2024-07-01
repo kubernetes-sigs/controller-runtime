@@ -77,7 +77,6 @@ var _ = Describe("controller.Controller", func() {
 		It("should not leak goroutines when stopped", func() {
 			currentGRs := goleak.IgnoreCurrent()
 
-			ctx, cancel := context.WithCancel(context.Background())
 			watchChan := make(chan event.GenericEvent, 1)
 			watch := source.Channel(watchChan, &handler.EnqueueRequestForObject{})
 			watchChan <- event.GenericEvent{Object: &corev1.Pod{}}
@@ -104,20 +103,21 @@ var _ = Describe("controller.Controller", func() {
 			Expect(c.Watch(watch)).To(Succeed())
 			Expect(err).NotTo(HaveOccurred())
 
+			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
 				defer GinkgoRecover()
 				Expect(m.Start(ctx)).To(Succeed())
 				close(controllerFinished)
 			}()
 
-			<-reconcileStarted
+			Eventually(reconcileStarted).Should(BeClosed())
 			cancel()
-			<-controllerFinished
+			Eventually(controllerFinished).Should(BeClosed())
 
 			// force-close keep-alive connections.  These'll time anyway (after
 			// like 30s or so) but force it to speed up the tests.
 			clientTransport.CloseIdleConnections()
-			Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
+			Eventually(func() error { return goleak.Find(currentGRs) }, 10*time.Second).Should(Succeed())
 		})
 
 		It("should not create goroutines if never started", func() {

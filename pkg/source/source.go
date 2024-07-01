@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	internal "sigs.k8s.io/controller-runtime/pkg/internal/source"
@@ -52,6 +53,13 @@ type Source interface {
 type SyncingSource interface {
 	Source
 	WaitForSync(ctx context.Context) error
+}
+
+// ClusterAwareSource is a source that can be engaged and disengaged when
+// clusters are added or removed from the manager.
+type ClusterAwareSource interface {
+	Source
+	cluster.Aware
 }
 
 // Kind creates a KindSource with the given cache provider.

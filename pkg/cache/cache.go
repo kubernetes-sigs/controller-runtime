@@ -205,6 +205,9 @@ type Options struct {
 	// A typical usecase for this is to use TransformStripManagedFields
 	// to reduce the caches memory usage.
 	DefaultTransform toolscache.TransformFunc
+	// AdditionalDefaultIndexes are indexes that are added to every informer
+	// beyond the namespace-name and namespace ones.
+	AdditionalDefaultIndexes client.Indexers
 
 	// DefaultWatchErrorHandler will be used to the WatchErrorHandler which is called
 	// whenever ListAndWatch drops the connection with an error.
@@ -226,8 +229,10 @@ type Options struct {
 	// If unset, this will fall through to the Default* settings.
 	ByObject map[client.Object]ByObject
 
-	// newInformer allows overriding of NewSharedIndexInformer for testing.
-	newInformer *func(toolscache.ListerWatcher, runtime.Object, time.Duration, toolscache.Indexers) toolscache.SharedIndexInformer
+	// NewInformer allows to override NewSharedIndexInformer.
+	// NOTE: LOW LEVEL PRIMITIVE!
+	// Only use a custom informer if you know what you are doing.
+	NewInformer func(toolscache.ListerWatcher, runtime.Object, time.Duration, toolscache.Indexers) toolscache.SharedIndexInformer
 }
 
 // ByObject offers more fine-grained control over the cache's ListWatch by object.
@@ -395,10 +400,11 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 					Label: config.LabelSelector,
 					Field: config.FieldSelector,
 				},
-				Transform:             config.Transform,
-				WatchErrorHandler:     opts.DefaultWatchErrorHandler,
-				UnsafeDisableDeepCopy: ptr.Deref(config.UnsafeDisableDeepCopy, false),
-				NewInformer:           opts.newInformer,
+				Transform:                config.Transform,
+				WatchErrorHandler:        opts.DefaultWatchErrorHandler,
+				UnsafeDisableDeepCopy:    ptr.Deref(config.UnsafeDisableDeepCopy, false),
+				NewInformer:              opts.NewInformer,
+				AdditionalDefaultIndexes: opts.AdditionalDefaultIndexes,
 			}),
 			readerFailOnMissingInformer: opts.ReaderFailOnMissingInformer,
 		}

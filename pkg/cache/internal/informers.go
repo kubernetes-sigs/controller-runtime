@@ -36,29 +36,31 @@ import (
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/internal/syncs"
 )
 
 // InformersOpts configures an InformerMap.
 type InformersOpts struct {
-	HTTPClient            *http.Client
-	Scheme                *runtime.Scheme
-	Mapper                meta.RESTMapper
-	ResyncPeriod          time.Duration
-	Namespace             string
-	NewInformer           *func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
-	Selector              Selector
-	Transform             cache.TransformFunc
-	UnsafeDisableDeepCopy bool
-	WatchErrorHandler     cache.WatchErrorHandler
+	HTTPClient               *http.Client
+	Scheme                   *runtime.Scheme
+	Mapper                   meta.RESTMapper
+	ResyncPeriod             time.Duration
+	Namespace                string
+	NewInformer              func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
+	AdditionalDefaultIndexes client.Indexers
+	Selector                 Selector
+	Transform                cache.TransformFunc
+	UnsafeDisableDeepCopy    bool
+	WatchErrorHandler        cache.WatchErrorHandler
 }
 
 // NewInformers creates a new InformersMap that can create informers under the hood.
 func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 	newInformer := cache.NewSharedIndexInformer
 	if options.NewInformer != nil {
-		newInformer = *options.NewInformer
+		newInformer = options.NewInformer
 	}
 	return &Informers{
 		config:     config,
@@ -70,16 +72,17 @@ func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 			Unstructured: make(map[schema.GroupVersionKind]*Cache),
 			Metadata:     make(map[schema.GroupVersionKind]*Cache),
 		},
-		codecs:                serializer.NewCodecFactory(options.Scheme),
-		paramCodec:            runtime.NewParameterCodec(options.Scheme),
-		resync:                options.ResyncPeriod,
-		startWait:             make(chan struct{}),
-		namespace:             options.Namespace,
-		selector:              options.Selector,
-		transform:             options.Transform,
-		unsafeDisableDeepCopy: options.UnsafeDisableDeepCopy,
-		newInformer:           newInformer,
-		watchErrorHandler:     options.WatchErrorHandler,
+		codecs:                   serializer.NewCodecFactory(options.Scheme),
+		paramCodec:               runtime.NewParameterCodec(options.Scheme),
+		resync:                   options.ResyncPeriod,
+		startWait:                make(chan struct{}),
+		namespace:                options.Namespace,
+		selector:                 options.Selector,
+		transform:                options.Transform,
+		additionalDefaultIndexes: options.AdditionalDefaultIndexes,
+		unsafeDisableDeepCopy:    options.UnsafeDisableDeepCopy,
+		newInformer:              newInformer,
+		watchErrorHandler:        options.WatchErrorHandler,
 	}
 }
 
@@ -171,9 +174,10 @@ type Informers struct {
 	// default or empty string means all namespaces
 	namespace string
 
-	selector              Selector
-	transform             cache.TransformFunc
-	unsafeDisableDeepCopy bool
+	selector                 Selector
+	transform                cache.TransformFunc
+	additionalDefaultIndexes client.Indexers
+	unsafeDisableDeepCopy    bool
 
 	// NewInformer allows overriding of the shared index informer constructor for testing.
 	newInformer func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
@@ -355,6 +359,11 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 	if err != nil {
 		return nil, false, err
 	}
+	indexers := make(cache.Indexers, len(ip.additionalDefaultIndexes)+1)
+	for k, fn := range ip.additionalDefaultIndexes {
+		indexers[FieldIndexName(k)] = IndexFunc(fn)
+	}
+	indexers[cache.NamespaceIndex] = cache.MetaNamespaceIndexFunc
 	sharedIndexInformer := ip.newInformer(&cache.ListWatch{
 		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 			ip.selector.ApplyToList(&opts)
@@ -365,9 +374,7 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 			opts.Watch = true // Watch needs to be set to true separately
 			return listWatcher.WatchFunc(opts)
 		},
-	}, obj, calculateResyncPeriod(ip.resync), cache.Indexers{
-		cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
-	})
+	}, obj, calculateResyncPeriod(ip.resync), indexers)
 
 	// Set WatchErrorHandler on SharedIndexInformer if set
 	if ip.watchErrorHandler != nil {
@@ -593,4 +600,44 @@ func restrictNamespaceBySelector(namespaceOpt string, s Selector) string {
 		return value
 	}
 	return ""
+}
+
+// IndexFunc constructs a low-level cache.IndexFunc from a client.IndexerFunc.
+// Returned keys in the former are namespaced and non-namespaced variants of the
+// latter.
+func IndexFunc(extractValue client.IndexerFunc) cache.IndexFunc {
+	return func(objRaw interface{}) ([]string, error) {
+		// TODO(directxman12): check if this is the correct type?
+		obj, isObj := objRaw.(client.Object)
+		if !isObj {
+			return nil, fmt.Errorf("object of type %T is not an Object", objRaw)
+		}
+		meta, err := meta.Accessor(obj)
+		if err != nil {
+			return nil, err
+		}
+		ns := meta.GetNamespace()
+
+		rawVals := extractValue(obj)
+		var vals []string
+		if ns == "" {
+			// if we're not doubling the keys for the namespaced case, just create a new slice with same length
+			vals = make([]string, len(rawVals))
+		} else {
+			// if we need to add non-namespaced versions too, double the length
+			vals = make([]string, len(rawVals)*2)
+		}
+		for i, rawVal := range rawVals {
+			// save a namespaced variant, so that we can ask
+			// "what are all the object matching a given index *in a given namespace*"
+			vals[i] = KeyToNamespacedKey(ns, rawVal)
+			if ns != "" {
+				// if we have a namespace, also inject a special index key for listing
+				// regardless of the object namespace
+				vals[i+len(rawVals)] = KeyToNamespacedKey("", rawVal)
+			}
+		}
+
+		return vals, nil
+	}
 }

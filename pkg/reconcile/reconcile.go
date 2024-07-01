@@ -48,8 +48,21 @@ func (r *Result) IsZero() bool {
 // information to uniquely identify the object - its Name and Namespace.  It does NOT contain information about
 // any specific Event or the object contents itself.
 type Request struct {
+	// ClusterName identifies the cluster that the object is in.
+	// The property is only populated when controllers are setup in a fleet manager.
+	// +optional
+	ClusterName string
+
 	// NamespacedName is the name and namespace of the object to reconcile.
 	types.NamespacedName
+}
+
+// String returns the general purpose string representation.
+func (r Request) String() string {
+	if r.ClusterName == "" {
+		return r.NamespacedName.String()
+	}
+	return "cluster://" + r.ClusterName + string(types.Separator) + r.NamespacedName.String()
 }
 
 /*

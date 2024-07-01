@@ -101,6 +101,11 @@ func ExampleController_unstructured() {
 		os.Exit(1)
 	}
 
+	if err := mgr.Add(c); err != nil {
+		log.Error(err, "unable to add controller to manager")
+		os.Exit(1)
+	}
+
 	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(schema.GroupVersionKind{
 		Kind:    "Pod",

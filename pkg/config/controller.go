@@ -46,4 +46,16 @@ type Controller struct {
 	// NeedLeaderElection indicates whether the controller needs to use leader election.
 	// Defaults to true, which means the controller will use leader election.
 	NeedLeaderElection *bool
+
+	// EngageWithDefaultCluster indicates whether the controller should engage
+	// with the default cluster. This default to false if a cluster provider
+	// is configured, and to true otherwise.
+	//
+	// This is an experimental feature and is subject to change.
+	EngageWithDefaultCluster *bool
+
+	// EngageWithProvidedClusters indicates whether the controller should engage
+	// with the provided clusters of the manager. This defaults to true if a
+	// cluster provider is set, and to false otherwise.
+	EngageWithProviderClusters *bool
 }

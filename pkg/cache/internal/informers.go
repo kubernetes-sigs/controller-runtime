@@ -52,6 +52,7 @@ type InformersOpts struct {
 	Transform             cache.TransformFunc
 	UnsafeDisableDeepCopy bool
 	WatchErrorHandler     cache.WatchErrorHandler
+	MinWatchTimeout       *time.Duration
 }
 
 // NewInformers creates a new InformersMap that can create informers under the hood.
@@ -80,6 +81,7 @@ func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 		unsafeDisableDeepCopy: options.UnsafeDisableDeepCopy,
 		newInformer:           newInformer,
 		watchErrorHandler:     options.WatchErrorHandler,
+		minWatchTimeout:       options.MinWatchTimeout,
 	}
 }
 
@@ -147,6 +149,11 @@ type Informers struct {
 	// a 10 percent jitter will be added to the resync period between informers
 	// so that all informers will not send list requests simultaneously.
 	resync time.Duration
+
+	// minWatchTimeout is the minimum timeout period for watch requests
+	// We try to spread the load on apiserver by setting timeouts for
+	// watch requests - it is random in [minWatchTimeout, 2*minWatchTimeout].
+	minWatchTimeout *time.Duration
 
 	// mu guards access to the map
 	mu sync.RWMutex
@@ -363,6 +370,10 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 		WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
 			ip.selector.ApplyToList(&opts)
 			opts.Watch = true // Watch needs to be set to true separately
+			if ip.minWatchTimeout != nil {
+				watchTimeoutSeconds := int64(ip.minWatchTimeout.Seconds() * (rand.Float64() + 1.0)) //nolint:gosec
+				opts.TimeoutSeconds = &watchTimeoutSeconds
+			}
 			return listWatcher.WatchFunc(opts)
 		},
 	}, obj, calculateResyncPeriod(ip.resync), cache.Indexers{

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -72,6 +73,10 @@ type Manager interface {
 	// If the simple path -> handler mapping offered here is not enough,
 	// a new http server/listener should be added as Runnable to the manager via Add method.
 	AddMetricsServerExtraHandler(path string, handler http.Handler) error
+
+	// AddMetricsServerExtraGatherer adds an extra prometheus.Gatherer to the metrics server.
+	// This can be used to add custom metrics to the metrics server.
+	AddMetricsServerExtraGatherer(gatherer prometheus.Gatherer) error
 
 	// AddHealthzCheck allows you to add Healthz checker
 	AddHealthzCheck(name string, check healthz.Checker) error

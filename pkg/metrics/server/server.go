@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/client-go/rest"
 	certutil "k8s.io/client-go/util/cert"
@@ -48,6 +49,9 @@ var DefaultBindAddress = ":8080"
 type Server interface {
 	// AddExtraHandler adds extra handler served on path to the http server that serves metrics.
 	AddExtraHandler(path string, handler http.Handler) error
+
+	// AddExtraGatherer adds a gatherer to the metrics server that is used on top of the default via metrics.Registry.
+	AddExtraGatherer(gatherer prometheus.Gatherer)
 
 	// NeedLeaderElection implements the LeaderElectionRunnable interface, which indicates
 	// the metrics server doesn't need leader election.
@@ -75,6 +79,11 @@ type Options struct {
 	// If the simple path -> handler mapping offered here is not enough, a new http
 	// server/listener should be added as Runnable to the manager via the Add method.
 	ExtraHandlers map[string]http.Handler
+
+	// ExtraGatherers contains a list of gatherers that will be added to the metrics server.
+	// This might be useful to add custom metrics to the metrics server that are not registerable
+	// via the metrics.Registry directly, such as prebuilt registries from libraries.
+	ExtraGatherers []prometheus.Gatherer
 
 	// FilterProvider provides a filter which is a func that is added around
 	// the metrics and the extra handlers on the metrics server.
@@ -202,6 +211,10 @@ func (s *defaultServer) AddExtraHandler(path string, handler http.Handler) error
 	return nil
 }
 
+func (s *defaultServer) AddExtraGatherer(gatherer prometheus.Gatherer) {
+	s.options.ExtraGatherers = append(s.options.ExtraGatherers, gatherer)
+}
+
 // Start runs the server.
 // It will install the metrics related resources depend on the server configuration.
 func (s *defaultServer) Start(ctx context.Context) error {
@@ -218,7 +231,9 @@ func (s *defaultServer) Start(ctx context.Context) error {
 
 	mux := http.NewServeMux()
 
-	handler := promhttp.HandlerFor(metrics.Registry, promhttp.HandlerOpts{
+	gatherer := prometheus.Gatherers(append([]prometheus.Gatherer{metrics.Registry}, s.options.ExtraGatherers...))
+
+	handler := promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{
 		ErrorHandling: promhttp.HTTPErrorOnError,
 	})
 	if s.metricsFilter != nil {

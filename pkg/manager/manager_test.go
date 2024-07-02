@@ -1303,6 +1303,50 @@ var _ = Describe("manger.Manager", func() {
 				Expect(ok).To(BeTrue())
 			})
 
+			It("should serve metrics in an extra registry", func() {
+				extraRegistry := prometheus.NewRegistry()
+				one := prometheus.NewCounter(prometheus.CounterOpts{
+					Name: "test_one",
+					Help: "test metric for testing",
+				})
+				one.Inc()
+				err := extraRegistry.Register(one)
+				Expect(err).NotTo(HaveOccurred())
+
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(m.AddMetricsServerExtraGatherer(extraRegistry)).To(Succeed())
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+				}()
+				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
+
+				metricsEndpoint := fmt.Sprintf("http://%s/metrics", defaultServer.GetBindAddr())
+				resp, err := http.Get(metricsEndpoint)
+				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
+				Expect(resp.StatusCode).To(Equal(200))
+
+				data, err := io.ReadAll(resp.Body)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(data)).To(ContainSubstring("%s\n%s\n%s\n",
+					`# HELP test_one test metric for testing`,
+					`# TYPE test_one counter`,
+					`test_one 1`,
+				))
+
+				// Unregister will return false if the metric was never registered
+				ok := extraRegistry.Unregister(one)
+				Expect(ok).To(BeTrue())
+			})
+
 			It("should serve extra endpoints", func() {
 				opts.Metrics.ExtraHandlers = map[string]http.Handler{
 					"/debug": http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

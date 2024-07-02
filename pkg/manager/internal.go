@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -194,6 +195,22 @@ func (cm *controllerManager) AddMetricsServerExtraHandler(path string, handler h
 		return err
 	}
 	cm.logger.V(2).Info("Registering metrics http server extra handler", "path", path)
+	return nil
+}
+
+// AddMetricsServerExtraGatherer adds an extra prometheus.Gatherer to the metrics server.
+func (cm *controllerManager) AddMetricsServerExtraGatherer(gatherer prometheus.Gatherer) error {
+	cm.Lock()
+	defer cm.Unlock()
+	if cm.started {
+		return fmt.Errorf("unable to add new gatherer because metrics endpoint has already been created")
+	}
+	if cm.metricsServer == nil {
+		cm.GetLogger().Info("warn: metrics server is currently disabled, registering extra gatherer will be ignored")
+		return nil
+	}
+	cm.metricsServer.AddExtraGatherer(gatherer)
+	cm.logger.V(2).Info("Registering metrics http server extra gatherer")
 	return nil
 }
 

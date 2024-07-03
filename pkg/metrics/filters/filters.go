@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apiserver/pkg/apis/apiserver"
 	"k8s.io/apiserver/pkg/authentication/authenticatorfactory"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/authorization/authorizerfactory"
@@ -43,7 +44,7 @@ func WithAuthenticationAndAuthorization(config *rest.Config, httpClient *http.Cl
 	}
 
 	authenticatorConfig := authenticatorfactory.DelegatingAuthenticatorConfig{
-		Anonymous:                false, // Require authentication.
+		Anonymous:                &apiserver.AnonymousAuthConfig{Enabled: false}, // Require authentication.
 		CacheTTL:                 1 * time.Minute,
 		TokenAccessReviewClient:  authenticationV1Client,
 		TokenAccessReviewTimeout: 10 * time.Second,

@@ -72,7 +72,7 @@ func IsObjectNamespaced(obj runtime.Object, scheme *runtime.Scheme, restmapper m
 // IsGVKNamespaced returns true if the object having the provided
 // GVK is namespace scoped.
 func IsGVKNamespaced(gvk schema.GroupVersionKind, restmapper meta.RESTMapper) (bool, error) {
-	restmapping, err := restmapper.RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind})
+	restmapping, err := restmapper.RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}, gvk.Version)
 	if err != nil {
 		return false, fmt.Errorf("failed to get restmapping: %w", err)
 	}

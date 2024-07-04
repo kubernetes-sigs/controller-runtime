@@ -351,6 +351,39 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 	// Initialize the internal context.
 	cm.internalCtx, cm.internalCancel = context.WithCancel(ctx)
 
+	leaderElector, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
+		Lock:          cm.resourceLock,
+		LeaseDuration: cm.leaseDuration,
+		RenewDeadline: cm.renewDeadline,
+		RetryPeriod:   cm.retryPeriod,
+		Callbacks: leaderelection.LeaderCallbacks{
+			OnStartedLeading: func(_ context.Context) {
+				if err := cm.startLeaderElectionRunnables(); err != nil {
+					cm.errChan <- err
+					return
+				}
+				close(cm.elected)
+			},
+			OnStoppedLeading: func() {
+				if cm.onStoppedLeading != nil {
+					cm.onStoppedLeading()
+				}
+				// Make sure graceful shutdown is skipped if we lost the leader lock without
+				// intending to.
+				cm.gracefulShutdownTimeout = time.Duration(0)
+				// Most implementations of leader election log.Fatal() here.
+				// Since Start is wrapped in log.Fatal when called, we can just return
+				// an error here which will cause the program to exit.
+				cm.errChan <- errors.New("leader election lost")
+			},
+		},
+		ReleaseOnCancel: cm.leaderElectionReleaseOnCancel,
+		Name:            cm.leaderElectionID,
+	})
+	if err != nil {
+		return err
+	}
+
 	// This chan indicates that stop is complete, in other words all runnables have returned or timeout on stop request
 	stopComplete := make(chan struct{})
 	defer close(stopComplete)
@@ -433,19 +466,22 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 	{
 		ctx, cancel := context.WithCancel(context.Background())
 		cm.leaderElectionCancel = cancel
-		go func() {
-			if cm.resourceLock != nil {
-				if err := cm.startLeaderElection(ctx); err != nil {
-					cm.errChan <- err
-				}
-			} else {
+		if cm.resourceLock != nil {
+			// Start the leader elector process
+			go func() {
+				leaderElector.Run(ctx)
+				<-ctx.Done()
+				close(cm.leaderElectionStopped)
+			}()
+		} else {
+			go func() {
 				// Treat not having leader election enabled the same as being elected.
 				if err := cm.startLeaderElectionRunnables(); err != nil {
 					cm.errChan <- err
 				}
 				close(cm.elected)
-			}
-		}()
+			}()
+		}
 	}
 
 	ready = true
@@ -566,49 +602,6 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 
 func (cm *controllerManager) startLeaderElectionRunnables() error {
 	return cm.runnables.LeaderElection.Start(cm.internalCtx)
-}
-
-func (cm *controllerManager) startLeaderElection(ctx context.Context) (err error) {
-	l, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
-		Lock:          cm.resourceLock,
-		LeaseDuration: cm.leaseDuration,
-		RenewDeadline: cm.renewDeadline,
-		RetryPeriod:   cm.retryPeriod,
-		Callbacks: leaderelection.LeaderCallbacks{
-			OnStartedLeading: func(_ context.Context) {
-				if err := cm.startLeaderElectionRunnables(); err != nil {
-					cm.errChan <- err
-					return
-				}
-				close(cm.elected)
-			},
-			OnStoppedLeading: func() {
-				if cm.onStoppedLeading != nil {
-					cm.onStoppedLeading()
-				}
-				// Make sure graceful shutdown is skipped if we lost the leader lock without
-				// intending to.
-				cm.gracefulShutdownTimeout = time.Duration(0)
-				// Most implementations of leader election log.Fatal() here.
-				// Since Start is wrapped in log.Fatal when called, we can just return
-				// an error here which will cause the program to exit.
-				cm.errChan <- errors.New("leader election lost")
-			},
-		},
-		ReleaseOnCancel: cm.leaderElectionReleaseOnCancel,
-		Name:            cm.leaderElectionID,
-	})
-	if err != nil {
-		return err
-	}
-
-	// Start the leader elector process
-	go func() {
-		l.Run(ctx)
-		<-ctx.Done()
-		close(cm.leaderElectionStopped)
-	}()
-	return nil
 }
 
 func (cm *controllerManager) Elected() <-chan struct{} {

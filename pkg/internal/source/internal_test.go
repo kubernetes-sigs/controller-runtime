@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	internal "sigs.k8s.io/controller-runtime/pkg/internal/source"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,40 +39,40 @@ import (
 
 var _ = Describe("Internal", func() {
 	var ctx = context.Background()
-	var instance *internal.EventHandler[client.Object]
+	var instance *internal.EventHandler[client.Object, reconcile.Request]
 	var funcs, setfuncs *handler.Funcs
 	var set bool
 	BeforeEach(func() {
 		funcs = &handler.Funcs{
-			CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
+			CreateFunc: func(context.Context, event.CreateEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Fail("Did not expect CreateEvent to be called.")
 			},
-			DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+			DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Fail("Did not expect DeleteEvent to be called.")
 			},
-			UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+			UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Fail("Did not expect UpdateEvent to be called.")
 			},
-			GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
+			GenericFunc: func(context.Context, event.GenericEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Fail("Did not expect GenericEvent to be called.")
 			},
 		}
 
 		setfuncs = &handler.Funcs{
-			CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
+			CreateFunc: func(context.Context, event.CreateEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				set = true
 			},
-			DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+			DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				set = true
 			},
-			UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+			UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				set = true
 			},
-			GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
+			GenericFunc: func(context.Context, event.GenericEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				set = true
 			},
 		}
@@ -92,7 +93,7 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should create a CreateEvent", func() {
-			funcs.CreateFunc = func(ctx context.Context, evt event.CreateEvent, q workqueue.RateLimitingInterface) {
+			funcs.CreateFunc = func(ctx context.Context, evt event.CreateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Expect(evt.Object).To(Equal(pod))
 			}
@@ -148,7 +149,7 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should create an UpdateEvent", func() {
-			funcs.UpdateFunc = func(ctx context.Context, evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+			funcs.UpdateFunc = func(ctx context.Context, evt event.UpdateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Expect(evt.ObjectOld).To(Equal(pod))
 				Expect(evt.ObjectNew).To(Equal(newPod))
@@ -207,7 +208,7 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should create a DeleteEvent", func() {
-			funcs.DeleteFunc = func(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			funcs.DeleteFunc = func(ctx context.Context, evt event.DeleteEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Expect(evt.Object).To(Equal(pod))
 			}
@@ -263,11 +264,10 @@ var _ = Describe("Internal", func() {
 		})
 
 		It("should create a DeleteEvent from a tombstone", func() {
-
 			tombstone := cache.DeletedFinalStateUnknown{
 				Obj: pod,
 			}
-			funcs.DeleteFunc = func(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			funcs.DeleteFunc = func(ctx context.Context, evt event.DeleteEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Expect(evt.Object).To(Equal(pod))
 				Expect(evt.DeleteStateUnknown).Should(BeTrue())
@@ -289,7 +289,7 @@ var _ = Describe("Internal", func() {
 
 	Describe("Kind", func() {
 		It("should return kind source type", func() {
-			kind := internal.Kind[*corev1.Pod]{
+			kind := internal.Kind[*corev1.Pod, reconcile.Request]{
 				Type: &corev1.Pod{},
 			}
 			Expect(kind.String()).Should(Equal("kind source: *v1.Pod"))

@@ -19,6 +19,7 @@ package builder
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -37,7 +38,6 @@ import (
 )
 
 // Supporting mocking out functions for testing.
-var newController = controller.New
 var getGvk = apiutil.GVKForObject
 
 // project represents other forms that we can use to
@@ -52,21 +52,32 @@ const (
 )
 
 // Builder builds a Controller.
-type Builder struct {
+type Builder = TypedBuilder[reconcile.Request]
+
+// TypedBuilder builds a Controller. The request is the request type
+// that is passed to the workqueue and then to the Reconciler.
+// The workqueue de-duplicates identical requests.
+type TypedBuilder[request comparable] struct {
 	forInput         ForInput
 	ownsInput        []OwnsInput
-	rawSources       []source.Source
-	watchesInput     []WatchesInput
+	rawSources       []source.TypedSource[request]
+	watchesInput     []WatchesInput[request]
 	mgr              manager.Manager
 	globalPredicates []predicate.Predicate
-	ctrl             controller.Controller
-	ctrlOptions      controller.Options
+	ctrl             controller.TypedController[request]
+	ctrlOptions      controller.TypedOptions[request]
 	name             string
+	newController    func(name string, mgr manager.Manager, options controller.TypedOptions[request]) (controller.TypedController[request], error)
 }
 
 // ControllerManagedBy returns a new controller builder that will be started by the provided Manager.
 func ControllerManagedBy(m manager.Manager) *Builder {
-	return &Builder{mgr: m}
+	return TypedControllerManagedBy[reconcile.Request](m)
+}
+
+// TypedControllerManagedBy returns a new typed controller builder that will be started by the provided Manager.
+func TypedControllerManagedBy[request comparable](m manager.Manager) *TypedBuilder[request] {
+	return &TypedBuilder[request]{mgr: m}
 }
 
 // ForInput represents the information set by the For method.
@@ -81,7 +92,7 @@ type ForInput struct {
 // update events by *reconciling the object*.
 // This is the equivalent of calling
 // Watches(&source.Kind{Type: apiType}, &handler.EnqueueRequestForObject{}).
-func (blder *Builder) For(object client.Object, opts ...ForOption) *Builder {
+func (blder *TypedBuilder[request]) For(object client.Object, opts ...ForOption) *TypedBuilder[request] {
 	if blder.forInput.object != nil {
 		blder.forInput.err = fmt.Errorf("For(...) should only be called once, could not assign multiple objects for reconciliation")
 		return blder
@@ -111,7 +122,7 @@ type OwnsInput struct {
 //
 // By default, this is the equivalent of calling
 // Watches(object, handler.EnqueueRequestForOwner([...], ownerType, OnlyControllerOwner())).
-func (blder *Builder) Owns(object client.Object, opts ...OwnsOption) *Builder {
+func (blder *TypedBuilder[request]) Owns(object client.Object, opts ...OwnsOption) *TypedBuilder[request] {
 	input := OwnsInput{object: object}
 	for _, opt := range opts {
 		opt.ApplyToOwns(&input)
@@ -121,12 +132,25 @@ func (blder *Builder) Owns(object client.Object, opts ...OwnsOption) *Builder {
 	return blder
 }
 
+type untypedWatchesInput interface {
+	setPredicates([]predicate.Predicate)
+	setObjectProjection(objectProjection)
+}
+
 // WatchesInput represents the information set by Watches method.
-type WatchesInput struct {
+type WatchesInput[request comparable] struct {
 	obj              client.Object
-	handler          handler.EventHandler
+	handler          handler.TypedEventHandler[client.Object, request]
 	predicates       []predicate.Predicate
 	objectProjection objectProjection
+}
+
+func (w *WatchesInput[request]) setPredicates(predicates []predicate.Predicate) {
+	w.predicates = predicates
+}
+
+func (w *WatchesInput[request]) setObjectProjection(objectProjection objectProjection) {
+	w.objectProjection = objectProjection
 }
 
 // Watches defines the type of Object to watch, and configures the ControllerManagedBy to respond to create / delete /
@@ -134,8 +158,12 @@ type WatchesInput struct {
 //
 // This is the equivalent of calling
 // WatchesRawSource(source.Kind(cache, object, eventHandler, predicates...)).
-func (blder *Builder) Watches(object client.Object, eventHandler handler.EventHandler, opts ...WatchesOption) *Builder {
-	input := WatchesInput{
+func (blder *TypedBuilder[request]) Watches(
+	object client.Object,
+	eventHandler handler.TypedEventHandler[client.Object, request],
+	opts ...WatchesOption,
+) *TypedBuilder[request] {
+	input := WatchesInput[request]{
 		obj:     object,
 		handler: eventHandler,
 	}
@@ -175,7 +203,11 @@ func (blder *Builder) Watches(object client.Object, eventHandler handler.EventHa
 // In the first case, controller-runtime will create another cache for the
 // concrete type on top of the metadata cache; this increases memory
 // consumption and leads to race conditions as caches are not in sync.
-func (blder *Builder) WatchesMetadata(object client.Object, eventHandler handler.EventHandler, opts ...WatchesOption) *Builder {
+func (blder *TypedBuilder[request]) WatchesMetadata(
+	object client.Object,
+	eventHandler handler.TypedEventHandler[client.Object, request],
+	opts ...WatchesOption,
+) *TypedBuilder[request] {
 	opts = append(opts, OnlyMetadata)
 	return blder.Watches(object, eventHandler, opts...)
 }
@@ -187,7 +219,7 @@ func (blder *Builder) WatchesMetadata(object client.Object, eventHandler handler
 // This method is only exposed for more advanced use cases, most users should use one of the higher level functions.
 //
 // WatchesRawSource does not respect predicates configured through WithEventFilter.
-func (blder *Builder) WatchesRawSource(src source.Source) *Builder {
+func (blder *TypedBuilder[request]) WatchesRawSource(src source.TypedSource[request]) *TypedBuilder[request] {
 	blder.rawSources = append(blder.rawSources, src)
 
 	return blder
@@ -197,19 +229,19 @@ func (blder *Builder) WatchesRawSource(src source.Source) *Builder {
 // trigger reconciliations. For example, filtering on whether the resource version has changed.
 // Given predicate is added for all watched objects.
 // Defaults to the empty list.
-func (blder *Builder) WithEventFilter(p predicate.Predicate) *Builder {
+func (blder *TypedBuilder[request]) WithEventFilter(p predicate.Predicate) *TypedBuilder[request] {
 	blder.globalPredicates = append(blder.globalPredicates, p)
 	return blder
 }
 
 // WithOptions overrides the controller options used in doController. Defaults to empty.
-func (blder *Builder) WithOptions(options controller.Options) *Builder {
+func (blder *TypedBuilder[request]) WithOptions(options controller.TypedOptions[request]) *TypedBuilder[request] {
 	blder.ctrlOptions = options
 	return blder
 }
 
 // WithLogConstructor overrides the controller options's LogConstructor.
-func (blder *Builder) WithLogConstructor(logConstructor func(*reconcile.Request) logr.Logger) *Builder {
+func (blder *TypedBuilder[request]) WithLogConstructor(logConstructor func(*request) logr.Logger) *TypedBuilder[request] {
 	blder.ctrlOptions.LogConstructor = logConstructor
 	return blder
 }
@@ -219,19 +251,19 @@ func (blder *Builder) WithLogConstructor(logConstructor func(*reconcile.Request)
 // (underscores and alphanumeric characters only).
 //
 // By default, controllers are named using the lowercase version of their kind.
-func (blder *Builder) Named(name string) *Builder {
+func (blder *TypedBuilder[request]) Named(name string) *TypedBuilder[request] {
 	blder.name = name
 	return blder
 }
 
 // Complete builds the Application Controller.
-func (blder *Builder) Complete(r reconcile.Reconciler) error {
+func (blder *TypedBuilder[request]) Complete(r reconcile.TypedReconciler[request]) error {
 	_, err := blder.Build(r)
 	return err
 }
 
 // Build builds the Application Controller and returns the Controller it created.
-func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, error) {
+func (blder *TypedBuilder[request]) Build(r reconcile.TypedReconciler[request]) (controller.TypedController[request], error) {
 	if r == nil {
 		return nil, fmt.Errorf("must provide a non-nil Reconciler")
 	}
@@ -255,7 +287,7 @@ func (blder *Builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 	return blder.ctrl, nil
 }
 
-func (blder *Builder) project(obj client.Object, proj objectProjection) (client.Object, error) {
+func (blder *TypedBuilder[request]) project(obj client.Object, proj objectProjection) (client.Object, error) {
 	switch proj {
 	case projectAsNormal:
 		return obj, nil
@@ -272,17 +304,23 @@ func (blder *Builder) project(obj client.Object, proj objectProjection) (client.
 	}
 }
 
-func (blder *Builder) doWatch() error {
+func (blder *TypedBuilder[request]) doWatch() error {
 	// Reconcile type
 	if blder.forInput.object != nil {
 		obj, err := blder.project(blder.forInput.object, blder.forInput.objectProjection)
 		if err != nil {
 			return err
 		}
-		hdler := &handler.EnqueueRequestForObject{}
+
+		if reflect.TypeFor[request]() != reflect.TypeOf(reconcile.Request{}) {
+			return fmt.Errorf("For() can only be used with reconcile.Request, got %T", *new(request))
+		}
+
+		var hdler handler.TypedEventHandler[client.Object, request]
+		reflect.ValueOf(&hdler).Elem().Set(reflect.ValueOf(&handler.EnqueueRequestForObject{}))
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, blder.forInput.predicates...)
-		src := source.Kind(blder.mgr.GetCache(), obj, hdler, allPredicates...)
+		src := source.TypedKind(blder.mgr.GetCache(), obj, hdler, allPredicates...)
 		if err := blder.ctrl.Watch(src); err != nil {
 			return err
 		}
@@ -301,14 +339,16 @@ func (blder *Builder) doWatch() error {
 		if !own.matchEveryOwner {
 			opts = append(opts, handler.OnlyControllerOwner())
 		}
-		hdler := handler.EnqueueRequestForOwner(
+
+		var hdler handler.TypedEventHandler[client.Object, request]
+		reflect.ValueOf(&hdler).Elem().Set(reflect.ValueOf(handler.EnqueueRequestForOwner(
 			blder.mgr.GetScheme(), blder.mgr.GetRESTMapper(),
 			blder.forInput.object,
 			opts...,
-		)
+		)))
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, own.predicates...)
-		src := source.Kind(blder.mgr.GetCache(), obj, hdler, allPredicates...)
+		src := source.TypedKind(blder.mgr.GetCache(), obj, hdler, allPredicates...)
 		if err := blder.ctrl.Watch(src); err != nil {
 			return err
 		}
@@ -325,7 +365,7 @@ func (blder *Builder) doWatch() error {
 		}
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)
-		if err := blder.ctrl.Watch(source.Kind(blder.mgr.GetCache(), projected, w.handler, allPredicates...)); err != nil {
+		if err := blder.ctrl.Watch(source.TypedKind[client.Object, request](blder.mgr.GetCache(), projected, w.handler, allPredicates...)); err != nil {
 			return err
 		}
 	}
@@ -337,7 +377,7 @@ func (blder *Builder) doWatch() error {
 	return nil
 }
 
-func (blder *Builder) getControllerName(gvk schema.GroupVersionKind, hasGVK bool) (string, error) {
+func (blder *TypedBuilder[request]) getControllerName(gvk schema.GroupVersionKind, hasGVK bool) (string, error) {
 	if blder.name != "" {
 		return blder.name, nil
 	}
@@ -347,7 +387,7 @@ func (blder *Builder) getControllerName(gvk schema.GroupVersionKind, hasGVK bool
 	return strings.ToLower(gvk.Kind), nil
 }
 
-func (blder *Builder) doController(r reconcile.Reconciler) error {
+func (blder *TypedBuilder[request]) doController(r reconcile.TypedReconciler[request]) error {
 	globalOpts := blder.mgr.GetControllerOptions()
 
 	ctrlOptions := blder.ctrlOptions
@@ -401,9 +441,10 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 			)
 		}
 
-		ctrlOptions.LogConstructor = func(req *reconcile.Request) logr.Logger {
+		ctrlOptions.LogConstructor = func(in *request) logr.Logger {
 			log := log
-			if req != nil {
+
+			if req, ok := any(in).(*reconcile.Request); ok && req != nil {
 				if hasGVK {
 					log = log.WithValues(gvk.Kind, klog.KRef(req.Namespace, req.Name))
 				}
@@ -415,7 +456,11 @@ func (blder *Builder) doController(r reconcile.Reconciler) error {
 		}
 	}
 
+	if blder.newController == nil {
+		blder.newController = controller.NewTyped[request]
+	}
+
 	// Build the controller and return.
-	blder.ctrl, err = newController(controllerName, blder.mgr, ctrlOptions)
+	blder.ctrl, err = blder.newController(controllerName, blder.mgr, ctrlOptions)
 	return err
 }

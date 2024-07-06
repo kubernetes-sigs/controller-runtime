@@ -41,12 +41,12 @@ import (
 
 var _ = Describe("Eventhandler", func() {
 	var ctx = context.Background()
-	var q workqueue.RateLimitingInterface
+	var q workqueue.TypedRateLimitingInterface[reconcile.Request]
 	var instance handler.EnqueueRequestForObject
 	var pod *corev1.Pod
 	var mapper meta.RESTMapper
 	BeforeEach(func() {
-		q = &controllertest.Queue{Interface: workqueue.New()}
+		q = &controllertest.Queue{TypedInterface: workqueue.NewTyped[reconcile.Request]()}
 		pod = &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "biz", Name: "baz"},
 		}
@@ -66,10 +66,7 @@ var _ = Describe("Eventhandler", func() {
 			instance.Create(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
 
-			i, _ := q.Get()
-			Expect(i).NotTo(BeNil())
-			req, ok := i.(reconcile.Request)
-			Expect(ok).To(BeTrue())
+			req, _ := q.Get()
 			Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
 		})
 
@@ -80,10 +77,7 @@ var _ = Describe("Eventhandler", func() {
 			instance.Delete(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
 
-			i, _ := q.Get()
-			Expect(i).NotTo(BeNil())
-			req, ok := i.(reconcile.Request)
-			Expect(ok).To(BeTrue())
+			req, _ := q.Get()
 			Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
 		})
 
@@ -100,10 +94,7 @@ var _ = Describe("Eventhandler", func() {
 				instance.Update(ctx, evt, q)
 				Expect(q.Len()).To(Equal(1))
 
-				i, _ := q.Get()
-				Expect(i).NotTo(BeNil())
-				req, ok := i.(reconcile.Request)
-				Expect(ok).To(BeTrue())
+				req, _ := q.Get()
 				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz2", Name: "baz2"}))
 			})
 
@@ -113,10 +104,7 @@ var _ = Describe("Eventhandler", func() {
 			}
 			instance.Generic(ctx, evt, q)
 			Expect(q.Len()).To(Equal(1))
-			i, _ := q.Get()
-			Expect(i).NotTo(BeNil())
-			req, ok := i.(reconcile.Request)
-			Expect(ok).To(BeTrue())
+			req, _ := q.Get()
 			Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
 		})
 
@@ -140,20 +128,14 @@ var _ = Describe("Eventhandler", func() {
 				}
 				instance.Update(ctx, evt, q)
 				Expect(q.Len()).To(Equal(1))
-				i, _ := q.Get()
-				Expect(i).NotTo(BeNil())
-				req, ok := i.(reconcile.Request)
-				Expect(ok).To(BeTrue())
+				req, _ := q.Get()
 				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz2", Name: "baz2"}))
 
 				evt.ObjectNew = nil
 				evt.ObjectOld = pod
 				instance.Update(ctx, evt, q)
 				Expect(q.Len()).To(Equal(1))
-				i, _ = q.Get()
-				Expect(i).NotTo(BeNil())
-				req, ok = i.(reconcile.Request)
-				Expect(ok).To(BeTrue())
+				req, _ = q.Get()
 				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
 			})
 
@@ -677,19 +659,19 @@ var _ = Describe("Eventhandler", func() {
 
 	Describe("Funcs", func() {
 		failingFuncs := handler.Funcs{
-			CreateFunc: func(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
+			CreateFunc: func(context.Context, event.CreateEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Fail("Did not expect CreateEvent to be called.")
 			},
-			DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+			DeleteFunc: func(context.Context, event.DeleteEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Fail("Did not expect DeleteEvent to be called.")
 			},
-			UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+			UpdateFunc: func(context.Context, event.UpdateEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Fail("Did not expect UpdateEvent to be called.")
 			},
-			GenericFunc: func(context.Context, event.GenericEvent, workqueue.RateLimitingInterface) {
+			GenericFunc: func(context.Context, event.GenericEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Fail("Did not expect GenericEvent to be called.")
 			},
@@ -700,7 +682,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
-			instance.CreateFunc = func(ctx context.Context, evt2 event.CreateEvent, q2 workqueue.RateLimitingInterface) {
+			instance.CreateFunc = func(ctx context.Context, evt2 event.CreateEvent, q2 workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Expect(q2).To(Equal(q))
 				Expect(evt2).To(Equal(evt))
@@ -727,7 +709,7 @@ var _ = Describe("Eventhandler", func() {
 			}
 
 			instance := failingFuncs
-			instance.UpdateFunc = func(ctx context.Context, evt2 event.UpdateEvent, q2 workqueue.RateLimitingInterface) {
+			instance.UpdateFunc = func(ctx context.Context, evt2 event.UpdateEvent, q2 workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Expect(q2).To(Equal(q))
 				Expect(evt2).To(Equal(evt))
@@ -752,7 +734,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.DeleteEvent{
 				Object: pod,
 			}
-			instance.DeleteFunc = func(ctx context.Context, evt2 event.DeleteEvent, q2 workqueue.RateLimitingInterface) {
+			instance.DeleteFunc = func(ctx context.Context, evt2 event.DeleteEvent, q2 workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Expect(q2).To(Equal(q))
 				Expect(evt2).To(Equal(evt))
@@ -774,7 +756,7 @@ var _ = Describe("Eventhandler", func() {
 			evt := event.GenericEvent{
 				Object: pod,
 			}
-			instance.GenericFunc = func(ctx context.Context, evt2 event.GenericEvent, q2 workqueue.RateLimitingInterface) {
+			instance.GenericFunc = func(ctx context.Context, evt2 event.GenericEvent, q2 workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Expect(q2).To(Equal(q))
 				Expect(evt2).To(Equal(evt))

@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	internalcontroller "sigs.k8s.io/controller-runtime/pkg/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -144,7 +143,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.RateLimiter).NotTo(BeNil())
@@ -155,9 +154,9 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			customRateLimiter := workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 1000*time.Second)
+			customRateLimiter := workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](5*time.Millisecond, 1000*time.Second)
 			customNewQueueCalled := false
-			customNewQueue := func(controllerName string, rateLimiter ratelimiter.RateLimiter) workqueue.RateLimitingInterface {
+			customNewQueue := func(controllerName string, rateLimiter workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
 				customNewQueueCalled = true
 				return nil
 			}
@@ -169,7 +168,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.RateLimiter).To(BeIdenticalTo(customRateLimiter))
@@ -186,7 +185,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.RecoverPanic).NotTo(BeNil())
@@ -203,7 +202,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.RecoverPanic).NotTo(BeNil())
@@ -219,7 +218,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.NeedLeaderElection()).To(BeTrue())
@@ -235,7 +234,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.NeedLeaderElection()).To(BeFalse())
@@ -250,7 +249,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.MaxConcurrentReconciles).To(BeEquivalentTo(5))
@@ -265,7 +264,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.MaxConcurrentReconciles).To(BeEquivalentTo(1))
@@ -281,7 +280,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.MaxConcurrentReconciles).To(BeEquivalentTo(5))
@@ -296,7 +295,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.CacheSyncTimeout).To(BeEquivalentTo(5))
@@ -311,7 +310,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.CacheSyncTimeout).To(BeEquivalentTo(2 * time.Minute))
@@ -327,7 +326,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.CacheSyncTimeout).To(BeEquivalentTo(5))
@@ -342,7 +341,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.NeedLeaderElection()).To(BeTrue())
@@ -358,7 +357,7 @@ var _ = Describe("controller.Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ctrl, ok := c.(*internalcontroller.Controller)
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
 
 			Expect(ctrl.NeedLeaderElection()).To(BeFalse())

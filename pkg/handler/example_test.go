@@ -93,26 +93,26 @@ func ExampleFuncs() {
 	// controller is a controller.controller
 	err := c.Watch(
 		source.Kind(mgr.GetCache(), &corev1.Pod{},
-			handler.TypedFuncs[*corev1.Pod]{
-				CreateFunc: func(ctx context.Context, e event.TypedCreateEvent[*corev1.Pod], q workqueue.RateLimitingInterface) {
+			handler.TypedFuncs[*corev1.Pod, reconcile.Request]{
+				CreateFunc: func(ctx context.Context, e event.TypedCreateEvent[*corev1.Pod], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 					q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 						Name:      e.Object.Name,
 						Namespace: e.Object.Namespace,
 					}})
 				},
-				UpdateFunc: func(ctx context.Context, e event.TypedUpdateEvent[*corev1.Pod], q workqueue.RateLimitingInterface) {
+				UpdateFunc: func(ctx context.Context, e event.TypedUpdateEvent[*corev1.Pod], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 					q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 						Name:      e.ObjectNew.Name,
 						Namespace: e.ObjectNew.Namespace,
 					}})
 				},
-				DeleteFunc: func(ctx context.Context, e event.TypedDeleteEvent[*corev1.Pod], q workqueue.RateLimitingInterface) {
+				DeleteFunc: func(ctx context.Context, e event.TypedDeleteEvent[*corev1.Pod], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 					q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 						Name:      e.Object.Name,
 						Namespace: e.Object.Namespace,
 					}})
 				},
-				GenericFunc: func(ctx context.Context, e event.TypedGenericEvent[*corev1.Pod], q workqueue.RateLimitingInterface) {
+				GenericFunc: func(ctx context.Context, e event.TypedGenericEvent[*corev1.Pod], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 					q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 						Name:      e.Object.Name,
 						Namespace: e.Object.Namespace,

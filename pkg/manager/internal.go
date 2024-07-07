@@ -351,6 +351,8 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 	// Initialize the internal context.
 	cm.internalCtx, cm.internalCancel = context.WithCancel(ctx)
 
+	// Leader elector must create before defer which contains engageStopProcedure function
+	// https://github.com/kubernetes-sigs/controller-runtime/issues/2873
 	var leaderElector *leaderelection.LeaderElector
 	if cm.resourceLock != nil {
 		leaderElector, err = cm.initLeaderElector()

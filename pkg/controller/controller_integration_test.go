@@ -171,6 +171,35 @@ var _ = Describe("controller", func() {
 			err = cm.GetClient().
 				List(context.Background(), &controllertest.UnconventionalListTypeList{})
 			Expect(err).NotTo(HaveOccurred())
+
+			By("Invoking Reconciling for a pod when it is created when adding watcher dynamically")
+			// Add new watcher dynamically
+			err = instance.Watch(source.Kind(cm.GetCache(), &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}))
+			Expect(err).NotTo(HaveOccurred())
+
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "pod-name"},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: 80,
+								},
+							},
+						},
+					},
+				},
+			}
+			expectedReconcileRequest = reconcile.Request{NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "pod-name",
+			}}
+			_, err = clientset.CoreV1().Pods("default").Create(ctx, pod, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 		})
 	})
 })

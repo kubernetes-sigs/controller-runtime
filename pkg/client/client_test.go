@@ -18,6 +18,7 @@ package client_test
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -43,6 +44,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/examples/crd/pkg"
@@ -229,7 +231,64 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 	})
 
 	Describe("WarningHandler", func() {
-		It("should log warnings when warning suppression is disabled", func() {
+		It("should log warnings with config.WarningHandler, if one is defined", func() {
+			cache := &fakeReader{}
+
+			testCfg := rest.CopyConfig(cfg)
+
+			var testLog bytes.Buffer
+			testCfg.WarningHandler = rest.NewWarningWriter(&testLog, rest.WarningWriterOptions{})
+
+			cl, err := client.New(testCfg, client.Options{Cache: &client.CacheOptions{Reader: cache, DisableFor: []client.Object{&corev1.Namespace{}}}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "wh-defined"}}
+			tns, err = clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tns).NotTo(BeNil())
+			defer deleteNamespace(ctx, tns)
+
+			toCreate := &pkg.ChaosPod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example",
+					Namespace: tns.Name,
+				},
+				// The ChaosPod CRD does not define Status, so the field is unknown to the API server,
+				// but field validation is not strict by default, so the API server returns a warning,
+				// and we need a warning to check whether suppression works.
+				Status: pkg.ChaosPodStatus{},
+			}
+			err = cl.Create(ctx, toCreate)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			scannerTestLog := bufio.NewScanner(&testLog)
+			for scannerTestLog.Scan() {
+				line := scannerTestLog.Text()
+				if strings.Contains(
+					line,
+					"unknown field \"status\"",
+				) {
+					return
+				}
+			}
+			defer Fail("expected to find one API server warning logged the config.WarningHandler")
+
+			scanner := bufio.NewScanner(&log)
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.Contains(
+					line,
+					"unknown field \"status\"",
+				) {
+					defer Fail("expected to find zero API server warnings in the client log")
+					break
+				}
+			}
+		})
+
+		It("(deprecated behavior) should log warnings when warning suppression is disabled", func() {
 			cache := &fakeReader{}
 			cl, err := client.New(cfg, client.Options{
 				WarningHandler: client.WarningHandlerOptions{SuppressWarnings: false}, Cache: &client.CacheOptions{Reader: cache, DisableFor: []client.Object{&corev1.Namespace{}}},
@@ -270,7 +329,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			defer Fail("expected to find one API server warning in the client log")
 		})
 
-		It("should not log warnings when warning suppression is enabled", func() {
+		It("(deprecated behavior) should not log warnings when warning suppression is enabled", func() {
 			cache := &fakeReader{}
 			cl, err := client.New(cfg, client.Options{
 				WarningHandler: client.WarningHandlerOptions{SuppressWarnings: true}, Cache: &client.CacheOptions{Reader: cache, DisableFor: []client.Object{&corev1.Namespace{}}},

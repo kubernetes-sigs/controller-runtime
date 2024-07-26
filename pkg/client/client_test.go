@@ -241,6 +241,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			tns, err = clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tns).NotTo(BeNil())
+			defer deleteNamespace(ctx, tns)
 
 			toCreate := &pkg.ChaosPod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -267,7 +268,6 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				}
 			}
 			defer Fail("expected to find one API server warning in the client log")
-			deleteNamespace(ctx, tns)
 		})
 
 		It("should not log warnings when warning suppression is enabled", func() {

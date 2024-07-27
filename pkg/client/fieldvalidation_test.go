@@ -30,7 +30,7 @@ import (
 func TestWithStrictFieldValidation(t *testing.T) {
 	calls := 0
 	fakeClient := testFieldValidationClient(t, metav1.FieldValidationStrict, func() { calls++ })
-	wrappedClient := client.WithStrictFieldValidation(fakeClient)
+	wrappedClient := client.WithFieldValidation(fakeClient, metav1.FieldValidationStrict)
 
 	ctx := context.Background()
 	dummyObj := &corev1.Namespace{}
@@ -54,7 +54,7 @@ func TestWithStrictFieldValidationOverridden(t *testing.T) {
 	calls := 0
 
 	fakeClient := testFieldValidationClient(t, metav1.FieldValidationWarn, func() { calls++ })
-	wrappedClient := client.WithStrictFieldValidation(fakeClient)
+	wrappedClient := client.WithFieldValidation(fakeClient, metav1.FieldValidationStrict)
 
 	ctx := context.Background()
 	dummyObj := &corev1.Namespace{}

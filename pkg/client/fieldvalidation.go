@@ -20,88 +20,87 @@ import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// WithStrictFieldValidation wraps a Client and configures strict field
-// validation, by default, for all write requests from this client. Users
-// can override the field validation for individual requests.
-func WithStrictFieldValidation(c Client) Client {
+// WithFieldValidation wraps a Client and configures field validation, by
+// default, for all write requests from this client. Users can override field
+// validation for individual write requests.
+func WithFieldValidation(c Client, validation FieldValidation) Client {
 	return &clientWithFieldValidation{
-		validation: metav1.FieldValidationStrict,
-		c:          c,
+		validation: validation,
+		client:     c,
 		Reader:     c,
 	}
 }
 
 type clientWithFieldValidation struct {
-	validation string
-	c          Client
+	validation FieldValidation
+	client     Client
 	Reader
 }
 
-func (f *clientWithFieldValidation) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
-	return f.c.Create(ctx, obj, append([]CreateOption{FieldValidation(f.validation)}, opts...)...)
+func (c *clientWithFieldValidation) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
+	return c.client.Create(ctx, obj, append([]CreateOption{c.validation}, opts...)...)
 }
 
-func (f *clientWithFieldValidation) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
-	return f.c.Update(ctx, obj, append([]UpdateOption{FieldValidation(f.validation)}, opts...)...)
+func (c *clientWithFieldValidation) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
+	return c.client.Update(ctx, obj, append([]UpdateOption{c.validation}, opts...)...)
 }
 
-func (f *clientWithFieldValidation) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
-	return f.c.Patch(ctx, obj, patch, append([]PatchOption{FieldValidation(f.validation)}, opts...)...)
+func (c *clientWithFieldValidation) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
+	return c.client.Patch(ctx, obj, patch, append([]PatchOption{c.validation}, opts...)...)
 }
 
-func (f *clientWithFieldValidation) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
-	return f.c.Delete(ctx, obj, opts...)
+func (c *clientWithFieldValidation) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
+	return c.client.Delete(ctx, obj, opts...)
 }
 
-func (f *clientWithFieldValidation) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllOfOption) error {
-	return f.c.DeleteAllOf(ctx, obj, opts...)
+func (c *clientWithFieldValidation) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllOfOption) error {
+	return c.client.DeleteAllOf(ctx, obj, opts...)
 }
 
-func (f *clientWithFieldValidation) Scheme() *runtime.Scheme     { return f.c.Scheme() }
-func (f *clientWithFieldValidation) RESTMapper() meta.RESTMapper { return f.c.RESTMapper() }
-func (f *clientWithFieldValidation) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
-	return f.c.GroupVersionKindFor(obj)
+func (c *clientWithFieldValidation) Scheme() *runtime.Scheme     { return c.client.Scheme() }
+func (c *clientWithFieldValidation) RESTMapper() meta.RESTMapper { return c.client.RESTMapper() }
+func (c *clientWithFieldValidation) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
+	return c.client.GroupVersionKindFor(obj)
 }
 
-func (f *clientWithFieldValidation) IsObjectNamespaced(obj runtime.Object) (bool, error) {
-	return f.c.IsObjectNamespaced(obj)
+func (c *clientWithFieldValidation) IsObjectNamespaced(obj runtime.Object) (bool, error) {
+	return c.client.IsObjectNamespaced(obj)
 }
 
-func (f *clientWithFieldValidation) Status() StatusWriter {
+func (c *clientWithFieldValidation) Status() StatusWriter {
 	return &subresourceClientWithFieldValidation{
-		validation:        f.validation,
-		subresourceWriter: f.c.Status(),
+		validation:        c.validation,
+		subresourceWriter: c.client.Status(),
 	}
 }
 
-func (f *clientWithFieldValidation) SubResource(subresource string) SubResourceClient {
-	c := f.c.SubResource(subresource)
+func (c *clientWithFieldValidation) SubResource(subresource string) SubResourceClient {
+	srClient := c.client.SubResource(subresource)
 	return &subresourceClientWithFieldValidation{
-		validation:        f.validation,
-		subresourceWriter: c,
-		SubResourceReader: c,
+		validation:        c.validation,
+		subresourceWriter: srClient,
+		SubResourceReader: srClient,
 	}
 }
 
 type subresourceClientWithFieldValidation struct {
-	validation        string
+	validation        FieldValidation
 	subresourceWriter SubResourceWriter
 	SubResourceReader
 }
 
-func (f *subresourceClientWithFieldValidation) Create(ctx context.Context, obj Object, subresource Object, opts ...SubResourceCreateOption) error {
-	return f.subresourceWriter.Create(ctx, obj, subresource, append([]SubResourceCreateOption{FieldValidation(f.validation)}, opts...)...)
+func (c *subresourceClientWithFieldValidation) Create(ctx context.Context, obj Object, subresource Object, opts ...SubResourceCreateOption) error {
+	return c.subresourceWriter.Create(ctx, obj, subresource, append([]SubResourceCreateOption{c.validation}, opts...)...)
 }
 
-func (f *subresourceClientWithFieldValidation) Update(ctx context.Context, obj Object, opts ...SubResourceUpdateOption) error {
-	return f.subresourceWriter.Update(ctx, obj, append([]SubResourceUpdateOption{FieldValidation(f.validation)}, opts...)...)
+func (c *subresourceClientWithFieldValidation) Update(ctx context.Context, obj Object, opts ...SubResourceUpdateOption) error {
+	return c.subresourceWriter.Update(ctx, obj, append([]SubResourceUpdateOption{c.validation}, opts...)...)
 }
 
-func (f *subresourceClientWithFieldValidation) Patch(ctx context.Context, obj Object, patch Patch, opts ...SubResourcePatchOption) error {
-	return f.subresourceWriter.Patch(ctx, obj, patch, append([]SubResourcePatchOption{FieldValidation(f.validation)}, opts...)...)
+func (c *subresourceClientWithFieldValidation) Patch(ctx context.Context, obj Object, patch Patch, opts ...SubResourcePatchOption) error {
+	return c.subresourceWriter.Patch(ctx, obj, patch, append([]SubResourcePatchOption{c.validation}, opts...)...)
 }

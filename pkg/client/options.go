@@ -236,7 +236,6 @@ type CreateOptions struct {
 	// any unknown fields would be dropped from the object, or if any
 	// duplicate fields are present. The error returned from the server
 	// will contain all unknown and duplicate fields encountered.
-	// +optional
 	FieldValidation string
 
 	// Raw represents raw CreateOptions, as passed to the API server.
@@ -747,7 +746,6 @@ type UpdateOptions struct {
 	// any unknown fields would be dropped from the object, or if any
 	// duplicate fields are present. The error returned from the server
 	// will contain all unknown and duplicate fields encountered.
-	// +optional
 	FieldValidation string
 
 	// Raw represents raw UpdateOptions, as passed to the API server.
@@ -832,7 +830,6 @@ type PatchOptions struct {
 	// any unknown fields would be dropped from the object, or if any
 	// duplicate fields are present. The error returned from the server
 	// will contain all unknown and duplicate fields encountered.
-	// +optional
 	FieldValidation string
 
 	// Raw represents raw PatchOptions, as passed to the API server.

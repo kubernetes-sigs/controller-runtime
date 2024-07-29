@@ -17,11 +17,13 @@ limitations under the License.
 package client_test
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -224,6 +226,90 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 		err = clientset.CertificatesV1().CertificateSigningRequests().Delete(ctx, csr.Name, *delOptions)
 		Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
+	})
+
+	Describe("WarningHandler", func() {
+		It("should log warnings when warning suppression is disabled", func() {
+			cache := &fakeReader{}
+			cl, err := client.New(cfg, client.Options{
+				WarningHandler: client.WarningHandlerOptions{SuppressWarnings: false}, Cache: &client.CacheOptions{Reader: cache, DisableFor: []client.Object{&corev1.Namespace{}}},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ws-disabled"}}
+			tns, err = clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tns).NotTo(BeNil())
+			defer deleteNamespace(ctx, tns)
+
+			toCreate := &pkg.ChaosPod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example",
+					Namespace: tns.Name,
+				},
+				// The ChaosPod CRD does not define Status, so the field is unknown to the API server,
+				// but field validation is not strict by default, so the API server returns a warning,
+				// and we need a warning to check whether suppression works.
+				Status: pkg.ChaosPodStatus{},
+			}
+			err = cl.Create(ctx, toCreate)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			scanner := bufio.NewScanner(&log)
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.Contains(
+					line,
+					"unknown field \"status\"",
+				) {
+					return
+				}
+			}
+			defer Fail("expected to find one API server warning in the client log")
+		})
+
+		It("should not log warnings when warning suppression is enabled", func() {
+			cache := &fakeReader{}
+			cl, err := client.New(cfg, client.Options{
+				WarningHandler: client.WarningHandlerOptions{SuppressWarnings: true}, Cache: &client.CacheOptions{Reader: cache, DisableFor: []client.Object{&corev1.Namespace{}}},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ws-enabled"}}
+			tns, err = clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tns).NotTo(BeNil())
+
+			toCreate := &pkg.ChaosPod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example",
+					Namespace: tns.Name,
+				},
+				// The ChaosPod CRD does not define Status, so the field is unknown to the API server,
+				// but field validation is not strict by default, so the API server returns a warning,
+				// and we need a warning to check whether suppression works.
+				Status: pkg.ChaosPodStatus{},
+			}
+			err = cl.Create(ctx, toCreate)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+
+			scanner := bufio.NewScanner(&log)
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.Contains(
+					line,
+					"unknown field \"status\"",
+				) {
+					defer Fail("expected to find zero API server warnings in the client log")
+					break
+				}
+			}
+			deleteNamespace(ctx, tns)
+		})
 	})
 
 	Describe("New", func() {

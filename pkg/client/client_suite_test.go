@@ -17,6 +17,8 @@ limitations under the License.
 package client_test
 
 import (
+	"bytes"
+	"io"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -24,6 +26,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/examples/crd/pkg"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
@@ -36,12 +39,24 @@ func TestClient(t *testing.T) {
 	RunSpecs(t, "Client Suite")
 }
 
-var testenv *envtest.Environment
-var cfg *rest.Config
-var clientset *kubernetes.Clientset
+var (
+	testenv   *envtest.Environment
+	cfg       *rest.Config
+	clientset *kubernetes.Clientset
+
+	// Used by tests to inspect controller and client log messages.
+	log bytes.Buffer
+)
 
 var _ = BeforeSuite(func() {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+	// Forwards logs to ginkgo output, and allows tests to inspect logs.
+	mw := io.MultiWriter(&log, GinkgoWriter)
+
+	// Use prefixes to help us tell the source of the log message.
+	// controller-runtime uses logf
+	logf.SetLogger(zap.New(zap.WriteTo(mw), zap.UseDevMode(true)).WithName("logf"))
+	// client-go logs uses klog
+	klog.SetLogger(zap.New(zap.WriteTo(mw), zap.UseDevMode(true)).WithName("klog"))
 
 	testenv = &envtest.Environment{CRDDirectoryPaths: []string{"./testdata"}}
 

@@ -41,7 +41,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	for _, file := range []string{certPath, keyPath} {
+	for _, file := range []string{certPath, keyPath, certPath + ".new", keyPath + ".new", certPath + ".old", keyPath + ".old"} {
 		_ = os.Remove(file)
 	}
 })

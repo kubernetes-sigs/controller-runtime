@@ -121,6 +121,36 @@ var _ = Describe("CertWatcher", func() {
 			Expect(called.Load()).To(BeNumerically(">=", 1))
 		})
 
+		It("should reload currentCert when changed with rename", func() {
+			doneCh := startWatcher()
+			called := atomic.Int64{}
+			watcher.RegisterCallback(func(crt tls.Certificate) {
+				called.Add(1)
+				Expect(crt.Certificate).ToNot(BeEmpty())
+			})
+
+			firstcert, _ := watcher.GetCertificate(nil)
+
+			err := writeCerts(certPath+".new", keyPath+".new", "192.168.0.2")
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(os.Link(certPath, certPath+".old")).To(Succeed())
+			Expect(os.Rename(certPath+".new", certPath)).To(Succeed())
+
+			Expect(os.Link(keyPath, keyPath+".old")).To(Succeed())
+			Expect(os.Rename(keyPath+".new", keyPath)).To(Succeed())
+
+			Eventually(func() bool {
+				secondcert, _ := watcher.GetCertificate(nil)
+				first := firstcert.PrivateKey.(*rsa.PrivateKey)
+				return first.Equal(secondcert.PrivateKey)
+			}).ShouldNot(BeTrue())
+
+			ctxCancel()
+			Eventually(doneCh, "4s").Should(BeClosed())
+			Expect(called.Load()).To(BeNumerically(">=", 1))
+		})
+
 		Context("prometheus metric read_certificate_total", func() {
 			var readCertificateTotalBefore float64
 			var readCertificateErrorsBefore float64

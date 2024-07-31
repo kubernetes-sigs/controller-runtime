@@ -53,8 +53,8 @@ type Source = TypedSource[reconcile.Request]
 //
 // Users may build their own Source implementations.
 type TypedSource[request comparable] interface {
-	// Start is internal and should be called only by the Controller to register an EventHandler with the Informer
-	// to enqueue reconcile.Requests.
+	// Start is internal and should be called only by the Controller to start the source.
+	// Start must be non-blocking.
 	Start(context.Context, workqueue.TypedRateLimitingInterface[request]) error
 }
 

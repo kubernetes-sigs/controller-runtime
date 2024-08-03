@@ -1165,6 +1165,23 @@ var _ = Describe("manger.Manager", func() {
 					cm.onStoppedLeading = func() {}
 				},
 			)
+
+			It("should return an error if leader election param incorrect", func() {
+				renewDeadline := time.Second * 20
+				m, err := New(cfg, Options{
+					LeaderElection:          true,
+					LeaderElectionID:        "controller-runtime",
+					LeaderElectionNamespace: "default",
+					newResourceLock:         fakeleaderelection.NewResourceLock,
+					RenewDeadline:           &renewDeadline,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+				defer cancel()
+				err = m.Start(ctx)
+				Expect(err).To(HaveOccurred())
+				Expect(errors.Is(err, context.DeadlineExceeded)).NotTo(BeTrue())
+			})
 		})
 
 		Context("should start serving metrics", func() {

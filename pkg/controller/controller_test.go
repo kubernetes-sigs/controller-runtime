@@ -60,6 +60,20 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err.Error()).To(ContainSubstring("must specify Reconciler"))
 		})
 
+		It("should return an error if two controllers are registered with the same name", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c1, err := controller.New("c3", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c1).ToNot(BeNil())
+
+			c2, err := controller.New("c3", m, controller.Options{Reconciler: rec})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("controller with name c3 already exists"))
+			Expect(c2).To(BeNil())
+		})
+
 		It("should not return an error if two controllers are registered with different names", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
@@ -99,7 +113,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{Reconciler: rec})
+			c, err := controller.New("new-controller-0", m, controller.Options{Reconciler: rec})
 			Expect(c.Watch(watch)).To(Succeed())
 			Expect(err).NotTo(HaveOccurred())
 
@@ -125,7 +139,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = controller.New("new-controller", m, controller.Options{Reconciler: rec})
+			_, err = controller.New("new-controller-1", m, controller.Options{Reconciler: rec})
 			Expect(err).NotTo(HaveOccurred())
 
 			// force-close keep-alive connections.  These'll time anyway (after
@@ -138,7 +152,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-2", m, controller.Options{
 				Reconciler: reconcile.Func(nil),
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -161,7 +175,7 @@ var _ = Describe("controller.Controller", func() {
 				return nil
 			}
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-3", m, controller.Options{
 				Reconciler:  reconcile.Func(nil),
 				RateLimiter: customRateLimiter,
 				NewQueue:    customNewQueue,
@@ -180,7 +194,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{RecoverPanic: ptr.To(true)}})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-4", m, controller.Options{
 				Reconciler: reconcile.Func(nil),
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -213,7 +227,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: ptr.To(true)}})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-5", m, controller.Options{
 				Reconciler: reconcile.Func(nil),
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -228,7 +242,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: ptr.To(true)}})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-6", m, controller.Options{
 				NeedLeaderElection: ptr.To(false),
 				Reconciler:         reconcile.Func(nil),
 			})
@@ -244,7 +258,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{MaxConcurrentReconciles: 5}})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-7", m, controller.Options{
 				Reconciler: reconcile.Func(nil),
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -259,7 +273,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-8", m, controller.Options{
 				Reconciler: reconcile.Func(nil),
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -274,7 +288,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-9", m, controller.Options{
 				Reconciler:              reconcile.Func(nil),
 				MaxConcurrentReconciles: 5,
 			})
@@ -290,7 +304,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{CacheSyncTimeout: 5}})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-10", m, controller.Options{
 				Reconciler: reconcile.Func(nil),
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -305,7 +319,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-11", m, controller.Options{
 				Reconciler: reconcile.Func(nil),
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -320,7 +334,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-12", m, controller.Options{
 				Reconciler:       reconcile.Func(nil),
 				CacheSyncTimeout: 5,
 			})
@@ -336,7 +350,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-13", m, controller.Options{
 				Reconciler: rec,
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -351,7 +365,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-14", m, controller.Options{
 				NeedLeaderElection: ptr.To(false),
 				Reconciler:         rec,
 			})
@@ -367,7 +381,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{
+			c, err := controller.New("new-controller-15", m, controller.Options{
 				Reconciler: rec,
 			})
 			Expect(err).NotTo(HaveOccurred())

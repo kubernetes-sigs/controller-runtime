@@ -100,11 +100,15 @@ type TypedController[request comparable] interface {
 
 // New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have
 // been synced before the Controller is Started.
+//
+// The name must be unique as it is used to identify the controller in metrics and logs.
 func New(name string, mgr manager.Manager, options Options) (Controller, error) {
 	return NewTyped(name, mgr, options)
 }
 
 // NewTyped returns a new typed controller registered with the Manager,
+//
+// The name must be unique as it is used to identify the controller in metrics and logs.
 func NewTyped[request comparable](name string, mgr manager.Manager, options TypedOptions[request]) (TypedController[request], error) {
 	c, err := NewTypedUnmanaged(name, mgr, options)
 	if err != nil {
@@ -117,11 +121,15 @@ func NewTyped[request comparable](name string, mgr manager.Manager, options Type
 
 // NewUnmanaged returns a new controller without adding it to the manager. The
 // caller is responsible for starting the returned controller.
+//
+// The name must be unique as it is used to identify the controller in metrics and logs.
 func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller, error) {
 	return NewTypedUnmanaged(name, mgr, options)
 }
 
 // NewTypedUnmanaged returns a new typed controller without adding it to the manager.
+//
+// The name must be unique as it is used to identify the controller in metrics and logs.
 func NewTypedUnmanaged[request comparable](name string, mgr manager.Manager, options TypedOptions[request]) (TypedController[request], error) {
 	if options.Reconciler == nil {
 		return nil, fmt.Errorf("must specify Reconciler")
@@ -129,6 +137,10 @@ func NewTypedUnmanaged[request comparable](name string, mgr manager.Manager, opt
 
 	if len(name) == 0 {
 		return nil, fmt.Errorf("must specify Name for Controller")
+	}
+
+	if err := checkName(name); err != nil {
+		return nil, err
 	}
 
 	if options.LogConstructor == nil {

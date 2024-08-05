@@ -142,7 +142,7 @@ var _ = Describe("application", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
-				Named("my_controller").
+				Named("my_new_controller").
 				Build(noop)
 			Expect(err).To(MatchError(ContainSubstring("there are no watches configured, controller will never get triggered. Use For(), Owns(), Watches() or WatchesRawSource() to set them up")))
 			Expect(instance).To(BeNil())
@@ -154,7 +154,7 @@ var _ = Describe("application", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
-				Named("my_controller").
+				Named("my_other_controller").
 				Watches(&appsv1.ReplicaSet{}, &handler.EnqueueRequestForObject{}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
@@ -186,6 +186,7 @@ var _ = Describe("application", func() {
 
 			instance, err := TypedControllerManagedBy[empty](m).
 				For(&appsv1.ReplicaSet{}).
+				Named("last_controller").
 				Build(typedNoop)
 			Expect(err).To(MatchError(ContainSubstring("For() can only be used with reconcile.Request, got builder.empty")))
 			Expect(instance).To(BeNil())
@@ -197,7 +198,7 @@ var _ = Describe("application", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := TypedControllerManagedBy[empty](m).
-				Named("my_controller").
+				Named("my_controller-0").
 				Owns(&appsv1.ReplicaSet{}).
 				Build(typedNoop)
 				// If we ever allow Owns() without For() we need to update the code to error
@@ -213,7 +214,7 @@ var _ = Describe("application", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := TypedControllerManagedBy[empty](m).
-				Named("my_controller").
+				Named("my_controller-1").
 				WatchesRawSource(
 					source.TypedKind(
 						m.GetCache(),
@@ -263,6 +264,7 @@ var _ = Describe("application", func() {
 
 			builder := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
+				Named("replicaset-4").
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles})
 			builder.newController = newController
@@ -294,6 +296,7 @@ var _ = Describe("application", func() {
 
 			builder := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
+				Named("replicaset-3").
 				Owns(&appsv1.ReplicaSet{})
 			builder.newController = newController
 
@@ -317,6 +320,7 @@ var _ = Describe("application", func() {
 
 			builder := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
+				Named("replicaset-2").
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{RateLimiter: rateLimiter})
 			builder.newController = newController
@@ -341,6 +345,7 @@ var _ = Describe("application", func() {
 
 			builder := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
+				Named("replicaset-0").
 				Owns(&appsv1.ReplicaSet{}).
 				WithLogConstructor(func(request *reconcile.Request) logr.Logger {
 					return logr.New(logger)
@@ -358,6 +363,7 @@ var _ = Describe("application", func() {
 
 			builder := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
+				Named("replicaset-1").
 				Owns(&appsv1.ReplicaSet{}).
 				WithOptions(controller.Options{Reconciler: noop})
 			instance, err := builder.Build(noop)
@@ -387,6 +393,7 @@ var _ = Describe("application", func() {
 			By("creating the 2nd controller")
 			ctrl2, err := ControllerManagedBy(m).
 				For(&TestDefaultValidator{}).
+				Named("test-default-validator-1").
 				Owns(&appsv1.ReplicaSet{}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
@@ -401,6 +408,7 @@ var _ = Describe("application", func() {
 
 			bldr := ControllerManagedBy(m).
 				For(&appsv1.Deployment{}).
+				Named("deployment-0").
 				Owns(&appsv1.ReplicaSet{})
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -414,6 +422,7 @@ var _ = Describe("application", func() {
 
 			bldr := ControllerManagedBy(m).
 				For(&appsv1.Deployment{}).
+				Named("deployment-1").
 				Owns(&appsv1.ReplicaSet{}, MatchEveryOwner)
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -443,6 +452,7 @@ var _ = Describe("application", func() {
 
 			bldr := ControllerManagedBy(m).
 				Named("Deployment").
+				Named("deployment-2").
 				Watches( // Equivalent of For
 						&appsv1.Deployment{}, &handler.EnqueueRequestForObject{}).
 				Watches( // Equivalent of Owns
@@ -503,6 +513,7 @@ var _ = Describe("application", func() {
 
 			bldr := ControllerManagedBy(m).
 				For(&appsv1.Deployment{}, WithPredicates(deployPrct)).
+				Named("deployment-3").
 				Owns(&appsv1.ReplicaSet{}, WithPredicates(replicaSetPrct)).
 				WithEventFilter(allPrct)
 
@@ -527,8 +538,8 @@ var _ = Describe("application", func() {
 		})
 
 		It("should support multiple controllers watching the same metadata kind", func() {
-			bldr1 := ControllerManagedBy(mgr).For(&appsv1.Deployment{}, OnlyMetadata)
-			bldr2 := ControllerManagedBy(mgr).For(&appsv1.Deployment{}, OnlyMetadata)
+			bldr1 := ControllerManagedBy(mgr).For(&appsv1.Deployment{}, OnlyMetadata).Named("deployment-4")
+			bldr2 := ControllerManagedBy(mgr).For(&appsv1.Deployment{}, OnlyMetadata).Named("deployment-5")
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -541,6 +552,7 @@ var _ = Describe("application", func() {
 
 			bldr := ControllerManagedBy(mgr).
 				For(&appsv1.Deployment{}, OnlyMetadata).
+				Named("deployment-6").
 				Owns(&appsv1.ReplicaSet{}, OnlyMetadata).
 				Watches(&appsv1.StatefulSet{},
 					handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {

@@ -249,6 +249,8 @@ func (blder *TypedBuilder[request]) WithLogConstructor(logConstructor func(*requ
 // (underscores and alphanumeric characters only).
 //
 // By default, controllers are named using the lowercase version of their kind.
+//
+// The name must be unique as it is used to identify the controller in metrics and logs.
 func (blder *TypedBuilder[request]) Named(name string) *TypedBuilder[request] {
 	blder.name = name
 	return blder

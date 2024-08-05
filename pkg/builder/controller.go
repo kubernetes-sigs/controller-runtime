@@ -37,9 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-// Supporting mocking out functions for testing.
-var getGvk = apiutil.GVKForObject
-
 // project represents other forms that we can use to
 // send/receive a given resource (metadata-only, unstructured, etc).
 type objectProjection int
@@ -90,8 +87,9 @@ type ForInput struct {
 
 // For defines the type of Object being *reconciled*, and configures the ControllerManagedBy to respond to create / delete /
 // update events by *reconciling the object*.
+//
 // This is the equivalent of calling
-// Watches(&source.Kind{Type: apiType}, &handler.EnqueueRequestForObject{}).
+// Watches(source.Kind(cache, &Type{}, &handler.EnqueueRequestForObject{})).
 func (blder *TypedBuilder[request]) For(object client.Object, opts ...ForOption) *TypedBuilder[request] {
 	if blder.forInput.object != nil {
 		blder.forInput.err = fmt.Errorf("For(...) should only be called once, could not assign multiple objects for reconciliation")
@@ -121,7 +119,7 @@ type OwnsInput struct {
 // Use Owns(object, builder.MatchEveryOwner) to reconcile all owners.
 //
 // By default, this is the equivalent of calling
-// Watches(object, handler.EnqueueRequestForOwner([...], ownerType, OnlyControllerOwner())).
+// Watches(source.Kind(cache, &Type{}, handler.EnqueueRequestForOwner([...], &OwnerType{}, OnlyControllerOwner()))).
 func (blder *TypedBuilder[request]) Owns(object client.Object, opts ...OwnsOption) *TypedBuilder[request] {
 	input := OwnsInput{object: object}
 	for _, opt := range opts {
@@ -213,12 +211,10 @@ func (blder *TypedBuilder[request]) WatchesMetadata(
 }
 
 // WatchesRawSource exposes the lower-level ControllerManagedBy Watches functions through the builder.
-// Specified predicates are registered only for given source.
-//
-// STOP! Consider using For(...), Owns(...), Watches(...), WatchesMetadata(...) instead.
-// This method is only exposed for more advanced use cases, most users should use one of the higher level functions.
 //
 // WatchesRawSource does not respect predicates configured through WithEventFilter.
+//
+// WatchesRawSource makes it possible to use typed handlers and predicates with `source.Kind` as well as custom source implementations.
 func (blder *TypedBuilder[request]) WatchesRawSource(src source.TypedSource[request]) *TypedBuilder[request] {
 	blder.rawSources = append(blder.rawSources, src)
 
@@ -227,7 +223,9 @@ func (blder *TypedBuilder[request]) WatchesRawSource(src source.TypedSource[requ
 
 // WithEventFilter sets the event filters, to filter which create/update/delete/generic events eventually
 // trigger reconciliations. For example, filtering on whether the resource version has changed.
-// Given predicate is added for all watched objects.
+// Given predicate is added for all watched objects and thus must be able to deal with the type
+// of all watched objects.
+//
 // Defaults to the empty list.
 func (blder *TypedBuilder[request]) WithEventFilter(p predicate.Predicate) *TypedBuilder[request] {
 	blder.globalPredicates = append(blder.globalPredicates, p)
@@ -293,7 +291,7 @@ func (blder *TypedBuilder[request]) project(obj client.Object, proj objectProjec
 		return obj, nil
 	case projectAsMetadata:
 		metaObj := &metav1.PartialObjectMetadata{}
-		gvk, err := getGvk(obj, blder.mgr.GetScheme())
+		gvk, err := apiutil.GVKForObject(obj, blder.mgr.GetScheme())
 		if err != nil {
 			return nil, fmt.Errorf("unable to determine GVK of %T for a metadata-only watch: %w", obj, err)
 		}
@@ -365,7 +363,7 @@ func (blder *TypedBuilder[request]) doWatch() error {
 		}
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)
-		if err := blder.ctrl.Watch(source.TypedKind[client.Object, request](blder.mgr.GetCache(), projected, w.handler, allPredicates...)); err != nil {
+		if err := blder.ctrl.Watch(source.TypedKind(blder.mgr.GetCache(), projected, w.handler, allPredicates...)); err != nil {
 			return err
 		}
 	}
@@ -404,7 +402,7 @@ func (blder *TypedBuilder[request]) doController(r reconcile.TypedReconciler[req
 	hasGVK := blder.forInput.object != nil
 	if hasGVK {
 		var err error
-		gvk, err = getGvk(blder.forInput.object, blder.mgr.GetScheme())
+		gvk, err = apiutil.GVKForObject(blder.forInput.object, blder.mgr.GetScheme())
 		if err != nil {
 			return err
 		}

@@ -33,7 +33,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/utils/ptr"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -161,7 +160,7 @@ func runTests(admissionReviewVersion string) {
 
 		err = WebhookManagedBy(m).
 			For(&TestDefaulter{Panic: true}).
-			RecoverPanic(nil). // Defaults to true.
+			// RecoverPanic defaults to true.
 			Complete()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 		svr := m.GetWebhookServer()
@@ -370,7 +369,7 @@ func runTests(admissionReviewVersion string) {
 
 		err = WebhookManagedBy(m).
 			For(&TestValidator{Panic: true}).
-			RecoverPanic(ptr.To[bool](true)).
+			RecoverPanic(true).
 			Complete()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 		svr := m.GetWebhookServer()

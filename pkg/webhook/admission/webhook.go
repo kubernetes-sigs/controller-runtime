@@ -144,8 +144,8 @@ type Webhook struct {
 
 // WithRecoverPanic takes a bool flag which indicates whether the panic caused by webhook should be recovered.
 // Defaults to true.
-func (wh *Webhook) WithRecoverPanic(recoverPanic *bool) *Webhook {
-	wh.RecoverPanic = recoverPanic
+func (wh *Webhook) WithRecoverPanic(recoverPanic bool) *Webhook {
+	wh.RecoverPanic = &recoverPanic
 	return wh
 }
 

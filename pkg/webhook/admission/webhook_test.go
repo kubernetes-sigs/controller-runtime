@@ -30,6 +30,7 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	machinerytypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -199,7 +200,7 @@ var _ = Describe("Admission Webhooks", func() {
 	})
 
 	Describe("panic recovery", func() {
-		It("should recover panic if RecoverPanic is true", func() {
+		It("should recover panic if RecoverPanic is true by default", func() {
 			panicHandler := func() *Webhook {
 				handler := &fakeHandler{
 					fn: func(ctx context.Context, req Request) Response {
@@ -207,8 +208,8 @@ var _ = Describe("Admission Webhooks", func() {
 					},
 				}
 				webhook := &Webhook{
-					Handler:      handler,
-					RecoverPanic: true,
+					Handler: handler,
+					// RecoverPanic defaults to true.
 				}
 
 				return webhook
@@ -226,7 +227,7 @@ var _ = Describe("Admission Webhooks", func() {
 			Expect(resp.Result.Message).To(Equal("panic: fake panic test [recovered]"))
 		})
 
-		It("should not recover panic if RecoverPanic is false by default", func() {
+		It("should recover panic if RecoverPanic is true", func() {
 			panicHandler := func() *Webhook {
 				handler := &fakeHandler{
 					fn: func(ctx context.Context, req Request) Response {
@@ -234,7 +235,35 @@ var _ = Describe("Admission Webhooks", func() {
 					},
 				}
 				webhook := &Webhook{
-					Handler: handler,
+					Handler:      handler,
+					RecoverPanic: ptr.To[bool](true),
+				}
+
+				return webhook
+			}
+
+			By("setting up a webhook with a panicking handler")
+			webhook := panicHandler()
+
+			By("invoking the webhook")
+			resp := webhook.Handle(context.Background(), Request{})
+
+			By("checking that it errored the request")
+			Expect(resp.Allowed).To(BeFalse())
+			Expect(resp.Result.Code).To(Equal(int32(http.StatusInternalServerError)))
+			Expect(resp.Result.Message).To(Equal("panic: fake panic test [recovered]"))
+		})
+
+		It("should not recover panic if RecoverPanic is false", func() {
+			panicHandler := func() *Webhook {
+				handler := &fakeHandler{
+					fn: func(ctx context.Context, req Request) Response {
+						panic("fake panic test")
+					},
+				}
+				webhook := &Webhook{
+					Handler:      handler,
+					RecoverPanic: ptr.To[bool](false),
 				}
 
 				return webhook

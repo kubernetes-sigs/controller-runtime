@@ -87,6 +87,7 @@ type Controller[request comparable] struct {
 	LogConstructor func(request *request) logr.Logger
 
 	// RecoverPanic indicates whether the panic caused by reconcile should be recovered.
+	// Defaults to true.
 	RecoverPanic *bool
 
 	// LeaderElected indicates whether the controller is leader elected or always running.
@@ -97,7 +98,9 @@ type Controller[request comparable] struct {
 func (c *Controller[request]) Reconcile(ctx context.Context, req request) (_ reconcile.Result, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			if c.RecoverPanic != nil && *c.RecoverPanic {
+			ctrlmetrics.ReconcilePanics.WithLabelValues(c.Name).Inc()
+
+			if c.RecoverPanic == nil || *c.RecoverPanic {
 				for _, fn := range utilruntime.PanicHandlers {
 					fn(ctx, r)
 				}
@@ -269,13 +272,15 @@ const (
 )
 
 func (c *Controller[request]) initMetrics() {
-	ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Set(0)
-	ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Add(0)
 	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelError).Add(0)
 	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeueAfter).Add(0)
 	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeue).Add(0)
 	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelSuccess).Add(0)
+	ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Add(0)
+	ctrlmetrics.TerminalReconcileErrors.WithLabelValues(c.Name).Add(0)
+	ctrlmetrics.ReconcilePanics.WithLabelValues(c.Name).Add(0)
 	ctrlmetrics.WorkerCount.WithLabelValues(c.Name).Set(float64(c.MaxConcurrentReconciles))
+	ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Set(0)
 }
 
 func (c *Controller[request]) reconcileHandler(ctx context.Context, req request) {

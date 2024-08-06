@@ -41,6 +41,7 @@ type Controller struct {
 
 	// RecoverPanic indicates whether the panic caused by reconcile should be recovered.
 	// Defaults to the Controller.RecoverPanic setting from the Manager if unset.
+	// Defaults to true if Controller.RecoverPanic setting from the Manager is also unset.
 	RecoverPanic *bool
 
 	// NeedLeaderElection indicates whether the controller needs to use leader election.

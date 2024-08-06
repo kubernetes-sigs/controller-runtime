@@ -160,7 +160,7 @@ func runTests(admissionReviewVersion string) {
 
 		err = WebhookManagedBy(m).
 			For(&TestDefaulter{Panic: true}).
-			RecoverPanic().
+			// RecoverPanic defaults to true.
 			Complete()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 		svr := m.GetWebhookServer()
@@ -369,7 +369,7 @@ func runTests(admissionReviewVersion string) {
 
 		err = WebhookManagedBy(m).
 			For(&TestValidator{Panic: true}).
-			RecoverPanic().
+			RecoverPanic(true).
 			Complete()
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 		svr := m.GetWebhookServer()

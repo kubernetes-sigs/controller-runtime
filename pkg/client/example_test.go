@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
+	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -42,6 +43,26 @@ var (
 
 func ExampleNew() {
 	cl, err := client.New(config.GetConfigOrDie(), client.Options{})
+	if err != nil {
+		fmt.Println("failed to create client")
+		os.Exit(1)
+	}
+
+	podList := &corev1.PodList{}
+
+	err = cl.List(context.Background(), podList, client.InNamespace("default"))
+	if err != nil {
+		fmt.Printf("failed to list pods in namespace default: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func ExampleNew_suppress_warnings() {
+	cfg := config.GetConfigOrDie()
+	// Use a rest.WarningHandler that discards warning messages.
+	cfg.WarningHandler = rest.NoWarnings{}
+
+	cl, err := client.New(cfg, client.Options{})
 	if err != nil {
 		fmt.Println("failed to create client")
 		os.Exit(1)

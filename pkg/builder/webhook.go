@@ -42,7 +42,7 @@ type WebhookBuilder struct {
 	gvk             schema.GroupVersionKind
 	mgr             manager.Manager
 	config          *rest.Config
-	recoverPanic    bool
+	recoverPanic    *bool
 	logConstructor  func(base logr.Logger, req *admission.Request) logr.Logger
 	err             error
 }
@@ -84,8 +84,9 @@ func (blder *WebhookBuilder) WithLogConstructor(logConstructor func(base logr.Lo
 }
 
 // RecoverPanic indicates whether panics caused by the webhook should be recovered.
-func (blder *WebhookBuilder) RecoverPanic() *WebhookBuilder {
-	blder.recoverPanic = true
+// Defaults to true.
+func (blder *WebhookBuilder) RecoverPanic(recoverPanic *bool) *WebhookBuilder {
+	blder.recoverPanic = recoverPanic
 	return blder
 }
 

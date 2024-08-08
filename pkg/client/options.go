@@ -254,6 +254,7 @@ func (o *CreateOptions) AsCreateOptions() *metav1.CreateOptions {
 
 	o.Raw.DryRun = o.DryRun
 	o.Raw.FieldManager = o.FieldManager
+	o.Raw.FieldValidation = o.FieldValidation
 	return o.Raw
 }
 
@@ -273,6 +274,9 @@ func (o *CreateOptions) ApplyToCreate(co *CreateOptions) {
 	}
 	if o.FieldManager != "" {
 		co.FieldManager = o.FieldManager
+	}
+	if o.FieldValidation != "" {
+		co.FieldValidation = o.FieldValidation
 	}
 	if o.Raw != nil {
 		co.Raw = o.Raw
@@ -764,6 +768,7 @@ func (o *UpdateOptions) AsUpdateOptions() *metav1.UpdateOptions {
 
 	o.Raw.DryRun = o.DryRun
 	o.Raw.FieldManager = o.FieldManager
+	o.Raw.FieldValidation = o.FieldValidation
 	return o.Raw
 }
 
@@ -785,6 +790,9 @@ func (o *UpdateOptions) ApplyToUpdate(uo *UpdateOptions) {
 	}
 	if o.FieldManager != "" {
 		uo.FieldManager = o.FieldManager
+	}
+	if o.FieldValidation != "" {
+		uo.FieldValidation = o.FieldValidation
 	}
 	if o.Raw != nil {
 		uo.Raw = o.Raw
@@ -858,6 +866,7 @@ func (o *PatchOptions) AsPatchOptions() *metav1.PatchOptions {
 	o.Raw.DryRun = o.DryRun
 	o.Raw.Force = o.Force
 	o.Raw.FieldManager = o.FieldManager
+	o.Raw.FieldValidation = o.FieldValidation
 	return o.Raw
 }
 
@@ -873,6 +882,9 @@ func (o *PatchOptions) ApplyToPatch(po *PatchOptions) {
 	}
 	if o.FieldManager != "" {
 		po.FieldManager = o.FieldManager
+	}
+	if o.FieldValidation != "" {
+		po.FieldValidation = o.FieldValidation
 	}
 	if o.Raw != nil {
 		po.Raw = o.Raw

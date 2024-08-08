@@ -20,12 +20,79 @@ import (
 	"context"
 	"testing"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
+
+var _ = Describe("ClientWithFieldValidation", func() {
+	It("should return errors for invalid fields when using strict validation", func() {
+		cl, err := client.New(cfg, client.Options{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cl).NotTo(BeNil())
+
+		wrappedClient := client.WithFieldValidation(cl, metav1.FieldValidationStrict)
+		ctx := context.Background()
+
+		baseNode := &unstructured.Unstructured{}
+		baseNode.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "",
+			Kind:    "Node",
+			Version: "v1",
+		})
+		baseNode.SetName("client-with-field-validation-test-node")
+
+		validNode := baseNode.DeepCopy()
+		patch := client.MergeFrom(validNode.DeepCopy())
+
+		invalidNode := baseNode.DeepCopy()
+		Expect(unstructured.SetNestedField(invalidNode.Object, "value", "spec", "invalidField")).To(Succeed())
+
+		invalidStatusNode := baseNode.DeepCopy()
+		Expect(unstructured.SetNestedField(invalidStatusNode.Object, "value", "status", "invalidStatusField")).To(Succeed())
+
+		err = wrappedClient.Create(ctx, invalidNode)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("strict decoding error: unknown field \"spec.invalidField\""))
+
+		err = wrappedClient.Create(ctx, validNode)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = wrappedClient.Update(ctx, invalidNode)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("strict decoding error: unknown field \"spec.invalidField\""))
+
+		err = wrappedClient.Patch(ctx, invalidNode, patch)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("strict decoding error: unknown field \"spec.invalidField\""))
+
+		// Status.Create is not supported on Nodes
+
+		err = wrappedClient.Status().Update(ctx, invalidStatusNode)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("strict decoding error: unknown field \"status.invalidStatusField\""))
+
+		err = wrappedClient.Status().Patch(ctx, invalidStatusNode, patch)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("strict decoding error: unknown field \"status.invalidStatusField\""))
+
+		// Status.Create is not supported on Nodes
+
+		err = wrappedClient.SubResource("status").Update(ctx, invalidStatusNode)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("strict decoding error: unknown field \"status.invalidStatusField\""))
+
+		err = wrappedClient.SubResource("status").Patch(ctx, invalidStatusNode, patch)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("strict decoding error: unknown field \"status.invalidStatusField\""))
+	})
+})
 
 func TestWithStrictFieldValidation(t *testing.T) {
 	calls := 0
@@ -88,6 +155,16 @@ func testFieldValidationClient(t *testing.T, expectedFieldValidation string, cal
 			if got := out.FieldValidation; expectedFieldValidation != got {
 				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
 			}
+
+			if got := out.AsCreateOptions().FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
+
+			co := &client.CreateOptions{}
+			out.ApplyToCreate(co)
+			if got := co.FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
 			return nil
 		},
 		Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
@@ -97,6 +174,16 @@ func testFieldValidationClient(t *testing.T, expectedFieldValidation string, cal
 				f.ApplyToUpdate(out)
 			}
 			if got := out.FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
+
+			if got := out.AsUpdateOptions().FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
+
+			co := &client.UpdateOptions{}
+			out.ApplyToUpdate(co)
+			if got := co.FieldValidation; expectedFieldValidation != got {
 				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
 			}
 			return nil
@@ -110,6 +197,16 @@ func testFieldValidationClient(t *testing.T, expectedFieldValidation string, cal
 			if got := out.FieldValidation; expectedFieldValidation != got {
 				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
 			}
+
+			if got := out.AsPatchOptions().FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
+
+			co := &client.PatchOptions{}
+			out.ApplyToPatch(co)
+			if got := co.FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
 			return nil
 		},
 		SubResourceCreate: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, subResource client.Object, opts ...client.SubResourceCreateOption) error {
@@ -119,6 +216,16 @@ func testFieldValidationClient(t *testing.T, expectedFieldValidation string, cal
 				f.ApplyToSubResourceCreate(out)
 			}
 			if got := out.FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
+
+			if got := out.AsCreateOptions().FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
+
+			co := &client.CreateOptions{}
+			out.ApplyToCreate(co)
+			if got := co.FieldValidation; expectedFieldValidation != got {
 				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
 			}
 			return nil
@@ -132,6 +239,16 @@ func testFieldValidationClient(t *testing.T, expectedFieldValidation string, cal
 			if got := out.FieldValidation; expectedFieldValidation != got {
 				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
 			}
+
+			if got := out.AsUpdateOptions().FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
+
+			co := &client.UpdateOptions{}
+			out.ApplyToUpdate(co)
+			if got := co.FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
 			return nil
 		},
 		SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
@@ -141,6 +258,16 @@ func testFieldValidationClient(t *testing.T, expectedFieldValidation string, cal
 				f.ApplyToSubResourcePatch(out)
 			}
 			if got := out.FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
+
+			if got := out.AsPatchOptions().FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
+
+			co := &client.PatchOptions{}
+			out.ApplyToPatch(co)
+			if got := co.FieldValidation; expectedFieldValidation != got {
 				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
 			}
 			return nil

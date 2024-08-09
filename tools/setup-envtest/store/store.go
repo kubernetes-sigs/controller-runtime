@@ -38,7 +38,7 @@ func (i Item) String() string {
 }
 
 // Filter is a version spec & platform selector (i.e. platform
-// potentially with wilcards) to filter store items.
+// potentially with wildcards) to filter store items.
 type Filter struct {
 	Version  versions.Spec
 	Platform versions.Platform

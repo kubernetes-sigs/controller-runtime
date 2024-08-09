@@ -125,36 +125,6 @@ var _ = Describe("Store", func() {
 		})
 	})
 
-	Describe("adding items (GCS archives)", func() {
-		archiveName := "kubebuilder-tools-1.16.3-linux-amd64.tar.gz"
-
-		It("should support .tar.gz input", func() {
-			Expect(st.Add(logCtx(), newItem, makeFakeArchive(archiveName, "kubebuilder/bin/"))).To(Succeed())
-			Expect(st.Has(newItem)).To(BeTrue(), "should have the item after adding it")
-		})
-
-		It("should extract binaries from the given archive to a directly to the item's directory, regardless of path", func() {
-			Expect(st.Add(logCtx(), newItem, makeFakeArchive(archiveName, "kubebuilder/bin/"))).To(Succeed())
-
-			dirName := newItem.Platform.BaseName(newItem.Version)
-			Expect(afero.ReadFile(st.Root, filepath.Join("k8s", dirName, "some-file"))).To(HavePrefix(archiveName + "some-file"))
-			Expect(afero.ReadFile(st.Root, filepath.Join("k8s", dirName, "other-file"))).To(HavePrefix(archiveName + "other-file"))
-		})
-
-		It("should clean up any existing item directory before creating the new one", func() {
-			item := localVersions[0]
-			Expect(st.Add(logCtx(), item, makeFakeArchive(archiveName, "kubebuilder/bin/"))).To(Succeed())
-			Expect(st.Root.Stat(filepath.Join("k8s", item.Platform.BaseName(item.Version)))).NotTo(BeNil(), "new files should exist")
-		})
-		It("should clean up if it errors before finishing", func() {
-			item := localVersions[0]
-			Expect(st.Add(logCtx(), item, new(bytes.Buffer))).NotTo(Succeed(), "should fail to extract")
-			_, err := st.Root.Stat(filepath.Join("k8s", item.Platform.BaseName(item.Version)))
-			Expect(err).To(HaveOccurred(), "the binaries dir for the item should be gone")
-
-		})
-	})
-
 	Describe("adding items (controller-tools archives)", func() {
 		archiveName := "envtest-v1.16.3-linux-amd64.tar.gz"
 

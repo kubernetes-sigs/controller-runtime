@@ -52,11 +52,6 @@ setup-envtest sideload 1.16.2 < downloaded-envtest.tar.gz
 # To download from a custom index use the following:
 setup-envtest use --index https://custom.com/envtest-releases.yaml
 
-# To download from the kubebuilder-tools GCS bucket: (default behavior before v0.18)
-# Note: This is a Google-owned bucket and it might be shutdown at any time
-# see: https://github.com/kubernetes/k8s.io/issues/2647#event-12439345373
-# Note: This flag will also be removed soon.
-setup-envtest use --use-deprecated-gcs
 ```
 
 ## Where does it put all those binaries?
@@ -107,8 +102,7 @@ Then, you have a few options for managing your binaries:
 
   `--use-env` makes the command unconditionally use the value of
   KUBEBUILDER_ASSETS as long as it contains the required binaries, and
-  `-i` indicates that we only ever want to work with installed binaries
-  (no reaching out the remote GCS storage).
+  `-i` indicates that we only ever want to work with installed binaries.
 
   As noted about, you can use `ENVTEST_INSTALLED_ONLY=true` to switch `-i`
   on by default, and you can use `ENVTEST_USE_ENV=true` to switch
@@ -123,25 +117,3 @@ Then, you have a few options for managing your binaries:
 - If you want to talk to some internal source via HTTP, you can simply set `--index`
   The index must contain references to envtest binary archives in the same format as:
   https://raw.githubusercontent.com/kubernetes-sigs/controller-tools/master/envtest-releases.yaml
-
-- If you want to talk to some internal source in a GCS "style", you can use the
-  `--remote-bucket` and `--remote-server` options together with `--use-deprecated-gcs`.
-  Note: This is deprecated and will be removed soon. The former sets which
-  GCS bucket to download from, and the latter sets the host to talk to as
-  if it were a GCS endpoint. Theoretically, you could use the latter
-  version to run an internal "mirror" -- the tool expects
-
-  - `HOST/storage/v1/b/BUCKET/o` to return JSON like
-
-    ```json
-    {"items": [
-        {"name": "kubebuilder-tools-X.Y.Z-os-arch.tar.gz", "md5Hash": "<base-64-encoded-md5-hash>"},
-        {"name": "kubebuilder-tools-X.Y.Z-os-arch.tar.gz", "md5Hash": "<base-64-encoded-md5-hash>"}
-    ]}
-    ```
-
-  - `HOST/storage/v1/b/BUCKET/o/TARBALL_NAME` to return JSON like
-    `{"name": "kubebuilder-tools-X.Y.Z-os-arch.tar.gz", "md5Hash": "<base-64-encoded-md5-hash>"}`
-
-  - `HOST/storage/v1/b/BUCKET/o/TARBALL_NAME?alt=media` to return the
-    actual file contents

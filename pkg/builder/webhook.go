@@ -176,15 +176,8 @@ func (blder *WebhookBuilder) getDefaultingWebhook() *admission.Webhook {
 		}
 		return w
 	}
-	if defaulter, ok := blder.apiType.(admission.Defaulter); ok {
-		w := admission.DefaultingWebhookFor(blder.mgr.GetScheme(), defaulter)
-		if blder.recoverPanic != nil {
-			w = w.WithRecoverPanic(*blder.recoverPanic)
-		}
-		return w
-	}
 	log.Info(
-		"skip registering a mutating webhook, object does not implement admission.Defaulter or WithDefaulter wasn't called",
+		"skip registering a mutating webhook, object does not implement admission.CustomDefaulter or WithCustomDefaulter wasn't called",
 		"GVK", blder.gvk)
 	return nil
 }
@@ -215,15 +208,8 @@ func (blder *WebhookBuilder) getValidatingWebhook() *admission.Webhook {
 		}
 		return w
 	}
-	if validator, ok := blder.apiType.(admission.Validator); ok {
-		w := admission.ValidatingWebhookFor(blder.mgr.GetScheme(), validator)
-		if blder.recoverPanic != nil {
-			w = w.WithRecoverPanic(*blder.recoverPanic)
-		}
-		return w
-	}
 	log.Info(
-		"skip registering a validating webhook, object does not implement admission.Validator or WithValidator wasn't called",
+		"skip registering a validating webhook, object does not implement admission.CustomValidator or WithCustomValidator wasn't called",
 		"GVK", blder.gvk)
 	return nil
 }

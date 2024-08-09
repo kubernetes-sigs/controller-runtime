@@ -7,10 +7,8 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"crypto/md5" //nolint:gosec
 	"crypto/rand"
 	"crypto/sha512"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -27,45 +25,6 @@ import (
 )
 
 var (
-	remoteNamesGCS = []string{
-		"kubebuilder-tools-1.10-darwin-amd64.tar.gz",
-		"kubebuilder-tools-1.10-linux-amd64.tar.gz",
-		"kubebuilder-tools-1.10.1-darwin-amd64.tar.gz",
-		"kubebuilder-tools-1.10.1-linux-amd64.tar.gz",
-		"kubebuilder-tools-1.11.0-darwin-amd64.tar.gz",
-		"kubebuilder-tools-1.11.0-linux-amd64.tar.gz",
-		"kubebuilder-tools-1.11.1-potato-cherrypie.tar.gz",
-		"kubebuilder-tools-1.12.3-darwin-amd64.tar.gz",
-		"kubebuilder-tools-1.12.3-linux-amd64.tar.gz",
-		"kubebuilder-tools-1.13.1-darwin-amd64.tar.gz",
-		"kubebuilder-tools-1.13.1-linux-amd64.tar.gz",
-		"kubebuilder-tools-1.14.1-darwin-amd64.tar.gz",
-		"kubebuilder-tools-1.14.1-linux-amd64.tar.gz",
-		"kubebuilder-tools-1.15.5-darwin-amd64.tar.gz",
-		"kubebuilder-tools-1.15.5-linux-amd64.tar.gz",
-		"kubebuilder-tools-1.16.4-darwin-amd64.tar.gz",
-		"kubebuilder-tools-1.16.4-linux-amd64.tar.gz",
-		"kubebuilder-tools-1.17.9-darwin-amd64.tar.gz",
-		"kubebuilder-tools-1.17.9-linux-amd64.tar.gz",
-		"kubebuilder-tools-1.19.0-darwin-amd64.tar.gz",
-		"kubebuilder-tools-1.19.0-linux-amd64.tar.gz",
-		"kubebuilder-tools-1.19.2-darwin-amd64.tar.gz",
-		"kubebuilder-tools-1.19.2-linux-amd64.tar.gz",
-		"kubebuilder-tools-1.19.2-linux-arm64.tar.gz",
-		"kubebuilder-tools-1.19.2-linux-ppc64le.tar.gz",
-		"kubebuilder-tools-1.20.2-darwin-amd64.tar.gz",
-		"kubebuilder-tools-1.20.2-linux-amd64.tar.gz",
-		"kubebuilder-tools-1.20.2-linux-arm64.tar.gz",
-		"kubebuilder-tools-1.20.2-linux-ppc64le.tar.gz",
-		"kubebuilder-tools-1.9-darwin-amd64.tar.gz",
-		"kubebuilder-tools-1.9-linux-amd64.tar.gz",
-		"kubebuilder-tools-v1.19.2-darwin-amd64.tar.gz",
-		"kubebuilder-tools-v1.19.2-linux-amd64.tar.gz",
-		"kubebuilder-tools-v1.19.2-linux-arm64.tar.gz",
-		"kubebuilder-tools-v1.19.2-linux-ppc64le.tar.gz",
-	}
-	remoteVersionsGCS = makeContentsGCS(remoteNamesGCS)
-
 	remoteNamesHTTP = remote.Index{
 		Releases: map[string]remote.Release{
 			"v1.10.0": map[string]remote.Archive{
@@ -148,85 +107,6 @@ var (
 		}},
 	}
 )
-
-type item struct {
-	meta     bucketObject
-	contents []byte
-}
-
-// objectList is the parts we need of the GCS "list-objects-in-bucket" endpoint.
-type objectList struct {
-	Items []bucketObject `json:"items"`
-}
-
-// bucketObject is the parts we need of the GCS object metadata.
-type bucketObject struct {
-	Name string `json:"name"`
-	Hash string `json:"md5Hash"`
-}
-
-func makeContentsGCS(names []string) []item {
-	res := make([]item, len(names))
-	for i, name := range names {
-		var chunk [1024 * 48]byte // 1.5 times our chunk read size in GetVersion
-		copy(chunk[:], name)
-		if _, err := rand.Read(chunk[len(name):]); err != nil {
-			panic(err)
-		}
-		res[i] = verWithGCS(name, chunk[:])
-	}
-	return res
-}
-
-func verWithGCS(name string, contents []byte) item {
-	out := new(bytes.Buffer)
-	gzipWriter := gzip.NewWriter(out)
-	tarWriter := tar.NewWriter(gzipWriter)
-	err := tarWriter.WriteHeader(&tar.Header{
-		Name: "kubebuilder/bin/some-file",
-		Size: int64(len(contents)),
-		Mode: 0777, // so we can check that we fix this later
-	})
-	if err != nil {
-		panic(err)
-	}
-	_, err = tarWriter.Write(contents)
-	if err != nil {
-		panic(err)
-	}
-	tarWriter.Close()
-	gzipWriter.Close()
-	res := item{
-		meta:     bucketObject{Name: name},
-		contents: out.Bytes(),
-	}
-	hash := md5.Sum(res.contents) //nolint:gosec
-	res.meta.Hash = base64.StdEncoding.EncodeToString(hash[:])
-	return res
-}
-
-func handleRemoteVersionsGCS(server *ghttp.Server, versions []item) {
-	list := objectList{Items: make([]bucketObject, len(versions))}
-	for i, ver := range versions {
-		ver := ver // copy to avoid capturing the iteration variable
-		list.Items[i] = ver.meta
-		server.RouteToHandler("GET", "/storage/v1/b/kubebuilder-tools-test/o/"+ver.meta.Name, func(resp http.ResponseWriter, req *http.Request) {
-			if req.URL.Query().Get("alt") == "media" {
-				resp.WriteHeader(http.StatusOK)
-				Expect(resp.Write(ver.contents)).To(Equal(len(ver.contents)))
-			} else {
-				ghttp.RespondWithJSONEncoded(
-					http.StatusOK,
-					ver.meta,
-				)(resp, req)
-			}
-		})
-	}
-	server.RouteToHandler("GET", "/storage/v1/b/kubebuilder-tools-test/o", ghttp.RespondWithJSONEncoded(
-		http.StatusOK,
-		list,
-	))
-}
 
 type itemsHTTP struct {
 	index    remote.Index

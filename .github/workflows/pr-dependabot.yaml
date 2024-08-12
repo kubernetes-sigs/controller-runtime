@@ -20,10 +20,13 @@ jobs:
     steps:
     - name: Check out code
       uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # tag=v4.1.7
+    - name: Calculate go version
+      id: vars
+      run: echo "go_version=$(make go-version)" >> $GITHUB_OUTPUT
     - name: Set up Go
       uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # tag=v5.0.2
       with:
-        go-version: '1.22'
+        go-version: ${{ steps.vars.outputs.go_version }}
     - name: Update all modules
       run: make modules
     - uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # tag=v9.1.4

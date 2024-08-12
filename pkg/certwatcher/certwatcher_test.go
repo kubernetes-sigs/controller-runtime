@@ -121,6 +121,36 @@ var _ = Describe("CertWatcher", func() {
 			Expect(called.Load()).To(BeNumerically(">=", 1))
 		})
 
+		It("should reload currentCert when changed with rename", func() {
+			doneCh := startWatcher()
+			called := atomic.Int64{}
+			watcher.RegisterCallback(func(crt tls.Certificate) {
+				called.Add(1)
+				Expect(crt.Certificate).ToNot(BeEmpty())
+			})
+
+			firstcert, _ := watcher.GetCertificate(nil)
+
+			err := writeCerts(certPath+".new", keyPath+".new", "192.168.0.2")
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(os.Link(certPath, certPath+".old")).To(Succeed())
+			Expect(os.Rename(certPath+".new", certPath)).To(Succeed())
+
+			Expect(os.Link(keyPath, keyPath+".old")).To(Succeed())
+			Expect(os.Rename(keyPath+".new", keyPath)).To(Succeed())
+
+			Eventually(func() bool {
+				secondcert, _ := watcher.GetCertificate(nil)
+				first := firstcert.PrivateKey.(*rsa.PrivateKey)
+				return first.Equal(secondcert.PrivateKey)
+			}).ShouldNot(BeTrue())
+
+			ctxCancel()
+			Eventually(doneCh, "4s").Should(BeClosed())
+			Expect(called.Load()).To(BeNumerically(">=", 1))
+		})
+
 		Context("prometheus metric read_certificate_total", func() {
 			var readCertificateTotalBefore float64
 			var readCertificateErrorsBefore float64
@@ -159,17 +189,18 @@ var _ = Describe("CertWatcher", func() {
 
 				Expect(os.Remove(keyPath)).To(Succeed())
 
+				// Note, we are checking two errors here, because os.Remove generates two fsnotify events: Chmod + Remove
 				Eventually(func() error {
 					readCertificateTotalAfter := testutil.ToFloat64(metrics.ReadCertificateTotal)
-					if readCertificateTotalAfter != readCertificateTotalBefore+1.0 {
-						return fmt.Errorf("metric read certificate total expected: %v and got: %v", readCertificateTotalBefore+1.0, readCertificateTotalAfter)
+					if readCertificateTotalAfter != readCertificateTotalBefore+2.0 {
+						return fmt.Errorf("metric read certificate total expected: %v and got: %v", readCertificateTotalBefore+2.0, readCertificateTotalAfter)
 					}
 					return nil
 				}, "4s").Should(Succeed())
 				Eventually(func() error {
 					readCertificateErrorsAfter := testutil.ToFloat64(metrics.ReadCertificateErrors)
-					if readCertificateErrorsAfter != readCertificateErrorsBefore+1.0 {
-						return fmt.Errorf("metric read certificate errors expected: %v and got: %v", readCertificateErrorsBefore+1.0, readCertificateErrorsAfter)
+					if readCertificateErrorsAfter != readCertificateErrorsBefore+2.0 {
+						return fmt.Errorf("metric read certificate errors expected: %v and got: %v", readCertificateErrorsBefore+2.0, readCertificateErrorsAfter)
 					}
 					return nil
 				}, "4s").Should(Succeed())

@@ -36,6 +36,12 @@ type Options = TypedOptions[reconcile.Request]
 
 // TypedOptions are the arguments for creating a new Controller.
 type TypedOptions[request comparable] struct {
+	// SkipNameValidation allows skipping the name validation that ensures that every controller name is unique.
+	// Unique controller names are important to get unique metrics and logs for a controller.
+	// Defaults to the Controller.SkipNameValidation setting from the Manager if unset.
+	// Defaults to false if Controller.SkipNameValidation setting from the Manager is also unset.
+	SkipNameValidation *bool
+
 	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 
@@ -140,8 +146,14 @@ func NewTypedUnmanaged[request comparable](name string, mgr manager.Manager, opt
 		return nil, fmt.Errorf("must specify Name for Controller")
 	}
 
-	if err := checkName(name); err != nil {
-		return nil, err
+	if options.SkipNameValidation == nil {
+		options.SkipNameValidation = mgr.GetControllerOptions().SkipNameValidation
+	}
+
+	if options.SkipNameValidation == nil || !*options.SkipNameValidation {
+		if err := checkName(name); err != nil {
+			return nil, err
+		}
 	}
 
 	if options.LogConstructor == nil {

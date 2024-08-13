@@ -74,6 +74,54 @@ var _ = Describe("controller.Controller", func() {
 			Expect(c2).To(BeNil())
 		})
 
+		It("should return an error if two controllers are registered with the same name and SkipNameValidation is set to false on the manager", func() {
+			m, err := manager.New(cfg, manager.Options{
+				Controller: config.Controller{
+					SkipNameValidation: ptr.To(false),
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			c1, err := controller.New("c4", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c1).ToNot(BeNil())
+
+			c2, err := controller.New("c4", m, controller.Options{Reconciler: rec})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("controller with name c4 already exists"))
+			Expect(c2).To(BeNil())
+		})
+
+		It("should not return an error if two controllers are registered with the same name and SkipNameValidation is set on the manager", func() {
+			m, err := manager.New(cfg, manager.Options{
+				Controller: config.Controller{
+					SkipNameValidation: ptr.To(true),
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			c1, err := controller.New("c5", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c1).ToNot(BeNil())
+
+			c2, err := controller.New("c5", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c2).ToNot(BeNil())
+		})
+
+		It("should not return an error if two controllers are registered with the same name and SkipNameValidation is set on the controller", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c1, err := controller.New("c6", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c1).ToNot(BeNil())
+
+			c2, err := controller.New("c6", m, controller.Options{Reconciler: rec, SkipNameValidation: ptr.To(true)})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c2).ToNot(BeNil())
+		})
+
 		It("should not return an error if two controllers are registered with different names", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())

@@ -18,6 +18,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,6 +34,15 @@ func NewWithWatch(config *rest.Config, options Options) (WithWatch, error) {
 		return nil, err
 	}
 	return &watchingClient{client: client}, nil
+}
+
+// AsWithWatch wraps an existing client in a WithWatch
+func AsWithWatch(c Client) (WithWatch, error) {
+	cl, ok := c.(*client)
+	if !ok {
+		return nil, errors.New("incompatible client type")
+	}
+	return &watchingClient{client: cl}, nil
 }
 
 type watchingClient struct {

@@ -176,9 +176,6 @@ func (blder *WebhookBuilder) getDefaultingWebhook() *admission.Webhook {
 		}
 		return w
 	}
-	log.Info(
-		"skip registering a mutating webhook, object does not implement admission.CustomDefaulter or WithCustomDefaulter wasn't called",
-		"GVK", blder.gvk)
 	return nil
 }
 
@@ -208,9 +205,6 @@ func (blder *WebhookBuilder) getValidatingWebhook() *admission.Webhook {
 		}
 		return w
 	}
-	log.Info(
-		"skip registering a validating webhook, object does not implement admission.CustomValidator or WithCustomValidator wasn't called",
-		"GVK", blder.gvk)
 	return nil
 }
 

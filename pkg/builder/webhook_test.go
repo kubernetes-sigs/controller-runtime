@@ -77,6 +77,69 @@ func runTests(admissionReviewVersion string) {
 		close(stop)
 	})
 
+	It("should scaffold a custom defaulter webhook which recovers from panics", func() {
+		By("creating a controller manager")
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
+		builder.Register(&TestDefaulter{}, &TestDefaulterList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		err = WebhookManagedBy(m).
+			For(&TestDefaulter{}).
+			WithDefaulter(&TestCustomDefaulter{}).
+			RecoverPanic(true).
+			// RecoverPanic defaults to true.
+			Complete()
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		svr := m.GetWebhookServer()
+		ExpectWithOffset(1, svr).NotTo(BeNil())
+
+		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
+  "request":{
+    "uid":"07e52e8d-4513-11e9-a716-42010a800270",
+    "kind":{
+      "group":"",
+      "version":"v1",
+      "kind":"TestDefaulter"
+    },
+    "resource":{
+      "group":"",
+      "version":"v1",
+      "resource":"testdefaulter"
+    },
+    "namespace":"default",
+    "operation":"CREATE",
+    "object":{
+      "panic":true
+    },
+    "oldObject":null
+  }
+}`)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		err = svr.Start(ctx)
+		if err != nil && !os.IsNotExist(err) {
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		}
+
+		By("sending a request to a mutating webhook path")
+		path := generateMutatePath(testDefaulterGVK)
+		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
+		req.Header.Add("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		svr.WebhookMux().ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable fields")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":500`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"message":"panic: fake panic test [recovered]`))
+	})
+
 	It("should scaffold a defaulting webhook with a custom defaulter", func() {
 		By("creating a controller manager")
 		m, err := manager.New(cfg, manager.Options{})
@@ -230,6 +293,74 @@ func runTests(admissionReviewVersion string) {
 		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Validating object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testvalidator"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
 	})
 
+	It("should scaffold a customValidator webhook which recovers from panics", func() {
+		By("creating a controller manager")
+		m, err := manager.New(cfg, manager.Options{})
+
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+		builder.Register(&TestValidator{}, &TestValidatorList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		err = WebhookManagedBy(m).
+			For(&TestValidator{Panic: true}).
+			WithValidator(&TestCustomValidator{}).
+			RecoverPanic(true).
+			Complete()
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		svr := m.GetWebhookServer()
+		ExpectWithOffset(1, svr).NotTo(BeNil())
+
+		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
+  "request":{
+    "uid":"07e52e8d-4513-11e9-a716-42010a800270",
+    "kind":{
+      "group":"",
+      "version":"v1",
+      "kind":"TestValidator"
+    },
+
+    "resource":{
+      "group":"",
+
+      "version":"v1",
+      "resource":"testvalidator"
+    },
+    "namespace":"default",
+    "operation":"CREATE",
+
+    "object":{
+      "replica":2,
+      "panic":true
+    }
+  }
+}`)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		err = svr.Start(ctx)
+		if err != nil && !os.IsNotExist(err) {
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		}
+
+		By("sending a request to a validating webhook path")
+		path := generateValidatePath(testValidatorGVK)
+		_, err = reader.Seek(0, 0)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
+		req.Header.Add("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		svr.WebhookMux().ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable field")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":500`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"message":"panic: fake panic test [recovered]`))
+	})
+
 	It("should send an error when trying to register a webhook with more than one For", func() {
 		By("creating a controller manager")
 		m, err := manager.New(cfg, manager.Options{})
@@ -246,6 +377,102 @@ func runTests(admissionReviewVersion string) {
 			For(&TestDefaulter{}).
 			Complete()
 		Expect(err).To(HaveOccurred())
+	})
+
+	It("should scaffold a custom validator webhook if the type implements the CustomValidator interface to validate deletes", func() {
+		By("creating a controller manager")
+		ctx, cancel := context.WithCancel(context.Background())
+
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+		builder.Register(&TestValidator{}, &TestValidatorList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		err = WebhookManagedBy(m).
+			For(&TestValidator{}).
+			WithValidator(&TestCustomValidator{}).
+			Complete()
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		svr := m.GetWebhookServer()
+		ExpectWithOffset(1, svr).NotTo(BeNil())
+
+		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
+  "request":{
+    "uid":"07e52e8d-4513-11e9-a716-42010a800270",
+    "kind":{
+      "group":"",
+      "version":"v1",
+      "kind":"TestValidator"
+
+    },
+    "resource":{
+      "group":"",
+      "version":"v1",
+      "resource":"testvalidator"
+    },
+    "namespace":"default",
+    "operation":"DELETE",
+    "object":null,
+    "oldObject":{
+      "replica":1
+    }
+  }
+}`)
+
+		cancel()
+		err = svr.Start(ctx)
+		if err != nil && !os.IsNotExist(err) {
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		}
+
+		By("sending a request to a validating webhook path to check for failed delete")
+		path := generateValidatePath(testValidatorGVK)
+		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
+		req.Header.Add("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		svr.WebhookMux().ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable field")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":403`))
+
+		reader = strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
+  "request":{
+    "uid":"07e52e8d-4513-11e9-a716-42010a800270",
+
+    "kind":{
+      "group":"",
+      "version":"v1",
+      "kind":"TestValidator"
+    },
+    "resource":{
+
+      "group":"",
+      "version":"v1",
+      "resource":"testvalidator"
+    },
+    "namespace":"default",
+    "operation":"DELETE",
+    "object":null,
+    "oldObject":{
+      "replica":0
+    }
+  }
+}`)
+		By("sending a request to a validating webhook path with correct request")
+		path = generateValidatePath(testValidatorGVK)
+		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
+		req.Header.Add("Content-Type", "application/json")
+		w = httptest.NewRecorder()
+		svr.WebhookMux().ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable field")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":true`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":200`))
 	})
 }
 
@@ -431,8 +658,12 @@ func (*TestCustomDefaulter) Default(ctx context.Context, obj runtime.Object) err
 	}
 
 	d := obj.(*TestDefaulter) //nolint:ifshort
+
 	if d.Replica < 2 {
 		d.Replica = 2
+	}
+	if d.Panic {
+		panic("fake panic test")
 	}
 	return nil
 }
@@ -454,6 +685,9 @@ func (*TestCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Obje
 	}
 
 	v := obj.(*TestValidator) //nolint:ifshort
+	if v.Panic {
+		panic("fake panic test")
+	}
 	if v.Replica < 0 {
 		return nil, errors.New("number of replica should be greater than or equal to 0")
 	}

@@ -508,15 +508,6 @@ type TestDefaulterList struct{}
 func (*TestDefaulterList) GetObjectKind() schema.ObjectKind { return nil }
 func (*TestDefaulterList) DeepCopyObject() runtime.Object   { return nil }
 
-func (d *TestDefaulter) Default() {
-	if d.Panic {
-		panic("fake panic test")
-	}
-	if d.Replica < 2 {
-		d.Replica = 2
-	}
-}
-
 // TestValidator.
 var _ runtime.Object = &TestValidator{}
 
@@ -548,41 +539,6 @@ type TestValidatorList struct{}
 
 func (*TestValidatorList) GetObjectKind() schema.ObjectKind { return nil }
 func (*TestValidatorList) DeepCopyObject() runtime.Object   { return nil }
-
-func (v *TestValidator) ValidateCreate() (admission.Warnings, error) {
-	if v.Panic {
-		panic("fake panic test")
-	}
-	if v.Replica < 0 {
-		return nil, errors.New("number of replica should be greater than or equal to 0")
-	}
-	return nil, nil
-}
-
-func (v *TestValidator) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	if v.Panic {
-		panic("fake panic test")
-	}
-	if v.Replica < 0 {
-		return nil, errors.New("number of replica should be greater than or equal to 0")
-	}
-	if oldObj, ok := old.(*TestValidator); !ok {
-		return nil, fmt.Errorf("the old object is expected to be %T", oldObj)
-	} else if v.Replica < oldObj.Replica {
-		return nil, fmt.Errorf("new replica %v should not be fewer than old replica %v", v.Replica, oldObj.Replica)
-	}
-	return nil, nil
-}
-
-func (v *TestValidator) ValidateDelete() (admission.Warnings, error) {
-	if v.Panic {
-		panic("fake panic test")
-	}
-	if v.Replica > 0 {
-		return nil, errors.New("number of replica should be less than or equal to 0 to delete")
-	}
-	return nil, nil
-}
 
 // TestDefaultValidator.
 var _ runtime.Object = &TestDefaultValidator{}
@@ -616,35 +572,7 @@ type TestDefaultValidatorList struct{}
 func (*TestDefaultValidatorList) GetObjectKind() schema.ObjectKind { return nil }
 func (*TestDefaultValidatorList) DeepCopyObject() runtime.Object   { return nil }
 
-func (dv *TestDefaultValidator) Default() {
-	if dv.Replica < 2 {
-		dv.Replica = 2
-	}
-}
-
-func (dv *TestDefaultValidator) ValidateCreate() (admission.Warnings, error) {
-	if dv.Replica < 0 {
-		return nil, errors.New("number of replica should be greater than or equal to 0")
-	}
-	return nil, nil
-}
-
-func (dv *TestDefaultValidator) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	if dv.Replica < 0 {
-		return nil, errors.New("number of replica should be greater than or equal to 0")
-	}
-	return nil, nil
-}
-
-func (dv *TestDefaultValidator) ValidateDelete() (admission.Warnings, error) {
-	if dv.Replica > 0 {
-		return nil, errors.New("number of replica should be less than or equal to 0 to delete")
-	}
-	return nil, nil
-}
-
 // TestCustomDefaulter.
-
 type TestCustomDefaulter struct{}
 
 func (*TestCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {

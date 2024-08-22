@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"gomodules.xyz/jsonpatch/v2"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,6 +28,27 @@ import (
 )
 
 var _ = Describe("Defaulter Handler", func() {
+
+	It("should should not lose unknown fields", func() {
+		obj := &TestDefaulter{}
+		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{})
+
+		resp := handler.Handle(context.TODO(), Request{
+			AdmissionRequest: admissionv1.AdmissionRequest{
+				Operation: admissionv1.Create,
+				Object: runtime.RawExtension{
+					Raw: []byte(`{"newField":"foo"}`),
+				},
+			},
+		})
+		Expect(resp.Allowed).Should(BeTrue())
+		Expect(resp.Patches).To(Equal([]jsonpatch.JsonPatchOperation{{
+			Operation: "add",
+			Path:      "/replica",
+			Value:     2.0,
+		}}))
+		Expect(resp.Result.Code).Should(Equal(int32(http.StatusOK)))
+	})
 
 	It("should return ok if received delete verb in defaulter handler", func() {
 		obj := &TestDefaulter{}

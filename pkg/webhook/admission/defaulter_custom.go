@@ -71,13 +71,14 @@ func (h *defaulterForType) Handle(ctx context.Context, req Request) Response {
 	ctx = NewContextWithRequest(ctx, req)
 
 	// Get the object in the request
-	obj := h.object.DeepCopyObject()
-	if err := h.decoder.Decode(req, obj); err != nil {
+	original := h.object.DeepCopyObject()
+	if err := h.decoder.Decode(req, original); err != nil {
 		return Errored(http.StatusBadRequest, err)
 	}
 
 	// Default the object
-	if err := h.defaulter.Default(ctx, obj); err != nil {
+	updated := original.DeepCopyObject()
+	if err := h.defaulter.Default(ctx, updated); err != nil {
 		var apiStatus apierrors.APIStatus
 		if errors.As(err, &apiStatus) {
 			return validationResponseFromStatus(false, apiStatus.Status())
@@ -85,10 +86,17 @@ func (h *defaulterForType) Handle(ctx context.Context, req Request) Response {
 		return Denied(err.Error())
 	}
 
-	// Create the patch
-	marshalled, err := json.Marshal(obj)
+	// Create the patch.
+	// We need to decode and marshall the original because the type registered in the
+	// decoder might not match the latest version of the API.
+	// Creating a diff from the raw object might cause new fields to be dropped.
+	marshalledOriginal, err := json.Marshal(original)
 	if err != nil {
 		return Errored(http.StatusInternalServerError, err)
 	}
-	return PatchResponseFromRaw(req.Object.Raw, marshalled)
+	marshalledUpdated, err := json.Marshal(updated)
+	if err != nil {
+		return Errored(http.StatusInternalServerError, err)
+	}
+	return PatchResponseFromRaw(marshalledOriginal, marshalledUpdated)
 }

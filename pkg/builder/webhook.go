@@ -37,6 +37,7 @@ import (
 // WebhookBuilder builds a Webhook.
 type WebhookBuilder struct {
 	apiType         runtime.Object
+	mutatorFactory  admission.HandlerFactory
 	customDefaulter admission.CustomDefaulter
 	customValidator admission.CustomValidator
 	gvk             schema.GroupVersionKind
@@ -62,6 +63,12 @@ func (blder *WebhookBuilder) For(apiType runtime.Object) *WebhookBuilder {
 		blder.err = errors.New("For(...) should only be called once, could not assign multiple objects for webhook registration")
 	}
 	blder.apiType = apiType
+	return blder
+}
+
+// WithMutatorFactory takes an admission.HandlerFactory, a MutatingWebhook will be wired for the handler that this factory creates.
+func (blder *WebhookBuilder) WithMutatorFactory(factory admission.HandlerFactory) *WebhookBuilder {
+	blder.mutatorFactory = factory
 	return blder
 }
 
@@ -169,14 +176,18 @@ func (blder *WebhookBuilder) registerDefaultingWebhook() {
 }
 
 func (blder *WebhookBuilder) getDefaultingWebhook() *admission.Webhook {
-	if defaulter := blder.customDefaulter; defaulter != nil {
-		w := admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, defaulter)
-		if blder.recoverPanic != nil {
-			w = w.WithRecoverPanic(*blder.recoverPanic)
-		}
-		return w
+	var w *admission.Webhook
+	if factory := blder.mutatorFactory; factory != nil {
+		w = admission.WithHandlerFactory(blder.mgr.GetScheme(), blder.apiType, factory)
+	} else if defaulter := blder.customDefaulter; defaulter != nil {
+		w = admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, defaulter)
+	} else {
+		return nil
 	}
-	return nil
+	if blder.recoverPanic != nil {
+		w = w.WithRecoverPanic(*blder.recoverPanic)
+	}
+	return w
 }
 
 // registerValidatingWebhook registers a validating webhook if necessary.

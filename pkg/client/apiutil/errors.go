@@ -52,3 +52,9 @@ func (e *ErrResourceDiscoveryFailed) Unwrap() []error {
 	}
 	return subErrors
 }
+
+// Is makes it possible for the callers to use `errors.Is(` helper on errors wrapped with ErrResourceDiscoveryFailed error.
+func (e *ErrResourceDiscoveryFailed) Is(target error) bool {
+	_, ok := target.(*ErrResourceDiscoveryFailed)
+	return ok
+}

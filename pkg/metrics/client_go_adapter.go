@@ -18,6 +18,8 @@ package metrics
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	clientmetrics "k8s.io/client-go/tools/metrics"
@@ -37,20 +39,30 @@ var (
 		},
 		[]string{"code", "method", "host"},
 	)
+
+	clientMetricsRegisterOnce = sync.Once{}
 )
 
 func init() {
-	registerClientMetrics()
-}
-
-// registerClientMetrics sets up the client latency metrics from client-go.
-func registerClientMetrics() {
 	// register the metrics with our registry
 	Registry.MustRegister(requestResult)
 
-	// register the metrics with client-go
-	clientmetrics.Register(clientmetrics.RegisterOpts{
-		RequestResult: &resultAdapter{metric: requestResult},
+	time.AfterFunc(30*time.Second, func() {
+		RegisterClientMetrics(clientmetrics.RegisterOpts{})
+	})
+}
+
+// RegisterClientMetrics sets up the client latency metrics from client-go. Since clientmetrics.Register can only be
+// called once, you MUST call this method if you want to register other client-go metrics within the first 30 seconds
+// of a binaries lifetime, or it will get called without other metrics.
+func RegisterClientMetrics(opts clientmetrics.RegisterOpts) {
+	clientMetricsRegisterOnce.Do(func() {
+		opts.RequestResult = &resultAdapter{
+			metric:       requestResult,
+			customMetric: opts.RequestResult,
+		}
+		// register the metrics with client-go
+		clientmetrics.Register(opts)
 	})
 }
 
@@ -63,9 +75,13 @@ func registerClientMetrics() {
 // (which isn't anywhere in an easily-importable place).
 
 type resultAdapter struct {
-	metric *prometheus.CounterVec
+	metric       *prometheus.CounterVec
+	customMetric clientmetrics.ResultMetric
 }
 
-func (r *resultAdapter) Increment(_ context.Context, code, method, host string) {
+func (r *resultAdapter) Increment(ctx context.Context, code, method, host string) {
 	r.metric.WithLabelValues(code, method, host).Inc()
+	if r.customMetric != nil {
+		r.customMetric.Increment(ctx, code, method, host)
+	}
 }

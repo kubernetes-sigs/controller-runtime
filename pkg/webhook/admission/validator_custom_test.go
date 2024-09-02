@@ -1,10 +1,8 @@
 /*
 Copyright 2021 The Kubernetes Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
@@ -28,18 +26,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/kubernetes/scheme"
 )
 
 var fakeValidatorVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: "fakeValidator"}
 
-var _ = Describe("validatingHandler", func() {
-
-	decoder := NewDecoder(scheme.Scheme)
+var _ = Describe("customValidatingHandler", func() {
 
 	Context("when dealing with successful results without warning", func() {
-		f := &fakeValidator{ErrorToReturn: nil, GVKToReturn: fakeValidatorVK, WarningsToReturn: nil}
-		handler := validatingHandler{validator: f, decoder: decoder}
+		val := &fakeCustomValidator{ErrorToReturn: nil, GVKToReturn: fakeValidatorVK, WarningsToReturn: nil}
+		f := &fakeValidator{}
+		handler := WithCustomValidator(admissionScheme, f, val)
 
 		It("should return 200 in response when create succeeds", func() {
 
@@ -48,7 +44,7 @@ var _ = Describe("validatingHandler", func() {
 					Operation: admissionv1.Create,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -64,11 +60,11 @@ var _ = Describe("validatingHandler", func() {
 					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 					OldObject: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -83,7 +79,7 @@ var _ = Describe("validatingHandler", func() {
 					Operation: admissionv1.Delete,
 					OldObject: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -95,19 +91,19 @@ var _ = Describe("validatingHandler", func() {
 	const warningMessage = "warning message"
 	const anotherWarningMessage = "another warning message"
 	Context("when dealing with successful results with warning", func() {
-		f := &fakeValidator{ErrorToReturn: nil, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{
+		f := &fakeValidator{}
+		val := &fakeCustomValidator{ErrorToReturn: nil, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{
 			warningMessage,
 			anotherWarningMessage,
 		}}
-		handler := validatingHandler{validator: f, decoder: decoder}
-
+		handler := WithCustomValidator(admissionScheme, f, val)
 		It("should return 200 in response when create succeeds, with warning messages", func() {
 			response := handler.Handle(context.TODO(), Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Create,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -125,11 +121,11 @@ var _ = Describe("validatingHandler", func() {
 					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 					OldObject: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -145,8 +141,9 @@ var _ = Describe("validatingHandler", func() {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Delete,
 					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Raw: []byte("{}"),
+
+						Object: f,
 					},
 				},
 			})
@@ -165,8 +162,9 @@ var _ = Describe("validatingHandler", func() {
 				Code:    http.StatusUnprocessableEntity,
 			},
 		}
-		f := &fakeValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{warningMessage, anotherWarningMessage}}
-		handler := validatingHandler{validator: f, decoder: decoder}
+		f := &fakeValidator{}
+		val := &fakeCustomValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{warningMessage, anotherWarningMessage}}
+		handler := WithCustomValidator(admissionScheme, f, val)
 
 		It("should propagate the Status from ValidateCreate's return value to the HTTP response", func() {
 
@@ -175,7 +173,7 @@ var _ = Describe("validatingHandler", func() {
 					Operation: admissionv1.Create,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -195,11 +193,12 @@ var _ = Describe("validatingHandler", func() {
 					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Raw: []byte("{}"),
+
+						Object: f,
 					},
 				},
 			})
@@ -217,9 +216,10 @@ var _ = Describe("validatingHandler", func() {
 			response := handler.Handle(context.TODO(), Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Delete,
+
 					OldObject: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -242,17 +242,19 @@ var _ = Describe("validatingHandler", func() {
 				Code:    http.StatusUnprocessableEntity,
 			},
 		}
-		f := &fakeValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: nil}
-		handler := validatingHandler{validator: f, decoder: decoder}
+		f := &fakeValidator{}
+		val := &fakeCustomValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: nil}
+		handler := WithCustomValidator(admissionScheme, f, val)
 
 		It("should propagate the Status from ValidateCreate's return value to the HTTP response", func() {
 
 			response := handler.Handle(context.TODO(), Request{
+
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Create,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -270,11 +272,11 @@ var _ = Describe("validatingHandler", func() {
 					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 					OldObject: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -292,13 +294,14 @@ var _ = Describe("validatingHandler", func() {
 					Operation: admissionv1.Delete,
 					OldObject: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
 
 			Expect(response.Allowed).Should(BeFalse())
 			Expect(response.Result.Code).Should(Equal(expectedError.Status().Code))
+
 			Expect(*response.Result).Should(Equal(expectedError.Status()))
 
 		})
@@ -308,17 +311,19 @@ var _ = Describe("validatingHandler", func() {
 	Context("when dealing with non-status errors, without warning messages", func() {
 
 		expectedError := errors.New("some error")
-		f := &fakeValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK}
-		handler := validatingHandler{validator: f, decoder: decoder}
+		f := &fakeValidator{}
+		val := &fakeCustomValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK}
+		handler := WithCustomValidator(admissionScheme, f, val)
 
 		It("should return 403 response when ValidateCreate with error message embedded", func() {
 
 			response := handler.Handle(context.TODO(), Request{
+
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Create,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -332,15 +337,16 @@ var _ = Describe("validatingHandler", func() {
 		It("should return 403 response when ValidateUpdate returns non-APIStatus error", func() {
 
 			response := handler.Handle(context.TODO(), Request{
+
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 					OldObject: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -357,7 +363,7 @@ var _ = Describe("validatingHandler", func() {
 					Operation: admissionv1.Delete,
 					OldObject: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -371,21 +377,24 @@ var _ = Describe("validatingHandler", func() {
 	Context("when dealing with non-status errors, with warning messages", func() {
 
 		expectedError := errors.New("some error")
-		f := &fakeValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{warningMessage, anotherWarningMessage}}
-		handler := validatingHandler{validator: f, decoder: decoder}
+		f := &fakeValidator{}
+		val := &fakeCustomValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{warningMessage, anotherWarningMessage}}
+		handler := WithCustomValidator(admissionScheme, f, val)
 
 		It("should return 403 response when ValidateCreate with error message embedded", func() {
 
 			response := handler.Handle(context.TODO(), Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
+
 					Operation: admissionv1.Create,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
 			Expect(response.Allowed).Should(BeFalse())
+
 			Expect(response.Result.Code).Should(Equal(int32(http.StatusForbidden)))
 			Expect(response.Result.Reason).Should(Equal(metav1.StatusReasonForbidden))
 			Expect(response.Result.Message).Should(Equal(expectedError.Error()))
@@ -400,11 +409,12 @@ var _ = Describe("validatingHandler", func() {
 					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 					OldObject: runtime.RawExtension{
+
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -412,6 +422,7 @@ var _ = Describe("validatingHandler", func() {
 			Expect(response.Result.Code).Should(Equal(int32(http.StatusForbidden)))
 			Expect(response.Result.Reason).Should(Equal(metav1.StatusReasonForbidden))
 			Expect(response.Result.Message).Should(Equal(expectedError.Error()))
+
 			Expect(response.AdmissionResponse.Warnings).Should(ContainElement(warningMessage))
 			Expect(response.AdmissionResponse.Warnings).Should(ContainElement(anotherWarningMessage))
 
@@ -423,7 +434,7 @@ var _ = Describe("validatingHandler", func() {
 					Operation: admissionv1.Delete,
 					OldObject: runtime.RawExtension{
 						Raw:    []byte("{}"),
-						Object: handler.validator,
+						Object: f,
 					},
 				},
 			})
@@ -447,12 +458,12 @@ var _ = Describe("validatingHandler", func() {
 
 })
 
-// fakeValidator provides fake validating webhook functionality for testing
-// It implements the admission.Validator interface and
+// fakeCustomValidator provides fake validating webhook functionality for testing
+// It implements the admission.CustomValidator interface and
 // rejects all requests with the same configured error
 // or passes if ErrorToReturn is nil.
 // And it would always return configured warning messages WarningsToReturn.
-type fakeValidator struct {
+type fakeCustomValidator struct {
 	// ErrorToReturn is the error for which the fakeValidator rejects all requests
 	ErrorToReturn error `json:"errorToReturn,omitempty"`
 	// GVKToReturn is the GroupVersionKind that the webhook operates on
@@ -461,16 +472,21 @@ type fakeValidator struct {
 	WarningsToReturn []string
 }
 
-func (v *fakeValidator) ValidateCreate() (warnings Warnings, err error) {
+func (v *fakeCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (warnings Warnings, err error) {
 	return v.WarningsToReturn, v.ErrorToReturn
 }
 
-func (v *fakeValidator) ValidateUpdate(old runtime.Object) (warnings Warnings, err error) {
+func (v *fakeCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (warnings Warnings, err error) {
 	return v.WarningsToReturn, v.ErrorToReturn
 }
 
-func (v *fakeValidator) ValidateDelete() (warnings Warnings, err error) {
+func (v *fakeCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (warnings Warnings, err error) {
 	return v.WarningsToReturn, v.ErrorToReturn
+}
+
+type fakeValidator struct {
+	// GVKToReturn is the GroupVersionKind that the webhook operates on
+	GVKToReturn schema.GroupVersionKind
 }
 
 func (v *fakeValidator) SetGroupVersionKind(gvk schema.GroupVersionKind) {
@@ -487,8 +503,6 @@ func (v *fakeValidator) GetObjectKind() schema.ObjectKind {
 
 func (v *fakeValidator) DeepCopyObject() runtime.Object {
 	return &fakeValidator{
-		ErrorToReturn:    v.ErrorToReturn,
-		GVKToReturn:      v.GVKToReturn,
-		WarningsToReturn: v.WarningsToReturn,
+		GVKToReturn: v.GVKToReturn,
 	}
 }

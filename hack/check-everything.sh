@@ -73,6 +73,9 @@ k8s_bin_dir=$(
 )
 echo "Replacing kube-apiserver binary from ${k8s_bin_dir} to ${KUBEBUILDER_ASSETS}"
 cp -f "${k8s_bin_dir}/kube-apiserver" "${KUBEBUILDER_ASSETS}/kube-apiserver"
+
+echo "Enabling WatchListClient feature"
+export KUBE_FEATURE_WatchListClient=true
 # END OF HACK
 
 # Run tests.

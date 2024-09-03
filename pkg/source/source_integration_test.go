@@ -210,7 +210,7 @@ var _ = Describe("Source", func() {
 			informerFactory = kubeinformers.NewSharedInformerFactory(clientset, time.Second*30)
 			depInformer = informerFactory.Apps().V1().ReplicaSets().Informer()
 			informerFactory.Start(stopTest)
-			Eventually(depInformer.HasSynced).Should(BeTrue())
+			Eventually(depInformer.HasSynced, "5s").Should(BeTrue())
 
 			c = make(chan struct{})
 			rs = &appsv1.ReplicaSet{

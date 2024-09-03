@@ -63,7 +63,7 @@ var _ = Describe("WatchList", func() {
 						if meta.GetAnnotations()[metav1.InitialEventsAnnotationKey] != "true" {
 							continue
 						}
-						if len(meta.GetAnnotations()["kubernetes.io/initial-events-embedded-list"]) == 0 {
+						if len(meta.GetAnnotations()[metav1.InitialEventsEmbeddedListAnnotationKey]) == 0 {
 							continue
 						}
 						receivedWatchListStreamFromTheServer = true

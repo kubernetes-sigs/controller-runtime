@@ -201,9 +201,9 @@ var _ = Describe("application", func() {
 				Named("my_controller-0").
 				Owns(&appsv1.ReplicaSet{}).
 				Build(typedNoop)
-				// If we ever allow Owns() without For() we need to update the code to error
-				// out on Owns() if the request type is different from reconcile.Request just
-				// like we do in For().
+			// If we ever allow Owns() without For() we need to update the code to error
+			// out on Owns() if the request type is different from reconcile.Request just
+			// like we do in For().
 			Expect(err).To(MatchError("Owns() can only be used together with For()"))
 			Expect(instance).To(BeNil())
 		})
@@ -711,7 +711,7 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Waiting for the Deployment Reconcile")
-	Eventually(ch).Should(Receive(Equal(reconcile.Request{
+	Eventually(ch, "5s").Should(Receive(Equal(reconcile.Request{
 		NamespacedName: types.NamespacedName{Namespace: "default", Name: deployName}})))
 
 	By("Creating a ReplicaSet")

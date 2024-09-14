@@ -40,13 +40,17 @@ func (c *typedClient) Create(ctx context.Context, obj Object, opts ...CreateOpti
 	createOpts := &CreateOptions{}
 	createOpts.ApplyOptions(opts)
 
-	return o.Post().
+	gvk, err := o.Post().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Body(obj).
 		VersionedParams(createOpts.AsCreateOptions(), c.paramCodec).
 		Do(ctx).
-		Into(obj)
+		UpdateObjectAndGetGVK(obj)
+	if gvk != nil {
+		obj.GetObjectKind().SetGroupVersionKind(*gvk)
+	}
+	return err
 }
 
 // Update implements client.Client.
@@ -59,14 +63,18 @@ func (c *typedClient) Update(ctx context.Context, obj Object, opts ...UpdateOpti
 	updateOpts := &UpdateOptions{}
 	updateOpts.ApplyOptions(opts)
 
-	return o.Put().
+	gvk, err := o.Put().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
 		Body(obj).
 		VersionedParams(updateOpts.AsUpdateOptions(), c.paramCodec).
 		Do(ctx).
-		Into(obj)
+		UpdateObjectAndGetGVK(obj)
+	if gvk != nil {
+		obj.GetObjectKind().SetGroupVersionKind(*gvk)
+	}
+	return err
 }
 
 // Delete implements client.Client.
@@ -122,14 +130,18 @@ func (c *typedClient) Patch(ctx context.Context, obj Object, patch Patch, opts .
 	patchOpts := &PatchOptions{}
 	patchOpts.ApplyOptions(opts)
 
-	return o.Patch(patch.Type()).
+	gvk, err := o.Patch(patch.Type()).
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
 		VersionedParams(patchOpts.AsPatchOptions(), c.paramCodec).
 		Body(data).
 		Do(ctx).
-		Into(obj)
+		UpdateObjectAndGetGVK(obj)
+	if gvk != nil {
+		obj.GetObjectKind().SetGroupVersionKind(*gvk)
+	}
+	return err
 }
 
 // Get implements client.Client.
@@ -140,11 +152,17 @@ func (c *typedClient) Get(ctx context.Context, key ObjectKey, obj Object, opts .
 	}
 	getOpts := GetOptions{}
 	getOpts.ApplyOptions(opts)
-	return r.Get().
+	gvk, err := r.Get().
 		NamespaceIfScoped(key.Namespace, r.isNamespaced()).
 		Resource(r.resource()).
 		VersionedParams(getOpts.AsGetOptions(), c.paramCodec).
-		Name(key.Name).Do(ctx).Into(obj)
+		Name(key.Name).
+		Do(ctx).
+		UpdateObjectAndGetGVK(obj)
+	if gvk != nil {
+		obj.GetObjectKind().SetGroupVersionKind(*gvk)
+	}
+	return err
 }
 
 // List implements client.Client.
@@ -157,12 +175,16 @@ func (c *typedClient) List(ctx context.Context, obj ObjectList, opts ...ListOpti
 	listOpts := ListOptions{}
 	listOpts.ApplyOptions(opts)
 
-	return r.Get().
+	gvk, err := r.Get().
 		NamespaceIfScoped(listOpts.Namespace, r.isNamespaced()).
 		Resource(r.resource()).
 		VersionedParams(listOpts.AsListOptions(), c.paramCodec).
 		Do(ctx).
-		Into(obj)
+		UpdateObjectAndGetGVK(obj)
+	if gvk != nil {
+		obj.GetObjectKind().SetGroupVersionKind(*gvk)
+	}
+	return err
 }
 
 func (c *typedClient) GetSubResource(ctx context.Context, obj, subResourceObj Object, subResource string, opts ...SubResourceGetOption) error {
@@ -178,14 +200,18 @@ func (c *typedClient) GetSubResource(ctx context.Context, obj, subResourceObj Ob
 	getOpts := &SubResourceGetOptions{}
 	getOpts.ApplyOptions(opts)
 
-	return o.Get().
+	gvk, err := o.Get().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
 		SubResource(subResource).
 		VersionedParams(getOpts.AsGetOptions(), c.paramCodec).
 		Do(ctx).
-		Into(subResourceObj)
+		UpdateObjectAndGetGVK(subResourceObj)
+	if gvk != nil {
+		obj.GetObjectKind().SetGroupVersionKind(*gvk)
+	}
+	return err
 }
 
 func (c *typedClient) CreateSubResource(ctx context.Context, obj Object, subResourceObj Object, subResource string, opts ...SubResourceCreateOption) error {
@@ -201,7 +227,7 @@ func (c *typedClient) CreateSubResource(ctx context.Context, obj Object, subReso
 	createOpts := &SubResourceCreateOptions{}
 	createOpts.ApplyOptions(opts)
 
-	return o.Post().
+	gvk, err := o.Post().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
@@ -209,7 +235,11 @@ func (c *typedClient) CreateSubResource(ctx context.Context, obj Object, subReso
 		Body(subResourceObj).
 		VersionedParams(createOpts.AsCreateOptions(), c.paramCodec).
 		Do(ctx).
-		Into(subResourceObj)
+		UpdateObjectAndGetGVK(subResourceObj)
+	if gvk != nil {
+		obj.GetObjectKind().SetGroupVersionKind(*gvk)
+	}
+	return err
 }
 
 // UpdateSubResource used by SubResourceWriter to write status.
@@ -236,7 +266,7 @@ func (c *typedClient) UpdateSubResource(ctx context.Context, obj Object, subReso
 		body.SetNamespace(obj.GetNamespace())
 	}
 
-	return o.Put().
+	gvk, err := o.Put().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
@@ -244,7 +274,11 @@ func (c *typedClient) UpdateSubResource(ctx context.Context, obj Object, subReso
 		Body(body).
 		VersionedParams(updateOpts.AsUpdateOptions(), c.paramCodec).
 		Do(ctx).
-		Into(body)
+		UpdateObjectAndGetGVK(body)
+	if gvk != nil {
+		obj.GetObjectKind().SetGroupVersionKind(*gvk)
+	}
+	return err
 }
 
 // PatchSubResource used by SubResourceWriter to write subresource.
@@ -267,7 +301,7 @@ func (c *typedClient) PatchSubResource(ctx context.Context, obj Object, subResou
 		return err
 	}
 
-	return o.Patch(patch.Type()).
+	gvk, err := o.Patch(patch.Type()).
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
@@ -275,5 +309,9 @@ func (c *typedClient) PatchSubResource(ctx context.Context, obj Object, subResou
 		Body(data).
 		VersionedParams(patchOpts.AsPatchOptions(), c.paramCodec).
 		Do(ctx).
-		Into(body)
+		UpdateObjectAndGetGVK(body)
+	if gvk != nil {
+		obj.GetObjectKind().SetGroupVersionKind(*gvk)
+	}
+	return err
 }

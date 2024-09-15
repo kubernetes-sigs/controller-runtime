@@ -337,6 +337,33 @@ var _ = Describe("Fake client", func() {
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 
+		It("should be able to retrieve objects by PartialObjectMetadata", func() {
+			By("Creating a Resource")
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+			}
+			err := cl.Create(context.Background(), secret)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Fetching the resource using a PartialObjectMeta")
+			partialObjMeta := &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+			}
+			partialObjMeta.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
+
+			err = cl.Get(context.Background(), client.ObjectKeyFromObject(partialObjMeta), partialObjMeta)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(partialObjMeta.Kind).To(Equal("Secret"))
+			Expect(partialObjMeta.APIVersion).To(Equal("v1"))
+		})
+
 		It("should support filtering by labels and their values", func() {
 			By("Listing deployments with a particular label and value")
 			list := &appsv1.DeploymentList{}

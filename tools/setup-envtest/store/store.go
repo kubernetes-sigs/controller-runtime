@@ -167,7 +167,7 @@ func (s *Store) Add(ctx context.Context, item Item, contents io.Reader) (resErr 
 		// preferfing our own scheme.
 		targetPath := filepath.Base(header.Name)
 		log.V(1).Info("writing archive file to disk", "archive file", header.Name, "on-disk file", targetPath)
-		perms := 0555 & header.Mode // make sure we're at most r+x
+		perms := 0555 & uint32(header.Mode) // make sure we're at most r+x
 		binOut, err := itemPath.OpenFile(targetPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.FileMode(perms))
 		if err != nil {
 			return fmt.Errorf("unable to create file %s from archive to disk for version-platform pair %s", targetPath, itemName)

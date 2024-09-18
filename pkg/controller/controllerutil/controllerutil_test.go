@@ -967,8 +967,7 @@ var _ = Describe("Controllerutil", func() {
 					ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
 				}
 				Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
-
-				b, err := controllerutil.HasOwnerReference(dep.GetOwnerReferences(), rs, scheme.Scheme)
+				b, err := controllerutil.HasOwnerReference(rs.GetOwnerReferences(), dep, scheme.Scheme)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(b).To(BeTrue())
 			})
@@ -980,16 +979,8 @@ var _ = Describe("Controllerutil", func() {
 				dep := &extensionsv1beta1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
 				}
-				b, err := controllerutil.HasOwnerReference(dep.GetOwnerReferences(), rs, scheme.Scheme)
+				b, err := controllerutil.HasOwnerReference(rs.GetOwnerReferences(), dep, scheme.Scheme)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(b).To(BeFalse())
-			})
-
-			It("should return error if the object can not create group-version-kind", func() {
-				rs := &appsv1.ReplicaSet{}
-				dep := &errMetaObj{}
-				b, err := controllerutil.HasOwnerReference(dep.GetOwnerReferences(), rs, runtime.NewScheme())
-				Expect(err).To(HaveOccurred())
 				Expect(b).To(BeFalse())
 			})
 		})

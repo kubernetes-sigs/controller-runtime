@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	api "sigs.k8s.io/controller-runtime/examples/crd/pkg"
@@ -48,8 +49,11 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	var chaospod api.ChaosPod
 	if err := r.Get(ctx, req.NamespacedName, &chaospod); err != nil {
-		log.Error(err, "unable to get chaosctl")
-		return ctrl.Result{}, err
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "unable to get chaosctl")
+		}
+
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	var pod corev1.Pod
@@ -93,27 +97,37 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	chaospod.Spec.NextStop.Time = time.Now().Add(time.Duration(10*(rand.Int63n(2)+1)) * time.Second)
-	chaospod.Status.LastRun = pod.CreationTimestamp
 	if err := r.Update(ctx, &chaospod); err != nil {
 		log.Error(err, "unable to update chaosctl status")
 		return ctrl.Result{}, err
 	}
+
+	chaospod.Status.LastRun = pod.CreationTimestamp
+	err := r.Status().Update(ctx, &chaospod)
+	if err != nil {
+		log.Error(err, "unable to update chaosctl status")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
 func main() {
 	ctrl.SetLogger(zap.New())
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
+	scheme := runtime.NewScheme()
+	utilruntime.Must(corev1.AddToScheme(scheme))
+	err := api.AddToScheme(scheme)
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
+		setupLog.Error(err, "unable to add scheme")
 		os.Exit(1)
 	}
 
-	// in a real controller, we'd create a new scheme for this
-	err = api.AddToScheme(mgr.GetScheme())
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme: scheme,
+	})
 	if err != nil {
-		setupLog.Error(err, "unable to add scheme")
+		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 

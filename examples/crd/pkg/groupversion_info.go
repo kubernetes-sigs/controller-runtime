@@ -16,6 +16,7 @@ limitations under the License.
 
 // +kubebuilder:object:generate=true
 // +groupName=chaosapps.metamagical.io
+// +versionName=v1
 package pkg
 
 import (

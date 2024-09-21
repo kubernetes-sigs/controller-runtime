@@ -957,6 +957,33 @@ var _ = Describe("Controllerutil", func() {
 				Expect(controllerutil.ContainsFinalizer(deploy, testFinalizer)).To(BeFalse())
 			})
 		})
+
+		Describe("HasOwnerReference", func() {
+			It("should return true if the object has the owner reference", func() {
+				rs := &appsv1.ReplicaSet{
+					ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+				}
+				dep := &extensionsv1beta1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+				}
+				Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
+				b, err := controllerutil.HasOwnerReference(rs.GetOwnerReferences(), dep, scheme.Scheme)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(b).To(BeTrue())
+			})
+
+			It("should return false if the object does not have the owner reference", func() {
+				rs := &appsv1.ReplicaSet{
+					ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+				}
+				dep := &extensionsv1beta1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+				}
+				b, err := controllerutil.HasOwnerReference(rs.GetOwnerReferences(), dep, scheme.Scheme)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(b).To(BeFalse())
+			})
+		})
 	})
 })
 

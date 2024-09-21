@@ -35,6 +35,7 @@ type ChaosPodStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // ChaosPod is the Schema for the randomjobs API
 // +kubebuilder:printcolumn:name="next stop",type="string",JSONPath=".spec.nextStop",format="date"

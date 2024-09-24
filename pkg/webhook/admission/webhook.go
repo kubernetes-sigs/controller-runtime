@@ -27,7 +27,6 @@ import (
 	"gomodules.xyz/jsonpatch/v2"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/klog/v2"
@@ -96,9 +95,6 @@ func (r *Response) Complete(req Request) error {
 	return nil
 }
 
-// HandlerFactory can create a Handler for the given type.
-type HandlerFactory func(obj runtime.Object, decoder Decoder) Handler
-
 // Handler can handle an AdmissionRequest.
 type Handler interface {
 	// Handle yields a response to an AdmissionRequest.
@@ -116,13 +112,6 @@ var _ Handler = HandlerFunc(nil)
 // Handle process the AdmissionRequest by invoking the underlying function.
 func (f HandlerFunc) Handle(ctx context.Context, req Request) Response {
 	return f(ctx, req)
-}
-
-// WithHandlerFactory creates a new Webhook for a handler factory.
-func WithHandlerFactory(scheme *runtime.Scheme, obj runtime.Object, factory HandlerFactory) *Webhook {
-	return &Webhook{
-		Handler: factory(obj, NewDecoder(scheme)),
-	}
 }
 
 // Webhook represents each individual webhook.

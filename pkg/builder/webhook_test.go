@@ -30,9 +30,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"gomodules.xyz/jsonpatch/v2"
+	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -229,8 +232,8 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 		err = WebhookManagedBy(m).
-			WithMutatorFactory(mutatorFactoryForTestDefaulter(m.GetScheme())).
 			For(&TestDefaulter{}).
+			WithMutationHandler(&TestMutationHandler{}).
 			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
 				return admission.DefaultLogConstructor(testingLogger, req)
 			}).
@@ -280,7 +283,7 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":true`))
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"patch":`))
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":200`))
-		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Defaulting object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaulter"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
+		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Mutating object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaulter"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
 
 		By("sending a request to a validating webhook path that doesn't exist")
 		path = generateValidatePath(testDefaulterGVK)
@@ -646,7 +649,8 @@ func (*TestDefaultValidatorList) DeepCopyObject() runtime.Object   { return nil 
 type TestCustomDefaulter struct{}
 
 func (*TestCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
-	logf.FromContext(ctx).Info("Defaulting object")
+	log := logf.FromContext(ctx)
+	log.Info("Defaulting object")
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("expected admission.Request in ctx: %w", err)
@@ -668,11 +672,26 @@ func (*TestCustomDefaulter) Default(ctx context.Context, obj runtime.Object) err
 
 var _ admission.CustomDefaulter = &TestCustomDefaulter{}
 
-func mutatorFactoryForTestDefaulter(scheme *runtime.Scheme) admission.HandlerFactory {
-	return func(obj runtime.Object, _ admission.Decoder) admission.Handler {
-		return admission.WithCustomDefaulter(scheme, obj, &TestCustomDefaulter{}).Handler
+// TestMutationHandler
+type TestMutationHandler struct{}
+
+func (*TestMutationHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
+	log := logf.FromContext(ctx)
+	log.Info("Mutating object")
+	return admission.Response{
+		AdmissionResponse: admissionv1.AdmissionResponse{
+			Allowed:   true,
+			PatchType: ptr.To(admissionv1.PatchTypeJSONPatch),
+		},
+		Patches: []jsonpatch.Operation{{
+			Operation: "replace",
+			Path:      "/replica",
+			Value:     "2",
+		}},
 	}
 }
+
+var _ admission.Handler = &TestMutationHandler{}
 
 // TestCustomValidator.
 

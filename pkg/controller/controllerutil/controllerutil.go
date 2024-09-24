@@ -71,7 +71,7 @@ func SetControllerReference(owner, controlled metav1.Object, scheme *runtime.Sch
 	if !ok {
 		return fmt.Errorf("%T is not a runtime.Object, cannot call SetControllerReference", owner)
 	}
-	if err := validateOwner(owner, controlled); err != nil {
+	if err := validateOwnerWithNS(owner, controlled); err != nil {
 		return err
 	}
 
@@ -106,7 +106,7 @@ func SetOwnerReference(owner, object metav1.Object, scheme *runtime.Scheme, opts
 	if !ok {
 		return fmt.Errorf("%T is not a runtime.Object, cannot call SetOwnerReference", owner)
 	}
-	if err := validateOwner(owner, object); err != nil {
+	if err := validateOwnerWithNS(owner, object); err != nil {
 		return err
 	}
 
@@ -133,10 +133,16 @@ func RemoveOwnerReference(owner, object metav1.Object, scheme *runtime.Scheme) e
 	if length < 1 {
 		return fmt.Errorf("%T does not have any owner references", object)
 	}
+
 	ro, ok := owner.(runtime.Object)
 	if !ok {
 		return fmt.Errorf("%T is not a runtime.Object, cannot call RemoveOwnerReference", owner)
 	}
+
+	if err := validateOwnerWithNS(owner, object); err != nil {
+		return err
+	}
+
 	gvk, err := apiutil.GVKForObject(ro, scheme)
 	if err != nil {
 		return err
@@ -172,10 +178,6 @@ func HasOwnerReference(ownerRefs []metav1.OwnerReference, obj client.Object, sch
 // RemoveControllerReference removes an owner reference where the controller
 // equals true
 func RemoveControllerReference(owner, object metav1.Object, scheme *runtime.Scheme) error {
-	if !metav1.IsControlledBy(object, owner) {
-		return fmt.Errorf("%T owner is not the controller reference for %T", owner, object)
-	}
-
 	ro, ok := owner.(runtime.Object)
 	if !ok {
 		return fmt.Errorf("%T is not a runtime.Object, cannot call RemoveControllerReference", owner)
@@ -184,6 +186,17 @@ func RemoveControllerReference(owner, object metav1.Object, scheme *runtime.Sche
 	if err != nil {
 		return err
 	}
+
+	if controller := metav1.GetControllerOfNoCopy(object); controller == nil {
+		return fmt.Errorf("%T does not have a owner reference with controller equals true", object)
+	} else if !referSameObject(*controller, *NewOwnerRef(owner, gvk)) {
+		return fmt.Errorf("%T owner is not the controller reference for %T", owner, object)
+	}
+
+	if err := validateOwnerWithNS(owner, object); err != nil {
+		return err
+	}
+
 	ownerRefs := object.GetOwnerReferences()
 	index := indexOwnerRef(ownerRefs, *metav1.NewControllerRef(owner, gvk))
 
@@ -222,7 +235,7 @@ func NewOwnerRef(owner metav1.Object, gvk schema.GroupVersionKind) *metav1.Owner
 	}
 }
 
-func validateOwner(owner, object metav1.Object) error {
+func validateOwnerWithNS(owner, object metav1.Object) error {
 	ownerNs := owner.GetNamespace()
 	if ownerNs != "" {
 		objNs := object.GetNamespace()
@@ -238,7 +251,16 @@ func validateOwner(owner, object metav1.Object) error {
 
 // Returns true if a and b point to the same object.
 func referSameObject(a, b metav1.OwnerReference) bool {
-	return a.UID == b.UID
+	aGV, err := schema.ParseGroupVersion(a.APIVersion)
+	if err != nil {
+		return false
+	}
+
+	bGV, err := schema.ParseGroupVersion(b.APIVersion)
+	if err != nil {
+		return false
+	}
+	return aGV.Group == bGV.Group && a.Kind == b.Kind && a.Name == b.Name
 }
 
 // OperationResult is the action result of a CreateOrUpdate call.

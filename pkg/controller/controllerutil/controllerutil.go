@@ -82,7 +82,6 @@ func SetControllerReference(owner, controlled metav1.Object, scheme *runtime.Sch
 	}
 
 	ref := metav1.NewControllerRef(owner, gvk)
-
 	for _, opt := range opts {
 		opt(ref)
 	}
@@ -138,7 +137,6 @@ func RemoveOwnerReference(owner, object metav1.Object, scheme *runtime.Scheme) e
 	if !ok {
 		return fmt.Errorf("%T is not a runtime.Object, cannot call RemoveOwnerReference", owner)
 	}
-
 	if err := validateOwnerWithNS(owner, object); err != nil {
 		return err
 	}
@@ -189,7 +187,7 @@ func RemoveControllerReference(owner, object metav1.Object, scheme *runtime.Sche
 
 	if controller := metav1.GetControllerOfNoCopy(object); controller == nil {
 		return fmt.Errorf("%T does not have a owner reference with controller equals true", object)
-	} else if !referSameObject(*controller, *NewOwnerRef(owner, gvk)) {
+	} else if !referSameObject(*controller, *metav1.NewControllerRef(owner, gvk)) {
 		return fmt.Errorf("%T owner is not the controller reference for %T", owner, object)
 	}
 

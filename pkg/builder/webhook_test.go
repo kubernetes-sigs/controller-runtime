@@ -649,8 +649,7 @@ func (*TestDefaultValidatorList) DeepCopyObject() runtime.Object   { return nil 
 type TestCustomDefaulter struct{}
 
 func (*TestCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
-	log := logf.FromContext(ctx)
-	log.Info("Defaulting object")
+	logf.FromContext(ctx).Info("Defaulting object")
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("expected admission.Request in ctx: %w", err)
@@ -676,8 +675,7 @@ var _ admission.CustomDefaulter = &TestCustomDefaulter{}
 type TestMutationHandler struct{}
 
 func (*TestMutationHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
-	log := logf.FromContext(ctx)
-	log.Info("Mutating object")
+	logf.FromContext(ctx).Info("Mutating object")
 	return admission.Response{
 		AdmissionResponse: admissionv1.AdmissionResponse{
 			Allowed:   true,

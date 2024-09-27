@@ -19,6 +19,7 @@ package controllerutil
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -81,10 +82,8 @@ func SetControllerReference(owner, controlled metav1.Object, scheme *runtime.Sch
 		return err
 	}
 
-	ref := metav1.NewControllerRef(owner, gvk)
-	for _, opt := range opts {
-		opt(ref)
-	}
+	ref := NewOwnerRef(owner, gvk, opts...)
+	ref.Controller = ptr.To(true)
 
 	// Return early with an error if the object is already controlled.
 	if existing := metav1.GetControllerOf(controlled); existing != nil && !referSameObject(*existing, *ref) {
@@ -114,10 +113,7 @@ func SetOwnerReference(owner, object metav1.Object, scheme *runtime.Scheme, opts
 	if err != nil {
 		return err
 	}
-	ref := NewOwnerRef(owner, gvk)
-	for _, opt := range opts {
-		opt(ref)
-	}
+	ref := NewOwnerRef(owner, gvk, opts...)
 
 	// Update owner references and return.
 	upsertOwnerRef(*ref, object)
@@ -185,18 +181,27 @@ func RemoveControllerReference(owner, object metav1.Object, scheme *runtime.Sche
 		return err
 	}
 
-	if controller := metav1.GetControllerOfNoCopy(object); controller == nil {
-		return fmt.Errorf("%T does not have a owner reference with controller equals true", object)
-	} else if !referSameObject(*controller, *metav1.NewControllerRef(owner, gvk)) {
-		return fmt.Errorf("%T owner is not the controller reference for %T", owner, object)
+	hasController := false
+	index := -1
+	ownerRefs := object.GetOwnerReferences()
+	ctrlRefToBeRemove := *metav1.NewControllerRef(owner, gvk)
+	for i, ownerRef := range ownerRefs {
+		if ownerRef.Controller != nil {
+			hasController = *ownerRef.Controller || hasController
+		}
+		if referSameObject(ownerRef, ctrlRefToBeRemove) {
+			index = i
+		}
 	}
 
+	if !hasController {
+		return fmt.Errorf("%T does not have a owner reference with controller equals true", object)
+	} else if index == -1 || ownerRefs[index].Controller == nil || !*ownerRefs[index].Controller {
+		return fmt.Errorf("%T owner is not the controller reference for %T", owner, object)
+	}
 	if err := validateOwnerWithNS(owner, object); err != nil {
 		return err
 	}
-
-	ownerRefs := object.GetOwnerReferences()
-	index := indexOwnerRef(ownerRefs, *metav1.NewControllerRef(owner, gvk))
 
 	ownerRefs = append(ownerRefs[:index], ownerRefs[index+1:]...)
 	object.SetOwnerReferences(ownerRefs)
@@ -224,13 +229,17 @@ func indexOwnerRef(ownerReferences []metav1.OwnerReference, ref metav1.OwnerRefe
 }
 
 // NewOwnerRef creates an OwnerReference pointing to the given owner.
-func NewOwnerRef(owner metav1.Object, gvk schema.GroupVersionKind) *metav1.OwnerReference {
-	return &metav1.OwnerReference{
+func NewOwnerRef(owner metav1.Object, gvk schema.GroupVersionKind, opts ...OwnerReferenceOption) *metav1.OwnerReference {
+	ref := &metav1.OwnerReference{
 		APIVersion: gvk.GroupVersion().String(),
 		Kind:       gvk.Kind,
 		Name:       owner.GetName(),
 		UID:        owner.GetUID(),
 	}
+	for _, opt := range opts {
+		opt(ref)
+	}
+	return ref
 }
 
 func validateOwnerWithNS(owner, object metav1.Object) error {

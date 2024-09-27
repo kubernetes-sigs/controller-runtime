@@ -15,4 +15,4 @@ jobs:
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          ./hack/verify-pr-title.sh "${{ github.event.pull_request.title }}"
+          ./hack/verify-pr-title.sh "${PR_TITLE}"

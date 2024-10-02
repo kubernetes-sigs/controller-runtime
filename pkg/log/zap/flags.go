@@ -85,7 +85,7 @@ func (ev *levelFlag) Set(flagValue string) error {
 		}
 		if logLevel > 0 {
 			intLevel := -1 * logLevel
-			ev.setFunc(zap.NewAtomicLevelAt(zapcore.Level(int8(intLevel))))
+			ev.setFunc(zap.NewAtomicLevelAt(zapcore.Level(int8(intLevel)))) //nolint:gosec // We don't care about G115.
 		} else {
 			return fmt.Errorf("invalid log level \"%s\"", flagValue)
 		}

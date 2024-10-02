@@ -1544,7 +1544,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					return obtainedPodNames
 				}, ConsistOf(tc.expectedPods)))
 				for _, pod := range obtainedStructuredPodList.Items {
-					Expect(informer.Get(context.Background(), client.ObjectKeyFromObject(&pod), &pod)).To(Succeed()) // We don't retain the pointer
+					Expect(informer.Get(context.Background(), client.ObjectKeyFromObject(&pod), &pod)).To(Succeed())
 				}
 
 				By("Checking with unstructured")
@@ -1564,7 +1564,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					return obtainedPodNames
 				}, ConsistOf(tc.expectedPods)))
 				for _, pod := range obtainedUnstructuredPodList.Items {
-					Expect(informer.Get(context.Background(), client.ObjectKeyFromObject(&pod), &pod)).To(Succeed()) // We don't retain the pointer
+					Expect(informer.Get(context.Background(), client.ObjectKeyFromObject(&pod), &pod)).To(Succeed())
 				}
 
 				By("Checking with metadata")
@@ -1584,7 +1584,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					return obtainedPodNames
 				}, ConsistOf(tc.expectedPods)))
 				for _, pod := range obtainedMetadataPodList.Items {
-					Expect(informer.Get(context.Background(), client.ObjectKeyFromObject(&pod), &pod)).To(Succeed()) // We don't retain the pointer
+					Expect(informer.Get(context.Background(), client.ObjectKeyFromObject(&pod), &pod)).To(Succeed())
 				}
 			},
 				Entry("when selectors are empty it has to inform about all the pods", selectorsTestCase{

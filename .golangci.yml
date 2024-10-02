@@ -163,9 +163,6 @@ issues:
         - gosec
       text: "G304: Potential file inclusion via variable"
     - linters:
-        - gosec
-      text: "G115: integer overflow conversion"
-    - linters:
         - dupl
       path: _test\.go
 

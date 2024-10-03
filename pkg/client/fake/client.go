@@ -33,6 +33,7 @@ import (
 	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -1128,7 +1129,7 @@ func (sw *fakeSubResourceClient) Get(ctx context.Context, obj, subResource clien
 		}
 		scale, isScale := subResource.(*autoscalingv1.Scale)
 		if !isScale {
-			return apierrors.NewBadRequest(fmt.Sprintf("expected Scale, got %t", subResource))
+			return apierrors.NewBadRequest(fmt.Sprintf("expected Scale, got %T", subResource))
 		}
 		scaleOut, err := extractScale(obj)
 		if err != nil {
@@ -1149,13 +1150,26 @@ func (sw *fakeSubResourceClient) Create(ctx context.Context, obj client.Object, 
 			_, isEviction = subResource.(*policyv1.Eviction)
 		}
 		if !isEviction {
-			return apierrors.NewBadRequest(fmt.Sprintf("got invalid type %t, expected Eviction", subResource))
+			return apierrors.NewBadRequest(fmt.Sprintf("got invalid type %T, expected Eviction", subResource))
 		}
 		if _, isPod := obj.(*corev1.Pod); !isPod {
 			return apierrors.NewNotFound(schema.GroupResource{}, "")
 		}
 
 		return sw.client.Delete(ctx, obj)
+	case "token":
+		tokenRequest, isTokenRequest := subResource.(*authenticationv1.TokenRequest)
+		if !isTokenRequest {
+			return apierrors.NewBadRequest(fmt.Sprintf("got invalid type %T, expected TokenRequest", subResource))
+		}
+		if _, isServiceAccount := obj.(*corev1.ServiceAccount); !isServiceAccount {
+			return apierrors.NewNotFound(schema.GroupResource{}, "")
+		}
+
+		tokenRequest.Status.Token = "fake-token"
+		tokenRequest.Status.ExpirationTimestamp = metav1.Date(6041, 1, 1, 0, 0, 0, 0, time.UTC)
+
+		return nil
 	default:
 		return fmt.Errorf("fakeSubResourceWriter does not support create for %s", sw.subResource)
 	}
@@ -1176,7 +1190,7 @@ func (sw *fakeSubResourceClient) Update(ctx context.Context, obj client.Object, 
 
 		scale, isScale := updateOptions.SubResourceBody.(*autoscalingv1.Scale)
 		if !isScale {
-			return apierrors.NewBadRequest(fmt.Sprintf("expected Scale, got %t", updateOptions.SubResourceBody))
+			return apierrors.NewBadRequest(fmt.Sprintf("expected Scale, got %T", updateOptions.SubResourceBody))
 		}
 		if err := applyScale(obj, scale); err != nil {
 			return err

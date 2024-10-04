@@ -1169,7 +1169,7 @@ func (sw *fakeSubResourceClient) Create(ctx context.Context, obj client.Object, 
 		tokenRequest.Status.Token = "fake-token"
 		tokenRequest.Status.ExpirationTimestamp = metav1.Date(6041, 1, 1, 0, 0, 0, 0, time.UTC)
 
-		return nil
+		return sw.client.Get(ctx, client.ObjectKeyFromObject(obj), obj)
 	default:
 		return fmt.Errorf("fakeSubResourceWriter does not support create for %s", sw.subResource)
 	}

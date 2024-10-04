@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -1956,6 +1957,42 @@ var _ = Describe("Fake client", func() {
 	It("should error when creating an eviction with the wrong type", func() {
 		cl := NewClientBuilder().Build()
 		err := cl.SubResource("eviction").Create(context.Background(), &corev1.Pod{}, &corev1.Namespace{})
+		Expect(apierrors.IsBadRequest(err)).To(BeTrue())
+	})
+
+	It("should create a ServiceAccount token through the token subresource", func() {
+		sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+		cl := NewClientBuilder().WithObjects(sa).Build()
+
+		tokenRequest := &authenticationv1.TokenRequest{}
+		err := cl.SubResource("token").Create(context.Background(), sa, tokenRequest)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(tokenRequest.Status.Token).NotTo(Equal(""))
+		Expect(tokenRequest.Status.ExpirationTimestamp).NotTo(Equal(metav1.Time{}))
+	})
+
+	It("should return not found when creating a token for a ServiceAccount that doesn't exist", func() {
+		sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+		cl := NewClientBuilder().Build()
+
+		tokenRequest := &authenticationv1.TokenRequest{}
+		err := cl.SubResource("token").Create(context.Background(), sa, tokenRequest)
+		Expect(err).To(HaveOccurred())
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	})
+
+
+
+	It("should error when creating a token with the wrong subresource type", func() {
+		cl := NewClientBuilder().Build()
+		err := cl.SubResource("token").Create(context.Background(), &corev1.ServiceAccount{}, &corev1.Namespace{})
+		Expect(apierrors.IsBadRequest(err)).To(BeTrue())
+	})
+
+	It("should error when creating a token with the wrong type", func() {
+		cl := NewClientBuilder().Build()
+		err := cl.SubResource("token").Create(context.Background(), &corev1.Secret{}, &corev1.Namespace{})
 		Expect(apierrors.IsBadRequest(err)).To(BeTrue())
 	})
 

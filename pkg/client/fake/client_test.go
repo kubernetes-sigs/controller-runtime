@@ -1976,8 +1976,7 @@ var _ = Describe("Fake client", func() {
 		sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
 		cl := NewClientBuilder().Build()
 
-		tokenRequest := &authenticationv1.TokenRequest{}
-		err := cl.SubResource("token").Create(context.Background(), sa, tokenRequest)
+		err := cl.SubResource("token").Create(context.Background(), sa, &authenticationv1.TokenRequest{})
 		Expect(err).To(HaveOccurred())
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
@@ -1985,13 +1984,15 @@ var _ = Describe("Fake client", func() {
 	It("should error when creating a token with the wrong subresource type", func() {
 		cl := NewClientBuilder().Build()
 		err := cl.SubResource("token").Create(context.Background(), &corev1.ServiceAccount{}, &corev1.Namespace{})
+		Expect(err).To(HaveOccurred())
 		Expect(apierrors.IsBadRequest(err)).To(BeTrue())
 	})
 
 	It("should error when creating a token with the wrong type", func() {
 		cl := NewClientBuilder().Build()
-		err := cl.SubResource("token").Create(context.Background(), &corev1.Secret{}, &corev1.Namespace{})
-		Expect(apierrors.IsBadRequest(err)).To(BeTrue())
+		err := cl.SubResource("token").Create(context.Background(), &corev1.Secret{}, &authenticationv1.TokenRequest{})
+		Expect(err).To(HaveOccurred())
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
 	It("should leave typemeta empty on typed get", func() {

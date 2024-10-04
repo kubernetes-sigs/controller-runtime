@@ -1982,8 +1982,6 @@ var _ = Describe("Fake client", func() {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
-
-
 	It("should error when creating a token with the wrong subresource type", func() {
 		cl := NewClientBuilder().Build()
 		err := cl.SubResource("token").Create(context.Background(), &corev1.ServiceAccount{}, &corev1.Namespace{})

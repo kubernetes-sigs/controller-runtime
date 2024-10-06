@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
+
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -200,6 +201,10 @@ type Options struct {
 	// speeds up voluntary leader transitions as the new leader doesn't have to wait
 	// LeaseDuration time first.
 	LeaderElectionReleaseOnCancel bool
+
+	// OnStoppedLeading is callled when the leader election lease is lost.
+	// It can be overridden for tests.
+	OnStoppedLeading func()
 
 	// LeaderElectionResourceLockInterface allows to provide a custom resourcelock.Interface that was created outside
 	// of the controller-runtime. If this value is set the options LeaderElectionID, LeaderElectionNamespace,
@@ -441,6 +446,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		internalProceduresStop:        make(chan struct{}),
 		leaderElectionStopped:         make(chan struct{}),
 		leaderElectionReleaseOnCancel: options.LeaderElectionReleaseOnCancel,
+		onStoppedLeading:              options.OnStoppedLeading,
 	}, nil
 }
 

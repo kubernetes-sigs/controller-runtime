@@ -30,6 +30,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/client-go/rest"
+	clientmetrics "k8s.io/client-go/tools/metrics"
 	certutil "k8s.io/client-go/util/cert"
 
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
@@ -81,6 +82,9 @@ type Options struct {
 	// This can be e.g. used to enforce authentication and authorization on the handlers
 	// endpoint by setting this field to filters.WithAuthenticationAndAuthorization.
 	FilterProvider func(c *rest.Config, httpClient *http.Client) (Filter, error)
+
+	// ClientGoMetricsRegisterOpts contains the options used to register client-go metrics.
+	ClientGoMetricsRegisterOpts clientmetrics.RegisterOpts
 
 	// CertDir is the directory that contains the server key and certificate. Defaults to
 	// <temp-dir>/k8s-metrics-server/serving-certs.
@@ -137,6 +141,8 @@ func NewServer(o Options, config *rest.Config, httpClient *http.Client) (Server,
 			return nil, fmt.Errorf("filter provider failed to create filter for the metrics server: %w", err)
 		}
 	}
+
+	metrics.RegisterClientMetrics(o.ClientGoMetricsRegisterOpts)
 
 	return &defaultServer{
 		metricsFilter: metricsFilter,

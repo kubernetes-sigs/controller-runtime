@@ -18,8 +18,6 @@ package metrics
 
 import (
 	"context"
-	"sync"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	clientmetrics "k8s.io/client-go/tools/metrics"
@@ -39,31 +37,24 @@ var (
 		},
 		[]string{"code", "method", "host"},
 	)
-
-	clientMetricsRegisterOnce = sync.Once{}
 )
 
 func init() {
 	// register the metrics with our registry
 	Registry.MustRegister(requestResult)
-
-	time.AfterFunc(30*time.Second, func() {
-		RegisterClientMetrics(clientmetrics.RegisterOpts{})
-	})
 }
 
-// RegisterClientMetrics sets up the client latency metrics from client-go. Since clientmetrics.Register can only be
-// called once, you MUST call this method if you want to register other client-go metrics within the first 30 seconds
-// of a binaries lifetime, or it will get called without other metrics.
+// RegisterClientMetrics sets up metrics from client-go.
+// Notice that clientmetrics.Register can only be called once, so only the RegisterOpts from the first call to this
+// function will take effect.
 func RegisterClientMetrics(opts clientmetrics.RegisterOpts) {
-	clientMetricsRegisterOnce.Do(func() {
+	if opts.RequestResult == nil {
 		opts.RequestResult = &resultAdapter{
-			metric:       requestResult,
-			customMetric: opts.RequestResult,
+			metric: requestResult,
 		}
-		// register the metrics with client-go
-		clientmetrics.Register(opts)
-	})
+	}
+	// register the metrics with client-go
+	clientmetrics.Register(opts)
 }
 
 // this section contains adapters, implementations, and other sundry organic, artisanally
@@ -75,13 +66,9 @@ func RegisterClientMetrics(opts clientmetrics.RegisterOpts) {
 // (which isn't anywhere in an easily-importable place).
 
 type resultAdapter struct {
-	metric       *prometheus.CounterVec
-	customMetric clientmetrics.ResultMetric
+	metric *prometheus.CounterVec
 }
 
-func (r *resultAdapter) Increment(ctx context.Context, code, method, host string) {
+func (r *resultAdapter) Increment(_ context.Context, code, method, host string) {
 	r.metric.WithLabelValues(code, method, host).Inc()
-	if r.customMetric != nil {
-		r.customMetric.Increment(ctx, code, method, host)
-	}
 }

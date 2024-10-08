@@ -40,18 +40,21 @@ var (
 )
 
 func init() {
-	registerClientMetrics()
-}
-
-// registerClientMetrics sets up the client latency metrics from client-go.
-func registerClientMetrics() {
 	// register the metrics with our registry
 	Registry.MustRegister(requestResult)
+}
 
+// RegisterClientMetrics sets up metrics from client-go.
+// Notice that clientmetrics.Register can only be called once, so only the RegisterOpts from the first call to this
+// function will take effect.
+func RegisterClientMetrics(opts clientmetrics.RegisterOpts) {
+	if opts.RequestResult == nil {
+		opts.RequestResult = &resultAdapter{
+			metric: requestResult,
+		}
+	}
 	// register the metrics with client-go
-	clientmetrics.Register(clientmetrics.RegisterOpts{
-		RequestResult: &resultAdapter{metric: requestResult},
-	})
+	clientmetrics.Register(opts)
 }
 
 // this section contains adapters, implementations, and other sundry organic, artisanally

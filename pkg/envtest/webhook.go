@@ -313,14 +313,12 @@ func createWebhooks(config *rest.Config, mutHooks []*admissionv1.MutatingWebhook
 
 	// Create each webhook
 	for _, hook := range mutHooks {
-		hook := hook
 		log.V(1).Info("installing mutating webhook", "webhook", hook.GetName())
 		if err := ensureCreated(cs, hook); err != nil {
 			return err
 		}
 	}
 	for _, hook := range valHooks {
-		hook := hook
 		log.V(1).Info("installing validating webhook", "webhook", hook.GetName())
 		if err := ensureCreated(cs, hook); err != nil {
 			return err

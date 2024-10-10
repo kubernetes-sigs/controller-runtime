@@ -67,6 +67,9 @@ func (blder *WebhookBuilder) For(apiType runtime.Object) *WebhookBuilder {
 }
 
 // WithMutationHandler takes an admission.Handler, a MutatingWebhook will be wired for it.
+// A mutation handler is a low-level plug point for advanced use cases that need control
+// to generate patches. If in doubt, prefer using WithDefaulter to register a defaulter.
+// You can only use one of WithMutationHandler or WithDefaulter.
 func (blder *WebhookBuilder) WithMutationHandler(h admission.Handler) *WebhookBuilder {
 	blder.mutationHandler = h
 	return blder

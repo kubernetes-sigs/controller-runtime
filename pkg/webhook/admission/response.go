@@ -71,7 +71,7 @@ func ValidationResponse(allowed bool, message string) Response {
 		AdmissionResponse: admissionv1.AdmissionResponse{
 			Allowed: allowed,
 			Result: &metav1.Status{
-				Code:   int32(code),
+				Code:   int32(code), //nolint:gosec // Integer overflows (G115) cannot occur here.
 				Reason: reason,
 			},
 		},

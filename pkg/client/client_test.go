@@ -1979,7 +1979,6 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			// Test this with an integrated type and a CRD to make sure it covers both proto
 			// and json deserialization.
 			for idx, object := range []client.Object{&corev1.ConfigMap{}, &pkg.ChaosPod{}} {
-				idx, object := idx, object
 				It(fmt.Sprintf("should not retain any data in the obj variable that is not on the server for %T", object), func() {
 					cl, err := client.New(cfg, client.Options{})
 					Expect(err).NotTo(HaveOccurred())

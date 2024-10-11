@@ -29,7 +29,7 @@ import (
 
 var _ = Describe("Defaulter Handler", func() {
 
-	It("should should not lose unknown fields", func() {
+	It("should not lose unknown fields", func() {
 		obj := &TestDefaulter{}
 		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{})
 
@@ -37,16 +37,22 @@ var _ = Describe("Defaulter Handler", func() {
 			AdmissionRequest: admissionv1.AdmissionRequest{
 				Operation: admissionv1.Create,
 				Object: runtime.RawExtension{
-					Raw: []byte(`{"newField":"foo"}`),
+					Raw: []byte(`{"newField":"foo", "totalReplicas":5}`),
 				},
 			},
 		})
 		Expect(resp.Allowed).Should(BeTrue())
-		Expect(resp.Patches).To(Equal([]jsonpatch.JsonPatchOperation{{
-			Operation: "add",
-			Path:      "/replica",
-			Value:     2.0,
-		}}))
+		Expect(resp.Patches).To(Equal([]jsonpatch.JsonPatchOperation{
+			{
+				Operation: "add",
+				Path:      "/replica",
+				Value:     2.0,
+			},
+			{
+				Operation: "remove",
+				Path:      "/totalReplicas",
+			},
+		}))
 		Expect(resp.Result.Code).Should(Equal(int32(http.StatusOK)))
 	})
 
@@ -70,7 +76,8 @@ var _ = Describe("Defaulter Handler", func() {
 var _ runtime.Object = &TestDefaulter{}
 
 type TestDefaulter struct {
-	Replica int `json:"replica,omitempty"`
+	Replica       int `json:"replica,omitempty"`
+	TotalReplicas int `json:"totalReplicas,omitempty"`
 }
 
 var testDefaulterGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: "TestDefaulter"}
@@ -78,7 +85,8 @@ var testDefaulterGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "
 func (d *TestDefaulter) GetObjectKind() schema.ObjectKind { return d }
 func (d *TestDefaulter) DeepCopyObject() runtime.Object {
 	return &TestDefaulter{
-		Replica: d.Replica,
+		Replica:       d.Replica,
+		TotalReplicas: d.TotalReplicas,
 	}
 }
 
@@ -103,5 +111,6 @@ func (d *TestCustomDefaulter) Default(ctx context.Context, obj runtime.Object) e
 	if o.Replica < 2 {
 		o.Replica = 2
 	}
+	o.TotalReplicas = 0
 	return nil
 }

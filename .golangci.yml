@@ -5,13 +5,13 @@ linters:
     - asciicheck
     - bidichk
     - bodyclose
+    - copyloopvar
     - dogsled
     - dupl
     - errcheck
     - errchkjson
     - errorlint
     - exhaustive
-    - exportloopref
     - ginkgolinter
     - goconst
     - gocritic

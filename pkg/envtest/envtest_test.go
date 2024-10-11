@@ -57,7 +57,6 @@ var _ = Describe("Test", func() {
 	// Cleanup CRDs
 	AfterEach(func() {
 		for _, crd := range crds {
-			crd := crd
 			// Delete only if CRD exists.
 			crdObjectKey := client.ObjectKey{
 				Name: crd.GetName(),

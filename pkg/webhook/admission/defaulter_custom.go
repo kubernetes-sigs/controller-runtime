@@ -21,11 +21,14 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 
+	"gomodules.xyz/jsonpatch/v2"
 	admissionv1 "k8s.io/api/admission/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // CustomDefaulter defines functions for setting defaults on resources.
@@ -71,14 +74,16 @@ func (h *defaulterForType) Handle(ctx context.Context, req Request) Response {
 	ctx = NewContextWithRequest(ctx, req)
 
 	// Get the object in the request
-	original := h.object.DeepCopyObject()
-	if err := h.decoder.Decode(req, original); err != nil {
+	obj := h.object.DeepCopyObject()
+	if err := h.decoder.Decode(req, obj); err != nil {
 		return Errored(http.StatusBadRequest, err)
 	}
 
+	// Keep a copy of the object
+	originalObj := obj.DeepCopyObject()
+
 	// Default the object
-	updated := original.DeepCopyObject()
-	if err := h.defaulter.Default(ctx, updated); err != nil {
+	if err := h.defaulter.Default(ctx, obj); err != nil {
 		var apiStatus apierrors.APIStatus
 		if errors.As(err, &apiStatus) {
 			return validationResponseFromStatus(false, apiStatus.Status())
@@ -86,17 +91,42 @@ func (h *defaulterForType) Handle(ctx context.Context, req Request) Response {
 		return Denied(err.Error())
 	}
 
-	// Create the patch.
-	// We need to decode and marshall the original because the type registered in the
-	// decoder might not match the latest version of the API.
-	// Creating a diff from the raw object might cause new fields to be dropped.
+	// Create the patch
+	marshalled, err := json.Marshal(obj)
+	if err != nil {
+		return Errored(http.StatusInternalServerError, err)
+	}
+	handlerResponse := PatchResponseFromRaw(req.Object.Raw, marshalled)
+
+	return h.dropSchemeRemovals(handlerResponse, originalObj, req.Object.Raw)
+}
+
+func (h *defaulterForType) dropSchemeRemovals(r Response, original runtime.Object, raw []byte) Response {
+	const opRemove = "remove"
+	if !r.Allowed || r.PatchType == nil {
+		return r
+	}
+
+	// If we don't have removals in the patch.
+	if !slices.ContainsFunc(r.Patches, func(o jsonpatch.JsonPatchOperation) bool { return o.Operation == opRemove }) {
+		return r
+	}
+
+	// Get the raw to original patch
 	marshalledOriginal, err := json.Marshal(original)
 	if err != nil {
 		return Errored(http.StatusInternalServerError, err)
 	}
-	marshalledUpdated, err := json.Marshal(updated)
-	if err != nil {
-		return Errored(http.StatusInternalServerError, err)
+
+	patchOriginal := PatchResponseFromRaw(raw, marshalledOriginal).Patches
+	removedByScheme := sets.New(slices.DeleteFunc(patchOriginal, func(p jsonpatch.JsonPatchOperation) bool { return p.Operation != opRemove })...)
+
+	r.Patches = slices.DeleteFunc(r.Patches, func(p jsonpatch.JsonPatchOperation) bool {
+		return removedByScheme.Has(p)
+	})
+
+	if len(r.Patches) == 0 {
+		r.PatchType = nil
 	}
-	return PatchResponseFromRaw(marshalledOriginal, marshalledUpdated)
+	return r
 }

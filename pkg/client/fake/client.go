@@ -468,6 +468,11 @@ func (t versionedTracker) updateObject(gvr schema.GroupVersionResource, obj runt
 		switch {
 		case allowsUnconditionalUpdate(gvk):
 			accessor.SetResourceVersion(oldAccessor.GetResourceVersion())
+			// This is needed because if the patch explicitly sets the RV to null, the client-go reaction we use
+			// to apply it and whose output we process here will have it unset. It is not clear why the Kubernetes
+			// apiserver accepts such a patch, but it does so we just copy that behavior.
+			// Kubernetes apiserver behavior can be checked like this:
+			// `kubectl patch configmap foo --patch '{"metadata":{"annotations":{"foo":"bar"},"resourceVersion":null}}' -v=9`
 		case bytes.
 			Contains(debug.Stack(), []byte("sigs.k8s.io/controller-runtime/pkg/client/fake.(*fakeClient).Patch")):
 			// We apply patches using a client-go reaction that ends up calling the trackers Update. As we can't change
@@ -904,6 +909,16 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 		return err
 	}
 
+	// retryOnConflict unless the patch includes a resourceVersion. We have to
+	// compare the resource version of newObj with oldObject because newObj is
+	// oldObj + the patch. It is important to note that the RV in it might be
+	// different from the RV in obj, as oldObj is fetched from the tracker and
+	// a concurrent actor could have modified it.
+	retryOnConflict := true
+	if newObj.GetResourceVersion() != oldAccessor.GetResourceVersion() {
+		retryOnConflict = false
+	}
+
 	// Validate that deletionTimestamp has not been changed
 	if !deletionTimestampEqual(newObj, oldAccessor) {
 		return fmt.Errorf("rejected patch, metadata.deletionTimestamp immutable")
@@ -912,6 +927,9 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 	reaction := testing.ObjectReaction(c.tracker)
 	handled, o, err := reaction(action)
 	if err != nil {
+		if retryOnConflict && apierrors.IsConflict(err) {
+			return c.patch(obj, patch, opts...)
+		}
 		return err
 	}
 	if !handled {

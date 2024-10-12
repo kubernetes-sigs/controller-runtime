@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -580,7 +581,7 @@ var _ = Describe("Fake client", func() {
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1000"))
 		})
 
-		It("should allow patch with non-set ResourceVersion for a resource that doesn't allow unconditional updates", func() {
+		It("should allow patch when the patch sets RV to 'null'", func() {
 			schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
 			schemeBuilder.Register(&WithPointerMeta{}, &WithPointerMetaList{})
 
@@ -605,6 +606,7 @@ var _ = Describe("Fake client", func() {
 						"foo": "bar",
 					},
 				}}
+
 			Expect(cl.Patch(context.Background(), newObj, client.MergeFrom(original))).To(Succeed())
 
 			patched := &WithPointerMeta{}
@@ -2134,6 +2136,61 @@ var _ = Describe("Fake client", func() {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
+	It("should allow concurrent patches to a configMap", func() {
+		scheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "foo",
+				ResourceVersion: "0",
+			},
+		}
+		cl := NewClientBuilder().WithScheme(scheme).WithObjects(obj).Build()
+		wg := sync.WaitGroup{}
+		wg.Add(5)
+
+		for i := range 5 {
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+
+				newObj := obj.DeepCopy()
+				newObj.Data = map[string]string{"foo": strconv.Itoa(i)}
+				Expect(cl.Patch(context.Background(), newObj, client.MergeFrom(obj))).To(Succeed())
+			}()
+		}
+		wg.Wait()
+	})
+
+	It("should not allow concurrent patches to a configMap if the patch contains a ResourceVersion", func() {
+		scheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "foo",
+				ResourceVersion: "0",
+			},
+		}
+		cl := NewClientBuilder().WithScheme(scheme).WithObjects(obj).Build()
+		wg := sync.WaitGroup{}
+		wg.Add(5)
+
+		for i := range 5 {
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+
+				newObj := obj.DeepCopy()
+				newObj.ResourceVersion = "1" // include an invalid RV to cause a conflict
+				newObj.Data = map[string]string{"foo": strconv.Itoa(i)}
+				Expect(apierrors.IsConflict(cl.Patch(context.Background(), newObj, client.MergeFrom(obj)))).To(BeTrue())
+			}()
+		}
+		wg.Wait()
+	})
+
 	It("disallows scale subresources on unsupported built-in types", func() {
 		scheme := runtime.NewScheme()
 		Expect(corev1.AddToScheme(scheme)).To(Succeed())
@@ -2288,8 +2345,8 @@ func (t *WithPointerMetaList) DeepCopyObject() runtime.Object {
 }
 
 type WithPointerMeta struct {
-	*metav1.TypeMeta
-	*metav1.ObjectMeta
+	*metav1.TypeMeta   `json:",inline"`
+	*metav1.ObjectMeta `json:"metadata,omitempty"`
 }
 
 func (t *WithPointerMeta) DeepCopy() *WithPointerMeta {

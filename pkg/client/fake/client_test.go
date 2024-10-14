@@ -2516,6 +2516,51 @@ var _ = Describe("Fake client", func() {
 		Expect(cl.SubResource(subResourceScale).Update(context.Background(), obj, client.WithSubResourceBody(scale)).Error()).To(Equal(expectedErr))
 	})
 
+	It("supports server-side apply of a client-go resource", func() {
+		cl := NewClientBuilder().Build()
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("v1")
+		obj.SetKind("ConfigMap")
+		obj.SetName("foo")
+		unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "data")
+
+		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+
+		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(cm), cm)).To(Succeed())
+		Expect(cm.Data).To(Equal(map[string]string{"some": "data"}))
+
+		unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "data")
+		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(cm), cm)).To(Succeed())
+		Expect(cm.Data).To(Equal(map[string]string{"other": "data"}))
+	})
+
+	//	It("supports server-side apply of a custom resource", func() {
+	//		cl := NewClientBuilder().Build()
+	//		obj := &unstructured.Unstructured{}
+	//		obj.SetAPIVersion("custom/v1")
+	//		obj.SetKind("FakeResource")
+	//		obj.SetName("foo")
+	//		unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "spec")
+	//
+	//		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+	//
+	//		result := obj.DeepCopy()
+	//		unstructured.SetNestedField(result.Object, nil, "spec")
+	//
+	//		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(result), result)).To(Succeed())
+	//		Expect(result.Object["spec"]).To(Equal(map[string]any{"some": "data"}))
+	//
+	//		unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "spec")
+	//		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+	//
+	//		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(result), result)).To(Succeed())
+	//		Expect(result.Object["spec"]).To(Equal(map[string]any{"other": "data"}))
+	//	})
+
 	It("is threadsafe", func() {
 		cl := NewClientBuilder().Build()
 
@@ -2681,6 +2726,7 @@ var _ = Describe("Fake client", func() {
 				expected.ResourceVersion = objActual.GetResourceVersion()
 				expected.Spec.Replicas = ptr.To(int32(3))
 			}
+			objExpected.SetManagedFields(objActual.GetManagedFields())
 			Expect(cmp.Diff(objExpected, objActual)).To(BeEmpty())
 
 			scaleActual := &autoscalingv1.Scale{}

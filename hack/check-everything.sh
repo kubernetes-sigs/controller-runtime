@@ -51,7 +51,7 @@ k8s_clone_dir=$tmp_root/kubernetes
 
   cd $k8s_clone_dir
 
-  pr_number="128053"
+  pr_number="128078"
   echo "Fetching pull request #$pr_number..."
   git fetch origin pull/$pr_number/head:pr-$pr_number
 

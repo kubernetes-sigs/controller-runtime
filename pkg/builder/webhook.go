@@ -37,6 +37,7 @@ import (
 // WebhookBuilder builds a Webhook.
 type WebhookBuilder struct {
 	apiType         runtime.Object
+	mutationHandler admission.Handler
 	customDefaulter admission.CustomDefaulter
 	customValidator admission.CustomValidator
 	gvk             schema.GroupVersionKind
@@ -62,6 +63,15 @@ func (blder *WebhookBuilder) For(apiType runtime.Object) *WebhookBuilder {
 		blder.err = errors.New("For(...) should only be called once, could not assign multiple objects for webhook registration")
 	}
 	blder.apiType = apiType
+	return blder
+}
+
+// WithMutationHandler takes an admission.Handler, a MutatingWebhook will be wired for it.
+// A mutation handler is a low-level plug point for advanced use cases that need control
+// to generate patches. If in doubt, prefer using WithDefaulter to register a defaulter.
+// You can only use one of WithMutationHandler or WithDefaulter.
+func (blder *WebhookBuilder) WithMutationHandler(h admission.Handler) *WebhookBuilder {
+	blder.mutationHandler = h
 	return blder
 }
 
@@ -140,7 +150,9 @@ func (blder *WebhookBuilder) registerWebhooks() error {
 	}
 
 	// Register webhook(s) for type
-	blder.registerDefaultingWebhook()
+	if err := blder.registerDefaultingWebhook(); err != nil {
+		return err
+	}
 	blder.registerValidatingWebhook()
 
 	err = blder.registerConversionWebhook()
@@ -151,8 +163,11 @@ func (blder *WebhookBuilder) registerWebhooks() error {
 }
 
 // registerDefaultingWebhook registers a defaulting webhook if necessary.
-func (blder *WebhookBuilder) registerDefaultingWebhook() {
-	mwh := blder.getDefaultingWebhook()
+func (blder *WebhookBuilder) registerDefaultingWebhook() error {
+	mwh, err := blder.getDefaultingWebhook()
+	if err != nil {
+		return err
+	}
 	if mwh != nil {
 		mwh.LogConstructor = blder.logConstructor
 		path := generateMutatePath(blder.gvk)
@@ -166,17 +181,27 @@ func (blder *WebhookBuilder) registerDefaultingWebhook() {
 			blder.mgr.GetWebhookServer().Register(path, mwh)
 		}
 	}
+	return nil
 }
 
-func (blder *WebhookBuilder) getDefaultingWebhook() *admission.Webhook {
-	if defaulter := blder.customDefaulter; defaulter != nil {
-		w := admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, defaulter)
-		if blder.recoverPanic != nil {
-			w = w.WithRecoverPanic(*blder.recoverPanic)
-		}
-		return w
+func (blder *WebhookBuilder) getDefaultingWebhook() (*admission.Webhook, error) {
+	var w *admission.Webhook
+	if handler := blder.mutationHandler; handler != nil {
+		w = &admission.Webhook{Handler: handler}
 	}
-	return nil
+	if defaulter := blder.customDefaulter; defaulter != nil {
+		if w != nil {
+			return nil, errors.New("a WebhookBuilder can only define a MutationHandler or a Defaulter, but not both")
+		}
+		w = admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, defaulter)
+	}
+	if w == nil {
+		return nil, nil
+	}
+	if blder.recoverPanic != nil {
+		w = w.WithRecoverPanic(*blder.recoverPanic)
+	}
+	return w, nil
 }
 
 // registerValidatingWebhook registers a validating webhook if necessary.

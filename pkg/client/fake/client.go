@@ -45,12 +45,14 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apimachinery/pkg/watch"
+	clientgoapplyconfigurations "k8s.io/client-go/applyconfigurations"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/testing"
 	"k8s.io/utils/ptr"
@@ -230,7 +232,11 @@ func (f *ClientBuilder) Build() client.WithWatch {
 	}
 
 	if f.objectTracker == nil {
-		tracker = versionedTracker{ObjectTracker: testing.NewObjectTracker(f.scheme, scheme.Codecs.UniversalDecoder()), scheme: f.scheme, withStatusSubresource: withStatusSubResource}
+		tracker = versionedTracker{ObjectTracker: testing.NewFieldManagedObjectTracker(
+			f.scheme,
+			serializer.NewCodecFactory(f.scheme).UniversalDecoder(),
+			clientgoapplyconfigurations.NewTypeConverter(f.scheme),
+		)}
 	} else {
 		tracker = versionedTracker{ObjectTracker: f.objectTracker, scheme: f.scheme, withStatusSubresource: withStatusSubResource}
 	}
@@ -868,6 +874,12 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 	if err != nil {
 		return err
 	}
+
+	// otherwise the merge logic in the tracker complains
+	if patch.Type() == types.ApplyPatchType {
+		obj.SetManagedFields(nil)
+	}
+
 	data, err := patch.Data(obj)
 	if err != nil {
 		return err
@@ -880,7 +892,11 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 
 	oldObj, err := c.tracker.Get(gvr, accessor.GetNamespace(), accessor.GetName())
 	if err != nil {
-		return err
+		if patch.Type() == types.ApplyPatchType {
+			oldObj = &unstructured.Unstructured{}
+		} else {
+			return err
+		}
 	}
 	oldAccessor, err := meta.Accessor(oldObj)
 	if err != nil {
@@ -895,7 +911,7 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 	// This ensures that the patch may be rejected if a deletionTimestamp is modified, prior
 	// to updating the object.
 	action := testing.NewPatchAction(gvr, accessor.GetNamespace(), accessor.GetName(), patch.Type(), data)
-	o, err := dryPatch(action, c.tracker)
+	o, err := dryPatch(action, c.tracker, obj)
 	if err != nil {
 		return err
 	}
@@ -954,12 +970,15 @@ func deletionTimestampEqual(newObj metav1.Object, obj metav1.Object) bool {
 // This results in some code duplication, but was found to be a cleaner alternative than unmarshalling and introspecting the patch data
 // and easier than refactoring the k8s client-go method upstream.
 // Duplicate of upstream: https://github.com/kubernetes/client-go/blob/783d0d33626e59d55d52bfd7696b775851f92107/testing/fixture.go#L146-L194
-func dryPatch(action testing.PatchActionImpl, tracker testing.ObjectTracker) (runtime.Object, error) {
+func dryPatch(action testing.PatchActionImpl, tracker testing.ObjectTracker, newObj runtime.Object) (runtime.Object, error) {
 	ns := action.GetNamespace()
 	gvr := action.GetResource()
 
 	obj, err := tracker.Get(gvr, ns, action.GetName())
 	if err != nil {
+		if action.GetPatchType() == types.ApplyPatchType {
+			return &unstructured.Unstructured{}, nil
+		}
 		return nil, err
 	}
 
@@ -1005,7 +1024,18 @@ func dryPatch(action testing.PatchActionImpl, tracker testing.ObjectTracker) (ru
 			return nil, err
 		}
 	case types.ApplyPatchType:
-		return nil, errors.New("apply patches are not supported in the fake client. Follow https://github.com/kubernetes/kubernetes/issues/115598 for the current status")
+		// There doesn't seem to be a way to test this without actually applying it as apply is implemented in the tracker.
+		// We have to make sure no reader sees this and we can not handle errors resetting the obj to the original state.
+		defer tracker.Add(obj)
+		defer func() {
+			if err := tracker.Add(obj); err != nil {
+				panic(err)
+			}
+		}()
+		if err := tracker.Apply(gvr, newObj, ns, action.PatchOptions); err != nil {
+			return nil, err
+		}
+		return tracker.Get(gvr, ns, action.GetName())
 	default:
 		return nil, fmt.Errorf("%s PatchType is not supported", action.GetPatchType())
 	}

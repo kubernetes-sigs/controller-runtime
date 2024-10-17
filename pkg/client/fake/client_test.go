@@ -2169,6 +2169,28 @@ var _ = Describe("Fake client", func() {
 		Expect(cl.SubResource(subResourceScale).Update(context.Background(), obj, client.WithSubResourceBody(scale)).Error()).To(Equal(expectedErr))
 	})
 
+	FIt("supports server-side apply", func() {
+		cl := NewClientBuilder().Build()
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("v1")
+		obj.SetKind("ConfigMap")
+		obj.SetName("foo")
+		unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "data")
+
+		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+
+		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(cm), cm)).To(Succeed())
+		Expect(cm.Data).To(Equal(map[string]string{"some": "data"}))
+
+		unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "data")
+		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(cm), cm)).To(Succeed())
+		Expect(cm.Data).To(Equal(map[string]string{"other": "data"}))
+	})
+
 	scalableObjs := []client.Object{
 		&appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{

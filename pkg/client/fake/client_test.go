@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -580,7 +581,7 @@ var _ = Describe("Fake client", func() {
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1000"))
 		})
 
-		It("should allow patch with non-set ResourceVersion for a resource that doesn't allow unconditional updates", func() {
+		It("should allow patch when the patch sets RV to 'null'", func() {
 			schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
 			schemeBuilder.Register(&WithPointerMeta{}, &WithPointerMetaList{})
 
@@ -605,6 +606,7 @@ var _ = Describe("Fake client", func() {
 						"foo": "bar",
 					},
 				}}
+
 			Expect(cl.Patch(context.Background(), newObj, client.MergeFrom(original))).To(Succeed())
 
 			patched := &WithPointerMeta{}
@@ -2134,6 +2136,280 @@ var _ = Describe("Fake client", func() {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
+	It("should allow concurrent patches to a configMap", func() {
+		scheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "foo",
+				ResourceVersion: "0",
+			},
+		}
+		cl := NewClientBuilder().WithScheme(scheme).WithObjects(obj).Build()
+
+		const tries = 50
+		wg := sync.WaitGroup{}
+		wg.Add(tries)
+
+		for i := range tries {
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+
+				newObj := obj.DeepCopy()
+				newObj.Data = map[string]string{"foo": strconv.Itoa(i)}
+				Expect(cl.Patch(context.Background(), newObj, client.MergeFrom(obj))).To(Succeed())
+			}()
+		}
+		wg.Wait()
+
+		// While the order is not deterministic, there must be $tries distinct updates
+		// that each increment the resource version by one
+		Expect(cl.Get(context.Background(), client.ObjectKey{Name: "foo"}, obj)).To(Succeed())
+		Expect(obj.ResourceVersion).To(Equal(strconv.Itoa(tries)))
+	})
+
+	It("should not allow concurrent patches to a configMap if the patch contains a ResourceVersion", func() {
+		scheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "foo",
+				ResourceVersion: "0",
+			},
+		}
+		cl := NewClientBuilder().WithScheme(scheme).WithObjects(obj).Build()
+		wg := sync.WaitGroup{}
+		wg.Add(5)
+
+		for i := range 5 {
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+
+				newObj := obj.DeepCopy()
+				newObj.ResourceVersion = "1" // include an invalid RV to cause a conflict
+				newObj.Data = map[string]string{"foo": strconv.Itoa(i)}
+				Expect(apierrors.IsConflict(cl.Patch(context.Background(), newObj, client.MergeFrom(obj)))).To(BeTrue())
+			}()
+		}
+		wg.Wait()
+	})
+
+	It("should allow concurrent updates to an object that allows unconditionalUpdate if the incoming request has no RV", func() {
+		scheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "foo",
+				ResourceVersion: "0",
+			},
+		}
+		cl := NewClientBuilder().WithScheme(scheme).WithObjects(obj).Build()
+
+		const tries = 50
+		wg := sync.WaitGroup{}
+		wg.Add(tries)
+
+		for i := range tries {
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+
+				newObj := obj.DeepCopy()
+				newObj.Data = map[string]string{"foo": strconv.Itoa(i)}
+				newObj.ResourceVersion = ""
+				Expect(cl.Update(context.Background(), newObj)).To(Succeed())
+			}()
+		}
+		wg.Wait()
+
+		// While the order is not deterministic, there must be $tries distinct updates
+		// that each increment the resource version by one
+		Expect(cl.Get(context.Background(), client.ObjectKey{Name: "foo"}, obj)).To(Succeed())
+		Expect(obj.ResourceVersion).To(Equal(strconv.Itoa(tries)))
+	})
+
+	It("If a create races with an update for an object that allows createOnUpdate, the update should always succeed", func() {
+		scheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+
+		cl := NewClientBuilder().WithScheme(scheme).Build()
+
+		const tries = 50
+		wg := sync.WaitGroup{}
+		wg.Add(tries * 2)
+
+		for i := range tries {
+			obj := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: strconv.Itoa(i),
+				},
+			}
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+
+				// this may or may not succeed depending on if we win the race. Either is acceptable,
+				// but if it fails, it must fail due to an AlreadyExists.
+				err := cl.Create(context.Background(), obj.DeepCopy())
+				if err != nil {
+					Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
+				}
+			}()
+
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+
+				// This must always succeed, regardless of the outcome of the create.
+				Expect(cl.Update(context.Background(), obj.DeepCopy())).To(Succeed())
+			}()
+		}
+
+		wg.Wait()
+	})
+
+	It("If a delete races with an update for an object that allows createOnUpdate, the update should always succeed", func() {
+		scheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+
+		cl := NewClientBuilder().WithScheme(scheme).Build()
+
+		const tries = 50
+		wg := sync.WaitGroup{}
+		wg.Add(tries * 2)
+
+		for i := range tries {
+			obj := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: strconv.Itoa(i),
+				},
+			}
+			Expect(cl.Create(context.Background(), obj.DeepCopy())).To(Succeed())
+
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+
+				Expect(cl.Delete(context.Background(), obj.DeepCopy())).To(Succeed())
+			}()
+
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+
+				// This must always succeed, regardless of if the delete came before or
+				// after us.
+				Expect(cl.Update(context.Background(), obj.DeepCopy())).To(Succeed())
+			}()
+		}
+
+		wg.Wait()
+	})
+
+	It("If a DeleteAllOf races with a delete, the DeleteAllOf should always succeed", func() {
+		scheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+
+		cl := NewClientBuilder().WithScheme(scheme).Build()
+
+		const objects = 50
+		wg := sync.WaitGroup{}
+		wg.Add(objects)
+
+		for i := range objects {
+			obj := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: strconv.Itoa(i),
+				},
+			}
+			Expect(cl.Create(context.Background(), obj.DeepCopy())).To(Succeed())
+		}
+
+		for i := range objects {
+			obj := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: strconv.Itoa(i),
+				},
+			}
+
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+
+				// This may or may not succeed depending on if the DeleteAllOf is faster,
+				// but if it fails, it should be a not found.
+				err := cl.Delete(context.Background(), obj)
+				if err != nil {
+					Expect(apierrors.IsNotFound(err)).To(BeTrue())
+				}
+			}()
+		}
+		Expect(cl.DeleteAllOf(context.Background(), &corev1.Service{})).To(Succeed())
+
+		wg.Wait()
+	})
+
+	It("If an update races with a scale update, only one of them succeeds", func() {
+		scheme := runtime.NewScheme()
+		Expect(appsv1.AddToScheme(scheme)).To(Succeed())
+
+		cl := NewClientBuilder().WithScheme(scheme).Build()
+
+		const tries = 5000
+		for i := range tries {
+			dep := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: strconv.Itoa(i),
+				},
+			}
+			Expect(cl.Create(context.Background(), dep)).To(Succeed())
+
+			wg := sync.WaitGroup{}
+			wg.Add(2)
+			var updateSucceeded bool
+			var scaleSucceeded bool
+
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+
+				dep := dep.DeepCopy()
+				dep.Annotations = map[string]string{"foo": "bar"}
+
+				// This may or may not fail. If it does fail, it must be a conflict.
+				err := cl.Update(context.Background(), dep)
+				if err != nil {
+					Expect(apierrors.IsConflict(err)).To(BeTrue())
+				} else {
+					updateSucceeded = true
+				}
+			}()
+
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+
+				// This may or may not fail. If it does fail, it must be a conflict.
+				scale := &autoscalingv1.Scale{Spec: autoscalingv1.ScaleSpec{Replicas: 10}}
+				err := cl.SubResource("scale").Update(context.Background(), dep.DeepCopy(), client.WithSubResourceBody(scale))
+				if err != nil {
+					Expect(apierrors.IsConflict(err)).To(BeTrue())
+				} else {
+					scaleSucceeded = true
+				}
+			}()
+
+			wg.Wait()
+			Expect(updateSucceeded).ToNot(Equal(scaleSucceeded))
+		}
+
+	})
+
 	It("disallows scale subresources on unsupported built-in types", func() {
 		scheme := runtime.NewScheme()
 		Expect(corev1.AddToScheme(scheme)).To(Succeed())
@@ -2288,8 +2564,8 @@ func (t *WithPointerMetaList) DeepCopyObject() runtime.Object {
 }
 
 type WithPointerMeta struct {
-	*metav1.TypeMeta
-	*metav1.ObjectMeta
+	*metav1.TypeMeta   `json:",inline"`
+	*metav1.ObjectMeta `json:"metadata,omitempty"`
 }
 
 func (t *WithPointerMeta) DeepCopy() *WithPointerMeta {

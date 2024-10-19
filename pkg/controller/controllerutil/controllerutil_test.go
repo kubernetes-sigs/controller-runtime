@@ -276,6 +276,184 @@ var _ = Describe("Controllerutil", func() {
 		})
 	})
 
+	var _ = Describe("Controllerutil", func() {
+		Describe("AppendOwnerReference", func() {
+			It("should set ownerRef on an empty list", func() {
+				rs := &appsv1.ReplicaSet{}
+				dep := metav1.OwnerReference{
+					APIVersion: "v1",
+					Kind:       "Deployment",
+					Name:       "foo",
+					UID:        "foo-uid",
+				}
+				controllerutil.AppendOwnerReference(dep, rs)
+				Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+					Name:       "foo",
+					Kind:       "Deployment",
+					APIVersion: "extensions/v1beta1",
+					UID:        "foo-uid",
+				}))
+			})
+
+			It("should not duplicate owner references", func() {
+				rs := &appsv1.ReplicaSet{
+					ObjectMeta: metav1.ObjectMeta{
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:       "foo",
+								Kind:       "Deployment",
+								APIVersion: "extensions/v1beta1",
+								UID:        "foo-uid",
+							},
+						},
+					},
+				}
+				dep := metav1.OwnerReference{
+					APIVersion: "v1",
+					Kind:       "Deployment",
+					Name:       "foo",
+					UID:        "foo-uid",
+				}
+				controllerutil.AppendOwnerReference(dep, rs)
+				Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+					Name:       "foo",
+					Kind:       "Deployment",
+					APIVersion: "extensions/v1beta1",
+					UID:        "foo-uid",
+				}))
+			})
+
+			It("should update the reference", func() {
+				rs := &appsv1.ReplicaSet{
+					ObjectMeta: metav1.ObjectMeta{
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:       "foo",
+								Kind:       "Deployment",
+								APIVersion: "extensions/v1alpha1",
+								UID:        "foo-uid-1",
+							},
+						},
+					},
+				}
+				dep := metav1.OwnerReference{
+					APIVersion: "v1",
+					Kind:       "Deployment",
+					Name:       "foo",
+					UID:        "foo-uid-2",
+				}
+				controllerutil.AppendOwnerReference(dep, rs)
+				Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+					Name:       "foo",
+					Kind:       "Deployment",
+					APIVersion: "extensions/v1beta1",
+					UID:        "foo-uid-2",
+				}))
+			})
+
+			It("should remove the owner reference", func() {
+				rs := &appsv1.ReplicaSet{
+					ObjectMeta: metav1.ObjectMeta{
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:       "foo",
+								Kind:       "Deployment",
+								APIVersion: "extensions/v1alpha1",
+								UID:        "foo-uid-1",
+							},
+						},
+					},
+				}
+				dep := metav1.OwnerReference{
+					APIVersion: "v1",
+					Kind:       "Deployment",
+					Name:       "foo",
+					UID:        "foo-uid-2",
+				}
+				controllerutil.AppendOwnerReference(dep, rs)
+				Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
+					Name:       "foo",
+					Kind:       "Deployment",
+					APIVersion: "extensions/v1beta1",
+					UID:        "foo-uid-2",
+				}))
+				Expect(controllerutil.DropOwnerReference(dep, rs)).ToNot(HaveOccurred())
+				Expect(rs.GetOwnerReferences()).To(BeEmpty())
+			})
+
+			It("should error when trying to remove the reference that doesn't exist", func() {
+				rs := &appsv1.ReplicaSet{
+					ObjectMeta: metav1.ObjectMeta{},
+				}
+				dep := metav1.OwnerReference{
+					APIVersion: "v1",
+					Kind:       "Deployment",
+					Name:       "foo",
+					UID:        "foo-uid-2",
+				}
+				Expect(controllerutil.DropOwnerReference(dep, rs)).To(HaveOccurred())
+				Expect(rs.GetOwnerReferences()).To(BeEmpty())
+			})
+
+			It("should error when trying to remove an owner that doesn't exist", func() {
+				rs := &appsv1.ReplicaSet{
+					ObjectMeta: metav1.ObjectMeta{},
+				}
+				dep := metav1.OwnerReference{
+					APIVersion: "v1",
+					Kind:       "Deployment",
+					Name:       "foo",
+					UID:        "foo-uid-2",
+				}
+				dep2 := metav1.OwnerReference{
+					APIVersion: "v1",
+					Kind:       "Deployment",
+					Name:       "foo",
+					UID:        "foo-uid-3",
+				}
+				controllerutil.AppendOwnerReference(dep, rs)
+				Expect(controllerutil.DropOwnerReference(dep2, rs)).To(HaveOccurred())
+				Expect(rs.GetOwnerReferences()).To(HaveLen(1))
+			})
+
+			It("should error when DropOwnerReference owner's controller is set to false", func() {
+				rs := &appsv1.ReplicaSet{
+					ObjectMeta: metav1.ObjectMeta{},
+				}
+				dep := metav1.OwnerReference{
+					APIVersion: "v1",
+					Kind:       "Deployment",
+					Name:       "foo",
+					UID:        "foo-uid-2",
+				}
+				controllerutil.AppendOwnerReference(dep, rs)
+				Expect(controllerutil.DropOwnerReference(dep, rs)).To(HaveOccurred())
+			})
+
+			It("should error when DropOwnerReference passed in owner is not the owner", func() {
+				rs := &appsv1.ReplicaSet{
+					ObjectMeta: metav1.ObjectMeta{},
+				}
+				dep := metav1.OwnerReference{
+					APIVersion: "v1",
+					Kind:       "Deployment",
+					Name:       "foo",
+					UID:        "foo-uid-2",
+				}
+				dep2 := metav1.OwnerReference{
+					APIVersion: "v1",
+					Kind:       "Deployment",
+					Name:       "foo-2",
+					UID:        "foo-uid-42",
+				}
+				controllerutil.AppendOwnerReference(dep, rs)
+				controllerutil.AppendOwnerReference(dep2, rs)
+				Expect(controllerutil.DropOwnerReference(dep2, rs)).To(HaveOccurred())
+				Expect(rs.GetOwnerReferences()).To(HaveLen(2))
+			})
+		})
+	})
+
 	Describe("SetControllerReference", func() {
 		It("should set the OwnerReference if it can find the group version kind", func() {
 			rs := &appsv1.ReplicaSet{}

@@ -168,6 +168,36 @@ func RemoveOwnerReference(owner, object metav1.Object, scheme *runtime.Scheme) e
 	return nil
 }
 
+// AppendOwnerReference is a helper method to make sure the given object contains a provided owner reference.
+// This allows you to declare that owner has a dependency on the object without specifying it as a controller.
+// If a reference already exists, it'll be overwritten with the newly provided version.
+func AppendOwnerReference(owner metav1.OwnerReference, object metav1.Object) {
+	upsertOwnerRef(owner, object)
+}
+
+// DropOwnerReference is a helper method to make sure the given object removes a provided owner reference.
+// This allows you to remove the owner to establish a new owner of the object in a subsequent call.
+func DropOwnerReference(owner metav1.OwnerReference, object metav1.Object) error {
+	ownerRefs := object.GetOwnerReferences()
+	index := indexOwnerRef(ownerRefs, metav1.OwnerReference{
+		APIVersion: owner.APIVersion,
+		Name:       owner.Name,
+		Kind:       owner.Kind,
+	})
+
+	if index == -1 {
+		return fmt.Errorf("%T does not have an controller reference for %T", object, owner)
+	}
+
+	if ownerRefs[index].Controller == nil || !*ownerRefs[index].Controller {
+		return fmt.Errorf("%T owner is not the controller reference for %T", owner, object)
+	}
+
+	ownerRefs = append(ownerRefs[:index], ownerRefs[index+1:]...)
+	object.SetOwnerReferences(ownerRefs)
+	return nil
+}
+
 // HasControllerReference returns true if the object
 // has an owner ref with controller equal to true
 func HasControllerReference(object metav1.Object) bool {

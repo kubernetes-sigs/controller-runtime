@@ -36,17 +36,33 @@ type CustomDefaulter interface {
 	Default(ctx context.Context, obj runtime.Object) error
 }
 
+type defaulterOptions struct {
+	preserveUnknownFields bool
+}
+
+type defaulterOption func(*defaulterOptions)
+
+// DefaulterPreserveUnknownFields stops the defaulter from pruning the fields that are not recognized in the local scheme.
+func DefaulterPreserveUnknownFields(o *defaulterOptions) {
+	o.preserveUnknownFields = true
+}
+
 // WithCustomDefaulter creates a new Webhook for a CustomDefaulter interface.
-func WithCustomDefaulter(scheme *runtime.Scheme, obj runtime.Object, defaulter CustomDefaulter) *Webhook {
+func WithCustomDefaulter(scheme *runtime.Scheme, obj runtime.Object, defaulter CustomDefaulter, opts ...defaulterOption) *Webhook {
+	options := &defaulterOptions{}
+	for _, o := range opts {
+		o(options)
+	}
 	return &Webhook{
-		Handler: &defaulterForType{object: obj, defaulter: defaulter, decoder: NewDecoder(scheme)},
+		Handler: &defaulterForType{object: obj, defaulter: defaulter, decoder: NewDecoder(scheme), preserveUnknownFields: options.preserveUnknownFields},
 	}
 }
 
 type defaulterForType struct {
-	defaulter CustomDefaulter
-	object    runtime.Object
-	decoder   Decoder
+	defaulter             CustomDefaulter
+	object                runtime.Object
+	decoder               Decoder
+	preserveUnknownFields bool
 }
 
 // Handle handles admission requests.
@@ -79,8 +95,11 @@ func (h *defaulterForType) Handle(ctx context.Context, req Request) Response {
 		return Errored(http.StatusBadRequest, err)
 	}
 
-	// Keep a copy of the object
-	originalObj := obj.DeepCopyObject()
+	// Keep a copy of the object if needed
+	var originalObj runtime.Object
+	if h.preserveUnknownFields {
+		originalObj = obj.DeepCopyObject()
+	}
 
 	// Default the object
 	if err := h.defaulter.Default(ctx, obj); err != nil {
@@ -96,9 +115,12 @@ func (h *defaulterForType) Handle(ctx context.Context, req Request) Response {
 	if err != nil {
 		return Errored(http.StatusInternalServerError, err)
 	}
-	handlerResponse := PatchResponseFromRaw(req.Object.Raw, marshalled)
 
-	return h.dropSchemeRemovals(handlerResponse, originalObj, req.Object.Raw)
+	handlerResponse := PatchResponseFromRaw(req.Object.Raw, marshalled)
+	if h.preserveUnknownFields {
+		handlerResponse = h.dropSchemeRemovals(handlerResponse, originalObj, req.Object.Raw)
+	}
+	return handlerResponse
 }
 
 func (h *defaulterForType) dropSchemeRemovals(r Response, original runtime.Object, raw []byte) Response {

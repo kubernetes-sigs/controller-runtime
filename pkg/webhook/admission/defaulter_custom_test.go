@@ -29,7 +29,7 @@ import (
 
 var _ = Describe("Defaulter Handler", func() {
 
-	It("should not lose unknown fields", func() {
+	It("should not preserve unknown fields by default", func() {
 		obj := &TestDefaulter{}
 		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{})
 
@@ -42,17 +42,50 @@ var _ = Describe("Defaulter Handler", func() {
 			},
 		})
 		Expect(resp.Allowed).Should(BeTrue())
-		Expect(resp.Patches).To(Equal([]jsonpatch.JsonPatchOperation{
-			{
+		Expect(resp.Patches).To(HaveLen(3))
+		Expect(resp.Patches).To(ContainElements(
+			jsonpatch.JsonPatchOperation{
 				Operation: "add",
 				Path:      "/replica",
 				Value:     2.0,
 			},
-			{
+			jsonpatch.JsonPatchOperation{
+				Operation: "remove",
+				Path:      "/newField",
+			},
+			jsonpatch.JsonPatchOperation{
 				Operation: "remove",
 				Path:      "/totalReplicas",
 			},
-		}))
+		))
+		Expect(resp.Result.Code).Should(Equal(int32(http.StatusOK)))
+	})
+
+	It("should preserve unknown fields when DefaulterPreserveUnknownFields is passed", func() {
+		obj := &TestDefaulter{}
+		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{}, DefaulterPreserveUnknownFields)
+
+		resp := handler.Handle(context.TODO(), Request{
+			AdmissionRequest: admissionv1.AdmissionRequest{
+				Operation: admissionv1.Create,
+				Object: runtime.RawExtension{
+					Raw: []byte(`{"newField":"foo", "totalReplicas":5}`),
+				},
+			},
+		})
+		Expect(resp.Allowed).Should(BeTrue())
+		Expect(resp.Patches).To(HaveLen(2))
+		Expect(resp.Patches).To(ContainElements(
+			jsonpatch.JsonPatchOperation{
+				Operation: "add",
+				Path:      "/replica",
+				Value:     2.0,
+			},
+			jsonpatch.JsonPatchOperation{
+				Operation: "remove",
+				Path:      "/totalReplicas",
+			},
+		))
 		Expect(resp.Result.Code).Should(Equal(int32(http.StatusOK)))
 	})
 

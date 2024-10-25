@@ -140,7 +140,10 @@ func (h *defaulterForType) dropSchemeRemovals(r Response, original runtime.Objec
 		return Errored(http.StatusInternalServerError, err)
 	}
 
-	patchOriginal := PatchResponseFromRaw(raw, marshalledOriginal).Patches
+	patchOriginal, err := jsonpatch.CreatePatch(raw, marshalledOriginal)
+	if err != nil {
+		return Errored(http.StatusInternalServerError, err)
+	}
 	removedByScheme := sets.New(slices.DeleteFunc(patchOriginal, func(p jsonpatch.JsonPatchOperation) bool { return p.Operation != opRemove })...)
 
 	r.Patches = slices.DeleteFunc(r.Patches, func(p jsonpatch.JsonPatchOperation) bool {

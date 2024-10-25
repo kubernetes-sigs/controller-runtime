@@ -29,7 +29,7 @@ import (
 
 var _ = Describe("Defaulter Handler", func() {
 
-	It("should not preserve unknown fields by default", func() {
+	It("should remove unknown fields when DefaulterRemoveUnknownFields is passed", func() {
 		obj := &TestDefaulter{}
 		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{}, DefaulterRemoveUnknownFields)
 
@@ -61,7 +61,7 @@ var _ = Describe("Defaulter Handler", func() {
 		Expect(resp.Result.Code).Should(Equal(int32(http.StatusOK)))
 	})
 
-	It("should preserve unknown fields when DefaulterPreserveUnknownFields is passed", func() {
+	It("should preserve unknown fields by default", func() {
 		obj := &TestDefaulter{}
 		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{})
 

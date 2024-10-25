@@ -31,7 +31,7 @@ var _ = Describe("Defaulter Handler", func() {
 
 	It("should not preserve unknown fields by default", func() {
 		obj := &TestDefaulter{}
-		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{})
+		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{}, DefaulterRemoveUnknownFields)
 
 		resp := handler.Handle(context.TODO(), Request{
 			AdmissionRequest: admissionv1.AdmissionRequest{
@@ -63,7 +63,7 @@ var _ = Describe("Defaulter Handler", func() {
 
 	It("should preserve unknown fields when DefaulterPreserveUnknownFields is passed", func() {
 		obj := &TestDefaulter{}
-		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{}, DefaulterPreserveUnknownFields)
+		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{})
 
 		resp := handler.Handle(context.TODO(), Request{
 			AdmissionRequest: admissionv1.AdmissionRequest{

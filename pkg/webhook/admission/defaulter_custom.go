@@ -37,14 +37,14 @@ type CustomDefaulter interface {
 }
 
 type defaulterOptions struct {
-	preserveUnknownFields bool
+	removeUnknownFields bool
 }
 
 type defaulterOption func(*defaulterOptions)
 
-// DefaulterPreserveUnknownFields stops the defaulter from pruning the fields that are not recognized in the local scheme.
-func DefaulterPreserveUnknownFields(o *defaulterOptions) {
-	o.preserveUnknownFields = true
+// DefaulterRemoveUnknownFields makes the defaulter prune the fields that are not recognized in the local scheme.
+func DefaulterRemoveUnknownFields(o *defaulterOptions) {
+	o.removeUnknownFields = true
 }
 
 // WithCustomDefaulter creates a new Webhook for a CustomDefaulter interface.
@@ -54,15 +54,15 @@ func WithCustomDefaulter(scheme *runtime.Scheme, obj runtime.Object, defaulter C
 		o(options)
 	}
 	return &Webhook{
-		Handler: &defaulterForType{object: obj, defaulter: defaulter, decoder: NewDecoder(scheme), preserveUnknownFields: options.preserveUnknownFields},
+		Handler: &defaulterForType{object: obj, defaulter: defaulter, decoder: NewDecoder(scheme), removeUnknownFields: options.removeUnknownFields},
 	}
 }
 
 type defaulterForType struct {
-	defaulter             CustomDefaulter
-	object                runtime.Object
-	decoder               Decoder
-	preserveUnknownFields bool
+	defaulter           CustomDefaulter
+	object              runtime.Object
+	decoder             Decoder
+	removeUnknownFields bool
 }
 
 // Handle handles admission requests.
@@ -97,7 +97,7 @@ func (h *defaulterForType) Handle(ctx context.Context, req Request) Response {
 
 	// Keep a copy of the object if needed
 	var originalObj runtime.Object
-	if h.preserveUnknownFields {
+	if !h.removeUnknownFields {
 		originalObj = obj.DeepCopyObject()
 	}
 
@@ -117,7 +117,7 @@ func (h *defaulterForType) Handle(ctx context.Context, req Request) Response {
 	}
 
 	handlerResponse := PatchResponseFromRaw(req.Object.Raw, marshalled)
-	if h.preserveUnknownFields {
+	if !h.removeUnknownFields {
 		handlerResponse = h.dropSchemeRemovals(handlerResponse, originalObj, req.Object.Raw)
 	}
 	return handlerResponse

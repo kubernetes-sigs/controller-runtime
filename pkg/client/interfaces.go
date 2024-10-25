@@ -193,7 +193,7 @@ type IndexerFunc func(Object) []string
 // FieldIndexer knows how to index over a particular "field" such that it
 // can later be used by a field selector.
 type FieldIndexer interface {
-	// IndexFields adds an index with the given field name on the given object type
+	// IndexField adds an index with the given field name on the given object type
 	// by using the given function to extract the value for that field.  If you want
 	// compatibility with the Kubernetes API server, only return one key, and only use
 	// fields that the API server supports.  Otherwise, you can return multiple keys,

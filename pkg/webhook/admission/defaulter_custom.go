@@ -40,15 +40,18 @@ type defaulterOptions struct {
 	removeUnknownFields bool
 }
 
-type defaulterOption func(*defaulterOptions)
+// DefaulterOption defines the type of a CustomDefaulter's option
+type DefaulterOption func(*defaulterOptions)
 
-// DefaulterRemoveUnknownFields makes the defaulter prune the fields that are not recognized in the local scheme.
+// DefaulterRemoveUnknownFields makes the defaulter prune fields that are in the json object retrieved by the
+// webhook but not in the local go type. This happens for example when the CRD in the apiserver has fields that
+// our go type doesn't know about, because it's outdated.
 func DefaulterRemoveUnknownFields(o *defaulterOptions) {
 	o.removeUnknownFields = true
 }
 
 // WithCustomDefaulter creates a new Webhook for a CustomDefaulter interface.
-func WithCustomDefaulter(scheme *runtime.Scheme, obj runtime.Object, defaulter CustomDefaulter, opts ...defaulterOption) *Webhook {
+func WithCustomDefaulter(scheme *runtime.Scheme, obj runtime.Object, defaulter CustomDefaulter, opts ...DefaulterOption) *Webhook {
 	options := &defaulterOptions{}
 	for _, o := range opts {
 		o(options)

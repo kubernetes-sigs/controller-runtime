@@ -37,16 +37,17 @@ import (
 
 // WebhookBuilder builds a Webhook.
 type WebhookBuilder struct {
-	apiType         runtime.Object
-	customDefaulter admission.CustomDefaulter
-	customValidator admission.CustomValidator
-	customPath      string
-	gvk             schema.GroupVersionKind
-	mgr             manager.Manager
-	config          *rest.Config
-	recoverPanic    *bool
-	logConstructor  func(base logr.Logger, req *admission.Request) logr.Logger
-	err             error
+	apiType             runtime.Object
+	customDefaulter     admission.CustomDefaulter
+	customDefaulterOpts []admission.DefaulterOption
+	customValidator     admission.CustomValidator
+	customPath          string
+	gvk                 schema.GroupVersionKind
+	mgr                 manager.Manager
+	config              *rest.Config
+	recoverPanic        *bool
+	logConstructor      func(base logr.Logger, req *admission.Request) logr.Logger
+	err                 error
 }
 
 // WebhookManagedBy returns a new webhook builder.
@@ -67,9 +68,11 @@ func (blder *WebhookBuilder) For(apiType runtime.Object) *WebhookBuilder {
 	return blder
 }
 
-// WithDefaulter takes an admission.CustomDefaulter interface, a MutatingWebhook will be wired for this type.
-func (blder *WebhookBuilder) WithDefaulter(defaulter admission.CustomDefaulter) *WebhookBuilder {
+// WithDefaulter takes an admission.CustomDefaulter interface, a MutatingWebhook with the provided opts (admission.DefaulterOption)
+// will be wired for this type.
+func (blder *WebhookBuilder) WithDefaulter(defaulter admission.CustomDefaulter, opts ...admission.DefaulterOption) *WebhookBuilder {
 	blder.customDefaulter = defaulter
+	blder.customDefaulterOpts = opts
 	return blder
 }
 
@@ -194,7 +197,7 @@ func (blder *WebhookBuilder) registerDefaultingWebhook() error {
 
 func (blder *WebhookBuilder) getDefaultingWebhook() *admission.Webhook {
 	if defaulter := blder.customDefaulter; defaulter != nil {
-		w := admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, defaulter)
+		w := admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, defaulter, blder.customDefaulterOpts...)
 		if blder.recoverPanic != nil {
 			w = w.WithRecoverPanic(*blder.recoverPanic)
 		}

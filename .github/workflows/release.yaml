@@ -27,7 +27,7 @@ jobs:
       run: |
         make release
     - name: Release
-      uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # tag=v2.0.8
+      uses: softprops/action-gh-release@e7a8f85e1c67a31e6ed99a94b41bd0b71bbee6b8 # tag=v2.0.9
       with:
         draft: false
         files: tools/setup-envtest/out/*

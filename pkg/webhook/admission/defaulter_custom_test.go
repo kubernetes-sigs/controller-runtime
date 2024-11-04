@@ -31,7 +31,7 @@ var _ = Describe("Defaulter Handler", func() {
 
 	It("should remove unknown fields when DefaulterRemoveUnknownFields is passed", func() {
 		obj := &TestDefaulter{}
-		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{}, DefaulterRemoveUnknownFields)
+		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{}, DefaulterRemoveUnknownOrOmitableFields)
 
 		resp := handler.Handle(context.TODO(), Request{
 			AdmissionRequest: admissionv1.AdmissionRequest{

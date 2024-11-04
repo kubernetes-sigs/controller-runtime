@@ -37,17 +37,17 @@ type CustomDefaulter interface {
 }
 
 type defaulterOptions struct {
-	removeUnknownFields bool
+	removeUnknownOrOmitableFields bool
 }
 
 // DefaulterOption defines the type of a CustomDefaulter's option
 type DefaulterOption func(*defaulterOptions)
 
-// DefaulterRemoveUnknownFields makes the defaulter prune fields that are in the json object retrieved by the
-// webhook but not in the local go type. This happens for example when the CRD in the apiserver has fields that
-// our go type doesn't know about, because it's outdated.
-func DefaulterRemoveUnknownFields(o *defaulterOptions) {
-	o.removeUnknownFields = true
+// DefaulterRemoveUnknownOrOmitableFields makes the defaulter prune fields that are in the json object retrieved by the
+// webhook but not in the local go type json representation. This happens for example when the CRD in the apiserver has
+// fields that our go type doesn't know about, because it's outdated, or the field has a zero value and is `omitempty`.
+func DefaulterRemoveUnknownOrOmitableFields(o *defaulterOptions) {
+	o.removeUnknownOrOmitableFields = true
 }
 
 // WithCustomDefaulter creates a new Webhook for a CustomDefaulter interface.
@@ -57,15 +57,20 @@ func WithCustomDefaulter(scheme *runtime.Scheme, obj runtime.Object, defaulter C
 		o(options)
 	}
 	return &Webhook{
-		Handler: &defaulterForType{object: obj, defaulter: defaulter, decoder: NewDecoder(scheme), removeUnknownFields: options.removeUnknownFields},
+		Handler: &defaulterForType{
+			object:                        obj,
+			defaulter:                     defaulter,
+			decoder:                       NewDecoder(scheme),
+			removeUnknownOrOmitableFields: options.removeUnknownOrOmitableFields,
+		},
 	}
 }
 
 type defaulterForType struct {
-	defaulter           CustomDefaulter
-	object              runtime.Object
-	decoder             Decoder
-	removeUnknownFields bool
+	defaulter                     CustomDefaulter
+	object                        runtime.Object
+	decoder                       Decoder
+	removeUnknownOrOmitableFields bool
 }
 
 // Handle handles admission requests.
@@ -100,7 +105,7 @@ func (h *defaulterForType) Handle(ctx context.Context, req Request) Response {
 
 	// Keep a copy of the object if needed
 	var originalObj runtime.Object
-	if !h.removeUnknownFields {
+	if !h.removeUnknownOrOmitableFields {
 		originalObj = obj.DeepCopyObject()
 	}
 
@@ -120,7 +125,7 @@ func (h *defaulterForType) Handle(ctx context.Context, req Request) Response {
 	}
 
 	handlerResponse := PatchResponseFromRaw(req.Object.Raw, marshalled)
-	if !h.removeUnknownFields {
+	if !h.removeUnknownOrOmitableFields {
 		handlerResponse = h.dropSchemeRemovals(handlerResponse, originalObj, req.Object.Raw)
 	}
 	return handlerResponse

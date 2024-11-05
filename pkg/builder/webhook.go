@@ -20,6 +20,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -39,6 +40,7 @@ type WebhookBuilder struct {
 	apiType         runtime.Object
 	customDefaulter admission.CustomDefaulter
 	customValidator admission.CustomValidator
+	customPath      string
 	gvk             schema.GroupVersionKind
 	mgr             manager.Manager
 	config          *rest.Config
@@ -87,6 +89,12 @@ func (blder *WebhookBuilder) WithLogConstructor(logConstructor func(base logr.Lo
 // Defaults to true.
 func (blder *WebhookBuilder) RecoverPanic(recoverPanic bool) *WebhookBuilder {
 	blder.recoverPanic = &recoverPanic
+	return blder
+}
+
+// WithCustomPath overrides the webhook's default path by the customPath
+func (blder *WebhookBuilder) WithCustomPath(customPath string) *WebhookBuilder {
+	blder.customPath = customPath
 	return blder
 }
 
@@ -140,8 +148,15 @@ func (blder *WebhookBuilder) registerWebhooks() error {
 	}
 
 	// Register webhook(s) for type
-	blder.registerDefaultingWebhook()
-	blder.registerValidatingWebhook()
+	err = blder.registerDefaultingWebhook()
+	if err != nil {
+		return err
+	}
+
+	err = blder.registerValidatingWebhook()
+	if err != nil {
+		return err
+	}
 
 	err = blder.registerConversionWebhook()
 	if err != nil {
@@ -151,11 +166,18 @@ func (blder *WebhookBuilder) registerWebhooks() error {
 }
 
 // registerDefaultingWebhook registers a defaulting webhook if necessary.
-func (blder *WebhookBuilder) registerDefaultingWebhook() {
+func (blder *WebhookBuilder) registerDefaultingWebhook() error {
 	mwh := blder.getDefaultingWebhook()
 	if mwh != nil {
 		mwh.LogConstructor = blder.logConstructor
 		path := generateMutatePath(blder.gvk)
+		if blder.customPath != "" {
+			generatedCustomPath, err := generateCustomPath(blder.customPath)
+			if err != nil {
+				return err
+			}
+			path = generatedCustomPath
+		}
 
 		// Checking if the path is already registered.
 		// If so, just skip it.
@@ -166,6 +188,8 @@ func (blder *WebhookBuilder) registerDefaultingWebhook() {
 			blder.mgr.GetWebhookServer().Register(path, mwh)
 		}
 	}
+
+	return nil
 }
 
 func (blder *WebhookBuilder) getDefaultingWebhook() *admission.Webhook {
@@ -180,11 +204,18 @@ func (blder *WebhookBuilder) getDefaultingWebhook() *admission.Webhook {
 }
 
 // registerValidatingWebhook registers a validating webhook if necessary.
-func (blder *WebhookBuilder) registerValidatingWebhook() {
+func (blder *WebhookBuilder) registerValidatingWebhook() error {
 	vwh := blder.getValidatingWebhook()
 	if vwh != nil {
 		vwh.LogConstructor = blder.logConstructor
 		path := generateValidatePath(blder.gvk)
+		if blder.customPath != "" {
+			generatedCustomPath, err := generateCustomPath(blder.customPath)
+			if err != nil {
+				return err
+			}
+			path = generatedCustomPath
+		}
 
 		// Checking if the path is already registered.
 		// If so, just skip it.
@@ -195,6 +226,8 @@ func (blder *WebhookBuilder) registerValidatingWebhook() {
 			blder.mgr.GetWebhookServer().Register(path, vwh)
 		}
 	}
+
+	return nil
 }
 
 func (blder *WebhookBuilder) getValidatingWebhook() *admission.Webhook {
@@ -250,4 +283,15 @@ func generateMutatePath(gvk schema.GroupVersionKind) string {
 func generateValidatePath(gvk schema.GroupVersionKind) string {
 	return "/validate-" + strings.ReplaceAll(gvk.Group, ".", "-") + "-" +
 		gvk.Version + "-" + strings.ToLower(gvk.Kind)
+}
+
+const webhookPathStringValidation = `^((/[a-zA-Z0-9-_]+)+|/)$`
+
+var validWebhookPathRegex = regexp.MustCompile(webhookPathStringValidation)
+
+func generateCustomPath(customPath string) (string, error) {
+	if !validWebhookPathRegex.MatchString(customPath) {
+		return "", errors.New("customPath \"" + customPath + "\" does not match this regex: " + webhookPathStringValidation)
+	}
+	return customPath, nil
 }

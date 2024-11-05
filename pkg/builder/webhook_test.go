@@ -153,6 +153,85 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
 	})
 
+	It("should scaffold a custom defaulting webhook with a custom path", func() {
+		By("creating a controller manager")
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
+		builder.Register(&TestDefaulter{}, &TestDefaulterList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		customPath := "/custom-defaulting-path"
+		err = WebhookManagedBy(m).
+			For(&TestDefaulter{}).
+			WithDefaulter(&TestCustomDefaulter{}).
+			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
+				return admission.DefaultLogConstructor(testingLogger, req)
+			}).
+			WithCustomPath(customPath).
+			Complete()
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		svr := m.GetWebhookServer()
+		ExpectWithOffset(1, svr).NotTo(BeNil())
+
+		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
+  "request":{
+    "uid":"07e52e8d-4513-11e9-a716-42010a800270",
+    "kind":{
+      "group":"foo.test.org",
+      "version":"v1",
+      "kind":"TestDefaulter"
+    },
+    "resource":{
+      "group":"foo.test.org",
+      "version":"v1",
+      "resource":"testdefaulter"
+    },
+    "namespace":"default",
+    "name":"foo",
+    "operation":"CREATE",
+    "object":{
+      "replica":1
+    },
+    "oldObject":null
+  }
+}`)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		err = svr.Start(ctx)
+		if err != nil && !os.IsNotExist(err) {
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		}
+
+		By("sending a request to a mutating webhook path")
+		path, err := generateCustomPath(customPath)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
+		req.Header.Add("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		svr.WebhookMux().ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable fields")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":true`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"patch":`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":200`))
+		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Defaulting object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaulter"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
+
+		By("sending a request to a mutating webhook path that have been overrided by the custom path")
+		path = generateMutatePath(testDefaulterGVK)
+		_, err = reader.Seek(0, 0)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
+		req.Header.Add("Content-Type", "application/json")
+		w = httptest.NewRecorder()
+		svr.WebhookMux().ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
+	})
+
 	It("should scaffold a custom defaulting webhook which recovers from panics", func() {
 		By("creating a controller manager")
 		m, err := manager.New(cfg, manager.Options{})
@@ -281,6 +360,86 @@ func runTests(admissionReviewVersion string) {
 
 		By("sending a request to a validating webhook path")
 		path = generateValidatePath(testValidatorGVK)
+		_, err = reader.Seek(0, 0)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
+		req.Header.Add("Content-Type", "application/json")
+		w = httptest.NewRecorder()
+		svr.WebhookMux().ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+		By("sanity checking the response contains reasonable field")
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
+		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":403`))
+		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Validating object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testvalidator"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
+	})
+
+	It("should scaffold a custom validating webhook with a custom path", func() {
+		By("creating a controller manager")
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+		builder.Register(&TestValidator{}, &TestValidatorList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		customPath := "/custom-validating-path"
+		err = WebhookManagedBy(m).
+			For(&TestValidator{}).
+			WithValidator(&TestCustomValidator{}).
+			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
+				return admission.DefaultLogConstructor(testingLogger, req)
+			}).
+			WithCustomPath(customPath).
+			Complete()
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		svr := m.GetWebhookServer()
+		ExpectWithOffset(1, svr).NotTo(BeNil())
+
+		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
+  "request":{
+    "uid":"07e52e8d-4513-11e9-a716-42010a800270",
+    "kind":{
+      "group":"foo.test.org",
+      "version":"v1",
+      "kind":"TestValidator"
+    },
+    "resource":{
+      "group":"foo.test.org",
+      "version":"v1",
+      "resource":"testvalidator"
+    },
+    "namespace":"default",
+    "name":"foo",
+    "operation":"UPDATE",
+    "object":{
+      "replica":1
+    },
+    "oldObject":{
+      "replica":2
+    }
+  }
+}`)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		err = svr.Start(ctx)
+		if err != nil && !os.IsNotExist(err) {
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		}
+
+		By("sending a request to a mutating webhook path that have been overrided by a custom path")
+		path := generateValidatePath(testValidatorGVK)
+		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
+		req.Header.Add("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		svr.WebhookMux().ServeHTTP(w, req)
+		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
+
+		By("sending a request to a validating webhook path")
+		path, err = generateCustomPath(customPath)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 		_, err = reader.Seek(0, 0)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)

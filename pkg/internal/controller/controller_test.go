@@ -145,6 +145,7 @@ var _ = Describe("controller", func() {
 
 	Describe("Start", func() {
 		It("should return an error if there is an error waiting for the informers", func() {
+			ctrl.CacheSyncTimeout = time.Second
 			f := false
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
@@ -158,12 +159,11 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should error when cache sync timeout occurs", func() {
-			ctrl.CacheSyncTimeout = 10 * time.Nanosecond
-
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 
+			ctrl.CacheSyncTimeout = time.Second
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Kind(c, &appsv1.Deployment{}, &handler.TypedEnqueueRequestForObject[*appsv1.Deployment]{}),
 			}
@@ -174,7 +174,7 @@ var _ = Describe("controller", func() {
 			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync: timed out waiting for cache to be synced"))
 		})
 
-		It("should not error when context cancelled", func() {
+		It("should not error when controller Start context is cancelled during Sources WaitForSync", func() {
 			ctrl.CacheSyncTimeout = 1 * time.Second
 
 			sourceSynced := make(chan struct{})
@@ -200,26 +200,39 @@ var _ = Describe("controller", func() {
 			<-sourceSynced
 		})
 
-		It("should not error when cache sync timeout is of sufficiently high", func() {
-			ctrl.CacheSyncTimeout = 1 * time.Second
+		It("should error when Start() is blocking forever", func() {
+			ctrl.CacheSyncTimeout = 0
 
+			controllerDone := make(chan struct{})
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					<-controllerDone
+					return ctx.Err()
+				})}
+
+			ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
+			defer cancel()
+
+			err := ctrl.Start(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Please ensure that its Start() method is non-blocking"))
+
+			close(controllerDone)
+		})
+
+		It("should not error when cache sync timeout is of sufficiently high", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			sourceSynced := make(chan struct{})
-			c, err := cache.New(cfg, cache.Options{})
-			Expect(err).NotTo(HaveOccurred())
+			c := &informertest.FakeInformers{}
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				&singnallingSourceWrapper{
 					SyncingSource: source.Kind[client.Object](c, &appsv1.Deployment{}, &handler.EnqueueRequestForObject{}),
 					cacheSyncDone: sourceSynced,
 				},
 			}
-
-			go func() {
-				defer GinkgoRecover()
-				Expect(c.Start(ctx)).To(Succeed())
-			}()
 
 			go func() {
 				defer GinkgoRecover()
@@ -230,6 +243,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should process events from source.Channel", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
 			// channel to be closed when event is processed
 			processed := make(chan struct{})
 			// source channel
@@ -269,6 +283,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should error when channel source is not specified", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -281,24 +296,26 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
 			started := false
+			ctx, cancel := context.WithCancel(context.Background())
 			src := source.Func(func(ctx context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(ctrl.Queue))
 
 				started = true
+				cancel()
 				return nil
 			})
 			Expect(ctrl.Watch(src)).NotTo(HaveOccurred())
 
-			// Use a cancelled context so Start doesn't block
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-			Expect(ctrl.Start(ctx)).To(Succeed())
+			err := ctrl.Start(ctx)
+			Expect(err).To(Succeed())
 			Expect(started).To(BeTrue())
 		})
 
 		It("should return an error if there is an error starting sources", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
 			err := fmt.Errorf("Expected Error: could not start source")
 			src := source.Func(func(context.Context,
 				workqueue.TypedRateLimitingInterface[reconcile.Request],
@@ -850,6 +867,15 @@ func (f *fakeReconciler) Reconcile(_ context.Context, r reconcile.Request) (reco
 type singnallingSourceWrapper struct {
 	cacheSyncDone chan struct{}
 	source.SyncingSource
+}
+
+func (s *singnallingSourceWrapper) Start(ctx context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+	err := s.SyncingSource.Start(ctx, q)
+	if err != nil {
+		// WaitForSync will never be called if this errors, so close the channel to prevent deadlocks in tests
+		close(s.cacheSyncDone)
+	}
+	return err
 }
 
 func (s *singnallingSourceWrapper) WaitForSync(ctx context.Context) error {

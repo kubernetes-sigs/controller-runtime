@@ -1028,6 +1028,8 @@ func dryPatch(action testing.PatchActionImpl, tracker testing.ObjectTracker) (ru
 		}
 	case types.ApplyPatchType:
 		return nil, errors.New("apply patches are not supported in the fake client. Follow https://github.com/kubernetes/kubernetes/issues/115598 for the current status")
+	case types.ApplyCBORPatchType:
+		return nil, errors.New("apply CBOR patches are not supported in the fake client")
 	default:
 		return nil, fmt.Errorf("%s PatchType is not supported", action.GetPatchType())
 	}

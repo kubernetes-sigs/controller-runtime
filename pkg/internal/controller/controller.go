@@ -173,7 +173,7 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 		// NB(directxman12): launch the sources *before* trying to wait for the
 		// caches to sync so that they have a chance to register their intendeded
 		// caches.
-		errGroup, _ := errgroup.WithContext(ctx)
+		errGroup := &errgroup.Group{}
 		for _, watch := range c.startWatches {
 			log := c.LogConstructor(nil).WithValues("source", fmt.Sprintf("%s", watch))
 			didStartSyncingSource := &atomic.Bool{}

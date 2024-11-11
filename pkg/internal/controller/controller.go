@@ -171,14 +171,15 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 		defer utilruntime.HandleCrash()
 
 		// NB(directxman12): launch the sources *before* trying to wait for the
-		// caches to sync so that they have a chance to register their intendeded
+		// caches to sync so that they have a chance to register their intended
 		// caches.
 		errGroup := &errgroup.Group{}
 		for _, watch := range c.startWatches {
 			log := c.LogConstructor(nil).WithValues("source", fmt.Sprintf("%s", watch))
 			didStartSyncingSource := &atomic.Bool{}
 			errGroup.Go(func() error {
-				// use a context with timeout for launching sources and syncing caches.
+				// Use a timeout for starting and syncing the source to avoid silently
+				// blocking startup indefinitely if it doesn't come up.
 				sourceStartCtx, cancel := context.WithTimeout(ctx, c.CacheSyncTimeout)
 				defer cancel()
 
@@ -220,7 +221,6 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 			return err
 		}
 
-		// Start the SharedIndexInformer factories to begin populating the SharedIndexInformer caches
 		c.LogConstructor(nil).Info("Starting Controller")
 
 		// All the watches have been started, we can reset the local slice.

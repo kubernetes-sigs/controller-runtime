@@ -201,7 +201,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should error when Start() is blocking forever", func() {
-			ctrl.CacheSyncTimeout = 0
+			ctrl.CacheSyncTimeout = time.Second
 
 			controllerDone := make(chan struct{})
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
@@ -304,7 +304,7 @@ var _ = Describe("controller", func() {
 				Expect(q).To(Equal(ctrl.Queue))
 
 				started = true
-				cancel()
+				cancel() // Cancel the context so ctrl.Start() doesn't block forever
 				return nil
 			})
 			Expect(ctrl.Watch(src)).NotTo(HaveOccurred())

@@ -19,11 +19,12 @@ package cache
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"sort"
 	"time"
 
-	"golang.org/x/exp/maps"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -465,7 +466,7 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 			if namespace == metav1.NamespaceAll {
 				config.FieldSelector = fields.AndSelectors(
 					appendIfNotNil(
-						namespaceAllSelector(maps.Keys(byObject.Namespaces)),
+						namespaceAllSelector(slices.Collect(maps.Keys(byObject.Namespaces))),
 						config.FieldSelector,
 					)...,
 				)
@@ -495,7 +496,7 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 		if namespace == metav1.NamespaceAll {
 			cfg.FieldSelector = fields.AndSelectors(
 				appendIfNotNil(
-					namespaceAllSelector(maps.Keys(opts.DefaultNamespaces)),
+					namespaceAllSelector(slices.Collect(maps.Keys(opts.DefaultNamespaces))),
 					cfg.FieldSelector,
 				)...,
 			)

@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/controller-runtime/pkg/controllerworkqueue"
 	"sigs.k8s.io/controller-runtime/pkg/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -193,10 +194,16 @@ func NewTypedUnmanaged[request comparable](name string, mgr manager.Manager, opt
 	}
 
 	if options.NewQueue == nil {
-		options.NewQueue = func(controllerName string, rateLimiter workqueue.TypedRateLimiter[request]) workqueue.TypedRateLimitingInterface[request] {
-			return workqueue.NewTypedRateLimitingQueueWithConfig(rateLimiter, workqueue.TypedRateLimitingQueueConfig[request]{
-				Name: controllerName,
-			})
+		if mgr.GetControllerOptions().UsePriorityQueue {
+			options.NewQueue = func(controllerName string, rateLimiter workqueue.TypedRateLimiter[request]) workqueue.TypedRateLimitingInterface[request] {
+				return controllerworkqueue.New[request](controllerName)
+			}
+		} else {
+			options.NewQueue = func(controllerName string, rateLimiter workqueue.TypedRateLimiter[request]) workqueue.TypedRateLimitingInterface[request] {
+				return workqueue.NewTypedRateLimitingQueueWithConfig(rateLimiter, workqueue.TypedRateLimitingQueueConfig[request]{
+					Name: controllerName,
+				})
+			}
 		}
 	}
 

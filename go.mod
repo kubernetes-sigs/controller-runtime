@@ -30,6 +30,8 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
+require github.com/google/btree v1.1.3
+
 require (
 	cel.dev/expr v0.18.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect

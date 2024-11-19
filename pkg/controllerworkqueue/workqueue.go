@@ -1,11 +1,11 @@
 package controllerworkqueue
 
 import (
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/google/btree"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/clock"
@@ -58,7 +58,7 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 
 	cwq := &controllerworkqueue[T]{
 		items:       map[T]*item[T]{},
-		queue:       queue[T]{},
+		queue:       btree.NewG(32, less[T]),
 		tryPush:     make(chan struct{}, 1),
 		rateLimiter: opts.RateLimiter,
 		locked:      sets.Set[T]{},
@@ -77,11 +77,15 @@ type controllerworkqueue[T comparable] struct {
 	// lock has to be acquired for any access to either items or queue
 	lock  sync.Mutex
 	items map[T]*item[T]
-	queue queue[T]
+	queue *btree.BTreeG[*item[T]]
 
 	tryPush chan struct{}
 
 	rateLimiter workqueue.TypedRateLimiter[T]
+
+	// addedCounter is a counter of elements added, we need it
+	// because unixNano is not guaranteed to be unique.
+	addedCounter uint64
 
 	// locked contains the keys we handed out through Get() and that haven't
 	// yet been returned through Done().
@@ -106,7 +110,6 @@ func (w *controllerworkqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	var hadChanges bool
 	for _, key := range items {
 		if o.RateLimited {
 			after := w.rateLimiter.When(key)
@@ -121,30 +124,30 @@ func (w *controllerworkqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 		}
 		if _, ok := w.items[key]; !ok {
 			item := &item[T]{
-				key:      key,
-				priority: o.Priority,
-				readyAt:  readyAt,
+				key:             key,
+				addedAtUnixNano: w.now().UnixNano(),
+				addedCounter:    w.addedCounter,
+				priority:        o.Priority,
+				readyAt:         readyAt,
 			}
 			w.items[key] = item
-			w.queue = append(w.queue, item)
-			hadChanges = true
+			w.queue.ReplaceOrInsert(item)
+			w.addedCounter++
 			continue
 		}
 
-		if o.Priority > w.items[key].priority {
-			w.items[key].priority = o.Priority
-			hadChanges = true
+		// The b-tree de-duplicates based on ordering and any change here
+		// will affect the order - Just delete and re-add.
+		item, _ := w.queue.Delete(w.items[key])
+		if o.Priority > item.priority {
+			item.priority = o.Priority
 		}
 
-		if w.items[key].readyAt != nil && (readyAt == nil || readyAt.Before(*w.items[key].readyAt)) {
-			w.items[key].readyAt = readyAt
-			hadChanges = true
+		if item.readyAt != nil && (readyAt == nil || readyAt.Before(*item.readyAt)) {
+			item.readyAt = readyAt
 		}
-	}
 
-	if hadChanges {
-		sort.Stable(w.queue)
-		w.doTryPush()
+		w.queue.ReplaceOrInsert(item)
 	}
 }
 
@@ -176,42 +179,30 @@ func (w *controllerworkqueue[T]) spin() {
 			w.lockedLock.Lock()
 			defer w.lockedLock.Unlock()
 
-			// toRemove is a list of indexes to remove from the queue.
-			// We can not do it in-place as we would be manipulating the
-			// slice we are iterating over. We have to do it backwards, as
-			// otherwise the indexes become invalid.
-			var toRemove []int
-			defer func() {
-				for i := len(toRemove) - 1; i >= 0; i-- {
-					idxToRemove := toRemove[i]
-					if idxToRemove == len(w.queue)-1 {
-						w.queue = w.queue[:idxToRemove]
-					} else {
-						w.queue = append(w.queue[:idxToRemove], w.queue[idxToRemove+1:]...)
-					}
-				}
-			}()
-			for idx, item := range w.queue {
+			w.queue.Ascend(func(item *item[T]) bool {
 				if w.waiters.Load() == 0 { // no waiters, return as we can not hand anything out anyways
-					return
+					return false
 				}
+
 				// No next element we can process
-				if w.queue[0].readyAt != nil && w.queue[0].readyAt.After(w.now()) {
-					nextReady = w.tick(w.queue[0].readyAt.Sub(w.now()))
-					return
+				if item.readyAt != nil && item.readyAt.After(w.now()) {
+					nextReady = w.tick(item.readyAt.Sub(w.now()))
+					return false
 				}
 
 				// Item is locked, we can not hand it out
 				if w.locked.Has(item.key) {
-					continue
+					return true
 				}
 
 				w.get <- *item
 				w.locked.Insert(item.key)
-				delete(w.items, item.key)
 				w.waiters.Add(-1)
-				toRemove = append(toRemove, idx)
-			}
+				delete(w.items, item.key)
+				w.queue.Delete(item)
+
+				return true
+			})
 		}()
 	}
 }
@@ -274,37 +265,36 @@ func (w *controllerworkqueue[T]) Len() int {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	return len(w.queue)
+	return w.queue.Len()
 }
 
-// queue is the actual queue. It implements heap.Interface.
-type queue[T comparable] []*item[T]
-
-func (q queue[T]) Len() int {
-	return len(q)
-}
-
-func (q queue[T]) Less(i, j int) bool {
-	switch {
-	case q[i].readyAt == nil && q[j].readyAt != nil:
+func less[T comparable](a, b *item[T]) bool {
+	if a.readyAt == nil && b.readyAt != nil {
 		return true
-	case q[i].readyAt != nil && q[j].readyAt == nil:
+	}
+	if a.readyAt != nil && b.readyAt == nil {
 		return false
-	case q[i].readyAt != nil && q[j].readyAt != nil:
-		return q[i].readyAt.Before(*q[j].readyAt)
+	}
+	if a.readyAt != nil && b.readyAt != nil && !a.readyAt.Equal(*b.readyAt) {
+		return a.readyAt.Before(*b.readyAt)
+	}
+	if a.priority != b.priority {
+		return a.priority > b.priority
 	}
 
-	return q[i].priority > q[j].priority
-}
+	if a.addedAtUnixNano != b.addedAtUnixNano {
+		return a.addedAtUnixNano < b.addedAtUnixNano
+	}
 
-func (q queue[T]) Swap(i, j int) {
-	q[i], q[j] = q[j], q[i]
+	return a.addedCounter < b.addedCounter
 }
 
 type item[T comparable] struct {
-	key      T
-	priority int
-	readyAt  *time.Time
+	key             T
+	addedAtUnixNano int64
+	addedCounter    uint64
+	priority        int
+	readyAt         *time.Time
 }
 
 func wrapWithMetrics[T comparable](q *controllerworkqueue[T], name string, provider workqueue.MetricsProvider) PriorityQueue[T] {

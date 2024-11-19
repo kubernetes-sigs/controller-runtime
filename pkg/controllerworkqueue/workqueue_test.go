@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
+	fuzz "github.com/google/gofuzz"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 var _ = Describe("Controllerworkqueue", func() {
@@ -251,6 +253,122 @@ func BenchmarkAddGetDone(b *testing.B) {
 			item, _ := q.Get()
 			q.Done(item)
 		}
+	}
+}
+
+// TestFuzzPrioriorityQueue validates a set of basic
+// invariants that should always be true:
+//
+//   - The queue is threadsafe when multiple producers and consumers
+//     are involved
+//   - There are no deadlocks
+//   - An item is never handed out again before it is returned
+//   - Items in the queue are de-duplicated
+//   - max(existing priority, new priority) is used
+func TestFuzzPrioriorityQueue(t *testing.T) {
+	t.Parallel()
+
+	seed := time.Now().UnixNano()
+	t.Logf("seed: %d", seed)
+	f := fuzz.NewWithSeed(seed)
+	fuzzLock := sync.Mutex{}
+	fuzz := func(in any) {
+		fuzzLock.Lock()
+		defer fuzzLock.Unlock()
+
+		f.Fuzz(in)
+	}
+
+	inQueue := map[string]int{}
+	inQueueLock := sync.Mutex{}
+
+	handedOut := sets.Set[string]{}
+	handedOutLock := sync.Mutex{}
+
+	wg := sync.WaitGroup{}
+	q, _ := newQueue()
+
+	for range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for range 1000 {
+				opts, item := AddOpts{}, ""
+
+				fuzz(&opts)
+				fuzz(&item)
+
+				if opts.After > 100*time.Millisecond {
+					opts.After = 10 * time.Millisecond
+				}
+				opts.RateLimited = false
+
+				func() {
+					inQueueLock.Lock()
+					defer inQueueLock.Unlock()
+
+					q.AddWithOpts(opts, item)
+					if existingPriority, exists := inQueue[item]; !exists || existingPriority < opts.Priority {
+						inQueue[item] = opts.Priority
+					}
+				}()
+			}
+		}()
+	}
+
+	for range 100 {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for {
+				item, cont := func() (string, bool) {
+					inQueueLock.Lock()
+					defer inQueueLock.Unlock()
+
+					if len(inQueue) == 0 {
+						return "", false
+					}
+
+					item, priority, _ := q.GetWithPriority()
+					if expected := inQueue[item]; expected != priority {
+						t.Errorf("got priority %d, expected %d", priority, expected)
+					}
+					delete(inQueue, item)
+					return item, true
+				}()
+
+				if !cont {
+					return
+				}
+
+				func() {
+					handedOutLock.Lock()
+					defer handedOutLock.Unlock()
+
+					if handedOut.Has(item) {
+						t.Errorf("item %s got handed out more than once", item)
+					}
+					handedOut.Insert(item)
+				}()
+
+				func() {
+					handedOutLock.Lock()
+					defer handedOutLock.Unlock()
+
+					handedOut.Delete(item)
+					q.Done(item)
+				}()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if expected := len(inQueue); expected != q.Len() {
+		t.Errorf("Expected queue length to be %d, was %d", expected, q.Len())
 	}
 }
 

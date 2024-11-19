@@ -57,15 +57,19 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 	}
 
 	cwq := &controllerworkqueue[T]{
-		items:       map[T]*item[T]{},
-		queue:       btree.NewG(32, less[T]),
-		tryPush:     make(chan struct{}, 1),
-		rateLimiter: opts.RateLimiter,
-		locked:      sets.Set[T]{},
-		done:        make(chan struct{}),
-		get:         make(chan item[T]),
-		now:         time.Now,
-		tick:        time.Tick,
+		items: map[T]*item[T]{},
+		queue: btree.NewG(32, less[T]),
+		// itemOrWaiterAdded indicates that an item or
+		// waiter was added. It must be buffered, because
+		// if we currently process items we can't tell
+		// if that included the new item/waiter.
+		itemOrWaiterAdded: make(chan struct{}, 1),
+		rateLimiter:       opts.RateLimiter,
+		locked:            sets.Set[T]{},
+		done:              make(chan struct{}),
+		get:               make(chan item[T]),
+		now:               time.Now,
+		tick:              time.Tick,
 	}
 
 	go cwq.spin()
@@ -79,7 +83,7 @@ type controllerworkqueue[T comparable] struct {
 	items map[T]*item[T]
 	queue *btree.BTreeG[*item[T]]
 
-	tryPush chan struct{}
+	itemOrWaiterAdded chan struct{}
 
 	rateLimiter workqueue.TypedRateLimiter[T]
 
@@ -119,7 +123,7 @@ func (w *controllerworkqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 		}
 
 		var readyAt *time.Time
-		if o.After != 0 {
+		if o.After > 0 {
 			readyAt = ptr.To(w.now().Add(o.After))
 		}
 		if _, ok := w.items[key]; !ok {
@@ -151,9 +155,9 @@ func (w *controllerworkqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 	}
 }
 
-func (w *controllerworkqueue[T]) doTryPush() {
+func (w *controllerworkqueue[T]) notifyItemOrWaiterAdded() {
 	select {
-	case w.tryPush <- struct{}{}:
+	case w.itemOrWaiterAdded <- struct{}{}:
 	default:
 	}
 }
@@ -162,11 +166,12 @@ func (w *controllerworkqueue[T]) spin() {
 	blockForever := make(chan time.Time)
 	var nextReady <-chan time.Time
 	nextReady = blockForever
+
 	for {
 		select {
 		case <-w.done:
 			return
-		case <-w.tryPush:
+		case <-w.itemOrWaiterAdded:
 		case <-nextReady:
 		}
 
@@ -186,7 +191,11 @@ func (w *controllerworkqueue[T]) spin() {
 
 				// No next element we can process
 				if item.readyAt != nil && item.readyAt.After(w.now()) {
-					nextReady = w.tick(item.readyAt.Sub(w.now()))
+					readyAt := item.readyAt.Sub(w.now())
+					if readyAt <= 0 { // Toctou race with the above check
+						readyAt = 1
+					}
+					nextReady = w.tick(readyAt)
 					return false
 				}
 
@@ -222,7 +231,7 @@ func (w *controllerworkqueue[T]) AddRateLimited(item T) {
 func (w *controllerworkqueue[T]) GetWithPriority() (_ T, priority int, shutdown bool) {
 	w.waiters.Add(1)
 
-	w.doTryPush()
+	w.notifyItemOrWaiterAdded()
 	item := <-w.get
 
 	return item.key, item.priority, w.shutdown.Load()
@@ -249,7 +258,7 @@ func (w *controllerworkqueue[T]) Done(item T) {
 	w.lockedLock.Lock()
 	defer w.lockedLock.Unlock()
 	w.locked.Delete(item)
-	w.doTryPush()
+	w.notifyItemOrWaiterAdded()
 }
 
 func (w *controllerworkqueue[T]) ShutDown() {

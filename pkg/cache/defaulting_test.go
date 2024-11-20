@@ -225,6 +225,30 @@ func TestDefaultOpts(t *testing.T) {
 			},
 		},
 		{
+			name: "ByObject.EnableWatchBookmarks gets defaulted from DefaultEnableWatchBookmarks",
+			in: Options{
+				ByObject:                    map[client.Object]ByObject{pod: {}},
+				DefaultEnableWatchBookmarks: ptr.To(true),
+			},
+
+			verification: func(o Options) string {
+				expected := ptr.To(true)
+				return cmp.Diff(expected, o.ByObject[pod].EnableWatchBookmarks)
+			},
+		},
+		{
+			name: "ByObject.EnableWatchBookmarks doesn't get defaulted when set",
+			in: Options{
+				ByObject:                    map[client.Object]ByObject{pod: {EnableWatchBookmarks: ptr.To(false)}},
+				DefaultEnableWatchBookmarks: ptr.To(true),
+			},
+
+			verification: func(o Options) string {
+				expected := ptr.To(false)
+				return cmp.Diff(expected, o.ByObject[pod].EnableWatchBookmarks)
+			},
+		},
+		{
 			name: "DefaultNamespace label selector gets defaulted from DefaultLabelSelector",
 			in: Options{
 				DefaultNamespaces:    map[string]Config{"default": {}},

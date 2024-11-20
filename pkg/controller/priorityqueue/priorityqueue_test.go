@@ -1,6 +1,7 @@
 package priorityqueue
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -377,5 +378,38 @@ func newQueue() (PriorityQueue[string], *fakeMetricsProvider) {
 	q := New("test", func(o *Opts[string]) {
 		o.MetricProvider = metrics
 	})
+	q.(*priorityqueue[string]).queue = &btreeInteractionValidator{
+		bTree: q.(*priorityqueue[string]).queue,
+	}
+
+	upstreamTick := q.(*priorityqueue[string]).tick
+	q.(*priorityqueue[string]).tick = func(d time.Duration) <-chan time.Time {
+		if d <= 0 {
+			panic(fmt.Sprintf("got non-positive tick: %v", d))
+		}
+		return upstreamTick(d)
+	}
 	return q, metrics
+}
+
+type btreeInteractionValidator struct {
+	bTree[*item[string]]
+}
+
+func (b *btreeInteractionValidator) ReplaceOrInsert(item *item[string]) (*item[string], bool) {
+	// There is no codepath that updates an item
+	item, alreadyExist := b.bTree.ReplaceOrInsert(item)
+	if alreadyExist {
+		panic(fmt.Sprintf("ReplaceOrInsert: item %v already existed", item))
+	}
+	return item, alreadyExist
+}
+
+func (b *btreeInteractionValidator) Delete(item *item[string]) (*item[string], bool) {
+	// There is node codepath that deletes an item that doesn't exist
+	old, existed := b.bTree.Delete(item)
+	if !existed {
+		panic(fmt.Sprintf("Delete: item %v not found", item))
+	}
+	return old, existed
 }

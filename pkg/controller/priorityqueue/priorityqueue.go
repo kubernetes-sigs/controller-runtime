@@ -86,7 +86,7 @@ type priorityqueue[T comparable] struct {
 	// or metrics.
 	lock    sync.Mutex
 	items   map[T]*item[T]
-	queue   *btree.BTreeG[*item[T]]
+	queue   bTree[*item[T]]
 	metrics queueMetrics[T]
 
 	// addedCounter is a counter of elements added, we need it
@@ -324,4 +324,11 @@ func (w *priorityqueue[T]) updateUnfinishedWorkLoop() {
 		}
 		w.metrics.updateUnfinishedWork()
 	}
+}
+
+type bTree[T any] interface {
+	ReplaceOrInsert(item T) (_ T, _ bool)
+	Delete(item T) (T, bool)
+	Ascend(iterator btree.ItemIteratorG[T])
+	Len() int
 }

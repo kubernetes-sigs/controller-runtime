@@ -171,7 +171,7 @@ var _ = Describe("controller", func() {
 
 			err = ctrl.Start(context.TODO())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync: timed out waiting for cache to be synced"))
+			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync kind source: *v1.Deployment: timed out waiting for cache to be synced"))
 		})
 
 		It("should not error when controller Start context is cancelled during Sources WaitForSync", func() {

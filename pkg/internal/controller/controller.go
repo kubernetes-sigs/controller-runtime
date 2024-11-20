@@ -197,7 +197,7 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 					}
 					didStartSyncingSource.Store(true)
 					if err := syncingSource.WaitForSync(sourceStartCtx); err != nil {
-						err := fmt.Errorf("failed to wait for %s caches to sync: %w", c.Name, err)
+						err := fmt.Errorf("failed to wait for %s caches to sync %v: %w", c.Name, syncingSource, err)
 						log.Error(err, "Could not wait for Cache to sync")
 						sourceStartErrChan <- err
 					}

@@ -1,4 +1,4 @@
-package controllerworkqueue
+package priorityqueue
 
 import (
 	"sync"
@@ -56,7 +56,7 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 		opts.MetricProvider = metrics.WorkqueueMetricsProvider{}
 	}
 
-	cwq := &controllerworkqueue[T]{
+	cwq := &priorityqueue[T]{
 		items: map[T]*item[T]{},
 		queue: btree.NewG(32, less[T]),
 		// itemOrWaiterAdded indicates that an item or
@@ -77,7 +77,7 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 	return wrapWithMetrics(cwq, name, opts.MetricProvider)
 }
 
-type controllerworkqueue[T comparable] struct {
+type priorityqueue[T comparable] struct {
 	// lock has to be acquired for any access to either items or queue
 	lock  sync.Mutex
 	items map[T]*item[T]
@@ -110,7 +110,7 @@ type controllerworkqueue[T comparable] struct {
 	tick func(time.Duration) <-chan time.Time
 }
 
-func (w *controllerworkqueue[T]) AddWithOpts(o AddOpts, items ...T) {
+func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -155,14 +155,14 @@ func (w *controllerworkqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 	}
 }
 
-func (w *controllerworkqueue[T]) notifyItemOrWaiterAdded() {
+func (w *priorityqueue[T]) notifyItemOrWaiterAdded() {
 	select {
 	case w.itemOrWaiterAdded <- struct{}{}:
 	default:
 	}
 }
 
-func (w *controllerworkqueue[T]) spin() {
+func (w *priorityqueue[T]) spin() {
 	blockForever := make(chan time.Time)
 	var nextReady <-chan time.Time
 	nextReady = blockForever
@@ -216,19 +216,19 @@ func (w *controllerworkqueue[T]) spin() {
 	}
 }
 
-func (w *controllerworkqueue[T]) Add(item T) {
+func (w *priorityqueue[T]) Add(item T) {
 	w.AddWithOpts(AddOpts{}, item)
 }
 
-func (w *controllerworkqueue[T]) AddAfter(item T, after time.Duration) {
+func (w *priorityqueue[T]) AddAfter(item T, after time.Duration) {
 	w.AddWithOpts(AddOpts{After: after}, item)
 }
 
-func (w *controllerworkqueue[T]) AddRateLimited(item T) {
+func (w *priorityqueue[T]) AddRateLimited(item T) {
 	w.AddWithOpts(AddOpts{RateLimited: true}, item)
 }
 
-func (w *controllerworkqueue[T]) GetWithPriority() (_ T, priority int, shutdown bool) {
+func (w *priorityqueue[T]) GetWithPriority() (_ T, priority int, shutdown bool) {
 	w.waiters.Add(1)
 
 	w.notifyItemOrWaiterAdded()
@@ -237,40 +237,40 @@ func (w *controllerworkqueue[T]) GetWithPriority() (_ T, priority int, shutdown 
 	return item.key, item.priority, w.shutdown.Load()
 }
 
-func (w *controllerworkqueue[T]) Get() (item T, shutdown bool) {
+func (w *priorityqueue[T]) Get() (item T, shutdown bool) {
 	key, _, shutdown := w.GetWithPriority()
 	return key, shutdown
 }
 
-func (w *controllerworkqueue[T]) Forget(item T) {
+func (w *priorityqueue[T]) Forget(item T) {
 	w.rateLimiter.Forget(item)
 }
 
-func (w *controllerworkqueue[T]) NumRequeues(item T) int {
+func (w *priorityqueue[T]) NumRequeues(item T) int {
 	return w.rateLimiter.NumRequeues(item)
 }
 
-func (w *controllerworkqueue[T]) ShuttingDown() bool {
+func (w *priorityqueue[T]) ShuttingDown() bool {
 	return w.shutdown.Load()
 }
 
-func (w *controllerworkqueue[T]) Done(item T) {
+func (w *priorityqueue[T]) Done(item T) {
 	w.lockedLock.Lock()
 	defer w.lockedLock.Unlock()
 	w.locked.Delete(item)
 	w.notifyItemOrWaiterAdded()
 }
 
-func (w *controllerworkqueue[T]) ShutDown() {
+func (w *priorityqueue[T]) ShutDown() {
 	w.shutdown.Store(true)
 	close(w.done)
 }
 
-func (w *controllerworkqueue[T]) ShutDownWithDrain() {
+func (w *priorityqueue[T]) ShutDownWithDrain() {
 	w.ShutDown()
 }
 
-func (w *controllerworkqueue[T]) Len() int {
+func (w *priorityqueue[T]) Len() int {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -306,10 +306,10 @@ type item[T comparable] struct {
 	readyAt         *time.Time
 }
 
-func wrapWithMetrics[T comparable](q *controllerworkqueue[T], name string, provider workqueue.MetricsProvider) PriorityQueue[T] {
+func wrapWithMetrics[T comparable](q *priorityqueue[T], name string, provider workqueue.MetricsProvider) PriorityQueue[T] {
 	mwq := &metricWrappedQueue[T]{
-		controllerworkqueue: q,
-		metrics:             newQueueMetrics[T](provider, name, clock.RealClock{}),
+		priorityqueue: q,
+		metrics:       newQueueMetrics[T](provider, name, clock.RealClock{}),
 	}
 
 	go mwq.updateUnfinishedWorkLoop()
@@ -318,7 +318,7 @@ func wrapWithMetrics[T comparable](q *controllerworkqueue[T], name string, provi
 }
 
 type metricWrappedQueue[T comparable] struct {
-	*controllerworkqueue[T]
+	*priorityqueue[T]
 	metrics queueMetrics[T]
 }
 
@@ -326,11 +326,11 @@ func (m *metricWrappedQueue[T]) AddWithOpts(o AddOpts, items ...T) {
 	for _, item := range items {
 		m.metrics.add(item)
 	}
-	m.controllerworkqueue.AddWithOpts(o, items...)
+	m.priorityqueue.AddWithOpts(o, items...)
 }
 
 func (m *metricWrappedQueue[T]) GetWithPriority() (T, int, bool) {
-	item, priority, shutdown := m.controllerworkqueue.GetWithPriority()
+	item, priority, shutdown := m.priorityqueue.GetWithPriority()
 	m.metrics.get(item)
 	return item, priority, shutdown
 }
@@ -342,14 +342,14 @@ func (m *metricWrappedQueue[T]) Get() (T, bool) {
 
 func (m *metricWrappedQueue[T]) Done(item T) {
 	m.metrics.done(item)
-	m.controllerworkqueue.Done(item)
+	m.priorityqueue.Done(item)
 }
 
 func (m *metricWrappedQueue[T]) updateUnfinishedWorkLoop() {
 	t := time.NewTicker(time.Millisecond)
 	defer t.Stop()
 	for range t.C {
-		if m.controllerworkqueue.ShuttingDown() {
+		if m.priorityqueue.ShuttingDown() {
 			return
 		}
 		m.metrics.updateUnfinishedWork()

@@ -22,7 +22,7 @@ import (
 
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controllerworkqueue"
+	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -140,7 +140,7 @@ func (h TypedFuncs[object, request]) Generic(ctx context.Context, e event.TypedG
 const LowPriority = -100
 
 // WithLowPriorityWhenUnchanged reduces the priority of events stemming from the initial listwatch or from a resync if
-// and only if a controllerworkqueue.PriorityQueue is used. If not, it does nothing.
+// and only if a priorityqueue.PriorityQueue is used. If not, it does nothing.
 func WithLowPriorityWhenUnchanged[object client.Object, request comparable](u TypedEventHandler[object, request]) TypedEventHandler[object, request] {
 	return TypedFuncs[object, request]{
 		CreateFunc: func(ctx context.Context, tce event.TypedCreateEvent[object], trli workqueue.TypedRateLimitingInterface[request]) {
@@ -149,7 +149,7 @@ func WithLowPriorityWhenUnchanged[object client.Object, request comparable](u Ty
 			u.Create(ctx, tce, workqueueWithCustomAddFunc[request]{
 				TypedRateLimitingInterface: trli,
 				addFunc: func(item request, q workqueue.TypedRateLimitingInterface[request]) {
-					priorityQueue, isPriorityQueue := q.(controllerworkqueue.PriorityQueue[request])
+					priorityQueue, isPriorityQueue := q.(priorityqueue.PriorityQueue[request])
 					if !isPriorityQueue {
 						q.Add(item)
 						return
@@ -158,7 +158,7 @@ func WithLowPriorityWhenUnchanged[object client.Object, request comparable](u Ty
 					if isObjectUnchanged(tce) {
 						priority = LowPriority
 					}
-					priorityQueue.AddWithOpts(controllerworkqueue.AddOpts{Priority: priority}, item)
+					priorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: priority}, item)
 				},
 			})
 		},
@@ -166,7 +166,7 @@ func WithLowPriorityWhenUnchanged[object client.Object, request comparable](u Ty
 			u.Update(ctx, tue, workqueueWithCustomAddFunc[request]{
 				TypedRateLimitingInterface: trli,
 				addFunc: func(item request, q workqueue.TypedRateLimitingInterface[request]) {
-					priorityQueue, isPriorityQueue := q.(controllerworkqueue.PriorityQueue[request])
+					priorityQueue, isPriorityQueue := q.(priorityqueue.PriorityQueue[request])
 					if !isPriorityQueue {
 						q.Add(item)
 						return
@@ -175,7 +175,7 @@ func WithLowPriorityWhenUnchanged[object client.Object, request comparable](u Ty
 					if tue.ObjectOld.GetResourceVersion() == tue.ObjectNew.GetResourceVersion() {
 						priority = LowPriority
 					}
-					priorityQueue.AddWithOpts(controllerworkqueue.AddOpts{Priority: priority}, item)
+					priorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: priority}, item)
 				},
 			})
 		},

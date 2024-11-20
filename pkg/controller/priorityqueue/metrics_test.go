@@ -1,4 +1,4 @@
-package controllerworkqueue
+package priorityqueue
 
 import (
 	"sync"

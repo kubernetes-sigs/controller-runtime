@@ -56,9 +56,10 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 		opts.MetricProvider = metrics.WorkqueueMetricsProvider{}
 	}
 
-	cwq := &priorityqueue[T]{
-		items: map[T]*item[T]{},
-		queue: btree.NewG(32, less[T]),
+	pq := &priorityqueue[T]{
+		items:   map[T]*item[T]{},
+		queue:   btree.NewG(32, less[T]),
+		metrics: newQueueMetrics[T](opts.MetricProvider, name, clock.RealClock{}),
 		// itemOrWaiterAdded indicates that an item or
 		// waiter was added. It must be buffered, because
 		// if we currently process items we can't tell
@@ -72,24 +73,29 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 		tick:              time.Tick,
 	}
 
-	go cwq.spin()
+	go pq.spin()
+	if _, ok := pq.metrics.(noMetrics[T]); !ok {
+		go pq.updateUnfinishedWorkLoop()
+	}
 
-	return wrapWithMetrics(cwq, name, opts.MetricProvider)
+	return pq
 }
 
 type priorityqueue[T comparable] struct {
-	// lock has to be acquired for any access to either items or queue
-	lock  sync.Mutex
-	items map[T]*item[T]
-	queue *btree.BTreeG[*item[T]]
-
-	itemOrWaiterAdded chan struct{}
-
-	rateLimiter workqueue.TypedRateLimiter[T]
+	// lock has to be acquired for any access any of items, queue, addedCounter
+	// or metrics.
+	lock    sync.Mutex
+	items   map[T]*item[T]
+	queue   *btree.BTreeG[*item[T]]
+	metrics queueMetrics[T]
 
 	// addedCounter is a counter of elements added, we need it
 	// because unixNano is not guaranteed to be unique.
 	addedCounter uint64
+
+	itemOrWaiterAdded chan struct{}
+
+	rateLimiter workqueue.TypedRateLimiter[T]
 
 	// locked contains the keys we handed out through Get() and that haven't
 	// yet been returned through Done().
@@ -136,6 +142,7 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 			}
 			w.items[key] = item
 			w.queue.ReplaceOrInsert(item)
+			w.metrics.add(key)
 			w.addedCounter++
 			continue
 		}
@@ -204,11 +211,12 @@ func (w *priorityqueue[T]) spin() {
 					return true
 				}
 
-				w.get <- *item
+				w.metrics.get(item.key)
 				w.locked.Insert(item.key)
 				w.waiters.Add(-1)
 				delete(w.items, item.key)
 				w.queue.Delete(item)
+				w.get <- *item
 
 				return true
 			})
@@ -258,6 +266,7 @@ func (w *priorityqueue[T]) Done(item T) {
 	w.lockedLock.Lock()
 	defer w.lockedLock.Unlock()
 	w.locked.Delete(item)
+	w.metrics.done(item)
 	w.notifyItemOrWaiterAdded()
 }
 
@@ -306,52 +315,13 @@ type item[T comparable] struct {
 	readyAt         *time.Time
 }
 
-func wrapWithMetrics[T comparable](q *priorityqueue[T], name string, provider workqueue.MetricsProvider) PriorityQueue[T] {
-	mwq := &metricWrappedQueue[T]{
-		priorityqueue: q,
-		metrics:       newQueueMetrics[T](provider, name, clock.RealClock{}),
-	}
-
-	go mwq.updateUnfinishedWorkLoop()
-
-	return mwq
-}
-
-type metricWrappedQueue[T comparable] struct {
-	*priorityqueue[T]
-	metrics queueMetrics[T]
-}
-
-func (m *metricWrappedQueue[T]) AddWithOpts(o AddOpts, items ...T) {
-	for _, item := range items {
-		m.metrics.add(item)
-	}
-	m.priorityqueue.AddWithOpts(o, items...)
-}
-
-func (m *metricWrappedQueue[T]) GetWithPriority() (T, int, bool) {
-	item, priority, shutdown := m.priorityqueue.GetWithPriority()
-	m.metrics.get(item)
-	return item, priority, shutdown
-}
-
-func (m *metricWrappedQueue[T]) Get() (T, bool) {
-	item, _, shutdown := m.GetWithPriority()
-	return item, shutdown
-}
-
-func (m *metricWrappedQueue[T]) Done(item T) {
-	m.metrics.done(item)
-	m.priorityqueue.Done(item)
-}
-
-func (m *metricWrappedQueue[T]) updateUnfinishedWorkLoop() {
-	t := time.NewTicker(time.Millisecond)
+func (w *priorityqueue[T]) updateUnfinishedWorkLoop() {
+	t := time.NewTicker(500 * time.Millisecond) // borrowed from workqueue: https://github.com/kubernetes/kubernetes/blob/67a807bf142c7a2a5ecfdb2a5d24b4cdea4cc79c/staging/src/k8s.io/client-go/util/workqueue/queue.go#L182
 	defer t.Stop()
 	for range t.C {
-		if m.priorityqueue.ShuttingDown() {
+		if w.shutdown.Load() {
 			return
 		}
-		m.metrics.updateUnfinishedWork()
+		w.metrics.updateUnfinishedWork()
 	}
 }

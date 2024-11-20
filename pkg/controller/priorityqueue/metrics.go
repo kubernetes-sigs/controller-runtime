@@ -11,6 +11,9 @@ import (
 
 // This file is mostly a copy of unexported code from
 // https://github.com/kubernetes/kubernetes/blob/1d8828ce707ed9dd7a6a9756385419cce1d202ac/staging/src/k8s.io/client-go/util/workqueue/metrics.go
+//
+// The only difference is the addition of mapLock in defaultQueueMetrics, we want to avoid the need of synchronizing updateUnfinishedWork()
+// with the queue.
 
 type queueMetrics[T comparable] interface {
 	add(item T)

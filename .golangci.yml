@@ -172,7 +172,7 @@ issues:
         - unused
       # Seems to incorrectly trigger on the two implementations that are only
       # used through an interface and not directly..?
-      path: pkg/controllerworkqueue/metrics\.go
+      path: pkg/controller/priorityqueue/metrics\.go
 
 run:
   go: "1.23"

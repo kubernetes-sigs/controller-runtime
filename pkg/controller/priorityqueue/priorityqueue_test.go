@@ -90,12 +90,12 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Consistently(q.Len).Should(Equal(1))
 
-		cwq := q.(*metricWrappedQueue[string])
+		cwq := q.(*priorityqueue[string])
 		cwq.lockedLock.Lock()
 		Expect(cwq.locked.Len()).To(Equal(0))
 
 		Expect(metrics.depth["test"]).To(Equal(1))
-		Expect(metrics.adds["test"]).To(Equal(2))
+		Expect(metrics.adds["test"]).To(Equal(1))
 	})
 
 	It("retains the highest priority", func() {
@@ -112,7 +112,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(q.Len()).To(Equal(0))
 
 		Expect(metrics.depth["test"]).To(Equal(0))
-		Expect(metrics.adds["test"]).To(Equal(2))
+		Expect(metrics.adds["test"]).To(Equal(1))
 	})
 
 	It("gets pushed to the front if the priority increases", func() {
@@ -131,7 +131,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(q.Len()).To(Equal(2))
 
 		Expect(metrics.depth["test"]).To(Equal(2))
-		Expect(metrics.adds["test"]).To(Equal(4))
+		Expect(metrics.adds["test"]).To(Equal(3))
 	})
 
 	It("retains the lowest after duration", func() {
@@ -147,7 +147,7 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Expect(q.Len()).To(Equal(0))
 		Expect(metrics.depth["test"]).To(Equal(0))
-		Expect(metrics.adds["test"]).To(Equal(2))
+		Expect(metrics.adds["test"]).To(Equal(1))
 	})
 
 	It("returns an item only after after has passed", func() {
@@ -158,7 +158,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		nowLock := sync.Mutex{}
 		tick := make(chan time.Time)
 
-		cwq := q.(*metricWrappedQueue[string])
+		cwq := q.(*priorityqueue[string])
 		cwq.now = func() time.Time {
 			nowLock.Lock()
 			defer nowLock.Unlock()
@@ -199,7 +199,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		nowLock := sync.Mutex{}
 		tick := make(chan time.Time)
 
-		cwq := q.(*metricWrappedQueue[string])
+		cwq := q.(*priorityqueue[string])
 		cwq.now = func() time.Time {
 			nowLock.Lock()
 			defer nowLock.Unlock()

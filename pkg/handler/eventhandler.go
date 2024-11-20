@@ -136,6 +136,9 @@ func (h TypedFuncs[object, request]) Generic(ctx context.Context, e event.TypedG
 	}
 }
 
+// LowPriority is the priority set by WithLowPriorityWhenUnchanged
+const LowPriority = -100
+
 // WithLowPriorityWhenUnchanged reduces the priority of events stemming from the initial listwatch or from a resync if
 // and only if a controllerworkqueue.PriorityQueue is used. If not, it does nothing.
 func WithLowPriorityWhenUnchanged[object client.Object, request comparable](u TypedEventHandler[object, request]) TypedEventHandler[object, request] {
@@ -151,13 +154,31 @@ func WithLowPriorityWhenUnchanged[object client.Object, request comparable](u Ty
 						q.Add(item)
 						return
 					}
+					var priority int
 					if isObjectUnchanged(tce) {
-						priorityQueue.AddWithOpts(controllerworkqueue.AddOpts{Priority: -1}, item)
+						priority = LowPriority
 					}
+					priorityQueue.AddWithOpts(controllerworkqueue.AddOpts{Priority: priority}, item)
 				},
 			})
 		},
-		UpdateFunc:  u.Update,
+		UpdateFunc: func(ctx context.Context, tue event.TypedUpdateEvent[object], trli workqueue.TypedRateLimitingInterface[request]) {
+			u.Update(ctx, tue, workqueueWithCustomAddFunc[request]{
+				TypedRateLimitingInterface: trli,
+				addFunc: func(item request, q workqueue.TypedRateLimitingInterface[request]) {
+					priorityQueue, isPriorityQueue := q.(controllerworkqueue.PriorityQueue[request])
+					if !isPriorityQueue {
+						q.Add(item)
+						return
+					}
+					var priority int
+					if tue.ObjectOld.GetResourceVersion() == tue.ObjectNew.GetResourceVersion() {
+						priority = LowPriority
+					}
+					priorityQueue.AddWithOpts(controllerworkqueue.AddOpts{Priority: priority}, item)
+				},
+			})
+		},
 		DeleteFunc:  u.Delete,
 		GenericFunc: u.Generic,
 	}

@@ -231,7 +231,7 @@ type Options struct {
 	// This will be used for all object types, unless it is set in ByObject or
 	// DefaultNamespaces.
 	//
-	// Defaults to true.
+	// Defaults to false.
 	DefaultEnableWatchBookmarks *bool
 
 	// ByObject restricts the cache's ListWatch to the desired fields per GVK at the specified object.
@@ -291,7 +291,7 @@ type ByObject struct {
 	// assume bookmarks are returned at any specific interval, nor may they
 	// assume the server will send any BOOKMARK event during a session.
 	//
-	// Defaults to true.
+	// Defaults to false.
 	EnableWatchBookmarks *bool
 }
 
@@ -326,7 +326,7 @@ type Config struct {
 	// assume bookmarks are returned at any specific interval, nor may they
 	// assume the server will send any BOOKMARK event during a session.
 	//
-	// Defaults to true.
+	// Defaults to false.
 	EnableWatchBookmarks *bool
 }
 
@@ -430,7 +430,7 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 				Transform:             config.Transform,
 				WatchErrorHandler:     opts.DefaultWatchErrorHandler,
 				UnsafeDisableDeepCopy: ptr.Deref(config.UnsafeDisableDeepCopy, false),
-				EnableWatchBookmarks:  ptr.Deref(config.EnableWatchBookmarks, true),
+				EnableWatchBookmarks:  ptr.Deref(config.EnableWatchBookmarks, false),
 				NewInformer:           opts.newInformer,
 			}),
 			readerFailOnMissingInformer: opts.ReaderFailOnMissingInformer,

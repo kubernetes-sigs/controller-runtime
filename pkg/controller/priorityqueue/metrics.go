@@ -12,14 +12,14 @@ import (
 // This file is mostly a copy of unexported code from
 // https://github.com/kubernetes/kubernetes/blob/1d8828ce707ed9dd7a6a9756385419cce1d202ac/staging/src/k8s.io/client-go/util/workqueue/metrics.go
 //
-// The only difference is the addition of mapLock in defaultQueueMetrics, we want to avoid the need of synchronizing updateUnfinishedWork()
-// with the queue.
+// The only two differences are the addition of mapLock in defaultQueueMetrics and converging retryMetrics into queueMetrics.
 
 type queueMetrics[T comparable] interface {
 	add(item T)
 	get(item T)
 	done(item T)
 	updateUnfinishedWork()
+	retry()
 }
 
 func newQueueMetrics[T comparable](mp workqueue.MetricsProvider, name string, clock clock.Clock) queueMetrics[T] {
@@ -37,6 +37,7 @@ func newQueueMetrics[T comparable](mp workqueue.MetricsProvider, name string, cl
 		added:                   sets.Set[T]{},
 		addTimes:                map[T]time.Time{},
 		processingStartTimes:    map[T]time.Time{},
+		retries:                 mp.NewRetriesMetric(name),
 	}
 }
 
@@ -61,6 +62,8 @@ type defaultQueueMetrics[T comparable] struct {
 	// how long have current threads been working?
 	unfinishedWorkSeconds   workqueue.SettableGaugeMetric
 	longestRunningProcessor workqueue.SettableGaugeMetric
+
+	retries workqueue.CounterMetric
 }
 
 func (m *defaultQueueMetrics[T]) add(item T) {
@@ -135,9 +138,14 @@ func (m *defaultQueueMetrics[T]) sinceInSeconds(start time.Time) float64 {
 	return m.clock.Since(start).Seconds()
 }
 
+func (m *defaultQueueMetrics[T]) retry() {
+	m.retries.Inc()
+}
+
 type noMetrics[T any] struct{}
 
 func (noMetrics[T]) add(item T)            {}
 func (noMetrics[T]) get(item T)            {}
 func (noMetrics[T]) done(item T)           {}
 func (noMetrics[T]) updateUnfinishedWork() {}
+func (noMetrics[T]) retry()                {}

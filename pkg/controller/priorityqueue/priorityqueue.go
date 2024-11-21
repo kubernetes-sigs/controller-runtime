@@ -131,6 +131,7 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 		var readyAt *time.Time
 		if o.After > 0 {
 			readyAt = ptr.To(w.now().Add(o.After))
+			w.metrics.retry()
 		}
 		if _, ok := w.items[key]; !ok {
 			item := &item[T]{

@@ -23,6 +23,7 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Expect(metrics.depth["test"]).To(Equal(0))
 		Expect(metrics.adds["test"]).To(Equal(1))
+		Expect(metrics.retries["test"]).To(Equal(0))
 	})
 
 	It("returns items in order", func() {
@@ -190,6 +191,7 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Expect(metrics.depth["test"]).To(Equal(0))
 		Expect(metrics.adds["test"]).To(Equal(1))
+		Expect(metrics.retries["test"]).To(Equal(1))
 	})
 
 	It("returns multiple items with after in correct order", func() {

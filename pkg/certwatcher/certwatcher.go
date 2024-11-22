@@ -27,6 +27,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
@@ -120,8 +121,31 @@ func (cw *CertWatcher) Start(ctx context.Context) error {
 	return cw.watcher.Close()
 }
 
+func (cw *CertWatcher) ensureAllFilesAreWatched() {
+	watchList := sets.New(cw.watcher.WatchList()...)
+	difference := sets.New(cw.certPath, cw.keyPath).Difference(watchList)
+	if difference.Len() == 0 {
+		return
+	}
+
+	for _, missingWatchPath := range difference.UnsortedList() {
+		log.V(1).Info("re-adding missing watch", "path", missingWatchPath)
+		if err := cw.watcher.Add(missingWatchPath); err != nil {
+			log.Error(err, "failed to add watch", "path", missingWatchPath)
+			return
+		}
+	}
+
+	log.V(1).Info("all files are watched again", "list", cw.watcher.WatchList())
+
+	if err := cw.ReadCertificate(); err != nil {
+		log.Error(err, "error re-reading certificate")
+	}
+}
+
 // Watch reads events from the watcher's channel and reacts to changes.
 func (cw *CertWatcher) Watch() {
+	watcherHealthTimer := time.NewTicker(time.Second)
 	for {
 		select {
 		case event, ok := <-cw.watcher.Events:
@@ -139,6 +163,8 @@ func (cw *CertWatcher) Watch() {
 			}
 
 			log.Error(err, "certificate watch error")
+		case <-watcherHealthTimer.C:
+			cw.ensureAllFilesAreWatched()
 		}
 	}
 }

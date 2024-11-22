@@ -22,6 +22,7 @@ import (
 
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -80,6 +81,15 @@ type TypedEventHandler[object any, request comparable] interface {
 	// Generic is called in response to an event of an unknown type or a synthetic event triggered as a cron or
 	// external trigger request - e.g. reconcile Autoscaling, or a Webhook.
 	Generic(context.Context, event.TypedGenericEvent[object], workqueue.TypedRateLimitingInterface[request])
+}
+
+// TypedDeepCopyableEventHandler embeds a TypedEventHandler, but supports being deep copied for a
+// specific cluster.Cluster object. In multi-cluster scenarios, any event handler that stores information
+// about the cluster in its own state (versus extracting this information from the object passed via the event)
+// should support this interface to create a new instance of an event handler when new clusters get engaged.
+type TypedDeepCopyableEventHandler[object any, request comparable] interface {
+	TypedEventHandler[object, request]
+	DeepCopyFor(c cluster.Cluster) TypedDeepCopyableEventHandler[object, request]
 }
 
 var _ EventHandler = Funcs{}

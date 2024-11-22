@@ -17,6 +17,7 @@ limitations under the License.
 package builder
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -25,10 +26,12 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -36,6 +39,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
+
+// Supporting mocking out functions for testing.
+var getGvk = apiutil.GVKForObject
 
 // project represents other forms that we can use to
 // send/receive a given resource (metadata-only, unstructured, etc).
@@ -48,6 +54,16 @@ const (
 	projectAsMetadata
 )
 
+// clusterWatcher sets up watches between a cluster and a controller.
+type typedClusterWatcher[request comparable] struct {
+	ctrl                   controller.TypedController[request]
+	forInput               ForInput
+	ownsInput              []OwnsInput
+	watchesInput           []WatchesInput[request]
+	globalPredicates       []predicate.Predicate
+	clusterAwareRawSources []source.TypedClusterAwareSource[request]
+}
+
 // Builder builds a Controller.
 type Builder = TypedBuilder[reconcile.Request]
 
@@ -55,16 +71,12 @@ type Builder = TypedBuilder[reconcile.Request]
 // that is passed to the workqueue and then to the Reconciler.
 // The workqueue de-duplicates identical requests.
 type TypedBuilder[request comparable] struct {
-	forInput         ForInput
-	ownsInput        []OwnsInput
-	rawSources       []source.TypedSource[request]
-	watchesInput     []WatchesInput[request]
-	mgr              manager.Manager
-	globalPredicates []predicate.Predicate
-	ctrl             controller.TypedController[request]
-	ctrlOptions      controller.TypedOptions[request]
-	name             string
-	newController    func(name string, mgr manager.Manager, options controller.TypedOptions[request]) (controller.TypedController[request], error)
+	typedClusterWatcher[request]
+	mgr           manager.Manager
+	ctrlOptions   controller.TypedOptions[request]
+	name          string
+	rawSources    []source.TypedSource[request]
+	newController func(name string, mgr manager.Manager, options controller.TypedOptions[request]) (controller.TypedController[request], error)
 }
 
 // ControllerManagedBy returns a new controller builder that will be started by the provided Manager.
@@ -163,7 +175,7 @@ func (blder *TypedBuilder[request]) Watches(
 ) *TypedBuilder[request] {
 	input := WatchesInput[request]{
 		obj:     object,
-		handler: handler.WithLowPriorityWhenUnchanged(eventHandler),
+		handler: eventHandler,
 	}
 	for _, opt := range opts {
 		opt.ApplyToWatches(&input)
@@ -216,8 +228,12 @@ func (blder *TypedBuilder[request]) WatchesMetadata(
 //
 // WatchesRawSource makes it possible to use typed handlers and predicates with `source.Kind` as well as custom source implementations.
 func (blder *TypedBuilder[request]) WatchesRawSource(src source.TypedSource[request]) *TypedBuilder[request] {
-	blder.rawSources = append(blder.rawSources, src)
+	if src, ok := src.(source.TypedClusterAwareSource[request]); ok {
+		blder.clusterAwareRawSources = append(blder.clusterAwareRawSources, src)
+		return blder
+	}
 
+	blder.rawSources = append(blder.rawSources, src)
 	return blder
 }
 
@@ -279,35 +295,33 @@ func (blder *TypedBuilder[request]) Build(r reconcile.TypedReconciler[request]) 
 		return nil, err
 	}
 
+	if blder.ctrlOptions.EngageWithDefaultCluster == nil {
+		blder.ctrlOptions.EngageWithDefaultCluster = blder.mgr.GetControllerOptions().EngageWithDefaultCluster
+	}
+
+	if blder.ctrlOptions.EngageWithProviderClusters == nil {
+		blder.ctrlOptions.EngageWithProviderClusters = blder.mgr.GetControllerOptions().EngageWithProviderClusters
+	}
+
 	// Set the Watch
 	if err := blder.doWatch(); err != nil {
 		return nil, err
 	}
 
+	if *blder.ctrlOptions.EngageWithProviderClusters {
+		// wrap as cluster.Aware to be engaged with provider clusters on demand
+		if err := blder.mgr.Add(controller.NewTypedMultiClusterController(blder.ctrl, &blder.typedClusterWatcher)); err != nil {
+			return nil, err
+		}
+	}
+
 	return blder.ctrl, nil
 }
 
-func (blder *TypedBuilder[request]) project(obj client.Object, proj objectProjection) (client.Object, error) {
-	switch proj {
-	case projectAsNormal:
-		return obj, nil
-	case projectAsMetadata:
-		metaObj := &metav1.PartialObjectMetadata{}
-		gvk, err := apiutil.GVKForObject(obj, blder.mgr.GetScheme())
-		if err != nil {
-			return nil, fmt.Errorf("unable to determine GVK of %T for a metadata-only watch: %w", obj, err)
-		}
-		metaObj.SetGroupVersionKind(gvk)
-		return metaObj, nil
-	default:
-		panic(fmt.Sprintf("unexpected projection type %v on type %T, should not be possible since this is an internal field", proj, obj))
-	}
-}
-
-func (blder *TypedBuilder[request]) doWatch() error {
+func (cc *typedClusterWatcher[request]) Watch(ctx context.Context, cl cluster.Cluster) error {
 	// Reconcile type
-	if blder.forInput.object != nil {
-		obj, err := blder.project(blder.forInput.object, blder.forInput.objectProjection)
+	if cc.forInput.object != nil {
+		obj, err := project(cl, cc.forInput.object, cc.forInput.objectProjection)
 		if err != nil {
 			return err
 		}
@@ -318,20 +332,16 @@ func (blder *TypedBuilder[request]) doWatch() error {
 
 		var hdler handler.TypedEventHandler[client.Object, request]
 		reflect.ValueOf(&hdler).Elem().Set(reflect.ValueOf(handler.WithLowPriorityWhenUnchanged(&handler.EnqueueRequestForObject{})))
-		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
-		allPredicates = append(allPredicates, blder.forInput.predicates...)
-		src := source.TypedKind(blder.mgr.GetCache(), obj, hdler, allPredicates...)
-		if err := blder.ctrl.Watch(src); err != nil {
+		allPredicates := append([]predicate.Predicate(nil), cc.globalPredicates...)
+		allPredicates = append(allPredicates, cc.forInput.predicates...)
+		src := &ctxBoundedSyncingSource[request]{ctx: ctx, src: source.TypedKind(cl.GetCache(), obj, hdler, allPredicates...)}
+		if err := cc.ctrl.Watch(src); err != nil {
 			return err
 		}
 	}
 
-	// Watches the managed types
-	if len(blder.ownsInput) > 0 && blder.forInput.object == nil {
-		return errors.New("Owns() can only be used together with For()")
-	}
-	for _, own := range blder.ownsInput {
-		obj, err := blder.project(own.object, own.objectProjection)
+	for _, own := range cc.ownsInput {
+		obj, err := project(cl, own.object, own.objectProjection)
 		if err != nil {
 			return err
 		}
@@ -342,36 +352,67 @@ func (blder *TypedBuilder[request]) doWatch() error {
 
 		var hdler handler.TypedEventHandler[client.Object, request]
 		reflect.ValueOf(&hdler).Elem().Set(reflect.ValueOf(handler.WithLowPriorityWhenUnchanged(handler.EnqueueRequestForOwner(
-			blder.mgr.GetScheme(), blder.mgr.GetRESTMapper(),
-			blder.forInput.object,
+			cl.GetScheme(), cl.GetRESTMapper(),
+			cc.forInput.object,
 			opts...,
 		))))
-		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
+		allPredicates := append([]predicate.Predicate(nil), cc.globalPredicates...)
 		allPredicates = append(allPredicates, own.predicates...)
-		src := source.TypedKind(blder.mgr.GetCache(), obj, hdler, allPredicates...)
-		if err := blder.ctrl.Watch(src); err != nil {
+		src := &ctxBoundedSyncingSource[request]{ctx: ctx, src: source.TypedKind(cl.GetCache(), obj, hdler, allPredicates...)}
+		if err := cc.ctrl.Watch(src); err != nil {
 			return err
 		}
 	}
 
-	// Do the watch requests
-	if len(blder.watchesInput) == 0 && blder.forInput.object == nil && len(blder.rawSources) == 0 {
-		return errors.New("there are no watches configured, controller will never get triggered. Use For(), Owns(), Watches() or WatchesRawSource() to set them up")
-	}
-	for _, w := range blder.watchesInput {
-		projected, err := blder.project(w.obj, w.objectProjection)
+	for _, w := range cc.watchesInput {
+		projected, err := project(cl, w.obj, w.objectProjection)
 		if err != nil {
 			return fmt.Errorf("failed to project for %T: %w", w.obj, err)
 		}
-		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
+		allPredicates := append([]predicate.Predicate(nil), cc.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)
-		if err := blder.ctrl.Watch(source.TypedKind(blder.mgr.GetCache(), projected, w.handler, allPredicates...)); err != nil {
+
+		h := w.handler
+		if deepCopyableHandler, ok := h.(handler.TypedDeepCopyableEventHandler[client.Object, request]); ok {
+			h = deepCopyableHandler.DeepCopyFor(cl)
+		}
+
+		src := &ctxBoundedSyncingSource[request]{ctx: ctx, src: source.TypedKind(cl.GetCache(), projected, handler.WithLowPriorityWhenUnchanged(h), allPredicates...)}
+		if err := cc.ctrl.Watch(src); err != nil {
 			return err
 		}
 	}
-	for _, src := range blder.rawSources {
-		if err := blder.ctrl.Watch(src); err != nil {
+
+	for _, src := range cc.clusterAwareRawSources {
+		if err := cc.ctrl.Watch(src); err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+func (blder *TypedBuilder[request]) doWatch() error {
+	// Pre-checks for a valid configuration
+	if len(blder.ownsInput) > 0 && blder.forInput.object == nil {
+		return errors.New("Owns() can only be used together with For()")
+	}
+	if len(blder.watchesInput) == 0 && blder.forInput.object == nil && len(blder.rawSources) == 0 {
+		return errors.New("there are no watches configured, controller will never get triggered. Use For(), Owns(), Watches() or WatchesRawSource() to set them up")
+	}
+	if !*blder.ctrlOptions.EngageWithDefaultCluster && len(blder.rawSources) > 0 {
+		return errors.New("when using a cluster adapter without watching the default cluster, non-cluster-aware custom raw watches are not allowed")
+	}
+
+	if *blder.ctrlOptions.EngageWithDefaultCluster {
+		if err := blder.Watch(unboundedContext, blder.mgr); err != nil {
+			return err
+		}
+
+		for _, src := range blder.rawSources {
+			if err := blder.ctrl.Watch(src); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -463,4 +504,54 @@ func (blder *TypedBuilder[request]) doController(r reconcile.TypedReconciler[req
 	// Build the controller and return.
 	blder.ctrl, err = blder.newController(controllerName, blder.mgr, ctrlOptions)
 	return err
+}
+
+func project(cl cluster.Cluster, obj client.Object, proj objectProjection) (client.Object, error) {
+	switch proj {
+	case projectAsNormal:
+		return obj, nil
+	case projectAsMetadata:
+		metaObj := &metav1.PartialObjectMetadata{}
+		gvk, err := getGvk(obj, cl.GetScheme())
+		if err != nil {
+			return nil, fmt.Errorf("unable to determine GVK of %T for a metadata-only watch: %w", obj, err)
+		}
+		metaObj.SetGroupVersionKind(gvk)
+		return metaObj, nil
+	default:
+		panic(fmt.Sprintf("unexpected projection type %v on type %T, should not be possible since this is an internal field", proj, obj))
+	}
+}
+
+// ctxBoundedSyncingSource implements source.SyncingSource and wraps the ctx
+// passed to the methods into the life-cycle of another context, i.e. stop
+// whenever one of the contexts is done.
+type ctxBoundedSyncingSource[request comparable] struct {
+	ctx context.Context
+	src source.TypedSyncingSource[request]
+}
+
+var unboundedContext context.Context = nil //nolint:revive // keep nil explicit for clarity.
+
+var _ source.SyncingSource = &ctxBoundedSyncingSource[reconcile.Request]{}
+
+func (s *ctxBoundedSyncingSource[request]) Start(ctx context.Context, q workqueue.TypedRateLimitingInterface[request]) error {
+	return s.src.Start(joinContexts(ctx, s.ctx), q)
+}
+
+func (s *ctxBoundedSyncingSource[request]) WaitForSync(ctx context.Context) error {
+	return s.src.WaitForSync(joinContexts(ctx, s.ctx))
+}
+
+func joinContexts(ctx, bound context.Context) context.Context {
+	if bound == unboundedContext {
+		return ctx
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		defer cancel()
+		<-bound.Done()
+	}()
+	return ctx
 }

@@ -207,6 +207,10 @@ type Options struct {
 	// to reduce the caches memory usage.
 	DefaultTransform toolscache.TransformFunc
 
+	// AdditionalDefaultIndexes are indexes that are added to every informer
+	// beyond the namespace-name and namespace ones.
+	AdditionalDefaultIndexes client.Indexers
+
 	// DefaultWatchErrorHandler will be used to the WatchErrorHandler which is called
 	// whenever ListAndWatch drops the connection with an error.
 	//
@@ -429,11 +433,12 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 					Label: config.LabelSelector,
 					Field: config.FieldSelector,
 				},
-				Transform:             config.Transform,
-				WatchErrorHandler:     opts.DefaultWatchErrorHandler,
-				UnsafeDisableDeepCopy: ptr.Deref(config.UnsafeDisableDeepCopy, false),
-				EnableWatchBookmarks:  ptr.Deref(config.EnableWatchBookmarks, true),
-				NewInformer:           opts.NewInformer,
+				Transform:                config.Transform,
+				WatchErrorHandler:        opts.DefaultWatchErrorHandler,
+				UnsafeDisableDeepCopy:    ptr.Deref(config.UnsafeDisableDeepCopy, false),
+				EnableWatchBookmarks:     ptr.Deref(config.EnableWatchBookmarks, true),
+				NewInformer:              opts.NewInformer,
+				AdditionalDefaultIndexes: opts.AdditionalDefaultIndexes,
 			}),
 			readerFailOnMissingInformer: opts.ReaderFailOnMissingInformer,
 		}

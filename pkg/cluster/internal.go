@@ -32,6 +32,11 @@ import (
 )
 
 type cluster struct {
+	// name is the name of the cluster. It identifies the cluster in the manager
+	// if that is attached to a cluster provider. The value is usually empty for
+	// the default cluster of a manager.
+	name string
+
 	// config is the rest.config used to talk to the apiserver.  Required.
 	config *rest.Config
 
@@ -57,6 +62,10 @@ type cluster struct {
 	// Logger is the logger that should be used by this manager.
 	// If none is set, it defaults to log.Log global logger.
 	logger logr.Logger
+}
+
+func (c *cluster) Name() string {
+	return c.name
 }
 
 func (c *cluster) GetConfig() *rest.Config {

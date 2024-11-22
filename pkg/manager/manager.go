@@ -53,6 +53,11 @@ type Manager interface {
 	// Cluster holds a variety of methods to interact with a cluster.
 	cluster.Cluster
 
+	// Aware is an interface for dynamic cluster addition and removal. The
+	// Manager will call Engage and Disengage on cluster-aware runnables like
+	// controllers to e.g. watch multiple clusters.
+	cluster.Aware
+
 	// Add will set requested dependencies on the component, and cause the component to be
 	// started when Start is called.
 	// Depending on if a Runnable implements LeaderElectionRunnable interface, a Runnable can be run in either
@@ -86,6 +91,10 @@ type Manager interface {
 	// otherwise components that need leader election might continue to run after the leader
 	// lock was lost.
 	Start(ctx context.Context) error
+
+	// GetCluster retrieves a Cluster from a given identifying cluster name. An
+	// empty string will return the default cluster of the manager.
+	GetCluster(ctx context.Context, clusterName string) (cluster.Cluster, error)
 
 	// GetWebhookServer returns a webhook.Server
 	GetWebhookServer() webhook.Server
@@ -281,6 +290,11 @@ type Options struct {
 	newMetricsServer       func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error)
 	newHealthProbeListener func(addr string) (net.Listener, error)
 	newPprofListener       func(addr string) (net.Listener, error)
+
+	// ExperimentalClusterProvider is an EXPERIMENTAL feature that allows the manager to
+	// operate against many Kubernetes clusters at once. Individual clusters can
+	// be accessed by calling GetCluster on the Manager.
+	ExperimentalClusterProvider cluster.Provider
 }
 
 // BaseContextFunc is a function used to provide a base Context to Runnables
@@ -325,7 +339,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Set default values for options fields
 	options = setOptionsDefaults(options)
 
-	cluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {
+	clusterOptions := func(clusterOptions *cluster.Options) {
 		clusterOptions.Scheme = options.Scheme
 		clusterOptions.MapperProvider = options.MapperProvider
 		clusterOptions.Logger = options.Logger
@@ -334,7 +348,9 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		clusterOptions.Cache = options.Cache
 		clusterOptions.Client = options.Client
 		clusterOptions.EventBroadcaster = options.EventBroadcaster //nolint:staticcheck
-	})
+	}
+
+	cl, err := cluster.New(config, clusterOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +363,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Create the recorder provider to inject event recorders for the components.
 	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.
-	recorderProvider, err := options.newRecorderProvider(config, cluster.GetHTTPClient(), cluster.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
+	recorderProvider, err := options.newRecorderProvider(config, cl.GetHTTPClient(), cl.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
 	if err != nil {
 		return nil, err
 	}
@@ -361,7 +377,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		leaderRecorderProvider = recorderProvider
 	} else {
 		leaderConfig = rest.CopyConfig(options.LeaderElectionConfig)
-		scheme := cluster.GetScheme()
+		scheme := cl.GetScheme()
 		err := corev1.AddToScheme(scheme)
 		if err != nil {
 			return nil, err
@@ -397,7 +413,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}
 
 	// Create the metrics server.
-	metricsServer, err := options.newMetricsServer(options.Metrics, config, cluster.GetHTTPClient())
+	metricsServer, err := options.newMetricsServer(options.Metrics, config, cl.GetHTTPClient())
 	if err != nil {
 		return nil, err
 	}
@@ -417,11 +433,13 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}
 
 	errChan := make(chan error, 1)
-	runnables := newRunnables(options.BaseContext, errChan)
 	return &controllerManager{
 		stopProcedureEngaged:          ptr.To(int64(0)),
-		cluster:                       cluster,
-		runnables:                     runnables,
+		defaultCluster:                cl,
+		defaultClusterOptions:         clusterOptions,
+		clusterProvider:               options.ExperimentalClusterProvider,
+		engagedClusters:               make(map[string]cluster.Cluster),
+		runnables:                     newRunnables(options.BaseContext, errChan),
 		errChan:                       errChan,
 		recorderProvider:              recorderProvider,
 		resourceLock:                  resourceLock,
@@ -550,6 +568,11 @@ func setOptionsDefaults(options Options) Options {
 
 	if options.WebhookServer == nil {
 		options.WebhookServer = webhook.NewServer(webhook.Options{})
+	}
+
+	if options.Controller.EngageWithDefaultCluster == nil {
+		options.Controller.EngageWithDefaultCluster = ptr.To(options.ExperimentalClusterProvider == nil)
+		options.Controller.EngageWithProviderClusters = ptr.To(options.ExperimentalClusterProvider != nil)
 	}
 
 	return options

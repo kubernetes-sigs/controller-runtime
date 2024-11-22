@@ -59,6 +59,8 @@ const (
 )
 
 var _ Runnable = &controllerManager{}
+var _ cluster.Aware = &controllerManager{}
+var _ Manager = &controllerManager{}
 
 type controllerManager struct {
 	sync.Mutex
@@ -68,8 +70,14 @@ type controllerManager struct {
 	errChan              chan error
 	runnables            *runnables
 
-	// cluster holds a variety of methods to interact with a cluster. Required.
-	cluster cluster.Cluster
+	// defaultCluster holds a variety of methods to interact with a defaultCluster. Required.
+	defaultCluster        cluster.Cluster
+	defaultClusterOptions cluster.Option
+
+	// engagedCluster is a map of engaged clusters. The can come and go as the manager is running.
+	engagedClustersLock   sync.RWMutex
+	engagedClusters       map[string]cluster.Cluster
+	clusterAwareRunnables []cluster.Aware
 
 	// recorderProvider is used to generate event recorders that will be injected into Controllers
 	// (and EventHandlers, Sources and Predicates).
@@ -161,6 +169,9 @@ type controllerManager struct {
 	// internalProceduresStop channel is used internally to the manager when coordinating
 	// the proper shutdown of servers. This channel is also used for dependency injection.
 	internalProceduresStop chan struct{}
+
+	// clusterProvider is used to get clusters by name, beyond the default cluster.
+	clusterProvider cluster.Provider
 }
 
 type hasCache interface {
@@ -176,7 +187,40 @@ func (cm *controllerManager) Add(r Runnable) error {
 }
 
 func (cm *controllerManager) add(r Runnable) error {
-	return cm.runnables.Add(r)
+	var engaged []cluster.Aware
+	var errs []error
+	disengage := func() {
+		for _, aware := range engaged {
+			if err := aware.Disengage(cm.internalCtx, cm.defaultCluster); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	// engage with existing clusters (this is reversible)
+	if aware, ok := r.(cluster.Aware); ok {
+		cm.engagedClustersLock.RLock()
+		defer cm.engagedClustersLock.RUnlock()
+		for _, cl := range cm.engagedClusters {
+			if err := aware.Engage(cm.internalCtx, cl); err != nil {
+				errs = append(errs, err)
+				break
+			}
+			engaged = append(engaged, aware)
+		}
+		if len(errs) > 0 {
+			disengage()
+			return kerrors.NewAggregate(errs)
+		}
+		cm.clusterAwareRunnables = append(cm.clusterAwareRunnables, aware)
+	} else {
+		if err := cm.runnables.Add(r); err != nil {
+			disengage()
+			return err
+		}
+	}
+
+	return nil
 }
 
 // AddMetricsServerExtraHandler adds extra handler served on path to the http server that serves metrics.
@@ -231,40 +275,58 @@ func (cm *controllerManager) AddReadyzCheck(name string, check healthz.Checker) 
 	return nil
 }
 
+func (cm *controllerManager) Name() string {
+	return cm.defaultCluster.Name()
+}
+
+func (cm *controllerManager) GetCluster(ctx context.Context, clusterName string) (cluster.Cluster, error) {
+	if clusterName == "" || clusterName == cm.defaultCluster.Name() {
+		return cm.defaultCluster, nil
+	}
+
+	if cm.clusterProvider == nil {
+		return nil, fmt.Errorf("cluster %q not found, cluster provider is not set", clusterName)
+	}
+
+	// intentionally not returning from engaged clusters. This can be used
+	// without engaging clusters.
+	return cm.clusterProvider.Get(ctx, clusterName)
+}
+
 func (cm *controllerManager) GetHTTPClient() *http.Client {
-	return cm.cluster.GetHTTPClient()
+	return cm.defaultCluster.GetHTTPClient()
 }
 
 func (cm *controllerManager) GetConfig() *rest.Config {
-	return cm.cluster.GetConfig()
+	return cm.defaultCluster.GetConfig()
 }
 
 func (cm *controllerManager) GetClient() client.Client {
-	return cm.cluster.GetClient()
+	return cm.defaultCluster.GetClient()
 }
 
 func (cm *controllerManager) GetScheme() *runtime.Scheme {
-	return cm.cluster.GetScheme()
+	return cm.defaultCluster.GetScheme()
 }
 
 func (cm *controllerManager) GetFieldIndexer() client.FieldIndexer {
-	return cm.cluster.GetFieldIndexer()
+	return cm.defaultCluster.GetFieldIndexer()
 }
 
 func (cm *controllerManager) GetCache() cache.Cache {
-	return cm.cluster.GetCache()
+	return cm.defaultCluster.GetCache()
 }
 
 func (cm *controllerManager) GetEventRecorderFor(name string) record.EventRecorder {
-	return cm.cluster.GetEventRecorderFor(name)
+	return cm.defaultCluster.GetEventRecorderFor(name)
 }
 
 func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
-	return cm.cluster.GetRESTMapper()
+	return cm.defaultCluster.GetRESTMapper()
 }
 
 func (cm *controllerManager) GetAPIReader() client.Reader {
-	return cm.cluster.GetAPIReader()
+	return cm.defaultCluster.GetAPIReader()
 }
 
 func (cm *controllerManager) GetWebhookServer() webhook.Server {
@@ -381,7 +443,7 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 	}()
 
 	// Add the cluster runnable.
-	if err := cm.add(cm.cluster); err != nil {
+	if err := cm.add(cm.defaultCluster); err != nil {
 		return fmt.Errorf("failed to add cluster to runnables: %w", err)
 	}
 
@@ -612,6 +674,70 @@ func (cm *controllerManager) initLeaderElector() (*leaderelection.LeaderElector,
 	}
 
 	return leaderElector, nil
+}
+
+func (cm *controllerManager) Engage(ctx context.Context, cl cluster.Cluster) error {
+	cm.Lock()
+	defer cm.Unlock()
+
+	// be reentrant via noop
+	cm.engagedClustersLock.RLock()
+	if _, ok := cm.engagedClusters[cl.Name()]; ok {
+		cm.engagedClustersLock.RUnlock()
+		return nil
+	}
+	cm.engagedClustersLock.RUnlock()
+
+	// add early because any engaged runnable could access it
+	cm.engagedClustersLock.Lock()
+	cm.engagedClusters[cl.Name()] = cl
+	cm.engagedClustersLock.Unlock()
+
+	// engage known runnables
+	var errs []error
+	engaged := []cluster.Aware{}
+	for _, r := range cm.clusterAwareRunnables {
+		if err := r.Engage(ctx, cl); err != nil {
+			errs = append(errs, err)
+			break
+		}
+		engaged = append(engaged, r)
+	}
+
+	// clean-up
+	if len(errs) > 0 {
+		for _, aware := range engaged {
+			if err := aware.Disengage(ctx, cl); err != nil {
+				errs = append(errs, err)
+			}
+		}
+
+		cm.engagedClustersLock.Lock()
+		delete(cm.engagedClusters, cl.Name())
+		cm.engagedClustersLock.Unlock()
+
+		return kerrors.NewAggregate(errs)
+	}
+
+	return nil
+}
+
+func (cm *controllerManager) Disengage(ctx context.Context, cl cluster.Cluster) error {
+	cm.Lock()
+	defer cm.Unlock()
+
+	var errs []error
+	for _, r := range cm.clusterAwareRunnables {
+		if err := r.Disengage(ctx, cl); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	cm.engagedClustersLock.Lock()
+	delete(cm.engagedClusters, cl.Name())
+	cm.engagedClustersLock.Unlock()
+
+	return kerrors.NewAggregate(errs)
 }
 
 func (cm *controllerManager) startLeaderElectionRunnables() error {

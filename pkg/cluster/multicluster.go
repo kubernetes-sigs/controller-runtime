@@ -42,8 +42,9 @@ type Aware interface {
 	Disengage(context.Context, Cluster) error
 }
 
-// Provider defines methods to retrieve clusters by name. The provider is
-// responsible for discovering and managing the lifecycle of each cluster.
+// Provider allows to retrieve clusters by name. The provider is responsible for discovering
+// and managing the lifecycle of each cluster, calling `Engage` and `Disengage` on the manager
+// it is run against whenever a new cluster is discovered or a cluster is unregistered.
 //
 // Example: A Cluster API provider would be responsible for discovering and
 // managing clusters that are backed by Cluster API resources, which can live
@@ -51,5 +52,7 @@ type Aware interface {
 type Provider interface {
 	// Get returns a cluster for the given identifying cluster name. Get
 	// returns an existing cluster if it has been created before.
+	// If no cluster is known to the provider under the given cluster name,
+	// an error should be returned.
 	Get(ctx context.Context, clusterName string) (Cluster, error)
 }

@@ -34,6 +34,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher/metrics"
 )
@@ -113,7 +114,7 @@ var _ = Describe("CertWatcher", func() {
 			Eventually(func() bool {
 				secondcert, _ := watcher.GetCertificate(nil)
 				first := firstcert.PrivateKey.(*rsa.PrivateKey)
-				return first.Equal(secondcert.PrivateKey)
+				return first.Equal(secondcert.PrivateKey) || firstcert.Leaf.SerialNumber == secondcert.Leaf.SerialNumber
 			}).ShouldNot(BeTrue())
 
 			ctxCancel()
@@ -143,8 +144,35 @@ var _ = Describe("CertWatcher", func() {
 			Eventually(func() bool {
 				secondcert, _ := watcher.GetCertificate(nil)
 				first := firstcert.PrivateKey.(*rsa.PrivateKey)
-				return first.Equal(secondcert.PrivateKey)
+				return first.Equal(secondcert.PrivateKey) || firstcert.Leaf.SerialNumber == secondcert.Leaf.SerialNumber
 			}).ShouldNot(BeTrue())
+
+			ctxCancel()
+			Eventually(doneCh, "4s").Should(BeClosed())
+			Expect(called.Load()).To(BeNumerically(">=", 1))
+		})
+
+		It("should reload currentCert after move out", func() {
+			doneCh := startWatcher()
+			called := atomic.Int64{}
+			watcher.RegisterCallback(func(crt tls.Certificate) {
+				called.Add(1)
+				Expect(crt.Certificate).ToNot(BeEmpty())
+			})
+
+			firstcert, _ := watcher.GetCertificate(nil)
+
+			Expect(os.Rename(certPath, certPath+".old")).To(Succeed())
+			Expect(os.Rename(keyPath, keyPath+".old")).To(Succeed())
+
+			err := writeCerts(certPath, keyPath, "192.168.0.3")
+			Expect(err).ToNot(HaveOccurred())
+
+			Eventually(func() bool {
+				secondcert, _ := watcher.GetCertificate(nil)
+				first := firstcert.PrivateKey.(*rsa.PrivateKey)
+				return first.Equal(secondcert.PrivateKey) || firstcert.Leaf.SerialNumber == secondcert.Leaf.SerialNumber
+			}, "10s", "1s").ShouldNot(BeTrue())
 
 			ctxCancel()
 			Eventually(doneCh, "4s").Should(BeClosed())

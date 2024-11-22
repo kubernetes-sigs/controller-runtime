@@ -83,6 +83,17 @@ type TypedOptions[request comparable] struct {
 	// LogConstructor is used to construct a logger used for this controller and passed
 	// to each reconciliation via the context field.
 	LogConstructor func(request *request) logr.Logger
+
+	// EngageWithDefaultCluster indicates whether the controller should engage
+	// with the default cluster of a manager. This defaults to false through the
+	// global controller options of the manager if a cluster provider is set,
+	// and to true otherwise. Here it can be overridden.
+	EngageWithDefaultCluster *bool
+	// EngageWithProvidedClusters indicates whether the controller should engage
+	// with the provided clusters of a manager. This defaults to true through the
+	// global controller options of the manager if a cluster provider is set,
+	// and to false otherwise. Here it can be overridden.
+	EngageWithProviderClusters *bool
 }
 
 // Controller implements a Kubernetes API.  A Controller manages a work queue fed reconcile.Requests

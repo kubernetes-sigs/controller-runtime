@@ -60,6 +60,8 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 		items:   map[T]*item[T]{},
 		queue:   btree.NewG(32, less[T]),
 		metrics: newQueueMetrics[T](opts.MetricProvider, name, clock.RealClock{}),
+		// Use a buffered channel to try and not block callers
+		adds: make(chan *itemsWithOpts[T], 1000),
 		// itemOrWaiterAdded indicates that an item or
 		// waiter was added. It must be buffered, because
 		// if we currently process items we can't tell
@@ -88,6 +90,7 @@ type priorityqueue[T comparable] struct {
 	items   map[T]*item[T]
 	queue   bTree[*item[T]]
 	metrics queueMetrics[T]
+	adds    chan *itemsWithOpts[T]
 
 	// addedCounter is a counter of elements added, we need it
 	// because unixNano is not guaranteed to be unique.
@@ -117,54 +120,67 @@ type priorityqueue[T comparable] struct {
 }
 
 func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
-	w.lock.Lock()
-	defer w.lock.Unlock()
+	w.adds <- &itemsWithOpts[T]{opts: o, items: items}
+}
 
-	for _, key := range items {
-		if o.RateLimited {
-			after := w.rateLimiter.When(key)
-			if o.After == 0 || after < o.After {
-				o.After = after
+func (w *priorityqueue[T]) drainAddsLocked(added *itemsWithOpts[T]) {
+	for {
+		for _, key := range added.items {
+			if added.opts.RateLimited {
+				after := w.rateLimiter.When(key)
+				if added.opts.After == 0 || after < added.opts.After {
+					added.opts.After = after
+				}
 			}
-		}
 
-		var readyAt *time.Time
-		if o.After > 0 {
-			readyAt = ptr.To(w.now().Add(o.After))
-			w.metrics.retry()
-		}
-		if _, ok := w.items[key]; !ok {
-			item := &item[T]{
-				key:             key,
-				addedAtUnixNano: w.now().UnixNano(),
-				addedCounter:    w.addedCounter,
-				priority:        o.Priority,
-				readyAt:         readyAt,
+			var readyAt *time.Time
+			if added.opts.After > 0 {
+				readyAt = ptr.To(w.now().Add(added.opts.After))
+				w.metrics.retry()
 			}
-			w.items[key] = item
+			if _, ok := w.items[key]; !ok {
+				item := &item[T]{
+					key:             key,
+					addedAtUnixNano: w.now().UnixNano(),
+					addedCounter:    w.addedCounter,
+					priority:        added.opts.Priority,
+					readyAt:         readyAt,
+				}
+				w.items[key] = item
+				w.queue.ReplaceOrInsert(item)
+				w.metrics.add(key)
+				w.addedCounter++
+				continue
+			}
+
+			// The b-tree de-duplicates based on ordering and any change here
+			// will affect the order - Just delete and re-add.
+			item, _ := w.queue.Delete(w.items[key])
+			if added.opts.Priority > item.priority {
+				item.priority = added.opts.Priority
+			}
+
+			if item.readyAt != nil && (readyAt == nil || readyAt.Before(*item.readyAt)) {
+				item.readyAt = readyAt
+			}
+
 			w.queue.ReplaceOrInsert(item)
-			w.metrics.add(key)
-			w.addedCounter++
-			continue
 		}
 
-		// The b-tree de-duplicates based on ordering and any change here
-		// will affect the order - Just delete and re-add.
-		item, _ := w.queue.Delete(w.items[key])
-		if o.Priority > item.priority {
-			item.priority = o.Priority
+		// Drain the remainder of the channel. Has to be at the end,
+		// because the first item is read in spin() and passed on
+		// to us.
+		select {
+		case added = <-w.adds:
+		default:
+			return
 		}
-
-		if item.readyAt != nil && (readyAt == nil || readyAt.Before(*item.readyAt)) {
-			item.readyAt = readyAt
-		}
-
-		w.queue.ReplaceOrInsert(item)
 	}
+}
 
-	if len(items) > 0 {
-		w.notifyItemOrWaiterAdded()
-	}
+type itemsWithOpts[T comparable] struct {
+	opts  AddOpts
+	items []T
 }
 
 func (w *priorityqueue[T]) notifyItemOrWaiterAdded() {
@@ -179,11 +195,13 @@ func (w *priorityqueue[T]) spin() {
 	var nextReady <-chan time.Time
 	nextReady = blockForever
 
+	var addedItem *itemsWithOpts[T]
 	for {
 		select {
 		case <-w.done:
 			return
 		case <-w.itemOrWaiterAdded:
+		case addedItem = <-w.adds:
 		case <-nextReady:
 		}
 
@@ -192,6 +210,11 @@ func (w *priorityqueue[T]) spin() {
 		func() {
 			w.lock.Lock()
 			defer w.lock.Unlock()
+
+			if addedItem != nil {
+				w.drainAddsLocked(addedItem)
+			}
+			addedItem = nil
 
 			w.lockedLock.Lock()
 			defer w.lockedLock.Unlock()

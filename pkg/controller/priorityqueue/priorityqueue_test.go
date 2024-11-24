@@ -194,6 +194,31 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(metrics.retries["test"]).To(Equal(1))
 	})
 
+	It("returns an item to a waiter as soon as it has one", func() {
+		q, metrics := newQueue()
+		defer q.ShutDown()
+
+		retrieved := make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			item, _, _ := q.GetWithPriority()
+			Expect(item).To(Equal("foo"))
+			close(retrieved)
+		}()
+
+		// We are waiting for the GetWithPriority() call to be blocked
+		// on retrieving an item. As golang doesn't provide a way to
+		// check if something is listening on a channel without
+		// sending them a message, I can't think of a way to do this
+		// without sleeping.
+		time.Sleep(time.Second)
+		q.AddWithOpts(AddOpts{}, "foo")
+		Eventually(retrieved).Should(BeClosed())
+
+		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.adds["test"]).To(Equal(1))
+	})
+
 	It("returns multiple items with after in correct order", func() {
 		q, metrics := newQueue()
 		defer q.ShutDown()
@@ -209,7 +234,23 @@ var _ = Describe("Controllerworkqueue", func() {
 			return now
 		}
 		cwq.tick = func(d time.Duration) <-chan time.Time {
-			Expect(d).To(Equal(200 * time.Millisecond))
+			// What a bunch of bs. Deferring in here causes
+			// ginkgo to deadlock, presumably because it
+			// never returns after the defer. Not deferring
+			// hides the actual assertion result and makes
+			// it complain that there should be a defer.
+			// Move the assertion into a goroutine just to
+			// get around that mess.
+			done := make(chan struct{})
+			go func() {
+				defer GinkgoRecover()
+				defer close(done)
+
+				// This is not deterministic and depends on which of
+				// Add() or Spin() gets the lock first.
+				Expect(d).To(Or(Equal(200*time.Millisecond), Equal(time.Second)))
+			}()
+			<-done
 			return tick
 		}
 

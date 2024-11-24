@@ -161,6 +161,10 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 
 		w.queue.ReplaceOrInsert(item)
 	}
+
+	if len(items) > 0 {
+		w.notifyItemOrWaiterAdded()
+	}
 }
 
 func (w *priorityqueue[T]) notifyItemOrWaiterAdded() {

@@ -29,6 +29,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	internalcontroller "sigs.k8s.io/controller-runtime/pkg/internal/controller"
@@ -436,6 +437,42 @@ var _ = Describe("controller.Controller", func() {
 
 			_, ok := c.(manager.LeaderElectionRunnable)
 			Expect(ok).To(BeTrue())
+		})
+
+		It("should configure a priority queue if UsePriorityQueue is set", func() {
+			m, err := manager.New(cfg, manager.Options{
+				Controller: config.Controller{UsePriorityQueue: true},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-16", m, controller.Options{
+				Reconciler: rec,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			q := ctrl.NewQueue("foo", nil)
+			_, ok = q.(priorityqueue.PriorityQueue[reconcile.Request])
+			Expect(ok).To(BeTrue())
+		})
+
+		It("should not configure a priority queue if UsePriorityQueue is not set", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-17", m, controller.Options{
+				Reconciler: rec,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			q := ctrl.NewQueue("foo", nil)
+			_, ok = q.(priorityqueue.PriorityQueue[reconcile.Request])
+			Expect(ok).To(BeFalse())
 		})
 	})
 })

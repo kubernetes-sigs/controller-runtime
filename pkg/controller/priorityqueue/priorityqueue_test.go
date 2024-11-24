@@ -300,6 +300,34 @@ func BenchmarkAddGetDone(b *testing.B) {
 	}
 }
 
+func BenchmarkAddOnly(b *testing.B) {
+	q := New[int]("")
+	defer q.ShutDown()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		for i := 0; i < 1000; i++ {
+			q.Add(i)
+		}
+	}
+}
+
+func BenchmarkAddLockContended(b *testing.B) {
+	q := New[int]("")
+	defer q.ShutDown()
+	go func() {
+		for range 1000 {
+			item, _ := q.Get()
+			q.Done(item)
+		}
+	}()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		for i := 0; i < 1000; i++ {
+			q.Add(i)
+		}
+	}
+}
+
 // TestFuzzPrioriorityQueue validates a set of basic
 // invariants that should always be true:
 //

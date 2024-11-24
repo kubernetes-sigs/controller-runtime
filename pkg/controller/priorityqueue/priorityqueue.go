@@ -135,11 +135,10 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 		}
 		if _, ok := w.items[key]; !ok {
 			item := &item[T]{
-				key:             key,
-				addedAtUnixNano: w.now().UnixNano(),
-				addedCounter:    w.addedCounter,
-				priority:        o.Priority,
-				readyAt:         readyAt,
+				key:          key,
+				addedCounter: w.addedCounter,
+				priority:     o.Priority,
+				readyAt:      readyAt,
 			}
 			w.items[key] = item
 			w.queue.ReplaceOrInsert(item)
@@ -305,19 +304,14 @@ func less[T comparable](a, b *item[T]) bool {
 		return a.priority > b.priority
 	}
 
-	if a.addedAtUnixNano != b.addedAtUnixNano {
-		return a.addedAtUnixNano < b.addedAtUnixNano
-	}
-
 	return a.addedCounter < b.addedCounter
 }
 
 type item[T comparable] struct {
-	key             T
-	addedAtUnixNano int64
-	addedCounter    uint64
-	priority        int
-	readyAt         *time.Time
+	key          T
+	addedCounter uint64
+	priority     int
+	readyAt      *time.Time
 }
 
 func (w *priorityqueue[T]) updateUnfinishedWorkLoop() {

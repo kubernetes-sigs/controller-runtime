@@ -39,7 +39,7 @@ func Example() {
 		panic(err)
 	}
 
-	// Start goroutine with certwatcher running fsnotify against supplied certdir
+	// Start goroutine with certwatcher running against supplied cert
 	go func() {
 		if err := watcher.Start(ctx); err != nil {
 			panic(err)

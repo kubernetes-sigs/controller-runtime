@@ -9,7 +9,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
@@ -21,6 +22,13 @@ var _ = Describe("runnables", func() {
 		Expect(newRunnables(defaultBaseContext, errCh)).ToNot(BeNil())
 	})
 
+	It("should add HTTP servers to the appropriate group", func() {
+		server := &Server{}
+		r := newRunnables(defaultBaseContext, errCh)
+		Expect(r.Add(server)).To(Succeed())
+		Expect(r.HTTPServers.startQueue).To(HaveLen(1))
+	})
+
 	It("should add caches to the appropriate group", func() {
 		cache := &cacheProvider{cache: &informertest.FakeInformers{Error: fmt.Errorf("expected error")}}
 		r := newRunnables(defaultBaseContext, errCh)
@@ -29,7 +37,7 @@ var _ = Describe("runnables", func() {
 	})
 
 	It("should add webhooks to the appropriate group", func() {
-		webhook := &webhook.Server{}
+		webhook := webhook.NewServer(webhook.Options{})
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(webhook)).To(Succeed())
 		Expect(r.Webhooks.startQueue).To(HaveLen(1))
@@ -105,7 +113,7 @@ var _ = Describe("runnableGroup", func() {
 	It("should be able to close the group and wait for all runnables to finish", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 
-		exited := pointer.Int64(0)
+		exited := ptr.To(int64(0))
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 		for i := 0; i < 10; i++ {
 			Expect(rg.Add(RunnableFunc(func(c context.Context) error {
@@ -150,6 +158,42 @@ var _ = Describe("runnableGroup", func() {
 					<-time.After(time.Duration(i) * 10 * time.Millisecond)
 					return true
 				})).To(Succeed())
+			}(i)
+		}
+	})
+
+	It("should be able to handle adding runnables while stopping", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		rg := newRunnableGroup(defaultBaseContext, errCh)
+
+		go func() {
+			defer GinkgoRecover()
+			<-time.After(1 * time.Millisecond)
+			Expect(rg.Start(ctx)).To(Succeed())
+		}()
+		go func() {
+			defer GinkgoRecover()
+			<-time.After(1 * time.Millisecond)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			rg.StopAndWait(ctx)
+		}()
+
+		for i := 0; i < 200; i++ {
+			go func(i int) {
+				defer GinkgoRecover()
+
+				<-time.After(time.Duration(i) * time.Microsecond)
+				Expect(rg.Add(RunnableFunc(func(c context.Context) error {
+					<-ctx.Done()
+					return nil
+				}), func(_ context.Context) bool {
+					return true
+				})).To(SatisfyAny(
+					Succeed(),
+					Equal(errRunnableGroupStopped),
+				))
 			}(i)
 		}
 	})

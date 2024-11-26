@@ -128,7 +128,7 @@ var _ = Describe("APIServer", func() {
 
 		Context("when SecureServing is not set", func() {
 			It("should be defaulted with a random port", func() {
-				Expect(server.Port).NotTo(Equal(0))
+				Expect(server.Port).NotTo(BeEquivalentTo(0))
 			})
 		})
 	})

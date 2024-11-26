@@ -20,11 +20,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sync"
 
 	"github.com/go-logr/logr"
 	authenticationv1 "k8s.io/api/authentication/v1"
+	"k8s.io/klog/v2"
 
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var (
@@ -85,45 +87,40 @@ type Webhook struct {
 	// headers thus allowing you to read them from within the handler
 	WithContextFunc func(context.Context, *http.Request) context.Context
 
-	log logr.Logger
-}
-
-// InjectLogger gets a handle to a logging instance, hopefully with more info about this particular webhook.
-func (wh *Webhook) InjectLogger(l logr.Logger) error {
-	wh.log = l
-	return nil
+	setupLogOnce sync.Once
+	log          logr.Logger
 }
 
 // Handle processes TokenReview.
 func (wh *Webhook) Handle(ctx context.Context, req Request) Response {
 	resp := wh.Handler.Handle(ctx, req)
 	if err := resp.Complete(req); err != nil {
-		wh.log.Error(err, "unable to encode response")
+		wh.getLogger(&req).Error(err, "unable to encode response")
 		return Errored(errUnableToEncodeResponse)
 	}
 
 	return resp
 }
 
-// InjectFunc injects the field setter into the webhook.
-func (wh *Webhook) InjectFunc(f inject.Func) error {
-	// inject directly into the handlers.  It would be more correct
-	// to do this in a sync.Once in Handle (since we don't have some
-	// other start/finalize-type method), but it's more efficient to
-	// do it here, presumably.
-
-	var setFields inject.Func
-	setFields = func(target interface{}) error {
-		if err := f(target); err != nil {
-			return err
+// getLogger constructs a logger from the injected log and LogConstructor.
+func (wh *Webhook) getLogger(req *Request) logr.Logger {
+	wh.setupLogOnce.Do(func() {
+		if wh.log.GetSink() == nil {
+			wh.log = logf.Log.WithName("authentication")
 		}
+	})
 
-		if _, err := inject.InjectorInto(setFields, target); err != nil {
-			return err
-		}
+	return logConstructor(wh.log, req)
+}
 
-		return nil
+// logConstructor adds some commonly interesting fields to the given logger.
+func logConstructor(base logr.Logger, req *Request) logr.Logger {
+	if req != nil {
+		return base.WithValues("object", klog.KRef(req.Namespace, req.Name),
+			"namespace", req.Namespace, "name", req.Name,
+			"user", req.Status.User.Username,
+			"requestID", req.UID,
+		)
 	}
-
-	return setFields(wh.Handler)
+	return base
 }

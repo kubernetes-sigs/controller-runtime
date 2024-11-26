@@ -17,8 +17,6 @@ var (
 
 	// ConcreteVersionRE matches a concrete version anywhere in the string.
 	ConcreteVersionRE = regexp.MustCompile(`(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)`)
-	// OnlyConcreteVersionRE matches a string that's just a concrete version.
-	OnlyConcreteVersionRE = regexp.MustCompile(`^` + ConcreteVersionRE.String() + `$`)
 )
 
 // FromExpr extracts a version from a string in the form of a semver version,
@@ -109,7 +107,7 @@ func PatchSelectorFromMatch(match []string, re *regexp.Regexp) PatchSelector {
 		panic("invalid input passed as patch selector (invalid state)")
 	}
 
-	// patch is optional, means wilcard if left off
+	// patch is optional, means wildcard if left off
 	patch := AnyPoint
 	if patchRaw := match[re.SubexpIndex("patch")]; patchRaw != "" {
 		patch = PointVersionFromValidString(patchRaw)

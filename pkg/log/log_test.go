@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ logr.LogSink = &DelegatingLogSink{}
+var _ logr.LogSink = &delegatingLogSink{}
 
 // logInfo is the information for a particular fakeLogger message.
 type logInfo struct {
@@ -124,13 +124,13 @@ var _ = Describe("logging", func() {
 		var (
 			root     *fakeLoggerRoot
 			baseLog  logr.LogSink
-			delegLog *DelegatingLogSink
+			delegLog *delegatingLogSink
 		)
 
 		BeforeEach(func() {
 			root = &fakeLoggerRoot{}
 			baseLog = &fakeLogger{root: root}
-			delegLog = NewDelegatingLogSink(NullLogSink{})
+			delegLog = newDelegatingLogSink(NullLogSink{})
 		})
 
 		It("should delegate with name", func() {
@@ -285,6 +285,14 @@ var _ = Describe("logging", func() {
 				logInfo{msg: "msg 1"},
 				logInfo{msg: "msg 2"},
 			))
+		})
+
+		It("should handle nil sinks", func() {
+			By("fulfilling once")
+			delegLog.Fulfill(logr.Discard().GetSink())
+			By("grabbing a sub-logger and logging")
+			l1 := logr.New(delegLog).WithName("nilsink").WithValues("newtag", "newvalue2")
+			l1.Info("test")
 		})
 	})
 

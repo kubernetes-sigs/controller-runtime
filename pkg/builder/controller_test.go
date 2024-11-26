@@ -33,10 +33,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -47,11 +48,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-type typedNoop struct{}
-
-func (typedNoop) Reconcile(context.Context, reconcile.Request) (reconcile.Result, error) {
-	return reconcile.Result{}, nil
-}
+var _ untypedWatchesInput = (*WatchesInput[struct{}])(nil)
 
 type testLogger struct {
 	logr.Logger
@@ -75,12 +72,13 @@ func (l *testLogger) WithName(name string) logr.LogSink {
 	return l
 }
 
-var _ = Describe("application", func() {
-	BeforeEach(func() {
-		newController = controller.New
-	})
+type empty struct{}
 
+var _ = Describe("application", func() {
 	noop := reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
+		return reconcile.Result{}, nil
+	})
+	typedNoop := reconcile.TypedFunc[empty](func(context.Context, empty) (reconcile.Result, error) {
 		return reconcile.Result{}, nil
 	})
 
@@ -112,16 +110,55 @@ var _ = Describe("application", func() {
 			Expect(instance).To(BeNil())
 		})
 
-		It("should return an error if For function is not called", func() {
+		It("should return an error if For and Named function are not called", func() {
 			By("creating a controller manager")
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
+				Watches(&appsv1.ReplicaSet{}, &handler.EnqueueRequestForObject{}).
+				Build(noop)
+			Expect(err).To(MatchError(ContainSubstring("one of For() or Named() must be called")))
+			Expect(instance).To(BeNil())
+		})
+
+		It("should return an error when using Owns without For", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				Named("my_controller").
 				Owns(&appsv1.ReplicaSet{}).
 				Build(noop)
-			Expect(err).To(MatchError(ContainSubstring("must provide an object for reconciliation")))
+			Expect(err).To(MatchError(ContainSubstring("Owns() can only be used together with For()")))
 			Expect(instance).To(BeNil())
+
+		})
+
+		It("should return an error when there are no watches", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				Named("my_new_controller").
+				Build(noop)
+			Expect(err).To(MatchError(ContainSubstring("there are no watches configured, controller will never get triggered. Use For(), Owns(), Watches() or WatchesRawSource() to set them up")))
+			Expect(instance).To(BeNil())
+		})
+
+		It("should allow creating a controllerw without calling For", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := ControllerManagedBy(m).
+				Named("my_other_controller").
+				Watches(&appsv1.ReplicaSet{}, &handler.EnqueueRequestForObject{}).
+				Build(noop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeNil())
 		})
 
 		It("should return an error if there is no GVK for an object, and thus we can't default the controller name", func() {
@@ -142,20 +179,70 @@ var _ = Describe("application", func() {
 			// manifest when we try to default the controller name, which is good to double check.
 		})
 
+		It("should return error if in For is used with a custom request type", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := TypedControllerManagedBy[empty](m).
+				For(&appsv1.ReplicaSet{}).
+				Named("last_controller").
+				Build(typedNoop)
+			Expect(err).To(MatchError(ContainSubstring("For() can only be used with reconcile.Request, got builder.empty")))
+			Expect(instance).To(BeNil())
+		})
+
+		It("should return error if in Owns is used with a custom request type", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := TypedControllerManagedBy[empty](m).
+				Named("my_controller-0").
+				Owns(&appsv1.ReplicaSet{}).
+				Build(typedNoop)
+				// If we ever allow Owns() without For() we need to update the code to error
+				// out on Owns() if the request type is different from reconcile.Request just
+				// like we do in For().
+			Expect(err).To(MatchError("Owns() can only be used together with For()"))
+			Expect(instance).To(BeNil())
+		})
+
+		It("should build a controller with a custom request type", func() {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			instance, err := TypedControllerManagedBy[empty](m).
+				Named("my_controller-1").
+				WatchesRawSource(
+					source.TypedKind(
+						m.GetCache(),
+						&appsv1.ReplicaSet{},
+						handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, rs *appsv1.ReplicaSet) []empty {
+							return []empty{{}}
+						}),
+					),
+				).
+				Build(typedNoop)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance).NotTo(BeNil())
+		})
+
 		It("should return an error if it cannot create the controller", func() {
-			newController = func(name string, mgr manager.Manager, options controller.Options) (
-				controller.Controller, error) {
-				return nil, fmt.Errorf("expected error")
-			}
 
 			By("creating a controller manager")
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			instance, err := ControllerManagedBy(m).
+			builder := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
-				Owns(&appsv1.ReplicaSet{}).
-				Build(noop)
+				Owns(&appsv1.ReplicaSet{})
+			builder.newController = func(name string, mgr manager.Manager, options controller.Options) (
+				controller.Controller, error) {
+				return nil, fmt.Errorf("expected error")
+			}
+			instance, err := builder.Build(noop)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
 			Expect(instance).To(BeNil())
@@ -163,7 +250,7 @@ var _ = Describe("application", func() {
 
 		It("should override max concurrent reconcilers during creation of controller", func() {
 			const maxConcurrentReconciles = 5
-			newController = func(name string, mgr manager.Manager, options controller.Options) (
+			newController := func(name string, mgr manager.Manager, options controller.Options) (
 				controller.Controller, error) {
 				if options.MaxConcurrentReconciles == maxConcurrentReconciles {
 					return controller.New(name, mgr, options)
@@ -175,18 +262,21 @@ var _ = Describe("application", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			instance, err := ControllerManagedBy(m).
+			builder := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
+				Named("replicaset-4").
 				Owns(&appsv1.ReplicaSet{}).
-				WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
-				Build(noop)
+				WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles})
+			builder.newController = newController
+
+			instance, err := builder.Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())
 		})
 
 		It("should override max concurrent reconcilers during creation of controller, when using", func() {
 			const maxConcurrentReconciles = 10
-			newController = func(name string, mgr manager.Manager, options controller.Options) (
+			newController := func(name string, mgr manager.Manager, options controller.Options) (
 				controller.Controller, error) {
 				if options.MaxConcurrentReconciles == maxConcurrentReconciles {
 					return controller.New(name, mgr, options)
@@ -196,7 +286,7 @@ var _ = Describe("application", func() {
 
 			By("creating a controller manager")
 			m, err := manager.New(cfg, manager.Options{
-				Controller: v1alpha1.ControllerConfigurationSpec{
+				Controller: config.Controller{
 					GroupKindConcurrency: map[string]int{
 						"ReplicaSet.apps": maxConcurrentReconciles,
 					},
@@ -204,17 +294,20 @@ var _ = Describe("application", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			instance, err := ControllerManagedBy(m).
+			builder := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
-				Owns(&appsv1.ReplicaSet{}).
-				Build(noop)
+				Named("replicaset-3").
+				Owns(&appsv1.ReplicaSet{})
+			builder.newController = newController
+
+			instance, err := builder.Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())
 		})
 
 		It("should override rate limiter during creation of controller", func() {
-			rateLimiter := workqueue.DefaultItemBasedRateLimiter()
-			newController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
+			rateLimiter := workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]()
+			newController := func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
 				if options.RateLimiter == rateLimiter {
 					return controller.New(name, mgr, options)
 				}
@@ -225,19 +318,21 @@ var _ = Describe("application", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			instance, err := ControllerManagedBy(m).
+			builder := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
+				Named("replicaset-2").
 				Owns(&appsv1.ReplicaSet{}).
-				WithOptions(controller.Options{RateLimiter: rateLimiter}).
-				Build(noop)
+				WithOptions(controller.Options{RateLimiter: rateLimiter})
+			builder.newController = newController
+
+			instance, err := builder.Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())
 		})
 
 		It("should override logger during creation of controller", func() {
-
 			logger := &testLogger{}
-			newController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
+			newController := func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
 				if options.LogConstructor(nil).GetSink() == logger {
 					return controller.New(name, mgr, options)
 				}
@@ -248,36 +343,32 @@ var _ = Describe("application", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			instance, err := ControllerManagedBy(m).
+			builder := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
+				Named("replicaset-0").
 				Owns(&appsv1.ReplicaSet{}).
 				WithLogConstructor(func(request *reconcile.Request) logr.Logger {
 					return logr.New(logger)
-				}).
-				Build(noop)
+				})
+			builder.newController = newController
+			instance, err := builder.Build(noop)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance).NotTo(BeNil())
 		})
 
-		It("should prefer reconciler from options during creation of controller", func() {
-			newController = func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
-				if options.Reconciler != (typedNoop{}) {
-					return nil, fmt.Errorf("Custom reconciler expected %T but found %T", typedNoop{}, options.Reconciler)
-				}
-				return controller.New(name, mgr, options)
-			}
-
+		It("should not allow multiple reconcilers during creation of controller", func() {
 			By("creating a controller manager")
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			instance, err := ControllerManagedBy(m).
+			builder := ControllerManagedBy(m).
 				For(&appsv1.ReplicaSet{}).
+				Named("replicaset-1").
 				Owns(&appsv1.ReplicaSet{}).
-				WithOptions(controller.Options{Reconciler: typedNoop{}}).
-				Build(noop)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(instance).NotTo(BeNil())
+				WithOptions(controller.Options{Reconciler: noop})
+			instance, err := builder.Build(noop)
+			Expect(err).To(HaveOccurred())
+			Expect(instance).To(BeNil())
 		})
 
 		It("should allow multiple controllers for the same kind", func() {
@@ -302,6 +393,7 @@ var _ = Describe("application", func() {
 			By("creating the 2nd controller")
 			ctrl2, err := ControllerManagedBy(m).
 				For(&TestDefaultValidator{}).
+				Named("test-default-validator-1").
 				Owns(&appsv1.ReplicaSet{}).
 				Build(noop)
 			Expect(err).NotTo(HaveOccurred())
@@ -316,11 +408,26 @@ var _ = Describe("application", func() {
 
 			bldr := ControllerManagedBy(m).
 				For(&appsv1.Deployment{}).
+				Named("deployment-0").
 				Owns(&appsv1.ReplicaSet{})
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			doReconcileTest(ctx, "3", m, false, bldr)
+		})
+
+		It("should Reconcile Owns objects for every owner", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			bldr := ControllerManagedBy(m).
+				For(&appsv1.Deployment{}).
+				Named("deployment-1").
+				Owns(&appsv1.ReplicaSet{}, MatchEveryOwner)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			doReconcileTest(ctx, "12", m, false, bldr)
 		})
 
 		It("should Reconcile Watches objects", func() {
@@ -330,12 +437,32 @@ var _ = Describe("application", func() {
 			bldr := ControllerManagedBy(m).
 				For(&appsv1.Deployment{}).
 				Watches( // Equivalent of Owns
-					&source.Kind{Type: &appsv1.ReplicaSet{}},
-					&handler.EnqueueRequestForOwner{OwnerType: &appsv1.Deployment{}, IsController: true})
+					&appsv1.ReplicaSet{},
+					handler.EnqueueRequestForOwner(m.GetScheme(), m.GetRESTMapper(), &appsv1.Deployment{}, handler.OnlyControllerOwner()),
+				)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			doReconcileTest(ctx, "4", m, true, bldr)
+		})
+
+		It("should Reconcile without For", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			bldr := ControllerManagedBy(m).
+				Named("Deployment").
+				Named("deployment-2").
+				Watches( // Equivalent of For
+						&appsv1.Deployment{}, &handler.EnqueueRequestForObject{}).
+				Watches( // Equivalent of Owns
+					&appsv1.ReplicaSet{},
+					handler.EnqueueRequestForOwner(m.GetScheme(), m.GetRESTMapper(), &appsv1.Deployment{}, handler.OnlyControllerOwner()),
+				)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			doReconcileTest(ctx, "9", m, true, bldr)
 		})
 	})
 
@@ -386,6 +513,7 @@ var _ = Describe("application", func() {
 
 			bldr := ControllerManagedBy(m).
 				For(&appsv1.Deployment{}, WithPredicates(deployPrct)).
+				Named("deployment-3").
 				Owns(&appsv1.ReplicaSet{}, WithPredicates(replicaSetPrct)).
 				WithEventFilter(allPrct)
 
@@ -410,8 +538,8 @@ var _ = Describe("application", func() {
 		})
 
 		It("should support multiple controllers watching the same metadata kind", func() {
-			bldr1 := ControllerManagedBy(mgr).For(&appsv1.Deployment{}, OnlyMetadata)
-			bldr2 := ControllerManagedBy(mgr).For(&appsv1.Deployment{}, OnlyMetadata)
+			bldr1 := ControllerManagedBy(mgr).For(&appsv1.Deployment{}, OnlyMetadata).Named("deployment-4")
+			bldr2 := ControllerManagedBy(mgr).For(&appsv1.Deployment{}, OnlyMetadata).Named("deployment-5")
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -424,9 +552,10 @@ var _ = Describe("application", func() {
 
 			bldr := ControllerManagedBy(mgr).
 				For(&appsv1.Deployment{}, OnlyMetadata).
+				Named("deployment-6").
 				Owns(&appsv1.ReplicaSet{}, OnlyMetadata).
-				Watches(&source.Kind{Type: &appsv1.StatefulSet{}},
-					handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
+				Watches(&appsv1.StatefulSet{},
+					handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
 						defer GinkgoRecover()
 
 						ometa := o.(*metav1.PartialObjectMetadata)
@@ -505,21 +634,21 @@ type nonTypedOnlyCache struct {
 	cache.Cache
 }
 
-func (c *nonTypedOnlyCache) GetInformer(ctx context.Context, obj client.Object) (cache.Informer, error) {
+func (c *nonTypedOnlyCache) GetInformer(ctx context.Context, obj client.Object, opts ...cache.InformerGetOption) (cache.Informer, error) {
 	switch obj.(type) {
 	case (*metav1.PartialObjectMetadata):
-		return c.Cache.GetInformer(ctx, obj)
+		return c.Cache.GetInformer(ctx, obj, opts...)
 	default:
 		return nil, fmt.Errorf("did not want to provide an informer for normal type %T", obj)
 	}
 }
-func (c *nonTypedOnlyCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (cache.Informer, error) {
+func (c *nonTypedOnlyCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, opts ...cache.InformerGetOption) (cache.Informer, error) {
 	return nil, fmt.Errorf("don't try to sidestep the restriction on informer types by calling GetInformerForKind")
 }
 
 // TODO(directxman12): this function has too many arguments, and the whole
 // "nameSuffix" think is a bit of a hack It should be cleaned up significantly by someone with a bit of time.
-func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager, complete bool, blders ...*Builder) {
+func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager, complete bool, blders ...*TypedBuilder[reconcile.Request]) {
 	deployName := "deploy-name-" + nameSuffix
 	rsName := "rs-name-" + nameSuffix
 
@@ -578,7 +707,7 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 			},
 		},
 	}
-	err := mgr.GetClient().Create(context.TODO(), dep)
+	err := mgr.GetClient().Create(ctx, dep)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Waiting for the Deployment Reconcile")
@@ -587,7 +716,6 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 
 	By("Creating a ReplicaSet")
 	// Expect a Reconcile when an Owned object is managedObjects.
-	t := true
 	rs := &appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -598,7 +726,7 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 					Name:       deployName,
 					Kind:       "Deployment",
 					APIVersion: "apps/v1",
-					Controller: &t,
+					Controller: ptr.To(true),
 					UID:        dep.UID,
 				},
 			},
@@ -608,7 +736,7 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 			Template: dep.Spec.Template,
 		},
 	}
-	err = mgr.GetClient().Create(context.TODO(), rs)
+	err = mgr.GetClient().Create(ctx, rs)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Waiting for the ReplicaSet Reconcile")

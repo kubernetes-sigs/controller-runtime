@@ -25,11 +25,15 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
+	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 var (
@@ -39,6 +43,26 @@ var (
 
 func ExampleNew() {
 	cl, err := client.New(config.GetConfigOrDie(), client.Options{})
+	if err != nil {
+		fmt.Println("failed to create client")
+		os.Exit(1)
+	}
+
+	podList := &corev1.PodList{}
+
+	err = cl.List(context.Background(), podList, client.InNamespace("default"))
+	if err != nil {
+		fmt.Printf("failed to list pods in namespace default: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func ExampleNew_suppress_warnings() {
+	cfg := config.GetConfigOrDie()
+	// Use a rest.WarningHandler that discards warning messages.
+	cfg.WarningHandler = rest.NoWarnings{}
+
+	cl, err := client.New(cfg, client.Options{})
 	if err != nil {
 		fmt.Println("failed to create client")
 		os.Exit(1)
@@ -159,7 +183,7 @@ func ExampleClient_update() {
 		Namespace: "namespace",
 		Name:      "name",
 	}, pod)
-	pod.SetFinalizers(append(pod.GetFinalizers(), "new-finalizer"))
+	controllerutil.AddFinalizer(pod, "new-finalizer")
 	_ = c.Update(context.Background(), pod)
 
 	// Using a unstructured object.
@@ -173,7 +197,7 @@ func ExampleClient_update() {
 		Namespace: "namespace",
 		Name:      "name",
 	}, u)
-	u.SetFinalizers(append(u.GetFinalizers(), "new-finalizer"))
+	controllerutil.AddFinalizer(u, "new-finalizer")
 	_ = c.Update(context.Background(), u)
 }
 
@@ -186,6 +210,18 @@ func ExampleClient_patch() {
 			Name:      "name",
 		},
 	}, client.RawPatch(types.StrategicMergePatchType, patch))
+}
+
+// This example shows how to use the client with unstructured objects to create/patch objects using Server Side Apply,
+// "k8s.io/apimachinery/pkg/runtime".DefaultUnstructuredConverter.ToUnstructured is used to convert an object into map[string]any representation,
+// which is then set as an "Object" field in *unstructured.Unstructured struct, which implements client.Object.
+func ExampleClient_apply() {
+	// Using a typed object.
+	configMap := corev1ac.ConfigMap("name", "namespace").WithData(map[string]string{"key": "value"})
+	// c is a created client.
+	u := &unstructured.Unstructured{}
+	u.Object, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(configMap)
+	_ = c.Patch(context.Background(), u, client.Apply, client.ForceOwnership, client.FieldOwner("field-owner"))
 }
 
 // This example shows how to use the client with typed and unstructured objects to patch objects' status.
@@ -230,7 +266,7 @@ func ExampleClient_delete() {
 	_ = c.Delete(context.Background(), u)
 }
 
-// This example shows how to use the client with typed and unstrucurted objects to delete collections of objects.
+// This example shows how to use the client with typed and unstructured objects to delete collections of objects.
 func ExampleClient_deleteAllOf() {
 	// Using a typed object.
 	// c is a created client.
@@ -247,7 +283,7 @@ func ExampleClient_deleteAllOf() {
 }
 
 // This example shows how to set up and consume a field selector over a pod's volumes' secretName field.
-func ExampleFieldIndexer_secretName() {
+func ExampleFieldIndexer_secretNameNode() {
 	// someIndexer is a FieldIndexer over a Cache
 	_ = someIndexer.IndexField(context.TODO(), &corev1.Pod{}, "spec.volumes.secret.secretName", func(o client.Object) []string {
 		var res []string
@@ -261,8 +297,20 @@ func ExampleFieldIndexer_secretName() {
 		return res
 	})
 
+	_ = someIndexer.IndexField(context.TODO(), &corev1.Pod{}, "spec.NodeName", func(o client.Object) []string {
+		nodeName := o.(*corev1.Pod).Spec.NodeName
+		if nodeName != "" {
+			return []string{nodeName}
+		}
+		return nil
+	})
+
 	// elsewhere (e.g. in your reconciler)
 	mySecretName := "someSecret" // derived from the reconcile.Request, for instance
+	myNode := "master-0"
 	var podsWithSecrets corev1.PodList
-	_ = c.List(context.Background(), &podsWithSecrets, client.MatchingFields{"spec.volumes.secret.secretName": mySecretName})
+	_ = c.List(context.Background(), &podsWithSecrets, client.MatchingFields{
+		"spec.volumes.secret.secretName": mySecretName,
+		"spec.NodeName":                  myNode,
+	})
 }

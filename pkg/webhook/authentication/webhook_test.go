@@ -25,9 +25,6 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	machinerytypes "k8s.io/apimachinery/pkg/types"
-
-	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
 var _ = Describe("Authentication Webhooks", func() {
@@ -45,7 +42,6 @@ var _ = Describe("Authentication Webhooks", func() {
 		}
 		webhook := &Webhook{
 			Handler: handler,
-			log:     logf.RuntimeLog.WithName("webhook"),
 		}
 
 		return webhook
@@ -97,7 +93,6 @@ var _ = Describe("Authentication Webhooks", func() {
 					},
 				}
 			}),
-			log: logf.RuntimeLog.WithName("webhook"),
 		}
 
 		By("invoking the webhook")
@@ -108,33 +103,4 @@ var _ = Describe("Authentication Webhooks", func() {
 		Expect(resp.Status.Authenticated).To(BeTrue())
 		Expect(resp.Status.Error).To(Equal("Ground Control to Major Tom"))
 	})
-
-	Describe("dependency injection", func() {
-		It("should set dependencies passed in on the handler", func() {
-			By("setting up a webhook and injecting it with a injection func that injects a string")
-			setFields := func(target interface{}) error {
-				inj, ok := target.(stringInjector)
-				if !ok {
-					return nil
-				}
-
-				return inj.InjectString("something")
-			}
-			handler := &fakeHandler{}
-			webhook := &Webhook{
-				Handler: handler,
-				log:     logf.RuntimeLog.WithName("webhook"),
-			}
-			Expect(setFields(webhook)).To(Succeed())
-			Expect(inject.InjectorInto(setFields, webhook)).To(BeTrue())
-
-			By("checking that the string was injected")
-			Expect(handler.injectedString).To(Equal("something"))
-		})
-
-	})
 })
-
-type stringInjector interface {
-	InjectString(s string) error
-}

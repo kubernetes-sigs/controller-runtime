@@ -67,6 +67,11 @@ type DeleteAllOfOption interface {
 	ApplyToDeleteAllOf(*DeleteAllOfOptions)
 }
 
+// SubResourceGetOption modifies options for a SubResource Get request.
+type SubResourceGetOption interface {
+	ApplyToSubResourceGet(*SubResourceGetOptions)
+}
+
 // SubResourceUpdateOption is some configuration that modifies options for a update request.
 type SubResourceUpdateOption interface {
 	// ApplyToSubResourceUpdate applies this configuration to the given update options.
@@ -149,6 +154,54 @@ func (f FieldOwner) ApplyToUpdate(opts *UpdateOptions) {
 	opts.FieldManager = string(f)
 }
 
+// ApplyToSubResourcePatch applies this configuration to the given patch options.
+func (f FieldOwner) ApplyToSubResourcePatch(opts *SubResourcePatchOptions) {
+	opts.FieldManager = string(f)
+}
+
+// ApplyToSubResourceCreate applies this configuration to the given create options.
+func (f FieldOwner) ApplyToSubResourceCreate(opts *SubResourceCreateOptions) {
+	opts.FieldManager = string(f)
+}
+
+// ApplyToSubResourceUpdate applies this configuration to the given update options.
+func (f FieldOwner) ApplyToSubResourceUpdate(opts *SubResourceUpdateOptions) {
+	opts.FieldManager = string(f)
+}
+
+// FieldValidation configures field validation for the given requests.
+type FieldValidation string
+
+// ApplyToPatch applies this configuration to the given patch options.
+func (f FieldValidation) ApplyToPatch(opts *PatchOptions) {
+	opts.FieldValidation = string(f)
+}
+
+// ApplyToCreate applies this configuration to the given create options.
+func (f FieldValidation) ApplyToCreate(opts *CreateOptions) {
+	opts.FieldValidation = string(f)
+}
+
+// ApplyToUpdate applies this configuration to the given update options.
+func (f FieldValidation) ApplyToUpdate(opts *UpdateOptions) {
+	opts.FieldValidation = string(f)
+}
+
+// ApplyToSubResourcePatch applies this configuration to the given patch options.
+func (f FieldValidation) ApplyToSubResourcePatch(opts *SubResourcePatchOptions) {
+	opts.FieldValidation = string(f)
+}
+
+// ApplyToSubResourceCreate applies this configuration to the given create options.
+func (f FieldValidation) ApplyToSubResourceCreate(opts *SubResourceCreateOptions) {
+	opts.FieldValidation = string(f)
+}
+
+// ApplyToSubResourceUpdate applies this configuration to the given update options.
+func (f FieldValidation) ApplyToSubResourceUpdate(opts *SubResourceUpdateOptions) {
+	opts.FieldValidation = string(f)
+}
+
 // }}}
 
 // {{{ Create Options
@@ -167,6 +220,24 @@ type CreateOptions struct {
 	// this request.  It must be set with server-side apply.
 	FieldManager string
 
+	// fieldValidation instructs the server on how to handle
+	// objects in the request (POST/PUT/PATCH) containing unknown
+	// or duplicate fields. Valid values are:
+	// - Ignore: This will ignore any unknown fields that are silently
+	// dropped from the object, and will ignore all but the last duplicate
+	// field that the decoder encounters. This is the default behavior
+	// prior to v1.23.
+	// - Warn: This will send a warning via the standard warning response
+	// header for each unknown field that is dropped from the object, and
+	// for each duplicate field that is encountered. The request will
+	// still succeed if there are no other errors, and will only persist
+	// the last of any duplicate fields. This is the default in v1.23+
+	// - Strict: This will fail the request with a BadRequest error if
+	// any unknown fields would be dropped from the object, or if any
+	// duplicate fields are present. The error returned from the server
+	// will contain all unknown and duplicate fields encountered.
+	FieldValidation string
+
 	// Raw represents raw CreateOptions, as passed to the API server.
 	Raw *metav1.CreateOptions
 }
@@ -183,6 +254,7 @@ func (o *CreateOptions) AsCreateOptions() *metav1.CreateOptions {
 
 	o.Raw.DryRun = o.DryRun
 	o.Raw.FieldManager = o.FieldManager
+	o.Raw.FieldValidation = o.FieldValidation
 	return o.Raw
 }
 
@@ -202,6 +274,9 @@ func (o *CreateOptions) ApplyToCreate(co *CreateOptions) {
 	}
 	if o.FieldManager != "" {
 		co.FieldManager = o.FieldManager
+	}
+	if o.FieldValidation != "" {
+		co.FieldValidation = o.FieldValidation
 	}
 	if o.Raw != nil {
 		co.Raw = o.Raw
@@ -399,7 +474,7 @@ type ListOptions struct {
 	LabelSelector labels.Selector
 	// FieldSelector filters results by a particular field.  In order
 	// to use this with cache-based implementations, restrict usage to
-	// a single field-value pair that's been added to the indexers.
+	// exact match field-value pair that's been added to the indexers.
 	FieldSelector fields.Selector
 
 	// Namespace represents the namespace to list for, or empty for
@@ -416,6 +491,12 @@ type ListOptions struct {
 	// it does not recognize and will return a 410 error if the token can no longer be used because
 	// it has expired. This field is not supported if watch is true in the Raw ListOptions.
 	Continue string
+
+	// UnsafeDisableDeepCopy indicates not to deep copy objects during list objects.
+	// Be very careful with this, when enabled you must DeepCopy any object before mutating it,
+	// otherwise you will mutate the object in the cache.
+	// +optional
+	UnsafeDisableDeepCopy *bool
 
 	// Raw represents raw ListOptions, as passed to the API server.  Note
 	// that these may not be respected by all implementations of interface,
@@ -444,6 +525,9 @@ func (o *ListOptions) ApplyToList(lo *ListOptions) {
 	}
 	if o.Continue != "" {
 		lo.Continue = o.Continue
+	}
+	if o.UnsafeDisableDeepCopy != nil {
+		lo.UnsafeDisableDeepCopy = o.UnsafeDisableDeepCopy
 	}
 }
 
@@ -484,8 +568,16 @@ type MatchingLabels map[string]string
 // ApplyToList applies this configuration to the given list options.
 func (m MatchingLabels) ApplyToList(opts *ListOptions) {
 	// TODO(directxman12): can we avoid reserializing this over and over?
-	sel := labels.SelectorFromValidatedSet(map[string]string(m))
-	opts.LabelSelector = sel
+	if opts.LabelSelector == nil {
+		opts.LabelSelector = labels.SelectorFromValidatedSet(map[string]string(m))
+		return
+	}
+	// If there's already a selector, we need to AND the two together.
+	noValidSel := labels.SelectorFromValidatedSet(map[string]string(m))
+	reqs, _ := noValidSel.Requirements()
+	for _, req := range reqs {
+		opts.LabelSelector = opts.LabelSelector.Add(req)
+	}
 }
 
 // ApplyToDeleteAllOf applies this configuration to the given an List options.
@@ -499,14 +591,17 @@ type HasLabels []string
 
 // ApplyToList applies this configuration to the given list options.
 func (m HasLabels) ApplyToList(opts *ListOptions) {
-	sel := labels.NewSelector()
+	if opts.LabelSelector == nil {
+		opts.LabelSelector = labels.NewSelector()
+	}
+	// TODO: ignore invalid labels will result in an empty selector.
+	// This is inconsistent to the that of MatchingLabels.
 	for _, label := range m {
 		r, err := labels.NewRequirement(label, selection.Exists, nil)
 		if err == nil {
-			sel = sel.Add(*r)
+			opts.LabelSelector = opts.LabelSelector.Add(*r)
 		}
 	}
-	opts.LabelSelector = sel
 }
 
 // ApplyToDeleteAllOf applies this configuration to the given an List options.
@@ -577,6 +672,11 @@ func (n InNamespace) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	n.ApplyToList(&opts.ListOptions)
 }
 
+// AsSelector returns a selector that matches objects in the given namespace.
+func (n InNamespace) AsSelector() fields.Selector {
+	return fields.SelectorFromSet(fields.Set{"metadata.namespace": string(n)})
+}
+
 // Limit specifies the maximum number of results to return from the server.
 // Limit does not implement DeleteAllOfOption interface because the server
 // does not support setting it for deletecollection operations.
@@ -586,6 +686,25 @@ type Limit int64
 func (l Limit) ApplyToList(opts *ListOptions) {
 	opts.Limit = int64(l)
 }
+
+// UnsafeDisableDeepCopyOption indicates not to deep copy objects during list objects.
+// Be very careful with this, when enabled you must DeepCopy any object before mutating it,
+// otherwise you will mutate the object in the cache.
+type UnsafeDisableDeepCopyOption bool
+
+// ApplyToList applies this configuration to the given an List options.
+func (d UnsafeDisableDeepCopyOption) ApplyToList(opts *ListOptions) {
+	definitelyTrue := true
+	definitelyFalse := false
+	if d {
+		opts.UnsafeDisableDeepCopy = &definitelyTrue
+	} else {
+		opts.UnsafeDisableDeepCopy = &definitelyFalse
+	}
+}
+
+// UnsafeDisableDeepCopy indicates not to deep copy objects during list objects.
+const UnsafeDisableDeepCopy = UnsafeDisableDeepCopyOption(true)
 
 // Continue sets a continuation token to retrieve chunks of results when using limit.
 // Continue does not implement DeleteAllOfOption interface because the server
@@ -615,6 +734,24 @@ type UpdateOptions struct {
 	// this request.  It must be set with server-side apply.
 	FieldManager string
 
+	// fieldValidation instructs the server on how to handle
+	// objects in the request (POST/PUT/PATCH) containing unknown
+	// or duplicate fields. Valid values are:
+	// - Ignore: This will ignore any unknown fields that are silently
+	// dropped from the object, and will ignore all but the last duplicate
+	// field that the decoder encounters. This is the default behavior
+	// prior to v1.23.
+	// - Warn: This will send a warning via the standard warning response
+	// header for each unknown field that is dropped from the object, and
+	// for each duplicate field that is encountered. The request will
+	// still succeed if there are no other errors, and will only persist
+	// the last of any duplicate fields. This is the default in v1.23+
+	// - Strict: This will fail the request with a BadRequest error if
+	// any unknown fields would be dropped from the object, or if any
+	// duplicate fields are present. The error returned from the server
+	// will contain all unknown and duplicate fields encountered.
+	FieldValidation string
+
 	// Raw represents raw UpdateOptions, as passed to the API server.
 	Raw *metav1.UpdateOptions
 }
@@ -631,6 +768,7 @@ func (o *UpdateOptions) AsUpdateOptions() *metav1.UpdateOptions {
 
 	o.Raw.DryRun = o.DryRun
 	o.Raw.FieldManager = o.FieldManager
+	o.Raw.FieldValidation = o.FieldValidation
 	return o.Raw
 }
 
@@ -652,6 +790,9 @@ func (o *UpdateOptions) ApplyToUpdate(uo *UpdateOptions) {
 	}
 	if o.FieldManager != "" {
 		uo.FieldManager = o.FieldManager
+	}
+	if o.FieldValidation != "" {
+		uo.FieldValidation = o.FieldValidation
 	}
 	if o.Raw != nil {
 		uo.Raw = o.Raw
@@ -681,6 +822,24 @@ type PatchOptions struct {
 	// this request.  It must be set with server-side apply.
 	FieldManager string
 
+	// fieldValidation instructs the server on how to handle
+	// objects in the request (POST/PUT/PATCH) containing unknown
+	// or duplicate fields. Valid values are:
+	// - Ignore: This will ignore any unknown fields that are silently
+	// dropped from the object, and will ignore all but the last duplicate
+	// field that the decoder encounters. This is the default behavior
+	// prior to v1.23.
+	// - Warn: This will send a warning via the standard warning response
+	// header for each unknown field that is dropped from the object, and
+	// for each duplicate field that is encountered. The request will
+	// still succeed if there are no other errors, and will only persist
+	// the last of any duplicate fields. This is the default in v1.23+
+	// - Strict: This will fail the request with a BadRequest error if
+	// any unknown fields would be dropped from the object, or if any
+	// duplicate fields are present. The error returned from the server
+	// will contain all unknown and duplicate fields encountered.
+	FieldValidation string
+
 	// Raw represents raw PatchOptions, as passed to the API server.
 	Raw *metav1.PatchOptions
 }
@@ -707,6 +866,7 @@ func (o *PatchOptions) AsPatchOptions() *metav1.PatchOptions {
 	o.Raw.DryRun = o.DryRun
 	o.Raw.Force = o.Force
 	o.Raw.FieldManager = o.FieldManager
+	o.Raw.FieldValidation = o.FieldValidation
 	return o.Raw
 }
 
@@ -723,6 +883,9 @@ func (o *PatchOptions) ApplyToPatch(po *PatchOptions) {
 	if o.FieldManager != "" {
 		po.FieldManager = o.FieldManager
 	}
+	if o.FieldValidation != "" {
+		po.FieldValidation = o.FieldValidation
+	}
 	if o.Raw != nil {
 		po.Raw = o.Raw
 	}
@@ -736,6 +899,11 @@ var ForceOwnership = forceOwnership{}
 type forceOwnership struct{}
 
 func (forceOwnership) ApplyToPatch(opts *PatchOptions) {
+	definitelyTrue := true
+	opts.Force = &definitelyTrue
+}
+
+func (forceOwnership) ApplyToSubResourcePatch(opts *SubResourcePatchOptions) {
 	definitelyTrue := true
 	opts.Force = &definitelyTrue
 }

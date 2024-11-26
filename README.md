@@ -16,8 +16,8 @@ Documentation:
 - [Basic controller using builder](https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/builder#example-Builder)
 - [Creating a manager](https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/manager#example-New)
 - [Creating a controller](https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/controller#example-New)
-- [Examples](https://github.com/kubernetes-sigs/controller-runtime/blob/master/examples)
-- [Designs](https://github.com/kubernetes-sigs/controller-runtime/blob/master/designs)
+- [Examples](https://github.com/kubernetes-sigs/controller-runtime/blob/main/examples)
+- [Designs](https://github.com/kubernetes-sigs/controller-runtime/blob/main/designs)
 
 # Versioning, Maintenance, and Compatibility
 
@@ -27,7 +27,7 @@ Users:
 
 - We follow [Semantic Versioning (semver)](https://semver.org)
 - Use releases with your dependency management to ensure that you get compatible code
-- The master branch contains all the latest code, some of which may break compatibility (so "normal" `go get` is not recommended)
+- The main branch contains all the latest code, some of which may break compatibility (so "normal" `go get` is not recommended)
 
 Contributors:
 
@@ -39,6 +39,26 @@ Contributors:
   * [Bug fixes](/.github/PULL_REQUEST_TEMPLATE/bug_fix.md)
   * [Documentation Changes](/.github/PULL_REQUEST_TEMPLATE/docs.md)
   * [Test/Build/Other Changes](/.github/PULL_REQUEST_TEMPLATE/other.md)
+
+## Compatibility
+
+Every minor version of controller-runtime has been tested with a specific minor version of client-go. A controller-runtime minor version *may* be compatible with
+other client-go minor versions, but this is by chance and neither supported nor tested. In general, we create one minor version of controller-runtime
+for each minor version of client-go and other k8s.io/* dependencies.
+
+The minimum Go version of controller-runtime is the highest minimum Go version of our Go dependencies. Usually, this will
+be identical to the minimum Go version of the corresponding k8s.io/* dependencies.
+
+Compatible k8s.io/*, client-go and minimum Go versions can be looked up in our [go.mod](go.mod) file.
+
+|          | k8s.io/*, client-go | minimum Go version |
+|----------|:-------------------:|:------------------:|
+| CR v0.20 |        v0.32        |        1.23        |
+| CR v0.19 |        v0.31        |        1.22        |
+| CR v0.18 |        v0.30        |        1.22        |
+| CR v0.17 |        v0.29        |        1.21        |
+| CR v0.16 |        v0.28        |        1.20        |
+| CR v0.15 |        v0.27        |        1.20        |
 
 ## FAQ
 
@@ -57,6 +77,7 @@ You can reach the maintainers of this project at:
 - Google Group: [kubebuilder@googlegroups.com](https://groups.google.com/forum/#!forum/kubebuilder)
 
 ## Contributing
+
 Contributions are greatly appreciated. The maintainers actively manage the issues list, and try to highlight issues suitable for newcomers.
 The project follows the typical GitHub pull request model. See [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
 Before starting any work, please either comment on an existing issue, or file a new one.

@@ -31,7 +31,9 @@ var _ = Describe("informerCache", func() {
 	It("should not require LeaderElection", func() {
 		cfg := &rest.Config{}
 
-		mapper, err := apiutil.NewDynamicRESTMapper(cfg, apiutil.WithLazyDiscovery)
+		httpClient, err := rest.HTTPClientFor(cfg)
+		Expect(err).ToNot(HaveOccurred())
+		mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
 		Expect(err).ToNot(HaveOccurred())
 
 		c, err := cache.New(cfg, cache.Options{Mapper: mapper})

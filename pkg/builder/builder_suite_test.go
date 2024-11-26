@@ -26,12 +26,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/addr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -57,7 +57,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Prevent the metrics listener being created
-	metrics.DefaultBindAddress = "0"
+	metricsserver.DefaultBindAddress = "0"
 
 	webhook.DefaultPort, _, err = addr.Suggest("")
 	Expect(err).NotTo(HaveOccurred())
@@ -67,7 +67,7 @@ var _ = AfterSuite(func() {
 	Expect(testenv.Stop()).To(Succeed())
 
 	// Put the DefaultBindAddress back
-	metrics.DefaultBindAddress = ":8080"
+	metricsserver.DefaultBindAddress = ":8080"
 
 	// Change the webhook.DefaultPort back to the original default.
 	webhook.DefaultPort = 9443

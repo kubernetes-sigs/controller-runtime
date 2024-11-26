@@ -95,7 +95,7 @@ var _ = Describe("Platform", func() {
 	Specify("knows how to produce an archive name", func() {
 		plat := Platform{OS: "linux", Arch: "amd64"}
 		ver := Concrete{Major: 1, Minor: 16, Patch: 3}
-		Expect(plat.ArchiveName(ver)).To(Equal("kubebuilder-tools-1.16.3-linux-amd64.tar.gz"))
+		Expect(plat.ArchiveName(ver)).To(Equal("envtest-v1.16.3-linux-amd64.tar.gz"))
 	})
 
 	Describe("parsing", func() {
@@ -110,14 +110,14 @@ var _ = Describe("Platform", func() {
 				Expect(ver).To(BeNil())
 			})
 		})
-		Context("for archive names", func() {
-			It("should accept strings of the form kubebuilder-tools-x.y.z-os-arch.tar.gz", func() {
-				ver, plat := ExtractWithPlatform(ArchiveRE, "kubebuilder-tools-1.16.3-linux-amd64.tar.gz")
+		Context("for archive names (controller-tools)", func() {
+			It("should accept strings of the form envtest-vx.y.z-os-arch.tar.gz", func() {
+				ver, plat := ExtractWithPlatform(ArchiveRE, "envtest-v1.16.3-linux-amd64.tar.gz")
 				Expect(ver).To(Equal(&Concrete{Major: 1, Minor: 16, Patch: 3}))
 				Expect(plat).To(Equal(Platform{OS: "linux", Arch: "amd64"}))
 			})
 			It("should reject nonsense strings", func() {
-				ver, _ := ExtractWithPlatform(ArchiveRE, "kubebuilder-tools-1.16.3-linux-amd64.tar.sum")
+				ver, _ := ExtractWithPlatform(ArchiveRE, "envtest-v1.16.3-linux-amd64.tar.sum")
 				Expect(ver).To(BeNil())
 			})
 		})

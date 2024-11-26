@@ -19,47 +19,48 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"k8s.io/apimachinery/pkg/runtime"
+
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-// +kubebuilder:webhook:path=/validate-v1-pod,mutating=false,failurePolicy=fail,groups="",resources=pods,verbs=create;update,versions=v1,name=vpod.kb.io
+// +kubebuilder:webhook:path=/validate--v1-pod,mutating=false,failurePolicy=fail,groups="",resources=pods,verbs=create;update,versions=v1,name=vpod.kb.io
 
 // podValidator validates Pods
-type podValidator struct {
-	Client  client.Client
-	decoder *admission.Decoder
-}
+type podValidator struct{}
 
-// podValidator admits a pod if a specific annotation exists.
-func (v *podValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
-	pod := &corev1.Pod{}
-
-	err := v.decoder.Decode(req, pod)
-	if err != nil {
-		return admission.Errored(http.StatusBadRequest, err)
+// validate admits a pod if a specific annotation exists.
+func (v *podValidator) validate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	log := logf.FromContext(ctx)
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return nil, fmt.Errorf("expected a Pod but got a %T", obj)
 	}
 
+	log.Info("Validating Pod")
 	key := "example-mutating-admission-webhook"
 	anno, found := pod.Annotations[key]
 	if !found {
-		return admission.Denied(fmt.Sprintf("missing annotation %s", key))
+		return nil, fmt.Errorf("missing annotation %s", key)
 	}
 	if anno != "foo" {
-		return admission.Denied(fmt.Sprintf("annotation %s did not have value %q", key, "foo"))
+		return nil, fmt.Errorf("annotation %s did not have value %q", key, "foo")
 	}
 
-	return admission.Allowed("")
+	return nil, nil
 }
 
-// podValidator implements admission.DecoderInjector.
-// A decoder will be automatically injected.
+func (v *podValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	return v.validate(ctx, obj)
+}
 
-// InjectDecoder injects the decoder.
-func (v *podValidator) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
-	return nil
+func (v *podValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	return v.validate(ctx, newObj)
+}
+
+func (v *podValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	return v.validate(ctx, obj)
 }

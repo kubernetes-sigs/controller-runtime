@@ -25,6 +25,7 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	jobsv1 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v1"
 	jobsv2 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v2"
 	jobsv3 "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/testdata/api/v3"
@@ -55,9 +56,9 @@ func main() {
 	ctrl.SetLogger(zap.Logger(true))
 
 	mgr, err := ctrl.NewManager(context.Background(), ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		LeaderElection:     enableLeaderElection,
+		Scheme:         scheme,
+		Metrics:        metricsserver.Options{BindAddress: metricsAddr},
+		LeaderElection: enableLeaderElection,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

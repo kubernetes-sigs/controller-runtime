@@ -64,12 +64,14 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Watching Resources")
-			err = instance.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, &handler.EnqueueRequestForOwner{
-				OwnerType: &appsv1.Deployment{},
-			})
+			err = instance.Watch(
+				source.Kind(cm.GetCache(), &appsv1.ReplicaSet{},
+					handler.TypedEnqueueRequestForOwner[*appsv1.ReplicaSet](cm.GetScheme(), cm.GetRESTMapper(), &appsv1.Deployment{}),
+				),
+			)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = instance.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForObject{})
+			err = instance.Watch(source.Kind(cm.GetCache(), &appsv1.Deployment{}, &handler.TypedEnqueueRequestForObject[*appsv1.Deployment]{}))
 			Expect(err).NotTo(HaveOccurred())
 
 			err = cm.GetClient().Get(ctx, types.NamespacedName{Name: "foo"}, &corev1.Namespace{})
@@ -169,6 +171,35 @@ var _ = Describe("controller", func() {
 			err = cm.GetClient().
 				List(context.Background(), &controllertest.UnconventionalListTypeList{})
 			Expect(err).NotTo(HaveOccurred())
+
+			By("Invoking Reconciling for a pod when it is created when adding watcher dynamically")
+			// Add new watcher dynamically
+			err = instance.Watch(source.Kind(cm.GetCache(), &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}))
+			Expect(err).NotTo(HaveOccurred())
+
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "pod-name"},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: 80,
+								},
+							},
+						},
+					},
+				},
+			}
+			expectedReconcileRequest = reconcile.Request{NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "pod-name",
+			}}
+			_, err = clientset.CoreV1().Pods("default").Create(ctx, pod, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 		})
 	})
 })

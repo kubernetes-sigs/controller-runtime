@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,17 +42,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/internal/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 var _ = Describe("controller", func() {
 	var fakeReconcile *fakeReconciler
-	var ctrl *Controller
+	var ctrl *Controller[reconcile.Request]
 	var queue *controllertest.Queue
-	var informers *informertest.FakeInformers
 	var reconciled chan reconcile.Request
 	var request = reconcile.Request{
 		NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
@@ -64,18 +62,18 @@ var _ = Describe("controller", func() {
 			results:  make(chan fakeReconcileResultPair, 10 /* chosen by the completely scientific approach of guessing */),
 		}
 		queue = &controllertest.Queue{
-			Interface: workqueue.New(),
+			TypedInterface: workqueue.NewTyped[reconcile.Request](),
 		}
-		informers = &informertest.FakeInformers{}
-		ctrl = &Controller{
+		ctrl = &Controller[reconcile.Request]{
 			MaxConcurrentReconciles: 1,
 			Do:                      fakeReconcile,
-			MakeQueue:               func() workqueue.RateLimitingInterface { return queue },
+			NewQueue: func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				return queue
+			},
 			LogConstructor: func(_ *reconcile.Request) logr.Logger {
 				return log.RuntimeLog.WithName("controller").WithName("test")
 			},
 		}
-		Expect(ctrl.InjectFunc(func(interface{}) error { return nil })).To(Succeed())
 	})
 
 	Describe("Reconciler", func() {
@@ -92,19 +90,38 @@ var _ = Describe("controller", func() {
 			Expect(result).To(Equal(reconcile.Result{Requeue: true}))
 		})
 
-		It("should not recover panic if RecoverPanic is false by default", func() {
+		It("should not recover panic if RecoverPanic is false", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			defer func() {
 				Expect(recover()).ShouldNot(BeNil())
 			}()
+			ctrl.RecoverPanic = ptr.To(false)
 			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 				var res *reconcile.Result
 				return *res, nil
 			})
 			_, _ = ctrl.Reconcile(ctx,
 				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+		})
+
+		It("should recover panic if RecoverPanic is true by default", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			defer func() {
+				Expect(recover()).To(BeNil())
+			}()
+			// RecoverPanic defaults to true.
+			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
+				var res *reconcile.Result
+				return *res, nil
+			})
+			_, err := ctrl.Reconcile(ctx,
+				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("[recovered]"))
 		})
 
 		It("should recover panic if RecoverPanic is true", func() {
@@ -114,7 +131,7 @@ var _ = Describe("controller", func() {
 			defer func() {
 				Expect(recover()).To(BeNil())
 			}()
-			ctrl.RecoverPanic = true
+			ctrl.RecoverPanic = ptr.To(true)
 			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 				var res *reconcile.Result
 				return *res, nil
@@ -128,10 +145,11 @@ var _ = Describe("controller", func() {
 
 	Describe("Start", func() {
 		It("should return an error if there is an error waiting for the informers", func() {
+			ctrl.CacheSyncTimeout = time.Second
 			f := false
-			ctrl.startWatches = []watchDescription{{
-				src: source.NewKindWithCache(&corev1.Pod{}, &informertest.FakeInformers{Synced: &f}),
-			}}
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
+			}
 			ctrl.Name = "foo"
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -141,35 +159,34 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should error when cache sync timeout occurs", func() {
-			ctrl.CacheSyncTimeout = 10 * time.Nanosecond
-
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 
-			ctrl.startWatches = []watchDescription{{
-				src: source.NewKindWithCache(&appsv1.Deployment{}, c),
-			}}
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Kind(c, &appsv1.Deployment{}, &handler.TypedEnqueueRequestForObject[*appsv1.Deployment]{}),
+			}
 			ctrl.Name = "testcontroller"
 
 			err = ctrl.Start(context.TODO())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync: timed out waiting for cache to be synced"))
+			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync kind source: *v1.Deployment: timed out waiting for cache to be synced"))
 		})
 
-		It("should not error when context cancelled", func() {
+		It("should not error when controller Start context is cancelled during Sources WaitForSync", func() {
 			ctrl.CacheSyncTimeout = 1 * time.Second
 
 			sourceSynced := make(chan struct{})
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
-			ctrl.startWatches = []watchDescription{{
-				src: &singnallingSourceWrapper{
-					SyncingSource: source.NewKindWithCache(&appsv1.Deployment{}, c),
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				&singnallingSourceWrapper{
+					SyncingSource: source.Kind[client.Object](c, &appsv1.Deployment{}, &handler.EnqueueRequestForObject{}),
 					cacheSyncDone: sourceSynced,
 				},
-			}}
+			}
 			ctrl.Name = "testcontroller"
 
 			ctx, cancel := context.WithCancel(context.TODO())
@@ -183,26 +200,39 @@ var _ = Describe("controller", func() {
 			<-sourceSynced
 		})
 
-		It("should not error when cache sync timeout is of sufficiently high", func() {
-			ctrl.CacheSyncTimeout = 1 * time.Second
+		It("should error when Start() is blocking forever", func() {
+			ctrl.CacheSyncTimeout = time.Second
 
+			controllerDone := make(chan struct{})
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					<-controllerDone
+					return ctx.Err()
+				})}
+
+			ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
+			defer cancel()
+
+			err := ctrl.Start(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Please ensure that its Start() method is non-blocking"))
+
+			close(controllerDone)
+		})
+
+		It("should not error when cache sync timeout is of sufficiently high", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			sourceSynced := make(chan struct{})
-			c, err := cache.New(cfg, cache.Options{})
-			Expect(err).NotTo(HaveOccurred())
-			ctrl.startWatches = []watchDescription{{
-				src: &singnallingSourceWrapper{
-					SyncingSource: source.NewKindWithCache(&appsv1.Deployment{}, c),
+			c := &informertest.FakeInformers{}
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				&singnallingSourceWrapper{
+					SyncingSource: source.Kind[client.Object](c, &appsv1.Deployment{}, &handler.EnqueueRequestForObject{}),
 					cacheSyncDone: sourceSynced,
 				},
-			}}
-
-			go func() {
-				defer GinkgoRecover()
-				Expect(c.Start(ctx)).To(Succeed())
-			}()
+			}
 
 			go func() {
 				defer GinkgoRecover()
@@ -213,9 +243,10 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should process events from source.Channel", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
 			// channel to be closed when event is processed
 			processed := make(chan struct{})
-			// source channel to be injected
+			// source channel
 			ch := make(chan event.GenericEvent, 1)
 
 			ctx, cancel := context.WithCancel(context.TODO())
@@ -229,22 +260,20 @@ var _ = Describe("controller", func() {
 				Object: p,
 			}
 
-			ins := &source.Channel{Source: ch}
-			ins.DestBufferSize = 1
-			Expect(inject.StopChannelInto(ctx.Done(), ins)).To(BeTrue())
-
-			// send the event to the channel
-			ch <- evt
-
-			ctrl.startWatches = []watchDescription{{
-				src: ins,
-				handler: handler.Funcs{
-					GenericFunc: func(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+			ins := source.Channel(
+				ch,
+				handler.Funcs{
+					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 						defer GinkgoRecover()
 						close(processed)
 					},
 				},
-			}}
+			)
+
+			// send the event to the channel
+			ch <- evt
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{ins}
 
 			go func() {
 				defer GinkgoRecover()
@@ -253,70 +282,48 @@ var _ = Describe("controller", func() {
 			<-processed
 		})
 
-		It("should error when channel is passed as a source but stop channel is not injected", func() {
-			ch := make(chan event.GenericEvent)
-			ctx, cancel := context.WithCancel(context.TODO())
-			defer cancel()
-
-			ins := &source.Channel{Source: ch}
-			ctrl.startWatches = []watchDescription{{
-				src: ins,
-			}}
-
-			e := ctrl.Start(ctx)
-
-			Expect(e).NotTo(BeNil())
-			Expect(e.Error()).To(ContainSubstring("must call InjectStop on Channel before calling Start"))
-		})
-
 		It("should error when channel source is not specified", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			ins := &source.Channel{}
-			Expect(inject.StopChannelInto(make(<-chan struct{}), ins)).To(BeTrue())
-
-			ctrl.startWatches = []watchDescription{{
-				src: &source.Channel{},
-			}}
+			ins := source.Channel[string](nil, nil)
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{ins}
 
 			e := ctrl.Start(ctx)
-			Expect(e).NotTo(BeNil())
+			Expect(e).To(HaveOccurred())
 			Expect(e.Error()).To(ContainSubstring("must specify Channel.Source"))
 		})
 
 		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {
-			pr1 := &predicate.Funcs{}
-			pr2 := &predicate.Funcs{}
-			evthdl := &handler.EnqueueRequestForObject{}
+			ctrl.CacheSyncTimeout = 10 * time.Second
 			started := false
-			src := source.Func(func(ctx context.Context, e handler.EventHandler, q workqueue.RateLimitingInterface, p ...predicate.Predicate) error {
+			ctx, cancel := context.WithCancel(context.Background())
+			src := source.Func(func(ctx context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
 				defer GinkgoRecover()
-				Expect(e).To(Equal(evthdl))
 				Expect(q).To(Equal(ctrl.Queue))
-				Expect(p).To(ConsistOf(pr1, pr2))
 
 				started = true
+				cancel() // Cancel the context so ctrl.Start() doesn't block forever
 				return nil
 			})
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).NotTo(HaveOccurred())
+			Expect(ctrl.Watch(src)).NotTo(HaveOccurred())
 
-			// Use a cancelled context so Start doesn't block
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-			Expect(ctrl.Start(ctx)).To(Succeed())
+			err := ctrl.Start(ctx)
+			Expect(err).To(Succeed())
 			Expect(started).To(BeTrue())
 		})
 
 		It("should return an error if there is an error starting sources", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
 			err := fmt.Errorf("Expected Error: could not start source")
-			src := source.Func(func(context.Context, handler.EventHandler,
-				workqueue.RateLimitingInterface,
-				...predicate.Predicate) error {
+			src := source.Func(func(context.Context,
+				workqueue.TypedRateLimitingInterface[reconcile.Request],
+			) error {
 				defer GinkgoRecover()
 				return err
 			})
-			Expect(ctrl.Watch(src, &handler.EnqueueRequestForObject{})).To(Succeed())
+			Expect(ctrl.Watch(src)).To(Succeed())
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -327,132 +334,12 @@ var _ = Describe("controller", func() {
 			// Use a cancelled context so Start doesn't block
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
-			Expect(ctrl.Start(ctx)).To(BeNil())
+			Expect(ctrl.Start(ctx)).To(Succeed())
 			err := ctrl.Start(ctx)
-			Expect(err).NotTo(BeNil())
+			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("controller was started more than once. This is likely to be caused by being added to a manager multiple times"))
 		})
 
-	})
-
-	Describe("Watch", func() {
-		It("should inject dependencies into the Source", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			found := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == src {
-					found = true
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue(), "Source not injected")
-		})
-
-		It("should return an error if there is an error injecting into the Source", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			expected := fmt.Errorf("expect fail source")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == src {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
-		})
-
-		It("should inject dependencies into the EventHandler", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			found := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == evthdl {
-					found = true
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue(), "EventHandler not injected")
-		})
-
-		It("should return an error if there is an error injecting into the EventHandler", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			evthdl := &handler.EnqueueRequestForObject{}
-			expected := fmt.Errorf("expect fail eventhandler")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == evthdl {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl)).To(Equal(expected))
-		})
-
-		PIt("should inject dependencies into the Reconciler", func() {
-			// TODO(community): Write this
-		})
-
-		PIt("should return an error if there is an error injecting into the Reconciler", func() {
-			// TODO(community): Write this
-		})
-
-		It("should inject dependencies into all of the Predicates", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			pr1 := &predicate.Funcs{}
-			pr2 := &predicate.Funcs{}
-			found1 := false
-			found2 := false
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr1 {
-					found1 = true
-				}
-				if i == pr2 {
-					found2 = true
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).NotTo(HaveOccurred())
-			Expect(found1).To(BeTrue(), "First Predicated not injected")
-			Expect(found2).To(BeTrue(), "Second Predicated not injected")
-		})
-
-		It("should return an error if there is an error injecting into any of the Predicates", func() {
-			src := &source.Kind{Type: &corev1.Pod{}}
-			Expect(src.InjectCache(informers)).To(Succeed())
-			evthdl := &handler.EnqueueRequestForObject{}
-			pr1 := &predicate.Funcs{}
-			pr2 := &predicate.Funcs{}
-			expected := fmt.Errorf("expect fail predicate")
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr1 {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).To(Equal(expected))
-
-			ctrl.SetFields = func(i interface{}) error {
-				defer GinkgoRecover()
-				if i == pr2 {
-					return expected
-				}
-				return nil
-			}
-			Expect(ctrl.Watch(src, evthdl, pr1, pr2)).To(Equal(expected))
-		})
 	})
 
 	Describe("Processing queue items from a Controller", func() {
@@ -474,34 +361,11 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
 		})
 
-		It("should continue to process additional queue items after the first", func() {
-			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
-				defer GinkgoRecover()
-				Fail("Reconciler should not have been called")
-				return reconcile.Result{}, nil
-			})
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			go func() {
-				defer GinkgoRecover()
-				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
-			}()
-
-			By("adding two bad items to the queue")
-			queue.Add("foo/bar1")
-			queue.Add("foo/bar2")
-
-			By("expecting both of them to be skipped")
-			Eventually(queue.Len).Should(Equal(0))
-			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
-		})
-
 		PIt("should forget an item if it is not a Request and continue processing items", func() {
 			// TODO(community): write this test
 		})
 
 		It("should requeue a Request if there is an error and continue processing items", func() {
-
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			go func() {
@@ -514,6 +378,9 @@ var _ = Describe("controller", func() {
 			By("Invoking Reconciler which will give an error")
 			fakeReconcile.AddResult(reconcile.Result{}, fmt.Errorf("expected error: reconcile"))
 			Expect(<-reconciled).To(Equal(request))
+			queue.AddedRateLimitedLock.Lock()
+			Expect(queue.AddedRatelimited).To(Equal([]any{request}))
+			queue.AddedRateLimitedLock.Unlock()
 
 			By("Invoking Reconciler a second time without error")
 			fakeReconcile.AddResult(reconcile.Result{}, nil)
@@ -524,11 +391,34 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return queue.NumRequeues(request) }, 1.0).Should(Equal(0))
 		})
 
+		It("should not requeue a Request if there is a terminal error", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
+			}()
+
+			queue.Add(request)
+
+			By("Invoking Reconciler which will give an error")
+			fakeReconcile.AddResult(reconcile.Result{}, reconcile.TerminalError(fmt.Errorf("expected error: reconcile")))
+			Expect(<-reconciled).To(Equal(request))
+
+			queue.AddedRateLimitedLock.Lock()
+			Expect(queue.AddedRatelimited).To(BeEmpty())
+			queue.AddedRateLimitedLock.Unlock()
+
+			Expect(queue.Len()).Should(Equal(0))
+		})
+
 		// TODO(directxman12): we should ensure that backoff occurrs with error requeue
 
 		It("should not reset backoff until there's a non-error result", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
-			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
+			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
+			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				return dq
+			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -563,8 +453,10 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should requeue a Request with rate limiting if the Result sets Requeue:true and continue processing items", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
-			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
+			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
+			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				return dq
+			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -593,8 +485,10 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should requeue a Request after a duration (but not rate-limitted) if the Result sets RequeueAfter (regardless of Requeue)", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
-			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
+			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
+			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				return dq
+			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -623,8 +517,10 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should perform error behavior if error is not nil, regardless of RequeueAfter", func() {
-			dq := &DelegatingQueue{RateLimitingInterface: ctrl.MakeQueue()}
-			ctrl.MakeQueue = func() workqueue.RateLimitingInterface { return dq }
+			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
+			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				return dq
+			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -891,7 +787,7 @@ var _ = Describe("ReconcileIDFromContext function", func() {
 })
 
 type DelegatingQueue struct {
-	workqueue.RateLimitingInterface
+	workqueue.TypedRateLimitingInterface[reconcile.Request]
 	mu sync.Mutex
 
 	countAddRateLimited int
@@ -899,36 +795,36 @@ type DelegatingQueue struct {
 	countAddAfter       int
 }
 
-func (q *DelegatingQueue) AddRateLimited(item interface{}) {
+func (q *DelegatingQueue) AddRateLimited(item reconcile.Request) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	q.countAddRateLimited++
-	q.RateLimitingInterface.AddRateLimited(item)
+	q.TypedRateLimitingInterface.AddRateLimited(item)
 }
 
-func (q *DelegatingQueue) AddAfter(item interface{}, d time.Duration) {
+func (q *DelegatingQueue) AddAfter(item reconcile.Request, d time.Duration) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	q.countAddAfter++
-	q.RateLimitingInterface.AddAfter(item, d)
+	q.TypedRateLimitingInterface.AddAfter(item, d)
 }
 
-func (q *DelegatingQueue) Add(item interface{}) {
+func (q *DelegatingQueue) Add(item reconcile.Request) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.countAdd++
 
-	q.RateLimitingInterface.Add(item)
+	q.TypedRateLimitingInterface.Add(item)
 }
 
-func (q *DelegatingQueue) Forget(item interface{}) {
+func (q *DelegatingQueue) Forget(item reconcile.Request) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.countAdd--
 
-	q.RateLimitingInterface.Forget(item)
+	q.TypedRateLimitingInterface.Forget(item)
 }
 
 type countInfo struct {
@@ -973,6 +869,15 @@ type singnallingSourceWrapper struct {
 	source.SyncingSource
 }
 
+func (s *singnallingSourceWrapper) Start(ctx context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+	err := s.SyncingSource.Start(ctx, q)
+	if err != nil {
+		// WaitForSync will never be called if this errors, so close the channel to prevent deadlocks in tests
+		close(s.cacheSyncDone)
+	}
+	return err
+}
+
 func (s *singnallingSourceWrapper) WaitForSync(ctx context.Context) error {
 	defer func() {
 		close(s.cacheSyncDone)
@@ -992,7 +897,7 @@ type cacheWithIndefinitelyBlockingGetInformer struct {
 	cache.Cache
 }
 
-func (c *cacheWithIndefinitelyBlockingGetInformer) GetInformer(ctx context.Context, obj client.Object) (cache.Informer, error) {
+func (c *cacheWithIndefinitelyBlockingGetInformer) GetInformer(ctx context.Context, obj client.Object, opts ...cache.InformerGetOption) (cache.Informer, error) {
 	<-ctx.Done()
 	return nil, errors.New("GetInformer timed out")
 }

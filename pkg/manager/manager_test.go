@@ -18,44 +18,39 @@ package manager
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"path"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/goleak"
+	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
-	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
-
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -71,7 +66,7 @@ var _ = Describe("manger.Manager", func() {
 		It("should return an error if it can't create a RestMapper", func() {
 			expected := fmt.Errorf("expected error: RestMapper")
 			m, err := New(cfg, Options{
-				MapperProvider: func(c *rest.Config) (meta.RESTMapper, error) { return nil, expected },
+				MapperProvider: func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error) { return nil, expected },
 			})
 			Expect(m).To(BeNil())
 			Expect(err).To(Equal(expected))
@@ -80,7 +75,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should return an error it can't create a client.Client", func() {
 			m, err := New(cfg, Options{
-				NewClient: func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
+				NewClient: func(config *rest.Config, options client.Options) (client.Client, error) {
 					return nil, errors.New("expected error")
 				},
 			})
@@ -102,7 +97,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should create a client defined in by the new client function", func() {
 			m, err := New(cfg, Options{
-				NewClient: func(cache cache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
+				NewClient: func(config *rest.Config, options client.Options) (client.Client, error) {
 					return nil, nil
 				},
 			})
@@ -113,7 +108,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should return an error it can't create a recorder.Provider", func() {
 			m, err := New(cfg, Options{
-				newRecorderProvider: func(_ *rest.Config, _ *runtime.Scheme, _ logr.Logger, _ intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
+				newRecorderProvider: func(_ *rest.Config, _ *http.Client, _ *runtime.Scheme, _ logr.Logger, _ intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
 					return nil, fmt.Errorf("expected error")
 				},
 			})
@@ -122,162 +117,46 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err.Error()).To(ContainSubstring("expected error"))
 		})
 
-		It("should be able to load Options from cfg.ControllerManagerConfiguration type", func() {
-			duration := metav1.Duration{Duration: 48 * time.Hour}
-			port := int(6090)
-			leaderElect := false
-
-			ccfg := &v1alpha1.ControllerManagerConfiguration{
-				ControllerManagerConfigurationSpec: v1alpha1.ControllerManagerConfigurationSpec{
-					SyncPeriod: &duration,
-					LeaderElection: &configv1alpha1.LeaderElectionConfiguration{
-						LeaderElect:       &leaderElect,
-						ResourceLock:      "leases",
-						ResourceNamespace: "default",
-						ResourceName:      "ctrl-lease",
-						LeaseDuration:     duration,
-						RenewDeadline:     duration,
-						RetryPeriod:       duration,
-					},
-					CacheNamespace: "default",
-					Metrics: v1alpha1.ControllerMetrics{
-						BindAddress: ":6000",
-					},
-					Health: v1alpha1.ControllerHealth{
-						HealthProbeBindAddress: "6060",
-						ReadinessEndpointName:  "/readyz",
-						LivenessEndpointName:   "/livez",
-					},
-					Webhook: v1alpha1.ControllerWebhook{
-						Port:    &port,
-						Host:    "localhost",
-						CertDir: "/certs",
-					},
-				},
-			}
-
-			m, err := Options{}.AndFrom(&fakeDeferredLoader{ccfg})
-			Expect(err).To(BeNil())
-
-			Expect(*m.SyncPeriod).To(Equal(duration.Duration))
-			Expect(m.LeaderElection).To(Equal(leaderElect))
-			Expect(m.LeaderElectionResourceLock).To(Equal("leases"))
-			Expect(m.LeaderElectionNamespace).To(Equal("default"))
-			Expect(m.LeaderElectionID).To(Equal("ctrl-lease"))
-			Expect(m.LeaseDuration.String()).To(Equal(duration.Duration.String()))
-			Expect(m.RenewDeadline.String()).To(Equal(duration.Duration.String()))
-			Expect(m.RetryPeriod.String()).To(Equal(duration.Duration.String()))
-			Expect(m.Namespace).To(Equal("default"))
-			Expect(m.MetricsBindAddress).To(Equal(":6000"))
-			Expect(m.HealthProbeBindAddress).To(Equal("6060"))
-			Expect(m.ReadinessEndpointName).To(Equal("/readyz"))
-			Expect(m.LivenessEndpointName).To(Equal("/livez"))
-			Expect(m.Port).To(Equal(port))
-			Expect(m.Host).To(Equal("localhost"))
-			Expect(m.CertDir).To(Equal("/certs"))
-		})
-
-		It("should be able to keep Options when cfg.ControllerManagerConfiguration set", func() {
-			optDuration := time.Duration(2)
-			duration := metav1.Duration{Duration: 48 * time.Hour}
-			port := int(6090)
-			leaderElect := false
-
-			ccfg := &v1alpha1.ControllerManagerConfiguration{
-				ControllerManagerConfigurationSpec: v1alpha1.ControllerManagerConfigurationSpec{
-					SyncPeriod: &duration,
-					LeaderElection: &configv1alpha1.LeaderElectionConfiguration{
-						LeaderElect:       &leaderElect,
-						ResourceLock:      "leases",
-						ResourceNamespace: "default",
-						ResourceName:      "ctrl-lease",
-						LeaseDuration:     duration,
-						RenewDeadline:     duration,
-						RetryPeriod:       duration,
-					},
-					CacheNamespace: "default",
-					Metrics: v1alpha1.ControllerMetrics{
-						BindAddress: ":6000",
-					},
-					Health: v1alpha1.ControllerHealth{
-						HealthProbeBindAddress: "6060",
-						ReadinessEndpointName:  "/readyz",
-						LivenessEndpointName:   "/livez",
-					},
-					Webhook: v1alpha1.ControllerWebhook{
-						Port:    &port,
-						Host:    "localhost",
-						CertDir: "/certs",
-					},
-				},
-			}
-
-			optionsTlSOptsFuncs := []func(*tls.Config){
-				func(config *tls.Config) {},
-			}
-			m, err := Options{
-				SyncPeriod:                 &optDuration,
-				LeaderElection:             true,
-				LeaderElectionResourceLock: "configmaps",
-				LeaderElectionNamespace:    "ctrl",
-				LeaderElectionID:           "ctrl-configmap",
-				LeaseDuration:              &optDuration,
-				RenewDeadline:              &optDuration,
-				RetryPeriod:                &optDuration,
-				Namespace:                  "ctrl",
-				MetricsBindAddress:         ":7000",
-				HealthProbeBindAddress:     "5000",
-				ReadinessEndpointName:      "/readiness",
-				LivenessEndpointName:       "/liveness",
-				Port:                       8080,
-				Host:                       "example.com",
-				CertDir:                    "/pki",
-				TLSOpts:                    optionsTlSOptsFuncs,
-			}.AndFrom(&fakeDeferredLoader{ccfg})
-			Expect(err).To(BeNil())
-
-			Expect(m.SyncPeriod.String()).To(Equal(optDuration.String()))
-			Expect(m.LeaderElection).To(Equal(true))
-			Expect(m.LeaderElectionResourceLock).To(Equal("configmaps"))
-			Expect(m.LeaderElectionNamespace).To(Equal("ctrl"))
-			Expect(m.LeaderElectionID).To(Equal("ctrl-configmap"))
-			Expect(m.LeaseDuration.String()).To(Equal(optDuration.String()))
-			Expect(m.RenewDeadline.String()).To(Equal(optDuration.String()))
-			Expect(m.RetryPeriod.String()).To(Equal(optDuration.String()))
-			Expect(m.Namespace).To(Equal("ctrl"))
-			Expect(m.MetricsBindAddress).To(Equal(":7000"))
-			Expect(m.HealthProbeBindAddress).To(Equal("5000"))
-			Expect(m.ReadinessEndpointName).To(Equal("/readiness"))
-			Expect(m.LivenessEndpointName).To(Equal("/liveness"))
-			Expect(m.Port).To(Equal(8080))
-			Expect(m.Host).To(Equal("example.com"))
-			Expect(m.CertDir).To(Equal("/pki"))
-			Expect(m.TLSOpts).To(Equal(optionsTlSOptsFuncs))
-		})
-
 		It("should lazily initialize a webhook server if needed", func() {
 			By("creating a manager with options")
-			m, err := New(cfg, Options{Port: 9440, Host: "foo.com"})
+			m, err := New(cfg, Options{WebhookServer: webhook.NewServer(webhook.Options{Port: 9440, Host: "foo.com"})})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m).NotTo(BeNil())
 
 			By("checking options are passed to the webhook server")
 			svr := m.GetWebhookServer()
 			Expect(svr).NotTo(BeNil())
-			Expect(svr.Port).To(Equal(9440))
-			Expect(svr.Host).To(Equal("foo.com"))
+			Expect(svr.(*webhook.DefaultServer).Options.Port).To(Equal(9440))
+			Expect(svr.(*webhook.DefaultServer).Options.Host).To(Equal("foo.com"))
 		})
 
 		It("should not initialize a webhook server if Options.WebhookServer is set", func() {
 			By("creating a manager with options")
-			m, err := New(cfg, Options{Port: 9441, WebhookServer: &webhook.Server{Port: 9440}})
+			srv := webhook.NewServer(webhook.Options{Port: 9440})
+			m, err := New(cfg, Options{WebhookServer: srv})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m).NotTo(BeNil())
 
 			By("checking the server contains the Port set on the webhook server and not passed to Options")
 			svr := m.GetWebhookServer()
 			Expect(svr).NotTo(BeNil())
-			Expect(svr.Port).To(Equal(9440))
+			Expect(svr).To(Equal(srv))
+			Expect(svr.(*webhook.DefaultServer).Options.Port).To(Equal(9440))
+		})
+
+		It("should allow passing a custom webhook.Server implementation", func() {
+			type customWebhook struct {
+				webhook.Server
+			}
+			m, err := New(cfg, Options{WebhookServer: customWebhook{}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(m).NotTo(BeNil())
+
+			svr := m.GetWebhookServer()
+			Expect(svr).NotTo(BeNil())
+
+			_, isCustomWebhook := svr.(customWebhook)
+			Expect(isCustomWebhook).To(BeTrue())
 		})
 
 		Context("with leader election enabled", func() {
@@ -287,10 +166,14 @@ var _ = Describe("manger.Manager", func() {
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id-2",
 					HealthProbeBindAddress:  "0",
-					MetricsBindAddress:      "0",
+					Metrics:                 metricsserver.Options{BindAddress: "0"},
+					PprofBindAddress:        "0",
 				})
-				Expect(err).To(BeNil())
-
+				Expect(err).ToNot(HaveOccurred())
+				gvkcorev1 := schema.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "ConfigMap"}
+				gvkcoordinationv1 := schema.GroupVersionKind{Group: coordinationv1.SchemeGroupVersion.Group, Version: coordinationv1.SchemeGroupVersion.Version, Kind: "Lease"}
+				Expect(m.GetScheme().Recognizes(gvkcorev1)).To(BeTrue())
+				Expect(m.GetScheme().Recognizes(gvkcoordinationv1)).To(BeTrue())
 				runnableDone := make(chan struct{})
 				slowRunnable := RunnableFunc(func(ctx context.Context) error {
 					<-ctx.Done()
@@ -298,7 +181,7 @@ var _ = Describe("manger.Manager", func() {
 					close(runnableDone)
 					return nil
 				})
-				Expect(m.Add(slowRunnable)).To(BeNil())
+				Expect(m.Add(slowRunnable)).To(Succeed())
 
 				cm := m.(*controllerManager)
 				cm.gracefulShutdownTimeout = time.Second
@@ -311,7 +194,7 @@ var _ = Describe("manger.Manager", func() {
 				mgrDone := make(chan struct{})
 				go func() {
 					defer GinkgoRecover()
-					Expect(m.Start(ctx)).To(BeNil())
+					Expect(m.Start(ctx)).To(Succeed())
 					close(mgrDone)
 				}()
 				<-cm.Elected()
@@ -332,9 +215,10 @@ var _ = Describe("manger.Manager", func() {
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id-3",
 					HealthProbeBindAddress:  "0",
-					MetricsBindAddress:      "0",
+					Metrics:                 metricsserver.Options{BindAddress: "0"},
+					PprofBindAddress:        "0",
 				})
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
@@ -342,7 +226,7 @@ var _ = Describe("manger.Manager", func() {
 				go func() {
 					defer GinkgoRecover()
 					err := m.Start(ctx)
-					Expect(err).ToNot(BeNil())
+					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("leader election lost"))
 					close(mgrDone)
 				}()
@@ -354,7 +238,8 @@ var _ = Describe("manger.Manager", func() {
 
 				Expect(cm.gracefulShutdownTimeout.Nanoseconds()).To(Equal(int64(0)))
 			})
-			It("should default ID to controller-runtime if ID is not set", func() {
+
+			It("should prevent leader election when shutting down a non-elected manager", func() {
 				var rl resourcelock.Interface
 				m1, err := New(cfg, Options{
 					LeaderElection:          true,
@@ -366,7 +251,8 @@ var _ = Describe("manger.Manager", func() {
 						return rl, err
 					},
 					HealthProbeBindAddress: "0",
-					MetricsBindAddress:     "0",
+					Metrics:                metricsserver.Options{BindAddress: "0"},
+					PprofBindAddress:       "0",
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(m1).ToNot(BeNil())
@@ -386,7 +272,86 @@ var _ = Describe("manger.Manager", func() {
 						return rl, err
 					},
 					HealthProbeBindAddress: "0",
-					MetricsBindAddress:     "0",
+					Metrics:                metricsserver.Options{BindAddress: "0"},
+					PprofBindAddress:       "0",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(m2).ToNot(BeNil())
+				Expect(rl.Describe()).To(Equal("default/test-leader-election-id"))
+
+				m1done := make(chan struct{})
+				Expect(m1.Add(RunnableFunc(func(ctx context.Context) error {
+					defer GinkgoRecover()
+					close(m1done)
+					return nil
+				}))).To(Succeed())
+
+				ctx1, cancel1 := context.WithCancel(context.Background())
+				defer cancel1()
+				go func() {
+					defer GinkgoRecover()
+					Expect(m1.Elected()).ShouldNot(BeClosed())
+					Expect(m1.Start(ctx1)).NotTo(HaveOccurred())
+				}()
+				<-m1.Elected()
+				<-m1done
+
+				electionRunnable := &needElection{make(chan struct{})}
+
+				Expect(m2.Add(electionRunnable)).To(Succeed())
+
+				ctx2, cancel2 := context.WithCancel(context.Background())
+				m2done := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					Expect(m2.Start(ctx2)).NotTo(HaveOccurred())
+					close(m2done)
+				}()
+				Consistently(m2.Elected()).ShouldNot(Receive())
+
+				go func() {
+					defer GinkgoRecover()
+					Consistently(electionRunnable.ch).ShouldNot(Receive())
+				}()
+				cancel2()
+				<-m2done
+			})
+
+			It("should default ID to controller-runtime if ID is not set", func() {
+				var rl resourcelock.Interface
+				m1, err := New(cfg, Options{
+					LeaderElection:          true,
+					LeaderElectionNamespace: "default",
+					LeaderElectionID:        "test-leader-election-id",
+					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+						var err error
+						rl, err = leaderelection.NewResourceLock(config, recorderProvider, options)
+						return rl, err
+					},
+					HealthProbeBindAddress: "0",
+					Metrics:                metricsserver.Options{BindAddress: "0"},
+					PprofBindAddress:       "0",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(m1).ToNot(BeNil())
+				Expect(rl.Describe()).To(Equal("default/test-leader-election-id"))
+
+				m1cm, ok := m1.(*controllerManager)
+				Expect(ok).To(BeTrue())
+				m1cm.onStoppedLeading = func() {}
+
+				m2, err := New(cfg, Options{
+					LeaderElection:          true,
+					LeaderElectionNamespace: "default",
+					LeaderElectionID:        "test-leader-election-id",
+					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+						var err error
+						rl, err = leaderelection.NewResourceLock(config, recorderProvider, options)
+						return rl, err
+					},
+					HealthProbeBindAddress: "0",
+					Metrics:                metricsserver.Options{BindAddress: "0"},
+					PprofBindAddress:       "0",
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(m2).ToNot(BeNil())
@@ -467,7 +432,7 @@ var _ = Describe("manger.Manager", func() {
 			It("should use the specified ResourceLock", func() {
 				m, err := New(cfg, Options{
 					LeaderElection:             true,
-					LeaderElectionResourceLock: resourcelock.ConfigMapsLeasesResourceLock,
+					LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 					LeaderElectionID:           "controller-runtime",
 					LeaderElectionNamespace:    "my-ns",
 				})
@@ -475,14 +440,8 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).ToNot(HaveOccurred())
 				cm, ok := m.(*controllerManager)
 				Expect(ok).To(BeTrue())
-				multilock, isMultiLock := cm.resourceLock.(*resourcelock.MultiLock)
-				Expect(isMultiLock).To(BeTrue())
-				primaryLockType := reflect.TypeOf(multilock.Primary)
-				Expect(primaryLockType.Kind()).To(Equal(reflect.Ptr))
-				Expect(primaryLockType.Elem().PkgPath()).To(Equal("k8s.io/client-go/tools/leaderelection/resourcelock"))
-				Expect(primaryLockType.Elem().Name()).To(Equal("configMapLock"))
-				_, secondaryIsLeaseLock := multilock.Secondary.(*resourcelock.LeaseLock)
-				Expect(secondaryIsLeaseLock).To(BeTrue())
+				_, isLeaseLock := cm.resourceLock.(*resourcelock.LeaseLock)
+				Expect(isLeaseLock).To(BeTrue())
 			})
 			It("should release lease if ElectionReleaseOnCancel is true", func() {
 				var rl resourcelock.Interface
@@ -498,7 +457,7 @@ var _ = Describe("manger.Manager", func() {
 						return rl, err
 					},
 				})
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 
 				ctx, cancel := context.WithCancel(context.Background())
 				doneCh := make(chan struct{})
@@ -514,7 +473,7 @@ var _ = Describe("manger.Manager", func() {
 				ctx, cancel = context.WithCancel(context.Background())
 				defer cancel()
 				record, _, err := rl.Get(ctx)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(record.HolderIdentity).To(BeEmpty())
 			})
 			When("using a custom LeaderElectionResourceLockInterface", func() {
@@ -538,40 +497,107 @@ var _ = Describe("manger.Manager", func() {
 			})
 		})
 
-		It("should create a listener for the metrics if a valid address is provided", func() {
-			var listener net.Listener
+		It("should create a metrics server if a valid address is provided", func() {
+			var srv metricsserver.Server
 			m, err := New(cfg, Options{
-				MetricsBindAddress: ":0",
-				newMetricsListener: func(addr string) (net.Listener, error) {
+				Metrics: metricsserver.Options{BindAddress: ":0"},
+				newMetricsServer: func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error) {
 					var err error
-					listener, err = metrics.NewListener(addr)
-					return listener, err
+					srv, err = metricsserver.NewServer(options, config, httpClient)
+					return srv, err
 				},
 			})
 			Expect(m).ToNot(BeNil())
 			Expect(err).ToNot(HaveOccurred())
-			Expect(listener).ToNot(BeNil())
-			Expect(listener.Close()).ToNot(HaveOccurred())
+			Expect(srv).ToNot(BeNil())
+
+			// Triggering the metric server start here manually to test if it works.
+			// Usually this happens later during manager.Start().
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			Expect(srv.Start(ctx)).To(Succeed())
+			cancel()
+		})
+
+		It("should create a metrics server if a valid address is provided and secure serving is enabled", func() {
+			var srv metricsserver.Server
+			m, err := New(cfg, Options{
+				Metrics: metricsserver.Options{BindAddress: ":0", SecureServing: true},
+				newMetricsServer: func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error) {
+					var err error
+					srv, err = metricsserver.NewServer(options, config, httpClient)
+					return srv, err
+				},
+			})
+			Expect(m).ToNot(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(srv).ToNot(BeNil())
+
+			// Triggering the metric server start here manually to test if it works.
+			// Usually this happens later during manager.Start().
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			Expect(srv.Start(ctx)).To(Succeed())
+			cancel()
+		})
+
+		It("should be able to create a manager with a cache that fails on missing informer", func() {
+			m, err := New(cfg, Options{
+				Cache: cache.Options{
+					ReaderFailOnMissingInformer: true,
+				},
+			})
+			Expect(m).ToNot(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return an error if the metrics bind address is already in use", func() {
-			ln, err := metrics.NewListener(":0")
+			ln, err := net.Listen("tcp", ":0") //nolint:gosec
 			Expect(err).ShouldNot(HaveOccurred())
 
-			var listener net.Listener
+			var srv metricsserver.Server
 			m, err := New(cfg, Options{
-				MetricsBindAddress: ln.Addr().String(),
-				newMetricsListener: func(addr string) (net.Listener, error) {
+				Metrics: metricsserver.Options{
+					BindAddress: ln.Addr().String(),
+				},
+				newMetricsServer: func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error) {
 					var err error
-					listener, err = metrics.NewListener(addr)
-					return listener, err
+					srv, err = metricsserver.NewServer(options, config, httpClient)
+					return srv, err
 				},
 			})
-			Expect(m).To(BeNil())
-			Expect(err).To(HaveOccurred())
-			Expect(listener).To(BeNil())
+			Expect(m).ToNot(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
-			Expect(ln.Close()).ToNot(HaveOccurred())
+			// Triggering the metric server start here manually to test if it works.
+			// Usually this happens later during manager.Start().
+			Expect(srv.Start(context.Background())).ToNot(Succeed())
+
+			Expect(ln.Close()).To(Succeed())
+		})
+
+		It("should return an error if the metrics bind address is already in use and secure serving enabled", func() {
+			ln, err := net.Listen("tcp", ":0") //nolint:gosec
+			Expect(err).ShouldNot(HaveOccurred())
+
+			var srv metricsserver.Server
+			m, err := New(cfg, Options{
+				Metrics: metricsserver.Options{
+					BindAddress:   ln.Addr().String(),
+					SecureServing: true,
+				},
+				newMetricsServer: func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error) {
+					var err error
+					srv, err = metricsserver.NewServer(options, config, httpClient)
+					return srv, err
+				},
+			})
+			Expect(m).ToNot(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+
+			// Triggering the metric server start here manually to test if it works.
+			// Usually this happens later during manager.Start().
+			Expect(srv.Start(context.Background())).ToNot(Succeed())
+
+			Expect(ln.Close()).To(Succeed())
 		})
 
 		It("should create a listener for the health probes if a valid address is provided", func() {
@@ -794,7 +820,7 @@ var _ = Describe("manger.Manager", func() {
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				err = m.Start(ctx)
-				Expect(err).ToNot(BeNil())
+				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("expected error"))
 			})
 
@@ -957,6 +983,57 @@ var _ = Describe("manger.Manager", func() {
 				}))).NotTo(Succeed())
 			})
 
+			It("should not return runnables context.Canceled errors", func() {
+				Expect(options.Logger).To(BeZero(), "this test overrides Logger")
+
+				var log struct {
+					sync.Mutex
+					messages []string
+				}
+				options.Logger = funcr.NewJSON(func(object string) {
+					log.Lock()
+					log.messages = append(log.messages, object)
+					log.Unlock()
+				}, funcr.Options{})
+
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+
+				// Runnables may return ctx.Err() as shown in some [context.Context] examples.
+				started := make(chan struct{})
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					close(started)
+					<-ctx.Done()
+					return ctx.Err()
+				}))).To(Succeed())
+
+				stopped := make(chan error)
+				ctx, cancel := context.WithCancel(context.Background())
+				go func() {
+					stopped <- m.Start(ctx)
+				}()
+
+				// Wait for runnables to start, signal the manager, and wait for it to return.
+				<-started
+				cancel()
+				Expect(<-stopped).To(Succeed())
+
+				// The leader election goroutine emits one more log message after Start() returns.
+				// Take the lock here to avoid a race between it writing to log.messages and the
+				// following read from log.messages.
+				if options.LeaderElection {
+					log.Lock()
+					defer log.Unlock()
+				}
+
+				Expect(log.messages).To(Not(ContainElement(
+					ContainSubstring(context.Canceled.Error()),
+				)))
+			})
+
 			It("should return both runnables and stop errors when both error", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
@@ -966,7 +1043,7 @@ var _ = Describe("manger.Manager", func() {
 				m.(*controllerManager).gracefulShutdownTimeout = 1 * time.Nanosecond
 				Expect(m.Add(RunnableFunc(func(context.Context) error {
 					return runnableError{}
-				})))
+				}))).To(Succeed())
 				testDone := make(chan struct{})
 				defer close(testDone)
 				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
@@ -979,11 +1056,11 @@ var _ = Describe("manger.Manager", func() {
 					case <-timer.C:
 						return nil
 					}
-				})))
+				}))).To(Succeed())
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				err = m.Start(ctx)
-				Expect(err).ToNot(BeNil())
+				Expect(err).To(HaveOccurred())
 				eMsg := "[not feeling like that, failed waiting for all runnables to end within grace period of 1ns: context deadline exceeded]"
 				Expect(err.Error()).To(Equal(eMsg))
 				Expect(errors.Is(err, context.DeadlineExceeded)).To(BeTrue())
@@ -1000,7 +1077,7 @@ var _ = Describe("manger.Manager", func() {
 				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
 					<-ctx.Done()
 					return nil
-				})))
+				}))).To(Succeed())
 				testDone := make(chan struct{})
 				defer close(testDone)
 				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
@@ -1013,7 +1090,7 @@ var _ = Describe("manger.Manager", func() {
 					case <-timer.C:
 						return nil
 					}
-				}))).NotTo(HaveOccurred())
+				}))).To(Succeed())
 				ctx, cancel := context.WithCancel(context.Background())
 				managerStopDone := make(chan struct{})
 				go func() { err = m.Start(ctx); close(managerStopDone) }()
@@ -1022,7 +1099,7 @@ var _ = Describe("manger.Manager", func() {
 				<-m.(*controllerManager).elected
 				cancel()
 				<-managerStopDone
-				Expect(err).ToNot(BeNil())
+				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("failed waiting for all runnables to end within grace period of 1ns: context deadline exceeded"))
 				Expect(errors.Is(err, context.DeadlineExceeded)).To(BeTrue())
 				Expect(errors.Is(err, runnableError{})).ToNot(BeTrue())
@@ -1036,11 +1113,11 @@ var _ = Describe("manger.Manager", func() {
 				}
 				Expect(m.Add(RunnableFunc(func(context.Context) error {
 					return runnableError{}
-				})))
+				}))).To(Succeed())
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				err = m.Start(ctx)
-				Expect(err).ToNot(BeNil())
+				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("not feeling like that"))
 				Expect(errors.Is(err, context.DeadlineExceeded)).ToNot(BeTrue())
 				Expect(errors.Is(err, runnableError{})).To(BeTrue())
@@ -1076,6 +1153,50 @@ var _ = Describe("manger.Manager", func() {
 				<-runnableStopped
 			})
 
+			It("should wait forever for runnables if gracefulShutdownTimeout is <0 (-1)", func() {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+				m.(*controllerManager).gracefulShutdownTimeout = time.Duration(-1)
+
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					<-ctx.Done()
+					time.Sleep(100 * time.Millisecond)
+					return nil
+				}))).ToNot(HaveOccurred())
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					<-ctx.Done()
+					time.Sleep(200 * time.Millisecond)
+					return nil
+				}))).ToNot(HaveOccurred())
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					<-ctx.Done()
+					time.Sleep(500 * time.Millisecond)
+					return nil
+				}))).ToNot(HaveOccurred())
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					<-ctx.Done()
+					time.Sleep(1500 * time.Millisecond)
+					return nil
+				}))).ToNot(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				managerStopDone := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+					close(managerStopDone)
+				}()
+				<-m.Elected()
+				cancel()
+
+				beforeDone := time.Now()
+				<-managerStopDone
+				Expect(time.Since(beforeDone)).To(BeNumerically(">=", 1500*time.Millisecond))
+			})
+
 		}
 
 		Context("with defaults", func() {
@@ -1096,31 +1217,48 @@ var _ = Describe("manger.Manager", func() {
 					cm.onStoppedLeading = func() {}
 				},
 			)
+
+			It("should return an error if leader election param incorrect", func() {
+				renewDeadline := time.Second * 20
+				m, err := New(cfg, Options{
+					LeaderElection:          true,
+					LeaderElectionID:        "controller-runtime",
+					LeaderElectionNamespace: "default",
+					newResourceLock:         fakeleaderelection.NewResourceLock,
+					RenewDeadline:           &renewDeadline,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+				defer cancel()
+				err = m.Start(ctx)
+				Expect(err).To(HaveOccurred())
+				Expect(errors.Is(err, context.DeadlineExceeded)).NotTo(BeTrue())
+			})
 		})
 
 		Context("should start serving metrics", func() {
-			var listener net.Listener
+			var srv metricsserver.Server
+			var defaultServer metricsDefaultServer
 			var opts Options
 
 			BeforeEach(func() {
-				listener = nil
+				srv = nil
 				opts = Options{
-					newMetricsListener: func(addr string) (net.Listener, error) {
+					Metrics: metricsserver.Options{
+						BindAddress: ":0",
+					},
+					newMetricsServer: func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error) {
 						var err error
-						listener, err = metrics.NewListener(addr)
-						return listener, err
+						srv, err = metricsserver.NewServer(options, config, httpClient)
+						if srv != nil {
+							defaultServer = srv.(metricsDefaultServer)
+						}
+						return srv, err
 					},
 				}
 			})
 
-			AfterEach(func() {
-				if listener != nil {
-					listener.Close()
-				}
-			})
-
 			It("should stop serving metrics when stop is called", func() {
-				opts.MetricsBindAddress = ":0"
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1129,9 +1267,13 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
+				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
 
 				// Check the metrics started
-				endpoint := fmt.Sprintf("http://%s", listener.Addr().String())
+				endpoint := fmt.Sprintf("http://%s/metrics", defaultServer.GetBindAddr())
 				_, err = http.Get(endpoint)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1142,11 +1284,10 @@ var _ = Describe("manger.Manager", func() {
 				Eventually(func() error {
 					_, err = http.Get(endpoint)
 					return err
-				}).ShouldNot(Succeed())
+				}, 10*time.Second).ShouldNot(Succeed())
 			})
 
 			It("should serve metrics endpoint", func() {
-				opts.MetricsBindAddress = ":0"
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1157,15 +1298,17 @@ var _ = Describe("manger.Manager", func() {
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
 
-				metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
+				metricsEndpoint := fmt.Sprintf("http://%s/metrics", defaultServer.GetBindAddr())
 				resp, err := http.Get(metricsEndpoint)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(resp.StatusCode).To(Equal(200))
 			})
 
 			It("should not serve anything other than metrics endpoint by default", func() {
-				opts.MetricsBindAddress = ":0"
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1176,8 +1319,11 @@ var _ = Describe("manger.Manager", func() {
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
 
-				endpoint := fmt.Sprintf("http://%s/should-not-exist", listener.Addr().String())
+				endpoint := fmt.Sprintf("http://%s/should-not-exist", defaultServer.GetBindAddr())
 				resp, err := http.Get(endpoint)
 				Expect(err).NotTo(HaveOccurred())
 				defer resp.Body.Close()
@@ -1193,7 +1339,6 @@ var _ = Describe("manger.Manager", func() {
 				err := metrics.Registry.Register(one)
 				Expect(err).NotTo(HaveOccurred())
 
-				opts.MetricsBindAddress = ":0"
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1204,8 +1349,11 @@ var _ = Describe("manger.Manager", func() {
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
 
-				metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
+				metricsEndpoint := fmt.Sprintf("http://%s/metrics", defaultServer.GetBindAddr())
 				resp, err := http.Get(metricsEndpoint)
 				Expect(err).NotTo(HaveOccurred())
 				defer resp.Body.Close()
@@ -1225,17 +1373,16 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should serve extra endpoints", func() {
-				opts.MetricsBindAddress = ":0"
+				opts.Metrics.ExtraHandlers = map[string]http.Handler{
+					"/debug": http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+						_, _ = w.Write([]byte("Some debug info"))
+					}),
+				}
 				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = m.AddMetricsExtraHandler("/debug", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-					_, _ = w.Write([]byte("Some debug info"))
-				}))
-				Expect(err).NotTo(HaveOccurred())
-
 				// Should error when we add another extra endpoint on the already registered path.
-				err = m.AddMetricsExtraHandler("/debug", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				err = m.AddMetricsServerExtraHandler("/debug", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 					_, _ = w.Write([]byte("Another debug info"))
 				}))
 				Expect(err).To(HaveOccurred())
@@ -1247,8 +1394,11 @@ var _ = Describe("manger.Manager", func() {
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
 				}()
 				<-m.Elected()
+				// Note: Wait until metrics server has been started. A finished leader election
+				// doesn't guarantee that the metrics server is up.
+				Eventually(func() string { return defaultServer.GetBindAddr() }, 10*time.Second).ShouldNot(BeEmpty())
 
-				endpoint := fmt.Sprintf("http://%s/debug", listener.Addr().String())
+				endpoint := fmt.Sprintf("http://%s/debug", defaultServer.GetBindAddr())
 				resp, err := http.Get(endpoint)
 				Expect(err).NotTo(HaveOccurred())
 				defer resp.Body.Close()
@@ -1420,6 +1570,99 @@ var _ = Describe("manger.Manager", func() {
 		})
 	})
 
+	Context("should start serving pprof", func() {
+		var listener net.Listener
+		var opts Options
+
+		BeforeEach(func() {
+			listener = nil
+			opts = Options{
+				newPprofListener: func(addr string) (net.Listener, error) {
+					var err error
+					listener, err = defaultPprofListener(addr)
+					return listener, err
+				},
+			}
+		})
+
+		AfterEach(func() {
+			if listener != nil {
+				listener.Close()
+			}
+		})
+
+		It("should stop serving pprof when stop is called", func() {
+			opts.PprofBindAddress = ":0"
+			m, err := New(cfg, opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(ctx)).NotTo(HaveOccurred())
+			}()
+			<-m.Elected()
+
+			// Check the pprof started
+			endpoint := fmt.Sprintf("http://%s", listener.Addr().String())
+			_, err = http.Get(endpoint)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Shutdown the server
+			cancel()
+
+			// Expect the pprof server to shutdown
+			Eventually(func() error {
+				_, err = http.Get(endpoint)
+				return err
+			}, 10*time.Second).ShouldNot(Succeed())
+		})
+
+		It("should serve pprof endpoints", func() {
+			opts.PprofBindAddress = ":0"
+			m, err := New(cfg, opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(ctx)).NotTo(HaveOccurred())
+			}()
+			<-m.Elected()
+
+			pprofIndexEndpoint := fmt.Sprintf("http://%s/debug/pprof/", listener.Addr().String())
+			resp, err := http.Get(pprofIndexEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			pprofCmdlineEndpoint := fmt.Sprintf("http://%s/debug/pprof/cmdline", listener.Addr().String())
+			resp, err = http.Get(pprofCmdlineEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			pprofProfileEndpoint := fmt.Sprintf("http://%s/debug/pprof/profile", listener.Addr().String())
+			resp, err = http.Get(pprofProfileEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			pprofSymbolEndpoint := fmt.Sprintf("http://%s/debug/pprof/symbol", listener.Addr().String())
+			resp, err = http.Get(pprofSymbolEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			pprofTraceEndpoint := fmt.Sprintf("http://%s/debug/pprof/trace", listener.Addr().String())
+			resp, err = http.Get(pprofTraceEndpoint)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			Expect(resp.StatusCode).To(Equal(http.StatusOK))
+		})
+	})
+
 	Describe("Add", func() {
 		It("should immediately start the Component if the Manager has already Started another Component",
 			func() {
@@ -1487,105 +1730,27 @@ var _ = Describe("manger.Manager", func() {
 			<-c1
 		})
 
-		It("should fail if SetFields fails", func() {
+		It("should fail if attempted to start a second time", func() {
 			m, err := New(cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(m.Add(&failRec{})).To(HaveOccurred())
-		})
-	})
-	Describe("SetFields", func() {
-		It("should inject field values", func() {
-			m, err := New(cfg, Options{
-				NewCache: func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
-					return &informertest.FakeInformers{}, nil
-				},
-			})
-			Expect(err).NotTo(HaveOccurred())
 
-			By("Injecting the dependencies")
-			err = m.SetFields(&injectable{
-				scheme: func(scheme *runtime.Scheme) error {
-					defer GinkgoRecover()
-					Expect(scheme).To(Equal(m.GetScheme()))
-					return nil
-				},
-				config: func(config *rest.Config) error {
-					defer GinkgoRecover()
-					Expect(config).To(Equal(m.GetConfig()))
-					return nil
-				},
-				client: func(client client.Client) error {
-					defer GinkgoRecover()
-					Expect(client).To(Equal(m.GetClient()))
-					return nil
-				},
-				cache: func(c cache.Cache) error {
-					defer GinkgoRecover()
-					Expect(c).To(Equal(m.GetCache()))
-					return nil
-				},
-				stop: func(stop <-chan struct{}) error {
-					defer GinkgoRecover()
-					Expect(stop).NotTo(BeNil())
-					return nil
-				},
-				f: func(f inject.Func) error {
-					defer GinkgoRecover()
-					Expect(f).NotTo(BeNil())
-					return nil
-				},
-				log: func(logger logr.Logger) error {
-					defer GinkgoRecover()
-					Expect(logger).To(Equal(log.Log))
-					return nil
-				},
-			})
-			Expect(err).NotTo(HaveOccurred())
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(ctx)).NotTo(HaveOccurred())
+			}()
+			// Wait for the Manager to start
+			Eventually(func() bool {
+				mgr, ok := m.(*controllerManager)
+				Expect(ok).To(BeTrue())
+				return mgr.runnables.Caches.Started()
+			}).Should(BeTrue())
 
-			By("Returning an error if dependency injection fails")
+			err = m.Start(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("manager already started"))
 
-			expected := fmt.Errorf("expected error")
-			err = m.SetFields(&injectable{
-				client: func(client client.Client) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
-
-			err = m.SetFields(&injectable{
-				scheme: func(scheme *runtime.Scheme) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
-
-			err = m.SetFields(&injectable{
-				config: func(config *rest.Config) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
-
-			err = m.SetFields(&injectable{
-				cache: func(c cache.Cache) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
-
-			err = m.SetFields(&injectable{
-				f: func(c inject.Func) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
-
-			err = m.SetFields(&injectable{
-				stop: func(<-chan struct{}) error {
-					return expected
-				},
-			})
-			Expect(err).To(Equal(expected))
 		})
 	})
 
@@ -1697,111 +1862,11 @@ var _ = Describe("manger.Manager", func() {
 	})
 })
 
-var _ reconcile.Reconciler = &failRec{}
-var _ inject.Client = &failRec{}
-
-type failRec struct{}
-
-func (*failRec) Reconcile(context.Context, reconcile.Request) (reconcile.Result, error) {
-	return reconcile.Result{}, nil
-}
-
-func (*failRec) Start(context.Context) error {
-	return nil
-}
-
-func (*failRec) InjectClient(client.Client) error {
-	return fmt.Errorf("expected error")
-}
-
-var _ inject.Injector = &injectable{}
-var _ inject.Cache = &injectable{}
-var _ inject.Client = &injectable{}
-var _ inject.Scheme = &injectable{}
-var _ inject.Config = &injectable{}
-var _ inject.Stoppable = &injectable{}
-var _ inject.Logger = &injectable{}
-
-type injectable struct {
-	scheme func(scheme *runtime.Scheme) error
-	client func(client.Client) error
-	config func(config *rest.Config) error
-	cache  func(cache.Cache) error
-	f      func(inject.Func) error
-	stop   func(<-chan struct{}) error
-	log    func(logger logr.Logger) error
-}
-
-func (i *injectable) InjectCache(c cache.Cache) error {
-	if i.cache == nil {
-		return nil
-	}
-	return i.cache(c)
-}
-
-func (i *injectable) InjectConfig(config *rest.Config) error {
-	if i.config == nil {
-		return nil
-	}
-	return i.config(config)
-}
-
-func (i *injectable) InjectClient(c client.Client) error {
-	if i.client == nil {
-		return nil
-	}
-	return i.client(c)
-}
-
-func (i *injectable) InjectScheme(scheme *runtime.Scheme) error {
-	if i.scheme == nil {
-		return nil
-	}
-	return i.scheme(scheme)
-}
-
-func (i *injectable) InjectFunc(f inject.Func) error {
-	if i.f == nil {
-		return nil
-	}
-	return i.f(f)
-}
-
-func (i *injectable) InjectStopChannel(stop <-chan struct{}) error {
-	if i.stop == nil {
-		return nil
-	}
-	return i.stop(stop)
-}
-
-func (i *injectable) InjectLogger(log logr.Logger) error {
-	if i.log == nil {
-		return nil
-	}
-	return i.log(log)
-}
-
-func (i *injectable) Start(<-chan struct{}) error {
-	return nil
-}
-
 type runnableError struct {
 }
 
 func (runnableError) Error() string {
 	return "not feeling like that"
-}
-
-type fakeDeferredLoader struct {
-	*v1alpha1.ControllerManagerConfiguration
-}
-
-func (f *fakeDeferredLoader) Complete() (v1alpha1.ControllerManagerConfigurationSpec, error) {
-	return f.ControllerManagerConfiguration.ControllerManagerConfigurationSpec, nil
-}
-
-func (f *fakeDeferredLoader) InjectScheme(scheme *runtime.Scheme) error {
-	return nil
 }
 
 var _ Runnable = &cacheProvider{}
@@ -1857,4 +1922,24 @@ func (c *startClusterAfterManager) Start(ctx context.Context) error {
 
 func (c *startClusterAfterManager) GetCache() cache.Cache {
 	return c.informer
+}
+
+// metricsDefaultServer is used to type check the default metrics server implementation
+// so we can retrieve the bind addr without having to make GetBindAddr a function on the
+// metricsserver.Server interface or resort to reflection.
+type metricsDefaultServer interface {
+	GetBindAddr() string
+}
+
+type needElection struct {
+	ch chan struct{}
+}
+
+func (n *needElection) Start(_ context.Context) error {
+	n.ch <- struct{}{}
+	return nil
+}
+
+func (n *needElection) NeedLeaderElection() bool {
+	return true
 }

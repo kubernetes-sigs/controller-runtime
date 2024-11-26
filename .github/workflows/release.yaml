@@ -1,0 +1,33 @@
+name: Upload binaries to release
+
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+    - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Upload binaries to release
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # tag=v4.2.2
+    - name: Calculate go version
+      id: vars
+      run: echo "go_version=$(make go-version)" >> $GITHUB_OUTPUT
+    - name: Set up Go
+      uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # tag=v5.1.0
+      with:
+        go-version: ${{ steps.vars.outputs.go_version }}
+    - name: Generate release binaries
+      run: |
+        make release
+    - name: Release
+      uses: softprops/action-gh-release@01570a1f39cb168c169c802c3bceb9e93fb10974 # tag=v2.1.0
+      with:
+        draft: false
+        files: tools/setup-envtest/out/*

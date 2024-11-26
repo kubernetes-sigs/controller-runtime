@@ -23,11 +23,13 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"path"
+	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
@@ -38,7 +40,7 @@ var _ = Describe("Webhook Server", func() {
 		ctxCancel    context.CancelFunc
 		testHostPort string
 		client       *http.Client
-		server       *webhook.Server
+		server       webhook.Server
 		servingOpts  envtest.WebhookInstallOptions
 	)
 
@@ -60,11 +62,11 @@ var _ = Describe("Webhook Server", func() {
 			Transport: clientTransport,
 		}
 
-		server = &webhook.Server{
+		server = webhook.NewServer(webhook.Options{
 			Host:    servingOpts.LocalServingHost,
 			Port:    servingOpts.LocalServingPort,
 			CertDir: servingOpts.LocalServingCertDir,
-		}
+		})
 	})
 	AfterEach(func() {
 		Expect(servingOpts.Cleanup()).To(Succeed())
@@ -82,15 +84,6 @@ var _ = Describe("Webhook Server", func() {
 			_, err := client.Get(fmt.Sprintf("https://%s/unservedpath", testHostPort))
 			return err
 		}).Should(Succeed())
-
-		// this is normally called before Start by the manager
-		Expect(server.InjectFunc(func(i interface{}) error {
-			boolInj, canInj := i.(interface{ InjectBool(bool) error })
-			if !canInj {
-				return nil
-			}
-			return boolInj.InjectBool(true)
-		})).To(Succeed())
 
 		return doneCh
 	}
@@ -145,17 +138,6 @@ var _ = Describe("Webhook Server", func() {
 			ctxCancel()
 			Eventually(doneCh, "4s").Should(BeClosed())
 		})
-
-		It("should inject dependencies eventually, given an inject func is eventually provided", func() {
-			handler := &testHandler{}
-			server.Register("/somepath", handler)
-			doneCh := startServer()
-
-			Eventually(func() bool { return handler.injectedField }).Should(BeTrue())
-
-			ctxCancel()
-			Eventually(doneCh, "4s").Should(BeClosed())
-		})
 	})
 
 	Context("when registering webhooks after starting", func() {
@@ -179,34 +161,6 @@ var _ = Describe("Webhook Server", func() {
 
 			Expect(io.ReadAll(resp.Body)).To(Equal([]byte("gadzooks!")))
 		})
-
-		It("should inject dependencies, if an inject func has been provided already", func() {
-			handler := &testHandler{}
-			server.Register("/somepath", handler)
-			Expect(handler.injectedField).To(BeTrue())
-		})
-	})
-
-	It("should be able to serve in unmanaged mode", func() {
-		server = &webhook.Server{
-			Host:    servingOpts.LocalServingHost,
-			Port:    servingOpts.LocalServingPort,
-			CertDir: servingOpts.LocalServingCertDir,
-		}
-		server.Register("/somepath", &testHandler{})
-		doneCh := genericStartServer(func(ctx context.Context) {
-			Expect(server.StartStandalone(ctx, scheme.Scheme))
-		})
-
-		Eventually(func() ([]byte, error) {
-			resp, err := client.Get(fmt.Sprintf("https://%s/somepath", testHostPort))
-			Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
-			return io.ReadAll(resp.Body)
-		}).Should(Equal([]byte("gadzooks!")))
-
-		ctxCancel()
-		Eventually(doneCh, "4s").Should(BeClosed())
 	})
 
 	It("should respect passed in TLS configurations", func() {
@@ -216,21 +170,21 @@ var _ = Describe("Webhook Server", func() {
 				tls.TLS_AES_128_GCM_SHA256,
 				tls.TLS_AES_256_GCM_SHA384,
 			}
+			cfg.MinVersion = tls.VersionTLS12
 			// save cfg after changes to test against
 			finalCfg = cfg
 		}
-		server = &webhook.Server{
-			Host:          servingOpts.LocalServingHost,
-			Port:          servingOpts.LocalServingPort,
-			CertDir:       servingOpts.LocalServingCertDir,
-			TLSMinVersion: "1.2",
+		server = webhook.NewServer(webhook.Options{
+			Host:    servingOpts.LocalServingHost,
+			Port:    servingOpts.LocalServingPort,
+			CertDir: servingOpts.LocalServingCertDir,
 			TLSOpts: []func(*tls.Config){
 				tlsCfgFunc,
 			},
-		}
+		})
 		server.Register("/somepath", &testHandler{})
 		doneCh := genericStartServer(func(ctx context.Context) {
-			Expect(server.StartStandalone(ctx, scheme.Scheme))
+			Expect(server.Start(ctx)).To(Succeed())
 		})
 
 		Eventually(func() ([]byte, error) {
@@ -248,16 +202,59 @@ var _ = Describe("Webhook Server", func() {
 		ctxCancel()
 		Eventually(doneCh, "4s").Should(BeClosed())
 	})
+
+	It("should prefer GetCertificate through TLSOpts", func() {
+		var finalCfg *tls.Config
+		finalCert, err := tls.LoadX509KeyPair(
+			path.Join(servingOpts.LocalServingCertDir, "tls.crt"),
+			path.Join(servingOpts.LocalServingCertDir, "tls.key"),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		finalGetCertificate := func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) { //nolint:unparam
+			return &finalCert, nil
+		}
+		server = &webhook.DefaultServer{Options: webhook.Options{
+			Host:    servingOpts.LocalServingHost,
+			Port:    servingOpts.LocalServingPort,
+			CertDir: servingOpts.LocalServingCertDir,
+
+			TLSOpts: []func(*tls.Config){
+				func(cfg *tls.Config) {
+					cfg.GetCertificate = finalGetCertificate
+					cfg.MinVersion = tls.VersionTLS12
+					// save cfg after changes to test against
+					finalCfg = cfg
+				},
+			},
+		}}
+		server.Register("/somepath", &testHandler{})
+		doneCh := genericStartServer(func(ctx context.Context) {
+			Expect(server.Start(ctx)).To(Succeed())
+		})
+
+		Eventually(func() ([]byte, error) {
+			resp, err := client.Get(fmt.Sprintf("https://%s/somepath", testHostPort))
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			return io.ReadAll(resp.Body)
+		}).Should(Equal([]byte("gadzooks!")))
+		Expect(finalCfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
+		// We can't compare the functions directly, but we can compare their pointers
+		if reflect.ValueOf(finalCfg.GetCertificate).Pointer() != reflect.ValueOf(finalGetCertificate).Pointer() {
+			Fail("GetCertificate was not set properly, or overwritten")
+		}
+		cert, err := finalCfg.GetCertificate(nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cert).To(BeEquivalentTo(&finalCert))
+
+		ctxCancel()
+		Eventually(doneCh, "4s").Should(BeClosed())
+	})
 })
 
 type testHandler struct {
-	injectedField bool
 }
 
-func (t *testHandler) InjectBool(val bool) error {
-	t.injectedField = val
-	return nil
-}
 func (t *testHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	if _, err := resp.Write([]byte("gadzooks!")); err != nil {
 		panic("unable to write http response!")

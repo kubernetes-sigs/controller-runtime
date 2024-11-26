@@ -29,7 +29,7 @@ func checkDefaultClient() {
 // It can be used with gomega.Eventually() like this
 //
 //	deployment := appsv1.Deployment{ ... }
-//	gomega.Eventually(komega.Get(&deployment)).To(gomega.Succeed())
+//	gomega.Eventually(komega.Get(&deployment)).Should(gomega.Succeed())
 //
 // By calling the returned function directly it can also be used with gomega.Expect(komega.Get(...)()).To(...)
 func Get(obj client.Object) func() error {
@@ -41,7 +41,7 @@ func Get(obj client.Object) func() error {
 // It can be used with gomega.Eventually() like this
 //
 //	deployments := v1.DeploymentList{ ... }
-//	gomega.Eventually(k.List(&deployments)).To(gomega.Succeed())
+//	gomega.Eventually(k.List(&deployments)).Should(gomega.Succeed())
 //
 // By calling the returned function directly it can also be used as gomega.Expect(k.List(...)()).To(...)
 func List(list client.ObjectList, opts ...client.ListOption) func() error {
@@ -53,10 +53,9 @@ func List(list client.ObjectList, opts ...client.ListOption) func() error {
 // It can be used with gomega.Eventually() like this:
 //
 //	deployment := appsv1.Deployment{ ... }
-//	gomega.Eventually(k.Update(&deployment, func (o client.Object) {
+//	gomega.Eventually(k.Update(&deployment, func() {
 //	  deployment.Spec.Replicas = 3
-//	  return &deployment
-//	})).To(gomega.Succeed())
+//	})).Should(gomega.Succeed())
 //
 // By calling the returned function directly it can also be used as gomega.Expect(k.Update(...)()).To(...)
 func Update(obj client.Object, f func(), opts ...client.UpdateOption) func() error {
@@ -68,10 +67,9 @@ func Update(obj client.Object, f func(), opts ...client.UpdateOption) func() err
 // It can be used with gomega.Eventually() like this:
 //
 //	deployment := appsv1.Deployment{ ... }
-//	gomega.Eventually(k.UpdateStatus(&deployment, func (o client.Object) {
+//	gomega.Eventually(k.UpdateStatus(&deployment, func() {
 //	  deployment.Status.AvailableReplicas = 1
-//	  return &deployment
-//	})).To(gomega.Succeed())
+//	})).Should(gomega.Succeed())
 //
 // By calling the returned function directly it can also be used as gomega.Expect(k.UpdateStatus(...)()).To(...)
 func UpdateStatus(obj client.Object, f func(), opts ...client.SubResourceUpdateOption) func() error {
@@ -83,7 +81,7 @@ func UpdateStatus(obj client.Object, f func(), opts ...client.SubResourceUpdateO
 // It can be used with gomega.Eventually() like this:
 //
 //	deployment := appsv1.Deployment{ ... }
-//	gomega.Eventually(k.Object(&deployment)).To(HaveField("Spec.Replicas", gomega.Equal(pointer.Int32(3))))
+//	gomega.Eventually(k.Object(&deployment)).Should(HaveField("Spec.Replicas", gomega.Equal(ptr.To(3))))
 //
 // By calling the returned function directly it can also be used as gomega.Expect(k.Object(...)()).To(...)
 func Object(obj client.Object) func() (client.Object, error) {
@@ -95,7 +93,7 @@ func Object(obj client.Object) func() (client.Object, error) {
 // It can be used with gomega.Eventually() like this:
 //
 //	deployments := appsv1.DeploymentList{ ... }
-//	gomega.Eventually(k.ObjectList(&deployments)).To(HaveField("Items", HaveLen(1)))
+//	gomega.Eventually(k.ObjectList(&deployments)).Should(HaveField("Items", HaveLen(1)))
 //
 // By calling the returned function directly it can also be used as gomega.Expect(k.ObjectList(...)()).To(...)
 func ObjectList(list client.ObjectList, opts ...client.ListOption) func() (client.ObjectList, error) {

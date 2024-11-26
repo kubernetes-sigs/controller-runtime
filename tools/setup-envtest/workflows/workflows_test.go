@@ -5,15 +5,17 @@ package workflows_test
 
 import (
 	"bytes"
+	"fmt"
 	"io/fs"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
 	"github.com/spf13/afero"
-
+	"k8s.io/apimachinery/pkg/util/sets"
 	envp "sigs.k8s.io/controller-runtime/tools/setup-envtest/env"
 	"sigs.k8s.io/controller-runtime/tools/setup-envtest/remote"
 	"sigs.k8s.io/controller-runtime/tools/setup-envtest/store"
@@ -48,14 +50,22 @@ const (
 
 var _ = Describe("Workflows", func() {
 	var (
-		env         *envp.Env
-		out         *bytes.Buffer
-		server      *ghttp.Server
-		remoteItems []item
+		env             *envp.Env
+		out             *bytes.Buffer
+		server          *ghttp.Server
+		remoteHTTPItems itemsHTTP
 	)
 	BeforeEach(func() {
 		out = new(bytes.Buffer)
 		baseFs := afero.Afero{Fs: afero.NewMemMapFs()}
+
+		server = ghttp.NewServer()
+
+		client := &remote.HTTPClient{
+			Log:      testLog.WithName("http-client"),
+			IndexURL: fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"),
+		}
+
 		env = &envp.Env{
 			Log:       testLog,
 			VerifySum: true, // on by default
@@ -68,21 +78,14 @@ var _ = Describe("Workflows", func() {
 					Arch: "amd64",
 				},
 			},
-			Client: &remote.Client{
-				Log:      testLog.WithName("remote-client"),
-				Bucket:   "kubebuilder-tools-test", // test custom bucket functionality too
-				Server:   "localhost:-1",
-				Insecure: true, // no https in httptest :-(
-			},
+			Client: client,
 		}
-		server = ghttp.NewServer()
-		env.Client.Server = server.Addr()
 
 		fakeStore(env.FS, testStorePath)
-		remoteItems = remoteVersions
+		remoteHTTPItems = remoteVersionsHTTP
 	})
 	JustBeforeEach(func() {
-		handleRemoteVersions(server, remoteItems)
+		handleRemoteVersionsHTTP(server, remoteHTTPItems)
 	})
 	AfterEach(func() {
 		server.Close()
@@ -245,18 +248,22 @@ var _ = Describe("Workflows", func() {
 
 		Describe("verifying the checksum", func() {
 			BeforeEach(func() {
-				remoteItems = append(remoteItems, item{
-					meta: bucketObject{
-						Name: "kubebuilder-tools-86.75.309-linux-amd64.tar.gz",
-						Hash: "nottherightone!",
+				// Recreate remoteHTTPItems to not impact others tests.
+				remoteHTTPItems = makeContentsHTTP(remoteNamesHTTP)
+				remoteHTTPItems.index.Releases["v86.75.309"] = map[string]remote.Archive{
+					"envtest-v86.75.309-linux-amd64.tar.gz": {
+						SelfLink: "not used in this test",
+						Hash:     "nottherightone!",
 					},
-					contents: remoteItems[0].contents, // need a valid tar.gz file to not error from that
-				})
+				}
+				// need a valid tar.gz file to not error from that
+				remoteHTTPItems.contents["envtest-v86.75.309-linux-amd64.tar.gz"] = remoteHTTPItems.contents["envtest-v1.10-darwin-amd64.tar.gz"]
+
 				env.Version = versions.Spec{
 					Selector: ver(86, 75, 309),
 				}
 			})
-			Specify("when enabled, should fail if the downloaded md5 checksum doesn't match", func() {
+			Specify("when enabled, should fail if the downloaded hash doesn't match", func() {
 				defer shouldHaveError()
 				flow.Do(env)
 			})
@@ -310,14 +317,31 @@ var _ = Describe("Workflows", func() {
 					{"(installed)", "v1.16.1", "linux/amd64"},
 					{"(installed)", "v1.16.0", "linux/amd64"},
 				}))
-
 			})
 		})
 		Context("when downloads are enabled", func() {
 			Context("when sorting", func() {
 				BeforeEach(func() {
-					// shorten the list a bit for expediency
-					remoteItems = remoteItems[:7]
+					// Recreate remoteHTTPItems to not impact others tests.
+					remoteHTTPItems = makeContentsHTTP(remoteNamesHTTP)
+					// Also only keep the first 7 items.
+					// Get the first 7 archive names
+					var archiveNames []string
+					for _, release := range remoteHTTPItems.index.Releases {
+						for archiveName := range release {
+							archiveNames = append(archiveNames, archiveName)
+						}
+					}
+					sort.Strings(archiveNames)
+					archiveNamesSet := sets.Set[string]{}.Insert(archiveNames[:7]...)
+					// Delete all other archives
+					for _, release := range remoteHTTPItems.index.Releases {
+						for archiveName := range release {
+							if !archiveNamesSet.Has(archiveName) {
+								delete(release, archiveName)
+							}
+						}
+					}
 				})
 				It("should sort local & remote by version", func() {
 					env.Version = versions.AnyVersion
@@ -338,7 +362,6 @@ var _ = Describe("Workflows", func() {
 						{"(available)", "v1.10.1", "darwin/amd64"},
 						{"(available)", "v1.10.1", "linux/amd64"},
 					}))
-
 				})
 			})
 			It("should skip non-matching remote contents", func() {
@@ -354,7 +377,6 @@ var _ = Describe("Workflows", func() {
 					{"(installed)", "v1.16.0", "linux/amd64"},
 					{"(available)", "v1.16.4", "linux/amd64"},
 				}))
-
 			})
 		})
 	})
@@ -381,13 +403,17 @@ var _ = Describe("Workflows", func() {
 	Describe("sideload", func() {
 		var (
 			flow wf.Sideload
-			// remote version fake contents are prefixed by the
-			// name for easier debugging, so we can use that here
-			expectedPrefix = remoteVersions[0].meta.Name
 		)
+
+		// hard coding to one of the archives in remoteVersionsHTTP as we can't pick the "first" of a map.
+		expectedPrefix := "envtest-v1.10-darwin-amd64.tar.gz"
+
 		BeforeEach(func() {
 			server.Close() // ensure no network
-			flow.Input = bytes.NewReader(remoteVersions[0].contents)
+
+			content := remoteVersionsHTTP.contents[expectedPrefix]
+
+			flow.Input = bytes.NewReader(content)
 			flow.PrintFormat = envp.PrintPath
 		})
 		It("should initialize the store if it doesn't exist", func() {

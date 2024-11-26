@@ -4,11 +4,10 @@ approvers:
   - controller-runtime-approvers
   - schrej
   - JoelSpeed
-  - sbueringer
 reviewers:
   - controller-runtime-admins
-  - controller-runtime-reviewers
+  - controller-runtime-maintainers
   - controller-runtime-approvers
+  - controller-runtime-reviewers
   - schrej
   - JoelSpeed
-  - sbueringer

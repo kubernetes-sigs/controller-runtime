@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -28,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -39,12 +41,12 @@ var _ = Describe("Test", func() {
 	Describe("Webhook", func() {
 		It("should reject create request for webhook that rejects all requests", func() {
 			m, err := manager.New(env.Config, manager.Options{
-				Port:    env.WebhookInstallOptions.LocalServingPort,
-				Host:    env.WebhookInstallOptions.LocalServingHost,
-				CertDir: env.WebhookInstallOptions.LocalServingCertDir,
-				TLSOpts: []func(*tls.Config){
-					func(config *tls.Config) {},
-				},
+				WebhookServer: webhook.NewServer(webhook.Options{
+					Port:    env.WebhookInstallOptions.LocalServingPort,
+					Host:    env.WebhookInstallOptions.LocalServingHost,
+					CertDir: env.WebhookInstallOptions.LocalServingCertDir,
+					TLSOpts: []func(*tls.Config){func(config *tls.Config) {}},
+				}),
 			}) // we need manager here just to leverage manager.SetFields
 			Expect(err).NotTo(HaveOccurred())
 			server := m.GetWebhookServer()
@@ -87,7 +89,7 @@ var _ = Describe("Test", func() {
 
 			Eventually(func() bool {
 				err = c.Create(context.TODO(), obj)
-				return apierrors.ReasonForError(err) == metav1.StatusReason("Always denied")
+				return err != nil && strings.HasSuffix(err.Error(), "Always denied") && apierrors.ReasonForError(err) == metav1.StatusReasonForbidden
 			}, 1*time.Second).Should(BeTrue())
 
 			cancel()
@@ -99,8 +101,8 @@ var _ = Describe("Test", func() {
 			}
 			err := parseWebhook(&installOptions)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(installOptions.MutatingWebhooks)).To(Equal(2))
-			Expect(len(installOptions.ValidatingWebhooks)).To(Equal(2))
+			Expect(installOptions.MutatingWebhooks).To(HaveLen(2))
+			Expect(installOptions.ValidatingWebhooks).To(HaveLen(2))
 		})
 
 		It("should load webhooks from files", func() {
@@ -109,8 +111,8 @@ var _ = Describe("Test", func() {
 			}
 			err := parseWebhook(&installOptions)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(installOptions.MutatingWebhooks)).To(Equal(2))
-			Expect(len(installOptions.ValidatingWebhooks)).To(Equal(2))
+			Expect(installOptions.MutatingWebhooks).To(HaveLen(2))
+			Expect(installOptions.ValidatingWebhooks).To(HaveLen(2))
 		})
 	})
 })

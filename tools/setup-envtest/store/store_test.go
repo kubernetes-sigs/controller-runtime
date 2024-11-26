@@ -20,9 +20,9 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"crypto/rand"
 	"io"
 	"io/fs"
-	"math/rand"
 	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -125,23 +125,25 @@ var _ = Describe("Store", func() {
 		})
 	})
 
-	Describe("adding items", func() {
+	Describe("adding items (controller-tools archives)", func() {
+		archiveName := "envtest-v1.16.3-linux-amd64.tar.gz"
+
 		It("should support .tar.gz input", func() {
-			Expect(st.Add(logCtx(), newItem, makeFakeArchive(newName))).To(Succeed())
+			Expect(st.Add(logCtx(), newItem, makeFakeArchive(archiveName, "controller-tools/envtest/"))).To(Succeed())
 			Expect(st.Has(newItem)).To(BeTrue(), "should have the item after adding it")
 		})
 
 		It("should extract binaries from the given archive to a directly to the item's directory, regardless of path", func() {
-			Expect(st.Add(logCtx(), newItem, makeFakeArchive(newName))).To(Succeed())
+			Expect(st.Add(logCtx(), newItem, makeFakeArchive(archiveName, "controller-tools/envtest/"))).To(Succeed())
 
 			dirName := newItem.Platform.BaseName(newItem.Version)
-			Expect(afero.ReadFile(st.Root, filepath.Join("k8s", dirName, "some-file"))).To(HavePrefix(newName + "some-file"))
-			Expect(afero.ReadFile(st.Root, filepath.Join("k8s", dirName, "other-file"))).To(HavePrefix(newName + "other-file"))
+			Expect(afero.ReadFile(st.Root, filepath.Join("k8s", dirName, "some-file"))).To(HavePrefix(archiveName + "some-file"))
+			Expect(afero.ReadFile(st.Root, filepath.Join("k8s", dirName, "other-file"))).To(HavePrefix(archiveName + "other-file"))
 		})
 
 		It("should clean up any existing item directory before creating the new one", func() {
 			item := localVersions[0]
-			Expect(st.Add(logCtx(), item, makeFakeArchive(newName))).To(Succeed())
+			Expect(st.Add(logCtx(), item, makeFakeArchive(archiveName, "controller-tools/envtest/"))).To(Succeed())
 			Expect(st.Root.Stat(filepath.Join("k8s", item.Platform.BaseName(item.Version)))).NotTo(BeNil(), "new files should exist")
 		})
 		It("should clean up if it errors before finishing", func() {
@@ -187,8 +189,6 @@ var (
 		Version:  ver(1, 16, 3),
 		Platform: versions.Platform{OS: "linux", Arch: "amd64"},
 	}
-
-	newName = "kubebuilder-tools-1.16.3-linux-amd64.tar.gz"
 )
 
 func ver(major, minor, patch int) versions.Concrete {
@@ -199,13 +199,13 @@ func ver(major, minor, patch int) versions.Concrete {
 	}
 }
 
-func makeFakeArchive(magic string) io.Reader {
+func makeFakeArchive(magic, relativePath string) io.Reader {
 	out := new(bytes.Buffer)
 	gzipWriter := gzip.NewWriter(out)
 	tarWriter := tar.NewWriter(gzipWriter)
 	Expect(tarWriter.WriteHeader(&tar.Header{
 		Typeflag: tar.TypeDir,
-		Name:     "kubebuilder/bin/", // so we can ensure we skip non-files
+		Name:     relativePath, // so we can ensure we skip non-files
 		Mode:     0777,
 	})).To(Succeed())
 	for _, fileName := range []string{"some-file", "other-file"} {
@@ -214,13 +214,13 @@ func makeFakeArchive(magic string) io.Reader {
 		copy(chunk[:], magic)
 		copy(chunk[len(magic):], fileName)
 		start := len(magic) + len(fileName)
-		if _, err := rand.Read(chunk[start:]); err != nil { //nolint:gosec
+		if _, err := rand.Read(chunk[start:]); err != nil {
 			panic(err)
 		}
 
-		// write to kubebuilder/bin/fileName
+		// write to relativePath/fileName
 		err := tarWriter.WriteHeader(&tar.Header{
-			Name: "kubebuilder/bin/" + fileName,
+			Name: relativePath + fileName,
 			Size: int64(len(chunk[:])),
 			Mode: 0777, // so we can check that we fix this later
 		})

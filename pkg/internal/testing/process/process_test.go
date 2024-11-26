@@ -138,7 +138,7 @@ var _ = Describe("Start method", func() {
 						echo 'i started' >&2
 					`,
 				}
-				processState.StartTimeout = 1 * time.Second
+				processState.StartTimeout = 5 * time.Second
 
 				Expect(processState.Start(stdout, stderr)).To(Succeed())
 				Eventually(processState.Exited).Should(BeTrue())
@@ -352,16 +352,7 @@ var _ = Describe("Init", func() {
 })
 
 var simpleBashScript = []string{
-	"-c",
-	`
-		i=0
-		while true
-		do
-			echo "loop $i" >&2
-			let 'i += 1'
-			sleep 0.2
-		done
-	`,
+	"-c", "tail -f /dev/null",
 }
 
 func getServerURL(server *ghttp.Server) url.URL {

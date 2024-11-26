@@ -18,21 +18,22 @@ package controller_test
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/goleak"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	internalcontroller "sigs.k8s.io/controller-runtime/pkg/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -59,14 +60,66 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err.Error()).To(ContainSubstring("must specify Reconciler"))
 		})
 
-		It("NewController should return an error if injecting Reconciler fails", func() {
+		It("should return an error if two controllers are registered with the same name", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("foo", m, controller.Options{Reconciler: &failRec{}})
-			Expect(c).To(BeNil())
+			c1, err := controller.New("c3", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c1).ToNot(BeNil())
+
+			c2, err := controller.New("c3", m, controller.Options{Reconciler: rec})
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("expected error"))
+			Expect(err.Error()).To(ContainSubstring("controller with name c3 already exists"))
+			Expect(c2).To(BeNil())
+		})
+
+		It("should return an error if two controllers are registered with the same name and SkipNameValidation is set to false on the manager", func() {
+			m, err := manager.New(cfg, manager.Options{
+				Controller: config.Controller{
+					SkipNameValidation: ptr.To(false),
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			c1, err := controller.New("c4", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c1).ToNot(BeNil())
+
+			c2, err := controller.New("c4", m, controller.Options{Reconciler: rec})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("controller with name c4 already exists"))
+			Expect(c2).To(BeNil())
+		})
+
+		It("should not return an error if two controllers are registered with the same name and SkipNameValidation is set on the manager", func() {
+			m, err := manager.New(cfg, manager.Options{
+				Controller: config.Controller{
+					SkipNameValidation: ptr.To(true),
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			c1, err := controller.New("c5", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c1).ToNot(BeNil())
+
+			c2, err := controller.New("c5", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c2).ToNot(BeNil())
+		})
+
+		It("should not return an error if two controllers are registered with the same name and SkipNameValidation is set on the controller", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c1, err := controller.New("c6", m, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c1).ToNot(BeNil())
+
+			c2, err := controller.New("c6", m, controller.Options{Reconciler: rec, SkipNameValidation: ptr.To(true)})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c2).ToNot(BeNil())
 		})
 
 		It("should not return an error if two controllers are registered with different names", func() {
@@ -85,8 +138,9 @@ var _ = Describe("controller.Controller", func() {
 		It("should not leak goroutines when stopped", func() {
 			currentGRs := goleak.IgnoreCurrent()
 
+			ctx, cancel := context.WithCancel(context.Background())
 			watchChan := make(chan event.GenericEvent, 1)
-			watch := &source.Channel{Source: watchChan}
+			watch := source.Channel(watchChan, &handler.EnqueueRequestForObject{})
 			watchChan <- event.GenericEvent{Object: &corev1.Pod{}}
 
 			reconcileStarted := make(chan struct{})
@@ -107,11 +161,10 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			c, err := controller.New("new-controller", m, controller.Options{Reconciler: rec})
-			Expect(c.Watch(watch, &handler.EnqueueRequestForObject{})).To(Succeed())
+			c, err := controller.New("new-controller-0", m, controller.Options{Reconciler: rec})
+			Expect(c.Watch(watch)).To(Succeed())
 			Expect(err).NotTo(HaveOccurred())
 
-			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
 				defer GinkgoRecover()
 				Expect(m.Start(ctx)).To(Succeed())
@@ -134,7 +187,7 @@ var _ = Describe("controller.Controller", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = controller.New("new-controller", m, controller.Options{Reconciler: rec})
+			_, err = controller.New("new-controller-1", m, controller.Options{Reconciler: rec})
 			Expect(err).NotTo(HaveOccurred())
 
 			// force-close keep-alive connections.  These'll time anyway (after
@@ -142,18 +195,247 @@ var _ = Describe("controller.Controller", func() {
 			clientTransport.CloseIdleConnections()
 			Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 		})
+
+		It("should default RateLimiter and NewQueue if not specified", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-2", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.RateLimiter).NotTo(BeNil())
+			Expect(ctrl.NewQueue).NotTo(BeNil())
+		})
+
+		It("should not override RateLimiter and NewQueue if specified", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			customRateLimiter := workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](5*time.Millisecond, 1000*time.Second)
+			customNewQueueCalled := false
+			customNewQueue := func(controllerName string, rateLimiter workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				customNewQueueCalled = true
+				return nil
+			}
+
+			c, err := controller.New("new-controller-3", m, controller.Options{
+				Reconciler:  reconcile.Func(nil),
+				RateLimiter: customRateLimiter,
+				NewQueue:    customNewQueue,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.RateLimiter).To(BeIdenticalTo(customRateLimiter))
+			ctrl.NewQueue("controller1", nil)
+			Expect(customNewQueueCalled).To(BeTrue(), "Expected customNewQueue to be called")
+		})
+
+		It("should default RecoverPanic from the manager", func() {
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{RecoverPanic: ptr.To(true)}})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-4", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.RecoverPanic).NotTo(BeNil())
+			Expect(*ctrl.RecoverPanic).To(BeTrue())
+		})
+
+		It("should not override RecoverPanic on the controller", func() {
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{RecoverPanic: ptr.To(true)}})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller", m, controller.Options{
+				RecoverPanic: ptr.To(false),
+				Reconciler:   reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.RecoverPanic).NotTo(BeNil())
+			Expect(*ctrl.RecoverPanic).To(BeFalse())
+		})
+
+		It("should default NeedLeaderElection from the manager", func() {
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: ptr.To(true)}})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-5", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.NeedLeaderElection()).To(BeTrue())
+		})
+
+		It("should not override NeedLeaderElection on the controller", func() {
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: ptr.To(true)}})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-6", m, controller.Options{
+				NeedLeaderElection: ptr.To(false),
+				Reconciler:         reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.NeedLeaderElection()).To(BeFalse())
+		})
+
+		It("Should default MaxConcurrentReconciles from the manager if set", func() {
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{MaxConcurrentReconciles: 5}})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-7", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.MaxConcurrentReconciles).To(BeEquivalentTo(5))
+		})
+
+		It("Should default MaxConcurrentReconciles to 1 if unset", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-8", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.MaxConcurrentReconciles).To(BeEquivalentTo(1))
+		})
+
+		It("Should leave MaxConcurrentReconciles if set", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-9", m, controller.Options{
+				Reconciler:              reconcile.Func(nil),
+				MaxConcurrentReconciles: 5,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.MaxConcurrentReconciles).To(BeEquivalentTo(5))
+		})
+
+		It("Should default CacheSyncTimeout from the manager if set", func() {
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{CacheSyncTimeout: 5}})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-10", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.CacheSyncTimeout).To(BeEquivalentTo(5))
+		})
+
+		It("Should default CacheSyncTimeout to 2 minutes if unset", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-11", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.CacheSyncTimeout).To(BeEquivalentTo(2 * time.Minute))
+		})
+
+		It("Should leave CacheSyncTimeout if set", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-12", m, controller.Options{
+				Reconciler:       reconcile.Func(nil),
+				CacheSyncTimeout: 5,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.CacheSyncTimeout).To(BeEquivalentTo(5))
+		})
+
+		It("should default NeedLeaderElection on the controller to true", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-13", m, controller.Options{
+				Reconciler: rec,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.NeedLeaderElection()).To(BeTrue())
+		})
+
+		It("should allow for setting leaderElected to false", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-14", m, controller.Options{
+				NeedLeaderElection: ptr.To(false),
+				Reconciler:         rec,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.NeedLeaderElection()).To(BeFalse())
+		})
+
+		It("should implement manager.LeaderElectionRunnable", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("new-controller-15", m, controller.Options{
+				Reconciler: rec,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := c.(manager.LeaderElectionRunnable)
+			Expect(ok).To(BeTrue())
+		})
 	})
 })
-
-var _ reconcile.Reconciler = &failRec{}
-var _ inject.Client = &failRec{}
-
-type failRec struct{}
-
-func (*failRec) Reconcile(context.Context, reconcile.Request) (reconcile.Result, error) {
-	return reconcile.Result{}, nil
-}
-
-func (*failRec) InjectClient(client.Client) error {
-	return fmt.Errorf("expected error")
-}

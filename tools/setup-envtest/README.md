@@ -4,11 +4,17 @@ This is a small tool that manages binaries for envtest. It can be used to
 download new binaries, list currently installed and available ones, and
 clean up versions.
 
-To use it, just go-install it on 1.16+ (it's a separate, self-contained
+To use it, just go-install it with Golang 1.23+ (it's a separate, self-contained
 module):
 
 ```shell
 go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+```
+
+If you are using Golang 1.22, use the `release-0.18` branch instead:
+
+```shell
+go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.18
 ```
 
 For full documentation, run it with the `--help` flag, but here are some
@@ -40,27 +46,33 @@ setup-envtest use -i --use-env
 
 # sideload a pre-downloaded tarball as Kubernetes 1.16.2 into our store
 setup-envtest sideload 1.16.2 < downloaded-envtest.tar.gz
+
+# Per default envtest binaries are downloaded from:
+# https://raw.githubusercontent.com/kubernetes-sigs/controller-tools/master/envtest-releases.yaml
+# To download from a custom index use the following:
+setup-envtest use --index https://custom.com/envtest-releases.yaml
+
 ```
 
 ## Where does it put all those binaries?
 
 By default, binaries are stored in a subdirectory of an OS-specific data
-directory, as per the OS's conventions. 
+directory, as per the OS's conventions.
 
 On Linux, this is `$XDG_DATA_HOME`; on Windows, `%LocalAppData`; and on
 OSX, `~/Library/Application Support`.
 
 There's an overall folder that holds all files, and inside that is
-a folder for each version/platform pair.  The exact directory structure is
-not guarnateed, except that the leaf directory will contain the names
-expected by envtest.  You should always use `setup-envtest fetch` or
+a folder for each version/platform pair. The exact directory structure is
+not guaranteed, except that the leaf directory will contain the names
+expected by envtest. You should always use `setup-envtest fetch` or
 `setup-envtest switch` (generally with the `-p path` or `-p env` flags) to
 get the directory that you should use.
 
 ## Why do I have to do that `source <(blah blah blah)` thing
 
 This is a normal binary, not a shell script, so we can't set the parent
-process's environment variables.  If you use this by hand a lot and want
+process's environment variables. If you use this by hand a lot and want
 to save the typing, you could put something like the following in your
 `~/.zshrc` (or similar for bash/fish/whatever, modified to those):
 
@@ -79,7 +91,7 @@ setup-envtest() {
 There are a few options.
 
 First, you'll probably want to set the `-i/--installed` flag. If you want
-to avoid forgetting to set this flag, set  the `ENVTEST_INSTALLED_ONLY`
+to avoid forgetting to set this flag, set the `ENVTEST_INSTALLED_ONLY`
 env variable, which will switch that flag on by default.
 
 Then, you have a few options for managing your binaries:
@@ -90,36 +102,18 @@ Then, you have a few options for managing your binaries:
 
   `--use-env` makes the command unconditionally use the value of
   KUBEBUILDER_ASSETS as long as it contains the required binaries, and
-  `-i` indicates that we only ever want to work with installed binaries
-  (no reaching out the remote GCS storage).
+  `-i` indicates that we only ever want to work with installed binaries.
 
   As noted about, you can use `ENVTEST_INSTALLED_ONLY=true` to switch `-i`
   on by default, and you can use `ENVTEST_USE_ENV=true` to switch
   `--use-env` on by default.
 
 - If you want to use this tool, but download your gziped tarballs
-  separately, you can use the `sideload` command.  You'll need to use the
+  separately, you can use the `sideload` command. You'll need to use the
   `-k/--version` flag to indicate which version you're sideloading.
 
   After that, it'll be as if you'd installed the binaries with `use`.
 
-- If you want to talk to some internal source, you can use the
-  `--remote-bucket` and `--remote-server` options.  The former sets which
-  GCS bucket to download from, and the latter sets the host to talk to as
-  if it were a GCS endpoint. Theoretically, you could use the latter
-  version to run an internal "mirror" -- the tool expects
-
-  - `HOST/storage/v1/b/BUCKET/o` to return JSON like
-
-    ```json
-    {"items": [
-        {"name": "kubebuilder-tools-X.Y.Z-os-arch.tar.gz", "md5Hash": "<base-64-encoded-md5-hash>"},
-        {"name": "kubebuilder-tools-X.Y.Z-os-arch.tar.gz", "md5Hash": "<base-64-encoded-md5-hash>"},
-    ]}
-    ```
-
-  - `HOST/storage/v1/b/BUCKET/o/TARBALL_NAME` to return JSON like
-    `{"name": "kubebuilder-tools-X.Y.Z-os-arch.tar.gz", "md5Hash": "<base-64-encoded-md5-hash>"}`
-
-  - `HOST/storage/v1/b/BUCKET/o/TARBALL_NAME?alt=media` to return the
-    actual file contents
+- If you want to talk to some internal source via HTTP, you can simply set `--index`
+  The index must contain references to envtest binary archives in the same format as:
+  https://raw.githubusercontent.com/kubernetes-sigs/controller-tools/master/envtest-releases.yaml

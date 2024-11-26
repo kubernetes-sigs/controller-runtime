@@ -23,7 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
-	utilpointer "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -86,33 +86,33 @@ var _ = Describe("GetOptions", func() {
 var _ = Describe("CreateOptions", func() {
 	It("Should set DryRun", func() {
 		o := &client.CreateOptions{DryRun: []string{"Hello", "Theodore"}}
-		newCreatOpts := &client.CreateOptions{}
-		o.ApplyToCreate(newCreatOpts)
-		Expect(newCreatOpts).To(Equal(o))
+		newCreateOpts := &client.CreateOptions{}
+		o.ApplyToCreate(newCreateOpts)
+		Expect(newCreateOpts).To(Equal(o))
 	})
 	It("Should set FieldManager", func() {
 		o := &client.CreateOptions{FieldManager: "FieldManager"}
-		newCreatOpts := &client.CreateOptions{}
-		o.ApplyToCreate(newCreatOpts)
-		Expect(newCreatOpts).To(Equal(o))
+		newCreateOpts := &client.CreateOptions{}
+		o.ApplyToCreate(newCreateOpts)
+		Expect(newCreateOpts).To(Equal(o))
 	})
 	It("Should set Raw", func() {
 		o := &client.CreateOptions{Raw: &metav1.CreateOptions{DryRun: []string{"Bye", "Theodore"}}}
-		newCreatOpts := &client.CreateOptions{}
-		o.ApplyToCreate(newCreatOpts)
-		Expect(newCreatOpts).To(Equal(o))
+		newCreateOpts := &client.CreateOptions{}
+		o.ApplyToCreate(newCreateOpts)
+		Expect(newCreateOpts).To(Equal(o))
 	})
 	It("Should not set anything", func() {
 		o := &client.CreateOptions{}
-		newCreatOpts := &client.CreateOptions{}
-		o.ApplyToCreate(newCreatOpts)
-		Expect(newCreatOpts).To(Equal(o))
+		newCreateOpts := &client.CreateOptions{}
+		o.ApplyToCreate(newCreateOpts)
+		Expect(newCreateOpts).To(Equal(o))
 	})
 })
 
 var _ = Describe("DeleteOptions", func() {
 	It("Should set GracePeriodSeconds", func() {
-		o := &client.DeleteOptions{GracePeriodSeconds: utilpointer.Int64Ptr(42)}
+		o := &client.DeleteOptions{GracePeriodSeconds: ptr.To(int64(42))}
 		newDeleteOpts := &client.DeleteOptions{}
 		o.ApplyToDelete(newDeleteOpts)
 		Expect(newDeleteOpts).To(Equal(o))
@@ -185,7 +185,7 @@ var _ = Describe("PatchOptions", func() {
 		Expect(newPatchOpts).To(Equal(o))
 	})
 	It("Should set Force", func() {
-		o := &client.PatchOptions{Force: utilpointer.BoolPtr(true)}
+		o := &client.PatchOptions{Force: ptr.To(true)}
 		newPatchOpts := &client.PatchOptions{}
 		o.ApplyToPatch(newPatchOpts)
 		Expect(newPatchOpts).To(Equal(o))
@@ -218,7 +218,7 @@ var _ = Describe("DeleteAllOfOptions", func() {
 		Expect(newDeleteAllOfOpts).To(Equal(o))
 	})
 	It("Should set DeleleteOptions", func() {
-		o := &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: utilpointer.Int64Ptr(44)}}
+		o := &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: ptr.To(int64(44))}}
 		newDeleteAllOfOpts := &client.DeleteAllOfOptions{}
 		o.ApplyToDeleteAllOf(newDeleteAllOfOpts)
 		Expect(newDeleteAllOfOpts).To(Equal(o))
@@ -233,8 +233,107 @@ var _ = Describe("MatchingLabels", func() {
 
 		r, _ := listOpts.LabelSelector.Requirements()
 		_, err := labels.NewRequirement(r[0].Key(), r[0].Operator(), r[0].Values().List())
-		Expect(err).ToNot(BeNil())
+		Expect(err).To(HaveOccurred())
 		expectedErrMsg := `values[0][k]: Invalid value: "axahm2EJ8Phiephe2eixohbee9eGeiyees1thuozi1xoh0GiuH3diewi8iem7Nui": must be no more than 63 characters`
 		Expect(err.Error()).To(Equal(expectedErrMsg))
+	})
+
+	It("Should add matchingLabels to existing selector", func() {
+		listOpts := &client.ListOptions{}
+
+		matchingLabels := client.MatchingLabels(map[string]string{"k": "v"})
+		matchingLabels2 := client.MatchingLabels(map[string]string{"k2": "v2"})
+
+		matchingLabels.ApplyToList(listOpts)
+		Expect(listOpts.LabelSelector.String()).To(Equal("k=v"))
+
+		matchingLabels2.ApplyToList(listOpts)
+		Expect(listOpts.LabelSelector.String()).To(Equal("k=v,k2=v2"))
+	})
+})
+
+var _ = Describe("FieldOwner", func() {
+	It("Should apply to PatchOptions", func() {
+		o := &client.PatchOptions{FieldManager: "bar"}
+		t := client.FieldOwner("foo")
+		t.ApplyToPatch(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to CreateOptions", func() {
+		o := &client.CreateOptions{FieldManager: "bar"}
+		t := client.FieldOwner("foo")
+		t.ApplyToCreate(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to UpdateOptions", func() {
+		o := &client.UpdateOptions{FieldManager: "bar"}
+		t := client.FieldOwner("foo")
+		t.ApplyToUpdate(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to SubResourcePatchOptions", func() {
+		o := &client.SubResourcePatchOptions{PatchOptions: client.PatchOptions{FieldManager: "bar"}}
+		t := client.FieldOwner("foo")
+		t.ApplyToSubResourcePatch(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to SubResourceCreateOptions", func() {
+		o := &client.SubResourceCreateOptions{CreateOptions: client.CreateOptions{FieldManager: "bar"}}
+		t := client.FieldOwner("foo")
+		t.ApplyToSubResourceCreate(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to SubResourceUpdateOptions", func() {
+		o := &client.SubResourceUpdateOptions{UpdateOptions: client.UpdateOptions{FieldManager: "bar"}}
+		t := client.FieldOwner("foo")
+		t.ApplyToSubResourceUpdate(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+})
+
+var _ = Describe("ForceOwnership", func() {
+	It("Should apply to PatchOptions", func() {
+		o := &client.PatchOptions{}
+		t := client.ForceOwnership
+		t.ApplyToPatch(o)
+		Expect(*o.Force).To(BeTrue())
+	})
+	It("Should apply to SubResourcePatchOptions", func() {
+		o := &client.SubResourcePatchOptions{PatchOptions: client.PatchOptions{}}
+		t := client.ForceOwnership
+		t.ApplyToSubResourcePatch(o)
+		Expect(*o.Force).To(BeTrue())
+	})
+})
+
+var _ = Describe("HasLabels", func() {
+	It("Should produce hasLabels in given order", func() {
+		listOpts := &client.ListOptions{}
+
+		hasLabels := client.HasLabels([]string{"labelApe", "labelFox"})
+		hasLabels.ApplyToList(listOpts)
+		Expect(listOpts.LabelSelector.String()).To(Equal("labelApe,labelFox"))
+	})
+
+	It("Should add hasLabels to existing hasLabels selector", func() {
+		listOpts := &client.ListOptions{}
+
+		hasLabel := client.HasLabels([]string{"labelApe"})
+		hasLabel.ApplyToList(listOpts)
+
+		hasOtherLabel := client.HasLabels([]string{"labelFox"})
+		hasOtherLabel.ApplyToList(listOpts)
+		Expect(listOpts.LabelSelector.String()).To(Equal("labelApe,labelFox"))
+	})
+
+	It("Should add hasLabels to existing matchingLabels", func() {
+		listOpts := &client.ListOptions{}
+
+		matchingLabels := client.MatchingLabels(map[string]string{"k": "v"})
+		matchingLabels.ApplyToList(listOpts)
+
+		hasLabel := client.HasLabels([]string{"labelApe"})
+		hasLabel.ApplyToList(listOpts)
+		Expect(listOpts.LabelSelector.String()).To(Equal("k=v,labelApe"))
 	})
 })

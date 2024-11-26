@@ -42,9 +42,8 @@ type Komega interface {
 	// Update returns a function that fetches a resource, applies the provided update function and then updates the resource.
 	// It can be used with gomega.Eventually() like this:
 	//   deployment := appsv1.Deployment{ ... }
-	//   gomega.Eventually(k.Update(&deployment, func (o client.Object) {
+	//   gomega.Eventually(k.Update(&deployment, func() {
 	//     deployment.Spec.Replicas = 3
-	//     return &deployment
 	//   })).To(gomega.Succeed())
 	// By calling the returned function directly it can also be used as gomega.Expect(k.Update(...)()).To(...)
 	Update(client.Object, func(), ...client.UpdateOption) func() error
@@ -52,9 +51,8 @@ type Komega interface {
 	// UpdateStatus returns a function that fetches a resource, applies the provided update function and then updates the resource's status.
 	// It can be used with gomega.Eventually() like this:
 	//   deployment := appsv1.Deployment{ ... }
-	//   gomega.Eventually(k.Update(&deployment, func (o client.Object) {
+	//   gomega.Eventually(k.Update(&deployment, func() {
 	//     deployment.Status.AvailableReplicas = 1
-	//     return &deployment
 	//   })).To(gomega.Succeed())
 	// By calling the returned function directly it can also be used as gomega.Expect(k.UpdateStatus(...)()).To(...)
 	UpdateStatus(client.Object, func(), ...client.SubResourceUpdateOption) func() error
@@ -62,7 +60,7 @@ type Komega interface {
 	// Object returns a function that fetches a resource and returns the object.
 	// It can be used with gomega.Eventually() like this:
 	//   deployment := appsv1.Deployment{ ... }
-	//   gomega.Eventually(k.Object(&deployment)).To(HaveField("Spec.Replicas", gomega.Equal(pointer.Int32(3))))
+	//   gomega.Eventually(k.Object(&deployment)).To(HaveField("Spec.Replicas", gomega.Equal(ptr.To(int32(3)))))
 	// By calling the returned function directly it can also be used as gomega.Expect(k.Object(...)()).To(...)
 	Object(client.Object) func() (client.Object, error)
 

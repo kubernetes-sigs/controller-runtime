@@ -45,6 +45,7 @@ type fakeSyncWriter bool
 func (w *fakeSyncWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
+
 func (w *fakeSyncWriter) Sync() error {
 	*w = true
 	return nil
@@ -327,7 +328,6 @@ var _ = Describe("Zap logger setup", func() {
 				logger = New(WriteTo(logOut), UseDevMode(false))
 			})
 			defineTests()
-
 		})
 	})
 })
@@ -363,7 +363,6 @@ var _ = Describe("Zap log level flag options setup", func() {
 
 			Expect(string(outRaw)).Should(ContainSubstring(logInfoLevel0))
 			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel1))
-
 		})
 
 		It("Should output only error logs, otherwise empty logs", func() {
@@ -382,7 +381,6 @@ var _ = Describe("Zap log level flag options setup", func() {
 
 			Expect(outRaw).To(BeEmpty())
 		})
-
 	})
 
 	Context("with  zap-log-level  with increased verbosity.", func() {
@@ -439,7 +437,6 @@ var _ = Describe("Zap log level flag options setup", func() {
 			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel1))
 			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel2))
 			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel3))
-
 		})
 		It("Should output info, and debug logs with increased verbosity, and with production mode set to true.", func() {
 			args := []string{"--zap-log-level=3", "--zap-devel=true"}
@@ -460,13 +457,10 @@ var _ = Describe("Zap log level flag options setup", func() {
 			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel1))
 			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel2))
 			Expect(string(outRaw)).Should(ContainSubstring(logDebugLevel3))
-
 		})
-
 	})
 
 	Context("with  zap-stacktrace-level options provided", func() {
-
 		It("Should output stacktrace at info level, with development mode set to true.", func() {
 			args := []string{"--zap-stacktrace-level=info", "--zap-devel=true"}
 			fromFlags.BindFlags(&fs)
@@ -501,7 +495,6 @@ var _ = Describe("Zap log level flag options setup", func() {
 			Expect(out.StacktraceLevel.Enabled(zapcore.ErrorLevel)).To(BeFalse())
 			Expect(out.StacktraceLevel.Enabled(zapcore.InfoLevel)).To(BeFalse())
 		})
-
 	})
 
 	Context("with only -zap-devel flag provided", func() {
@@ -534,12 +527,10 @@ var _ = Describe("Zap log level flag options setup", func() {
 			Expect(out.Level).To(BeNil())
 			Expect(out.StacktraceLevel).To(BeNil())
 			Expect(out.EncoderConfigOptions).To(BeNil())
-
 		})
 	})
 
 	Context("with zap-time-encoding flag provided", func() {
-
 		It("Should set time encoder in options", func() {
 			args := []string{"--zap-time-encoding=rfc3339"}
 			fromFlags.BindFlags(&fs)
@@ -599,11 +590,9 @@ var _ = Describe("Zap log level flag options setup", func() {
 			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 			Expect(res["ts"]).Should(MatchRegexp(iso8601Pattern))
 		})
-
 	})
 
 	Context("with encoder options provided programmatically", func() {
-
 		It("Should set JSON Encoder, with given Millis TimeEncoder option, and MessageKey", func() {
 			logOut := new(bytes.Buffer)
 			f := func(ec *zapcore.EncoderConfig) {

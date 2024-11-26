@@ -17,6 +17,7 @@ limitations under the License.
 package handler
 
 import (
+	"context"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -25,15 +26,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 )
 
-var _ EventHandler = &EnqueueRequestForOwner{}
+var _ EventHandler = &enqueueRequestForOwner[client.Object]{}
 
-var log = logf.RuntimeLog.WithName("eventhandler").WithName("EnqueueRequestForOwner")
+var log = logf.RuntimeLog.WithName("eventhandler").WithName("enqueueRequestForOwner")
+
+// OwnerOption modifies an EnqueueRequestForOwner EventHandler.
+type OwnerOption func(e enqueueRequestForOwnerInterface)
 
 // EnqueueRequestForOwner enqueues Requests for the Owners of an object.  E.g. the object that created
 // the object that was the source of the Event.
@@ -42,13 +46,52 @@ var log = logf.RuntimeLog.WithName("eventhandler").WithName("EnqueueRequestForOw
 //
 // - a source.Kind Source with Type of Pod.
 //
-// - a handler.EnqueueRequestForOwner EventHandler with an OwnerType of ReplicaSet and IsController set to true.
-type EnqueueRequestForOwner struct {
-	// OwnerType is the type of the Owner object to look for in OwnerReferences.  Only Group and Kind are compared.
-	OwnerType runtime.Object
+// - a handler.enqueueRequestForOwner EventHandler with an OwnerType of ReplicaSet and OnlyControllerOwner set to true.
+func EnqueueRequestForOwner(scheme *runtime.Scheme, mapper meta.RESTMapper, ownerType client.Object, opts ...OwnerOption) EventHandler {
+	return TypedEnqueueRequestForOwner[client.Object](scheme, mapper, ownerType, opts...)
+}
 
-	// IsController if set will only look at the first OwnerReference with Controller: true.
-	IsController bool
+// TypedEnqueueRequestForOwner enqueues Requests for the Owners of an object.  E.g. the object that created
+// the object that was the source of the Event.
+//
+// If a ReplicaSet creates Pods, users may reconcile the ReplicaSet in response to Pod Events using:
+//
+// - a source.Kind Source with Type of Pod.
+//
+// - a handler.typedEnqueueRequestForOwner EventHandler with an OwnerType of ReplicaSet and OnlyControllerOwner set to true.
+//
+// TypedEnqueueRequestForOwner is experimental and subject to future change.
+func TypedEnqueueRequestForOwner[object client.Object](scheme *runtime.Scheme, mapper meta.RESTMapper, ownerType client.Object, opts ...OwnerOption) TypedEventHandler[object, reconcile.Request] {
+	e := &enqueueRequestForOwner[object]{
+		ownerType: ownerType,
+		mapper:    mapper,
+	}
+	if err := e.parseOwnerTypeGroupKind(scheme); err != nil {
+		panic(err)
+	}
+	for _, opt := range opts {
+		opt(e)
+	}
+	return e
+}
+
+// OnlyControllerOwner if provided will only look at the first OwnerReference with Controller: true.
+func OnlyControllerOwner() OwnerOption {
+	return func(e enqueueRequestForOwnerInterface) {
+		e.setIsController(true)
+	}
+}
+
+type enqueueRequestForOwnerInterface interface {
+	setIsController(bool)
+}
+
+type enqueueRequestForOwner[object client.Object] struct {
+	// ownerType is the type of the Owner object to look for in OwnerReferences.  Only Group and Kind are compared.
+	ownerType runtime.Object
+
+	// isController if set will only look at the first OwnerReference with Controller: true.
+	isController bool
 
 	// groupKind is the cached Group and Kind from OwnerType
 	groupKind schema.GroupKind
@@ -57,8 +100,12 @@ type EnqueueRequestForOwner struct {
 	mapper meta.RESTMapper
 }
 
+func (e *enqueueRequestForOwner[object]) setIsController(isController bool) {
+	e.isController = isController
+}
+
 // Create implements EventHandler.
-func (e *EnqueueRequestForOwner) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
+func (e *enqueueRequestForOwner[object]) Create(ctx context.Context, evt event.TypedCreateEvent[object], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	reqs := map[reconcile.Request]empty{}
 	e.getOwnerReconcileRequest(evt.Object, reqs)
 	for req := range reqs {
@@ -67,7 +114,7 @@ func (e *EnqueueRequestForOwner) Create(evt event.CreateEvent, q workqueue.RateL
 }
 
 // Update implements EventHandler.
-func (e *EnqueueRequestForOwner) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+func (e *enqueueRequestForOwner[object]) Update(ctx context.Context, evt event.TypedUpdateEvent[object], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	reqs := map[reconcile.Request]empty{}
 	e.getOwnerReconcileRequest(evt.ObjectOld, reqs)
 	e.getOwnerReconcileRequest(evt.ObjectNew, reqs)
@@ -77,7 +124,7 @@ func (e *EnqueueRequestForOwner) Update(evt event.UpdateEvent, q workqueue.RateL
 }
 
 // Delete implements EventHandler.
-func (e *EnqueueRequestForOwner) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+func (e *enqueueRequestForOwner[object]) Delete(ctx context.Context, evt event.TypedDeleteEvent[object], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	reqs := map[reconcile.Request]empty{}
 	e.getOwnerReconcileRequest(evt.Object, reqs)
 	for req := range reqs {
@@ -86,7 +133,7 @@ func (e *EnqueueRequestForOwner) Delete(evt event.DeleteEvent, q workqueue.RateL
 }
 
 // Generic implements EventHandler.
-func (e *EnqueueRequestForOwner) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+func (e *enqueueRequestForOwner[object]) Generic(ctx context.Context, evt event.TypedGenericEvent[object], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	reqs := map[reconcile.Request]empty{}
 	e.getOwnerReconcileRequest(evt.Object, reqs)
 	for req := range reqs {
@@ -96,17 +143,17 @@ func (e *EnqueueRequestForOwner) Generic(evt event.GenericEvent, q workqueue.Rat
 
 // parseOwnerTypeGroupKind parses the OwnerType into a Group and Kind and caches the result.  Returns false
 // if the OwnerType could not be parsed using the scheme.
-func (e *EnqueueRequestForOwner) parseOwnerTypeGroupKind(scheme *runtime.Scheme) error {
+func (e *enqueueRequestForOwner[object]) parseOwnerTypeGroupKind(scheme *runtime.Scheme) error {
 	// Get the kinds of the type
-	kinds, _, err := scheme.ObjectKinds(e.OwnerType)
+	kinds, _, err := scheme.ObjectKinds(e.ownerType)
 	if err != nil {
-		log.Error(err, "Could not get ObjectKinds for OwnerType", "owner type", fmt.Sprintf("%T", e.OwnerType))
+		log.Error(err, "Could not get ObjectKinds for OwnerType", "owner type", fmt.Sprintf("%T", e.ownerType))
 		return err
 	}
 	// Expect only 1 kind.  If there is more than one kind this is probably an edge case such as ListOptions.
 	if len(kinds) != 1 {
-		err := fmt.Errorf("expected exactly 1 kind for OwnerType %T, but found %s kinds", e.OwnerType, kinds)
-		log.Error(nil, "expected exactly 1 kind for OwnerType", "owner type", fmt.Sprintf("%T", e.OwnerType), "kinds", kinds)
+		err := fmt.Errorf("expected exactly 1 kind for OwnerType %T, but found %s kinds", e.ownerType, kinds)
+		log.Error(nil, "expected exactly 1 kind for OwnerType", "owner type", fmt.Sprintf("%T", e.ownerType), "kinds", kinds)
 		return err
 	}
 	// Cache the Group and Kind for the OwnerType
@@ -116,10 +163,10 @@ func (e *EnqueueRequestForOwner) parseOwnerTypeGroupKind(scheme *runtime.Scheme)
 
 // getOwnerReconcileRequest looks at object and builds a map of reconcile.Request to reconcile
 // owners of object that match e.OwnerType.
-func (e *EnqueueRequestForOwner) getOwnerReconcileRequest(object metav1.Object, result map[reconcile.Request]empty) {
+func (e *enqueueRequestForOwner[object]) getOwnerReconcileRequest(obj metav1.Object, result map[reconcile.Request]empty) {
 	// Iterate through the OwnerReferences looking for a match on Group and Kind against what was requested
 	// by the user
-	for _, ref := range e.getOwnersReferences(object) {
+	for _, ref := range e.getOwnersReferences(obj) {
 		// Parse the Group out of the OwnerReference to compare it to what was parsed out of the requested OwnerType
 		refGV, err := schema.ParseGroupVersion(ref.APIVersion)
 		if err != nil {
@@ -138,14 +185,14 @@ func (e *EnqueueRequestForOwner) getOwnerReconcileRequest(object metav1.Object, 
 				Name: ref.Name,
 			}}
 
-			// if owner is not namespaced then we should set the namespace to the empty
+			// if owner is not namespaced then we should not set the namespace
 			mapping, err := e.mapper.RESTMapping(e.groupKind, refGV.Version)
 			if err != nil {
 				log.Error(err, "Could not retrieve rest mapping", "kind", e.groupKind)
 				return
 			}
 			if mapping.Scope.Name() != meta.RESTScopeNameRoot {
-				request.Namespace = object.GetNamespace()
+				request.Namespace = obj.GetNamespace()
 			}
 
 			result[request] = empty{}
@@ -153,37 +200,22 @@ func (e *EnqueueRequestForOwner) getOwnerReconcileRequest(object metav1.Object, 
 	}
 }
 
-// getOwnersReferences returns the OwnerReferences for an object as specified by the EnqueueRequestForOwner
+// getOwnersReferences returns the OwnerReferences for an object as specified by the enqueueRequestForOwner
 // - if IsController is true: only take the Controller OwnerReference (if found)
 // - if IsController is false: take all OwnerReferences.
-func (e *EnqueueRequestForOwner) getOwnersReferences(object metav1.Object) []metav1.OwnerReference {
-	if object == nil {
+func (e *enqueueRequestForOwner[object]) getOwnersReferences(obj metav1.Object) []metav1.OwnerReference {
+	if obj == nil {
 		return nil
 	}
 
 	// If not filtered as Controller only, then use all the OwnerReferences
-	if !e.IsController {
-		return object.GetOwnerReferences()
+	if !e.isController {
+		return obj.GetOwnerReferences()
 	}
 	// If filtered to a Controller, only take the Controller OwnerReference
-	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
+	if ownerRef := metav1.GetControllerOf(obj); ownerRef != nil {
 		return []metav1.OwnerReference{*ownerRef}
 	}
 	// No Controller OwnerReference found
-	return nil
-}
-
-var _ inject.Scheme = &EnqueueRequestForOwner{}
-
-// InjectScheme is called by the Controller to provide a singleton scheme to the EnqueueRequestForOwner.
-func (e *EnqueueRequestForOwner) InjectScheme(s *runtime.Scheme) error {
-	return e.parseOwnerTypeGroupKind(s)
-}
-
-var _ inject.Mapper = &EnqueueRequestForOwner{}
-
-// InjectMapper  is called by the Controller to provide the rest mapper used by the manager.
-func (e *EnqueueRequestForOwner) InjectMapper(m meta.RESTMapper) error {
-	e.mapper = m
 	return nil
 }

@@ -59,12 +59,7 @@ func New(certPath, keyPath string) (*CertWatcher, error) {
 		interval: defaultWatchInterval,
 	}
 
-	// Initial read of certificate and key.
-	if err := cw.ReadCertificate(); err != nil {
-		return nil, err
-	}
-
-	return cw, nil
+	return cw, cw.ReadCertificate()
 }
 
 // WithWatchInterval sets the watch interval and returns the CertWatcher pointer

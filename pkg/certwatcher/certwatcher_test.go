@@ -17,6 +17,7 @@ limitations under the License.
 package certwatcher_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -114,7 +115,7 @@ var _ = Describe("CertWatcher", func() {
 			Eventually(func() bool {
 				secondcert, _ := watcher.GetCertificate(nil)
 				first := firstcert.PrivateKey.(*rsa.PrivateKey)
-				return first.Equal(secondcert.PrivateKey) || firstcert.Leaf.SerialNumber == secondcert.Leaf.SerialNumber
+				return first.Equal(secondcert.PrivateKey) || bytes.Equal(firstcert.Certificate[0], secondcert.Certificate[0])
 			}).ShouldNot(BeTrue())
 
 			ctxCancel()
@@ -144,7 +145,7 @@ var _ = Describe("CertWatcher", func() {
 			Eventually(func() bool {
 				secondcert, _ := watcher.GetCertificate(nil)
 				first := firstcert.PrivateKey.(*rsa.PrivateKey)
-				return first.Equal(secondcert.PrivateKey) || firstcert.Leaf.SerialNumber == secondcert.Leaf.SerialNumber
+				return first.Equal(secondcert.PrivateKey) || bytes.Equal(firstcert.Certificate[0], secondcert.Certificate[0])
 			}).ShouldNot(BeTrue())
 
 			ctxCancel()
@@ -171,7 +172,7 @@ var _ = Describe("CertWatcher", func() {
 			Eventually(func() bool {
 				secondcert, _ := watcher.GetCertificate(nil)
 				first := firstcert.PrivateKey.(*rsa.PrivateKey)
-				return first.Equal(secondcert.PrivateKey) || firstcert.Leaf.SerialNumber == secondcert.Leaf.SerialNumber
+				return first.Equal(secondcert.PrivateKey) || bytes.Equal(firstcert.Certificate[0], secondcert.Certificate[0])
 			}, "10s", "1s").ShouldNot(BeTrue())
 
 			ctxCancel()

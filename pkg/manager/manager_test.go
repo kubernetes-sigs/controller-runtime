@@ -324,8 +324,8 @@ var _ = Describe("manger.Manager", func() {
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id",
 					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
-						if options.RewnewDeadline != 10*time.Second {
-							return nil, fmt.Errorf("expected RenewDeadline to be 10s, got %v", options.RewnewDeadline)
+						if options.RenewDeadline != 10*time.Second {
+							return nil, fmt.Errorf("expected RenewDeadline to be 10s, got %v", options.RenewDeadline)
 						}
 						var err error
 						rl, err = leaderelection.NewResourceLock(config, recorderProvider, options)

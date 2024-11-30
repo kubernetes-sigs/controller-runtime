@@ -49,8 +49,8 @@ type Options struct {
 	// will use for holding the leader lock.
 	LeaderElectionID string
 
-	// RewnewDeadline is the renew deadline for this leader election client
-	RewnewDeadline time.Duration
+	// RenewDeadline is the renew deadline for this leader election client
+	RenewDeadline time.Duration
 }
 
 // NewResourceLock creates a new resource lock for use in a leader election loop.
@@ -99,7 +99,7 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 			EventRecorder: recorderProvider.GetEventRecorderFor(id),
 		},
 		config,
-		options.RewnewDeadline,
+		options.RenewDeadline,
 	)
 }
 

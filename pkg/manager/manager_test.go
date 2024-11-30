@@ -317,6 +317,28 @@ var _ = Describe("manger.Manager", func() {
 				<-m2done
 			})
 
+			It("should default RenewDeadline for leader election config", func() {
+				var rl resourcelock.Interface
+				m1, err := New(cfg, Options{
+					LeaderElection:          true,
+					LeaderElectionNamespace: "default",
+					LeaderElectionID:        "test-leader-election-id",
+					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+						if options.RewnewDeadline != 10*time.Second {
+							return nil, fmt.Errorf("expected RenewDeadline to be 10s, got %v", options.RewnewDeadline)
+						}
+						var err error
+						rl, err = leaderelection.NewResourceLock(config, recorderProvider, options)
+						return rl, err
+					},
+					HealthProbeBindAddress: "0",
+					Metrics:                metricsserver.Options{BindAddress: "0"},
+					PprofBindAddress:       "0",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(m1).ToNot(BeNil())
+			})
+
 			It("should default ID to controller-runtime if ID is not set", func() {
 				var rl resourcelock.Interface
 				m1, err := New(cfg, Options{

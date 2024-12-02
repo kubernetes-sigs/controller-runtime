@@ -17,6 +17,7 @@ limitations under the License.
 package certwatcher_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -34,6 +35,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher/metrics"
 )
@@ -80,7 +82,7 @@ var _ = Describe("CertWatcher", func() {
 			go func() {
 				defer GinkgoRecover()
 				defer close(doneCh)
-				Expect(watcher.Start(ctx)).To(Succeed())
+				Expect(watcher.WithWatchInterval(time.Second).Start(ctx)).To(Succeed())
 			}()
 			// wait till we read first cert
 			Eventually(func() error {
@@ -113,7 +115,7 @@ var _ = Describe("CertWatcher", func() {
 			Eventually(func() bool {
 				secondcert, _ := watcher.GetCertificate(nil)
 				first := firstcert.PrivateKey.(*rsa.PrivateKey)
-				return first.Equal(secondcert.PrivateKey)
+				return first.Equal(secondcert.PrivateKey) || bytes.Equal(firstcert.Certificate[0], secondcert.Certificate[0])
 			}).ShouldNot(BeTrue())
 
 			ctxCancel()
@@ -143,8 +145,35 @@ var _ = Describe("CertWatcher", func() {
 			Eventually(func() bool {
 				secondcert, _ := watcher.GetCertificate(nil)
 				first := firstcert.PrivateKey.(*rsa.PrivateKey)
-				return first.Equal(secondcert.PrivateKey)
+				return first.Equal(secondcert.PrivateKey) || bytes.Equal(firstcert.Certificate[0], secondcert.Certificate[0])
 			}).ShouldNot(BeTrue())
+
+			ctxCancel()
+			Eventually(doneCh, "4s").Should(BeClosed())
+			Expect(called.Load()).To(BeNumerically(">=", 1))
+		})
+
+		It("should reload currentCert after move out", func() {
+			doneCh := startWatcher()
+			called := atomic.Int64{}
+			watcher.RegisterCallback(func(crt tls.Certificate) {
+				called.Add(1)
+				Expect(crt.Certificate).ToNot(BeEmpty())
+			})
+
+			firstcert, _ := watcher.GetCertificate(nil)
+
+			Expect(os.Rename(certPath, certPath+".old")).To(Succeed())
+			Expect(os.Rename(keyPath, keyPath+".old")).To(Succeed())
+
+			err := writeCerts(certPath, keyPath, "192.168.0.3")
+			Expect(err).ToNot(HaveOccurred())
+
+			Eventually(func() bool {
+				secondcert, _ := watcher.GetCertificate(nil)
+				first := firstcert.PrivateKey.(*rsa.PrivateKey)
+				return first.Equal(secondcert.PrivateKey) || bytes.Equal(firstcert.Certificate[0], secondcert.Certificate[0])
+			}, "10s", "1s").ShouldNot(BeTrue())
 
 			ctxCancel()
 			Eventually(doneCh, "4s").Should(BeClosed())
@@ -165,8 +194,8 @@ var _ = Describe("CertWatcher", func() {
 
 				Eventually(func() error {
 					readCertificateTotalAfter := testutil.ToFloat64(metrics.ReadCertificateTotal)
-					if readCertificateTotalAfter != readCertificateTotalBefore+1.0 {
-						return fmt.Errorf("metric read certificate total expected: %v and got: %v", readCertificateTotalBefore+1.0, readCertificateTotalAfter)
+					if readCertificateTotalAfter < readCertificateTotalBefore+1.0 {
+						return fmt.Errorf("metric read certificate total expected at least: %v and got: %v", readCertificateTotalBefore+1.0, readCertificateTotalAfter)
 					}
 					return nil
 				}, "4s").Should(Succeed())
@@ -180,8 +209,8 @@ var _ = Describe("CertWatcher", func() {
 
 				Eventually(func() error {
 					readCertificateTotalAfter := testutil.ToFloat64(metrics.ReadCertificateTotal)
-					if readCertificateTotalAfter != readCertificateTotalBefore+1.0 {
-						return fmt.Errorf("metric read certificate total expected: %v and got: %v", readCertificateTotalBefore+1.0, readCertificateTotalAfter)
+					if readCertificateTotalAfter < readCertificateTotalBefore+1.0 {
+						return fmt.Errorf("metric read certificate total expected at least: %v and got: %v", readCertificateTotalBefore+1.0, readCertificateTotalAfter)
 					}
 					readCertificateTotalBefore = readCertificateTotalAfter
 					return nil
@@ -192,15 +221,15 @@ var _ = Describe("CertWatcher", func() {
 				// Note, we are checking two errors here, because os.Remove generates two fsnotify events: Chmod + Remove
 				Eventually(func() error {
 					readCertificateTotalAfter := testutil.ToFloat64(metrics.ReadCertificateTotal)
-					if readCertificateTotalAfter != readCertificateTotalBefore+2.0 {
-						return fmt.Errorf("metric read certificate total expected: %v and got: %v", readCertificateTotalBefore+2.0, readCertificateTotalAfter)
+					if readCertificateTotalAfter < readCertificateTotalBefore+2.0 {
+						return fmt.Errorf("metric read certificate total expected at least: %v and got: %v", readCertificateTotalBefore+2.0, readCertificateTotalAfter)
 					}
 					return nil
 				}, "4s").Should(Succeed())
 				Eventually(func() error {
 					readCertificateErrorsAfter := testutil.ToFloat64(metrics.ReadCertificateErrors)
-					if readCertificateErrorsAfter != readCertificateErrorsBefore+2.0 {
-						return fmt.Errorf("metric read certificate errors expected: %v and got: %v", readCertificateErrorsBefore+2.0, readCertificateErrorsAfter)
+					if readCertificateErrorsAfter < readCertificateErrorsBefore+2.0 {
+						return fmt.Errorf("metric read certificate errors expected at least: %v and got: %v", readCertificateErrorsBefore+2.0, readCertificateErrorsAfter)
 					}
 					return nil
 				}, "4s").Should(Succeed())

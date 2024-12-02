@@ -1388,6 +1388,47 @@ var _ = Describe("Fake client", func() {
 					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
 					Expect(list.Items).To(BeEmpty())
 				})
+
+				It("supports adding an index at runtime", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("metadata.name", "test-deployment-2"),
+					}
+					list := &appsv1.DeploymentList{}
+					err := cl.List(context.Background(), list, listOpts)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("no index with name metadata.name has been registered"))
+
+					err = AddIndex(cl, &appsv1.Deployment{}, "metadata.name", func(obj client.Object) []string {
+						return []string{obj.GetName()}
+					})
+					Expect(err).To(Succeed())
+
+					Expect(cl.List(context.Background(), list, listOpts)).To(Succeed())
+					Expect(list.Items).To(ConsistOf(*dep2))
+				})
+
+				It("Is not a datarace to add and use indexes in parallel", func() {
+					wg := sync.WaitGroup{}
+					wg.Add(2)
+
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("spec.replicas", "2"),
+					}
+					go func() {
+						defer wg.Done()
+						defer GinkgoRecover()
+						Expect(cl.List(context.Background(), &appsv1.DeploymentList{}, listOpts)).To(Succeed())
+					}()
+					go func() {
+						defer wg.Done()
+						defer GinkgoRecover()
+						err := AddIndex(cl, &appsv1.Deployment{}, "metadata.name", func(obj client.Object) []string {
+							return []string{obj.GetName()}
+						})
+						Expect(err).To(Succeed())
+					}()
+					wg.Wait()
+				})
 			})
 		})
 

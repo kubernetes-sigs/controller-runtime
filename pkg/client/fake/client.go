@@ -84,6 +84,8 @@ type fakeClient struct {
 	// indexes maps each GroupVersionKind (GVK) to the indexes registered for that GVK.
 	// The inner map maps from index name to IndexerFunc.
 	indexes map[schema.GroupVersionKind]map[string]client.IndexerFunc
+	// indexesLock must be held when accessing indexes.
+	indexesLock sync.RWMutex
 }
 
 var _ client.WithWatch = &fakeClient{}
@@ -648,10 +650,11 @@ func (c *fakeClient) filterList(list []runtime.Object, gvk schema.GroupVersionKi
 func (c *fakeClient) filterWithFields(list []runtime.Object, gvk schema.GroupVersionKind, fs fields.Selector) ([]runtime.Object, error) {
 	requiresExact := selector.RequiresExactMatch(fs)
 	if !requiresExact {
-		return nil, fmt.Errorf("field selector %s is not in one of the two supported forms \"key==val\" or \"key=val\"",
-			fs)
+		return nil, fmt.Errorf(`field selector %s is not in one of the two supported forms "key==val" or "key=val"`, fs)
 	}
 
+	c.indexesLock.RLock()
+	defer c.indexesLock.RUnlock()
 	// Field selection is mimicked via indexes, so there's no sane answer this function can give
 	// if there are no indexes registered for the GroupVersionKind of the objects in the list.
 	indexes := c.indexes[gvk]
@@ -1526,5 +1529,39 @@ func applyScale(obj client.Object, scale *autoscalingv1.Scale) error {
 		// TODO: CRDs https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#scale-subresource
 		return fmt.Errorf("unimplemented scale subresource for resource %T", obj)
 	}
+	return nil
+}
+
+// AddIndex adds an index to a fake client. It will panic if used with a client that is not a fake client.
+// It will error if there is already an index for given object with the same name as field.
+//
+// It can be used to test code that adds indexes to the cache at runtime.
+func AddIndex(c client.Client, obj runtime.Object, field string, extractValue client.IndexerFunc) error {
+	fakeClient, isFakeClient := c.(*fakeClient)
+	if !isFakeClient {
+		panic("AddIndex can only be used with a fake client")
+	}
+	fakeClient.indexesLock.Lock()
+	defer fakeClient.indexesLock.Unlock()
+
+	if fakeClient.indexes == nil {
+		fakeClient.indexes = make(map[schema.GroupVersionKind]map[string]client.IndexerFunc, 1)
+	}
+
+	gvk, err := apiutil.GVKForObject(obj, fakeClient.scheme)
+	if err != nil {
+		return fmt.Errorf("failed to get gvk for %T: %w", obj, err)
+	}
+
+	if fakeClient.indexes[gvk] == nil {
+		fakeClient.indexes[gvk] = make(map[string]client.IndexerFunc, 1)
+	}
+
+	if fakeClient.indexes[gvk][field] != nil {
+		return fmt.Errorf("index %s already exists", field)
+	}
+
+	fakeClient.indexes[gvk][field] = extractValue
+
 	return nil
 }

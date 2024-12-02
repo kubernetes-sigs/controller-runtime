@@ -104,6 +104,13 @@ func (cw *CertWatcher) Start(ctx context.Context) error {
 	}
 }
 
+// Watch used to read events from the watcher's channel and reacts to changes,
+// it has currently no function and it's left here for backward compatibility until a future release.
+//
+// Deprecated: fsnotify has been removed and Start() is now polling instead.
+func (cw *CertWatcher) Watch() {
+}
+
 // updateCachedCertificate checks if the new certificate differs from the cache,
 // updates it and returns the result if it was updated or not
 func (cw *CertWatcher) updateCachedCertificate(cert *tls.Certificate, keyPEMBlock []byte) bool {

@@ -64,8 +64,8 @@ type Cluster interface {
 	// GetRESTMapper returns a RESTMapper
 	GetRESTMapper() meta.RESTMapper
 
-	// GetAPIReader returns a reader that will be configured to use the API server.
-	// This should be used sparingly and only when the client does not fit your
+	// GetAPIReader returns a reader that will be configured to use the API server directly.
+	// This should be used sparingly and only when the cached client does not fit your
 	// use case.
 	GetAPIReader() client.Reader
 

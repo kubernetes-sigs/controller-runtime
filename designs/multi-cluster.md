@@ -1,8 +1,10 @@
 # Multi-Cluster Support
-Author: @sttts
+
+Author: @sttts @embik
+
 Initial implementation: @vincepri
 
-Last Updated on: 03/26/2024
+Last Updated on: 12/04/2024
 
 ## Table of Contents
 
@@ -35,6 +37,10 @@ Multi-cluster use-cases require the creation of multiple managers and/or cluster
 objects. This proposal is about adding native support for multi-cluster use-cases
 to controller-runtime.
 
+With this change, it will be possible to implement pluggable cluster providers
+that automatically start and stop watches (and thus, cluster-aware reconcilers) when
+the cluster provider adds ("engages") or removes ("disengages") a cluster.
+
 ## Motivation
 
 This change is important because:
@@ -50,6 +56,7 @@ This change is important because:
 
 ### Goals
 
+- Provide an interface for plugging in a "cluster provider", which provides a dynamic set of clusters that should be reconciled by registered controllers.
 - Provide a way to natively write controllers that
   1. (UNIFORM MULTI-CLUSTER CONTROLLER) operate on multiple clusters in a uniform way,
      i.e. reconciling the same resources on multiple clusters, **optionally**
@@ -59,12 +66,8 @@ This change is important because:
      Example: distributed `ReplicaSet` controller, reconciling `ReplicaSets` on multiple clusters.
   2. (AGGREGATING MULTI-CLUSTER CONTROLLER) operate on one central hub cluster aggregating information from multiple clusters.
      
-     Example: distributed `Deployment` controller, aggregating `ReplicaSets` back into the `Deployment` object.
+     Example: distributed `Deployment` controller, aggregating `ReplicaSets` across multiple clusters back into a central `Deployment` object.
 - Allow clusters to dynamically join and leave the set of clusters a controller operates on.
-- Allow event sources to be cross-cluster:
-  1. Multi-cluster events that trigger reconciliation in the one central hub cluster.
-  2. Central hub cluster events to trigger reconciliation on multiple clusters.
-- Allow (informer) indexes that span multiple clusters.
 - Allow logical clusters where a set of clusters is actually backed by one physical informer store.
 - Allow 3rd-parties to plug in their multi-cluster adapter (in source code) into
   an existing multi-cluster-compatible code-base.
@@ -80,7 +83,7 @@ logic.
 ### Examples
 
 - Run a controller-runtime controller against a kubeconfig with arbitrary many contexts, all being reconciled.
-- Run a controller-runtime controller against cluster-managers like kind, Cluster-API, Open-Cluster-Manager or Hypershift.
+- Run a controller-runtime controller against cluster managers like kind, Cluster API, Open-Cluster-Manager or Hypershift.
 - Run a controller-runtime controller against a kcp shard with a wildcard watch.
 
 ### Non-Goals/Future Work
@@ -94,17 +97,32 @@ logic.
 ## Proposal
 
 The `ctrl.Manager` _SHOULD_ be extended to get an optional `cluster.Provider` via
-`ctrl.Options` implementing
+`ctrl.Options`, implementing:
 
 ```golang
 // pkg/cluster
+
+// Provider defines methods to retrieve clusters by name. The provider is
+// responsible for discovering and managing the lifecycle of each cluster.
+//
+// Example: A Cluster API provider would be responsible for discovering and
+// managing clusters that are backed by Cluster API resources, which can live
+// in multiple namespaces in a single management cluster.
 type Provider interface {
-   Get(ctx context.Context, clusterName string, opts ...Option) (Cluster, error)
-   List(ctx context.Context) ([]string, error)
-   Watch(ctx context.Context) (Watcher, error)
+	// Get returns a cluster for the given identifying cluster name. Get
+	// returns an existing cluster if it has been created before.
+	Get(ctx context.Context, clusterName string) (Cluster, error)
 }
 ```
+
+A cluster provider is responsible for constructing a `cluster.Cluster` instance
+upon calls to `Get(ctx, clusterName)` and returning it. Providers should keep track
+of created clusters and return them again if the same name is requested. Since
+providers are responsible for constructing the `cluster.Cluster` instance, they
+can make decisions about e.g. reusing existing informers.
+
 The `cluster.Cluster` _SHOULD_ be extended with a unique name identifier:
+
 ```golang
 // pkg/cluster:
 type Cluster interface {
@@ -113,36 +131,74 @@ type Cluster interface {
 }
 ```
 
-The `ctrl.Manager` will use the provider to watch clusters coming and going, and
-will inform runnables implementing the `cluster.AwareRunnable` interface:
+A new interface for cluster-aware runnables will be provided:
 
 ```golang
 // pkg/cluster
-type AwareRunnable interface {
+type Aware interface {
+	// Engage gets called when the component should start operations for the given Cluster.
+	// The given context is tied to the Cluster's lifecycle and will be cancelled when the
+	// Cluster is removed or an error occurs.
+	//
+	// Implementers should return an error if they cannot start operations for the given Cluster,
+	// and should ensure this operation is re-entrant and non-blocking.
+	//
+	//	\_________________|)____.---'--`---.____
+	//              ||    \----.________.----/
+	//              ||     / /    `--'
+	//            __||____/ /_
+	//           |___         \
+	//               `--------'
 	Engage(context.Context, Cluster) error
+
+	// Disengage gets called when the component should stop operations for the given Cluster.
 	Disengage(context.Context, Cluster) error
 }
 ```
-In particular, controllers implement the `AwareRunnable` interface. They react
-to engaged clusters by duplicating and starting their registered `source.Source`s
-and `handler.EventHandler`s for each cluster through implementation of
-```golang
-// pkg/source
-type DeepCopyableSyncingSource interface {
-	SyncingSource
-	DeepCopyFor(cluster cluster.Cluster) DeepCopyableSyncingSource
-}
 
-// pkg/handler
-type DeepCopyableEventHandler interface {
-    EventHandler
-    DeepCopyFor(c cluster.Cluster) DeepCopyableEventHandler
+`ctrl.Manager` will implement `cluster.Aware`. It is the cluster provider's responsibility
+to call `Engage` and `Disengage` on a `ctrl.Manager` instance when clusters join or leave
+the set of target clusters that should be reconciled.
+
+The internal `ctrl.Manager` implementation in turn will call `Engage` and `Disengage` on all 
+its runnables that are cluster-aware (i.e. that implement the `cluster.Aware` interface).
+
+In particular, cluster-aware controllers implement the `cluster.Aware` interface and are
+responsible for starting watches on clusters when they are engaged. This is expressed through
+the interface below:
+
+```golang
+// pkg/controller
+type TypedMultiClusterController[request comparable] interface {
+	cluster.Aware
+	TypedController[request]
 }
 ```
-The standard implementing types, in particular `internal.Kind` will adhere to
-these interfaces.
+
+The multi-cluster controller implementation reacts to engaged clusters by starting
+a new `TypedSyncingSource` that also wraps the context passed down from the call to `Engage`,
+which _MUST_ be canceled by the cluster provider at the end of a cluster's lifecycle.
+
+Instead of extending `reconcile.Request`, implementations _SHOULD_ bring their
+own request type through the generics support in `Typed*` types (`request comparable`).
+
+Optionally, a passed `TypedEventHandler` will be duplicated per engaged cluster if they
+fullfil the following interface:
+
+```golang
+// pkg/handler
+type TypedDeepCopyableEventHandler[object any, request comparable] interface {
+	TypedEventHandler[object, request]
+	DeepCopyFor(c cluster.Cluster) TypedDeepCopyableEventHandler[object, request]
+}
+```
+
+This might be necessary if a BYO `TypedEventHandler` needs to store information about
+the engaged cluster (e.g. because the events do not supply information about the cluster in
+object annotations) that it has been started for.
 
 The `ctrl.Manager` _SHOULD_ be extended by a `cluster.Cluster` getter:
+
 ```golang
 // pkg/manager
 type Manager interface {
@@ -150,55 +206,85 @@ type Manager interface {
     GetCluster(ctx context.Context, clusterName string) (cluster.Cluster, error)
 }
 ```
+
 The embedded `cluster.Cluster` corresponds to `GetCluster(ctx, "")`. We call the
 clusters with non-empty name "provider clusters" or "enganged clusters", while
 the embedded cluster of the manager is called the "default cluster" or "hub 
 cluster".
 
-The `reconcile.Request` _SHOULD_ be extended by an optional `ClusterName` field:
-```golang
-// pkg/reconile
-type Request struct {
-    ClusterName string
-    types.NamespacedName
-}
-```
-
-With these changes, the behaviour of controller-runtime without a set cluster
-provider will be unchanged.
 
 ### Multi-Cluster-Compatible Reconcilers
 
 Reconcilers can be made multi-cluster-compatible by changing client and cache
 accessing code from directly accessing `mgr.GetClient()` and `mgr.GetCache()` to
-going through `mgr.GetCluster(req.ClusterName).GetClient()` and
-`mgr.GetCluster(req.ClusterName).GetCache()`.
+going through `mgr.GetCluster(clusterName).GetClient()` and
+`mgr.GetCluster(clusterName).GetCache()`. `clusterName` needs to be extracted from
+the BYO `request` type (e.g. a `clusterName` field in the type itself).
 
-When building a controller like
+A typical snippet at the beginning of a reconciler to fetch the client could look like this:
+
 ```golang
-builder.NewControllerManagedBy(mgr).
-    For(&appsv1.ReplicaSet{}).
-	Owns(&v1.Pod{}).
-    Complete(reconciler)
+cl, err := mgr.GetCluster(ctx, req.ClusterName)
+if err != nil {
+	return reconcile.Result{}, err
+}
+client := cl.GetClient()
 ```
-with the described change to use `GetCluster(ctx, req.ClusterName)` will automatically 
-act as *uniform multi-cluster controller*. It will reconcile resources from cluster `X`
+
+Due to the BYO `request` type, controllers need to be built like this:
+
+```golang
+builder.TypedControllerManagedBy[ClusterRequest](mgr).
+	Named("multi-cluster-controller").
+	Watches(&corev1.Pod{}, &ClusterRequestEventHandler{}).
+	Complete(reconciler)
+```
+
+With `ClusterRequest` and `ClusterRequestEventHandler` being BYO types. `reconciler`
+can be e.g. of type `reconcile.TypedFunc[ClusterRequest]`.
+
+`ClusterRequest` will likely often look like this:
+
+```golang
+type ClusterRequest struct {
+	reconcile.Request
+	ClusterName string
+}
+```
+
+Controllers that use `For` or `Owns` cannot be converted to multi-cluster controllers
+without changing to `Watches` as the BYO `request` type cannot be used with them:
+
+```golang
+// pkg/builder/controller.go
+if reflect.TypeFor[request]() != reflect.TypeOf(reconcile.Request{}) {
+	return fmt.Errorf("For() can only be used with reconcile.Request, got %T", *new(request))
+}
+```
+
+With the described changes (use `GetCluster(ctx, clusterName)` and making `reconciler`
+a `TypedFunc[ClusterRequest`) an existing controller will automatically act as
+*uniform multi-cluster controller*. It will reconcile resources from cluster `X`
 in cluster `X`.
 
 For a manager with `cluster.Provider`, the builder _SHOULD_ create a controller
 that sources events **ONLY** from the provider clusters that got engaged with
 the controller.
 
-Controllers that should be triggered by events on the hub cluster will have to
-opt-in like in this example:
+Controllers that should be triggered by events on the hub cluster can continue
+to use `For` and `Owns` and explicitly pass the intention to engage only with the
+"default" cluster:
 
 ```golang
 builder.NewControllerManagedBy(mgr).
-    For(&appsv1.Deployment{}, builder.InDefaultCluster).
+    WithOptions(controller.TypedOptions{
+        EngageWithDefaultCluster: ptr.To(true),
+        EngageWithProviderClusters: ptr.To(false),
+    }).
+    For(&appsv1.Deployment{}).
 	Owns(&v1.ReplicaSet{}).
     Complete(reconciler)
 ```
-A mixed set of sources is possible as shown here in the example.
 
 ## User Stories
 
@@ -206,11 +292,11 @@ A mixed set of sources is possible as shown here in the example.
 
 - Do nothing. Controller-runtime behaviour is unchanged.
 
-### Multi-Cluster Integrator wanting to support cluster managers like Cluster-API or kind
+### Multi-Cluster Integrator wanting to support cluster managers like Cluster API or kind
 
 - Implement the `cluster.Provider` interface, either via polling of the cluster registry
   or by watching objects in the hub cluster.
-- For every new cluster create an instance of `cluster.Cluster`.
+- For every new cluster create an instance of `cluster.Cluster` and call `mgr.Engage`.
 
 ### Multi-Cluster Integrator wanting to support apiservers with logical cluster (like kcp)
 
@@ -223,7 +309,8 @@ A mixed set of sources is possible as shown here in the example.
 ### Controller Author without self-interest in multi-cluster, but open for adoption in multi-cluster setups
 
 - Replace `mgr.GetClient()` and `mgr.GetCache` with `mgr.GetCluster(req.ClusterName).GetClient()` and `mgr.GetCluster(req.ClusterName).GetCache()`.
-- Make manager and controller plumbing vendor'able to allow plugging in multi-cluster provider.
+- Switch from `For` and `Owns` builder calls to `watches`
+- Make manager and controller plumbing vendor'able to allow plugging in multi-cluster provider and BYO request type.
 
 ### Controller Author who wants to support certain multi-cluster setups
 
@@ -234,12 +321,11 @@ A mixed set of sources is possible as shown here in the example.
 
 - The standard behaviour of controller-runtime is unchanged for single-cluster controllers.
 - The activation of the multi-cluster mode is through attaching the `cluster.Provider` to the manager. 
-  To make it clear that the semantics are experimental, we make the `Options.provider` field private
-  and adds `Options.WithExperimentalClusterProvider` method.
+  To make it clear that the semantics are experimental, we name the `manager.Options` field
+  `ExperimentalClusterProvider`.
 - We only extend these interfaces and structs:
-  - `ctrl.Manager` with `GetCluster(ctx, clusterName string) (cluster.Cluster, error)`
-  - `cluster.Cluster` with `Name() string`
-  - `reconcile.Request` with `ClusterName string`
+  - `ctrl.Manager` with `GetCluster(ctx, clusterName string) (cluster.Cluster, error)` and `cluster.Aware`.
+  - `cluster.Cluster` with `Name() string`.
   We think that the behaviour of these extensions is well understood and hence low risk.
   Everything else behind the scenes is an implementation detail that can be changed
   at any time.
@@ -258,24 +344,12 @@ A mixed set of sources is possible as shown here in the example.
 - We could deepcopy the builder instead of the sources and handlers. This would
   lead to one controller and one workqueue per cluster. For the reason outlined
   in the previous alternative, this is not desireable.
-- We could skip adding `ClusterName` to `reconcile.Request` and instead pass the
-  cluster through in the context. On the one hand, this looks attractive as it
-  would avoid having to touch reconcilers at all to make them multi-cluster-compatible.
-  On the other hand, with `cluster.Cluster` embedded into `manager.Manager`, not
-  every method of `cluster.Cluster` carries a context. So virtualizing the cluster
-  in the manager leads to contradictions in the semantics.
-
-  For example, it can well be that every cluster has different REST mapping because
-  installed CRDs are different. Without a context, we cannot return the right
-  REST mapper.
-
-  An alternative would be to add a context to every method of `cluster.Cluster`,
-  which is a much bigger and uglier change than what is proposed here.
-
 
 ## Implementation History
 
 - [PR #2207 by @vincepri : WIP: ✨ Cluster Provider and cluster-aware controllers](https://github.com/kubernetes-sigs/controller-runtime/pull/2207) – with extensive review
-- [PR #2208 by @sttts replace #2207: WIP: ✨ Cluster Provider and cluster-aware controllers](https://github.com/kubernetes-sigs/controller-runtime/pull/2726) – 
+- [PR #2726 by @sttts replacing #2207: WIP: ✨ Cluster Provider and cluster-aware controllers](https://github.com/kubernetes-sigs/controller-runtime/pull/2726) – 
   picking up #2207, addressing lots of comments and extending the approach to what kcp needs, with a `fleet-namespace` example that demonstrates a similar setup as kcp with real logical clusters.
+- [PR #3019 by @embik, replacing #2726: ✨ WIP: Cluster provider and cluster-aware controllers](https://github.com/kubernetes-sigs/controller-runtime/pull/3019) - 
+  picking up #2726, reworking existing code to support the recent `Typed*` generic changes of the codebase.
 - [github.com/kcp-dev/controller-runtime](https://github.com/kcp-dev/controller-runtime) – the kcp controller-runtime fork

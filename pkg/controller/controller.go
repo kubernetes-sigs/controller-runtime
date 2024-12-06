@@ -190,7 +190,11 @@ func NewTypedUnmanaged[request comparable](name string, mgr manager.Manager, opt
 	}
 
 	if options.RateLimiter == nil {
-		options.RateLimiter = workqueue.DefaultTypedControllerRateLimiter[request]()
+		if mgr.GetControllerOptions().UsePriorityQueue {
+			options.RateLimiter = workqueue.NewTypedItemExponentialFailureRateLimiter[request](5*time.Millisecond, 1000*time.Second)
+		} else {
+			options.RateLimiter = workqueue.DefaultTypedControllerRateLimiter[request]()
+		}
 	}
 
 	if options.NewQueue == nil {

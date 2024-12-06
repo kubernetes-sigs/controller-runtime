@@ -194,12 +194,12 @@ func NewTypedUnmanaged[request comparable](name string, mgr manager.Manager, opt
 	}
 
 	if options.NewQueue == nil {
-		if mgr.GetControllerOptions().UsePriorityQueue {
-			options.NewQueue = func(controllerName string, rateLimiter workqueue.TypedRateLimiter[request]) workqueue.TypedRateLimitingInterface[request] {
-				return priorityqueue.New[request](controllerName)
-			}
-		} else {
-			options.NewQueue = func(controllerName string, rateLimiter workqueue.TypedRateLimiter[request]) workqueue.TypedRateLimitingInterface[request] {
+		options.NewQueue = func(controllerName string, rateLimiter workqueue.TypedRateLimiter[request]) workqueue.TypedRateLimitingInterface[request] {
+			if mgr.GetControllerOptions().UsePriorityQueue {
+				return priorityqueue.New(controllerName, func(o *priorityqueue.Opts[request]) {
+					o.RateLimiter = rateLimiter
+				})
+			} else {
 				return workqueue.NewTypedRateLimitingQueueWithConfig(rateLimiter, workqueue.TypedRateLimitingQueueConfig[request]{
 					Name: controllerName,
 				})

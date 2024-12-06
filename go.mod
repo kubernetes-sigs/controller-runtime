@@ -6,6 +6,7 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.0
 	github.com/go-logr/logr v1.4.2
 	github.com/go-logr/zapr v1.3.0
+	github.com/google/btree v1.1.3
 	github.com/google/go-cmp v0.6.0
 	github.com/google/gofuzz v1.2.0
 	github.com/onsi/ginkgo/v2 v2.21.0
@@ -29,8 +30,6 @@ require (
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 	sigs.k8s.io/yaml v1.4.0
 )
-
-require github.com/google/btree v1.1.3
 
 require (
 	cel.dev/expr v0.18.0 // indirect

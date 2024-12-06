@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
+	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -773,4 +774,140 @@ var _ = Describe("Eventhandler", func() {
 			instance.Generic(ctx, evt, q)
 		})
 	})
+
+	Describe("WithLowPriorityWhenUnchanged", func() {
+		It("should lower the priority of a create request for an object that was crated more than one minute in the past", func() {
+			actualOpts := priorityqueue.AddOpts{}
+			var actualRequests []reconcile.Request
+			wq := &fakePriorityQueue{
+				addWithOpts: func(o priorityqueue.AddOpts, items ...reconcile.Request) {
+					actualOpts = o
+					actualRequests = items
+				},
+			}
+
+			h := handler.WithLowPriorityWhenUnchanged(&handler.EnqueueRequestForObject{})
+			h.Create(ctx, event.CreateEvent{
+				Object: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+					Name: "my-pod",
+				}},
+			}, wq)
+
+			Expect(actualOpts).To(Equal(priorityqueue.AddOpts{Priority: handler.LowPriority}))
+			Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
+		})
+
+		It("should not lower the priority of a create request for an object that was crated less than one minute in the past", func() {
+			actualOpts := priorityqueue.AddOpts{}
+			var actualRequests []reconcile.Request
+			wq := &fakePriorityQueue{
+				addWithOpts: func(o priorityqueue.AddOpts, items ...reconcile.Request) {
+					actualOpts = o
+					actualRequests = items
+				},
+			}
+
+			h := handler.WithLowPriorityWhenUnchanged(&handler.EnqueueRequestForObject{})
+			h.Create(ctx, event.CreateEvent{
+				Object: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+					Name:              "my-pod",
+					CreationTimestamp: metav1.Now(),
+				}},
+			}, wq)
+
+			Expect(actualOpts).To(Equal(priorityqueue.AddOpts{}))
+			Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
+		})
+
+		It("should lower the priority of an update request with unchanged RV", func() {
+			actualOpts := priorityqueue.AddOpts{}
+			var actualRequests []reconcile.Request
+			wq := &fakePriorityQueue{
+				addWithOpts: func(o priorityqueue.AddOpts, items ...reconcile.Request) {
+					actualOpts = o
+					actualRequests = items
+				},
+			}
+
+			h := handler.WithLowPriorityWhenUnchanged(&handler.EnqueueRequestForObject{})
+			h.Update(ctx, event.UpdateEvent{
+				ObjectOld: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+					Name: "my-pod",
+				}},
+				ObjectNew: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+					Name: "my-pod",
+				}},
+			}, wq)
+
+			Expect(actualOpts).To(Equal(priorityqueue.AddOpts{Priority: handler.LowPriority}))
+			Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
+		})
+
+		It("should not lower the priority of an update request with changed RV", func() {
+			actualOpts := priorityqueue.AddOpts{}
+			var actualRequests []reconcile.Request
+			wq := &fakePriorityQueue{
+				addWithOpts: func(o priorityqueue.AddOpts, items ...reconcile.Request) {
+					actualOpts = o
+					actualRequests = items
+				},
+			}
+
+			h := handler.WithLowPriorityWhenUnchanged(&handler.EnqueueRequestForObject{})
+			h.Update(ctx, event.UpdateEvent{
+				ObjectOld: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+					Name: "my-pod",
+				}},
+				ObjectNew: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+					Name:            "my-pod",
+					ResourceVersion: "1",
+				}},
+			}, wq)
+
+			Expect(actualOpts).To(Equal(priorityqueue.AddOpts{}))
+			Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
+		})
+
+		It("should have no effect on create if the workqueue is not a priorityqueue", func() {
+			h := handler.WithLowPriorityWhenUnchanged(&handler.EnqueueRequestForObject{})
+			h.Create(ctx, event.CreateEvent{
+				Object: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+					Name: "my-pod",
+				}},
+			}, q)
+
+			Expect(q.Len()).To(Equal(1))
+			item, _ := q.Get()
+			Expect(item).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Name: "my-pod"}}))
+		})
+
+		It("should have no effect on Update if the workqueue is not a priorityqueue", func() {
+			h := handler.WithLowPriorityWhenUnchanged(&handler.EnqueueRequestForObject{})
+			h.Update(ctx, event.UpdateEvent{
+				ObjectOld: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+					Name: "my-pod",
+				}},
+				ObjectNew: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+					Name: "my-pod",
+				}},
+			}, q)
+
+			Expect(q.Len()).To(Equal(1))
+			item, _ := q.Get()
+			Expect(item).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Name: "my-pod"}}))
+		})
+	})
+
 })
+
+type fakePriorityQueue struct {
+	workqueue.TypedRateLimitingInterface[reconcile.Request]
+	addWithOpts func(o priorityqueue.AddOpts, items ...reconcile.Request)
+}
+
+func (f *fakePriorityQueue) AddWithOpts(o priorityqueue.AddOpts, items ...reconcile.Request) {
+	f.addWithOpts(o, items...)
+}
+func (f *fakePriorityQueue) GetWithPriority() (item reconcile.Request, priority int, shutdown bool) {
+	panic("GetWithPriority is not expected to be called")
+}

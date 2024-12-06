@@ -165,6 +165,14 @@ issues:
     - linters:
         - dupl
       path: _test\.go
+    - linters:
+        - revive
+      path: .*/internal/.*
+    - linters:
+        - unused
+      # Seems to incorrectly trigger on the two implementations that are only
+      # used through an interface and not directly..?
+      path: pkg/controller/priorityqueue/metrics\.go
 
 run:
   go: "1.23"

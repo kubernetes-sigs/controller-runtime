@@ -146,6 +146,8 @@ var _ = Describe("Zap options setup", func() {
 	})
 })
 
+const kindNode = "Node"
+
 var _ = Describe("Zap logger setup", func() {
 	Context("when logging kubernetes objects", func() {
 		var logOut *bytes.Buffer
@@ -179,7 +181,7 @@ var _ = Describe("Zap logger setup", func() {
 
 			It("should log a standard non-namespaced Kubernetes object name", func() {
 				node := &corev1.Node{}
-				node.Name = "some-node"
+				node.Name = "some-node-1"
 				logger.Info("here's a kubernetes object", "thing", node)
 
 				outRaw := logOut.Bytes()
@@ -193,9 +195,9 @@ var _ = Describe("Zap logger setup", func() {
 
 			It("should log a standard Kubernetes object's kind, if set", func() {
 				node := &corev1.Node{}
-				node.Name = "some-node"
+				node.Name = "some-node-2"
 				node.APIVersion = "v1"
-				node.Kind = "Node"
+				node.Kind = kindNode
 				logger.Info("here's a kubernetes object", "thing", node)
 
 				outRaw := logOut.Bytes()
@@ -205,12 +207,12 @@ var _ = Describe("Zap logger setup", func() {
 				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
 					"name":       node.Name,
 					"apiVersion": "v1",
-					"kind":       "Node",
+					"kind":       kindNode,
 				}))
 			})
 
 			It("should log a standard non-namespaced NamespacedName name", func() {
-				name := types.NamespacedName{Name: "some-node"}
+				name := types.NamespacedName{Name: "some-node-3"}
 				logger.Info("here's a kubernetes object", "thing", name)
 
 				outRaw := logOut.Bytes()
@@ -263,6 +265,58 @@ var _ = Describe("Zap logger setup", func() {
 
 				outRaw := logOut.Bytes()
 				Expect(string(outRaw)).Should(ContainSubstring("got nil for runtime.Object"))
+			})
+			It("should log a standard namespaced when using logrLogger.WithValues", func() {
+				name := types.NamespacedName{Name: "some-pod", Namespace: "some-ns"}
+				logger.WithValues("thing", name).Info("here's a kubernetes object")
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":      name.Name,
+					"namespace": name.Namespace,
+				}))
+			})
+
+			It("should log a standard Kubernetes objects when using logrLogger.WithValues", func() {
+				node := &corev1.Node{}
+				node.Name = "some-node"
+				node.APIVersion = "v1"
+				node.Kind = kindNode
+				logger.WithValues("thing", node).Info("here's a kubernetes object")
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":       node.Name,
+					"apiVersion": "v1",
+					"kind":       kindNode,
+				}))
+			})
+
+			It("should log a standard unstructured Kubernetes object when using logrLogger.WithValues", func() {
+				pod := &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"name":      "some-pod",
+							"namespace": "some-ns",
+						},
+					},
+				}
+				logger.WithValues("thing", pod).Info("here's a kubernetes object")
+
+				outRaw := logOut.Bytes()
+				res := map[string]interface{}{}
+				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+					"name":      "some-pod",
+					"namespace": "some-ns",
+				}))
 			})
 		}
 

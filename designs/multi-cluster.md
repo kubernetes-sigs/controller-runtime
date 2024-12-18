@@ -4,7 +4,7 @@ Author: @sttts @embik
 
 Initial implementation: @vincepri
 
-Last Updated on: 12/04/2024
+Last Updated on: 2025-01-06
 
 ## Table of Contents
 
@@ -38,7 +38,7 @@ objects. This proposal is about adding native support for multi-cluster use-case
 to controller-runtime.
 
 With this change, it will be possible to implement pluggable cluster providers
-that automatically start and stop watches (and thus, cluster-aware reconcilers) when
+that automatically start and stop sources (and thus, cluster-aware reconcilers) when
 the cluster provider adds ("engages") or removes ("disengages") a cluster.
 
 ## Motivation
@@ -56,24 +56,27 @@ This change is important because:
 
 ### Goals
 
-- Provide an interface for plugging in a "cluster provider", which provides a dynamic set of clusters that should be reconciled by registered controllers.
-- Provide a way to natively write controllers that
-  1. (UNIFORM MULTI-CLUSTER CONTROLLER) operate on multiple clusters in a uniform way,
+- Allow 3rd-parties to implement an (optional) multi-cluster provider Go interface that controller-runtime will use (if configured on the manager) to dynamically attach and detach registered controllers to clusters that come and go.
+- With that, provide a way to natively write controllers for these patterns:
+  1. (UNIFORM MULTI-CLUSTER CONTROLLERS) operate on multiple clusters in a uniform way,
      i.e. reconciling the same resources on multiple clusters, **optionally**
      - sourcing information from one central hub cluster
      - sourcing information cross-cluster.
 
-     Example: distributed `ReplicaSet` controller, reconciling `ReplicaSets` on multiple clusters.
-  2. (AGGREGATING MULTI-CLUSTER CONTROLLER) operate on one central hub cluster aggregating information from multiple clusters.
+      Example: distributed `ReplicaSet` controller, reconciling `ReplicaSets` on multiple clusters.
+  2. (AGGREGATING MULTI-CLUSTER CONTROLLERS) operate on one central hub cluster aggregating information from multiple clusters.
      
      Example: distributed `Deployment` controller, aggregating `ReplicaSets` across multiple clusters back into a central `Deployment` object.
-- Allow clusters to dynamically join and leave the set of clusters a controller operates on.
-- Allow logical clusters where a set of clusters is actually backed by one physical informer store.
-- Allow 3rd-parties to plug in their multi-cluster adapter (in source code) into
-  an existing multi-cluster-compatible code-base.
+
+#### Low-Level Requirements
+
+- Allow event sources to be cross-cluster such that:
+  1. Multi-cluster events can trigger reconciliation in the one central hub cluster.
+  2. Central hub cluster events can trigger reconciliation on multiple clusters.
+- Allow reconcilers to look up objects through (informer) indexes from specific other clusters.
 - Minimize the amount of changes to make a controller-runtime controller 
   multi-cluster-compatible, in a way that 3rd-party projects have no reason to
-  object these kind of changes.
+  object to these kind of changes.
 
 Here we call a controller to be multi-cluster-compatible if the reconcilers get
 reconcile requests in cluster `X` and do all reconciliation in cluster `X`. This 
@@ -231,9 +234,16 @@ if err != nil {
 client := cl.GetClient()
 ```
 
-Due to the BYO `request` type, controllers need to be built like this:
+Due to the BYO `request` type, controllers using the `For` builder function need to be built/changed like this:
 
 ```golang
+// previous
+builder.TypedControllerManagedBy[reconcile.Request](mgr).
+	Named("single-cluster-controller").
+	For(&corev1.Pod{}).
+	Complete(reconciler)
+
+// new
 builder.TypedControllerManagedBy[ClusterRequest](mgr).
 	Named("multi-cluster-controller").
 	Watches(&corev1.Pod{}, &ClusterRequestEventHandler{}).
@@ -243,7 +253,7 @@ builder.TypedControllerManagedBy[ClusterRequest](mgr).
 With `ClusterRequest` and `ClusterRequestEventHandler` being BYO types. `reconciler`
 can be e.g. of type `reconcile.TypedFunc[ClusterRequest]`.
 
-`ClusterRequest` will likely often look like this:
+`ClusterRequest` will likely often look like this (but since it is a BYO type, it could store other information as well):
 
 ```golang
 type ClusterRequest struct {
@@ -252,18 +262,12 @@ type ClusterRequest struct {
 }
 ```
 
-Controllers that use `For` or `Owns` cannot be converted to multi-cluster controllers
-without changing to `Watches` as the BYO `request` type cannot be used with them:
+Controllers that use `Owns` cannot be converted to multi-cluster controllers
+without a BYO type re-implementation of `handler.EnqueueRequestForOwner` matching
+the BYO type, which is considered out of scope for now.
 
-```golang
-// pkg/builder/controller.go
-if reflect.TypeFor[request]() != reflect.TypeOf(reconcile.Request{}) {
-	return fmt.Errorf("For() can only be used with reconcile.Request, got %T", *new(request))
-}
-```
-
-With the described changes (use `GetCluster(ctx, clusterName)` and making `reconciler`
-a `TypedFunc[ClusterRequest`) an existing controller will automatically act as
+With the described changes (use `GetCluster(ctx, clusterName)`, making `reconciler`
+a `TypedFunc[ClusterRequest]` and migrating to `Watches`) an existing controller will automatically act as
 *uniform multi-cluster controller*. It will reconcile resources from cluster `X`
 in cluster `X`.
 
@@ -273,7 +277,7 @@ the controller.
 
 Controllers that should be triggered by events on the hub cluster can continue
 to use `For` and `Owns` and explicitly pass the intention to engage only with the
-"default" cluster:
+"default" cluster (this is only necessary if a cluster provider is plugged in):
 
 ```golang
 builder.NewControllerManagedBy(mgr).

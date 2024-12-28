@@ -44,8 +44,11 @@ type clientRestResources struct {
 	// mapper maps GroupVersionKinds to Resources
 	mapper meta.RESTMapper
 
-	// codecs are used to create a REST client for a gvk
-	codecs serializer.CodecFactory
+	// codecsByObject is used to override defaultCodecs for specific GroupVersionKind(object)
+	codecsByObject map[schema.GroupVersionKind]serializer.CodecFactory
+
+	// defaultCodecs are used to create a REST client for a gvk
+	defaultCodecs serializer.CodecFactory
 
 	// structuredResourceByType stores structured type metadata
 	structuredResourceByType map[schema.GroupVersionKind]*resourceMeta
@@ -62,7 +65,11 @@ func (c *clientRestResources) newResource(gvk schema.GroupVersionKind, isList, i
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 	}
 
-	client, err := apiutil.RESTClientForGVK(gvk, isUnstructured, c.config, c.codecs, c.httpClient)
+	codecFactory := c.defaultCodecs
+	if override, ok := c.codecsByObject[gvk]; ok {
+		codecFactory = override
+	}
+	client, err := apiutil.RESTClientForGVK(gvk, isUnstructured, c.config, codecFactory, c.httpClient)
 	if err != nil {
 		return nil, err
 	}

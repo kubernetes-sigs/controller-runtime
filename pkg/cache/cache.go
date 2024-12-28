@@ -140,6 +140,9 @@ type Options struct {
 	// Scheme is the scheme to use for mapping objects to GroupVersionKinds
 	Scheme *runtime.Scheme
 
+	// CodecFactoryOptionsByObject are used to indicate whether enable strict/pretty mode of codecFactory for specific object
+	CodecFactoryOptionsByObject map[client.Object]client.CodecFactoryOptions
+
 	// Mapper is the RESTMapper to use for mapping GroupVersionKinds to Resources
 	Mapper meta.RESTMapper
 
@@ -420,11 +423,12 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 		return &informerCache{
 			scheme: opts.Scheme,
 			Informers: internal.NewInformers(restConfig, &internal.InformersOpts{
-				HTTPClient:   opts.HTTPClient,
-				Scheme:       opts.Scheme,
-				Mapper:       opts.Mapper,
-				ResyncPeriod: *opts.SyncPeriod,
-				Namespace:    namespace,
+				HTTPClient:                  opts.HTTPClient,
+				Scheme:                      opts.Scheme,
+				CodecFactoryOptionsByObject: opts.CodecFactoryOptionsByObject,
+				Mapper:                      opts.Mapper,
+				ResyncPeriod:                *opts.SyncPeriod,
+				Namespace:                   namespace,
 				Selector: internal.Selector{
 					Label: config.LabelSelector,
 					Field: config.FieldSelector,

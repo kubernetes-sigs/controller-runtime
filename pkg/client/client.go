@@ -44,6 +44,9 @@ type Options struct {
 	// Scheme, if provided, will be used to map go structs to GroupVersionKinds
 	Scheme *runtime.Scheme
 
+	// CodecFactoryOptionsMutators, if provided, will be used to indicate whether enable Strict/Pretty mode of CodecFactory
+	CodecFactoryOptionsMutators []serializer.CodecFactoryOptionsMutator
+
 	// Mapper, if provided, will be used to map GroupVersionKinds to Resources
 	Mapper meta.RESTMapper
 
@@ -150,7 +153,7 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 		config:     config,
 		scheme:     options.Scheme,
 		mapper:     options.Mapper,
-		codecs:     serializer.NewCodecFactory(options.Scheme),
+		codecs:     serializer.NewCodecFactory(options.Scheme, options.CodecFactoryOptionsMutators...),
 
 		structuredResourceByType:   make(map[schema.GroupVersionKind]*resourceMeta),
 		unstructuredResourceByType: make(map[schema.GroupVersionKind]*resourceMeta),

@@ -42,17 +42,18 @@ import (
 
 // InformersOpts configures an InformerMap.
 type InformersOpts struct {
-	HTTPClient            *http.Client
-	Scheme                *runtime.Scheme
-	Mapper                meta.RESTMapper
-	ResyncPeriod          time.Duration
-	Namespace             string
-	NewInformer           *func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
-	Selector              Selector
-	Transform             cache.TransformFunc
-	UnsafeDisableDeepCopy bool
-	EnableWatchBookmarks  bool
-	WatchErrorHandler     cache.WatchErrorHandler
+	HTTPClient                  *http.Client
+	Scheme                      *runtime.Scheme
+	CodecFactoryOptionsMutators []serializer.CodecFactoryOptionsMutator
+	Mapper                      meta.RESTMapper
+	ResyncPeriod                time.Duration
+	Namespace                   string
+	NewInformer                 *func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
+	Selector                    Selector
+	Transform                   cache.TransformFunc
+	UnsafeDisableDeepCopy       bool
+	EnableWatchBookmarks        bool
+	WatchErrorHandler           cache.WatchErrorHandler
 }
 
 // NewInformers creates a new InformersMap that can create informers under the hood.
@@ -71,7 +72,7 @@ func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 			Unstructured: make(map[schema.GroupVersionKind]*Cache),
 			Metadata:     make(map[schema.GroupVersionKind]*Cache),
 		},
-		codecs:                serializer.NewCodecFactory(options.Scheme),
+		codecs:                serializer.NewCodecFactory(options.Scheme, options.CodecFactoryOptionsMutators...),
 		paramCodec:            runtime.NewParameterCodec(options.Scheme),
 		resync:                options.ResyncPeriod,
 		startWait:             make(chan struct{}),

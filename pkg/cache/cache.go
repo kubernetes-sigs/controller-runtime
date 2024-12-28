@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	toolscache "k8s.io/client-go/tools/cache"
@@ -139,6 +140,9 @@ type Options struct {
 
 	// Scheme is the scheme to use for mapping objects to GroupVersionKinds
 	Scheme *runtime.Scheme
+
+	// CodecFactoryOptionsMutators is used to indicate whether enable Strict/Pretty mode of CodecFactory
+	CodecFactoryOptionsMutators []serializer.CodecFactoryOptionsMutator
 
 	// Mapper is the RESTMapper to use for mapping GroupVersionKinds to Resources
 	Mapper meta.RESTMapper
@@ -419,11 +423,12 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 		return &informerCache{
 			scheme: opts.Scheme,
 			Informers: internal.NewInformers(restConfig, &internal.InformersOpts{
-				HTTPClient:   opts.HTTPClient,
-				Scheme:       opts.Scheme,
-				Mapper:       opts.Mapper,
-				ResyncPeriod: *opts.SyncPeriod,
-				Namespace:    namespace,
+				HTTPClient:                  opts.HTTPClient,
+				Scheme:                      opts.Scheme,
+				CodecFactoryOptionsMutators: opts.CodecFactoryOptionsMutators,
+				Mapper:                      opts.Mapper,
+				ResyncPeriod:                *opts.SyncPeriod,
+				Namespace:                   namespace,
 				Selector: internal.Selector{
 					Label: config.LabelSelector,
 					Field: config.FieldSelector,

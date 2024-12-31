@@ -77,12 +77,12 @@ var _ = Describe("CertWatcher", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		startWatcher := func() (done <-chan struct{}) {
+		startWatcher := func(interval time.Duration) (done <-chan struct{}) {
 			doneCh := make(chan struct{})
 			go func() {
 				defer GinkgoRecover()
 				defer close(doneCh)
-				Expect(watcher.WithWatchInterval(time.Second).Start(ctx)).To(Succeed())
+				Expect(watcher.WithWatchInterval(interval).Start(ctx)).To(Succeed())
 			}()
 			// wait till we read first cert
 			Eventually(func() error {
@@ -93,14 +93,16 @@ var _ = Describe("CertWatcher", func() {
 		}
 
 		It("should read the initial cert/key", func() {
-			doneCh := startWatcher()
+			// This test verifies the initial read succeeded. So interval doesn't matter.
+			doneCh := startWatcher(10 * time.Second)
 
 			ctxCancel()
 			Eventually(doneCh, "4s").Should(BeClosed())
 		})
 
 		It("should reload currentCert when changed", func() {
-			doneCh := startWatcher()
+			// This test verifies fsnotify detects the cert change. So interval doesn't matter.
+			doneCh := startWatcher(10 * time.Second)
 			called := atomic.Int64{}
 			watcher.RegisterCallback(func(crt tls.Certificate) {
 				called.Add(1)
@@ -124,7 +126,8 @@ var _ = Describe("CertWatcher", func() {
 		})
 
 		It("should reload currentCert when changed with rename", func() {
-			doneCh := startWatcher()
+			// This test verifies fsnotify detects the cert change. So interval doesn't matter.
+			doneCh := startWatcher(10 * time.Second)
 			called := atomic.Int64{}
 			watcher.RegisterCallback(func(crt tls.Certificate) {
 				called.Add(1)
@@ -154,7 +157,8 @@ var _ = Describe("CertWatcher", func() {
 		})
 
 		It("should reload currentCert after move out", func() {
-			doneCh := startWatcher()
+			// This test verifies poll works, so we'll use 1s as interval (fsnotify doesn't detect this change).
+			doneCh := startWatcher(1 * time.Second)
 			called := atomic.Int64{}
 			watcher.RegisterCallback(func(crt tls.Certificate) {
 				called.Add(1)
@@ -190,7 +194,8 @@ var _ = Describe("CertWatcher", func() {
 			})
 
 			It("should get updated on successful certificate read", func() {
-				doneCh := startWatcher()
+				// This test verifies fsnotify, so interval doesn't matter.
+				doneCh := startWatcher(10 * time.Second)
 
 				Eventually(func() error {
 					readCertificateTotalAfter := testutil.ToFloat64(metrics.ReadCertificateTotal)
@@ -205,7 +210,8 @@ var _ = Describe("CertWatcher", func() {
 			})
 
 			It("should get updated on read certificate errors", func() {
-				doneCh := startWatcher()
+				// This test works with fsnotify, so interval doesn't matter.
+				doneCh := startWatcher(10 * time.Second)
 
 				Eventually(func() error {
 					readCertificateTotalAfter := testutil.ToFloat64(metrics.ReadCertificateTotal)

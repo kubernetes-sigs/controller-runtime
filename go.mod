@@ -5,7 +5,7 @@ go 1.22.0
 require (
 	github.com/evanphx/json-patch v4.12.0+incompatible // Using v4 to match upstream
 	github.com/evanphx/json-patch/v5 v5.9.0
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
+	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-logr/logr v1.4.2
 	github.com/go-logr/zapr v1.3.0
 	github.com/google/go-cmp v0.6.0

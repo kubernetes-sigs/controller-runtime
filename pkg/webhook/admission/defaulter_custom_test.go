@@ -16,6 +16,7 @@ package admission
 
 import (
 	"context"
+	"maps"
 	"net/http"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -42,8 +43,13 @@ var _ = Describe("Defaulter Handler", func() {
 			},
 		})
 		Expect(resp.Allowed).Should(BeTrue())
-		Expect(resp.Patches).To(HaveLen(3))
+		Expect(resp.Patches).To(HaveLen(4))
 		Expect(resp.Patches).To(ContainElements(
+			jsonpatch.JsonPatchOperation{
+				Operation: "add",
+				Path:      "/labels",
+				Value:     map[string]any{"foo": "bar"},
+			},
 			jsonpatch.JsonPatchOperation{
 				Operation: "add",
 				Path:      "/replica",
@@ -74,8 +80,13 @@ var _ = Describe("Defaulter Handler", func() {
 			},
 		})
 		Expect(resp.Allowed).Should(BeTrue())
-		Expect(resp.Patches).To(HaveLen(2))
+		Expect(resp.Patches).To(HaveLen(3))
 		Expect(resp.Patches).To(ContainElements(
+			jsonpatch.JsonPatchOperation{
+				Operation: "add",
+				Path:      "/labels",
+				Value:     map[string]any{"foo": "bar"},
+			},
 			jsonpatch.JsonPatchOperation{
 				Operation: "add",
 				Path:      "/replica",
@@ -109,6 +120,8 @@ var _ = Describe("Defaulter Handler", func() {
 var _ runtime.Object = &TestDefaulter{}
 
 type TestDefaulter struct {
+	Labels map[string]string `json:"labels,omitempty"`
+
 	Replica       int `json:"replica,omitempty"`
 	TotalReplicas int `json:"totalReplicas,omitempty"`
 }
@@ -118,6 +131,7 @@ var testDefaulterGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "
 func (d *TestDefaulter) GetObjectKind() schema.ObjectKind { return d }
 func (d *TestDefaulter) DeepCopyObject() runtime.Object {
 	return &TestDefaulter{
+		Labels:        maps.Clone(d.Labels),
 		Replica:       d.Replica,
 		TotalReplicas: d.TotalReplicas,
 	}
@@ -141,6 +155,12 @@ type TestCustomDefaulter struct{}
 
 func (d *TestCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
 	o := obj.(*TestDefaulter)
+
+	if o.Labels == nil {
+		o.Labels = map[string]string{}
+	}
+	o.Labels["foo"] = "bar"
+
 	if o.Replica < 2 {
 		o.Replica = 2
 	}

@@ -155,7 +155,7 @@ func (h *defaulterForType) dropSchemeRemovals(r Response, original runtime.Objec
 	removedByScheme := sets.New(slices.DeleteFunc(patchOriginal, func(p jsonpatch.JsonPatchOperation) bool { return p.Operation != opRemove })...)
 
 	r.Patches = slices.DeleteFunc(r.Patches, func(p jsonpatch.JsonPatchOperation) bool {
-		return removedByScheme.Has(p)
+		return p.Operation == opRemove && removedByScheme.Has(p)
 	})
 
 	if len(r.Patches) == 0 {

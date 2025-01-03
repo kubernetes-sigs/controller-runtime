@@ -195,35 +195,41 @@ func (w *priorityqueue[T]) spin() {
 			w.lockedLock.Lock()
 			defer w.lockedLock.Unlock()
 
-			w.queue.Ascend(func(item *item[T]) bool {
-				if w.waiters.Load() == 0 { // no waiters, return as we can not hand anything out anyways
-					return false
-				}
-
-				// No next element we can process
-				if item.readyAt != nil && item.readyAt.After(w.now()) {
-					readyAt := item.readyAt.Sub(w.now())
-					if readyAt <= 0 { // Toctou race with the above check
-						readyAt = 1
+			for continueLoop := true; continueLoop; {
+				continueLoop = false
+				w.queue.Ascend(func(item *item[T]) bool {
+					if w.waiters.Load() == 0 { // no waiters, return as we can not hand anything out anyways
+						return false
 					}
-					nextReady = w.tick(readyAt)
+
+					// No next element we can process
+					if item.readyAt != nil && item.readyAt.After(w.now()) {
+						readyAt := item.readyAt.Sub(w.now())
+						if readyAt <= 0 { // Toctou race with the above check
+							readyAt = 1
+						}
+						nextReady = w.tick(readyAt)
+						return false
+					}
+
+					// Item is locked, we can not hand it out
+					if w.locked.Has(item.key) {
+						return true
+					}
+
+					w.metrics.get(item.key)
+					w.locked.Insert(item.key)
+					w.waiters.Add(-1)
+					delete(w.items, item.key)
+					w.queue.Delete(item)
+					w.get <- *item
+
+					// Return false because continuing with Ascend after deleting an item
+					// can lead to panics within Ascend.
+					continueLoop = true
 					return false
-				}
-
-				// Item is locked, we can not hand it out
-				if w.locked.Has(item.key) {
-					return true
-				}
-
-				w.metrics.get(item.key)
-				w.locked.Insert(item.key)
-				w.waiters.Add(-1)
-				delete(w.items, item.key)
-				w.queue.Delete(item)
-				w.get <- *item
-
-				return true
-			})
+				})
+			}
 		}()
 	}
 }

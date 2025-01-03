@@ -283,6 +283,67 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(metrics.depth["test"]).To(Equal(0))
 		Expect(metrics.adds["test"]).To(Equal(2))
 	})
+
+	It("doesn't include non-ready items in Len()", func() {
+		q, metrics := newQueue()
+		defer q.ShutDown()
+
+		q.AddWithOpts(AddOpts{After: time.Minute}, "foo")
+		q.AddWithOpts(AddOpts{}, "baz")
+		q.AddWithOpts(AddOpts{After: time.Minute}, "bar")
+		q.AddWithOpts(AddOpts{}, "bal")
+
+		Expect(q.Len()).To(Equal(2))
+		Expect(metrics.depth).To(HaveLen(1))
+		Expect(metrics.depth["test"]).To(Equal(2))
+	})
+
+	It("items are included in Len() and the queueDepth metric once they are ready", func() {
+		q, metrics := newQueue()
+		defer q.ShutDown()
+
+		q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "foo")
+		q.AddWithOpts(AddOpts{}, "baz")
+		q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "bar")
+		q.AddWithOpts(AddOpts{}, "bal")
+
+		Expect(q.Len()).To(Equal(2))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(2))
+		metrics.mu.Unlock()
+		time.Sleep(time.Second)
+		Expect(q.Len()).To(Equal(4))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(4))
+		metrics.mu.Unlock()
+
+		// Drain queue
+		for range 4 {
+			item, _ := q.Get()
+			q.Done(item)
+		}
+		Expect(q.Len()).To(Equal(0))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(0))
+		metrics.mu.Unlock()
+
+		// Validate that doing it again still works to notice bugs with removing
+		// it from the queues becameReady tracking.
+		q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "foo")
+		q.AddWithOpts(AddOpts{}, "baz")
+		q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "bar")
+		q.AddWithOpts(AddOpts{}, "bal")
+
+		Expect(q.Len()).To(Equal(2))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(2))
+		metrics.mu.Unlock()
+		time.Sleep(time.Second)
+		Expect(q.Len()).To(Equal(4))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(4))
+		metrics.mu.Unlock()
+	})
 })
 
 func BenchmarkAddGetDone(b *testing.B) {
@@ -438,10 +499,6 @@ func TestFuzzPrioriorityQueue(t *testing.T) {
 	}
 
 	wg.Wait()
-
-	if expected := len(inQueue); expected != q.Len() {
-		t.Errorf("Expected queue length to be %d, was %d", expected, q.Len())
-	}
 }
 
 func newQueue() (PriorityQueue[string], *fakeMetricsProvider) {
@@ -453,6 +510,8 @@ func newQueue() (PriorityQueue[string], *fakeMetricsProvider) {
 		bTree: q.(*priorityqueue[string]).queue,
 	}
 
+	// validate that tick always gets a positive value as it will just return
+	// nil otherwise, which results in blocking forever.
 	upstreamTick := q.(*priorityqueue[string]).tick
 	q.(*priorityqueue[string]).tick = func(d time.Duration) <-chan time.Time {
 		if d <= 0 {
@@ -477,7 +536,7 @@ func (b *btreeInteractionValidator) ReplaceOrInsert(item *item[string]) (*item[s
 }
 
 func (b *btreeInteractionValidator) Delete(item *item[string]) (*item[string], bool) {
-	// There is node codepath that deletes an item that doesn't exist
+	// There is no codepath that deletes an item that doesn't exist
 	old, existed := b.bTree.Delete(item)
 	if !existed {
 		panic(fmt.Sprintf("Delete: item %v not found", item))

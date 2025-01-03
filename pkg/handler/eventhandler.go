@@ -194,8 +194,8 @@ func (w workqueueWithCustomAddFunc[request]) Add(item request) {
 }
 
 // isObjectUnchanged checks if the object in a create event is unchanged, for example because
-// we got it in our initial listwatch or because of a resync. The heuristic it uses is to check
-// if the object is older than one minute.
+// we got it in our initial listwatch. The heuristic it uses is to check if the object is older
+// than one minute.
 func isObjectUnchanged[object client.Object](e event.TypedCreateEvent[object]) bool {
 	return e.Object.GetCreationTimestamp().Time.Before(time.Now().Add(-time.Minute))
 }

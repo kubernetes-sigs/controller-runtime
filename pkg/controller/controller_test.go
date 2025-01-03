@@ -441,7 +441,7 @@ var _ = Describe("controller.Controller", func() {
 
 		It("should configure a priority queue if UsePriorityQueue is set", func() {
 			m, err := manager.New(cfg, manager.Options{
-				Controller: config.Controller{UsePriorityQueue: true},
+				Controller: config.Controller{UsePriorityQueue: ptr.To(true)},
 			})
 			Expect(err).NotTo(HaveOccurred())
 

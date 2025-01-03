@@ -23,6 +23,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	kubeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/config"
@@ -48,7 +49,7 @@ func run() error {
 
 	// Setup a Manager
 	mgr, err := manager.New(kubeconfig.GetConfigOrDie(), manager.Options{
-		Controller: config.Controller{UsePriorityQueue: true},
+		Controller: config.Controller{UsePriorityQueue: ptr.To(true)},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to set up controller-manager: %w", err)

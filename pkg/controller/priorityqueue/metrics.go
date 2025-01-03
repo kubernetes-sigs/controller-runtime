@@ -66,6 +66,7 @@ type defaultQueueMetrics[T comparable] struct {
 	retries workqueue.CounterMetric
 }
 
+// add is called for ready items only
 func (m *defaultQueueMetrics[T]) add(item T) {
 	if m == nil {
 		return

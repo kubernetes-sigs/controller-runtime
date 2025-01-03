@@ -190,6 +190,9 @@ type WithWatch interface {
 // namespaced and non-spaced variants, so keys do not need to include namespace.
 type IndexerFunc func(Object) []string
 
+// Indexers is a map of field name to IndexerFunc.
+type Indexers map[string]IndexerFunc
+
 // FieldIndexer knows how to index over a particular "field" such that it
 // can later be used by a field selector.
 type FieldIndexer interface {

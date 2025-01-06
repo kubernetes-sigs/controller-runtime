@@ -52,6 +52,15 @@ type Request struct {
 	types.NamespacedName
 }
 
+// ClusterAwareRequest contains the information necessary to reconcile a Kubernetes object in a multi-cluster
+// controller.  This includes the information of a normal `Request` (Name and Namespace) plus a ClusterName
+// that can then be used to call the `Get` function of the `cluster.Provider` interface to fetch the correct
+// cluster for a request.
+type ClusterAwareRequest struct {
+	Request
+	ClusterName string
+}
+
 /*
 Reconciler implements a Kubernetes API for a specific Resource by Creating, Updating or Deleting Kubernetes
 objects, or by making changes to systems external to the cluster (e.g. cloudproviders, github, etc).

@@ -120,11 +120,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := builder.TypedControllerManagedBy[clusterRequest](mgr).
+	if err := builder.TypedControllerManagedBy[reconcile.ClusterAwareRequest](mgr).
 		Named("fleet-ns-configmap-controller").
-		Watches(&corev1.ConfigMap{}, &EnqueueClusterRequestForObject{}).
-		Complete(reconcile.TypedFunc[clusterRequest](
-			func(ctx context.Context, req clusterRequest) (ctrl.Result, error) {
+		For(&corev1.ConfigMap{}).
+		Complete(reconcile.TypedFunc[reconcile.ClusterAwareRequest](
+			func(ctx context.Context, req reconcile.ClusterAwareRequest) (ctrl.Result, error) {
 				log := log.FromContext(ctx).WithValues("cluster", req.ClusterName)
 
 				cl, err := mgr.GetCluster(ctx, req.ClusterName)

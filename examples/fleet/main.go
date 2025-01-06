@@ -25,6 +25,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/spf13/pflag"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -48,6 +50,14 @@ func main() {
 	ctx := signals.SetupSignalHandler()
 	entryLog := log.Log.WithName("entrypoint")
 
+	var (
+		enableClusterProvider bool
+		provider              *KindClusterProvider
+	)
+
+	pflag.BoolVar(&enableClusterProvider, "enable-cluster-provider", true, "Enables experimental kind cluster provider")
+	pflag.Parse()
+
 	testEnv := &envtest.Environment{}
 	cfg, err := testEnv.Start()
 	if err != nil {
@@ -66,25 +76,28 @@ func main() {
 
 	// Setup a Manager, note that this not yet engages clusters, only makes them available.
 	entryLog.Info("Setting up manager")
-	provider := &KindClusterProvider{
-		log:       log.Log.WithName("kind-cluster-provider"),
-		clusters:  map[string]cluster.Cluster{},
-		cancelFns: map[string]context.CancelFunc{},
+	opts := manager.Options{}
+
+	if enableClusterProvider {
+		provider = &KindClusterProvider{
+			log:       log.Log.WithName("kind-cluster-provider"),
+			clusters:  map[string]cluster.Cluster{},
+			cancelFns: map[string]context.CancelFunc{},
+		}
+		opts.ExperimentalClusterProvider = provider
 	}
-	mgr, err := manager.New(
-		cfg,
-		manager.Options{ExperimentalClusterProvider: provider},
-	)
+	mgr, err := manager.New(cfg, opts)
 	if err != nil {
 		entryLog.Error(err, "unable to set up overall controller manager")
 		os.Exit(1)
 	}
 
-	if err := builder.TypedControllerManagedBy[clusterRequest](mgr).
-		Named("fleet-pod-controller").
-		Watches(&corev1.Pod{}, &EnqueueClusterRequestForObject{}).
-		Complete(reconcile.TypedFunc[clusterRequest](
-			func(ctx context.Context, req clusterRequest) (ctrl.Result, error) {
+	if err := builder.TypedControllerManagedBy[reconcile.ClusterAwareRequest](mgr).
+		Named("fleet-controller").
+		For(&appsv1.ReplicaSet{}).
+		Owns(&corev1.Pod{}).
+		Complete(reconcile.TypedFunc[reconcile.ClusterAwareRequest](
+			func(ctx context.Context, req reconcile.ClusterAwareRequest) (ctrl.Result, error) {
 				log := log.FromContext(ctx).WithValues("cluster", req.ClusterName)
 
 				cl, err := mgr.GetCluster(ctx, req.ClusterName)
@@ -93,27 +106,27 @@ func main() {
 				}
 				client := cl.GetClient()
 
-				// Retrieve the pod from the cluster.
-				pod := &corev1.Pod{}
-				if err := client.Get(ctx, req.NamespacedName, pod); err != nil {
+				// Retrieve the ReplicaSet from the cluster.
+				replicaSet := &appsv1.ReplicaSet{}
+				if err := client.Get(ctx, req.NamespacedName, replicaSet); err != nil {
 					if !apierrors.IsNotFound(err) {
 						return reconcile.Result{}, err
 					}
-					// Pod was deleted.
+					// ReplicaSet was deleted.
 					return reconcile.Result{}, nil
 				}
 
-				// If the pod is being deleted, we can skip it.
-				if pod.DeletionTimestamp != nil {
+				// If the ReplicaSet is being deleted, we can skip it.
+				if replicaSet.DeletionTimestamp != nil {
 					return reconcile.Result{}, nil
 				}
 
-				log.Info("Reconciling pod", "ns", pod.GetNamespace(), "name", pod.Name, "uuid", pod.UID)
+				log.Info("Reconciling ReplicaSet", "ns", replicaSet.GetNamespace(), "name", replicaSet.Name, "uuid", replicaSet.UID)
 
 				// Print any annotations that start with fleet.
-				for k, v := range pod.Labels {
+				for k, v := range replicaSet.Labels {
 					if strings.HasPrefix(k, "fleet-") {
-						log.Info("Detected fleet label!", "pod", pod.Name, "key", k, "value", v)
+						log.Info("Detected fleet label!", "pod", replicaSet.Name, "key", k, "value", v)
 					}
 				}
 
@@ -124,13 +137,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	entryLog.Info("Starting provider")
-	go func() {
-		if err := provider.Run(ctx, mgr); err != nil {
-			entryLog.Error(err, "unable to run provider")
-			os.Exit(1)
-		}
-	}()
+	if enableClusterProvider && provider != nil {
+		entryLog.Info("Starting provider")
+		go func() {
+			if err := provider.Run(ctx, mgr); err != nil {
+				entryLog.Error(err, "unable to run provider")
+				os.Exit(1)
+			}
+		}()
+	}
 
 	entryLog.Info("Starting manager")
 	if err := mgr.Start(ctx); err != nil {

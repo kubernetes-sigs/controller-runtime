@@ -188,7 +188,7 @@ var _ = Describe("application", func() {
 				For(&appsv1.ReplicaSet{}).
 				Named("last_controller").
 				Build(typedNoop)
-			Expect(err).To(MatchError(ContainSubstring("For() can only be used with reconcile.Request, got builder.empty")))
+			Expect(err).To(MatchError(ContainSubstring("For() can only be used with reconcile.Request or reconcile.ClusterAwareRequest, got builder.empty")))
 			Expect(instance).To(BeNil())
 		})
 

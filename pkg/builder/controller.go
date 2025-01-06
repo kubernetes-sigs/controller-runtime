@@ -326,12 +326,16 @@ func (cc *typedClusterWatcher[request]) Watch(ctx context.Context, cl cluster.Cl
 			return err
 		}
 
-		if reflect.TypeFor[request]() != reflect.TypeOf(reconcile.Request{}) {
-			return fmt.Errorf("For() can only be used with reconcile.Request, got %T", *new(request))
+		var hdler handler.TypedEventHandler[client.Object, request]
+		switch reflect.TypeFor[request]() {
+		case reflect.TypeOf(reconcile.Request{}):
+			reflect.ValueOf(&hdler).Elem().Set(reflect.ValueOf(handler.WithLowPriorityWhenUnchanged(&handler.EnqueueRequestForObject{})))
+		case reflect.TypeOf(reconcile.ClusterAwareRequest{}):
+			reflect.ValueOf(&hdler).Elem().Set(reflect.ValueOf(handler.WithLowPriorityWhenUnchanged(&handler.EnqueueClusterAwareRequestForObject{ClusterName: cl.Name()})))
+		default:
+			return fmt.Errorf("For() can only be used with reconcile.Request or reconcile.ClusterAwareRequest, got %T", *new(request))
 		}
 
-		var hdler handler.TypedEventHandler[client.Object, request]
-		reflect.ValueOf(&hdler).Elem().Set(reflect.ValueOf(handler.WithLowPriorityWhenUnchanged(&handler.EnqueueRequestForObject{})))
 		allPredicates := append([]predicate.Predicate(nil), cc.globalPredicates...)
 		allPredicates = append(allPredicates, cc.forInput.predicates...)
 		src := &ctxBoundedSyncingSource[request]{ctx: ctx, src: source.TypedKind(cl.GetCache(), obj, hdler, allPredicates...)}
@@ -351,11 +355,24 @@ func (cc *typedClusterWatcher[request]) Watch(ctx context.Context, cl cluster.Cl
 		}
 
 		var hdler handler.TypedEventHandler[client.Object, request]
-		reflect.ValueOf(&hdler).Elem().Set(reflect.ValueOf(handler.WithLowPriorityWhenUnchanged(handler.EnqueueRequestForOwner(
-			cl.GetScheme(), cl.GetRESTMapper(),
-			cc.forInput.object,
-			opts...,
-		))))
+		switch reflect.TypeFor[request]() {
+		case reflect.TypeOf(reconcile.Request{}):
+			reflect.ValueOf(&hdler).Elem().Set(reflect.ValueOf(handler.WithLowPriorityWhenUnchanged(handler.EnqueueRequestForOwner(
+				cl.GetScheme(), cl.GetRESTMapper(),
+				cc.forInput.object,
+				opts...,
+			))))
+		case reflect.TypeOf(reconcile.ClusterAwareRequest{}):
+			reflect.ValueOf(&hdler).Elem().Set(reflect.ValueOf(handler.WithLowPriorityWhenUnchanged(handler.EnqueueClusterAwareRequestForOwner(
+				cl.GetScheme(), cl.GetRESTMapper(),
+				cc.forInput.object,
+				cl,
+				opts...,
+			))))
+		default:
+			return fmt.Errorf("Owns() can only be used with reconcile.Request or reconcile.ClusterAwareRequest, got %T", *new(request))
+		}
+
 		allPredicates := append([]predicate.Predicate(nil), cc.globalPredicates...)
 		allPredicates = append(allPredicates, own.predicates...)
 		src := &ctxBoundedSyncingSource[request]{ctx: ctx, src: source.TypedKind(cl.GetCache(), obj, hdler, allPredicates...)}

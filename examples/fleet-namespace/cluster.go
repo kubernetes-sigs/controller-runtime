@@ -19,26 +19,11 @@ package main
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
-
-type clusterRequest struct {
-	reconcile.Request
-	ClusterName string
-}
-
-// String returns the general purpose string representation.
-func (cr *clusterRequest) String() string {
-	if cr.ClusterName == "" {
-		return cr.NamespacedName.String()
-	}
-	return "cluster://" + cr.ClusterName + string(types.Separator) + cr.NamespacedName.String()
-}
 
 type NamespacedCluster struct {
 	clusterName string

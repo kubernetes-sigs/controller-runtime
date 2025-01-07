@@ -4,7 +4,7 @@ Author: @sttts @embik
 
 Initial implementation: @vincepri
 
-Last Updated on: 2025-01-06
+Last Updated on: 2025-01-07
 
 ## Table of Contents
 
@@ -118,11 +118,10 @@ type Provider interface {
 }
 ```
 
-A cluster provider is responsible for constructing a `cluster.Cluster` instance
-upon calls to `Get(ctx, clusterName)` and returning it. Providers should keep track
-of created clusters and return them again if the same name is requested. Since
-providers are responsible for constructing the `cluster.Cluster` instance, they
-can make decisions about e.g. reusing existing informers.
+A cluster provider is responsible for constructing `cluster.Cluster` instances and returning
+upon calls to `Get(ctx, clusterName)`. Providers should keep track of created clusters and
+return them again if the same name is requested. Since providers are responsible for constructing
+the `cluster.Cluster` instance, they can make decisions about e.g. reusing existing informers.
 
 The `cluster.Cluster` _SHOULD_ be extended with a unique name identifier:
 
@@ -159,9 +158,9 @@ type Aware interface {
 }
 ```
 
-`ctrl.Manager` will implement `cluster.Aware`. It is the cluster provider's responsibility
-to call `Engage` and `Disengage` on a `ctrl.Manager` instance when clusters join or leave
-the set of target clusters that should be reconciled.
+`ctrl.Manager` will implement `cluster.Aware`. As specified in the `Provider` interface,
+it is the cluster provider's responsibility to call `Engage` and `Disengage` on a `ctrl.Manager`
+instance when clusters join or leave the set of target clusters that should be reconciled.
 
 The internal `ctrl.Manager` implementation in turn will call `Engage` and `Disengage` on all 
 its runnables that are cluster-aware (i.e. that implement the `cluster.Aware` interface).
@@ -182,7 +181,42 @@ The multi-cluster controller implementation reacts to engaged clusters by starti
 a new `TypedSyncingSource` that also wraps the context passed down from the call to `Engage`,
 which _MUST_ be canceled by the cluster provider at the end of a cluster's lifecycle.
 
-Instead of extending `reconcile.Request`, implementations _SHOULD_ bring their
+The `ctrl.Manager` _SHOULD_ be extended by a `cluster.Cluster` getter:
+
+```golang
+// pkg/manager
+type Manager interface {
+    // ...
+    GetCluster(ctx context.Context, clusterName string) (cluster.Cluster, error)
+}
+```
+
+The embedded `cluster.Cluster` corresponds to `GetCluster(ctx, "")`. We call the
+clusters with non-empty name "provider clusters" or "enganged clusters", while
+the embedded cluster of the manager is called the "default cluster" or "hub 
+cluster".
+
+To provide information about the source cluster of a request, a new type
+`reconcile.ClusterAwareRequest` _SHOULD_ be added:
+
+```golang
+// pkg/reconcile
+type ClusterAwareRequest struct {
+	Request
+	ClusterName string
+}
+```
+
+This struct embeds a `reconcile.Request` to store the "usual" information (name and namespace)
+about an object, plus the name of the originating cluster.
+
+Given that an empty cluster name represents the "default cluster", a `reconcile.ClusterAwareRequest`
+can be used as `request` type even for controllers that do not have an active cluster provider.
+The cluster name will simply be an empty string, which is compatible with calls to `mgr.GetCluster`.
+
+### BYO Request Type
+
+Instead of using the new `reconcile.ClusterAwareRequest`, implementations _CAN_ also bring their
 own request type through the generics support in `Typed*` types (`request comparable`).
 
 Optionally, a passed `TypedEventHandler` will be duplicated per engaged cluster if they
@@ -200,29 +234,12 @@ This might be necessary if a BYO `TypedEventHandler` needs to store information 
 the engaged cluster (e.g. because the events do not supply information about the cluster in
 object annotations) that it has been started for.
 
-The `ctrl.Manager` _SHOULD_ be extended by a `cluster.Cluster` getter:
-
-```golang
-// pkg/manager
-type Manager interface {
-    // ...
-    GetCluster(ctx context.Context, clusterName string) (cluster.Cluster, error)
-}
-```
-
-The embedded `cluster.Cluster` corresponds to `GetCluster(ctx, "")`. We call the
-clusters with non-empty name "provider clusters" or "enganged clusters", while
-the embedded cluster of the manager is called the "default cluster" or "hub 
-cluster".
-
-
 ### Multi-Cluster-Compatible Reconcilers
 
 Reconcilers can be made multi-cluster-compatible by changing client and cache
 accessing code from directly accessing `mgr.GetClient()` and `mgr.GetCache()` to
-going through `mgr.GetCluster(clusterName).GetClient()` and
-`mgr.GetCluster(clusterName).GetCache()`. `clusterName` needs to be extracted from
-the BYO `request` type (e.g. a `clusterName` field in the type itself).
+going through `mgr.GetCluster(req.ClusterName).GetClient()` and
+`mgr.GetCluster(req.ClusterName).GetCache()`.
 
 A typical snippet at the beginning of a reconciler to fetch the client could look like this:
 
@@ -234,7 +251,7 @@ if err != nil {
 client := cl.GetClient()
 ```
 
-Due to the BYO `request` type, controllers using the `For` builder function need to be built/changed like this:
+Due to `request.ClusterAwareRequest`, changes to the controller builder process are minimal:
 
 ```golang
 // previous
@@ -244,32 +261,19 @@ builder.TypedControllerManagedBy[reconcile.Request](mgr).
 	Complete(reconciler)
 
 // new
-builder.TypedControllerManagedBy[ClusterRequest](mgr).
+builder.TypedControllerManagedBy[reconcile.ClusterAwareRequest](mgr).
 	Named("multi-cluster-controller").
-	Watches(&corev1.Pod{}, &ClusterRequestEventHandler{}).
+	For(&corev1.Pod{}).
 	Complete(reconciler)
 ```
 
-With `ClusterRequest` and `ClusterRequestEventHandler` being BYO types. `reconciler`
-can be e.g. of type `reconcile.TypedFunc[ClusterRequest]`.
+The builder will chose the correct `EventHandler` implementation for both `For` and `Owns`
+depending on the `request` type used.
 
-`ClusterRequest` will likely often look like this (but since it is a BYO type, it could store other information as well):
-
-```golang
-type ClusterRequest struct {
-	reconcile.Request
-	ClusterName string
-}
-```
-
-Controllers that use `Owns` cannot be converted to multi-cluster controllers
-without a BYO type re-implementation of `handler.EnqueueRequestForOwner` matching
-the BYO type, which is considered out of scope for now.
-
-With the described changes (use `GetCluster(ctx, clusterName)`, making `reconciler`
-a `TypedFunc[ClusterRequest]` and migrating to `Watches`) an existing controller will automatically act as
-*uniform multi-cluster controller*. It will reconcile resources from cluster `X`
-in cluster `X`.
+With the described changes (use `GetCluster(ctx, req.ClusterName)`, making `reconciler`
+a `TypedFunc[reconcile.ClusterAwareRequest]`) an existing controller will automatically act as
+*uniform multi-cluster controller* if a cluster provider is configured.
+It will reconcile resources from cluster `X` in cluster `X`.
 
 For a manager with `cluster.Provider`, the builder _SHOULD_ create a controller
 that sources events **ONLY** from the provider clusters that got engaged with
@@ -313,20 +317,19 @@ builder.NewControllerManagedBy(mgr).
 ### Controller Author without self-interest in multi-cluster, but open for adoption in multi-cluster setups
 
 - Replace `mgr.GetClient()` and `mgr.GetCache` with `mgr.GetCluster(req.ClusterName).GetClient()` and `mgr.GetCluster(req.ClusterName).GetCache()`.
-- Switch from `For` and `Owns` builder calls to `watches`
 - Make manager and controller plumbing vendor'able to allow plugging in multi-cluster provider and BYO request type.
 
 ### Controller Author who wants to support certain multi-cluster setups
 
 - Do the `GetCluster` plumbing as described above.
-- Vendor 3rd-party multi-cluster providers and wire them up in `main.go`
+- Vendor 3rd-party multi-cluster providers and wire them up in `main.go`.
 
 ## Risks and Mitigations
 
 - The standard behaviour of controller-runtime is unchanged for single-cluster controllers.
-- The activation of the multi-cluster mode is through attaching the `cluster.Provider` to the manager. 
-  To make it clear that the semantics are experimental, we name the `manager.Options` field
-  `ExperimentalClusterProvider`.
+- The activation of the multi-cluster mode is through usage of a `request.ClusterAwareRequest` request type and
+  attaching the `cluster.Provider` to the manager. To make it clear that the semantics are experimental, we name
+  the `manager.Options` field `ExperimentalClusterProvider`.
 - We only extend these interfaces and structs:
   - `ctrl.Manager` with `GetCluster(ctx, clusterName string) (cluster.Cluster, error)` and `cluster.Aware`.
   - `cluster.Cluster` with `Name() string`.

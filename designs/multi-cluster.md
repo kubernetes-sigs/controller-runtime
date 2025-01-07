@@ -106,7 +106,9 @@ The `ctrl.Manager` _SHOULD_ be extended to get an optional `cluster.Provider` vi
 // pkg/cluster
 
 // Provider defines methods to retrieve clusters by name. The provider is
-// responsible for discovering and managing the lifecycle of each cluster.
+// responsible for discovering and managing the lifecycle of each cluster,
+// and to engage or disengage clusters with the manager the provider is
+// run against.
 //
 // Example: A Cluster API provider would be responsible for discovering and
 // managing clusters that are backed by Cluster API resources, which can live
@@ -196,6 +198,8 @@ clusters with non-empty name "provider clusters" or "enganged clusters", while
 the embedded cluster of the manager is called the "default cluster" or "hub 
 cluster".
 
+### Cluster-Aware Request
+
 To provide information about the source cluster of a request, a new type
 `reconcile.ClusterAwareRequest` _SHOULD_ be added:
 
@@ -214,10 +218,20 @@ Given that an empty cluster name represents the "default cluster", a `reconcile.
 can be used as `request` type even for controllers that do not have an active cluster provider.
 The cluster name will simply be an empty string, which is compatible with calls to `mgr.GetCluster`.
 
+**Note:** controller-runtime must provide this cluster-aware request type to
+allow writing *uniform* multi-cluster controllers (see goals), i.e. controllers 
+that both work as single-cluster and multi-cluster controllers against arbitrary
+cluster providers. Think of generic CNCF projects like cert-manager wanting to
+support multi-cluster setups generically without forking the codebase.
+
 ### BYO Request Type
 
 Instead of using the new `reconcile.ClusterAwareRequest`, implementations _CAN_ also bring their
 own request type through the generics support in `Typed*` types (`request comparable`).
+
+**Note:** these kind of controllers won't be uniform in the sense of compatibility
+with arbitrary cluster providers, but for use-cases that are tiedly integrated
+with specific cluster providers, this might be useful.
 
 Optionally, a passed `TypedEventHandler` will be duplicated per engaged cluster if they
 fullfil the following interface:

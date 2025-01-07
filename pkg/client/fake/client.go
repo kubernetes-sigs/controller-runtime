@@ -601,21 +601,22 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 		return err
 	}
 	zero(obj)
-	if err := json.Unmarshal(j, obj); err != nil {
+	objCopy := obj.DeepCopyObject().(client.ObjectList)
+	if err := json.Unmarshal(j, objCopy); err != nil {
 		return err
 	}
 
-	if listOpts.LabelSelector == nil && listOpts.FieldSelector == nil {
-		return nil
-	}
-
-	// If we're here, either a label or field selector are specified (or both), so before we return
-	// the list we must filter it. If both selectors are set, they are ANDed.
-	objs, err := meta.ExtractList(obj)
+	objs, err := meta.ExtractList(objCopy)
 	if err != nil {
 		return err
 	}
 
+	if listOpts.LabelSelector == nil && listOpts.FieldSelector == nil {
+		return meta.SetList(obj, objs)
+	}
+
+	// If we're here, either a label or field selector are specified (or both), so before we return
+	// the list we must filter it. If both selectors are set, they are ANDed.
 	filteredList, err := c.filterList(objs, gvk, listOpts.LabelSelector, listOpts.FieldSelector)
 	if err != nil {
 		return err

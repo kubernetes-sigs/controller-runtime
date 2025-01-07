@@ -1319,16 +1319,20 @@ var _ = Describe("Fake client", func() {
 					listOpts := &client.ListOptions{
 						FieldSelector: fields.OneTermEqualSelector("key", "val"),
 					}
-					err := cl.List(context.Background(), &corev1.ConfigMapList{}, listOpts)
+					list := &corev1.ConfigMapList{}
+					err := cl.List(context.Background(), list, listOpts)
 					Expect(err).To(HaveOccurred())
+					Expect(list.Items).To(BeEmpty())
 				})
 
 				It("errors when there's no Index matching the field name", func() {
 					listOpts := &client.ListOptions{
 						FieldSelector: fields.OneTermEqualSelector("spec.paused", "false"),
 					}
-					err := cl.List(context.Background(), &appsv1.DeploymentList{}, listOpts)
+					list := &appsv1.DeploymentList{}
+					err := cl.List(context.Background(), list, listOpts)
 					Expect(err).To(HaveOccurred())
+					Expect(list.Items).To(BeEmpty())
 				})
 
 				It("errors when field selector uses two requirements", func() {
@@ -1337,8 +1341,10 @@ var _ = Describe("Fake client", func() {
 							fields.OneTermEqualSelector("spec.replicas", "1"),
 							fields.OneTermEqualSelector("spec.strategy.type", string(appsv1.RecreateDeploymentStrategyType)),
 						)}
-					err := cl.List(context.Background(), &appsv1.DeploymentList{}, listOpts)
+					list := &appsv1.DeploymentList{}
+					err := cl.List(context.Background(), list, listOpts)
 					Expect(err).To(HaveOccurred())
+					Expect(list.Items).To(BeEmpty())
 				})
 
 				It("returns two deployments that match the only field selector requirement", func() {

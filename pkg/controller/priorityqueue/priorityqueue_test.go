@@ -2,6 +2,7 @@ package priorityqueue
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
@@ -343,6 +344,40 @@ var _ = Describe("Controllerworkqueue", func() {
 		metrics.mu.Lock()
 		Expect(metrics.depth["test"]).To(Equal(4))
 		metrics.mu.Unlock()
+	})
+
+	It("returns many items", func() {
+		// This test ensures the queue is able to drain a large queue without panic'ing.
+		// In a previous version of the code we were calling queue.Delete within q.Ascend
+		// which led to a panic in queue.Ascend > iterate:
+		// "panic: runtime error: index out of range [0] with length 0"
+		q, _ := newQueue()
+		defer q.ShutDown()
+
+		for range 20 {
+			for i := range 1000 {
+				rn := rand.N(100) //nolint:gosec // We don't need cryptographically secure entropy here
+				if rn < 10 {
+					q.AddWithOpts(AddOpts{After: time.Duration(rn) * time.Millisecond}, fmt.Sprintf("foo%d", i))
+				} else {
+					q.AddWithOpts(AddOpts{Priority: rn}, fmt.Sprintf("foo%d", i))
+				}
+			}
+
+			wg := sync.WaitGroup{}
+			for range 100 { // The panic only occurred relatively frequently with a high number of go routines.
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for range 10 {
+						obj, _, _ := q.GetWithPriority()
+						q.Done(obj)
+					}
+				}()
+			}
+
+			wg.Wait()
+		}
 	})
 })
 

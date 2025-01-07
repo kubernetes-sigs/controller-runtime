@@ -203,6 +203,9 @@ func (w *priorityqueue[T]) spin() {
 			w.lockedLock.Lock()
 			defer w.lockedLock.Unlock()
 
+			// manipulating the tree from within Ascend might lead to panics, so
+			// track what we want to delete and do it after we are done ascending.
+			var toDelete []*item[T]
 			w.queue.Ascend(func(item *item[T]) bool {
 				if item.readyAt != nil {
 					if readyAt := item.readyAt.Sub(w.now()); readyAt > 0 {
@@ -230,12 +233,16 @@ func (w *priorityqueue[T]) spin() {
 				w.locked.Insert(item.key)
 				w.waiters.Add(-1)
 				delete(w.items, item.key)
-				w.queue.Delete(item)
+				toDelete = append(toDelete, item)
 				w.becameReady.Delete(item.key)
 				w.get <- *item
 
 				return true
 			})
+
+			for _, item := range toDelete {
+				w.queue.Delete(item)
+			}
 		}()
 	}
 }

@@ -66,7 +66,7 @@ type ByObject struct {
   // An empty map prevents this.
   //
   // This must be unset for cluster-scoped objects.
-  Namespaces map[string]*Config
+  Namespaces map[string]Config
 
   // Config will be used for cluster-scoped objects and to default
   // Config in the Namespaces field.
@@ -79,7 +79,7 @@ type ByObject struct {
 type Options struct {
   // ByObject specifies per-object cache settings. If unset for a given
   // object, this will fall through to Default* settings.
-  ByObject map[client.Object]*ByObject
+  ByObject map[client.Object]ByObject
 
   // DefaultNamespaces maps namespace names to cache settings. If set, it
   // will be used for all objects that have a nil Namespaces setting.
@@ -91,7 +91,7 @@ type Options struct {
   //
   // The options in the Config that are nil will be defaulted from
   // the respective Default* settings.
-  DefaultNamespaces map[string]*Config
+  DefaultNamespaces map[string]Config
 
   // DefaultLabelSelector is the label selector that will be used as
   // the default field label selector for everything that doesn't
@@ -158,14 +158,14 @@ type Options struct {
 
 ```
 cache.Options{
-  ByObject: map[client.Object]*cache.ByObject{
+  ByObject: map[client.Object]cache.ByObject{
     &corev1.ConfigMap{}: {
-      Namespaces: map[string]*cache.Config{
+      Namespaces: map[string]cache.Config{
         "public":      {},
         "kube-system": {},
       },
     },
-    &corev1.Secret{}: {Namespaces: map[string]*Config{
+    &corev1.Secret{}: {Namespaces: map[string]Config{
         "operator": {},
     }},
   },
@@ -176,9 +176,9 @@ cache.Options{
 
 ```
 cache.Options{
-  ByObject: map[client.Object]*cache.ByObject{
+  ByObject: map[client.Object]cache.ByObject{
     &corev1.ConfigMap{}: {
-      Namespaces: map[string]*cache.Config{
+      Namespaces: map[string]cache.Config{
         cache.AllNamespaces: nil,                   // No selector for all namespaces...
         "operator": {LabelSelector: labelSelector}, // except for the operator namespace
       },
@@ -192,13 +192,13 @@ cache.Options{
 
 ```
 cache.Options{
-  ByObject: map[client.Object]*cache.ByObject{
-    &appsv1.Deployment: {Namespaces: map[string]*cache.Config{
-       cache.AllNamespaces: nil,
+  ByObject: map[client.Object]cache.ByObject{
+    &appsv1.Deployment: {Namespaces: map[string]cache.Config{
+       cache.AllNamespaces: {}},
     }},
   },
-  DefaultNamespaces: map[string]*cache.Config{
-      "operator": nil,
+  DefaultNamespaces: map[string]cache.Config{
+      "operator": {}},
   },
 }
 ```
@@ -207,7 +207,7 @@ cache.Options{
 
 ```
 cache.Options{
-  ByObject: map[client.Object]*cache.ByObject{
+  ByObject: map[client.Object]cache.ByObject{
     &corev1.Node: {LabelSelector: labels.Everything()},
   },
   DefaultLabelSelector: myLabelSelector,
@@ -218,9 +218,9 @@ cache.Options{
 
 ```
 cache.Options{
-  DefaultNamespaces: map[string]*cache.Config{
-    "foo": nil,
-    "bar": nil,
+  DefaultNamespaces: map[string]cache.Config{
+    "foo": {},
+    "bar": {},
   }
 }
 ```

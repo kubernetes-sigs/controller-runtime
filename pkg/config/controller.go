@@ -58,5 +58,5 @@ type Controller struct {
 	// priority queue.
 	//
 	// Note: This flag is disabled by default until a future version. It's currently in beta.
-	UsePriorityQueue bool
+	UsePriorityQueue *bool
 }

@@ -2,6 +2,7 @@ package priorityqueue
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
@@ -283,6 +284,101 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(metrics.depth["test"]).To(Equal(0))
 		Expect(metrics.adds["test"]).To(Equal(2))
 	})
+
+	It("doesn't include non-ready items in Len()", func() {
+		q, metrics := newQueue()
+		defer q.ShutDown()
+
+		q.AddWithOpts(AddOpts{After: time.Minute}, "foo")
+		q.AddWithOpts(AddOpts{}, "baz")
+		q.AddWithOpts(AddOpts{After: time.Minute}, "bar")
+		q.AddWithOpts(AddOpts{}, "bal")
+
+		Expect(q.Len()).To(Equal(2))
+		Expect(metrics.depth).To(HaveLen(1))
+		Expect(metrics.depth["test"]).To(Equal(2))
+	})
+
+	It("items are included in Len() and the queueDepth metric once they are ready", func() {
+		q, metrics := newQueue()
+		defer q.ShutDown()
+
+		q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "foo")
+		q.AddWithOpts(AddOpts{}, "baz")
+		q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "bar")
+		q.AddWithOpts(AddOpts{}, "bal")
+
+		Expect(q.Len()).To(Equal(2))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(2))
+		metrics.mu.Unlock()
+		time.Sleep(time.Second)
+		Expect(q.Len()).To(Equal(4))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(4))
+		metrics.mu.Unlock()
+
+		// Drain queue
+		for range 4 {
+			item, _ := q.Get()
+			q.Done(item)
+		}
+		Expect(q.Len()).To(Equal(0))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(0))
+		metrics.mu.Unlock()
+
+		// Validate that doing it again still works to notice bugs with removing
+		// it from the queues becameReady tracking.
+		q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "foo")
+		q.AddWithOpts(AddOpts{}, "baz")
+		q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "bar")
+		q.AddWithOpts(AddOpts{}, "bal")
+
+		Expect(q.Len()).To(Equal(2))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(2))
+		metrics.mu.Unlock()
+		time.Sleep(time.Second)
+		Expect(q.Len()).To(Equal(4))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(4))
+		metrics.mu.Unlock()
+	})
+
+	It("returns many items", func() {
+		// This test ensures the queue is able to drain a large queue without panic'ing.
+		// In a previous version of the code we were calling queue.Delete within q.Ascend
+		// which led to a panic in queue.Ascend > iterate:
+		// "panic: runtime error: index out of range [0] with length 0"
+		q, _ := newQueue()
+		defer q.ShutDown()
+
+		for range 20 {
+			for i := range 1000 {
+				rn := rand.N(100) //nolint:gosec // We don't need cryptographically secure entropy here
+				if rn < 10 {
+					q.AddWithOpts(AddOpts{After: time.Duration(rn) * time.Millisecond}, fmt.Sprintf("foo%d", i))
+				} else {
+					q.AddWithOpts(AddOpts{Priority: rn}, fmt.Sprintf("foo%d", i))
+				}
+			}
+
+			wg := sync.WaitGroup{}
+			for range 100 { // The panic only occurred relatively frequently with a high number of go routines.
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for range 10 {
+						obj, _, _ := q.GetWithPriority()
+						q.Done(obj)
+					}
+				}()
+			}
+
+			wg.Wait()
+		}
+	})
 })
 
 func BenchmarkAddGetDone(b *testing.B) {
@@ -438,10 +534,6 @@ func TestFuzzPrioriorityQueue(t *testing.T) {
 	}
 
 	wg.Wait()
-
-	if expected := len(inQueue); expected != q.Len() {
-		t.Errorf("Expected queue length to be %d, was %d", expected, q.Len())
-	}
 }
 
 func newQueue() (PriorityQueue[string], *fakeMetricsProvider) {
@@ -453,6 +545,8 @@ func newQueue() (PriorityQueue[string], *fakeMetricsProvider) {
 		bTree: q.(*priorityqueue[string]).queue,
 	}
 
+	// validate that tick always gets a positive value as it will just return
+	// nil otherwise, which results in blocking forever.
 	upstreamTick := q.(*priorityqueue[string]).tick
 	q.(*priorityqueue[string]).tick = func(d time.Duration) <-chan time.Time {
 		if d <= 0 {
@@ -477,7 +571,7 @@ func (b *btreeInteractionValidator) ReplaceOrInsert(item *item[string]) (*item[s
 }
 
 func (b *btreeInteractionValidator) Delete(item *item[string]) (*item[string], bool) {
-	// There is node codepath that deletes an item that doesn't exist
+	// There is no codepath that deletes an item that doesn't exist
 	old, existed := b.bTree.Delete(item)
 	if !existed {
 		panic(fmt.Sprintf("Delete: item %v not found", item))

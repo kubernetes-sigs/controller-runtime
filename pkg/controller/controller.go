@@ -24,6 +24,7 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
 	"sigs.k8s.io/controller-runtime/pkg/internal/controller"
@@ -190,7 +191,7 @@ func NewTypedUnmanaged[request comparable](name string, mgr manager.Manager, opt
 	}
 
 	if options.RateLimiter == nil {
-		if mgr.GetControllerOptions().UsePriorityQueue {
+		if ptr.Deref(mgr.GetControllerOptions().UsePriorityQueue, false) {
 			options.RateLimiter = workqueue.NewTypedItemExponentialFailureRateLimiter[request](5*time.Millisecond, 1000*time.Second)
 		} else {
 			options.RateLimiter = workqueue.DefaultTypedControllerRateLimiter[request]()
@@ -199,7 +200,7 @@ func NewTypedUnmanaged[request comparable](name string, mgr manager.Manager, opt
 
 	if options.NewQueue == nil {
 		options.NewQueue = func(controllerName string, rateLimiter workqueue.TypedRateLimiter[request]) workqueue.TypedRateLimitingInterface[request] {
-			if mgr.GetControllerOptions().UsePriorityQueue {
+			if ptr.Deref(mgr.GetControllerOptions().UsePriorityQueue, false) {
 				return priorityqueue.New(controllerName, func(o *priorityqueue.Opts[request]) {
 					o.RateLimiter = rateLimiter
 				})

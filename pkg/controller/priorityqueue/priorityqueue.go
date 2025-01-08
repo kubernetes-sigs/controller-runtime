@@ -57,9 +57,10 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 	}
 
 	pq := &priorityqueue[T]{
-		items:   map[T]*item[T]{},
-		queue:   btree.NewG(32, less[T]),
-		metrics: newQueueMetrics[T](opts.MetricProvider, name, clock.RealClock{}),
+		items:       map[T]*item[T]{},
+		queue:       btree.NewG(32, less[T]),
+		becameReady: sets.Set[T]{},
+		metrics:     newQueueMetrics[T](opts.MetricProvider, name, clock.RealClock{}),
 		// itemOrWaiterAdded indicates that an item or
 		// waiter was added. It must be buffered, because
 		// if we currently process items we can't tell
@@ -83,15 +84,20 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 
 type priorityqueue[T comparable] struct {
 	// lock has to be acquired for any access any of items, queue, addedCounter
-	// or metrics.
-	lock    sync.Mutex
-	items   map[T]*item[T]
-	queue   bTree[*item[T]]
-	metrics queueMetrics[T]
+	// or becameReady
+	lock  sync.Mutex
+	items map[T]*item[T]
+	queue bTree[*item[T]]
 
 	// addedCounter is a counter of elements added, we need it
 	// because unixNano is not guaranteed to be unique.
 	addedCounter uint64
+
+	// becameReady holds items that are in the queue, were added
+	// with non-zero after and became ready. We need it to call the
+	// metrics add exactly once for them.
+	becameReady sets.Set[T]
+	metrics     queueMetrics[T]
 
 	itemOrWaiterAdded chan struct{}
 
@@ -142,7 +148,9 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 			}
 			w.items[key] = item
 			w.queue.ReplaceOrInsert(item)
-			w.metrics.add(key)
+			if item.readyAt == nil {
+				w.metrics.add(key)
+			}
 			w.addedCounter++
 			continue
 		}
@@ -195,19 +203,25 @@ func (w *priorityqueue[T]) spin() {
 			w.lockedLock.Lock()
 			defer w.lockedLock.Unlock()
 
+			// manipulating the tree from within Ascend might lead to panics, so
+			// track what we want to delete and do it after we are done ascending.
+			var toDelete []*item[T]
 			w.queue.Ascend(func(item *item[T]) bool {
-				if w.waiters.Load() == 0 { // no waiters, return as we can not hand anything out anyways
-					return false
+				if item.readyAt != nil {
+					if readyAt := item.readyAt.Sub(w.now()); readyAt > 0 {
+						nextReady = w.tick(readyAt)
+						return false
+					}
+					if !w.becameReady.Has(item.key) {
+						w.metrics.add(item.key)
+						w.becameReady.Insert(item.key)
+					}
 				}
 
-				// No next element we can process
-				if item.readyAt != nil && item.readyAt.After(w.now()) {
-					readyAt := item.readyAt.Sub(w.now())
-					if readyAt <= 0 { // Toctou race with the above check
-						readyAt = 1
-					}
-					nextReady = w.tick(readyAt)
-					return false
+				if w.waiters.Load() == 0 {
+					// Have to keep iterating here to ensure we update metrics
+					// for further items that became ready and set nextReady.
+					return true
 				}
 
 				// Item is locked, we can not hand it out
@@ -219,11 +233,16 @@ func (w *priorityqueue[T]) spin() {
 				w.locked.Insert(item.key)
 				w.waiters.Add(-1)
 				delete(w.items, item.key)
-				w.queue.Delete(item)
+				toDelete = append(toDelete, item)
+				w.becameReady.Delete(item.key)
 				w.get <- *item
 
 				return true
 			})
+
+			for _, item := range toDelete {
+				w.queue.Delete(item)
+			}
 		}()
 	}
 }
@@ -279,22 +298,36 @@ func (w *priorityqueue[T]) ShutDown() {
 	close(w.done)
 }
 
+// ShutDownWithDrain just calls ShutDown, as the draining
+// functionality is not used by controller-runtime.
 func (w *priorityqueue[T]) ShutDownWithDrain() {
 	w.ShutDown()
 }
 
+// Len returns the number of items that are ready to be
+// picked up. It does not include items that are not yet
+// ready.
 func (w *priorityqueue[T]) Len() int {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	return w.queue.Len()
+	var result int
+	w.queue.Ascend(func(item *item[T]) bool {
+		if item.readyAt == nil || item.readyAt.Compare(w.now()) <= 0 {
+			result++
+			return true
+		}
+		return false
+	})
+
+	return result
 }
 
 func less[T comparable](a, b *item[T]) bool {
 	if a.readyAt == nil && b.readyAt != nil {
 		return true
 	}
-	if a.readyAt != nil && b.readyAt == nil {
+	if b.readyAt == nil && a.readyAt != nil {
 		return false
 	}
 	if a.readyAt != nil && b.readyAt != nil && !a.readyAt.Equal(*b.readyAt) {
@@ -329,5 +362,4 @@ type bTree[T any] interface {
 	ReplaceOrInsert(item T) (_ T, _ bool)
 	Delete(item T) (T, bool)
 	Ascend(iterator btree.ItemIteratorG[T])
-	Len() int
 }

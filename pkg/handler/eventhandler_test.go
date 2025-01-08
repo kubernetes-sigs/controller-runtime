@@ -776,7 +776,7 @@ var _ = Describe("Eventhandler", func() {
 	})
 
 	Describe("WithLowPriorityWhenUnchanged", func() {
-		It("should lower the priority of a create request for an object that was crated more than one minute in the past", func() {
+		It("should lower the priority of a create request for an object that was created more than one minute in the past", func() {
 			actualOpts := priorityqueue.AddOpts{}
 			var actualRequests []reconcile.Request
 			wq := &fakePriorityQueue{
@@ -797,7 +797,7 @@ var _ = Describe("Eventhandler", func() {
 			Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 		})
 
-		It("should not lower the priority of a create request for an object that was crated less than one minute in the past", func() {
+		It("should not lower the priority of a create request for an object that was created less than one minute in the past", func() {
 			actualOpts := priorityqueue.AddOpts{}
 			var actualRequests []reconcile.Request
 			wq := &fakePriorityQueue{

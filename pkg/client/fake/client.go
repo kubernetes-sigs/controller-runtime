@@ -763,6 +763,8 @@ func (c *fakeClient) Delete(ctx context.Context, obj client.Object, opts ...clie
 	}
 	delOptions := client.DeleteOptions{}
 	delOptions.ApplyOptions(opts)
+	now := metav1.Now()
+	obj.SetDeletionTimestamp(&now)
 
 	for _, dryRunOpt := range delOptions.DryRun {
 		if dryRunOpt == metav1.DryRunAll {

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -104,6 +105,8 @@ func (uc *unstructuredClient) Delete(ctx context.Context, obj Object, opts ...De
 
 	deleteOpts := DeleteOptions{}
 	deleteOpts.ApplyOptions(opts)
+	now := metav1.Now()
+	o.SetDeletionTimestamp(&now)
 
 	return o.Delete().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).

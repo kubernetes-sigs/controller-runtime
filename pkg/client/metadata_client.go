@@ -63,6 +63,8 @@ func (mc *metadataClient) Delete(ctx context.Context, obj Object, opts ...Delete
 
 	deleteOpts := DeleteOptions{}
 	deleteOpts.ApplyOptions(opts)
+	now := metav1.Now()
+	metadata.SetDeletionTimestamp(&now)
 
 	return resInt.Delete(ctx, metadata.Name, *deleteOpts.AsDeleteOptions())
 }

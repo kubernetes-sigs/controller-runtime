@@ -191,7 +191,7 @@ func setConfigs(tc testCase, dir string) {
 
 func createFiles(files map[string]string, dir string) error {
 	for path, data := range files {
-		if err := os.WriteFile(filepath.Join(dir, path), []byte(data), 0644); err != nil { //nolint:gosec
+		if err := os.WriteFile(filepath.Join(dir, path), []byte(data), 0644); err != nil {
 			return err
 		}
 	}

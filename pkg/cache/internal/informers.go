@@ -585,7 +585,7 @@ func newGVKFixupWatcher(gvk schema.GroupVersionKind, watcher watch.Interface) wa
 // hammer the apiserver with list requests simultaneously.
 func calculateResyncPeriod(resync time.Duration) time.Duration {
 	// the factor will fall into [0.9, 1.1)
-	factor := rand.Float64()/5.0 + 0.9 //nolint:gosec
+	factor := rand.Float64()/5.0 + 0.9
 	return time.Duration(float64(resync.Nanoseconds()) * factor)
 }
 

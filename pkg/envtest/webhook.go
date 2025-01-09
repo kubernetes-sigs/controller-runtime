@@ -294,10 +294,10 @@ func (o *WebhookInstallOptions) setupCA() error {
 		return fmt.Errorf("unable to marshal webhook serving certs: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(localServingCertsDir, "tls.crt"), certData, 0640); err != nil { //nolint:gosec
+	if err := os.WriteFile(filepath.Join(localServingCertsDir, "tls.crt"), certData, 0640); err != nil {
 		return fmt.Errorf("unable to write webhook serving cert to disk: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(localServingCertsDir, "tls.key"), keyData, 0640); err != nil { //nolint:gosec
+	if err := os.WriteFile(filepath.Join(localServingCertsDir, "tls.key"), keyData, 0640); err != nil {
 		return fmt.Errorf("unable to write webhook serving key to disk: %w", err)
 	}
 

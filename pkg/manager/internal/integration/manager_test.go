@@ -261,7 +261,7 @@ func createConversionWebhook(mgr manager.Manager) *ConversionWebhook {
 	// This is a hack but it's better than using a hard-coded port.
 	v := reflect.ValueOf(mgr).Elem()
 	field := v.FieldByName("healthProbeListener")
-	healthProbeListener := *(*net.Listener)(unsafe.Pointer(field.UnsafeAddr())) //nolint:gosec
+	healthProbeListener := *(*net.Listener)(unsafe.Pointer(field.UnsafeAddr()))
 	readinessEndpoint := fmt.Sprint("http://", healthProbeListener.Addr().String(), "/readyz")
 
 	return &ConversionWebhook{

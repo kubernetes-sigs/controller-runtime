@@ -72,7 +72,7 @@ var _ = Describe("manger.Manager", func() {
 					Elem().
 					Set(reflect.ValueOf(newMetricsServer))
 				httpClient = &http.Client{Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 				}}
 			})
 

@@ -356,7 +356,7 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		for range 20 {
 			for i := range 1000 {
-				rn := rand.N(100) //nolint:gosec // We don't need cryptographically secure entropy here
+				rn := rand.N(100)
 				if rn < 10 {
 					q.AddWithOpts(AddOpts{After: time.Duration(rn) * time.Millisecond}, fmt.Sprintf("foo%d", i))
 				} else {

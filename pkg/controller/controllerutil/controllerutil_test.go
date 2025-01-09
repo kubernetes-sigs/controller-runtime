@@ -457,7 +457,7 @@ var _ = Describe("Controllerutil", func() {
 		BeforeEach(func() {
 			deploy = &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("deploy-%d", rand.Int31()), //nolint:gosec
+					Name:      fmt.Sprintf("deploy-%d", rand.Int31()),
 					Namespace: "default",
 				},
 			}
@@ -606,7 +606,7 @@ var _ = Describe("Controllerutil", func() {
 		BeforeEach(func() {
 			deploy = &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("deploy-%d", rand.Int31()), //nolint:gosec
+					Name:      fmt.Sprintf("deploy-%d", rand.Int31()),
 					Namespace: "default",
 				},
 			}

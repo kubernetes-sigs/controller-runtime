@@ -572,7 +572,7 @@ var _ = Describe("manger.Manager", func() {
 		})
 
 		It("should return an error if the metrics bind address is already in use", func() {
-			ln, err := net.Listen("tcp", ":0") //nolint:gosec
+			ln, err := net.Listen("tcp", ":0")
 			Expect(err).ShouldNot(HaveOccurred())
 
 			var srv metricsserver.Server
@@ -597,7 +597,7 @@ var _ = Describe("manger.Manager", func() {
 		})
 
 		It("should return an error if the metrics bind address is already in use and secure serving enabled", func() {
-			ln, err := net.Listen("tcp", ":0") //nolint:gosec
+			ln, err := net.Listen("tcp", ":0")
 			Expect(err).ShouldNot(HaveOccurred())
 
 			var srv metricsserver.Server

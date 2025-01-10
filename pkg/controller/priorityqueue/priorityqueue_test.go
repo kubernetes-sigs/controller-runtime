@@ -379,6 +379,23 @@ var _ = Describe("Controllerworkqueue", func() {
 			wg.Wait()
 		}
 	})
+
+	It("updates metrics correctly for an item that gets initially added with after and then without", func() {
+		q, metrics := newQueue()
+		defer q.ShutDown()
+
+		q.AddWithOpts(AddOpts{After: time.Hour}, "foo")
+		Expect(q.Len()).To(Equal(0))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(0))
+		metrics.mu.Unlock()
+
+		q.AddWithOpts(AddOpts{}, "foo")
+
+		Expect(q.Len()).To(Equal(1))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(1))
+	})
 })
 
 func BenchmarkAddGetDone(b *testing.B) {
@@ -454,7 +471,7 @@ func TestFuzzPrioriorityQueue(t *testing.T) {
 	handedOutLock := sync.Mutex{}
 
 	wg := sync.WaitGroup{}
-	q, _ := newQueue()
+	q, metrics := newQueue()
 
 	for range 10 {
 		wg.Add(1)
@@ -519,6 +536,12 @@ func TestFuzzPrioriorityQueue(t *testing.T) {
 					if handedOut.Has(item) {
 						t.Errorf("item %s got handed out more than once", item)
 					}
+
+					metrics.mu.Lock()
+					if metrics.depth["test"] < 0 {
+						t.Errorf("negative depth of %d", metrics.depth["test"])
+					}
+					metrics.mu.Unlock()
 					handedOut.Insert(item)
 				}()
 

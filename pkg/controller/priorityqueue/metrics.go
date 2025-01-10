@@ -4,7 +4,6 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/clock"
 )
@@ -34,7 +33,6 @@ func newQueueMetrics[T comparable](mp workqueue.MetricsProvider, name string, cl
 		workDuration:            mp.NewWorkDurationMetric(name),
 		unfinishedWorkSeconds:   mp.NewUnfinishedWorkSecondsMetric(name),
 		longestRunningProcessor: mp.NewLongestRunningProcessorSecondsMetric(name),
-		added:                   sets.Set[T]{},
 		addTimes:                map[T]time.Time{},
 		processingStartTimes:    map[T]time.Time{},
 		retries:                 mp.NewRetriesMetric(name),
@@ -55,7 +53,6 @@ type defaultQueueMetrics[T comparable] struct {
 	workDuration workqueue.HistogramMetric
 
 	mapLock              sync.RWMutex
-	added                sets.Set[T]
 	addTimes             map[T]time.Time
 	processingStartTimes map[T]time.Time
 
@@ -73,13 +70,11 @@ func (m *defaultQueueMetrics[T]) add(item T) {
 	}
 
 	m.adds.Inc()
+	m.depth.Inc()
 
 	m.mapLock.Lock()
 	defer m.mapLock.Unlock()
-	if !m.added.Has(item) {
-		m.added.Insert(item)
-		m.depth.Inc()
-	}
+
 	if _, exists := m.addTimes[item]; !exists {
 		m.addTimes[item] = m.clock.Now()
 	}
@@ -94,7 +89,6 @@ func (m *defaultQueueMetrics[T]) get(item T) {
 	defer m.mapLock.Unlock()
 
 	m.depth.Dec()
-	m.added.Delete(item)
 
 	m.processingStartTimes[item] = m.clock.Now()
 	if startTime, exists := m.addTimes[item]; exists {

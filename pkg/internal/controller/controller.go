@@ -175,7 +175,7 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 		// caches.
 		errGroup := &errgroup.Group{}
 		for _, watch := range c.startWatches {
-			log := c.LogConstructor(nil).WithValues("source", fmt.Sprintf("%s", watch))
+			log := c.LogConstructor(nil).WithValues("source", watch.String())
 			didStartSyncingSource := &atomic.Bool{}
 			errGroup.Go(func() error {
 				// Use a timeout for starting and syncing the source to avoid silently

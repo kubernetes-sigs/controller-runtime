@@ -17,6 +17,8 @@ limitations under the License.
 package metrics
 
 import (
+	"regexp"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -89,6 +91,13 @@ func init() {
 		// expose process metrics like CPU, Memory, file descriptor usage etc.
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		// expose Go runtime metrics like GC stats, memory stats etc.
-		collectors.NewGoCollector(),
+		collectors.NewGoCollector(
+			collectors.WithGoCollectorRuntimeMetrics(
+				collectors.MetricsGC,
+				collectors.MetricsScheduler,
+				collectors.MetricsMemory,
+				collectors.GoRuntimeMetricsRule{Matcher: regexp.MustCompile(`^/sync/.*`)},
+			),
+		),
 	)
 }

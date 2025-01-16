@@ -157,6 +157,8 @@ var _ = Describe("Fake client", func() {
 			list.SetKind("DeploymentList")
 			err := cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).ToNot(HaveOccurred())
+			Expect(list.GroupVersionKind().GroupVersion().String()).To(Equal("apps/v1"))
+			Expect(list.GetKind()).To(Equal("DeploymentList"))
 			Expect(list.Items).To(HaveLen(2))
 		})
 
@@ -167,6 +169,8 @@ var _ = Describe("Fake client", func() {
 			list.SetKind("Deployment")
 			err := cl.List(context.Background(), list, client.InNamespace("ns1"))
 			Expect(err).ToNot(HaveOccurred())
+			Expect(list.GroupVersionKind().GroupVersion().String()).To(Equal("apps/v1"))
+			Expect(list.GetKind()).To(Equal("Deployment"))
 			Expect(list.Items).To(HaveLen(2))
 		})
 
@@ -178,6 +182,8 @@ var _ = Describe("Fake client", func() {
 				list.SetKind("EndpointsList")
 				err := cl.List(context.Background(), list, client.InNamespace("ns1"))
 				Expect(err).ToNot(HaveOccurred())
+				Expect(list.GroupVersionKind().GroupVersion().String()).To(Equal("v1"))
+				Expect(list.GetKind()).To(Equal("EndpointsList"))
 				Expect(list.Items).To(HaveLen(1))
 			}
 
@@ -247,6 +253,8 @@ var _ = Describe("Fake client", func() {
 			list.SetAPIVersion("custom/v3")
 			list.SetKind("ImageList")
 			err := cl.List(context.Background(), list)
+			Expect(list.GroupVersionKind().GroupVersion().String()).To(Equal("custom/v3"))
+			Expect(list.GetKind()).To(Equal("ImageList"))
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -255,6 +263,8 @@ var _ = Describe("Fake client", func() {
 			list.SetAPIVersion("custom/v4")
 			list.SetKind("Image")
 			err := cl.List(context.Background(), list)
+			Expect(list.GroupVersionKind().GroupVersion().String()).To(Equal("custom/v4"))
+			Expect(list.GetKind()).To(Equal("Image"))
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -1322,6 +1332,20 @@ var _ = Describe("Fake client", func() {
 					list := &corev1.ConfigMapList{}
 					err := cl.List(context.Background(), list, listOpts)
 					Expect(err).To(HaveOccurred())
+					Expect(list.Items).To(BeEmpty())
+				})
+
+				It("errors when there's no Index for the GroupVersionResource with UnstructuredList", func() {
+					listOpts := &client.ListOptions{
+						FieldSelector: fields.OneTermEqualSelector("key", "val"),
+					}
+					list := &unstructured.UnstructuredList{}
+					list.SetAPIVersion("v1")
+					list.SetKind("ConfigMapList")
+					err := cl.List(context.Background(), list, listOpts)
+					Expect(err).To(HaveOccurred())
+					Expect(list.GroupVersionKind().GroupVersion().String()).To(Equal("v1"))
+					Expect(list.GetKind()).To(Equal("ConfigMapList"))
 					Expect(list.Items).To(BeEmpty())
 				})
 

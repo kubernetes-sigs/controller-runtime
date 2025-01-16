@@ -606,6 +606,15 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 		return err
 	}
 
+	if _, isUnstructured := obj.(runtime.Unstructured); isUnstructured {
+		ta, err := meta.TypeAccessor(obj)
+		if err != nil {
+			return err
+		}
+		ta.SetKind(originalKind)
+		ta.SetAPIVersion(gvk.GroupVersion().String())
+	}
+
 	objs, err := meta.ExtractList(objCopy)
 	if err != nil {
 		return err

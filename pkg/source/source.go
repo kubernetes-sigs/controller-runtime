@@ -56,10 +56,6 @@ type TypedSource[request comparable] interface {
 	// Start is internal and should be called only by the Controller to start the source.
 	// Start must be non-blocking.
 	Start(context.Context, workqueue.TypedRateLimitingInterface[request]) error
-
-	// String enforces the custom source to adhere to the fmt.Stringer interface
-	// to print when being logged.
-	String() string
 }
 
 // SyncingSource is a source that needs syncing prior to being usable. The controller

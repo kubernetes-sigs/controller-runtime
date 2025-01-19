@@ -171,6 +171,7 @@ issues:
         - unused
       # Seems to incorrectly trigger on the two implementations that are only
       # used through an interface and not directly..?
+      # Likely same issue as https://github.com/dominikh/go-tools/issues/1616
       path: pkg/controller/priorityqueue/metrics\.go
 
 run:

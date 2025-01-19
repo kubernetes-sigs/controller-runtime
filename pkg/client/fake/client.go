@@ -1050,19 +1050,19 @@ func dryPatch(action testing.PatchActionImpl, tracker testing.ObjectTracker) (ru
 }
 
 // copyStatusFrom copies the status from old into new
-func copyStatusFrom(old, new runtime.Object) error {
+func copyStatusFrom(old, n runtime.Object) error {
 	oldMapStringAny, err := toMapStringAny(old)
 	if err != nil {
 		return fmt.Errorf("failed to convert old to *unstructured.Unstructured: %w", err)
 	}
-	newMapStringAny, err := toMapStringAny(new)
+	newMapStringAny, err := toMapStringAny(n)
 	if err != nil {
 		return fmt.Errorf("failed to convert new to *unststructured.Unstructured: %w", err)
 	}
 
 	newMapStringAny["status"] = oldMapStringAny["status"]
 
-	if err := fromMapStringAny(newMapStringAny, new); err != nil {
+	if err := fromMapStringAny(newMapStringAny, n); err != nil {
 		return fmt.Errorf("failed to convert back from map[string]any: %w", err)
 	}
 
@@ -1070,12 +1070,12 @@ func copyStatusFrom(old, new runtime.Object) error {
 }
 
 // copyFrom copies from old into new
-func copyFrom(old, new runtime.Object) error {
+func copyFrom(old, n runtime.Object) error {
 	oldMapStringAny, err := toMapStringAny(old)
 	if err != nil {
 		return fmt.Errorf("failed to convert old to *unstructured.Unstructured: %w", err)
 	}
-	if err := fromMapStringAny(oldMapStringAny, new); err != nil {
+	if err := fromMapStringAny(oldMapStringAny, n); err != nil {
 		return fmt.Errorf("failed to convert back from map[string]any: %w", err)
 	}
 

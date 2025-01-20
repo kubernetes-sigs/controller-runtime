@@ -18,6 +18,7 @@ package cache
 
 import (
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -430,6 +431,34 @@ func TestDefaultOpts(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDefaultOptsRace(t *testing.T) {
+	opts := Options{
+		Mapper: &fakeRESTMapper{},
+		ByObject: map[client.Object]ByObject{
+			&corev1.Pod{}: {
+				Label: labels.SelectorFromSet(map[string]string{"from": "pod"}),
+				Namespaces: map[string]Config{"default": {
+					LabelSelector: labels.SelectorFromSet(map[string]string{"from": "pod"}),
+				}},
+			},
+		},
+		DefaultNamespaces: map[string]Config{"default": {}},
+	}
+
+	// Start go routines which re-use the above options struct.
+	wg := sync.WaitGroup{}
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			_, _ = defaultOpts(&rest.Config{}, opts)
+			wg.Done()
+		}()
+	}
+
+	// Wait for the go routines to finish.
+	wg.Wait()
 }
 
 type fakeRESTMapper struct {

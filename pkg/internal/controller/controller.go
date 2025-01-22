@@ -200,7 +200,7 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 						sourceStartErrChan <- err
 						return
 					}
-					syncingSource, ok := watch.(source.SyncingSource)
+					syncingSource, ok := watch.(source.TypedSyncingSource[request])
 					if !ok {
 						return
 					}

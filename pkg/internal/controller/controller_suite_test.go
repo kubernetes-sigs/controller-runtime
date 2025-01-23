@@ -42,12 +42,12 @@ var _ = BeforeSuite(func() {
 
 	testenv = &envtest.Environment{}
 
-	// var err error
-	// cfg, err = testenv.Start()
-	// Expect(err).NotTo(HaveOccurred())
+	var err error
+	cfg, err = testenv.Start()
+	Expect(err).NotTo(HaveOccurred())
 
-	// clientset, err = kubernetes.NewForConfig(cfg)
-	// Expect(err).NotTo(HaveOccurred())
+	clientset, err = kubernetes.NewForConfig(cfg)
+	Expect(err).NotTo(HaveOccurred())
 })
 
 var _ = AfterSuite(func() {

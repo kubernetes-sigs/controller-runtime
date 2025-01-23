@@ -168,7 +168,7 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 		}
 
 		if item.ReadyAt != nil && (readyAt == nil || readyAt.Before(*item.ReadyAt)) {
-			if readyAt == nil {
+			if readyAt == nil && !w.becameReady.Has(key) {
 				w.metrics.add(key)
 			}
 			item.ReadyAt = readyAt

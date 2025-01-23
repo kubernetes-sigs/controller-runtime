@@ -22,6 +22,7 @@ import (
 	"os"
 	"time"
 
+	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -45,7 +46,9 @@ func main() {
 }
 
 func run() error {
-	log.SetLogger(zap.New())
+	log.SetLogger(zap.New(func(o *zap.Options) {
+		o.Level = zapcore.Level(-5)
+	}))
 
 	// Setup a Manager
 	mgr, err := manager.New(kubeconfig.GetConfigOrDie(), manager.Options{

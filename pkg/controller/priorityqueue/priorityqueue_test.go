@@ -395,6 +395,48 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(q.Len()).To(Equal(1))
 		metrics.mu.Lock()
 		Expect(metrics.depth["test"]).To(Equal(1))
+		metrics.mu.Unlock()
+
+		// Get the item to ensure the codepath in
+		// `spin` for the metrics is passed by so
+		// that this starts failing if it incorrectly
+		// calls `metrics.add` again.
+		item, _ := q.Get()
+		Expect(item).To(Equal("foo"))
+		Expect(q.Len()).To(Equal(0))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(0))
+		metrics.mu.Unlock()
+	})
+
+	It("Updates metrics correctly for an item whose requeueAfter expired that gets added again without requeueAfter", func() {
+		q, metrics := newQueue()
+		defer q.ShutDown()
+
+		q.AddWithOpts(AddOpts{After: 50 * time.Millisecond}, "foo")
+		time.Sleep(100 * time.Millisecond)
+
+		Expect(q.Len()).To(Equal(1))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(1))
+		metrics.mu.Unlock()
+
+		q.AddWithOpts(AddOpts{}, "foo")
+		Expect(q.Len()).To(Equal(1))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(1))
+		metrics.mu.Unlock()
+
+		// Get the item to ensure the codepath in
+		// `spin` for the metrics is passed by so
+		// that this starts failing if it incorrectly
+		// calls `metrics.add` again.
+		item, _ := q.Get()
+		Expect(item).To(Equal("foo"))
+		Expect(q.Len()).To(Equal(0))
+		metrics.mu.Lock()
+		Expect(metrics.depth["test"]).To(Equal(0))
+		metrics.mu.Unlock()
 	})
 })
 

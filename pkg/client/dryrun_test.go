@@ -179,8 +179,9 @@ var _ = Describe("DryRunClient", func() {
 		Expect(actual).To(BeEquivalentTo(dep))
 	})
 
-	It("should not delete objects", func(ctx SpecContext) {
-		Expect(getClient().Delete(ctx, dep)).NotTo(HaveOccurred())
+	It("should not delete objects", func() {
+		changedDep := dep.DeepCopy()
+		Expect(getClient().Delete(ctx, changedDep)).NotTo(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -191,7 +192,8 @@ var _ = Describe("DryRunClient", func() {
 	It("should not delete objects with opts", func(ctx SpecContext) {
 		opts := &client.DeleteOptions{DryRun: []string{"Bye", "Pippa"}}
 
-		Expect(getClient().Delete(ctx, dep, opts)).NotTo(HaveOccurred())
+		changedDep := dep.DeepCopy()
+		Expect(getClient().Delete(ctx, changedDep, opts)).NotTo(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())

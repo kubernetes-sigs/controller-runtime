@@ -51,6 +51,7 @@ import (
 	"sigs.k8s.io/controller-runtime/examples/crd/pkg"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 func deleteDeployment(ctx context.Context, dep *appsv1.Deployment, ns string) {
@@ -1733,6 +1734,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				nodeName := node.Name
 				err = cl.Delete(ctx, node)
 				Expect(err).NotTo(HaveOccurred())
+				Expect(node.ObjectMeta.DeletionTimestamp).To(BeNil())
 
 				By("validating the Node no longer exists")
 				_, err = clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
@@ -1746,6 +1748,36 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("Deleting node before it is ever created")
 				err = cl.Delete(ctx, node)
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("should update the resource when deleting if it receives a response", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Node")
+				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("adding a finalizer we prevent the node from being deleted immediately")
+				controllerutil.AddFinalizer(node, "example.com/test")
+				node, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("deleting the Node")
+				nodeName := node.Name
+				err = cl.Delete(context.TODO(), node)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(node.ObjectMeta.DeletionTimestamp).NotTo(BeNil())
+
+				By("removing the finalizer")
+				controllerutil.RemoveFinalizer(node, "example.com/test")
+				_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating the Node no longer exists")
+				_, err = clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 			})
 

@@ -1,6 +1,6 @@
 module sigs.k8s.io/controller-runtime/examples/scratch-env
 
-go 1.23.4
+go 1.23.0
 
 require (
 	github.com/spf13/pflag v1.0.5

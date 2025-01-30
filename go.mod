@@ -1,6 +1,6 @@
 module sigs.k8s.io/controller-runtime
 
-go 1.23.4
+go 1.23.0
 
 require (
 	github.com/evanphx/json-patch/v5 v5.9.11

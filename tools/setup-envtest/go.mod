@@ -8,7 +8,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/spf13/afero v1.12.0
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/pflag v1.0.6
 	go.uber.org/zap v1.27.0
 	k8s.io/apimachinery v0.32.1
 	sigs.k8s.io/yaml v1.4.0

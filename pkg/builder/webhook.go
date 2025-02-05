@@ -37,17 +37,18 @@ import (
 
 // WebhookBuilder builds a Webhook.
 type WebhookBuilder struct {
-	apiType             runtime.Object
-	customDefaulter     admission.CustomDefaulter
-	customDefaulterOpts []admission.DefaulterOption
-	customValidator     admission.CustomValidator
-	customPath          string
-	gvk                 schema.GroupVersionKind
-	mgr                 manager.Manager
-	config              *rest.Config
-	recoverPanic        *bool
-	logConstructor      func(base logr.Logger, req *admission.Request) logr.Logger
-	err                 error
+	apiType              runtime.Object
+	customDefaulter      admission.CustomDefaulter
+	customDefaulterOpts  []admission.DefaulterOption
+	customValidator      admission.CustomValidator
+	validatingCustomPath string
+	defaultingCustomPath string
+	gvk                  schema.GroupVersionKind
+	mgr                  manager.Manager
+	config               *rest.Config
+	recoverPanic         *bool
+	logConstructor       func(base logr.Logger, req *admission.Request) logr.Logger
+	err                  error
 }
 
 // WebhookManagedBy returns a new webhook builder.
@@ -95,9 +96,15 @@ func (blder *WebhookBuilder) RecoverPanic(recoverPanic bool) *WebhookBuilder {
 	return blder
 }
 
-// WithCustomPath overrides the webhook's default path by the customPath
-func (blder *WebhookBuilder) WithCustomPath(customPath string) *WebhookBuilder {
-	blder.customPath = customPath
+// WithValidatingCustomPath overrides the webhook's default validating path by the customPath
+func (blder *WebhookBuilder) WithValidatingCustomPath(customPath string) *WebhookBuilder {
+	blder.validatingCustomPath = customPath
+	return blder
+}
+
+// WithDefaultingCustomPath overrides the webhook's default defaulting path by the customPath
+func (blder *WebhookBuilder) WithDefaultingCustomPath(customPath string) *WebhookBuilder {
+	blder.defaultingCustomPath = customPath
 	return blder
 }
 
@@ -174,8 +181,8 @@ func (blder *WebhookBuilder) registerDefaultingWebhook() error {
 	if mwh != nil {
 		mwh.LogConstructor = blder.logConstructor
 		path := generateMutatePath(blder.gvk)
-		if blder.customPath != "" {
-			generatedCustomPath, err := generateCustomPath(blder.customPath)
+		if blder.defaultingCustomPath != "" {
+			generatedCustomPath, err := generateCustomPath(blder.defaultingCustomPath)
 			if err != nil {
 				return err
 			}
@@ -212,8 +219,8 @@ func (blder *WebhookBuilder) registerValidatingWebhook() error {
 	if vwh != nil {
 		vwh.LogConstructor = blder.logConstructor
 		path := generateValidatePath(blder.gvk)
-		if blder.customPath != "" {
-			generatedCustomPath, err := generateCustomPath(blder.customPath)
+		if blder.validatingCustomPath != "" {
+			generatedCustomPath, err := generateCustomPath(blder.validatingCustomPath)
 			if err != nil {
 				return err
 			}

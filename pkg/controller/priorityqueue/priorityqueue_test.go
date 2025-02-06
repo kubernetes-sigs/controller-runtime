@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/util/workqueue"
 )
 
 var _ = Describe("Controllerworkqueue", func() {
@@ -437,6 +438,72 @@ var _ = Describe("Controllerworkqueue", func() {
 		metrics.mu.Lock()
 		Expect(metrics.depth["test"]).To(Equal(0))
 		metrics.mu.Unlock()
+	})
+
+	It("When adding items with rateLimit, previous items' rateLimit should not affect subsequent items", func() {
+		q, metrics := newQueue()
+		defer q.ShutDown()
+
+		now := time.Now().Round(time.Second)
+		nowLock := sync.Mutex{}
+		tick := make(chan time.Time)
+
+		cwq := q.(*priorityqueue[string])
+		cwq.rateLimiter = workqueue.NewTypedItemExponentialFailureRateLimiter[string](5*time.Millisecond, 1000*time.Second)
+		cwq.now = func() time.Time {
+			nowLock.Lock()
+			defer nowLock.Unlock()
+			return now
+		}
+		cwq.tick = func(d time.Duration) <-chan time.Time {
+			done := make(chan struct{})
+			go func() {
+				defer GinkgoRecover()
+				defer close(done)
+
+				Expect(d).To(Or(Equal(5*time.Millisecond), Equal(635*time.Millisecond)))
+			}()
+			<-done
+			return tick
+		}
+
+		retrievedItem := make(chan struct{})
+		retrievedSecondItem := make(chan struct{})
+
+		go func() {
+			defer GinkgoRecover()
+			first, _, _ := q.GetWithPriority()
+			Expect(first).To(Equal("foo"))
+			close(retrievedItem)
+
+			second, _, _ := q.GetWithPriority()
+			Expect(second).To(Equal("bar"))
+			close(retrievedSecondItem)
+		}()
+
+		// after 7 calls, the next When("bar") call will return 640ms.
+		for range 7 {
+			cwq.rateLimiter.When("bar")
+		}
+		q.AddWithOpts(AddOpts{RateLimited: true}, "foo", "bar")
+
+		Consistently(retrievedItem).ShouldNot(BeClosed())
+		nowLock.Lock()
+		now = now.Add(5 * time.Millisecond)
+		nowLock.Unlock()
+		tick <- now
+		Eventually(retrievedItem).Should(BeClosed())
+
+		Consistently(retrievedSecondItem).ShouldNot(BeClosed())
+		nowLock.Lock()
+		now = now.Add(635 * time.Millisecond)
+		nowLock.Unlock()
+		tick <- now
+		Eventually(retrievedSecondItem).Should(BeClosed())
+
+		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.adds["test"]).To(Equal(2))
+		Expect(metrics.retries["test"]).To(Equal(2))
 	})
 })
 

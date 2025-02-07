@@ -17,6 +17,7 @@ limitations under the License.
 package controllertest
 
 import (
+	"context"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -109,6 +110,10 @@ func (f *FakeInformer) Run(<-chan struct{}) {
 	f.RunCount++
 }
 
+func (f *FakeInformer) RunWithContext(_ context.Context) {
+	f.RunCount++
+}
+
 // Add fakes an Add event for obj.
 func (f *FakeInformer) Add(obj metav1.Object) {
 	for _, h := range f.handlers {
@@ -135,6 +140,10 @@ func (f *FakeInformer) AddEventHandlerWithResyncPeriod(handler cache.ResourceEve
 	return nil, nil
 }
 
+func (f *FakeInformer) AddEventHandlerWithOptions(handler cache.ResourceEventHandler, options cache.HandlerOptions) (cache.ResourceEventHandlerRegistration, error) {
+	return nil, nil
+}
+
 // RemoveEventHandler does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) RemoveEventHandler(handle cache.ResourceEventHandlerRegistration) error {
 	return nil
@@ -157,6 +166,10 @@ func (f *FakeInformer) LastSyncResourceVersion() string {
 
 // SetWatchErrorHandler does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) SetWatchErrorHandler(cache.WatchErrorHandler) error {
+	return nil
+}
+
+func (f *FakeInformer) SetWatchErrorHandlerWithContext(handler cache.WatchErrorHandlerWithContext) error {
 	return nil
 }
 

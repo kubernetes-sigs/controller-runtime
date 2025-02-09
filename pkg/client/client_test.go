@@ -1751,7 +1751,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(err).To(HaveOccurred())
 			})
 
-			It("should update the resource when deleting if it receives a response", func() {
+			It("should update the resource when deleting if it receives a response", func(ctx SpecContext) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
@@ -1767,7 +1767,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("deleting the Node")
 				nodeName := node.Name
-				err = cl.Delete(context.TODO(), node)
+				err = cl.Delete(ctx, node)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(node.ObjectMeta.DeletionTimestamp).NotTo(BeNil())
 
@@ -1940,7 +1940,48 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep2Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 			})
+
+			It("should update the resource when deleting if it receives a response", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Node")
+				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("adding a finalizer we prevent the node from being deleted immediately")
+				controllerutil.AddFinalizer(node, "example.com/test")
+				node, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("deleting the Node")
+				nodeName := node.Name
+				u := &unstructured.Unstructured{}
+				Expect(scheme.Convert(node, u, nil)).To(Succeed())
+				u.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "",
+					Kind:    "Node",
+					Version: "v1",
+				})
+				err = cl.Delete(ctx, u)
+				Expect(err).NotTo(HaveOccurred())
+
+				accessor, err := meta.Accessor(u)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(accessor.GetDeletionTimestamp()).NotTo(BeNil())
+
+				By("removing the finalizer")
+				controllerutil.RemoveFinalizer(u, "example.com/test")
+				err = cl.Delete(ctx, u)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating the Node no longer exists")
+				_, err = clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			})
 		})
+
 		Context("with metadata objects", func() {
 			It("should delete an existing object from a go struct", func(ctx SpecContext) {
 				cl, err := client.New(cfg, client.Options{})

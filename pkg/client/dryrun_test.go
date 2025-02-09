@@ -179,7 +179,7 @@ var _ = Describe("DryRunClient", func() {
 		Expect(actual).To(BeEquivalentTo(dep))
 	})
 
-	It("should not delete objects", func() {
+	It("should not delete objects", func(ctx SpecContext) {
 		changedDep := dep.DeepCopy()
 		Expect(getClient().Delete(ctx, changedDep)).NotTo(HaveOccurred())
 

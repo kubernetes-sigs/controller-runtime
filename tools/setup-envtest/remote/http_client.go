@@ -12,8 +12,9 @@ import (
 	"sort"
 
 	"github.com/go-logr/logr"
-	"sigs.k8s.io/controller-runtime/tools/setup-envtest/versions"
 	"sigs.k8s.io/yaml"
+
+	"sigs.k8s.io/controller-runtime/tools/setup-envtest/versions"
 )
 
 // DefaultIndexURL is the default index used in HTTPClient.

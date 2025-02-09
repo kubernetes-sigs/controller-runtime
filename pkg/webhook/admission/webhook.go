@@ -30,9 +30,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/klog/v2"
-	admissionmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/admission/metrics"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	admissionmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/admission/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 

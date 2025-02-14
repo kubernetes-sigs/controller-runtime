@@ -1819,7 +1819,7 @@ var _ = Describe("manger.Manager", func() {
 		<-m.Elected()
 
 		Eventually(func() *corev1.Event {
-			evts, err := clientset.CoreV1().Events("").Search(m.GetScheme(), &ns)
+			evts, err := clientset.CoreV1().Events("").SearchWithContext(ctx, m.GetScheme(), &ns)
 			Expect(err).NotTo(HaveOccurred())
 
 			for i, evt := range evts.Items {

@@ -29,8 +29,7 @@ import (
 	"sync"
 	"time"
 
-	// Using v4 to match upstream
-	jsonpatch "gopkg.in/evanphx/json-patch.v4"
+	jsonpatch "github.com/evanphx/json-patch/v5"
 	appsv1 "k8s.io/api/apps/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
@@ -1138,7 +1137,7 @@ func (c *fakeClient) deleteObjectLocked(gvr schema.GroupVersionResource, accesso
 		}
 	}
 
-	//TODO: implement propagation
+	// TODO: implement propagation
 	return c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
 }
 

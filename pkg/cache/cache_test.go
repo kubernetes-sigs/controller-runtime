@@ -130,16 +130,16 @@ var _ = Describe("Informer Cache with ReaderFailOnMissingInformer", func() {
 var _ = Describe("Multi-Namespace Informer Cache", func() {
 	CacheTest(cache.New, cache.Options{
 		DefaultNamespaces: map[string]cache.Config{
-			testNamespaceOne: {},
-			testNamespaceTwo: {},
-			"default":        {},
+			cache.AllNamespaces: {FieldSelector: fields.OneTermEqualSelector("metadata.namespace", testNamespaceOne)},
+			testNamespaceTwo:    {},
+			"default":           {},
 		},
 	})
 	NonBlockingGetTest(cache.New, cache.Options{
 		DefaultNamespaces: map[string]cache.Config{
-			testNamespaceOne: {},
-			testNamespaceTwo: {},
-			"default":        {},
+			cache.AllNamespaces: {FieldSelector: fields.OneTermEqualSelector("metadata.namespace", testNamespaceOne)},
+			testNamespaceTwo:    {},
+			"default":           {},
 		},
 	})
 })

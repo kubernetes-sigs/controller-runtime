@@ -23,7 +23,7 @@ source $(dirname ${BASH_SOURCE})/common.sh
 REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 cd "${REPO_ROOT}"
 
-export GOTOOLCHAIN="go$(make go-version)"
+export GOTOOLCHAIN="go$(make --silent go-version)"
 
 header_text "verifying api diff"
 echo "*** Running go-apidiff ***"

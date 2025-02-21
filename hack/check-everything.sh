@@ -24,7 +24,7 @@ source ${hack_dir}/common.sh
 tmp_root=/tmp
 kb_root_dir=$tmp_root/kubebuilder
 
-export GOTOOLCHAIN="go$(make go-version)"
+export GOTOOLCHAIN="go$(make --silent go-version)"
 
 # Run verification scripts.
 ${hack_dir}/verify.sh

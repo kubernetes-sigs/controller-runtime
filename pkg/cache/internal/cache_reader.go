@@ -139,15 +139,17 @@ func (c *CacheReader) List(_ context.Context, out client.ObjectList, opts ...cli
 		labelSel = listOpts.LabelSelector
 	}
 
+	// Since the cache does not implement strongly consistent paginated list
+	// calls, if the Limit option is set and the number of items listed exceeds
+	// this limit, there is no way for the caller to get a complete list of
+	// objects, so return an error here to notify the caller.
 	limitSet := listOpts.Limit > 0
+	if limitSet && int64(len(objs)) > listOpts.Limit {
+		return fmt.Errorf("object limit exceeded but paginated list is not supported by the cache")
+	}
 
 	runtimeObjs := make([]runtime.Object, 0, len(objs))
 	for _, item := range objs {
-		// if the Limit option is set and the number of items
-		// listed exceeds this limit, then stop reading.
-		if limitSet && int64(len(runtimeObjs)) >= listOpts.Limit {
-			break
-		}
 		obj, isObj := item.(runtime.Object)
 		if !isObj {
 			return fmt.Errorf("cache contained %T, which is not an Object", item)

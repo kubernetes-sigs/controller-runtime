@@ -72,6 +72,7 @@ var _ = Describe("Config", func() {
 					cfg, err := GetConfigWithContext(tc.context)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cfg.Host).To(Equal(tc.wantHost))
+					Expect(cfg.QPS).To(Equal(float32(-1)))
 				})
 			}
 		}
@@ -82,8 +83,8 @@ var _ = Describe("Config", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				cfg, err := GetConfigWithContext("")
-				Expect(cfg).To(BeNil())
 				Expect(err).To(HaveOccurred())
+				Expect(cfg).To(BeNil())
 			})
 		})
 

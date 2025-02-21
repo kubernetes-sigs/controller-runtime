@@ -31,7 +31,7 @@ var _ = Describe("Test", func() {
 					"testdata/crdv1_original",
 				},
 			}
-			err := readCRDFiles(&opt)
+			err := ReadCRDFiles(&opt)
 			Expect(err).NotTo(HaveOccurred())
 
 			expectedCRDs := sets.NewString(

@@ -348,7 +348,7 @@ func (c *Controller[request]) reconcileHandler(ctx context.Context, req request)
 		c.Queue.Forget(req)
 		c.Queue.AddAfter(req, result.RequeueAfter)
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeueAfter).Inc()
-	case result.Requeue:
+	case result.Requeue: //nolint: staticcheck // We have to handle it until it is removed
 		log.V(5).Info("Reconcile done, requeueing")
 		c.Queue.AddRateLimited(req)
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeue).Inc()

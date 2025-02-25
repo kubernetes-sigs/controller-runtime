@@ -861,6 +861,19 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(listObj.Items).Should(HaveLen(1))
 				})
 
+				It("should return an error if pagination is used", func() {
+					listObj := &corev1.PodList{}
+					By("verifying that the first list works and returns a sentinel continue")
+					err := informerCache.List(context.Background(), listObj)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(listObj.Continue).To(Equal("continue-not-supported"))
+
+					By("verifying that an error is returned")
+					err = informerCache.List(context.Background(), listObj, client.Continue(listObj.Continue))
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(Equal("continue list option is not supported by the cache"))
+				})
+
 				It("should return an error if the continue list options is set", func() {
 					listObj := &corev1.PodList{}
 					continueOpt := client.Continue("token")
@@ -1182,6 +1195,25 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(nodeList.Items).NotTo(BeEmpty())
 					Expect(len(nodeList.Items)).To(BeEquivalentTo(2))
 				})
+
+				It("should return an error if pagination is used", func() {
+					nodeList := &unstructured.UnstructuredList{}
+					nodeList.SetGroupVersionKind(schema.GroupVersionKind{
+						Group:   "",
+						Version: "v1",
+						Kind:    "NodeList",
+					})
+					By("verifying that the first list works and returns a sentinel continue")
+					err := informerCache.List(context.Background(), nodeList)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(nodeList.GetContinue()).To(Equal("continue-not-supported"))
+
+					By("verifying that an error is returned")
+					err = informerCache.List(context.Background(), nodeList, client.Continue(nodeList.GetContinue()))
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(Equal("continue list option is not supported by the cache"))
+				})
+
 				It("should return an error if the continue list options is set", func() {
 					podList := &unstructured.Unstructured{}
 					continueOpt := client.Continue("token")
@@ -1510,6 +1542,24 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("verifying that an error is returned")
 					err := informerCache.Get(context.Background(), svcKey, svc)
 					Expect(err).To(HaveOccurred())
+				})
+
+				It("should return an error if pagination is used", func() {
+					nodeList := &metav1.PartialObjectMetadataList{}
+					nodeList.SetGroupVersionKind(schema.GroupVersionKind{
+						Group:   "",
+						Version: "v1",
+						Kind:    "NodeList",
+					})
+					By("verifying that the first list works and returns a sentinel continue")
+					err := informerCache.List(context.Background(), nodeList)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(nodeList.GetContinue()).To(Equal("continue-not-supported"))
+
+					By("verifying that an error is returned")
+					err = informerCache.List(context.Background(), nodeList, client.Continue(nodeList.GetContinue()))
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(Equal("continue list option is not supported by the cache"))
 				})
 			})
 			type selectorsTestCase struct {

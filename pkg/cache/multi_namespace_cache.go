@@ -249,6 +249,10 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 	listOpts := client.ListOptions{}
 	listOpts.ApplyOptions(opts)
 
+	if listOpts.Continue != "" {
+		return fmt.Errorf("continue list option is not supported by the cache")
+	}
+
 	isNamespaced, err := apiutil.IsObjectNamespaced(list, c.Scheme, c.RESTMapper)
 	if err != nil {
 		return err
@@ -316,7 +320,12 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 	}
 	listAccessor.SetResourceVersion(resourceVersion)
 
-	return apimeta.SetList(list, allItems)
+	if err := apimeta.SetList(list, allItems); err != nil {
+		return err
+	}
+
+	list.SetContinue("continue-not-supported")
+	return nil
 }
 
 // multiNamespaceInformer knows how to handle interacting with the underlying informer across multiple namespaces.

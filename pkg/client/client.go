@@ -44,6 +44,9 @@ type Options struct {
 	// Scheme, if provided, will be used to map go structs to GroupVersionKinds
 	Scheme *runtime.Scheme
 
+	// CodecFactoryOptionsByObject, if provided, will be used to indicate whether enable strict/pretty mode of CodecFactory for specific obj
+	CodecFactoryOptionsByObject map[Object]CodecFactoryOptions
+
 	// Mapper, if provided, will be used to map GroupVersionKinds to Resources
 	Mapper meta.RESTMapper
 
@@ -66,6 +69,15 @@ type CacheOptions struct {
 	// read unstructured objects or lists from the cache.
 	// If false, unstructured objects will always result in a live lookup.
 	Unstructured bool
+}
+
+// CodecFactoryOptions holds the options for configuring CodecFactory behavior which is same as serializer.CodecFactoryOptions
+type CodecFactoryOptions struct {
+	// Strict configures all serializers in strict mode
+	Strict bool
+	// Pretty includes a pretty serializer along with the non-pretty one
+	Pretty bool
+	// drop serializers field in serializer.CodecFactoryOptions just for passing go-apidiff test
 }
 
 // NewClientFunc allows a user to define how to create a client.
@@ -145,13 +157,29 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 		}
 	}
 
-	resources := &clientRestResources{
-		httpClient: options.HTTPClient,
-		config:     config,
-		scheme:     options.Scheme,
-		mapper:     options.Mapper,
-		codecs:     serializer.NewCodecFactory(options.Scheme),
+	codecFactories := make(map[schema.GroupVersionKind]serializer.CodecFactory)
+	for obj, codecFactoryOptions := range options.CodecFactoryOptionsByObject {
+		gvk, err := apiutil.GVKForObject(obj, options.Scheme)
+		if err != nil {
+			continue
+		}
+		var mutators []serializer.CodecFactoryOptionsMutator
+		if codecFactoryOptions.Strict {
+			mutators = append(mutators, serializer.EnableStrict)
+		}
+		if codecFactoryOptions.Pretty {
+			mutators = append(mutators, serializer.EnablePretty)
+		}
+		codecFactories[gvk] = serializer.NewCodecFactory(options.Scheme, mutators...)
+	}
 
+	resources := &clientRestResources{
+		httpClient:                 options.HTTPClient,
+		config:                     config,
+		scheme:                     options.Scheme,
+		mapper:                     options.Mapper,
+		defaultCodecs:              serializer.NewCodecFactory(options.Scheme),
+		codecsByObject:             codecFactories,
 		structuredResourceByType:   make(map[schema.GroupVersionKind]*resourceMeta),
 		unstructuredResourceByType: make(map[schema.GroupVersionKind]*resourceMeta),
 	}

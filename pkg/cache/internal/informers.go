@@ -36,23 +36,25 @@ import (
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/internal/syncs"
 )
 
 // InformersOpts configures an InformerMap.
 type InformersOpts struct {
-	HTTPClient            *http.Client
-	Scheme                *runtime.Scheme
-	Mapper                meta.RESTMapper
-	ResyncPeriod          time.Duration
-	Namespace             string
-	NewInformer           func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
-	Selector              Selector
-	Transform             cache.TransformFunc
-	UnsafeDisableDeepCopy bool
-	EnableWatchBookmarks  bool
-	WatchErrorHandler     cache.WatchErrorHandler
+	HTTPClient                  *http.Client
+	Scheme                      *runtime.Scheme
+	CodecFactoryOptionsByObject map[client.Object]client.CodecFactoryOptions
+	Mapper                      meta.RESTMapper
+	ResyncPeriod                time.Duration
+	Namespace                   string
+	NewInformer                 func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
+	Selector                    Selector
+	Transform                   cache.TransformFunc
+	UnsafeDisableDeepCopy       bool
+	EnableWatchBookmarks        bool
+	WatchErrorHandler           cache.WatchErrorHandler
 }
 
 // NewInformers creates a new InformersMap that can create informers under the hood.
@@ -61,6 +63,23 @@ func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 	if options.NewInformer != nil {
 		newInformer = options.NewInformer
 	}
+
+	codecFactories := make(map[schema.GroupVersionKind]serializer.CodecFactory)
+	for obj, codecFactoryOptions := range options.CodecFactoryOptionsByObject {
+		gvk, err := apiutil.GVKForObject(obj, options.Scheme)
+		if err != nil {
+			continue
+		}
+		var mutators []serializer.CodecFactoryOptionsMutator
+		if codecFactoryOptions.Strict {
+			mutators = append(mutators, serializer.EnableStrict)
+		}
+		if codecFactoryOptions.Pretty {
+			mutators = append(mutators, serializer.EnablePretty)
+		}
+		codecFactories[gvk] = serializer.NewCodecFactory(options.Scheme, mutators...)
+	}
+
 	return &Informers{
 		config:     config,
 		httpClient: options.HTTPClient,
@@ -71,7 +90,8 @@ func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 			Unstructured: make(map[schema.GroupVersionKind]*Cache),
 			Metadata:     make(map[schema.GroupVersionKind]*Cache),
 		},
-		codecs:                serializer.NewCodecFactory(options.Scheme),
+		defaultCodecs:         serializer.NewCodecFactory(options.Scheme),
+		codecsByObject:        codecFactories,
 		paramCodec:            runtime.NewParameterCodec(options.Scheme),
 		resync:                options.ResyncPeriod,
 		startWait:             make(chan struct{}),
@@ -139,8 +159,11 @@ type Informers struct {
 	// tracker tracks informers keyed by their type and groupVersionKind
 	tracker tracker
 
-	// codecs is used to create a new REST client
-	codecs serializer.CodecFactory
+	// codecsByObject is used to override defaultCodecs for specific GroupVersionKind(object)
+	codecsByObject map[schema.GroupVersionKind]serializer.CodecFactory
+
+	// defaultCodecs is used to create a new REST client
+	defaultCodecs serializer.CodecFactory
 
 	// paramCodec is used by list and watch
 	paramCodec runtime.ParameterCodec
@@ -512,7 +535,12 @@ func (ip *Informers) makeListWatcher(gvk schema.GroupVersionKind, obj runtime.Ob
 	// Structured.
 	//
 	default:
-		client, err := apiutil.RESTClientForGVK(gvk, false, ip.config, ip.codecs, ip.httpClient)
+		codecFactory := ip.defaultCodecs
+		if override, ok := ip.codecsByObject[gvk]; ok {
+			codecFactory = override
+		}
+
+		client, err := apiutil.RESTClientForGVK(gvk, false, ip.config, codecFactory, ip.httpClient)
 		if err != nil {
 			return nil, err
 		}

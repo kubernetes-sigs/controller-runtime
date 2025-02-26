@@ -46,7 +46,7 @@ type TypedMapFunc[object any, request comparable] func(context.Context, object) 
 // For UpdateEvents which contain both a new and old object, the transformation function is run on both
 // objects and both sets of Requests are enqueue.
 func EnqueueRequestsFromMapFunc(fn MapFunc) EventHandler {
-	return TypedEnqueueRequestsFromMapFunc(fn)
+	return WithLowPriorityWhenUnchanged(TypedEnqueueRequestsFromMapFunc(fn))
 }
 
 // TypedEnqueueRequestsFromMapFunc enqueues Requests by running a transformation function that outputs a collection

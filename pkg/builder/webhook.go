@@ -41,6 +41,7 @@ type WebhookBuilder struct {
 	customDefaulter      admission.CustomDefaulter
 	customDefaulterOpts  []admission.DefaulterOption
 	customValidator      admission.CustomValidator
+	customPath           string
 	validatingCustomPath string
 	defaultingCustomPath string
 	gvk                  schema.GroupVersionKind
@@ -96,6 +97,14 @@ func (blder *WebhookBuilder) RecoverPanic(recoverPanic bool) *WebhookBuilder {
 	return blder
 }
 
+// WithCustomPath overrides the webhook's default path by the customPath
+// Deprecated: WithCustomPath should not be used anymore.
+// Please use WithValidatingCustomPath or WithDefaultingCustomPath instead.
+func (blder *WebhookBuilder) WithCustomPath(customPath string) *WebhookBuilder {
+	blder.customPath = customPath
+	return blder
+}
+
 // WithValidatingCustomPath overrides the webhook's default validating path by the customPath
 func (blder *WebhookBuilder) WithValidatingCustomPath(customPath string) *WebhookBuilder {
 	blder.validatingCustomPath = customPath
@@ -146,6 +155,10 @@ func (blder *WebhookBuilder) setLogConstructor() {
 	}
 }
 
+func (blder *WebhookBuilder) isThereCustomPathConflict() bool {
+	return (blder.customPath != "" && blder.customDefaulter != nil && blder.customValidator != nil) || (blder.customPath != "" && blder.defaultingCustomPath != "") || (blder.customPath != "" && blder.validatingCustomPath != "")
+}
+
 func (blder *WebhookBuilder) registerWebhooks() error {
 	typ, err := blder.getType()
 	if err != nil {
@@ -155,6 +168,18 @@ func (blder *WebhookBuilder) registerWebhooks() error {
 	blder.gvk, err = apiutil.GVKForObject(typ, blder.mgr.GetScheme())
 	if err != nil {
 		return err
+	}
+
+	if blder.isThereCustomPathConflict() {
+		return errors.New("only one of the custom defaulter or custom validtor should be set when using WithCustomPath. Otherwise, WithDefaultingCustomPath() and WithValidatingCustomPath() should be used.")
+	} else {
+		if blder.customPath != "" {
+			// isThereCustomPathConflict() already checks for potential conflicts.
+			// Since we are sure that only one of customDefaulter or customValidator will be used,
+			// we can set set both defaultingCustomPath and validatingCustomPath.
+			blder.defaultingCustomPath = blder.customPath
+			blder.validatingCustomPath = blder.customPath
+		}
 	}
 
 	// Register webhook(s) for type

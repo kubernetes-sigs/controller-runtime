@@ -817,6 +817,78 @@ func runTests(admissionReviewVersion string) {
 		svr.WebhookMux().ServeHTTP(w, req)
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
 	})
+
+	It("should not scaffold a custom defaulting and a custom validating webhook with the same custom path", func() {
+		By("creating a controller manager")
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+		builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		customPath := "/custom-path"
+		err = WebhookManagedBy(m).
+			For(&TestDefaultValidator{}).
+			WithDefaulter(&TestCustomDefaultValidator{}).
+			WithValidator(&TestCustomDefaultValidator{}).
+			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
+				return admission.DefaultLogConstructor(testingLogger, req)
+			}).
+			WithCustomPath(customPath).
+			Complete()
+		ExpectWithOffset(1, err).To(HaveOccurred())
+	})
+
+	It("should not scaffold a custom defaulting when setting a custom path and a defaulting custom path", func() {
+		By("creating a controller manager")
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+		builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		customPath := "/custom-path"
+		err = WebhookManagedBy(m).
+			For(&TestDefaulter{}).
+			WithDefaulter(&TestCustomDefaulter{}).
+			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
+				return admission.DefaultLogConstructor(testingLogger, req)
+			}).
+			WithDefaultingCustomPath(customPath).
+			WithCustomPath(customPath).
+			Complete()
+		ExpectWithOffset(1, err).To(HaveOccurred())
+	})
+
+	It("should not scaffold a custom defaulting when setting a custom path and a validating custom path", func() {
+		By("creating a controller manager")
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		By("registering the type in the Scheme")
+		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+		builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		customPath := "/custom-path"
+		err = WebhookManagedBy(m).
+			For(&TestValidator{}).
+			WithValidator(&TestCustomValidator{}).
+			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
+				return admission.DefaultLogConstructor(testingLogger, req)
+			}).
+			WithDefaultingCustomPath(customPath).
+			WithCustomPath(customPath).
+			Complete()
+		ExpectWithOffset(1, err).To(HaveOccurred())
+	})
 }
 
 // TestDefaulter.

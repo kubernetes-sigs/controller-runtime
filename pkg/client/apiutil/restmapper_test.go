@@ -77,6 +77,11 @@ func setupEnvtest(t *testing.T, disableAggregatedDiscovery bool) *rest.Config {
 		CRDDirectoryPaths: []string{"testdata"},
 	}
 	if disableAggregatedDiscovery {
+		testEnv.DownloadBinaryAssets = true
+		testEnv.DownloadBinaryAssetsVersion = "v1.28.0"
+		binaryAssetsDirectory, err := envtest.SetupEnvtestDefaultBinaryAssetsDirectory()
+		g.Expect(err).ToNot(gmg.HaveOccurred())
+		testEnv.BinaryAssetsDirectory = binaryAssetsDirectory
 		testEnv.ControlPlane.GetAPIServer().Configure().Append("feature-gates", "AggregatedDiscoveryEndpoint=false")
 	}
 

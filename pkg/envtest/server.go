@@ -148,13 +148,12 @@ type Environment struct {
 	CRDDirectoryPaths []string
 
 	// DownloadBinaryAssets indicates that the envtest binaries should be downloaded.
-	// If this field is set:
-	// * DownloadBinaryAssetsVersion must also be set
-	// * If BinaryAssetsDirectory is also set, it is used to store the downloaded binaries,
-	//   otherwise a tmp directory is created.
+	// If BinaryAssetsDirectory is also set, it is used to store the downloaded binaries,
+	// otherwise a tmp directory is created.
 	DownloadBinaryAssets bool
 
 	// DownloadBinaryAssetsVersion is the version of envtest binaries to download.
+	// Defaults to the latest stable version (i.e. excluding alpha / beta / RC versions).
 	DownloadBinaryAssetsVersion string
 
 	// DownloadBinaryAssetsIndexURL is the index used to discover envtest binaries to download.

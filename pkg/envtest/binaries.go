@@ -1,5 +1,18 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2021 The Kubernetes Authors
+/*
+Copyright 2025 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package envtest
 
@@ -19,8 +32,10 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
+	"github.com/blang/semver/v4"
 	"sigs.k8s.io/yaml"
 )
 
@@ -48,7 +63,7 @@ func SetupEnvtestDefaultBinaryAssetsDirectory() (string, error) {
 		if baseDir == "" {
 			return "", errors.New("%LocalAppData% is not defined")
 		}
-	case "darwin", "ios":
+	case "darwin":
 		homeDir := os.Getenv("HOME")
 		if homeDir == "" {
 			return "", errors.New("$HOME is not defined")
@@ -109,6 +124,20 @@ func downloadBinaryAssets(ctx context.Context, binaryAssetsDirectory, binaryAsse
 		}
 	}
 
+	var binaryAssetsIndex *index
+	if binaryAssetsVersion == "" {
+		var err error
+		binaryAssetsIndex, err = getIndex(ctx, binaryAssetsIndexURL)
+		if err != nil {
+			return "", "", "", err
+		}
+
+		binaryAssetsVersion, err = latestStableVersionFromIndex(binaryAssetsIndex)
+		if err != nil {
+			return "", "", "", err
+		}
+	}
+
 	// Storing the envtest binaries in a directory structure that is compatible with setup-envtest.
 	// This makes it possible to share the envtest binaries with setup-envtest if the BinaryAssetsDirectory is set to SetupEnvtestDefaultBinaryAssetsDirectory().
 	downloadDir := path.Join(downloadRootDir, fmt.Sprintf("%s-%s-%s", strings.TrimPrefix(binaryAssetsVersion, "v"), runtime.GOOS, runtime.GOARCH))
@@ -127,8 +156,17 @@ func downloadBinaryAssets(ctx context.Context, binaryAssetsDirectory, binaryAsse
 		return apiServerPath, etcdPath, kubectlPath, nil
 	}
 
+	// Get Index if we didn't have to get it above to get the latest stable version.
+	if binaryAssetsIndex == nil {
+		var err error
+		binaryAssetsIndex, err = getIndex(ctx, binaryAssetsIndexURL)
+		if err != nil {
+			return "", "", "", err
+		}
+	}
+
 	buf := &bytes.Buffer{}
-	if err := downloadBinaryAssetsArchive(ctx, binaryAssetsIndexURL, binaryAssetsVersion, buf); err != nil {
+	if err := downloadBinaryAssetsArchive(ctx, binaryAssetsIndex, binaryAssetsVersion, buf); err != nil {
 		return "", "", "", err
 	}
 
@@ -180,12 +218,7 @@ func fileExists(path string) bool {
 	return false
 }
 
-func downloadBinaryAssetsArchive(ctx context.Context, indexURL, version string, out io.Writer) error {
-	index, err := getIndex(ctx, indexURL)
-	if err != nil {
-		return err
-	}
-
+func downloadBinaryAssetsArchive(ctx context.Context, index *index, version string, out io.Writer) error {
 	archives, ok := index.Releases[version]
 	if !ok {
 		return fmt.Errorf("failed to find envtest binaries for version %s", version)
@@ -217,6 +250,36 @@ func downloadBinaryAssetsArchive(ctx context.Context, indexURL, version string, 
 	}
 
 	return readBody(resp, out, archiveName, archive.Hash)
+}
+
+func latestStableVersionFromIndex(index *index) (string, error) {
+	if len(index.Releases) == 0 {
+		return "", fmt.Errorf("failed to find latest stable version from index: index is empty")
+	}
+
+	parsedVersions := []semver.Version{}
+	for releaseVersion := range index.Releases {
+		v, err := semver.ParseTolerant(releaseVersion)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse version %q: %w", releaseVersion, err)
+		}
+
+		// Filter out pre-releases.
+		if len(v.Pre) > 0 {
+			continue
+		}
+
+		parsedVersions = append(parsedVersions, v)
+	}
+
+	if len(parsedVersions) == 0 {
+		return "", fmt.Errorf("failed to find latest stable version from index: index does not have stable versions")
+	}
+
+	sort.Slice(parsedVersions, func(i, j int) bool {
+		return parsedVersions[i].GT(parsedVersions[j])
+	})
+	return "v" + parsedVersions[0].String(), nil
 }
 
 func getIndex(ctx context.Context, indexURL string) (*index, error) {

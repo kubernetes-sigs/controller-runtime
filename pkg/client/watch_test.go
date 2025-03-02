@@ -62,7 +62,7 @@ var _ = Describe("ClientWithWatch", func() {
 	})
 
 	AfterEach(func() {
-		deleteDeployment(ctx, dep, ns)
+		deleteDeployment(ctx, clientset, dep, ns)
 	})
 
 	Describe("NewWithWatch", func() {

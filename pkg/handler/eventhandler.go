@@ -18,10 +18,8 @@ package handler
 
 import (
 	"context"
-	"reflect"
 	"time"
 
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
@@ -113,22 +111,7 @@ type TypedFuncs[object any, request comparable] struct {
 // Create implements EventHandler.
 func (h TypedFuncs[object, request]) Create(ctx context.Context, e event.TypedCreateEvent[object], q workqueue.TypedRateLimitingInterface[request]) {
 	if h.CreateFunc != nil {
-		if reflect.TypeFor[request]() != reflect.TypeOf(reconcile.Request{}) || !reflect.TypeFor[object]().Implements(reflect.TypeFor[client.Object]()) {
-			h.CreateFunc(ctx, e, q)
-		}
-
-		wq, ok := q.(workqueue.TypedRateLimitingInterface[reconcile.Request])
-		if ok {
-			evt, ok := any(e).(event.TypedCreateEvent[client.Object])
-			if ok {
-				item := reconcile.Request{NamespacedName: types.NamespacedName{
-					Name:      evt.Object.GetName(),
-					Namespace: evt.Object.GetNamespace(),
-				}}
-				addToQueueCreate(wq, evt, item)
-			}
-			h.CreateFunc(ctx, e, q)
-		}
+		h.CreateFunc(ctx, e, q)
 	}
 }
 
@@ -142,33 +125,7 @@ func (h TypedFuncs[object, request]) Delete(ctx context.Context, e event.TypedDe
 // Update implements EventHandler.
 func (h TypedFuncs[object, request]) Update(ctx context.Context, e event.TypedUpdateEvent[object], q workqueue.TypedRateLimitingInterface[request]) {
 	if h.UpdateFunc != nil {
-		if reflect.TypeFor[request]() != reflect.TypeOf(reconcile.Request{}) || !reflect.TypeFor[object]().Implements(reflect.TypeFor[client.Object]()) {
-			h.UpdateFunc(ctx, e, q)
-		}
-
-		wq, ok := q.(workqueue.TypedRateLimitingInterface[reconcile.Request])
-		if ok {
-			evt, ok := any(e).(event.TypedUpdateEvent[client.Object])
-			if ok {
-				switch {
-				case !isNil(evt.ObjectNew):
-					item := reconcile.Request{NamespacedName: types.NamespacedName{
-						Name:      evt.ObjectNew.GetName(),
-						Namespace: evt.ObjectNew.GetNamespace(),
-					}}
-					addToQueueUpdate(wq, evt, item)
-				case !isNil(evt.ObjectOld):
-					item := reconcile.Request{NamespacedName: types.NamespacedName{
-						Name:      evt.ObjectOld.GetName(),
-						Namespace: evt.ObjectOld.GetNamespace(),
-					}}
-					addToQueueUpdate(wq, evt, item)
-				default:
-					enqueueLog.Error(nil, "UpdateEvent received with no metadata", "event", evt)
-				}
-			}
-			h.UpdateFunc(ctx, e, q)
-		}
+		h.UpdateFunc(ctx, e, q)
 	}
 }
 

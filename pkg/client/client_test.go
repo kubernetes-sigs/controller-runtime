@@ -1036,7 +1036,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 		Context("with unstructured objects", func() {
 			It("should be able to read the Scale subresource", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1061,7 +1061,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(int32(val)).To(Equal(*dep.Spec.Replicas))
 			})
 			It("should be able to create ServiceAccount tokens", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1089,7 +1089,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should be able to create Pod evictions", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1122,7 +1122,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should be able to create Pod bindings", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1157,7 +1157,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should be able to approve CSRs", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1188,7 +1188,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should be able to approve CSRs using Patch", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1220,7 +1220,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should be able to update the scale subresource", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1250,7 +1250,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should be able to patch the scale subresource", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 

@@ -2618,7 +2618,6 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			Expect(deps.Items).To(BeEmpty())
 		})
 
-		// TODO(seans): get label selector test working
 		It("should filter results by label selector", func() {
 			By("creating a Deployment with the app=frontend label")
 			depFrontend := &appsv1.Deployment{
@@ -3097,7 +3096,6 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			Expect(deps.Items).To(BeEmpty())
 		})
 
-		// TODO(seans): get label selector test working
 		It("should filter results by label selector", func() {
 			By("creating a Deployment with the app=frontend label")
 			depFrontend := &appsv1.Deployment{
@@ -3569,7 +3567,6 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			Expect(metaList.Items).To(BeEmpty())
 		})
 
-		// TODO(seans): get label selector test working
 		It("should filter results by label selector", func() {
 			By("creating a Deployment with the app=frontend label")
 			depFrontend := &appsv1.Deployment{

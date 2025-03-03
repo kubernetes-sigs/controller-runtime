@@ -119,12 +119,15 @@ func (h TypedFuncs[object, request]) Create(ctx context.Context, e event.TypedCr
 
 		wq, ok := q.(workqueue.TypedRateLimitingInterface[reconcile.Request])
 		if ok {
-			evt := any(e).(event.TypedCreateEvent[client.Object])
-			item := reconcile.Request{NamespacedName: types.NamespacedName{
-				Name:      evt.Object.GetName(),
-				Namespace: evt.Object.GetNamespace(),
-			}}
-			addToQueueCreate(wq, evt, item)
+			evt, ok := any(e).(event.TypedCreateEvent[client.Object])
+			if ok {
+				item := reconcile.Request{NamespacedName: types.NamespacedName{
+					Name:      evt.Object.GetName(),
+					Namespace: evt.Object.GetNamespace(),
+				}}
+				addToQueueCreate(wq, evt, item)
+			}
+			h.CreateFunc(ctx, e, q)
 		}
 	}
 }
@@ -145,23 +148,26 @@ func (h TypedFuncs[object, request]) Update(ctx context.Context, e event.TypedUp
 
 		wq, ok := q.(workqueue.TypedRateLimitingInterface[reconcile.Request])
 		if ok {
-			evt := any(e).(event.TypedUpdateEvent[client.Object])
-			switch {
-			case !isNil(evt.ObjectNew):
-				item := reconcile.Request{NamespacedName: types.NamespacedName{
-					Name:      evt.ObjectNew.GetName(),
-					Namespace: evt.ObjectNew.GetNamespace(),
-				}}
-				addToQueueUpdate(wq, evt, item)
-			case !isNil(evt.ObjectOld):
-				item := reconcile.Request{NamespacedName: types.NamespacedName{
-					Name:      evt.ObjectOld.GetName(),
-					Namespace: evt.ObjectOld.GetNamespace(),
-				}}
-				addToQueueUpdate(wq, evt, item)
-			default:
-				enqueueLog.Error(nil, "UpdateEvent received with no metadata", "event", evt)
+			evt, ok := any(e).(event.TypedUpdateEvent[client.Object])
+			if ok {
+				switch {
+				case !isNil(evt.ObjectNew):
+					item := reconcile.Request{NamespacedName: types.NamespacedName{
+						Name:      evt.ObjectNew.GetName(),
+						Namespace: evt.ObjectNew.GetNamespace(),
+					}}
+					addToQueueUpdate(wq, evt, item)
+				case !isNil(evt.ObjectOld):
+					item := reconcile.Request{NamespacedName: types.NamespacedName{
+						Name:      evt.ObjectOld.GetName(),
+						Namespace: evt.ObjectOld.GetNamespace(),
+					}}
+					addToQueueUpdate(wq, evt, item)
+				default:
+					enqueueLog.Error(nil, "UpdateEvent received with no metadata", "event", evt)
+				}
 			}
+			h.UpdateFunc(ctx, e, q)
 		}
 	}
 }

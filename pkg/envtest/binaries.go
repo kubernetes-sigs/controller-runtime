@@ -142,7 +142,7 @@ func downloadBinaryAssets(ctx context.Context, binaryAssetsDirectory, binaryAsse
 	// This makes it possible to share the envtest binaries with setup-envtest if the BinaryAssetsDirectory is set to SetupEnvtestDefaultBinaryAssetsDirectory().
 	downloadDir := path.Join(downloadRootDir, fmt.Sprintf("%s-%s-%s", strings.TrimPrefix(binaryAssetsVersion, "v"), runtime.GOOS, runtime.GOARCH))
 	if !fileExists(downloadDir) {
-		if err := os.Mkdir(downloadDir, 0700); err != nil {
+		if err := os.MkdirAll(downloadDir, 0700); err != nil {
 			return "", "", "", fmt.Errorf("failed to create directory %q for envtest binaries: %w", downloadDir, err)
 		}
 	}

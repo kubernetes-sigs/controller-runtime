@@ -141,9 +141,6 @@ func (e *enqueueRequestsFromMapFunc[object, request]) Update(
 			}
 		}
 	}
-	reqs := map[request]empty{}
-	e.mapAndEnqueue(ctx, q, evt.ObjectOld, reqs)
-	e.mapAndEnqueue(ctx, q, evt.ObjectNew, reqs)
 }
 
 // Delete implements EventHandler.

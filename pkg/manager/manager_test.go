@@ -1056,6 +1056,47 @@ var _ = Describe("manger.Manager", func() {
 				)))
 			})
 
+			It("should default controller logger from manager logger", func() {
+				var lock sync.Mutex
+				var messages []string
+				options.Logger = funcr.NewJSON(func(object string) {
+					lock.Lock()
+					messages = append(messages, object)
+					lock.Unlock()
+				}, funcr.Options{})
+				options.LeaderElection = false
+
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+
+				started := make(chan struct{})
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					close(started)
+					return nil
+				}))).To(Succeed())
+
+				stopped := make(chan error)
+				ctx, cancel := context.WithCancel(context.Background())
+				go func() {
+					stopped <- m.Start(ctx)
+				}()
+
+				// Wait for runnables to start as a proxy for the manager being fully started.
+				<-started
+				cancel()
+				Expect(<-stopped).To(Succeed())
+
+				msg := "controller log message"
+				m.GetControllerOptions().Logger.Info(msg)
+
+				Expect(messages).To(ContainElement(
+					ContainSubstring(msg),
+				))
+			})
+
 			It("should return both runnables and stop errors when both error", func() {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())

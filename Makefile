@@ -27,7 +27,7 @@ SHELL:=/usr/bin/env bash
 #
 # Go.
 #
-GO_VERSION ?= 1.23.0
+GO_VERSION ?= 1.24.0
 
 # Use GOPROXY environment variable if set
 GOPROXY := $(shell go env GOPROXY)

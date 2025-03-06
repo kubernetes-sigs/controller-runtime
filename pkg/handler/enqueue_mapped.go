@@ -19,8 +19,10 @@ package handler
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -46,7 +48,7 @@ type TypedMapFunc[object any, request comparable] func(context.Context, object) 
 // For UpdateEvents which contain both a new and old object, the transformation function is run on both
 // objects and both sets of Requests are enqueue.
 func EnqueueRequestsFromMapFunc(fn MapFunc) EventHandler {
-	return TypedEnqueueRequestsFromMapFunc(fn)
+	return WithLowPriorityWhenUnchanged(TypedEnqueueRequestsFromMapFunc(fn))
 }
 
 // TypedEnqueueRequestsFromMapFunc enqueues Requests by running a transformation function that outputs a collection
@@ -80,8 +82,23 @@ func (e *enqueueRequestsFromMapFunc[object, request]) Create(
 	evt event.TypedCreateEvent[object],
 	q workqueue.TypedRateLimitingInterface[request],
 ) {
-	reqs := map[request]empty{}
-	e.mapAndEnqueue(ctx, q, evt.Object, reqs)
+	wq, ok := q.(workqueue.TypedRateLimitingInterface[reconcile.Request])
+	if ok {
+		evnt, ok := any(e).(event.TypedCreateEvent[client.Object])
+		if ok {
+			priorityQueue, isPriorityQueue := wq.(priorityqueue.PriorityQueue[reconcile.Request])
+			if isPriorityQueue {
+				item := reconcile.Request{NamespacedName: types.NamespacedName{
+					Name:      evnt.Object.GetName(),
+					Namespace: evnt.Object.GetNamespace(),
+				}}
+				addToQueueCreate(priorityQueue, evnt, item)
+				return
+			}
+			reqs := map[request]empty{}
+			e.mapAndEnqueue(ctx, q, evt.Object, reqs)
+		}
+	}
 }
 
 // Update implements EventHandler.
@@ -90,9 +107,40 @@ func (e *enqueueRequestsFromMapFunc[object, request]) Update(
 	evt event.TypedUpdateEvent[object],
 	q workqueue.TypedRateLimitingInterface[request],
 ) {
-	reqs := map[request]empty{}
-	e.mapAndEnqueue(ctx, q, evt.ObjectOld, reqs)
-	e.mapAndEnqueue(ctx, q, evt.ObjectNew, reqs)
+	wq, ok := q.(workqueue.TypedRateLimitingInterface[reconcile.Request])
+	if ok {
+		evnt, ok := any(e).(event.TypedUpdateEvent[client.Object])
+		if ok {
+			switch {
+			case !isNil(evt.ObjectNew):
+				priorityQueue, isPriorityQueue := wq.(priorityqueue.PriorityQueue[reconcile.Request])
+				if isPriorityQueue {
+					item := reconcile.Request{NamespacedName: types.NamespacedName{
+						Name:      evnt.ObjectNew.GetName(),
+						Namespace: evnt.ObjectNew.GetNamespace(),
+					}}
+					addToQueueUpdate(priorityQueue, evnt, item)
+					return
+				}
+				reqs := map[request]empty{}
+				e.mapAndEnqueue(ctx, q, evt.ObjectNew, reqs)
+			case !isNil(evt.ObjectOld):
+				priorityQueue, isPriorityQueue := wq.(priorityqueue.PriorityQueue[reconcile.Request])
+				if isPriorityQueue {
+					item := reconcile.Request{NamespacedName: types.NamespacedName{
+						Name:      evnt.ObjectOld.GetName(),
+						Namespace: evnt.ObjectOld.GetNamespace(),
+					}}
+					addToQueueUpdate(priorityQueue, evnt, item)
+					return
+				}
+				reqs := map[request]empty{}
+				e.mapAndEnqueue(ctx, q, evt.ObjectOld, reqs)
+			default:
+				enqueueLog.Error(nil, "UpdateEvent received with no metadata", "event", evt)
+			}
+		}
+	}
 }
 
 // Delete implements EventHandler.

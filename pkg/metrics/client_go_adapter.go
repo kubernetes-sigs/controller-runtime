@@ -18,6 +18,8 @@ package metrics
 
 import (
 	"context"
+	"net/url"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	clientmetrics "k8s.io/client-go/tools/metrics"
@@ -29,6 +31,26 @@ import (
 
 var (
 	// client metrics.
+
+	requestLatency = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "rest_client_request_duration_seconds",
+			Help: "Request latency in seconds. Broken down by verb and URL.",
+			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+				1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 40, 50, 60},
+		},
+		[]string{"verb", "host", "path"},
+	)
+
+	rateLimiterLatency = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "rest_client_rate_limiter_duration_seconds",
+			Help: "Client side rate limiter latency in seconds. Broken down by verb and URL.",
+			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+				1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 40, 50, 60},
+		},
+		[]string{"verb", "host", "path"},
+	)
 
 	requestResult = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -47,10 +69,14 @@ func init() {
 func registerClientMetrics() {
 	// register the metrics with our registry
 	Registry.MustRegister(requestResult)
+	Registry.MustRegister(rateLimiterLatency)
+	Registry.MustRegister(requestLatency)
 
 	// register the metrics with client-go
 	clientmetrics.Register(clientmetrics.RegisterOpts{
-		RequestResult: &resultAdapter{metric: requestResult},
+		RequestResult:      &resultAdapter{metric: requestResult},
+		RateLimiterLatency: &latencyAdapter{metric: rateLimiterLatency},
+		RequestLatency:     &latencyAdapter{metric: requestLatency},
 	})
 }
 
@@ -68,4 +94,12 @@ type resultAdapter struct {
 
 func (r *resultAdapter) Increment(_ context.Context, code, method, host string) {
 	r.metric.WithLabelValues(code, method, host).Inc()
+}
+
+type latencyAdapter struct {
+	metric *prometheus.HistogramVec
+}
+
+func (l *latencyAdapter) Observe(_ context.Context, verb string, u url.URL, latency time.Duration) {
+	l.metric.WithLabelValues(verb, u.Host, u.Path).Observe(latency.Seconds())
 }

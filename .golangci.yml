@@ -40,6 +40,8 @@ linters:
     - whitespace
 
 linters-settings:
+  goimports:
+    local-prefixes: sigs.k8s.io/controller-runtime
   govet:
     enable-all: true
     disable:

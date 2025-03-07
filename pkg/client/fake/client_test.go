@@ -2409,6 +2409,93 @@ var _ = Describe("Fake client", func() {
 		Expect(cl.SubResource(subResourceScale).Update(context.Background(), obj, client.WithSubResourceBody(scale)).Error()).To(Equal(expectedErr))
 	})
 
+	It("is threadsafe", func() {
+		cl := NewClientBuilder().Build()
+
+		u := func() *unstructured.Unstructured {
+			u := &unstructured.Unstructured{}
+			u.SetAPIVersion("custom/v1")
+			u.SetKind("Version")
+			u.SetName("foo")
+			return u
+		}
+
+		uList := func() *unstructured.UnstructuredList {
+			u := &unstructured.UnstructuredList{}
+			u.SetAPIVersion("custom/v1")
+			u.SetKind("Version")
+
+			return u
+		}
+
+		meta := func() *metav1.PartialObjectMetadata {
+			return &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "default",
+				},
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "custom/v1",
+					Kind:       "Version",
+				},
+			}
+		}
+		metaList := func() *metav1.PartialObjectMetadataList {
+			return &metav1.PartialObjectMetadataList{
+				TypeMeta: metav1.TypeMeta{
+
+					APIVersion: "custom/v1",
+					Kind:       "Version",
+				},
+			}
+		}
+
+		pod := func() *corev1.Pod {
+			return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: "default",
+			}}
+		}
+
+		ctx := context.Background()
+		ops := []func(){
+			func() { _ = cl.Create(ctx, u()) },
+			func() { _ = cl.Get(ctx, client.ObjectKeyFromObject(u()), u()) },
+			func() { _ = cl.Update(ctx, u()) },
+			func() { _ = cl.Patch(ctx, u(), client.RawPatch(types.StrategicMergePatchType, []byte("foo"))) },
+			func() { _ = cl.Delete(ctx, u()) },
+			func() { _ = cl.DeleteAllOf(ctx, u(), client.HasLabels{"foo"}) },
+			func() { _ = cl.List(ctx, uList()) },
+
+			func() { _ = cl.Create(ctx, meta()) },
+			func() { _ = cl.Get(ctx, client.ObjectKeyFromObject(meta()), meta()) },
+			func() { _ = cl.Update(ctx, meta()) },
+			func() { _ = cl.Patch(ctx, meta(), client.RawPatch(types.StrategicMergePatchType, []byte("foo"))) },
+			func() { _ = cl.Delete(ctx, meta()) },
+			func() { _ = cl.DeleteAllOf(ctx, meta(), client.HasLabels{"foo"}) },
+			func() { _ = cl.List(ctx, metaList()) },
+
+			func() { _ = cl.Create(ctx, pod()) },
+			func() { _ = cl.Get(ctx, client.ObjectKeyFromObject(pod()), pod()) },
+			func() { _ = cl.Update(ctx, pod()) },
+			func() { _ = cl.Patch(ctx, pod(), client.RawPatch(types.StrategicMergePatchType, []byte("foo"))) },
+			func() { _ = cl.Delete(ctx, pod()) },
+			func() { _ = cl.DeleteAllOf(ctx, pod(), client.HasLabels{"foo"}) },
+			func() { _ = cl.List(ctx, &corev1.PodList{}) },
+		}
+
+		wg := sync.WaitGroup{}
+		wg.Add(len(ops))
+		for _, op := range ops {
+			go func() {
+				defer wg.Done()
+				op()
+			}()
+		}
+
+		wg.Wait()
+	})
+
 	scalableObjs := []client.Object{
 		&appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
@@ -2497,6 +2584,7 @@ var _ = Describe("Fake client", func() {
 			scaleExpected.ResourceVersion = scaleActual.ResourceVersion
 			Expect(cmp.Diff(scaleExpected, scaleActual)).To(BeEmpty())
 		})
+
 	}
 })
 

@@ -25,20 +25,25 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/internal/syncs"
 )
+
+var log = logf.RuntimeLog.WithName("cache")
 
 // InformersOpts configures an InformerMap.
 type InformersOpts struct {
@@ -52,7 +57,7 @@ type InformersOpts struct {
 	Transform             cache.TransformFunc
 	UnsafeDisableDeepCopy bool
 	EnableWatchBookmarks  bool
-	WatchErrorHandler     cache.WatchErrorHandler
+	WatchErrorHandler     cache.WatchErrorHandlerWithContext
 }
 
 // NewInformers creates a new InformersMap that can create informers under the hood.
@@ -105,7 +110,8 @@ func (c *Cache) Start(stop <-chan struct{}) {
 	// Stop on either the whole map stopping or just this informer being removed.
 	internalStop, cancel := syncs.MergeChans(stop, c.stop)
 	defer cancel()
-	c.Informer.Run(internalStop)
+	// Convert the stop channel to a context and then add the logger.
+	c.Informer.RunWithContext(logr.NewContext(wait.ContextForChannel(internalStop), log))
 }
 
 type tracker struct {
@@ -181,10 +187,10 @@ type Informers struct {
 	// NewInformer allows overriding of the shared index informer constructor for testing.
 	newInformer func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
 
-	// WatchErrorHandler allows the shared index informer's
+	// watchErrorHandler allows the shared index informer's
 	// watchErrorHandler to be set by overriding the options
 	// or to use the default watchErrorHandler
-	watchErrorHandler cache.WatchErrorHandler
+	watchErrorHandler cache.WatchErrorHandlerWithContext
 }
 
 // Start calls Run on each of the informers and sets started to true. Blocks on the context.
@@ -376,7 +382,7 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 
 	// Set WatchErrorHandler on SharedIndexInformer if set
 	if ip.watchErrorHandler != nil {
-		if err := sharedIndexInformer.SetWatchErrorHandler(ip.watchErrorHandler); err != nil {
+		if err := sharedIndexInformer.SetWatchErrorHandlerWithContext(ip.watchErrorHandler); err != nil {
 			return nil, false, err
 		}
 	}

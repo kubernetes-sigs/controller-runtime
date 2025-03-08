@@ -168,7 +168,7 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 		defer c.mu.Unlock()
 
 		// TODO(pwittrock): Reconsider HandleCrash
-		defer utilruntime.HandleCrash()
+		defer utilruntime.HandleCrashWithLogger(c.LogConstructor(nil))
 
 		// NB(directxman12): launch the sources *before* trying to wait for the
 		// caches to sync so that they have a chance to register their intended

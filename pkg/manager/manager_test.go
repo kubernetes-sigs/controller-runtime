@@ -1092,9 +1092,14 @@ var _ = Describe("manger.Manager", func() {
 				msg := "controller log message"
 				m.GetControllerOptions().Logger.Info(msg)
 
-				Expect(messages).To(ContainElement(
-					ContainSubstring(msg),
-				))
+				Eventually(func(g Gomega) {
+					lock.Lock()
+					defer lock.Unlock()
+
+					g.Expect(messages).To(ContainElement(
+						ContainSubstring(msg),
+					))
+				}).Should(Succeed())
 			})
 
 			It("should return both runnables and stop errors when both error", func() {

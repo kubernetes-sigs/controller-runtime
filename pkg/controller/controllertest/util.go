@@ -99,8 +99,20 @@ func (f *FakeInformer) HasSynced() bool {
 	return f.Synced
 }
 
-// AddEventHandler implements the Informer interface.  Adds an EventHandler to the fake Informers. TODO(community): Implement Registration.
+// AddEventHandler implements the Informer interface. Adds an EventHandler to the fake Informers. TODO(community): Implement Registration.
 func (f *FakeInformer) AddEventHandler(handler cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
+	f.handlers = append(f.handlers, eventHandlerWrapper{handler})
+	return nil, nil
+}
+
+// AddEventHandlerWithResyncPeriod implements the Informer interface. Adds an EventHandler to the fake Informers (ignores resyncPeriod). TODO(community): Implement Registration.
+func (f *FakeInformer) AddEventHandlerWithResyncPeriod(handler cache.ResourceEventHandler, _ time.Duration) (cache.ResourceEventHandlerRegistration, error) {
+	f.handlers = append(f.handlers, eventHandlerWrapper{handler})
+	return nil, nil
+}
+
+// AddEventHandlerWithOptions implements the Informer interface. Adds an EventHandler to the fake Informers (ignores options). TODO(community): Implement Registration.
+func (f *FakeInformer) AddEventHandlerWithOptions(handler cache.ResourceEventHandler, _ cache.HandlerOptions) (cache.ResourceEventHandlerRegistration, error) {
 	f.handlers = append(f.handlers, eventHandlerWrapper{handler})
 	return nil, nil
 }
@@ -135,15 +147,6 @@ func (f *FakeInformer) Delete(obj metav1.Object) {
 	}
 }
 
-// AddEventHandlerWithResyncPeriod does nothing.  TODO(community): Implement this.
-func (f *FakeInformer) AddEventHandlerWithResyncPeriod(handler cache.ResourceEventHandler, resyncPeriod time.Duration) (cache.ResourceEventHandlerRegistration, error) {
-	return nil, nil
-}
-
-func (f *FakeInformer) AddEventHandlerWithOptions(handler cache.ResourceEventHandler, options cache.HandlerOptions) (cache.ResourceEventHandlerRegistration, error) {
-	return nil, nil
-}
-
 // RemoveEventHandler does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) RemoveEventHandler(handle cache.ResourceEventHandlerRegistration) error {
 	return nil
@@ -169,7 +172,8 @@ func (f *FakeInformer) SetWatchErrorHandler(cache.WatchErrorHandler) error {
 	return nil
 }
 
-func (f *FakeInformer) SetWatchErrorHandlerWithContext(handler cache.WatchErrorHandlerWithContext) error {
+// SetWatchErrorHandlerWithContext does nothing.  TODO(community): Implement this.
+func (f *FakeInformer) SetWatchErrorHandlerWithContext(cache.WatchErrorHandlerWithContext) error {
 	return nil
 }
 

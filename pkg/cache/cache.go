@@ -113,6 +113,10 @@ type Informer interface {
 	// the handler again and an error if the handler cannot be added.
 	AddEventHandlerWithResyncPeriod(handler toolscache.ResourceEventHandler, resyncPeriod time.Duration) (toolscache.ResourceEventHandlerRegistration, error)
 
+	// AddEventHandlerWithOptions is a variant of AddEventHandlerWithResyncPeriod where
+	// all optional parameters are passed in as a struct.
+	AddEventHandlerWithOptions(handler toolscache.ResourceEventHandler, options toolscache.HandlerOptions) (toolscache.ResourceEventHandlerRegistration, error)
+
 	// RemoveEventHandler removes a previously added event handler given by
 	// its registration handle.
 	// This function is guaranteed to be idempotent and thread-safe.

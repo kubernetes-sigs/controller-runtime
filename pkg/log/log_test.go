@@ -194,12 +194,12 @@ var _ = Describe("logging", func() {
 			}()
 			go func() {
 				defer GinkgoRecover()
-				delegLog.WithValues("with-value")
+				delegLog.WithValues("key", "with-value")
 				close(withValuesDone)
 			}()
 			go func() {
 				defer GinkgoRecover()
-				child.WithValues("grandchild")
+				child.WithValues("key", "grandchild")
 				close(grandChildDone)
 			}()
 			go func() {

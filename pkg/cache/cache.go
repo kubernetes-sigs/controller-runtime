@@ -207,11 +207,11 @@ type Options struct {
 	// to reduce the caches memory usage.
 	DefaultTransform toolscache.TransformFunc
 
-	// DefaultWatchErrorHandler will be used to the WatchErrorHandler which is called
+	// DefaultWatchErrorHandler will be used to set the WatchErrorHandler which is called
 	// whenever ListAndWatch drops the connection with an error.
 	//
 	// After calling this handler, the informer will backoff and retry.
-	DefaultWatchErrorHandler toolscache.WatchErrorHandler
+	DefaultWatchErrorHandler toolscache.WatchErrorHandlerWithContext
 
 	// DefaultUnsafeDisableDeepCopy is the default for UnsafeDisableDeepCopy
 	// for everything that doesn't specify this.

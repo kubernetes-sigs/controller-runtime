@@ -493,7 +493,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 		Context("with unstructured objects", func() {
 			It("should create a new object from a go struct", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -516,7 +516,9 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should create a new non-namespace object ", func() {
-				cl, err := client.New(cfg, client.Options{})
+				scheme := runtime.NewScheme()
+				Expect(corev1.AddToScheme(scheme)).To(Succeed())
+				cl, err := client.New(cfg, client.Options{Scheme: scheme})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -545,7 +547,9 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should fail if the object already exists", func() {
-				cl, err := client.New(cfg, client.Options{})
+				scheme := runtime.NewScheme()
+				Expect(appsv1.AddToScheme(scheme)).To(Succeed())
+				cl, err := client.New(cfg, client.Options{Scheme: scheme})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -574,7 +578,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should fail if the object does not pass server-side validation", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -596,7 +600,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 		Context("with metadata objects", func() {
 			It("should fail with an error", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 
 				obj := metaOnlyFromObj(dep, scheme)
@@ -606,7 +610,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 		Context("with the DryRun option", func() {
 			It("should not create a new object from a go struct", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -734,7 +738,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 		})
 		Context("with unstructured objects", func() {
 			It("should update an existing object from a go struct", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -762,7 +766,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should update and preserve type information", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -783,7 +787,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should update an existing object non-namespace object from a go struct", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -809,7 +813,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(actual.Annotations["foo"]).To(Equal("bar"))
 			})
 			It("should fail if the object does not exist", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -823,7 +827,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 		})
 		Context("with metadata objects", func() {
 			It("should fail with an error", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 
 				obj := metaOnlyFromObj(dep, scheme)
@@ -836,7 +840,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 	Describe("Patch", func() {
 		Context("Metadata Client", func() {
 			It("should merge patch with options", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1434,7 +1438,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 		Context("with unstructured objects", func() {
 			It("should update status of an existing object", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1457,7 +1461,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should update status and preserve type information", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1477,7 +1481,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should patch status and preserve type information", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1504,7 +1508,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should not update spec of an existing object", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1530,7 +1534,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should update an existing object non-namespace object", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1552,7 +1556,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should fail if the object does not exist", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1575,7 +1579,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 		Context("with metadata objects", func() {
 			It("should fail to update with an error", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 
 				obj := metaOnlyFromObj(dep, scheme)
@@ -1583,7 +1587,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should patch status and preserve type information", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1716,7 +1720,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 		})
 		Context("with unstructured objects", func() {
 			It("should delete an existing object from a go struct", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1742,7 +1746,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should delete an existing object non-namespace object from a go struct", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1768,7 +1772,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should fail if the object does not exist", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1785,7 +1789,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should delete a collection of object", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1822,7 +1826,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 		})
 		Context("with metadata objects", func() {
 			It("should delete an existing object from a go struct", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1841,7 +1845,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should delete an existing object non-namespace object from a go struct", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1860,7 +1864,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should fail if the object does not exist", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -1871,7 +1875,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should delete a collection of object", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -2015,7 +2019,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -2048,7 +2052,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				var u runtime.Unstructured = &unstructured.Unstructured{}
 				Expect(scheme.Convert(node, u, nil)).To(Succeed())
 
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -2069,7 +2073,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should fail if the object does not exist", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -2082,7 +2086,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 			It("should not retain any data in the obj variable that is not on the server", func() {
 				object := &unstructured.Unstructured{}
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -2110,7 +2114,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -2139,7 +2143,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				node, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -2158,7 +2162,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should fail if the object does not exist", func() {
-				cl, err := client.New(cfg, client.Options{})
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -2183,7 +2187,9 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 
 			It("should not retain any data in the obj variable that is not on the server", func() {
-				cl, err := client.New(cfg, client.Options{})
+				scheme := runtime.NewScheme()
+				Expect(pkg.AddToScheme(scheme)).To(Succeed())
+				cl, err := client.New(cfg, client.Options{Scheme: scheme})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cl).NotTo(BeNil())
 
@@ -2983,7 +2989,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			var logs []string
@@ -3080,7 +3086,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 		})
 
 		It("should return an empty list if there are no matching objects", func() {
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("listing all Deployments in the cluster")
@@ -3137,7 +3143,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			depBackend, err = clientset.AppsV1().Deployments(ns).Create(ctx, depBackend, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("listing all Deployments with label app=backend")
@@ -3200,7 +3206,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			depBackend, err = clientset.AppsV1().Deployments("test-namespace-6").Create(ctx, depBackend, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("listing all Deployments in test-namespace-5")
@@ -3258,7 +3264,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			depBackend, err = clientset.AppsV1().Deployments(ns).Create(ctx, depBackend, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("listing all Deployments with field metadata.name=deployment-backend")
@@ -3349,7 +3355,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			depFrontend4, err = clientset.AppsV1().Deployments("test-namespace-8").Create(ctx, depFrontend4, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("listing all Deployments in test-namespace-8 with label app=frontend")
@@ -3417,7 +3423,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			Expect(err).NotTo(HaveOccurred())
 			defer deleteDeployment(ctx, clientset, dep4, ns)
 
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("listing 1 deployment when limit=1 is used")
@@ -3486,7 +3492,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			var logs []string
@@ -3551,7 +3557,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 		})
 
 		It("should return an empty list if there are no matching objects", func() {
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("listing all Deployments in the cluster")
@@ -3608,7 +3614,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			depBackend, err = clientset.AppsV1().Deployments(ns).Create(ctx, depBackend, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("listing all Deployments with label app=backend")
@@ -3671,7 +3677,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			depBackend, err = clientset.AppsV1().Deployments("test-namespace-2").Create(ctx, depBackend, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("listing all Deployments in test-namespace-1")
@@ -3729,7 +3735,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			depBackend, err = clientset.AppsV1().Deployments(ns).Create(ctx, depBackend, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("listing all Deployments with field metadata.name=deployment-backend")
@@ -3820,7 +3826,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			depFrontend4, err = clientset.AppsV1().Deployments("test-namespace-4").Create(ctx, depFrontend4, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("listing all Deployments in test-namespace-3 with label app=frontend")
@@ -3890,7 +3896,7 @@ func ClientListTest(watchListEnabled, watchListClientEnabled bool) {
 			Expect(err).NotTo(HaveOccurred())
 			defer deleteDeployment(ctx, clientset, dep4, ns)
 
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("listing 1 deployment when limit=1 is used")
@@ -4014,6 +4020,7 @@ var _ = Describe("ClientWithCache", func() {
 					Cache: &client.CacheOptions{
 						Reader: cachedReader,
 					},
+					Scheme: runtime.NewScheme(),
 				})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -4035,6 +4042,7 @@ var _ = Describe("ClientWithCache", func() {
 						Reader:       cachedReader,
 						Unstructured: true,
 					},
+					Scheme: runtime.NewScheme(),
 				})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -4072,6 +4080,7 @@ var _ = Describe("ClientWithCache", func() {
 					Cache: &client.CacheOptions{
 						Reader: cachedReader,
 					},
+					Scheme: runtime.NewScheme(),
 				})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -4091,6 +4100,7 @@ var _ = Describe("ClientWithCache", func() {
 						Reader:       cachedReader,
 						Unstructured: true,
 					},
+					Scheme: runtime.NewScheme(),
 				})
 				Expect(err).NotTo(HaveOccurred())
 

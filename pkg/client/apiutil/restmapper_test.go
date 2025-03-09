@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"testing"
 
 	_ "github.com/onsi/ginkgo/v2"
@@ -739,6 +740,33 @@ func TestLazyRestMapperProvider(t *testing.T) {
 				mapping, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: group, Kind: kind})
 				g.Expect(err).NotTo(gmg.HaveOccurred())
 				g.Expect(mapping.Resource.Version).To(gmg.Equal("v1"))
+			})
+
+			t.Run("Restmapper should consistently return the preferred version", func(t *testing.T) {
+				g := gmg.NewWithT(t)
+
+				wg := sync.WaitGroup{}
+				wg.Add(50)
+				for i := 0; i < 50; i++ {
+					go func() {
+						defer wg.Done()
+						httpClient, err := rest.HTTPClientFor(restCfg)
+						g.Expect(err).NotTo(gmg.HaveOccurred())
+
+						mapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
+						g.Expect(err).NotTo(gmg.HaveOccurred())
+
+						mapping, err := mapper.RESTMapping(schema.GroupKind{
+							Group: "crew.example.com",
+							Kind:  "Driver",
+						})
+						g.Expect(err).NotTo(gmg.HaveOccurred())
+						// APIServer seems to have a heuristic to prefer the higher
+						// version number.
+						g.Expect(mapping.GroupVersionKind.Version).To(gmg.Equal("v2"))
+					}()
+				}
+				wg.Wait()
 			})
 		})
 	}

@@ -25,7 +25,6 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -445,9 +444,6 @@ func (blder *TypedBuilder[request]) doController(r reconcile.TypedReconciler[req
 			log := log
 
 			if req, ok := any(in).(*reconcile.Request); ok && req != nil {
-				if hasGVK {
-					log = log.WithValues(gvk.Kind, klog.KRef(req.Namespace, req.Name))
-				}
 				log = log.WithValues(
 					"namespace", req.Namespace, "name", req.Name,
 				)

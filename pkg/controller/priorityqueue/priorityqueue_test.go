@@ -23,7 +23,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		item, _, _ := q.GetWithPriority()
 		Expect(item).To(Equal("foo"))
 
-		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
 		Expect(metrics.adds["test"]).To(Equal(1))
 		Expect(metrics.retries["test"]).To(Equal(0))
 	})
@@ -40,7 +40,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		item, _, _ = q.GetWithPriority()
 		Expect(item).To(Equal("bar"))
 
-		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
 		Expect(metrics.adds["test"]).To(Equal(2))
 	})
 
@@ -58,7 +58,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		item, _, _ = q.GetWithPriority()
 		Expect(item).To(Equal("bar"))
 
-		Expect(metrics.depth["test"]).To(Equal(1))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 1}))
 		Expect(metrics.adds["test"]).To(Equal(3))
 	})
 
@@ -81,7 +81,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		item, _, _ = q.GetWithPriority()
 		Expect(item).To(Equal("foo"))
 
-		Expect(metrics.depth["test"]).To(Equal(1))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 1}))
 		Expect(metrics.adds["test"]).To(Equal(4))
 	})
 
@@ -98,7 +98,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		cwq.lockedLock.Lock()
 		Expect(cwq.locked.Len()).To(Equal(0))
 
-		Expect(metrics.depth["test"]).To(Equal(1))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 1}))
 		Expect(metrics.adds["test"]).To(Equal(1))
 	})
 
@@ -115,7 +115,7 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Expect(q.Len()).To(Equal(0))
 
-		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{1: 0, 2: 0}))
 		Expect(metrics.adds["test"]).To(Equal(1))
 	})
 
@@ -134,7 +134,7 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Expect(q.Len()).To(Equal(2))
 
-		Expect(metrics.depth["test"]).To(Equal(2))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 2, 1: 0}))
 		Expect(metrics.adds["test"]).To(Equal(3))
 	})
 
@@ -150,7 +150,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(priority).To(Equal(0))
 
 		Expect(q.Len()).To(Equal(0))
-		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
 		Expect(metrics.adds["test"]).To(Equal(1))
 	})
 
@@ -191,7 +191,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		tick <- now
 		Eventually(retrievedItem).Should(BeClosed())
 
-		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
 		Expect(metrics.adds["test"]).To(Equal(1))
 		Expect(metrics.retries["test"]).To(Equal(1))
 	})
@@ -217,7 +217,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		q.AddWithOpts(AddOpts{}, "foo")
 		Eventually(retrieved).Should(BeClosed())
 
-		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
 		Expect(metrics.adds["test"]).To(Equal(1))
 	})
 
@@ -282,7 +282,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		Eventually(retrievedItem).Should(BeClosed())
 		Eventually(retrievedSecondItem).Should(BeClosed())
 
-		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
 		Expect(metrics.adds["test"]).To(Equal(2))
 	})
 
@@ -297,7 +297,7 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Expect(q.Len()).To(Equal(2))
 		Expect(metrics.depth).To(HaveLen(1))
-		Expect(metrics.depth["test"]).To(Equal(2))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 2}))
 	})
 
 	It("items are included in Len() and the queueDepth metric once they are ready", func() {
@@ -311,12 +311,12 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Expect(q.Len()).To(Equal(2))
 		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(2))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 2}))
 		metrics.mu.Unlock()
 		time.Sleep(time.Second)
 		Expect(q.Len()).To(Equal(4))
 		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(4))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 4}))
 		metrics.mu.Unlock()
 
 		// Drain queue
@@ -326,7 +326,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		}
 		Expect(q.Len()).To(Equal(0))
 		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
 		metrics.mu.Unlock()
 
 		// Validate that doing it again still works to notice bugs with removing
@@ -338,12 +338,12 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Expect(q.Len()).To(Equal(2))
 		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(2))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 2}))
 		metrics.mu.Unlock()
 		time.Sleep(time.Second)
 		Expect(q.Len()).To(Equal(4))
 		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(4))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 4}))
 		metrics.mu.Unlock()
 	})
 
@@ -388,14 +388,14 @@ var _ = Describe("Controllerworkqueue", func() {
 		q.AddWithOpts(AddOpts{After: time.Hour}, "foo")
 		Expect(q.Len()).To(Equal(0))
 		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{}))
 		metrics.mu.Unlock()
 
 		q.AddWithOpts(AddOpts{}, "foo")
 
 		Expect(q.Len()).To(Equal(1))
 		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(1))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 1}))
 		metrics.mu.Unlock()
 
 		// Get the item to ensure the codepath in
@@ -406,7 +406,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(item).To(Equal("foo"))
 		Expect(q.Len()).To(Equal(0))
 		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
 		metrics.mu.Unlock()
 	})
 
@@ -419,13 +419,13 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Expect(q.Len()).To(Equal(1))
 		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(1))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 1}))
 		metrics.mu.Unlock()
 
 		q.AddWithOpts(AddOpts{}, "foo")
 		Expect(q.Len()).To(Equal(1))
 		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(1))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 1}))
 		metrics.mu.Unlock()
 
 		// Get the item to ensure the codepath in
@@ -436,7 +436,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(item).To(Equal("foo"))
 		Expect(q.Len()).To(Equal(0))
 		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
 		metrics.mu.Unlock()
 	})
 
@@ -501,7 +501,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		tick <- now
 		Eventually(retrievedSecondItem).Should(BeClosed())
 
-		Expect(metrics.depth["test"]).To(Equal(0))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
 		Expect(metrics.adds["test"]).To(Equal(2))
 		Expect(metrics.retries["test"]).To(Equal(2))
 	})
@@ -559,7 +559,7 @@ func BenchmarkAddLockContended(b *testing.B) {
 //   - An item is never handed out again before it is returned
 //   - Items in the queue are de-duplicated
 //   - max(existing priority, new priority) is used
-func TestFuzzPrioriorityQueue(t *testing.T) {
+func TestFuzzPriorityQueue(t *testing.T) {
 	t.Parallel()
 
 	seed := time.Now().UnixNano()
@@ -647,9 +647,12 @@ func TestFuzzPrioriorityQueue(t *testing.T) {
 					}
 
 					metrics.mu.Lock()
-					if metrics.depth["test"] < 0 {
-						t.Errorf("negative depth of %d", metrics.depth["test"])
+					for priority, depth := range metrics.depth["test"] {
+						if depth < 0 {
+							t.Errorf("negative depth of %d for priority %d:", depth, priority)
+						}
 					}
+
 					metrics.mu.Unlock()
 					handedOut.Insert(item)
 				}()

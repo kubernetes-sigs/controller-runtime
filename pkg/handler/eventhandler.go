@@ -109,6 +109,12 @@ type TypedFuncs[object any, request comparable] struct {
 	GenericFunc func(context.Context, event.TypedGenericEvent[object], workqueue.TypedRateLimitingInterface[request])
 }
 
+var typeForClientObject = reflect.TypeFor[client.Object]()
+
+func implementsClientObject[object any]() bool {
+	return reflect.TypeFor[object]().Implements(typeForClientObject)
+}
+
 func isPriorityQueue[request comparable](q workqueue.TypedRateLimitingInterface[request]) bool {
 	_, ok := q.(priorityqueue.PriorityQueue[request])
 	return ok
@@ -117,7 +123,7 @@ func isPriorityQueue[request comparable](q workqueue.TypedRateLimitingInterface[
 // Create implements EventHandler.
 func (h TypedFuncs[object, request]) Create(ctx context.Context, e event.TypedCreateEvent[object], q workqueue.TypedRateLimitingInterface[request]) {
 	if h.CreateFunc != nil {
-		if !reflect.TypeFor[object]().Implements(reflect.TypeFor[client.Object]()) || !isPriorityQueue(q) || isNil(e.Object) {
+		if !implementsClientObject[object]() || !isPriorityQueue(q) || isNil(e.Object) {
 			h.CreateFunc(ctx, e, q)
 			return
 		}
@@ -156,7 +162,7 @@ func (h TypedFuncs[object, request]) Delete(ctx context.Context, e event.TypedDe
 // Update implements EventHandler.
 func (h TypedFuncs[object, request]) Update(ctx context.Context, e event.TypedUpdateEvent[object], q workqueue.TypedRateLimitingInterface[request]) {
 	if h.UpdateFunc != nil {
-		if !reflect.TypeFor[object]().Implements(reflect.TypeFor[client.Object]()) || !isPriorityQueue(q) || isNil(e.ObjectOld) || isNil(e.ObjectNew) {
+		if !implementsClientObject[object]() || !isPriorityQueue(q) || isNil(e.ObjectOld) || isNil(e.ObjectNew) {
 			h.UpdateFunc(ctx, e, q)
 			return
 		}

@@ -18,7 +18,6 @@ package handler
 
 import (
 	"context"
-	"reflect"
 
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -65,7 +64,8 @@ func EnqueueRequestsFromMapFunc(fn MapFunc) EventHandler {
 // TypedEnqueueRequestsFromMapFunc is experimental and subject to future change.
 func TypedEnqueueRequestsFromMapFunc[object any, request comparable](fn TypedMapFunc[object, request]) TypedEventHandler[object, request] {
 	return &enqueueRequestsFromMapFunc[object, request]{
-		toRequests: fn,
+		toRequests:                   fn,
+		objectImplementsClientObject: implementsClientObject[object](),
 	}
 }
 
@@ -73,7 +73,8 @@ var _ EventHandler = &enqueueRequestsFromMapFunc[client.Object, reconcile.Reques
 
 type enqueueRequestsFromMapFunc[object any, request comparable] struct {
 	// Mapper transforms the argument into a slice of keys to be reconciled
-	toRequests TypedMapFunc[object, request]
+	toRequests                   TypedMapFunc[object, request]
+	objectImplementsClientObject bool
 }
 
 // Create implements EventHandler.
@@ -85,7 +86,7 @@ func (e *enqueueRequestsFromMapFunc[object, request]) Create(
 	reqs := map[request]empty{}
 
 	var lowPriority bool
-	if reflect.TypeFor[object]().Implements(reflect.TypeFor[client.Object]()) && isPriorityQueue(q) && !isNil(evt.Object) {
+	if e.objectImplementsClientObject && isPriorityQueue(q) && !isNil(evt.Object) {
 		clientObjectEvent := event.CreateEvent{Object: any(evt.Object).(client.Object)}
 		if isObjectUnchanged(clientObjectEvent) {
 			lowPriority = true
@@ -101,7 +102,7 @@ func (e *enqueueRequestsFromMapFunc[object, request]) Update(
 	q workqueue.TypedRateLimitingInterface[request],
 ) {
 	var lowPriority bool
-	if reflect.TypeFor[object]().Implements(reflect.TypeFor[client.Object]()) && isPriorityQueue(q) && !isNil(evt.ObjectOld) && !isNil(evt.ObjectNew) {
+	if e.objectImplementsClientObject && isPriorityQueue(q) && !isNil(evt.ObjectOld) && !isNil(evt.ObjectNew) {
 		lowPriority = any(evt.ObjectOld).(client.Object).GetResourceVersion() == any(evt.ObjectNew).(client.Object).GetResourceVersion()
 	}
 	reqs := map[request]empty{}
@@ -134,12 +135,12 @@ func (e *enqueueRequestsFromMapFunc[object, request]) mapAndEnqueue(
 	q workqueue.TypedRateLimitingInterface[request],
 	o object,
 	reqs map[request]empty,
-	unchanged bool,
+	lowPriority bool,
 ) {
 	for _, req := range e.toRequests(ctx, o) {
 		_, ok := reqs[req]
 		if !ok {
-			if unchanged {
+			if lowPriority {
 				q.(priorityqueue.PriorityQueue[request]).AddWithOpts(priorityqueue.AddOpts{
 					Priority: LowPriority,
 				}, req)

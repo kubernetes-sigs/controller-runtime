@@ -286,7 +286,7 @@ func (is *Informer) Start(ctx context.Context, queue workqueue.TypedRateLimiting
 		return errors.New("must specify Informer.Handler")
 	}
 
-	_, err := is.Informer.AddEventHandlerWithOptions(internal.NewEventHandler(ctx, queue, is.Handler, is.Predicates).HandlerFuncs(), toolscache.HandlerOptions{
+	_, err := is.Informer.AddEventHandlerWithOptions(internal.NewEventHandler(ctx, queue, is.Handler, is.Predicates), toolscache.HandlerOptions{
 		Logger: &logInformer,
 	})
 	if err != nil {

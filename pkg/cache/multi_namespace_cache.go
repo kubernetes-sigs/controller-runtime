@@ -337,18 +337,11 @@ type handlerRegistration struct {
 	handles map[string]toolscache.ResourceEventHandlerRegistration
 }
 
-type syncer interface {
-	HasSynced() bool
-}
-
 // HasSynced asserts that the handler has been called for the full initial state of the informer.
-// This uses syncer to be compatible between client-go 1.27+ and older versions when the interface changed.
 func (h handlerRegistration) HasSynced() bool {
-	for _, reg := range h.handles {
-		if s, ok := reg.(syncer); ok {
-			if !s.HasSynced() {
-				return false
-			}
+	for _, h := range h.handles {
+		if !h.HasSynced() {
+			return false
 		}
 	}
 	return true

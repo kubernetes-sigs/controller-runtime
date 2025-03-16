@@ -831,31 +831,7 @@ var _ = Describe("Eventhandler", func() {
 		}
 		for _, test := range handlerPriorityTests {
 			When("handler is "+test.name, func() {
-				It("should lower the priority of a create request for an object that was created more than one minute in the past", func() {
-					actualOpts := priorityqueue.AddOpts{}
-					var actualRequests []reconcile.Request
-					wq := &fakePriorityQueue{
-						addWithOpts: func(o priorityqueue.AddOpts, items ...reconcile.Request) {
-							actualOpts = o
-							actualRequests = items
-						},
-					}
-
-					test.handler().Create(ctx, event.CreateEvent{
-						Object: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
-							Name: "my-pod",
-							OwnerReferences: []metav1.OwnerReference{{
-								Kind: "Pod",
-								Name: "my-pod",
-							}},
-						}},
-					}, wq)
-
-					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{Priority: handler.LowPriority}))
-					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
-				})
-
-				It("should not lower the priority of a create request for an object that was created less than one minute in the past", func() {
+				It("should lower the priority of a create request for an object that was part of the initial list", func() {
 					actualOpts := priorityqueue.AddOpts{}
 					var actualRequests []reconcile.Request
 					wq := &fakePriorityQueue{
@@ -874,6 +850,33 @@ var _ = Describe("Eventhandler", func() {
 								Name: "my-pod",
 							}},
 						}},
+						IsInInitialList: true,
+					}, wq)
+
+					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{Priority: handler.LowPriority}))
+					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
+				})
+
+				It("should not lower the priority of a create request for an object that was not part of the initial list", func() {
+					actualOpts := priorityqueue.AddOpts{}
+					var actualRequests []reconcile.Request
+					wq := &fakePriorityQueue{
+						addWithOpts: func(o priorityqueue.AddOpts, items ...reconcile.Request) {
+							actualOpts = o
+							actualRequests = items
+						},
+					}
+
+					test.handler().Create(ctx, event.CreateEvent{
+						Object: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+							Name:              "my-pod",
+							CreationTimestamp: metav1.Now(),
+							OwnerReferences: []metav1.OwnerReference{{
+								Kind: "Pod",
+								Name: "my-pod",
+							}},
+						}},
+						IsInInitialList: false,
 					}, wq)
 
 					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{}))

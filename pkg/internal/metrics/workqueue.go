@@ -18,6 +18,7 @@ package metrics
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/client-go/util/workqueue"
@@ -54,17 +55,23 @@ var (
 	}, []string{"name", "controller"})
 
 	latency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Subsystem: WorkQueueSubsystem,
-		Name:      QueueLatencyKey,
-		Help:      "How long in seconds an item stays in workqueue before being requested",
-		Buckets:   prometheus.ExponentialBuckets(10e-9, 10, 12),
+		Subsystem:                       WorkQueueSubsystem,
+		Name:                            QueueLatencyKey,
+		Help:                            "How long in seconds an item stays in workqueue before being requested",
+		Buckets:                         prometheus.ExponentialBuckets(10e-9, 10, 12),
+		NativeHistogramBucketFactor:     1.1,
+		NativeHistogramMaxBucketNumber:  100,
+		NativeHistogramMinResetDuration: 1 * time.Hour,
 	}, []string{"name", "controller"})
 
 	workDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Subsystem: WorkQueueSubsystem,
-		Name:      WorkDurationKey,
-		Help:      "How long in seconds processing an item from workqueue takes.",
-		Buckets:   prometheus.ExponentialBuckets(10e-9, 10, 12),
+		Subsystem:                       WorkQueueSubsystem,
+		Name:                            WorkDurationKey,
+		Help:                            "How long in seconds processing an item from workqueue takes.",
+		Buckets:                         prometheus.ExponentialBuckets(10e-9, 10, 12),
+		NativeHistogramBucketFactor:     1.1,
+		NativeHistogramMaxBucketNumber:  100,
+		NativeHistogramMinResetDuration: 1 * time.Hour,
 	}, []string{"name", "controller"})
 
 	unfinished = prometheus.NewGaugeVec(prometheus.GaugeOpts{

@@ -126,6 +126,10 @@ type Environment struct {
 	// loading.
 	Config *rest.Config
 
+	// KubeConfig provides []byte of a kubeconfig file to talk to the apiserver
+	// It's automatically populated if not set based on the `Config`
+	KubeConfig []byte
+
 	// CRDInstallOptions are the options for installing CRDs.
 	CRDInstallOptions CRDInstallOptions
 
@@ -289,6 +293,14 @@ func (te *Environment) Start() (*rest.Config, error) {
 			return te.Config, fmt.Errorf("unable to provision admin user: %w", err)
 		}
 		te.Config = adminUser.Config()
+	}
+
+	if len(te.KubeConfig) == 0 {
+		var err error
+		te.KubeConfig, err = controlplane.KubeConfigFromREST(te.Config)
+		if err != nil {
+			return nil, fmt.Errorf("unable to set KubeConfig field: %w", err)
+		}
 	}
 
 	// Set the default scheme if nil.

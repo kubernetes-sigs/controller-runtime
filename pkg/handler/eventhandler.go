@@ -65,7 +65,7 @@ type EventHandler = TypedEventHandler[client.Object, reconcile.Request]
 //
 // Unless you are implementing your own TypedEventHandler, you can ignore the functions on the TypedEventHandler interface.
 // Most users shouldn't need to implement their own TypedEventHandler.
-
+//
 // TypedEventHandler is experimental and subject to future change.
 type TypedEventHandler[object any, request comparable] interface {
 	// Create is called in response to a create event - e.g. Pod Creation.

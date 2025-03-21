@@ -14,6 +14,8 @@ jobs:
     name: Upload binaries to release
     runs-on: ubuntu-latest
     steps:
+    - name: Set env
+      run:  echo "RELEASE_TAG=${GITHUB_REF:10}" >> $GITHUB_ENV
     - name: Check out code
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # tag=v4.2.2
     - name: Calculate go version

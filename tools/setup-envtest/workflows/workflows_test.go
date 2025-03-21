@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 
@@ -443,4 +444,16 @@ var _ = Describe("Workflows", func() {
 			Expect(string(outContents)).To(HavePrefix(expectedPrefix), "should have the debugging prefix")
 		})
 	})
+
+	Describe("version", func() {
+		It("should print out the version if the RELEASE_TAG is empty", func() {
+			v := wf.Version{}
+			v.Do(env)
+			info, ok := debug.ReadBuildInfo()
+			Expect(ok).To(BeTrue())
+			Expect(out.String()).ToNot(BeEmpty())
+			Expect(out.String()).To(Equal(fmt.Sprintf("setup-envtest version: %s\n", info.Main.Version)))
+		})
+	})
+
 })

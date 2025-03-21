@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
+	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
@@ -345,9 +346,10 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should check for correct TypedSyncingSource if custom types are used", func() {
-			queue := &controllertest.TypedQueue[TestRequest]{
-				TypedInterface: workqueue.NewTyped[TestRequest](),
-			}
+			queue := &priorityQueueWrapper[TestRequest]{
+				TypedRateLimitingInterface: &controllertest.TypedQueue[TestRequest]{
+					TypedInterface: workqueue.NewTyped[TestRequest](),
+				}}
 			ctrl := &Controller[TestRequest]{
 				NewQueue: func(string, workqueue.TypedRateLimiter[TestRequest]) workqueue.TypedRateLimitingInterface[TestRequest] {
 					return queue
@@ -398,10 +400,6 @@ var _ = Describe("controller", func() {
 			By("Removing the item from the queue")
 			Eventually(queue.Len).Should(Equal(0))
 			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
-		})
-
-		PIt("should forget an item if it is not a Request and continue processing items", func() {
-			// TODO(community): write this test
 		})
 
 		It("should requeue a Request if there is an error and continue processing items", func() {
@@ -523,6 +521,37 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return dq.NumRequeues(request) }).Should(Equal(0))
 		})
 
+		It("should retain the priority when the reconciler requests a requeue", func() {
+			q := &fakePriorityQueue{PriorityQueue: priorityqueue.New[reconcile.Request]("controller1")}
+			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				return q
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
+			}()
+
+			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: 10}, request)
+
+			By("Invoking Reconciler which will request a requeue")
+			fakeReconcile.AddResult(reconcile.Result{Requeue: true}, nil)
+			Expect(<-reconciled).To(Equal(request))
+			Eventually(func() []priorityQueueAddition {
+				q.lock.Lock()
+				defer q.lock.Unlock()
+				return q.added
+			}).Should(Equal([]priorityQueueAddition{{
+				AddOpts: priorityqueue.AddOpts{
+					RateLimited: true,
+					Priority:    10,
+				},
+				items: []reconcile.Request{request},
+			}}))
+		})
+
 		It("should requeue a Request after a duration (but not rate-limitted) if the Result sets RequeueAfter (regardless of Requeue)", func() {
 			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
 			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
@@ -555,6 +584,37 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return dq.NumRequeues(request) }).Should(Equal(0))
 		})
 
+		It("should retain the priority with RequeAfter", func() {
+			q := &fakePriorityQueue{PriorityQueue: priorityqueue.New[reconcile.Request]("controller1")}
+			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				return q
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
+			}()
+
+			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: 10}, request)
+
+			By("Invoking Reconciler which will ask for RequeueAfter")
+			fakeReconcile.AddResult(reconcile.Result{RequeueAfter: time.Millisecond * 100}, nil)
+			Expect(<-reconciled).To(Equal(request))
+			Eventually(func() []priorityQueueAddition {
+				q.lock.Lock()
+				defer q.lock.Unlock()
+				return q.added
+			}).Should(Equal([]priorityQueueAddition{{
+				AddOpts: priorityqueue.AddOpts{
+					After:    time.Millisecond * 100,
+					Priority: 10,
+				},
+				items: []reconcile.Request{request},
+			}}))
+		})
+
 		It("should perform error behavior if error is not nil, regardless of RequeueAfter", func() {
 			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
 			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
@@ -584,6 +644,37 @@ var _ = Describe("controller", func() {
 			By("Removing the item from the queue")
 			Eventually(dq.Len).Should(Equal(0))
 			Eventually(func() int { return dq.NumRequeues(request) }).Should(Equal(0))
+		})
+
+		It("should retain the priority when there was an error", func() {
+			q := &fakePriorityQueue{PriorityQueue: priorityqueue.New[reconcile.Request]("controller1")}
+			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+				return q
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
+			}()
+
+			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: 10}, request)
+
+			By("Invoking Reconciler which will return an error")
+			fakeReconcile.AddResult(reconcile.Result{}, errors.New("oups, I did it again"))
+			Expect(<-reconciled).To(Equal(request))
+			Eventually(func() []priorityQueueAddition {
+				q.lock.Lock()
+				defer q.lock.Unlock()
+				return q.added
+			}).Should(Equal([]priorityQueueAddition{{
+				AddOpts: priorityqueue.AddOpts{
+					RateLimited: true,
+					Priority:    10,
+				},
+				items: []reconcile.Request{request},
+			}}))
 		})
 
 		PIt("should return if the queue is shutdown", func() {
@@ -976,4 +1067,22 @@ func (t *bisignallingSource[T]) WaitForSync(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+type priorityQueueAddition struct {
+	priorityqueue.AddOpts
+	items []reconcile.Request
+}
+
+type fakePriorityQueue struct {
+	priorityqueue.PriorityQueue[reconcile.Request]
+
+	lock  sync.Mutex
+	added []priorityQueueAddition
+}
+
+func (f *fakePriorityQueue) AddWithOpts(o priorityqueue.AddOpts, items ...reconcile.Request) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.added = append(f.added, priorityQueueAddition{AddOpts: o, items: items})
 }

@@ -799,6 +799,16 @@ var _ = Describe("Eventhandler", func() {
 				},
 			},
 			{
+				name: "TypedEnqueueRequestForOwner",
+				handler: func() handler.EventHandler {
+					return handler.TypedEnqueueRequestForOwner[client.Object](
+						scheme.Scheme,
+						mapper,
+						&corev1.Pod{},
+					)
+				},
+			},
+			{
 				name: "Funcs",
 				handler: func() handler.EventHandler {
 					return handler.TypedFuncs[client.Object, reconcile.Request]{

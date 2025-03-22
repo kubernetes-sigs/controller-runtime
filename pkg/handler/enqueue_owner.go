@@ -48,7 +48,7 @@ type OwnerOption func(e enqueueRequestForOwnerInterface)
 //
 // - a handler.enqueueRequestForOwner EventHandler with an OwnerType of ReplicaSet and OnlyControllerOwner set to true.
 func EnqueueRequestForOwner(scheme *runtime.Scheme, mapper meta.RESTMapper, ownerType client.Object, opts ...OwnerOption) EventHandler {
-	return WithLowPriorityWhenUnchanged(TypedEnqueueRequestForOwner[client.Object](scheme, mapper, ownerType, opts...))
+	return TypedEnqueueRequestForOwner[client.Object](scheme, mapper, ownerType, opts...)
 }
 
 // TypedEnqueueRequestForOwner enqueues Requests for the Owners of an object.  E.g. the object that created
@@ -72,7 +72,7 @@ func TypedEnqueueRequestForOwner[object client.Object](scheme *runtime.Scheme, m
 	for _, opt := range opts {
 		opt(e)
 	}
-	return e
+	return WithLowPriorityWhenUnchanged(e)
 }
 
 // OnlyControllerOwner if provided will only look at the first OwnerReference with Controller: true.

@@ -59,8 +59,8 @@ func ExampleNew() {
 
 func ExampleNew_suppress_warnings() {
 	cfg := config.GetConfigOrDie()
-	// Use a rest.WarningHandler that discards warning messages.
-	cfg.WarningHandler = rest.NoWarnings{}
+	// Use a rest.WarningHandlerWithContext that discards warning messages.
+	cfg.WarningHandlerWithContext = rest.NoWarnings{}
 
 	cl, err := client.New(cfg, client.Options{})
 	if err != nil {

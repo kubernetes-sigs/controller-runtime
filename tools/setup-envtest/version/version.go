@@ -3,7 +3,7 @@ package version
 import "runtime/debug"
 
 // Version to be set using ldflags:
-// -ldflags "-X sigs.k8s.io/controller-tools/pkg/version.version=v1.0.0"
+// -ldflags "-X sigs.k8s.io/controller-runtime/tools/setup-envtest/version.version=v1.0.0"
 // falls back to module information is unse
 var version = ""
 

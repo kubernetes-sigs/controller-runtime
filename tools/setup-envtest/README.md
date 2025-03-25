@@ -14,7 +14,7 @@ go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
 If you are using Golang 1.23, use the `release-0.20` branch instead:
 
 ```shell
-go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.19
+go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.20
 ```
 
 For full documentation, run it with the `--help` flag, but here are some

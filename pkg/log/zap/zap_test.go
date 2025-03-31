@@ -327,6 +327,24 @@ var _ = Describe("Zap log level flag options setup", func() {
 
 			Expect(outRaw).To(BeEmpty())
 		})
+
+		It("Should output only panic logs, otherwise empty logs", func() {
+			args := []string{"--zap-log-level=panic"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+
+			logOut := new(bytes.Buffer)
+
+			logger := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
+			logger.V(0).Info(logInfoLevel0)
+			logger.V(1).Info(logDebugLevel1)
+			logger.V(2).Info(logDebugLevel2)
+
+			outRaw := logOut.Bytes()
+
+			Expect(outRaw).To(BeEmpty())
+		})
 	})
 
 	Context("with  zap-log-level  with increased verbosity.", func() {

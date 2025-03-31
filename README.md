@@ -68,9 +68,6 @@ See [FAQ.md](FAQ.md)
 
 Learn how to engage with the Kubernetes community on the [community page](http://kubernetes.io/community/).
 
-controller-runtime is a subproject of the [kubebuilder](https://github.com/kubernetes-sigs/kubebuilder) project
-in sig apimachinery.
-
 You can reach the maintainers of this project at:
 
 - Slack channel: [#controller-runtime](https://kubernetes.slack.com/archives/C02MRBMN00Z)

@@ -392,6 +392,12 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 		return nil, false, err
 	}
 
+	// Add metric event handler to track cache resources count
+	metricsHandler := NewMetricsResourceEventHandler(gvk, sharedIndexInformer)
+	if _, err := sharedIndexInformer.AddEventHandler(metricsHandler); err != nil {
+		return nil, false, err
+	}
+
 	mapping, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return nil, false, err
@@ -613,4 +619,23 @@ func restrictNamespaceBySelector(namespaceOpt string, s Selector) string {
 		return value
 	}
 	return ""
+}
+
+// VisitInformers calls the given function for each informer in the cache
+func (ip *Informers) VisitInformers(visitor func(gvk schema.GroupVersionKind, informer cache.SharedIndexInformer)) {
+	ip.mu.RLock()
+	defer ip.mu.RUnlock()
+
+	// Visit each tracked informer
+	for gvk, _cache := range ip.tracker.Structured {
+		visitor(gvk, _cache.Informer)
+	}
+
+	for gvk, _cache := range ip.tracker.Unstructured {
+		visitor(gvk, _cache.Informer)
+	}
+
+	for gvk, _cache := range ip.tracker.Metadata {
+		visitor(gvk, _cache.Informer)
+	}
 }

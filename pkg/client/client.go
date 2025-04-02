@@ -450,7 +450,7 @@ type SubResourceUpdateOptions struct {
 
 // ApplyToSubResourceUpdate updates the configuration on the given create options
 func (uo *SubResourceUpdateOptions) ApplyToSubResourceUpdate(o *SubResourceUpdateOptions) {
-	uo.UpdateOptions.ApplyToUpdate(&o.UpdateOptions)
+	uo.ApplyToUpdate(&o.UpdateOptions)
 	if uo.SubResourceBody != nil {
 		o.SubResourceBody = uo.SubResourceBody
 	}
@@ -507,7 +507,7 @@ func (co *SubResourceCreateOptions) ApplyOptions(opts []SubResourceCreateOption)
 
 // ApplyToSubResourceCreate applies the the configuration on the given create options.
 func (co *SubResourceCreateOptions) ApplyToSubResourceCreate(o *SubResourceCreateOptions) {
-	co.CreateOptions.ApplyToCreate(&co.CreateOptions)
+	co.ApplyToCreate(&co.CreateOptions)
 }
 
 // SubResourcePatchOptions holds all possible configurations for a subresource patch
@@ -528,7 +528,7 @@ func (po *SubResourcePatchOptions) ApplyOptions(opts []SubResourcePatchOption) *
 
 // ApplyToSubResourcePatch applies the configuration on the given patch options.
 func (po *SubResourcePatchOptions) ApplyToSubResourcePatch(o *SubResourcePatchOptions) {
-	po.PatchOptions.ApplyToPatch(&o.PatchOptions)
+	po.ApplyToPatch(&o.PatchOptions)
 	if po.SubResourceBody != nil {
 		o.SubResourceBody = po.SubResourceBody
 	}

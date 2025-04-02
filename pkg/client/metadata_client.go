@@ -77,7 +77,7 @@ func (mc *metadataClient) DeleteAllOf(ctx context.Context, obj Object, opts ...D
 	deleteAllOfOpts := DeleteAllOfOptions{}
 	deleteAllOfOpts.ApplyOptions(opts)
 
-	resInt, err := mc.getResourceInterface(metadata.GroupVersionKind(), deleteAllOfOpts.ListOptions.Namespace)
+	resInt, err := mc.getResourceInterface(metadata.GroupVersionKind(), deleteAllOfOpts.Namespace)
 	if err != nil {
 		return err
 	}

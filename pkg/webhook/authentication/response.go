@@ -57,7 +57,7 @@ func ReviewResponse(authenticated bool, user authenticationv1.UserInfo, err stri
 		},
 	}
 	if len(err) > 0 {
-		resp.TokenReview.Status.Error = err
+		resp.Status.Error = err
 	}
 	return resp
 }

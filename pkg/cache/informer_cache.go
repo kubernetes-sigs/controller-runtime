@@ -180,7 +180,7 @@ func (ic *informerCache) GetInformer(ctx context.Context, obj client.Object, opt
 
 func (ic *informerCache) getInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object) (bool, *internal.Cache, error) {
 	if ic.readerFailOnMissingInformer {
-		cache, started, ok := ic.Informers.Peek(gvk, obj)
+		cache, started, ok := ic.Peek(gvk, obj)
 		if !ok {
 			return false, nil, &ErrResourceNotCached{GVK: gvk}
 		}
@@ -197,7 +197,7 @@ func (ic *informerCache) RemoveInformer(_ context.Context, obj client.Object) er
 		return err
 	}
 
-	ic.Informers.Remove(gvk, obj)
+	ic.Remove(gvk, obj)
 	return nil
 }
 

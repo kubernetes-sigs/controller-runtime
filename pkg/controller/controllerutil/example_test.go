@@ -41,7 +41,7 @@ func ExampleCreateOrUpdate() {
 	op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, func() error {
 		// Deployment selector is immutable so we set this value only if
 		// a new object is going to be created
-		if deploy.ObjectMeta.CreationTimestamp.IsZero() {
+		if deploy.CreationTimestamp.IsZero() {
 			deploy.Spec.Selector = &metav1.LabelSelector{
 				MatchLabels: map[string]string{"foo": "bar"},
 			}

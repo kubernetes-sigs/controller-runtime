@@ -20,13 +20,10 @@ package pkg
 
 import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
 var (
-	log = logf.Log.WithName("chaospod-resource")
-
 	// SchemeGroupVersion is group version used to register these objects
 	SchemeGroupVersion = schema.GroupVersion{Group: "chaosapps.metamagical.io", Version: "v1"}
 

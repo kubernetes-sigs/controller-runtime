@@ -52,7 +52,7 @@ var _ = Describe("Config", func() {
 	})
 
 	AfterEach(func() {
-		os.Unsetenv(clientcmd.RecommendedConfigPathEnvVar)
+		_ = os.Unsetenv(clientcmd.RecommendedConfigPathEnvVar)
 		kubeconfig = ""
 		clientcmd.RecommendedHomeFile = origRecommendedHomeFile
 

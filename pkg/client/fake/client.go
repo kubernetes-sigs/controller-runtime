@@ -411,12 +411,9 @@ func (t versionedTracker) Patch(gvr schema.GroupVersionResource, obj runtime.Obj
 		return err
 	}
 
-	isStatus := false
+	isStatus := bytes.Contains(debug.Stack(), []byte("sigs.k8s.io/controller-runtime/pkg/client/fake.(*fakeSubResourceClient).statusPatch"))
 	// We apply patches using a client-go reaction that ends up calling the trackers Patch. As we can't change
 	// that reaction, we use the callstack to figure out if this originated from the status client.
-	if bytes.Contains(debug.Stack(), []byte("sigs.k8s.io/controller-runtime/pkg/client/fake.(*fakeSubResourceClient).statusPatch")) {
-		isStatus = true
-	}
 
 	obj, err = t.updateObject(gvr, obj, ns, isStatus, false, patchOptions.DryRun)
 	if err != nil {
@@ -447,7 +444,7 @@ func (t versionedTracker) updateObject(gvr schema.GroupVersionResource, obj runt
 		return nil, err
 	}
 
-	oldObject, err := t.ObjectTracker.Get(gvr, ns, accessor.GetName())
+	oldObject, err := t.Get(gvr, ns, accessor.GetName())
 	if err != nil {
 		// If the resource is not found and the resource allows create on update, issue a
 		// create instead.
@@ -518,7 +515,7 @@ func (t versionedTracker) updateObject(gvr schema.GroupVersionResource, obj runt
 	}
 
 	if !accessor.GetDeletionTimestamp().IsZero() && len(accessor.GetFinalizers()) == 0 {
-		return nil, t.ObjectTracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName(), metav1.DeleteOptions{DryRun: dryRun})
+		return nil, t.Delete(gvr, accessor.GetNamespace(), accessor.GetName(), metav1.DeleteOptions{DryRun: dryRun})
 	}
 	return convertFromUnstructuredIfNecessary(t.scheme, obj)
 }

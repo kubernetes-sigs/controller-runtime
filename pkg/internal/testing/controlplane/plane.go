@@ -168,11 +168,11 @@ func (u *AuthenticatedUser) Config() *rest.Config {
 	if u.cfgIsComplete {
 		return u.cfg
 	}
-	if len(u.plane.APIServer.SecureServing.CA) == 0 {
+	if len(u.plane.APIServer.CA) == 0 {
 		panic("the API server has not yet been started, please do that before accessing connection details")
 	}
 
-	u.cfg.CAData = u.plane.APIServer.SecureServing.CA
+	u.cfg.CAData = u.plane.APIServer.CA
 	u.cfg.Host = u.plane.APIServer.SecureServing.URL("https", "/").String()
 	u.cfgIsComplete = true
 	return u.cfg
@@ -232,14 +232,14 @@ func (u *AuthenticatedUser) Kubectl() (*KubeCtl, error) {
 // guaranteed to be callable both before and after Start has been called (but, as noted in the
 // AuthenticatedUser docs, the given user objects are only valid after Start has been called).
 func (f *ControlPlane) AddUser(user User, baseConfig *rest.Config) (*AuthenticatedUser, error) {
-	if f.GetAPIServer().SecureServing.Authn == nil {
+	if f.GetAPIServer().Authn == nil {
 		return nil, fmt.Errorf("no API server authentication is configured yet.  The API server defaults one when Start is called, did you mean to use that?")
 	}
 
 	if baseConfig == nil {
 		baseConfig = &rest.Config{}
 	}
-	cfg, err := f.GetAPIServer().SecureServing.AddUser(user, baseConfig)
+	cfg, err := f.GetAPIServer().AddUser(user, baseConfig)
 	if err != nil {
 		return nil, err
 	}

@@ -383,6 +383,123 @@ var _ = Describe("controller", func() {
 		})
 	})
 
+	Describe("startEventSources", func() {
+		It("should return nil when no sources are provided", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{}
+			err := ctrl.startEventSources(ctx)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return an error if a source fails to start", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			expectedErr := fmt.Errorf("failed to start source")
+			src := source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				// Return the error immediately so we don't get a timeout
+				return expectedErr
+			})
+
+			// // Set a sufficiently long timeout to avoid timeouts interfering with the error being returned
+			ctrl.CacheSyncTimeout = 5 * time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
+			err := ctrl.startEventSources(ctx)
+			Expect(err).To(Equal(expectedErr))
+		})
+
+		It("should return an error if a source fails to sync", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Kind(&informertest.FakeInformers{Synced: ptr.To(false)}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
+			}
+			ctrl.Name = "test-controller"
+			ctrl.CacheSyncTimeout = 5 * time.Second
+
+			err := ctrl.startEventSources(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to wait for test-controller caches to sync"))
+		})
+
+		It("should not return an error when sources start and sync successfully", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Create a source that starts and syncs successfully
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Kind(&informertest.FakeInformers{Synced: ptr.To(true)}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
+			}
+			ctrl.Name = "test-controller"
+			ctrl.CacheSyncTimeout = 5 * time.Second
+
+			err := ctrl.startEventSources(ctx)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should not return an error when context is cancelled during source sync", func() {
+			sourceCtx, sourceCancel := context.WithCancel(context.Background())
+			defer sourceCancel()
+
+			ctrl.CacheSyncTimeout = 5 * time.Second
+
+			// Create a bisignallingSource to control the test flow
+			src := &bisignallingSource[reconcile.Request]{
+				startCall: make(chan workqueue.TypedRateLimitingInterface[reconcile.Request]),
+				startDone: make(chan error, 1),
+				waitCall:  make(chan struct{}),
+				waitDone:  make(chan error, 1),
+			}
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
+
+			// Start the sources in a goroutine
+			startErrCh := make(chan error)
+			go func() {
+				startErrCh <- ctrl.startEventSources(sourceCtx)
+			}()
+
+			// Allow source to start successfully
+			Eventually(src.startCall).Should(Receive())
+			src.startDone <- nil
+
+			// Wait for WaitForSync to be called
+			Eventually(src.waitCall).Should(BeClosed())
+
+			// Return context.Canceled from WaitForSync
+			src.waitDone <- context.Canceled
+
+			// Also cancel the context
+			sourceCancel()
+
+			// We expect to receive the context.Canceled error
+			err := <-startErrCh
+			Expect(err).To(MatchError(context.Canceled))
+		})
+
+		It("should timeout if source Start blocks for too long", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = 1 * time.Millisecond
+
+			// Create a source that blocks forever in Start
+			blockingSrc := source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				<-ctx.Done()
+				return ctx.Err()
+			})
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{blockingSrc}
+
+			err := ctrl.startEventSources(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("timed out waiting for source"))
+		})
+	})
+
 	Describe("Processing queue items from a Controller", func() {
 		It("should call Reconciler if an item is enqueued", func() {
 			ctx, cancel := context.WithCancel(context.Background())

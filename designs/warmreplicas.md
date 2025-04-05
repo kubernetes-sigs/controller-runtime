@@ -3,7 +3,7 @@ Add support for warm replicas
 
 ## Motivation
 Controllers reconcile all objects during startup / leader election failover to account for changes
-in the reconciliation logic. For certain sources, the time to serve the initial list can be
+in the reconciliation logic. For certain sources, the time to do the cache sync can be
 significant in the order of minutes. This is problematic because by default controllers (and by
 extension watches) do not start until they have won leader election. This implies guaranteed
 downtime as even after leader election, the controller has to wait for the initial list to be served
@@ -35,8 +35,7 @@ and all controllers are leader election runnables by default.
 behavior when manager is not in leader mode. This interface should be as follows:
 ```go
 type WarmupRunnable interface {
-    NeedWarmup() bool
-    GetWarmupRunnable() Runnable
+    Warmup(context.Context) error
 }
 ```
 
@@ -65,29 +64,12 @@ func(rw runnableWrapper) Start(ctx context.Context) error {
     return rw.startFunc(ctx)
 }
 
-// NeedWarmup implements WarmupRunnable
-func (c *Controller[request]) NeedWarmup() bool {
-    if c.ShouldWarmupWithoutLeadership == nil {
-        return false
+func (c *Controller[request]) Warmup(ctx context.Context) error {
+    if !c.ShouldWarmupWithoutLeadership {
+        return nil
     }
-    return c.ShouldWarmupWithoutLeadership
-}
 
-// GetWarmupRunnable implements WarmupRunnable
-func (c *Controller[request]) GetWarmupRunnable() Runnable {
-    return runnableWrapper{
-        startFunc: func (ctx context.Context) error {
-            if !c.ShouldWarmupWithoutLeadership {
-                return nil
-            }
-
-            // pseudocode
-            for _, watch := c.startWatches {
-                watch.Start()
-                // handle syncing sources
-            }
-        }
-    }
+    return c.startEventSources(ctx)
 }
 ```
 
@@ -107,12 +89,10 @@ func (r *runnables) Add(fn Runnable) error {
 	switch runnable := fn.(type) {
     // ...
     case WarmupRunnable:
-        if runnable.NeedWarmup() {
-            r.Warmup.Add(runnable.GetWarmupRunnable(), nil)
-        }
+        r.Warmup.Add(RunnableFunc(fn.Warmup), nil)
 
         // fallthrough to ensure that a runnable that implements both LeaderElection and
-        // NonLeaderElection interfaces is added to both groups
+        // Warmup interfaces are added to both groups
         fallthrough
 	case LeaderElectionRunnable:
 		if !runnable.NeedLeaderElection() {

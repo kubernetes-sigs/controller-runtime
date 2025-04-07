@@ -38,8 +38,8 @@ func TestDefaultList(t *testing.T) {
 	g.Expect(list.Items).To(HaveLen(1))
 	depl := exampleDeployment()
 	g.Expect(list.Items[0]).To(And(
-		HaveField("ObjectMeta.Name", Equal(depl.ObjectMeta.Name)),
-		HaveField("ObjectMeta.Namespace", Equal(depl.ObjectMeta.Namespace)),
+		HaveField("ObjectMeta.Name", Equal(depl.Name)),
+		HaveField("ObjectMeta.Namespace", Equal(depl.Namespace)),
 	))
 }
 

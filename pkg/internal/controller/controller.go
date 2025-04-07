@@ -409,16 +409,16 @@ func (p *priorityQueueWrapper[request]) AddWithOpts(opts priorityqueue.AddOpts, 
 	for _, item := range items {
 		switch {
 		case opts.RateLimited:
-			p.TypedRateLimitingInterface.AddRateLimited(item)
+			p.AddRateLimited(item)
 		case opts.After > 0:
-			p.TypedRateLimitingInterface.AddAfter(item, opts.After)
+			p.AddAfter(item, opts.After)
 		default:
-			p.TypedRateLimitingInterface.Add(item)
+			p.Add(item)
 		}
 	}
 }
 
 func (p *priorityQueueWrapper[request]) GetWithPriority() (request, int, bool) {
-	item, shutdown := p.TypedRateLimitingInterface.Get()
+	item, shutdown := p.Get()
 	return item, 0, shutdown
 }

@@ -60,6 +60,10 @@ type Controller struct {
 	// Defaults to true, which means the controller will use leader election.
 	NeedLeaderElection *bool
 
+	// NeedWarmUp indicates whether the controller needs to use warm up.
+	// Defaults to false, which means the controller will not use warm up.
+	NeedWarmUp *bool
+
 	// UsePriorityQueue configures the controllers queue to use the controller-runtime provided
 	// priority queue.
 	//

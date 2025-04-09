@@ -83,6 +83,9 @@ type Controller[request comparable] struct {
 	// startWatches maintains a list of sources, handlers, and predicates to start when the controller is started.
 	startWatches []source.TypedSource[request]
 
+	// didStartEventSources is used to indicate whether the event sources have been started.
+	didStartEventSources atomic.Bool
+
 	// LogConstructor is used to construct a logger to then log messages to users during reconciliation,
 	// or for example when a watch is started.
 	// Note: LogConstructor has to be able to handle nil requests as we are also using it
@@ -95,6 +98,12 @@ type Controller[request comparable] struct {
 
 	// LeaderElected indicates whether the controller is leader elected or always running.
 	LeaderElected *bool
+
+	// ShouldWarmupWithoutLeadership specifies whether the controller should start its sources
+	// when the manager is not the leader.
+	// Defaults to false, which means that the controller will wait for leader election to start
+	// before starting sources.
+	ShouldWarmupWithoutLeadership *bool
 }
 
 // Reconcile implements reconcile.Reconciler.
@@ -142,6 +151,15 @@ func (c *Controller[request]) NeedLeaderElection() bool {
 		return true
 	}
 	return *c.LeaderElected
+}
+
+// Warmup implements the manager.WarmupRunnable interface.
+func (c *Controller[request]) Warmup(ctx context.Context) error {
+	if c.ShouldWarmupWithoutLeadership == nil || !*c.ShouldWarmupWithoutLeadership {
+		return nil
+	}
+
+	return c.startEventSources(ctx)
 }
 
 // Start implements controller.Controller.
@@ -221,6 +239,13 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 // startEventSources launches all the sources registered with this controller and waits
 // for them to sync. It returns an error if any of the sources fail to start or sync.
 func (c *Controller[request]) startEventSources(ctx context.Context) error {
+	// CAS returns false if value is already true, so early exit since another goroutine must have
+	// called startEventSources previously
+	if !c.didStartEventSources.CompareAndSwap(false, true) {
+		c.LogConstructor(nil).Info("Skipping starting event sources since it was already started")
+		return nil
+	}
+
 	errGroup := &errgroup.Group{}
 	for _, watch := range c.startWatches {
 		log := c.LogConstructor(nil)

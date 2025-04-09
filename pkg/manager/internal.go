@@ -439,6 +439,11 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 		return fmt.Errorf("failed to start other runnables: %w", err)
 	}
 
+	// Start and wait for sources to start.
+	if err := cm.runnables.Warmup.Start(cm.internalCtx); err != nil {
+		return fmt.Errorf("failed to start warmup runnables: %w", err)
+	}
+
 	// Start the leader election and all required runnables.
 	{
 		ctx, cancel := context.WithCancel(context.Background())
@@ -543,6 +548,10 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 		// Prevent leader election when shutting down a non-elected manager
 		cm.runnables.LeaderElection.startOnce.Do(func() {})
 		cm.runnables.LeaderElection.StopAndWait(cm.shutdownCtx)
+
+		// Stop the warmup runnables
+		cm.logger.Info("Stopping and waiting for warmup runnables")
+		cm.runnables.Warmup.StopAndWait(cm.shutdownCtx)
 
 		// Stop the caches before the leader election runnables, this is an important
 		// step to make sure that we don't race with the reconcilers by receiving more events

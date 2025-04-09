@@ -1928,6 +1928,75 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.GetAPIReader()).NotTo(BeNil())
 	})
+
+	It("should run warmup runnables before leader election is won", func() {
+		By("Creating channels to track execution order")
+		warmupCalled := make(chan struct{})
+		leaderElectionRunnableCalled := make(chan struct{})
+
+		By("Creating a manager with leader election enabled")
+		m, err := New(cfg, Options{
+			LeaderElection:          true,
+			LeaderElectionNamespace: "default",
+			LeaderElectionID:        "test-leader-election-warmup",
+			newResourceLock:         fakeleaderelection.NewResourceLock,
+			HealthProbeBindAddress:  "0",
+			Metrics:                 metricsserver.Options{BindAddress: "0"},
+			PprofBindAddress:        "0",
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Override onStoppedLeading to prevent os.Exit
+		cm := m.(*controllerManager)
+		cm.onStoppedLeading = func() {}
+
+		By("Creating a runnable that implements WarmupRunnable interface")
+		// Create a warmup runnable
+		warmupRunnable := WarmupRunnableFunc{
+			RunFunc: func(ctx context.Context) error {
+				// This is the main runnable that will be executed after leader election
+				<-ctx.Done()
+				return nil
+			},
+			WarmupFunc: func(ctx context.Context) error {
+				// This should be called during startup before leader election
+				close(warmupCalled)
+				return nil
+			},
+		}
+		Expect(m.Add(warmupRunnable)).To(Succeed())
+
+		By("Creating a runnable that requires leader election")
+		leaderElectionRunnable := LeaderElectionRunnableFunc{
+			RunFunc: func(ctx context.Context) error {
+				// This will only be called after leader election is won
+				close(leaderElectionRunnableCalled)
+				<-ctx.Done()
+				return nil
+			},
+			NeedLeaderElectionFunc: func() bool {
+				return true
+			},
+		}
+		Expect(m.Add(leaderElectionRunnable)).To(Succeed())
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		go func() {
+			defer GinkgoRecover()
+			Expect(m.Start(ctx)).NotTo(HaveOccurred())
+		}()
+
+		By("Waiting for the warmup runnable to be called")
+		<-warmupCalled
+
+		By("Waiting for leader election to be won")
+		<-m.Elected()
+
+		By("Verifying the leader election runnable is called after election")
+		<-leaderElectionRunnableCalled
+	})
 })
 
 type runnableError struct {

@@ -1014,6 +1014,127 @@ var _ = Describe("controller", func() {
 			})
 		})
 	})
+
+	Describe("Warmup", func() {
+		It("should start event sources when ShouldWarmupWithoutLeadership is true", func() {
+			// Setup
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Create a mock source that we can verify was started
+			sourceStarted := false
+			mockSource := source.Func(func(ctx context.Context, queue workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				sourceStarted = true
+				return nil
+			})
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
+			ctrl.ShouldWarmupWithoutLeadership = ptr.To(true)
+
+			// Act
+			err := ctrl.Warmup(ctx)
+
+			// Assert
+			Expect(err).NotTo(HaveOccurred())
+			Expect(sourceStarted).To(BeTrue(), "Event source should have been started")
+			Expect(ctrl.didStartEventSources.Load()).To(BeTrue(), "didStartEventSources flag should be set")
+		})
+
+		It("should not start event sources when ShouldWarmupWithoutLeadership is false", func() {
+			// Setup
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Create a mock source that should not be started
+			sourceStarted := false
+			mockSource := source.Func(func(ctx context.Context, queue workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				sourceStarted = true
+				return nil
+			})
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
+			ctrl.ShouldWarmupWithoutLeadership = ptr.To(false)
+
+			// Act
+			err := ctrl.Warmup(ctx)
+
+			// Assert
+			Expect(err).NotTo(HaveOccurred())
+			Expect(sourceStarted).To(BeFalse(), "Event source should not have been started")
+			Expect(ctrl.didStartEventSources.Load()).To(BeFalse(), "didStartEventSources flag should not be set")
+		})
+
+		It("should not start event sources when ShouldWarmupWithoutLeadership is nil", func() {
+			// Setup
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Create a mock source that should not be started
+			sourceStarted := false
+			mockSource := source.Func(func(ctx context.Context, queue workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				sourceStarted = true
+				return nil
+			})
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
+			ctrl.ShouldWarmupWithoutLeadership = nil
+
+			// Act
+			err := ctrl.Warmup(ctx)
+
+			// Assert
+			Expect(err).NotTo(HaveOccurred())
+			Expect(sourceStarted).To(BeFalse(), "Event source should not have been started")
+			Expect(ctrl.didStartEventSources.Load()).To(BeFalse(), "didStartEventSources flag should not be set")
+		})
+
+		It("should not start event sources twice when called multiple times", func() {
+			// Setup
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Create a mock source that counts how many times it's started
+			startCount := 0
+			mockSource := source.Func(func(ctx context.Context, queue workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				startCount++
+				return nil
+			})
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
+			ctrl.ShouldWarmupWithoutLeadership = ptr.To(true)
+
+			// Act
+			err1 := ctrl.Warmup(ctx)
+			err2 := ctrl.Warmup(ctx)
+
+			// Assert
+			Expect(err1).NotTo(HaveOccurred())
+			Expect(err2).NotTo(HaveOccurred())
+			Expect(startCount).To(Equal(1), "Event source should have been started only once")
+			Expect(ctrl.didStartEventSources.Load()).To(BeTrue(), "didStartEventSources flag should be set")
+		})
+
+		It("should propagate errors from event sources", func() {
+			// Setup
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Create a mock source that returns an error
+			expectedErr := errors.New("test error")
+			mockSource := source.Func(func(ctx context.Context, queue workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				return expectedErr
+			})
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
+			ctrl.ShouldWarmupWithoutLeadership = ptr.To(true)
+
+			// Act
+			err := ctrl.Warmup(ctx)
+
+			// Assert
+			Expect(err).To(MatchError(expectedErr))
+		})
+	})
 })
 
 var _ = Describe("ReconcileIDFromContext function", func() {

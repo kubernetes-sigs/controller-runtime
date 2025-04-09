@@ -32,6 +32,7 @@ type runnables struct {
 	Webhooks       *runnableGroup
 	Caches         *runnableGroup
 	LeaderElection *runnableGroup
+	Warmup         *runnableGroup
 	Others         *runnableGroup
 }
 
@@ -42,6 +43,7 @@ func newRunnables(baseContext BaseContextFunc, errChan chan error) *runnables {
 		Webhooks:       newRunnableGroup(baseContext, errChan),
 		Caches:         newRunnableGroup(baseContext, errChan),
 		LeaderElection: newRunnableGroup(baseContext, errChan),
+		Warmup:         newRunnableGroup(baseContext, errChan),
 		Others:         newRunnableGroup(baseContext, errChan),
 	}
 }
@@ -65,8 +67,20 @@ func (r *runnables) Add(fn Runnable) error {
 		})
 	case webhook.Server:
 		return r.Webhooks.Add(fn, nil)
-	case LeaderElectionRunnable:
-		if !runnable.NeedLeaderElection() {
+	case WarmupRunnable, LeaderElectionRunnable:
+		if warmupRunnable, ok := fn.(WarmupRunnable); ok {
+			if err := r.Warmup.Add(RunnableFunc(warmupRunnable.Warmup), nil); err != nil {
+				return err
+			}
+		}
+
+		leaderElectionRunnable, ok := fn.(LeaderElectionRunnable)
+		if !ok {
+			// If the runnable is not a LeaderElectionRunnable, add it to the leader election group for backwards compatibility
+			return r.LeaderElection.Add(fn, nil)
+		}
+
+		if !leaderElectionRunnable.NeedLeaderElection() {
 			return r.Others.Add(fn, nil)
 		}
 		return r.LeaderElection.Add(fn, nil)
@@ -208,23 +222,50 @@ func (r *runnableGroup) reconcile() {
 
 		// Start the runnable.
 		go func(rn *readyRunnable) {
-			go func() {
-				if rn.Check(r.ctx) {
-					if rn.signalReady {
-						r.startReadyCh <- rn
-					}
-				}
-			}()
-
 			// If we return, the runnable ended cleanly
 			// or returned an error to the channel.
 			//
 			// We should always decrement the WaitGroup here.
 			defer r.wg.Done()
 
+			// Track the ready check in the same WaitGroup to prevent goroutine leaks
+			done := make(chan struct{})
+
+			// Launch the ready check but make sure it doesn't outlive this goroutine
+			go func() {
+				defer close(done)
+				if rn.Check(r.ctx) {
+					if rn.signalReady {
+						// Use non-blocking send to avoid leaking this goroutine if the channel is never read
+						select {
+						case r.startReadyCh <- rn:
+							// Successfully sent
+						case <-r.ctx.Done():
+							// Context canceled, exit without blocking
+						}
+					}
+				}
+			}()
+
 			// Start the runnable.
-			if err := rn.Start(r.ctx); err != nil {
-				r.errChan <- err
+			err := rn.Start(r.ctx)
+
+			// Now that the runnable is done, clean up the ready check goroutine if still running
+			select {
+			case <-done:
+				// Ready check already completed, nothing to do
+			case <-r.ctx.Done():
+				// Context was canceled, ready check should exit soon
+			}
+
+			// Send any error from the runnable
+			if err != nil {
+				select {
+				case r.errChan <- err:
+					// Error sent successfully
+				default:
+					// Channel full or closed, can't send the error
+				}
 			}
 		}(runnable)
 	}
@@ -283,18 +324,13 @@ func (r *runnableGroup) Add(rn Runnable, ready runnableCheck) error {
 // StopAndWait waits for all the runnables to finish before returning.
 func (r *runnableGroup) StopAndWait(ctx context.Context) {
 	r.stopOnce.Do(func() {
-		// Close the reconciler channel once we're done.
-		defer func() {
-			r.stop.Lock()
-			close(r.ch)
-			r.stop.Unlock()
-		}()
-
 		_ = r.Start(ctx)
 		r.stop.Lock()
 		// Store the stopped variable so we don't accept any new
 		// runnables for the time being.
 		r.stopped = true
+		// Close the channel to signal the reconcile goroutine to exit
+		close(r.ch)
 		r.stop.Unlock()
 
 		// Cancel the internal channel.

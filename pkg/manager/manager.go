@@ -314,6 +314,12 @@ type LeaderElectionRunnable interface {
 	NeedLeaderElection() bool
 }
 
+// WarmupRunnable knows if a Runnable should be a warmup runnable.
+type WarmupRunnable interface {
+	// Warmup returns true if the Runnable should be run as warmup.
+	Warmup(context.Context) error
+}
+
 // New returns a new Manager for creating Controllers.
 // Note that if ContentType in the given config is not set, "application/vnd.kubernetes.protobuf"
 // will be used for all built-in resources of Kubernetes, and "application/json" is for other types

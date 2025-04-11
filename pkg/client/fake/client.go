@@ -67,7 +67,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	clientgoapplyconfigurations "k8s.io/client-go/applyconfigurations"
 	"k8s.io/client-go/kubernetes/scheme"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/testing"
 	"k8s.io/utils/ptr"
 
@@ -284,7 +283,7 @@ func (f *ClientBuilder) Build() client.WithWatch {
 				upstream: []managedfields.TypeConverter{
 					// Use corresponding scheme to ensure the converter error
 					// for types it can't handle.
-					clientgoapplyconfigurations.NewTypeConverter(clientgoscheme.Scheme),
+					clientgoapplyconfigurations.NewTypeConverter(scheme.Scheme),
 					managedfields.NewDeducedTypeConverter(),
 				},
 			}

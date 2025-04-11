@@ -2522,7 +2522,7 @@ var _ = Describe("Fake client", func() {
 		obj.SetAPIVersion("v1")
 		obj.SetKind("ConfigMap")
 		obj.SetName("foo")
-		unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "data")
+		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "data")).To(Succeed())
 
 		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
 
@@ -2531,7 +2531,7 @@ var _ = Describe("Fake client", func() {
 		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(cm), cm)).To(Succeed())
 		Expect(cm.Data).To(Equal(map[string]string{"some": "data"}))
 
-		unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "data")
+		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "data")).To(Succeed())
 		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
 
 		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(cm), cm)).To(Succeed())

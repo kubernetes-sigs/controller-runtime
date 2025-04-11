@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	utilerror "k8s.io/apimachinery/pkg/util/errors"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/managedfields"
 	"sigs.k8s.io/structured-merge-diff/v4/typed"
 )
@@ -44,7 +44,7 @@ func (m multiTypeConverter) ObjectToTyped(r runtime.Object, o ...typed.Validatio
 		return res, nil
 	}
 
-	return nil, fmt.Errorf("failed to convert Object to Typed: %w", utilerror.NewAggregate(errs))
+	return nil, fmt.Errorf("failed to convert Object to Typed: %w", kerrors.NewAggregate(errs))
 }
 
 func (m multiTypeConverter) TypedToObject(v *typed.TypedValue) (runtime.Object, error) {
@@ -59,5 +59,5 @@ func (m multiTypeConverter) TypedToObject(v *typed.TypedValue) (runtime.Object, 
 		return res, nil
 	}
 
-	return nil, fmt.Errorf("failed to convert TypedValue to Object: %w", utilerror.NewAggregate(errs))
+	return nil, fmt.Errorf("failed to convert TypedValue to Object: %w", kerrors.NewAggregate(errs))
 }

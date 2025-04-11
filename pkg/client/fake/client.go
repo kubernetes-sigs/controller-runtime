@@ -135,7 +135,7 @@ type ClientBuilder struct {
 	withStatusSubresource []client.Object
 	objectTracker         testing.ObjectTracker
 	interceptorFuncs      *interceptor.Funcs
-	typeConverters        []managedfields.TypeConverter
+	typeConverter         managedfields.TypeConverter
 
 	// indexes maps each GroupVersionKind (GVK) to the indexes registered for that GVK.
 	// The inner map maps from index name to IndexerFunc.
@@ -243,7 +243,14 @@ func (f *ClientBuilder) WithInterceptorFuncs(interceptorFuncs interceptor.Funcs)
 // * clientgoapplyconfigurations.NewTypeConverter(clientgoscheme.Scheme),
 // * managedfields.NewDeducedTypeConverter(),
 func (f *ClientBuilder) WithTypeConverters(typeConverters ...managedfields.TypeConverter) *ClientBuilder {
-	f.typeConverters = append(f.typeConverters, typeConverters...)
+	if f.typeConverter == nil {
+		f.typeConverter = &multiTypeConverter{upstream: typeConverters}
+	} else if multiTypeConverter, ok := f.typeConverter.(*multiTypeConverter); ok {
+		multiTypeConverter.upstream = append(multiTypeConverter.upstream, typeConverters...)
+	} else {
+		panic(fmt.Sprintf("unexpected type converter already specified: %T; this is incompatible with WithTypeConverters", f.typeConverter))
+	}
+
 	return f
 }
 
@@ -267,23 +274,25 @@ func (f *ClientBuilder) Build() client.WithWatch {
 		withStatusSubResource.Insert(gvk)
 	}
 
-	if f.objectTracker != nil && len(f.typeConverters) > 0 {
+	if f.objectTracker != nil && f.typeConverter != nil {
 		panic(errors.New("WithObjectTracker and WithTypeConverters are incompatible"))
 	}
 
 	if f.objectTracker == nil {
-		if len(f.typeConverters) == 0 {
-			f.typeConverters = []managedfields.TypeConverter{
-				// Use corresponding scheme to ensure the converter error
-				// for types it can't handle.
-				clientgoapplyconfigurations.NewTypeConverter(clientgoscheme.Scheme),
-				managedfields.NewDeducedTypeConverter(),
+		if f.typeConverter == nil {
+			f.typeConverter = &multiTypeConverter{
+				upstream: []managedfields.TypeConverter{
+					// Use corresponding scheme to ensure the converter error
+					// for types it can't handle.
+					clientgoapplyconfigurations.NewTypeConverter(clientgoscheme.Scheme),
+					managedfields.NewDeducedTypeConverter(),
+				},
 			}
 		}
 		f.objectTracker = testing.NewFieldManagedObjectTracker(
 			f.scheme,
 			serializer.NewCodecFactory(f.scheme).UniversalDecoder(),
-			multiTypeConverter{upstream: f.typeConverters},
+			f.typeConverter,
 		)
 	}
 	tracker = versionedTracker{

@@ -25,6 +25,9 @@ import (
 	"sigs.k8s.io/structured-merge-diff/v4/typed"
 )
 
+// multiTypeConverter is an implementation detail for the fake client used to
+// support server-side apply.
+// NOTE: this type should not be exported!
 type multiTypeConverter struct {
 	upstream []managedfields.TypeConverter
 }

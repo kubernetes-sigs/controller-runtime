@@ -67,7 +67,7 @@ func (w *watchingClient) metadataWatch(ctx context.Context, obj *metav1.PartialO
 
 	listOpts := w.listOpts(opts...)
 
-	resInt, err := w.client.metadataClient.getResourceInterface(gvk, listOpts.Namespace)
+	resInt, err := w.metadataClient.getResourceInterface(gvk, listOpts.Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func (w *watchingClient) metadataWatch(ctx context.Context, obj *metav1.PartialO
 }
 
 func (w *watchingClient) unstructuredWatch(ctx context.Context, obj runtime.Unstructured, opts ...ListOption) (watch.Interface, error) {
-	r, err := w.client.unstructuredClient.resources.getResource(obj)
+	r, err := w.unstructuredClient.resources.getResource(obj)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func (w *watchingClient) unstructuredWatch(ctx context.Context, obj runtime.Unst
 }
 
 func (w *watchingClient) typedWatch(ctx context.Context, obj ObjectList, opts ...ListOption) (watch.Interface, error) {
-	r, err := w.client.typedClient.resources.getResource(obj)
+	r, err := w.typedClient.resources.getResource(obj)
 	if err != nil {
 		return nil, err
 	}

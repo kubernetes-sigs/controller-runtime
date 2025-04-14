@@ -366,7 +366,7 @@ func (e *Env) PrintInfo(printFmt PrintFormat) {
 		fmt.Fprintf(e.Out, "Version: %s\n", e.Version)
 		fmt.Fprintf(e.Out, "OS/Arch: %s\n", e.Platform)
 		if e.Platform.Hash != nil {
-			fmt.Fprintf(e.Out, "%s: %s\n", e.Platform.Hash.Type, e.Platform.Hash.Value)
+			fmt.Fprintf(e.Out, "%s: %s\n", e.Platform.Type, e.Platform.Value)
 		}
 		fmt.Fprintf(e.Out, "Path: %s\n", path)
 	case PrintPath:

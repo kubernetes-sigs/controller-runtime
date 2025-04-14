@@ -200,23 +200,23 @@ func (s *APIServer) configurePorts() error {
 
 	// Secure: SecurePort, SecureServing
 	if s.SecurePort != 0 {
-		s.SecureServing.Port = strconv.Itoa(s.SecurePort)
+		s.Port = strconv.Itoa(s.SecurePort)
 		// if we don't have an address, try the insecure address, and otherwise
 		// default to loopback.
-		if s.SecureServing.Address == "" {
+		if s.Address == "" {
 			if s.InsecureServing != nil {
-				s.SecureServing.Address = s.InsecureServing.Address
+				s.Address = s.InsecureServing.Address
 			} else {
-				s.SecureServing.Address = "127.0.0.1"
+				s.Address = "127.0.0.1"
 			}
 		}
-	} else if s.SecureServing.Port == "" || s.SecureServing.Address == "" {
+	} else if s.Port == "" || s.Address == "" {
 		port, host, err := addr.Suggest("")
 		if err != nil {
 			return fmt.Errorf("unable to provision unused secure port: %w", err)
 		}
-		s.SecureServing.Port = strconv.Itoa(port)
-		s.SecureServing.Address = host
+		s.Port = strconv.Itoa(port)
+		s.Address = host
 		s.SecurePort = port
 	}
 
@@ -260,12 +260,12 @@ func (s *APIServer) setProcessState() error {
 		return err
 	}
 
-	if s.SecureServing.Authn == nil {
+	if s.Authn == nil {
 		authn, err := NewCertAuthn()
 		if err != nil {
 			return err
 		}
-		s.SecureServing.Authn = authn
+		s.Authn = authn
 	}
 
 	if err := s.Authn.Configure(s.CertDir, s.Configure()); err != nil {
@@ -337,11 +337,11 @@ func (s *APIServer) defaultArgs() map[string][]string {
 		"disable-admission-plugins": {"ServiceAccount"},
 		"cert-dir":                  {s.CertDir},
 		"authorization-mode":        {"RBAC"},
-		"secure-port":               {s.SecureServing.Port},
+		"secure-port":               {s.Port},
 		// NB(directxman12): previously we didn't set the bind address for the secure
 		// port.  It *shouldn't* make a difference unless people are doing something really
 		// funky, but if you start to get bug reports look here ;-)
-		"bind-address": {s.SecureServing.Address},
+		"bind-address": {s.Address},
 
 		// required on 1.20+, fine to leave on for <1.20
 		"service-account-issuer":           {s.SecureServing.URL("https", "/").String()},
@@ -391,7 +391,7 @@ func (s *APIServer) populateAPIServerCerts() error {
 		return err
 	}
 
-	s.SecureServing.CA = ca.CA.CertBytes()
+	s.CA = ca.CA.CertBytes()
 
 	// service account signing files too
 	saCA, err := certs.NewTinyCA()

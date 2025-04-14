@@ -403,7 +403,7 @@ var _ = Describe("controller", func() {
 				return expectedErr
 			})
 
-			// // Set a sufficiently long timeout to avoid timeouts interfering with the error being returned
+			// Set a sufficiently long timeout to avoid timeouts interfering with the error being returned
 			ctrl.CacheSyncTimeout = 5 * time.Second
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
 			err := ctrl.startEventSources(ctx)
@@ -1016,7 +1016,7 @@ var _ = Describe("controller", func() {
 	})
 
 	Describe("Warmup", func() {
-		It("should start event sources when ShouldWarmupWithoutLeadership is true", func() {
+		It("should start event sources when NeedWarmup is true", func() {
 			// Setup
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -1028,8 +1028,9 @@ var _ = Describe("controller", func() {
 				return nil
 			})
 
+			ctrl.CacheSyncTimeout = time.Second
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
-			ctrl.ShouldWarmupWithoutLeadership = ptr.To(true)
+			ctrl.NeedWarmup = ptr.To(true)
 
 			// Act
 			err := ctrl.Warmup(ctx)
@@ -1040,7 +1041,7 @@ var _ = Describe("controller", func() {
 			Expect(ctrl.didStartEventSources.Load()).To(BeTrue(), "didStartEventSources flag should be set")
 		})
 
-		It("should not start event sources when ShouldWarmupWithoutLeadership is false", func() {
+		It("should not start event sources when NeedWarmup is false", func() {
 			// Setup
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -1053,7 +1054,7 @@ var _ = Describe("controller", func() {
 			})
 
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
-			ctrl.ShouldWarmupWithoutLeadership = ptr.To(false)
+			ctrl.NeedWarmup = ptr.To(false)
 
 			// Act
 			err := ctrl.Warmup(ctx)
@@ -1064,7 +1065,7 @@ var _ = Describe("controller", func() {
 			Expect(ctrl.didStartEventSources.Load()).To(BeFalse(), "didStartEventSources flag should not be set")
 		})
 
-		It("should not start event sources when ShouldWarmupWithoutLeadership is nil", func() {
+		It("should not start event sources when NeedWarmup is nil", func() {
 			// Setup
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -1077,7 +1078,7 @@ var _ = Describe("controller", func() {
 			})
 
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
-			ctrl.ShouldWarmupWithoutLeadership = nil
+			ctrl.NeedWarmup = nil
 
 			// Act
 			err := ctrl.Warmup(ctx)
@@ -1100,8 +1101,9 @@ var _ = Describe("controller", func() {
 				return nil
 			})
 
+			ctrl.CacheSyncTimeout = time.Second
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
-			ctrl.ShouldWarmupWithoutLeadership = ptr.To(true)
+			ctrl.NeedWarmup = ptr.To(true)
 
 			// Act
 			err1 := ctrl.Warmup(ctx)
@@ -1125,8 +1127,9 @@ var _ = Describe("controller", func() {
 				return expectedErr
 			})
 
+			ctrl.CacheSyncTimeout = time.Second
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
-			ctrl.ShouldWarmupWithoutLeadership = ptr.To(true)
+			ctrl.NeedWarmup = ptr.To(true)
 
 			// Act
 			err := ctrl.Warmup(ctx)

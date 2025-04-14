@@ -99,11 +99,11 @@ type Controller[request comparable] struct {
 	// LeaderElected indicates whether the controller is leader elected or always running.
 	LeaderElected *bool
 
-	// ShouldWarmupWithoutLeadership specifies whether the controller should start its sources
+	// NeedWarmup specifies whether the controller should start its sources
 	// when the manager is not the leader.
 	// Defaults to false, which means that the controller will wait for leader election to start
 	// before starting sources.
-	ShouldWarmupWithoutLeadership *bool
+	NeedWarmup *bool
 }
 
 // Reconcile implements reconcile.Reconciler.
@@ -155,7 +155,7 @@ func (c *Controller[request]) NeedLeaderElection() bool {
 
 // Warmup implements the manager.WarmupRunnable interface.
 func (c *Controller[request]) Warmup(ctx context.Context) error {
-	if c.ShouldWarmupWithoutLeadership == nil || !*c.ShouldWarmupWithoutLeadership {
+	if c.NeedWarmup == nil || !*c.NeedWarmup {
 		return nil
 	}
 

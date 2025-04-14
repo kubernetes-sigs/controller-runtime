@@ -482,26 +482,26 @@ var _ = Describe("controller.Controller", func() {
 			// Test with ShouldWarmupWithoutLeadership set to true
 			ctrlWithWarmup, err := controller.New("warmup-enabled-ctrl", m, controller.Options{
 				Reconciler:                    reconcile.Func(nil),
-				ShouldWarmupWithoutLeadership: ptr.To(true),
+				NeedWarmup: ptr.To(true),
 			})
 			Expect(err).NotTo(HaveOccurred())
 
 			internalCtrlWithWarmup, ok := ctrlWithWarmup.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
-			Expect(internalCtrlWithWarmup.ShouldWarmupWithoutLeadership).NotTo(BeNil())
-			Expect(*internalCtrlWithWarmup.ShouldWarmupWithoutLeadership).To(BeTrue())
+			Expect(internalCtrlWithWarmup.NeedWarmup).NotTo(BeNil())
+			Expect(*internalCtrlWithWarmup.NeedWarmup).To(BeTrue())
 
 			// Test with ShouldWarmupWithoutLeadership set to false
 			ctrlWithoutWarmup, err := controller.New("warmup-disabled-ctrl", m, controller.Options{
 				Reconciler:                    reconcile.Func(nil),
-				ShouldWarmupWithoutLeadership: ptr.To(false),
+				NeedWarmup: ptr.To(false),
 			})
 			Expect(err).NotTo(HaveOccurred())
 
 			internalCtrlWithoutWarmup, ok := ctrlWithoutWarmup.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
-			Expect(internalCtrlWithoutWarmup.ShouldWarmupWithoutLeadership).NotTo(BeNil())
-			Expect(*internalCtrlWithoutWarmup.ShouldWarmupWithoutLeadership).To(BeFalse())
+			Expect(internalCtrlWithoutWarmup.NeedWarmup).NotTo(BeNil())
+			Expect(*internalCtrlWithoutWarmup.NeedWarmup).To(BeFalse())
 
 			// Test with ShouldWarmupWithoutLeadership not set (should default to nil)
 			ctrlWithDefaultWarmup, err := controller.New("warmup-default-ctrl", m, controller.Options{
@@ -511,14 +511,14 @@ var _ = Describe("controller.Controller", func() {
 
 			internalCtrlWithDefaultWarmup, ok := ctrlWithDefaultWarmup.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
-			Expect(internalCtrlWithDefaultWarmup.ShouldWarmupWithoutLeadership).To(BeNil())
+			Expect(internalCtrlWithDefaultWarmup.NeedWarmup).To(BeNil())
 		})
 
 		It("should inherit ShouldWarmupWithoutLeadership from manager config", func() {
 			// Test with manager default setting ShouldWarmupWithoutLeadership to true
 			managerWithWarmup, err := manager.New(cfg, manager.Options{
 				Controller: config.Controller{
-					NeedWarmUp: ptr.To(true),
+					NeedWarmup: ptr.To(true),
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -529,23 +529,20 @@ var _ = Describe("controller.Controller", func() {
 
 			internalCtrlInheritingWarmup, ok := ctrlInheritingWarmup.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
-			// Note: This test will fail until the DefaultFromConfig method is updated to set
-			// ShouldWarmupWithoutLeadership from config.Controller.NeedWarmUp
-			// This test demonstrates that the feature needs to be completed
-			Expect(internalCtrlInheritingWarmup.ShouldWarmupWithoutLeadership).NotTo(BeNil())
-			Expect(*internalCtrlInheritingWarmup.ShouldWarmupWithoutLeadership).To(BeTrue())
+			Expect(internalCtrlInheritingWarmup.NeedWarmup).NotTo(BeNil())
+			Expect(*internalCtrlInheritingWarmup.NeedWarmup).To(BeTrue())
 
 			// Test that explicit controller setting overrides manager setting
 			ctrlOverridingWarmup, err := controller.New("override-warmup-disabled", managerWithWarmup, controller.Options{
 				Reconciler:                    reconcile.Func(nil),
-				ShouldWarmupWithoutLeadership: ptr.To(false),
+				NeedWarmup: ptr.To(false),
 			})
 			Expect(err).NotTo(HaveOccurred())
 
 			internalCtrlOverridingWarmup, ok := ctrlOverridingWarmup.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
-			Expect(internalCtrlOverridingWarmup.ShouldWarmupWithoutLeadership).NotTo(BeNil())
-			Expect(*internalCtrlOverridingWarmup.ShouldWarmupWithoutLeadership).To(BeFalse())
+			Expect(internalCtrlOverridingWarmup.NeedWarmup).NotTo(BeNil())
+			Expect(*internalCtrlOverridingWarmup.NeedWarmup).To(BeFalse())
 		})
 	})
 })

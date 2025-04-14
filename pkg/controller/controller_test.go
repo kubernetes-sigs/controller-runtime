@@ -481,7 +481,7 @@ var _ = Describe("controller.Controller", func() {
 
 			// Test with ShouldWarmupWithoutLeadership set to true
 			ctrlWithWarmup, err := controller.New("warmup-enabled-ctrl", m, controller.Options{
-				Reconciler:                    reconcile.Func(nil),
+				Reconciler: reconcile.Func(nil),
 				NeedWarmup: ptr.To(true),
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -493,7 +493,7 @@ var _ = Describe("controller.Controller", func() {
 
 			// Test with ShouldWarmupWithoutLeadership set to false
 			ctrlWithoutWarmup, err := controller.New("warmup-disabled-ctrl", m, controller.Options{
-				Reconciler:                    reconcile.Func(nil),
+				Reconciler: reconcile.Func(nil),
 				NeedWarmup: ptr.To(false),
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -534,7 +534,7 @@ var _ = Describe("controller.Controller", func() {
 
 			// Test that explicit controller setting overrides manager setting
 			ctrlOverridingWarmup, err := controller.New("override-warmup-disabled", managerWithWarmup, controller.Options{
-				Reconciler:                    reconcile.Func(nil),
+				Reconciler: reconcile.Func(nil),
 				NeedWarmup: ptr.To(false),
 			})
 			Expect(err).NotTo(HaveOccurred())

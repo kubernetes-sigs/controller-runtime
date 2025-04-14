@@ -230,16 +230,16 @@ func (r *runnableGroup) reconcile() {
 				}
 			}()
 
-            // If we return, the runnable ended cleanly
+			// If we return, the runnable ended cleanly
 			// or returned an error to the channel.
 			//
 			// We should always decrement the WaitGroup here.
 			defer r.wg.Done()
 
 			// Start the runnable.
-            if err := rn.Start(r.ctx); err != nil {
-                r.errChan <- err
-            }
+			if err := rn.Start(r.ctx); err != nil {
+				r.errChan <- err
+			}
 		}(runnable)
 	}
 }
@@ -297,7 +297,7 @@ func (r *runnableGroup) Add(rn Runnable, ready runnableCheck) error {
 // StopAndWait waits for all the runnables to finish before returning.
 func (r *runnableGroup) StopAndWait(ctx context.Context) {
 	r.stopOnce.Do(func() {
-        // Close the reconciler channel once we're done.
+		// Close the reconciler channel once we're done.
 		defer func() {
 			r.stop.Lock()
 			close(r.ch)

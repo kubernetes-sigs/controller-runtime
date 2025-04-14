@@ -474,5 +474,75 @@ var _ = Describe("controller.Controller", func() {
 			_, ok = q.(priorityqueue.PriorityQueue[reconcile.Request])
 			Expect(ok).To(BeFalse())
 		})
+
+		It("should set ShouldWarmupWithoutLeadership correctly", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Test with ShouldWarmupWithoutLeadership set to true
+			ctrlWithWarmup, err := controller.New("warmup-enabled-ctrl", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+				NeedWarmup: ptr.To(true),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			internalCtrlWithWarmup, ok := ctrlWithWarmup.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+			Expect(internalCtrlWithWarmup.NeedWarmup).NotTo(BeNil())
+			Expect(*internalCtrlWithWarmup.NeedWarmup).To(BeTrue())
+
+			// Test with ShouldWarmupWithoutLeadership set to false
+			ctrlWithoutWarmup, err := controller.New("warmup-disabled-ctrl", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+				NeedWarmup: ptr.To(false),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			internalCtrlWithoutWarmup, ok := ctrlWithoutWarmup.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+			Expect(internalCtrlWithoutWarmup.NeedWarmup).NotTo(BeNil())
+			Expect(*internalCtrlWithoutWarmup.NeedWarmup).To(BeFalse())
+
+			// Test with ShouldWarmupWithoutLeadership not set (should default to nil)
+			ctrlWithDefaultWarmup, err := controller.New("warmup-default-ctrl", m, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			internalCtrlWithDefaultWarmup, ok := ctrlWithDefaultWarmup.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+			Expect(internalCtrlWithDefaultWarmup.NeedWarmup).To(BeNil())
+		})
+
+		It("should inherit ShouldWarmupWithoutLeadership from manager config", func() {
+			// Test with manager default setting ShouldWarmupWithoutLeadership to true
+			managerWithWarmup, err := manager.New(cfg, manager.Options{
+				Controller: config.Controller{
+					NeedWarmup: ptr.To(true),
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			ctrlInheritingWarmup, err := controller.New("inherit-warmup-enabled", managerWithWarmup, controller.Options{
+				Reconciler: reconcile.Func(nil),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			internalCtrlInheritingWarmup, ok := ctrlInheritingWarmup.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+			Expect(internalCtrlInheritingWarmup.NeedWarmup).NotTo(BeNil())
+			Expect(*internalCtrlInheritingWarmup.NeedWarmup).To(BeTrue())
+
+			// Test that explicit controller setting overrides manager setting
+			ctrlOverridingWarmup, err := controller.New("override-warmup-disabled", managerWithWarmup, controller.Options{
+				Reconciler: reconcile.Func(nil),
+				NeedWarmup: ptr.To(false),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			internalCtrlOverridingWarmup, ok := ctrlOverridingWarmup.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+			Expect(internalCtrlOverridingWarmup.NeedWarmup).NotTo(BeNil())
+			Expect(*internalCtrlOverridingWarmup.NeedWarmup).To(BeFalse())
+		})
 	})
 })

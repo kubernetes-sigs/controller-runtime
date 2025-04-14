@@ -115,7 +115,7 @@ var _ = Describe("runnables", func() {
 	})
 
 	It("should execute the Warmup function when Warmup group is started", func() {
-		warmupExecuted := false
+		var warmupExecuted atomic.Bool
 
 		warmupRunnable := WarmupRunnableFunc{
 			RunFunc: func(c context.Context) error {
@@ -123,7 +123,7 @@ var _ = Describe("runnables", func() {
 				return nil
 			},
 			WarmupFunc: func(c context.Context) error {
-				warmupExecuted = true
+				warmupExecuted.Store(true)
 				return nil
 			},
 		}
@@ -138,7 +138,7 @@ var _ = Describe("runnables", func() {
 		Expect(r.Warmup.Start(ctx)).To(Succeed())
 
 		// Verify warmup function was called
-		Expect(warmupExecuted).To(BeTrue())
+		Expect(warmupExecuted.Load()).To(BeTrue())
 	})
 
 	It("should propagate errors from Warmup function to error channel", func() {

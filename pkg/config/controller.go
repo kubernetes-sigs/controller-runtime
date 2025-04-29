@@ -60,7 +60,7 @@ type Controller struct {
 	// Defaults to true, which means the controller will use leader election.
 	NeedLeaderElection *bool
 
-	// EnableWarmup indicates whether the controller needs to use warm up.
+	// NeedWarmup indicates whether the controller needs to use warm up.
 	// Defaults to false, which means the controller will not use warm up.
 	NeedWarmup *bool
 

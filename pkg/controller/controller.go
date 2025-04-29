@@ -94,10 +94,11 @@ type TypedOptions[request comparable] struct {
 	// Note: This flag is disabled by default until a future version. It's currently in beta.
 	UsePriorityQueue *bool
 
-	// NeedWarmup specifies whether the controller should start its sources
-	// when the manager is not the leader.
-	// Defaults to false, which means that the controller will wait for leader election to start
-	// before starting sources.
+	// NeedWarmup specifies whether the controller should start its sources when the manager is not
+	// the leader. When set to true, the controller will not restart its sources when/if it
+	// transitions to be leader.
+	//
+	// Defaults to false.
 	NeedWarmup *bool
 }
 

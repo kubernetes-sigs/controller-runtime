@@ -192,7 +192,7 @@ func (c *Controller[request]) DidFinishWarmup(ctx context.Context) bool {
 
 		if !*didFinishSync {
 			// event sources finished syncing with an error
-			return true, errors.New("event sources did not finish syncing succesfully")
+			return true, errors.New("event sources did not finish syncing successfully")
 		}
 
 		return true, nil

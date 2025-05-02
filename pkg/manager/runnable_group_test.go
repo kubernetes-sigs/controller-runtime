@@ -55,7 +55,7 @@ var _ = Describe("runnables", func() {
 	})
 
 	It("should add WarmupRunnable to the Warmup and LeaderElection group", func() {
-		warmupRunnable := WarmupRunnableFunc{
+		warmupRunnable := warmupRunnableFunc{
 			RunFunc: func(c context.Context) error {
 				<-c.Done()
 				return nil
@@ -72,7 +72,7 @@ var _ = Describe("runnables", func() {
 	})
 
 	It("should add WarmupRunnable that doesn't needs leader election to warmup group only", func() {
-		warmupRunnable := CombinedRunnable{
+		warmupRunnable := combinedRunnable{
 			RunFunc: func(c context.Context) error {
 				<-c.Done()
 				return nil
@@ -93,7 +93,7 @@ var _ = Describe("runnables", func() {
 	})
 
 	It("should add WarmupRunnable that needs leader election to Warmup and LeaderElection group, not Others", func() {
-		warmupRunnable := CombinedRunnable{
+		warmupRunnable := combinedRunnable{
 			RunFunc: func(c context.Context) error {
 				<-c.Done()
 				return nil
@@ -117,7 +117,7 @@ var _ = Describe("runnables", func() {
 	It("should execute the Warmup function when Warmup group is started", func() {
 		var warmupExecuted atomic.Bool
 
-		warmupRunnable := WarmupRunnableFunc{
+		warmupRunnable := warmupRunnableFunc{
 			RunFunc: func(c context.Context) error {
 				<-c.Done()
 				return nil
@@ -144,7 +144,7 @@ var _ = Describe("runnables", func() {
 	It("should propagate errors from Warmup function to error channel", func() {
 		expectedErr := fmt.Errorf("expected warmup error")
 
-		warmupRunnable := WarmupRunnableFunc{
+		warmupRunnable := warmupRunnableFunc{
 			RunFunc: func(c context.Context) error {
 				<-c.Done()
 				return nil
@@ -349,51 +349,63 @@ var _ = Describe("runnableGroup", func() {
 	})
 })
 
-// LeaderElectionRunnableFunc is a helper struct that implements LeaderElectionRunnable
+var _ LeaderElectionRunnable = &leaderElectionRunnableFunc{}
+
+// leaderElectionRunnableFunc is a helper struct that implements LeaderElectionRunnable
 // for testing purposes.
-type LeaderElectionRunnableFunc struct {
+type leaderElectionRunnableFunc struct {
 	RunFunc                func(context.Context) error
 	NeedLeaderElectionFunc func() bool
 }
 
-func (r LeaderElectionRunnableFunc) Start(ctx context.Context) error {
+func (r leaderElectionRunnableFunc) Start(ctx context.Context) error {
 	return r.RunFunc(ctx)
 }
 
-func (r LeaderElectionRunnableFunc) NeedLeaderElection() bool {
+func (r leaderElectionRunnableFunc) NeedLeaderElection() bool {
 	return r.NeedLeaderElectionFunc()
 }
 
-// WarmupRunnableFunc is a helper struct that implements WarmupRunnable
+var _ WarmupRunnable = &warmupRunnableFunc{}
+
+// warmupRunnableFunc is a helper struct that implements WarmupRunnable
 // for testing purposes.
-type WarmupRunnableFunc struct {
+type warmupRunnableFunc struct {
 	RunFunc    func(context.Context) error
 	WarmupFunc func(context.Context) error
 }
 
-func (r WarmupRunnableFunc) Start(ctx context.Context) error {
+func (r warmupRunnableFunc) Start(ctx context.Context) error {
 	return r.RunFunc(ctx)
 }
 
-func (r WarmupRunnableFunc) Warmup(ctx context.Context) error {
+func (r warmupRunnableFunc) Warmup(ctx context.Context) error {
 	return r.WarmupFunc(ctx)
 }
 
-// CombinedRunnable implements both WarmupRunnable and LeaderElectionRunnable
-type CombinedRunnable struct {
+func (r warmupRunnableFunc) WaitForWarmupComplete(ctx context.Context) bool {
+	return true
+}
+
+// combinedRunnable implements both WarmupRunnable and LeaderElectionRunnable
+type combinedRunnable struct {
 	RunFunc                func(context.Context) error
 	WarmupFunc             func(context.Context) error
 	NeedLeaderElectionFunc func() bool
 }
 
-func (r CombinedRunnable) Start(ctx context.Context) error {
+func (r combinedRunnable) Start(ctx context.Context) error {
 	return r.RunFunc(ctx)
 }
 
-func (r CombinedRunnable) Warmup(ctx context.Context) error {
+func (r combinedRunnable) Warmup(ctx context.Context) error {
 	return r.WarmupFunc(ctx)
 }
 
-func (r CombinedRunnable) NeedLeaderElection() bool {
+func (r combinedRunnable) WaitForWarmupComplete(ctx context.Context) bool {
+	return true
+}
+
+func (r combinedRunnable) NeedLeaderElection() bool {
 	return r.NeedLeaderElectionFunc()
 }

@@ -1952,7 +1952,7 @@ var _ = Describe("manger.Manager", func() {
 
 		By("Creating a runnable that implements WarmupRunnable interface")
 		// Create a warmup runnable
-		warmupRunnable := WarmupRunnableFunc{
+		warmupRunnable := warmupRunnableFunc{
 			RunFunc: func(ctx context.Context) error {
 				// This is the main runnable that will be executed after leader election
 				<-ctx.Done()
@@ -1967,7 +1967,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(m.Add(warmupRunnable)).To(Succeed())
 
 		By("Creating a runnable that requires leader election")
-		leaderElectionRunnable := LeaderElectionRunnableFunc{
+		leaderElectionRunnable := leaderElectionRunnableFunc{
 			RunFunc: func(ctx context.Context) error {
 				// This will only be called after leader election is won
 				close(leaderElectionRunnableCalled)

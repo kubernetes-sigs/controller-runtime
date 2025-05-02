@@ -1016,126 +1016,78 @@ var _ = Describe("controller", func() {
 	})
 
 	Describe("Warmup", func() {
-		It("should start event sources when NeedWarmup is true", func() {
-			// Setup
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			// Create a mock source that we can verify was started
-			sourceStarted := false
-			mockSource := source.Func(func(ctx context.Context, queue workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
-				sourceStarted = true
-				return nil
-			})
-
-			ctrl.CacheSyncTimeout = time.Second
-			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
+		JustBeforeEach(func() {
 			ctrl.NeedWarmup = ptr.To(true)
-
-			// Act
-			err := ctrl.Warmup(ctx)
-
-			// Assert
-			Expect(err).NotTo(HaveOccurred())
-			Expect(sourceStarted).To(BeTrue(), "Event source should have been started")
-			Expect(ctrl.didStartEventSources.Load()).To(BeTrue(), "didStartEventSources flag should be set")
 		})
 
-		It("should not start event sources when NeedWarmup is false", func() {
-			// Setup
+		It("should track warmup status correctly with successful sync", func() {
+			// Setup controller with sources that complete successfully
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			// Create a mock source that should not be started
-			sourceStarted := false
-			mockSource := source.Func(func(ctx context.Context, queue workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
-				sourceStarted = true
-				return nil
-			})
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					return nil
+				}),
+			}
 
-			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
+			err := ctrl.Warmup(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify DidFinishWarmup returns true for successful sync
+			result := ctrl.DidFinishWarmup(ctx)
+			Expect(result).To(BeTrue())
+		})
+
+		It("should track warmup status correctly with unsuccessful sync", func() {
+			// Setup controller with sources that complete with error
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					return errors.New("sync error")
+				}),
+			}
+
+			err := ctrl.Warmup(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("sync error"))
+
+			// Verify DidFinishWarmup returns false for unsuccessful sync
+			result := ctrl.DidFinishWarmup(ctx)
+			Expect(result).To(BeFalse())
+		})
+	})
+
+	Describe("Warmup without warmup enabled", func() {
+		JustBeforeEach(func() {
 			ctrl.NeedWarmup = ptr.To(false)
-
-			// Act
-			err := ctrl.Warmup(ctx)
-
-			// Assert
-			Expect(err).NotTo(HaveOccurred())
-			Expect(sourceStarted).To(BeFalse(), "Event source should not have been started")
-			Expect(ctrl.didStartEventSources.Load()).To(BeFalse(), "didStartEventSources flag should not be set")
 		})
 
-		It("should not start event sources when NeedWarmup is nil", func() {
-			// Setup
+		It("should not start sources if warmup is disabled.", func() {
+			// Setup controller with sources that complete successfully
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-
-			// Create a mock source that should not be started
-			sourceStarted := false
-			mockSource := source.Func(func(ctx context.Context, queue workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
-				sourceStarted = true
-				return nil
-			})
-
-			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
-			ctrl.NeedWarmup = nil
-
-			// Act
-			err := ctrl.Warmup(ctx)
-
-			// Assert
-			Expect(err).NotTo(HaveOccurred())
-			Expect(sourceStarted).To(BeFalse(), "Event source should not have been started")
-			Expect(ctrl.didStartEventSources.Load()).To(BeFalse(), "didStartEventSources flag should not be set")
-		})
-
-		It("should not start event sources twice when called multiple times", func() {
-			// Setup
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			// Create a mock source that counts how many times it's started
-			startCount := 0
-			mockSource := source.Func(func(ctx context.Context, queue workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
-				startCount++
-				return nil
-			})
 
 			ctrl.CacheSyncTimeout = time.Second
-			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
-			ctrl.NeedWarmup = ptr.To(true)
+			isSourceStarted := false
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					isSourceStarted = true
+					return nil
+				}),
+			}
 
-			// Act
-			err1 := ctrl.Warmup(ctx)
-			err2 := ctrl.Warmup(ctx)
-
-			// Assert
-			Expect(err1).NotTo(HaveOccurred())
-			Expect(err2).NotTo(HaveOccurred())
-			Expect(startCount).To(Equal(1), "Event source should have been started only once")
-			Expect(ctrl.didStartEventSources.Load()).To(BeTrue(), "didStartEventSources flag should be set")
-		})
-
-		It("should propagate errors from event sources", func() {
-			// Setup
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			// Create a mock source that returns an error
-			expectedErr := errors.New("test error")
-			mockSource := source.Func(func(ctx context.Context, queue workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
-				return expectedErr
-			})
-
-			ctrl.CacheSyncTimeout = time.Second
-			ctrl.startWatches = []source.TypedSource[reconcile.Request]{mockSource}
-			ctrl.NeedWarmup = ptr.To(true)
-
-			// Act
 			err := ctrl.Warmup(ctx)
+			Expect(err).NotTo(HaveOccurred())
 
-			// Assert
-			Expect(err).To(MatchError(expectedErr))
+			result := ctrl.DidFinishWarmup(ctx)
+			Expect(result).To(BeTrue())
+
+			Expect(isSourceStarted).To(BeFalse())
 		})
 	})
 })

@@ -29,13 +29,20 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+)
+
+const (
+	// syncedPollPeriod is the period to poll for cache sync
+	syncedPollPeriod = 100 * time.Millisecond
 )
 
 // Controller implements controller.Controller.
@@ -83,6 +90,16 @@ type Controller[request comparable] struct {
 	// startWatches maintains a list of sources, handlers, and predicates to start when the controller is started.
 	startWatches []source.TypedSource[request]
 
+	// didStartEventSources is used to indicate whether the event sources have been started.
+	didStartEventSources atomic.Bool
+
+	// didEventSourcesFinishSync is used to indicate whether the event sources have finished
+	// successfully. It stores a *bool where
+	// - nil: not finished syncing
+	// - true: finished syncing without error
+	// - false: finished syncing with error
+	didEventSourcesFinishSync atomic.Value
+
 	// LogConstructor is used to construct a logger to then log messages to users during reconciliation,
 	// or for example when a watch is started.
 	// Note: LogConstructor has to be able to handle nil requests as we are also using it
@@ -95,6 +112,12 @@ type Controller[request comparable] struct {
 
 	// LeaderElected indicates whether the controller is leader elected or always running.
 	LeaderElected *bool
+
+	// NeedWarmup specifies whether the controller should start its sources
+	// when the manager is not the leader.
+	// Defaults to false, which means that the controller will wait for leader election to start
+	// before starting sources.
+	NeedWarmup *bool
 }
 
 // Reconcile implements reconcile.Reconciler.
@@ -142,6 +165,40 @@ func (c *Controller[request]) NeedLeaderElection() bool {
 		return true
 	}
 	return *c.LeaderElected
+}
+
+// Warmup implements the manager.WarmupRunnable interface.
+func (c *Controller[request]) Warmup(ctx context.Context) error {
+	if c.NeedWarmup == nil || !*c.NeedWarmup {
+		c.didEventSourcesFinishSync.Store(ptr.To(true))
+		return nil
+	}
+
+	return c.startEventSources(ctx)
+}
+
+// DidFinishWarmup implements the manager.WarmupRunnable interface.
+func (c *Controller[request]) DidFinishWarmup(ctx context.Context) bool {
+	err := wait.PollUntilContextCancel(ctx, syncedPollPeriod, true, func(ctx context.Context) (bool, error) {
+		didFinishSync, ok := c.didEventSourcesFinishSync.Load().(*bool)
+		if !ok {
+			return false, errors.New("unexpected error: didEventSourcesFinishSync is not a bool pointer")
+		}
+
+		if didFinishSync == nil {
+			// event sources not finished syncing
+			return false, nil
+		}
+
+		if !*didFinishSync {
+			// event sources finished syncing with an error
+			return true, errors.New("event sources did not finish syncing successfully")
+		}
+
+		return true, nil
+	})
+
+	return err == nil
 }
 
 // Start implements controller.Controller.
@@ -221,6 +278,13 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 // startEventSources launches all the sources registered with this controller and waits
 // for them to sync. It returns an error if any of the sources fail to start or sync.
 func (c *Controller[request]) startEventSources(ctx context.Context) error {
+	// CAS returns false if value is already true, so early exit since another goroutine must have
+	// called startEventSources previously
+	if !c.didStartEventSources.CompareAndSwap(false, true) {
+		c.LogConstructor(nil).Info("Skipping starting event sources since it was already started")
+		return nil
+	}
+
 	errGroup := &errgroup.Group{}
 	for _, watch := range c.startWatches {
 		log := c.LogConstructor(nil)
@@ -274,7 +338,11 @@ func (c *Controller[request]) startEventSources(ctx context.Context) error {
 			}
 		})
 	}
-	return errGroup.Wait()
+	err := errGroup.Wait()
+
+	c.didEventSourcesFinishSync.Store(ptr.To(err == nil))
+
+	return err
 }
 
 // processNextWorkItem will read a single work item off the workqueue and

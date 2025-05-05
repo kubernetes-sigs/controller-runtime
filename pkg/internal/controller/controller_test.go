@@ -403,7 +403,7 @@ var _ = Describe("controller", func() {
 				return expectedErr
 			})
 
-			// // Set a sufficiently long timeout to avoid timeouts interfering with the error being returned
+			// Set a sufficiently long timeout to avoid timeouts interfering with the error being returned
 			ctrl.CacheSyncTimeout = 5 * time.Second
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
 			err := ctrl.startEventSources(ctx)
@@ -1012,6 +1012,82 @@ var _ = Describe("controller", func() {
 					return nil
 				}, 2.0).Should(Succeed())
 			})
+		})
+	})
+
+	Describe("Warmup", func() {
+		JustBeforeEach(func() {
+			ctrl.NeedWarmup = ptr.To(true)
+		})
+
+		It("should track warmup status correctly with successful sync", func() {
+			// Setup controller with sources that complete successfully
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					return nil
+				}),
+			}
+
+			err := ctrl.Warmup(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify DidFinishWarmup returns true for successful sync
+			result := ctrl.DidFinishWarmup(ctx)
+			Expect(result).To(BeTrue())
+		})
+
+		It("should track warmup status correctly with unsuccessful sync", func() {
+			// Setup controller with sources that complete with error
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					return errors.New("sync error")
+				}),
+			}
+
+			err := ctrl.Warmup(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("sync error"))
+
+			// Verify DidFinishWarmup returns false for unsuccessful sync
+			result := ctrl.DidFinishWarmup(ctx)
+			Expect(result).To(BeFalse())
+		})
+	})
+
+	Describe("Warmup without warmup enabled", func() {
+		JustBeforeEach(func() {
+			ctrl.NeedWarmup = ptr.To(false)
+		})
+
+		It("should not start sources if warmup is disabled.", func() {
+			// Setup controller with sources that complete successfully
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = time.Second
+			isSourceStarted := false
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					isSourceStarted = true
+					return nil
+				}),
+			}
+
+			err := ctrl.Warmup(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			result := ctrl.DidFinishWarmup(ctx)
+			Expect(result).To(BeTrue())
+
+			Expect(isSourceStarted).To(BeFalse())
 		})
 	})
 })

@@ -23,13 +23,13 @@ func readBody(resp *http.Response, out io.Writer, archiveName string, platform v
 		// memory to avoid causing issues with big files.
 		buf := make([]byte, 32*1024) // 32KiB, same as io.Copy
 		var hasher hash.Hash
-		switch platform.Hash.Type {
+		switch platform.Type {
 		case versions.SHA512HashType:
 			hasher = sha512.New()
 		case versions.MD5HashType:
 			hasher = md5.New()
 		default:
-			return fmt.Errorf("hash type %s not implemented", platform.Hash.Type)
+			return fmt.Errorf("hash type %s not implemented", platform.Type)
 		}
 		for cont := true; cont; {
 			amt, err := resp.Body.Read(buf)
@@ -47,16 +47,16 @@ func readBody(resp *http.Response, out io.Writer, archiveName string, platform v
 		}
 
 		var sum string
-		switch platform.Hash.Encoding {
+		switch platform.Encoding {
 		case versions.Base64HashEncoding:
 			sum = base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 		case versions.HexHashEncoding:
 			sum = hex.EncodeToString(hasher.Sum(nil))
 		default:
-			return fmt.Errorf("hash encoding %s not implemented", platform.Hash.Encoding)
+			return fmt.Errorf("hash encoding %s not implemented", platform.Encoding)
 		}
-		if sum != platform.Hash.Value {
-			return fmt.Errorf("checksum mismatch for %s: %s (computed) != %s (reported)", archiveName, sum, platform.Hash.Value)
+		if sum != platform.Value {
+			return fmt.Errorf("checksum mismatch for %s: %s (computed) != %s (reported)", archiveName, sum, platform.Value)
 		}
 	} else if _, err := io.Copy(out, resp.Body); err != nil {
 		return fmt.Errorf("unable to download %s: %w", archiveName, err)

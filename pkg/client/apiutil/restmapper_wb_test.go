@@ -209,6 +209,6 @@ type fakeAggregatedDiscoveryClient struct {
 }
 
 func (f *fakeAggregatedDiscoveryClient) GroupsAndMaybeResources() (*metav1.APIGroupList, map[schema.GroupVersion]*metav1.APIResourceList, map[schema.GroupVersion]error, error) {
-	groupList, err := f.DiscoveryInterface.ServerGroups()
+	groupList, err := f.ServerGroups()
 	return groupList, nil, nil, err
 }

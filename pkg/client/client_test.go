@@ -1698,7 +1698,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				dep2Name := dep2.Name
 
 				By("deleting Deployments")
-				err = cl.DeleteAllOf(context.TODO(), dep, client.InNamespace(ns), client.MatchingLabels(dep.ObjectMeta.Labels))
+				err = cl.DeleteAllOf(context.TODO(), dep, client.InNamespace(ns), client.MatchingLabels(dep.Labels))
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating the Deployment no longer exists")
@@ -1804,7 +1804,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 					Kind:    "Deployment",
 					Version: "v1",
 				})
-				err = cl.DeleteAllOf(context.TODO(), u, client.InNamespace(ns), client.MatchingLabels(dep.ObjectMeta.Labels))
+				err = cl.DeleteAllOf(context.TODO(), u, client.InNamespace(ns), client.MatchingLabels(dep.Labels))
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating the Deployment no longer exists")
@@ -1884,7 +1884,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("deleting Deployments")
 				metaObj := metaOnlyFromObj(dep, scheme)
-				err = cl.DeleteAllOf(context.TODO(), metaObj, client.InNamespace(ns), client.MatchingLabels(dep.ObjectMeta.Labels))
+				err = cl.DeleteAllOf(context.TODO(), metaObj, client.InNamespace(ns), client.MatchingLabels(dep.Labels))
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating the Deployment no longer exists")

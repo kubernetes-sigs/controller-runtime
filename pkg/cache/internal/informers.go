@@ -201,7 +201,7 @@ func (ip *Informers) Start(ctx context.Context) error {
 		defer ip.mu.Unlock()
 
 		if ip.started {
-			return errors.New("Informer already started") //nolint:stylecheck
+			return errors.New("informer already started") //nolint:stylecheck
 		}
 
 		// Set the context so it can be passed to informers that are added later

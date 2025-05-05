@@ -279,10 +279,7 @@ func (c *multiNamespaceCache) List(ctx context.Context, list client.ObjectList, 
 		return err
 	}
 
-	allItems, err := apimeta.ExtractList(list)
-	if err != nil {
-		return err
-	}
+	allItems := []runtime.Object{}
 
 	limitSet := listOpts.Limit > 0
 

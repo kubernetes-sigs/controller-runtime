@@ -66,6 +66,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/testing"
 	"k8s.io/utils/ptr"
+	kjson "sigs.k8s.io/json"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -377,7 +378,7 @@ func convertFromUnstructuredIfNecessary(s *runtime.Scheme, o runtime.Object) (ru
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize %T: %w", unstructuredSerialized, err)
 	}
-	if err := json.Unmarshal(unstructuredSerialized, typed); err != nil {
+	if err := kjson.UnmarshalCaseSensitivePreserveInts(unstructuredSerialized, typed); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal the content of %T into %T: %w", u, typed, err)
 	}
 
@@ -556,7 +557,7 @@ func (c *fakeClient) Get(ctx context.Context, key client.ObjectKey, obj client.O
 		return err
 	}
 	zero(obj)
-	return json.Unmarshal(j, obj)
+	return kjson.UnmarshalCaseSensitivePreserveInts(j, obj)
 }
 
 func (c *fakeClient) Watch(ctx context.Context, list client.ObjectList, opts ...client.ListOption) (watch.Interface, error) {
@@ -620,7 +621,7 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 	}
 	zero(obj)
 	objCopy := obj.DeepCopyObject().(client.ObjectList)
-	if err := json.Unmarshal(j, objCopy); err != nil {
+	if err := kjson.UnmarshalCaseSensitivePreserveInts(j, objCopy); err != nil {
 		return err
 	}
 
@@ -995,7 +996,7 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 		return err
 	}
 	zero(obj)
-	return json.Unmarshal(j, obj)
+	return kjson.UnmarshalCaseSensitivePreserveInts(j, obj)
 }
 
 // Applying a patch results in a deletionTimestamp that is truncated to the nearest second.
@@ -1047,7 +1048,7 @@ func dryPatch(action testing.PatchActionImpl, tracker testing.ObjectTracker) (ru
 			return nil, err
 		}
 
-		if err = json.Unmarshal(modified, obj); err != nil {
+		if err = kjson.UnmarshalCaseSensitivePreserveInts(modified, obj); err != nil {
 			return nil, err
 		}
 	case types.MergePatchType:
@@ -1056,7 +1057,7 @@ func dryPatch(action testing.PatchActionImpl, tracker testing.ObjectTracker) (ru
 			return nil, err
 		}
 
-		if err := json.Unmarshal(modified, obj); err != nil {
+		if err := kjson.UnmarshalCaseSensitivePreserveInts(modified, obj); err != nil {
 			return nil, err
 		}
 	case types.StrategicMergePatchType:
@@ -1064,7 +1065,7 @@ func dryPatch(action testing.PatchActionImpl, tracker testing.ObjectTracker) (ru
 		if err != nil {
 			return nil, err
 		}
-		if err = json.Unmarshal(mergedByte, obj); err != nil {
+		if err = kjson.UnmarshalCaseSensitivePreserveInts(mergedByte, obj); err != nil {
 			return nil, err
 		}
 	case types.ApplyPatchType:
@@ -1121,7 +1122,7 @@ func toMapStringAny(obj runtime.Object) (map[string]any, error) {
 	}
 
 	u := map[string]any{}
-	return u, json.Unmarshal(serialized, &u)
+	return u, kjson.UnmarshalCaseSensitivePreserveInts(serialized, &u)
 }
 
 func fromMapStringAny(u map[string]any, target runtime.Object) error {
@@ -1136,7 +1137,7 @@ func fromMapStringAny(u map[string]any, target runtime.Object) error {
 	}
 
 	zero(target)
-	if err := json.Unmarshal(serialized, &target); err != nil {
+	if err := kjson.UnmarshalCaseSensitivePreserveInts(serialized, &target); err != nil {
 		return fmt.Errorf("failed to deserialize: %w", err)
 	}
 

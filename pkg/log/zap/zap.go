@@ -28,6 +28,8 @@ import (
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	logrhelper "sigs.k8s.io/controller-runtime/pkg/log/logr"
 )
 
 // EncoderConfigOption is a function that can modify a `zapcore.EncoderConfig`.
@@ -36,11 +38,14 @@ type EncoderConfigOption func(*zapcore.EncoderConfig)
 // NewEncoderFunc is a function that creates an Encoder using the provided EncoderConfigOptions.
 type NewEncoderFunc func(...EncoderConfigOption) zapcore.Encoder
 
-// New returns a brand new Logger configured with Opts. It
-// uses KubeAwareEncoder which adds Type information and
-// Namespace/Name to the log.
+// New returns a brand new Logger configured with Opts.
+// It uses [logrhelper.KubeAware] to make the logger Kubernetes-aware,
+// meaning that for Kubernetes objects, the logger will by default digest only the metadata.
 func New(opts ...Opts) logr.Logger {
-	return zapr.NewLogger(NewRaw(opts...))
+	zrl := zapr.NewLogger(NewRaw(opts...))
+	// Make sure the created logr.logger is Kubernetes-aware.
+	// See https://github.com/kubernetes-sigs/controller-runtime/issues/1290 for the background.
+	return logrhelper.KubeAware(zrl)
 }
 
 // Opts allows to manipulate Options.

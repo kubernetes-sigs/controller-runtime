@@ -43,6 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -75,6 +76,7 @@ var _ = Describe("controller", func() {
 			NewQueue: func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
 				return queue
 			},
+			MetricsProvider: metrics.NewPrometheusProvider(),
 			LogConstructor: func(_ *reconcile.Request) logr.Logger {
 				return log.RuntimeLog.WithName("controller").WithName("test")
 			},
@@ -354,6 +356,7 @@ var _ = Describe("controller", func() {
 				NewQueue: func(string, workqueue.TypedRateLimiter[TestRequest]) workqueue.TypedRateLimitingInterface[TestRequest] {
 					return queue
 				},
+				MetricsProvider: metrics.NewPrometheusProvider(),
 				LogConstructor: func(*TestRequest) logr.Logger {
 					return log.RuntimeLog.WithName("controller").WithName("test")
 				},

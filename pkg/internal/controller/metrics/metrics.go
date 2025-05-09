@@ -20,8 +20,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 var (
@@ -81,19 +79,3 @@ var (
 		Help: "Number of currently used workers per controller",
 	}, []string{"controller"})
 )
-
-func init() {
-	metrics.Registry.MustRegister(
-		ReconcileTotal,
-		ReconcileErrors,
-		TerminalReconcileErrors,
-		ReconcilePanics,
-		ReconcileTime,
-		WorkerCount,
-		ActiveWorkers,
-		// expose process metrics like CPU, Memory, file descriptor usage etc.
-		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		// expose all Go runtime metrics like GC stats, memory stats etc.
-		collectors.NewGoCollector(collectors.WithGoCollectorRuntimeMetrics(collectors.MetricsAll)),
-	)
-}

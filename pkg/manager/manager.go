@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -223,6 +224,10 @@ type Options struct {
 	// Metrics are the metricsserver.Options that will be used to create the metricsserver.Server.
 	Metrics metricsserver.Options
 
+	// LeaderEelectionMetricProvider allows users to override the location where leader election metrics are emitted.
+	// By default, metrics are emitted to a pre-configured Prometheus registry
+	LeaderElectionMetricProvider metrics.LeaderElectionMetricsProvider
+
 	// HealthProbeBindAddress is the TCP address that the controller should bind to
 	// for serving health probes
 	// It can be set to "0" or "" to disable serving the health probe.
@@ -401,6 +406,11 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	leaderElectionMetricsProvider := options.LeaderElectionMetricProvider
+	if leaderElectionMetricsProvider == nil {
+		leaderElectionMetricsProvider = metrics.NewPrometheusProvider()
+	}
+	metrics.SetLeaderElectionProvider(leaderElectionMetricsProvider)
 
 	// Create health probes listener. This will throw an error if the bind
 	// address is invalid or already in use.

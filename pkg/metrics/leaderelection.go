@@ -1,47 +1,34 @@
 package metrics
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/client-go/tools/leaderelection"
 )
 
-// This file is copied and adapted from k8s.io/component-base/metrics/prometheus/clientgo/leaderelection
-// which registers metrics to the k8s legacy Registry. We require very
-// similar functionality, but must register metrics to a different Registry.
-
-var (
-	leaderGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "leader_election_master_status",
-		Help: "Gauge of if the reporting system is master of the relevant lease, 0 indicates backup, 1 indicates master. 'name' is the string used to identify the lease. Please make sure to group by name.",
-	}, []string{"name"})
-
-	leaderSlowpathCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "leader_election_slowpath_total",
-		Help: "Total number of slow path exercised in renewing leader leases. 'name' is the string used to identify the lease. Please make sure to group by name.",
-	}, []string{"name"})
-)
-
-func init() {
-	Registry.MustRegister(leaderGauge)
-	leaderelection.SetProvider(leaderelectionMetricsProvider{})
+// SetLeaderElectionProvider sets the leader election provider leveraged by client-go
+func SetLeaderElectionProvider(provider LeaderElectionMetricsProvider) {
+	leaderelection.SetProvider(leaderElectionMetricsProvider{provider: provider})
 }
 
-type leaderelectionMetricsProvider struct{}
-
-func (leaderelectionMetricsProvider) NewLeaderMetric() leaderelection.LeaderMetric {
-	return leaderElectionPrometheusAdapter{}
+type leaderElectionMetricsProvider struct {
+	provider LeaderElectionMetricsProvider
 }
 
-type leaderElectionPrometheusAdapter struct{}
-
-func (s leaderElectionPrometheusAdapter) On(name string) {
-	leaderGauge.WithLabelValues(name).Set(1.0)
+func (l leaderElectionMetricsProvider) NewLeaderMetric() leaderelection.LeaderMetric {
+	return leaderElectionMetricAdapter(l)
 }
 
-func (s leaderElectionPrometheusAdapter) Off(name string) {
-	leaderGauge.WithLabelValues(name).Set(0.0)
+type leaderElectionMetricAdapter struct {
+	provider LeaderElectionMetricsProvider
 }
 
-func (leaderElectionPrometheusAdapter) SlowpathExercised(name string) {
-	leaderSlowpathCounter.WithLabelValues(name).Inc()
+func (l leaderElectionMetricAdapter) On(name string) {
+	l.provider.LeaderGauge().Set(map[string]string{"name": name}, 1)
+}
+
+func (l leaderElectionMetricAdapter) Off(name string) {
+	l.provider.LeaderGauge().Set(map[string]string{"name": name}, 0)
+}
+
+func (l leaderElectionMetricAdapter) SlowpathExercised(name string) {
+	l.provider.SlowpathExercised().Inc(map[string]string{"name": name})
 }

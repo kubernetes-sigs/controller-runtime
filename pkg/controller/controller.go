@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
@@ -84,6 +85,10 @@ type TypedOptions[request comparable] struct {
 	// Logger will be used to build a default LogConstructor if unset.
 	Logger logr.Logger
 
+	// MetricsProvider allows users to override the location where controller metrics are emitted.
+	// By default, metrics are emitted to a pre-configured Prometheus registry
+	MetricsProvider metrics.ControllerMetricsProvider
+
 	// LogConstructor is used to construct a logger used for this controller and passed
 	// to each reconciliation via the context field.
 	LogConstructor func(request *request) logr.Logger
@@ -99,6 +104,10 @@ type TypedOptions[request comparable] struct {
 func (options *TypedOptions[request]) DefaultFromConfig(config config.Controller) {
 	if options.Logger.GetSink() == nil {
 		options.Logger = config.Logger
+	}
+
+	if options.MetricsProvider == nil {
+		options.MetricsProvider = config.MetricsProvider
 	}
 
 	if options.SkipNameValidation == nil {
@@ -196,6 +205,10 @@ func NewTypedUnmanaged[request comparable](name string, options TypedOptions[req
 		}
 	}
 
+	if options.MetricsProvider == nil {
+		options.MetricsProvider = metrics.NewPrometheusProvider()
+	}
+
 	if options.LogConstructor == nil {
 		log := options.Logger.WithValues(
 			"controller", name,
@@ -250,6 +263,7 @@ func NewTypedUnmanaged[request comparable](name string, options TypedOptions[req
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
 		CacheSyncTimeout:        options.CacheSyncTimeout,
 		Name:                    name,
+		MetricsProvider:         options.MetricsProvider,
 		LogConstructor:          options.LogConstructor,
 		RecoverPanic:            options.RecoverPanic,
 		LeaderElected:           options.NeedLeaderElection,

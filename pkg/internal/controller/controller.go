@@ -197,9 +197,16 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 		for i := 0; i < c.MaxConcurrentReconciles; i++ {
 			go func() {
 				defer wg.Done()
+				queueCtx := context.WithoutCancel(ctx)
 				// Run a worker thread that just dequeues items, processes them, and marks them done.
 				// It enforces that the reconcileHandler is never invoked concurrently with the same object.
-				for c.processNextWorkItem(ctx) {
+			Process:
+				for c.processNextWorkItem(queueCtx) {
+					select {
+					case <-ctx.Done():
+						break Process
+					default:
+					}
 				}
 			}()
 		}

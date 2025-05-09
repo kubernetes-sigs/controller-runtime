@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 // Controller contains configuration options for controllers. It only includes options
@@ -66,10 +65,6 @@ type Controller struct {
 	//
 	// Note: This flag is disabled by default until a future version. It's currently in beta.
 	UsePriorityQueue *bool
-
-	// MetricsProvider allows users to override the location where controller metrics are emitted.
-	// By default, metrics are emitted to a pre-configured Prometheus registry
-	MetricsProvider metrics.ControllerMetricsProvider
 
 	// Logger is the logger controllers should use.
 	Logger logr.Logger

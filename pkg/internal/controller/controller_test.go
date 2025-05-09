@@ -38,12 +38,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/internal/log"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
+	intmetrics "sigs.k8s.io/controller-runtime/pkg/internal/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -76,7 +76,6 @@ var _ = Describe("controller", func() {
 			NewQueue: func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
 				return queue
 			},
-			MetricsProvider: metrics.NewPrometheusProvider(),
 			LogConstructor: func(_ *reconcile.Request) logr.Logger {
 				return log.RuntimeLog.WithName("controller").WithName("test")
 			},
@@ -356,7 +355,6 @@ var _ = Describe("controller", func() {
 				NewQueue: func(string, workqueue.TypedRateLimiter[TestRequest]) workqueue.TypedRateLimitingInterface[TestRequest] {
 					return queue
 				},
-				MetricsProvider: metrics.NewPrometheusProvider(),
 				LogConstructor: func(*TestRequest) logr.Logger {
 					return log.RuntimeLog.WithName("controller").WithName("test")
 				},
@@ -813,13 +811,13 @@ var _ = Describe("controller", func() {
 			var reconcileTotal dto.Metric
 
 			BeforeEach(func() {
-				ctrlmetrics.ReconcileTotal.Reset()
+				ctrlmetrics.GetControllerMetricsProvider().ReconcileTotal().(*intmetrics.PrometheusCounterAdapter).CounterVec.Reset()
 				reconcileTotal.Reset()
 			})
 
 			It("should get updated on successful reconciliation", func() {
 				Expect(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "success").Write(&reconcileTotal)).To(Succeed())
+					Expect(ctrlmetrics.GetControllerMetricsProvider().ReconcileTotal().(*intmetrics.PrometheusCounterAdapter).WithLabelValues(ctrl.Name, "success").Write(&reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile total not reset")
 					}
@@ -838,7 +836,7 @@ var _ = Describe("controller", func() {
 				fakeReconcile.AddResult(reconcile.Result{}, nil)
 				Expect(<-reconciled).To(Equal(request))
 				Eventually(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "success").Write(&reconcileTotal)).To(Succeed())
+					Expect(ctrlmetrics.GetControllerMetricsProvider().ReconcileTotal().(*intmetrics.PrometheusCounterAdapter).WithLabelValues(ctrl.Name, "success").Write(&reconcileTotal)).To(Succeed())
 					if actual := reconcileTotal.GetCounter().GetValue(); actual != 1.0 {
 						return fmt.Errorf("metric reconcile total expected: %v and got: %v", 1.0, actual)
 					}
@@ -848,7 +846,7 @@ var _ = Describe("controller", func() {
 
 			It("should get updated on reconcile errors", func() {
 				Expect(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "error").Write(&reconcileTotal)).To(Succeed())
+					Expect(ctrlmetrics.GetControllerMetricsProvider().ReconcileTotal().(*intmetrics.PrometheusCounterAdapter).WithLabelValues(ctrl.Name, "error").Write(&reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile total not reset")
 					}
@@ -867,7 +865,7 @@ var _ = Describe("controller", func() {
 				fakeReconcile.AddResult(reconcile.Result{}, fmt.Errorf("expected error: reconcile"))
 				Expect(<-reconciled).To(Equal(request))
 				Eventually(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "error").Write(&reconcileTotal)).To(Succeed())
+					Expect(ctrlmetrics.GetControllerMetricsProvider().ReconcileTotal().(*intmetrics.PrometheusCounterAdapter).WithLabelValues(ctrl.Name, "error").Write(&reconcileTotal)).To(Succeed())
 					if actual := reconcileTotal.GetCounter().GetValue(); actual != 1.0 {
 						return fmt.Errorf("metric reconcile total expected: %v and got: %v", 1.0, actual)
 					}
@@ -877,7 +875,7 @@ var _ = Describe("controller", func() {
 
 			It("should get updated when reconcile returns with retry enabled", func() {
 				Expect(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "retry").Write(&reconcileTotal)).To(Succeed())
+					Expect(ctrlmetrics.GetControllerMetricsProvider().ReconcileTotal().(*intmetrics.PrometheusCounterAdapter).WithLabelValues(ctrl.Name, "retry").Write(&reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile total not reset")
 					}
@@ -897,7 +895,7 @@ var _ = Describe("controller", func() {
 				fakeReconcile.AddResult(reconcile.Result{Requeue: true}, nil)
 				Expect(<-reconciled).To(Equal(request))
 				Eventually(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "requeue").Write(&reconcileTotal)).To(Succeed())
+					Expect(ctrlmetrics.GetControllerMetricsProvider().ReconcileTotal().(*intmetrics.PrometheusCounterAdapter).WithLabelValues(ctrl.Name, "requeue").Write(&reconcileTotal)).To(Succeed())
 					if actual := reconcileTotal.GetCounter().GetValue(); actual != 1.0 {
 						return fmt.Errorf("metric reconcile total expected: %v and got: %v", 1.0, actual)
 					}
@@ -907,7 +905,7 @@ var _ = Describe("controller", func() {
 
 			It("should get updated when reconcile returns with retryAfter enabled", func() {
 				Expect(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "retry_after").Write(&reconcileTotal)).To(Succeed())
+					Expect(ctrlmetrics.GetControllerMetricsProvider().ReconcileTotal().(*intmetrics.PrometheusCounterAdapter).WithLabelValues(ctrl.Name, "retry_after").Write(&reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile total not reset")
 					}
@@ -926,7 +924,7 @@ var _ = Describe("controller", func() {
 				fakeReconcile.AddResult(reconcile.Result{RequeueAfter: 5 * time.Hour}, nil)
 				Expect(<-reconciled).To(Equal(request))
 				Eventually(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "requeue_after").Write(&reconcileTotal)).To(Succeed())
+					Expect(ctrlmetrics.GetControllerMetricsProvider().ReconcileTotal().(*intmetrics.PrometheusCounterAdapter).WithLabelValues(ctrl.Name, "requeue_after").Write(&reconcileTotal)).To(Succeed())
 					if actual := reconcileTotal.GetCounter().GetValue(); actual != 1.0 {
 						return fmt.Errorf("metric reconcile total expected: %v and got: %v", 1.0, actual)
 					}
@@ -938,9 +936,9 @@ var _ = Describe("controller", func() {
 		Context("should update prometheus metrics", func() {
 			It("should requeue a Request if there is an error and continue processing items", func() {
 				var reconcileErrs dto.Metric
-				ctrlmetrics.ReconcileErrors.Reset()
+				ctrlmetrics.GetControllerMetricsProvider().ReconcileErrors().(*intmetrics.PrometheusCounterAdapter).Reset()
 				Expect(func() error {
-					Expect(ctrlmetrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)).To(Succeed())
+					Expect(ctrlmetrics.GetControllerMetricsProvider().ReconcileErrors().(*intmetrics.PrometheusCounterAdapter).WithLabelValues(ctrl.Name).Write(&reconcileErrs)).To(Succeed())
 					if reconcileErrs.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile errors not reset")
 					}
@@ -959,7 +957,7 @@ var _ = Describe("controller", func() {
 				fakeReconcile.AddResult(reconcile.Result{}, fmt.Errorf("expected error: reconcile"))
 				Expect(<-reconciled).To(Equal(request))
 				Eventually(func() error {
-					Expect(ctrlmetrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)).To(Succeed())
+					Expect(ctrlmetrics.GetControllerMetricsProvider().ReconcileErrors().(*intmetrics.PrometheusCounterAdapter).WithLabelValues(ctrl.Name).Write(&reconcileErrs)).To(Succeed())
 					if reconcileErrs.GetCounter().GetValue() != 1.0 {
 						return fmt.Errorf("metrics not updated")
 					}
@@ -977,10 +975,10 @@ var _ = Describe("controller", func() {
 
 			It("should add a reconcile time to the reconcile time histogram", func() {
 				var reconcileTime dto.Metric
-				ctrlmetrics.ReconcileTime.Reset()
+				ctrlmetrics.GetControllerMetricsProvider().ReconcileTime().(*intmetrics.PrometheusHistogramAdapter).Reset()
 
 				Expect(func() error {
-					histObserver := ctrlmetrics.ReconcileTime.WithLabelValues(ctrl.Name)
+					histObserver := ctrlmetrics.GetControllerMetricsProvider().ReconcileTime().(*intmetrics.PrometheusHistogramAdapter).WithLabelValues(ctrl.Name)
 					hist := histObserver.(prometheus.Histogram)
 					Expect(hist.Write(&reconcileTime)).To(Succeed())
 					if reconcileTime.GetHistogram().GetSampleCount() != uint64(0) {
@@ -1006,7 +1004,7 @@ var _ = Describe("controller", func() {
 				Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
 
 				Eventually(func() error {
-					histObserver := ctrlmetrics.ReconcileTime.WithLabelValues(ctrl.Name)
+					histObserver := ctrlmetrics.GetControllerMetricsProvider().ReconcileTime().(*intmetrics.PrometheusHistogramAdapter).WithLabelValues(ctrl.Name)
 					hist := histObserver.(prometheus.Histogram)
 					Expect(hist.Write(&reconcileTime)).To(Succeed())
 					if reconcileTime.GetHistogram().GetSampleCount() == uint64(0) {

@@ -1094,7 +1094,7 @@ var _ = Describe("controller", func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).To(Succeed())
 			}()
-			Eventually(func() bool { return isSourceStarted.Load() }).Should(BeTrue())
+			Eventually(isSourceStarted.Load).Should(BeTrue())
 		})
 	})
 })

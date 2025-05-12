@@ -1035,13 +1035,15 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 							Version: "v1",
 							Kind:    "PodList",
 						})
-						Expect(namespacedCache.List(context.Background(), out)).To(Succeed())
+						for range 2 {
+							Expect(namespacedCache.List(context.Background(), out)).To(Succeed())
 
-						By("verifying the returned pod is from the watched namespace")
-						Expect(out.Items).NotTo(BeEmpty())
-						Expect(out.Items).Should(HaveLen(2))
-						for _, item := range out.Items {
-							Expect(item.GetNamespace()).To(Equal(testNamespaceOne))
+							By("verifying the returned pod is from the watched namespace")
+							Expect(out.Items).NotTo(BeEmpty())
+							Expect(out.Items).Should(HaveLen(2))
+							for _, item := range out.Items {
+								Expect(item.GetNamespace()).To(Equal(testNamespaceOne))
+							}
 						}
 						By("listing all nodes - should still be able to list a cluster-scoped resource")
 						nodeList := &unstructured.UnstructuredList{}

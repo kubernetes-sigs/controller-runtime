@@ -170,10 +170,8 @@ func (c *Controller[request]) NeedLeaderElection() bool {
 // Warmup implements the manager.WarmupRunnable interface.
 func (c *Controller[request]) Warmup(ctx context.Context) error {
 	if c.NeedWarmup == nil || !*c.NeedWarmup {
-		c.didEventSourcesFinishSync.Store(ptr.To(true))
 		return nil
 	}
-
 	return c.startEventSources(ctx)
 }
 
@@ -291,7 +289,6 @@ func (c *Controller[request]) startEventSources(ctx context.Context) error {
 		_, ok := watch.(interface {
 			String() string
 		})
-
 		if !ok {
 			log = log.WithValues("source", fmt.Sprintf("%T", watch))
 		} else {

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -1062,32 +1063,38 @@ var _ = Describe("controller", func() {
 		})
 	})
 
-	Describe("Warmup without warmup enabled", func() {
+	Describe("Warmup with warmup disabled", func() {
 		JustBeforeEach(func() {
 			ctrl.NeedWarmup = ptr.To(false)
 		})
 
-		It("should not start sources if warmup is disabled.", func() {
+		It("should not start sources when Warmup is called if warmup is disabled but start it when Start is called.", func() {
 			// Setup controller with sources that complete successfully
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			ctrl.CacheSyncTimeout = time.Second
-			isSourceStarted := false
+			var isSourceStarted atomic.Bool
+			isSourceStarted.Store(false)
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
-					isSourceStarted = true
+					isSourceStarted.Store(true)
 					return nil
 				}),
 			}
 
+			By("Calling Warmup when NeedWarmup is false")
 			err := ctrl.Warmup(ctx)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(isSourceStarted.Load()).To(BeFalse())
 
-			result := ctrl.DidFinishWarmup(ctx)
-			Expect(result).To(BeTrue())
-
-			Expect(isSourceStarted).To(BeFalse())
+			By("Calling Start when NeedWarmup is false")
+			// Now call Start
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(ctx)).To(Succeed())
+			}()
+			Eventually(func() bool { return isSourceStarted.Load() }).Should(BeTrue())
 		})
 	})
 })

@@ -488,8 +488,7 @@ var _ = Describe("controller.Controller", func() {
 
 			internalCtrlWithWarmup, ok := ctrlWithWarmup.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
-			Expect(internalCtrlWithWarmup.NeedWarmup).NotTo(BeNil())
-			Expect(*internalCtrlWithWarmup.NeedWarmup).To(BeTrue())
+			Expect(internalCtrlWithWarmup.NeedWarmup).To(HaveValue(BeTrue()))
 
 			// Test with NeedWarmup set to false
 			ctrlWithoutWarmup, err := controller.New("warmup-disabled-ctrl", m, controller.Options{
@@ -500,8 +499,7 @@ var _ = Describe("controller.Controller", func() {
 
 			internalCtrlWithoutWarmup, ok := ctrlWithoutWarmup.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
-			Expect(internalCtrlWithoutWarmup.NeedWarmup).NotTo(BeNil())
-			Expect(*internalCtrlWithoutWarmup.NeedWarmup).To(BeFalse())
+			Expect(internalCtrlWithoutWarmup.NeedWarmup).To(HaveValue(BeFalse()))
 
 			// Test with NeedWarmup not set (should default to nil)
 			ctrlWithDefaultWarmup, err := controller.New("warmup-default-ctrl", m, controller.Options{
@@ -529,8 +527,7 @@ var _ = Describe("controller.Controller", func() {
 
 			internalCtrlInheritingWarmup, ok := ctrlInheritingWarmup.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
-			Expect(internalCtrlInheritingWarmup.NeedWarmup).NotTo(BeNil())
-			Expect(*internalCtrlInheritingWarmup.NeedWarmup).To(BeTrue())
+			Expect(internalCtrlInheritingWarmup.NeedWarmup).To(HaveValue(BeTrue()))
 
 			// Test that explicit controller setting overrides manager setting
 			ctrlOverridingWarmup, err := controller.New("override-warmup-disabled", managerWithWarmup, controller.Options{
@@ -541,8 +538,7 @@ var _ = Describe("controller.Controller", func() {
 
 			internalCtrlOverridingWarmup, ok := ctrlOverridingWarmup.(*internalcontroller.Controller[reconcile.Request])
 			Expect(ok).To(BeTrue())
-			Expect(internalCtrlOverridingWarmup.NeedWarmup).NotTo(BeNil())
-			Expect(*internalCtrlOverridingWarmup.NeedWarmup).To(BeFalse())
+			Expect(internalCtrlOverridingWarmup.NeedWarmup).To(HaveValue(BeFalse()))
 		})
 	})
 })

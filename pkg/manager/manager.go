@@ -314,11 +314,11 @@ type LeaderElectionRunnable interface {
 	NeedLeaderElection() bool
 }
 
-// WarmupRunnable knows if a Runnable should be a warmup runnable. A warmup runnable is a runnable
+// warmupRunnable knows if a Runnable requires warmup. A warmup runnable is a runnable
 // that should be run when the manager is started, but before the leader election is acquired.
-// Note: Implementing this interface is only useful when LeaderElection is enabled, as the behavior
-// without leaderelection is to run LeaderElectionRunnables immediately.
-type WarmupRunnable interface {
+// Note: Implementing this interface is only useful when LeaderElection can be enabled, as the
+// behavior when leaderelection is not enabled is to run LeaderElectionRunnables immediately.
+type warmupRunnable interface {
 	// Warmup is the implementation of the warmup runnable.
 	Warmup(context.Context) error
 

@@ -93,12 +93,12 @@ type Controller[request comparable] struct {
 	// didStartEventSources is used to indicate whether the event sources have been started.
 	didStartEventSources atomic.Bool
 
-	// didEventSourcesFinishSync is used to indicate whether the event sources have finished
+	// didEventSourcesFinishSyncSuccessfully is used to indicate whether the event sources have finished
 	// successfully. It stores a *bool where
 	// - nil: not finished syncing
 	// - true: finished syncing without error
 	// - false: finished syncing with error
-	didEventSourcesFinishSync atomic.Value
+	didEventSourcesFinishSyncSuccessfully atomic.Value
 
 	// LogConstructor is used to construct a logger to then log messages to users during reconciliation,
 	// or for example when a watch is started.
@@ -175,10 +175,11 @@ func (c *Controller[request]) Warmup(ctx context.Context) error {
 	return c.startEventSources(ctx)
 }
 
-// DidFinishWarmup implements the manager.WarmupRunnable interface.
-func (c *Controller[request]) DidFinishWarmup(ctx context.Context) bool {
+// WaitForWarmupComplete returns true if warmup has completed without error, and false if there was
+// an error during warmup.
+func (c *Controller[request]) WaitForWarmupComplete(ctx context.Context) bool {
 	err := wait.PollUntilContextCancel(ctx, syncedPollPeriod, true, func(ctx context.Context) (bool, error) {
-		didFinishSync, ok := c.didEventSourcesFinishSync.Load().(*bool)
+		didFinishSync, ok := c.didEventSourcesFinishSyncSuccessfully.Load().(*bool)
 		if !ok {
 			return false, errors.New("unexpected error: didEventSourcesFinishSync is not a bool pointer")
 		}
@@ -279,7 +280,7 @@ func (c *Controller[request]) startEventSources(ctx context.Context) error {
 	// CAS returns false if value is already true, so early exit since another goroutine must have
 	// called startEventSources previously
 	if !c.didStartEventSources.CompareAndSwap(false, true) {
-		c.LogConstructor(nil).Info("Skipping starting event sources since it was already started")
+		c.LogConstructor(nil).Info("Skipping starting event sources since they were previously started")
 		return nil
 	}
 
@@ -337,7 +338,7 @@ func (c *Controller[request]) startEventSources(ctx context.Context) error {
 	}
 	err := errGroup.Wait()
 
-	c.didEventSourcesFinishSync.Store(ptr.To(err == nil))
+	c.didEventSourcesFinishSyncSuccessfully.Store(ptr.To(err == nil))
 
 	return err
 }

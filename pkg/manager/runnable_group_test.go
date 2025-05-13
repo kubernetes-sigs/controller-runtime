@@ -56,7 +56,7 @@ var _ = Describe("runnables", func() {
 
 	It("should add WarmupRunnable to the Warmup and LeaderElection group", func() {
 		warmupRunnable := warmupRunnableFunc{
-			RunFunc: func(c context.Context) error {
+			StartFunc: func(c context.Context) error {
 				<-c.Done()
 				return nil
 			},
@@ -72,8 +72,8 @@ var _ = Describe("runnables", func() {
 	})
 
 	It("should add WarmupRunnable that doesn't needs leader election to warmup group only", func() {
-		warmupRunnable := combinedRunnable{
-			RunFunc: func(c context.Context) error {
+		warmupRunnable := leaderElectionAndWarmupRunnable{
+			StartFunc: func(c context.Context) error {
 				<-c.Done()
 				return nil
 			},
@@ -93,8 +93,8 @@ var _ = Describe("runnables", func() {
 	})
 
 	It("should add WarmupRunnable that needs leader election to Warmup and LeaderElection group, not Others", func() {
-		warmupRunnable := combinedRunnable{
-			RunFunc: func(c context.Context) error {
+		warmupRunnable := leaderElectionAndWarmupRunnable{
+			StartFunc: func(c context.Context) error {
 				<-c.Done()
 				return nil
 			},
@@ -118,7 +118,7 @@ var _ = Describe("runnables", func() {
 		var warmupExecuted atomic.Bool
 
 		warmupRunnable := warmupRunnableFunc{
-			RunFunc: func(c context.Context) error {
+			StartFunc: func(c context.Context) error {
 				<-c.Done()
 				return nil
 			},
@@ -145,7 +145,7 @@ var _ = Describe("runnables", func() {
 		expectedErr := fmt.Errorf("expected warmup error")
 
 		warmupRunnable := warmupRunnableFunc{
-			RunFunc: func(c context.Context) error {
+			StartFunc: func(c context.Context) error {
 				<-c.Done()
 				return nil
 			},
@@ -354,29 +354,29 @@ var _ LeaderElectionRunnable = &leaderElectionRunnableFunc{}
 // leaderElectionRunnableFunc is a helper struct that implements LeaderElectionRunnable
 // for testing purposes.
 type leaderElectionRunnableFunc struct {
-	RunFunc                func(context.Context) error
+	StartFunc              func(context.Context) error
 	NeedLeaderElectionFunc func() bool
 }
 
 func (r leaderElectionRunnableFunc) Start(ctx context.Context) error {
-	return r.RunFunc(ctx)
+	return r.StartFunc(ctx)
 }
 
 func (r leaderElectionRunnableFunc) NeedLeaderElection() bool {
 	return r.NeedLeaderElectionFunc()
 }
 
-var _ WarmupRunnable = &warmupRunnableFunc{}
+var _ warmupRunnable = &warmupRunnableFunc{}
 
 // warmupRunnableFunc is a helper struct that implements WarmupRunnable
 // for testing purposes.
 type warmupRunnableFunc struct {
-	RunFunc    func(context.Context) error
+	StartFunc  func(context.Context) error
 	WarmupFunc func(context.Context) error
 }
 
 func (r warmupRunnableFunc) Start(ctx context.Context) error {
-	return r.RunFunc(ctx)
+	return r.StartFunc(ctx)
 }
 
 func (r warmupRunnableFunc) Warmup(ctx context.Context) error {
@@ -387,25 +387,25 @@ func (r warmupRunnableFunc) WaitForWarmupComplete(ctx context.Context) bool {
 	return true
 }
 
-// combinedRunnable implements both WarmupRunnable and LeaderElectionRunnable
-type combinedRunnable struct {
-	RunFunc                func(context.Context) error
+// leaderElectionAndWarmupRunnable implements both WarmupRunnable and LeaderElectionRunnable
+type leaderElectionAndWarmupRunnable struct {
+	StartFunc              func(context.Context) error
 	WarmupFunc             func(context.Context) error
 	NeedLeaderElectionFunc func() bool
 }
 
-func (r combinedRunnable) Start(ctx context.Context) error {
-	return r.RunFunc(ctx)
+func (r leaderElectionAndWarmupRunnable) Start(ctx context.Context) error {
+	return r.StartFunc(ctx)
 }
 
-func (r combinedRunnable) Warmup(ctx context.Context) error {
+func (r leaderElectionAndWarmupRunnable) Warmup(ctx context.Context) error {
 	return r.WarmupFunc(ctx)
 }
 
-func (r combinedRunnable) WaitForWarmupComplete(ctx context.Context) bool {
+func (r leaderElectionAndWarmupRunnable) WaitForWarmupComplete(ctx context.Context) bool {
 	return true
 }
 
-func (r combinedRunnable) NeedLeaderElection() bool {
+func (r leaderElectionAndWarmupRunnable) NeedLeaderElection() bool {
 	return r.NeedLeaderElectionFunc()
 }

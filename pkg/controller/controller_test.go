@@ -475,11 +475,11 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ok).To(BeFalse())
 		})
 
-		It("should set ShouldWarmupWithoutLeadership correctly", func() {
+		It("should set NeedWarmup correctly", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
-			// Test with ShouldWarmupWithoutLeadership set to true
+			// Test with NeedWarmup set to true
 			ctrlWithWarmup, err := controller.New("warmup-enabled-ctrl", m, controller.Options{
 				Reconciler: reconcile.Func(nil),
 				NeedWarmup: ptr.To(true),
@@ -491,7 +491,7 @@ var _ = Describe("controller.Controller", func() {
 			Expect(internalCtrlWithWarmup.NeedWarmup).NotTo(BeNil())
 			Expect(*internalCtrlWithWarmup.NeedWarmup).To(BeTrue())
 
-			// Test with ShouldWarmupWithoutLeadership set to false
+			// Test with NeedWarmup set to false
 			ctrlWithoutWarmup, err := controller.New("warmup-disabled-ctrl", m, controller.Options{
 				Reconciler: reconcile.Func(nil),
 				NeedWarmup: ptr.To(false),
@@ -503,7 +503,7 @@ var _ = Describe("controller.Controller", func() {
 			Expect(internalCtrlWithoutWarmup.NeedWarmup).NotTo(BeNil())
 			Expect(*internalCtrlWithoutWarmup.NeedWarmup).To(BeFalse())
 
-			// Test with ShouldWarmupWithoutLeadership not set (should default to nil)
+			// Test with NeedWarmup not set (should default to nil)
 			ctrlWithDefaultWarmup, err := controller.New("warmup-default-ctrl", m, controller.Options{
 				Reconciler: reconcile.Func(nil),
 			})
@@ -514,8 +514,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(internalCtrlWithDefaultWarmup.NeedWarmup).To(BeNil())
 		})
 
-		It("should inherit ShouldWarmupWithoutLeadership from manager config", func() {
-			// Test with manager default setting ShouldWarmupWithoutLeadership to true
+		It("should inherit NeedWarmup from manager config", func() {
+			// Test with manager default setting NeedWarmup to true
 			managerWithWarmup, err := manager.New(cfg, manager.Options{
 				Controller: config.Controller{
 					NeedWarmup: ptr.To(true),

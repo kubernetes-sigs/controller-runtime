@@ -67,8 +67,8 @@ func (r *runnables) Add(fn Runnable) error {
 		})
 	case webhook.Server:
 		return r.Webhooks.Add(fn, nil)
-	case WarmupRunnable, LeaderElectionRunnable:
-		if warmupRunnable, ok := fn.(WarmupRunnable); ok {
+	case warmupRunnable, LeaderElectionRunnable:
+		if warmupRunnable, ok := fn.(warmupRunnable); ok {
 			if err := r.Warmup.Add(
 				RunnableFunc(warmupRunnable.Warmup),
 				func(ctx context.Context) bool {

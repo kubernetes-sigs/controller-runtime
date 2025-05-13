@@ -439,7 +439,7 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 		return fmt.Errorf("failed to start other runnables: %w", err)
 	}
 
-	// Start and wait for sources to start.
+	// Start WarmupRunnables and wait for warmup to complete.
 	if err := cm.runnables.Warmup.Start(cm.internalCtx); err != nil {
 		return fmt.Errorf("failed to start warmup runnables: %w", err)
 	}

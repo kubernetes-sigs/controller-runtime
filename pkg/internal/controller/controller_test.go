@@ -1036,8 +1036,8 @@ var _ = Describe("controller", func() {
 			err := ctrl.Warmup(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify DidFinishWarmup returns true for successful sync
-			result := ctrl.DidFinishWarmup(ctx)
+			// Verify WaitForWarmupComplete returns true for successful sync
+			result := ctrl.WaitForWarmupComplete(ctx)
 			Expect(result).To(BeTrue())
 		})
 
@@ -1057,8 +1057,8 @@ var _ = Describe("controller", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("sync error"))
 
-			// Verify DidFinishWarmup returns false for unsuccessful sync
-			result := ctrl.DidFinishWarmup(ctx)
+			// Verify WaitForWarmupComplete returns false for unsuccessful sync
+			result := ctrl.WaitForWarmupComplete(ctx)
 			Expect(result).To(BeFalse())
 		})
 	})

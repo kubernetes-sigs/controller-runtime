@@ -177,6 +177,9 @@ func (c *Controller[request]) Warmup(ctx context.Context) error {
 // WaitForWarmupComplete returns true if warmup has completed without error, and false if there was
 // an error during warmup. If context is cancelled, it returns true.
 func (c *Controller[request]) WaitForWarmupComplete(ctx context.Context) bool {
+	if c.NeedWarmup == nil || !*c.NeedWarmup {
+		return true
+	}
 	ticker := time.NewTicker(syncedPollPeriod)
 	defer ticker.Stop()
 

@@ -40,10 +40,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -1088,6 +1090,77 @@ var _ = Describe("controller", func() {
 
 			cancel()
 			Expect(<-resultChan).To(BeTrue())
+		})
+
+		It("should be called before leader election runnables if warmup is enabled", func() {
+			// This unit test exists to ensure that a warmup enabled controller will actually be
+			// called in the warmup phase before the leader election runnables are started. It
+			// catches regressions in the controller that would not implement warmupRunnable from
+			// pkg/manager.
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			hasCtrlWatchStarted, hasNonWarmupCtrlWatchStarted := atomic.Bool{}, atomic.Bool{}
+
+			// ctrl watch will block from finishing until the channel is produced to
+			ctrlWatchBlockingChan := make(chan struct{})
+
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					hasCtrlWatchStarted.Store(true)
+					<-ctrlWatchBlockingChan
+					return nil
+				}),
+			}
+
+			nonWarmupCtrl := &Controller[reconcile.Request]{
+				MaxConcurrentReconciles: 1,
+				Do:                      fakeReconcile,
+				NewQueue: func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+					return queue
+				},
+				LogConstructor: func(_ *reconcile.Request) logr.Logger {
+					return log.RuntimeLog.WithName("controller").WithName("test")
+				},
+				CacheSyncTimeout: time.Second,
+				NeedWarmup:       ptr.To(false),
+				LeaderElected:    ptr.To(true),
+				startWatches: []source.TypedSource[reconcile.Request]{
+					source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+						hasNonWarmupCtrlWatchStarted.Store(true)
+						return nil
+					}),
+				},
+			}
+
+			By("Creating a manager")
+			testenv = &envtest.Environment{}
+			cfg, err := testenv.Start()
+			Expect(err).NotTo(HaveOccurred())
+			m, err := manager.New(cfg, manager.Options{
+				LeaderElection: false,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Adding warmup and non-warmup controllers to the manager")
+			Expect(m.Add(ctrl)).To(Succeed())
+			Expect(m.Add(nonWarmupCtrl)).To(Succeed())
+
+			By("Starting the manager")
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(ctx)).To(Succeed())
+			}()
+
+			By("Waiting for the warmup controller to start")
+			Eventually(hasCtrlWatchStarted.Load).Should(BeTrue())
+			Expect(hasNonWarmupCtrlWatchStarted.Load()).To(BeFalse())
+
+			By("Unblocking the warmup controller source start")
+			close(ctrlWatchBlockingChan)
+			Eventually(hasNonWarmupCtrlWatchStarted.Load).Should(BeTrue())
 		})
 	})
 

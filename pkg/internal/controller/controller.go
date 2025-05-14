@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
 
@@ -176,28 +175,28 @@ func (c *Controller[request]) Warmup(ctx context.Context) error {
 }
 
 // WaitForWarmupComplete returns true if warmup has completed without error, and false if there was
-// an error during warmup.
+// an error during warmup. If context is cancelled, it returns true.
 func (c *Controller[request]) WaitForWarmupComplete(ctx context.Context) bool {
-	err := wait.PollUntilContextCancel(ctx, syncedPollPeriod, true, func(ctx context.Context) (bool, error) {
-		didFinishSync, ok := c.didEventSourcesFinishSyncSuccessfully.Load().(*bool)
-		if !ok {
-			return false, errors.New("unexpected error: didEventSourcesFinishSync is not a bool pointer")
+	ticker := time.NewTicker(syncedPollPeriod)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return true
+		case <-ticker.C:
+			didFinishSync, ok := c.didEventSourcesFinishSyncSuccessfully.Load().(*bool)
+			if !ok {
+				return false
+			}
+
+			if didFinishSync != nil && *didFinishSync {
+				// event sources finished syncing successfully
+				return true
+			}
+			return false
 		}
-
-		if didFinishSync == nil {
-			// event sources not finished syncing
-			return false, nil
-		}
-
-		if !*didFinishSync {
-			// event sources finished syncing with an error
-			return true, errors.New("event sources did not finish syncing successfully")
-		}
-
-		return true, nil
-	})
-
-	return err == nil
+	}
 }
 
 // Start implements controller.Controller.

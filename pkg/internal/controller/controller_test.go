@@ -1061,6 +1061,34 @@ var _ = Describe("controller", func() {
 			result := ctrl.WaitForWarmupComplete(ctx)
 			Expect(result).To(BeFalse())
 		})
+
+		It("should return true if context is cancelled", func() {
+			// Setup controller with sources that complete with error
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					<-ctx.Done()
+					return nil
+				}),
+			}
+
+			resultChan := make(chan bool)
+
+			// Invoked in goroutines because the Warmup / WaitForWarmupComplete will block forever.
+			go func() {
+				err := ctrl.Warmup(ctx)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+			go func() {
+				resultChan <- ctrl.WaitForWarmupComplete(ctx)
+			}()
+
+			cancel()
+			Expect(<-resultChan).To(BeTrue())
+		})
 	})
 
 	Describe("Warmup with warmup disabled", func() {

@@ -1064,7 +1064,7 @@ var _ = Describe("controller", func() {
 			Expect(result).To(BeFalse())
 		})
 
-		It("should return true if context is cancelled", func() {
+		It("should return true if context is cancelled while waiting for source to start", func() {
 			// Setup controller with sources that complete with error
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -1197,6 +1197,58 @@ var _ = Describe("controller", func() {
 			}()
 			Eventually(isSourceStarted.Load).Should(BeTrue())
 		})
+	})
+
+	Describe("WaitForWarmupComplete", func() {
+		It("should short circuit without blocking if warmup is disabled", func() {
+			ctrl.NeedWarmup = ptr.To(false)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Call WaitForWarmupComplete and expect it to return immediately
+			result := ctrl.WaitForWarmupComplete(ctx)
+			Expect(result).To(BeTrue())
+		})
+
+		It("should block until warmup is complete if warmup is enabled", func() {
+			ctrl.NeedWarmup = ptr.To(true)
+			// Setup controller with sources that complete successfully
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Close the channel to signal watch completion
+			shouldWatchCompleteChan := make(chan struct{})
+
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					<-shouldWatchCompleteChan
+					return nil
+				}),
+			}
+
+			By("Starting a blocking warmup")
+
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Warmup(ctx)).To(Succeed())
+			}()
+
+			// didWaitForWarmupCompleteReturn is true when the call to WaitForWarmupComplete returns
+			didWaitForWarmupCompleteReturn := atomic.Bool{}
+			go func() {
+				// Verify WaitForWarmupComplete returns true for successful sync
+				Expect(ctrl.WaitForWarmupComplete(ctx)).To(BeTrue())
+				didWaitForWarmupCompleteReturn.Store(true)
+			}()
+			Consistently(didWaitForWarmupCompleteReturn.Load).Should(BeFalse())
+
+			By("Unblocking the watch to simulate initial sync completion")
+			close(shouldWatchCompleteChan)
+			Eventually(didWaitForWarmupCompleteReturn.Load).Should(BeTrue())
+		})
+
 	})
 })
 

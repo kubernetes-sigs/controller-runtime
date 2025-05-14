@@ -377,8 +377,9 @@ var _ warmupRunnable = &warmupRunnableFunc{}
 // warmupRunnableFunc is a helper struct that implements WarmupRunnable
 // for testing purposes.
 type warmupRunnableFunc struct {
-	StartFunc  func(context.Context) error
-	WarmupFunc func(context.Context) error
+	StartFunc       func(context.Context) error
+	WarmupFunc      func(context.Context) error
+	didWarmupFinish chan bool
 }
 
 func (r warmupRunnableFunc) Start(ctx context.Context) error {
@@ -386,18 +387,24 @@ func (r warmupRunnableFunc) Start(ctx context.Context) error {
 }
 
 func (r warmupRunnableFunc) Warmup(ctx context.Context) error {
-	return r.WarmupFunc(ctx)
+	err := r.WarmupFunc(ctx)
+	r.didWarmupFinish <- (err == nil)
+	return err
 }
 
 func (r warmupRunnableFunc) WaitForWarmupComplete(ctx context.Context) bool {
-	return true
+	return <-r.didWarmupFinish
 }
+
+var _ LeaderElectionRunnable = &leaderElectionAndWarmupRunnable{}
+var _ warmupRunnable = &leaderElectionAndWarmupRunnable{}
 
 // leaderElectionAndWarmupRunnable implements both WarmupRunnable and LeaderElectionRunnable
 type leaderElectionAndWarmupRunnable struct {
 	StartFunc              func(context.Context) error
 	WarmupFunc             func(context.Context) error
 	NeedLeaderElectionFunc func() bool
+	didWarmupFinish        chan bool
 }
 
 func (r leaderElectionAndWarmupRunnable) Start(ctx context.Context) error {
@@ -405,11 +412,13 @@ func (r leaderElectionAndWarmupRunnable) Start(ctx context.Context) error {
 }
 
 func (r leaderElectionAndWarmupRunnable) Warmup(ctx context.Context) error {
-	return r.WarmupFunc(ctx)
+	err := r.WarmupFunc(ctx)
+	r.didWarmupFinish <- (err == nil)
+	return err
 }
 
 func (r leaderElectionAndWarmupRunnable) WaitForWarmupComplete(ctx context.Context) bool {
-	return true
+	return <-r.didWarmupFinish
 }
 
 func (r leaderElectionAndWarmupRunnable) NeedLeaderElection() bool {

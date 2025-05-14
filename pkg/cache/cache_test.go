@@ -1919,7 +1919,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			It("should error when starting the cache a second time", func() {
 				err := informerCache.Start(context.Background())
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("Informer already started"))
+				Expect(err.Error()).To(ContainSubstring("informer already started"))
 			})
 
 			Context("with structured objects", func() {

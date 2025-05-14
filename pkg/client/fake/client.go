@@ -411,12 +411,9 @@ func (t versionedTracker) Patch(gvr schema.GroupVersionResource, obj runtime.Obj
 		return err
 	}
 
-	isStatus := false
 	// We apply patches using a client-go reaction that ends up calling the trackers Patch. As we can't change
 	// that reaction, we use the callstack to figure out if this originated from the status client.
-	if bytes.Contains(debug.Stack(), []byte("sigs.k8s.io/controller-runtime/pkg/client/fake.(*fakeSubResourceClient).statusPatch")) {
-		isStatus = true
-	}
+	isStatus := bytes.Contains(debug.Stack(), []byte("sigs.k8s.io/controller-runtime/pkg/client/fake.(*fakeSubResourceClient).statusPatch"))
 
 	obj, err = t.updateObject(gvr, obj, ns, isStatus, false, patchOptions.DryRun)
 	if err != nil {

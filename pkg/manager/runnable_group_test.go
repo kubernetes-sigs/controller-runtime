@@ -27,6 +27,7 @@ var _ = Describe("runnables", func() {
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(server)).To(Succeed())
 		Expect(r.HTTPServers.startQueue).To(HaveLen(1))
+		Expect(r.Others.startQueue).To(BeEmpty())
 	})
 
 	It("should add caches to the appropriate group", func() {
@@ -34,6 +35,7 @@ var _ = Describe("runnables", func() {
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(cache)).To(Succeed())
 		Expect(r.Caches.startQueue).To(HaveLen(1))
+		Expect(r.Others.startQueue).To(BeEmpty())
 	})
 
 	It("should add webhooks to the appropriate group", func() {
@@ -41,6 +43,7 @@ var _ = Describe("runnables", func() {
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(webhook)).To(Succeed())
 		Expect(r.Webhooks.startQueue).To(HaveLen(1))
+		Expect(r.Others.startQueue).To(BeEmpty())
 	})
 
 	It("should add any runnable to the leader election group", func() {
@@ -52,6 +55,7 @@ var _ = Describe("runnables", func() {
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(runnable)).To(Succeed())
 		Expect(r.LeaderElection.startQueue).To(HaveLen(1))
+		Expect(r.Others.startQueue).To(BeEmpty())
 	})
 
 	It("should add WarmupRunnable to the Warmup and LeaderElection group", func() {
@@ -69,6 +73,7 @@ var _ = Describe("runnables", func() {
 		Expect(r.Add(warmupRunnable)).To(Succeed())
 		Expect(r.Warmup.startQueue).To(HaveLen(1))
 		Expect(r.LeaderElection.startQueue).To(HaveLen(1))
+		Expect(r.Others.startQueue).To(BeEmpty())
 	})
 
 	It("should add WarmupRunnable that doesn't needs leader election to warmup group only", func() {
@@ -90,6 +95,7 @@ var _ = Describe("runnables", func() {
 
 		Expect(r.Warmup.startQueue).To(HaveLen(1))
 		Expect(r.LeaderElection.startQueue).To(BeEmpty())
+		Expect(r.Others.startQueue).To(HaveLen(1))
 	})
 
 	It("should add WarmupRunnable that needs leader election to Warmup and LeaderElection group, not Others", func() {

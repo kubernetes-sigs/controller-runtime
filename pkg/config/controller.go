@@ -66,7 +66,10 @@ type Controller struct {
 	// improves leadership failover time, as the caches will be prepopulated before the controller
 	// transitions to be leader.
 	//
-	// When set to true, the controller will start its sources without waiting to become leader.
+	// Setting NeedWarmup to true and NeedLeaderElection to true means the controller will start its
+	// sources without waiting to become leader.
+	// Setting NeedWarmup to true and NeedLeaderElection is false is a no-op as controllers without
+	// leader election do not wait on leader election to start their sources.
 	// Defaults to false.
 	NeedWarmup *bool
 

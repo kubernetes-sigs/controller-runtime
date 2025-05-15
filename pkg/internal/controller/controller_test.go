@@ -1229,7 +1229,6 @@ var _ = Describe("controller", func() {
 			}
 
 			By("Starting a blocking warmup")
-
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Warmup(ctx)).To(Succeed())
@@ -1238,6 +1237,7 @@ var _ = Describe("controller", func() {
 			// didWaitForWarmupCompleteReturn is true when the call to WaitForWarmupComplete returns
 			didWaitForWarmupCompleteReturn := atomic.Bool{}
 			go func() {
+				defer GinkgoRecover()
 				// Verify WaitForWarmupComplete returns true for successful sync
 				Expect(ctrl.WaitForWarmupComplete(ctx)).To(BeTrue())
 				didWaitForWarmupCompleteReturn.Store(true)

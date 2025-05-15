@@ -188,12 +188,22 @@ func (c *Controller[request]) WaitForWarmupComplete(ctx context.Context) bool {
 		case <-ctx.Done():
 			return true
 		case <-ticker.C:
-			didFinishSync, ok := c.didEventSourcesFinishSyncSuccessfully.Load().(*bool)
+			didFinishSync := c.didEventSourcesFinishSyncSuccessfully.Load()
+			if didFinishSync == nil {
+				// event source still syncing
+				continue
+			}
+
+			// This *bool assertion is done after checking for nil because type asserting a nil
+			// interface as a *bool will return false, which is not what we want since nil should be
+			// treated as not finished syncing.
+			didFinishSyncPtr, ok := didFinishSync.(*bool)
 			if !ok {
+				// programming error, should never happen
 				return false
 			}
 
-			if didFinishSync != nil && *didFinishSync {
+			if didFinishSyncPtr != nil && *didFinishSyncPtr {
 				// event sources finished syncing successfully
 				return true
 			}

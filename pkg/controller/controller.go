@@ -94,7 +94,7 @@ type TypedOptions[request comparable] struct {
 	// Note: This flag is disabled by default until a future version. It's currently in beta.
 	UsePriorityQueue *bool
 
-	// NeedWarmup specifies whether the controller should start its sources when the manager is not
+	// EnableWarmup specifies whether the controller should start its sources when the manager is not
 	// the leader. This is useful for cases where sources take a long time to start, as it allows
 	// for the controller to warm up its caches even before it is elected as the leader. This
 	// improves leadership failover time, as the caches will be prepopulated before the controller
@@ -102,7 +102,7 @@ type TypedOptions[request comparable] struct {
 	//
 	// When set to true, the controller will start its sources without transitioning to be leader.
 	// Defaults to false.
-	NeedWarmup *bool
+	EnableWarmup *bool
 }
 
 // DefaultFromConfig defaults the config from a config.Controller
@@ -135,8 +135,8 @@ func (options *TypedOptions[request]) DefaultFromConfig(config config.Controller
 		options.NeedLeaderElection = config.NeedLeaderElection
 	}
 
-	if options.NeedWarmup == nil {
-		options.NeedWarmup = config.NeedWarmup
+	if options.EnableWarmup == nil {
+		options.EnableWarmup = config.EnableWarmup
 	}
 }
 
@@ -267,7 +267,7 @@ func NewTypedUnmanaged[request comparable](name string, options TypedOptions[req
 		LogConstructor:          options.LogConstructor,
 		RecoverPanic:            options.RecoverPanic,
 		LeaderElected:           options.NeedLeaderElection,
-		NeedWarmup:              options.NeedWarmup,
+		EnableWarmup:            options.EnableWarmup,
 	}, nil
 }
 

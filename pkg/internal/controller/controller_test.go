@@ -1051,7 +1051,7 @@ var _ = Describe("controller", func() {
 
 	Describe("Warmup", func() {
 		JustBeforeEach(func() {
-			ctrl.NeedWarmup = ptr.To(true)
+			ctrl.EnableWarmup = ptr.To(true)
 		})
 
 		It("should track warmup status correctly with successful sync", func() {
@@ -1165,7 +1165,7 @@ var _ = Describe("controller", func() {
 					return log.RuntimeLog.WithName("controller").WithName("test")
 				},
 				CacheSyncTimeout: time.Second,
-				NeedWarmup:       ptr.To(false),
+				EnableWarmup:     ptr.To(false),
 				LeaderElected:    ptr.To(true),
 				startWatches: []source.TypedSource[reconcile.Request]{
 					source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
@@ -1206,7 +1206,7 @@ var _ = Describe("controller", func() {
 
 	Describe("Warmup with warmup disabled", func() {
 		JustBeforeEach(func() {
-			ctrl.NeedWarmup = ptr.To(false)
+			ctrl.EnableWarmup = ptr.To(false)
 		})
 
 		It("should not start sources when Warmup is called if warmup is disabled but start it when Start is called.", func() {
@@ -1224,12 +1224,12 @@ var _ = Describe("controller", func() {
 				}),
 			}
 
-			By("Calling Warmup when NeedWarmup is false")
+			By("Calling Warmup when EnableWarmup is false")
 			err := ctrl.Warmup(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(isSourceStarted.Load()).To(BeFalse())
 
-			By("Calling Start when NeedWarmup is false")
+			By("Calling Start when EnableWarmup is false")
 			// Now call Start
 			go func() {
 				defer GinkgoRecover()
@@ -1241,7 +1241,7 @@ var _ = Describe("controller", func() {
 
 	Describe("WaitForWarmupComplete", func() {
 		It("should short circuit without blocking if warmup is disabled", func() {
-			ctrl.NeedWarmup = ptr.To(false)
+			ctrl.EnableWarmup = ptr.To(false)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -1252,7 +1252,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should block until warmup is complete if warmup is enabled", func() {
-			ctrl.NeedWarmup = ptr.To(true)
+			ctrl.EnableWarmup = ptr.To(true)
 			// Setup controller with sources that complete successfully
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

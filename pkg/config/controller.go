@@ -60,18 +60,18 @@ type Controller struct {
 	// Defaults to true, which means the controller will use leader election.
 	NeedLeaderElection *bool
 
-	// NeedWarmup specifies whether the controller should start its sources when the manager is not
+	// EnableWarmup specifies whether the controller should start its sources when the manager is not
 	// the leader. This is useful for cases where sources take a long time to start, as it allows
 	// for the controller to warm up its caches even before it is elected as the leader. This
 	// improves leadership failover time, as the caches will be prepopulated before the controller
 	// transitions to be leader.
 	//
-	// Setting NeedWarmup to true and NeedLeaderElection to true means the controller will start its
+	// Setting EnableWarmup to true and NeedLeaderElection to true means the controller will start its
 	// sources without waiting to become leader.
-	// Setting NeedWarmup to true and NeedLeaderElection is false is a no-op as controllers without
+	// Setting EnableWarmup to true and NeedLeaderElection is false is a no-op as controllers without
 	// leader election do not wait on leader election to start their sources.
 	// Defaults to false.
-	NeedWarmup *bool
+	EnableWarmup *bool
 
 	// UsePriorityQueue configures the controllers queue to use the controller-runtime provided
 	// priority queue.

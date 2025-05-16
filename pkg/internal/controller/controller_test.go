@@ -502,6 +502,36 @@ var _ = Describe("controller", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("timed out waiting for source"))
 		})
+
+		It("should only start sources once when called multiple times", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = 1 * time.Millisecond
+
+			var startCount atomic.Int32
+			src := source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				startCount.Add(1)
+				return nil
+			})
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
+
+			By("Calling startEventSources multiple times in parallel")
+			var wg sync.WaitGroup
+			for i := 1; i <= 5; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					err := ctrl.startEventSources(ctx)
+					// All calls should return the same nil error
+					Expect(err).NotTo(HaveOccurred())
+				}()
+			}
+
+			wg.Wait()
+			Expect(startCount.Load()).To(Equal(int32(1)), "Source should only be started once even when called multiple times")
+		})
 	})
 
 	Describe("Processing queue items from a Controller", func() {

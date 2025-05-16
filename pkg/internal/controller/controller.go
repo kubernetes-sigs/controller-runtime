@@ -89,8 +89,8 @@ type Controller[request comparable] struct {
 	// startWatches maintains a list of sources, handlers, and predicates to start when the controller is started.
 	startWatches []source.TypedSource[request]
 
-	// didStartEventSources is used to indicate whether the event sources have been started.
-	didStartEventSources atomic.Bool
+	// didStartEventSourcesOnce is used to ensure that the event sources are only started once.
+	didStartEventSourcesOnce sync.Once
 
 	// didEventSourcesFinishSyncSuccessfully is used to indicate whether the event sources have finished
 	// successfully. It stores a *bool where
@@ -289,70 +289,69 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 // startEventSources launches all the sources registered with this controller and waits
 // for them to sync. It returns an error if any of the sources fail to start or sync.
 func (c *Controller[request]) startEventSources(ctx context.Context) error {
-	// CAS returns false if value is already true, so early exit since another goroutine must have
-	// called startEventSources previously
-	if !c.didStartEventSources.CompareAndSwap(false, true) {
-		c.LogConstructor(nil).Info("Skipping starting event sources since they were previously started")
-		return nil
-	}
+	var retErr error
 
-	errGroup := &errgroup.Group{}
-	for _, watch := range c.startWatches {
-		log := c.LogConstructor(nil)
-		_, ok := watch.(interface {
-			String() string
-		})
-		if !ok {
-			log = log.WithValues("source", fmt.Sprintf("%T", watch))
-		} else {
-			log = log.WithValues("source", fmt.Sprintf("%s", watch))
-		}
-		didStartSyncingSource := &atomic.Bool{}
-		errGroup.Go(func() error {
-			// Use a timeout for starting and syncing the source to avoid silently
-			// blocking startup indefinitely if it doesn't come up.
-			sourceStartCtx, cancel := context.WithTimeout(ctx, c.CacheSyncTimeout)
-			defer cancel()
-
-			sourceStartErrChan := make(chan error, 1) // Buffer chan to not leak goroutine if we time out
-			go func() {
-				defer close(sourceStartErrChan)
-				log.Info("Starting EventSource")
-				if err := watch.Start(ctx, c.Queue); err != nil {
-					sourceStartErrChan <- err
-					return
-				}
-				syncingSource, ok := watch.(source.TypedSyncingSource[request])
-				if !ok {
-					return
-				}
-				didStartSyncingSource.Store(true)
-				if err := syncingSource.WaitForSync(sourceStartCtx); err != nil {
-					err := fmt.Errorf("failed to wait for %s caches to sync %v: %w", c.Name, syncingSource, err)
-					log.Error(err, "Could not wait for Cache to sync")
-					sourceStartErrChan <- err
-				}
-			}()
-
-			select {
-			case err := <-sourceStartErrChan:
-				return err
-			case <-sourceStartCtx.Done():
-				if didStartSyncingSource.Load() { // We are racing with WaitForSync, wait for it to let it tell us what happened
-					return <-sourceStartErrChan
-				}
-				if ctx.Err() != nil { // Don't return an error if the root context got cancelled
-					return nil
-				}
-				return fmt.Errorf("timed out waiting for source %s to Start. Please ensure that its Start() method is non-blocking", watch)
+	c.didStartEventSourcesOnce.Do(func() {
+		errGroup := &errgroup.Group{}
+		for _, watch := range c.startWatches {
+			log := c.LogConstructor(nil)
+			_, ok := watch.(interface {
+				String() string
+			})
+			if !ok {
+				log = log.WithValues("source", fmt.Sprintf("%T", watch))
+			} else {
+				log = log.WithValues("source", fmt.Sprintf("%s", watch))
 			}
-		})
-	}
-	err := errGroup.Wait()
+			didStartSyncingSource := &atomic.Bool{}
+			errGroup.Go(func() error {
+				// Use a timeout for starting and syncing the source to avoid silently
+				// blocking startup indefinitely if it doesn't come up.
+				sourceStartCtx, cancel := context.WithTimeout(ctx, c.CacheSyncTimeout)
+				defer cancel()
 
-	c.didEventSourcesFinishSyncSuccessfully.Store(ptr.To(err == nil))
+				sourceStartErrChan := make(chan error, 1) // Buffer chan to not leak goroutine if we time out
+				go func() {
+					defer close(sourceStartErrChan)
+					log.Info("Starting EventSource")
+					if err := watch.Start(ctx, c.Queue); err != nil {
+						sourceStartErrChan <- err
+						return
+					}
+					syncingSource, ok := watch.(source.TypedSyncingSource[request])
+					if !ok {
+						return
+					}
+					didStartSyncingSource.Store(true)
+					if err := syncingSource.WaitForSync(sourceStartCtx); err != nil {
+						err := fmt.Errorf("failed to wait for %s caches to sync %v: %w", c.Name, syncingSource, err)
+						log.Error(err, "Could not wait for Cache to sync")
+						sourceStartErrChan <- err
+					}
+				}()
 
-	return err
+				select {
+				case err := <-sourceStartErrChan:
+					return err
+				case <-sourceStartCtx.Done():
+					if didStartSyncingSource.Load() { // We are racing with WaitForSync, wait for it to let it tell us what happened
+						return <-sourceStartErrChan
+					}
+					if ctx.Err() != nil { // Don't return an error if the root context got cancelled
+						return nil
+					}
+					return fmt.Errorf("timed out waiting for source %s to Start. Please ensure that its Start() method is non-blocking", watch)
+				}
+			})
+		}
+		err := errGroup.Wait()
+
+		c.didEventSourcesFinishSyncSuccessfully.Store(ptr.To(err == nil))
+
+		retErr = err
+	})
+
+	return retErr
 }
 
 // processNextWorkItem will read a single work item off the workqueue and

@@ -503,7 +503,7 @@ var _ = Describe("controller", func() {
 			Expect(err.Error()).To(ContainSubstring("timed out waiting for source"))
 		})
 
-		It("should only start sources once when called multiple times", func() {
+		It("should only start sources once when called multiple times concurrently", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -531,6 +531,23 @@ var _ = Describe("controller", func() {
 
 			wg.Wait()
 			Expect(startCount.Load()).To(Equal(int32(1)), "Source should only be started once even when called multiple times")
+		})
+
+		It("should reset c.startWatches to nil after returning", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = 1 * time.Millisecond
+
+			src := source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				return nil
+			})
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
+
+			err := ctrl.startEventSources(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ctrl.startWatches).To(BeNil(), "startWatches should be reset to nil after returning")
 		})
 	})
 

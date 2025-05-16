@@ -233,12 +233,6 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 
 		c.LogConstructor(nil).Info("Starting Controller")
 
-		// All the watches have been started, we can reset the local slice.
-		//
-		// We should never hold watches more than necessary, each watch source can hold a backing cache,
-		// which won't be garbage collected if we hold a reference to it.
-		c.startWatches = nil
-
 		// Launch workers to process resources
 		c.LogConstructor(nil).Info("Starting workers", "worker count", c.MaxConcurrentReconciles)
 		wg.Add(c.MaxConcurrentReconciles)
@@ -325,6 +319,12 @@ func (c *Controller[request]) startEventSources(ctx context.Context) error {
 			})
 		}
 		retErr = errGroup.Wait()
+
+		// All the watches have been started, we can reset the local slice.
+		//
+		// We should never hold watches more than necessary, each watch source can hold a backing cache,
+		// which won't be garbage collected if we hold a reference to it.
+		c.startWatches = nil
 	})
 
 	return retErr

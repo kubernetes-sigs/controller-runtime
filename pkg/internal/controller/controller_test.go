@@ -462,6 +462,7 @@ var _ = Describe("controller", func() {
 			// Start the sources in a goroutine
 			startErrCh := make(chan error)
 			go func() {
+				defer GinkgoRecover()
 				startErrCh <- ctrl.startEventSources(sourceCtx)
 			}()
 
@@ -1079,17 +1080,26 @@ var _ = Describe("controller", func() {
 
 			resultChan := make(chan bool)
 
+			// Wait for the goroutines to finish before returning to avoid racing with the
+			// assignment in BeforeEach block.
+			var wg sync.WaitGroup
+
 			// Invoked in goroutines because the Warmup / WaitForWarmupComplete will block forever.
+			wg.Add(2)
 			go func() {
-				err := ctrl.Warmup(ctx)
-				Expect(err).NotTo(HaveOccurred())
+				defer GinkgoRecover()
+				defer wg.Done()
+				Expect(ctrl.Warmup(ctx)).To(Succeed())
 			}()
 			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
 				resultChan <- ctrl.WaitForWarmupComplete(ctx)
 			}()
 
 			cancel()
 			Expect(<-resultChan).To(BeTrue())
+			wg.Wait()
 		})
 
 		It("should be called before leader election runnables if warmup is enabled", func() {

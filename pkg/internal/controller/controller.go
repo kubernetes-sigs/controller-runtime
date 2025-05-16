@@ -172,6 +172,11 @@ func (c *Controller[request]) Warmup(ctx context.Context) error {
 		return nil
 	}
 
+	// Hold the lock to avoid concurrent access to c.startWatches with Start() when calling
+	// startEventSources
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	c.ensureDidWarmupFinishChanInitialized()
 	err := c.startEventSources(ctx)
 	c.didWarmupFinishSuccessfully.Store(err == nil)

@@ -533,7 +533,7 @@ var _ = Describe("controller", func() {
 			Expect(startCount.Load()).To(Equal(int32(1)), "Source should only be started once even when called multiple times")
 		})
 
-        It("should block subsequent calls from returning until the first call to startEventSources has returned", func() {
+		It("should block subsequent calls from returning until the first call to startEventSources has returned", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			ctrl.CacheSyncTimeout = 5 * time.Second
@@ -1256,6 +1256,39 @@ var _ = Describe("controller", func() {
 			By("Unblocking the warmup controller source start")
 			close(ctrlWatchBlockingChan)
 			Eventually(hasNonWarmupCtrlWatchStarted.Load).Should(BeTrue())
+		})
+
+		It("should not race with Start and only start sources once", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = time.Second
+
+			var watchStartedCount atomic.Int32
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					watchStartedCount.Add(1)
+					return nil
+				}),
+			}
+
+			By("calling Warmup and Start concurrently")
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(ctx)).To(Succeed())
+			}()
+
+			blockOnWarmupChan := make(chan struct{})
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Warmup(ctx)).To(Succeed())
+				close(blockOnWarmupChan)
+			}()
+
+			<-blockOnWarmupChan
+
+			Expect(watchStartedCount.Load()).To(Equal(int32(1)), "source should only be started once")
+			Expect(ctrl.startWatches).To(BeNil(), "startWatches should be reset to nil after they are started")
 		})
 	})
 

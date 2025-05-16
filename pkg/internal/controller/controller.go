@@ -30,18 +30,12 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-)
-
-const (
-	// syncedPollPeriod is the period to poll for cache sync
-	syncedPollPeriod = 100 * time.Millisecond
 )
 
 // Controller implements controller.Controller.
@@ -92,12 +86,18 @@ type Controller[request comparable] struct {
 	// didStartEventSourcesOnce is used to ensure that the event sources are only started once.
 	didStartEventSourcesOnce sync.Once
 
-	// didEventSourcesFinishSyncSuccessfully is used to indicate whether the event sources have finished
-	// successfully. It stores a *bool where
-	// - nil: not finished syncing
-	// - true: finished syncing without error
-	// - false: finished syncing with error
-	didEventSourcesFinishSyncSuccessfully atomic.Value
+	// ensureDidWarmupFinishChanInitializedOnce is used to ensure that the didWarmupFinishChan is
+	// initialized to a non-nil channel.
+	ensureDidWarmupFinishChanInitializedOnce sync.Once
+
+	// didWarmupFinish is closed when startEventSources returns. It is used to
+	// signal to WaitForWarmupComplete that the event sources have finished syncing.
+	didWarmupFinishChan chan struct{}
+
+	// didWarmupFinishSuccessfully is used to indicate whether the event sources have finished
+	// successfully. If true, the event sources have finished syncing without error. If false, the
+	// event sources have finished syncing but with error.
+	didWarmupFinishSuccessfully atomic.Bool
 
 	// LogConstructor is used to construct a logger to then log messages to users during reconciliation,
 	// or for example when a watch is started.
@@ -171,7 +171,13 @@ func (c *Controller[request]) Warmup(ctx context.Context) error {
 	if c.NeedWarmup == nil || !*c.NeedWarmup {
 		return nil
 	}
-	return c.startEventSources(ctx)
+
+	c.ensureDidWarmupFinishChanInitialized()
+	err := c.startEventSources(ctx)
+	c.didWarmupFinishSuccessfully.Store(err == nil)
+	close(c.didWarmupFinishChan)
+
+	return err
 }
 
 // WaitForWarmupComplete returns true if warmup has completed without error, and false if there was
@@ -180,36 +186,10 @@ func (c *Controller[request]) WaitForWarmupComplete(ctx context.Context) bool {
 	if c.NeedWarmup == nil || !*c.NeedWarmup {
 		return true
 	}
-	ticker := time.NewTicker(syncedPollPeriod)
-	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return true
-		case <-ticker.C:
-			didFinishSync := c.didEventSourcesFinishSyncSuccessfully.Load()
-			if didFinishSync == nil {
-				// event source still syncing
-				continue
-			}
-
-			// This *bool assertion is done after checking for nil because type asserting a nil
-			// interface as a *bool will return false, which is not what we want since nil should be
-			// treated as not finished syncing.
-			didFinishSyncPtr, ok := didFinishSync.(*bool)
-			if !ok {
-				// programming error, should never happen
-				return false
-			}
-
-			if didFinishSyncPtr != nil && *didFinishSyncPtr {
-				// event sources finished syncing successfully
-				return true
-			}
-			return false
-		}
-	}
+	c.ensureDidWarmupFinishChanInitialized()
+	<-c.didWarmupFinishChan
+	return c.didWarmupFinishSuccessfully.Load()
 }
 
 // Start implements controller.Controller.
@@ -344,11 +324,7 @@ func (c *Controller[request]) startEventSources(ctx context.Context) error {
 				}
 			})
 		}
-		err := errGroup.Wait()
-
-		c.didEventSourcesFinishSyncSuccessfully.Store(ptr.To(err == nil))
-
-		retErr = err
+		retErr = errGroup.Wait()
 	})
 
 	return retErr
@@ -458,6 +434,15 @@ func (c *Controller[request]) GetLogger() logr.Logger {
 // updateMetrics updates prometheus metrics within the controller.
 func (c *Controller[request]) updateMetrics(reconcileTime time.Duration) {
 	ctrlmetrics.ReconcileTime.WithLabelValues(c.Name).Observe(reconcileTime.Seconds())
+}
+
+// ensureDidWarmupFinishChanInitialized ensures that the didWarmupFinishChan is initialized. This is needed
+// because controller can directly be created from other packages like controller.Controller, and
+// there is no way for the caller to pass in the chan.
+func (c *Controller[request]) ensureDidWarmupFinishChanInitialized() {
+	c.ensureDidWarmupFinishChanInitializedOnce.Do(func() {
+		c.didWarmupFinishChan = make(chan struct{})
+	})
 }
 
 // ReconcileIDFromContext gets the reconcileID from the current context.

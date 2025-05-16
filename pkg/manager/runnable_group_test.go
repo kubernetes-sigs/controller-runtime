@@ -59,15 +59,13 @@ var _ = Describe("runnables", func() {
 	})
 
 	It("should add WarmupRunnable to the Warmup and LeaderElection group", func() {
-		warmupRunnable := warmupRunnableFunc{
-			StartFunc: func(c context.Context) error {
+		warmupRunnable := newWarmupRunnableFunc(
+			func(c context.Context) error {
 				<-c.Done()
 				return nil
 			},
-			WarmupFunc: func(c context.Context) error {
-				return nil
-			},
-		}
+			func(c context.Context) error { return nil },
+		)
 
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(warmupRunnable)).To(Succeed())
@@ -77,18 +75,14 @@ var _ = Describe("runnables", func() {
 	})
 
 	It("should add WarmupRunnable that doesn't needs leader election to warmup group only", func() {
-		warmupRunnable := leaderElectionAndWarmupRunnable{
-			StartFunc: func(c context.Context) error {
+		warmupRunnable := newLeaderElectionAndWarmupRunnable(
+			func(c context.Context) error {
 				<-c.Done()
 				return nil
 			},
-			WarmupFunc: func(c context.Context) error {
-				return nil
-			},
-			NeedLeaderElectionFunc: func() bool {
-				return false
-			},
-		}
+			func(c context.Context) error { return nil },
+			false,
+		)
 
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(warmupRunnable)).To(Succeed())
@@ -99,18 +93,14 @@ var _ = Describe("runnables", func() {
 	})
 
 	It("should add WarmupRunnable that needs leader election to Warmup and LeaderElection group, not Others", func() {
-		warmupRunnable := leaderElectionAndWarmupRunnable{
-			StartFunc: func(c context.Context) error {
+		warmupRunnable := newLeaderElectionAndWarmupRunnable(
+			func(c context.Context) error {
 				<-c.Done()
 				return nil
 			},
-			WarmupFunc: func(c context.Context) error {
-				return nil
-			},
-			NeedLeaderElectionFunc: func() bool {
-				return true
-			},
-		}
+			func(c context.Context) error { return nil },
+			true,
+		)
 
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(warmupRunnable)).To(Succeed())
@@ -123,16 +113,16 @@ var _ = Describe("runnables", func() {
 	It("should execute the Warmup function when Warmup group is started", func() {
 		var warmupExecuted atomic.Bool
 
-		warmupRunnable := warmupRunnableFunc{
-			StartFunc: func(c context.Context) error {
+		warmupRunnable := newWarmupRunnableFunc(
+			func(c context.Context) error {
 				<-c.Done()
 				return nil
 			},
-			WarmupFunc: func(c context.Context) error {
+			func(c context.Context) error {
 				warmupExecuted.Store(true)
 				return nil
 			},
-		}
+		)
 
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(warmupRunnable)).To(Succeed())
@@ -150,15 +140,13 @@ var _ = Describe("runnables", func() {
 	It("should propagate errors from Warmup function to error channel", func() {
 		expectedErr := fmt.Errorf("expected warmup error")
 
-		warmupRunnable := warmupRunnableFunc{
-			StartFunc: func(c context.Context) error {
+		warmupRunnable := newWarmupRunnableFunc(
+			func(c context.Context) error {
 				<-c.Done()
 				return nil
 			},
-			WarmupFunc: func(c context.Context) error {
-				return expectedErr
-			},
-		}
+			func(c context.Context) error { return expectedErr },
+		)
 
 		testErrChan := make(chan error, 1)
 		r := newRunnables(defaultBaseContext, testErrChan)
@@ -355,45 +343,46 @@ var _ = Describe("runnableGroup", func() {
 	})
 })
 
-var _ LeaderElectionRunnable = &leaderElectionRunnableFunc{}
-
-// leaderElectionRunnableFunc is a helper struct that implements LeaderElectionRunnable
-// for testing purposes.
-type leaderElectionRunnableFunc struct {
-	StartFunc              func(context.Context) error
-	NeedLeaderElectionFunc func() bool
-}
-
-func (r leaderElectionRunnableFunc) Start(ctx context.Context) error {
-	return r.StartFunc(ctx)
-}
-
-func (r leaderElectionRunnableFunc) NeedLeaderElection() bool {
-	return r.NeedLeaderElectionFunc()
-}
-
 var _ warmupRunnable = &warmupRunnableFunc{}
+
+func newWarmupRunnableFunc(
+	startFunc func(context.Context) error,
+	warmupFunc func(context.Context) error,
+) *warmupRunnableFunc {
+	return &warmupRunnableFunc{
+		startFunc:           startFunc,
+		warmupFunc:          warmupFunc,
+		didWarmupFinishChan: make(chan struct{}),
+	}
+}
 
 // warmupRunnableFunc is a helper struct that implements WarmupRunnable
 // for testing purposes.
 type warmupRunnableFunc struct {
-	StartFunc       func(context.Context) error
-	WarmupFunc      func(context.Context) error
-	didWarmupFinish chan bool
+	startFunc  func(context.Context) error
+	warmupFunc func(context.Context) error
+
+	// didWarmupFinishChan is closed when warmup is finished
+	didWarmupFinishChan chan struct{}
+
+	// didWarmupFinishSuccessfully is set to true if warmup was successful
+	didWarmupFinishSuccessfully atomic.Bool
 }
 
-func (r warmupRunnableFunc) Start(ctx context.Context) error {
-	return r.StartFunc(ctx)
+func (r *warmupRunnableFunc) Start(ctx context.Context) error {
+	return r.startFunc(ctx)
 }
 
-func (r warmupRunnableFunc) Warmup(ctx context.Context) error {
-	err := r.WarmupFunc(ctx)
-	r.didWarmupFinish <- (err == nil)
+func (r *warmupRunnableFunc) Warmup(ctx context.Context) error {
+	err := r.warmupFunc(ctx)
+	r.didWarmupFinishSuccessfully.Store(err == nil)
+	close(r.didWarmupFinishChan)
 	return err
 }
 
-func (r warmupRunnableFunc) WaitForWarmupComplete(ctx context.Context) bool {
-	return <-r.didWarmupFinish
+func (r *warmupRunnableFunc) WaitForWarmupComplete(ctx context.Context) bool {
+	<-r.didWarmupFinishChan
+	return r.didWarmupFinishSuccessfully.Load()
 }
 
 var _ LeaderElectionRunnable = &leaderElectionAndWarmupRunnable{}
@@ -401,26 +390,25 @@ var _ warmupRunnable = &leaderElectionAndWarmupRunnable{}
 
 // leaderElectionAndWarmupRunnable implements both WarmupRunnable and LeaderElectionRunnable
 type leaderElectionAndWarmupRunnable struct {
-	StartFunc              func(context.Context) error
-	WarmupFunc             func(context.Context) error
-	NeedLeaderElectionFunc func() bool
-	didWarmupFinish        chan bool
+	*warmupRunnableFunc
+	needLeaderElection bool
 }
 
-func (r leaderElectionAndWarmupRunnable) Start(ctx context.Context) error {
-	return r.StartFunc(ctx)
-}
-
-func (r leaderElectionAndWarmupRunnable) Warmup(ctx context.Context) error {
-	err := r.WarmupFunc(ctx)
-	r.didWarmupFinish <- (err == nil)
-	return err
-}
-
-func (r leaderElectionAndWarmupRunnable) WaitForWarmupComplete(ctx context.Context) bool {
-	return <-r.didWarmupFinish
+func newLeaderElectionAndWarmupRunnable(
+	startFunc func(context.Context) error,
+	warmupFunc func(context.Context) error,
+	needLeaderElection bool,
+) *leaderElectionAndWarmupRunnable {
+	return &leaderElectionAndWarmupRunnable{
+		warmupRunnableFunc: &warmupRunnableFunc{
+			startFunc:           startFunc,
+			warmupFunc:          warmupFunc,
+			didWarmupFinishChan: make(chan struct{}),
+		},
+		needLeaderElection: needLeaderElection,
+	}
 }
 
 func (r leaderElectionAndWarmupRunnable) NeedLeaderElection() bool {
-	return r.NeedLeaderElectionFunc()
+	return r.needLeaderElection
 }

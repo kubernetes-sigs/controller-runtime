@@ -1950,34 +1950,31 @@ var _ = Describe("manger.Manager", func() {
 
 		By("Creating a runnable that implements WarmupRunnable interface")
 		// Create a warmup runnable
-		warmupRunnable := warmupRunnableFunc{
-			StartFunc: func(ctx context.Context) error {
+		warmupRunnable := newWarmupRunnableFunc(
+			func(ctx context.Context) error {
 				// This is the main runnable that will be executed after leader election
 				// Block forever
 				<-ctx.Done()
 				return nil
 			},
-			WarmupFunc: func(ctx context.Context) error {
+			func(ctx context.Context) error {
 				// This should be called during startup before leader election
 				warmupCalled.Store(true)
 				<-warmupRunnableWarmupBlockingChan
 				return nil
 			},
-			didWarmupFinish: make(chan bool),
-		}
+		)
 		Expect(m.Add(warmupRunnable)).To(Succeed())
 
 		By("Creating a runnable that requires leader election")
-		leaderElectionRunnable := leaderElectionRunnableFunc{
-			StartFunc: func(ctx context.Context) error {
+
+		leaderElectionRunnable := RunnableFunc(
+			func(ctx context.Context) error {
 				leaderElectionRunnableStarted.Store(true)
 				<-ctx.Done()
 				return nil
 			},
-			NeedLeaderElectionFunc: func() bool {
-				return true
-			},
-		}
+		)
 		Expect(m.Add(leaderElectionRunnable)).To(Succeed())
 
 		ctx, cancel := context.WithCancel(context.Background())

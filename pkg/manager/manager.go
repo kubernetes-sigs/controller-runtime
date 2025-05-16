@@ -315,11 +315,11 @@ type LeaderElectionRunnable interface {
 }
 
 // warmupRunnable knows if a Runnable requires warmup. A warmup runnable is a runnable
-// that should be run when the manager is started, but before the leader election is acquired.
+// that should be run when the manager is started but before it becomes leader.
 // Note: Implementing this interface is only useful when LeaderElection can be enabled, as the
 // behavior when leaderelection is not enabled is to run LeaderElectionRunnables immediately.
 type warmupRunnable interface {
-	// Warmup is the implementation of the warmup runnable.
+	// Warmup will be called when the manager is started but before it becomes leader.
 	Warmup(context.Context) error
 
 	// WaitForWarmupComplete is a blocking function that waits for the warmup to be completed. It

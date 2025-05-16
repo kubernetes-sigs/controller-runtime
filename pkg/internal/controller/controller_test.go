@@ -533,6 +533,44 @@ var _ = Describe("controller", func() {
 			Expect(startCount.Load()).To(Equal(int32(1)), "Source should only be started once even when called multiple times")
 		})
 
+        It("should block subsequent calls from returning until the first call to startEventSources has returned", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ctrl.CacheSyncTimeout = 5 * time.Second
+
+			// finishSourceChan is closed to unblock startEventSources from returning
+			finishSourceChan := make(chan struct{})
+
+			src := source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				<-finishSourceChan
+				return nil
+			})
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
+
+			By("Calling startEventSources asynchronously")
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.startEventSources(ctx)).To(Succeed())
+			}()
+
+			By("Calling startEventSources again")
+			var didSubsequentCallComplete atomic.Bool
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.startEventSources(ctx)).To(Succeed())
+				didSubsequentCallComplete.Store(true)
+			}()
+
+			// Assert that second call to startEventSources is blocked while source has not finished
+			Consistently(didSubsequentCallComplete.Load).Should(BeFalse())
+
+			By("Finishing source start + sync")
+			finishSourceChan <- struct{}{}
+
+			// Assert that second call to startEventSources is now complete
+			Eventually(didSubsequentCallComplete.Load).Should(BeTrue(), "startEventSources should complete after source is started and synced")
+		})
+
 		It("should reset c.startWatches to nil after returning", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

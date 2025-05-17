@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"k8s.io/client-go/util/workqueue"
-	"sigs.k8s.io/controller-runtime/pkg/internal/metrics"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 func newFakeMetricsProvider() *fakeMetricsProvider {

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -39,10 +40,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -403,7 +406,7 @@ var _ = Describe("controller", func() {
 				return expectedErr
 			})
 
-			// // Set a sufficiently long timeout to avoid timeouts interfering with the error being returned
+			// Set a sufficiently long timeout to avoid timeouts interfering with the error being returned
 			ctrl.CacheSyncTimeout = 5 * time.Second
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
 			err := ctrl.startEventSources(ctx)
@@ -459,6 +462,7 @@ var _ = Describe("controller", func() {
 			// Start the sources in a goroutine
 			startErrCh := make(chan error)
 			go func() {
+				defer GinkgoRecover()
 				startErrCh <- ctrl.startEventSources(sourceCtx)
 			}()
 
@@ -497,6 +501,91 @@ var _ = Describe("controller", func() {
 			err := ctrl.startEventSources(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("timed out waiting for source"))
+		})
+
+		It("should only start sources once when called multiple times concurrently", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = 1 * time.Millisecond
+
+			var startCount atomic.Int32
+			src := source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				startCount.Add(1)
+				return nil
+			})
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
+
+			By("Calling startEventSources multiple times in parallel")
+			var wg sync.WaitGroup
+			for i := 1; i <= 5; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					err := ctrl.startEventSources(ctx)
+					// All calls should return the same nil error
+					Expect(err).NotTo(HaveOccurred())
+				}()
+			}
+
+			wg.Wait()
+			Expect(startCount.Load()).To(Equal(int32(1)), "Source should only be started once even when called multiple times")
+		})
+
+		It("should block subsequent calls from returning until the first call to startEventSources has returned", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ctrl.CacheSyncTimeout = 5 * time.Second
+
+			// finishSourceChan is closed to unblock startEventSources from returning
+			finishSourceChan := make(chan struct{})
+
+			src := source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				<-finishSourceChan
+				return nil
+			})
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
+
+			By("Calling startEventSources asynchronously")
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.startEventSources(ctx)).To(Succeed())
+			}()
+
+			By("Calling startEventSources again")
+			var didSubsequentCallComplete atomic.Bool
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.startEventSources(ctx)).To(Succeed())
+				didSubsequentCallComplete.Store(true)
+			}()
+
+			// Assert that second call to startEventSources is blocked while source has not finished
+			Consistently(didSubsequentCallComplete.Load).Should(BeFalse())
+
+			By("Finishing source start + sync")
+			finishSourceChan <- struct{}{}
+
+			// Assert that second call to startEventSources is now complete
+			Eventually(didSubsequentCallComplete.Load).Should(BeTrue(), "startEventSources should complete after source is started and synced")
+		})
+
+		It("should reset c.startWatches to nil after returning", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = 1 * time.Millisecond
+
+			src := source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				return nil
+			})
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
+
+			err := ctrl.startEventSources(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ctrl.startWatches).To(BeNil(), "startWatches should be reset to nil after returning")
 		})
 	})
 
@@ -1013,6 +1102,281 @@ var _ = Describe("controller", func() {
 				}, 2.0).Should(Succeed())
 			})
 		})
+	})
+
+	Describe("Warmup", func() {
+		JustBeforeEach(func() {
+			ctrl.EnableWarmup = ptr.To(true)
+		})
+
+		It("should track warmup status correctly with successful sync", func() {
+			// Setup controller with sources that complete successfully
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					return nil
+				}),
+			}
+
+			err := ctrl.Warmup(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify WaitForWarmupComplete returns true for successful sync
+			result := ctrl.WaitForWarmupComplete(ctx)
+			Expect(result).To(BeTrue())
+		})
+
+		It("should track warmup status correctly with unsuccessful sync", func() {
+			// Setup controller with sources that complete with error
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					return errors.New("sync error")
+				}),
+			}
+
+			err := ctrl.Warmup(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("sync error"))
+
+			// Verify WaitForWarmupComplete returns false for unsuccessful sync
+			result := ctrl.WaitForWarmupComplete(ctx)
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return true if context is cancelled while waiting for source to start", func() {
+			// Setup controller with sources that complete with error
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					<-ctx.Done()
+					return nil
+				}),
+			}
+
+			resultChan := make(chan bool)
+
+			// Wait for the goroutines to finish before returning to avoid racing with the
+			// assignment in BeforeEach block.
+			var wg sync.WaitGroup
+
+			// Invoked in goroutines because the Warmup / WaitForWarmupComplete will block forever.
+			wg.Add(2)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				Expect(ctrl.Warmup(ctx)).To(Succeed())
+			}()
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				resultChan <- ctrl.WaitForWarmupComplete(ctx)
+			}()
+
+			cancel()
+			Expect(<-resultChan).To(BeTrue())
+			wg.Wait()
+		})
+
+		It("should be called before leader election runnables if warmup is enabled", func() {
+			// This unit test exists to ensure that a warmup enabled controller will actually be
+			// called in the warmup phase before the leader election runnables are started. It
+			// catches regressions in the controller that would not implement warmupRunnable from
+			// pkg/manager.
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			hasCtrlWatchStarted, hasNonWarmupCtrlWatchStarted := atomic.Bool{}, atomic.Bool{}
+
+			// ctrl watch will block from finishing until the channel is produced to
+			ctrlWatchBlockingChan := make(chan struct{})
+
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					hasCtrlWatchStarted.Store(true)
+					<-ctrlWatchBlockingChan
+					return nil
+				}),
+			}
+
+			nonWarmupCtrl := &Controller[reconcile.Request]{
+				MaxConcurrentReconciles: 1,
+				Do:                      fakeReconcile,
+				NewQueue: func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
+					return queue
+				},
+				LogConstructor: func(_ *reconcile.Request) logr.Logger {
+					return log.RuntimeLog.WithName("controller").WithName("test")
+				},
+				CacheSyncTimeout: time.Second,
+				EnableWarmup:     ptr.To(false),
+				LeaderElected:    ptr.To(true),
+				startWatches: []source.TypedSource[reconcile.Request]{
+					source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+						hasNonWarmupCtrlWatchStarted.Store(true)
+						return nil
+					}),
+				},
+			}
+
+			By("Creating a manager")
+			testenv = &envtest.Environment{}
+			cfg, err := testenv.Start()
+			Expect(err).NotTo(HaveOccurred())
+			m, err := manager.New(cfg, manager.Options{
+				LeaderElection: false,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Adding warmup and non-warmup controllers to the manager")
+			Expect(m.Add(ctrl)).To(Succeed())
+			Expect(m.Add(nonWarmupCtrl)).To(Succeed())
+
+			By("Starting the manager")
+			go func() {
+				defer GinkgoRecover()
+				Expect(m.Start(ctx)).To(Succeed())
+			}()
+
+			By("Waiting for the warmup controller to start")
+			Eventually(hasCtrlWatchStarted.Load).Should(BeTrue())
+			Expect(hasNonWarmupCtrlWatchStarted.Load()).To(BeFalse())
+
+			By("Unblocking the warmup controller source start")
+			close(ctrlWatchBlockingChan)
+			Eventually(hasNonWarmupCtrlWatchStarted.Load).Should(BeTrue())
+		})
+
+		It("should not race with Start and only start sources once", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = time.Second
+
+			var watchStartedCount atomic.Int32
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					watchStartedCount.Add(1)
+					return nil
+				}),
+			}
+
+			By("calling Warmup and Start concurrently")
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(ctx)).To(Succeed())
+			}()
+
+			blockOnWarmupChan := make(chan struct{})
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Warmup(ctx)).To(Succeed())
+				close(blockOnWarmupChan)
+			}()
+
+			<-blockOnWarmupChan
+
+			Expect(watchStartedCount.Load()).To(Equal(int32(1)), "source should only be started once")
+			Expect(ctrl.startWatches).To(BeNil(), "startWatches should be reset to nil after they are started")
+		})
+	})
+
+	Describe("Warmup with warmup disabled", func() {
+		JustBeforeEach(func() {
+			ctrl.EnableWarmup = ptr.To(false)
+		})
+
+		It("should not start sources when Warmup is called if warmup is disabled but start it when Start is called.", func() {
+			// Setup controller with sources that complete successfully
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = time.Second
+			var isSourceStarted atomic.Bool
+			isSourceStarted.Store(false)
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					isSourceStarted.Store(true)
+					return nil
+				}),
+			}
+
+			By("Calling Warmup when EnableWarmup is false")
+			err := ctrl.Warmup(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(isSourceStarted.Load()).To(BeFalse())
+
+			By("Calling Start when EnableWarmup is false")
+			// Now call Start
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(ctx)).To(Succeed())
+			}()
+			Eventually(isSourceStarted.Load).Should(BeTrue())
+		})
+	})
+
+	Describe("WaitForWarmupComplete", func() {
+		It("should short circuit without blocking if warmup is disabled", func() {
+			ctrl.EnableWarmup = ptr.To(false)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Call WaitForWarmupComplete and expect it to return immediately
+			result := ctrl.WaitForWarmupComplete(ctx)
+			Expect(result).To(BeTrue())
+		})
+
+		It("should block until warmup is complete if warmup is enabled", func() {
+			ctrl.EnableWarmup = ptr.To(true)
+			// Setup controller with sources that complete successfully
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Close the channel to signal watch completion
+			shouldWatchCompleteChan := make(chan struct{})
+
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					<-shouldWatchCompleteChan
+					return nil
+				}),
+			}
+
+			By("Starting a blocking warmup")
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Warmup(ctx)).To(Succeed())
+			}()
+
+			// didWaitForWarmupCompleteReturn is true when the call to WaitForWarmupComplete returns
+			didWaitForWarmupCompleteReturn := atomic.Bool{}
+			go func() {
+				defer GinkgoRecover()
+				// Verify WaitForWarmupComplete returns true for successful sync
+				Expect(ctrl.WaitForWarmupComplete(ctx)).To(BeTrue())
+				didWaitForWarmupCompleteReturn.Store(true)
+			}()
+			Consistently(didWaitForWarmupCompleteReturn.Load).Should(BeFalse())
+
+			By("Unblocking the watch to simulate initial sync completion")
+			close(shouldWatchCompleteChan)
+			Eventually(didWaitForWarmupCompleteReturn.Load).Should(BeTrue())
+		})
+
 	})
 })
 

@@ -83,6 +83,22 @@ type Controller[request comparable] struct {
 	// startWatches maintains a list of sources, handlers, and predicates to start when the controller is started.
 	startWatches []source.TypedSource[request]
 
+	// didStartEventSourcesOnce is used to ensure that the event sources are only started once.
+	didStartEventSourcesOnce sync.Once
+
+	// ensureDidWarmupFinishChanInitializedOnce is used to ensure that the didWarmupFinishChan is
+	// initialized to a non-nil channel.
+	ensureDidWarmupFinishChanInitializedOnce sync.Once
+
+	// didWarmupFinish is closed when startEventSources returns. It is used to
+	// signal to WaitForWarmupComplete that the event sources have finished syncing.
+	didWarmupFinishChan chan struct{}
+
+	// didWarmupFinishSuccessfully is used to indicate whether the event sources have finished
+	// successfully. If true, the event sources have finished syncing without error. If false, the
+	// event sources have finished syncing but with error.
+	didWarmupFinishSuccessfully atomic.Bool
+
 	// LogConstructor is used to construct a logger to then log messages to users during reconciliation,
 	// or for example when a watch is started.
 	// Note: LogConstructor has to be able to handle nil requests as we are also using it
@@ -95,6 +111,12 @@ type Controller[request comparable] struct {
 
 	// LeaderElected indicates whether the controller is leader elected or always running.
 	LeaderElected *bool
+
+	// EnableWarmup specifies whether the controller should start its sources
+	// when the manager is not the leader.
+	// Defaults to false, which means that the controller will wait for leader election to start
+	// before starting sources.
+	EnableWarmup *bool
 }
 
 // Reconcile implements reconcile.Reconciler.
@@ -144,6 +166,37 @@ func (c *Controller[request]) NeedLeaderElection() bool {
 	return *c.LeaderElected
 }
 
+// Warmup implements the manager.WarmupRunnable interface.
+func (c *Controller[request]) Warmup(ctx context.Context) error {
+	if c.EnableWarmup == nil || !*c.EnableWarmup {
+		return nil
+	}
+
+	// Hold the lock to avoid concurrent access to c.startWatches with Start() when calling
+	// startEventSources
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.ensureDidWarmupFinishChanInitialized()
+	err := c.startEventSources(ctx)
+	c.didWarmupFinishSuccessfully.Store(err == nil)
+	close(c.didWarmupFinishChan)
+
+	return err
+}
+
+// WaitForWarmupComplete returns true if warmup has completed without error, and false if there was
+// an error during warmup. If context is cancelled, it returns true.
+func (c *Controller[request]) WaitForWarmupComplete(ctx context.Context) bool {
+	if c.EnableWarmup == nil || !*c.EnableWarmup {
+		return true
+	}
+
+	c.ensureDidWarmupFinishChanInitialized()
+	<-c.didWarmupFinishChan
+	return c.didWarmupFinishSuccessfully.Load()
+}
+
 // Start implements controller.Controller.
 func (c *Controller[request]) Start(ctx context.Context) error {
 	// use an IIFE to get proper lock handling
@@ -185,12 +238,6 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 
 		c.LogConstructor(nil).Info("Starting Controller")
 
-		// All the watches have been started, we can reset the local slice.
-		//
-		// We should never hold watches more than necessary, each watch source can hold a backing cache,
-		// which won't be garbage collected if we hold a reference to it.
-		c.startWatches = nil
-
 		// Launch workers to process resources
 		c.LogConstructor(nil).Info("Starting workers", "worker count", c.MaxConcurrentReconciles)
 		wg.Add(c.MaxConcurrentReconciles)
@@ -221,60 +268,71 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 // startEventSources launches all the sources registered with this controller and waits
 // for them to sync. It returns an error if any of the sources fail to start or sync.
 func (c *Controller[request]) startEventSources(ctx context.Context) error {
-	errGroup := &errgroup.Group{}
-	for _, watch := range c.startWatches {
-		log := c.LogConstructor(nil)
-		_, ok := watch.(interface {
-			String() string
-		})
+	var retErr error
 
-		if !ok {
-			log = log.WithValues("source", fmt.Sprintf("%T", watch))
-		} else {
-			log = log.WithValues("source", fmt.Sprintf("%s", watch))
-		}
-		didStartSyncingSource := &atomic.Bool{}
-		errGroup.Go(func() error {
-			// Use a timeout for starting and syncing the source to avoid silently
-			// blocking startup indefinitely if it doesn't come up.
-			sourceStartCtx, cancel := context.WithTimeout(ctx, c.CacheSyncTimeout)
-			defer cancel()
-
-			sourceStartErrChan := make(chan error, 1) // Buffer chan to not leak goroutine if we time out
-			go func() {
-				defer close(sourceStartErrChan)
-				log.Info("Starting EventSource")
-				if err := watch.Start(ctx, c.Queue); err != nil {
-					sourceStartErrChan <- err
-					return
-				}
-				syncingSource, ok := watch.(source.TypedSyncingSource[request])
-				if !ok {
-					return
-				}
-				didStartSyncingSource.Store(true)
-				if err := syncingSource.WaitForSync(sourceStartCtx); err != nil {
-					err := fmt.Errorf("failed to wait for %s caches to sync %v: %w", c.Name, syncingSource, err)
-					log.Error(err, "Could not wait for Cache to sync")
-					sourceStartErrChan <- err
-				}
-			}()
-
-			select {
-			case err := <-sourceStartErrChan:
-				return err
-			case <-sourceStartCtx.Done():
-				if didStartSyncingSource.Load() { // We are racing with WaitForSync, wait for it to let it tell us what happened
-					return <-sourceStartErrChan
-				}
-				if ctx.Err() != nil { // Don't return an error if the root context got cancelled
-					return nil
-				}
-				return fmt.Errorf("timed out waiting for source %s to Start. Please ensure that its Start() method is non-blocking", watch)
+	c.didStartEventSourcesOnce.Do(func() {
+		errGroup := &errgroup.Group{}
+		for _, watch := range c.startWatches {
+			log := c.LogConstructor(nil)
+			_, ok := watch.(interface {
+				String() string
+			})
+			if !ok {
+				log = log.WithValues("source", fmt.Sprintf("%T", watch))
+			} else {
+				log = log.WithValues("source", fmt.Sprintf("%s", watch))
 			}
-		})
-	}
-	return errGroup.Wait()
+			didStartSyncingSource := &atomic.Bool{}
+			errGroup.Go(func() error {
+				// Use a timeout for starting and syncing the source to avoid silently
+				// blocking startup indefinitely if it doesn't come up.
+				sourceStartCtx, cancel := context.WithTimeout(ctx, c.CacheSyncTimeout)
+				defer cancel()
+
+				sourceStartErrChan := make(chan error, 1) // Buffer chan to not leak goroutine if we time out
+				go func() {
+					defer close(sourceStartErrChan)
+					log.Info("Starting EventSource")
+					if err := watch.Start(ctx, c.Queue); err != nil {
+						sourceStartErrChan <- err
+						return
+					}
+					syncingSource, ok := watch.(source.TypedSyncingSource[request])
+					if !ok {
+						return
+					}
+					didStartSyncingSource.Store(true)
+					if err := syncingSource.WaitForSync(sourceStartCtx); err != nil {
+						err := fmt.Errorf("failed to wait for %s caches to sync %v: %w", c.Name, syncingSource, err)
+						log.Error(err, "Could not wait for Cache to sync")
+						sourceStartErrChan <- err
+					}
+				}()
+
+				select {
+				case err := <-sourceStartErrChan:
+					return err
+				case <-sourceStartCtx.Done():
+					if didStartSyncingSource.Load() { // We are racing with WaitForSync, wait for it to let it tell us what happened
+						return <-sourceStartErrChan
+					}
+					if ctx.Err() != nil { // Don't return an error if the root context got cancelled
+						return nil
+					}
+					return fmt.Errorf("timed out waiting for source %s to Start. Please ensure that its Start() method is non-blocking", watch)
+				}
+			})
+		}
+		retErr = errGroup.Wait()
+
+		// All the watches have been started, we can reset the local slice.
+		//
+		// We should never hold watches more than necessary, each watch source can hold a backing cache,
+		// which won't be garbage collected if we hold a reference to it.
+		c.startWatches = nil
+	})
+
+	return retErr
 }
 
 // processNextWorkItem will read a single work item off the workqueue and
@@ -381,6 +439,15 @@ func (c *Controller[request]) GetLogger() logr.Logger {
 // updateMetrics updates prometheus metrics within the controller.
 func (c *Controller[request]) updateMetrics(reconcileTime time.Duration) {
 	ctrlmetrics.ReconcileTime.WithLabelValues(c.Name).Observe(reconcileTime.Seconds())
+}
+
+// ensureDidWarmupFinishChanInitialized ensures that the didWarmupFinishChan is initialized. This is needed
+// because controller can directly be created from other packages like controller.Controller, and
+// there is no way for the caller to pass in the chan.
+func (c *Controller[request]) ensureDidWarmupFinishChanInitialized() {
+	c.ensureDidWarmupFinishChanInitializedOnce.Do(func() {
+		c.didWarmupFinishChan = make(chan struct{})
+	})
 }
 
 // ReconcileIDFromContext gets the reconcileID from the current context.

@@ -72,7 +72,7 @@ var _ = Describe("controller", func() {
 		queue = &controllertest.Queue{
 			TypedInterface: workqueue.NewTyped[reconcile.Request](),
 		}
-		ctrl = &Controller[reconcile.Request]{
+		ctrl = New[reconcile.Request](ControllerOptions[reconcile.Request]{
 			MaxConcurrentReconciles: 1,
 			Do:                      fakeReconcile,
 			NewQueue: func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
@@ -81,7 +81,7 @@ var _ = Describe("controller", func() {
 			LogConstructor: func(_ *reconcile.Request) logr.Logger {
 				return log.RuntimeLog.WithName("controller").WithName("test")
 			},
-		}
+		})
 	})
 
 	Describe("Reconciler", func() {
@@ -353,14 +353,14 @@ var _ = Describe("controller", func() {
 				TypedRateLimitingInterface: &controllertest.TypedQueue[TestRequest]{
 					TypedInterface: workqueue.NewTyped[TestRequest](),
 				}}
-			ctrl := &Controller[TestRequest]{
+			ctrl := New[TestRequest](ControllerOptions[TestRequest]{
 				NewQueue: func(string, workqueue.TypedRateLimiter[TestRequest]) workqueue.TypedRateLimitingInterface[TestRequest] {
 					return queue
 				},
 				LogConstructor: func(*TestRequest) logr.Logger {
 					return log.RuntimeLog.WithName("controller").WithName("test")
 				},
-			}
+			})
 			ctrl.CacheSyncTimeout = time.Second
 			src := &bisignallingSource[TestRequest]{
 				startCall: make(chan workqueue.TypedRateLimitingInterface[TestRequest]),
@@ -1210,7 +1210,7 @@ var _ = Describe("controller", func() {
 				}),
 			}
 
-			nonWarmupCtrl := &Controller[reconcile.Request]{
+			nonWarmupCtrl := New[reconcile.Request](ControllerOptions[reconcile.Request]{
 				MaxConcurrentReconciles: 1,
 				Do:                      fakeReconcile,
 				NewQueue: func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
@@ -1222,12 +1222,12 @@ var _ = Describe("controller", func() {
 				CacheSyncTimeout: time.Second,
 				EnableWarmup:     ptr.To(false),
 				LeaderElected:    ptr.To(true),
-				startWatches: []source.TypedSource[reconcile.Request]{
-					source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
-						hasNonWarmupCtrlWatchStarted.Store(true)
-						return nil
-					}),
-				},
+			})
+			nonWarmupCtrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					hasNonWarmupCtrlWatchStarted.Store(true)
+					return nil
+				}),
 			}
 
 			By("Creating a manager")

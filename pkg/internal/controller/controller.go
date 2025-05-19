@@ -38,7 +38,54 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+type ControllerOptions[request comparable] struct {
+	// Reconciler is a function that can be called at any time with the Name / Namespace of an object and
+	// ensures that the state of the system matches the state specified in the object.
+	// Defaults to the DefaultReconcileFunc.
+	Do reconcile.TypedReconciler[request]
+
+	// RateLimiter is used to limit how frequently requests may be queued into the work queue.
+	RateLimiter workqueue.TypedRateLimiter[request]
+
+	// NewQueue constructs the queue for this controller once the controller is ready to start.
+	// This is a func because the standard Kubernetes work queues start themselves immediately, which
+	// leads to goroutine leaks if something calls controller.New repeatedly.
+	NewQueue func(controllerName string, rateLimiter workqueue.TypedRateLimiter[request]) workqueue.TypedRateLimitingInterface[request]
+
+	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
+	MaxConcurrentReconciles int
+
+	// CacheSyncTimeout refers to the time limit set on waiting for cache to sync
+	// Defaults to 2 minutes if not set.
+	CacheSyncTimeout time.Duration
+
+	// Name is used to uniquely identify a Controller in tracing, logging and monitoring.  Name is required.
+	Name string
+
+	// LogConstructor is used to construct a logger to then log messages to users during reconciliation,
+	// or for example when a watch is started.
+	// Note: LogConstructor has to be able to handle nil requests as we are also using it
+	// outside the context of a reconciliation.
+	LogConstructor func(request *request) logr.Logger
+
+	// RecoverPanic indicates whether the panic caused by reconcile should be recovered.
+	// Defaults to true.
+	RecoverPanic *bool
+
+	// LeaderElected indicates whether the controller is leader elected or always running.
+	LeaderElected *bool
+
+	// EnableWarmup specifies whether the controller should start its sources
+	// when the manager is not the leader.
+	// Defaults to false, which means that the controller will wait for leader election to start
+	// before starting sources.
+	EnableWarmup *bool
+}
+
 // Controller implements controller.Controller.
+// WARNING: If directly instantiating a Controller vs. using the New method, ensure that the
+// warmupResultChan is instantiated as a buffered channel of size 1. Otherwise, the controller will
+// panic on having Warmup called.
 type Controller[request comparable] struct {
 	// Name is used to uniquely identify a Controller in tracing, logging and monitoring.  Name is required.
 	Name string
@@ -86,18 +133,9 @@ type Controller[request comparable] struct {
 	// didStartEventSourcesOnce is used to ensure that the event sources are only started once.
 	didStartEventSourcesOnce sync.Once
 
-	// ensureDidWarmupFinishChanInitializedOnce is used to ensure that the didWarmupFinishChan is
-	// initialized to a non-nil channel.
-	ensureDidWarmupFinishChanInitializedOnce sync.Once
-
-	// didWarmupFinish is closed when startEventSources returns. It is used to
-	// signal to WaitForWarmupComplete that the event sources have finished syncing.
-	didWarmupFinishChan chan struct{}
-
-	// didWarmupFinishSuccessfully is used to indicate whether the event sources have finished
-	// successfully. If true, the event sources have finished syncing without error. If false, the
-	// event sources have finished syncing but with error.
-	didWarmupFinishSuccessfully atomic.Bool
+	// warmupResultChan receives the result (nil / non-nil error) of the warmup method. It is
+	// consumed by the WaitForWarmupComplete method that the warmup has finished.
+	warmupResultChan chan error
 
 	// LogConstructor is used to construct a logger to then log messages to users during reconciliation,
 	// or for example when a watch is started.
@@ -117,6 +155,22 @@ type Controller[request comparable] struct {
 	// Defaults to false, which means that the controller will wait for leader election to start
 	// before starting sources.
 	EnableWarmup *bool
+}
+
+func New[request comparable](options ControllerOptions[request]) *Controller[request] {
+	return &Controller[request]{
+		Do:                      options.Do,
+		RateLimiter:             options.RateLimiter,
+		NewQueue:                options.NewQueue,
+		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
+		CacheSyncTimeout:        options.CacheSyncTimeout,
+		Name:                    options.Name,
+		LogConstructor:          options.LogConstructor,
+		RecoverPanic:            options.RecoverPanic,
+		LeaderElected:           options.LeaderElected,
+		EnableWarmup:            options.EnableWarmup,
+		warmupResultChan:        make(chan error, 1),
+	}
 }
 
 // Reconcile implements reconcile.Reconciler.
@@ -177,10 +231,8 @@ func (c *Controller[request]) Warmup(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.ensureDidWarmupFinishChanInitialized()
 	err := c.startEventSources(ctx)
-	c.didWarmupFinishSuccessfully.Store(err == nil)
-	close(c.didWarmupFinishChan)
+	c.warmupResultChan <- err
 
 	return err
 }
@@ -192,9 +244,13 @@ func (c *Controller[request]) WaitForWarmupComplete(ctx context.Context) bool {
 		return true
 	}
 
-	c.ensureDidWarmupFinishChanInitialized()
-	<-c.didWarmupFinishChan
-	return c.didWarmupFinishSuccessfully.Load()
+	warmupError, ok := <-c.warmupResultChan
+	if !ok {
+		// channel closed unexpectedly
+		return false
+	}
+
+	return warmupError == nil
 }
 
 // Start implements controller.Controller.
@@ -439,15 +495,6 @@ func (c *Controller[request]) GetLogger() logr.Logger {
 // updateMetrics updates prometheus metrics within the controller.
 func (c *Controller[request]) updateMetrics(reconcileTime time.Duration) {
 	ctrlmetrics.ReconcileTime.WithLabelValues(c.Name).Observe(reconcileTime.Seconds())
-}
-
-// ensureDidWarmupFinishChanInitialized ensures that the didWarmupFinishChan is initialized. This is needed
-// because controller can directly be created from other packages like controller.Controller, and
-// there is no way for the caller to pass in the chan.
-func (c *Controller[request]) ensureDidWarmupFinishChanInitialized() {
-	c.ensureDidWarmupFinishChanInitializedOnce.Do(func() {
-		c.didWarmupFinishChan = make(chan struct{})
-	})
 }
 
 // ReconcileIDFromContext gets the reconcileID from the current context.

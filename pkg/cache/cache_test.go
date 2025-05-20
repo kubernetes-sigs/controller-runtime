@@ -2462,27 +2462,43 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				})
 			})
 		})
-		Describe("use UnsafeDisableDeepCopy list options", func() {
-			It("should be able to change object in informer cache", func() {
-				By("listing pods")
-				out := corev1.PodList{}
-				Expect(informerCache.List(context.Background(), &out, client.UnsafeDisableDeepCopy)).To(Succeed())
-				for _, item := range out.Items {
-					if strings.Compare(item.Name, "test-pod-3") == 0 { // test-pod-3 has labels
-						item.Labels["UnsafeDisableDeepCopy"] = "true"
-						break
+		Context("using UnsafeDisableDeepCopy", func() {
+			Describe("with ListOptions", func() {
+				It("should be able to change object in informer cache", func() {
+					By("listing pods")
+					out := corev1.PodList{}
+					Expect(informerCache.List(context.Background(), &out, client.UnsafeDisableDeepCopy)).To(Succeed())
+					for _, item := range out.Items {
+						if strings.Compare(item.Name, "test-pod-3") == 0 { // test-pod-3 has labels
+							item.Labels["UnsafeDisableDeepCopy"] = "true"
+							break
+						}
 					}
-				}
 
-				By("verifying that the returned pods were changed")
-				out2 := corev1.PodList{}
-				Expect(informerCache.List(context.Background(), &out, client.UnsafeDisableDeepCopy)).To(Succeed())
-				for _, item := range out2.Items {
-					if strings.Compare(item.Name, "test-pod-3") == 0 {
-						Expect(item.Labels["UnsafeDisableDeepCopy"]).To(Equal("true"))
-						break
+					By("verifying that the returned pods were changed")
+					out2 := corev1.PodList{}
+					Expect(informerCache.List(context.Background(), &out, client.UnsafeDisableDeepCopy)).To(Succeed())
+					for _, item := range out2.Items {
+						if strings.Compare(item.Name, "test-pod-3") == 0 {
+							Expect(item.Labels["UnsafeDisableDeepCopy"]).To(Equal("true"))
+							break
+						}
 					}
-				}
+				})
+			})
+			Describe("with GetOptions", func() {
+				It("should be able to change object in informer cache", func() {
+					out := corev1.Pod{}
+					podKey := client.ObjectKey{Name: "test-pod-2", Namespace: testNamespaceTwo}
+					Expect(informerCache.Get(context.Background(), podKey, &out, client.UnsafeDisableDeepCopy)).To(Succeed())
+
+					out.Labels["UnsafeDisableDeepCopy"] = "true"
+
+					By("verifying that the returned pod was changed")
+					out2 := corev1.Pod{}
+					Expect(informerCache.Get(context.Background(), podKey, &out2, client.UnsafeDisableDeepCopy)).To(Succeed())
+					Expect(out2.Labels["UnsafeDisableDeepCopy"]).To(Equal("true"))
+				})
 			})
 		})
 	})

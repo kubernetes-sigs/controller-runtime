@@ -431,6 +431,12 @@ type GetOptions struct {
 	// Raw represents raw GetOptions, as passed to the API server.  Note
 	// that these may not be respected by all implementations of interface.
 	Raw *metav1.GetOptions
+
+	// UnsafeDisableDeepCopy indicates not to deep copy objects during get object.
+	// Be very careful with this, when enabled you must DeepCopy any object before mutating it,
+	// otherwise you will mutate the object in the cache.
+	// +optional
+	UnsafeDisableDeepCopy *bool
 }
 
 var _ GetOption = &GetOptions{}
@@ -439,6 +445,9 @@ var _ GetOption = &GetOptions{}
 func (o *GetOptions) ApplyToGet(lo *GetOptions) {
 	if o.Raw != nil {
 		lo.Raw = o.Raw
+	}
+	if o.UnsafeDisableDeepCopy != nil {
+		lo.UnsafeDisableDeepCopy = o.UnsafeDisableDeepCopy
 	}
 }
 
@@ -691,6 +700,17 @@ func (l Limit) ApplyToList(opts *ListOptions) {
 // Be very careful with this, when enabled you must DeepCopy any object before mutating it,
 // otherwise you will mutate the object in the cache.
 type UnsafeDisableDeepCopyOption bool
+
+// ApplyToGet applies this configuration to the given an Get options.
+func (d UnsafeDisableDeepCopyOption) ApplyToGet(opts *GetOptions) {
+	definitelyTrue := true
+	definitelyFalse := false
+	if d {
+		opts.UnsafeDisableDeepCopy = &definitelyTrue
+	} else {
+		opts.UnsafeDisableDeepCopy = &definitelyFalse
+	}
+}
 
 // ApplyToList applies this configuration to the given an List options.
 func (d UnsafeDisableDeepCopyOption) ApplyToList(opts *ListOptions) {

@@ -68,7 +68,7 @@ type Controller struct {
 	//
 	// Setting EnableWarmup to true and NeedLeaderElection to true means the controller will start its
 	// sources without waiting to become leader.
-	// Setting EnableWarmup to true and NeedLeaderElection is false is a no-op as controllers without
+	// Setting EnableWarmup to true and NeedLeaderElection to false is a no-op as controllers without
 	// leader election do not wait on leader election to start their sources.
 	// Defaults to false.
 	EnableWarmup *bool

@@ -143,10 +143,17 @@ type Controller[request comparable] struct {
 	// LeaderElected indicates whether the controller is leader elected or always running.
 	LeaderElected *bool
 
-	// EnableWarmup specifies whether the controller should start its sources
-	// when the manager is not the leader.
-	// Defaults to false, which means that the controller will wait for leader election to start
-	// before starting sources.
+	// EnableWarmup specifies whether the controller should start its sources when the manager is not
+	// the leader. This is useful for cases where sources take a long time to start, as it allows
+	// for the controller to warm up its caches even before it is elected as the leader. This
+	// improves leadership failover time, as the caches will be prepopulated before the controller
+	// transitions to be leader.
+	//
+	// Setting EnableWarmup to true and NeedLeaderElection to true means the controller will start its
+	// sources without waiting to become leader.
+	// Setting EnableWarmup to true and NeedLeaderElection to false is a no-op as controllers without
+	// leader election do not wait on leader election to start their sources.
+	// Defaults to false.
 	EnableWarmup *bool
 }
 

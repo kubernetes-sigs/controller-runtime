@@ -100,7 +100,10 @@ type TypedOptions[request comparable] struct {
 	// improves leadership failover time, as the caches will be prepopulated before the controller
 	// transitions to be leader.
 	//
-	// When set to true, the controller will start its sources without transitioning to be leader.
+	// Setting EnableWarmup to true and NeedLeaderElection to true means the controller will start its
+	// sources without waiting to become leader.
+	// Setting EnableWarmup to true and NeedLeaderElection to false is a no-op as controllers without
+	// leader election do not wait on leader election to start their sources.
 	// Defaults to false.
 	EnableWarmup *bool
 }

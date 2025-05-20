@@ -83,9 +83,6 @@ type ControllerOptions[request comparable] struct {
 }
 
 // Controller implements controller.Controller.
-// WARNING: If directly instantiating a Controller vs. using the New method, ensure that the
-// warmupResultChan is instantiated as a buffered channel of size 1. Otherwise, the controller will
-// panic on having Warmup called.
 type Controller[request comparable] struct {
 	// Name is used to uniquely identify a Controller in tracing, logging and monitoring.  Name is required.
 	Name string
@@ -133,10 +130,6 @@ type Controller[request comparable] struct {
 	// didStartEventSourcesOnce is used to ensure that the event sources are only started once.
 	didStartEventSourcesOnce sync.Once
 
-	// warmupResultChan receives the result (nil / non-nil error) of the warmup method. It is
-	// consumed by the WaitForWarmupComplete method that the warmup has finished.
-	warmupResultChan chan error
-
 	// LogConstructor is used to construct a logger to then log messages to users during reconciliation,
 	// or for example when a watch is started.
 	// Note: LogConstructor has to be able to handle nil requests as we are also using it
@@ -169,7 +162,6 @@ func New[request comparable](options ControllerOptions[request]) *Controller[req
 		RecoverPanic:            options.RecoverPanic,
 		LeaderElected:           options.LeaderElected,
 		EnableWarmup:            options.EnableWarmup,
-		warmupResultChan:        make(chan error, 1),
 	}
 }
 
@@ -226,31 +218,7 @@ func (c *Controller[request]) Warmup(ctx context.Context) error {
 		return nil
 	}
 
-	// Hold the lock to avoid concurrent access to c.startWatches with Start() when calling
-	// startEventSources
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	err := c.startEventSources(ctx)
-	c.warmupResultChan <- err
-
-	return err
-}
-
-// WaitForWarmupComplete returns true if warmup has completed without error, and false if there was
-// an error during warmup. If context is cancelled, it returns true.
-func (c *Controller[request]) WaitForWarmupComplete(ctx context.Context) bool {
-	if c.EnableWarmup == nil || !*c.EnableWarmup {
-		return true
-	}
-
-	warmupError, ok := <-c.warmupResultChan
-	if !ok {
-		// channel closed unexpectedly
-		return false
-	}
-
-	return warmupError == nil
+	return c.startEventSources(ctx)
 }
 
 // Start implements controller.Controller.

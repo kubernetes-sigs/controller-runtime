@@ -1930,11 +1930,10 @@ var _ = Describe("manger.Manager", func() {
 	})
 
 	It("should run warmup runnables before leader election is won", func() {
-		By("Creating channels to track execution order")
-		warmupCalled := atomic.Bool{}
-		leaderElectionRunnableStarted := atomic.Bool{}
-		// warmupRunnable's WarmupFunc will block until this channel is closed
-		warmupRunnableWarmupBlockingChan := make(chan struct{})
+		By("Creating a channel to track execution order")
+		runnableExecutionOrderChan := make(chan string, 2)
+		const leaderElectionRunnableName = "leaderElectionRunnable"
+		const warmupRunnableName = "warmupRunnable"
 
 		By("Creating a manager with leader election enabled")
 		m, err := New(cfg, Options{
@@ -1952,25 +1951,23 @@ var _ = Describe("manger.Manager", func() {
 		// Create a warmup runnable
 		warmupRunnable := newWarmupRunnableFunc(
 			func(ctx context.Context) error {
-				// This is the main runnable that will be executed after leader election
-				// Block forever
+				// This is the leader election runnable that will be executed after leader election
+				// It will block until context is done/cancelled
 				<-ctx.Done()
 				return nil
 			},
 			func(ctx context.Context) error {
 				// This should be called during startup before leader election
-				warmupCalled.Store(true)
-				<-warmupRunnableWarmupBlockingChan
+				runnableExecutionOrderChan <- warmupRunnableName
 				return nil
 			},
 		)
 		Expect(m.Add(warmupRunnable)).To(Succeed())
 
 		By("Creating a runnable that requires leader election")
-
 		leaderElectionRunnable := RunnableFunc(
 			func(ctx context.Context) error {
-				leaderElectionRunnableStarted.Store(true)
+				runnableExecutionOrderChan <- leaderElectionRunnableName
 				<-ctx.Done()
 				return nil
 			},
@@ -1985,18 +1982,9 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.Start(ctx)).To(Succeed())
 		}()
 
-		By("Waiting for the warmup runnable to be called")
-		Eventually(warmupCalled.Load).Should(BeTrue())
-		Expect(leaderElectionRunnableStarted.Load()).To(BeFalse())
-
-		By("Closing the channel to unblock the warmup runnable")
-		close(warmupRunnableWarmupBlockingChan)
-
-		By("Waiting for leader election to be won")
 		<-m.Elected()
-
-		By("Verifying the leader election runnable is called after election")
-		Eventually(leaderElectionRunnableStarted.Load).Should(BeTrue())
+		Expect(<-runnableExecutionOrderChan).To(Equal(warmupRunnableName))
+		Expect(<-runnableExecutionOrderChan).To(Equal(leaderElectionRunnableName))
 	})
 })
 

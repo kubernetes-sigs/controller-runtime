@@ -321,10 +321,6 @@ type LeaderElectionRunnable interface {
 type warmupRunnable interface {
 	// Warmup will be called when the manager is started but before it becomes leader.
 	Warmup(context.Context) error
-
-	// WaitForWarmupComplete is a blocking function that waits for the warmup to be completed. It
-	// returns false if it could not successfully finish warmup.
-	WaitForWarmupComplete(context.Context) bool
 }
 
 // New returns a new Manager for creating Controllers.

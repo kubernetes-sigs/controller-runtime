@@ -350,9 +350,8 @@ func newWarmupRunnableFunc(
 	warmupFunc func(context.Context) error,
 ) *warmupRunnableFunc {
 	return &warmupRunnableFunc{
-		startFunc:           startFunc,
-		warmupFunc:          warmupFunc,
-		didWarmupFinishChan: make(chan struct{}),
+		startFunc:  startFunc,
+		warmupFunc: warmupFunc,
 	}
 }
 
@@ -361,12 +360,6 @@ func newWarmupRunnableFunc(
 type warmupRunnableFunc struct {
 	startFunc  func(context.Context) error
 	warmupFunc func(context.Context) error
-
-	// didWarmupFinishChan is closed when warmup is finished
-	didWarmupFinishChan chan struct{}
-
-	// didWarmupFinishSuccessfully is set to true if warmup was successful
-	didWarmupFinishSuccessfully atomic.Bool
 }
 
 func (r *warmupRunnableFunc) Start(ctx context.Context) error {
@@ -374,15 +367,7 @@ func (r *warmupRunnableFunc) Start(ctx context.Context) error {
 }
 
 func (r *warmupRunnableFunc) Warmup(ctx context.Context) error {
-	err := r.warmupFunc(ctx)
-	r.didWarmupFinishSuccessfully.Store(err == nil)
-	close(r.didWarmupFinishChan)
-	return err
-}
-
-func (r *warmupRunnableFunc) WaitForWarmupComplete(ctx context.Context) bool {
-	<-r.didWarmupFinishChan
-	return r.didWarmupFinishSuccessfully.Load()
+	return r.warmupFunc(ctx)
 }
 
 var _ LeaderElectionRunnable = &leaderElectionAndWarmupRunnable{}
@@ -401,9 +386,8 @@ func newLeaderElectionAndWarmupRunnable(
 ) *leaderElectionAndWarmupRunnable {
 	return &leaderElectionAndWarmupRunnable{
 		warmupRunnableFunc: &warmupRunnableFunc{
-			startFunc:           startFunc,
-			warmupFunc:          warmupFunc,
-			didWarmupFinishChan: make(chan struct{}),
+			startFunc:  startFunc,
+			warmupFunc: warmupFunc,
 		},
 		needLeaderElection: needLeaderElection,
 	}

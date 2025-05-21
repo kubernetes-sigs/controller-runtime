@@ -38,7 +38,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-type ControllerOptions[request comparable] struct {
+// Options are the arguments for creating a new Controller.
+type Options[request comparable] struct {
 	// Reconciler is a function that can be called at any time with the Name / Namespace of an object and
 	// ensures that the state of the system matches the state specified in the object.
 	// Defaults to the DefaultReconcileFunc.
@@ -129,7 +130,7 @@ type Controller[request comparable] struct {
 
 	// startedEventSources is used to track if the event sources have been started.
 	// It ensures that we append sources to c.startWatches only until we call Start() / Warmup()
-    // It is true if startEventSourcesLocked has been called at least once.
+	// It is true if startEventSourcesLocked has been called at least once.
 	startedEventSources bool
 
 	// didStartEventSourcesOnce is used to ensure that the event sources are only started once.
@@ -162,7 +163,8 @@ type Controller[request comparable] struct {
 	EnableWarmup *bool
 }
 
-func New[request comparable](options ControllerOptions[request]) *Controller[request] {
+// New returns a new Controller configured with the given options.
+func New[request comparable](options Options[request]) *Controller[request] {
 	return &Controller[request]{
 		Do:                      options.Do,
 		RateLimiter:             options.RateLimiter,

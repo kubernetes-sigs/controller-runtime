@@ -72,7 +72,7 @@ var _ = Describe("controller", func() {
 		queue = &controllertest.Queue{
 			TypedInterface: workqueue.NewTyped[reconcile.Request](),
 		}
-		ctrl = New[reconcile.Request](ControllerOptions[reconcile.Request]{
+		ctrl = New[reconcile.Request](Options[reconcile.Request]{
 			MaxConcurrentReconciles: 1,
 			Do:                      fakeReconcile,
 			NewQueue: func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
@@ -353,7 +353,7 @@ var _ = Describe("controller", func() {
 				TypedRateLimitingInterface: &controllertest.TypedQueue[TestRequest]{
 					TypedInterface: workqueue.NewTyped[TestRequest](),
 				}}
-			ctrl := New[TestRequest](ControllerOptions[TestRequest]{
+			ctrl := New[TestRequest](Options[TestRequest]{
 				NewQueue: func(string, workqueue.TypedRateLimiter[TestRequest]) workqueue.TypedRateLimitingInterface[TestRequest] {
 					return queue
 				},
@@ -1192,7 +1192,7 @@ var _ = Describe("controller", func() {
 				}),
 			}
 
-			nonWarmupCtrl := New[reconcile.Request](ControllerOptions[reconcile.Request]{
+			nonWarmupCtrl := New[reconcile.Request](Options[reconcile.Request]{
 				MaxConcurrentReconciles: 1,
 				Do:                      fakeReconcile,
 				NewQueue: func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {

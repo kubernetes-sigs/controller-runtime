@@ -260,7 +260,7 @@ func NewTypedUnmanaged[request comparable](name string, options TypedOptions[req
 	}
 
 	// Create controller with dependencies set
-	return controller.New[request](controller.ControllerOptions[request]{
+	return controller.New[request](controller.Options[request]{
 		Do:                      options.Reconciler,
 		RateLimiter:             options.RateLimiter,
 		NewQueue:                options.NewQueue,

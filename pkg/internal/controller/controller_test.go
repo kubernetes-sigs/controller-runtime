@@ -1293,6 +1293,29 @@ var _ = Describe("controller", func() {
 			Expect(watchStartedCount.Load()).To(Equal(int32(1)), "source should only be started once")
 			Expect(ctrl.startWatches).To(BeNil(), "startWatches should be reset to nil after they are started")
 		})
+
+		It("should start sources added after Warmup is called", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = time.Second
+
+			Expect(ctrl.Warmup(ctx)).To(Succeed())
+
+			By("starting a watch after warmup is added")
+			var didWatchStart atomic.Bool
+			Expect(ctrl.Watch(source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				didWatchStart.Store(true)
+				return nil
+			}))).To(Succeed())
+
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Start(ctx)).To(Succeed())
+			}()
+
+			Eventually(didWatchStart.Load).Should(BeTrue(), "watch should be started if it is added after Warmup")
+		})
 	})
 
 	Describe("Warmup with warmup disabled", func() {

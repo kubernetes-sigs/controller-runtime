@@ -127,6 +127,11 @@ type Controller[request comparable] struct {
 	// startWatches maintains a list of sources, handlers, and predicates to start when the controller is started.
 	startWatches []source.TypedSource[request]
 
+	// startedEventSources is used to track if the event sources have been started.
+	// It ensures that we append sources to c.startWatches only until we call Start() / Warmup()
+    // It is true if startEventSourcesLocked has been called at least once.
+	startedEventSources bool
+
 	// didStartEventSourcesOnce is used to ensure that the event sources are only started once.
 	didStartEventSourcesOnce sync.Once
 
@@ -199,10 +204,9 @@ func (c *Controller[request]) Watch(src source.TypedSource[request]) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Controller hasn't started yet, store the watches locally and return.
-	//
-	// These watches are going to be held on the controller struct until the manager or user calls Start(...).
-	if !c.Started {
+	// Sources weren't started yet, store the watches locally and return.
+	// These sources are going to be held until either Warmup() or Start(...) is called.
+	if !c.startedEventSources {
 		c.startWatches = append(c.startWatches, src)
 		return nil
 	}
@@ -227,6 +231,9 @@ func (c *Controller[request]) Warmup(ctx context.Context) error {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Set the ctx so later calls to watch use this internal context of nil
+	c.ctx = ctx
 
 	return c.startEventSourcesLocked(ctx)
 }
@@ -364,6 +371,10 @@ func (c *Controller[request]) startEventSourcesLocked(ctx context.Context) error
 		// We should never hold watches more than necessary, each watch source can hold a backing cache,
 		// which won't be garbage collected if we hold a reference to it.
 		c.startWatches = nil
+
+		// Mark event sources as started after resetting the startWatches slice to no-op a Watch()
+		// call after event sources have been started.
+		c.startedEventSources = true
 	})
 
 	return retErr

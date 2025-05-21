@@ -1217,7 +1217,7 @@ var _ = Describe("controller", func() {
 			cfg, err := testenv.Start()
 			Expect(err).NotTo(HaveOccurred())
 			m, err := manager.New(cfg, manager.Options{
-				LeaderElection: false,
+				LeaderElection: true,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1261,7 +1261,7 @@ var _ = Describe("controller", func() {
 			wg.Wait()
 		})
 
-		It("should not race with Start and only start sources once", func() {
+		It("should not cause a data race when called concurrently with Start and only start sources once", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 

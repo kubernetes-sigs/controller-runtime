@@ -386,13 +386,13 @@ var _ = Describe("controller", func() {
 		})
 	})
 
-	Describe("startEventSources", func() {
+	Describe("startEventSourcesLocked", func() {
 		It("should return nil when no sources are provided", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{}
-			err := ctrl.startEventSources(ctx)
+			err := ctrl.startEventSourcesLocked(ctx)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -409,7 +409,7 @@ var _ = Describe("controller", func() {
 			// Set a sufficiently long timeout to avoid timeouts interfering with the error being returned
 			ctrl.CacheSyncTimeout = 5 * time.Second
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
-			err := ctrl.startEventSources(ctx)
+			err := ctrl.startEventSourcesLocked(ctx)
 			Expect(err).To(Equal(expectedErr))
 		})
 
@@ -423,7 +423,7 @@ var _ = Describe("controller", func() {
 			ctrl.Name = "test-controller"
 			ctrl.CacheSyncTimeout = 5 * time.Second
 
-			err := ctrl.startEventSources(ctx)
+			err := ctrl.startEventSourcesLocked(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to wait for test-controller caches to sync"))
 		})
@@ -439,7 +439,7 @@ var _ = Describe("controller", func() {
 			ctrl.Name = "test-controller"
 			ctrl.CacheSyncTimeout = 5 * time.Second
 
-			err := ctrl.startEventSources(ctx)
+			err := ctrl.startEventSourcesLocked(ctx)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -463,7 +463,7 @@ var _ = Describe("controller", func() {
 			startErrCh := make(chan error)
 			go func() {
 				defer GinkgoRecover()
-				startErrCh <- ctrl.startEventSources(sourceCtx)
+				startErrCh <- ctrl.startEventSourcesLocked(sourceCtx)
 			}()
 
 			// Allow source to start successfully
@@ -498,7 +498,7 @@ var _ = Describe("controller", func() {
 
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{blockingSrc}
 
-			err := ctrl.startEventSources(ctx)
+			err := ctrl.startEventSourcesLocked(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("timed out waiting for source"))
 		})
@@ -517,13 +517,13 @@ var _ = Describe("controller", func() {
 
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
 
-			By("Calling startEventSources multiple times in parallel")
+			By("Calling startEventSourcesLocked multiple times in parallel")
 			var wg sync.WaitGroup
 			for i := 1; i <= 5; i++ {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					err := ctrl.startEventSources(ctx)
+					err := ctrl.startEventSourcesLocked(ctx)
 					// All calls should return the same nil error
 					Expect(err).NotTo(HaveOccurred())
 				}()
@@ -533,12 +533,12 @@ var _ = Describe("controller", func() {
 			Expect(startCount.Load()).To(Equal(int32(1)), "Source should only be started once even when called multiple times")
 		})
 
-		It("should block subsequent calls from returning until the first call to startEventSources has returned", func() {
+		It("should block subsequent calls from returning until the first call to startEventSourcesLocked has returned", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			ctrl.CacheSyncTimeout = 5 * time.Second
 
-			// finishSourceChan is closed to unblock startEventSources from returning
+			// finishSourceChan is closed to unblock startEventSourcesLocked from returning
 			finishSourceChan := make(chan struct{})
 
 			src := source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
@@ -547,28 +547,28 @@ var _ = Describe("controller", func() {
 			})
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
 
-			By("Calling startEventSources asynchronously")
+			By("Calling startEventSourcesLocked asynchronously")
 			go func() {
 				defer GinkgoRecover()
-				Expect(ctrl.startEventSources(ctx)).To(Succeed())
+				Expect(ctrl.startEventSourcesLocked(ctx)).To(Succeed())
 			}()
 
-			By("Calling startEventSources again")
+			By("Calling startEventSourcesLocked again")
 			var didSubsequentCallComplete atomic.Bool
 			go func() {
 				defer GinkgoRecover()
-				Expect(ctrl.startEventSources(ctx)).To(Succeed())
+				Expect(ctrl.startEventSourcesLocked(ctx)).To(Succeed())
 				didSubsequentCallComplete.Store(true)
 			}()
 
-			// Assert that second call to startEventSources is blocked while source has not finished
+			// Assert that second call to startEventSourcesLocked is blocked while source has not finished
 			Consistently(didSubsequentCallComplete.Load).Should(BeFalse())
 
 			By("Finishing source start + sync")
 			finishSourceChan <- struct{}{}
 
-			// Assert that second call to startEventSources is now complete
-			Eventually(didSubsequentCallComplete.Load).Should(BeTrue(), "startEventSources should complete after source is started and synced")
+			// Assert that second call to startEventSourcesLocked is now complete
+			Eventually(didSubsequentCallComplete.Load).Should(BeTrue(), "startEventSourcesLocked should complete after source is started and synced")
 		})
 
 		It("should reset c.startWatches to nil after returning", func() {
@@ -583,7 +583,7 @@ var _ = Describe("controller", func() {
 
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
 
-			err := ctrl.startEventSources(ctx)
+			err := ctrl.startEventSourcesLocked(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ctrl.startWatches).To(BeNil(), "startWatches should be reset to nil after returning")
 		})
@@ -1234,6 +1234,31 @@ var _ = Describe("controller", func() {
 			<-m.Elected()
 			Expect(<-runnableExecutionOrderChan).To(Equal(warmupRunnableName))
 			Expect(<-runnableExecutionOrderChan).To(Equal(nonWarmupRunnableName))
+		})
+
+		It("should not cause a data race when called concurrently", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ctrl.CacheSyncTimeout = time.Second
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					return nil
+				}),
+			}
+
+			var wg sync.WaitGroup
+			for i := 0; i < 5; i++ {
+				wg.Add(1)
+				go func() {
+					defer GinkgoRecover()
+					defer wg.Done()
+					Expect(ctrl.Warmup(ctx)).To(Succeed())
+				}()
+			}
+
+			wg.Wait()
 		})
 
 		It("should not race with Start and only start sources once", func() {

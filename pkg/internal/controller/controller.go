@@ -225,7 +225,10 @@ func (c *Controller[request]) Warmup(ctx context.Context) error {
 		return nil
 	}
 
-	return c.startEventSources(ctx)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.startEventSourcesLocked(ctx)
 }
 
 // Start implements controller.Controller.
@@ -263,7 +266,7 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 		// NB(directxman12): launch the sources *before* trying to wait for the
 		// caches to sync so that they have a chance to register their intended
 		// caches.
-		if err := c.startEventSources(ctx); err != nil {
+		if err := c.startEventSourcesLocked(ctx); err != nil {
 			return err
 		}
 
@@ -296,9 +299,9 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 	return nil
 }
 
-// startEventSources launches all the sources registered with this controller and waits
+// startEventSourcesLocked launches all the sources registered with this controller and waits
 // for them to sync. It returns an error if any of the sources fail to start or sync.
-func (c *Controller[request]) startEventSources(ctx context.Context) error {
+func (c *Controller[request]) startEventSourcesLocked(ctx context.Context) error {
 	var retErr error
 
 	c.didStartEventSourcesOnce.Do(func() {

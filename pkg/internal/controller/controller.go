@@ -356,7 +356,8 @@ func (c *Controller[request]) startEventSourcesLocked(ctx context.Context) error
 				case err := <-sourceStartErrChan:
 					return err
 				case <-sourceStartCtx.Done():
-					if didStartSyncingSource.Load() { // We are racing with WaitForSync, wait for it to let it tell us what happened
+					defer func() { <-sourceStartErrChan }() // Ensure that watch.Start has been called to avoid prematurely releasing lock before accessing c.Queue
+					if didStartSyncingSource.Load() {       // We are racing with WaitForSync, wait for it to let it tell us what happened
 						return <-sourceStartErrChan
 					}
 					if ctx.Err() != nil { // Don't return an error if the root context got cancelled

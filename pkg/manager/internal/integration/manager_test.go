@@ -34,10 +34,12 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -90,6 +92,8 @@ var (
 			},
 		},
 	}
+
+	ctx = ctrl.SetupSignalHandler()
 )
 
 var _ = Describe("manger.Manager Start", func() {
@@ -107,9 +111,7 @@ var _ = Describe("manger.Manager Start", func() {
 	//   * Add an index on v2 Driver to ensure we start and wait for an informer during cache.Start (as part of manager.Start)
 	//     * Note: cache.Start would fail if the conversion webhook doesn't work (which in turn depends on the readiness probe)
 	//     * Note: Adding the index for v2 ensures the Driver list call during Informer sync goes through conversion.
-	It("should start all components without deadlock", func() {
-		ctx := ctrl.SetupSignalHandler()
-
+	DescribeTable("should start all components without deadlock", func(warmupEnabled bool) {
 		// Set up schema.
 		Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
 		Expect(apiextensionsv1.AddToScheme(scheme)).To(Succeed())
@@ -163,7 +165,13 @@ var _ = Describe("manger.Manager Start", func() {
 		driverReconciler := &DriverReconciler{
 			Client: mgr.GetClient(),
 		}
-		Expect(ctrl.NewControllerManagedBy(mgr).For(&crewv2.Driver{}).Complete(driverReconciler)).To(Succeed())
+		Expect(
+			ctrl.NewControllerManagedBy(mgr).
+				For(&crewv2.Driver{}).
+				Named(fmt.Sprintf("driver_warmup_%t", warmupEnabled)).
+				WithOptions(controller.Options{EnableWarmup: ptr.To(warmupEnabled)}).
+				Complete(driverReconciler),
+		).To(Succeed())
 
 		// Set up a conversion webhook.
 		conversionWebhook := createConversionWebhook(mgr)
@@ -211,7 +219,10 @@ var _ = Describe("manger.Manager Start", func() {
 
 		// Shutdown the server
 		cancel()
-	})
+	},
+		Entry("controller warmup enabled", true),
+		Entry("controller warmup not enabled", false),
+	)
 })
 
 type DriverReconciler struct {

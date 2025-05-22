@@ -18,16 +18,21 @@ package controller_test
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -48,30 +53,46 @@ var _ = Describe("controller", func() {
 	Describe("controller", func() {
 		// TODO(directxman12): write a whole suite of controller-client interaction tests
 
-		It("should reconcile", func() {
+        // Since all tests are run in parallel and share the same testenv, we namespace the objects
+        // created by using a namespace per entry, and adding a watch predicate that filters by
+        // namespace.
+		DescribeTable("should reconcile", func(enableWarmup bool) {
 			By("Creating the Manager")
 			cm, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
-			instance, err := controller.New("foo-controller", cm, controller.Options{
-				Reconciler: reconcile.Func(
-					func(_ context.Context, request reconcile.Request) (reconcile.Result, error) {
-						reconciled <- request
-						return reconcile.Result{}, nil
-					}),
-			})
+			instance, err := controller.New(
+                fmt.Sprintf("foo-controller-%t", enableWarmup),
+                cm,
+                controller.Options{
+                    Reconciler: reconcile.Func(
+                        func(_ context.Context, request reconcile.Request) (reconcile.Result, error) {
+                            reconciled <- request
+                            return reconcile.Result{}, nil
+                        }),
+                    EnableWarmup: ptr.To(enableWarmup),
+                },
+            )
 			Expect(err).NotTo(HaveOccurred())
+
+            testNamespace := strconv.FormatBool(enableWarmup)
 
 			By("Watching Resources")
 			err = instance.Watch(
 				source.Kind(cm.GetCache(), &appsv1.ReplicaSet{},
 					handler.TypedEnqueueRequestForOwner[*appsv1.ReplicaSet](cm.GetScheme(), cm.GetRESTMapper(), &appsv1.Deployment{}),
+                    makeNamespacePredicate[*appsv1.ReplicaSet](testNamespace),
 				),
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = instance.Watch(source.Kind(cm.GetCache(), &appsv1.Deployment{}, &handler.TypedEnqueueRequestForObject[*appsv1.Deployment]{}))
+			err = instance.Watch(
+                source.Kind(cm.GetCache(), &appsv1.Deployment{},
+                    &handler.TypedEnqueueRequestForObject[*appsv1.Deployment]{},
+                    makeNamespacePredicate[*appsv1.Deployment](testNamespace),
+                ),
+            )
 			Expect(err).NotTo(HaveOccurred())
 
 			err = cm.GetClient().Get(ctx, types.NamespacedName{Name: "foo"}, &corev1.Namespace{})
@@ -110,19 +131,25 @@ var _ = Describe("controller", func() {
 				},
 			}
 			expectedReconcileRequest := reconcile.Request{NamespacedName: types.NamespacedName{
-				Namespace: "default",
+				Namespace: testNamespace,
 				Name:      "deployment-name",
 			}}
 
+            By("Creating the test namespace")
+            _, err = clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+                ObjectMeta: metav1.ObjectMeta{ Name: testNamespace },
+            }, metav1.CreateOptions{})
+            Expect(err).NotTo(HaveOccurred())
+
 			By("Invoking Reconciling for Create")
-			deployment, err = clientset.AppsV1().Deployments("default").Create(ctx, deployment, metav1.CreateOptions{})
+			deployment, err = clientset.AppsV1().Deployments(testNamespace).Create(ctx, deployment, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for Update")
 			newDeployment := deployment.DeepCopy()
 			newDeployment.Labels = map[string]string{"foo": "bar"}
-			_, err = clientset.AppsV1().Deployments("default").Update(ctx, newDeployment, metav1.UpdateOptions{})
+			_, err = clientset.AppsV1().Deployments(testNamespace).Update(ctx, newDeployment, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
@@ -145,24 +172,24 @@ var _ = Describe("controller", func() {
 					Template: deployment.Spec.Template,
 				},
 			}
-			replicaset, err = clientset.AppsV1().ReplicaSets("default").Create(ctx, replicaset, metav1.CreateOptions{})
+			replicaset, err = clientset.AppsV1().ReplicaSets(testNamespace).Create(ctx, replicaset, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for an OwnedObject when it is updated")
 			newReplicaset := replicaset.DeepCopy()
 			newReplicaset.Labels = map[string]string{"foo": "bar"}
-			_, err = clientset.AppsV1().ReplicaSets("default").Update(ctx, newReplicaset, metav1.UpdateOptions{})
+			_, err = clientset.AppsV1().ReplicaSets(testNamespace).Update(ctx, newReplicaset, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for an OwnedObject when it is deleted")
-			err = clientset.AppsV1().ReplicaSets("default").Delete(ctx, replicaset.Name, metav1.DeleteOptions{})
+			err = clientset.AppsV1().ReplicaSets(testNamespace).Delete(ctx, replicaset.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
 
 			By("Invoking Reconciling for Delete")
-			err = clientset.AppsV1().Deployments("default").
+			err = clientset.AppsV1().Deployments(testNamespace).
 				Delete(ctx, "deployment-name", metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
@@ -174,7 +201,12 @@ var _ = Describe("controller", func() {
 
 			By("Invoking Reconciling for a pod when it is created when adding watcher dynamically")
 			// Add new watcher dynamically
-			err = instance.Watch(source.Kind(cm.GetCache(), &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}))
+			err = instance.Watch(
+                source.Kind(cm.GetCache(), &corev1.Pod{},
+                    &handler.TypedEnqueueRequestForObject[*corev1.Pod]{},
+                    makeNamespacePredicate[*corev1.Pod](testNamespace),
+                ),
+            )
 			Expect(err).NotTo(HaveOccurred())
 
 			pod := &corev1.Pod{
@@ -194,15 +226,26 @@ var _ = Describe("controller", func() {
 				},
 			}
 			expectedReconcileRequest = reconcile.Request{NamespacedName: types.NamespacedName{
-				Namespace: "default",
+				Namespace: testNamespace,
 				Name:      "pod-name",
 			}}
-			_, err = clientset.CoreV1().Pods("default").Create(ctx, pod, metav1.CreateOptions{})
+			_, err = clientset.CoreV1().Pods(testNamespace).Create(ctx, pod, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))
-		})
+		},
+			Entry("with controller warmup enabled", true),
+			Entry("with controller warmup not enabled", false),
+		)
 	})
 })
+
+// makeNamespacePredicate returns a predicate that filters out all objects not in the passed in
+// namespace.
+func makeNamespacePredicate[object client.Object](namespace string) predicate.TypedPredicate[object] {
+    return predicate.NewTypedPredicateFuncs[object](func(obj object) bool {
+        return obj.GetNamespace() == namespace
+    })
+}
 
 func truePtr() *bool {
 	t := true

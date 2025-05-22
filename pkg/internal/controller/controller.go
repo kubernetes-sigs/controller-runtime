@@ -234,7 +234,7 @@ func (c *Controller[request]) Warmup(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Set the ctx so later calls to watch use this internal context of nil
+	// Set the ctx so later calls to watch use this internal context
 	c.ctx = ctx
 
 	return c.startEventSourcesLocked(ctx)

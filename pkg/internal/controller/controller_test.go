@@ -549,8 +549,12 @@ var _ = Describe("controller", func() {
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{src}
 
 			By("Calling startEventSourcesLocked asynchronously")
+			wg := sync.WaitGroup{}
 			go func() {
 				defer GinkgoRecover()
+				defer wg.Done()
+
+				wg.Add(1)
 				Expect(ctrl.startEventSourcesLocked(ctx)).To(Succeed())
 			}()
 
@@ -558,6 +562,9 @@ var _ = Describe("controller", func() {
 			var didSubsequentCallComplete atomic.Bool
 			go func() {
 				defer GinkgoRecover()
+				defer wg.Done()
+
+				wg.Add(1)
 				Expect(ctrl.startEventSourcesLocked(ctx)).To(Succeed())
 				didSubsequentCallComplete.Store(true)
 			}()
@@ -570,6 +577,7 @@ var _ = Describe("controller", func() {
 
 			// Assert that second call to startEventSourcesLocked is now complete
 			Eventually(didSubsequentCallComplete.Load).Should(BeTrue(), "startEventSourcesLocked should complete after source is started and synced")
+			wg.Wait()
 		})
 
 		It("should reset c.startWatches to nil after returning", func() {
@@ -1155,20 +1163,18 @@ var _ = Describe("controller", func() {
 				}),
 			}
 
-			// Wait for the goroutines to finish before returning to avoid racing with the
-			// assignment in BeforeEach block.
-			var wg sync.WaitGroup
+			// channel to prevent the goroutine from outliving the It test
+			waitChan := make(chan struct{})
 
 			// Invoked in a goroutine because Warmup will block
-			wg.Add(1)
 			go func() {
 				defer GinkgoRecover()
-				defer wg.Done()
+				defer close(waitChan)
 				Expect(ctrl.Warmup(ctx)).To(Succeed())
 			}()
 
 			cancel()
-			wg.Wait()
+			<-waitChan
 		})
 
 		It("should be called before leader election runnables if warmup is enabled", func() {
@@ -1176,9 +1182,7 @@ var _ = Describe("controller", func() {
 			// called in the warmup phase before the leader election runnables are started. It
 			// catches regressions in the controller that would not implement warmupRunnable from
 			// pkg/manager.
-
 			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 
 			By("Creating a channel to track execution order")
 			runnableExecutionOrderChan := make(chan string, 2)
@@ -1229,14 +1233,19 @@ var _ = Describe("controller", func() {
 			Expect(m.Add(nonWarmupCtrl)).To(Succeed())
 
 			By("Starting the manager")
+			waitChan := make(chan struct{})
 			go func() {
 				defer GinkgoRecover()
+				defer close(waitChan)
 				Expect(m.Start(ctx)).To(Succeed())
 			}()
 
 			<-m.Elected()
 			Expect(<-runnableExecutionOrderChan).To(Equal(warmupRunnableName))
 			Expect(<-runnableExecutionOrderChan).To(Equal(nonWarmupRunnableName))
+
+			cancel()
+			<-waitChan
 		})
 
 		It("should not cause a data race when called concurrently", func() {
@@ -1299,7 +1308,6 @@ var _ = Describe("controller", func() {
 
 		It("should start sources added after Warmup is called", func() {
 			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 
 			ctrl.CacheSyncTimeout = time.Second
 
@@ -1312,12 +1320,17 @@ var _ = Describe("controller", func() {
 				return nil
 			}))).To(Succeed())
 
+			waitChan := make(chan struct{})
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).To(Succeed())
+				close(waitChan)
 			}()
 
 			Eventually(didWatchStart.Load).Should(BeTrue(), "watch should be started if it is added after Warmup")
+
+			cancel()
+			<-waitChan
 		})
 
 		DescribeTable("should not leak goroutines when manager is stopped with warmup runnable",
@@ -1349,9 +1362,11 @@ var _ = Describe("controller", func() {
 				// ignore needs to go after the testenv.Start() call to ignore the apiserver
 				// process
 				currentGRs := goleak.IgnoreCurrent()
+				waitChan := make(chan struct{})
 				go func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).To(Succeed())
+					close(waitChan)
 				}()
 
 				<-m.Elected()
@@ -1359,9 +1374,10 @@ var _ = Describe("controller", func() {
 				cancel()
 
 				Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
+				<-waitChan
 			},
-			Entry("manager with leader election enabled", true),
-			Entry("manager without leader election enabled", false),
+			Entry("and with leader election enabled", true),
+			Entry("and without leader election enabled", false),
 		)
 	})
 
@@ -1373,7 +1389,6 @@ var _ = Describe("controller", func() {
 		It("should not start sources when Warmup is called if warmup is disabled but start it when Start is called.", func() {
 			// Setup controller with sources that complete successfully
 			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 
 			ctrl.CacheSyncTimeout = time.Second
 			var isSourceStarted atomic.Bool
@@ -1391,12 +1406,16 @@ var _ = Describe("controller", func() {
 			Expect(isSourceStarted.Load()).To(BeFalse())
 
 			By("Calling Start when EnableWarmup is false")
-			// Now call Start
+			waitChan := make(chan struct{})
+
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).To(Succeed())
+				close(waitChan)
 			}()
 			Eventually(isSourceStarted.Load).Should(BeTrue())
+			cancel()
+			<-waitChan
 		})
 	})
 })

@@ -128,10 +128,10 @@ type Controller[request comparable] struct {
 	// startWatches maintains a list of sources, handlers, and predicates to start when the controller is started.
 	startWatches []source.TypedSource[request]
 
-	// startedEventSources is used to track if the event sources have been started.
+	// startedEventSourcesAndQueue is used to track if the event sources have been started.
 	// It ensures that we append sources to c.startWatches only until we call Start() / Warmup()
-	// It is true if startEventSourcesLocked has been called at least once.
-	startedEventSources bool
+	// It is true if startEventSourcesAndQueueLocked has been called at least once.
+	startedEventSourcesAndQueue bool
 
 	// didStartEventSourcesOnce is used to ensure that the event sources are only started once.
 	didStartEventSourcesOnce sync.Once
@@ -208,7 +208,7 @@ func (c *Controller[request]) Watch(src source.TypedSource[request]) error {
 
 	// Sources weren't started yet, store the watches locally and return.
 	// These sources are going to be held until either Warmup() or Start(...) is called.
-	if !c.startedEventSources {
+	if !c.startedEventSourcesAndQueue {
 		c.startWatches = append(c.startWatches, src)
 		return nil
 	}
@@ -237,7 +237,7 @@ func (c *Controller[request]) Warmup(ctx context.Context) error {
 	// Set the ctx so later calls to watch use this internal context
 	c.ctx = ctx
 
-	return c.startEventSourcesLocked(ctx)
+	return c.startEventSourcesAndQueueLocked(ctx)
 }
 
 // Start implements controller.Controller.
@@ -254,17 +254,6 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 	// Set the internal context.
 	c.ctx = ctx
 
-	queue := c.NewQueue(c.Name, c.RateLimiter)
-	if priorityQueue, isPriorityQueue := queue.(priorityqueue.PriorityQueue[request]); isPriorityQueue {
-		c.Queue = priorityQueue
-	} else {
-		c.Queue = &priorityQueueWrapper[request]{TypedRateLimitingInterface: queue}
-	}
-	go func() {
-		<-ctx.Done()
-		c.Queue.ShutDown()
-	}()
-
 	wg := &sync.WaitGroup{}
 	err := func() error {
 		defer c.mu.Unlock()
@@ -275,7 +264,7 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 		// NB(directxman12): launch the sources *before* trying to wait for the
 		// caches to sync so that they have a chance to register their intended
 		// caches.
-		if err := c.startEventSourcesLocked(ctx); err != nil {
+		if err := c.startEventSourcesAndQueueLocked(ctx); err != nil {
 			return err
 		}
 
@@ -308,12 +297,23 @@ func (c *Controller[request]) Start(ctx context.Context) error {
 	return nil
 }
 
-// startEventSourcesLocked launches all the sources registered with this controller and waits
+// startEventSourcesAndQueueLocked launches all the sources registered with this controller and waits
 // for them to sync. It returns an error if any of the sources fail to start or sync.
-func (c *Controller[request]) startEventSourcesLocked(ctx context.Context) error {
+func (c *Controller[request]) startEventSourcesAndQueueLocked(ctx context.Context) error {
 	var retErr error
 
 	c.didStartEventSourcesOnce.Do(func() {
+        queue := c.NewQueue(c.Name, c.RateLimiter)
+        if priorityQueue, isPriorityQueue := queue.(priorityqueue.PriorityQueue[request]); isPriorityQueue {
+            c.Queue = priorityQueue
+        } else {
+            c.Queue = &priorityQueueWrapper[request]{TypedRateLimitingInterface: queue}
+        }
+        go func() {
+            <-ctx.Done()
+            c.Queue.ShutDown()
+        }()
+
 		errGroup := &errgroup.Group{}
 		for _, watch := range c.startWatches {
 			log := c.LogConstructor(nil)
@@ -381,7 +381,7 @@ func (c *Controller[request]) startEventSourcesLocked(ctx context.Context) error
 
 		// Mark event sources as started after resetting the startWatches slice to no-op a Watch()
 		// call after event sources have been started.
-		c.startedEventSources = true
+		c.startedEventSourcesAndQueue = true
 	})
 
 	return retErr

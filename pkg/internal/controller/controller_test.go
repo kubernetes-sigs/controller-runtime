@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+	"go.uber.org/goleak"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1217,7 +1218,9 @@ var _ = Describe("controller", func() {
 			cfg, err := testenv.Start()
 			Expect(err).NotTo(HaveOccurred())
 			m, err := manager.New(cfg, manager.Options{
-				LeaderElection: true,
+				LeaderElection:          true,
+				LeaderElectionID:        "some-leader-election-id",
+				LeaderElectionNamespace: "default",
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1316,6 +1319,50 @@ var _ = Describe("controller", func() {
 
 			Eventually(didWatchStart.Load).Should(BeTrue(), "watch should be started if it is added after Warmup")
 		})
+
+		DescribeTable("should not leak goroutines when manager is stopped with warmup runnable",
+			func(leaderElection bool) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				ctrl.CacheSyncTimeout = time.Second
+
+				By("Creating a manager")
+				testenv = &envtest.Environment{}
+				cfg, err := testenv.Start()
+				Expect(err).NotTo(HaveOccurred())
+				m, err := manager.New(cfg, manager.Options{
+					LeaderElection:          leaderElection,
+					LeaderElectionID:        "some-leader-election-id",
+					LeaderElectionNamespace: "default",
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+					source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+						<-ctx.Done()
+						return nil
+					}),
+				}
+				Expect(m.Add(ctrl)).To(Succeed())
+
+				// ignore needs to go after the testenv.Start() call to ignore the apiserver
+				// process
+				currentGRs := goleak.IgnoreCurrent()
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(ctx)).To(Succeed())
+				}()
+
+				<-m.Elected()
+				By("stopping the manager via context")
+				cancel()
+
+				Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
+			},
+			Entry("manager with leader election enabled", true),
+			Entry("manager without leader election enabled", false),
+		)
 	})
 
 	Describe("Warmup with warmup disabled", func() {

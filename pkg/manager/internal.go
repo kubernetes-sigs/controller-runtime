@@ -539,6 +539,18 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 	}()
 
 	go func() {
+		go func() {
+			// Stop the warmup runnables in a separate goroutine to avoid blocking.
+			// It is important to stop the warmup runnables in parallel with the other runnables
+			// since we cannot assume ordering of whether or not one of the warmup runnables or one
+			// of the other runnables is holding a lock.
+			// Cancelling the wrong runnable (one that is not holding the lock) will cause the
+			// shutdown sequence to block indefinitely as it will wait for the runnable that is
+			// holding the lock to finish.
+			cm.logger.Info("Stopping and waiting for warmup runnables")
+			cm.runnables.Warmup.StopAndWait(cm.shutdownCtx)
+		}()
+
 		// First stop the non-leader election runnables.
 		cm.logger.Info("Stopping and waiting for non leader election runnables")
 		cm.runnables.Others.StopAndWait(cm.shutdownCtx)
@@ -548,10 +560,6 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 		// Prevent leader election when shutting down a non-elected manager
 		cm.runnables.LeaderElection.startOnce.Do(func() {})
 		cm.runnables.LeaderElection.StopAndWait(cm.shutdownCtx)
-
-		// Stop the warmup runnables
-		cm.logger.Info("Stopping and waiting for warmup runnables")
-		cm.runnables.Warmup.StopAndWait(cm.shutdownCtx)
 
 		// Stop the caches before the leader election runnables, this is an important
 		// step to make sure that we don't race with the reconcilers by receiving more events

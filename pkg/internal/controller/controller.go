@@ -379,8 +379,8 @@ func (c *Controller[request]) startEventSourcesAndQueueLocked(ctx context.Contex
 		// which won't be garbage collected if we hold a reference to it.
 		c.startWatches = nil
 
-		// Mark event sources as started after resetting the startWatches slice to no-op a Watch()
-		// call after event sources have been started.
+		// Mark event sources as started after resetting the startWatches slice so that watches from
+        // a new Watch() call are immediately started.
 		c.startedEventSourcesAndQueue = true
 	})
 

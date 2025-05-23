@@ -66,6 +66,19 @@ var _ = Describe("ListOptions", func() {
 		o.ApplyToList(newListOpts)
 		Expect(newListOpts).To(Equal(o))
 	})
+	It("Should set UnsafeDisableDeepCopy", func() {
+		definitelyTrue := true
+		o := &client.ListOptions{UnsafeDisableDeepCopy: &definitelyTrue}
+		newListOpts := &client.ListOptions{}
+		o.ApplyToList(newListOpts)
+		Expect(newListOpts).To(Equal(o))
+	})
+	It("Should set UnsafeDisableDeepCopy through option", func() {
+		listOpts := &client.ListOptions{}
+		client.UnsafeDisableDeepCopy.ApplyToList(listOpts)
+		Expect(listOpts.UnsafeDisableDeepCopy).ToNot(BeNil())
+		Expect(*listOpts.UnsafeDisableDeepCopy).To(BeTrue())
+	})
 	It("Should not set anything", func() {
 		o := &client.ListOptions{}
 		newListOpts := &client.ListOptions{}
@@ -80,6 +93,19 @@ var _ = Describe("GetOptions", func() {
 		newGetOpts := &client.GetOptions{}
 		o.ApplyToGet(newGetOpts)
 		Expect(newGetOpts).To(Equal(o))
+	})
+	It("Should set UnsafeDisableDeepCopy", func() {
+		definitelyTrue := true
+		o := &client.GetOptions{UnsafeDisableDeepCopy: &definitelyTrue}
+		newGetOpts := &client.GetOptions{}
+		o.ApplyToGet(newGetOpts)
+		Expect(newGetOpts).To(Equal(o))
+	})
+	It("Should set UnsafeDisableDeepCopy through option", func() {
+		getOpts := &client.GetOptions{}
+		client.UnsafeDisableDeepCopy.ApplyToGet(getOpts)
+		Expect(getOpts.UnsafeDisableDeepCopy).ToNot(BeNil())
+		Expect(*getOpts.UnsafeDisableDeepCopy).To(BeTrue())
 	})
 })
 

@@ -303,16 +303,16 @@ func (c *Controller[request]) startEventSourcesAndQueueLocked(ctx context.Contex
 	var retErr error
 
 	c.didStartEventSourcesOnce.Do(func() {
-        queue := c.NewQueue(c.Name, c.RateLimiter)
-        if priorityQueue, isPriorityQueue := queue.(priorityqueue.PriorityQueue[request]); isPriorityQueue {
-            c.Queue = priorityQueue
-        } else {
-            c.Queue = &priorityQueueWrapper[request]{TypedRateLimitingInterface: queue}
-        }
-        go func() {
-            <-ctx.Done()
-            c.Queue.ShutDown()
-        }()
+		queue := c.NewQueue(c.Name, c.RateLimiter)
+		if priorityQueue, isPriorityQueue := queue.(priorityqueue.PriorityQueue[request]); isPriorityQueue {
+			c.Queue = priorityQueue
+		} else {
+			c.Queue = &priorityQueueWrapper[request]{TypedRateLimitingInterface: queue}
+		}
+		go func() {
+			<-ctx.Done()
+			c.Queue.ShutDown()
+		}()
 
 		errGroup := &errgroup.Group{}
 		for _, watch := range c.startWatches {
@@ -380,7 +380,7 @@ func (c *Controller[request]) startEventSourcesAndQueueLocked(ctx context.Contex
 		c.startWatches = nil
 
 		// Mark event sources as started after resetting the startWatches slice so that watches from
-        // a new Watch() call are immediately started.
+		// a new Watch() call are immediately started.
 		c.startedEventSourcesAndQueue = true
 	})
 

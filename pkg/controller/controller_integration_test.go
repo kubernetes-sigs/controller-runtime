@@ -53,9 +53,9 @@ var _ = Describe("controller", func() {
 	Describe("controller", func() {
 		// TODO(directxman12): write a whole suite of controller-client interaction tests
 
-        // Since all tests are run in parallel and share the same testenv, we namespace the objects
-        // created by using a namespace per entry, and adding a watch predicate that filters by
-        // namespace.
+		// Since all tests are run in parallel and share the same testenv, we namespace the objects
+		// created by using a namespace per entry, and adding a watch predicate that filters by
+		// namespace.
 		DescribeTable("should reconcile", func(enableWarmup bool) {
 			By("Creating the Manager")
 			cm, err := manager.New(cfg, manager.Options{})
@@ -63,36 +63,36 @@ var _ = Describe("controller", func() {
 
 			By("Creating the Controller")
 			instance, err := controller.New(
-                fmt.Sprintf("foo-controller-%t", enableWarmup),
-                cm,
-                controller.Options{
-                    Reconciler: reconcile.Func(
-                        func(_ context.Context, request reconcile.Request) (reconcile.Result, error) {
-                            reconciled <- request
-                            return reconcile.Result{}, nil
-                        }),
-                    EnableWarmup: ptr.To(enableWarmup),
-                },
-            )
+				fmt.Sprintf("foo-controller-%t", enableWarmup),
+				cm,
+				controller.Options{
+					Reconciler: reconcile.Func(
+						func(_ context.Context, request reconcile.Request) (reconcile.Result, error) {
+							reconciled <- request
+							return reconcile.Result{}, nil
+						}),
+					EnableWarmup: ptr.To(enableWarmup),
+				},
+			)
 			Expect(err).NotTo(HaveOccurred())
 
-            testNamespace := strconv.FormatBool(enableWarmup)
+			testNamespace := strconv.FormatBool(enableWarmup)
 
 			By("Watching Resources")
 			err = instance.Watch(
 				source.Kind(cm.GetCache(), &appsv1.ReplicaSet{},
 					handler.TypedEnqueueRequestForOwner[*appsv1.ReplicaSet](cm.GetScheme(), cm.GetRESTMapper(), &appsv1.Deployment{}),
-                    makeNamespacePredicate[*appsv1.ReplicaSet](testNamespace),
+					makeNamespacePredicate[*appsv1.ReplicaSet](testNamespace),
 				),
 			)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = instance.Watch(
-                source.Kind(cm.GetCache(), &appsv1.Deployment{},
-                    &handler.TypedEnqueueRequestForObject[*appsv1.Deployment]{},
-                    makeNamespacePredicate[*appsv1.Deployment](testNamespace),
-                ),
-            )
+				source.Kind(cm.GetCache(), &appsv1.Deployment{},
+					&handler.TypedEnqueueRequestForObject[*appsv1.Deployment]{},
+					makeNamespacePredicate[*appsv1.Deployment](testNamespace),
+				),
+			)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = cm.GetClient().Get(ctx, types.NamespacedName{Name: "foo"}, &corev1.Namespace{})
@@ -135,11 +135,11 @@ var _ = Describe("controller", func() {
 				Name:      "deployment-name",
 			}}
 
-            By("Creating the test namespace")
-            _, err = clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-                ObjectMeta: metav1.ObjectMeta{ Name: testNamespace },
-            }, metav1.CreateOptions{})
-            Expect(err).NotTo(HaveOccurred())
+			By("Creating the test namespace")
+			_, err = clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Invoking Reconciling for Create")
 			deployment, err = clientset.AppsV1().Deployments(testNamespace).Create(ctx, deployment, metav1.CreateOptions{})
@@ -202,11 +202,11 @@ var _ = Describe("controller", func() {
 			By("Invoking Reconciling for a pod when it is created when adding watcher dynamically")
 			// Add new watcher dynamically
 			err = instance.Watch(
-                source.Kind(cm.GetCache(), &corev1.Pod{},
-                    &handler.TypedEnqueueRequestForObject[*corev1.Pod]{},
-                    makeNamespacePredicate[*corev1.Pod](testNamespace),
-                ),
-            )
+				source.Kind(cm.GetCache(), &corev1.Pod{},
+					&handler.TypedEnqueueRequestForObject[*corev1.Pod]{},
+					makeNamespacePredicate[*corev1.Pod](testNamespace),
+				),
+			)
 			Expect(err).NotTo(HaveOccurred())
 
 			pod := &corev1.Pod{
@@ -242,9 +242,9 @@ var _ = Describe("controller", func() {
 // makeNamespacePredicate returns a predicate that filters out all objects not in the passed in
 // namespace.
 func makeNamespacePredicate[object client.Object](namespace string) predicate.TypedPredicate[object] {
-    return predicate.NewTypedPredicateFuncs[object](func(obj object) bool {
-        return obj.GetNamespace() == namespace
-    })
+	return predicate.NewTypedPredicateFuncs[object](func(obj object) bool {
+		return obj.GetNamespace() == namespace
+	})
 }
 
 func truePtr() *bool {

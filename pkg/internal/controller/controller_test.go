@@ -404,7 +404,7 @@ var _ = Describe("controller", func() {
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{}
 			err := ctrl.startEventSourcesAndQueueLocked(ctx)
 			Expect(err).NotTo(HaveOccurred())
-            Expect(ctrl.Queue).NotTo(BeNil())
+			Expect(ctrl.Queue).NotTo(BeNil())
 		})
 
 		It("should return an error if a source fails to start", func() {
@@ -1166,7 +1166,7 @@ var _ = Describe("controller", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			src := source.Func(func(ctx context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
 				defer GinkgoRecover()
-                Expect(q).ToNot(BeNil())
+				Expect(q).ToNot(BeNil())
 				Expect(q).To(Equal(ctrl.Queue))
 
 				started = true
@@ -1175,7 +1175,7 @@ var _ = Describe("controller", func() {
 			})
 			Expect(ctrl.Watch(src)).To(Succeed())
 			Expect(ctrl.Warmup(ctx)).To(Succeed())
-            Expect(ctrl.Queue).ToNot(BeNil())
+			Expect(ctrl.Queue).ToNot(BeNil())
 			Expect(started).To(BeTrue())
 		})
 

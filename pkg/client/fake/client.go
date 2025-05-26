@@ -332,8 +332,9 @@ func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Ob
 		return fmt.Errorf("failed to get accessor for object: %w", err)
 	}
 	if accessor.GetName() == "" {
+		gvk, _ := apiutil.GVKForObject(obj, t.scheme)
 		return apierrors.NewInvalid(
-			obj.GetObjectKind().GroupVersionKind().GroupKind(),
+			gvk.GroupKind(),
 			accessor.GetName(),
 			field.ErrorList{field.Required(field.NewPath("metadata.name"), "name is required")})
 	}
@@ -433,8 +434,9 @@ func (t versionedTracker) updateObject(gvr schema.GroupVersionResource, obj runt
 	}
 
 	if accessor.GetName() == "" {
+		gvk, _ := apiutil.GVKForObject(obj, t.scheme)
 		return nil, apierrors.NewInvalid(
-			obj.GetObjectKind().GroupVersionKind().GroupKind(),
+			gvk.GroupKind(),
 			accessor.GetName(),
 			field.ErrorList{field.Required(field.NewPath("metadata.name"), "name is required")})
 	}
@@ -527,33 +529,35 @@ func (c *fakeClient) Get(ctx context.Context, key client.ObjectKey, obj client.O
 	if err != nil {
 		return err
 	}
+	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	if err != nil {
+		return err
+	}
 	o, err := c.tracker.Get(gvr, key.Namespace, key.Name)
 	if err != nil {
 		return err
 	}
 
-	_, isUnstructured := obj.(runtime.Unstructured)
-	_, isPartialObject := obj.(*metav1.PartialObjectMetadata)
-
-	if isUnstructured || isPartialObject {
-		gvk, err := apiutil.GVKForObject(obj, c.scheme)
-		if err != nil {
-			return err
-		}
-		ta, err := meta.TypeAccessor(o)
-		if err != nil {
-			return err
-		}
-		ta.SetKind(gvk.Kind)
-		ta.SetAPIVersion(gvk.GroupVersion().String())
+	ta, err := meta.TypeAccessor(o)
+	if err != nil {
+		return err
 	}
+
+	// If the final object is unstructuctured, the json
+	// representation must contain GVK or the apimachinery
+	// json serializer will error out.
+	ta.SetAPIVersion(gvk.GroupVersion().String())
+	ta.SetKind(gvk.Kind)
 
 	j, err := json.Marshal(o)
 	if err != nil {
 		return err
 	}
 	zero(obj)
-	return json.Unmarshal(j, obj)
+	if err := json.Unmarshal(j, obj); err != nil {
+		return err
+	}
+	return ensureTypeMeta(obj, gvk)
 }
 
 func (c *fakeClient) Watch(ctx context.Context, list client.ObjectList, opts ...client.ListOption) (watch.Interface, error) {
@@ -579,8 +583,7 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 		return err
 	}
 
-	originalKind := gvk.Kind
-
+	originalGVK := gvk
 	gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
 
 	if _, isUnstructuredList := obj.(runtime.Unstructured); isUnstructuredList && !c.scheme.Recognizes(gvk) {
@@ -602,37 +605,28 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 		return err
 	}
 
-	if _, isUnstructured := obj.(runtime.Unstructured); isUnstructured {
-		ta, err := meta.TypeAccessor(o)
-		if err != nil {
-			return err
-		}
-		ta.SetKind(originalKind)
-		ta.SetAPIVersion(gvk.GroupVersion().String())
-	}
-
 	j, err := json.Marshal(o)
 	if err != nil {
 		return err
 	}
 	zero(obj)
+	if err := ensureTypeMeta(obj, originalGVK); err != nil {
+		return err
+	}
 	objCopy := obj.DeepCopyObject().(client.ObjectList)
 	if err := json.Unmarshal(j, objCopy); err != nil {
 		return err
 	}
 
-	if _, isUnstructured := obj.(runtime.Unstructured); isUnstructured {
-		ta, err := meta.TypeAccessor(obj)
-		if err != nil {
-			return err
-		}
-		ta.SetKind(originalKind)
-		ta.SetAPIVersion(gvk.GroupVersion().String())
-	}
-
 	objs, err := meta.ExtractList(objCopy)
 	if err != nil {
 		return err
+	}
+
+	for _, o := range objs {
+		if err := ensureTypeMeta(o, gvk); err != nil {
+			return err
+		}
 	}
 
 	if listOpts.LabelSelector == nil && listOpts.FieldSelector == nil {
@@ -775,7 +769,15 @@ func (c *fakeClient) Create(ctx context.Context, obj client.Object, opts ...clie
 
 	c.trackerWriteLock.Lock()
 	defer c.trackerWriteLock.Unlock()
-	return c.tracker.Create(gvr, obj, accessor.GetNamespace())
+	if err := c.tracker.Create(gvr, obj, accessor.GetNamespace()); err != nil {
+		return err
+	}
+
+	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	if err != nil {
+		return err
+	}
+	return ensureTypeMeta(obj, gvk)
 }
 
 func (c *fakeClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
@@ -892,6 +894,10 @@ func (c *fakeClient) update(obj client.Object, isStatus bool, opts ...client.Upd
 	if err != nil {
 		return err
 	}
+	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	if err != nil {
+		return err
+	}
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
 		return err
@@ -899,7 +905,11 @@ func (c *fakeClient) update(obj client.Object, isStatus bool, opts ...client.Upd
 
 	c.trackerWriteLock.Lock()
 	defer c.trackerWriteLock.Unlock()
-	return c.tracker.update(gvr, obj, accessor.GetNamespace(), isStatus, false, *updateOptions.AsUpdateOptions())
+	if err := c.tracker.update(gvr, obj, accessor.GetNamespace(), isStatus, false, *updateOptions.AsUpdateOptions()); err != nil {
+		return err
+	}
+
+	return ensureTypeMeta(obj, gvk)
 }
 
 func (c *fakeClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
@@ -922,16 +932,15 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 	if err != nil {
 		return err
 	}
+	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	if err != nil {
+		return err
+	}
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
 		return err
 	}
 	data, err := patch.Data(obj)
-	if err != nil {
-		return err
-	}
-
-	gvk, err := apiutil.GVKForObject(obj, c.scheme)
 	if err != nil {
 		return err
 	}
@@ -978,13 +987,8 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 		panic("tracker could not handle patch method")
 	}
 
-	if _, isUnstructured := obj.(runtime.Unstructured); isUnstructured {
-		ta, err := meta.TypeAccessor(o)
-		if err != nil {
-			return err
-		}
-		ta.SetKind(gvk.Kind)
-		ta.SetAPIVersion(gvk.GroupVersion().String())
+	if err := ensureTypeMeta(obj, gvk); err != nil {
+		return err
 	}
 
 	j, err := json.Marshal(o)
@@ -992,7 +996,11 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 		return err
 	}
 	zero(obj)
-	return json.Unmarshal(j, obj)
+	if err := json.Unmarshal(j, obj); err != nil {
+		return err
+	}
+
+	return ensureTypeMeta(obj, gvk)
 }
 
 // Applying a patch results in a deletionTimestamp that is truncated to the nearest second.
@@ -1597,6 +1605,26 @@ func AddIndex(c client.Client, obj runtime.Object, field string, extractValue cl
 	}
 
 	fakeClient.indexes[gvk][field] = extractValue
+
+	return nil
+}
+
+func ensureTypeMeta(obj runtime.Object, gvk schema.GroupVersionKind) error {
+	ta, err := meta.TypeAccessor(obj)
+	if err != nil {
+		return err
+	}
+	_, isUnstructured := obj.(runtime.Unstructured)
+	_, isPartialObject := obj.(*metav1.PartialObjectMetadata)
+	_, isPartialObjectList := obj.(*metav1.PartialObjectMetadataList)
+	if !isUnstructured && !isPartialObject && !isPartialObjectList {
+		ta.SetKind("")
+		ta.SetAPIVersion("")
+		return nil
+	}
+
+	ta.SetKind(gvk.Kind)
+	ta.SetAPIVersion(gvk.GroupVersion().String())
 
 	return nil
 }

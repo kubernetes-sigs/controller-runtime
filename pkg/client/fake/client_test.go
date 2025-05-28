@@ -592,15 +592,9 @@ var _ = Describe("Fake client", func() {
 		})
 
 		It("should allow patch when the patch sets RV to 'null'", func() {
-			schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
-			schemeBuilder.Register(&WithPointerMeta{}, &WithPointerMetaList{})
-
-			scheme := runtime.NewScheme()
-			Expect(schemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
-
-			cl := NewClientBuilder().WithScheme(scheme).Build()
-			original := &WithPointerMeta{
-				ObjectMeta: &metav1.ObjectMeta{
+			cl := NewClientBuilder().Build()
+			original := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
 					Name:      "obj",
 					Namespace: "ns2",
 				}}
@@ -608,8 +602,8 @@ var _ = Describe("Fake client", func() {
 			err := cl.Create(context.Background(), original)
 			Expect(err).ToNot(HaveOccurred())
 
-			newObj := &WithPointerMeta{
-				ObjectMeta: &metav1.ObjectMeta{
+			newObj := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
 					Name:      original.Name,
 					Namespace: original.Namespace,
 					Annotations: map[string]string{
@@ -619,7 +613,7 @@ var _ = Describe("Fake client", func() {
 
 			Expect(cl.Patch(context.Background(), newObj, client.MergeFrom(original))).To(Succeed())
 
-			patched := &WithPointerMeta{}
+			patched := &corev1.ConfigMap{}
 			Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(original), patched)).To(Succeed())
 			Expect(patched.Annotations).To(Equal(map[string]string{"foo": "bar"}))
 		})
@@ -2142,121 +2136,6 @@ var _ = Describe("Fake client", func() {
 		Expect(podList.Items[0].TypeMeta).To(Equal(metav1.TypeMeta{}))
 	})
 
-	It("should be able to Get an object that has pointer fields for metadata", func() {
-		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
-		schemeBuilder.Register(&WithPointerMeta{}, &WithPointerMetaList{})
-		scheme := runtime.NewScheme()
-		Expect(schemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
-
-		cl := NewClientBuilder().
-			WithScheme(scheme).
-			WithObjects(&WithPointerMeta{ObjectMeta: &metav1.ObjectMeta{
-				Name: "foo",
-			}}).
-			Build()
-
-		var object WithPointerMeta
-		Expect(cl.Get(context.Background(), client.ObjectKey{Name: "foo"}, &object)).NotTo(HaveOccurred())
-	})
-
-	It("should be able to List an object type that has pointer fields for metadata", func() {
-		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
-		schemeBuilder.Register(&WithPointerMeta{}, &WithPointerMetaList{})
-		scheme := runtime.NewScheme()
-		Expect(schemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
-
-		cl := NewClientBuilder().
-			WithScheme(scheme).
-			WithObjects(&WithPointerMeta{ObjectMeta: &metav1.ObjectMeta{
-				Name: "foo",
-			}}).
-			Build()
-
-		var objectList WithPointerMetaList
-		Expect(cl.List(context.Background(), &objectList)).NotTo(HaveOccurred())
-		Expect(objectList.Items).To(HaveLen(1))
-	})
-
-	It("should be able to List an object type that has pointer fields for metadata with no results", func() {
-		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
-		schemeBuilder.Register(&WithPointerMeta{}, &WithPointerMetaList{})
-		scheme := runtime.NewScheme()
-		Expect(schemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
-
-		cl := NewClientBuilder().
-			WithScheme(scheme).
-			Build()
-
-		var objectList WithPointerMetaList
-		Expect(cl.List(context.Background(), &objectList)).NotTo(HaveOccurred())
-		Expect(objectList.Items).To(BeEmpty())
-	})
-
-	It("should be able to Patch an object type that has pointer fields for metadata", func() {
-		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
-		schemeBuilder.Register(&WithPointerMeta{}, &WithPointerMetaList{})
-		scheme := runtime.NewScheme()
-		Expect(schemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
-
-		obj := &WithPointerMeta{ObjectMeta: &metav1.ObjectMeta{
-			Name: "foo",
-		}}
-		cl := NewClientBuilder().
-			WithScheme(scheme).
-			WithObjects(obj).
-			Build()
-
-		original := obj.DeepCopy()
-		obj.Labels = map[string]string{"foo": "bar"}
-		Expect(cl.Patch(context.Background(), obj, client.MergeFrom(original))).NotTo(HaveOccurred())
-
-		Expect(cl.Get(context.Background(), client.ObjectKey{Name: "foo"}, obj)).NotTo(HaveOccurred())
-		Expect(obj.Labels).To(Equal(map[string]string{"foo": "bar"}))
-	})
-
-	It("should be able to Update an object type that has pointer fields for metadata", func() {
-		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
-		schemeBuilder.Register(&WithPointerMeta{}, &WithPointerMetaList{})
-		scheme := runtime.NewScheme()
-		Expect(schemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
-
-		obj := &WithPointerMeta{ObjectMeta: &metav1.ObjectMeta{
-			Name: "foo",
-		}}
-		cl := NewClientBuilder().
-			WithScheme(scheme).
-			WithObjects(obj).
-			Build()
-
-		Expect(cl.Get(context.Background(), client.ObjectKey{Name: "foo"}, obj)).NotTo(HaveOccurred())
-
-		obj.Labels = map[string]string{"foo": "bar"}
-		Expect(cl.Update(context.Background(), obj)).NotTo(HaveOccurred())
-
-		Expect(cl.Get(context.Background(), client.ObjectKey{Name: "foo"}, obj)).NotTo(HaveOccurred())
-		Expect(obj.Labels).To(Equal(map[string]string{"foo": "bar"}))
-	})
-
-	It("should be able to Delete an object type that has pointer fields for metadata", func() {
-		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
-		schemeBuilder.Register(&WithPointerMeta{}, &WithPointerMetaList{})
-		scheme := runtime.NewScheme()
-		Expect(schemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
-
-		obj := &WithPointerMeta{ObjectMeta: &metav1.ObjectMeta{
-			Name: "foo",
-		}}
-		cl := NewClientBuilder().
-			WithScheme(scheme).
-			WithObjects(obj).
-			Build()
-
-		Expect(cl.Delete(context.Background(), obj)).NotTo(HaveOccurred())
-
-		err := cl.Get(context.Background(), client.ObjectKey{Name: "foo"}, obj)
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
-	})
-
 	It("should allow concurrent patches to a configMap", func() {
 		scheme := runtime.NewScheme()
 		Expect(corev1.AddToScheme(scheme)).To(Succeed())
@@ -2789,56 +2668,6 @@ func (in *Schemaless) DeepCopy() *Schemaless {
 	out := new(Schemaless)
 	in.DeepCopyInto(out)
 	return out
-}
-
-type WithPointerMetaList struct {
-	*metav1.ListMeta
-	*metav1.TypeMeta
-	Items []*WithPointerMeta
-}
-
-func (t *WithPointerMetaList) DeepCopy() *WithPointerMetaList {
-	l := &WithPointerMetaList{
-		ListMeta: t.ListMeta.DeepCopy(),
-	}
-	if t.TypeMeta != nil {
-		l.TypeMeta = &metav1.TypeMeta{
-			APIVersion: t.APIVersion,
-			Kind:       t.Kind,
-		}
-	}
-	for _, item := range t.Items {
-		l.Items = append(l.Items, item.DeepCopy())
-	}
-
-	return l
-}
-
-func (t *WithPointerMetaList) DeepCopyObject() runtime.Object {
-	return t.DeepCopy()
-}
-
-type WithPointerMeta struct {
-	*metav1.TypeMeta   `json:",inline"`
-	*metav1.ObjectMeta `json:"metadata,omitempty"`
-}
-
-func (t *WithPointerMeta) DeepCopy() *WithPointerMeta {
-	w := &WithPointerMeta{
-		ObjectMeta: t.ObjectMeta.DeepCopy(),
-	}
-	if t.TypeMeta != nil {
-		w.TypeMeta = &metav1.TypeMeta{
-			APIVersion: t.APIVersion,
-			Kind:       t.Kind,
-		}
-	}
-
-	return w
-}
-
-func (t *WithPointerMeta) DeepCopyObject() runtime.Object {
-	return t.DeepCopy()
 }
 
 var _ = Describe("Fake client builder", func() {

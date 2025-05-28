@@ -66,10 +66,6 @@ var _ = Describe("Fake client", func() {
 	BeforeEach(func() {
 		replicas := int32(1)
 		dep = &appsv1.Deployment{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            "test-deployment",
 				Namespace:       "ns1",
@@ -83,10 +79,6 @@ var _ = Describe("Fake client", func() {
 			},
 		}
 		dep2 = &appsv1.Deployment{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-deployment-2",
 				Namespace: "ns1",
@@ -100,10 +92,6 @@ var _ = Describe("Fake client", func() {
 			},
 		}
 		cm = &corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       "ConfigMap",
-			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            "test-cm",
 				Namespace:       "ns2",
@@ -248,7 +236,7 @@ var _ = Describe("Fake client", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should be able to List an unregistered type using unstructured", func() {
+		It("should be able to List an unregistered type using unstructured with ListKind", func() {
 			list := &unstructured.UnstructuredList{}
 			list.SetAPIVersion("custom/v3")
 			list.SetKind("ImageList")
@@ -258,14 +246,14 @@ var _ = Describe("Fake client", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should be able to List an unregistered type using unstructured", func() {
+		It("should be able to List an unregistered type using unstructured with Kind", func() {
 			list := &unstructured.UnstructuredList{}
 			list.SetAPIVersion("custom/v4")
 			list.SetKind("Image")
 			err := cl.List(context.Background(), list)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(list.GroupVersionKind().GroupVersion().String()).To(Equal("custom/v4"))
 			Expect(list.GetKind()).To(Equal("Image"))
-			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should be able to Update an unregistered type using unstructured", func() {
@@ -403,10 +391,6 @@ var _ = Describe("Fake client", func() {
 		It("should reject apply patches, they are not supported in the fake client", func() {
 			By("Creating a new configmap")
 			cm := &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "ConfigMap",
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "new-test-cm",
 					Namespace: "ns2",
@@ -423,10 +407,6 @@ var _ = Describe("Fake client", func() {
 		It("should be able to Create", func() {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "ConfigMap",
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "new-test-cm",
 					Namespace: "ns2",
@@ -474,10 +454,6 @@ var _ = Describe("Fake client", func() {
 		It("should error on Create with empty Name", func() {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "ConfigMap",
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "ns2",
 				},
@@ -489,10 +465,6 @@ var _ = Describe("Fake client", func() {
 		It("should error on Update with empty Name", func() {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "ConfigMap",
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "ns2",
 				},
@@ -504,10 +476,6 @@ var _ = Describe("Fake client", func() {
 		It("should be able to Create with GenerateName", func() {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "ConfigMap",
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "new-test-cm",
 					Namespace:    "ns2",
@@ -533,10 +501,6 @@ var _ = Describe("Fake client", func() {
 		It("should be able to Update", func() {
 			By("Updating a new configmap")
 			newcm := &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "ConfigMap",
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "test-cm",
 					Namespace:       "ns2",
@@ -564,10 +528,6 @@ var _ = Describe("Fake client", func() {
 		It("should allow updates with non-set ResourceVersion for a resource that allows unconditional updates", func() {
 			By("Updating a new configmap")
 			newcm := &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "ConfigMap",
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cm",
 					Namespace: "ns2",
@@ -621,10 +581,6 @@ var _ = Describe("Fake client", func() {
 		It("should reject updates with non-set ResourceVersion for a resource that doesn't allow unconditional updates", func() {
 			By("Creating a new binding")
 			binding := &corev1.Binding{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Binding",
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "ns2",
@@ -640,10 +596,6 @@ var _ = Describe("Fake client", func() {
 
 			By("Updating the binding with a new resource lacking resource version")
 			newBinding := &corev1.Binding{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Binding",
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      binding.Name,
 					Namespace: binding.Namespace,
@@ -659,10 +611,6 @@ var _ = Describe("Fake client", func() {
 		It("should allow create on update for a resource that allows create on update", func() {
 			By("Creating a new lease with update")
 			lease := &coordinationv1.Lease{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "coordination.k8s.io/v1",
-					Kind:       "Lease",
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-lease",
 					Namespace: "ns2",
@@ -685,10 +633,6 @@ var _ = Describe("Fake client", func() {
 		It("should reject create on update for a resource that does not allow create on update", func() {
 			By("Attemping to create a new configmap with update")
 			newcm := &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "ConfigMap",
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "different-test-cm",
 					Namespace: "ns2",
@@ -1539,10 +1483,6 @@ var _ = Describe("Fake client", func() {
 		}
 
 		dep3 := &appsv1.Deployment{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-deployment-3",
 				Namespace: "ns1",
@@ -1929,8 +1869,6 @@ var _ = Describe("Fake client", func() {
 
 		actual := &corev1.Pod{}
 		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), actual)).To(Succeed())
-		obj.APIVersion = u.GetAPIVersion()
-		obj.Kind = u.GetKind()
 		obj.ResourceVersion = actual.ResourceVersion
 		// only the spec mutation should persist
 		obj.Spec.RestartPolicy = corev1.RestartPolicyNever
@@ -2443,6 +2381,90 @@ var _ = Describe("Fake client", func() {
 		expectedErr := "deployments.apps \"foo\" not found"
 		Expect(cl.SubResource(subResourceScale).Get(context.Background(), obj, scale).Error()).To(Equal(expectedErr))
 		Expect(cl.SubResource(subResourceScale).Update(context.Background(), obj, client.WithSubResourceBody(scale)).Error()).To(Equal(expectedErr))
+	})
+
+	It("clears typemeta from structured objects on create", func() {
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "foo",
+			},
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "ConfigMap",
+			},
+		}
+		cl := NewClientBuilder().Build()
+		Expect(cl.Create(context.Background(), obj)).To(Succeed())
+		Expect(obj.TypeMeta).To(Equal(metav1.TypeMeta{}))
+	})
+
+	It("clears typemeta from structured objects on update", func() {
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "foo",
+			},
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "ConfigMap",
+			},
+		}
+		cl := NewClientBuilder().WithObjects(obj).Build()
+		Expect(cl.Update(context.Background(), obj)).To(Succeed())
+		Expect(obj.TypeMeta).To(Equal(metav1.TypeMeta{}))
+	})
+
+	It("clears typemeta from structured objects on patch", func() {
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "foo",
+			},
+		}
+		cl := NewClientBuilder().WithObjects(obj).Build()
+		original := obj.DeepCopy()
+		obj.TypeMeta = metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
+		}
+		Expect(cl.Patch(context.Background(), obj, client.MergeFrom(original))).To(Succeed())
+		Expect(obj.TypeMeta).To(Equal(metav1.TypeMeta{}))
+	})
+
+	It("clears typemeta from structured objects on get", func() {
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "foo",
+			},
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "ConfigMap",
+			},
+		}
+		cl := NewClientBuilder().WithObjects(obj).Build()
+		target := &corev1.ConfigMap{}
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(obj), target)).To(Succeed())
+		Expect(target.TypeMeta).To(Equal(metav1.TypeMeta{}))
+	})
+
+	It("clears typemeta from structured objects on list", func() {
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "foo",
+			},
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "ConfigMap",
+			},
+		}
+		cl := NewClientBuilder().WithObjects(obj).Build()
+		target := &corev1.ConfigMapList{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "ConfigMap",
+			},
+		}
+		Expect(cl.List(context.Background(), target)).To(Succeed())
+		Expect(target.TypeMeta).To(Equal(metav1.TypeMeta{}))
+		Expect(target.Items[0].TypeMeta).To(Equal(metav1.TypeMeta{}))
 	})
 
 	It("is threadsafe", func() {

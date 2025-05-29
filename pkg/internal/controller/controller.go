@@ -30,9 +30,9 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/controller/metrics"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
-	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -101,7 +101,7 @@ type Controller[request comparable] struct {
 func (c *Controller[request]) Reconcile(ctx context.Context, req request) (_ reconcile.Result, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			ctrlmetrics.ReconcilePanics.WithLabelValues(c.Name).Inc()
+			metrics.GetControllerMetricsProvider().ReconcilePanics().Inc(map[string]string{labelKeyController: c.Name})
 
 			if c.RecoverPanic == nil || *c.RecoverPanic {
 				for _, fn := range utilruntime.PanicHandlers {
@@ -294,30 +294,32 @@ func (c *Controller[request]) processNextWorkItem(ctx context.Context) bool {
 	// period.
 	defer c.Queue.Done(obj)
 
-	ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(1)
-	defer ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(-1)
+	metrics.GetControllerMetricsProvider().ActiveWorkers().Add(map[string]string{labelKeyController: c.Name}, 1)
+	defer metrics.GetControllerMetricsProvider().ActiveWorkers().Add(map[string]string{labelKeyController: c.Name}, -1)
 
 	c.reconcileHandler(ctx, obj, priority)
 	return true
 }
 
 const (
-	labelError        = "error"
-	labelRequeueAfter = "requeue_after"
-	labelRequeue      = "requeue"
-	labelSuccess      = "success"
+	labelKeyController = "controller"
+	labelKeyResult     = "result"
+	labelError         = "error"
+	labelRequeueAfter  = "requeue_after"
+	labelRequeue       = "requeue"
+	labelSuccess       = "success"
 )
 
 func (c *Controller[request]) initMetrics() {
-	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelError).Add(0)
-	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeueAfter).Add(0)
-	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeue).Add(0)
-	ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelSuccess).Add(0)
-	ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Add(0)
-	ctrlmetrics.TerminalReconcileErrors.WithLabelValues(c.Name).Add(0)
-	ctrlmetrics.ReconcilePanics.WithLabelValues(c.Name).Add(0)
-	ctrlmetrics.WorkerCount.WithLabelValues(c.Name).Set(float64(c.MaxConcurrentReconciles))
-	ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Set(0)
+	metrics.GetControllerMetricsProvider().ReconcileTotal().Add(map[string]string{labelKeyController: c.Name, labelKeyResult: labelError}, 0)
+	metrics.GetControllerMetricsProvider().ReconcileTotal().Add(map[string]string{labelKeyController: c.Name, labelKeyResult: labelRequeueAfter}, 0)
+	metrics.GetControllerMetricsProvider().ReconcileTotal().Add(map[string]string{labelKeyController: c.Name, labelKeyResult: labelRequeue}, 0)
+	metrics.GetControllerMetricsProvider().ReconcileTotal().Add(map[string]string{labelKeyController: c.Name, labelKeyResult: labelSuccess}, 0)
+	metrics.GetControllerMetricsProvider().ReconcileErrors().Add(map[string]string{labelKeyController: c.Name}, 0)
+	metrics.GetControllerMetricsProvider().TerminalReconcileErrors().Add(map[string]string{labelKeyController: c.Name}, 0)
+	metrics.GetControllerMetricsProvider().ReconcilePanics().Add(map[string]string{labelKeyController: c.Name}, 0)
+	metrics.GetControllerMetricsProvider().WorkerCount().Set(map[string]string{labelKeyController: c.Name}, float64(c.MaxConcurrentReconciles))
+	metrics.GetControllerMetricsProvider().ActiveWorkers().Set(map[string]string{labelKeyController: c.Name}, 0)
 }
 
 func (c *Controller[request]) reconcileHandler(ctx context.Context, req request, priority int) {
@@ -341,12 +343,12 @@ func (c *Controller[request]) reconcileHandler(ctx context.Context, req request,
 	switch {
 	case err != nil:
 		if errors.Is(err, reconcile.TerminalError(nil)) {
-			ctrlmetrics.TerminalReconcileErrors.WithLabelValues(c.Name).Inc()
+			metrics.GetControllerMetricsProvider().TerminalReconcileErrors().Inc(map[string]string{"controller": c.Name})
 		} else {
 			c.Queue.AddWithOpts(priorityqueue.AddOpts{RateLimited: true, Priority: priority}, req)
 		}
-		ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Inc()
-		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelError).Inc()
+		metrics.GetControllerMetricsProvider().ReconcileErrors().Inc(map[string]string{labelKeyController: c.Name})
+		metrics.GetControllerMetricsProvider().ReconcileTotal().Inc(map[string]string{labelKeyController: c.Name, labelKeyResult: labelError})
 		if !result.IsZero() {
 			log.Info("Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes requeuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler")
 		}
@@ -359,17 +361,17 @@ func (c *Controller[request]) reconcileHandler(ctx context.Context, req request,
 		// to result.RequestAfter
 		c.Queue.Forget(req)
 		c.Queue.AddWithOpts(priorityqueue.AddOpts{After: result.RequeueAfter, Priority: priority}, req)
-		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeueAfter).Inc()
+		metrics.GetControllerMetricsProvider().ReconcileTotal().Inc(map[string]string{labelKeyController: c.Name, labelKeyResult: labelRequeueAfter})
 	case result.Requeue: //nolint: staticcheck // We have to handle it until it is removed
 		log.V(5).Info("Reconcile done, requeueing")
 		c.Queue.AddWithOpts(priorityqueue.AddOpts{RateLimited: true, Priority: priority}, req)
-		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeue).Inc()
+		metrics.GetControllerMetricsProvider().ReconcileTotal().Inc(map[string]string{labelKeyController: c.Name, labelKeyResult: labelRequeue})
 	default:
 		log.V(5).Info("Reconcile successful")
 		// Finally, if no error occurs we Forget this item so it does not
 		// get queued again until another change happens.
 		c.Queue.Forget(req)
-		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelSuccess).Inc()
+		metrics.GetControllerMetricsProvider().ReconcileTotal().Inc(map[string]string{labelKeyController: c.Name, labelKeyResult: labelSuccess})
 	}
 }
 
@@ -380,7 +382,7 @@ func (c *Controller[request]) GetLogger() logr.Logger {
 
 // updateMetrics updates prometheus metrics within the controller.
 func (c *Controller[request]) updateMetrics(reconcileTime time.Duration) {
-	ctrlmetrics.ReconcileTime.WithLabelValues(c.Name).Observe(reconcileTime.Seconds())
+	metrics.GetControllerMetricsProvider().ReconcileTime().Observe(map[string]string{labelKeyController: c.Name}, reconcileTime.Seconds())
 }
 
 // ReconcileIDFromContext gets the reconcileID from the current context.

@@ -388,22 +388,6 @@ var _ = Describe("Fake client", func() {
 			Expect(list.Items).To(ConsistOf(*dep2))
 		})
 
-		It("should reject apply patches, they are not supported in the fake client", func() {
-			By("Creating a new configmap")
-			cm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "new-test-cm",
-					Namespace: "ns2",
-				},
-			}
-			err := cl.Create(context.Background(), cm)
-			Expect(err).ToNot(HaveOccurred())
-
-			cm.Data = map[string]string{"foo": "bar"}
-			err = cl.Patch(context.Background(), cm, client.Apply, client.ForceOwnership)
-			Expect(err).To(MatchError(ContainSubstring("apply patches are not supported in the fake client")))
-		})
-
 		It("should be able to Create", func() {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
@@ -448,7 +432,7 @@ var _ = Describe("Fake client", func() {
 			err := cl.Create(context.Background(), submitted)
 			Expect(err).To(HaveOccurred())
 			Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
-			Expect(submitted).To(Equal(submittedReference))
+			Expect(cmp.Diff(submitted, submittedReference)).To(BeEmpty())
 		})
 
 		It("should error on Create with empty Name", func() {
@@ -1469,7 +1453,7 @@ var _ = Describe("Fake client", func() {
 		obj := &appsv1.Deployment{}
 		err := cl.Get(context.Background(), namespacedName, obj)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(obj).To(Equal(dep))
+		Expect(cmp.Diff(obj, dep)).To(BeEmpty())
 
 		By("Getting a deployment from clientSet")
 		csDep2, err := clientSet.AppsV1().Deployments("ns1").Get(context.Background(), "test-deployment-2", metav1.GetOptions{})
@@ -1499,7 +1483,7 @@ var _ = Describe("Fake client", func() {
 		obj = &appsv1.Deployment{}
 		err = cl.Get(context.Background(), namespacedName3, obj)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(obj).To(Equal(dep3))
+		Expect(cmp.Diff(obj, dep3)).To(BeEmpty())
 	})
 
 	It("should not change the status of typed objects that have a status subresource on update", func() {
@@ -2553,6 +2537,51 @@ var _ = Describe("Fake client", func() {
 
 		wg.Wait()
 	})
+
+	It("supports server-side apply of a client-go resource", func() {
+		cl := NewClientBuilder().Build()
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("v1")
+		obj.SetKind("ConfigMap")
+		obj.SetName("foo")
+		unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "data")
+
+		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+
+		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(cm), cm)).To(Succeed())
+		Expect(cm.Data).To(Equal(map[string]string{"some": "data"}))
+
+		unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "data")
+		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(cm), cm)).To(Succeed())
+		Expect(cm.Data).To(Equal(map[string]string{"other": "data"}))
+	})
+
+	//	It("supports server-side apply of a custom resource", func() {
+	//		cl := NewClientBuilder().Build()
+	//		obj := &unstructured.Unstructured{}
+	//		obj.SetAPIVersion("custom/v1")
+	//		obj.SetKind("FakeResource")
+	//		obj.SetName("foo")
+	//		unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "spec")
+	//
+	//		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+	//
+	//		result := obj.DeepCopy()
+	//		unstructured.SetNestedField(result.Object, nil, "spec")
+	//
+	//		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(result), result)).To(Succeed())
+	//		Expect(result.Object["spec"]).To(Equal(map[string]any{"some": "data"}))
+	//
+	//		unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "spec")
+	//		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+	//
+	//		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(result), result)).To(Succeed())
+	//		Expect(result.Object["spec"]).To(Equal(map[string]any{"other": "data"}))
+	//	})
 
 	scalableObjs := []client.Object{
 		&appsv1.Deployment{

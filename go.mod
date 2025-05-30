@@ -2,6 +2,10 @@ module sigs.k8s.io/controller-runtime
 
 go 1.24.0
 
+replace k8s.io/apimachinery => /Users/alvaro/git/go/src/k8s.io/kubernetes/staging/src/k8s.io/apimachinery
+
+replace k8s.io/client-go => /Users/alvaro/git/go/src/k8s.io/kubernetes/staging/src/k8s.io/client-go
+
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/evanphx/json-patch/v5 v5.9.11
@@ -28,9 +32,11 @@ require (
 	k8s.io/apiserver v0.33.0
 	k8s.io/client-go v0.33.0
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
+	k8s.io/utils v0.0.0-20250502105355-0f33e8f1c979
 	sigs.k8s.io/yaml v1.4.0
 )
+
+require sigs.k8s.io/structured-merge-diff/v4 v4.7.0
 
 require (
 	cel.dev/expr v0.19.1 // indirect
@@ -41,7 +47,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
+	github.com/fxamacker/cbor/v2 v2.8.0 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
@@ -65,7 +71,7 @@ require (
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
@@ -96,5 +102,4 @@ require (
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.2 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 )

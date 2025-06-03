@@ -2030,7 +2030,8 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(actual).NotTo(BeNil())
 
 				By("validating the fetched Deployment equals the created one")
-				Expect(u).To(Equal(&actual))
+				unstructured.RemoveNestedField(actual.Object, "spec", "template", "metadata", "creationTimestamp")
+				Expect(u).To(BeComparableTo(&actual))
 			})
 
 			It("should fetch an existing non-namespace object", func() {

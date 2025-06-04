@@ -6,7 +6,7 @@ import (
 
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/clock"
-	"sigs.k8s.io/controller-runtime/pkg/internal/metrics"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 // This file is mostly a copy of unexported code from

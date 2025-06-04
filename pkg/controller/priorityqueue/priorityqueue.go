@@ -12,7 +12,7 @@ import (
 	"k8s.io/utils/clock"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/controller-runtime/pkg/internal/metrics"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 // AddOpts describes the options for adding items to the queue.
@@ -56,7 +56,7 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 	}
 
 	if opts.MetricProvider == nil {
-		opts.MetricProvider = metrics.WorkqueueMetricsProvider{}
+		opts.MetricProvider = metrics.PrometheusWorkqueueMetricsProvider{}
 	}
 
 	pq := &priorityqueue[T]{

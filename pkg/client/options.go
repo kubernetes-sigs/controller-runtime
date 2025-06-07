@@ -62,6 +62,12 @@ type PatchOption interface {
 	ApplyToPatch(*PatchOptions)
 }
 
+// ApplyOption is some configuration that modifies options for a apply request.
+type ApplyOption interface {
+	// A ApplyToApply applies this configuration to the given apply options.
+	ApplyToApply(*ApplyOptions)
+}
+
 // DeleteAllOfOption is some configuration that modifies options for a delete request.
 type DeleteAllOfOption interface {
 	// ApplyToDeleteAllOf applies this configuration to the given deletecollection options.
@@ -116,6 +122,10 @@ func (dryRunAll) ApplyToPatch(opts *PatchOptions) {
 	opts.DryRun = []string{metav1.DryRunAll}
 }
 
+func (drun dryRunAll) ApplyToApply(opts *ApplyOptions) {
+	opts.DryRun = []string{metav1.DryRunAll}
+}
+
 // ApplyToPatch applies this configuration to the given delete options.
 func (dryRunAll) ApplyToDelete(opts *DeleteOptions) {
 	opts.DryRun = []string{metav1.DryRunAll}
@@ -152,6 +162,11 @@ func (f FieldOwner) ApplyToCreate(opts *CreateOptions) {
 
 // ApplyToUpdate applies this configuration to the given update options.
 func (f FieldOwner) ApplyToUpdate(opts *UpdateOptions) {
+	opts.FieldManager = string(f)
+}
+
+// ApplyToApply applies this configuration to the given apply options.
+func (f FieldOwner) ApplyToApply(opts *ApplyOptions) {
 	opts.FieldManager = string(f)
 }
 
@@ -872,10 +887,18 @@ func (o *PatchOptions) AsPatchOptions() *metav1.PatchOptions {
 		o.Raw = &metav1.PatchOptions{}
 	}
 
-	o.Raw.DryRun = o.DryRun
-	o.Raw.Force = o.Force
-	o.Raw.FieldManager = o.FieldManager
-	o.Raw.FieldValidation = o.FieldValidation
+	if o.DryRun != nil {
+		o.Raw.DryRun = o.DryRun
+	}
+	if o.Force != nil {
+		o.Raw.Force = o.Force
+	}
+	if o.FieldManager != "" {
+		o.Raw.FieldManager = o.FieldManager
+	}
+	if o.FieldValidation != "" {
+		o.Raw.FieldValidation = o.FieldValidation
+	}
 	return o.Raw
 }
 
@@ -948,3 +971,57 @@ func (o *DeleteAllOfOptions) ApplyToDeleteAllOf(do *DeleteAllOfOptions) {
 }
 
 // }}}
+
+// ApplyOptions are the options for an apply request.
+type ApplyOptions struct {
+	// When present, indicates that modifications should not be
+	// persisted. An invalid or unrecognized dryRun directive will
+	// result in an error response and no further processing of the
+	// request. Valid values are:
+	// - All: all dry run stages will be processed
+	// +optional
+	// +listType=atomic
+	DryRun []string `json:"dryRun,omitempty" protobuf:"bytes,1,rep,name=dryRun"`
+
+	// Force is going to "force" Apply requests. It means user will
+	// re-acquire conflicting fields owned by other people.
+	Force *bool `json:"force" protobuf:"varint,2,opt,name=force"`
+
+	// fieldManager is a name associated with the actor or entity
+	// that is making these changes. The value must be less than or
+	// 128 characters long, and only contain printable characters,
+	// as defined by https://golang.org/pkg/unicode/#IsPrint. This
+	// field is required.
+	FieldManager string `json:"fieldManager" protobuf:"bytes,3,name=fieldManager"`
+}
+
+// ApplyOptions applies the given opts onto the ApplyOptions
+func (o *ApplyOptions) ApplyOptions(opts []ApplyOption) *ApplyOptions {
+	for _, opt := range opts {
+		opt.ApplyToApply(o)
+	}
+	return o
+}
+
+// ApplyToApply applies the given opts onto the ApplyOptions
+func (o *ApplyOptions) ApplyToApply(opts *ApplyOptions) {
+	if o.DryRun != nil {
+		opts.DryRun = o.DryRun
+	}
+	if o.Force != nil {
+		opts.Force = o.Force
+	}
+
+	if o.FieldManager != "" {
+		opts.FieldManager = o.FieldManager
+	}
+}
+
+// AsPatchOptions constructs patch options from the given ApplyOptions
+func (o *ApplyOptions) AsPatchOptions() *metav1.PatchOptions {
+	return &metav1.PatchOptions{
+		DryRun:       o.DryRun,
+		Force:        o.Force,
+		FieldManager: o.FieldManager,
+	}
+}

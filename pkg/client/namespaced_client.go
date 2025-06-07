@@ -18,6 +18,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -145,6 +146,10 @@ func (n *namespacedClient) Patch(ctx context.Context, obj Object, patch Patch, o
 		obj.SetNamespace(n.namespace)
 	}
 	return n.client.Patch(ctx, obj, patch, opts...)
+}
+
+func (n *namespacedClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ApplyOption) error {
+	return errors.New("Apply is not supported on namespaced client")
 }
 
 // Get implements client.Client.

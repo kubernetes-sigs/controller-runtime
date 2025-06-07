@@ -78,6 +78,9 @@ type Writer interface {
 
 	// DeleteAllOf deletes all objects of the given type matching the given options.
 	DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllOfOption) error
+
+	// Apply applies the given apply configuration to the Kubernetes cluster.
+	Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ApplyOption) error
 }
 
 // StatusClient knows how to create a client which can update status subresource

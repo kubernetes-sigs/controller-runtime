@@ -360,6 +360,10 @@ func (d dummyClient) Patch(ctx context.Context, obj client.Object, patch client.
 	return nil
 }
 
+func (d dummyClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+	return nil
+}
+
 func (d dummyClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
 	return nil
 }

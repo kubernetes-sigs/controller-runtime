@@ -498,6 +498,25 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(record.HolderIdentity).To(BeEmpty())
 			})
+			It("should set the leaselocks's label field when LeaderElectionLabels is set", func() {
+				labels := map[string]string{"my-key": "my-val"}
+				m, err := New(cfg, Options{
+					LeaderElection:             true,
+					LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
+					LeaderElectionID:           "controller-runtime",
+					LeaderElectionNamespace:    "default",
+					LeaderElectionLabels:       labels,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(m).ToNot(BeNil())
+				cm, ok := m.(*controllerManager)
+				Expect(ok).To(BeTrue())
+				ll, isLeaseLock := cm.resourceLock.(*resourcelock.LeaseLock)
+				Expect(isLeaseLock).To(BeTrue())
+				val, exists := ll.Labels["my-key"]
+				Expect(exists).To(BeTrue())
+				Expect(val).To(Equal("my-val"))
+			})
 			When("using a custom LeaderElectionResourceLockInterface", func() {
 				It("should use the custom LeaderElectionResourceLockInterface", func() {
 					rl, err := fakeleaderelection.NewResourceLock(nil, nil, leaderelection.Options{})

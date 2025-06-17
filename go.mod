@@ -22,13 +22,13 @@ require (
 	golang.org/x/sys v0.31.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // Using v4 to match upstream
-	k8s.io/api v0.34.0-alpha.0
-	k8s.io/apiextensions-apiserver v0.0.0-20250527181603-1e69f9c86d5a
-	k8s.io/apimachinery v0.34.0-alpha.0.0.20250602220442-a925cd7fb3fd
-	k8s.io/apiserver v0.0.0-20250528055411-b50caf5d6623
-	k8s.io/client-go v0.34.0-alpha.0
+	k8s.io/api v0.34.0-alpha.1
+	k8s.io/apiextensions-apiserver v0.34.0-alpha.1
+	k8s.io/apimachinery v0.34.0-alpha.1
+	k8s.io/apiserver v0.34.0-alpha.1
+	k8s.io/client-go v0.34.0-alpha.1
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/utils v0.0.0-20250502105355-0f33e8f1c979
+	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -59,12 +59,12 @@ require (
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/spf13/cobra v1.8.1 // indirect
+	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
@@ -91,12 +91,10 @@ require (
 	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/component-base v0.34.0-alpha.0 // indirect
+	k8s.io/component-base v0.34.0-alpha.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.2 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.7.0 // indirect
 )
-
-replace k8s.io/client-go => k8s.io/client-go v0.0.0-20250603014204-647bbbe85970

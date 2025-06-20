@@ -44,7 +44,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
+	clientgoapplyconfigurations "k8s.io/client-go/applyconfigurations"
 	"k8s.io/client-go/kubernetes/fake"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -388,22 +390,6 @@ var _ = Describe("Fake client", func() {
 			Expect(list.Items).To(ConsistOf(*dep2))
 		})
 
-		It("should reject apply patches, they are not supported in the fake client", func() {
-			By("Creating a new configmap")
-			cm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "new-test-cm",
-					Namespace: "ns2",
-				},
-			}
-			err := cl.Create(context.Background(), cm)
-			Expect(err).ToNot(HaveOccurred())
-
-			cm.Data = map[string]string{"foo": "bar"}
-			err = cl.Patch(context.Background(), cm, client.Apply, client.ForceOwnership)
-			Expect(err).To(MatchError(ContainSubstring("apply patches are not supported in the fake client")))
-		})
-
 		It("should be able to Create", func() {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
@@ -448,7 +434,7 @@ var _ = Describe("Fake client", func() {
 			err := cl.Create(context.Background(), submitted)
 			Expect(err).To(HaveOccurred())
 			Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
-			Expect(submitted).To(Equal(submittedReference))
+			Expect(submitted).To(BeComparableTo(submittedReference))
 		})
 
 		It("should error on Create with empty Name", func() {
@@ -1469,7 +1455,7 @@ var _ = Describe("Fake client", func() {
 		obj := &appsv1.Deployment{}
 		err := cl.Get(context.Background(), namespacedName, obj)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(obj).To(Equal(dep))
+		Expect(obj).To(BeComparableTo(dep))
 
 		By("Getting a deployment from clientSet")
 		csDep2, err := clientSet.AppsV1().Deployments("ns1").Get(context.Background(), "test-deployment-2", metav1.GetOptions{})
@@ -1499,7 +1485,7 @@ var _ = Describe("Fake client", func() {
 		obj = &appsv1.Deployment{}
 		err = cl.Get(context.Background(), namespacedName3, obj)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(obj).To(Equal(dep3))
+		Expect(obj).To(BeComparableTo(dep3))
 	})
 
 	It("should not change the status of typed objects that have a status subresource on update", func() {
@@ -2552,6 +2538,136 @@ var _ = Describe("Fake client", func() {
 		}
 
 		wg.Wait()
+	})
+
+	It("supports server-side apply of a client-go resource", func() {
+		cl := NewClientBuilder().Build()
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("v1")
+		obj.SetKind("ConfigMap")
+		obj.SetName("foo")
+		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "data")).To(Succeed())
+
+		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+
+		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(cm), cm)).To(Succeed())
+		Expect(cm.Data).To(Equal(map[string]string{"some": "data"}))
+
+		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "data")).To(Succeed())
+		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(cm), cm)).To(Succeed())
+		Expect(cm.Data).To(Equal(map[string]string{"other": "data"}))
+	})
+
+	It("supports server-side apply of a custom resource", func() {
+		cl := NewClientBuilder().Build()
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("custom/v1")
+		obj.SetKind("FakeResource")
+		obj.SetName("foo")
+		result := obj.DeepCopy()
+
+		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "spec")).To(Succeed())
+
+		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(result), result)).To(Succeed())
+		Expect(result.Object["spec"]).To(Equal(map[string]any{"some": "data"}))
+
+		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "spec")).To(Succeed())
+		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(result), result)).To(Succeed())
+		Expect(result.Object["spec"]).To(Equal(map[string]any{"other": "data"}))
+	})
+
+	It("errors out when doing SSA with managedFields set", func() {
+		cl := NewClientBuilder().WithReturnManagedFields().Build()
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("v1")
+		obj.SetKind("ConfigMap")
+		obj.SetName("foo")
+		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "data")).To(Succeed())
+
+		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+
+		err := cl.Patch(context.Background(), obj, client.Apply)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("metadata.managedFields must be nil"))
+	})
+
+	It("supports server-side apply using a custom type converter", func() {
+		cl := NewClientBuilder().
+			WithTypeConverters(clientgoapplyconfigurations.NewTypeConverter(clientgoscheme.Scheme)).
+			Build()
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("v1")
+		obj.SetKind("ConfigMap")
+		obj.SetName("foo")
+
+		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "data")).To(Succeed())
+
+		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+
+		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(cm), cm)).To(Succeed())
+		Expect(cm.Data).To(Equal(map[string]string{"some": "data"}))
+
+		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "data")).To(Succeed())
+		Expect(cl.Patch(context.Background(), obj, client.Apply)).To(Succeed())
+
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(cm), cm)).To(Succeed())
+		Expect(cm.Data).To(Equal(map[string]string{"other": "data"}))
+	})
+
+	It("returns managedFields if configured to do so", func() {
+		cl := NewClientBuilder().WithReturnManagedFields().Build()
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "some-cm",
+				Namespace: "default",
+			},
+			Data: map[string]string{
+				"initial": "data",
+			},
+		}
+		Expect(cl.Create(context.Background(), cm)).NotTo(HaveOccurred())
+		Expect(cm.ManagedFields).NotTo(BeNil())
+
+		retrieved := &corev1.ConfigMap{}
+		Expect(cl.Get(context.Background(), client.ObjectKeyFromObject(cm), retrieved)).NotTo(HaveOccurred())
+		Expect(retrieved.ManagedFields).NotTo(BeNil())
+
+		cm.Data["another"] = "value"
+		cm.SetManagedFields(nil)
+		Expect(cl.Update(context.Background(), cm)).NotTo(HaveOccurred())
+		Expect(cm.ManagedFields).NotTo(BeNil())
+
+		cm.SetManagedFields(nil)
+		beforePatch := cm.DeepCopy()
+		cm.Data["a-third"] = "value"
+		Expect(cl.Patch(context.Background(), cm, client.MergeFrom(beforePatch))).NotTo(HaveOccurred())
+		Expect(cm.ManagedFields).NotTo(BeNil())
+
+		u := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "ConfigMap",
+			"metadata": map[string]any{
+				"name":      cm.Name,
+				"namespace": cm.Namespace,
+			},
+			"data": map[string]any{
+				"ssa": "value",
+			},
+		}}
+		Expect(cl.Patch(context.Background(), u, client.Apply)).NotTo(HaveOccurred())
+		_, exists, err := unstructured.NestedFieldNoCopy(u.Object, "metadata", "managedFields")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(exists).To(BeTrue())
 	})
 
 	scalableObjs := []client.Object{

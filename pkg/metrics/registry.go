@@ -16,7 +16,10 @@ limitations under the License.
 
 package metrics
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+)
 
 // RegistererGatherer combines both parts of the API of a Prometheus
 // registry, both the Registerer and the Gatherer interfaces.
@@ -28,3 +31,11 @@ type RegistererGatherer interface {
 // Registry is a prometheus registry for storing metrics within the
 // controller-runtime.
 var Registry RegistererGatherer = prometheus.NewRegistry()
+
+func init() {
+	Registry.MustRegister( // expose process metrics like CPU, Memory, file descriptor usage etc.
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+		// expose all Go runtime metrics like GC stats, memory stats etc.
+		collectors.NewGoCollector(collectors.WithGoCollectorRuntimeMetrics(collectors.MetricsAll)),
+	)
+}

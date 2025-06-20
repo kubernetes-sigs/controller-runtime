@@ -201,10 +201,15 @@ type Options struct {
 	// LeaseDuration time first.
 	LeaderElectionReleaseOnCancel bool
 
+	// LeaderElectionLabels allows a controller to supplement all leader election api calls with a set of custom labels based on
+	// the replica attempting to acquire leader status.
+	LeaderElectionLabels map[string]string
+
 	// LeaderElectionResourceLockInterface allows to provide a custom resourcelock.Interface that was created outside
 	// of the controller-runtime. If this value is set the options LeaderElectionID, LeaderElectionNamespace,
-	// LeaderElectionResourceLock, LeaseDuration, RenewDeadline and RetryPeriod will be ignored. This can be useful if you
-	// want to use a locking mechanism that is currently not supported, like a MultiLock across two Kubernetes clusters.
+	//  LeaderElectionResourceLock, LeaseDuration, RenewDeadline, RetryPeriod and LeaderElectionLeases will be ignored.
+	// This can be useful if you want to use a locking mechanism that is currently not supported, like a MultiLock across
+	// two Kubernetes clusters.
 	LeaderElectionResourceLockInterface resourcelock.Interface
 
 	// LeaseDuration is the duration that non-leader candidates will
@@ -390,6 +395,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 			LeaderElectionID:           options.LeaderElectionID,
 			LeaderElectionNamespace:    options.LeaderElectionNamespace,
 			RenewDeadline:              *options.RenewDeadline,
+			LeaderLabels:               options.LeaderElectionLabels,
 		})
 		if err != nil {
 			return nil, err

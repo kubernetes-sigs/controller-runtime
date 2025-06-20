@@ -319,6 +319,15 @@ type LeaderElectionRunnable interface {
 	NeedLeaderElection() bool
 }
 
+// warmupRunnable knows if a Runnable requires warmup. A warmup runnable is a runnable
+// that should be run when the manager is started but before it becomes leader.
+// Note: Implementing this interface is only useful when LeaderElection can be enabled, as the
+// behavior when leaderelection is not enabled is to run LeaderElectionRunnables immediately.
+type warmupRunnable interface {
+	// Warmup will be called when the manager is started but before it becomes leader.
+	Warmup(context.Context) error
+}
+
 // New returns a new Manager for creating Controllers.
 // Note that if ContentType in the given config is not set, "application/vnd.kubernetes.protobuf"
 // will be used for all built-in resources of Kubernetes, and "application/json" is for other types

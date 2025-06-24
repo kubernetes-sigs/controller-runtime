@@ -35,6 +35,7 @@ import (
 	"k8s.io/utils/ptr"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
@@ -95,6 +96,18 @@ type Manager interface {
 
 	// GetControllerOptions returns controller global configuration options.
 	GetControllerOptions() config.Controller
+
+	ControllerNameValidator
+}
+
+// ControllerNameValidator defines the interface for validating controller names
+type ControllerNameValidator interface {
+	// ValidateControllerName validates that a controller name is unique within this manager.
+	// Returns an error if the name is already in use.
+	// This validation can be skipped by setting SkipNameValidation to true in either:
+	// - Manager options (config.Controller.SkipNameValidation) - applies to all controllers
+	// - Controller options (controller.Options.SkipNameValidation) - overrides manager setting
+	ValidateControllerName(name string) error
 }
 
 // Options are the arguments for creating a new Manager.
@@ -428,6 +441,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		metricsServer:                 metricsServer,
 		controllerConfig:              options.Controller,
 		logger:                        options.Logger,
+		usedControllerNames:           sets.Set[string]{},
 		elected:                       make(chan struct{}),
 		webhookServer:                 options.WebhookServer,
 		leaderElectionID:              options.LeaderElectionID,

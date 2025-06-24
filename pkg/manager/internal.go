@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
@@ -109,6 +110,10 @@ type controllerManager struct {
 	// Logger is the logger that should be used by this manager.
 	// If none is set, it defaults to log.Log global logger.
 	logger logr.Logger
+
+	// usedControllerNames tracks controller names within this manager instance
+	usedControllerNames sets.Set[string]
+	usedNamesMutex      sync.RWMutex
 
 	// leaderElectionStopped is an internal channel used to signal the stopping procedure that the
 	// LeaderElection.Run(...) function has returned and the shutdown can proceed.
@@ -285,6 +290,23 @@ func (cm *controllerManager) GetLogger() logr.Logger {
 
 func (cm *controllerManager) GetControllerOptions() config.Controller {
 	return cm.controllerConfig
+}
+
+// ValidateControllerName validates that a controller name is unique within this manager.
+func (cm *controllerManager) ValidateControllerName(name string) error {
+	cm.usedNamesMutex.Lock()
+	defer cm.usedNamesMutex.Unlock()
+
+	if cm.usedControllerNames == nil {
+		cm.usedControllerNames = sets.Set[string]{}
+	}
+
+	if cm.usedControllerNames.Has(name) {
+		return fmt.Errorf("controller with name %s already exists in this manager. Controller names must be unique within the same controller manager to avoid multiple controllers reporting the same metric. This validation can be disabled via the SkipNameValidation option", name)
+	}
+
+	cm.usedControllerNames.Insert(name)
+	return nil
 }
 
 func (cm *controllerManager) addHealthProbeServer() error {

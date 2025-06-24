@@ -166,6 +166,15 @@ func NewTyped[request comparable](name string, mgr manager.Manager, options Type
 		return nil, err
 	}
 
+	// Validate controller name uniqueness within this manager
+	if options.SkipNameValidation == nil || !*options.SkipNameValidation {
+		if validator, ok := mgr.(manager.ControllerNameValidator); ok {
+			if err := validator.ValidateControllerName(name); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// Add the controller as a Manager components
 	return c, mgr.Add(c)
 }
@@ -188,12 +197,6 @@ func NewTypedUnmanaged[request comparable](name string, options TypedOptions[req
 
 	if len(name) == 0 {
 		return nil, fmt.Errorf("must specify Name for Controller")
-	}
-
-	if options.SkipNameValidation == nil || !*options.SkipNameValidation {
-		if err := checkName(name); err != nil {
-			return nil, err
-		}
 	}
 
 	if options.LogConstructor == nil {

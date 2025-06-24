@@ -55,6 +55,8 @@ type TestRequest struct {
 	Key string
 }
 
+const testControllerName = "testcontroller"
+
 var _ = Describe("controller", func() {
 	var fakeReconcile *fakeReconciler
 	var ctrl *Controller[reconcile.Request]
@@ -176,7 +178,7 @@ var _ = Describe("controller", func() {
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Kind(c, &appsv1.Deployment{}, &handler.TypedEnqueueRequestForObject[*appsv1.Deployment]{}),
 			}
-			ctrl.Name = "testcontroller"
+			ctrl.Name = testControllerName
 
 			err = ctrl.Start(context.TODO())
 			Expect(err).To(HaveOccurred())
@@ -196,7 +198,7 @@ var _ = Describe("controller", func() {
 					cacheSyncDone: sourceSynced,
 				},
 			}
-			ctrl.Name = "testcontroller"
+			ctrl.Name = testControllerName
 
 			ctx, cancel := context.WithCancel(context.TODO())
 			go func() {
@@ -1148,12 +1150,12 @@ var _ = Describe("controller", func() {
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Kind(&informertest.FakeInformers{Synced: ptr.To(false)}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
 			}
-			ctrl.Name = "foo"
+			ctrl.Name = testControllerName
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			err := ctrl.Warmup(ctx)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to wait for foo caches to sync"))
+			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync"))
 		})
 
 		It("should error when cache sync timeout occurs", func() {
@@ -1165,7 +1167,7 @@ var _ = Describe("controller", func() {
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Kind(c, &appsv1.Deployment{}, &handler.TypedEnqueueRequestForObject[*appsv1.Deployment]{}),
 			}
-			ctrl.Name = "testcontroller"
+			ctrl.Name = testControllerName
 
 			err = ctrl.Warmup(context.TODO())
 			Expect(err).To(HaveOccurred())
@@ -1185,7 +1187,7 @@ var _ = Describe("controller", func() {
 					cacheSyncDone: sourceSynced,
 				},
 			}
-			ctrl.Name = "testcontroller"
+			ctrl.Name = testControllerName
 
 			ctx, cancel := context.WithCancel(context.TODO())
 			go func() {

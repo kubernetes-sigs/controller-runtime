@@ -1143,6 +1143,191 @@ var _ = Describe("controller", func() {
 			Expect(ctrl.Warmup(ctx)).To(Succeed())
 		})
 
+		It("should return an error if there is an error waiting for the informers", func() {
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Kind(&informertest.FakeInformers{Synced: ptr.To(false)}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
+			}
+			ctrl.Name = "foo"
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			err := ctrl.Warmup(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to wait for foo caches to sync"))
+		})
+
+		It("should error when cache sync timeout occurs", func() {
+			c, err := cache.New(cfg, cache.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			c = &cacheWithIndefinitelyBlockingGetInformer{c}
+
+			ctrl.CacheSyncTimeout = time.Second
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Kind(c, &appsv1.Deployment{}, &handler.TypedEnqueueRequestForObject[*appsv1.Deployment]{}),
+			}
+			ctrl.Name = "testcontroller"
+
+			err = ctrl.Warmup(context.TODO())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync kind source: *v1.Deployment: timed out waiting for cache to be synced"))
+		})
+
+		It("should not error when controller Warmup context is cancelled during Sources WaitForSync", func() {
+			ctrl.CacheSyncTimeout = 1 * time.Second
+
+			sourceSynced := make(chan struct{})
+			c, err := cache.New(cfg, cache.Options{})
+			Expect(err).NotTo(HaveOccurred())
+			c = &cacheWithIndefinitelyBlockingGetInformer{c}
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				&singnallingSourceWrapper{
+					SyncingSource: source.Kind[client.Object](c, &appsv1.Deployment{}, &handler.EnqueueRequestForObject{}),
+					cacheSyncDone: sourceSynced,
+				},
+			}
+			ctrl.Name = "testcontroller"
+
+			ctx, cancel := context.WithCancel(context.TODO())
+			go func() {
+				defer GinkgoRecover()
+				err = ctrl.Warmup(ctx)
+				Expect(err).To(Succeed())
+			}()
+
+			cancel()
+			<-sourceSynced
+		})
+
+		It("should error when Warmup() is blocking forever", func() {
+			ctrl.CacheSyncTimeout = time.Second
+
+			controllerDone := make(chan struct{})
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+					<-controllerDone
+					return ctx.Err()
+				})}
+
+			ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
+			defer cancel()
+
+			err := ctrl.Warmup(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Please ensure that its Start() method is non-blocking"))
+
+			close(controllerDone)
+		})
+
+		It("should not error when cache sync timeout is of sufficiently high", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			sourceSynced := make(chan struct{})
+			c := &informertest.FakeInformers{}
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
+				&singnallingSourceWrapper{
+					SyncingSource: source.Kind[client.Object](c, &appsv1.Deployment{}, &handler.EnqueueRequestForObject{}),
+					cacheSyncDone: sourceSynced,
+				},
+			}
+
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Warmup(ctx)).To(Succeed())
+			}()
+
+			<-sourceSynced
+		})
+
+		It("should process events from source.Channel", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
+			// channel to be closed when event is processed
+			processed := make(chan struct{})
+			// source channel
+			ch := make(chan event.GenericEvent, 1)
+
+			ctx, cancel := context.WithCancel(context.TODO())
+			defer cancel()
+
+			// event to be sent to the channel
+			p := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			}
+			evt := event.GenericEvent{
+				Object: p,
+			}
+
+			ins := source.Channel(
+				ch,
+				handler.Funcs{
+					GenericFunc: func(ctx context.Context, evt event.GenericEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+						defer GinkgoRecover()
+						close(processed)
+					},
+				},
+			)
+
+			// send the event to the channel
+			ch <- evt
+
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{ins}
+
+			go func() {
+				defer GinkgoRecover()
+				Expect(ctrl.Warmup(ctx)).To(Succeed())
+			}()
+			<-processed
+		})
+
+		It("should error when channel source is not specified", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ins := source.Channel[string](nil, nil)
+			ctrl.startWatches = []source.TypedSource[reconcile.Request]{ins}
+
+			e := ctrl.Warmup(ctx)
+			Expect(e).To(HaveOccurred())
+			Expect(e.Error()).To(ContainSubstring("must specify Channel.Source"))
+		})
+
+		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
+			started := false
+			ctx, cancel := context.WithCancel(context.Background())
+			src := source.Func(func(ctx context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				defer GinkgoRecover()
+				Expect(q).To(Equal(ctrl.Queue))
+
+				started = true
+				cancel() // Cancel the context so ctrl.Warmup() doesn't block forever
+				return nil
+			})
+			Expect(ctrl.Watch(src)).NotTo(HaveOccurred())
+
+			err := ctrl.Warmup(ctx)
+			Expect(err).To(Succeed())
+			Expect(started).To(BeTrue())
+		})
+
+		It("should return an error if there is an error starting sources", func() {
+			ctrl.CacheSyncTimeout = 10 * time.Second
+			err := fmt.Errorf("Expected Error: could not start source")
+			src := source.Func(func(context.Context,
+				workqueue.TypedRateLimitingInterface[reconcile.Request],
+			) error {
+				defer GinkgoRecover()
+				return err
+			})
+			Expect(ctrl.Watch(src)).To(Succeed())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			Expect(ctrl.Warmup(ctx)).To(Equal(err))
+		})
+
 		It("should track warmup status correctly with unsuccessful sync", func() {
 			// Setup controller with sources that complete with error
 			ctx, cancel := context.WithCancel(context.Background())

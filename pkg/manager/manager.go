@@ -417,7 +417,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	}
 
 	errChan := make(chan error, 1)
-	runnables := newRunnables(options.BaseContext, errChan)
+	runnables := newRunnables(options.BaseContext, errChan).withLogger(options.Logger)
 	return &controllerManager{
 		stopProcedureEngaged:          ptr.To(int64(0)),
 		cluster:                       cluster,

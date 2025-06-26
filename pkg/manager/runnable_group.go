@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -44,6 +45,16 @@ func newRunnables(baseContext BaseContextFunc, errChan chan error) *runnables {
 		LeaderElection: newRunnableGroup(baseContext, errChan),
 		Others:         newRunnableGroup(baseContext, errChan),
 	}
+}
+
+// withLogger returns the runnables with the logger set for all runnable groups.
+func (r *runnables) withLogger(logger logr.Logger) *runnables {
+	r.HTTPServers.withLogger(logger)
+	r.Webhooks.withLogger(logger)
+	r.Caches.withLogger(logger)
+	r.LeaderElection.withLogger(logger)
+	r.Others.withLogger(logger)
+	return r
 }
 
 // Add adds a runnable to closest group of runnable that they belong to.
@@ -105,6 +116,9 @@ type runnableGroup struct {
 	// wg is an internal sync.WaitGroup that allows us to properly stop
 	// and wait for all the runnables to finish before returning.
 	wg *sync.WaitGroup
+
+	// logger is used for logging when errors are dropped during shutdown
+	logger logr.Logger
 }
 
 func newRunnableGroup(baseContext BaseContextFunc, errChan chan error) *runnableGroup {
@@ -113,10 +127,16 @@ func newRunnableGroup(baseContext BaseContextFunc, errChan chan error) *runnable
 		errChan:      errChan,
 		ch:           make(chan *readyRunnable),
 		wg:           new(sync.WaitGroup),
+		logger:       logr.Discard(), // Default to no-op logger
 	}
 
 	r.ctx, r.cancel = context.WithCancel(baseContext())
 	return r
+}
+
+// withLogger sets the logger for this runnable group.
+func (r *runnableGroup) withLogger(logger logr.Logger) {
+	r.logger = logger
 }
 
 // Started returns true if the group has started.
@@ -224,7 +244,17 @@ func (r *runnableGroup) reconcile() {
 
 			// Start the runnable.
 			if err := rn.Start(r.ctx); err != nil {
-				r.errChan <- err
+				// Send error with context awareness to prevent blocking during shutdown
+				select {
+				case r.errChan <- err:
+					// Error sent successfully
+				case <-r.ctx.Done():
+					// Context cancelled (shutdown), drop error to prevent blocking forever
+					// This prevents goroutine leaks when error drain go routine has exited after timeout
+					if !errors.Is(err, context.Canceled) { // don't log context.Canceled errors as they are expected during shutdown
+						r.logger.Info("error dropped during shutdown to prevent goroutine leak", "error", err)
+					}
+				}
 			}
 		}(runnable)
 	}

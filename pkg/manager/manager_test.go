@@ -1886,6 +1886,54 @@ var _ = Describe("manger.Manager", func() {
 		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 
+	It("should not leak goroutines when a runnable returns error slowly after being signaled to stop", func() {
+		// This test reproduces the race condition where the manager's Start method
+		// exits due to context cancellation, leaving no one to drain errChan
+
+		currentGRs := goleak.IgnoreCurrent()
+
+		// Create manager with a very short graceful shutdown timeout to reliablytrigger the race condition
+		shortGracefulShutdownTimeout := 10 * time.Millisecond
+		m, err := New(cfg, Options{
+			GracefulShutdownTimeout: &shortGracefulShutdownTimeout,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Add the slow runnable that will return an error after some delay
+		for i := 0; i < 3; i++ {
+			slowRunnable := RunnableFunc(func(c context.Context) error {
+				<-c.Done()
+
+				// Simulate some work that delays the error from being returned
+				// Choosing a large delay to reliably trigger the race condition
+				time.Sleep(100 * time.Millisecond)
+
+				// This simulates the race condition where runnables try to send
+				// errors after the manager has stopped reading from errChan
+				return errors.New("slow runnable error")
+			})
+
+			Expect(m.Add(slowRunnable)).To(Succeed())
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+		go func() {
+			defer GinkgoRecover()
+			Expect(m.Start(ctx)).To(HaveOccurred()) // We expect error here because the slow runnables will return errors
+		}()
+
+		// Wait for context to be cancelled
+		<-ctx.Done()
+
+		// Give time for any leaks to become apparent. This makes sure that we don't false alarm on go routine leaks because runnables are still running.
+		time.Sleep(300 * time.Millisecond)
+
+		// force-close keep-alive connections
+		clientTransport.CloseIdleConnections()
+		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
+	})
+
 	It("should provide a function to get the Config", func() {
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())

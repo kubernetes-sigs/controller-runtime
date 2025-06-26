@@ -300,6 +300,26 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 2}))
 	})
 
+	// ref: https://github.com/kubernetes-sigs/controller-runtime/issues/3239
+	It("Get from priority queue might get stuck when the priority queue is shut down", func() {
+		q, _ := newQueue()
+
+		q.Add("baz")
+		// shut down
+		q.ShutDown()
+		q.AddWithOpts(AddOpts{After: time.Second}, "foo")
+
+		item, priority, isShutDown := q.GetWithPriority()
+		Expect(item).To(Equal(""))
+		Expect(priority).To(Equal(0))
+		Expect(isShutDown).To(BeTrue())
+
+		item1, priority1, isShutDown := q.GetWithPriority()
+		Expect(item1).To(Equal(""))
+		Expect(priority1).To(Equal(0))
+		Expect(isShutDown).To(BeTrue())
+	})
+
 	It("items are included in Len() and the queueDepth metric once they are ready", func() {
 		q, metrics := newQueue()
 		defer q.ShutDown()

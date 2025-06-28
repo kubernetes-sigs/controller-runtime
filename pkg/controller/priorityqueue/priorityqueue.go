@@ -129,6 +129,10 @@ type priorityqueue[T comparable] struct {
 }
 
 func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
+	if w.shutdown.Load() {
+		return
+	}
+
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -274,15 +278,14 @@ func (w *priorityqueue[T]) AddRateLimited(item T) {
 }
 
 func (w *priorityqueue[T]) GetWithPriority() (_ T, priority int, shutdown bool) {
-	w.waiters.Add(1)
-
-	w.notifyItemOrWaiterAdded()
-
-	// ref: https://github.com/kubernetes-sigs/controller-runtime/issues/3239
 	if w.shutdown.Load() {
 		var zero T
 		return zero, 0, true
 	}
+
+	w.waiters.Add(1)
+
+	w.notifyItemOrWaiterAdded()
 
 	item := <-w.get
 

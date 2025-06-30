@@ -86,7 +86,7 @@ var _ = Describe("NamespacedClient", func() {
 		})
 
 		AfterEach(func() {
-			deleteDeployment(ctx, dep, ns)
+			deleteDeployment(ctx, clientset, dep, ns)
 		})
 		It("should successfully Get a namespace-scoped object", func() {
 			name := types.NamespacedName{Name: dep.Name}
@@ -113,7 +113,7 @@ var _ = Describe("NamespacedClient", func() {
 		})
 
 		AfterEach(func() {
-			deleteDeployment(ctx, dep, ns)
+			deleteDeployment(ctx, clientset, dep, ns)
 		})
 
 		It("should successfully List objects when namespace is not specified with the object", func() {
@@ -137,7 +137,7 @@ var _ = Describe("NamespacedClient", func() {
 
 	Describe("Create", func() {
 		AfterEach(func() {
-			deleteDeployment(ctx, dep, ns)
+			deleteDeployment(ctx, clientset, dep, ns)
 		})
 
 		It("should successfully create object in the right namespace", func() {
@@ -192,7 +192,7 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 		AfterEach(func() {
-			deleteDeployment(ctx, dep, ns)
+			deleteDeployment(ctx, clientset, dep, ns)
 		})
 
 		It("should successfully update the provided object", func() {
@@ -262,8 +262,8 @@ var _ = Describe("NamespacedClient", func() {
 			err = getClient().Update(ctx, changedDep)
 			Expect(err).To(HaveOccurred())
 
-			deleteDeployment(ctx, changedDep, tns.Name)
-			deleteNamespace(ctx, tns)
+			deleteDeployment(ctx, clientset, changedDep, tns.Name)
+			deleteNamespace(ctx, clientset, tns)
 		})
 
 		It("should update a cluster scoped resource", func() {
@@ -308,7 +308,7 @@ var _ = Describe("NamespacedClient", func() {
 		})
 
 		AfterEach(func() {
-			deleteDeployment(ctx, dep, ns)
+			deleteDeployment(ctx, clientset, dep, ns)
 		})
 
 		It("should successfully modify the object using Patch", func() {
@@ -373,8 +373,8 @@ var _ = Describe("NamespacedClient", func() {
 			err = getClient().Patch(ctx, changedDep, client.RawPatch(types.MergePatchType, generatePatch()))
 			Expect(err).To(HaveOccurred())
 
-			deleteDeployment(ctx, changedDep, tns.Name)
-			deleteNamespace(ctx, tns)
+			deleteDeployment(ctx, clientset, changedDep, tns.Name)
+			deleteNamespace(ctx, clientset, tns)
 		})
 
 		It("should successfully modify cluster scoped resource", func() {
@@ -417,7 +417,7 @@ var _ = Describe("NamespacedClient", func() {
 		})
 
 		AfterEach(func() {
-			deleteDeployment(ctx, dep, ns)
+			deleteDeployment(ctx, clientset, dep, ns)
 		})
 		It("should successfully delete an object when namespace is not specified", func() {
 			By("deleting the object")
@@ -475,8 +475,8 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(actual).To(BeEquivalentTo(changedDep))
 
-			deleteDeployment(ctx, changedDep, tns.Name)
-			deleteNamespace(ctx, tns)
+			deleteDeployment(ctx, clientset, changedDep, tns.Name)
+			deleteNamespace(ctx, clientset, tns)
 		})
 	})
 
@@ -488,7 +488,7 @@ var _ = Describe("NamespacedClient", func() {
 		})
 
 		AfterEach(func() {
-			deleteDeployment(ctx, dep, ns)
+			deleteDeployment(ctx, clientset, dep, ns)
 		})
 
 		It("should change objects via update status", func() {

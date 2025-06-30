@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/json"
 )
 
 var _ Reader = &unstructuredClient{}
@@ -161,6 +163,30 @@ func (uc *unstructuredClient) Patch(ctx context.Context, obj Object, patch Patch
 		Resource(o.resource()).
 		Name(o.GetName()).
 		VersionedParams(patchOpts.AsPatchOptions(), uc.paramCodec).
+		Body(data).
+		Do(ctx).
+		Into(obj)
+}
+
+func (uc *unstructuredClient) Apply(ctx context.Context, obj Object, fieldOwner string) error {
+	if _, ok := obj.(runtime.Unstructured); !ok {
+		return fmt.Errorf("unstructured client did not understand object: %T", obj)
+	}
+
+	o, err := uc.resources.getObjMeta(obj)
+	if err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(obj)
+	if err != nil {
+		return err
+	}
+
+	return o.Patch(types.ApplyPatchType).
+		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
+		Resource(o.resource()).
+		Name(o.GetName()).
 		Body(data).
 		Do(ctx).
 		Into(obj)

@@ -137,11 +137,11 @@ Source provides event:
 
 EventHandler enqueues Request:
 
-* &handler.EnqueueRequestForObject{} -> (reconcile.Request{types.NamespaceName{Name: "foo", Namespace: "bar"}})
+* &handler.EnqueueRequestForObject{} -> (reconcile.Request{types.NamespaceName{Namespace: "foo", Name: "bar"}})
 
 Reconciler is called with the Request:
 
-* Reconciler(reconcile.Request{types.NamespaceName{Name: "foo", Namespace: "bar"}})
+* Reconciler(reconcile.Request{types.NamespaceName{Namespace: "foo", Name: "bar"}})
 
 # Usage
 

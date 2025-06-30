@@ -136,6 +136,30 @@ var _ = Describe("controller.Controller", func() {
 			Expect(c2).ToNot(BeNil())
 		})
 
+		It("should allow controllers with same name in different manager instances", func() {
+			// Create two separate manager instances
+			m1, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			m2, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Both managers should be able to have controllers with the same name
+			c1, err := controller.New("c1", m1, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c1).ToNot(BeNil())
+
+			c2, err := controller.New("c1", m2, controller.Options{Reconciler: rec})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c2).ToNot(BeNil())
+
+			// Verify that trying to create another controller with the same name in the same manager fails
+			c3, err := controller.New("c1", m1, controller.Options{Reconciler: rec})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("controller with name c1 already exists in this manager"))
+			Expect(c3).To(BeNil())
+		})
+
 		It("should not leak goroutines when stopped", func() {
 			currentGRs := goleak.IgnoreCurrent()
 

@@ -41,6 +41,9 @@ tmp_bin=/tmp/cr-tests-bin
 )
 export KUBEBUILDER_ASSETS="$(${tmp_bin}/setup-envtest use --use-env -p path "${ENVTEST_K8S_VERSION}")"
 
+echo "Enabling WatchListClient feature"
+export KUBE_FEATURE_WatchListClient=true
+
 # Run tests.
 ${hack_dir}/test-all.sh
 

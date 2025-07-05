@@ -43,6 +43,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	corev1applyconfigurations "k8s.io/client-go/applyconfigurations/core/v1"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
@@ -855,6 +856,97 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("validating patch options were applied")
 				Expect(testOption.applied).To(BeTrue())
+			})
+		})
+	})
+
+	Describe("Apply", func() {
+		Context("Unstructured Client", func() {
+			It("should create and update a configMap using SSA", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				data := map[string]any{
+					"some-key": "some-value",
+				}
+				obj := &unstructured.Unstructured{Object: map[string]any{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]any{
+						"name":      "test-configmap",
+						"namespace": "default",
+					},
+					"data": data,
+				}}
+
+				err = cl.Apply(context.Background(), client.ApplyConfigurationFromUnstructured(obj), &client.ApplyOptions{FieldManager: "test-manager"})
+				Expect(err).NotTo(HaveOccurred())
+
+				cm, err := clientset.CoreV1().ConfigMaps(obj.GetNamespace()).Get(context.Background(), obj.GetName(), metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				actualData := map[string]any{}
+				for k, v := range cm.Data {
+					actualData[k] = v
+				}
+
+				Expect(actualData).To(BeComparableTo(data))
+				Expect(actualData).To(BeComparableTo(obj.Object["data"]))
+
+				data["a-new-key"] = "a-new-value"
+				obj.Object["data"] = data
+				unstructured.RemoveNestedField(obj.Object, "metadata", "managedFields")
+
+				err = cl.Apply(context.Background(), client.ApplyConfigurationFromUnstructured(obj), &client.ApplyOptions{FieldManager: "test-manager"})
+				Expect(err).NotTo(HaveOccurred())
+
+				cm, err = clientset.CoreV1().ConfigMaps(obj.GetNamespace()).Get(context.Background(), obj.GetName(), metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				actualData = map[string]any{}
+				for k, v := range cm.Data {
+					actualData[k] = v
+				}
+
+				Expect(actualData).To(BeComparableTo(data))
+				Expect(actualData).To(BeComparableTo(obj.Object["data"]))
+			})
+		})
+
+		Context("Structured Client", func() {
+			It("should create and update a configMap using SSA", func() {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				data := map[string]string{
+					"some-key": "some-value",
+				}
+				obj := corev1applyconfigurations.
+					ConfigMap("test-configmap", "default").
+					WithData(data)
+
+				err = cl.Apply(context.Background(), obj, &client.ApplyOptions{FieldManager: "test-manager"})
+				Expect(err).NotTo(HaveOccurred())
+
+				cm, err := clientset.CoreV1().ConfigMaps(ptr.Deref(obj.GetNamespace(), "")).Get(context.Background(), ptr.Deref(obj.GetName(), ""), metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cm.Data).To(BeComparableTo(data))
+				Expect(cm.Data).To(BeComparableTo(obj.Data))
+
+				data["a-new-key"] = "a-new-value"
+				obj.Data = data
+
+				err = cl.Apply(context.Background(), obj, &client.ApplyOptions{FieldManager: "test-manager"})
+				Expect(err).NotTo(HaveOccurred())
+
+				cm, err = clientset.CoreV1().ConfigMaps(ptr.Deref(obj.GetNamespace(), "")).Get(context.Background(), ptr.Deref(obj.GetName(), ""), metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cm.Data).To(BeComparableTo(data))
+				Expect(cm.Data).To(BeComparableTo(obj.Data))
 			})
 		})
 	})

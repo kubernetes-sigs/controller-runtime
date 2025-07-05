@@ -592,7 +592,7 @@ var _ = Describe("controller", func() {
 			wg.Wait()
 		})
 
-		It("should reset c.startWatches to nil after returning", func() {
+		It("should reset c.startWatches to nil after returning and startedEventSourcesAndQueue", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -607,6 +607,7 @@ var _ = Describe("controller", func() {
 			err := ctrl.startEventSourcesAndQueueLocked(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ctrl.startWatches).To(BeNil(), "startWatches should be reset to nil after returning")
+            Expect(ctrl.startedEventSourcesAndQueue).To(BeTrue(), "startedEventSourcesAndQueue should be set to true after startEventSourcesAndQueueLocked returns without error")
 		})
 	})
 

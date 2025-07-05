@@ -1494,13 +1494,14 @@ var _ = Describe("controller", func() {
 			defer cancel()
 
 			ctrl.CacheSyncTimeout = time.Second
+			numWatches := 10
 
 			var watchStartedCount atomic.Int32
-			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
-				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+			for range numWatches {
+				ctrl.startWatches = append(ctrl.startWatches, source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
 					watchStartedCount.Add(1)
 					return nil
-				}),
+				}))
 			}
 
 			By("calling Warmup and Start concurrently")
@@ -1518,7 +1519,7 @@ var _ = Describe("controller", func() {
 
 			<-blockOnWarmupChan
 
-			Expect(watchStartedCount.Load()).To(Equal(int32(1)), "source should only be started once")
+			Expect(watchStartedCount.Load()).To(Equal(int32(numWatches)), "source should only be started once")
 			Expect(ctrl.startWatches).To(BeNil(), "startWatches should be reset to nil after they are started")
 		})
 

@@ -333,13 +333,11 @@ func (c *Controller[request]) startEventSourcesAndQueueLocked(ctx context.Contex
 				defer cancel()
 
 				sourceStartErrChan := make(chan error, 1)   // Buffer chan to not leak goroutine if we time out
-				hasAccessedQueueChan := make(chan struct{}) //
 				go func() {
 					defer close(sourceStartErrChan)
 					log.Info("Starting EventSource")
 
 					q := c.Queue
-					close(hasAccessedQueueChan)
 					if err := watch.Start(ctx, q); err != nil {
 						sourceStartErrChan <- err
 						return
@@ -360,7 +358,6 @@ func (c *Controller[request]) startEventSourcesAndQueueLocked(ctx context.Contex
 				case err := <-sourceStartErrChan:
 					return err
 				case <-sourceStartCtx.Done():
-					defer func() { <-hasAccessedQueueChan }() // Ensure that watch.Start has been called to avoid prematurely releasing lock before accessing c.Queue
 					if didStartSyncingSource.Load() {         // We are racing with WaitForSync, wait for it to let it tell us what happened
 						return <-sourceStartErrChan
 					}

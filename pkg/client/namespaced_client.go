@@ -149,6 +149,10 @@ func (n *namespacedClient) Patch(ctx context.Context, obj Object, patch Patch, o
 }
 
 func (n *namespacedClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ApplyOption) error {
+	// It is non-trivial to make this work as the current check if an object is namespaces takes a runtime.Object,
+	// we would need to update that to be able to deal with a runtime.ApplyConfiguration. Additionally, ACs
+	// do allow setting the namespace through a `WithNamespace(string) T` method, but we would have to use reflect
+	// due to the `T` return.
 	return errors.New("Apply is not supported on namespaced client")
 }
 

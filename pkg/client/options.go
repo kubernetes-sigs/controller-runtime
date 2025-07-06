@@ -218,11 +218,6 @@ func (f FieldValidation) ApplyToSubResourceUpdate(opts *SubResourceUpdateOptions
 	opts.FieldValidation = string(f)
 }
 
-// ApplyToApply applies this configuration to the given apply options.
-func (f FieldValidation) ApplyToApply(opts *ApplyOptions) {
-	opts.FieldValidation = string(f)
-}
-
 // }}}
 
 // {{{ Create Options
@@ -998,24 +993,6 @@ type ApplyOptions struct {
 	// as defined by https://golang.org/pkg/unicode/#IsPrint. This
 	// field is required.
 	FieldManager string `json:"fieldManager" protobuf:"bytes,3,name=fieldManager"`
-
-	// fieldValidation instructs the server on how to handle
-	// objects in the apply request containing unknown
-	// or duplicate fields. Valid values are:
-	// - Ignore: This will ignore any unknown fields that are silently
-	// dropped from the object, and will ignore all but the last duplicate
-	// field that the decoder encounters.
-	// - Warn: This will send a warning via the standard warning response
-	// header for each unknown field that is dropped from the object, and
-	// for each duplicate field that is encountered. The request will
-	// still succeed if there are no other errors, and will only persist
-	// the last of any duplicate fields.
-	// - Strict: This will fail the request with a BadRequest error if
-	// any unknown fields would be dropped from the object, or if any
-	// duplicate fields are present. The error returned from the server
-	// will contain all unknown and duplicate fields encountered.
-	// This is the default for apply requests.
-	FieldValidation string `json:"fieldValidation,omitempty" protobuf:"bytes,4,opt,name=fieldValidation"`
 }
 
 // ApplyOptions applies the given opts onto the ApplyOptions
@@ -1038,17 +1015,13 @@ func (o *ApplyOptions) ApplyToApply(opts *ApplyOptions) {
 	if o.FieldManager != "" {
 		opts.FieldManager = o.FieldManager
 	}
-	if o.FieldValidation != "" {
-		opts.FieldValidation = o.FieldValidation
-	}
 }
 
 // AsPatchOptions constructs patch options from the given ApplyOptions
 func (o *ApplyOptions) AsPatchOptions() *metav1.PatchOptions {
 	return &metav1.PatchOptions{
-		DryRun:          o.DryRun,
-		Force:           o.Force,
-		FieldManager:    o.FieldManager,
-		FieldValidation: o.FieldValidation,
+		DryRun:       o.DryRun,
+		Force:        o.Force,
+		FieldManager: o.FieldManager,
 	}
 }

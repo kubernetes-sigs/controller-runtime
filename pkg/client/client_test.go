@@ -949,62 +949,6 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(cm.Data).To(BeComparableTo(obj.Data))
 			})
 		})
-
-		Context("with FieldValidation", func() {
-			It("should handle invalid fields based on FieldValidation setting", func() {
-				cl, err := client.New(cfg, client.Options{})
-				Expect(err).NotTo(HaveOccurred())
-				Expect(cl).NotTo(BeNil())
-
-				data := map[string]any{
-					"some-key": "some-value",
-				}
-				obj := &unstructured.Unstructured{Object: map[string]any{
-					"apiVersion": "v1",
-					"kind":       "ConfigMap",
-					"metadata": map[string]any{
-						"name":      "test-configmap-fieldvalidation",
-						"namespace": "default",
-					},
-					"data": data,
-					"invalidField": "invalid-value",
-				}}
-
-				// Apply with disabled field validation should succeed
-				err = cl.Apply(context.Background(), client.ApplyConfigurationFromUnstructured(obj), &client.ApplyOptions{
-					FieldManager:    "test-manager",
-					FieldValidation: metav1.FieldValidationIgnore,
-				})
-				Expect(err).NotTo(HaveOccurred())
-
-				cm, err := clientset.CoreV1().ConfigMaps(obj.GetNamespace()).Get(context.Background(), obj.GetName(), metav1.GetOptions{})
-				Expect(err).NotTo(HaveOccurred())
-
-				actualData := map[string]any{}
-				for k, v := range cm.Data {
-					actualData[k] = v
-				}
-				Expect(actualData).To(BeComparableTo(data))
-
-				// Apply with default (strict) field validation should fail
-				obj2 := &unstructured.Unstructured{Object: map[string]any{
-					"apiVersion": "v1",
-					"kind":       "ConfigMap",
-					"metadata": map[string]any{
-						"name":      "test-configmap-fieldvalidation-strict",
-						"namespace": "default",
-					},
-					"data": data,
-					"invalidField": "invalid-value",
-				}}
-
-				err = cl.Apply(context.Background(), client.ApplyConfigurationFromUnstructured(obj2), &client.ApplyOptions{
-					FieldManager: "test-manager",
-				})
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unknown field"))
-			})
-		})
 	})
 
 	Describe("SubResourceClient", func() {

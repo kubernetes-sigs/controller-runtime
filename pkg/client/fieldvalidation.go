@@ -18,6 +18,7 @@ package client
 
 import (
 	"context"
+	"errors"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -54,7 +55,7 @@ func (c *clientWithFieldValidation) Patch(ctx context.Context, obj Object, patch
 }
 
 func (c *clientWithFieldValidation) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ApplyOption) error {
-	return c.client.Apply(ctx, obj, append([]ApplyOption{c.validation}, opts...)...)
+	return errors.New("Apply is not supported with field validation")
 }
 
 func (c *clientWithFieldValidation) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {

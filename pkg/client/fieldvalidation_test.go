@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -105,6 +106,7 @@ func TestWithStrictFieldValidation(t *testing.T) {
 	_ = wrappedClient.Create(ctx, dummyObj)
 	_ = wrappedClient.Update(ctx, dummyObj)
 	_ = wrappedClient.Patch(ctx, dummyObj, nil)
+	_ = wrappedClient.Apply(ctx, nil)
 	_ = wrappedClient.Status().Create(ctx, dummyObj, dummyObj)
 	_ = wrappedClient.Status().Update(ctx, dummyObj)
 	_ = wrappedClient.Status().Patch(ctx, dummyObj, nil)
@@ -112,7 +114,7 @@ func TestWithStrictFieldValidation(t *testing.T) {
 	_ = wrappedClient.SubResource("some-subresource").Update(ctx, dummyObj)
 	_ = wrappedClient.SubResource("some-subresource").Patch(ctx, dummyObj, nil)
 
-	if expectedCalls := 9; calls != expectedCalls {
+	if expectedCalls := 10; calls != expectedCalls {
 		t.Fatalf("wrong number of calls to assertions: expected=%d; got=%d", expectedCalls, calls)
 	}
 }
@@ -129,6 +131,7 @@ func TestWithStrictFieldValidationOverridden(t *testing.T) {
 	_ = wrappedClient.Create(ctx, dummyObj, client.FieldValidation(metav1.FieldValidationWarn))
 	_ = wrappedClient.Update(ctx, dummyObj, client.FieldValidation(metav1.FieldValidationWarn))
 	_ = wrappedClient.Patch(ctx, dummyObj, nil, client.FieldValidation(metav1.FieldValidationWarn))
+	_ = wrappedClient.Apply(ctx, nil, client.FieldValidation(metav1.FieldValidationWarn))
 	_ = wrappedClient.Status().Create(ctx, dummyObj, dummyObj, client.FieldValidation(metav1.FieldValidationWarn))
 	_ = wrappedClient.Status().Update(ctx, dummyObj, client.FieldValidation(metav1.FieldValidationWarn))
 	_ = wrappedClient.Status().Patch(ctx, dummyObj, nil, client.FieldValidation(metav1.FieldValidationWarn))
@@ -136,7 +139,7 @@ func TestWithStrictFieldValidationOverridden(t *testing.T) {
 	_ = wrappedClient.SubResource("some-subresource").Update(ctx, dummyObj, client.FieldValidation(metav1.FieldValidationWarn))
 	_ = wrappedClient.SubResource("some-subresource").Patch(ctx, dummyObj, nil, client.FieldValidation(metav1.FieldValidationWarn))
 
-	if expectedCalls := 9; calls != expectedCalls {
+	if expectedCalls := 10; calls != expectedCalls {
 		t.Fatalf("wrong number of calls to assertions: expected=%d; got=%d", expectedCalls, calls)
 	}
 }
@@ -267,6 +270,27 @@ func testFieldValidationClient(t *testing.T, expectedFieldValidation string, cal
 
 			co := &client.PatchOptions{}
 			out.ApplyToPatch(co)
+			if got := co.FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
+			return nil
+		},
+		Apply: func(ctx context.Context, c client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+			callback()
+			out := &client.ApplyOptions{}
+			for _, f := range opts {
+				f.ApplyToApply(out)
+			}
+			if got := out.FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
+
+			if got := out.AsPatchOptions().FieldValidation; expectedFieldValidation != got {
+				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
+			}
+
+			co := &client.ApplyOptions{}
+			out.ApplyToApply(co)
 			if got := co.FieldValidation; expectedFieldValidation != got {
 				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
 			}

@@ -29,6 +29,9 @@ type unstructuredApplyConfiguration struct {
 func (u *unstructuredApplyConfiguration) IsApplyConfiguration() {}
 
 // ApplyConfigurationFromUnstructured creates a runtime.ApplyConfiguration from an *unstructured.Unstructured object.
+//
+// Do not use Unstructured objects here that were generated from API objects, as those
+// contain zero values.
 func ApplyConfigurationFromUnstructured(u *unstructured.Unstructured) runtime.ApplyConfiguration {
 	return &unstructuredApplyConfiguration{Unstructured: u}
 }

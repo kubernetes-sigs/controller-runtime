@@ -931,13 +931,15 @@ var ForceOwnership = forceOwnership{}
 type forceOwnership struct{}
 
 func (forceOwnership) ApplyToPatch(opts *PatchOptions) {
-	definitelyTrue := true
-	opts.Force = &definitelyTrue
+	opts.Force = ptr.To(true)
 }
 
 func (forceOwnership) ApplyToSubResourcePatch(opts *SubResourcePatchOptions) {
-	definitelyTrue := true
-	opts.Force = &definitelyTrue
+	opts.Force = ptr.To(true)
+}
+
+func (forceOwnership) ApplyToApply(opts *ApplyOptions) {
+	opts.Force = ptr.To(true)
 }
 
 // }}}

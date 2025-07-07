@@ -330,6 +330,12 @@ var _ = Describe("ForceOwnership", func() {
 		t.ApplyToSubResourcePatch(o)
 		Expect(*o.Force).To(BeTrue())
 	})
+	It("Should apply to ApplyOptions", func() {
+		o := &client.ApplyOptions{}
+		t := client.ForceOwnership
+		t.ApplyToApply(o)
+		Expect(*o.Force).To(BeTrue())
+	})
 })
 
 var _ = Describe("HasLabels", func() {

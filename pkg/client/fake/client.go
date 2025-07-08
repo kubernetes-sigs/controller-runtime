@@ -1046,6 +1046,10 @@ func (c *fakeClient) Patch(ctx context.Context, obj client.Object, patch client.
 	return c.patch(obj, patch, opts...)
 }
 
+func (c *fakeClient) Apply(ctx context.Context, obj client.Object, fieldOwner string) error {
+	return c.Patch(ctx, obj, client.Apply, client.ForceOwnership, client.FieldOwner(fieldOwner))
+}
+
 func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 	if err := c.addToSchemeIfUnknownAndUnstructuredOrPartial(obj); err != nil {
 		return err

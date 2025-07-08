@@ -244,16 +244,26 @@ func (r *runnableGroup) reconcile() {
 
 			// Start the runnable.
 			if err := rn.Start(r.ctx); err != nil {
-				// Send error with context awareness to prevent blocking during shutdown
-				select {
-				case r.errChan <- err:
-					// Error sent successfully
-				case <-r.ctx.Done():
-					// Context cancelled (shutdown), drop error to prevent blocking forever
-					// This prevents goroutine leaks when error drain go routine has exited after timeout
-					if !errors.Is(err, context.Canceled) { // don't log context.Canceled errors as they are expected during shutdown
-						r.logger.Info("error dropped during shutdown to prevent goroutine leak", "error", err)
+				// Check if we're during the shutdown process.
+				r.stop.RLock()
+				isStopped := r.stopped
+				r.stop.RUnlock()
+
+				if isStopped {
+					// During shutdown, try to send error first (error drain goroutine might still be running)
+					// but drop if it would block to prevent goroutine leaks
+					select {
+					case r.errChan <- err:
+						// Error sent successfully (error drain goroutine is still running)
+					default:
+						// Error drain goroutine has exited, drop error to prevent goroutine leak
+						if !errors.Is(err, context.Canceled) { // don't log context.Canceled errors as they are expected during shutdown
+							r.logger.Info("error dropped during shutdown to prevent goroutine leak", "error", err)
+						}
 					}
+				} else {
+					// During normal operation, always try to send errors (may block briefly)
+					r.errChan <- err
 				}
 			}
 		}(runnable)

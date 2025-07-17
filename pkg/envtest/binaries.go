@@ -125,14 +125,14 @@ func downloadBinaryAssets(ctx context.Context, binaryAssetsDirectory, binaryAsse
 	}
 
 	var binaryAssetsIndex *index
-	if binaryAssetsVersion == "" {
+	if binaryAssetsVersion == "" || strings.Count(binaryAssetsVersion, ".") < 2 {
 		var err error
 		binaryAssetsIndex, err = getIndex(ctx, binaryAssetsIndexURL)
 		if err != nil {
 			return "", "", "", err
 		}
 
-		binaryAssetsVersion, err = latestStableVersionFromIndex(binaryAssetsIndex)
+		binaryAssetsVersion, err = latestStableVersionFromIndex(binaryAssetsIndex, binaryAssetsVersion)
 		if err != nil {
 			return "", "", "", err
 		}
@@ -252,13 +252,19 @@ func downloadBinaryAssetsArchive(ctx context.Context, index *index, version stri
 	return readBody(resp, out, archiveName, archive.Hash)
 }
 
-func latestStableVersionFromIndex(index *index) (string, error) {
+func latestStableVersionFromIndex(index *index, prefix string) (string, error) {
 	if len(index.Releases) == 0 {
 		return "", fmt.Errorf("failed to find latest stable version from index: index is empty")
 	}
 
+	prefix = strings.TrimPrefix(prefix, "v")
 	parsedVersions := []semver.Version{}
 	for releaseVersion := range index.Releases {
+		// Filter on prefix.
+		if !strings.HasPrefix(strings.TrimPrefix(releaseVersion, "v"), prefix) {
+			continue
+		}
+
 		v, err := semver.ParseTolerant(releaseVersion)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse version %q: %w", releaseVersion, err)

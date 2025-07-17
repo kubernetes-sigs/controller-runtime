@@ -68,12 +68,31 @@ var _ = Describe("Test download binaries", func() {
 		Expect(actualFiles).To(ConsistOf("some-file"))
 	})
 
-	It("should download v1.32.0 binaries", func(ctx SpecContext) {
+	It("should download binaries of an exact version", func(ctx SpecContext) {
 		apiServerPath, etcdPath, kubectlPath, err := downloadBinaryAssets(ctx, downloadDirectory, "v1.31.0", fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"))
 		Expect(err).ToNot(HaveOccurred())
 
-		// Verify latest stable version (v1.32.0) was downloaded
+		// Verify exact version (v1.31.0) was downloaded
 		versionDownloadDirectory := path.Join(downloadDirectory, fmt.Sprintf("1.31.0-%s-%s", runtime.GOOS, runtime.GOARCH))
+		Expect(apiServerPath).To(Equal(path.Join(versionDownloadDirectory, "kube-apiserver")))
+		Expect(etcdPath).To(Equal(path.Join(versionDownloadDirectory, "etcd")))
+		Expect(kubectlPath).To(Equal(path.Join(versionDownloadDirectory, "kubectl")))
+
+		dirEntries, err := os.ReadDir(versionDownloadDirectory)
+		Expect(err).ToNot(HaveOccurred())
+		var actualFiles []string
+		for _, e := range dirEntries {
+			actualFiles = append(actualFiles, e.Name())
+		}
+		Expect(actualFiles).To(ConsistOf("some-file"))
+	})
+
+	It("should download binaries of latest stable version of a release series", func(ctx SpecContext) {
+		apiServerPath, etcdPath, kubectlPath, err := downloadBinaryAssets(ctx, downloadDirectory, "1.31", fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"))
+		Expect(err).ToNot(HaveOccurred())
+
+		// Verify stable version (v1.31.4) was downloaded
+		versionDownloadDirectory := path.Join(downloadDirectory, fmt.Sprintf("1.31.4-%s-%s", runtime.GOOS, runtime.GOARCH))
 		Expect(apiServerPath).To(Equal(path.Join(versionDownloadDirectory, "kube-apiserver")))
 		Expect(etcdPath).To(Equal(path.Join(versionDownloadDirectory, "etcd")))
 		Expect(kubectlPath).To(Equal(path.Join(versionDownloadDirectory, "kubectl")))
@@ -99,6 +118,15 @@ var (
 				"envtest-v1.32.0-linux-ppc64le.tar.gz": {},
 				"envtest-v1.32.0-linux-s390x.tar.gz":   {},
 				"envtest-v1.32.0-windows-amd64.tar.gz": {},
+			},
+			"v1.31.4": map[string]archive{
+				"envtest-v1.31.4-darwin-amd64.tar.gz":  {},
+				"envtest-v1.31.4-darwin-arm64.tar.gz":  {},
+				"envtest-v1.31.4-linux-amd64.tar.gz":   {},
+				"envtest-v1.31.4-linux-arm64.tar.gz":   {},
+				"envtest-v1.31.4-linux-ppc64le.tar.gz": {},
+				"envtest-v1.31.4-linux-s390x.tar.gz":   {},
+				"envtest-v1.31.4-windows-amd64.tar.gz": {},
 			},
 			"v1.31.0": map[string]archive{
 				"envtest-v1.31.0-darwin-amd64.tar.gz":  {},

@@ -73,7 +73,7 @@ var _ = Describe("DryRunClient", func() {
 	})
 
 	AfterEach(func() {
-		deleteDeployment(ctx, dep, ns)
+		deleteDeployment(ctx, clientset, dep, ns)
 	})
 
 	It("should successfully Get an object", func() {

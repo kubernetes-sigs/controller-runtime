@@ -18,8 +18,11 @@ package client
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/watchlist"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ Reader = &typedClient{}
@@ -156,6 +159,21 @@ func (c *typedClient) List(ctx context.Context, obj ObjectList, opts ...ListOpti
 
 	listOpts := ListOptions{}
 	listOpts.ApplyOptions(opts)
+
+	if watchListOptions, hasWatchListOptionsPrepared, watchListOptionsErr := watchlist.PrepareWatchListOptionsFromListOptions(*listOpts.AsListOptions()); watchListOptionsErr != nil {
+		log.FromContext(ctx).Error(watchListOptionsErr, fmt.Sprintf("Warning: Failed preparing watchlist options for %s, falling back to the standard LIST semantics", r.resource()))
+	} else if hasWatchListOptionsPrepared {
+		err := r.Get().
+			NamespaceIfScoped(listOpts.Namespace, r.isNamespaced()).
+			Resource(r.resource()).
+			VersionedParams(&watchListOptions, c.paramCodec).
+			WatchList(ctx).
+			Into(obj)
+		if err == nil {
+			return nil
+		}
+		log.FromContext(ctx).Error(err, fmt.Sprintf("Warning: The watchlist request for %s ended with an error, falling back to the standard LIST semantics", r.resource()))
+	}
 
 	return r.Get().
 		NamespaceIfScoped(listOpts.Namespace, r.isNamespaced()).

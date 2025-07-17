@@ -76,6 +76,11 @@ type Writer interface {
 	// struct pointer so that obj can be updated with the content returned by the Server.
 	Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error
 
+	// Apply patches the given object in the Kubernetes cluster with a server side
+	// apply.  obj must be a struct pointer so that obj can be updated with the
+	// content returned by the Server
+	Apply(ctx context.Context, obj Object, fieldOwner string) error
+
 	// DeleteAllOf deletes all objects of the given type matching the given options.
 	DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllOfOption) error
 }

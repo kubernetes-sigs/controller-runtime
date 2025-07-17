@@ -10,8 +10,8 @@ require (
 	github.com/spf13/afero v1.12.0
 	github.com/spf13/pflag v1.0.6
 	go.uber.org/zap v1.27.0
-	k8s.io/apimachinery v0.34.0-alpha.2
-	sigs.k8s.io/yaml v1.4.0
+	k8s.io/apimachinery v0.34.0-beta.0
+	sigs.k8s.io/yaml v1.5.0
 )
 
 require (
@@ -19,6 +19,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
 	go.uber.org/multierr v1.10.0 // indirect
+	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect

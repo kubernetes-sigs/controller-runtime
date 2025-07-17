@@ -24,7 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/managedfields"
-	"sigs.k8s.io/structured-merge-diff/v4/typed"
+	"sigs.k8s.io/structured-merge-diff/v6/typed"
 )
 
 var _ = Describe("multiTypeConverter", func() {

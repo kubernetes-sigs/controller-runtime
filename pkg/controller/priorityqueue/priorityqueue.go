@@ -38,7 +38,18 @@ type Opts[T comparable] struct {
 	// limiter with an initial delay of five milliseconds and a max delay of 1000 seconds.
 	RateLimiter    workqueue.TypedRateLimiter[T]
 	MetricProvider workqueue.MetricsProvider
-	Log            logr.Logger
+	// FairnessDimensionsExtractor can be configured to make the PriorityQueue return items
+	// with the same priority fairly based on the returned dimensions. This could for
+	// example be the items Namespace. Doing this ensures that one Namespace with a lot
+	// of events can not starve other Namespaces.
+	//
+	// If more than one dimension is returned, fairness is first ensured within the first
+	// dimension, then within the second dimension and so on.
+	//
+	// If you want the opposite, i.E. explicitly priorize specific events, call AddWithOpts with a
+	// higher priority.
+	FairnessDimensionsExtractor func(T) []string
+	Log                         logr.Logger
 }
 
 // Opt allows to configure a PriorityQueue.
@@ -59,12 +70,18 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 		opts.MetricProvider = metrics.WorkqueueMetricsProvider{}
 	}
 
+	if opts.FairnessDimensionsExtractor == nil {
+		opts.FairnessDimensionsExtractor = func(T) []string { return nil }
+	}
+
 	pq := &priorityqueue[T]{
-		log:         opts.Log,
-		items:       map[T]*item[T]{},
-		queue:       btree.NewG(32, less[T]),
-		becameReady: sets.Set[T]{},
-		metrics:     newQueueMetrics[T](opts.MetricProvider, name, clock.RealClock{}),
+		log:                       opts.Log,
+		items:                     map[T]*item[T]{},
+		queue:                     btree.NewG(32, less[T]),
+		fairQueue:                 &fairq[T]{},
+		extractFairnessDimensions: opts.FairnessDimensionsExtractor,
+		becameReady:               sets.Set[T]{},
+		metrics:                   newQueueMetrics[T](opts.MetricProvider, name, clock.RealClock{}),
 		// itemOrWaiterAdded indicates that an item or
 		// waiter was added. It must be buffered, because
 		// if we currently process items we can't tell
@@ -89,19 +106,34 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 
 type priorityqueue[T comparable] struct {
 	log logr.Logger
-	// lock has to be acquired for any access any of items, queue, addedCounter
-	// or becameReady
+	// lock has to be acquired before accessing any of items,
+	// queue, fairQueue, fairQueue, addedCounter, becameReady or
+	// locked.
 	lock  sync.Mutex
 	items map[T]*item[T]
 	queue bTree[*item[T]]
+
+	// fairQueue ensures that the items we hand out are far across
+	// configurable dimensions, for example the namespace.
+	// It holds all items that are ready to be handed out and in the
+	// highest priority bracket that has ready items, as well as state
+	// to determine the fairness.
+	fairQueue fairQueueInterface[T]
+
+	// fairQueuePriority is the priority of the items in the fairQueue.
+	// it may be nil, indicating the fairQueuePriority is currently
+	// unknown.
+	fairQueuePriority *int
+
+	extractFairnessDimensions func(item T) []string
 
 	// addedCounter is a counter of elements added, we need it
 	// because unixNano is not guaranteed to be unique.
 	addedCounter uint64
 
 	// becameReady holds items that are in the queue, were added
-	// with non-zero after and became ready. We need it to call the
-	// metrics add exactly once for them.
+	// with non-zero after and became ready. We need it to call
+	// metrics.add and fairQueue.add exactly once for them.
 	becameReady sets.Set[T]
 	metrics     queueMetrics[T]
 
@@ -111,8 +143,7 @@ type priorityqueue[T comparable] struct {
 
 	// locked contains the keys we handed out through Get() and that haven't
 	// yet been returned through Done().
-	locked     sets.Set[T]
-	lockedLock sync.RWMutex
+	locked sets.Set[T]
 
 	shutdown atomic.Bool
 	done     chan struct{}
@@ -150,6 +181,12 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 			readyAt = ptr.To(w.now().Add(after))
 			w.metrics.retry()
 		}
+
+		if readyAt == nil && !w.locked.Has(key) && w.fairQueuePriority != nil && *w.fairQueuePriority < o.Priority {
+			w.fairQueue.drain()
+			w.fairQueuePriority = nil // Leave nil here in case something at that priority becomes ready in parallel
+		}
+
 		if _, ok := w.items[key]; !ok {
 			item := &item[T]{
 				Key:          key,
@@ -161,6 +198,7 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 			w.queue.ReplaceOrInsert(item)
 			if item.ReadyAt == nil {
 				w.metrics.add(key, item.Priority)
+				w.maybeAddToFairQueueLocked(item)
 			}
 			w.addedCounter++
 			continue
@@ -175,11 +213,14 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 				w.metrics.updateDepthWithPriorityMetric(item.Priority, o.Priority)
 			}
 			item.Priority = o.Priority
+
+			w.maybeAddToFairQueueLocked(item)
 		}
 
 		if item.ReadyAt != nil && (readyAt == nil || readyAt.Before(*item.ReadyAt)) {
 			if readyAt == nil && !w.becameReady.Has(key) {
 				w.metrics.add(key, item.Priority)
+				w.maybeAddToFairQueueLocked(item)
 			}
 			item.ReadyAt = readyAt
 		}
@@ -218,12 +259,8 @@ func (w *priorityqueue[T]) spin() {
 			w.lock.Lock()
 			defer w.lock.Unlock()
 
-			w.lockedLock.Lock()
-			defer w.lockedLock.Unlock()
-
-			// manipulating the tree from within Ascend might lead to panics, so
-			// track what we want to delete and do it after we are done ascending.
-			var toDelete []*item[T]
+		fairQueuePopulating:
+			fairQueueNeedsPopulating := w.fairQueuePriority == nil
 			w.queue.Ascend(func(item *item[T]) bool {
 				if item.ReadyAt != nil {
 					if readyAt := item.ReadyAt.Sub(w.now()); readyAt > 0 {
@@ -233,13 +270,10 @@ func (w *priorityqueue[T]) spin() {
 					if !w.becameReady.Has(item.Key) {
 						w.metrics.add(item.Key, item.Priority)
 						w.becameReady.Insert(item.Key)
+						if !fairQueueNeedsPopulating {
+							w.maybeAddToFairQueueLocked(item)
+						}
 					}
-				}
-
-				if w.waiters.Load() == 0 {
-					// Have to keep iterating here to ensure we update metrics
-					// for further items that became ready and set nextReady.
-					return true
 				}
 
 				// Item is locked, we can not hand it out
@@ -247,22 +281,57 @@ func (w *priorityqueue[T]) spin() {
 					return true
 				}
 
-				w.metrics.get(item.Key, item.Priority)
-				w.locked.Insert(item.Key)
-				w.waiters.Add(-1)
-				delete(w.items, item.Key)
-				toDelete = append(toDelete, item)
-				w.becameReady.Delete(item.Key)
-				w.get <- *item
+				if w.fairQueuePriority == nil {
+					w.fairQueuePriority = ptr.To(item.Priority)
+				}
+
+				if fairQueueNeedsPopulating {
+					w.maybeAddToFairQueueLocked(item)
+				}
 
 				return true
 			})
 
-			for _, item := range toDelete {
+			if w.fairQueue.isEmpty() {
+				return
+			}
+
+			for w.waiters.Load() > 0 {
+				item, hasItem := w.fairQueue.dequeue()
+				if !hasItem {
+					w.fairQueuePriority = nil
+					if w.waiters.Load() > 0 {
+						// There could be ready items that have a lower priority
+						goto fairQueuePopulating
+					}
+					break
+				}
+
+				w.metrics.get(item.Key, item.Priority)
+				w.locked.Insert(item.Key)
+				w.waiters.Add(-1)
+				delete(w.items, item.Key)
+				w.becameReady.Delete(item.Key)
+				w.get <- *item
 				w.queue.Delete(item)
+
+				if w.fairQueue.isEmpty() {
+					w.fairQueuePriority = nil
+				}
 			}
 		}()
 	}
+}
+
+func (w *priorityqueue[T]) maybeAddToFairQueueLocked(item *item[T]) {
+	if w.fairQueuePriority == nil ||
+		*w.fairQueuePriority != item.Priority ||
+		(item.ReadyAt != nil && item.ReadyAt.Sub(w.now()) > 0) ||
+		w.locked.Has(item.Key) {
+		return
+	}
+
+	w.fairQueue.add(item, w.extractFairnessDimensions(item.Key)...)
 }
 
 func (w *priorityqueue[T]) Add(item T) {
@@ -310,10 +379,22 @@ func (w *priorityqueue[T]) ShuttingDown() bool {
 }
 
 func (w *priorityqueue[T]) Done(item T) {
-	w.lockedLock.Lock()
-	defer w.lockedLock.Unlock()
+	w.lock.Lock()
+	defer w.lock.Unlock()
 	w.locked.Delete(item)
 	w.metrics.done(item)
+
+	// Update the fairqueue if the item is waiting
+	if w.fairQueuePriority != nil && w.items[item] != nil && (w.items[item].ReadyAt == nil || w.items[item].ReadyAt.Sub(w.now()) <= 0) {
+		if *w.fairQueuePriority == w.items[item].Priority {
+			// We can just insert as the fairQueue sorts by addedCounter
+			w.fairQueue.add(w.items[item], w.extractFairnessDimensions(item)...)
+		} else if *w.fairQueuePriority < w.items[item].Priority {
+			w.fairQueue.drain()
+			w.fairQueuePriority = ptr.To(w.items[item].Priority)
+			w.fairQueue.add(w.items[item], w.extractFairnessDimensions(item)...)
+		}
+	}
 	w.notifyItemOrWaiterAdded()
 }
 
@@ -414,4 +495,11 @@ type bTree[T any] interface {
 	ReplaceOrInsert(item T) (_ T, _ bool)
 	Delete(item T) (T, bool)
 	Ascend(iterator btree.ItemIteratorG[T])
+}
+
+type fairQueueInterface[T comparable] interface {
+	add(i *item[T], dimensions ...string)
+	dequeue() (*item[T], bool)
+	drain()
+	isEmpty() bool
 }

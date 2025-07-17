@@ -158,6 +158,12 @@ linters:
         # used through an interface and not directly..?
         # Likely same issue as https://github.com/dominikh/go-tools/issues/1616
         path: pkg/controller/priorityqueue/metrics\.go
+      - linters:
+          - unused
+        # Seems to incorrectly trigger on the two implementations that are only
+        # used through an interface and not directly..?
+        # Likely same issue as https://github.com/dominikh/go-tools/issues/1616
+        path: pkg/controller/priorityqueue/priorityqueue_test\.go
       # The following are being worked on to remove their exclusion. This list should be reduced or go away all together over time.
       # If it is decided they will not be addressed they should be moved above this comment.
       - path: (.+)\.go$

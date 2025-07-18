@@ -25,19 +25,25 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	rbacv1 "k8s.io/api/rbac/v1"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	appsv1applyconfigurations "k8s.io/client-go/applyconfigurations/apps/v1"
+	corev1applyconfigurations "k8s.io/client-go/applyconfigurations/core/v1"
+	metav1applyconfigurations "k8s.io/client-go/applyconfigurations/meta/v1"
+	rbacv1applyconfigurations "k8s.io/client-go/applyconfigurations/rbac/v1"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("NamespacedClient", func() {
 	var dep *appsv1.Deployment
+	var acDep *appsv1applyconfigurations.DeploymentApplyConfiguration
 	var ns = "default"
 	ctx := context.Background()
 	var count uint64 = 0
@@ -75,10 +81,25 @@ var _ = Describe("NamespacedClient", func() {
 				},
 			},
 		}
+		acDep = appsv1applyconfigurations.Deployment(dep.Name, "").
+			WithLabels(dep.Labels).
+			WithSpec(appsv1applyconfigurations.DeploymentSpec().
+				WithReplicas(*dep.Spec.Replicas).
+				WithSelector(metav1applyconfigurations.LabelSelector().WithMatchLabels(dep.Spec.Selector.MatchLabels)).
+				WithTemplate(corev1applyconfigurations.PodTemplateSpec().
+					WithLabels(dep.Spec.Template.Labels).
+					WithSpec(corev1applyconfigurations.PodSpec().
+						WithContainers(corev1applyconfigurations.Container().
+							WithName(dep.Spec.Template.Spec.Containers[0].Name).
+							WithImage(dep.Spec.Template.Spec.Containers[0].Image),
+						),
+					),
+				),
+			)
+
 	})
 
 	Describe("Get", func() {
-
 		BeforeEach(func() {
 			var err error
 			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
@@ -88,6 +109,7 @@ var _ = Describe("NamespacedClient", func() {
 		AfterEach(func() {
 			deleteDeployment(ctx, dep, ns)
 		})
+
 		It("should successfully Get a namespace-scoped object", func() {
 			name := types.NamespacedName{Name: dep.Name}
 			result := &appsv1.Deployment{}
@@ -132,6 +154,66 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(getClient().List(ctx, result, opts)).NotTo(HaveOccurred())
 			Expect(len(result.Items)).To(BeEquivalentTo(1))
 			Expect(result.Items[0]).To(BeEquivalentTo(*dep))
+		})
+	})
+
+	Describe("Apply", func() {
+		AfterEach(func() {
+			deleteDeployment(ctx, dep, ns)
+		})
+
+		It("should successfully apply an object in the right namespace", func() {
+			err := getClient().Apply(ctx, acDep, client.FieldOwner("test"))
+			Expect(err).NotTo(HaveOccurred())
+
+			res, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.GetNamespace()).To(BeEquivalentTo(ns))
+		})
+
+		It("should successfully apply an object in the right namespace through unstructured", func() {
+			serialized, err := json.Marshal(acDep)
+			Expect(err).NotTo(HaveOccurred())
+			u := &unstructured.Unstructured{}
+			Expect(json.Unmarshal(serialized, &u.Object)).To(Succeed())
+			err = getClient().Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.FieldOwner("test"))
+			Expect(err).NotTo(HaveOccurred())
+
+			res, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.GetNamespace()).To(BeEquivalentTo(ns))
+		})
+
+		It("should not create an object if the namespace of the object is different", func() {
+			acDep.WithNamespace("non-default")
+			err := getClient().Apply(ctx, acDep, client.FieldOwner("test"))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("does not match the namespace"))
+		})
+
+		It("should not create an object through unstructured if the namespace of the object is different", func() {
+			acDep.WithNamespace("non-default")
+			serialized, err := json.Marshal(acDep)
+			Expect(err).NotTo(HaveOccurred())
+			u := &unstructured.Unstructured{}
+			Expect(json.Unmarshal(serialized, &u.Object)).To(Succeed())
+			err = getClient().Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.FieldOwner("test"))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("does not match the namespace"))
+		})
+
+		It("should create a cluster scoped object", func() {
+			cr := rbacv1applyconfigurations.ClusterRole(fmt.Sprintf("clusterRole-%v", count))
+
+			err := getClient().Apply(ctx, cr, client.FieldOwner("test"))
+			Expect(err).NotTo(HaveOccurred())
+
+			By("checking if the object was created")
+			res, err := clientset.RbacV1().ClusterRoles().Get(ctx, *cr.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res).NotTo(BeNil())
+
+			deleteClusterRole(ctx, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: *cr.Name}})
 		})
 	})
 

@@ -102,13 +102,10 @@ func (c *clientRestResources) getResource(obj any) (*resourceMeta, error) {
 		if !ok {
 			return nil, fmt.Errorf("%T is a runtime.ApplyConfiguration but not an applyConfiguration", o)
 		}
-		gv, err := schema.ParseGroupVersion(ptr.Deref(ac.GetAPIVersion(), ""))
+		gvk, err = gvkFromApplyConfiguration(ac)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse %q as GroupVersion: %w", ptr.Deref(ac.GetAPIVersion(), ""), err)
+			return nil, err
 		}
-		gvk.Group = gv.Group
-		gvk.Version = gv.Version
-		gvk.Kind = ptr.Deref(ac.GetKind(), "")
 		isApplyConfiguration = true
 	default:
 		return nil, fmt.Errorf("bug: %T is neither a runtime.Object nor a runtime.ApplyConfiguration", o)

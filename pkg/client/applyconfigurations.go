@@ -17,9 +17,12 @@ limitations under the License.
 package client
 
 import (
+	"fmt"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 )
 
 type unstructuredApplyConfiguration struct {
@@ -56,4 +59,17 @@ func (a *applyconfigurationRuntimeObject) DeepCopyObject() runtime.Object {
 
 func runtimeObjectFromApplyConfiguration(ac runtime.ApplyConfiguration) runtime.Object {
 	return &applyconfigurationRuntimeObject{ApplyConfiguration: ac}
+}
+
+func gvkFromApplyConfiguration(ac applyConfiguration) (schema.GroupVersionKind, error) {
+	var gvk schema.GroupVersionKind
+	gv, err := schema.ParseGroupVersion(ptr.Deref(ac.GetAPIVersion(), ""))
+	if err != nil {
+		return gvk, fmt.Errorf("failed to parse %q as GroupVersion: %w", ptr.Deref(ac.GetAPIVersion(), ""), err)
+	}
+	gvk.Group = gv.Group
+	gvk.Version = gv.Version
+	gvk.Kind = ptr.Deref(ac.GetKind(), "")
+
+	return gvk, nil
 }

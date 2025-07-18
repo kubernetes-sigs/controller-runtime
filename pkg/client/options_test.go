@@ -109,6 +109,27 @@ var _ = Describe("GetOptions", func() {
 	})
 })
 
+var _ = Describe("ApplyOptions", func() {
+	It("Should set DryRun", func() {
+		o := &client.ApplyOptions{DryRun: []string{"Hello", "Theodore"}}
+		newApplyOpts := &client.ApplyOptions{}
+		o.ApplyToApply(newApplyOpts)
+		Expect(newApplyOpts).To(Equal(o))
+	})
+	It("Should set Force", func() {
+		o := &client.ApplyOptions{Force: ptr.To(true)}
+		newApplyOpts := &client.ApplyOptions{}
+		o.ApplyToApply(newApplyOpts)
+		Expect(newApplyOpts).To(Equal(o))
+	})
+	It("Should set FieldManager", func() {
+		o := &client.ApplyOptions{FieldManager: "field-manager"}
+		newApplyOpts := &client.ApplyOptions{}
+		o.ApplyToApply(newApplyOpts)
+		Expect(newApplyOpts).To(Equal(o))
+	})
+})
+
 var _ = Describe("CreateOptions", func() {
 	It("Should set DryRun", func() {
 		o := &client.CreateOptions{DryRun: []string{"Hello", "Theodore"}}
@@ -278,11 +299,68 @@ var _ = Describe("MatchingLabels", func() {
 	})
 })
 
+var _ = Describe("DryRunAll", func() {
+	It("Should apply to ApplyOptions", func() {
+		o := &client.ApplyOptions{DryRun: []string{"server"}}
+		t := client.DryRunAll
+		t.ApplyToApply(o)
+		Expect(o.DryRun).To(Equal([]string{metav1.DryRunAll}))
+	})
+	It("Should apply to CreateOptions", func() {
+		o := &client.CreateOptions{DryRun: []string{"server"}}
+		t := client.DryRunAll
+		t.ApplyToCreate(o)
+		Expect(o.DryRun).To(Equal([]string{metav1.DryRunAll}))
+	})
+	It("Should apply to UpdateOptions", func() {
+		o := &client.UpdateOptions{DryRun: []string{"server"}}
+		t := client.DryRunAll
+		t.ApplyToUpdate(o)
+		Expect(o.DryRun).To(Equal([]string{metav1.DryRunAll}))
+	})
+	It("Should apply to PatchOptions", func() {
+		o := &client.PatchOptions{DryRun: []string{"server"}}
+		t := client.DryRunAll
+		t.ApplyToPatch(o)
+		Expect(o.DryRun).To(Equal([]string{metav1.DryRunAll}))
+	})
+	It("Should apply to DeleteOptions", func() {
+		o := &client.DeleteOptions{DryRun: []string{"server"}}
+		t := client.DryRunAll
+		t.ApplyToDelete(o)
+		Expect(o.DryRun).To(Equal([]string{metav1.DryRunAll}))
+	})
+	It("Should apply to SubResourcePatchOptions", func() {
+		o := &client.SubResourcePatchOptions{PatchOptions: client.PatchOptions{DryRun: []string{"server"}}}
+		t := client.DryRunAll
+		t.ApplyToSubResourcePatch(o)
+		Expect(o.DryRun).To(Equal([]string{metav1.DryRunAll}))
+	})
+	It("Should apply to SubResourceCreateOptions", func() {
+		o := &client.SubResourceCreateOptions{CreateOptions: client.CreateOptions{DryRun: []string{"server"}}}
+		t := client.DryRunAll
+		t.ApplyToSubResourceCreate(o)
+		Expect(o.DryRun).To(Equal([]string{metav1.DryRunAll}))
+	})
+	It("Should apply to SubResourceUpdateOptions", func() {
+		o := &client.SubResourceUpdateOptions{UpdateOptions: client.UpdateOptions{DryRun: []string{"server"}}}
+		t := client.DryRunAll
+		t.ApplyToSubResourceUpdate(o)
+		Expect(o.DryRun).To(Equal([]string{metav1.DryRunAll}))
+	})
+})
+
 var _ = Describe("FieldOwner", func() {
 	It("Should apply to PatchOptions", func() {
 		o := &client.PatchOptions{FieldManager: "bar"}
 		t := client.FieldOwner("foo")
 		t.ApplyToPatch(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
+	It("Should apply to ApplyOptions", func() {
+		o := &client.ApplyOptions{FieldManager: "bar"}
+		t := client.FieldOwner("foo")
+		t.ApplyToApply(o)
 		Expect(o.FieldManager).To(Equal("foo"))
 	})
 	It("Should apply to CreateOptions", func() {

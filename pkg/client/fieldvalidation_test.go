@@ -25,7 +25,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	corev1applyconfigurations "k8s.io/client-go/applyconfigurations/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -104,6 +106,7 @@ func TestWithStrictFieldValidation(t *testing.T) {
 
 	_ = wrappedClient.Create(ctx, dummyObj)
 	_ = wrappedClient.Update(ctx, dummyObj)
+	_ = wrappedClient.Apply(ctx, corev1applyconfigurations.ConfigMap("foo", "bar"))
 	_ = wrappedClient.Patch(ctx, dummyObj, nil)
 	_ = wrappedClient.Status().Create(ctx, dummyObj, dummyObj)
 	_ = wrappedClient.Status().Update(ctx, dummyObj)
@@ -112,7 +115,7 @@ func TestWithStrictFieldValidation(t *testing.T) {
 	_ = wrappedClient.SubResource("some-subresource").Update(ctx, dummyObj)
 	_ = wrappedClient.SubResource("some-subresource").Patch(ctx, dummyObj, nil)
 
-	if expectedCalls := 9; calls != expectedCalls {
+	if expectedCalls := 10; calls != expectedCalls {
 		t.Fatalf("wrong number of calls to assertions: expected=%d; got=%d", expectedCalls, calls)
 	}
 }
@@ -186,6 +189,10 @@ func testFieldValidationClient(t *testing.T, expectedFieldValidation string, cal
 			if got := co.FieldValidation; expectedFieldValidation != got {
 				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
 			}
+			return nil
+		},
+		Apply: func(ctx context.Context, client client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+			callback()
 			return nil
 		},
 		Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {

@@ -52,6 +52,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/validation"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1046,16 +1047,52 @@ func (c *fakeClient) Patch(ctx context.Context, obj client.Object, patch client.
 	return c.patch(obj, patch, opts...)
 }
 
+func (c *fakeClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+	applyOpts := &client.ApplyOptions{}
+	applyOpts.ApplyOptions(opts)
+
+	data, err := json.Marshal(obj)
+	if err != nil {
+		return fmt.Errorf("failed to marshal apply configuration: %w", err)
+	}
+
+	u := &unstructured.Unstructured{}
+	if err := json.Unmarshal(data, u); err != nil {
+		return fmt.Errorf("failed to unmarshal apply configuration: %w", err)
+	}
+
+	applyPatch := &fakeApplyPatch{}
+
+	patchOpts := &client.PatchOptions{}
+	patchOpts.Raw = applyOpts.AsPatchOptions()
+
+	return c.patch(u, applyPatch, patchOpts)
+}
+
+type fakeApplyPatch struct{}
+
+func (p *fakeApplyPatch) Type() types.PatchType {
+	return types.ApplyPatchType
+}
+
+func (p *fakeApplyPatch) Data(obj client.Object) ([]byte, error) {
+	return json.Marshal(obj)
+}
+
 func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 	if err := c.addToSchemeIfUnknownAndUnstructuredOrPartial(obj); err != nil {
 		return err
 	}
 
-	c.schemeLock.RLock()
-	defer c.schemeLock.RUnlock()
-
 	patchOptions := &client.PatchOptions{}
 	patchOptions.ApplyOptions(opts)
+
+	if errs := validation.ValidatePatchOptions(patchOptions.AsPatchOptions(), patch.Type()); len(errs) > 0 {
+		return apierrors.NewInvalid(schema.GroupKind{Group: "meta.k8s.io", Kind: "PatchOptions"}, "", errs)
+	}
+
+	c.schemeLock.RLock()
+	defer c.schemeLock.RUnlock()
 
 	for _, dryRunOpt := range patchOptions.DryRun {
 		if dryRunOpt == metav1.DryRunAll {

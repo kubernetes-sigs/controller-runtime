@@ -61,6 +61,9 @@ type Reader interface {
 
 // Writer knows how to create, delete, and update Kubernetes objects.
 type Writer interface {
+	// Apply applies the given apply configuration to the Kubernetes cluster.
+	Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ApplyOption) error
+
 	// Create saves the object obj in the Kubernetes cluster. obj must be a
 	// struct pointer so that obj can be updated with the content returned by the Server.
 	Create(ctx context.Context, obj Object, opts ...CreateOption) error
@@ -78,9 +81,6 @@ type Writer interface {
 
 	// DeleteAllOf deletes all objects of the given type matching the given options.
 	DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllOfOption) error
-
-	// Apply applies the given apply configuration to the Kubernetes cluster.
-	Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ApplyOption) error
 }
 
 // StatusClient knows how to create a client which can update status subresource

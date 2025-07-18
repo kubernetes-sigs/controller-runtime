@@ -124,15 +124,54 @@ func downloadBinaryAssets(ctx context.Context, binaryAssetsDirectory, binaryAsse
 		}
 	}
 
+	var requestedRange semver.Range
+	if binaryAssetsVersion != "" {
+		binaryAssetsVersion = strings.TrimPrefix(binaryAssetsVersion, "v")
+		parsedVersion, errV := semver.ParseTolerant(binaryAssetsVersion)
+		parsedRange, errR := semver.ParseRange(binaryAssetsVersion)
+
+		switch {
+		// When an exact version is requested, don't look for it in the release index.
+		case errV == nil && parsedVersion.String() == binaryAssetsVersion:
+			requestedRange = nil
+
+		// When the version looks like a range, apply it to the index.
+		case errR == nil:
+			requestedRange = parsedRange
+
+		// When the version isn't exact, turn it into a range.
+		//
+		// The `setup-envtest` tool interprets a partial version to mean "latest stable with that prefix."
+		// For example, "1" and "1.2" are akin to "1.x.x" and "1.2.x" in [semver.ParseRange].
+		// [semver.ParseTolerant] fills in missing minor or patch with "0", so this replaces those with "x".
+		//
+		// That *should* produce a valid range. If it doesn't, use the original value and skip the index.
+		case errV == nil:
+			suffix := strings.TrimPrefix(parsedVersion.FinalizeVersion(), binaryAssetsVersion)
+			suffix = strings.ReplaceAll(suffix, "0", "x")
+			parsedRange, errR = semver.ParseRange(binaryAssetsVersion + suffix)
+
+			if errR == nil {
+				requestedRange = parsedRange
+			} else {
+				requestedRange = nil
+			}
+		}
+	} else {
+		// When no version is requested, look for one in the release index.
+		requestedRange = semver.MustParseRange(">0.0.0")
+	}
+
+	// When a range a versions is requested, select one from the release index.
 	var binaryAssetsIndex *index
-	if binaryAssetsVersion == "" || strings.Count(binaryAssetsVersion, ".") < 2 {
+	if requestedRange != nil {
 		var err error
 		binaryAssetsIndex, err = getIndex(ctx, binaryAssetsIndexURL)
 		if err != nil {
 			return "", "", "", err
 		}
 
-		binaryAssetsVersion, err = latestStableVersionFromIndex(binaryAssetsIndex, binaryAssetsVersion)
+		binaryAssetsVersion, err = latestStableVersionFromIndex(binaryAssetsIndex, requestedRange)
 		if err != nil {
 			return "", "", "", err
 		}
@@ -219,6 +258,8 @@ func fileExists(path string) bool {
 }
 
 func downloadBinaryAssetsArchive(ctx context.Context, index *index, version string, out io.Writer) error {
+	version = "v" + strings.TrimPrefix(version, "v")
+
 	archives, ok := index.Releases[version]
 	if !ok {
 		return fmt.Errorf("failed to find envtest binaries for version %s", version)
@@ -252,26 +293,20 @@ func downloadBinaryAssetsArchive(ctx context.Context, index *index, version stri
 	return readBody(resp, out, archiveName, archive.Hash)
 }
 
-func latestStableVersionFromIndex(index *index, prefix string) (string, error) {
+func latestStableVersionFromIndex(index *index, satisfying semver.Range) (string, error) {
 	if len(index.Releases) == 0 {
 		return "", fmt.Errorf("failed to find latest stable version from index: index is empty")
 	}
 
-	prefix = strings.TrimPrefix(prefix, "v")
 	parsedVersions := []semver.Version{}
 	for releaseVersion := range index.Releases {
-		// Filter on prefix.
-		if !strings.HasPrefix(strings.TrimPrefix(releaseVersion, "v"), prefix) {
-			continue
-		}
-
 		v, err := semver.ParseTolerant(releaseVersion)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse version %q: %w", releaseVersion, err)
 		}
 
-		// Filter out pre-releases.
-		if len(v.Pre) > 0 {
+		// Filter out pre-releases and undesirable versions.
+		if len(v.Pre) > 0 || !satisfying(v) {
 			continue
 		}
 

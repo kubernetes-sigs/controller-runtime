@@ -30,8 +30,8 @@ func (u *unstructuredApplyConfiguration) IsApplyConfiguration() {}
 
 // ApplyConfigurationFromUnstructured creates a runtime.ApplyConfiguration from an *unstructured.Unstructured object.
 //
-// Do not use Unstructured objects here that were generated from API objects, as those
-// contain zero values.
+// Do not use Unstructured objects here that were generated from API objects, as its impossible to tell
+// if a zero value was explicitly set.
 func ApplyConfigurationFromUnstructured(u *unstructured.Unstructured) runtime.ApplyConfiguration {
 	return &unstructuredApplyConfiguration{Unstructured: u}
 }

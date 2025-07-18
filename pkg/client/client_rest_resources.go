@@ -115,7 +115,7 @@ func (c *clientRestResources) getResource(obj any) (*resourceMeta, error) {
 	}
 
 	_, isUnstructured := obj.(runtime.Unstructured)
-	disableProtoBuf := isUnstructured || isApplyConfiguration
+	forceDisableProtoBuf := isUnstructured || isApplyConfiguration
 
 	// It's better to do creation work twice than to not let multiple
 	// people make requests at once
@@ -139,7 +139,7 @@ func (c *clientRestResources) getResource(obj any) (*resourceMeta, error) {
 	// Initialize a new Client
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	r, err = c.newResource(gvk, isList, disableProtoBuf, isUnstructured)
+	r, err = c.newResource(gvk, isList, forceDisableProtoBuf, isUnstructured)
 	if err != nil {
 		return nil, err
 	}

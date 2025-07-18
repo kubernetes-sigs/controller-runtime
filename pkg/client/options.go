@@ -62,9 +62,9 @@ type PatchOption interface {
 	ApplyToPatch(*PatchOptions)
 }
 
-// ApplyOption is some configuration that modifies options for a apply request.
+// ApplyOption is some configuration that modifies options for an apply request.
 type ApplyOption interface {
-	// A ApplyToApply applies this configuration to the given apply options.
+	// ApplyToApply applies this configuration to the given apply options.
 	ApplyToApply(*ApplyOptions)
 }
 
@@ -122,11 +122,12 @@ func (dryRunAll) ApplyToPatch(opts *PatchOptions) {
 	opts.DryRun = []string{metav1.DryRunAll}
 }
 
-func (drun dryRunAll) ApplyToApply(opts *ApplyOptions) {
+// ApplyToApply applies this configuration to the given apply options.
+func (dryRunAll) ApplyToApply(opts *ApplyOptions) {
 	opts.DryRun = []string{metav1.DryRunAll}
 }
 
-// ApplyToPatch applies this configuration to the given delete options.
+// ApplyToDelete applies this configuration to the given delete options.
 func (dryRunAll) ApplyToDelete(opts *DeleteOptions) {
 	opts.DryRun = []string{metav1.DryRunAll}
 }
@@ -981,20 +982,20 @@ type ApplyOptions struct {
 	// result in an error response and no further processing of the
 	// request. Valid values are:
 	// - All: all dry run stages will be processed
-	// +optional
-	// +listType=atomic
-	DryRun []string `json:"dryRun,omitempty" protobuf:"bytes,1,rep,name=dryRun"`
+	DryRun []string
 
 	// Force is going to "force" Apply requests. It means user will
 	// re-acquire conflicting fields owned by other people.
-	Force *bool `json:"force" protobuf:"varint,2,opt,name=force"`
+	Force *bool
 
 	// fieldManager is a name associated with the actor or entity
 	// that is making these changes. The value must be less than or
 	// 128 characters long, and only contain printable characters,
 	// as defined by https://golang.org/pkg/unicode/#IsPrint. This
 	// field is required.
-	FieldManager string `json:"fieldManager" protobuf:"bytes,3,name=fieldManager"`
+	//
+	// +required
+	FieldManager string
 }
 
 // ApplyOptions applies the given opts onto the ApplyOptions

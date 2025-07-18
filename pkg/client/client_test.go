@@ -894,7 +894,9 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(actualData).To(BeComparableTo(data))
 				Expect(actualData).To(BeComparableTo(obj.Object["data"]))
 
-				data["a-new-key"] = "a-new-value"
+				data = map[string]any{
+					"a-new-key": "a-new-value",
+				}
 				obj.Object["data"] = data
 				unstructured.RemoveNestedField(obj.Object, "metadata", "managedFields")
 
@@ -936,7 +938,9 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(cm.Data).To(BeComparableTo(data))
 				Expect(cm.Data).To(BeComparableTo(obj.Data))
 
-				data["a-new-key"] = "a-new-value"
+				data = map[string]string{
+					"a-new-key": "a-new-value",
+				}
 				obj.Data = data
 
 				err = cl.Apply(context.Background(), obj, &client.ApplyOptions{FieldManager: "test-manager"})

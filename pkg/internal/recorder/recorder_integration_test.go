@@ -43,7 +43,7 @@ var _ = Describe("recorder", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
-			recorder := cm.GetEventRecorderFor("test-recorder")
+			recorder := cm.GetEventRecorder("test-recorder")
 			instance, err := controller.New("foo-controller", cm, controller.Options{
 				Reconciler: reconcile.Func(
 					func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {

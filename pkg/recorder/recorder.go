@@ -21,11 +21,11 @@ limitations under the License.
 package recorder
 
 import (
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 )
 
 // Provider knows how to generate new event recorders with given name.
 type Provider interface {
 	// NewRecorder returns an EventRecorder with given name.
-	GetEventRecorderFor(name string) record.EventRecorder
+	GetEventRecorder(name string) events.EventRecorder
 }

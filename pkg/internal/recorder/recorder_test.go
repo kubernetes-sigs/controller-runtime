@@ -48,7 +48,7 @@ var _ = Describe("recorder.Provider", func() {
 			provider, err := recorder.NewProvider(cfg, httpClient, scheme.Scheme, logr.Discard(), makeBroadcaster)
 			Expect(err).NotTo(HaveOccurred())
 
-			recorder := provider.GetEventRecorderFor("test")
+			recorder := provider.GetEventRecorder("test")
 			Expect(recorder).NotTo(BeNil())
 		})
 	})

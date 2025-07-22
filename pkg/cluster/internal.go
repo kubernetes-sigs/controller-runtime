@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -83,8 +83,8 @@ func (c *cluster) GetCache() cache.Cache {
 	return c.cache
 }
 
-func (c *cluster) GetEventRecorderFor(name string) record.EventRecorder {
-	return c.recorderProvider.GetEventRecorderFor(name)
+func (c *cluster) GetEventRecorder(name string) events.EventRecorder {
+	return c.recorderProvider.GetEventRecorder(name)
 }
 
 func (c *cluster) GetRESTMapper() meta.RESTMapper {

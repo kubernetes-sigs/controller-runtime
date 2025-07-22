@@ -60,7 +60,6 @@ var _ = Describe("manger.Manager", func() {
 			m, err := New(nil, Options{})
 			Expect(m).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Config"))
-
 		})
 
 		It("should return an error if it can't create a RestMapper", func() {
@@ -70,7 +69,6 @@ var _ = Describe("manger.Manager", func() {
 			})
 			Expect(m).To(BeNil())
 			Expect(err).To(Equal(expected))
-
 		})
 
 		It("should return an error it can't create a client.Client", func() {
@@ -207,7 +205,6 @@ var _ = Describe("manger.Manager", func() {
 				}
 				// Don't leak routines
 				<-mgrDone
-
 			})
 			It("should disable gracefulShutdown when stopping to lead", func(ctx SpecContext) {
 				m, err := New(cfg, Options{
@@ -443,7 +440,6 @@ var _ = Describe("manger.Manager", func() {
 				Expect(ok).To(BeTrue())
 				_, isLeaseLock := cm.resourceLock.(*resourcelock.LeaseLock)
 				Expect(isLeaseLock).To(BeTrue())
-
 			})
 			It("should use the specified ResourceLock", func() {
 				m, err := New(cfg, Options{
@@ -671,7 +667,7 @@ var _ = Describe("manger.Manager", func() {
 	})
 
 	Describe("Start", func() {
-		var startSuite = func(options Options, callbacks ...func(Manager)) {
+		startSuite := func(options Options, callbacks ...func(Manager)) {
 			It("should Start each Component", func(ctx SpecContext) {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
@@ -1256,7 +1252,6 @@ var _ = Describe("manger.Manager", func() {
 				<-managerStopDone
 				Expect(time.Since(beforeDone)).To(BeNumerically(">=", 1500*time.Millisecond))
 			})
-
 		}
 
 		Context("with defaults", func() {
@@ -1790,7 +1785,6 @@ var _ = Describe("manger.Manager", func() {
 			err = m.Start(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("manager already started"))
-
 		})
 	})
 
@@ -1820,7 +1814,7 @@ var _ = Describe("manger.Manager", func() {
 		ns := corev1.Namespace{}
 		ns.Name = "default"
 
-		recorder := m.GetEventRecorderFor("rock-and-roll")
+		recorder := m.GetEventRecorder("rock-and-roll")
 		Expect(m.Add(RunnableFunc(func(_ context.Context) error {
 			recorder.Event(&ns, "Warning", "BallroomBlitz", "yeah, yeah, yeah-yeah-yeah")
 			return nil
@@ -1941,7 +1935,7 @@ var _ = Describe("manger.Manager", func() {
 	It("should provide a function to get the EventRecorder", func() {
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(m.GetEventRecorderFor("test")).NotTo(BeNil())
+		Expect(m.GetEventRecorder("test")).NotTo(BeNil())
 	})
 	It("should provide a function to get the APIReader", func() {
 		m, err := New(cfg, Options{})
@@ -2020,8 +2014,7 @@ var _ = Describe("manger.Manager", func() {
 	})
 })
 
-type runnableError struct {
-}
+type runnableError struct{}
 
 func (runnableError) Error() string {
 	return "not feeling like that"

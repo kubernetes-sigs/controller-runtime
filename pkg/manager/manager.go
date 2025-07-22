@@ -29,7 +29,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	eventsv1client "k8s.io/client-go/kubernetes/typed/events/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
@@ -337,7 +339,10 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, errors.New("must specify Config")
 	}
 	// Set default values for options fields
-	options = setOptionsDefaults(options)
+	options, err := setOptionsDefaults(config, options)
+	if err != nil {
+		return nil, fmt.Errorf("failed setting manager default options: %w", err)
+	}
 
 	cluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {
 		clusterOptions.Scheme = options.Scheme
@@ -493,7 +498,7 @@ func defaultBaseContext() context.Context {
 }
 
 // setOptionsDefaults set default values for Options fields.
-func setOptionsDefaults(options Options) Options {
+func setOptionsDefaults(config *rest.Config, options Options) (Options, error) {
 	// Allow newResourceLock to be mocked
 	if options.newResourceLock == nil {
 		options.newResourceLock = leaderelection.NewResourceLock
@@ -507,14 +512,25 @@ func setOptionsDefaults(options Options) Options {
 	// This is duplicated with pkg/cluster, we need it here
 	// for the leader election and there to provide the user with
 	// an EventBroadcaster
+	httpClient, err := rest.HTTPClientFor(config)
+	if err != nil {
+		return options, err
+	}
+
+	evtCl, err := eventsv1client.NewForConfigAndClient(config, httpClient)
+	if err != nil {
+		return options, err
+	}
+
 	if options.EventBroadcaster == nil {
 		// defer initialization to avoid leaking by default
-		options.makeBroadcaster = func() (record.EventBroadcaster, bool) {
-			return record.NewBroadcaster(), true
+		options.makeBroadcaster = func() (record.EventBroadcaster, events.EventBroadcaster, bool) {
+			return record.NewBroadcaster(), events.NewBroadcaster(&events.EventSinkImpl{Interface: evtCl}), true
 		}
 	} else {
-		options.makeBroadcaster = func() (record.EventBroadcaster, bool) {
-			return options.EventBroadcaster, false
+		// keep supporting the options.EventBroadcaster in the old API, but do not introduce it for the new one.
+		options.makeBroadcaster = func() (record.EventBroadcaster, events.EventBroadcaster, bool) {
+			return options.EventBroadcaster, events.NewBroadcaster(&events.EventSinkImpl{Interface: evtCl}), false
 		}
 	}
 
@@ -571,5 +587,5 @@ func setOptionsDefaults(options Options) Options {
 		options.WebhookServer = webhook.NewServer(webhook.Options{})
 	}
 
-	return options
+	return options, nil
 }

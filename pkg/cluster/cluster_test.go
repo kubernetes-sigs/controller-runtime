@@ -40,7 +40,6 @@ var _ = Describe("cluster.Cluster", func() {
 			c, err := New(nil)
 			Expect(c).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Config"))
-
 		})
 
 		It("should return an error if it can't create a RestMapper", func() {
@@ -50,7 +49,6 @@ var _ = Describe("cluster.Cluster", func() {
 			})
 			Expect(c).To(BeNil())
 			Expect(err).To(Equal(expected))
-
 		})
 
 		It("should return an error it can't create a client.Client", func() {
@@ -96,7 +94,6 @@ var _ = Describe("cluster.Cluster", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
 		})
-
 	})
 
 	Describe("Start", func() {
@@ -160,7 +157,13 @@ var _ = Describe("cluster.Cluster", func() {
 	It("should provide a function to get the EventRecorder", func() {
 		c, err := New(cfg)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(c.GetEventRecorderFor("test")).NotTo(BeNil())
+		Expect(c.GetEventRecorder("test")).NotTo(BeNil())
+	})
+
+	It("should provide a function to get the deprecated EventRecorder", func() {
+		c, err := New(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.GetEventRecorderFor("test")).NotTo(BeNil()) //nolint:staticcheck
 	})
 	It("should provide a function to get the APIReader", func() {
 		c, err := New(cfg)

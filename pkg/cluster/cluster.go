@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -58,8 +58,8 @@ type Cluster interface {
 	// GetFieldIndexer returns a client.FieldIndexer configured with the client
 	GetFieldIndexer() client.FieldIndexer
 
-	// GetEventRecorderFor returns a new EventRecorder for the provided name
-	GetEventRecorderFor(name string) record.EventRecorder
+	// GetEventRecorder returns a new EventRecorder for the provided name
+	GetEventRecorder(name string) events.EventRecorder
 
 	// GetRESTMapper returns a RESTMapper
 	GetRESTMapper() meta.RESTMapper
@@ -126,16 +126,10 @@ type Options struct {
 	//
 	// Deprecated: using this may cause goroutine leaks if the lifetime of your manager or controllers
 	// is shorter than the lifetime of your process.
-	EventBroadcaster record.EventBroadcaster
-
-	// makeBroadcaster allows deferring the creation of the broadcaster to
-	// avoid leaking goroutines if we never call Start on this manager.  It also
-	// returns whether or not this is a "owned" broadcaster, and as such should be
-	// stopped with the manager.
-	makeBroadcaster intrec.EventBroadcasterProducer
+	EventBroadcaster events.EventBroadcaster
 
 	// Dependency injection for testing
-	newRecorderProvider func(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error)
+	newRecorderProvider func(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, broadcaster events.EventBroadcaster, stopWithProvider bool) (*intrec.Provider, error)
 }
 
 // Option can be used to manipulate Options.
@@ -228,7 +222,8 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	// Create the recorder provider to inject event recorders for the components.
 	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.
-	recorderProvider, err := options.newRecorderProvider(config, options.HTTPClient, options.Scheme, options.Logger.WithName("events"), options.makeBroadcaster)
+	// Stop the broadcaster with the provider only if the broadcaster is externally given (aka non-nil).
+	recorderProvider, err := options.newRecorderProvider(config, options.HTTPClient, options.Scheme, options.Logger.WithName("events"), options.EventBroadcaster, options.EventBroadcaster == nil)
 	if err != nil {
 		return nil, err
 	}
@@ -279,19 +274,6 @@ func setOptionsDefaults(options Options, config *rest.Config) (Options, error) {
 	// Allow newRecorderProvider to be mocked
 	if options.newRecorderProvider == nil {
 		options.newRecorderProvider = intrec.NewProvider
-	}
-
-	// This is duplicated with pkg/manager, we need it here to provide
-	// the user with an EventBroadcaster and there for the Leader election
-	if options.EventBroadcaster == nil {
-		// defer initialization to avoid leaking by default
-		options.makeBroadcaster = func() (record.EventBroadcaster, bool) {
-			return record.NewBroadcaster(), true
-		}
-	} else {
-		options.makeBroadcaster = func() (record.EventBroadcaster, bool) {
-			return options.EventBroadcaster, false
-		}
 	}
 
 	if options.Logger.GetSink() == nil {

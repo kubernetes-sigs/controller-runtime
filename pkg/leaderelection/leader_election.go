@@ -126,10 +126,9 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 		options.LeaderElectionID,
 		corev1Client,
 		coordinationClient,
-		// TODO(clebs): figure out how to solve this.
 		resourcelock.ResourceLockConfig{
 			Identity:      id,
-			EventRecorder: recorderProvider.GetEventRecorder(id),
+			EventRecorder: recorderProvider.GetOldEventRecorder(id),
 		},
 		options.LeaderLabels,
 	)

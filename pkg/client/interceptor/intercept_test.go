@@ -63,6 +63,29 @@ var _ = Describe("NewClient", func() {
 		_ = client2.List(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
+	It("should call the provided Apply function", func() {
+		var called bool
+		client := NewClient(wrappedClient, Funcs{
+			Apply: func(ctx context.Context, client client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+				called = true
+				return nil
+			},
+		})
+		_ = client.Apply(ctx, nil)
+		Expect(called).To(BeTrue())
+	})
+	It("should call the underlying client if the provided Apply function is nil", func() {
+		var called bool
+		client1 := NewClient(wrappedClient, Funcs{
+			Apply: func(ctx context.Context, client client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+				called = true
+				return nil
+			},
+		})
+		client2 := NewClient(client1, Funcs{})
+		_ = client2.Apply(ctx, nil)
+		Expect(called).To(BeTrue())
+	})
 	It("should call the provided Create function", func() {
 		var called bool
 		client := NewClient(wrappedClient, Funcs{
@@ -357,6 +380,10 @@ func (d dummyClient) Update(ctx context.Context, obj client.Object, opts ...clie
 }
 
 func (d dummyClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	return nil
+}
+
+func (d dummyClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
 	return nil
 }
 

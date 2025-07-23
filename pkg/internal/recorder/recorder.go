@@ -27,6 +27,7 @@ import (
 	eventsv1client "k8s.io/client-go/kubernetes/typed/events/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/client-go/tools/record"
 )
 
 // EventBroadcasterProducer makes an event broadcaster, returning
@@ -136,6 +137,17 @@ func (p *Provider) GetEventRecorder(name string) events.EventRecorder {
 	}
 }
 
+// GetOldEventRecorder returns an event recorder that broadcasts to this provider's
+// broadcaster.  All events will be associated with a component of the given name.
+func (p *Provider) GetOldEventRecorder(name string) record.EventRecorder {
+	return &oldRecorder{
+		newRecorder: &lazyRecorder{
+			prov: p,
+			name: name,
+		},
+	}
+}
+
 // lazyRecorder is a recorder that doesn't actually instantiate any underlying
 // recorder until the first event is emitted.
 type lazyRecorder struct {
@@ -162,4 +174,23 @@ func (l *lazyRecorder) Eventf(regarding runtime.Object, related runtime.Object, 
 		l.rec.Eventf(regarding, related, eventtype, reason, action, note, args...)
 	}
 	l.prov.lock.RUnlock()
+}
+
+// oldRecorder is a wrapper around the events.EventRecorder that implements the old record.EventRecorder API.
+// This is a temporary solution to support both the old and new events APIs without duplicating everything.
+// Internally it calls the new events API from the old API funcs and no longer supported parameters are ignored (e.g. annotations).
+type oldRecorder struct {
+	newRecorder *lazyRecorder
+}
+
+func (l *oldRecorder) Event(object runtime.Object, eventtype, reason, message string) {
+	l.newRecorder.Eventf(object, nil, eventtype, reason, "unsupported", message)
+}
+
+func (l *oldRecorder) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
+	l.newRecorder.Eventf(object, nil, eventtype, reason, "unsupported", messageFmt, args...)
+}
+
+func (l *oldRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
+	l.newRecorder.Eventf(object, nil, eventtype, reason, "unsupported", messageFmt, args...)
 }

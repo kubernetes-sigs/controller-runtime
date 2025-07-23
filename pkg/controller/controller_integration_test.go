@@ -53,11 +53,11 @@ var _ = Describe("controller", func() {
 	Describe("controller", func() {
 		// TODO(directxman12): write a whole suite of controller-client interaction tests
 
-        // The watches in this test are setup with a namespace predicate to avoid each table entry
-        // from interfering with the others. We cannot add a delete call for the pods created in the
-        // test, as it causes flakes with the api-server termination timing out.
-        // See https://github.com/kubernetes-sigs/controller-runtime/issues/1571 for a description
-        // of the issue, and a discussion here: https://github.com/kubernetes-sigs/controller-runtime/pull/3192#discussion_r2186967799
+		// The watches in this test are setup with a namespace predicate to avoid each table entry
+		// from interfering with the others. We cannot add a delete call for the pods created in the
+		// test, as it causes flakes with the api-server termination timing out.
+		// See https://github.com/kubernetes-sigs/controller-runtime/issues/1571 for a description
+		// of the issue, and a discussion here: https://github.com/kubernetes-sigs/controller-runtime/pull/3192#discussion_r2186967799
 		DescribeTable("should reconcile", func(enableWarmup bool) {
 			By("Creating the Manager")
 			cm, err := manager.New(cfg, manager.Options{})

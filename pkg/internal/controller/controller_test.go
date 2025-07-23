@@ -1438,7 +1438,7 @@ var _ = Describe("controller", func() {
 
 			By("Creating a test resource lock with hooks")
 			resourceLock, err := fakeleaderelection.NewResourceLock(nil, nil, leaderelection.Options{})
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			By("Creating a manager")
 			testenv = &envtest.Environment{}
@@ -1457,7 +1457,7 @@ var _ = Describe("controller", func() {
 			Expect(m.Add(nonWarmupCtrl)).To(Succeed())
 
 			By("Blocking leader election")
-			resourceLockWithHooks, ok := resourceLock.(fakeleaderelection.ResourceLockInterfaceWithHooks)
+			resourceLockWithHooks, ok := resourceLock.(fakeleaderelection.ControllableResourceLockInterface)
 			Expect(ok).To(BeTrue(), "resource lock should implement ResourceLockInterfaceWithHooks")
 			resourceLockWithHooks.BlockLeaderElection()
 

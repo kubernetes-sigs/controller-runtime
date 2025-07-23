@@ -1979,7 +1979,7 @@ var _ = Describe("manger.Manager", func() {
 
 		cm, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
-		resourceLockWithHooks, ok := cm.resourceLock.(fakeleaderelection.ResourceLockInterfaceWithHooks)
+		resourceLockWithHooks, ok := cm.resourceLock.(fakeleaderelection.ControllableResourceLockInterface)
 		Expect(ok).To(BeTrue())
 
 		By("Blocking leader election")

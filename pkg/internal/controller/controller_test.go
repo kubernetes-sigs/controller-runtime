@@ -46,6 +46,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/internal/log"
+	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
+	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -1434,20 +1436,30 @@ var _ = Describe("controller", func() {
 				}),
 			}
 
+			By("Creating a test resource lock with hooks")
+			resourceLock, err := fakeleaderelection.NewResourceLock(nil, nil, leaderelection.Options{})
+			Expect(err).To(BeNil())
+
 			By("Creating a manager")
 			testenv = &envtest.Environment{}
 			cfg, err := testenv.Start()
 			Expect(err).NotTo(HaveOccurred())
 			m, err := manager.New(cfg, manager.Options{
-				LeaderElection:          true,
-				LeaderElectionID:        "some-leader-election-id",
-				LeaderElectionNamespace: "default",
+				LeaderElection:                      true,
+				LeaderElectionID:                    "some-leader-election-id",
+				LeaderElectionNamespace:             "default",
+				LeaderElectionResourceLockInterface: resourceLock,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Adding warmup and non-warmup controllers to the manager")
 			Expect(m.Add(ctrl)).To(Succeed())
 			Expect(m.Add(nonWarmupCtrl)).To(Succeed())
+
+			By("Blocking leader election")
+			resourceLockWithHooks, ok := resourceLock.(fakeleaderelection.ResourceLockInterfaceWithHooks)
+			Expect(ok).To(BeTrue(), "resource lock should implement ResourceLockInterfaceWithHooks")
+			resourceLockWithHooks.BlockLeaderElection()
 
 			By("Starting the manager")
 			waitChan := make(chan struct{})
@@ -1456,9 +1468,11 @@ var _ = Describe("controller", func() {
 				defer close(waitChan)
 				Expect(m.Start(ctx)).To(Succeed())
 			}()
-
-			<-m.Elected()
 			Expect(<-runnableExecutionOrderChan).To(Equal(warmupRunnableName))
+
+			By("Unblocking leader election")
+			resourceLockWithHooks.UnblockLeaderElection()
+			<-m.Elected()
 			Expect(<-runnableExecutionOrderChan).To(Equal(nonWarmupRunnableName))
 
 			cancel()

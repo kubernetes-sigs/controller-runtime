@@ -1977,13 +1977,28 @@ var _ = Describe("manger.Manager", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
+		cm, ok := m.(*controllerManager)
+		Expect(ok).To(BeTrue())
+		resourceLockWithHooks, ok := cm.resourceLock.(fakeleaderelection.ResourceLockInterfaceWithHooks)
+		Expect(ok).To(BeTrue())
+
+		By("Blocking leader election")
+		resourceLockWithHooks.BlockLeaderElection()
+
+		By("Starting the manager")
 		go func() {
 			defer GinkgoRecover()
 			Expect(m.Start(ctx)).To(Succeed())
 		}()
 
-		<-m.Elected()
+		By("Waiting for the warmup runnable to be executed without leader election being won")
 		Expect(<-runnableExecutionOrderChan).To(Equal(warmupRunnableName))
+
+		By("Unblocking leader election")
+		resourceLockWithHooks.UnblockLeaderElection()
+
+		By("Waiting for the leader election runnable to be executed without leader election being won")
+		<-m.Elected()
 		Expect(<-runnableExecutionOrderChan).To(Equal(leaderElectionRunnableName))
 	})
 })

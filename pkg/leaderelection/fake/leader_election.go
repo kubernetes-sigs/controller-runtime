@@ -19,7 +19,9 @@ package fake
 import (
 	"context"
 	"encoding/json"
+    "errors"
 	"os"
+	"sync/atomic"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +31,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
+
+type ResourceLockInterfaceWithHooks interface {
+    resourcelock.Interface
+
+    // BlockLeaderElection blocks the leader election process when called. It will not be unblocked
+    // until UnblockLeaderElection is called.
+    // Not thread safe.
+    BlockLeaderElection()
+
+    // UnblockLeaderElection unblocks the leader election. Not thread safe.
+    UnblockLeaderElection()
+}
 
 // NewResourceLock creates a new ResourceLock for use in testing
 // leader election.
@@ -40,27 +54,31 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 	}
 	id = id + "_" + string(uuid.NewUUID())
 
-	return &ResourceLock{
+	return &resourceLock{
 		id: id,
 		record: resourcelock.LeaderElectionRecord{
 			HolderIdentity:       id,
-			LeaseDurationSeconds: 15,
+			LeaseDurationSeconds: 1,
 			AcquireTime:          metav1.NewTime(time.Now()),
-			RenewTime:            metav1.NewTime(time.Now().Add(15 * time.Second)),
+			RenewTime:            metav1.NewTime(time.Now().Add(1 * time.Second)),
 			LeaderTransitions:    1,
 		},
 	}, nil
 }
 
-// ResourceLock implements the ResourceLockInterface.
+var _ ResourceLockInterfaceWithHooks = &resourceLock{}
+
+// resourceLock implements the ResourceLockInterface.
 // By default returns that the current identity holds the lock.
-type ResourceLock struct {
+type resourceLock struct {
 	id     string
 	record resourcelock.LeaderElectionRecord
+
+    blockedLeaderElection atomic.Bool
 }
 
 // Get implements the ResourceLockInterface.
-func (f *ResourceLock) Get(ctx context.Context) (*resourcelock.LeaderElectionRecord, []byte, error) {
+func (f *resourceLock) Get(ctx context.Context) (*resourcelock.LeaderElectionRecord, []byte, error) {
 	recordBytes, err := json.Marshal(f.record)
 	if err != nil {
 		return nil, nil, err
@@ -69,28 +87,49 @@ func (f *ResourceLock) Get(ctx context.Context) (*resourcelock.LeaderElectionRec
 }
 
 // Create implements the ResourceLockInterface.
-func (f *ResourceLock) Create(ctx context.Context, ler resourcelock.LeaderElectionRecord) error {
+func (f *resourceLock) Create(ctx context.Context, ler resourcelock.LeaderElectionRecord) error {
+    if f.blockedLeaderElection.Load() {
+        // If leader election is blocked, we do not allow creating a new record.
+        return errors.New("leader election is blocked, cannot create new record")
+    }
+
 	f.record = ler
 	return nil
 }
 
 // Update implements the ResourceLockInterface.
-func (f *ResourceLock) Update(ctx context.Context, ler resourcelock.LeaderElectionRecord) error {
+func (f *resourceLock) Update(ctx context.Context, ler resourcelock.LeaderElectionRecord) error {
+    if f.blockedLeaderElection.Load() {
+        // If leader election is blocked, we do not allow updating records
+        return errors.New("leader election is blocked, cannot update record")
+    }
+
 	f.record = ler
+
 	return nil
 }
 
 // RecordEvent implements the ResourceLockInterface.
-func (f *ResourceLock) RecordEvent(s string) {
+func (f *resourceLock) RecordEvent(s string) {
 
 }
 
 // Identity implements the ResourceLockInterface.
-func (f *ResourceLock) Identity() string {
+func (f *resourceLock) Identity() string {
 	return f.id
 }
 
 // Describe implements the ResourceLockInterface.
-func (f *ResourceLock) Describe() string {
+func (f *resourceLock) Describe() string {
 	return f.id
+}
+
+// BlockLeaderElection blocks the leader election process when called.
+func (f *resourceLock) BlockLeaderElection() {
+    f.blockedLeaderElection.Store(true)
+}
+
+// UnblockLeaderElection blocks the leader election process when called.
+func (f *resourceLock) UnblockLeaderElection() {
+    f.blockedLeaderElection.Store(false)
 }

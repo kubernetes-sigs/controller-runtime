@@ -607,7 +607,7 @@ var _ = Describe("controller", func() {
 			err := ctrl.startEventSourcesAndQueueLocked(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ctrl.startWatches).To(BeNil(), "startWatches should be reset to nil after returning")
-            Expect(ctrl.startedEventSourcesAndQueue).To(BeTrue(), "startedEventSourcesAndQueue should be set to true after startEventSourcesAndQueueLocked returns without error")
+			Expect(ctrl.startedEventSourcesAndQueue).To(BeTrue(), "startedEventSourcesAndQueue should be set to true after startEventSourcesAndQueueLocked returns without error")
 		})
 	})
 

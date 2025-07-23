@@ -332,7 +332,7 @@ func (c *Controller[request]) startEventSourcesAndQueueLocked(ctx context.Contex
 				sourceStartCtx, cancel := context.WithTimeout(ctx, c.CacheSyncTimeout)
 				defer cancel()
 
-				sourceStartErrChan := make(chan error, 1)   // Buffer chan to not leak goroutine if we time out
+				sourceStartErrChan := make(chan error, 1) // Buffer chan to not leak goroutine if we time out
 				go func() {
 					defer close(sourceStartErrChan)
 					log.Info("Starting EventSource")
@@ -358,7 +358,7 @@ func (c *Controller[request]) startEventSourcesAndQueueLocked(ctx context.Contex
 				case err := <-sourceStartErrChan:
 					return err
 				case <-sourceStartCtx.Done():
-					if didStartSyncingSource.Load() {         // We are racing with WaitForSync, wait for it to let it tell us what happened
+					if didStartSyncingSource.Load() { // We are racing with WaitForSync, wait for it to let it tell us what happened
 						return <-sourceStartErrChan
 					}
 					if ctx.Err() != nil { // Don't return an error if the root context got cancelled

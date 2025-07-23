@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
+	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	eventsv1client "k8s.io/client-go/kubernetes/typed/events/v1"
 	"k8s.io/client-go/rest"
@@ -105,8 +106,12 @@ func (p *Provider) getBroadcaster() events.EventBroadcaster {
 
 		// TODO(clebs): figure out if we still need this and how the change would make sense.
 		p.broadcaster.StartEventWatcher(
-			func(e runtime.Object) {
-				p.logger.V(1).Info(e.Message, "type", e.Type, "object", e.InvolvedObject, "reason", e.Reason)
+			func(obj runtime.Object) {
+				if e, ok := obj.(*eventsv1.Event); ok {
+					p.logger.V(1).Info(e.Note, "type", e.Type, "object", e.Regarding, "related", e.Related, "reason", e.Reason)
+				} else {
+					p.logger.V(1).Info("event watcher received an unsupported object type", "gvk", obj.GetObjectKind().GroupVersionKind().String())
+				}
 			})
 	})
 

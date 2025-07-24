@@ -40,6 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
@@ -106,7 +107,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should return an error it can't create a recorder.Provider", func() {
 			m, err := New(cfg, Options{
-				newRecorderProvider: func(_ *rest.Config, _ *http.Client, _ *runtime.Scheme, _ logr.Logger, _ intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
+				newRecorderProvider: func(_ *rest.Config, _ *http.Client, _ *runtime.Scheme, _ logr.Logger, _ events.EventBroadcaster, _ bool) (*intrec.Provider, error) {
 					return nil, fmt.Errorf("expected error")
 				},
 			})
@@ -1814,7 +1815,7 @@ var _ = Describe("manger.Manager", func() {
 		ns := corev1.Namespace{}
 		ns.Name = "default"
 
-		recorder := m.GetEventRecorder("rock-and-roll")
+		recorder := m.GetEventRecorderFor("rock-and-roll")
 		Expect(m.Add(RunnableFunc(func(_ context.Context) error {
 			recorder.Event(&ns, "Warning", "BallroomBlitz", "yeah, yeah, yeah-yeah-yeah")
 			return nil
@@ -1935,7 +1936,7 @@ var _ = Describe("manger.Manager", func() {
 	It("should provide a function to get the EventRecorder", func() {
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(m.GetEventRecorder("test")).NotTo(BeNil())
+		Expect(m.GetEventRecorderFor("test")).NotTo(BeNil())
 	})
 	It("should provide a function to get the APIReader", func() {
 		m, err := New(cfg, Options{})

@@ -256,12 +256,12 @@ func (cm *controllerManager) GetCache() cache.Cache {
 	return cm.cluster.GetCache()
 }
 
-func (cm *controllerManager) GetEventRecorder(name string) events.EventRecorder {
-	return cm.cluster.GetEventRecorder(name)
+func (cm *controllerManager) GetEventRecorderFor(name string) record.EventRecorder {
+	return cm.cluster.GetEventRecorderFor(name)
 }
 
-func (cm *controllerManager) GetOldEventRecorder(name string) record.EventRecorder {
-	return cm.cluster.GetOldEventRecorder(name)
+func (cm *controllerManager) GetEventRecorder(name string) events.EventRecorder {
+	return cm.cluster.GetEventRecorder(name)
 }
 
 func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {

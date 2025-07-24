@@ -61,8 +61,8 @@ type Cluster interface {
 	// GetCache returns a cache.Cache
 	GetCache() cache.Cache
 
-	//GetEventRecorder returns a new EventRecorder for the provided name
-	GetEventRecorder(name string) record.EventRecorder
+	// GetEventRecorderFor returns a new EventRecorder for the provided name
+	GetEventRecorderFor(name string) record.EventRecorder
 
 	// GetRESTMapper returns a RESTMapper
 	GetRESTMapper() meta.RESTMapper

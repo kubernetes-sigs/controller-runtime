@@ -128,7 +128,7 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 		coordinationClient,
 		resourcelock.ResourceLockConfig{
 			Identity:      id,
-			EventRecorder: recorderProvider.GetOldEventRecorder(id),
+			EventRecorder: recorderProvider.GetEventRecorderFor(id),
 		},
 		options.LeaderLabels,
 	)

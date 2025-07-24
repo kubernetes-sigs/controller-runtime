@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
@@ -86,7 +87,7 @@ var _ = Describe("cluster.Cluster", func() {
 
 		It("should return an error it can't create a recorder.Provider", func() {
 			c, err := New(cfg, func(o *Options) {
-				o.newRecorderProvider = func(_ *rest.Config, _ *http.Client, _ *runtime.Scheme, _ logr.Logger, _ intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
+				o.newRecorderProvider = func(_ *rest.Config, _ *http.Client, _ *runtime.Scheme, _ logr.Logger, _ events.EventBroadcaster, _ bool) (*intrec.Provider, error) {
 					return nil, fmt.Errorf("expected error")
 				}
 			})
@@ -157,7 +158,7 @@ var _ = Describe("cluster.Cluster", func() {
 	It("should provide a function to get the EventRecorder", func() {
 		c, err := New(cfg)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(c.GetEventRecorder("test")).NotTo(BeNil())
+		Expect(c.GetEventRecorderFor("test")).NotTo(BeNil())
 	})
 	It("should provide a function to get the APIReader", func() {
 		c, err := New(cfg)

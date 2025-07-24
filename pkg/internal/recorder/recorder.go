@@ -31,11 +31,6 @@ import (
 	"k8s.io/client-go/tools/record"
 )
 
-// EventBroadcasterProducer makes an event broadcaster, returning
-// whether or not the broadcaster should be stopped with the Provider,
-// or not (e.g. if it's shared, it shouldn't be stopped with the Provider).
-type EventBroadcasterProducer func() (caster events.EventBroadcaster, stopWithProvider bool)
-
 // Provider is a recorder.Provider that records events to the k8s API server
 // and to a logr Logger.
 type Provider struct {
@@ -45,9 +40,8 @@ type Provider struct {
 	// scheme to specify when creating a recorder
 	scheme *runtime.Scheme
 	// logger is the logger to use when logging diagnostic event info
-	logger          logr.Logger
-	evtClient       eventsv1client.EventsV1Interface
-	makeBroadcaster EventBroadcasterProducer
+	logger    logr.Logger
+	evtClient eventsv1client.EventsV1Interface
 
 	broadcasterOnce sync.Once
 	broadcaster     events.EventBroadcaster
@@ -133,23 +127,23 @@ func NewProvider(config *rest.Config, httpClient *http.Client, scheme *runtime.S
 	return p, nil
 }
 
+// GetEventRecorderFor returns an event recorder that broadcasts to this provider's
+// broadcaster.  All events will be associated with a component of the given name.
+func (p *Provider) GetEventRecorderFor(name string) record.EventRecorder {
+	return &oldRecorder{
+		newRecorder: &lazyRecorder{
+			prov: p,
+			name: name,
+		},
+	}
+}
+
 // GetEventRecorder returns an event recorder that broadcasts to this provider's
 // broadcaster.  All events will be associated with a component of the given name.
 func (p *Provider) GetEventRecorder(name string) events.EventRecorder {
 	return &lazyRecorder{
 		prov: p,
 		name: name,
-	}
-}
-
-// GetOldEventRecorder returns an event recorder that broadcasts to this provider's
-// broadcaster.  All events will be associated with a component of the given name.
-func (p *Provider) GetOldEventRecorder(name string) record.EventRecorder {
-	return &oldRecorder{
-		newRecorder: &lazyRecorder{
-			prov: p,
-			name: name,
-		},
 	}
 }
 
@@ -171,7 +165,7 @@ func (l *lazyRecorder) ensureRecording() {
 	})
 }
 
-func (l *lazyRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{}) {
+func (l *lazyRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...any) {
 	l.ensureRecording()
 
 	l.prov.lock.RLock()
@@ -192,10 +186,10 @@ func (l *oldRecorder) Event(object runtime.Object, eventtype, reason, message st
 	l.newRecorder.Eventf(object, nil, eventtype, reason, "unsupported", message)
 }
 
-func (l *oldRecorder) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
+func (l *oldRecorder) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...any) {
 	l.newRecorder.Eventf(object, nil, eventtype, reason, "unsupported", messageFmt, args...)
 }
 
-func (l *oldRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
+func (l *oldRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...any) {
 	l.newRecorder.Eventf(object, nil, eventtype, reason, "unsupported", messageFmt, args...)
 }

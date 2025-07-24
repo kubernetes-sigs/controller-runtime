@@ -331,10 +331,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, errors.New("must specify Config")
 	}
 	// Set default values for options fields
-	options, err := setOptionsDefaults(config, options)
-	if err != nil {
-		return nil, err
-	}
+	options = setOptionsDefaults(config, options)
 
 	cluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {
 		clusterOptions.Scheme = options.Scheme
@@ -490,7 +487,7 @@ func defaultBaseContext() context.Context {
 }
 
 // setOptionsDefaults set default values for Options fields.
-func setOptionsDefaults(config *rest.Config, options Options) (Options, error) {
+func setOptionsDefaults(_ *rest.Config, options Options) Options {
 	// Allow newResourceLock to be mocked
 	if options.newResourceLock == nil {
 		options.newResourceLock = leaderelection.NewResourceLock
@@ -554,5 +551,5 @@ func setOptionsDefaults(config *rest.Config, options Options) (Options, error) {
 		options.WebhookServer = webhook.NewServer(webhook.Options{})
 	}
 
-	return options, nil
+	return options
 }

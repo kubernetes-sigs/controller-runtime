@@ -84,12 +84,12 @@ func (c *cluster) GetCache() cache.Cache {
 	return c.cache
 }
 
-func (c *cluster) GetEventRecorder(name string) events.EventRecorder {
-	return c.recorderProvider.GetEventRecorder(name)
+func (c *cluster) GetEventRecorderFor(name string) record.EventRecorder {
+	return c.recorderProvider.GetEventRecorderFor(name)
 }
 
-func (c *cluster) GetOldEventRecorder(name string) record.EventRecorder {
-	return c.recorderProvider.GetOldEventRecorder(name)
+func (c *cluster) GetEventRecorder(name string) events.EventRecorder {
+	return c.recorderProvider.GetEventRecorder(name)
 }
 
 func (c *cluster) GetRESTMapper() meta.RESTMapper {

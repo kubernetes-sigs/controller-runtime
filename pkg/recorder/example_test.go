@@ -30,7 +30,7 @@ var (
 
 func Example_event() {
 	// recorderProvider is a recorder.Provider
-	recorder := recorderProvider.GetEventRecorder("my-controller")
+	recorder := recorderProvider.GetEventRecorderFor("my-controller")
 
 	// emit an event with a fixed message
 	recorder.Event(somePod, corev1.EventTypeWarning,
@@ -39,7 +39,7 @@ func Example_event() {
 
 func Example_eventf() {
 	// recorderProvider is a recorder.Provider
-	recorder := recorderProvider.GetEventRecorder("my-controller")
+	recorder := recorderProvider.GetEventRecorderFor("my-controller")
 
 	// emit an event with a variable message
 	mildCheese := "Wensleydale"

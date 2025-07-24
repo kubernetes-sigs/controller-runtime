@@ -158,7 +158,7 @@ var _ = Describe("cluster.Cluster", func() {
 	It("should provide a function to get the EventRecorder", func() {
 		c, err := New(cfg)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(c.GetEventRecorderFor("test")).NotTo(BeNil())
+		Expect(c.GetEventRecorderFor("test")).NotTo(BeNil()) //nolint:staticcheck
 	})
 	It("should provide a function to get the APIReader", func() {
 		c, err := New(cfg)

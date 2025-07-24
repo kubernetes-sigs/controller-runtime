@@ -95,7 +95,7 @@ func (p *Provider) getBroadcaster() events.EventBroadcaster {
 			p.broadcaster = events.NewBroadcaster(&events.EventSinkImpl{Interface: p.evtClient})
 		}
 		// TODO(clebs): figure out how to manage the context/channel that StartRecordingToSink needs inside the provider.
-		p.broadcaster.StartRecordingToSinkWithContext(context.TODO())
+		_ = p.broadcaster.StartRecordingToSinkWithContext(context.TODO())
 	})
 
 	return p.broadcaster

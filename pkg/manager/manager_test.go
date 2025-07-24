@@ -1815,7 +1815,7 @@ var _ = Describe("manger.Manager", func() {
 		ns := corev1.Namespace{}
 		ns.Name = "default"
 
-		recorder := m.GetEventRecorderFor("rock-and-roll")
+		recorder := m.GetEventRecorderFor("rock-and-roll") //nolint:staticcheck
 		Expect(m.Add(RunnableFunc(func(_ context.Context) error {
 			recorder.Event(&ns, "Warning", "BallroomBlitz", "yeah, yeah, yeah-yeah-yeah")
 			return nil
@@ -1936,7 +1936,7 @@ var _ = Describe("manger.Manager", func() {
 	It("should provide a function to get the EventRecorder", func() {
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(m.GetEventRecorderFor("test")).NotTo(BeNil())
+		Expect(m.GetEventRecorderFor("test")).NotTo(BeNil()) //nolint:staticcheck
 	})
 	It("should provide a function to get the APIReader", func() {
 		m, err := New(cfg, Options{})

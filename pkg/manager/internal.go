@@ -257,7 +257,7 @@ func (cm *controllerManager) GetCache() cache.Cache {
 }
 
 func (cm *controllerManager) GetEventRecorderFor(name string) record.EventRecorder {
-	return cm.cluster.GetEventRecorderFor(name)
+	return cm.cluster.GetEventRecorderFor(name) //nolint:staticcheck
 }
 
 func (cm *controllerManager) GetEventRecorder(name string) events.EventRecorder {

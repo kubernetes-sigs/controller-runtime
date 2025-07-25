@@ -79,6 +79,9 @@ type Manager interface {
 	// AddReadyzCheck allows you to add Readyz checker
 	AddReadyzCheck(name string, check healthz.Checker) error
 
+	// Hook allows to add Runnables as hooks to modify the behavior.
+	Hook(hook HookType, runnable Runnable) error
+
 	// Start starts all registered Controllers and blocks until the context is cancelled.
 	// Returns an error if there is an error starting any controller.
 	//
@@ -274,6 +277,10 @@ type Options struct {
 	// +optional
 	Controller config.Controller
 
+	// HookTimeout is the duration given to each hook to return successfully.
+	// To use hooks without timeout, set to a negative duration, e.g. time.Duration(-1)
+	HookTimeout *time.Duration
+
 	// makeBroadcaster allows deferring the creation of the broadcaster to
 	// avoid leaking goroutines if we never call Start on this manager.  It also
 	// returns whether or not this is a "owned" broadcaster, and as such should be
@@ -287,6 +294,15 @@ type Options struct {
 	newHealthProbeListener func(addr string) (net.Listener, error)
 	newPprofListener       func(addr string) (net.Listener, error)
 }
+
+// HookType defines hooks for use with AddHook.
+type HookType int
+
+const (
+	// HookPrestartType defines a hook that is run after leader election and immediately before
+	// calling Start on the runnables that needed leader election.
+	HookPrestartType HookType = iota
+)
 
 // BaseContextFunc is a function used to provide a base Context to Runnables
 // managed by a Manager.
@@ -454,6 +470,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		livenessEndpointName:          options.LivenessEndpointName,
 		pprofListener:                 pprofListener,
 		gracefulShutdownTimeout:       *options.GracefulShutdownTimeout,
+		hookTimeout:                   *options.HookTimeout,
 		internalProceduresStop:        make(chan struct{}),
 		leaderElectionStopped:         make(chan struct{}),
 		leaderElectionReleaseOnCancel: options.LeaderElectionReleaseOnCancel,
@@ -553,6 +570,11 @@ func setOptionsDefaults(options Options) Options {
 	if options.GracefulShutdownTimeout == nil {
 		gracefulShutdownTimeout := defaultGracefulShutdownPeriod
 		options.GracefulShutdownTimeout = &gracefulShutdownTimeout
+	}
+
+	if options.HookTimeout == nil {
+		hookTimeout := defaultHookPeriod
+		options.HookTimeout = &hookTimeout
 	}
 
 	if options.Logger.GetSink() == nil {

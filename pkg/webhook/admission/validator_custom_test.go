@@ -37,9 +37,9 @@ var _ = Describe("customValidatingHandler", func() {
 		f := &fakeValidator{}
 		handler := WithCustomValidator(admissionScheme, f, val)
 
-		It("should return 200 in response when create succeeds", func() {
+		It("should return 200 in response when create succeeds", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Create,
 					Object: runtime.RawExtension{
@@ -53,9 +53,9 @@ var _ = Describe("customValidatingHandler", func() {
 			Expect(response.Result.Code).Should(Equal(int32(http.StatusOK)))
 		})
 
-		It("should return 200 in response when update succeeds", func() {
+		It("should return 200 in response when update succeeds", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
@@ -72,9 +72,9 @@ var _ = Describe("customValidatingHandler", func() {
 			Expect(response.Result.Code).Should(Equal(int32(http.StatusOK)))
 		})
 
-		It("should return 200 in response when delete succeeds", func() {
+		It("should return 200 in response when delete succeeds", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Delete,
 					OldObject: runtime.RawExtension{
@@ -97,8 +97,8 @@ var _ = Describe("customValidatingHandler", func() {
 			anotherWarningMessage,
 		}}
 		handler := WithCustomValidator(admissionScheme, f, val)
-		It("should return 200 in response when create succeeds, with warning messages", func() {
-			response := handler.Handle(context.TODO(), Request{
+		It("should return 200 in response when create succeeds, with warning messages", func(ctx SpecContext) {
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Create,
 					Object: runtime.RawExtension{
@@ -114,9 +114,9 @@ var _ = Describe("customValidatingHandler", func() {
 			Expect(response.AdmissionResponse.Warnings).Should(ContainElement(anotherWarningMessage))
 		})
 
-		It("should return 200 in response when update succeeds, with warning messages", func() {
+		It("should return 200 in response when update succeeds, with warning messages", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
@@ -135,9 +135,9 @@ var _ = Describe("customValidatingHandler", func() {
 			Expect(response.AdmissionResponse.Warnings).Should(ContainElement(anotherWarningMessage))
 		})
 
-		It("should return 200 in response when delete succeeds, with warning messages", func() {
+		It("should return 200 in response when delete succeeds, with warning messages", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Delete,
 					OldObject: runtime.RawExtension{
@@ -166,9 +166,9 @@ var _ = Describe("customValidatingHandler", func() {
 		val := &fakeCustomValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{warningMessage, anotherWarningMessage}}
 		handler := WithCustomValidator(admissionScheme, f, val)
 
-		It("should propagate the Status from ValidateCreate's return value to the HTTP response", func() {
+		It("should propagate the Status from ValidateCreate's return value to the HTTP response", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Create,
 					Object: runtime.RawExtension{
@@ -186,9 +186,9 @@ var _ = Describe("customValidatingHandler", func() {
 
 		})
 
-		It("should propagate the Status from ValidateUpdate's return value to the HTTP response", func() {
+		It("should propagate the Status from ValidateUpdate's return value to the HTTP response", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
@@ -211,9 +211,9 @@ var _ = Describe("customValidatingHandler", func() {
 
 		})
 
-		It("should propagate the Status from ValidateDelete's return value to the HTTP response", func() {
+		It("should propagate the Status from ValidateDelete's return value to the HTTP response", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Delete,
 
@@ -246,9 +246,9 @@ var _ = Describe("customValidatingHandler", func() {
 		val := &fakeCustomValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: nil}
 		handler := WithCustomValidator(admissionScheme, f, val)
 
-		It("should propagate the Status from ValidateCreate's return value to the HTTP response", func() {
+		It("should propagate the Status from ValidateCreate's return value to the HTTP response", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Create,
@@ -265,9 +265,9 @@ var _ = Describe("customValidatingHandler", func() {
 
 		})
 
-		It("should propagate the Status from ValidateUpdate's return value to the HTTP response", func() {
+		It("should propagate the Status from ValidateUpdate's return value to the HTTP response", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
@@ -287,9 +287,9 @@ var _ = Describe("customValidatingHandler", func() {
 
 		})
 
-		It("should propagate the Status from ValidateDelete's return value to the HTTP response", func() {
+		It("should propagate the Status from ValidateDelete's return value to the HTTP response", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Delete,
 					OldObject: runtime.RawExtension{
@@ -315,9 +315,9 @@ var _ = Describe("customValidatingHandler", func() {
 		val := &fakeCustomValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK}
 		handler := WithCustomValidator(admissionScheme, f, val)
 
-		It("should return 403 response when ValidateCreate with error message embedded", func() {
+		It("should return 403 response when ValidateCreate with error message embedded", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Create,
@@ -334,9 +334,9 @@ var _ = Describe("customValidatingHandler", func() {
 
 		})
 
-		It("should return 403 response when ValidateUpdate returns non-APIStatus error", func() {
+		It("should return 403 response when ValidateUpdate returns non-APIStatus error", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Update,
@@ -357,8 +357,8 @@ var _ = Describe("customValidatingHandler", func() {
 
 		})
 
-		It("should return 403 response when ValidateDelete returns non-APIStatus error", func() {
-			response := handler.Handle(context.TODO(), Request{
+		It("should return 403 response when ValidateDelete returns non-APIStatus error", func(ctx SpecContext) {
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Delete,
 					OldObject: runtime.RawExtension{
@@ -381,9 +381,9 @@ var _ = Describe("customValidatingHandler", func() {
 		val := &fakeCustomValidator{ErrorToReturn: expectedError, GVKToReturn: fakeValidatorVK, WarningsToReturn: []string{warningMessage, anotherWarningMessage}}
 		handler := WithCustomValidator(admissionScheme, f, val)
 
-		It("should return 403 response when ValidateCreate with error message embedded", func() {
+		It("should return 403 response when ValidateCreate with error message embedded", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 
 					Operation: admissionv1.Create,
@@ -402,9 +402,9 @@ var _ = Describe("customValidatingHandler", func() {
 			Expect(response.AdmissionResponse.Warnings).Should(ContainElement(anotherWarningMessage))
 		})
 
-		It("should return 403 response when ValidateUpdate returns non-APIStatus error", func() {
+		It("should return 403 response when ValidateUpdate returns non-APIStatus error", func(ctx SpecContext) {
 
-			response := handler.Handle(context.TODO(), Request{
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Update,
 					Object: runtime.RawExtension{
@@ -428,8 +428,8 @@ var _ = Describe("customValidatingHandler", func() {
 
 		})
 
-		It("should return 403 response when ValidateDelete returns non-APIStatus error", func() {
-			response := handler.Handle(context.TODO(), Request{
+		It("should return 403 response when ValidateDelete returns non-APIStatus error", func(ctx SpecContext) {
+			response := handler.Handle(ctx, Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Operation: admissionv1.Delete,
 					OldObject: runtime.RawExtension{

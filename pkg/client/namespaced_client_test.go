@@ -45,7 +45,6 @@ var _ = Describe("NamespacedClient", func() {
 	var dep *appsv1.Deployment
 	var acDep *appsv1applyconfigurations.DeploymentApplyConfiguration
 	var ns = "default"
-	ctx := context.Background()
 	var count uint64 = 0
 	var replicaCount int32 = 2
 
@@ -100,17 +99,17 @@ var _ = Describe("NamespacedClient", func() {
 	})
 
 	Describe("Get", func() {
-		BeforeEach(func() {
+		BeforeEach(func(ctx SpecContext) {
 			var err error
 			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		AfterEach(func() {
+		AfterEach(func(ctx SpecContext) {
 			deleteDeployment(ctx, dep, ns)
 		})
 
-		It("should successfully Get a namespace-scoped object", func() {
+		It("should successfully Get a namespace-scoped object", func(ctx SpecContext) {
 			name := types.NamespacedName{Name: dep.Name}
 			result := &appsv1.Deployment{}
 
@@ -119,7 +118,7 @@ var _ = Describe("NamespacedClient", func() {
 		})
 
 		It("should error when namespace provided in the object is different than the one "+
-			"specified in client", func() {
+			"specified in client", func(ctx SpecContext) {
 			name := types.NamespacedName{Name: dep.Name, Namespace: "non-default"}
 			result := &appsv1.Deployment{}
 
@@ -128,17 +127,17 @@ var _ = Describe("NamespacedClient", func() {
 	})
 
 	Describe("List", func() {
-		BeforeEach(func() {
+		BeforeEach(func(ctx SpecContext) {
 			var err error
 			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		AfterEach(func() {
+		AfterEach(func(ctx SpecContext) {
 			deleteDeployment(ctx, dep, ns)
 		})
 
-		It("should successfully List objects when namespace is not specified with the object", func() {
+		It("should successfully List objects when namespace is not specified with the object", func(ctx SpecContext) {
 			result := &appsv1.DeploymentList{}
 			opts := client.MatchingLabels(dep.Labels)
 
@@ -147,7 +146,7 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(result.Items[0]).To(BeEquivalentTo(*dep))
 		})
 
-		It("should List objects from the namespace specified in the client", func() {
+		It("should List objects from the namespace specified in the client", func(ctx SpecContext) {
 			result := &appsv1.DeploymentList{}
 			opts := client.InNamespace("non-default")
 
@@ -158,11 +157,11 @@ var _ = Describe("NamespacedClient", func() {
 	})
 
 	Describe("Apply", func() {
-		AfterEach(func() {
+		AfterEach(func(ctx SpecContext) {
 			deleteDeployment(ctx, dep, ns)
 		})
 
-		It("should successfully apply an object in the right namespace", func() {
+		It("should successfully apply an object in the right namespace", func(ctx SpecContext) {
 			err := getClient().Apply(ctx, acDep, client.FieldOwner("test"))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -171,7 +170,7 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(res.GetNamespace()).To(BeEquivalentTo(ns))
 		})
 
-		It("should successfully apply an object in the right namespace through unstructured", func() {
+		It("should successfully apply an object in the right namespace through unstructured", func(ctx SpecContext) {
 			serialized, err := json.Marshal(acDep)
 			Expect(err).NotTo(HaveOccurred())
 			u := &unstructured.Unstructured{}
@@ -184,14 +183,14 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(res.GetNamespace()).To(BeEquivalentTo(ns))
 		})
 
-		It("should not create an object if the namespace of the object is different", func() {
+		It("should not create an object if the namespace of the object is different", func(ctx SpecContext) {
 			acDep.WithNamespace("non-default")
 			err := getClient().Apply(ctx, acDep, client.FieldOwner("test"))
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("does not match the namespace"))
 		})
 
-		It("should not create an object through unstructured if the namespace of the object is different", func() {
+		It("should not create an object through unstructured if the namespace of the object is different", func(ctx SpecContext) {
 			acDep.WithNamespace("non-default")
 			serialized, err := json.Marshal(acDep)
 			Expect(err).NotTo(HaveOccurred())
@@ -202,7 +201,7 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(err.Error()).To(ContainSubstring("does not match the namespace"))
 		})
 
-		It("should create a cluster scoped object", func() {
+		It("should create a cluster scoped object", func(ctx SpecContext) {
 			cr := rbacv1applyconfigurations.ClusterRole(fmt.Sprintf("clusterRole-%v", count))
 
 			err := getClient().Apply(ctx, cr, client.FieldOwner("test"))
@@ -218,11 +217,11 @@ var _ = Describe("NamespacedClient", func() {
 	})
 
 	Describe("Create", func() {
-		AfterEach(func() {
+		AfterEach(func(ctx SpecContext) {
 			deleteDeployment(ctx, dep, ns)
 		})
 
-		It("should successfully create object in the right namespace", func() {
+		It("should successfully create object in the right namespace", func(ctx SpecContext) {
 			By("creating the object initially")
 			err := getClient().Create(ctx, dep)
 			Expect(err).NotTo(HaveOccurred())
@@ -233,13 +232,13 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(res.GetNamespace()).To(BeEquivalentTo(ns))
 		})
 
-		It("should not create object if the namespace of the object is different", func() {
+		It("should not create object if the namespace of the object is different", func(ctx SpecContext) {
 			By("creating the object initially")
 			dep.SetNamespace("non-default")
 			err := getClient().Create(ctx, dep)
 			Expect(err).To(HaveOccurred())
 		})
-		It("should create a cluster scoped object", func() {
+		It("should create a cluster scoped object", func(ctx SpecContext) {
 			cr := &rbacv1.ClusterRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   fmt.Sprintf("clusterRole-%v", count),
@@ -268,16 +267,16 @@ var _ = Describe("NamespacedClient", func() {
 
 	Describe("Update", func() {
 		var err error
-		BeforeEach(func() {
+		BeforeEach(func(ctx SpecContext) {
 			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 			dep.Annotations = map[string]string{"foo": "bar"}
 			Expect(err).NotTo(HaveOccurred())
 		})
-		AfterEach(func() {
+		AfterEach(func(ctx SpecContext) {
 			deleteDeployment(ctx, dep, ns)
 		})
 
-		It("should successfully update the provided object", func() {
+		It("should successfully update the provided object", func(ctx SpecContext) {
 			By("updating the Deployment")
 			err = getClient().Update(ctx, dep)
 			Expect(err).NotTo(HaveOccurred())
@@ -290,7 +289,7 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(actual.Annotations["foo"]).To(Equal("bar"))
 		})
 
-		It("should successfully update the provided object when namespace is not provided", func() {
+		It("should successfully update the provided object when namespace is not provided", func(ctx SpecContext) {
 			By("updating the Deployment")
 			dep.SetNamespace("")
 			err = getClient().Update(ctx, dep)
@@ -304,14 +303,14 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(actual.Annotations["foo"]).To(Equal("bar"))
 		})
 
-		It("should not update when object namespace is different", func() {
+		It("should not update when object namespace is different", func(ctx SpecContext) {
 			By("updating the Deployment")
 			dep.SetNamespace("non-default")
 			err = getClient().Update(ctx, dep)
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("should not update any object from other namespace", func() {
+		It("should not update any object from other namespace", func(ctx SpecContext) {
 			By("creating a new namespace")
 			tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "non-default-1"}}
 			_, err := clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
@@ -348,7 +347,7 @@ var _ = Describe("NamespacedClient", func() {
 			deleteNamespace(ctx, tns)
 		})
 
-		It("should update a cluster scoped resource", func() {
+		It("should update a cluster scoped resource", func(ctx SpecContext) {
 			changedCR := &rbacv1.ClusterRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   fmt.Sprintf("clusterRole-%v", count),
@@ -384,16 +383,16 @@ var _ = Describe("NamespacedClient", func() {
 
 	Describe("Patch", func() {
 		var err error
-		BeforeEach(func() {
+		BeforeEach(func(ctx SpecContext) {
 			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		AfterEach(func() {
+		AfterEach(func(ctx SpecContext) {
 			deleteDeployment(ctx, dep, ns)
 		})
 
-		It("should successfully modify the object using Patch", func() {
+		It("should successfully modify the object using Patch", func(ctx SpecContext) {
 			By("Applying Patch")
 			err = getClient().Patch(ctx, dep, client.RawPatch(types.MergePatchType, generatePatch()))
 			Expect(err).NotTo(HaveOccurred())
@@ -405,7 +404,7 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(actual.GetNamespace()).To(Equal(ns))
 		})
 
-		It("should successfully modify the object using Patch when namespace is not provided", func() {
+		It("should successfully modify the object using Patch when namespace is not provided", func(ctx SpecContext) {
 			By("Applying Patch")
 			dep.SetNamespace("")
 			err = getClient().Patch(ctx, dep, client.RawPatch(types.MergePatchType, generatePatch()))
@@ -418,13 +417,13 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(actual.GetNamespace()).To(Equal(ns))
 		})
 
-		It("should not modify the object when namespace of the object is different", func() {
+		It("should not modify the object when namespace of the object is different", func(ctx SpecContext) {
 			dep.SetNamespace("non-default")
 			err = getClient().Patch(ctx, dep, client.RawPatch(types.MergePatchType, generatePatch()))
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("should not modify an object from a different namespace", func() {
+		It("should not modify an object from a different namespace", func(ctx SpecContext) {
 			By("creating a new namespace")
 			tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "non-default-2"}}
 			_, err := clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
@@ -459,7 +458,7 @@ var _ = Describe("NamespacedClient", func() {
 			deleteNamespace(ctx, tns)
 		})
 
-		It("should successfully modify cluster scoped resource", func() {
+		It("should successfully modify cluster scoped resource", func(ctx SpecContext) {
 			cr := &rbacv1.ClusterRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   fmt.Sprintf("clusterRole-%v", count),
@@ -493,15 +492,15 @@ var _ = Describe("NamespacedClient", func() {
 
 	Describe("Delete and DeleteAllOf", func() {
 		var err error
-		BeforeEach(func() {
+		BeforeEach(func(ctx SpecContext) {
 			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		AfterEach(func() {
+		AfterEach(func(ctx SpecContext) {
 			deleteDeployment(ctx, dep, ns)
 		})
-		It("should successfully delete an object when namespace is not specified", func() {
+		It("should successfully delete an object when namespace is not specified", func(ctx SpecContext) {
 			By("deleting the object")
 			dep.SetNamespace("")
 			err = getClient().Delete(ctx, dep)
@@ -512,7 +511,7 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("should successfully delete all of the deployments in the given namespace", func() {
+		It("should successfully delete all of the deployments in the given namespace", func(ctx SpecContext) {
 			By("Deleting all objects in the namespace")
 			err = getClient().DeleteAllOf(ctx, dep)
 			Expect(err).NotTo(HaveOccurred())
@@ -522,7 +521,7 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("should not delete deployments in other namespaces", func() {
+		It("should not delete deployments in other namespaces", func(ctx SpecContext) {
 			tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "non-default-3"}}
 			_, err = clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -564,16 +563,16 @@ var _ = Describe("NamespacedClient", func() {
 
 	Describe("SubResourceWriter", func() {
 		var err error
-		BeforeEach(func() {
+		BeforeEach(func(ctx SpecContext) {
 			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		AfterEach(func() {
+		AfterEach(func(ctx SpecContext) {
 			deleteDeployment(ctx, dep, ns)
 		})
 
-		It("should change objects via update status", func() {
+		It("should change objects via update status", func(ctx SpecContext) {
 			changedDep := dep.DeepCopy()
 			changedDep.Status.Replicas = 99
 
@@ -586,7 +585,7 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(actual.Status.Replicas).To(BeEquivalentTo(99))
 		})
 
-		It("should not change objects via update status when object namespace is different", func() {
+		It("should not change objects via update status when object namespace is different", func(ctx SpecContext) {
 			changedDep := dep.DeepCopy()
 			changedDep.SetNamespace("test")
 			changedDep.Status.Replicas = 99
@@ -594,7 +593,7 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(getClient().SubResource("status").Update(ctx, changedDep)).To(HaveOccurred())
 		})
 
-		It("should change objects via status patch", func() {
+		It("should change objects via status patch", func(ctx SpecContext) {
 			changedDep := dep.DeepCopy()
 			changedDep.Status.Replicas = 99
 
@@ -607,7 +606,7 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(actual.Status.Replicas).To(BeEquivalentTo(99))
 		})
 
-		It("should not change objects via status patch when object namespace is different", func() {
+		It("should not change objects via status patch when object namespace is different", func(ctx SpecContext) {
 			changedDep := dep.DeepCopy()
 			changedDep.Status.Replicas = 99
 			changedDep.SetNamespace("test")
@@ -617,7 +616,7 @@ var _ = Describe("NamespacedClient", func() {
 	})
 
 	Describe("Test on invalid objects", func() {
-		It("should refuse to perform operations on invalid object", func() {
+		It("should refuse to perform operations on invalid object", func(ctx SpecContext) {
 			err := getClient().Create(ctx, nil)
 			Expect(err).To(HaveOccurred())
 

@@ -30,11 +30,11 @@ import (
 
 var _ = Describe("Defaulter Handler", func() {
 
-	It("should remove unknown fields when DefaulterRemoveUnknownFields is passed", func() {
+	It("should remove unknown fields when DefaulterRemoveUnknownFields is passed", func(ctx SpecContext) {
 		obj := &TestDefaulter{}
 		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{}, DefaulterRemoveUnknownOrOmitableFields)
 
-		resp := handler.Handle(context.TODO(), Request{
+		resp := handler.Handle(ctx, Request{
 			AdmissionRequest: admissionv1.AdmissionRequest{
 				Operation: admissionv1.Create,
 				Object: runtime.RawExtension{
@@ -67,11 +67,11 @@ var _ = Describe("Defaulter Handler", func() {
 		Expect(resp.Result.Code).Should(Equal(int32(http.StatusOK)))
 	})
 
-	It("should preserve unknown fields by default", func() {
+	It("should preserve unknown fields by default", func(ctx SpecContext) {
 		obj := &TestDefaulter{}
 		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{})
 
-		resp := handler.Handle(context.TODO(), Request{
+		resp := handler.Handle(ctx, Request{
 			AdmissionRequest: admissionv1.AdmissionRequest{
 				Operation: admissionv1.Create,
 				Object: runtime.RawExtension{
@@ -100,10 +100,10 @@ var _ = Describe("Defaulter Handler", func() {
 		Expect(resp.Result.Code).Should(Equal(int32(http.StatusOK)))
 	})
 
-	It("should return ok if received delete verb in defaulter handler", func() {
+	It("should return ok if received delete verb in defaulter handler", func(ctx SpecContext) {
 		obj := &TestDefaulter{}
 		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{})
-		resp := handler.Handle(context.TODO(), Request{
+		resp := handler.Handle(ctx, Request{
 			AdmissionRequest: admissionv1.AdmissionRequest{
 				Operation: admissionv1.Delete,
 				OldObject: runtime.RawExtension{

@@ -31,7 +31,7 @@ func TestWithFieldOwner(t *testing.T) {
 	fakeClient := testClient(t, "custom-field-mgr", func() { calls++ })
 	wrappedClient := client.WithFieldOwner(fakeClient, "custom-field-mgr")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	dummyObj := &corev1.Namespace{}
 
 	_ = wrappedClient.Create(ctx, dummyObj)
@@ -55,7 +55,7 @@ func TestWithFieldOwnerOverridden(t *testing.T) {
 	fakeClient := testClient(t, "new-field-manager", func() { calls++ })
 	wrappedClient := client.WithFieldOwner(fakeClient, "old-field-manager")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	dummyObj := &corev1.Namespace{}
 
 	_ = wrappedClient.Create(ctx, dummyObj, client.FieldOwner("new-field-manager"))

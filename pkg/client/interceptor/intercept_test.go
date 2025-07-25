@@ -16,8 +16,7 @@ import (
 
 var _ = Describe("NewClient", func() {
 	wrappedClient := dummyClient{}
-	ctx := context.Background()
-	It("should call the provided Get function", func() {
+	It("should call the provided Get function", func(ctx SpecContext) {
 		var called bool
 		client := NewClient(wrappedClient, Funcs{
 			Get: func(ctx context.Context, client client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
@@ -28,7 +27,7 @@ var _ = Describe("NewClient", func() {
 		_ = client.Get(ctx, types.NamespacedName{}, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided Get function is nil", func() {
+	It("should call the underlying client if the provided Get function is nil", func(ctx SpecContext) {
 		var called bool
 		client1 := NewClient(wrappedClient, Funcs{
 			Get: func(ctx context.Context, client client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
@@ -40,7 +39,7 @@ var _ = Describe("NewClient", func() {
 		_ = client2.Get(ctx, types.NamespacedName{}, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the provided List function", func() {
+	It("should call the provided List function", func(ctx SpecContext) {
 		var called bool
 		client := NewClient(wrappedClient, Funcs{
 			List: func(ctx context.Context, client client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
@@ -51,7 +50,7 @@ var _ = Describe("NewClient", func() {
 		_ = client.List(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided List function is nil", func() {
+	It("should call the underlying client if the provided List function is nil", func(ctx SpecContext) {
 		var called bool
 		client1 := NewClient(wrappedClient, Funcs{
 			List: func(ctx context.Context, client client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
@@ -63,7 +62,7 @@ var _ = Describe("NewClient", func() {
 		_ = client2.List(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the provided Apply function", func() {
+	It("should call the provided Apply function", func(ctx SpecContext) {
 		var called bool
 		client := NewClient(wrappedClient, Funcs{
 			Apply: func(ctx context.Context, client client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
@@ -74,7 +73,7 @@ var _ = Describe("NewClient", func() {
 		_ = client.Apply(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided Apply function is nil", func() {
+	It("should call the underlying client if the provided Apply function is nil", func(ctx SpecContext) {
 		var called bool
 		client1 := NewClient(wrappedClient, Funcs{
 			Apply: func(ctx context.Context, client client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
@@ -86,7 +85,7 @@ var _ = Describe("NewClient", func() {
 		_ = client2.Apply(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the provided Create function", func() {
+	It("should call the provided Create function", func(ctx SpecContext) {
 		var called bool
 		client := NewClient(wrappedClient, Funcs{
 			Create: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
@@ -97,7 +96,7 @@ var _ = Describe("NewClient", func() {
 		_ = client.Create(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided Create function is nil", func() {
+	It("should call the underlying client if the provided Create function is nil", func(ctx SpecContext) {
 		var called bool
 		client1 := NewClient(wrappedClient, Funcs{
 			Create: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
@@ -109,7 +108,7 @@ var _ = Describe("NewClient", func() {
 		_ = client2.Create(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the provided Delete function", func() {
+	It("should call the provided Delete function", func(ctx SpecContext) {
 		var called bool
 		client := NewClient(wrappedClient, Funcs{
 			Delete: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
@@ -120,7 +119,7 @@ var _ = Describe("NewClient", func() {
 		_ = client.Delete(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided Delete function is nil", func() {
+	It("should call the underlying client if the provided Delete function is nil", func(ctx SpecContext) {
 		var called bool
 		client1 := NewClient(wrappedClient, Funcs{
 			Delete: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
@@ -132,7 +131,7 @@ var _ = Describe("NewClient", func() {
 		_ = client2.Delete(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the provided DeleteAllOf function", func() {
+	It("should call the provided DeleteAllOf function", func(ctx SpecContext) {
 		var called bool
 		client := NewClient(wrappedClient, Funcs{
 			DeleteAllOf: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.DeleteAllOfOption) error {
@@ -143,7 +142,7 @@ var _ = Describe("NewClient", func() {
 		_ = client.DeleteAllOf(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided DeleteAllOf function is nil", func() {
+	It("should call the underlying client if the provided DeleteAllOf function is nil", func(ctx SpecContext) {
 		var called bool
 		client1 := NewClient(wrappedClient, Funcs{
 			DeleteAllOf: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.DeleteAllOfOption) error {
@@ -155,7 +154,7 @@ var _ = Describe("NewClient", func() {
 		_ = client2.DeleteAllOf(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the provided Update function", func() {
+	It("should call the provided Update function", func(ctx SpecContext) {
 		var called bool
 		client := NewClient(wrappedClient, Funcs{
 			Update: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
@@ -166,7 +165,7 @@ var _ = Describe("NewClient", func() {
 		_ = client.Update(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided Update function is nil", func() {
+	It("should call the underlying client if the provided Update function is nil", func(ctx SpecContext) {
 		var called bool
 		client1 := NewClient(wrappedClient, Funcs{
 			Update: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
@@ -178,7 +177,7 @@ var _ = Describe("NewClient", func() {
 		_ = client2.Update(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the provided Patch function", func() {
+	It("should call the provided Patch function", func(ctx SpecContext) {
 		var called bool
 		client := NewClient(wrappedClient, Funcs{
 			Patch: func(ctx context.Context, client client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
@@ -189,7 +188,7 @@ var _ = Describe("NewClient", func() {
 		_ = client.Patch(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided Patch function is nil", func() {
+	It("should call the underlying client if the provided Patch function is nil", func(ctx SpecContext) {
 		var called bool
 		client1 := NewClient(wrappedClient, Funcs{
 			Patch: func(ctx context.Context, client client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
@@ -201,7 +200,7 @@ var _ = Describe("NewClient", func() {
 		_ = client2.Patch(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the provided Watch function", func() {
+	It("should call the provided Watch function", func(ctx SpecContext) {
 		var called bool
 		client := NewClient(wrappedClient, Funcs{
 			Watch: func(ctx context.Context, client client.WithWatch, obj client.ObjectList, opts ...client.ListOption) (watch.Interface, error) {
@@ -212,7 +211,7 @@ var _ = Describe("NewClient", func() {
 		_, _ = client.Watch(ctx, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided Watch function is nil", func() {
+	It("should call the underlying client if the provided Watch function is nil", func(ctx SpecContext) {
 		var called bool
 		client1 := NewClient(wrappedClient, Funcs{
 			Watch: func(ctx context.Context, client client.WithWatch, obj client.ObjectList, opts ...client.ListOption) (watch.Interface, error) {
@@ -252,8 +251,7 @@ var _ = Describe("NewClient", func() {
 
 var _ = Describe("NewSubResourceClient", func() {
 	c := dummyClient{}
-	ctx := context.Background()
-	It("should call the provided Get function", func() {
+	It("should call the provided Get function", func(ctx SpecContext) {
 		var called bool
 		c := NewClient(c, Funcs{
 			SubResourceGet: func(_ context.Context, client client.Client, subResourceName string, obj, subResource client.Object, opts ...client.SubResourceGetOption) error {
@@ -265,7 +263,7 @@ var _ = Describe("NewSubResourceClient", func() {
 		_ = c.SubResource("foo").Get(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided Get function is nil", func() {
+	It("should call the underlying client if the provided Get function is nil", func(ctx SpecContext) {
 		var called bool
 		client1 := NewClient(c, Funcs{
 			SubResourceGet: func(_ context.Context, client client.Client, subResourceName string, obj, subResource client.Object, opts ...client.SubResourceGetOption) error {
@@ -278,7 +276,7 @@ var _ = Describe("NewSubResourceClient", func() {
 		_ = client2.SubResource("foo").Get(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the provided Update function", func() {
+	It("should call the provided Update function", func(ctx SpecContext) {
 		var called bool
 		client := NewClient(c, Funcs{
 			SubResourceUpdate: func(_ context.Context, client client.Client, subResourceName string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
@@ -290,7 +288,7 @@ var _ = Describe("NewSubResourceClient", func() {
 		_ = client.SubResource("foo").Update(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided Update function is nil", func() {
+	It("should call the underlying client if the provided Update function is nil", func(ctx SpecContext) {
 		var called bool
 		client1 := NewClient(c, Funcs{
 			SubResourceUpdate: func(_ context.Context, client client.Client, subResourceName string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
@@ -303,7 +301,7 @@ var _ = Describe("NewSubResourceClient", func() {
 		_ = client2.SubResource("foo").Update(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the provided Patch function", func() {
+	It("should call the provided Patch function", func(ctx SpecContext) {
 		var called bool
 		client := NewClient(c, Funcs{
 			SubResourcePatch: func(_ context.Context, client client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
@@ -315,7 +313,7 @@ var _ = Describe("NewSubResourceClient", func() {
 		_ = client.SubResource("foo").Patch(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided Patch function is nil", func() {
+	It("should call the underlying client if the provided Patch function is nil", func(ctx SpecContext) {
 		var called bool
 		client1 := NewClient(c, Funcs{
 			SubResourcePatch: func(ctx context.Context, client client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
@@ -328,7 +326,7 @@ var _ = Describe("NewSubResourceClient", func() {
 		_ = client2.SubResource("foo").Patch(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the provided Create function", func() {
+	It("should call the provided Create function", func(ctx SpecContext) {
 		var called bool
 		client := NewClient(c, Funcs{
 			SubResourceCreate: func(_ context.Context, client client.Client, subResourceName string, obj, subResource client.Object, opts ...client.SubResourceCreateOption) error {
@@ -340,7 +338,7 @@ var _ = Describe("NewSubResourceClient", func() {
 		_ = client.SubResource("foo").Create(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
-	It("should call the underlying client if the provided Create function is nil", func() {
+	It("should call the underlying client if the provided Create function is nil", func(ctx SpecContext) {
 		var called bool
 		client1 := NewClient(c, Funcs{
 			SubResourceCreate: func(_ context.Context, client client.Client, subResourceName string, obj, subResource client.Object, opts ...client.SubResourceCreateOption) error {

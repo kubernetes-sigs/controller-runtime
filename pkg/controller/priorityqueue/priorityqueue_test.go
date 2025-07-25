@@ -3,6 +3,7 @@ package priorityqueue
 import (
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -85,6 +86,31 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(metrics.adds["test"]).To(Equal(4))
 	})
 
+	It("returns items fairly when configured to", func() {
+		q, metrics := newQueue(func(o *Opts[string]) {
+			o.FairnessDimensionsExtractor = func(s string) []string {
+				return []string{strings.Split(s, "-")[0]}
+			}
+		})
+		defer q.ShutDown()
+
+		q.AddWithOpts(AddOpts{}, "foo-1")
+		q.AddWithOpts(AddOpts{}, "foo-2")
+		q.AddWithOpts(AddOpts{}, "bar-1")
+
+		item, _, _ := q.GetWithPriority()
+		Expect(item).To(Equal("bar-1"))
+		item, _, _ = q.GetWithPriority()
+		Expect(item).To(Equal("foo-1"))
+		item, _, _ = q.GetWithPriority()
+		Expect(item).To(Equal("foo-2"))
+
+		cwq := q.(*priorityqueue[string])
+		cwq.lock.Lock()
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
+		Expect(metrics.adds["test"]).To(Equal(3))
+	})
+
 	It("de-duplicates items", func() {
 		q, metrics := newQueue()
 		defer q.ShutDown()
@@ -95,7 +121,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		Consistently(q.Len).Should(Equal(1))
 
 		cwq := q.(*priorityqueue[string])
-		cwq.lockedLock.Lock()
+		cwq.lock.Lock()
 		Expect(cwq.locked.Len()).To(Equal(0))
 
 		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 1}))
@@ -194,6 +220,71 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
 		Expect(metrics.adds["test"]).To(Equal(1))
 		Expect(metrics.retries["test"]).To(Equal(1))
+	})
+
+	It("returns items from multiple priorities to waiting waiters once they are ready", func() {
+		q, metrics := newQueue()
+		defer q.ShutDown()
+
+		now := time.Now().Round(time.Second)
+		nowLock := sync.Mutex{}
+		tick := make(chan time.Time)
+
+		cwq := q.(*priorityqueue[string])
+		cwq.now = func() time.Time {
+			nowLock.Lock()
+			defer nowLock.Unlock()
+			return now
+		}
+		cwq.tick = func(d time.Duration) <-chan time.Time {
+			Expect(d).To(Equal(time.Second))
+			return tick
+		}
+
+		retrievedFoo := make(chan struct{})
+		retrievedBar := make(chan struct{})
+
+		go func() {
+			defer GinkgoRecover()
+			item, _, _ := q.GetWithPriority()
+			switch item {
+			case "foo":
+				close(retrievedFoo)
+			case "bar":
+				close(retrievedBar)
+			default:
+				panic(fmt.Sprintf("unexpected item %s", item))
+			}
+		}()
+		go func() {
+			defer GinkgoRecover()
+			item, _, _ := q.GetWithPriority()
+			switch item {
+			case "foo":
+				close(retrievedFoo)
+			case "bar":
+				close(retrievedBar)
+			default:
+				panic(fmt.Sprintf("unexpected item %s", item))
+			}
+		}()
+
+		q.AddWithOpts(AddOpts{After: time.Second, Priority: 1}, "foo")
+		q.AddWithOpts(AddOpts{After: time.Second, Priority: 2}, "bar")
+
+		Consistently(retrievedFoo).ShouldNot(BeClosed())
+		Consistently(retrievedBar).ShouldNot(BeClosed())
+
+		nowLock.Lock()
+		now = now.Add(time.Second)
+		nowLock.Unlock()
+		tick <- now
+		Eventually(retrievedBar).Should(BeClosed())
+		Eventually(retrievedFoo).Should(BeClosed())
+
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{1: 0, 2: 0}))
+		Expect(metrics.adds["test"]).To(Equal(2))
+		Expect(metrics.retries["test"]).To(Equal(2))
 	})
 
 	It("returns an item to a waiter as soon as it has one", func() {
@@ -691,13 +782,17 @@ func TestFuzzPriorityQueue(t *testing.T) {
 	wg.Wait()
 }
 
-func newQueue() (PriorityQueue[string], *fakeMetricsProvider) {
+func newQueue(opts ...Opt[string]) (PriorityQueue[string], *fakeMetricsProvider) {
 	metrics := newFakeMetricsProvider()
-	q := New("test", func(o *Opts[string]) {
+	q := New("test", append(opts, func(o *Opts[string]) {
 		o.MetricProvider = metrics
-	})
+	})...)
 	q.(*priorityqueue[string]).queue = &btreeInteractionValidator{
 		bTree: q.(*priorityqueue[string]).queue,
+	}
+	q.(*priorityqueue[string]).fairQueue = &fairQueueInteractionValidator[string]{
+		fairQueue: q.(*priorityqueue[string]).fairQueue,
+		pq:        q.(*priorityqueue[string]),
 	}
 
 	// validate that tick always gets a positive value as it will just return
@@ -720,16 +815,80 @@ func (b *btreeInteractionValidator) ReplaceOrInsert(item *item[string]) (*item[s
 	// There is no codepath that updates an item
 	item, alreadyExist := b.bTree.ReplaceOrInsert(item)
 	if alreadyExist {
+		defer GinkgoRecover()
 		panic(fmt.Sprintf("ReplaceOrInsert: item %v already existed", item))
 	}
 	return item, alreadyExist
 }
 
-func (b *btreeInteractionValidator) Delete(item *item[string]) (*item[string], bool) {
+func (b *btreeInteractionValidator) Delete(element *item[string]) (*item[string], bool) {
 	// There is no codepath that deletes an item that doesn't exist
-	old, existed := b.bTree.Delete(item)
+	old, existed := b.bTree.Delete(element)
 	if !existed {
-		panic(fmt.Sprintf("Delete: item %v not found", item))
+		var items []item[string]
+		b.bTree.Ascend(func(item *item[string]) bool {
+			items = append(items, *item)
+			return true
+		})
+		defer GinkgoRecover()
+		panic(fmt.Sprintf("Delete: item %v not found, items: %v", element, items))
 	}
 	return old, existed
+}
+
+type fairQueueInteractionValidator[T comparable] struct {
+	fairQueue fairQueueInterface[T]
+	pq        *priorityqueue[T]
+	allKeys   sets.Set[T]
+}
+
+func (f *fairQueueInteractionValidator[T]) add(item *item[T], dimensions ...string) {
+	if f.pq.fairQueuePriority == nil {
+		defer GinkgoRecover()
+		panic(fmt.Sprintf("add: fairQueuePriority is nil, item: %v", item))
+	}
+
+	if item.Priority != *f.pq.fairQueuePriority {
+		defer GinkgoRecover()
+		panic(fmt.Sprintf("add: item priority %d does not match fair queue priority %d", item.Priority, *f.pq.fairQueuePriority))
+	}
+
+	if f.pq.locked.Has(item.Key) {
+		defer GinkgoRecover()
+		panic(fmt.Sprintf("add: item %v is locked but got added to fair queue", item.Key))
+	}
+
+	if item.ReadyAt != nil && item.ReadyAt.After(f.pq.now()) {
+		defer GinkgoRecover()
+		panic(fmt.Sprintf("add: item %v has ReadyAt %v in the future", item.Key, item.ReadyAt))
+	}
+
+	if f.allKeys == nil {
+		f.allKeys = sets.New[T]()
+	}
+	if f.allKeys.Has(item.Key) {
+		defer GinkgoRecover()
+		panic(fmt.Sprintf("add: item with key %v already exists in fair queue", item.Key))
+	}
+	f.allKeys.Insert(item.Key)
+
+	f.fairQueue.add(item, dimensions...)
+}
+
+func (f *fairQueueInteractionValidator[T]) dequeue() (*item[T], bool) {
+	item, exists := f.fairQueue.dequeue()
+	if exists {
+		f.allKeys.Delete(item.Key)
+	}
+
+	return item, exists
+}
+
+func (f *fairQueueInteractionValidator[T]) drain() {
+	f.allKeys = nil
+	f.fairQueue.drain()
+}
+
+func (f *fairQueueInteractionValidator[T]) isEmpty() bool {
+	return f.fairQueue.isEmpty()
 }

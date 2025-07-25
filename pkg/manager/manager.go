@@ -30,8 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
@@ -261,7 +261,7 @@ type Options struct {
 	//
 	// Deprecated: using this may cause goroutine leaks if the lifetime of your manager or controllers
 	// is shorter than the lifetime of your process.
-	EventBroadcaster record.EventBroadcaster
+	EventBroadcaster events.EventBroadcaster
 
 	// GracefulShutdownTimeout is the duration given to runnable to stop before the manager actually returns on stop.
 	// To disable graceful shutdown, set to time.Duration(0)
@@ -274,14 +274,8 @@ type Options struct {
 	// +optional
 	Controller config.Controller
 
-	// makeBroadcaster allows deferring the creation of the broadcaster to
-	// avoid leaking goroutines if we never call Start on this manager.  It also
-	// returns whether or not this is a "owned" broadcaster, and as such should be
-	// stopped with the manager.
-	makeBroadcaster intrec.EventBroadcasterProducer
-
 	// Dependency injection for testing
-	newRecorderProvider    func(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error)
+	newRecorderProvider    func(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, broadcaster events.EventBroadcaster, stopWithProvider bool) (*intrec.Provider, error)
 	newResourceLock        func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
 	newMetricsServer       func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error)
 	newHealthProbeListener func(addr string) (net.Listener, error)
@@ -337,7 +331,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, errors.New("must specify Config")
 	}
 	// Set default values for options fields
-	options = setOptionsDefaults(options)
+	options = setOptionsDefaults(config, options)
 
 	cluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {
 		clusterOptions.Scheme = options.Scheme
@@ -361,7 +355,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Create the recorder provider to inject event recorders for the components.
 	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.
-	recorderProvider, err := options.newRecorderProvider(config, cluster.GetHTTPClient(), cluster.GetScheme(), options.Logger.WithName("events"), options.makeBroadcaster)
+	recorderProvider, err := options.newRecorderProvider(config, cluster.GetHTTPClient(), cluster.GetScheme(), options.Logger.WithName("events"), options.EventBroadcaster, options.EventBroadcaster == nil)
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +382,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		if err != nil {
 			return nil, err
 		}
-		leaderRecorderProvider, err = options.newRecorderProvider(leaderConfig, httpClient, scheme, options.Logger.WithName("events"), options.makeBroadcaster)
+		leaderRecorderProvider, err = options.newRecorderProvider(leaderConfig, httpClient, scheme, options.Logger.WithName("events"), options.EventBroadcaster, options.EventBroadcaster == nil)
 		if err != nil {
 			return nil, err
 		}
@@ -493,7 +487,7 @@ func defaultBaseContext() context.Context {
 }
 
 // setOptionsDefaults set default values for Options fields.
-func setOptionsDefaults(options Options) Options {
+func setOptionsDefaults(_ *rest.Config, options Options) Options {
 	// Allow newResourceLock to be mocked
 	if options.newResourceLock == nil {
 		options.newResourceLock = leaderelection.NewResourceLock
@@ -502,20 +496,6 @@ func setOptionsDefaults(options Options) Options {
 	// Allow newRecorderProvider to be mocked
 	if options.newRecorderProvider == nil {
 		options.newRecorderProvider = intrec.NewProvider
-	}
-
-	// This is duplicated with pkg/cluster, we need it here
-	// for the leader election and there to provide the user with
-	// an EventBroadcaster
-	if options.EventBroadcaster == nil {
-		// defer initialization to avoid leaking by default
-		options.makeBroadcaster = func() (record.EventBroadcaster, bool) {
-			return record.NewBroadcaster(), true
-		}
-	} else {
-		options.makeBroadcaster = func() (record.EventBroadcaster, bool) {
-			return options.EventBroadcaster, false
-		}
 	}
 
 	if options.newMetricsServer == nil {

@@ -1997,7 +1997,7 @@ var _ = Describe("manger.Manager", func() {
 		By("Unblocking leader election")
 		resourceLockWithHooks.UnblockLeaderElection()
 
-		By("Waiting for the leader election runnable to be executed without leader election being won")
+		By("Waiting for the leader election runnable to be executed after leader election was won")
 		<-m.Elected()
 		Expect(<-runnableExecutionOrderChan).To(Equal(leaderElectionRunnableName))
 	})

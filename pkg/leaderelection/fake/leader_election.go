@@ -39,10 +39,9 @@ type ControllableResourceLockInterface interface {
 
 	// BlockLeaderElection blocks the leader election process when called. It will not be unblocked
 	// until UnblockLeaderElection is called.
-	// Not thread safe.
 	BlockLeaderElection()
 
-	// UnblockLeaderElection unblocks the leader election. Not thread safe.
+	// UnblockLeaderElection unblocks the leader election.
 	UnblockLeaderElection()
 }
 

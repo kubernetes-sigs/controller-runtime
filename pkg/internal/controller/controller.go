@@ -337,8 +337,7 @@ func (c *Controller[request]) startEventSourcesAndQueueLocked(ctx context.Contex
 					defer close(sourceStartErrChan)
 					log.Info("Starting EventSource")
 
-					q := c.Queue
-					if err := watch.Start(ctx, q); err != nil {
+					if err := watch.Start(ctx, c.Queue); err != nil {
 						sourceStartErrChan <- err
 						return
 					}

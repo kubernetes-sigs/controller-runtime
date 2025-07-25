@@ -1947,6 +1947,79 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.GetAPIReader()).NotTo(BeNil())
 	})
+
+	It("should run warmup runnables before leader election is won", func() {
+		By("Creating a channel to track execution order")
+		runnableExecutionOrderChan := make(chan string, 2)
+		const leaderElectionRunnableName = "leaderElectionRunnable"
+		const warmupRunnableName = "warmupRunnable"
+
+		By("Creating a manager with leader election enabled")
+		m, err := New(cfg, Options{
+			LeaderElection:          true,
+			LeaderElectionNamespace: "default",
+			LeaderElectionID:        "test-leader-election-warmup",
+			newResourceLock:         fakeleaderelection.NewResourceLock,
+			HealthProbeBindAddress:  "0",
+			Metrics:                 metricsserver.Options{BindAddress: "0"},
+			PprofBindAddress:        "0",
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating a runnable that implements WarmupRunnable interface")
+		// Create a warmup runnable
+		warmupRunnable := newWarmupRunnableFunc(
+			func(ctx context.Context) error {
+				// This is the leader election runnable that will be executed after leader election
+				// It will block until context is done/cancelled
+				<-ctx.Done()
+				return nil
+			},
+			func(ctx context.Context) error {
+				// This should be called during startup before leader election
+				runnableExecutionOrderChan <- warmupRunnableName
+				return nil
+			},
+		)
+		Expect(m.Add(warmupRunnable)).To(Succeed())
+
+		By("Creating a runnable that requires leader election")
+		leaderElectionRunnable := RunnableFunc(
+			func(ctx context.Context) error {
+				runnableExecutionOrderChan <- leaderElectionRunnableName
+				<-ctx.Done()
+				return nil
+			},
+		)
+		Expect(m.Add(leaderElectionRunnable)).To(Succeed())
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		cm, ok := m.(*controllerManager)
+		Expect(ok).To(BeTrue())
+		resourceLockWithHooks, ok := cm.resourceLock.(fakeleaderelection.ControllableResourceLockInterface)
+		Expect(ok).To(BeTrue())
+
+		By("Blocking leader election")
+		resourceLockWithHooks.BlockLeaderElection()
+
+		By("Starting the manager")
+		go func() {
+			defer GinkgoRecover()
+			Expect(m.Start(ctx)).To(Succeed())
+		}()
+
+		By("Waiting for the warmup runnable to be executed without leader election being won")
+		Expect(<-runnableExecutionOrderChan).To(Equal(warmupRunnableName))
+
+		By("Unblocking leader election")
+		resourceLockWithHooks.UnblockLeaderElection()
+
+		By("Waiting for the leader election runnable to be executed after leader election was won")
+		<-m.Elected()
+		Expect(<-runnableExecutionOrderChan).To(Equal(leaderElectionRunnableName))
+	})
 })
 
 type runnableError struct {

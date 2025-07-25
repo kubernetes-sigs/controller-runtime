@@ -32,6 +32,7 @@ type runnables struct {
 	Webhooks       *runnableGroup
 	Caches         *runnableGroup
 	LeaderElection *runnableGroup
+	Warmup         *runnableGroup
 	Others         *runnableGroup
 }
 
@@ -42,6 +43,7 @@ func newRunnables(baseContext BaseContextFunc, errChan chan error) *runnables {
 		Webhooks:       newRunnableGroup(baseContext, errChan),
 		Caches:         newRunnableGroup(baseContext, errChan),
 		LeaderElection: newRunnableGroup(baseContext, errChan),
+		Warmup:         newRunnableGroup(baseContext, errChan),
 		Others:         newRunnableGroup(baseContext, errChan),
 	}
 }
@@ -65,8 +67,20 @@ func (r *runnables) Add(fn Runnable) error {
 		})
 	case webhook.Server:
 		return r.Webhooks.Add(fn, nil)
-	case LeaderElectionRunnable:
-		if !runnable.NeedLeaderElection() {
+	case warmupRunnable, LeaderElectionRunnable:
+		if warmupRunnable, ok := fn.(warmupRunnable); ok {
+			if err := r.Warmup.Add(RunnableFunc(warmupRunnable.Warmup), nil); err != nil {
+				return err
+			}
+		}
+
+		leaderElectionRunnable, ok := fn.(LeaderElectionRunnable)
+		if !ok {
+			// If the runnable is not a LeaderElectionRunnable, add it to the leader election group for backwards compatibility
+			return r.LeaderElection.Add(fn, nil)
+		}
+
+		if !leaderElectionRunnable.NeedLeaderElection() {
 			return r.Others.Add(fn, nil)
 		}
 		return r.LeaderElection.Add(fn, nil)

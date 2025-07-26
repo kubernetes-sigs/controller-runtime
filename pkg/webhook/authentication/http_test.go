@@ -154,7 +154,7 @@ var _ = Describe("Authentication Webhooks", func() {
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
 
-		It("should present the Context from the HTTP request, if any", func() {
+		It("should present the Context from the HTTP request, if any", func(specContext SpecContext) {
 			req := &http.Request{
 				Header: http.Header{"Content-Type": []string{"application/json"}},
 				Method: http.MethodPost,
@@ -175,13 +175,13 @@ var _ = Describe("Authentication Webhooks", func() {
 			expected := fmt.Sprintf(`{%s,"metadata":{},"spec":{},"status":{"authenticated":true,"user":{},"error":%q}}
 `, gvkJSONv1, value)
 
-			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), key, value))
+			ctx, cancel := context.WithCancel(context.WithValue(specContext, key, value))
 			cancel()
 			webhook.ServeHTTP(respRecorder, req.WithContext(ctx))
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
 
-		It("should mutate the Context from the HTTP request, if func supplied", func() {
+		It("should mutate the Context from the HTTP request, if func supplied", func(specContext SpecContext) {
 			req := &http.Request{
 				Header: http.Header{"Content-Type": []string{"application/json"}},
 				Method: http.MethodPost,
@@ -203,7 +203,7 @@ var _ = Describe("Authentication Webhooks", func() {
 			expected := fmt.Sprintf(`{%s,"metadata":{},"spec":{},"status":{"authenticated":true,"user":{},"error":%q}}
 `, gvkJSONv1, "application/json")
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(specContext)
 			cancel()
 			webhook.ServeHTTP(respRecorder, req.WithContext(ctx))
 			Expect(respRecorder.Body.String()).To(Equal(expected))

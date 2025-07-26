@@ -37,7 +37,7 @@ import (
 
 var _ = Describe("recorder", func() {
 	Describe("recorder", func() {
-		It("should publish events", func() {
+		It("should publish events", func(ctx SpecContext) {
 			By("Creating the Manager")
 			cm, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
@@ -60,8 +60,6 @@ var _ = Describe("recorder", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting the Manager")
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			go func() {
 				defer GinkgoRecover()
 				Expect(cm.Start(ctx)).NotTo(HaveOccurred())

@@ -45,7 +45,7 @@ var _ = Describe("Source", func() {
 	var ns string
 	count := 0
 
-	BeforeEach(func() {
+	BeforeEach(func(ctx SpecContext) {
 		// Create the namespace for the test
 		ns = fmt.Sprintf("controller-source-kindsource-%v", count)
 		count++
@@ -63,7 +63,7 @@ var _ = Describe("Source", func() {
 		c2 = make(chan interface{})
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx SpecContext) {
 		err := clientset.CoreV1().Namespaces().Delete(ctx, ns, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		close(c1)
@@ -74,7 +74,7 @@ var _ = Describe("Source", func() {
 		Context("for a Deployment resource", func() {
 			obj = &appsv1.Deployment{}
 
-			It("should provide Deployment Events", func() {
+			It("should provide Deployment Events", func(ctx SpecContext) {
 				var created, updated, deleted *appsv1.Deployment
 				var err error
 
@@ -239,7 +239,7 @@ var _ = Describe("Source", func() {
 		})
 
 		Context("for a ReplicaSet resource", func() {
-			It("should provide a ReplicaSet CreateEvent", func() {
+			It("should provide a ReplicaSet CreateEvent", func(ctx SpecContext) {
 				c := make(chan struct{})
 
 				q := workqueue.NewTypedRateLimitingQueueWithConfig(
@@ -282,7 +282,7 @@ var _ = Describe("Source", func() {
 				<-c
 			})
 
-			It("should provide a ReplicaSet UpdateEvent", func() {
+			It("should provide a ReplicaSet UpdateEvent", func(ctx SpecContext) {
 				var err error
 				rs, err = clientset.AppsV1().ReplicaSets("default").Get(ctx, rs.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -331,7 +331,7 @@ var _ = Describe("Source", func() {
 				<-c
 			})
 
-			It("should provide a ReplicaSet DeletedEvent", func() {
+			It("should provide a ReplicaSet DeletedEvent", func(ctx SpecContext) {
 				c := make(chan struct{})
 
 				q := workqueue.NewTypedRateLimitingQueueWithConfig(

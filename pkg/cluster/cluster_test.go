@@ -100,22 +100,22 @@ var _ = Describe("cluster.Cluster", func() {
 	})
 
 	Describe("Start", func() {
-		It("should stop when context is cancelled", func() {
+		It("should stop when context is cancelled", func(specCtx SpecContext) {
 			c, err := New(cfg)
 			Expect(err).NotTo(HaveOccurred())
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(specCtx)
 			cancel()
 			Expect(c.Start(ctx)).NotTo(HaveOccurred())
 		})
 	})
 
-	It("should not leak goroutines when stopped", func() {
+	It("should not leak goroutines when stopped", func(specCtx SpecContext) {
 		currentGRs := goleak.IgnoreCurrent()
 
 		c, err := New(cfg)
 		Expect(err).NotTo(HaveOccurred())
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(specCtx)
 		cancel()
 		Expect(c.Start(ctx)).NotTo(HaveOccurred())
 

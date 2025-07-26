@@ -402,7 +402,7 @@ var _ = Describe("application", func() {
 	})
 
 	Describe("Start with ControllerManagedBy", func() {
-		It("should Reconcile Owns objects", func() {
+		It("should Reconcile Owns objects", func(ctx SpecContext) {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -411,12 +411,10 @@ var _ = Describe("application", func() {
 				Named("deployment-0").
 				Owns(&appsv1.ReplicaSet{})
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			doReconcileTest(ctx, "3", m, false, bldr)
 		})
 
-		It("should Reconcile Owns objects for every owner", func() {
+		It("should Reconcile Owns objects for every owner", func(ctx SpecContext) {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -425,12 +423,10 @@ var _ = Describe("application", func() {
 				Named("deployment-1").
 				Owns(&appsv1.ReplicaSet{}, MatchEveryOwner)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			doReconcileTest(ctx, "12", m, false, bldr)
 		})
 
-		It("should Reconcile Watches objects", func() {
+		It("should Reconcile Watches objects", func(ctx SpecContext) {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -441,12 +437,10 @@ var _ = Describe("application", func() {
 					handler.EnqueueRequestForOwner(m.GetScheme(), m.GetRESTMapper(), &appsv1.Deployment{}, handler.OnlyControllerOwner()),
 				)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			doReconcileTest(ctx, "4", m, true, bldr)
 		})
 
-		It("should Reconcile without For", func() {
+		It("should Reconcile without For", func(ctx SpecContext) {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -460,14 +454,12 @@ var _ = Describe("application", func() {
 					handler.EnqueueRequestForOwner(m.GetScheme(), m.GetRESTMapper(), &appsv1.Deployment{}, handler.OnlyControllerOwner()),
 				)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			doReconcileTest(ctx, "9", m, true, bldr)
 		})
 	})
 
 	Describe("Set custom predicates", func() {
-		It("should execute registered predicates only for assigned kind", func() {
+		It("should execute registered predicates only for assigned kind", func(ctx SpecContext) {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -517,8 +509,6 @@ var _ = Describe("application", func() {
 				Owns(&appsv1.ReplicaSet{}, WithPredicates(replicaSetPrct)).
 				WithEventFilter(allPrct)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			doReconcileTest(ctx, "5", m, true, bldr)
 
 			Expect(deployPrctExecuted).To(BeTrue(), "Deploy predicated should be called at least once")
@@ -537,17 +527,14 @@ var _ = Describe("application", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should support multiple controllers watching the same metadata kind", func() {
+		It("should support multiple controllers watching the same metadata kind", func(ctx SpecContext) {
 			bldr1 := ControllerManagedBy(mgr).For(&appsv1.Deployment{}, OnlyMetadata).Named("deployment-4")
 			bldr2 := ControllerManagedBy(mgr).For(&appsv1.Deployment{}, OnlyMetadata).Named("deployment-5")
-
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 
 			doReconcileTest(ctx, "6", mgr, true, bldr1, bldr2)
 		})
 
-		It("should support watching For, Owns, and Watch as metadata", func() {
+		It("should support watching For, Owns, and Watch as metadata", func(ctx SpecContext) {
 			statefulSetMaps := make(chan *metav1.PartialObjectMetadata)
 
 			bldr := ControllerManagedBy(mgr).
@@ -571,8 +558,6 @@ var _ = Describe("application", func() {
 					}),
 					OnlyMetadata)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			doReconcileTest(ctx, "8", mgr, true, bldr)
 
 			By("Creating a new stateful set")
@@ -601,7 +586,7 @@ var _ = Describe("application", func() {
 					},
 				},
 			}
-			err := mgr.GetClient().Create(context.TODO(), set)
+			err := mgr.GetClient().Create(ctx, set)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking that the mapping function has been called")

@@ -34,13 +34,12 @@ import (
 )
 
 var _ = Describe("ClientWithFieldValidation", func() {
-	It("should return errors for invalid fields when using strict validation", func() {
+	It("should return errors for invalid fields when using strict validation", func(ctx SpecContext) {
 		cl, err := client.New(cfg, client.Options{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cl).NotTo(BeNil())
 
 		wrappedClient := client.WithFieldValidation(cl, metav1.FieldValidationStrict)
-		ctx := context.Background()
 
 		baseNode := &unstructured.Unstructured{}
 		baseNode.SetGroupVersionKind(schema.GroupVersionKind{
@@ -101,7 +100,7 @@ func TestWithStrictFieldValidation(t *testing.T) {
 	fakeClient := testFieldValidationClient(t, metav1.FieldValidationStrict, func() { calls++ })
 	wrappedClient := client.WithFieldValidation(fakeClient, metav1.FieldValidationStrict)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	dummyObj := &corev1.Namespace{}
 
 	_ = wrappedClient.Create(ctx, dummyObj)
@@ -126,7 +125,7 @@ func TestWithStrictFieldValidationOverridden(t *testing.T) {
 	fakeClient := testFieldValidationClient(t, metav1.FieldValidationWarn, func() { calls++ })
 	wrappedClient := client.WithFieldValidation(fakeClient, metav1.FieldValidationStrict)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	dummyObj := &corev1.Namespace{}
 
 	_ = wrappedClient.Create(ctx, dummyObj, client.FieldValidation(metav1.FieldValidationWarn))

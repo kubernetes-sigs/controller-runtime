@@ -49,13 +49,14 @@ var _ = Describe("CertWatcher", func() {
 
 	var _ = Describe("certwatcher Start", func() {
 		var (
-			ctx       context.Context
-			ctxCancel context.CancelFunc
-			watcher   *certwatcher.CertWatcher
+			ctxCancel    context.CancelFunc
+			watcher      *certwatcher.CertWatcher
+			startWatcher func(interval time.Duration) (done <-chan struct{})
 		)
 
 		BeforeEach(func() {
-			ctx, ctxCancel = context.WithCancel(context.Background())
+			var ctx context.Context
+			ctx, ctxCancel = context.WithCancel(context.Background()) //nolint:forbidigo // the watcher outlives the BeforeEach
 
 			err := writeCerts(certPath, keyPath, "127.0.0.1")
 			Expect(err).ToNot(HaveOccurred())
@@ -74,22 +75,22 @@ var _ = Describe("CertWatcher", func() {
 
 			watcher, err = certwatcher.New(certPath, keyPath)
 			Expect(err).ToNot(HaveOccurred())
-		})
 
-		startWatcher := func(interval time.Duration) (done <-chan struct{}) {
-			doneCh := make(chan struct{})
-			go func() {
-				defer GinkgoRecover()
-				defer close(doneCh)
-				Expect(watcher.WithWatchInterval(interval).Start(ctx)).To(Succeed())
-			}()
-			// wait till we read first cert
-			Eventually(func() error {
-				err := watcher.ReadCertificate()
-				return err
-			}).Should(Succeed())
-			return doneCh
-		}
+			startWatcher = func(interval time.Duration) (done <-chan struct{}) {
+				doneCh := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					defer close(doneCh)
+					Expect(watcher.WithWatchInterval(interval).Start(ctx)).To(Succeed())
+				}()
+				// wait till we read first cert
+				Eventually(func() error {
+					err := watcher.ReadCertificate()
+					return err
+				}).Should(Succeed())
+				return doneCh
+			}
+		})
 
 		It("should read the initial cert/key", func() {
 			// This test verifies the initial read succeeded. So interval doesn't matter.

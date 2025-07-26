@@ -39,11 +39,12 @@ var testenv *envtest.Environment
 var config *rest.Config
 var clientset *kubernetes.Clientset
 var icache cache.Cache
-var ctx context.Context
 var cancel context.CancelFunc
 
 var _ = BeforeSuite(func() {
-	ctx, cancel = context.WithCancel(context.Background())
+	var ctx context.Context
+	// Has to be derived from context.Background, as it stays valid past the BeforeSuite
+	ctx, cancel = context.WithCancel(context.Background()) //nolint:forbidigo
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	testenv = &envtest.Environment{}

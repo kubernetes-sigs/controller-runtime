@@ -47,40 +47,40 @@ var _ = Describe("Authentication Webhooks", func() {
 		return webhook
 	}
 
-	It("should invoke the handler to get a response", func() {
+	It("should invoke the handler to get a response", func(ctx SpecContext) {
 		By("setting up a webhook with an allow handler")
 		webhook := allowHandler()
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{})
+		resp := webhook.Handle(ctx, Request{})
 
 		By("checking that it allowed the request")
 		Expect(resp.Status.Authenticated).To(BeTrue())
 	})
 
-	It("should ensure that the response's UID is set to the request's UID", func() {
+	It("should ensure that the response's UID is set to the request's UID", func(ctx SpecContext) {
 		By("setting up a webhook")
 		webhook := allowHandler()
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{TokenReview: authenticationv1.TokenReview{ObjectMeta: metav1.ObjectMeta{UID: "foobar"}}})
+		resp := webhook.Handle(ctx, Request{TokenReview: authenticationv1.TokenReview{ObjectMeta: metav1.ObjectMeta{UID: "foobar"}}})
 
 		By("checking that the response share's the request's UID")
 		Expect(resp.UID).To(Equal(machinerytypes.UID("foobar")))
 	})
 
-	It("should populate the status on a response if one is not provided", func() {
+	It("should populate the status on a response if one is not provided", func(ctx SpecContext) {
 		By("setting up a webhook")
 		webhook := allowHandler()
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{})
+		resp := webhook.Handle(ctx, Request{})
 
 		By("checking that the response share's the request's UID")
 		Expect(resp.Status).To(Equal(authenticationv1.TokenReviewStatus{Authenticated: true}))
 	})
 
-	It("shouldn't overwrite the status on a response", func() {
+	It("shouldn't overwrite the status on a response", func(ctx SpecContext) {
 		By("setting up a webhook that sets a status")
 		webhook := &Webhook{
 			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
@@ -96,7 +96,7 @@ var _ = Describe("Authentication Webhooks", func() {
 		}
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{})
+		resp := webhook.Handle(ctx, Request{})
 
 		By("checking that the message is intact")
 		Expect(resp.Status).NotTo(BeNil())

@@ -64,40 +64,40 @@ var _ = Describe("Admission Webhooks", func() {
 		return webhook
 	}
 
-	It("should invoke the handler to get a response", func() {
+	It("should invoke the handler to get a response", func(ctx SpecContext) {
 		By("setting up a webhook with an allow handler")
 		webhook := allowHandler()
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{})
+		resp := webhook.Handle(ctx, Request{})
 
 		By("checking that it allowed the request")
 		Expect(resp.Allowed).To(BeTrue())
 	})
 
-	It("should ensure that the response's UID is set to the request's UID", func() {
+	It("should ensure that the response's UID is set to the request's UID", func(ctx SpecContext) {
 		By("setting up a webhook")
 		webhook := allowHandler()
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{AdmissionRequest: admissionv1.AdmissionRequest{UID: "foobar"}})
+		resp := webhook.Handle(ctx, Request{AdmissionRequest: admissionv1.AdmissionRequest{UID: "foobar"}})
 
 		By("checking that the response share's the request's UID")
 		Expect(resp.UID).To(Equal(machinerytypes.UID("foobar")))
 	})
 
-	It("should populate the status on a response if one is not provided", func() {
+	It("should populate the status on a response if one is not provided", func(ctx SpecContext) {
 		By("setting up a webhook")
 		webhook := allowHandler()
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{})
+		resp := webhook.Handle(ctx, Request{})
 
 		By("checking that the response share's the request's UID")
 		Expect(resp.Result).To(Equal(&metav1.Status{Code: http.StatusOK}))
 	})
 
-	It("shouldn't overwrite the status on a response", func() {
+	It("shouldn't overwrite the status on a response", func(ctx SpecContext) {
 		By("setting up a webhook that sets a status")
 		webhook := &Webhook{
 			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
@@ -111,14 +111,14 @@ var _ = Describe("Admission Webhooks", func() {
 		}
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{})
+		resp := webhook.Handle(ctx, Request{})
 
 		By("checking that the message is intact")
 		Expect(resp.Result).NotTo(BeNil())
 		Expect(resp.Result.Message).To(Equal("Ground Control to Major Tom"))
 	})
 
-	It("should serialize patch operations into a single jsonpatch blob", func() {
+	It("should serialize patch operations into a single jsonpatch blob", func(ctx SpecContext) {
 		By("setting up a webhook with a patching handler")
 		webhook := &Webhook{
 			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
@@ -127,7 +127,7 @@ var _ = Describe("Admission Webhooks", func() {
 		}
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{})
+		resp := webhook.Handle(ctx, Request{})
 
 		By("checking that a JSON patch is populated on the response")
 		patchType := admissionv1.PatchTypeJSONPatch
@@ -135,7 +135,7 @@ var _ = Describe("Admission Webhooks", func() {
 		Expect(resp.Patch).To(Equal([]byte(`[{"op":"add","path":"/a","value":2},{"op":"replace","path":"/b","value":4}]`)))
 	})
 
-	It("should pass a request logger via the context", func() {
+	It("should pass a request logger via the context", func(ctx SpecContext) {
 		By("setting up a webhook that uses the request logger")
 		webhook := &Webhook{
 			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
@@ -151,7 +151,7 @@ var _ = Describe("Admission Webhooks", func() {
 		}
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{AdmissionRequest: admissionv1.AdmissionRequest{
+		resp := webhook.Handle(ctx, Request{AdmissionRequest: admissionv1.AdmissionRequest{
 			UID:       "test123",
 			Name:      "foo",
 			Namespace: "bar",
@@ -170,7 +170,7 @@ var _ = Describe("Admission Webhooks", func() {
 		Eventually(logBuffer).Should(gbytes.Say(`"msg":"Received request","object":{"name":"foo","namespace":"bar"},"namespace":"bar","name":"foo","resource":{"group":"apps","version":"v1","resource":"deployments"},"user":"tim","requestID":"test123"}`))
 	})
 
-	It("should pass a request logger created by LogConstructor via the context", func() {
+	It("should pass a request logger created by LogConstructor via the context", func(ctx SpecContext) {
 		By("setting up a webhook that uses the request logger")
 		webhook := &Webhook{
 			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
@@ -189,7 +189,7 @@ var _ = Describe("Admission Webhooks", func() {
 		}
 
 		By("invoking the webhook")
-		resp := webhook.Handle(context.Background(), Request{AdmissionRequest: admissionv1.AdmissionRequest{
+		resp := webhook.Handle(ctx, Request{AdmissionRequest: admissionv1.AdmissionRequest{
 			UID:       "test123",
 			Operation: admissionv1.Create,
 		}})
@@ -200,7 +200,7 @@ var _ = Describe("Admission Webhooks", func() {
 	})
 
 	Describe("panic recovery", func() {
-		It("should recover panic if RecoverPanic is true by default", func() {
+		It("should recover panic if RecoverPanic is true by default", func(ctx SpecContext) {
 			panicHandler := func() *Webhook {
 				handler := &fakeHandler{
 					fn: func(ctx context.Context, req Request) Response {
@@ -219,7 +219,7 @@ var _ = Describe("Admission Webhooks", func() {
 			webhook := panicHandler()
 
 			By("invoking the webhook")
-			resp := webhook.Handle(context.Background(), Request{})
+			resp := webhook.Handle(ctx, Request{})
 
 			By("checking that it errored the request")
 			Expect(resp.Allowed).To(BeFalse())
@@ -227,7 +227,7 @@ var _ = Describe("Admission Webhooks", func() {
 			Expect(resp.Result.Message).To(Equal("panic: fake panic test [recovered]"))
 		})
 
-		It("should recover panic if RecoverPanic is true", func() {
+		It("should recover panic if RecoverPanic is true", func(ctx SpecContext) {
 			panicHandler := func() *Webhook {
 				handler := &fakeHandler{
 					fn: func(ctx context.Context, req Request) Response {
@@ -246,7 +246,7 @@ var _ = Describe("Admission Webhooks", func() {
 			webhook := panicHandler()
 
 			By("invoking the webhook")
-			resp := webhook.Handle(context.Background(), Request{})
+			resp := webhook.Handle(ctx, Request{})
 
 			By("checking that it errored the request")
 			Expect(resp.Allowed).To(BeFalse())
@@ -254,7 +254,7 @@ var _ = Describe("Admission Webhooks", func() {
 			Expect(resp.Result.Message).To(Equal("panic: fake panic test [recovered]"))
 		})
 
-		It("should not recover panic if RecoverPanic is false", func() {
+		It("should not recover panic if RecoverPanic is false", func(ctx SpecContext) {
 			panicHandler := func() *Webhook {
 				handler := &fakeHandler{
 					fn: func(ctx context.Context, req Request) Response {
@@ -276,20 +276,19 @@ var _ = Describe("Admission Webhooks", func() {
 			webhook := panicHandler()
 
 			By("invoking the webhook")
-			webhook.Handle(context.Background(), Request{})
+			webhook.Handle(ctx, Request{})
 		})
 	})
 })
 
-var _ = Describe("Should be able to write/read admission.Request to/from context", func() {
-	ctx := context.Background()
+var _ = It("Should be able to write/read admission.Request to/from context", func(specContext SpecContext) {
 	testRequest := Request{
 		admissionv1.AdmissionRequest{
 			UID: "test-uid",
 		},
 	}
 
-	ctx = NewContextWithRequest(ctx, testRequest)
+	ctx := NewContextWithRequest(specContext, testRequest)
 
 	gotRequest, err := RequestFromContext(ctx)
 	Expect(err).To(Not(HaveOccurred()))

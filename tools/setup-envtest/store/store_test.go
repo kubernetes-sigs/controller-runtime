@@ -47,23 +47,23 @@ var _ = Describe("Store", func() {
 		}
 	})
 	Describe("initialization", func() {
-		It("should ensure the repo root exists", func() {
+		It("should ensure the repo root exists", func(ctx SpecContext) {
 			// remove the old dir
 			Expect(st.Root.RemoveAll("")).To(Succeed(), "should be able to remove the store before trying to initialize")
 
-			Expect(st.Initialize(logCtx())).To(Succeed(), "initialization should succeed")
+			Expect(st.Initialize(logCtx(ctx))).To(Succeed(), "initialization should succeed")
 			Expect(st.Root.Stat("k8s")).NotTo(BeNil(), "store's binary dir should exist")
 		})
 
-		It("should be fine if the repo root already exists", func() {
-			Expect(st.Initialize(logCtx())).To(Succeed())
+		It("should be fine if the repo root already exists", func(ctx SpecContext) {
+			Expect(st.Initialize(logCtx(ctx))).To(Succeed())
 		})
 	})
 	Describe("listing items", func() {
-		It("should filter results by the given filter, sorted in version order (newest first)", func() {
+		It("should filter results by the given filter, sorted in version order (newest first)", func(ctx SpecContext) {
 			sel, err := versions.FromExpr("<=1.16")
 			Expect(err).NotTo(HaveOccurred(), "should be able to construct <=1.16 selector")
-			Expect(st.List(logCtx(), store.Filter{
+			Expect(st.List(logCtx(ctx), store.Filter{
 				Version:  sel,
 				Platform: versions.Platform{OS: "*", Arch: "amd64"},
 			})).To(Equal([]store.Item{
@@ -73,16 +73,16 @@ var _ = Describe("Store", func() {
 				{Version: ver(1, 14, 26), Platform: versions.Platform{OS: "linux", Arch: "amd64"}},
 			}))
 		})
-		It("should skip non-folders in the store", func() {
+		It("should skip non-folders in the store", func(ctx SpecContext) {
 			Expect(afero.WriteFile(st.Root, "k8s/2.3.6-linux-amd128", []byte{0x01}, fs.ModePerm)).To(Succeed(), "should be able to create a non-store file in the store directory")
-			Expect(st.List(logCtx(), store.Filter{
+			Expect(st.List(logCtx(ctx), store.Filter{
 				Version: versions.AnyVersion, Platform: versions.Platform{OS: "linux", Arch: "amd128"},
 			})).To(BeEmpty())
 		})
 
-		It("should skip non-matching names in the store", func() {
+		It("should skip non-matching names in the store", func(ctx SpecContext) {
 			Expect(st.Root.Mkdir("k8s/somedir-2.3.6-linux-amd128", fs.ModePerm)).To(Succeed(), "should be able to create a non-store file in the store directory")
-			Expect(st.List(logCtx(), store.Filter{
+			Expect(st.List(logCtx(ctx), store.Filter{
 				Version: versions.AnyVersion, Platform: versions.Platform{OS: "linux", Arch: "amd128"},
 			})).To(BeEmpty())
 		})
@@ -90,10 +90,10 @@ var _ = Describe("Store", func() {
 
 	Describe("removing items", func() {
 		var res []store.Item
-		BeforeEach(func() {
+		BeforeEach(func(ctx SpecContext) {
 			sel, err := versions.FromExpr("<=1.16")
 			Expect(err).NotTo(HaveOccurred(), "should be able to construct <=1.16 selector")
-			res, err = st.Remove(logCtx(), store.Filter{
+			res, err = st.Remove(logCtx(ctx), store.Filter{
 				Version:  sel,
 				Platform: versions.Platform{OS: "*", Arch: "amd64"},
 			})
@@ -128,27 +128,27 @@ var _ = Describe("Store", func() {
 	Describe("adding items (controller-tools archives)", func() {
 		archiveName := "envtest-v1.16.3-linux-amd64.tar.gz"
 
-		It("should support .tar.gz input", func() {
-			Expect(st.Add(logCtx(), newItem, makeFakeArchive(archiveName, "controller-tools/envtest/"))).To(Succeed())
+		It("should support .tar.gz input", func(ctx SpecContext) {
+			Expect(st.Add(logCtx(ctx), newItem, makeFakeArchive(archiveName, "controller-tools/envtest/"))).To(Succeed())
 			Expect(st.Has(newItem)).To(BeTrue(), "should have the item after adding it")
 		})
 
-		It("should extract binaries from the given archive to a directly to the item's directory, regardless of path", func() {
-			Expect(st.Add(logCtx(), newItem, makeFakeArchive(archiveName, "controller-tools/envtest/"))).To(Succeed())
+		It("should extract binaries from the given archive to a directly to the item's directory, regardless of path", func(ctx SpecContext) {
+			Expect(st.Add(logCtx(ctx), newItem, makeFakeArchive(archiveName, "controller-tools/envtest/"))).To(Succeed())
 
 			dirName := newItem.Platform.BaseName(newItem.Version)
 			Expect(afero.ReadFile(st.Root, filepath.Join("k8s", dirName, "some-file"))).To(HavePrefix(archiveName + "some-file"))
 			Expect(afero.ReadFile(st.Root, filepath.Join("k8s", dirName, "other-file"))).To(HavePrefix(archiveName + "other-file"))
 		})
 
-		It("should clean up any existing item directory before creating the new one", func() {
+		It("should clean up any existing item directory before creating the new one", func(ctx SpecContext) {
 			item := localVersions[0]
-			Expect(st.Add(logCtx(), item, makeFakeArchive(archiveName, "controller-tools/envtest/"))).To(Succeed())
+			Expect(st.Add(logCtx(ctx), item, makeFakeArchive(archiveName, "controller-tools/envtest/"))).To(Succeed())
 			Expect(st.Root.Stat(filepath.Join("k8s", item.Platform.BaseName(item.Version)))).NotTo(BeNil(), "new files should exist")
 		})
-		It("should clean up if it errors before finishing", func() {
+		It("should clean up if it errors before finishing", func(ctx SpecContext) {
 			item := localVersions[0]
-			Expect(st.Add(logCtx(), item, new(bytes.Buffer))).NotTo(Succeed(), "should fail to extract")
+			Expect(st.Add(logCtx(ctx), item, new(bytes.Buffer))).NotTo(Succeed(), "should fail to extract")
 			_, err := st.Root.Stat(filepath.Join("k8s", item.Platform.BaseName(item.Version)))
 			Expect(err).To(HaveOccurred(), "the binaries dir for the item should be gone")
 

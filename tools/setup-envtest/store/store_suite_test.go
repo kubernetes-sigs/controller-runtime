@@ -40,8 +40,8 @@ func zapLogger() logr.Logger {
 	return zapr.NewLogger(zapLog)
 }
 
-func logCtx() context.Context {
-	return logr.NewContext(context.Background(), testLog)
+func logCtx(ctx context.Context) context.Context {
+	return logr.NewContext(ctx, testLog)
 }
 
 func TestStore(t *testing.T) {

@@ -104,7 +104,6 @@ func TestApiMachinery(t *testing.T) {
 			for _, runtimeGvk := range runtimeGvks {
 				t.Run("IsGVKNamespaced should report scope for "+runtimeGvk.name, func(t *testing.T) {
 					g := gmg.NewWithT(t)
-					ctx := context.Background()
 
 					httpClient, err := rest.HTTPClientFor(restCfg)
 					g.Expect(err).NotTo(gmg.HaveOccurred())
@@ -128,7 +127,7 @@ func TestApiMachinery(t *testing.T) {
 					g.Expect(scope).To(gmg.BeTrue())
 
 					// Register a new CRD at runtime.
-					crd := newCRD(ctx, g, c, runtimeGvk.gvk.Group, runtimeGvk.gvk.Kind, runtimeGvk.plural)
+					crd := newCRD(t.Context(), g, c, runtimeGvk.gvk.Group, runtimeGvk.gvk.Kind, runtimeGvk.plural)
 					version := crd.Spec.Versions[0]
 					version.Name = runtimeGvk.gvk.Version
 					version.Storage = true
@@ -136,9 +135,9 @@ func TestApiMachinery(t *testing.T) {
 					crd.Spec.Versions = []apiextensionsv1.CustomResourceDefinitionVersion{version}
 					crd.Spec.Scope = apiextensionsv1.NamespaceScoped
 
-					g.Expect(c.Create(ctx, crd)).To(gmg.Succeed())
+					g.Expect(c.Create(t.Context(), crd)).To(gmg.Succeed())
 					t.Cleanup(func() {
-						g.Expect(c.Delete(ctx, crd)).To(gmg.Succeed())
+						g.Expect(c.Delete(context.Background(), crd)).To(gmg.Succeed()) //nolint:forbidigo //t.Context is cancelled in t.Cleanup
 					})
 
 					// Wait until the CRD is registered.

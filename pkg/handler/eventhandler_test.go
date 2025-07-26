@@ -41,7 +41,6 @@ import (
 )
 
 var _ = Describe("Eventhandler", func() {
-	var ctx = context.Background()
 	var q workqueue.TypedRateLimitingInterface[reconcile.Request]
 	var instance handler.EnqueueRequestForObject
 	var pod *corev1.Pod
@@ -60,7 +59,7 @@ var _ = Describe("Eventhandler", func() {
 	})
 
 	Describe("EnqueueRequestForObject", func() {
-		It("should enqueue a Request with the Name / Namespace of the object in the CreateEvent.", func() {
+		It("should enqueue a Request with the Name / Namespace of the object in the CreateEvent.", func(ctx SpecContext) {
 			evt := event.CreateEvent{
 				Object: pod,
 			}
@@ -71,7 +70,7 @@ var _ = Describe("Eventhandler", func() {
 			Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
 		})
 
-		It("should enqueue a Request with the Name / Namespace of the object in the DeleteEvent.", func() {
+		It("should enqueue a Request with the Name / Namespace of the object in the DeleteEvent.", func(ctx SpecContext) {
 			evt := event.DeleteEvent{
 				Object: pod,
 			}
@@ -83,7 +82,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		It("should enqueue a Request with the Name / Namespace of one object in the UpdateEvent.",
-			func() {
+			func(ctx SpecContext) {
 				newPod := pod.DeepCopy()
 				newPod.Name = "baz2"
 				newPod.Namespace = "biz2"
@@ -99,7 +98,7 @@ var _ = Describe("Eventhandler", func() {
 				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz2", Name: "baz2"}))
 			})
 
-		It("should enqueue a Request with the Name / Namespace of the object in the GenericEvent.", func() {
+		It("should enqueue a Request with the Name / Namespace of the object in the GenericEvent.", func(ctx SpecContext) {
 			evt := event.GenericEvent{
 				Object: pod,
 			}
@@ -110,7 +109,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		Context("for a runtime.Object without Object", func() {
-			It("should do nothing if the Object is missing for a CreateEvent.", func() {
+			It("should do nothing if the Object is missing for a CreateEvent.", func(ctx SpecContext) {
 				evt := event.CreateEvent{
 					Object: nil,
 				}
@@ -118,7 +117,7 @@ var _ = Describe("Eventhandler", func() {
 				Expect(q.Len()).To(Equal(0))
 			})
 
-			It("should do nothing if the Object is missing for a UpdateEvent.", func() {
+			It("should do nothing if the Object is missing for a UpdateEvent.", func(ctx SpecContext) {
 				newPod := pod.DeepCopy()
 				newPod.Name = "baz2"
 				newPod.Namespace = "biz2"
@@ -140,7 +139,7 @@ var _ = Describe("Eventhandler", func() {
 				Expect(req.NamespacedName).To(Equal(types.NamespacedName{Namespace: "biz", Name: "baz"}))
 			})
 
-			It("should do nothing if the Object is missing for a DeleteEvent.", func() {
+			It("should do nothing if the Object is missing for a DeleteEvent.", func(ctx SpecContext) {
 				evt := event.DeleteEvent{
 					Object: nil,
 				}
@@ -148,7 +147,7 @@ var _ = Describe("Eventhandler", func() {
 				Expect(q.Len()).To(Equal(0))
 			})
 
-			It("should do nothing if the Object is missing for a GenericEvent.", func() {
+			It("should do nothing if the Object is missing for a GenericEvent.", func(ctx SpecContext) {
 				evt := event.GenericEvent{
 					Object: nil,
 				}
@@ -159,7 +158,7 @@ var _ = Describe("Eventhandler", func() {
 	})
 
 	Describe("EnqueueRequestsFromMapFunc", func() {
-		It("should enqueue a Request with the function applied to the CreateEvent.", func() {
+		It("should enqueue a Request with the function applied to the CreateEvent.", func(ctx SpecContext) {
 			req := []reconcile.Request{}
 			instance := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a client.Object) []reconcile.Request {
 				defer GinkgoRecover()
@@ -191,7 +190,7 @@ var _ = Describe("Eventhandler", func() {
 			))
 		})
 
-		It("should enqueue a Request with the function applied to the DeleteEvent.", func() {
+		It("should enqueue a Request with the function applied to the DeleteEvent.", func(ctx SpecContext) {
 			req := []reconcile.Request{}
 			instance := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a client.Object) []reconcile.Request {
 				defer GinkgoRecover()
@@ -224,7 +223,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		It("should enqueue a Request with the function applied to both objects in the UpdateEvent.",
-			func() {
+			func(ctx SpecContext) {
 				newPod := pod.DeepCopy()
 
 				req := []reconcile.Request{}
@@ -256,7 +255,7 @@ var _ = Describe("Eventhandler", func() {
 				Expect(i).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz-baz"}}))
 			})
 
-		It("should enqueue a Request with the function applied to the GenericEvent.", func() {
+		It("should enqueue a Request with the function applied to the GenericEvent.", func(ctx SpecContext) {
 			req := []reconcile.Request{}
 			instance := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a client.Object) []reconcile.Request {
 				defer GinkgoRecover()
@@ -290,7 +289,7 @@ var _ = Describe("Eventhandler", func() {
 	})
 
 	Describe("EnqueueRequestForOwner", func() {
-		It("should enqueue a Request with the Owner of the object in the CreateEvent.", func() {
+		It("should enqueue a Request with the Owner of the object in the CreateEvent.", func(ctx SpecContext) {
 			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 
 			pod.OwnerReferences = []metav1.OwnerReference{
@@ -311,7 +310,7 @@ var _ = Describe("Eventhandler", func() {
 				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
 		})
 
-		It("should enqueue a Request with the Owner of the object in the DeleteEvent.", func() {
+		It("should enqueue a Request with the Owner of the object in the DeleteEvent.", func(ctx SpecContext) {
 			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 
 			pod.OwnerReferences = []metav1.OwnerReference{
@@ -332,7 +331,7 @@ var _ = Describe("Eventhandler", func() {
 				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
 		})
 
-		It("should enqueue a Request with the Owners of both objects in the UpdateEvent.", func() {
+		It("should enqueue a Request with the Owners of both objects in the UpdateEvent.", func(ctx SpecContext) {
 			newPod := pod.DeepCopy()
 			newPod.Name = pod.Name + "2"
 			newPod.Namespace = pod.Namespace + "2"
@@ -370,7 +369,7 @@ var _ = Describe("Eventhandler", func() {
 			))
 		})
 
-		It("should enqueue a Request with the one duplicate Owner of both objects in the UpdateEvent.", func() {
+		It("should enqueue a Request with the one duplicate Owner of both objects in the UpdateEvent.", func(ctx SpecContext) {
 			newPod := pod.DeepCopy()
 			newPod.Name = pod.Name + "2"
 
@@ -402,7 +401,7 @@ var _ = Describe("Eventhandler", func() {
 				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
 		})
 
-		It("should enqueue a Request with the Owner of the object in the GenericEvent.", func() {
+		It("should enqueue a Request with the Owner of the object in the GenericEvent.", func(ctx SpecContext) {
 			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -422,7 +421,7 @@ var _ = Describe("Eventhandler", func() {
 				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
 		})
 
-		It("should not enqueue a Request if there are no owners matching Group and Kind.", func() {
+		It("should not enqueue a Request if there are no owners matching Group and Kind.", func(ctx SpecContext) {
 			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{}, handler.OnlyControllerOwner())
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{ // Wrong group
@@ -444,7 +443,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		It("should enqueue a Request if there are owners matching Group "+
-			"and Kind with a different version.", func() {
+			"and Kind with a different version.", func(ctx SpecContext) {
 			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &autoscalingv1.HorizontalPodAutoscaler{})
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -464,7 +463,7 @@ var _ = Describe("Eventhandler", func() {
 				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
 		})
 
-		It("should enqueue a Request for a owner that is cluster scoped", func() {
+		It("should enqueue a Request for a owner that is cluster scoped", func(ctx SpecContext) {
 			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &corev1.Node{})
 			pod.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -485,7 +484,7 @@ var _ = Describe("Eventhandler", func() {
 
 		})
 
-		It("should not enqueue a Request if there are no owners.", func() {
+		It("should not enqueue a Request if there are no owners.", func(ctx SpecContext) {
 			instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 			evt := event.CreateEvent{
 				Object: pod,
@@ -496,7 +495,7 @@ var _ = Describe("Eventhandler", func() {
 
 		Context("with the Controller field set to true", func() {
 			It("should enqueue reconcile.Requests for only the first the Controller if there are "+
-				"multiple Controller owners.", func() {
+				"multiple Controller owners.", func(ctx SpecContext) {
 				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{}, handler.OnlyControllerOwner())
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
@@ -537,7 +536,7 @@ var _ = Describe("Eventhandler", func() {
 					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo2-parent"}}))
 			})
 
-			It("should not enqueue reconcile.Requests if there are no Controller owners.", func() {
+			It("should not enqueue reconcile.Requests if there are no Controller owners.", func(ctx SpecContext) {
 				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{}, handler.OnlyControllerOwner())
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
@@ -563,7 +562,7 @@ var _ = Describe("Eventhandler", func() {
 				Expect(q.Len()).To(Equal(0))
 			})
 
-			It("should not enqueue reconcile.Requests if there are no owners.", func() {
+			It("should not enqueue reconcile.Requests if there are no owners.", func(ctx SpecContext) {
 				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{}, handler.OnlyControllerOwner())
 				evt := event.CreateEvent{
 					Object: pod,
@@ -574,7 +573,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		Context("with the Controller field set to false", func() {
-			It("should enqueue a reconcile.Requests for all owners.", func() {
+			It("should enqueue a reconcile.Requests for all owners.", func(ctx SpecContext) {
 				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
@@ -614,7 +613,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		Context("with a nil object", func() {
-			It("should do nothing.", func() {
+			It("should do nothing.", func(ctx SpecContext) {
 				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
@@ -640,7 +639,7 @@ var _ = Describe("Eventhandler", func() {
 		})
 
 		Context("with an invalid APIVersion in the OwnerReference", func() {
-			It("should do nothing.", func() {
+			It("should do nothing.", func(ctx SpecContext) {
 				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
 				pod.OwnerReferences = []metav1.OwnerReference{
 					{
@@ -678,7 +677,7 @@ var _ = Describe("Eventhandler", func() {
 			},
 		}
 
-		It("should call CreateFunc for a CreateEvent if provided.", func() {
+		It("should call CreateFunc for a CreateEvent if provided.", func(ctx SpecContext) {
 			instance := failingFuncs
 			evt := event.CreateEvent{
 				Object: pod,
@@ -691,7 +690,7 @@ var _ = Describe("Eventhandler", func() {
 			instance.Create(ctx, evt, q)
 		})
 
-		It("should NOT call CreateFunc for a CreateEvent if NOT provided.", func() {
+		It("should NOT call CreateFunc for a CreateEvent if NOT provided.", func(ctx SpecContext) {
 			instance := failingFuncs
 			instance.CreateFunc = nil
 			evt := event.CreateEvent{
@@ -700,7 +699,7 @@ var _ = Describe("Eventhandler", func() {
 			instance.Create(ctx, evt, q)
 		})
 
-		It("should call UpdateFunc for an UpdateEvent if provided.", func() {
+		It("should call UpdateFunc for an UpdateEvent if provided.", func(ctx SpecContext) {
 			newPod := pod.DeepCopy()
 			newPod.Name = pod.Name + "2"
 			newPod.Namespace = pod.Namespace + "2"
@@ -719,7 +718,7 @@ var _ = Describe("Eventhandler", func() {
 			instance.Update(ctx, evt, q)
 		})
 
-		It("should NOT call UpdateFunc for an UpdateEvent if NOT provided.", func() {
+		It("should NOT call UpdateFunc for an UpdateEvent if NOT provided.", func(ctx SpecContext) {
 			newPod := pod.DeepCopy()
 			newPod.Name = pod.Name + "2"
 			newPod.Namespace = pod.Namespace + "2"
@@ -730,7 +729,7 @@ var _ = Describe("Eventhandler", func() {
 			instance.Update(ctx, evt, q)
 		})
 
-		It("should call DeleteFunc for a DeleteEvent if provided.", func() {
+		It("should call DeleteFunc for a DeleteEvent if provided.", func(ctx SpecContext) {
 			instance := failingFuncs
 			evt := event.DeleteEvent{
 				Object: pod,
@@ -743,7 +742,7 @@ var _ = Describe("Eventhandler", func() {
 			instance.Delete(ctx, evt, q)
 		})
 
-		It("should NOT call DeleteFunc for a DeleteEvent if NOT provided.", func() {
+		It("should NOT call DeleteFunc for a DeleteEvent if NOT provided.", func(ctx SpecContext) {
 			instance := failingFuncs
 			instance.DeleteFunc = nil
 			evt := event.DeleteEvent{
@@ -752,7 +751,7 @@ var _ = Describe("Eventhandler", func() {
 			instance.Delete(ctx, evt, q)
 		})
 
-		It("should call GenericFunc for a GenericEvent if provided.", func() {
+		It("should call GenericFunc for a GenericEvent if provided.", func(ctx SpecContext) {
 			instance := failingFuncs
 			evt := event.GenericEvent{
 				Object: pod,
@@ -765,7 +764,7 @@ var _ = Describe("Eventhandler", func() {
 			instance.Generic(ctx, evt, q)
 		})
 
-		It("should NOT call GenericFunc for a GenericEvent if NOT provided.", func() {
+		It("should NOT call GenericFunc for a GenericEvent if NOT provided.", func(ctx SpecContext) {
 			instance := failingFuncs
 			instance.GenericFunc = nil
 			evt := event.GenericEvent{
@@ -841,7 +840,7 @@ var _ = Describe("Eventhandler", func() {
 		}
 		for _, test := range handlerPriorityTests {
 			When("handler is "+test.name, func() {
-				It("should lower the priority of a create request for an object that was part of the initial list", func() {
+				It("should lower the priority of a create request for an object that was part of the initial list", func(ctx SpecContext) {
 					actualOpts := priorityqueue.AddOpts{}
 					var actualRequests []reconcile.Request
 					wq := &fakePriorityQueue{
@@ -867,7 +866,7 @@ var _ = Describe("Eventhandler", func() {
 					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 				})
 
-				It("should not lower the priority of a create request for an object that was not part of the initial list", func() {
+				It("should not lower the priority of a create request for an object that was not part of the initial list", func(ctx SpecContext) {
 					actualOpts := priorityqueue.AddOpts{}
 					var actualRequests []reconcile.Request
 					wq := &fakePriorityQueue{
@@ -893,7 +892,7 @@ var _ = Describe("Eventhandler", func() {
 					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 				})
 
-				It("should lower the priority of an update request with unchanged RV", func() {
+				It("should lower the priority of an update request with unchanged RV", func(ctx SpecContext) {
 					actualOpts := priorityqueue.AddOpts{}
 					var actualRequests []reconcile.Request
 					wq := &fakePriorityQueue{
@@ -924,7 +923,7 @@ var _ = Describe("Eventhandler", func() {
 					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 				})
 
-				It("should not lower the priority of an update request with changed RV", func() {
+				It("should not lower the priority of an update request with changed RV", func(ctx SpecContext) {
 					actualOpts := priorityqueue.AddOpts{}
 					var actualRequests []reconcile.Request
 					wq := &fakePriorityQueue{
@@ -956,7 +955,7 @@ var _ = Describe("Eventhandler", func() {
 					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 				})
 
-				It("should have no effect on create if the workqueue is not a priorityqueue", func() {
+				It("should have no effect on create if the workqueue is not a priorityqueue", func(ctx SpecContext) {
 					test.handler().Create(ctx, event.CreateEvent{
 						Object: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
 							Name: "my-pod",
@@ -972,7 +971,7 @@ var _ = Describe("Eventhandler", func() {
 					Expect(item).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Name: "my-pod"}}))
 				})
 
-				It("should have no effect on Update if the workqueue is not a priorityqueue", func() {
+				It("should have no effect on Update if the workqueue is not a priorityqueue", func(ctx SpecContext) {
 					test.handler().Update(ctx, event.UpdateEvent{
 						ObjectOld: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
 							Name: "my-pod",

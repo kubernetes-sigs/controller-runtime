@@ -90,10 +90,7 @@ var _ = Describe("controller", func() {
 	})
 
 	Describe("Reconciler", func() {
-		It("should call the Reconciler function", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
+		It("should call the Reconciler function", func(ctx SpecContext) {
 			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 				return reconcile.Result{Requeue: true}, nil
 			})
@@ -103,10 +100,7 @@ var _ = Describe("controller", func() {
 			Expect(result).To(Equal(reconcile.Result{Requeue: true}))
 		})
 
-		It("should not recover panic if RecoverPanic is false", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
+		It("should not recover panic if RecoverPanic is false", func(ctx SpecContext) {
 			defer func() {
 				Expect(recover()).ShouldNot(BeNil())
 			}()
@@ -119,10 +113,7 @@ var _ = Describe("controller", func() {
 				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
 		})
 
-		It("should recover panic if RecoverPanic is true by default", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
+		It("should recover panic if RecoverPanic is true by default", func(ctx SpecContext) {
 			defer func() {
 				Expect(recover()).To(BeNil())
 			}()
@@ -137,10 +128,7 @@ var _ = Describe("controller", func() {
 			Expect(err.Error()).To(ContainSubstring("[recovered]"))
 		})
 
-		It("should recover panic if RecoverPanic is true", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
+		It("should recover panic if RecoverPanic is true", func(ctx SpecContext) {
 			defer func() {
 				Expect(recover()).To(BeNil())
 			}()
@@ -157,21 +145,19 @@ var _ = Describe("controller", func() {
 	})
 
 	Describe("Start", func() {
-		It("should return an error if there is an error waiting for the informers", func() {
+		It("should return an error if there is an error waiting for the informers", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = time.Second
 			f := false
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Kind(&informertest.FakeInformers{Synced: &f}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
 			}
 			ctrl.Name = "foo"
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			err := ctrl.Start(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to wait for foo caches to sync"))
 		})
 
-		It("should error when cache sync timeout occurs", func() {
+		It("should error when cache sync timeout occurs", func(ctx SpecContext) {
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
@@ -182,12 +168,12 @@ var _ = Describe("controller", func() {
 			}
 			ctrl.Name = testControllerName
 
-			err = ctrl.Start(context.TODO())
+			err = ctrl.Start(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync kind source: *v1.Deployment: timed out waiting for cache to be synced"))
 		})
 
-		It("should not error when controller Start context is cancelled during Sources WaitForSync", func() {
+		It("should not error when controller Start context is cancelled during Sources WaitForSync", func(specCtx SpecContext) {
 			ctrl.CacheSyncTimeout = 1 * time.Second
 
 			sourceSynced := make(chan struct{})
@@ -202,7 +188,7 @@ var _ = Describe("controller", func() {
 			}
 			ctrl.Name = testControllerName
 
-			ctx, cancel := context.WithCancel(context.TODO())
+			ctx, cancel := context.WithCancel(specCtx)
 			go func() {
 				defer GinkgoRecover()
 				err = ctrl.Start(ctx)
@@ -213,7 +199,7 @@ var _ = Describe("controller", func() {
 			<-sourceSynced
 		})
 
-		It("should error when Start() is blocking forever", func() {
+		It("should error when Start() is blocking forever", func(specCtx SpecContext) {
 			ctrl.CacheSyncTimeout = time.Second
 
 			controllerDone := make(chan struct{})
@@ -223,7 +209,7 @@ var _ = Describe("controller", func() {
 					return ctx.Err()
 				})}
 
-			ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(specCtx, 10*time.Second)
 			defer cancel()
 
 			err := ctrl.Start(ctx)
@@ -233,10 +219,8 @@ var _ = Describe("controller", func() {
 			close(controllerDone)
 		})
 
-		It("should not error when cache sync timeout is of sufficiently high", func() {
+		It("should not error when cache sync timeout is of sufficiently high", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = 10 * time.Second
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 
 			sourceSynced := make(chan struct{})
 			c := &informertest.FakeInformers{}
@@ -255,15 +239,12 @@ var _ = Describe("controller", func() {
 			<-sourceSynced
 		})
 
-		It("should process events from source.Channel", func() {
+		It("should process events from source.Channel", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = 10 * time.Second
 			// channel to be closed when event is processed
 			processed := make(chan struct{})
 			// source channel
 			ch := make(chan event.GenericEvent, 1)
-
-			ctx, cancel := context.WithCancel(context.TODO())
-			defer cancel()
 
 			// event to be sent to the channel
 			p := &corev1.Pod{
@@ -295,10 +276,8 @@ var _ = Describe("controller", func() {
 			<-processed
 		})
 
-		It("should error when channel source is not specified", func() {
+		It("should error when channel source is not specified", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = 10 * time.Second
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 
 			ins := source.Channel[string](nil, nil)
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{ins}
@@ -308,10 +287,10 @@ var _ = Describe("controller", func() {
 			Expect(e.Error()).To(ContainSubstring("must specify Channel.Source"))
 		})
 
-		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {
+		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func(specCtx SpecContext) {
 			ctrl.CacheSyncTimeout = 10 * time.Second
 			started := false
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(specCtx)
 			src := source.Func(func(ctx context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(ctrl.Queue))
@@ -327,7 +306,7 @@ var _ = Describe("controller", func() {
 			Expect(started).To(BeTrue())
 		})
 
-		It("should return an error if there is an error starting sources", func() {
+		It("should return an error if there is an error starting sources", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = 10 * time.Second
 			err := fmt.Errorf("Expected Error: could not start source")
 			src := source.Func(func(context.Context,
@@ -337,15 +316,12 @@ var _ = Describe("controller", func() {
 				return err
 			})
 			Expect(ctrl.Watch(src)).To(Succeed())
-
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			Expect(ctrl.Start(ctx)).To(Equal(err))
 		})
 
-		It("should return an error if it gets started more than once", func() {
+		It("should return an error if it gets started more than once", func(specCtx SpecContext) {
 			// Use a cancelled context so Start doesn't block
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(specCtx)
 			cancel()
 			Expect(ctrl.Start(ctx)).To(Succeed())
 			err := ctrl.Start(ctx)
@@ -353,7 +329,7 @@ var _ = Describe("controller", func() {
 			Expect(err.Error()).To(Equal("controller was started more than once. This is likely to be caused by being added to a manager multiple times"))
 		})
 
-		It("should check for correct TypedSyncingSource if custom types are used", func() {
+		It("should check for correct TypedSyncingSource if custom types are used", func(specCtx SpecContext) {
 			queue := &priorityQueueWrapper[TestRequest]{
 				TypedRateLimitingInterface: &controllertest.TypedQueue[TestRequest]{
 					TypedInterface: workqueue.NewTyped[TestRequest](),
@@ -375,7 +351,7 @@ var _ = Describe("controller", func() {
 			}
 			ctrl.startWatches = []source.TypedSource[TestRequest]{src}
 			ctrl.Name = "foo"
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(specCtx)
 			defer cancel()
 			startCh := make(chan error)
 			go func() {
@@ -392,29 +368,20 @@ var _ = Describe("controller", func() {
 	})
 
 	Describe("startEventSourcesAndQueueLocked", func() {
-		It("should return nil when no sources are provided", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
+		It("should return nil when no sources are provided", func(ctx SpecContext) {
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{}
 			err := ctrl.startEventSourcesAndQueueLocked(ctx)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should initialize controller queue when called", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
+		It("should initialize controller queue when called", func(ctx SpecContext) {
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{}
 			err := ctrl.startEventSourcesAndQueueLocked(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ctrl.Queue).NotTo(BeNil())
 		})
 
-		It("should return an error if a source fails to start", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
+		It("should return an error if a source fails to start", func(ctx SpecContext) {
 			expectedErr := fmt.Errorf("failed to start source")
 			src := source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
 				// Return the error immediately so we don't get a timeout
@@ -428,10 +395,7 @@ var _ = Describe("controller", func() {
 			Expect(err).To(Equal(expectedErr))
 		})
 
-		It("should return an error if a source fails to sync", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
+		It("should return an error if a source fails to sync", func(ctx SpecContext) {
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Kind(&informertest.FakeInformers{Synced: ptr.To(false)}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
 			}
@@ -443,10 +407,7 @@ var _ = Describe("controller", func() {
 			Expect(err.Error()).To(ContainSubstring("failed to wait for test-controller caches to sync"))
 		})
 
-		It("should not return an error when sources start and sync successfully", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
+		It("should not return an error when sources start and sync successfully", func(ctx SpecContext) {
 			// Create a source that starts and syncs successfully
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Kind(&informertest.FakeInformers{Synced: ptr.To(true)}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
@@ -458,8 +419,8 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should not return an error when context is cancelled during source sync", func() {
-			sourceCtx, sourceCancel := context.WithCancel(context.Background())
+		It("should not return an error when context is cancelled during source sync", func(ctx SpecContext) {
+			sourceCtx, sourceCancel := context.WithCancel(ctx)
 			defer sourceCancel()
 
 			ctrl.CacheSyncTimeout = 5 * time.Second
@@ -499,10 +460,7 @@ var _ = Describe("controller", func() {
 			Expect(err).To(MatchError(context.Canceled))
 		})
 
-		It("should timeout if source Start blocks for too long", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
+		It("should timeout if source Start blocks for too long", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = 1 * time.Millisecond
 
 			// Create a source that blocks forever in Start
@@ -518,10 +476,7 @@ var _ = Describe("controller", func() {
 			Expect(err.Error()).To(ContainSubstring("timed out waiting for source"))
 		})
 
-		It("should only start sources once when called multiple times concurrently", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
+		It("should only start sources once when called multiple times concurrently", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = 1 * time.Millisecond
 
 			var startCount atomic.Int32
@@ -548,9 +503,7 @@ var _ = Describe("controller", func() {
 			Expect(startCount.Load()).To(Equal(int32(1)), "Source should only be started once even when called multiple times")
 		})
 
-		It("should block subsequent calls from returning until the first call to startEventSourcesAndQueueLocked has returned", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+		It("should block subsequent calls from returning until the first call to startEventSourcesAndQueueLocked has returned", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = 5 * time.Second
 
 			// finishSourceChan is closed to unblock startEventSourcesAndQueueLocked from returning
@@ -594,10 +547,7 @@ var _ = Describe("controller", func() {
 			wg.Wait()
 		})
 
-		It("should reset c.startWatches to nil after returning and startedEventSourcesAndQueue", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
+		It("should reset c.startWatches to nil after returning and startedEventSourcesAndQueue", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = 1 * time.Millisecond
 
 			src := source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
@@ -614,9 +564,7 @@ var _ = Describe("controller", func() {
 	})
 
 	Describe("Processing queue items from a Controller", func() {
-		It("should call Reconciler if an item is enqueued", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+		It("should call Reconciler if an item is enqueued", func(ctx SpecContext) {
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -632,9 +580,7 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
 		})
 
-		It("should requeue a Request if there is an error and continue processing items", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+		It("should requeue a Request if there is an error and continue processing items", func(ctx SpecContext) {
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -658,9 +604,7 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return queue.NumRequeues(request) }, 1.0).Should(Equal(0))
 		})
 
-		It("should not requeue a Request if there is a terminal error", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+		It("should not requeue a Request if there is a terminal error", func(ctx SpecContext) {
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -681,14 +625,12 @@ var _ = Describe("controller", func() {
 
 		// TODO(directxman12): we should ensure that backoff occurrs with error requeue
 
-		It("should not reset backoff until there's a non-error result", func() {
+		It("should not reset backoff until there's a non-error result", func(ctx SpecContext) {
 			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
 			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
 				return dq
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -719,14 +661,12 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return dq.NumRequeues(request) }).Should(Equal(0))
 		})
 
-		It("should requeue a Request with rate limiting if the Result sets Requeue:true and continue processing items", func() {
+		It("should requeue a Request with rate limiting if the Result sets Requeue:true and continue processing items", func(ctx SpecContext) {
 			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
 			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
 				return dq
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -751,14 +691,12 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return dq.NumRequeues(request) }).Should(Equal(0))
 		})
 
-		It("should retain the priority when the reconciler requests a requeue", func() {
+		It("should retain the priority when the reconciler requests a requeue", func(ctx SpecContext) {
 			q := &fakePriorityQueue{PriorityQueue: priorityqueue.New[reconcile.Request]("controller1")}
 			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
 				return q
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -782,14 +720,12 @@ var _ = Describe("controller", func() {
 			}}))
 		})
 
-		It("should requeue a Request after a duration (but not rate-limitted) if the Result sets RequeueAfter (regardless of Requeue)", func() {
+		It("should requeue a Request after a duration (but not rate-limitted) if the Result sets RequeueAfter (regardless of Requeue)", func(ctx SpecContext) {
 			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
 			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
 				return dq
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -814,14 +750,12 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return dq.NumRequeues(request) }).Should(Equal(0))
 		})
 
-		It("should retain the priority with RequeAfter", func() {
+		It("should retain the priority with RequeAfter", func(ctx SpecContext) {
 			q := &fakePriorityQueue{PriorityQueue: priorityqueue.New[reconcile.Request]("controller1")}
 			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
 				return q
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -845,14 +779,12 @@ var _ = Describe("controller", func() {
 			}}))
 		})
 
-		It("should perform error behavior if error is not nil, regardless of RequeueAfter", func() {
+		It("should perform error behavior if error is not nil, regardless of RequeueAfter", func(ctx SpecContext) {
 			dq := &DelegatingQueue{TypedRateLimitingInterface: ctrl.NewQueue("controller1", nil)}
 			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
 				return dq
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -876,14 +808,12 @@ var _ = Describe("controller", func() {
 			Eventually(func() int { return dq.NumRequeues(request) }).Should(Equal(0))
 		})
 
-		It("should retain the priority when there was an error", func() {
+		It("should retain the priority when there was an error", func(ctx SpecContext) {
 			q := &fakePriorityQueue{PriorityQueue: priorityqueue.New[reconcile.Request]("controller1")}
 			ctrl.NewQueue = func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
 				return q
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -927,7 +857,7 @@ var _ = Describe("controller", func() {
 				reconcileTotal.Reset()
 			})
 
-			It("should get updated on successful reconciliation", func() {
+			It("should get updated on successful reconciliation", func(ctx SpecContext) {
 				Expect(func() error {
 					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "success").Write(&reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
@@ -936,8 +866,6 @@ var _ = Describe("controller", func() {
 					return nil
 				}()).Should(Succeed())
 
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
 				go func() {
 					defer GinkgoRecover()
 					Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -956,7 +884,7 @@ var _ = Describe("controller", func() {
 				}, 2.0).Should(Succeed())
 			})
 
-			It("should get updated on reconcile errors", func() {
+			It("should get updated on reconcile errors", func(ctx SpecContext) {
 				Expect(func() error {
 					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "error").Write(&reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
@@ -965,8 +893,6 @@ var _ = Describe("controller", func() {
 					return nil
 				}()).Should(Succeed())
 
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
 				go func() {
 					defer GinkgoRecover()
 					Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -985,7 +911,7 @@ var _ = Describe("controller", func() {
 				}, 2.0).Should(Succeed())
 			})
 
-			It("should get updated when reconcile returns with retry enabled", func() {
+			It("should get updated when reconcile returns with retry enabled", func(ctx SpecContext) {
 				Expect(func() error {
 					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "retry").Write(&reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
@@ -994,8 +920,6 @@ var _ = Describe("controller", func() {
 					return nil
 				}()).Should(Succeed())
 
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
 				go func() {
 					defer GinkgoRecover()
 					Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -1015,7 +939,7 @@ var _ = Describe("controller", func() {
 				}, 2.0).Should(Succeed())
 			})
 
-			It("should get updated when reconcile returns with retryAfter enabled", func() {
+			It("should get updated when reconcile returns with retryAfter enabled", func(ctx SpecContext) {
 				Expect(func() error {
 					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "retry_after").Write(&reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
@@ -1024,8 +948,6 @@ var _ = Describe("controller", func() {
 					return nil
 				}()).Should(Succeed())
 
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
 				go func() {
 					defer GinkgoRecover()
 					Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -1046,7 +968,7 @@ var _ = Describe("controller", func() {
 		})
 
 		Context("should update prometheus metrics", func() {
-			It("should requeue a Request if there is an error and continue processing items", func() {
+			It("should requeue a Request if there is an error and continue processing items", func(ctx SpecContext) {
 				var reconcileErrs dto.Metric
 				ctrlmetrics.ReconcileErrors.Reset()
 				Expect(func() error {
@@ -1057,8 +979,6 @@ var _ = Describe("controller", func() {
 					return nil
 				}()).Should(Succeed())
 
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
 				go func() {
 					defer GinkgoRecover()
 					Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -1085,7 +1005,7 @@ var _ = Describe("controller", func() {
 				Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
 			})
 
-			It("should add a reconcile time to the reconcile time histogram", func() {
+			It("should add a reconcile time to the reconcile time histogram", func(ctx SpecContext) {
 				var reconcileTime dto.Metric
 				ctrlmetrics.ReconcileTime.Reset()
 
@@ -1099,8 +1019,6 @@ var _ = Describe("controller", func() {
 					return nil
 				}()).Should(Succeed())
 
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
 				go func() {
 					defer GinkgoRecover()
 					Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
@@ -1133,11 +1051,8 @@ var _ = Describe("controller", func() {
 			ctrl.EnableWarmup = ptr.To(true)
 		})
 
-		It("should track warmup status correctly with successful sync", func() {
+		It("should track warmup status correctly with successful sync", func(ctx SpecContext) {
 			// Setup controller with sources that complete successfully
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
 			ctrl.CacheSyncTimeout = time.Second
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
@@ -1148,20 +1063,18 @@ var _ = Describe("controller", func() {
 			Expect(ctrl.Warmup(ctx)).To(Succeed())
 		})
 
-		It("should return an error if there is an error waiting for the informers", func() {
+		It("should return an error if there is an error waiting for the informers", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = time.Second
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Kind(&informertest.FakeInformers{Synced: ptr.To(false)}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
 			}
 			ctrl.Name = testControllerName
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			err := ctrl.Warmup(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync"))
 		})
 
-		It("should error when cache sync timeout occurs", func() {
+		It("should error when cache sync timeout occurs", func(ctx SpecContext) {
 			c, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
@@ -1172,12 +1085,12 @@ var _ = Describe("controller", func() {
 			}
 			ctrl.Name = testControllerName
 
-			err = ctrl.Warmup(context.TODO())
+			err = ctrl.Warmup(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to wait for testcontroller caches to sync kind source: *v1.Deployment: timed out waiting for cache to be synced"))
 		})
 
-		It("should not error when controller Warmup context is cancelled during Sources WaitForSync", func() {
+		It("should not error when controller Warmup context is cancelled during Sources WaitForSync", func(specCtx SpecContext) {
 			ctrl.CacheSyncTimeout = 1 * time.Second
 
 			sourceSynced := make(chan struct{})
@@ -1192,7 +1105,7 @@ var _ = Describe("controller", func() {
 			}
 			ctrl.Name = testControllerName
 
-			ctx, cancel := context.WithCancel(context.TODO())
+			ctx, cancel := context.WithCancel(specCtx)
 			go func() {
 				defer GinkgoRecover()
 				err = ctrl.Warmup(ctx)
@@ -1203,7 +1116,7 @@ var _ = Describe("controller", func() {
 			<-sourceSynced
 		})
 
-		It("should error when Warmup() is blocking forever", func() {
+		It("should error when Warmup() is blocking forever", func(specCtx SpecContext) {
 			ctrl.CacheSyncTimeout = time.Second
 
 			controllerDone := make(chan struct{})
@@ -1213,7 +1126,7 @@ var _ = Describe("controller", func() {
 					return ctx.Err()
 				})}
 
-			ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(specCtx, 10*time.Second)
 			defer cancel()
 
 			err := ctrl.Warmup(ctx)
@@ -1223,10 +1136,8 @@ var _ = Describe("controller", func() {
 			close(controllerDone)
 		})
 
-		It("should not error when cache sync timeout is of sufficiently high", func() {
+		It("should not error when cache sync timeout is of sufficiently high", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = 10 * time.Second
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 
 			sourceSynced := make(chan struct{})
 			c := &informertest.FakeInformers{}
@@ -1245,15 +1156,12 @@ var _ = Describe("controller", func() {
 			<-sourceSynced
 		})
 
-		It("should process events from source.Channel", func() {
+		It("should process events from source.Channel", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = 10 * time.Second
 			// channel to be closed when event is processed
 			processed := make(chan struct{})
 			// source channel
 			ch := make(chan event.GenericEvent, 1)
-
-			ctx, cancel := context.WithCancel(context.TODO())
-			defer cancel()
 
 			// event to be sent to the channel
 			p := &corev1.Pod{
@@ -1285,10 +1193,8 @@ var _ = Describe("controller", func() {
 			<-processed
 		})
 
-		It("should error when channel source is not specified", func() {
+		It("should error when channel source is not specified", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = 10 * time.Second
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 
 			ins := source.Channel[string](nil, nil)
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{ins}
@@ -1298,10 +1204,10 @@ var _ = Describe("controller", func() {
 			Expect(e.Error()).To(ContainSubstring("must specify Channel.Source"))
 		})
 
-		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func() {
+		It("should call Start on sources with the appropriate EventHandler, Queue, and Predicates", func(specCtx SpecContext) {
 			ctrl.CacheSyncTimeout = 10 * time.Second
 			started := false
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(specCtx)
 			src := source.Func(func(ctx context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
 				defer GinkgoRecover()
 				Expect(q).To(Equal(ctrl.Queue))
@@ -1317,7 +1223,7 @@ var _ = Describe("controller", func() {
 			Expect(started).To(BeTrue())
 		})
 
-		It("should return an error if there is an error starting sources", func() {
+		It("should return an error if there is an error starting sources", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = 10 * time.Second
 			err := fmt.Errorf("Expected Error: could not start source")
 			src := source.Func(func(context.Context,
@@ -1328,16 +1234,11 @@ var _ = Describe("controller", func() {
 			})
 			Expect(ctrl.Watch(src)).To(Succeed())
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			Expect(ctrl.Warmup(ctx)).To(Equal(err))
 		})
 
-		It("should track warmup status correctly with unsuccessful sync", func() {
+		It("should track warmup status correctly with unsuccessful sync", func(ctx SpecContext) {
 			// Setup controller with sources that complete with error
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
 			ctrl.CacheSyncTimeout = time.Second
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
@@ -1350,10 +1251,10 @@ var _ = Describe("controller", func() {
 			Expect(err.Error()).To(ContainSubstring("sync error"))
 		})
 
-		It("should call Start on sources with the appropriate non-nil queue", func() {
+		It("should call Start on sources with the appropriate non-nil queue", func(specCtx SpecContext) {
 			ctrl.CacheSyncTimeout = 10 * time.Second
 			started := false
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(specCtx)
 			src := source.Func(func(ctx context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
 				defer GinkgoRecover()
 				Expect(q).ToNot(BeNil())
@@ -1369,9 +1270,9 @@ var _ = Describe("controller", func() {
 			Expect(started).To(BeTrue())
 		})
 
-		It("should return true if context is cancelled while waiting for source to start", func() {
+		It("should return true if context is cancelled while waiting for source to start", func(specCtx SpecContext) {
 			// Setup controller with sources that complete with error
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(specCtx)
 			defer cancel()
 
 			ctrl.CacheSyncTimeout = time.Second
@@ -1396,12 +1297,12 @@ var _ = Describe("controller", func() {
 			<-waitChan
 		})
 
-		It("should be called before leader election runnables if warmup is enabled", func() {
+		It("should be called before leader election runnables if warmup is enabled", func(specCtx SpecContext) {
 			// This unit test exists to ensure that a warmup enabled controller will actually be
 			// called in the warmup phase before the leader election runnables are started. It
 			// catches regressions in the controller that would not implement warmupRunnable from
 			// pkg/manager.
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(specCtx)
 
 			By("Creating a channel to track execution order")
 			runnableExecutionOrderChan := make(chan string, 2)
@@ -1479,9 +1380,7 @@ var _ = Describe("controller", func() {
 			<-waitChan
 		})
 
-		It("should not cause a data race when called concurrently", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+		It("should not cause a data race when called concurrently", func(ctx SpecContext) {
 
 			ctrl.CacheSyncTimeout = time.Second
 
@@ -1504,9 +1403,7 @@ var _ = Describe("controller", func() {
 			wg.Wait()
 		})
 
-		It("should not cause a data race when called concurrently with Start and only start sources once", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+		It("should not cause a data race when called concurrently with Start and only start sources once", func(ctx SpecContext) {
 
 			ctrl.CacheSyncTimeout = time.Second
 			numWatches := 10
@@ -1538,8 +1435,8 @@ var _ = Describe("controller", func() {
 			Expect(ctrl.startWatches).To(BeNil(), "startWatches should be reset to nil after they are started")
 		})
 
-		It("should start sources added after Warmup is called", func() {
-			ctx, cancel := context.WithCancel(context.Background())
+		It("should start sources added after Warmup is called", func(specCtx SpecContext) {
+			ctx, cancel := context.WithCancel(specCtx)
 
 			ctrl.CacheSyncTimeout = time.Second
 
@@ -1566,8 +1463,8 @@ var _ = Describe("controller", func() {
 		})
 
 		DescribeTable("should not leak goroutines when manager is stopped with warmup runnable",
-			func(leaderElection bool) {
-				ctx, cancel := context.WithCancel(context.Background())
+			func(specContext SpecContext, leaderElection bool) {
+				ctx, cancel := context.WithCancel(specContext)
 				defer cancel()
 
 				ctrl.CacheSyncTimeout = time.Second
@@ -1618,9 +1515,9 @@ var _ = Describe("controller", func() {
 			ctrl.EnableWarmup = ptr.To(false)
 		})
 
-		It("should not start sources when Warmup is called if warmup is disabled but start it when Start is called.", func() {
+		It("should not start sources when Warmup is called if warmup is disabled but start it when Start is called.", func(specCtx SpecContext) {
 			// Setup controller with sources that complete successfully
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(specCtx)
 
 			ctrl.CacheSyncTimeout = time.Second
 			var isSourceStarted atomic.Bool
@@ -1653,16 +1550,15 @@ var _ = Describe("controller", func() {
 })
 
 var _ = Describe("ReconcileIDFromContext function", func() {
-	It("should return an empty string if there is nothing in the context", func() {
-		ctx := context.Background()
+	It("should return an empty string if there is nothing in the context", func(ctx SpecContext) {
 		reconcileID := ReconcileIDFromContext(ctx)
 
 		Expect(reconcileID).To(Equal(types.UID("")))
 	})
 
-	It("should return the correct reconcileID from context", func() {
+	It("should return the correct reconcileID from context", func(specContext SpecContext) {
 		const expectedReconcileID = types.UID("uuid")
-		ctx := addReconcileID(context.Background(), expectedReconcileID)
+		ctx := addReconcileID(specContext, expectedReconcileID)
 		reconcileID := ReconcileIDFromContext(ctx)
 
 		Expect(reconcileID).To(Equal(expectedReconcileID))

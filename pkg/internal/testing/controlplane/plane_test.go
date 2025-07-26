@@ -17,8 +17,6 @@ limitations under the License.
 package controlplane_test
 
 import (
-	"context"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kauthn "k8s.io/api/authorization/v1"
@@ -69,7 +67,7 @@ var _ = Describe("Control Plane", func() {
 			Expect(plane.Stop()).To(Succeed())
 		})
 
-		It("should provision a working legacy user and legacy kubectl", func() {
+		It("should provision a working legacy user and legacy kubectl", func(ctx SpecContext) {
 			By("grabbing the legacy kubectl")
 			Expect(plane.KubeCtl()).NotTo(BeNil())
 
@@ -89,7 +87,7 @@ var _ = Describe("Control Plane", func() {
 					},
 				},
 			}
-			Expect(cl.Create(context.Background(), sar)).To(Succeed(), "should be able to make a Self-SAR")
+			Expect(cl.Create(ctx, sar)).To(Succeed(), "should be able to make a Self-SAR")
 			Expect(sar.Status.Allowed).To(BeTrue(), "admin user should be able to do everything")
 		})
 

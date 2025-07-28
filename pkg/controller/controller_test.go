@@ -136,10 +136,10 @@ var _ = Describe("controller.Controller", func() {
 			Expect(c2).ToNot(BeNil())
 		})
 
-		It("should not leak goroutines when stopped", func() {
+		It("should not leak goroutines when stopped", func(specCtx SpecContext) {
 			currentGRs := goleak.IgnoreCurrent()
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(specCtx)
 			watchChan := make(chan event.GenericEvent, 1)
 			watch := source.Channel(watchChan, &handler.EnqueueRequestForObject{})
 			watchChan <- event.GenericEvent{Object: &corev1.Pod{}}

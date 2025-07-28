@@ -79,7 +79,7 @@ func runTests(admissionReviewVersion string) {
 		close(stop)
 	})
 
-	It("should scaffold a custom defaulting webhook", func() {
+	It("should scaffold a custom defaulting webhook", func(specCtx SpecContext) {
 		By("creating a controller manager")
 		m, err := manager.New(cfg, manager.Options{})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -124,7 +124,7 @@ func runTests(admissionReviewVersion string) {
   }
 }`)
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(specCtx)
 		cancel()
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
@@ -155,7 +155,7 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
 	})
 
-	It("should scaffold a custom defaulting webhook with a custom path", func() {
+	It("should scaffold a custom defaulting webhook with a custom path", func(specCtx SpecContext) {
 		By("creating a controller manager")
 		m, err := manager.New(cfg, manager.Options{})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -202,7 +202,7 @@ func runTests(admissionReviewVersion string) {
   }
 }`)
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(specCtx)
 		cancel()
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
@@ -234,7 +234,7 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
 	})
 
-	It("should scaffold a custom defaulting webhook which recovers from panics", func() {
+	It("should scaffold a custom defaulting webhook which recovers from panics", func(specCtx SpecContext) {
 		By("creating a controller manager")
 		m, err := manager.New(cfg, manager.Options{})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -278,7 +278,7 @@ func runTests(admissionReviewVersion string) {
   }
 }`)
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(specCtx)
 		cancel()
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
@@ -298,7 +298,7 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"message":"panic: fake panic test [recovered]`))
 	})
 
-	It("should scaffold a custom validating webhook", func() {
+	It("should scaffold a custom validating webhook", func(specCtx SpecContext) {
 		By("creating a controller manager")
 		m, err := manager.New(cfg, manager.Options{})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -345,7 +345,7 @@ func runTests(admissionReviewVersion string) {
   }
 }`)
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(specCtx)
 		cancel()
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
@@ -375,7 +375,7 @@ func runTests(admissionReviewVersion string) {
 		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Validating object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testvalidator"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
 	})
 
-	It("should scaffold a custom validating webhook with a custom path", func() {
+	It("should scaffold a custom validating webhook with a custom path", func(specCtx SpecContext) {
 		By("creating a controller manager")
 		m, err := manager.New(cfg, manager.Options{})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -424,7 +424,7 @@ func runTests(admissionReviewVersion string) {
   }
 }`)
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(specCtx)
 		cancel()
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
@@ -455,7 +455,7 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
 	})
 
-	It("should scaffold a custom validating webhook which recovers from panics", func() {
+	It("should scaffold a custom validating webhook which recovers from panics", func(specCtx SpecContext) {
 		By("creating a controller manager")
 		m, err := manager.New(cfg, manager.Options{})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -497,7 +497,7 @@ func runTests(admissionReviewVersion string) {
   }
 }`)
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(specCtx)
 		cancel()
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
@@ -519,9 +519,9 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"message":"panic: fake panic test [recovered]`))
 	})
 
-	It("should scaffold a custom validating webhook to validate deletes", func() {
+	It("should scaffold a custom validating webhook to validate deletes", func(specCtx SpecContext) {
 		By("creating a controller manager")
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(specCtx)
 
 		m, err := manager.New(cfg, manager.Options{})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -630,7 +630,7 @@ func runTests(admissionReviewVersion string) {
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("should scaffold a custom defaulting and validating webhook", func() {
+	It("should scaffold a custom defaulting and validating webhook", func(specCtx SpecContext) {
 		By("creating a controller manager")
 		m, err := manager.New(cfg, manager.Options{})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -678,7 +678,7 @@ func runTests(admissionReviewVersion string) {
   }
 }`)
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(specCtx)
 		cancel()
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {
@@ -713,7 +713,7 @@ func runTests(admissionReviewVersion string) {
 		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Validating object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaultvalidator"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
 	})
 
-	It("should scaffold a custom defaulting and validating webhook with a custom path for each of them", func() {
+	It("should scaffold a custom defaulting and validating webhook with a custom path for each of them", func(specCtx SpecContext) {
 		By("creating a controller manager")
 		m, err := manager.New(cfg, manager.Options{})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -765,7 +765,7 @@ func runTests(admissionReviewVersion string) {
   }
 }`)
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(specCtx)
 		cancel()
 		err = svr.Start(ctx)
 		if err != nil && !os.IsNotExist(err) {

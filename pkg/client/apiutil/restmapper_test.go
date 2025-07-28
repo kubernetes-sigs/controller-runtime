@@ -599,7 +599,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 				g.Expect(err).NotTo(gmg.HaveOccurred())
 
 				// Register another CRD in runtime - "riders.crew.example.com".
-				createNewCRD(context.TODO(), g, c, "crew.example.com", "Rider", "riders")
+				createNewCRD(t.Context(), g, c, "crew.example.com", "Rider", "riders")
 
 				// Wait a bit until the CRD is registered.
 				g.Eventually(func() error {
@@ -621,7 +621,6 @@ func TestLazyRestMapperProvider(t *testing.T) {
 
 			t.Run("LazyRESTMapper should invalidate the group cache if a version is not found", func(t *testing.T) {
 				g := gmg.NewWithT(t)
-				ctx := context.Background()
 
 				httpClient, err := rest.HTTPClientFor(restCfg)
 				g.Expect(err).NotTo(gmg.HaveOccurred())
@@ -646,7 +645,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 				crdName := plural + "." + group
 				// Create a CRD with two versions: v1alpha1 and v1 where both are served and
 				// v1 is the storage version so we can easily remove v1alpha1 later.
-				crd := newCRD(ctx, g, c, group, kind, plural)
+				crd := newCRD(t.Context(), g, c, group, kind, plural)
 				v1alpha1 := crd.Spec.Versions[0]
 				v1alpha1.Name = "v1alpha1"
 				v1alpha1.Storage = false
@@ -656,9 +655,9 @@ func TestLazyRestMapperProvider(t *testing.T) {
 				v1.Storage = true
 				v1.Served = true
 				crd.Spec.Versions = []apiextensionsv1.CustomResourceDefinitionVersion{v1alpha1, v1}
-				g.Expect(c.Create(ctx, crd)).To(gmg.Succeed())
+				g.Expect(c.Create(t.Context(), crd)).To(gmg.Succeed())
 				t.Cleanup(func() {
-					g.Expect(c.Delete(ctx, crd)).To(gmg.Succeed())
+					g.Expect(c.Delete(context.Background(), crd)).To(gmg.Succeed()) //nolint:forbidigo //t.Context is cancelled in t.Cleanup
 				})
 
 				// Wait until the CRD is registered.
@@ -698,7 +697,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 				g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
 
 				// We update the CRD to only have v1 version.
-				g.Expect(c.Get(ctx, types.NamespacedName{Name: crdName}, crd)).To(gmg.Succeed())
+				g.Expect(c.Get(t.Context(), types.NamespacedName{Name: crdName}, crd)).To(gmg.Succeed())
 				for _, version := range crd.Spec.Versions {
 					if version.Name == "v1" {
 						v1 = version
@@ -706,7 +705,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 					}
 				}
 				crd.Spec.Versions = []apiextensionsv1.CustomResourceDefinitionVersion{v1}
-				g.Expect(c.Update(ctx, crd)).To(gmg.Succeed())
+				g.Expect(c.Update(t.Context(), crd)).To(gmg.Succeed())
 
 				// We wait until v1alpha1 is not available anymore.
 				g.Eventually(func(g gmg.Gomega) {

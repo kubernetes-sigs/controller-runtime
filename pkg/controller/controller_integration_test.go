@@ -43,7 +43,6 @@ import (
 
 var _ = Describe("controller", func() {
 	var reconciled chan reconcile.Request
-	ctx := context.Background()
 
 	BeforeEach(func() {
 		reconciled = make(chan reconcile.Request)
@@ -58,7 +57,7 @@ var _ = Describe("controller", func() {
 		// test, as it causes flakes with the api-server termination timing out.
 		// See https://github.com/kubernetes-sigs/controller-runtime/issues/1571 for a description
 		// of the issue, and a discussion here: https://github.com/kubernetes-sigs/controller-runtime/pull/3192#discussion_r2186967799
-		DescribeTable("should reconcile", func(enableWarmup bool) {
+		DescribeTable("should reconcile", func(ctx SpecContext, enableWarmup bool) {
 			By("Creating the Manager")
 			cm, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
@@ -103,8 +102,6 @@ var _ = Describe("controller", func() {
 			Expect(err).To(Equal(&cache.ErrCacheNotStarted{}))
 
 			By("Starting the Manager")
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			go func() {
 				defer GinkgoRecover()
 				Expect(cm.Start(ctx)).NotTo(HaveOccurred())
@@ -198,7 +195,7 @@ var _ = Describe("controller", func() {
 
 			By("Listing a type with a slice of pointers as items field")
 			err = cm.GetClient().
-				List(context.Background(), &controllertest.UnconventionalListTypeList{})
+				List(ctx, &controllertest.UnconventionalListTypeList{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Invoking Reconciling for a pod when it is created when adding watcher dynamically")

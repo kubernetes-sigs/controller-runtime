@@ -36,17 +36,19 @@ import (
 
 var _ = Describe("Webhook Server", func() {
 	var (
-		ctx          context.Context
-		ctxCancel    context.CancelFunc
-		testHostPort string
-		client       *http.Client
-		server       webhook.Server
-		servingOpts  envtest.WebhookInstallOptions
+		ctxCancel          context.CancelFunc
+		testHostPort       string
+		client             *http.Client
+		server             webhook.Server
+		servingOpts        envtest.WebhookInstallOptions
+		genericStartServer func(f func(ctx context.Context)) (done <-chan struct{})
 	)
 
 	BeforeEach(func() {
-		ctx, ctxCancel = context.WithCancel(context.Background())
-		// closed in individual tests differently
+		var ctx context.Context
+		// Has to be derived from context.Background() as it needs to be
+		// valid past the BeforeEach
+		ctx, ctxCancel = context.WithCancel(context.Background()) //nolint:forbidigo
 
 		servingOpts = envtest.WebhookInstallOptions{}
 		Expect(servingOpts.PrepWithoutInstalling()).To(Succeed())
@@ -67,26 +69,26 @@ var _ = Describe("Webhook Server", func() {
 			Port:    servingOpts.LocalServingPort,
 			CertDir: servingOpts.LocalServingCertDir,
 		})
+
+		genericStartServer = func(f func(ctx context.Context)) (done <-chan struct{}) {
+			doneCh := make(chan struct{})
+			go func() {
+				defer GinkgoRecover()
+				defer close(doneCh)
+				f(ctx)
+			}()
+			// wait till we can ping the server to start the test
+			Eventually(func() error {
+				_, err := client.Get(fmt.Sprintf("https://%s/unservedpath", testHostPort))
+				return err
+			}).Should(Succeed())
+
+			return doneCh
+		}
 	})
 	AfterEach(func() {
 		Expect(servingOpts.Cleanup()).To(Succeed())
 	})
-
-	genericStartServer := func(f func(ctx context.Context)) (done <-chan struct{}) {
-		doneCh := make(chan struct{})
-		go func() {
-			defer GinkgoRecover()
-			defer close(doneCh)
-			f(ctx)
-		}()
-		// wait till we can ping the server to start the test
-		Eventually(func() error {
-			_, err := client.Get(fmt.Sprintf("https://%s/unservedpath", testHostPort))
-			return err
-		}).Should(Succeed())
-
-		return doneCh
-	}
 
 	startServer := func() (done <-chan struct{}) {
 		return genericStartServer(func(ctx context.Context) {

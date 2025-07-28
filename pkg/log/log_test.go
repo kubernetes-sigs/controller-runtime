@@ -17,7 +17,6 @@ limitations under the License.
 package log
 
 import (
-	"context"
 	"errors"
 
 	"github.com/go-logr/logr"
@@ -297,17 +296,17 @@ var _ = Describe("logging", func() {
 	})
 
 	Describe("logger from context", func() {
-		It("should return default logger when context is empty", func() {
-			gotLog := FromContext(context.Background())
+		It("should return default logger when context is empty", func(ctx SpecContext) {
+			gotLog := FromContext(ctx)
 			Expect(gotLog).To(Not(BeNil()))
 		})
 
-		It("should return existing logger", func() {
+		It("should return existing logger", func(specCtx SpecContext) {
 			root := &fakeLoggerRoot{}
 			baseLog := &fakeLogger{root: root}
 
 			wantLog := logr.New(baseLog).WithName("my-logger")
-			ctx := IntoContext(context.Background(), wantLog)
+			ctx := IntoContext(specCtx, wantLog)
 
 			gotLog := FromContext(ctx)
 			Expect(gotLog).To(Not(BeNil()))
@@ -318,12 +317,12 @@ var _ = Describe("logging", func() {
 			))
 		})
 
-		It("should have added key-values", func() {
+		It("should have added key-values", func(specCtx SpecContext) {
 			root := &fakeLoggerRoot{}
 			baseLog := &fakeLogger{root: root}
 
 			wantLog := logr.New(baseLog).WithName("my-logger")
-			ctx := IntoContext(context.Background(), wantLog)
+			ctx := IntoContext(specCtx, wantLog)
 
 			gotLog := FromContext(ctx, "tag1", "value1")
 			Expect(gotLog).To(Not(BeNil()))

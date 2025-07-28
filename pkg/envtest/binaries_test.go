@@ -20,7 +20,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"context"
 	"crypto/rand"
 	"crypto/sha512"
 	"encoding/hex"
@@ -50,8 +49,8 @@ var _ = Describe("Test download binaries", func() {
 		setupServer(server)
 	})
 
-	It("should download binaries of latest stable version", func() {
-		apiServerPath, etcdPath, kubectlPath, err := downloadBinaryAssets(context.Background(), downloadDirectory, "", fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"))
+	It("should download binaries of latest stable version", func(ctx SpecContext) {
+		apiServerPath, etcdPath, kubectlPath, err := downloadBinaryAssets(ctx, downloadDirectory, "", fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"))
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify latest stable version (v1.32.0) was downloaded
@@ -69,8 +68,8 @@ var _ = Describe("Test download binaries", func() {
 		Expect(actualFiles).To(ConsistOf("some-file"))
 	})
 
-	It("should download v1.32.0 binaries", func() {
-		apiServerPath, etcdPath, kubectlPath, err := downloadBinaryAssets(context.Background(), downloadDirectory, "v1.31.0", fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"))
+	It("should download v1.32.0 binaries", func(ctx SpecContext) {
+		apiServerPath, etcdPath, kubectlPath, err := downloadBinaryAssets(ctx, downloadDirectory, "v1.31.0", fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"))
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify latest stable version (v1.32.0) was downloaded

@@ -17,7 +17,6 @@ limitations under the License.
 package envtest
 
 import (
-	"context"
 	"path/filepath"
 	"time"
 
@@ -55,29 +54,29 @@ var _ = Describe("Test", func() {
 	})
 
 	// Cleanup CRDs
-	AfterEach(func() {
+	AfterEach(func(ctx SpecContext) {
 		for _, crd := range crds {
 			// Delete only if CRD exists.
 			crdObjectKey := client.ObjectKey{
 				Name: crd.GetName(),
 			}
 			var placeholder apiextensionsv1.CustomResourceDefinition
-			if err = c.Get(context.TODO(), crdObjectKey, &placeholder); err != nil &&
+			if err = c.Get(ctx, crdObjectKey, &placeholder); err != nil &&
 				apierrors.IsNotFound(err) {
 				// CRD doesn't need to be deleted.
 				continue
 			}
 			Expect(err).NotTo(HaveOccurred())
-			Expect(c.Delete(context.TODO(), crd)).To(Succeed())
+			Expect(c.Delete(ctx, crd)).To(Succeed())
 			Eventually(func() bool {
-				err := c.Get(context.TODO(), crdObjectKey, &placeholder)
+				err := c.Get(ctx, crdObjectKey, &placeholder)
 				return apierrors.IsNotFound(err)
 			}, 5*time.Second).Should(BeTrue())
 		}
 	}, teardownTimeoutSeconds)
 
 	Describe("InstallCRDs", func() {
-		It("should install the unserved CRDs into the cluster", func() {
+		It("should install the unserved CRDs into the cluster", func(ctx SpecContext) {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{filepath.Join(".", "testdata", "crds", "examplecrd_unserved.yaml")},
 			})
@@ -86,7 +85,7 @@ var _ = Describe("Test", func() {
 			// Expect to find the CRDs
 
 			crd := &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "frigates.ship.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "frigates.ship.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Frigate"))
 
@@ -115,7 +114,7 @@ var _ = Describe("Test", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 		})
-		It("should install the CRDs into the cluster using directory", func() {
+		It("should install the CRDs into the cluster using directory", func(ctx SpecContext) {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{validDirectory},
 			})
@@ -124,27 +123,27 @@ var _ = Describe("Test", func() {
 			// Expect to find the CRDs
 
 			crd := &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "foos.bar.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "foos.bar.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Foo"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Baz"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "captains.crew.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "captains.crew.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Captain"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "firstmates.crew.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "firstmates.crew.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("FirstMate"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
@@ -244,14 +243,14 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should install the CRDs into the cluster using file", func() {
+		It("should install the CRDs into the cluster using file", func(ctx SpecContext) {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{filepath.Join(".", "testdata", "crds", "examplecrd3.yaml")},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
 			crd := &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "configs.foo.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "configs.foo.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Config"))
 
@@ -290,7 +289,7 @@ var _ = Describe("Test", func() {
 			Expect(crds).To(HaveLen(2))
 		})
 
-		It("should filter out already existent CRD", func() {
+		It("should filter out already existent CRD", func(ctx SpecContext) {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{
 					filepath.Join(".", "testdata"),
@@ -300,7 +299,7 @@ var _ = Describe("Test", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			crd := &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "foos.bar.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "foos.bar.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Foo"))
 
@@ -422,7 +421,7 @@ var _ = Describe("Test", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("should reinstall the CRDs if already present in the cluster", func() {
+		It("should reinstall the CRDs if already present in the cluster", func(ctx SpecContext) {
 
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{filepath.Join(".", "testdata")},
@@ -432,27 +431,27 @@ var _ = Describe("Test", func() {
 			// Expect to find the CRDs
 
 			crd := &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "foos.bar.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "foos.bar.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Foo"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Baz"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "captains.crew.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "captains.crew.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Captain"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "firstmates.crew.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "firstmates.crew.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("FirstMate"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
@@ -561,27 +560,27 @@ var _ = Describe("Test", func() {
 			// Expect to find the CRDs
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "foos.bar.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "foos.bar.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Foo"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Baz"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "captains.crew.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "captains.crew.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Captain"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "firstmates.crew.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "firstmates.crew.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("FirstMate"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
@@ -682,15 +681,15 @@ var _ = Describe("Test", func() {
 		})
 	})
 
-	It("should set a working KubeConfig", func() {
+	It("should set a working KubeConfig", func(ctx SpecContext) {
 		kubeconfigRESTConfig, err := clientcmd.RESTConfigFromKubeConfig(env.KubeConfig)
 		Expect(err).ToNot(HaveOccurred())
 		kubeconfigClient, err := client.New(kubeconfigRESTConfig, client.Options{Scheme: s})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(kubeconfigClient.List(context.Background(), &apiextensionsv1.CustomResourceDefinitionList{})).To(Succeed())
+		Expect(kubeconfigClient.List(ctx, &apiextensionsv1.CustomResourceDefinitionList{})).To(Succeed())
 	})
 
-	It("should update CRDs if already present in the cluster", func() {
+	It("should update CRDs if already present in the cluster", func(ctx SpecContext) {
 
 		// Install only the CRDv1 multi-version example
 		crds, err = InstallCRDs(env.Config, CRDInstallOptions{
@@ -701,7 +700,7 @@ var _ = Describe("Test", func() {
 		// Expect to find the CRDs
 
 		crd := &apiextensionsv1.CustomResourceDefinition{}
-		err = c.Get(context.TODO(), types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
+		err = c.Get(ctx, types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 		Expect(len(crd.Spec.Versions)).To(BeEquivalentTo(2))
@@ -743,7 +742,7 @@ var _ = Describe("Test", func() {
 		// Expect to find updated CRD
 
 		crd = &apiextensionsv1.CustomResourceDefinition{}
-		err = c.Get(context.TODO(), types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
+		err = c.Get(ctx, types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 		Expect(len(crd.Spec.Versions)).To(BeEquivalentTo(3))
@@ -781,8 +780,7 @@ var _ = Describe("Test", func() {
 	})
 
 	Describe("UninstallCRDs", func() {
-		It("should uninstall the CRDs from the cluster", func() {
-
+		It("should uninstall the CRDs from the cluster", func(ctx SpecContext) {
 			crds, err = InstallCRDs(env.Config, CRDInstallOptions{
 				Paths: []string{validDirectory},
 			})
@@ -791,27 +789,27 @@ var _ = Describe("Test", func() {
 			// Expect to find the CRDs
 
 			crd := &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "foos.bar.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "foos.bar.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Foo"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "bazs.qux.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Baz"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "captains.crew.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "captains.crew.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Captain"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "firstmates.crew.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "firstmates.crew.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("FirstMate"))
 
 			crd = &apiextensionsv1.CustomResourceDefinition{}
-			err = c.Get(context.TODO(), types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
+			err = c.Get(ctx, types.NamespacedName{Name: "drivers.crew.example.com"}, crd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(crd.Spec.Names.Kind).To(Equal("Driver"))
 
@@ -927,7 +925,7 @@ var _ = Describe("Test", func() {
 			placeholder := &apiextensionsv1.CustomResourceDefinition{}
 			Eventually(func() bool {
 				for _, crd := range crds {
-					err = c.Get(context.TODO(), types.NamespacedName{Name: crd}, placeholder)
+					err = c.Get(ctx, types.NamespacedName{Name: crd}, placeholder)
 					notFound := err != nil && apierrors.IsNotFound(err)
 					if !notFound {
 						return false

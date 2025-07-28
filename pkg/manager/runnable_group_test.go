@@ -110,7 +110,7 @@ var _ = Describe("runnables", func() {
 		Expect(r.Others.startQueue).To(BeEmpty())
 	})
 
-	It("should execute the Warmup function when Warmup group is started", func() {
+	It("should execute the Warmup function when Warmup group is started", func(ctx SpecContext) {
 		var warmupExecuted atomic.Bool
 
 		warmupRunnable := newWarmupRunnableFunc(
@@ -127,9 +127,6 @@ var _ = Describe("runnables", func() {
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(warmupRunnable)).To(Succeed())
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
 		// Start the Warmup group
 		Expect(r.Warmup.Start(ctx)).To(Succeed())
 
@@ -137,7 +134,7 @@ var _ = Describe("runnables", func() {
 		Expect(warmupExecuted.Load()).To(BeTrue())
 	})
 
-	It("should propagate errors from Warmup function to error channel", func() {
+	It("should propagate errors from Warmup function to error channel", func(ctx SpecContext) {
 		expectedErr := fmt.Errorf("expected warmup error")
 
 		warmupRunnable := newWarmupRunnableFunc(
@@ -151,9 +148,6 @@ var _ = Describe("runnables", func() {
 		testErrChan := make(chan error, 1)
 		r := newRunnables(defaultBaseContext, testErrChan)
 		Expect(r.Add(warmupRunnable)).To(Succeed())
-
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 
 		// Start the Warmup group in a goroutine
 		go func() {
@@ -176,9 +170,7 @@ var _ = Describe("runnables", func() {
 var _ = Describe("runnableGroup", func() {
 	errCh := make(chan error)
 
-	It("should be able to add new runnables before it starts", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+	It("should be able to add new runnables before it starts", func(ctx SpecContext) {
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 		Expect(rg.Add(RunnableFunc(func(c context.Context) error {
 			<-ctx.Done()
@@ -188,9 +180,7 @@ var _ = Describe("runnableGroup", func() {
 		Expect(rg.Started()).To(BeFalse())
 	})
 
-	It("should be able to add new runnables before and after start", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+	It("should be able to add new runnables before and after start", func(ctx SpecContext) {
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 		Expect(rg.Add(RunnableFunc(func(c context.Context) error {
 			<-ctx.Done()
@@ -204,9 +194,7 @@ var _ = Describe("runnableGroup", func() {
 		}), nil)).To(Succeed())
 	})
 
-	It("should be able to add new runnables before and after start concurrently", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+	It("should be able to add new runnables before and after start concurrently", func(ctx SpecContext) {
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 
 		go func() {
@@ -228,8 +216,8 @@ var _ = Describe("runnableGroup", func() {
 		}
 	})
 
-	It("should be able to close the group and wait for all runnables to finish", func() {
-		ctx, cancel := context.WithCancel(context.Background())
+	It("should be able to close the group and wait for all runnables to finish", func(specCtx SpecContext) {
+		ctx, cancel := context.WithCancel(specCtx)
 
 		exited := ptr.To(int64(0))
 		rg := newRunnableGroup(defaultBaseContext, errCh)
@@ -245,7 +233,7 @@ var _ = Describe("runnableGroup", func() {
 
 		// Cancel the context, asking the runnables to exit.
 		cancel()
-		rg.StopAndWait(context.Background())
+		rg.StopAndWait(specCtx)
 
 		Expect(rg.Add(RunnableFunc(func(c context.Context) error {
 			return nil
@@ -254,8 +242,8 @@ var _ = Describe("runnableGroup", func() {
 		Expect(atomic.LoadInt64(exited)).To(BeNumerically("==", 10))
 	})
 
-	It("should be able to wait for all runnables to be ready at different intervals", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	It("should be able to wait for all runnables to be ready at different intervals", func(specCtx SpecContext) {
+		ctx, cancel := context.WithTimeout(specCtx, 1*time.Second)
 		defer cancel()
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 
@@ -280,8 +268,8 @@ var _ = Describe("runnableGroup", func() {
 		}
 	})
 
-	It("should be able to handle adding runnables while stopping", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	It("should be able to handle adding runnables while stopping", func(specCtx SpecContext) {
+		ctx, cancel := context.WithTimeout(specCtx, 10*time.Second)
 		defer cancel()
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 
@@ -293,7 +281,7 @@ var _ = Describe("runnableGroup", func() {
 		go func() {
 			defer GinkgoRecover()
 			<-time.After(1 * time.Millisecond)
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(ctx)
 			cancel()
 			rg.StopAndWait(ctx)
 		}()
@@ -316,8 +304,8 @@ var _ = Describe("runnableGroup", func() {
 		}
 	})
 
-	It("should not turn ready if some readiness check fail", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	It("should not turn ready if some readiness check fail", func(specCtx SpecContext) {
+		ctx, cancel := context.WithTimeout(specCtx, 2*time.Second)
 		defer cancel()
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 

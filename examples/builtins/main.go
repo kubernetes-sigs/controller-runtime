@@ -24,21 +24,16 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-func init() {
-	log.SetLogger(zap.New())
-}
-
 func main() {
+	ctrl.SetLogger(zap.New())
 	entryLog := ctrl.Log.WithName("entrypoint")
 
 	// Setup a Manager
@@ -65,7 +60,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := builder.WebhookManagedBy(mgr).
+	if err := ctrl.NewWebhookManagedBy(mgr).
 		For(&corev1.Pod{}).
 		WithDefaulter(&podAnnotator{}).
 		WithValidator(&podValidator{}).

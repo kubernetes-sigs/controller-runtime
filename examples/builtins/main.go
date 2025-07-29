@@ -22,9 +22,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -38,7 +39,7 @@ func init() {
 }
 
 func main() {
-	entryLog := log.Log.WithName("entrypoint")
+	entryLog := ctrl.Log.WithName("entrypoint")
 
 	// Setup a Manager
 	entryLog.Info("setting up manager")
@@ -50,24 +51,17 @@ func main() {
 
 	// Setup a new controller to reconcile ReplicaSets
 	entryLog.Info("Setting up controller")
-	c, err := controller.New("foo-controller", mgr, controller.Options{
-		Reconciler: &reconcileReplicaSet{client: mgr.GetClient()},
-	})
+
+	err = ctrl.
+		NewControllerManagedBy(mgr).
+		Named("foo-controller").
+		WatchesRawSource(source.Kind(mgr.GetCache(), &appsv1.ReplicaSet{},
+			&handler.TypedEnqueueRequestForObject[*appsv1.ReplicaSet]{})).
+		WatchesRawSource(source.Kind(mgr.GetCache(), &corev1.Pod{},
+			handler.TypedEnqueueRequestForOwner[*corev1.Pod](mgr.GetScheme(), mgr.GetRESTMapper(), &appsv1.ReplicaSet{}, handler.OnlyControllerOwner()))).
+		Complete(&reconcileReplicaSet{client: mgr.GetClient()})
 	if err != nil {
-		entryLog.Error(err, "unable to set up individual controller")
-		os.Exit(1)
-	}
-
-	// Watch ReplicaSets and enqueue ReplicaSet object key
-	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.ReplicaSet{}, &handler.TypedEnqueueRequestForObject[*appsv1.ReplicaSet]{})); err != nil {
-		entryLog.Error(err, "unable to watch ReplicaSets")
-		os.Exit(1)
-	}
-
-	// Watch Pods and enqueue owning ReplicaSet key
-	if err := c.Watch(source.Kind(mgr.GetCache(), &corev1.Pod{},
-		handler.TypedEnqueueRequestForOwner[*corev1.Pod](mgr.GetScheme(), mgr.GetRESTMapper(), &appsv1.ReplicaSet{}, handler.OnlyControllerOwner()))); err != nil {
-		entryLog.Error(err, "unable to watch Pods")
+		entryLog.Error(err, "could not create controller")
 		os.Exit(1)
 	}
 

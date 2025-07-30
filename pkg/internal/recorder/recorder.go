@@ -172,13 +172,13 @@ type oldRecorder struct {
 }
 
 func (l *oldRecorder) Event(object runtime.Object, eventtype, reason, message string) {
-	l.newRecorder.Eventf(object, nil, eventtype, reason, "unsupported", message)
+	l.newRecorder.Eventf(object, nil, eventtype, reason, "no action", message)
 }
 
 func (l *oldRecorder) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...any) {
-	l.newRecorder.Eventf(object, nil, eventtype, reason, "unsupported", messageFmt, args...)
+	l.newRecorder.Eventf(object, nil, eventtype, reason, "no action", messageFmt, args...)
 }
 
 func (l *oldRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...any) {
-	l.newRecorder.Eventf(object, nil, eventtype, reason, "unsupported", messageFmt, args...)
+	l.newRecorder.Eventf(object, nil, eventtype, reason, "no action", messageFmt, args...)
 }

@@ -21,15 +21,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 )
 
 var _ = Describe("recorder.Provider", func() {
-	makeBroadcaster := func() (record.EventBroadcaster, bool) { return record.NewBroadcaster(), true }
 	Describe("NewProvider", func() {
 		It("should return a provider instance and a nil error.", func() {
-			provider, err := recorder.NewProvider(cfg, httpClient, scheme.Scheme, logr.Discard(), makeBroadcaster)
+			provider, err := recorder.NewProvider(cfg, httpClient, scheme.Scheme, logr.Discard(), nil, true)
 			Expect(provider).NotTo(BeNil())
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -38,14 +36,14 @@ var _ = Describe("recorder.Provider", func() {
 			// Invalid the config
 			cfg1 := *cfg
 			cfg1.Host = "invalid host"
-			_, err := recorder.NewProvider(&cfg1, httpClient, scheme.Scheme, logr.Discard(), makeBroadcaster)
+			_, err := recorder.NewProvider(&cfg1, httpClient, scheme.Scheme, logr.Discard(), nil, true)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to init client"))
 		})
 	})
-	Describe("GetEventRecorder", func() {
+	Describe("GetEventRecorderFor", func() {
 		It("should return a recorder instance.", func() {
-			provider, err := recorder.NewProvider(cfg, httpClient, scheme.Scheme, logr.Discard(), makeBroadcaster)
+			provider, err := recorder.NewProvider(cfg, httpClient, scheme.Scheme, logr.Discard(), nil, true)
 			Expect(err).NotTo(HaveOccurred())
 
 			recorder := provider.GetEventRecorderFor("test")

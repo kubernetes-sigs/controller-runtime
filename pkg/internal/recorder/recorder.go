@@ -23,17 +23,12 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	eventsv1client "k8s.io/client-go/kubernetes/typed/events/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/record"
 )
-
-// EventBroadcasterProducer makes an event broadcaster, returning
-// whether or not the broadcaster should be stopped with the Provider,
-// or not (e.g. if it's shared, it shouldn't be stopped with the Provider).
-type EventBroadcasterProducer func() (caster record.EventBroadcaster, stopWithProvider bool)
 
 // Provider is a recorder.Provider that records events to the k8s API server
 // and to a logr Logger.
@@ -44,12 +39,11 @@ type Provider struct {
 	// scheme to specify when creating a recorder
 	scheme *runtime.Scheme
 	// logger is the logger to use when logging diagnostic event info
-	logger          logr.Logger
-	evtClient       corev1client.EventInterface
-	makeBroadcaster EventBroadcasterProducer
+	logger    logr.Logger
+	evtClient eventsv1client.EventsV1Interface
 
 	broadcasterOnce sync.Once
-	broadcaster     record.EventBroadcaster
+	broadcaster     events.EventBroadcaster
 	stopBroadcaster bool
 }
 
@@ -89,7 +83,7 @@ func (p *Provider) Stop(shutdownCtx context.Context) {
 
 // getBroadcaster ensures that a broadcaster is started for this
 // provider, and returns it.  It's threadsafe.
-func (p *Provider) getBroadcaster() record.EventBroadcaster {
+func (p *Provider) getBroadcaster() events.EventBroadcaster {
 	// NB(directxman12): this can technically still leak if something calls
 	// "getBroadcaster" (i.e. Emits an Event) but never calls Start, but if we
 	// create the broadcaster in start, we could race with other things that
@@ -97,37 +91,45 @@ func (p *Provider) getBroadcaster() record.EventBroadcaster {
 	// silently swallowing events and more locking, but that seems suboptimal.
 
 	p.broadcasterOnce.Do(func() {
-		broadcaster, stop := p.makeBroadcaster()
-		broadcaster.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: p.evtClient})
-		broadcaster.StartEventWatcher(
-			func(e *corev1.Event) {
-				p.logger.V(1).Info(e.Message, "type", e.Type, "object", e.InvolvedObject, "reason", e.Reason)
-			})
-		p.broadcaster = broadcaster
-		p.stopBroadcaster = stop
+		if p.broadcaster == nil {
+			p.broadcaster = events.NewBroadcaster(&events.EventSinkImpl{Interface: p.evtClient})
+		}
+		// TODO(clebs): figure out how to manage the context/channel that StartRecordingToSink needs inside the provider.
+		_ = p.broadcaster.StartRecordingToSinkWithContext(context.TODO())
 	})
 
 	return p.broadcaster
 }
 
 // NewProvider create a new Provider instance.
-func NewProvider(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster EventBroadcasterProducer) (*Provider, error) {
+func NewProvider(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, broadcaster events.EventBroadcaster, stopWithProvider bool) (*Provider, error) {
 	if httpClient == nil {
 		panic("httpClient must not be nil")
 	}
 
-	corev1Client, err := corev1client.NewForConfigAndClient(config, httpClient)
+	eventsv1Client, err := eventsv1client.NewForConfigAndClient(config, httpClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init client: %w", err)
 	}
 
-	p := &Provider{scheme: scheme, logger: logger, makeBroadcaster: makeBroadcaster, evtClient: corev1Client.Events("")}
+	p := &Provider{scheme: scheme, logger: logger, broadcaster: broadcaster, stopBroadcaster: stopWithProvider, evtClient: eventsv1Client}
 	return p, nil
 }
 
 // GetEventRecorderFor returns an event recorder that broadcasts to this provider's
 // broadcaster.  All events will be associated with a component of the given name.
 func (p *Provider) GetEventRecorderFor(name string) record.EventRecorder {
+	return &oldRecorder{
+		newRecorder: &lazyRecorder{
+			prov: p,
+			name: name,
+		},
+	}
+}
+
+// GetEventRecorder returns an event recorder that broadcasts to this provider's
+// broadcaster.  All events will be associated with a component of the given name.
+func (p *Provider) GetEventRecorder(name string) events.EventRecorder {
 	return &lazyRecorder{
 		prov: p,
 		name: name,
@@ -141,41 +143,42 @@ type lazyRecorder struct {
 	name string
 
 	recOnce sync.Once
-	rec     record.EventRecorder
+	rec     events.EventRecorder
 }
 
 // ensureRecording ensures that a concrete recorder is populated for this recorder.
 func (l *lazyRecorder) ensureRecording() {
 	l.recOnce.Do(func() {
 		broadcaster := l.prov.getBroadcaster()
-		l.rec = broadcaster.NewRecorder(l.prov.scheme, corev1.EventSource{Component: l.name})
+		l.rec = broadcaster.NewRecorder(l.prov.scheme, l.name)
 	})
 }
 
-func (l *lazyRecorder) Event(object runtime.Object, eventtype, reason, message string) {
+func (l *lazyRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...any) {
 	l.ensureRecording()
 
 	l.prov.lock.RLock()
 	if !l.prov.stopped {
-		l.rec.Event(object, eventtype, reason, message)
+		l.rec.Eventf(regarding, related, eventtype, reason, action, note, args...)
 	}
 	l.prov.lock.RUnlock()
 }
-func (l *lazyRecorder) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
-	l.ensureRecording()
 
-	l.prov.lock.RLock()
-	if !l.prov.stopped {
-		l.rec.Eventf(object, eventtype, reason, messageFmt, args...)
-	}
-	l.prov.lock.RUnlock()
+// oldRecorder is a wrapper around the events.EventRecorder that implements the old record.EventRecorder API.
+// This is a temporary solution to support both the old and new events APIs without duplicating everything.
+// Internally it calls the new events API from the old API funcs and no longer supported parameters are ignored (e.g. annotations).
+type oldRecorder struct {
+	newRecorder *lazyRecorder
 }
-func (l *lazyRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
-	l.ensureRecording()
 
-	l.prov.lock.RLock()
-	if !l.prov.stopped {
-		l.rec.AnnotatedEventf(object, annotations, eventtype, reason, messageFmt, args...)
-	}
-	l.prov.lock.RUnlock()
+func (l *oldRecorder) Event(object runtime.Object, eventtype, reason, message string) {
+	l.newRecorder.Eventf(object, nil, eventtype, reason, "no action", message)
+}
+
+func (l *oldRecorder) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...any) {
+	l.newRecorder.Eventf(object, nil, eventtype, reason, "no action", messageFmt, args...)
+}
+
+func (l *oldRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...any) {
+	l.newRecorder.Eventf(object, nil, eventtype, reason, "no action", messageFmt, args...)
 }

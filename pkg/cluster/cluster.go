@@ -25,8 +25,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	eventsv1client "k8s.io/client-go/kubernetes/typed/events/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -126,10 +128,16 @@ type Options struct {
 	//
 	// Deprecated: using this may cause goroutine leaks if the lifetime of your manager or controllers
 	// is shorter than the lifetime of your process.
-	EventBroadcaster events.EventBroadcaster
+	EventBroadcaster record.EventBroadcaster
+
+	// makeBroadcaster allows deferring the creation of the broadcaster to
+	// avoid leaking goroutines if we never call Start on this manager.  It also
+	// returns whether or not this is a "owned" broadcaster, and as such should be
+	// stopped with the manager.
+	makeBroadcaster intrec.EventBroadcasterProducer
 
 	// Dependency injection for testing
-	newRecorderProvider func(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, broadcaster events.EventBroadcaster, stopWithProvider bool) (*intrec.Provider, error)
+	newRecorderProvider func(config *rest.Config, httpClient *http.Client, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error)
 }
 
 // Option can be used to manipulate Options.
@@ -223,7 +231,7 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.
 	// Stop the broadcaster with the provider only if the broadcaster is externally given (aka non-nil).
-	recorderProvider, err := options.newRecorderProvider(config, options.HTTPClient, options.Scheme, options.Logger.WithName("events"), options.EventBroadcaster, options.EventBroadcaster == nil)
+	recorderProvider, err := options.newRecorderProvider(config, options.HTTPClient, options.Scheme, options.Logger.WithName("events"), options.makeBroadcaster)
 	if err != nil {
 		return nil, err
 	}
@@ -274,6 +282,27 @@ func setOptionsDefaults(options Options, config *rest.Config) (Options, error) {
 	// Allow newRecorderProvider to be mocked
 	if options.newRecorderProvider == nil {
 		options.newRecorderProvider = intrec.NewProvider
+	}
+
+	// This is duplicated with pkg/manager, we need it here to provide
+	// the user with an EventBroadcaster and there for the Leader election
+	evtCl, err := eventsv1client.NewForConfigAndClient(config, options.HTTPClient)
+	if err != nil {
+		return options, err
+	}
+
+	// This is duplicated with pkg/manager, we need it here to provide
+	// the user with an EventBroadcaster and there for the Leader election
+	if options.EventBroadcaster == nil {
+		// defer initialization to avoid leaking by default
+		options.makeBroadcaster = func() (record.EventBroadcaster, events.EventBroadcaster, bool) {
+			return record.NewBroadcaster(), events.NewBroadcaster(&events.EventSinkImpl{Interface: evtCl}), true
+		}
+	} else {
+		// keep supporting the options.EventBroadcaster in the old API, but do not introduce it for the new one.
+		options.makeBroadcaster = func() (record.EventBroadcaster, events.EventBroadcaster, bool) {
+			return options.EventBroadcaster, events.NewBroadcaster(&events.EventSinkImpl{Interface: evtCl}), false
+		}
 	}
 
 	if options.Logger.GetSink() == nil {

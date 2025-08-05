@@ -2668,6 +2668,27 @@ var _ = Describe("Fake client", func() {
 		_, exists, err := unstructured.NestedFieldNoCopy(u.Object, "metadata", "managedFields")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(exists).To(BeTrue())
+
+		var list corev1.ConfigMapList
+		Expect(cl.List(ctx, &list)).NotTo(HaveOccurred())
+		for _, item := range list.Items {
+			Expect(item.ManagedFields).NotTo(BeNil())
+		}
+	})
+
+	It("clears managedFields from objects in a list", func(ctx SpecContext) {
+		cl := NewClientBuilder().Build()
+		obj := corev1applyconfigurations.
+			ConfigMap("foo", "default").
+			WithData(map[string]string{"some": "data"})
+
+		Expect(cl.Apply(ctx, obj, &client.ApplyOptions{FieldManager: "test-manager"})).To(Succeed())
+
+		var list corev1.ConfigMapList
+		Expect(cl.List(ctx, &list)).NotTo(HaveOccurred())
+		for _, item := range list.Items {
+			Expect(item.ManagedFields).To(BeNil())
+		}
 	})
 
 	It("supports server-side apply of a client-go resource via Apply method", func(ctx SpecContext) {
@@ -2734,6 +2755,88 @@ var _ = Describe("Fake client", func() {
 
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(result), result)).To(Succeed())
 		Expect(result.Object["spec"]).To(Equal(map[string]any{"other": "data"}))
+	})
+
+	It("sets managed fields through all methods", func(ctx SpecContext) {
+		owner := "test-owner"
+		cl := client.WithFieldOwner(
+			NewClientBuilder().WithReturnManagedFields().Build(),
+			owner,
+		)
+
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"},
+			Data:       map[string]string{"method": "create"},
+		}
+		Expect(cl.Create(ctx, obj)).NotTo(HaveOccurred())
+
+		Expect(obj.ManagedFields).NotTo(BeEmpty())
+		for _, f := range obj.ManagedFields {
+			Expect(f.Manager).To(BeEquivalentTo(owner))
+		}
+
+		originalObj := obj.DeepCopy()
+		obj.Data["method"] = "patch"
+		Expect(cl.Patch(ctx, obj, client.MergeFrom(originalObj))).NotTo(HaveOccurred())
+		Expect(obj.ManagedFields).NotTo(BeEmpty())
+		for _, f := range obj.ManagedFields {
+			Expect(f.Manager).To(BeEquivalentTo(owner))
+		}
+
+		obj.Data["method"] = "update"
+		Expect(cl.Update(ctx, obj)).NotTo(HaveOccurred())
+		Expect(obj.ManagedFields).NotTo(BeEmpty())
+		for _, f := range obj.ManagedFields {
+			Expect(f.Manager).To(BeEquivalentTo(owner))
+		}
+	})
+
+	// GH-3267
+	It("Doesn't leave stale data when updating an object through SSA", func(ctx SpecContext) {
+		obj := corev1applyconfigurations.
+			ConfigMap("foo", "default").
+			WithData(map[string]string{"some": "data"})
+
+		cl := NewClientBuilder().Build()
+		Expect(cl.Apply(ctx, obj, client.FieldOwner("foo"))).NotTo(HaveOccurred())
+
+		obj.WithData(map[string]string{"bar": "baz"})
+		Expect(cl.Apply(ctx, obj, client.FieldOwner("foo"))).NotTo(HaveOccurred())
+		var cms corev1.ConfigMapList
+		Expect(cl.List(ctx, &cms)).NotTo(HaveOccurred())
+		Expect(len(cms.Items)).To(BeEquivalentTo(1))
+	})
+
+	It("allows to set deletionTimestamp on an object during SSA create", func(ctx SpecContext) {
+		now := metav1.Now()
+		obj := corev1applyconfigurations.
+			ConfigMap("foo", "default").
+			WithDeletionTimestamp(now).
+			WithData(map[string]string{"some": "data"})
+
+		cl := NewClientBuilder().Build()
+		Expect(cl.Apply(ctx, obj, client.FieldOwner("foo"))).NotTo(HaveOccurred())
+
+		Expect(obj.DeletionTimestamp).To(BeEquivalentTo(&now))
+	})
+
+	It("will silently ignore a deletionTimestamp update through SSA", func(ctx SpecContext) {
+		Skip("the apply logic in the managedFieldObjectTracker seems to override this")
+		now := metav1.Now()
+		obj := corev1applyconfigurations.
+			ConfigMap("foo", "default").
+			WithDeletionTimestamp(now).
+			WithFinalizers("foo.bar").
+			WithData(map[string]string{"some": "data"})
+
+		cl := NewClientBuilder().Build()
+		Expect(cl.Apply(ctx, obj, client.FieldOwner("foo"))).NotTo(HaveOccurred())
+		Expect(obj.DeletionTimestamp).To(BeEquivalentTo(&now))
+
+		later := metav1.Time{Time: now.Add(time.Second)}
+		obj.DeletionTimestamp = &later
+		Expect(cl.Apply(ctx, obj, client.FieldOwner("foo"))).NotTo(HaveOccurred())
+		Expect(*obj.DeletionTimestamp).To(BeEquivalentTo(now))
 	})
 
 	scalableObjs := []client.Object{

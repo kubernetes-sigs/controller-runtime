@@ -25,7 +25,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	eventsv1client "k8s.io/client-go/kubernetes/typed/events/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -33,10 +35,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
+	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
 
 // Cluster provides various methods to interact with a cluster.
 type Cluster interface {
+	recorder.Provider
+
 	// GetHTTPClient returns an HTTP client that can be used to talk to the apiserver
 	GetHTTPClient() *http.Client
 
@@ -57,9 +62,6 @@ type Cluster interface {
 
 	// GetFieldIndexer returns a client.FieldIndexer configured with the client
 	GetFieldIndexer() client.FieldIndexer
-
-	// GetEventRecorderFor returns a new EventRecorder for the provided name
-	GetEventRecorderFor(name string) record.EventRecorder
 
 	// GetRESTMapper returns a RESTMapper
 	GetRESTMapper() meta.RESTMapper
@@ -228,6 +230,7 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	// Create the recorder provider to inject event recorders for the components.
 	// TODO(directxman12): the log for the event provider should have a context (name, tags, etc) specific
 	// to the particular controller that it's being injected into, rather than a generic one like is here.
+	// Stop the broadcaster with the provider only if the broadcaster is externally given (aka non-nil).
 	recorderProvider, err := options.newRecorderProvider(config, options.HTTPClient, options.Scheme, options.Logger.WithName("events"), options.makeBroadcaster)
 	if err != nil {
 		return nil, err
@@ -283,14 +286,22 @@ func setOptionsDefaults(options Options, config *rest.Config) (Options, error) {
 
 	// This is duplicated with pkg/manager, we need it here to provide
 	// the user with an EventBroadcaster and there for the Leader election
+	evtCl, err := eventsv1client.NewForConfigAndClient(config, options.HTTPClient)
+	if err != nil {
+		return options, err
+	}
+
+	// This is duplicated with pkg/manager, we need it here to provide
+	// the user with an EventBroadcaster and there for the Leader election
 	if options.EventBroadcaster == nil {
 		// defer initialization to avoid leaking by default
-		options.makeBroadcaster = func() (record.EventBroadcaster, bool) {
-			return record.NewBroadcaster(), true
+		options.makeBroadcaster = func() (record.EventBroadcaster, events.EventBroadcaster, bool) {
+			return record.NewBroadcaster(), events.NewBroadcaster(&events.EventSinkImpl{Interface: evtCl}), true
 		}
 	} else {
-		options.makeBroadcaster = func() (record.EventBroadcaster, bool) {
-			return options.EventBroadcaster, false
+		// keep supporting the options.EventBroadcaster in the old API, but do not introduce it for the new one.
+		options.makeBroadcaster = func() (record.EventBroadcaster, events.EventBroadcaster, bool) {
+			return options.EventBroadcaster, events.NewBroadcaster(&events.EventSinkImpl{Interface: evtCl}), false
 		}
 	}
 

@@ -1804,7 +1804,7 @@ var _ = Describe("manger.Manager", func() {
 		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 
-	It("should not leak goroutines if the default event broadcaster is used & events are emitted", func(specCtx SpecContext) {
+	It("should not leak goroutines if the deprecated event broadcaster is used & events are emitted", func(specCtx SpecContext) {
 		currentGRs := goleak.IgnoreCurrent()
 
 		m, err := New(cfg, Options{ /* implicit: default setting for EventBroadcaster */ })
@@ -1817,6 +1817,54 @@ var _ = Describe("manger.Manager", func() {
 		recorder := m.GetEventRecorderFor("rock-and-roll") //nolint:staticcheck
 		Expect(m.Add(RunnableFunc(func(_ context.Context) error {
 			recorder.Event(&ns, "Warning", "BallroomBlitz", "yeah, yeah, yeah-yeah-yeah")
+			return nil
+		}))).To(Succeed())
+
+		By("starting the manager & waiting till we've sent our event")
+		ctx, cancel := context.WithCancel(specCtx)
+		doneCh := make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			defer close(doneCh)
+			Expect(m.Start(ctx)).To(Succeed())
+		}()
+		<-m.Elected()
+
+		Eventually(func() *corev1.Event {
+			evts, err := clientset.CoreV1().Events("").SearchWithContext(ctx, m.GetScheme(), &ns)
+			Expect(err).NotTo(HaveOccurred())
+
+			for i, evt := range evts.Items {
+				if evt.Reason == "BallroomBlitz" {
+					return &evts.Items[i]
+				}
+			}
+			return nil
+		}).ShouldNot(BeNil())
+
+		By("making sure there's no extra go routines still running after we stop")
+		cancel()
+		<-doneCh
+
+		// force-close keep-alive connections.  These'll time anyway (after
+		// like 30s or so) but force it to speed up the tests.
+		clientTransport.CloseIdleConnections()
+		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
+	})
+
+	It("should not leak goroutines if the default event broadcaster is used & events are emitted", func(specCtx SpecContext) {
+		currentGRs := goleak.IgnoreCurrent()
+
+		m, err := New(cfg, Options{ /* implicit: default setting for EventBroadcaster */ })
+		Expect(err).NotTo(HaveOccurred())
+
+		By("adding a runnable that emits an event")
+		ns := corev1.Namespace{}
+		ns.Name = "default"
+
+		recorder := m.GetEventRecorder("rock-and-roll")
+		Expect(m.Add(RunnableFunc(func(_ context.Context) error {
+			recorder.Eventf(&ns, nil, "Warning", "BallroomBlitz", "dance action", "yeah, yeah, yeah-yeah-yeah")
 			return nil
 		}))).To(Succeed())
 
@@ -1932,10 +1980,15 @@ var _ = Describe("manger.Manager", func() {
 		Expect(m.GetFieldIndexer()).To(Equal(mgr.cluster.GetFieldIndexer()))
 	})
 
-	It("should provide a function to get the EventRecorder", func() {
+	It("should provide a function to get the deprecated EventRecorder", func() {
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.GetEventRecorderFor("test")).NotTo(BeNil()) //nolint:staticcheck
+	})
+	It("should provide a function to get the EventRecorder", func() {
+		m, err := New(cfg, Options{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetEventRecorder("test")).NotTo(BeNil())
 	})
 	It("should provide a function to get the APIReader", func() {
 		m, err := New(cfg, Options{})

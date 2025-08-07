@@ -104,16 +104,12 @@ func (p *Provider) getBroadcaster() (record.EventBroadcaster, events.EventBroadc
 	p.broadcasterOnce.Do(func() {
 		p.deprecatedBroadcaster, p.broadcaster, p.stopBroadcaster = p.makeBroadcaster()
 
-		// init old broadcaster
+		// init deprecated broadcaster (new broadcaster does not need to be initialised)
 		p.deprecatedBroadcaster.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: p.evtClient})
 		p.deprecatedBroadcaster.StartEventWatcher(
 			func(e *corev1.Event) {
 				p.logger.V(1).Info(e.Message, "type", e.Type, "object", e.InvolvedObject, "reason", e.Reason)
 			})
-
-		// init new broadcaster
-		// TODO(clebs): figure out how to manage the context/channel that StartRecordingToSink needs inside the provider.
-		_ = p.broadcaster.StartRecordingToSinkWithContext(context.TODO())
 	})
 
 	return p.deprecatedBroadcaster, p.broadcaster

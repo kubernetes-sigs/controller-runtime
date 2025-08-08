@@ -24,6 +24,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -34,7 +35,7 @@ import (
 // EventBroadcasterProducer makes an event broadcaster, returning
 // whether or not the broadcaster should be stopped with the Provider,
 // or not (e.g. if it's shared, it shouldn't be stopped with the Provider).
-// This producer currently produces both a
+// This producer currently produces both an old API and a new API broadcaster.
 type EventBroadcasterProducer func() (deprecatedCaster record.EventBroadcaster, caster events.EventBroadcaster, stopWithProvider bool)
 
 // Provider is a recorder.Provider that records events to the k8s API server
@@ -52,6 +53,7 @@ type Provider struct {
 
 	broadcasterOnce sync.Once
 	broadcaster     events.EventBroadcaster
+	stopCh          chan struct{}
 	// Deprecated: will be removed in a future release. Use the broadcaster above instead.
 	deprecatedBroadcaster record.EventBroadcaster
 	stopBroadcaster       bool
@@ -79,6 +81,7 @@ func (p *Provider) Stop(shutdownCtx context.Context) {
 		if p.stopBroadcaster {
 			p.lock.Lock()
 			broadcaster.Shutdown()
+			close(p.stopCh)
 			deprecatedBroadcaster.Shutdown()
 			p.stopped = true
 			p.lock.Unlock()
@@ -104,12 +107,22 @@ func (p *Provider) getBroadcaster() (record.EventBroadcaster, events.EventBroadc
 	p.broadcasterOnce.Do(func() {
 		p.deprecatedBroadcaster, p.broadcaster, p.stopBroadcaster = p.makeBroadcaster()
 
-		// init deprecated broadcaster (new broadcaster does not need to be initialised)
+		// init deprecated broadcaster
 		p.deprecatedBroadcaster.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: p.evtClient})
 		p.deprecatedBroadcaster.StartEventWatcher(
 			func(e *corev1.Event) {
 				p.logger.V(1).Info(e.Message, "type", e.Type, "object", e.InvolvedObject, "reason", e.Reason)
 			})
+
+		// init new broadcaster
+		p.stopCh = make(chan struct{})
+		p.broadcaster.StartRecordingToSink(p.stopCh)
+		_, _ = p.broadcaster.StartEventWatcher(func(event runtime.Object) {
+			e, isEvt := event.(*eventsv1.Event)
+			if isEvt {
+				p.logger.V(1).Info(e.Note, "type", e.Type, "object", e.Related, "action", e.Action, "reason", e.Reason)
+			}
+		})
 	})
 
 	return p.deprecatedBroadcaster, p.broadcaster

@@ -27,11 +27,11 @@ import (
 
 // Provider knows how to generate new event recorders with given name.
 type Provider interface {
-	// GetEventRecorder returns a EventRecorder with given name.
+	// GetEventRecorderFor returns an EventRecorder for the old events API.
 	//
 	// Deprecated: this uses the old events API and will be removed in a future release. Please use GetEventRecorder instead.
 	GetEventRecorderFor(name string) record.EventRecorder
-	// GetEventRecorder returns an EventRecorder for the old events API.
+	// GetEventRecorder returns a EventRecorder with given name.
 	// The old API is not 100% supported anymore, use the new one whenever possible.
 	GetEventRecorder(name string) events.EventRecorder
 }

@@ -37,6 +37,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher/metrics"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 var _ = Describe("CertWatcher", func() {
@@ -90,6 +91,12 @@ var _ = Describe("CertWatcher", func() {
 				}).Should(Succeed())
 				return doneCh
 			}
+		})
+
+		It("should not require LeaderElection", func() {
+			leaderElectionRunnable, isLeaderElectionRunnable := any(watcher).(manager.LeaderElectionRunnable)
+			Expect(isLeaderElectionRunnable).To(BeTrue())
+			Expect(leaderElectionRunnable.NeedLeaderElection()).To(BeFalse())
 		})
 
 		It("should read the initial cert/key", func() {

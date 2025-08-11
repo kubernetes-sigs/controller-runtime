@@ -240,3 +240,9 @@ func (cw *CertWatcher) handleEvent(event fsnotify.Event) {
 		log.Error(err, "error re-reading certificate")
 	}
 }
+
+// NeedLeaderElection indicates that the cert-manager
+// does not need leader election.
+func (cw *CertWatcher) NeedLeaderElection() bool {
+	return false
+}

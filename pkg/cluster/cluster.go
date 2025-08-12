@@ -19,6 +19,7 @@ package cluster
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-logr/logr"
@@ -162,8 +163,7 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	}
 	options, err := setOptionsDefaults(options, config)
 	if err != nil {
-		options.Logger.Error(err, "Failed to set defaults")
-		return nil, err
+		return nil, fmt.Errorf("failed setting cluster default options: %w", err)
 	}
 
 	// Create the mapper provider

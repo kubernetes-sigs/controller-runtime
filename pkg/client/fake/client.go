@@ -41,6 +41,7 @@ import (
 	    https://github.com/kubernetes/kubernetes/pull/120326 (v5.6.0+incompatible
 	    missing a critical fix)
 	*/
+
 	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 	appsv1 "k8s.io/api/apps/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -717,6 +718,10 @@ func (c *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...cl
 		if err := ensureTypeMeta(o, gvk); err != nil {
 			return err
 		}
+
+		if !c.returnManagedFields {
+			o.(metav1.Object).SetManagedFields(nil)
+		}
 	}
 
 	if listOpts.LabelSelector == nil && listOpts.FieldSelector == nil {
@@ -870,7 +875,7 @@ func (c *fakeClient) Create(ctx context.Context, obj client.Object, opts ...clie
 	c.trackerWriteLock.Lock()
 	defer c.trackerWriteLock.Unlock()
 
-	if err := c.tracker.Create(gvr, obj, accessor.GetNamespace()); err != nil {
+	if err := c.tracker.Create(gvr, obj, accessor.GetNamespace(), *createOptions.AsCreateOptions()); err != nil {
 		// The managed fields tracker sets gvk even on errors
 		_ = ensureTypeMeta(obj, gvk)
 		return err
@@ -1113,11 +1118,7 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 		return err
 	}
 
-	data, err := patch.Data(obj)
-	if err != nil {
-		return err
-	}
-
+	var isApplyCreate bool
 	c.trackerWriteLock.Lock()
 	defer c.trackerWriteLock.Unlock()
 	oldObj, err := c.tracker.Get(gvr, accessor.GetNamespace(), accessor.GetName())
@@ -1126,32 +1127,59 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 			return err
 		}
 		oldObj = &unstructured.Unstructured{}
+		isApplyCreate = true
 	}
 	oldAccessor, err := meta.Accessor(oldObj)
 	if err != nil {
 		return err
 	}
 
-	// Apply patch without updating object.
-	// To remain in accordance with the behavior of k8s api behavior,
-	// a patch must not allow for changes to the deletionTimestamp of an object.
-	// The reaction() function applies the patch to the object and calls Update(),
-	// whereas dryPatch() replicates this behavior but skips the call to Update().
-	// This ensures that the patch may be rejected if a deletionTimestamp is modified, prior
-	// to updating the object.
-	action := testing.NewPatchAction(gvr, accessor.GetNamespace(), accessor.GetName(), patch.Type(), data)
-	o, err := dryPatch(action, c.tracker, obj)
-	if err != nil {
-		return err
+	// SSA deletionTimestamp updates are silently ignored
+	if patch.Type() == types.ApplyPatchType && !isApplyCreate {
+		obj.SetDeletionTimestamp(oldAccessor.GetDeletionTimestamp())
 	}
-	newObj, err := meta.Accessor(o)
+
+	data, err := patch.Data(obj)
 	if err != nil {
 		return err
 	}
 
-	// Validate that deletionTimestamp has not been changed
-	if !deletionTimestampEqual(newObj, oldAccessor) {
-		return fmt.Errorf("rejected patch, metadata.deletionTimestamp immutable")
+	action := testing.NewPatchActionWithOptions(
+		gvr,
+		accessor.GetNamespace(),
+		accessor.GetName(),
+		patch.Type(),
+		data,
+		*patchOptions.AsPatchOptions(),
+	)
+
+	// Apply is implemented in the tracker and calling it has side-effects
+	// such as bumping RV and updating managedFields timestamps, hence we
+	// can not dry-run it. Luckily, the only validation we use it for
+	// doesn't apply to SSA - Creating objects with non-nil deletionTimestamp
+	// through SSA is possible and updating the deletionTimestamp is valid,
+	// but has no effect.
+	if patch.Type() != types.ApplyPatchType {
+		// Apply patch without updating object.
+		// To remain in accordance with the behavior of k8s api behavior,
+		// a patch must not allow for changes to the deletionTimestamp of an object.
+		// The reaction() function applies the patch to the object and calls Update(),
+		// whereas dryPatch() replicates this behavior but skips the call to Update().
+		// This ensures that the patch may be rejected if a deletionTimestamp is modified, prior
+		// to updating the object.
+		o, err := dryPatch(action, c.tracker)
+		if err != nil {
+			return err
+		}
+		newObj, err := meta.Accessor(o)
+		if err != nil {
+			return err
+		}
+
+		// Validate that deletionTimestamp has not been changed
+		if !deletionTimestampEqual(newObj, oldAccessor) {
+			return fmt.Errorf("rejected patch, metadata.deletionTimestamp immutable")
+		}
 	}
 
 	reaction := testing.ObjectReaction(c.tracker)
@@ -1206,7 +1234,7 @@ func deletionTimestampEqual(newObj metav1.Object, obj metav1.Object) bool {
 // This results in some code duplication, but was found to be a cleaner alternative than unmarshalling and introspecting the patch data
 // and easier than refactoring the k8s client-go method upstream.
 // Duplicate of upstream: https://github.com/kubernetes/client-go/blob/783d0d33626e59d55d52bfd7696b775851f92107/testing/fixture.go#L146-L194
-func dryPatch(action testing.PatchActionImpl, tracker testing.ObjectTracker, newObj runtime.Object) (runtime.Object, error) {
+func dryPatch(action testing.PatchActionImpl, tracker testing.ObjectTracker) (runtime.Object, error) {
 	ns := action.GetNamespace()
 	gvr := action.GetResource()
 
@@ -1262,20 +1290,7 @@ func dryPatch(action testing.PatchActionImpl, tracker testing.ObjectTracker, new
 	case types.ApplyCBORPatchType:
 		return nil, errors.New("apply CBOR patches are not supported in the fake client")
 	case types.ApplyPatchType:
-		// There doesn't seem to be a way to test this without actually applying it as apply is implemented in the tracker.
-		// We have to make sure no reader sees this and we can not handle errors resetting the obj to the original state.
-		defer func() {
-			if unstructured, isUnstructured := obj.(*unstructured.Unstructured); isUnstructured && unstructured.GetKind() == "" {
-				unstructured.SetGroupVersionKind(newObj.GetObjectKind().GroupVersionKind())
-			}
-			if err := tracker.Add(obj); err != nil {
-				panic(err)
-			}
-		}()
-		if err := tracker.Apply(gvr, newObj, ns, action.PatchOptions); err != nil {
-			return nil, err
-		}
-		return tracker.Get(gvr, ns, action.GetName())
+		return nil, errors.New("bug in controller-runtime: should not end up in dryPatch for SSA")
 	default:
 		return nil, fmt.Errorf("%s PatchType is not supported", action.GetPatchType())
 	}

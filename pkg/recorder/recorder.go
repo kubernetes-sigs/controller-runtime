@@ -32,6 +32,5 @@ type Provider interface {
 	// Deprecated: this uses the old events API and will be removed in a future release. Please use GetEventRecorder instead.
 	GetEventRecorderFor(name string) record.EventRecorder
 	// GetEventRecorder returns a EventRecorder with given name.
-	// The old API is not 100% supported anymore, use the new one whenever possible.
 	GetEventRecorder(name string) events.EventRecorder
 }

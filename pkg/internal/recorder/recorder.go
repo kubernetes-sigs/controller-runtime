@@ -117,7 +117,10 @@ func (p *Provider) getBroadcaster() (record.EventBroadcaster, events.EventBroadc
 		// init new broadcaster
 		ctx, cancel := context.WithCancel(context.Background())
 		p.cancelSinkRecordingFunc = cancel
-		p.broadcaster.StartRecordingToSinkWithContext(ctx)
+		if err := p.broadcaster.StartRecordingToSinkWithContext(ctx); err != nil {
+			p.logger.Error(err, "error starting recording for broadcaster")
+		}
+
 		_, err := p.broadcaster.StartEventWatcher(func(event runtime.Object) {
 			e, isEvt := event.(*eventsv1.Event)
 			if isEvt {

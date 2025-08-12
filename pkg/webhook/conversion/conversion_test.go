@@ -296,6 +296,29 @@ var _ = Describe("Conversion Webhook", func() {
 		Expect(convReview.Response.ConvertedObjects).To(BeEmpty())
 	})
 
+	It("should return error on panic in conversion", func() {
+
+		v1Obj := makeV1Obj()
+		v1Obj.Spec.PanicInConversion = true
+
+		convReq := &apix.ConversionReview{
+			TypeMeta: metav1.TypeMeta{},
+			Request: &apix.ConversionRequest{
+				DesiredAPIVersion: "jobs.testprojects.kb.io/v3",
+				Objects: []runtime.RawExtension{
+					{
+						Object: v1Obj,
+					},
+				},
+			},
+		}
+
+		convReview := doRequest(convReq)
+
+		Expect(convReview.Response.ConvertedObjects).To(HaveLen(0))
+		Expect(convReview.Response.Result.Status).To(Equal(metav1.StatusFailure))
+		Expect(convReview.Response.Result.Message).To(Equal("internal error occurred during conversion"))
+	})
 })
 
 var _ = Describe("IsConvertible", func() {

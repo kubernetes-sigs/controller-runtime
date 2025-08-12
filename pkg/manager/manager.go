@@ -341,8 +341,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// Set default values for options fields
 	options, err := setOptionsDefaults(config, options)
 	if err != nil {
-		options.Logger.Error(err, "Failed to set defaults")
-		return nil, err
+		return nil, fmt.Errorf("failed setting manager default options: %w", err)
 	}
 
 	cluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {

@@ -51,9 +51,9 @@ type Provider struct {
 	evtClient       corev1client.EventInterface
 	makeBroadcaster EventBroadcasterProducer
 
-	broadcasterOnce sync.Once
-	broadcaster     events.EventBroadcaster
-	stopCh          chan struct{}
+	broadcasterOnce         sync.Once
+	broadcaster             events.EventBroadcaster
+	cancelSinkRecordingFunc context.CancelFunc
 	// Deprecated: will be removed in a future release. Use the broadcaster above instead.
 	deprecatedBroadcaster record.EventBroadcaster
 	stopBroadcaster       bool
@@ -81,7 +81,7 @@ func (p *Provider) Stop(shutdownCtx context.Context) {
 		if p.stopBroadcaster {
 			p.lock.Lock()
 			broadcaster.Shutdown()
-			close(p.stopCh)
+			p.cancelSinkRecordingFunc()
 			deprecatedBroadcaster.Shutdown()
 			p.stopped = true
 			p.lock.Unlock()
@@ -115,14 +115,18 @@ func (p *Provider) getBroadcaster() (record.EventBroadcaster, events.EventBroadc
 			})
 
 		// init new broadcaster
-		p.stopCh = make(chan struct{})
-		p.broadcaster.StartRecordingToSink(p.stopCh)
-		_, _ = p.broadcaster.StartEventWatcher(func(event runtime.Object) {
+		ctx, cancel := context.WithCancel(context.Background())
+		p.cancelSinkRecordingFunc = cancel
+		p.broadcaster.StartRecordingToSinkWithContext(ctx)
+		_, err := p.broadcaster.StartEventWatcher(func(event runtime.Object) {
 			e, isEvt := event.(*eventsv1.Event)
 			if isEvt {
 				p.logger.V(1).Info(e.Note, "type", e.Type, "object", e.Related, "action", e.Action, "reason", e.Reason)
 			}
 		})
+		if err != nil {
+			p.logger.Error(err, "error starting event watcher for broadcaster")
+		}
 	})
 
 	return p.deprecatedBroadcaster, p.broadcaster
@@ -190,6 +194,7 @@ func (l *lazyRecorder) Eventf(regarding runtime.Object, related runtime.Object, 
 }
 
 // deprecatedRecorder implements the old events API during the tranisiton and will be removed in a future release.
+//
 // Deprecated: will be removed in a future release.
 type deprecatedRecorder struct {
 	prov *Provider

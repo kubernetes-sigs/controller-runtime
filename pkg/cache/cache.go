@@ -148,7 +148,10 @@ type Options struct {
 	Mapper meta.RESTMapper
 
 	// SyncPeriod determines the minimum frequency at which watched resources are
-	// reconciled. A lower period will correct entropy more quickly, but reduce
+	// reconciled. It causes all resources in the local cache to be re-enqueued
+	// for reconciliation, even if there are no new events. It does
+	// not sync between the api-server and the local cache.
+	// A lower period will correct entropy more quickly, but reduce
 	// responsiveness to change if there are many watched resources. Change this
 	// value only if you know what you are doing. Defaults to 10 hours if unset.
 	// there will a 10 percent jitter between the SyncPeriod of all controllers
@@ -174,8 +177,8 @@ type Options struct {
 	// instead of `reconcile.Result{}`.
 	//
 	// SyncPeriod will trigger update events with the old object being equal to the new
-	// object, except when the cache was out of sync.
-	// If you filter update events like this:
+	// object. If you filter update events like this:
+	//
 	// Controller.Watch(
 	//     &source.Kind{Type: v1.MyCustomKind},
 	//     &handler.EnqueueRequestForObject{},

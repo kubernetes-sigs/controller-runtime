@@ -36,11 +36,37 @@ var _ = Describe("ListOptions", func() {
 		o.ApplyToList(newListOpts)
 		Expect(newListOpts).To(Equal(o))
 	})
+	It("Should set LabelSelector with MatchingLabelsSelector", func() {
+		labelSelector, err := labels.Parse("a=b")
+		Expect(err).NotTo(HaveOccurred())
+		newListOpts := &client.ListOptions{}
+		newListOpts.ApplyOptions([]client.ListOption{client.MatchingLabelsSelector{Selector: labelSelector}})
+		expectedListOpts := &client.ListOptions{LabelSelector: client.MatchingLabelsSelector{Selector: labelSelector}}
+		Expect(newListOpts).To(Equal(expectedListOpts))
+	})
+	It("Should set LabelSelector to everything with empty MatchingLabelsSelector", func() {
+		newListOpts := &client.ListOptions{}
+		newListOpts.ApplyOptions([]client.ListOption{client.MatchingLabelsSelector{}})
+		expectedListOpts := &client.ListOptions{LabelSelector: client.MatchingLabelsSelector{Selector: labels.Everything()}}
+		Expect(newListOpts).To(Equal(expectedListOpts))
+	})
 	It("Should set FieldSelector", func() {
 		o := &client.ListOptions{FieldSelector: fields.Nothing()}
 		newListOpts := &client.ListOptions{}
 		o.ApplyToList(newListOpts)
 		Expect(newListOpts).To(Equal(o))
+	})
+	It("Should set FieldSelector with MatchingFieldsSelector", func() {
+		newListOpts := &client.ListOptions{}
+		newListOpts.ApplyOptions([]client.ListOption{client.MatchingFieldsSelector{Selector: fields.Nothing()}})
+		expectedListOpts := &client.ListOptions{FieldSelector: client.MatchingFieldsSelector{Selector: fields.Nothing()}}
+		Expect(newListOpts).To(Equal(expectedListOpts))
+	})
+	It("Should set FieldSelector to everything with empty MatchingFieldsSelector", func() {
+		newListOpts := &client.ListOptions{}
+		newListOpts.ApplyOptions([]client.ListOption{client.MatchingFieldsSelector{}})
+		expectedListOpts := &client.ListOptions{FieldSelector: client.MatchingFieldsSelector{Selector: fields.Everything()}}
+		Expect(newListOpts).To(Equal(expectedListOpts))
 	})
 	It("Should set Namespace", func() {
 		o := &client.ListOptions{Namespace: "my-ns"}

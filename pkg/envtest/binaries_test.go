@@ -28,12 +28,84 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"testing"
 
+	"github.com/Masterminds/semver/v3"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
 	"sigs.k8s.io/yaml"
 )
+
+func TestInterpretVersion(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name string
+		in   []string
+
+		canonical string
+		included  []string
+		excluded  []string
+	}{
+		{
+			name:      "an exact release is not a search",
+			in:        []string{"v1.2.3", "1.2.3"},
+			canonical: "1.2.3",
+		},
+		{
+			name:      "an exact prerelease is not a search",
+			in:        []string{"v1.2.0-beta.1", "1.2.0-beta.1"},
+			canonical: "1.2.0-beta.1",
+		},
+		{
+			name:     "a version prefix is a search",
+			in:       []string{"v1.20", "1.20", "001.20"},
+			included: []string{"1.20.0", "v1.20.1", "1.20.999"},
+			excluded: []string{"1.19.999", "1.20.0-beta.1", "v1.20.0-rc.1", "v1.21.0"},
+		},
+		{
+			name:     "a version prefix can be short",
+			in:       []string{"v2", "2", "02"},
+			included: []string{"2.0.0", "v2.5.6"},
+			excluded: []string{"1.3.0", "v2.33.0-beta.0", "3.1.0"},
+		},
+		{
+			name: "weird stuff is ignored",
+			in: []string{
+				"asdf", "version", "vegeta4",
+				"the.1", "2ne1",
+				"=7.8.9", "10.x", "*",
+			},
+			// no canonical version and no search
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, in := range tc.in {
+				g := NewWithT(t)
+				version, search := interpretVersion(in)
+
+				if version != nil {
+					g.Expect(version.String()).To(Equal(tc.canonical))
+				} else {
+					g.Expect(tc.canonical).To(BeEmpty())
+				}
+
+				if search != nil {
+					compare := func(s string) bool { return search.Check(semver.MustParse(s)) }
+
+					g.Expect(tc.included).To(HaveEach(WithTransform(compare, BeTrue())))
+					g.Expect(tc.excluded).To(HaveEach(WithTransform(compare, BeFalse())))
+				} else {
+					g.Expect(tc.included).To(BeEmpty())
+					g.Expect(tc.excluded).To(BeEmpty())
+				}
+			}
+		})
+	}
+}
 
 var _ = Describe("Test download binaries", func() {
 	var downloadDirectory string

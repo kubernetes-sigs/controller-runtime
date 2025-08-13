@@ -35,7 +35,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/blang/semver/v4"
+	"k8s.io/apimachinery/pkg/util/version"
 	"sigs.k8s.io/yaml"
 )
 
@@ -257,15 +257,15 @@ func latestStableVersionFromIndex(index *index) (string, error) {
 		return "", fmt.Errorf("failed to find latest stable version from index: index is empty")
 	}
 
-	parsedVersions := []semver.Version{}
+	parsedVersions := []*version.Version{}
 	for releaseVersion := range index.Releases {
-		v, err := semver.ParseTolerant(releaseVersion)
+		v, err := version.ParseSemantic(releaseVersion)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse version %q: %w", releaseVersion, err)
 		}
 
 		// Filter out pre-releases.
-		if len(v.Pre) > 0 {
+		if len(v.PreRelease()) > 0 {
 			continue
 		}
 
@@ -277,7 +277,7 @@ func latestStableVersionFromIndex(index *index) (string, error) {
 	}
 
 	sort.Slice(parsedVersions, func(i, j int) bool {
-		return parsedVersions[i].GT(parsedVersions[j])
+		return parsedVersions[i].GreaterThan(parsedVersions[j])
 	})
 	return "v" + parsedVersions[0].String(), nil
 }

@@ -28,12 +28,92 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
 	"sigs.k8s.io/yaml"
 )
+
+func TestInterpretKubernetesVersion(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name  string
+		in    []string
+		exact bool
+		major uint
+		minor uint
+	}{
+		{
+			name:  `SemVer and "v" prefix are exact`,
+			exact: true,
+			in: []string{
+				"1.2.3", "v1.2.3", "v1.30.2", "v1.31.0-beta.0", "v1.33.0-alpha.2",
+			},
+		},
+		{
+			name: "leading zeroes are not a version",
+			in: []string{
+				"01.2.0", "00001.2.3", "1.2.03", "v01.02.0003",
+			},
+		},
+		{
+			name: "weird stuff is not a version",
+			in: []string{
+				"asdf", "version", "vegeta4", "the.1", "2ne1", "=7.8.9", "10.x", "*",
+				"0.0001", "1.00002", "v1.2anything", "1.2.x", "1.2.z", "1.2.*",
+			},
+		},
+		{
+			name: "one number is not a version",
+			in: []string{
+				"1", "v1", "v001", "1.", "v1.", "1.x",
+			},
+		},
+		{
+			name:  "two numbers are a release series",
+			major: 0, minor: 1,
+			in: []string{"0.1", "v0.1"},
+		},
+		{
+			name:  "two numbers are a release series",
+			major: 1, minor: 2,
+			in: []string{"1.2", "v1.2"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, input := range tc.in {
+				exact, major, minor := interpretKubernetesVersion(input)
+
+				if tc.exact {
+					if expected := strings.TrimPrefix(input, "v"); exact != expected {
+						t.Errorf("expected canonical %q for %q, got %q", expected, input, exact)
+					}
+					if major != 0 || minor != 0 {
+						t.Errorf("expected no release series for %q, got (%v, %v)", input, major, minor)
+					}
+				}
+
+				if !tc.exact {
+					if major != tc.major {
+						t.Errorf("expected major %v for %q, got %v", tc.major, input, major)
+					}
+					if minor != tc.minor {
+						t.Errorf("expected minor %v for %q, got %v", tc.minor, input, minor)
+					}
+					if exact != "" {
+						t.Errorf("expected no canonical version for %q, got %q", input, exact)
+					}
+				}
+			}
+		})
+	}
+}
 
 var _ = Describe("Test download binaries", func() {
 	var downloadDirectory string
@@ -68,12 +148,31 @@ var _ = Describe("Test download binaries", func() {
 		Expect(actualFiles).To(ConsistOf("some-file"))
 	})
 
-	It("should download v1.32.0 binaries", func(ctx SpecContext) {
+	It("should download binaries of an exact version", func(ctx SpecContext) {
 		apiServerPath, etcdPath, kubectlPath, err := downloadBinaryAssets(ctx, downloadDirectory, "v1.31.0", fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"))
 		Expect(err).ToNot(HaveOccurred())
 
-		// Verify latest stable version (v1.32.0) was downloaded
+		// Verify exact version (v1.31.0) was downloaded
 		versionDownloadDirectory := path.Join(downloadDirectory, fmt.Sprintf("1.31.0-%s-%s", runtime.GOOS, runtime.GOARCH))
+		Expect(apiServerPath).To(Equal(path.Join(versionDownloadDirectory, "kube-apiserver")))
+		Expect(etcdPath).To(Equal(path.Join(versionDownloadDirectory, "etcd")))
+		Expect(kubectlPath).To(Equal(path.Join(versionDownloadDirectory, "kubectl")))
+
+		dirEntries, err := os.ReadDir(versionDownloadDirectory)
+		Expect(err).ToNot(HaveOccurred())
+		var actualFiles []string
+		for _, e := range dirEntries {
+			actualFiles = append(actualFiles, e.Name())
+		}
+		Expect(actualFiles).To(ConsistOf("some-file"))
+	})
+
+	It("should download binaries of latest stable version of a release series", func(ctx SpecContext) {
+		apiServerPath, etcdPath, kubectlPath, err := downloadBinaryAssets(ctx, downloadDirectory, "1.31", fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"))
+		Expect(err).ToNot(HaveOccurred())
+
+		// Verify stable version (v1.31.4) was downloaded
+		versionDownloadDirectory := path.Join(downloadDirectory, fmt.Sprintf("1.31.4-%s-%s", runtime.GOOS, runtime.GOARCH))
 		Expect(apiServerPath).To(Equal(path.Join(versionDownloadDirectory, "kube-apiserver")))
 		Expect(etcdPath).To(Equal(path.Join(versionDownloadDirectory, "etcd")))
 		Expect(kubectlPath).To(Equal(path.Join(versionDownloadDirectory, "kubectl")))
@@ -99,6 +198,15 @@ var (
 				"envtest-v1.32.0-linux-ppc64le.tar.gz": {},
 				"envtest-v1.32.0-linux-s390x.tar.gz":   {},
 				"envtest-v1.32.0-windows-amd64.tar.gz": {},
+			},
+			"v1.31.4": map[string]archive{
+				"envtest-v1.31.4-darwin-amd64.tar.gz":  {},
+				"envtest-v1.31.4-darwin-arm64.tar.gz":  {},
+				"envtest-v1.31.4-linux-amd64.tar.gz":   {},
+				"envtest-v1.31.4-linux-arm64.tar.gz":   {},
+				"envtest-v1.31.4-linux-ppc64le.tar.gz": {},
+				"envtest-v1.31.4-linux-s390x.tar.gz":   {},
+				"envtest-v1.31.4-windows-amd64.tar.gz": {},
 			},
 			"v1.31.0": map[string]archive{
 				"envtest-v1.31.0-darwin-amd64.tar.gz":  {},

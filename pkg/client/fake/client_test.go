@@ -42,12 +42,14 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	clientgoapplyconfigurations "k8s.io/client-go/applyconfigurations"
 	corev1applyconfigurations "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/testing"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -2837,6 +2839,93 @@ var _ = Describe("Fake client", func() {
 		obj.DeletionTimestamp = &later
 		Expect(cl.Apply(ctx, obj, client.FieldOwner("foo"))).NotTo(HaveOccurred())
 		Expect(*obj.DeletionTimestamp).To(BeEquivalentTo(now))
+	})
+
+	It("will error out if an object with invalid managedFields is added", func(ctx SpecContext) {
+		fieldV1Map := map[string]interface{}{
+			"f:metadata": map[string]interface{}{
+				"f:name":        map[string]interface{}{},
+				"f:labels":      map[string]interface{}{},
+				"f:annotations": map[string]interface{}{},
+				"f:finalizers":  map[string]interface{}{},
+			},
+		}
+		fieldV1, err := json.Marshal(fieldV1Map)
+		Expect(err).NotTo(HaveOccurred())
+
+		obj := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+			Name:      "cm-1",
+			Namespace: "default",
+			ManagedFields: []metav1.ManagedFieldsEntry{{
+				Manager:    "my-manager",
+				Operation:  metav1.ManagedFieldsOperationUpdate,
+				FieldsType: "FieldsV1",
+				FieldsV1:   &metav1.FieldsV1{Raw: fieldV1},
+			}},
+		}}
+
+		Expect(func() {
+			NewClientBuilder().WithObjects(obj).Build()
+		}).To(PanicWith(MatchError(ContainSubstring("invalid managedFields"))))
+	})
+
+	It("allows adding an object with managedFields", func(ctx SpecContext) {
+		fieldV1Map := map[string]interface{}{
+			"f:metadata": map[string]interface{}{
+				"f:name":        map[string]interface{}{},
+				"f:labels":      map[string]interface{}{},
+				"f:annotations": map[string]interface{}{},
+				"f:finalizers":  map[string]interface{}{},
+			},
+		}
+		fieldV1, err := json.Marshal(fieldV1Map)
+		Expect(err).NotTo(HaveOccurred())
+
+		obj := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+			Name:      "cm-1",
+			Namespace: "default",
+			ManagedFields: []metav1.ManagedFieldsEntry{{
+				Manager:    "my-manager",
+				Operation:  metav1.ManagedFieldsOperationUpdate,
+				FieldsType: "FieldsV1",
+				FieldsV1:   &metav1.FieldsV1{Raw: fieldV1},
+				APIVersion: "v1",
+			}},
+		}}
+
+		NewClientBuilder().WithObjects(obj).Build()
+	})
+
+	It("allows adding an object with invalid managedFields when not using the FieldManagedObjectTracker", func(ctx SpecContext) {
+		fieldV1Map := map[string]interface{}{
+			"f:metadata": map[string]interface{}{
+				"f:name":        map[string]interface{}{},
+				"f:labels":      map[string]interface{}{},
+				"f:annotations": map[string]interface{}{},
+				"f:finalizers":  map[string]interface{}{},
+			},
+		}
+		fieldV1, err := json.Marshal(fieldV1Map)
+		Expect(err).NotTo(HaveOccurred())
+
+		obj := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+			Name:      "cm-1",
+			Namespace: "default",
+			ManagedFields: []metav1.ManagedFieldsEntry{{
+				Manager:    "my-manager",
+				Operation:  metav1.ManagedFieldsOperationUpdate,
+				FieldsType: "FieldsV1",
+				FieldsV1:   &metav1.FieldsV1{Raw: fieldV1},
+			}},
+		}}
+
+		NewClientBuilder().
+			WithObjectTracker(testing.NewObjectTracker(
+				clientgoscheme.Scheme,
+				serializer.NewCodecFactory(clientgoscheme.Scheme).UniversalDecoder(),
+			)).
+			WithObjects(obj).
+			Build()
 	})
 
 	scalableObjs := []client.Object{

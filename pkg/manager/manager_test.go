@@ -36,7 +36,10 @@ import (
 	"go.uber.org/goleak"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
+	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -1878,8 +1881,9 @@ var _ = Describe("manger.Manager", func() {
 		}()
 		<-m.Elected()
 
-		Eventually(func() *corev1.Event {
-			evts, err := clientset.CoreV1().Events("").SearchWithContext(ctx, m.GetScheme(), &ns)
+		Eventually(func() *eventsv1.Event {
+			evts, err := clientset.EventsV1().Events("").List(ctx,
+				metav1.ListOptions{FieldSelector: fields.OneTermEqualSelector("regarding.name", ns.Name).String()})
 			Expect(err).NotTo(HaveOccurred())
 
 			for i, evt := range evts.Items {
@@ -1914,7 +1918,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Add the slow runnable that will return an error after some delay
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			slowRunnable := RunnableFunc(func(c context.Context) error {
 				<-c.Done()
 

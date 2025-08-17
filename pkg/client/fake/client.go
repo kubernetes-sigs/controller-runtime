@@ -1071,7 +1071,30 @@ func (c *fakeClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, 
 	patchOpts := &client.PatchOptions{}
 	patchOpts.Raw = applyOpts.AsPatchOptions()
 
-	return c.patch(u, applyPatch, patchOpts)
+	if err := c.patch(u, applyPatch, patchOpts); err != nil {
+		return err
+	}
+
+	acJSON, err := json.Marshal(u)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patched object: %w", err)
+	}
+
+	// We have to zero the object in case it contained a status and there is a
+	// status subresource. If its the private `unstructuredApplyConfiguration`
+	// we can not zero all of it, as that will cause the embedded Unstructured
+	// to be nil which then causes a NPD in the json.Unmarshal below.
+	switch reflect.TypeOf(obj).String() {
+	case "*client.unstructuredApplyConfiguration":
+		zero(reflect.ValueOf(obj).Elem().FieldByName("Unstructured").Interface())
+	default:
+		zero(obj)
+	}
+	if err := json.Unmarshal(acJSON, obj); err != nil {
+		return fmt.Errorf("failed to unmarshal patched object: %w", err)
+	}
+
+	return nil
 }
 
 type fakeApplyPatch struct{}

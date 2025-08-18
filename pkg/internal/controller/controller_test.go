@@ -1403,7 +1403,8 @@ var _ = Describe("controller", func() {
 			wg.Wait()
 		})
 
-		It("should not cause a data race when called concurrently with Start and only start sources once", func(ctx SpecContext) {
+		It("should not cause a data race when called concurrently with Start and only start sources once", func(specCtx SpecContext) {
+			ctx, cancel := context.WithCancel(specCtx)
 
 			ctrl.CacheSyncTimeout = time.Second
 			numWatches := 10
@@ -1417,9 +1418,11 @@ var _ = Describe("controller", func() {
 			}
 
 			By("calling Warmup and Start concurrently")
+			blockOnStartChan := make(chan struct{})
 			go func() {
 				defer GinkgoRecover()
 				Expect(ctrl.Start(ctx)).To(Succeed())
+				close(blockOnStartChan)
 			}()
 
 			blockOnWarmupChan := make(chan struct{})
@@ -1430,6 +1433,10 @@ var _ = Describe("controller", func() {
 			}()
 
 			<-blockOnWarmupChan
+
+			cancel()
+
+			<-blockOnStartChan
 
 			Expect(watchStartedCount.Load()).To(Equal(int32(numWatches)), "source should only be started once")
 			Expect(ctrl.startWatches).To(BeNil(), "startWatches should be reset to nil after they are started")

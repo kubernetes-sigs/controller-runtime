@@ -218,6 +218,20 @@ var _ = Describe("APIServer", func() {
 			return cert
 		}
 
+		Context("when SecureServing are not set", func() {
+			It("should have localhost/127.0.0.1 in the certificate altnames", func() {
+				cert := getCertificate()
+
+				Expect(cert.Subject.CommonName).To(Equal("localhost"))
+				Expect(cert.DNSNames).To(ConsistOf("localhost"))
+				expectedIPAddresses := []net.IP{
+					net.ParseIP("127.0.0.1").To4(),
+					net.ParseIP(server.SecureServing.ListenAddr.Address).To4(),
+				}
+				Expect(cert.IPAddresses).To(ContainElements(expectedIPAddresses))
+			})
+		})
+
 		Context("when SecureServing host & port are set", func() {
 			BeforeEach(func() {
 				server.SecureServing = SecureServing{
@@ -236,55 +250,6 @@ var _ = Describe("APIServer", func() {
 				expectedIPAddresses := []net.IP{
 					net.ParseIP("127.0.0.1").To4(),
 					net.ParseIP(server.SecureServing.ListenAddr.Address).To4(),
-				}
-				Expect(cert.IPAddresses).To(ContainElements(expectedIPAddresses))
-			})
-		})
-
-		Context("when InsecureServing host & port are set", func() {
-			BeforeEach(func() {
-				server.InsecureServing = &process.ListenAddr{
-					Address: "1.2.3.4",
-					Port:    "5678",
-				}
-			})
-
-			It("should have the host in the certificate altnames", func() {
-				cert := getCertificate()
-
-				Expect(cert.Subject.CommonName).To(Equal("localhost"))
-				Expect(cert.DNSNames).To(ConsistOf("localhost"))
-				expectedIPAddresses := []net.IP{
-					net.ParseIP("127.0.0.1").To4(),
-					net.ParseIP(server.InsecureServing.Address).To4(),
-				}
-				Expect(cert.IPAddresses).To(ContainElements(expectedIPAddresses))
-			})
-		})
-
-		Context("when SecureServing and InsecureServing host & port are set", func() {
-			BeforeEach(func() {
-				server.SecureServing = SecureServing{
-					ListenAddr: process.ListenAddr{
-						Address: "1.2.3.4",
-						Port:    "5678",
-					},
-				}
-				server.InsecureServing = &process.ListenAddr{
-					Address: "5.6.7.8",
-					Port:    "1234",
-				}
-			})
-
-			It("should have the host in the certificate altnames", func() {
-				cert := getCertificate()
-
-				Expect(cert.Subject.CommonName).To(Equal("localhost"))
-				Expect(cert.DNSNames).To(ConsistOf("localhost"))
-				expectedIPAddresses := []net.IP{
-					net.ParseIP("127.0.0.1").To4(),
-					net.ParseIP(server.SecureServing.ListenAddr.Address).To4(),
-					net.ParseIP(server.InsecureServing.Address).To4(),
 				}
 				Expect(cert.IPAddresses).To(ContainElements(expectedIPAddresses))
 			})

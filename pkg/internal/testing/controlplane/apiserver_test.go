@@ -17,8 +17,13 @@ limitations under the License.
 package controlplane_test
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
+	"net"
 	"net/url"
+	"os"
+	"path"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -187,6 +192,66 @@ var _ = Describe("APIServer", func() {
 					MatchRegexp("--client-ca-file=.+"),
 					"--authorization-mode=RBAC",
 				))
+			})
+		})
+	})
+
+	// These tests assume that 'localhost' resolves to 127.0.0.1. It can resolve
+	// to other addresses as well (e.g. ::1 on IPv6), but it must always resolve
+	// to 127.0.0.1.
+	Describe(("generated certificates"), func() {
+		getCertificate := func() *x509.Certificate {
+			// Read the cert file
+			certFile := path.Join(server.CertDir, "apiserver.crt")
+			certBytes, err := os.ReadFile(certFile)
+			Expect(err).NotTo(HaveOccurred(), "should be able to read the cert file")
+
+			// Decode and parse it
+			block, remainder := pem.Decode(certBytes)
+			Expect(block).NotTo(BeNil(), "should be able to decode the cert file")
+			Expect(remainder).To(BeEmpty(), "should not have any extra data in the cert file")
+			Expect(block.Type).To(Equal("CERTIFICATE"), "should be a certificate block")
+
+			cert, err := x509.ParseCertificate(block.Bytes)
+			Expect(err).NotTo(HaveOccurred(), "should be able to parse the cert file")
+
+			return cert
+		}
+
+		Context("when SecureServing are not set", func() {
+			It("should have localhost/127.0.0.1 in the certificate altnames", func() {
+				cert := getCertificate()
+
+				Expect(cert.Subject.CommonName).To(Equal("localhost"))
+				Expect(cert.DNSNames).To(ConsistOf("localhost"))
+				expectedIPAddresses := []net.IP{
+					net.ParseIP("127.0.0.1").To4(),
+					net.ParseIP(server.SecureServing.ListenAddr.Address).To4(),
+				}
+				Expect(cert.IPAddresses).To(ContainElements(expectedIPAddresses))
+			})
+		})
+
+		Context("when SecureServing host & port are set", func() {
+			BeforeEach(func() {
+				server.SecureServing = SecureServing{
+					ListenAddr: process.ListenAddr{
+						Address: "1.2.3.4",
+						Port:    "5678",
+					},
+				}
+			})
+
+			It("should have the host in the certificate altnames", func() {
+				cert := getCertificate()
+
+				Expect(cert.Subject.CommonName).To(Equal("localhost"))
+				Expect(cert.DNSNames).To(ConsistOf("localhost"))
+				expectedIPAddresses := []net.IP{
+					net.ParseIP("127.0.0.1").To4(),
+					net.ParseIP(server.SecureServing.ListenAddr.Address).To4(),
+				}
+				Expect(cert.IPAddresses).To(ContainElements(expectedIPAddresses))
 			})
 		})
 	})

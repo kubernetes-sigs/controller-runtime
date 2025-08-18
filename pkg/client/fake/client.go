@@ -81,8 +81,9 @@ import (
 
 type versionedTracker struct {
 	testing.ObjectTracker
-	scheme                *runtime.Scheme
-	withStatusSubresource sets.Set[schema.GroupVersionKind]
+	scheme                        *runtime.Scheme
+	withStatusSubresource         sets.Set[schema.GroupVersionKind]
+	usesFieldManagedObjectTracker bool
 }
 
 type fakeClient struct {
@@ -286,6 +287,7 @@ func (f *ClientBuilder) Build() client.WithWatch {
 		panic(errors.New("WithObjectTracker and WithTypeConverters are incompatible"))
 	}
 
+	var usesFieldManagedObjectTracker bool
 	if f.objectTracker == nil {
 		if len(f.typeConverters) == 0 {
 			// Use corresponding scheme to ensure the converter error
@@ -304,11 +306,13 @@ func (f *ClientBuilder) Build() client.WithWatch {
 			serializer.NewCodecFactory(f.scheme).UniversalDecoder(),
 			multiTypeConverter{upstream: f.typeConverters},
 		)
+		usesFieldManagedObjectTracker = true
 	}
 	tracker := versionedTracker{
-		ObjectTracker:         f.objectTracker,
-		scheme:                f.scheme,
-		withStatusSubresource: withStatusSubResource,
+		ObjectTracker:                 f.objectTracker,
+		scheme:                        f.scheme,
+		withStatusSubresource:         withStatusSubResource,
+		usesFieldManagedObjectTracker: usesFieldManagedObjectTracker,
 	}
 
 	for _, obj := range f.initObject {
@@ -375,6 +379,16 @@ func (t versionedTracker) Add(obj runtime.Object) error {
 		obj, err = convertFromUnstructuredIfNecessary(t.scheme, obj)
 		if err != nil {
 			return err
+		}
+
+		// If the fieldManager can not decode fields, it will just silently clear them. This is pretty
+		// much guaranteed not to be what someone that initializes a fake client with objects that
+		// have them set wants, so validate them here.
+		// Ref https://github.com/kubernetes/kubernetes/blob/a956ef4862993b825bcd524a19260192ff1da72d/staging/src/k8s.io/apimachinery/pkg/util/managedfields/internal/fieldmanager.go#L105
+		if t.usesFieldManagedObjectTracker {
+			if err := managedfields.ValidateManagedFields(accessor.GetManagedFields()); err != nil {
+				return fmt.Errorf("invalid managedFields on %T: %w", obj, err)
+			}
 		}
 		if err := t.ObjectTracker.Add(obj); err != nil {
 			return err

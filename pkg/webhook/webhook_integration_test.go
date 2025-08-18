@@ -111,6 +111,7 @@ var _ = Describe("Webhook", func() {
 			server.Register("/failing", &webhook.Admission{Handler: admission.MultiValidatingHandler(&rejectingValidator{d: admission.NewDecoder(testenv.Scheme)})})
 
 			go func() {
+				defer GinkgoRecover()
 				err = server.Start(ctx)
 				Expect(err).NotTo(HaveOccurred())
 			}()

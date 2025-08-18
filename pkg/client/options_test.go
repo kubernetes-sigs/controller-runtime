@@ -44,10 +44,10 @@ var _ = Describe("ListOptions", func() {
 		expectedListOpts := &client.ListOptions{LabelSelector: client.MatchingLabelsSelector{Selector: labelSelector}}
 		Expect(newListOpts).To(Equal(expectedListOpts))
 	})
-	It("Should set LabelSelector to everything with empty MatchingLabelsSelector", func() {
+	It("Should set LabelSelector to nothing with empty MatchingLabelsSelector", func() {
 		newListOpts := &client.ListOptions{}
 		newListOpts.ApplyOptions([]client.ListOption{client.MatchingLabelsSelector{}})
-		expectedListOpts := &client.ListOptions{LabelSelector: client.MatchingLabelsSelector{Selector: labels.Everything()}}
+		expectedListOpts := &client.ListOptions{LabelSelector: client.MatchingLabelsSelector{Selector: labels.Nothing()}}
 		Expect(newListOpts).To(Equal(expectedListOpts))
 	})
 	It("Should set FieldSelector", func() {
@@ -62,10 +62,10 @@ var _ = Describe("ListOptions", func() {
 		expectedListOpts := &client.ListOptions{FieldSelector: client.MatchingFieldsSelector{Selector: fields.Nothing()}}
 		Expect(newListOpts).To(Equal(expectedListOpts))
 	})
-	It("Should set FieldSelector to everything with empty MatchingFieldsSelector", func() {
+	It("Should set FieldSelector to nothing with empty MatchingFieldsSelector", func() {
 		newListOpts := &client.ListOptions{}
 		newListOpts.ApplyOptions([]client.ListOption{client.MatchingFieldsSelector{}})
-		expectedListOpts := &client.ListOptions{FieldSelector: client.MatchingFieldsSelector{Selector: fields.Everything()}}
+		expectedListOpts := &client.ListOptions{FieldSelector: client.MatchingFieldsSelector{Selector: fields.Nothing()}}
 		Expect(newListOpts).To(Equal(expectedListOpts))
 	})
 	It("Should set Namespace", func() {

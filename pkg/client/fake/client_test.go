@@ -2542,6 +2542,74 @@ var _ = Describe("Fake client", func() {
 		wg.Wait()
 	})
 
+	DescribeTable("mutating operations return the updated object",
+		func(ctx SpecContext, mutate func(ctx SpecContext) (*corev1.ConfigMap, error)) {
+			mutated, err := mutate(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			var retrieved corev1.ConfigMap
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(mutated), &retrieved)).To(Succeed())
+
+			Expect(&retrieved).To(BeComparableTo(mutated))
+		},
+
+		Entry("create", func(ctx SpecContext) (*corev1.ConfigMap, error) {
+			cl = NewClientBuilder().Build()
+			cm.ResourceVersion = ""
+			return cm, cl.Create(ctx, cm)
+		}),
+		Entry("update", func(ctx SpecContext) (*corev1.ConfigMap, error) {
+			cl = NewClientBuilder().WithObjects(cm).Build()
+			cm.Labels = map[string]string{"updated-label": "update-test"}
+			cm.Data["new-key"] = "new-value"
+			return cm, cl.Update(ctx, cm)
+		}),
+		Entry("patch", func(ctx SpecContext) (*corev1.ConfigMap, error) {
+			cl = NewClientBuilder().WithObjects(cm).Build()
+			original := cm.DeepCopy()
+
+			cm.Labels = map[string]string{"updated-label": "update-test"}
+			cm.Data["new-key"] = "new-value"
+			return cm, cl.Patch(ctx, cm, client.MergeFrom(original))
+		}),
+		Entry("Create through Apply", func(ctx SpecContext) (*corev1.ConfigMap, error) {
+			ac := corev1applyconfigurations.ConfigMap(cm.Name, cm.Namespace).WithData(cm.Data)
+
+			cl = NewClientBuilder().Build()
+			Expect(cl.Apply(ctx, ac, client.FieldOwner("foo"))).To(Succeed())
+
+			serialized, err := json.Marshal(ac)
+			Expect(err).NotTo(HaveOccurred())
+
+			var cm corev1.ConfigMap
+			Expect(json.Unmarshal(serialized, &cm)).To(Succeed())
+
+			// ApplyConfigurations always have TypeMeta set as they do not support using the scheme
+			// to retrieve gvk.
+			cm.TypeMeta = metav1.TypeMeta{}
+			return &cm, nil
+		}),
+		Entry("Update through Apply", func(ctx SpecContext) (*corev1.ConfigMap, error) {
+			ac := corev1applyconfigurations.ConfigMap(cm.Name, cm.Namespace).
+				WithLabels(map[string]string{"updated-label": "update-test"}).
+				WithData(map[string]string{"new-key": "new-value"})
+
+			cl = NewClientBuilder().WithObjects(cm).Build()
+			Expect(cl.Apply(ctx, ac, client.FieldOwner("foo"))).To(Succeed())
+
+			serialized, err := json.Marshal(ac)
+			Expect(err).NotTo(HaveOccurred())
+
+			var cm corev1.ConfigMap
+			Expect(json.Unmarshal(serialized, &cm)).To(Succeed())
+
+			// ApplyConfigurations always have TypeMeta set as they do not support using the scheme
+			// to retrieve gvk.
+			cm.TypeMeta = metav1.TypeMeta{}
+			return &cm, nil
+		}),
+	)
+
 	It("supports server-side apply of a client-go resource", func(ctx SpecContext) {
 		cl := NewClientBuilder().Build()
 		obj := &unstructured.Unstructured{}
@@ -2810,7 +2878,7 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("allows to set deletionTimestamp on an object during SSA create", func(ctx SpecContext) {
-		now := metav1.Now()
+		now := metav1.Time{Time: time.Now().Round(time.Second)}
 		obj := corev1applyconfigurations.
 			ConfigMap("foo", "default").
 			WithDeletionTimestamp(now).
@@ -2823,8 +2891,7 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("will silently ignore a deletionTimestamp update through SSA", func(ctx SpecContext) {
-		Skip("the apply logic in the managedFieldObjectTracker seems to override this")
-		now := metav1.Now()
+		now := metav1.Time{Time: time.Now().Round(time.Second)}
 		obj := corev1applyconfigurations.
 			ConfigMap("foo", "default").
 			WithDeletionTimestamp(now).

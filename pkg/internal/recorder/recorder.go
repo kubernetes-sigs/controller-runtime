@@ -152,30 +152,29 @@ func (l *lazyRecorder) ensureRecording() {
 	})
 }
 
+func (l *lazyRecorder) executeWithLock(eventF func()) {
+	l.ensureRecording()
+	l.prov.lock.RLock()
+	defer l.prov.lock.RUnlock()
+	if !l.prov.stopped {
+		eventF()
+	}
+}
+
 func (l *lazyRecorder) Event(object runtime.Object, eventtype, reason, message string) {
-	l.ensureRecording()
-
-	l.prov.lock.RLock()
-	if !l.prov.stopped {
+	l.executeWithLock(func() {
 		l.rec.Event(object, eventtype, reason, message)
-	}
-	l.prov.lock.RUnlock()
+	})
 }
+
 func (l *lazyRecorder) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
-	l.ensureRecording()
-
-	l.prov.lock.RLock()
-	if !l.prov.stopped {
+	l.executeWithLock(func() {
 		l.rec.Eventf(object, eventtype, reason, messageFmt, args...)
-	}
-	l.prov.lock.RUnlock()
+	})
 }
-func (l *lazyRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
-	l.ensureRecording()
 
-	l.prov.lock.RLock()
-	if !l.prov.stopped {
+func (l *lazyRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
+	l.executeWithLock(func() {
 		l.rec.AnnotatedEventf(object, annotations, eventtype, reason, messageFmt, args...)
-	}
-	l.prov.lock.RUnlock()
+	})
 }

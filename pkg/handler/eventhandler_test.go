@@ -862,7 +862,7 @@ var _ = Describe("Eventhandler", func() {
 						IsInInitialList: true,
 					}, wq)
 
-					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{Priority: handler.LowPriority}))
+					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{Priority: ptr.To(handler.LowPriority)}))
 					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 				})
 
@@ -888,7 +888,10 @@ var _ = Describe("Eventhandler", func() {
 						IsInInitialList: false,
 					}, wq)
 
-					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{}))
+					Expect(actualOpts).To(Or(
+						Equal(priorityqueue.AddOpts{}),
+						Equal(priorityqueue.AddOpts{Priority: ptr.To(0)}),
+					))
 					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 				})
 
@@ -919,7 +922,7 @@ var _ = Describe("Eventhandler", func() {
 						}},
 					}, wq)
 
-					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{Priority: handler.LowPriority}))
+					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{Priority: ptr.To(handler.LowPriority)}))
 					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 				})
 
@@ -951,7 +954,10 @@ var _ = Describe("Eventhandler", func() {
 						}},
 					}, wq)
 
-					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{}))
+					Expect(actualOpts).To(Or(
+						Equal(priorityqueue.AddOpts{}),
+						Equal(priorityqueue.AddOpts{Priority: ptr.To(0)}),
+					))
 					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 				})
 

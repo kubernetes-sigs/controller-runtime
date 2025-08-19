@@ -30,6 +30,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
@@ -449,7 +450,7 @@ func (c *Controller[request]) reconcileHandler(ctx context.Context, req request,
 		if errors.Is(err, reconcile.TerminalError(nil)) {
 			ctrlmetrics.TerminalReconcileErrors.WithLabelValues(c.Name).Inc()
 		} else {
-			c.Queue.AddWithOpts(priorityqueue.AddOpts{RateLimited: true, Priority: priority}, req)
+			c.Queue.AddWithOpts(priorityqueue.AddOpts{RateLimited: true, Priority: ptr.To(priority)}, req)
 		}
 		ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Inc()
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelError).Inc()
@@ -464,11 +465,11 @@ func (c *Controller[request]) reconcileHandler(ctx context.Context, req request,
 		// We need to drive to stable reconcile loops before queuing due
 		// to result.RequestAfter
 		c.Queue.Forget(req)
-		c.Queue.AddWithOpts(priorityqueue.AddOpts{After: result.RequeueAfter, Priority: priority}, req)
+		c.Queue.AddWithOpts(priorityqueue.AddOpts{After: result.RequeueAfter, Priority: ptr.To(priority)}, req)
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeueAfter).Inc()
 	case result.Requeue: //nolint: staticcheck // We have to handle it until it is removed
 		log.V(5).Info("Reconcile done, requeueing")
-		c.Queue.AddWithOpts(priorityqueue.AddOpts{RateLimited: true, Priority: priority}, req)
+		c.Queue.AddWithOpts(priorityqueue.AddOpts{RateLimited: true, Priority: ptr.To(priority)}, req)
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelRequeue).Inc()
 	default:
 		log.V(5).Info("Reconcile successful")

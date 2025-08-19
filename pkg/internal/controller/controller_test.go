@@ -702,7 +702,7 @@ var _ = Describe("controller", func() {
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
-			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: 10}, request)
+			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: ptr.To(10)}, request)
 
 			By("Invoking Reconciler which will request a requeue")
 			fakeReconcile.AddResult(reconcile.Result{Requeue: true}, nil)
@@ -714,7 +714,7 @@ var _ = Describe("controller", func() {
 			}).Should(Equal([]priorityQueueAddition{{
 				AddOpts: priorityqueue.AddOpts{
 					RateLimited: true,
-					Priority:    10,
+					Priority:    ptr.To(10),
 				},
 				items: []reconcile.Request{request},
 			}}))
@@ -761,7 +761,7 @@ var _ = Describe("controller", func() {
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
-			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: 10}, request)
+			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: ptr.To(10)}, request)
 
 			By("Invoking Reconciler which will ask for RequeueAfter")
 			fakeReconcile.AddResult(reconcile.Result{RequeueAfter: time.Millisecond * 100}, nil)
@@ -773,7 +773,7 @@ var _ = Describe("controller", func() {
 			}).Should(Equal([]priorityQueueAddition{{
 				AddOpts: priorityqueue.AddOpts{
 					After:    time.Millisecond * 100,
-					Priority: 10,
+					Priority: ptr.To(10),
 				},
 				items: []reconcile.Request{request},
 			}}))
@@ -819,7 +819,7 @@ var _ = Describe("controller", func() {
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
-			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: 10}, request)
+			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: ptr.To(10)}, request)
 
 			By("Invoking Reconciler which will return an error")
 			fakeReconcile.AddResult(reconcile.Result{}, errors.New("oups, I did it again"))
@@ -831,7 +831,7 @@ var _ = Describe("controller", func() {
 			}).Should(Equal([]priorityQueueAddition{{
 				AddOpts: priorityqueue.AddOpts{
 					RateLimited: true,
-					Priority:    10,
+					Priority:    ptr.To(10),
 				},
 				items: []reconcile.Request{request},
 			}}))

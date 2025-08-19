@@ -19,7 +19,10 @@ import (
 type AddOpts struct {
 	After       time.Duration
 	RateLimited bool
-	Priority    int
+	// Priority is the priority of the item. Higher values
+	// indicate higher priority.
+	// Defaults to zero if unset.
+	Priority *int
 }
 
 // PriorityQueue is a priority queue for a controller. It
@@ -154,7 +157,7 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 			item := &item[T]{
 				Key:          key,
 				AddedCounter: w.addedCounter,
-				Priority:     o.Priority,
+				Priority:     ptr.Deref(o.Priority, 0),
 				ReadyAt:      readyAt,
 			}
 			w.items[key] = item
@@ -169,12 +172,12 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 		// The b-tree de-duplicates based on ordering and any change here
 		// will affect the order - Just delete and re-add.
 		item, _ := w.queue.Delete(w.items[key])
-		if o.Priority > item.Priority {
+		if newPriority := ptr.Deref(o.Priority, 0); newPriority > item.Priority {
 			// Update depth metric only if the item in the queue was already added to the depth metric.
 			if item.ReadyAt == nil || w.becameReady.Has(key) {
-				w.metrics.updateDepthWithPriorityMetric(item.Priority, o.Priority)
+				w.metrics.updateDepthWithPriorityMetric(item.Priority, newPriority)
 			}
-			item.Priority = o.Priority
+			item.Priority = newPriority
 		}
 
 		if item.ReadyAt != nil && (readyAt == nil || readyAt.Before(*item.ReadyAt)) {

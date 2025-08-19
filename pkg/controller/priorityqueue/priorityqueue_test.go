@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("Controllerworkqueue", func() {
@@ -106,8 +107,8 @@ var _ = Describe("Controllerworkqueue", func() {
 		q, metrics := newQueue()
 		defer q.ShutDown()
 
-		q.AddWithOpts(AddOpts{Priority: 1}, "foo")
-		q.AddWithOpts(AddOpts{Priority: 2}, "foo")
+		q.AddWithOpts(AddOpts{Priority: ptr.To(1)}, "foo")
+		q.AddWithOpts(AddOpts{Priority: ptr.To(2)}, "foo")
 
 		item, priority, _ := q.GetWithPriority()
 		Expect(item).To(Equal("foo"))
@@ -126,7 +127,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		q.AddWithOpts(AddOpts{}, "foo")
 		q.AddWithOpts(AddOpts{}, "bar")
 		q.AddWithOpts(AddOpts{}, "baz")
-		q.AddWithOpts(AddOpts{Priority: 1}, "baz")
+		q.AddWithOpts(AddOpts{Priority: ptr.To(1)}, "baz")
 
 		item, priority, _ := q.GetWithPriority()
 		Expect(item).To(Equal("baz"))
@@ -381,7 +382,7 @@ var _ = Describe("Controllerworkqueue", func() {
 				if rn < 10 {
 					q.AddWithOpts(AddOpts{After: time.Duration(rn) * time.Millisecond}, fmt.Sprintf("foo%d", i))
 				} else {
-					q.AddWithOpts(AddOpts{Priority: rn}, fmt.Sprintf("foo%d", i))
+					q.AddWithOpts(AddOpts{Priority: &rn}, fmt.Sprintf("foo%d", i))
 				}
 			}
 
@@ -623,8 +624,8 @@ func TestFuzzPriorityQueue(t *testing.T) {
 					defer inQueueLock.Unlock()
 
 					q.AddWithOpts(opts, item)
-					if existingPriority, exists := inQueue[item]; !exists || existingPriority < opts.Priority {
-						inQueue[item] = opts.Priority
+					if existingPriority, exists := inQueue[item]; !exists || existingPriority < ptr.Deref(opts.Priority, 0) {
+						inQueue[item] = ptr.Deref(opts.Priority, 0)
 					}
 				}()
 			}

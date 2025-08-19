@@ -136,7 +136,7 @@ func (h TypedFuncs[object, request]) Create(ctx context.Context, e event.TypedCr
 					priority = LowPriority
 				}
 				q.(priorityqueue.PriorityQueue[request]).AddWithOpts(
-					priorityqueue.AddOpts{Priority: priority},
+					priorityqueue.AddOpts{Priority: &priority},
 					item,
 				)
 			},
@@ -170,7 +170,7 @@ func (h TypedFuncs[object, request]) Update(ctx context.Context, e event.TypedUp
 					priority = LowPriority
 				}
 				q.(priorityqueue.PriorityQueue[request]).AddWithOpts(
-					priorityqueue.AddOpts{Priority: priority},
+					priorityqueue.AddOpts{Priority: &priority},
 					item,
 				)
 			},
@@ -223,7 +223,7 @@ func addToQueueCreate[T client.Object, request comparable](q workqueue.TypedRate
 	if evt.IsInInitialList {
 		priority = LowPriority
 	}
-	priorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: priority}, item)
+	priorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: &priority}, item)
 }
 
 // addToQueueUpdate adds the reconcile.Request to the priorityqueue in the handler
@@ -239,5 +239,5 @@ func addToQueueUpdate[T client.Object, request comparable](q workqueue.TypedRate
 	if evt.ObjectOld.GetResourceVersion() == evt.ObjectNew.GetResourceVersion() {
 		priority = LowPriority
 	}
-	priorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: priority}, item)
+	priorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: &priority}, item)
 }

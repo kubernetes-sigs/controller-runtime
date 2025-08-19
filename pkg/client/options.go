@@ -644,6 +644,9 @@ type MatchingLabelsSelector struct {
 
 // ApplyToList applies this configuration to the given list options.
 func (m MatchingLabelsSelector) ApplyToList(opts *ListOptions) {
+	if m.Selector == nil {
+		m.Selector = labels.Nothing()
+	}
 	opts.LabelSelector = m
 }
 
@@ -677,6 +680,9 @@ type MatchingFieldsSelector struct {
 
 // ApplyToList applies this configuration to the given list options.
 func (m MatchingFieldsSelector) ApplyToList(opts *ListOptions) {
+	if m.Selector == nil {
+		m.Selector = fields.Nothing()
+	}
 	opts.FieldSelector = m
 }
 

@@ -173,16 +173,14 @@ type Options struct {
 	// recommend the `Reconcile` function return `reconcile.Result{RequeueAfter: t}`,
 	// instead of `reconcile.Result{}`.
 	//
-	// SyncPeriod will trigger update events with the old object being equal to the new
-	// object, except when the cache was out of sync.
-	// If you filter update events like this:
-	// Controller.Watch(
-	//     &source.Kind{Type: v1.MyCustomKind},
-	//     &handler.EnqueueRequestForObject{},
-	//     predicate.Or(predicate.GenerationChangedPredicate{},
-	//         predicate.LabelChangedPredicate{}))
-	// then the SyncPeriod will not trigger a Reconcile call, because the update event
-	// will be ignored by the predicate.
+	// SyncPeriod will locally trigger an artificial Update event with the same
+	// object in both ObjectOld and ObjectNew for everything that is in the
+	// cache.
+	//
+	// Predicates or Handlers that expect ObjectOld and ObjectNew to be different
+	// (such as GenerationChangedPredicate) will filter out this event, preventing
+	// it from triggering a reconciliation.
+	// SyncPeriod does not sync between the local cache and the server.
 	SyncPeriod *time.Duration
 
 	// ReaderFailOnMissingInformer configures the cache to return a ErrResourceNotCached error when a user

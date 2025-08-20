@@ -18,6 +18,7 @@ package handler_test
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -776,8 +777,11 @@ var _ = Describe("Eventhandler", func() {
 
 	Describe("WithLowPriorityWhenUnchanged", func() {
 		handlerPriorityTests := []struct {
-			name    string
-			handler func() handler.EventHandler
+			name             string
+			handler          func() handler.EventHandler
+			after            time.Duration
+			ratelimited      bool
+			overridePriority int
 		}{
 			{
 				name:    "WithLowPriorityWhenUnchanged wrapper",
@@ -837,6 +841,103 @@ var _ = Describe("Eventhandler", func() {
 					})
 				},
 			},
+			{
+				name: "WithLowPriorityWhenUnchanged - Add",
+				handler: func() handler.EventHandler {
+					return handler.WithLowPriorityWhenUnchanged(
+						handler.TypedFuncs[client.Object, reconcile.Request]{
+							CreateFunc: func(ctx context.Context, tce event.TypedCreateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+								wq.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+									Namespace: tce.Object.GetNamespace(),
+									Name:      tce.Object.GetName(),
+								}})
+							},
+							UpdateFunc: func(ctx context.Context, tue event.TypedUpdateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+								wq.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+									Namespace: tue.ObjectNew.GetNamespace(),
+									Name:      tue.ObjectNew.GetName(),
+								}})
+							},
+						})
+				},
+			},
+			{
+				name: "WithLowPriorityWhenUnchanged - AddAfter",
+				handler: func() handler.EventHandler {
+					return handler.WithLowPriorityWhenUnchanged(
+						handler.TypedFuncs[client.Object, reconcile.Request]{
+							CreateFunc: func(ctx context.Context, tce event.TypedCreateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+								wq.AddAfter(reconcile.Request{NamespacedName: types.NamespacedName{
+									Namespace: tce.Object.GetNamespace(),
+									Name:      tce.Object.GetName(),
+								}}, time.Second)
+							},
+							UpdateFunc: func(ctx context.Context, tue event.TypedUpdateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+								wq.AddAfter(reconcile.Request{NamespacedName: types.NamespacedName{
+									Namespace: tue.ObjectNew.GetNamespace(),
+									Name:      tue.ObjectNew.GetName(),
+								}}, time.Second)
+							},
+						})
+				},
+				after: time.Second,
+			},
+			{
+				name: "WithLowPriorityWhenUnchanged - AddRateLimited",
+				handler: func() handler.EventHandler {
+					return handler.WithLowPriorityWhenUnchanged(
+						handler.TypedFuncs[client.Object, reconcile.Request]{
+							CreateFunc: func(ctx context.Context, tce event.TypedCreateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+								wq.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
+									Namespace: tce.Object.GetNamespace(),
+									Name:      tce.Object.GetName(),
+								}})
+							},
+							UpdateFunc: func(ctx context.Context, tue event.TypedUpdateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+								wq.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
+									Namespace: tue.ObjectNew.GetNamespace(),
+									Name:      tue.ObjectNew.GetName(),
+								}})
+							},
+						})
+				},
+				ratelimited: true,
+			},
+			{
+				name: "WithLowPriorityWhenUnchanged - AddWithOpts priority is retained",
+				handler: func() handler.EventHandler {
+					return handler.WithLowPriorityWhenUnchanged(
+						handler.TypedFuncs[client.Object, reconcile.Request]{
+							CreateFunc: func(ctx context.Context, tce event.TypedCreateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+								if pq, isPQ := wq.(priorityqueue.PriorityQueue[reconcile.Request]); isPQ {
+									pq.AddWithOpts(priorityqueue.AddOpts{Priority: ptr.To(100)}, reconcile.Request{NamespacedName: types.NamespacedName{
+										Namespace: tce.Object.GetNamespace(),
+										Name:      tce.Object.GetName(),
+									}})
+									return
+								}
+								wq.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+									Namespace: tce.Object.GetNamespace(),
+									Name:      tce.Object.GetName(),
+								}})
+							},
+							UpdateFunc: func(ctx context.Context, tue event.TypedUpdateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+								if pq, isPQ := wq.(priorityqueue.PriorityQueue[reconcile.Request]); isPQ {
+									pq.AddWithOpts(priorityqueue.AddOpts{Priority: ptr.To(100)}, reconcile.Request{NamespacedName: types.NamespacedName{
+										Namespace: tue.ObjectNew.GetNamespace(),
+										Name:      tue.ObjectNew.GetName(),
+									}})
+									return
+								}
+								wq.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+									Namespace: tue.ObjectNew.GetNamespace(),
+									Name:      tue.ObjectNew.GetName(),
+								}})
+							},
+						})
+				},
+				overridePriority: 100,
+			},
 		}
 		for _, test := range handlerPriorityTests {
 			When("handler is "+test.name, func() {
@@ -862,7 +963,16 @@ var _ = Describe("Eventhandler", func() {
 						IsInInitialList: true,
 					}, wq)
 
-					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{Priority: ptr.To(handler.LowPriority)}))
+					expected := handler.LowPriority
+					if test.overridePriority != 0 {
+						expected = test.overridePriority
+					}
+
+					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{
+						Priority:    ptr.To(expected),
+						After:       test.after,
+						RateLimited: test.ratelimited,
+					}))
 					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 				})
 
@@ -888,10 +998,12 @@ var _ = Describe("Eventhandler", func() {
 						IsInInitialList: false,
 					}, wq)
 
-					Expect(actualOpts).To(Or(
-						Equal(priorityqueue.AddOpts{}),
-						Equal(priorityqueue.AddOpts{Priority: ptr.To(0)}),
-					))
+					var expectedPriority *int
+					if test.overridePriority != 0 {
+						expectedPriority = &test.overridePriority
+					}
+
+					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{After: test.after, RateLimited: test.ratelimited, Priority: expectedPriority}))
 					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 				})
 
@@ -922,7 +1034,12 @@ var _ = Describe("Eventhandler", func() {
 						}},
 					}, wq)
 
-					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{Priority: ptr.To(handler.LowPriority)}))
+					expectedPriority := handler.LowPriority
+					if test.overridePriority != 0 {
+						expectedPriority = test.overridePriority
+					}
+
+					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{After: test.after, RateLimited: test.ratelimited, Priority: ptr.To(expectedPriority)}))
 					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 				})
 
@@ -954,10 +1071,11 @@ var _ = Describe("Eventhandler", func() {
 						}},
 					}, wq)
 
-					Expect(actualOpts).To(Or(
-						Equal(priorityqueue.AddOpts{}),
-						Equal(priorityqueue.AddOpts{Priority: ptr.To(0)}),
-					))
+					var expectedPriority *int
+					if test.overridePriority != 0 {
+						expectedPriority = &test.overridePriority
+					}
+					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{After: test.after, RateLimited: test.ratelimited, Priority: expectedPriority}))
 					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 				})
 

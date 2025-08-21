@@ -93,8 +93,16 @@ type ForInput struct {
 func (blder *TypedBuilder[request]) For(object client.Object, opts ...ForOption) *TypedBuilder[request] {
 	if blder.forInput.object != nil {
 		blder.forInput.err = fmt.Errorf("For(...) should only be called once, could not assign multiple objects for reconciliation")
+	}
+
+	if reflect.TypeFor[request]() != reflect.TypeOf(reconcile.Request{}) {
+		blder.forInput.err = fmt.Errorf("For() can only be used with reconcile.Request, got %T", *new(request))
+	}
+
+	if blder.forInput.err != nil {
 		return blder
 	}
+
 	input := ForInput{object: object}
 	for _, opt := range opts {
 		opt.ApplyToFor(&input)
@@ -279,10 +287,6 @@ func (blder *TypedBuilder[request]) Build(r reconcile.TypedReconciler[request]) 
 		}
 		if len(blder.watchesInput) == 0 && len(blder.rawSources) == 0 {
 			return nil, errors.New("there are no watches configured, controller will never get triggered. Use For(), Owns(), Watches() or WatchesRawSource() to set them up")
-		}
-	} else {
-		if reflect.TypeFor[request]() != reflect.TypeOf(reconcile.Request{}) {
-			return nil, fmt.Errorf("For() can only be used with reconcile.Request, got %T", *new(request))
 		}
 	}
 

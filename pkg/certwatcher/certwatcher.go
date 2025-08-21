@@ -208,7 +208,7 @@ func (cw *CertWatcher) ReadCertificate() error {
 		return nil
 	}
 
-	log.Info("Updated current TLS certificate")
+	log.Info("Updated current TLS certificate", "cert", cw.certPath, "key", cw.keyPath)
 
 	// If a callback is registered, invoke it with the new certificate.
 	cw.RLock()

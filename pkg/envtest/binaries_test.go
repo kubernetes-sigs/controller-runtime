@@ -28,12 +28,116 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
 	"sigs.k8s.io/yaml"
 )
+
+func TestParseKubernetesVersion(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name   string
+		inputs []string
+
+		expectError       string
+		expectExact       bool
+		expectSeriesMajor uint
+		expectSeriesMinor uint
+	}{
+		{
+			name: `SemVer and "v" prefix are exact`,
+			inputs: []string{
+				"1.2.3", "v1.2.3", "v1.30.2", "v1.31.0-beta.0", "v1.33.0-alpha.2",
+			},
+			expectExact: true,
+		},
+		{
+			name:        "empty string is not a version",
+			inputs:      []string{""},
+			expectError: "could not parse",
+		},
+		{
+			name: "leading zeroes are not a version",
+			inputs: []string{
+				"01.2.0", "00001.2.3", "1.2.03", "v01.02.0003",
+			},
+			expectError: "could not parse",
+		},
+		{
+			name: "weird stuff is not a version",
+			inputs: []string{
+				"asdf", "version", "vegeta4", "the.1", "2ne1", "=7.8.9", "10.x", "*",
+				"0.0001", "1.00002", "v1.2anything", "1.2.x", "1.2.z", "1.2.*",
+			},
+			expectError: "could not parse",
+		},
+		{
+			name: "one number is not a version",
+			inputs: []string{
+				"1", "v1", "v001", "1.", "v1.", "1.x",
+			},
+			expectError: "could not parse",
+		},
+		{
+			name:   "two numbers are a release series",
+			inputs: []string{"0.1", "v0.1"},
+
+			expectSeriesMajor: 0,
+			expectSeriesMinor: 1,
+		},
+		{
+			name:   "two numbers are a release series",
+			inputs: []string{"1.2", "v1.2"},
+
+			expectSeriesMajor: 1,
+			expectSeriesMinor: 2,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, input := range tc.inputs {
+				exact, major, minor, err := parseKubernetesVersion(input)
+
+				if tc.expectError != "" && err == nil {
+					t.Errorf("expected error %q, got none", tc.expectError)
+				}
+				if tc.expectError != "" && !strings.Contains(err.Error(), tc.expectError) {
+					t.Errorf("expected error %q, got %q", tc.expectError, err)
+				}
+				if tc.expectError == "" && err != nil {
+					t.Errorf("expected no error, got %q", err)
+					continue
+				}
+
+				if tc.expectExact {
+					if expected := strings.TrimPrefix(input, "v"); exact != expected {
+						t.Errorf("expected canonical %q for %q, got %q", expected, input, exact)
+					}
+					if major != 0 || minor != 0 {
+						t.Errorf("expected no release series for %q, got (%v, %v)", input, major, minor)
+					}
+					continue
+				}
+
+				if major != tc.expectSeriesMajor {
+					t.Errorf("expected major %v for %q, got %v", tc.expectSeriesMajor, input, major)
+				}
+				if minor != tc.expectSeriesMinor {
+					t.Errorf("expected minor %v for %q, got %v", tc.expectSeriesMinor, input, minor)
+				}
+				if exact != "" {
+					t.Errorf("expected no canonical version for %q, got %q", input, exact)
+				}
+			}
+		})
+	}
+}
 
 var _ = Describe("Test download binaries", func() {
 	var downloadDirectory string
@@ -68,11 +172,11 @@ var _ = Describe("Test download binaries", func() {
 		Expect(actualFiles).To(ConsistOf("some-file"))
 	})
 
-	It("should download v1.32.0 binaries", func(ctx SpecContext) {
+	It("should download binaries of an exact version", func(ctx SpecContext) {
 		apiServerPath, etcdPath, kubectlPath, err := downloadBinaryAssets(ctx, downloadDirectory, "v1.31.0", fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"))
 		Expect(err).ToNot(HaveOccurred())
 
-		// Verify latest stable version (v1.32.0) was downloaded
+		// Verify exact version (v1.31.0) was downloaded
 		versionDownloadDirectory := path.Join(downloadDirectory, fmt.Sprintf("1.31.0-%s-%s", runtime.GOOS, runtime.GOARCH))
 		Expect(apiServerPath).To(Equal(path.Join(versionDownloadDirectory, "kube-apiserver")))
 		Expect(etcdPath).To(Equal(path.Join(versionDownloadDirectory, "etcd")))
@@ -85,6 +189,38 @@ var _ = Describe("Test download binaries", func() {
 			actualFiles = append(actualFiles, e.Name())
 		}
 		Expect(actualFiles).To(ConsistOf("some-file"))
+	})
+
+	It("should download binaries of latest stable version of a release series", func(ctx SpecContext) {
+		apiServerPath, etcdPath, kubectlPath, err := downloadBinaryAssets(ctx, downloadDirectory, "1.31", fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"))
+		Expect(err).ToNot(HaveOccurred())
+
+		// Verify stable version (v1.31.4) was downloaded
+		versionDownloadDirectory := path.Join(downloadDirectory, fmt.Sprintf("1.31.4-%s-%s", runtime.GOOS, runtime.GOARCH))
+		Expect(apiServerPath).To(Equal(path.Join(versionDownloadDirectory, "kube-apiserver")))
+		Expect(etcdPath).To(Equal(path.Join(versionDownloadDirectory, "etcd")))
+		Expect(kubectlPath).To(Equal(path.Join(versionDownloadDirectory, "kubectl")))
+
+		dirEntries, err := os.ReadDir(versionDownloadDirectory)
+		Expect(err).ToNot(HaveOccurred())
+		var actualFiles []string
+		for _, e := range dirEntries {
+			actualFiles = append(actualFiles, e.Name())
+		}
+		Expect(actualFiles).To(ConsistOf("some-file"))
+	})
+
+	It("should error when the asset version is not a version", func(ctx SpecContext) {
+		_, _, _, err := downloadBinaryAssets(ctx, downloadDirectory, "wonky", fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"))
+		Expect(err).To(MatchError(`could not parse "wonky" as version`))
+	})
+
+	It("should error when the asset version is not in the index", func(ctx SpecContext) {
+		_, _, _, err := downloadBinaryAssets(ctx, downloadDirectory, "v1.5.0", fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"))
+		Expect(err).To(MatchError("failed to find envtest binaries for version v1.5.0"))
+
+		_, _, _, err = downloadBinaryAssets(ctx, downloadDirectory, "v1.5", fmt.Sprintf("http://%s/%s", server.Addr(), "envtest-releases.yaml"))
+		Expect(err).To(MatchError("failed to find latest stable version from index: index does not have 1.5 stable versions"))
 	})
 })
 
@@ -99,6 +235,15 @@ var (
 				"envtest-v1.32.0-linux-ppc64le.tar.gz": {},
 				"envtest-v1.32.0-linux-s390x.tar.gz":   {},
 				"envtest-v1.32.0-windows-amd64.tar.gz": {},
+			},
+			"v1.31.4": map[string]archive{
+				"envtest-v1.31.4-darwin-amd64.tar.gz":  {},
+				"envtest-v1.31.4-darwin-arm64.tar.gz":  {},
+				"envtest-v1.31.4-linux-amd64.tar.gz":   {},
+				"envtest-v1.31.4-linux-arm64.tar.gz":   {},
+				"envtest-v1.31.4-linux-ppc64le.tar.gz": {},
+				"envtest-v1.31.4-linux-s390x.tar.gz":   {},
+				"envtest-v1.31.4-windows-amd64.tar.gz": {},
 			},
 			"v1.31.0": map[string]archive{
 				"envtest-v1.31.0-darwin-amd64.tar.gz":  {},

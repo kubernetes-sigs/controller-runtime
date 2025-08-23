@@ -81,4 +81,8 @@ type Controller struct {
 
 	// Logger is the logger controllers should use.
 	Logger logr.Logger
+
+	// ReconciliationTimeout is used as the timeout passed to the context of each Reconcile call.
+	// By default, there is no timeout.
+	ReconciliationTimeout time.Duration
 }

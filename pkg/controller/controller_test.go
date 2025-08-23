@@ -540,5 +540,40 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ok).To(BeTrue())
 			Expect(internalCtrlOverridingWarmup.EnableWarmup).To(HaveValue(BeFalse()))
 		})
+
+		It("should default ReconciliationTimeout from manager if unset", func() {
+			m, err := manager.New(cfg, manager.Options{
+				Controller: config.Controller{ReconciliationTimeout: 30 * time.Second},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("mgr-reconciliation-timeout", m, controller.Options{
+				Reconciler: rec,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.ReconciliationTimeout).To(Equal(30 * time.Second))
+		})
+
+		It("should not override an existing ReconciliationTimeout", func() {
+			m, err := manager.New(cfg, manager.Options{
+				Controller: config.Controller{ReconciliationTimeout: 30 * time.Second},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("ctrl-reconciliation-timeout", m, controller.Options{
+				Reconciler:            rec,
+				ReconciliationTimeout: time.Minute,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.ReconciliationTimeout).To(Equal(time.Minute))
+		})
 	})
 })

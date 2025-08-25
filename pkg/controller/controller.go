@@ -106,6 +106,10 @@ type TypedOptions[request comparable] struct {
 	// leader election do not wait on leader election to start their sources.
 	// Defaults to false.
 	EnableWarmup *bool
+
+	// ReconciliationTimeout is used as the timeout passed to the context of each Reconcile call.
+	// By default, there is no timeout.
+	ReconciliationTimeout time.Duration
 }
 
 // DefaultFromConfig defaults the config from a config.Controller
@@ -140,6 +144,10 @@ func (options *TypedOptions[request]) DefaultFromConfig(config config.Controller
 
 	if options.EnableWarmup == nil {
 		options.EnableWarmup = config.EnableWarmup
+	}
+
+	if options.ReconciliationTimeout == 0 {
+		options.ReconciliationTimeout = config.ReconciliationTimeout
 	}
 }
 
@@ -271,6 +279,7 @@ func NewTypedUnmanaged[request comparable](name string, options TypedOptions[req
 		RecoverPanic:            options.RecoverPanic,
 		LeaderElected:           options.NeedLeaderElection,
 		EnableWarmup:            options.EnableWarmup,
+		ReconciliationTimeout:   options.ReconciliationTimeout,
 	}), nil
 }
 

@@ -82,6 +82,10 @@ type Options[request comparable] struct {
 	// Defaults to false, which means that the controller will wait for leader election to start
 	// before starting sources.
 	EnableWarmup *bool
+
+	// ReconciliationTimeout is used as the timeout passed to the context of each Reconcile call.
+	// By default, there is no timeout.
+	ReconciliationTimeout time.Duration
 }
 
 // Controller implements controller.Controller.
@@ -162,6 +166,8 @@ type Controller[request comparable] struct {
 	// leader election do not wait on leader election to start their sources.
 	// Defaults to false.
 	EnableWarmup *bool
+
+	ReconciliationTimeout time.Duration
 }
 
 // New returns a new Controller configured with the given options.
@@ -177,6 +183,7 @@ func New[request comparable](options Options[request]) *Controller[request] {
 		RecoverPanic:            options.RecoverPanic,
 		LeaderElected:           options.LeaderElected,
 		EnableWarmup:            options.EnableWarmup,
+		ReconciliationTimeout:   options.ReconciliationTimeout,
 	}
 }
 
@@ -199,6 +206,13 @@ func (c *Controller[request]) Reconcile(ctx context.Context, req request) (_ rec
 			panic(r)
 		}
 	}()
+
+	if c.ReconciliationTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.ReconciliationTimeout)
+		defer cancel()
+	}
+
 	return c.Do.Reconcile(ctx, req)
 }
 

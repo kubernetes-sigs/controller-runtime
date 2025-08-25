@@ -142,6 +142,31 @@ var _ = Describe("controller", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("[recovered]"))
 		})
+
+		It("should time out if ReconciliationTimeout is set", func(ctx SpecContext) {
+			ctrl.ReconciliationTimeout = time.Duration(1) // One nanosecond
+			ctrl.Do = reconcile.Func(func(ctx context.Context, _ reconcile.Request) (reconcile.Result, error) {
+				<-ctx.Done()
+				return reconcile.Result{}, ctx.Err()
+			})
+			_, err := ctrl.Reconcile(ctx,
+				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(context.DeadlineExceeded))
+		})
+
+		It("should not configure a timeout if ReconciliationTimeout is zero", func(ctx SpecContext) {
+			ctrl.Do = reconcile.Func(func(ctx context.Context, _ reconcile.Request) (reconcile.Result, error) {
+				defer GinkgoRecover()
+
+				_, ok := ctx.Deadline()
+				Expect(ok).To(BeFalse())
+				return reconcile.Result{}, nil
+			})
+			_, err := ctrl.Reconcile(ctx,
+				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	Describe("Start", func() {

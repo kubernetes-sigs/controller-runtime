@@ -93,8 +93,16 @@ type ForInput struct {
 func (blder *TypedBuilder[request]) For(object client.Object, opts ...ForOption) *TypedBuilder[request] {
 	if blder.forInput.object != nil {
 		blder.forInput.err = fmt.Errorf("For(...) should only be called once, could not assign multiple objects for reconciliation")
+	}
+
+	if reflect.TypeFor[request]() != reflect.TypeOf(reconcile.Request{}) {
+		blder.forInput.err = fmt.Errorf("For() can only be used with reconcile.Request, got %T", *new(request))
+	}
+
+	if blder.forInput.err != nil {
 		return blder
 	}
+
 	input := ForInput{object: object}
 	for _, opt := range opts {
 		opt.ApplyToFor(&input)
@@ -273,6 +281,14 @@ func (blder *TypedBuilder[request]) Build(r reconcile.TypedReconciler[request]) 
 	if blder.forInput.err != nil {
 		return nil, blder.forInput.err
 	}
+	if blder.forInput.object == nil {
+		if len(blder.ownsInput) > 0 {
+			return nil, errors.New("Owns() can only be used together with For()")
+		}
+		if len(blder.watchesInput) == 0 && len(blder.rawSources) == 0 {
+			return nil, errors.New("there are no watches configured, controller will never get triggered. Use For(), Owns(), Watches() or WatchesRawSource() to set them up")
+		}
+	}
 
 	// Set the ControllerManagedBy
 	if err := blder.doController(r); err != nil {
@@ -305,6 +321,9 @@ func (blder *TypedBuilder[request]) project(obj client.Object, proj objectProjec
 }
 
 func (blder *TypedBuilder[request]) doWatch() error {
+
+	var sources []source.TypedSource[request]
+
 	// Reconcile type
 	if blder.forInput.object != nil {
 		obj, err := blder.project(blder.forInput.object, blder.forInput.objectProjection)
@@ -312,24 +331,15 @@ func (blder *TypedBuilder[request]) doWatch() error {
 			return err
 		}
 
-		if reflect.TypeFor[request]() != reflect.TypeOf(reconcile.Request{}) {
-			return fmt.Errorf("For() can only be used with reconcile.Request, got %T", *new(request))
-		}
-
 		var hdler handler.TypedEventHandler[client.Object, request]
 		reflect.ValueOf(&hdler).Elem().Set(reflect.ValueOf(&handler.EnqueueRequestForObject{}))
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, blder.forInput.predicates...)
 		src := source.TypedKind(blder.mgr.GetCache(), obj, hdler, allPredicates...)
-		if err := blder.ctrl.Watch(src); err != nil {
-			return err
-		}
+		sources = append(sources, src)
 	}
 
 	// Watches the managed types
-	if len(blder.ownsInput) > 0 && blder.forInput.object == nil {
-		return errors.New("Owns() can only be used together with For()")
-	}
 	for _, own := range blder.ownsInput {
 		obj, err := blder.project(own.object, own.objectProjection)
 		if err != nil {
@@ -349,15 +359,10 @@ func (blder *TypedBuilder[request]) doWatch() error {
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, own.predicates...)
 		src := source.TypedKind(blder.mgr.GetCache(), obj, hdler, allPredicates...)
-		if err := blder.ctrl.Watch(src); err != nil {
-			return err
-		}
+		sources = append(sources, src)
 	}
 
 	// Do the watch requests
-	if len(blder.watchesInput) == 0 && blder.forInput.object == nil && len(blder.rawSources) == 0 {
-		return errors.New("there are no watches configured, controller will never get triggered. Use For(), Owns(), Watches() or WatchesRawSource() to set them up")
-	}
 	for _, w := range blder.watchesInput {
 		projected, err := blder.project(w.obj, w.objectProjection)
 		if err != nil {
@@ -365,11 +370,13 @@ func (blder *TypedBuilder[request]) doWatch() error {
 		}
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, w.predicates...)
-		if err := blder.ctrl.Watch(source.TypedKind(blder.mgr.GetCache(), projected, w.handler, allPredicates...)); err != nil {
-			return err
-		}
+		src := source.TypedKind(blder.mgr.GetCache(), projected, w.handler, allPredicates...)
+		sources = append(sources, src)
 	}
-	for _, src := range blder.rawSources {
+
+	sources = append(sources, blder.rawSources...)
+
+	for _, src := range sources {
 		if err := blder.ctrl.Watch(src); err != nil {
 			return err
 		}

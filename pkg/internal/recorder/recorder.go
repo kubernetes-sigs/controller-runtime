@@ -54,6 +54,7 @@ type Provider struct {
 	broadcasterOnce         sync.Once
 	broadcaster             events.EventBroadcaster
 	cancelSinkRecordingFunc context.CancelFunc
+	stopWatcherFunc         func()
 	// Deprecated: will be removed in a future release. Use the broadcaster above instead.
 	deprecatedBroadcaster record.EventBroadcaster
 	stopBroadcaster       bool
@@ -82,6 +83,7 @@ func (p *Provider) Stop(shutdownCtx context.Context) {
 			p.lock.Lock()
 			broadcaster.Shutdown()
 			p.cancelSinkRecordingFunc()
+			p.stopWatcherFunc()
 			deprecatedBroadcaster.Shutdown()
 			p.stopped = true
 			p.lock.Unlock()
@@ -122,7 +124,7 @@ func (p *Provider) getBroadcaster() (record.EventBroadcaster, events.EventBroadc
 			return
 		}
 
-		_, err := p.broadcaster.StartEventWatcher(func(event runtime.Object) {
+		stopWatcher, err := p.broadcaster.StartEventWatcher(func(event runtime.Object) {
 			e, isEvt := event.(*eventsv1.Event)
 			if isEvt {
 				p.logger.V(1).Info(e.Note, "type", e.Type, "object", e.Related, "action", e.Action, "reason", e.Reason)
@@ -131,6 +133,8 @@ func (p *Provider) getBroadcaster() (record.EventBroadcaster, events.EventBroadc
 		if err != nil {
 			p.logger.Error(err, "error starting event watcher for broadcaster")
 		}
+
+		p.stopWatcherFunc = stopWatcher
 	})
 
 	return p.deprecatedBroadcaster, p.broadcaster

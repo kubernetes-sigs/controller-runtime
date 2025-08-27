@@ -91,7 +91,8 @@ type TypedOptions[request comparable] struct {
 	// UsePriorityQueue configures the controllers queue to use the controller-runtime provided
 	// priority queue.
 	//
-	// Note: This flag is disabled by default until a future version. It's currently in beta.
+	// Note: This flag is disabled by default until a future version. This feature is currently in beta.
+	// For more details, see: https://github.com/kubernetes-sigs/controller-runtime/issues/2374.
 	UsePriorityQueue *bool
 
 	// EnableWarmup specifies whether the controller should start its sources when the manager is not
@@ -105,6 +106,9 @@ type TypedOptions[request comparable] struct {
 	// Setting EnableWarmup to true and NeedLeaderElection to false is a no-op as controllers without
 	// leader election do not wait on leader election to start their sources.
 	// Defaults to false.
+	//
+	// Note: This feature is currently in beta and subject to change.
+	// For more details, see: https://github.com/kubernetes-sigs/controller-runtime/issues/3220.
 	EnableWarmup *bool
 
 	// ReconciliationTimeout is used as the timeout passed to the context of each Reconcile call.

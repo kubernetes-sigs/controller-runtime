@@ -148,7 +148,7 @@ var _ = Describe("application", func() {
 			Expect(instance).To(BeNil())
 		})
 
-		It("should allow creating a controllerw without calling For", func() {
+		It("should allow creating a controller without calling For", func() {
 			By("creating a controller manager")
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())

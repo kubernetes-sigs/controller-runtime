@@ -2877,6 +2877,29 @@ var _ = Describe("Fake client", func() {
 		Expect(len(cms.Items)).To(BeEquivalentTo(1))
 	})
 
+	It("sets resourceVersion on SSA create", func(ctx SpecContext) {
+		obj := corev1applyconfigurations.
+			ConfigMap("foo", "default").
+			WithData(map[string]string{"some": "data"})
+
+		cl := NewClientBuilder().Build()
+		Expect(cl.Apply(ctx, obj, client.FieldOwner("foo"))).NotTo(HaveOccurred())
+		// Ideally we should only test for it to not be empty, realistically we will
+		// break ppl if we ever start setting a different value.
+		Expect(obj.ResourceVersion).To(BeEquivalentTo(ptr.To("1")))
+	})
+
+	It("ignores a passed resourceVersion on SSA create", func(ctx SpecContext) {
+		obj := corev1applyconfigurations.
+			ConfigMap("foo", "default").
+			WithData(map[string]string{"some": "data"}).
+			WithResourceVersion("1234")
+
+		cl := NewClientBuilder().Build()
+		Expect(cl.Apply(ctx, obj, client.FieldOwner("foo"))).NotTo(HaveOccurred())
+		Expect(obj.ResourceVersion).To(BeEquivalentTo(ptr.To("1")))
+	})
+
 	It("allows to set deletionTimestamp on an object during SSA create", func(ctx SpecContext) {
 		now := metav1.Time{Time: time.Now().Round(time.Second)}
 		obj := corev1applyconfigurations.

@@ -1171,9 +1171,15 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 		return err
 	}
 
-	// SSA deletionTimestamp updates are silently ignored
-	if patch.Type() == types.ApplyPatchType && !isApplyCreate {
-		obj.SetDeletionTimestamp(oldAccessor.GetDeletionTimestamp())
+	if patch.Type() == types.ApplyPatchType {
+		if isApplyCreate {
+			// Overwrite it unconditionally, this matches the apiserver behavior
+			// which allows to set it on create, but will then ignore it.
+			obj.SetResourceVersion("1")
+		} else {
+			// SSA deletionTimestamp updates are silently ignored
+			obj.SetDeletionTimestamp(oldAccessor.GetDeletionTimestamp())
+		}
 	}
 
 	data, err := patch.Data(obj)

@@ -269,7 +269,7 @@ func (f *ClientBuilder) WithReturnManagedFields() *ClientBuilder {
 // Build builds and returns a new fake client.
 func (f *ClientBuilder) Build() client.WithWatch {
 	if f.isBuilt {
-		panic("build must not be called multiple times when creating a ClientBuilder")
+		panic("Build() must not be called multiple times when creating a ClientBuilder")
 	}
 	if f.scheme == nil {
 		f.scheme = scheme.Scheme

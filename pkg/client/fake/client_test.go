@@ -3159,4 +3159,13 @@ var _ = Describe("Fake client builder", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(called).To(BeTrue())
 	})
+
+	It("should panic when calling build more than once", func() {
+		cb := NewClientBuilder()
+		anotherCb := cb
+		cb.Build()
+		Expect(func() {
+			anotherCb.Build()
+		}).To(Panic())
+	})
 })

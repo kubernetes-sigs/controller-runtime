@@ -2568,7 +2568,6 @@ func ensureNode(ctx context.Context, name string, client client.Client) error {
 	return err
 }
 
-//nolint:interfacer
 func isKubeService(svc metav1.Object) bool {
 	// grumble grumble linters grumble grumble
 	return svc.GetNamespace() == "default" && svc.GetName() == "kubernetes"

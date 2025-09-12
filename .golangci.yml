@@ -22,6 +22,7 @@ linters:
     - goconst
     - gocritic
     - gocyclo
+    - godox
     - goprintffuncname
     - govet
     - importas
@@ -180,6 +181,9 @@ linters:
           - staticcheck
         path: (.+)\.go$
         text: (ST1000|QF1008)
+      - text: "Line contains TODO/BUG/FIXME"
+        linters:
+          - godox
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

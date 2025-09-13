@@ -374,6 +374,12 @@ var _ = Describe("DryRunAll", func() {
 		t.ApplyToSubResourceUpdate(o)
 		Expect(o.DryRun).To(Equal([]string{metav1.DryRunAll}))
 	})
+	It("Should apply to SubResourceApplyOptions", func() {
+		o := &client.SubResourceApplyOptions{ApplyOptions: client.ApplyOptions{DryRun: []string{"server"}}}
+		t := client.DryRunAll
+		t.ApplyToSubResourceApply(o)
+		Expect(o.DryRun).To(Equal([]string{metav1.DryRunAll}))
+	})
 })
 
 var _ = Describe("FieldOwner", func() {
@@ -419,6 +425,12 @@ var _ = Describe("FieldOwner", func() {
 		t.ApplyToSubResourceUpdate(o)
 		Expect(o.FieldManager).To(Equal("foo"))
 	})
+	It("Should apply to SubResourceApplyOptions", func() {
+		o := &client.SubResourceApplyOptions{ApplyOptions: client.ApplyOptions{FieldManager: "bar"}}
+		t := client.FieldOwner("foo")
+		t.ApplyToSubResourceApply(o)
+		Expect(o.FieldManager).To(Equal("foo"))
+	})
 })
 
 var _ = Describe("ForceOwnership", func() {
@@ -438,6 +450,12 @@ var _ = Describe("ForceOwnership", func() {
 		o := &client.ApplyOptions{}
 		t := client.ForceOwnership
 		t.ApplyToApply(o)
+		Expect(*o.Force).To(BeTrue())
+	})
+	It("Should apply to SubResourceApplyOptions", func() {
+		o := &client.SubResourceApplyOptions{}
+		t := client.ForceOwnership
+		t.ApplyToSubResourceApply(o)
 		Expect(*o.Force).To(BeTrue())
 	})
 })

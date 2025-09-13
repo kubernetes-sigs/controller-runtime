@@ -1809,6 +1809,31 @@ var _ = Describe("Fake client", func() {
 		Expect(pod.Status).To(BeComparableTo(corev1.PodStatus{}))
 	})
 
+	It("should only change status on status apply", func(ctx SpecContext) {
+		initial := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node",
+			},
+			Spec: corev1.NodeSpec{
+				PodCIDR: "old-cidr",
+			},
+		}
+		cl := NewClientBuilder().WithStatusSubresource(&corev1.Node{}).WithObjects(initial).Build()
+
+		ac := corev1applyconfigurations.Node(initial.Name).
+			WithSpec(corev1applyconfigurations.NodeSpec().WithPodCIDR(initial.Spec.PodCIDR + "-updated")).
+			WithStatus(corev1applyconfigurations.NodeStatus().WithPhase(corev1.NodeRunning))
+
+		Expect(cl.Status().Apply(ctx, ac, client.FieldOwner("test-owner"))).To(Succeed())
+
+		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: initial.Name}}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(actual), actual)).To(Succeed())
+
+		initial.ResourceVersion = actual.ResourceVersion
+		initial.Status = actual.Status
+		Expect(initial).To(BeComparableTo(actual))
+	})
+
 	It("should Unmarshal the schemaless object with int64 to preserve ints", func(ctx SpecContext) {
 		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
 		schemeBuilder.Register(&WithSchemalessSpec{})

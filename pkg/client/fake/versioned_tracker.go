@@ -137,11 +137,17 @@ func (t versionedTracker) update(gvr schema.GroupVersionResource, obj runtime.Ob
 	if err != nil {
 		return err
 	}
-	obj, err = t.updateObject(gvr, obj, ns, isStatus, deleting, opts.DryRun)
+	obj, needsCreate, err := t.updateObject(gvr, gvk, obj, ns, isStatus, deleting, allowsCreateOnUpdate(gvk), opts.DryRun)
 	if err != nil {
 		return err
 	}
-	if obj == nil {
+
+	if needsCreate {
+		opts := metav1.CreateOptions{DryRun: opts.DryRun, FieldManager: opts.FieldManager}
+		return t.Create(gvr, obj, ns, opts)
+	}
+
+	if obj == nil { // Object was deleted in updateObject
 		return nil
 	}
 
@@ -158,72 +164,94 @@ func (t versionedTracker) Patch(gvr schema.GroupVersionResource, obj runtime.Obj
 		return err
 	}
 
+	gvk, err := apiutil.GVKForObject(obj, t.scheme)
+	if err != nil {
+		return err
+	}
+
 	// We apply patches using a client-go reaction that ends up calling the trackers Patch. As we can't change
 	// that reaction, we use the callstack to figure out if this originated from the status client.
 	isStatus := bytes.Contains(debug.Stack(), []byte("sigs.k8s.io/controller-runtime/pkg/client/fake.(*fakeSubResourceClient).statusPatch"))
 
-	obj, err = t.updateObject(gvr, obj, ns, isStatus, false, patchOptions.DryRun)
+	obj, needsCreate, err := t.updateObject(gvr, gvk, obj, ns, isStatus, false, allowsCreateOnUpdate(gvk), patchOptions.DryRun)
 	if err != nil {
 		return err
 	}
-	if obj == nil {
+	if needsCreate {
+		opts := metav1.CreateOptions{DryRun: patchOptions.DryRun, FieldManager: patchOptions.FieldManager}
+		return t.Create(gvr, obj, ns, opts)
+	}
+
+	if obj == nil { // Object was deleted in updateObject
 		return nil
 	}
 
 	return t.upstream.Patch(gvr, obj, ns, patchOptions)
 }
 
-func (t versionedTracker) updateObject(gvr schema.GroupVersionResource, obj runtime.Object, ns string, isStatus, deleting bool, dryRun []string) (runtime.Object, error) {
+// updateObject performs a number of validations and changes related to
+// object updates, such as checking and updating the resourceVersion.
+func (t versionedTracker) updateObject(
+	gvr schema.GroupVersionResource,
+	gvk schema.GroupVersionKind,
+	obj runtime.Object,
+	ns string,
+	isStatus bool,
+	deleting bool,
+	allowCreateOnUpdate bool,
+	dryRun []string,
+) (result runtime.Object, needsCreate bool, _ error) {
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get accessor for object: %w", err)
+		return nil, false, fmt.Errorf("failed to get accessor for object: %w", err)
 	}
 
 	if accessor.GetName() == "" {
-		gvk, _ := apiutil.GVKForObject(obj, t.scheme)
-		return nil, apierrors.NewInvalid(
+		return nil, false, apierrors.NewInvalid(
 			gvk.GroupKind(),
 			accessor.GetName(),
 			field.ErrorList{field.Required(field.NewPath("metadata.name"), "name is required")})
-	}
-
-	gvk, err := apiutil.GVKForObject(obj, t.scheme)
-	if err != nil {
-		return nil, err
 	}
 
 	oldObject, err := t.Get(gvr, ns, accessor.GetName())
 	if err != nil {
 		// If the resource is not found and the resource allows create on update, issue a
 		// create instead.
-		if apierrors.IsNotFound(err) && allowsCreateOnUpdate(gvk) {
-			return nil, t.Create(gvr, obj, ns)
+		if apierrors.IsNotFound(err) && allowCreateOnUpdate {
+			// Pass this info to the caller rather than create, because in the SSA case it
+			// must be created by calling Apply in the upstream tracker, not Create.
+			// This is because SSA considers Apply and Non-Apply operations to be different
+			// even when they use the same fieldManager. This behavior is also observable
+			// with a real Kubernetes apiserver.
+			//
+			// Ref https://kubernetes.slack.com/archives/C0EG7JC6T/p1757868204458989?thread_ts=1757808656.002569&cid=C0EG7JC6T
+			return obj, true, nil
 		}
-		return nil, err
+		return obj, false, err
 	}
 
 	if t.withStatusSubresource.Has(gvk) {
 		if isStatus { // copy everything but status and metadata.ResourceVersion from original object
 			if err := copyStatusFrom(obj, oldObject); err != nil {
-				return nil, fmt.Errorf("failed to copy non-status field for object with status subresouce: %w", err)
+				return nil, false, fmt.Errorf("failed to copy non-status field for object with status subresouce: %w", err)
 			}
 			passedRV := accessor.GetResourceVersion()
 			if err := copyFrom(oldObject, obj); err != nil {
-				return nil, fmt.Errorf("failed to restore non-status fields: %w", err)
+				return nil, false, fmt.Errorf("failed to restore non-status fields: %w", err)
 			}
 			accessor.SetResourceVersion(passedRV)
 		} else { // copy status from original object
 			if err := copyStatusFrom(oldObject, obj); err != nil {
-				return nil, fmt.Errorf("failed to copy the status for object with status subresource: %w", err)
+				return nil, false, fmt.Errorf("failed to copy the status for object with status subresource: %w", err)
 			}
 		}
 	} else if isStatus {
-		return nil, apierrors.NewNotFound(gvr.GroupResource(), accessor.GetName())
+		return nil, false, apierrors.NewNotFound(gvr.GroupResource(), accessor.GetName())
 	}
 
 	oldAccessor, err := meta.Accessor(oldObject)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// If the new object does not have the resource version set and it allows unconditional update,
@@ -246,29 +274,66 @@ func (t versionedTracker) updateObject(gvr schema.GroupVersionResource, obj runt
 	}
 
 	if accessor.GetResourceVersion() != oldAccessor.GetResourceVersion() {
-		return nil, apierrors.NewConflict(gvr.GroupResource(), accessor.GetName(), errors.New("object was modified"))
+		return nil, false, apierrors.NewConflict(gvr.GroupResource(), accessor.GetName(), errors.New("object was modified"))
 	}
 	if oldAccessor.GetResourceVersion() == "" {
 		oldAccessor.SetResourceVersion("0")
 	}
 	intResourceVersion, err := strconv.ParseUint(oldAccessor.GetResourceVersion(), 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("can not convert resourceVersion %q to int: %w", oldAccessor.GetResourceVersion(), err)
+		return nil, false, fmt.Errorf("can not convert resourceVersion %q to int: %w", oldAccessor.GetResourceVersion(), err)
 	}
 	intResourceVersion++
 	accessor.SetResourceVersion(strconv.FormatUint(intResourceVersion, 10))
 
 	if !deleting && !deletionTimestampEqual(accessor, oldAccessor) {
-		return nil, fmt.Errorf("error: Unable to edit %s: metadata.deletionTimestamp field is immutable", accessor.GetName())
+		return nil, false, fmt.Errorf("error: Unable to edit %s: metadata.deletionTimestamp field is immutable", accessor.GetName())
 	}
 
 	if !accessor.GetDeletionTimestamp().IsZero() && len(accessor.GetFinalizers()) == 0 {
-		return nil, t.Delete(gvr, accessor.GetNamespace(), accessor.GetName(), metav1.DeleteOptions{DryRun: dryRun})
+		return nil, false, t.Delete(gvr, accessor.GetNamespace(), accessor.GetName(), metav1.DeleteOptions{DryRun: dryRun})
 	}
-	return convertFromUnstructuredIfNecessary(t.scheme, obj)
+
+	obj, err = convertFromUnstructuredIfNecessary(t.scheme, obj)
+	return obj, false, err
 }
 
 func (t versionedTracker) Apply(gvr schema.GroupVersionResource, applyConfiguration runtime.Object, ns string, opts ...metav1.PatchOptions) error {
+	patchOptions, err := getSingleOrZeroOptions(opts)
+	if err != nil {
+		return err
+	}
+	gvk, err := apiutil.GVKForObject(applyConfiguration, t.scheme)
+	if err != nil {
+		return err
+	}
+	applyConfiguration, needsCreate, err := t.updateObject(gvr, gvk, applyConfiguration, ns, false, false, true, patchOptions.DryRun)
+	if err != nil {
+		return err
+	}
+
+	if needsCreate {
+		//		https://github.com/kubernetes/kubernetes/blob/81affffa1b8d8079836f4cac713ea8d1b2bbf10f/staging/src/k8s.io/apiserver/pkg/endpoints/handlers/patch.go#L606
+		accessor, err := meta.Accessor(applyConfiguration)
+		if err != nil {
+			return fmt.Errorf("failed to get accessor for object: %w", err)
+		}
+		if accessor.GetUID() != "" {
+			return apierrors.NewConflict(gvr.GroupResource(), accessor.GetName(), fmt.Errorf("uid mismatch: the provided object specified uid %s, and no existing object was found", accessor.GetUID()))
+		}
+
+		if t.withStatusSubresource.Has(gvk) {
+			// Clear out status for create, for update this is handled in updateObject
+			if err := copyStatusFrom(&unstructured.Unstructured{}, applyConfiguration); err != nil {
+				return err
+			}
+		}
+	}
+
+	if applyConfiguration == nil { // Object was deleted in updateObject
+		return nil
+	}
+
 	return t.upstream.Apply(gvr, applyConfiguration, ns, opts...)
 }
 

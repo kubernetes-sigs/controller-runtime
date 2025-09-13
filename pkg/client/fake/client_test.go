@@ -660,6 +660,19 @@ var _ = Describe("Fake client", func() {
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal(trackerAddResourceVersion))
 		})
 
+		It("should reject apply with non-matching ResourceVersion", func(ctx SpecContext) {
+			cl := NewClientBuilder().WithRuntimeObjects(cm).Build()
+			applyCM := corev1applyconfigurations.ConfigMap(cm.Name, cm.Namespace).WithResourceVersion("0")
+			err := cl.Apply(ctx, applyCM, client.FieldOwner("test"))
+			Expect(apierrors.IsConflict(err)).To(BeTrue())
+
+			obj := &corev1.ConfigMap{}
+			err = cl.Get(ctx, client.ObjectKeyFromObject(cm), obj)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(obj).To(Equal(cm))
+			Expect(obj.ObjectMeta.ResourceVersion).To(Equal(trackerAddResourceVersion))
+		})
+
 		It("should reject Delete with a mismatched ResourceVersion", func(ctx SpecContext) {
 			bogusRV := "bogus"
 			By("Deleting with a mismatched ResourceVersion Precondition")
@@ -712,6 +725,35 @@ var _ = Describe("Fake client", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(list.Items).To(HaveLen(1))
 			Expect(list.Items).To(ConsistOf(*dep2))
+		})
+
+		It("should handle finalizers in Apply ", func(ctx SpecContext) {
+			cl := client.WithFieldOwner(cl, "test")
+
+			By("Creating the object with a finalizer")
+			cm := corev1applyconfigurations.ConfigMap("test-cm", "delete-with-finalizers").
+				WithFinalizers("finalizers.sigs.k8s.io/test")
+			Expect(cl.Apply(ctx, cm)).To(Succeed())
+
+			By("Deleting the object")
+			obj := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+				Name:      *cm.Name,
+				Namespace: *cm.Namespace,
+			}}
+			Expect(cl.Delete(ctx, obj)).NotTo(HaveOccurred())
+
+			By("Getting the object")
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), obj)).NotTo(HaveOccurred())
+			Expect(obj.DeletionTimestamp).NotTo(BeNil())
+
+			By("Removing the finalizer through SSA")
+			cm.ResourceVersion = nil
+			cm.Finalizers = nil
+			Expect(cl.Apply(ctx, cm)).NotTo(HaveOccurred())
+
+			By("Getting the object")
+			err := cl.Get(ctx, client.ObjectKeyFromObject(obj), &corev1.ConfigMap{})
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 
 		It("should handle finalizers on Update", func(ctx SpecContext) {
@@ -1731,6 +1773,40 @@ var _ = Describe("Fake client", func() {
 		objOriginal.ResourceVersion = actual.ResourceVersion
 		objOriginal.Status.NodeInfo.MachineID = "machine-id"
 		Expect(cmp.Diff(objOriginal, actual)).To(BeEmpty())
+	})
+
+	It("should not change the status of objects with status subresource when creating through apply ", func(ctx SpecContext) {
+		obj := corev1applyconfigurations.
+			Pod("node", "").
+			WithStatus(
+				corev1applyconfigurations.PodStatus().WithPhase("Running"),
+			)
+
+		cl := NewClientBuilder().WithStatusSubresource(&corev1.Pod{}).Build()
+		Expect(cl.Apply(ctx, obj, client.FieldOwner("test"))).To(Succeed())
+
+		p := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: *obj.Name}}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(p), p)).To(Succeed())
+
+		Expect(p.Status).To(BeComparableTo(corev1.PodStatus{}))
+	})
+
+	It("should not change the status of objects with status subresource when updating through apply ", func(ctx SpecContext) {
+
+		cl := NewClientBuilder().WithStatusSubresource(&corev1.Pod{}).Build()
+		pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod"}}
+		Expect(cl.Create(ctx, pod)).NotTo(HaveOccurred())
+
+		obj := corev1applyconfigurations.
+			Pod(pod.Name, "").
+			WithStatus(
+				corev1applyconfigurations.PodStatus().WithPhase("Running"),
+			)
+		Expect(cl.Apply(ctx, obj, client.FieldOwner("test"))).To(Succeed())
+
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(pod), pod)).To(Succeed())
+
+		Expect(pod.Status).To(BeComparableTo(corev1.PodStatus{}))
 	})
 
 	It("should Unmarshal the schemaless object with int64 to preserve ints", func(ctx SpecContext) {
@@ -2781,6 +2857,17 @@ var _ = Describe("Fake client", func() {
 		Expect(cm.Data).To(BeComparableTo(map[string]string{"other": "data"}))
 	})
 
+	It("returns a conflict when trying to Create an object with UID set through Apply", func(ctx SpecContext) {
+		cl := NewClientBuilder().Build()
+		obj := corev1applyconfigurations.
+			ConfigMap("foo", "default").
+			WithUID("123")
+
+		err := cl.Apply(ctx, obj, &client.ApplyOptions{FieldManager: "test-manager"})
+		Expect(err).To(HaveOccurred())
+		Expect(apierrors.IsConflict(err)).To(BeTrue())
+	})
+
 	It("errors when trying to server-side apply an object without configuring a FieldManager", func(ctx SpecContext) {
 		cl := NewClientBuilder().Build()
 		obj := corev1applyconfigurations.
@@ -2827,7 +2914,7 @@ var _ = Describe("Fake client", func() {
 		Expect(result.Object["spec"]).To(Equal(map[string]any{"other": "data"}))
 	})
 
-	It("sets managed fields through all methods", func(ctx SpecContext) {
+	It("sets the fieldManager in create, patch and update", func(ctx SpecContext) {
 		owner := "test-owner"
 		cl := client.WithFieldOwner(
 			NewClientBuilder().WithReturnManagedFields().Build(),
@@ -2856,6 +2943,20 @@ var _ = Describe("Fake client", func() {
 		obj.Data["method"] = "update"
 		Expect(cl.Update(ctx, obj)).NotTo(HaveOccurred())
 		Expect(obj.ManagedFields).NotTo(BeEmpty())
+		for _, f := range obj.ManagedFields {
+			Expect(f.Manager).To(BeEquivalentTo(owner))
+		}
+	})
+
+	It("sets the fieldManager when creating through update", func(ctx SpecContext) {
+		owner := "test-owner"
+		cl := client.WithFieldOwner(
+			NewClientBuilder().WithReturnManagedFields().Build(),
+			owner,
+		)
+
+		obj := &corev1.Event{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+		Expect(cl.Update(ctx, obj, client.FieldOwner(owner))).NotTo(HaveOccurred())
 		for _, f := range obj.ManagedFields {
 			Expect(f.Manager).To(BeEquivalentTo(owner))
 		}

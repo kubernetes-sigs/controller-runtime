@@ -1000,6 +1000,15 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 	reaction := testing.ObjectReaction(c.tracker)
 	handled, o, err := reaction(action)
 	if err != nil {
+		// The reaction calls tracker.Get after tracker.Apply to return the object,
+		// but we may have deleted it in tracker.Apply if there was no finalizer
+		// left.
+		if apierrors.IsNotFound(err) &&
+			patch.Type() == types.ApplyPatchType &&
+			oldAccessor.GetDeletionTimestamp() != nil &&
+			len(obj.GetFinalizers()) == 0 {
+			return nil
+		}
 		return err
 	}
 	if !handled {

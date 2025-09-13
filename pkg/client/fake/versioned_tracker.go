@@ -32,12 +32,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/managedfields"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/testing"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
+var _ testing.ObjectTracker = (*versionedTracker)(nil)
+
 type versionedTracker struct {
-	testing.ObjectTracker
+	upstream                      testing.ObjectTracker
 	scheme                        *runtime.Scheme
 	withStatusSubresource         sets.Set[schema.GroupVersionKind]
 	usesFieldManagedObjectTracker bool
@@ -84,7 +87,7 @@ func (t versionedTracker) Add(obj runtime.Object) error {
 				return fmt.Errorf("invalid managedFields on %T: %w", obj, err)
 			}
 		}
-		if err := t.Add(obj); err != nil {
+		if err := t.upstream.Add(obj); err != nil {
 			return err
 		}
 	}
@@ -112,7 +115,7 @@ func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Ob
 	if err != nil {
 		return err
 	}
-	if err := t.Create(gvr, obj, ns, opts...); err != nil {
+	if err := t.upstream.Create(gvr, obj, ns, opts...); err != nil {
 		accessor.SetResourceVersion("")
 		return err
 	}
@@ -146,7 +149,7 @@ func (t versionedTracker) update(gvr schema.GroupVersionResource, obj runtime.Ob
 		u.SetGroupVersionKind(gvk)
 	}
 
-	return t.Update(gvr, obj, ns, opts)
+	return t.upstream.Update(gvr, obj, ns, opts)
 }
 
 func (t versionedTracker) Patch(gvr schema.GroupVersionResource, obj runtime.Object, ns string, opts ...metav1.PatchOptions) error {
@@ -167,7 +170,7 @@ func (t versionedTracker) Patch(gvr schema.GroupVersionResource, obj runtime.Obj
 		return nil
 	}
 
-	return t.Patch(gvr, obj, ns, patchOptions)
+	return t.upstream.Patch(gvr, obj, ns, patchOptions)
 }
 
 func (t versionedTracker) updateObject(gvr schema.GroupVersionResource, obj runtime.Object, ns string, isStatus, deleting bool, dryRun []string) (runtime.Object, error) {
@@ -263,4 +266,24 @@ func (t versionedTracker) updateObject(gvr schema.GroupVersionResource, obj runt
 		return nil, t.Delete(gvr, accessor.GetNamespace(), accessor.GetName(), metav1.DeleteOptions{DryRun: dryRun})
 	}
 	return convertFromUnstructuredIfNecessary(t.scheme, obj)
+}
+
+func (t versionedTracker) Apply(gvr schema.GroupVersionResource, applyConfiguration runtime.Object, ns string, opts ...metav1.PatchOptions) error {
+	return t.upstream.Apply(gvr, applyConfiguration, ns, opts...)
+}
+
+func (t versionedTracker) Delete(gvr schema.GroupVersionResource, ns, name string, opts ...metav1.DeleteOptions) error {
+	return t.upstream.Delete(gvr, ns, name, opts...)
+}
+
+func (t versionedTracker) Get(gvr schema.GroupVersionResource, ns, name string, opts ...metav1.GetOptions) (runtime.Object, error) {
+	return t.upstream.Get(gvr, ns, name, opts...)
+}
+
+func (t versionedTracker) List(gvr schema.GroupVersionResource, gvk schema.GroupVersionKind, ns string, opts ...metav1.ListOptions) (runtime.Object, error) {
+	return t.upstream.List(gvr, gvk, ns, opts...)
+}
+
+func (t versionedTracker) Watch(gvr schema.GroupVersionResource, ns string, opts ...metav1.ListOptions) (watch.Interface, error) {
+	return t.upstream.Watch(gvr, ns, opts...)
 }

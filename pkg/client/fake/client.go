@@ -302,7 +302,7 @@ func (f *ClientBuilder) Build() client.WithWatch {
 		usesFieldManagedObjectTracker = true
 	}
 	tracker := versionedTracker{
-		ObjectTracker:                 f.objectTracker,
+		upstream:                      f.objectTracker,
 		scheme:                        f.scheme,
 		withStatusSubresource:         withStatusSubResource,
 		usesFieldManagedObjectTracker: usesFieldManagedObjectTracker,

@@ -2719,7 +2719,7 @@ var _ = Describe("Fake client", func() {
 		obj.SetName("foo")
 		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "data")).To(Succeed())
 
-		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed())
+		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed()) //nolint:staticcheck // will be removed once client.Apply is removed
 
 		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
 
@@ -2727,7 +2727,7 @@ var _ = Describe("Fake client", func() {
 		Expect(cm.Data).To(Equal(map[string]string{"some": "data"}))
 
 		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "data")).To(Succeed())
-		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed())
+		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed()) //nolint:staticcheck // will be removed once client.Apply is removed
 
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(cm), cm)).To(Succeed())
 		Expect(cm.Data).To(Equal(map[string]string{"other": "data"}))
@@ -2743,13 +2743,13 @@ var _ = Describe("Fake client", func() {
 
 		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "spec")).To(Succeed())
 
-		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed())
+		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed()) //nolint:staticcheck // will be removed once client.Apply is removed
 
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(result), result)).To(Succeed())
 		Expect(result.Object["spec"]).To(Equal(map[string]any{"some": "data"}))
 
 		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "spec")).To(Succeed())
-		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed())
+		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed()) //nolint:staticcheck // will be removed once client.Apply is removed
 
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(result), result)).To(Succeed())
 		Expect(result.Object["spec"]).To(Equal(map[string]any{"other": "data"}))
@@ -2763,9 +2763,9 @@ var _ = Describe("Fake client", func() {
 		obj.SetName("foo")
 		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "data")).To(Succeed())
 
-		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed())
+		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed()) //nolint:staticcheck // will be removed once client.Apply is removed
 
-		err := cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))
+		err := cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo")) //nolint:staticcheck // will be removed once client.Apply is removed
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("metadata.managedFields must be nil"))
 	})
@@ -2781,7 +2781,7 @@ var _ = Describe("Fake client", func() {
 
 		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "data")).To(Succeed())
 
-		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed())
+		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed()) //nolint:staticcheck // will be removed once client.Apply is removed
 
 		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
 
@@ -2789,7 +2789,7 @@ var _ = Describe("Fake client", func() {
 		Expect(cm.Data).To(Equal(map[string]string{"some": "data"}))
 
 		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "data")).To(Succeed())
-		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed())
+		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed()) //nolint:staticcheck // will be removed once client.Apply is removed
 
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(cm), cm)).To(Succeed())
 		Expect(cm.Data).To(Equal(map[string]string{"other": "data"}))
@@ -2835,7 +2835,7 @@ var _ = Describe("Fake client", func() {
 				"ssa": "value",
 			},
 		}}
-		Expect(cl.Patch(ctx, u, client.Apply, client.FieldOwner("foo"))).NotTo(HaveOccurred())
+		Expect(cl.Patch(ctx, u, client.Apply, client.FieldOwner("foo"))).NotTo(HaveOccurred()) //nolint:staticcheck // will be removed once client.Apply is removed
 		_, exists, err := unstructured.NestedFieldNoCopy(u.Object, "metadata", "managedFields")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(exists).To(BeTrue())

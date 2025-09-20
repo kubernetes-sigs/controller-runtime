@@ -351,6 +351,31 @@ var _ = Describe("NewSubResourceClient", func() {
 		_ = client2.SubResource("foo").Create(ctx, nil, nil)
 		Expect(called).To(BeTrue())
 	})
+	It("should call the provided Apply function", func(ctx SpecContext) {
+		var called bool
+		client := NewClient(c, Funcs{
+			SubResourceApply: func(_ context.Context, client client.Client, subResourceName string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+				called = true
+				Expect(subResourceName).To(BeEquivalentTo("foo"))
+				return nil
+			},
+		})
+		_ = client.SubResource("foo").Apply(ctx, nil)
+		Expect(called).To(BeTrue())
+	})
+	It("should call the underlying client if the provided Apply function is nil", func(ctx SpecContext) {
+		var called bool
+		client1 := NewClient(c, Funcs{
+			SubResourceApply: func(_ context.Context, client client.Client, subResourceName string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+				called = true
+				Expect(subResourceName).To(BeEquivalentTo("foo"))
+				return nil
+			},
+		})
+		client2 := NewClient(client1, Funcs{})
+		_ = client2.SubResource("foo").Apply(ctx, nil)
+		Expect(called).To(BeTrue())
+	})
 })
 
 type dummyClient struct{}

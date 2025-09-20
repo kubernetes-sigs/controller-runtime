@@ -307,7 +307,9 @@ func (t versionedTracker) Apply(gvr schema.GroupVersionResource, applyConfigurat
 	if err != nil {
 		return err
 	}
-	applyConfiguration, needsCreate, err := t.updateObject(gvr, gvk, applyConfiguration, ns, false, false, true, patchOptions.DryRun)
+	isStatus := bytes.Contains(debug.Stack(), []byte("sigs.k8s.io/controller-runtime/pkg/client/fake.(*fakeSubResourceClient).statusPatch"))
+
+	applyConfiguration, needsCreate, err := t.updateObject(gvr, gvk, applyConfiguration, ns, isStatus, false, true, patchOptions.DryRun)
 	if err != nil {
 		return err
 	}
@@ -334,6 +336,11 @@ func (t versionedTracker) Apply(gvr schema.GroupVersionResource, applyConfigurat
 		return nil
 	}
 
+	if isStatus {
+		// We restore everything but status from the tracker where we don't put GVK
+		// into the object but it must be set for the ManagedFieldsObjectTracker
+		applyConfiguration.GetObjectKind().SetGroupVersionKind(gvk)
+	}
 	return t.upstream.Apply(gvr, applyConfiguration, ns, opts...)
 }
 

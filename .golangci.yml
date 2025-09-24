@@ -22,10 +22,12 @@ linters:
     - goconst
     - gocritic
     - gocyclo
+    - godoclint
     - goprintffuncname
     - govet
     - importas
     - ineffassign
+    - iotamixing
     - makezero
     - misspell
     - nakedret

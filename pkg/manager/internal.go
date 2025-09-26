@@ -446,13 +446,16 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 
 	// Start the leader election and all required runnables.
 	{
-		ctx, cancel := context.WithCancel(context.Background())
+		// Create a context that inherits all keys from the parent context
+		// but can be cancelled independently for leader election management
+		baseCtx := context.WithoutCancel(ctx)
+		leaderCtx, cancel := context.WithCancel(baseCtx)
 		cm.leaderElectionCancel = cancel
 		if leaderElector != nil {
 			// Start the leader elector process
 			go func() {
-				leaderElector.Run(ctx)
-				<-ctx.Done()
+				leaderElector.Run(leaderCtx)
+				<-leaderCtx.Done()
 				close(cm.leaderElectionStopped)
 			}()
 		} else {

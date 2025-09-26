@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package pkg contains API Schema definitions for the chaosapps v1 API group
 // +kubebuilder:object:generate=true
 // +groupName=chaosapps.metamagical.io
 package pkg

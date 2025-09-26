@@ -174,7 +174,7 @@ type terminalError struct {
 	err error
 }
 
-// This function will return nil if te.err is nil.
+// Unwrap returns nil if te.err is nil.
 func (te *terminalError) Unwrap() error {
 	return te.err
 }

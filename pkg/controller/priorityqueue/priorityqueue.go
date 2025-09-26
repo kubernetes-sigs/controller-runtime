@@ -239,6 +239,7 @@ func (w *priorityqueue[T]) spin() {
 			}
 
 			for {
+				metricsAscend := false
 				pivotChange := false
 
 				w.queue.AscendGreaterOrEqual(&pivot, func(item *item[T]) bool {
@@ -264,7 +265,8 @@ func (w *priorityqueue[T]) spin() {
 						}
 					}
 
-					if w.waiters.Load() == 0 {
+					if w.waiters.Load() == 0 || metricsAscend {
+						metricsAscend = true
 						// Have to keep iterating here to ensure we update metrics
 						// for further items that became ready and set nextReady.
 						return true

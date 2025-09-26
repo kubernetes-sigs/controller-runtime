@@ -27,6 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	appsv1applyconfigurations "k8s.io/client-go/applyconfigurations/apps/v1"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -254,6 +255,38 @@ var _ = Describe("DryRunClient", func() {
 		opts := &client.SubResourcePatchOptions{PatchOptions: client.PatchOptions{DryRun: []string{"Bye", "Pippa"}}}
 
 		Expect(getClient().Status().Patch(ctx, changedDep, client.MergeFrom(dep), opts)).ToNot(HaveOccurred())
+
+		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(actual).NotTo(BeNil())
+		Expect(actual).To(BeEquivalentTo(dep))
+	})
+
+	It("should not change objects via status apply", func(ctx SpecContext) {
+		deploymentAC, err := appsv1applyconfigurations.ExtractDeployment(dep, "test-owner")
+		Expect(err).NotTo(HaveOccurred())
+		deploymentAC.WithStatus(&appsv1applyconfigurations.DeploymentStatusApplyConfiguration{
+			Replicas: ptr.To(int32(99)),
+		})
+
+		Expect(getClient().Status().Apply(ctx, deploymentAC, client.FieldOwner("test-owner"))).NotTo(HaveOccurred())
+
+		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(actual).NotTo(BeNil())
+		Expect(actual).To(BeEquivalentTo(dep))
+	})
+
+	It("should not change objects via status apply with opts", func(ctx SpecContext) {
+		deploymentAC, err := appsv1applyconfigurations.ExtractDeployment(dep, "test-owner")
+		Expect(err).NotTo(HaveOccurred())
+		deploymentAC.WithStatus(&appsv1applyconfigurations.DeploymentStatusApplyConfiguration{
+			Replicas: ptr.To(int32(99)),
+		})
+
+		opts := &client.SubResourceApplyOptions{ApplyOptions: client.ApplyOptions{DryRun: []string{"Bye", "Pippa"}}}
+
+		Expect(getClient().Status().Apply(ctx, deploymentAC, client.FieldOwner("test-owner"), opts)).NotTo(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())

@@ -43,6 +43,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	appsv1applyconfigurations "k8s.io/client-go/applyconfigurations/apps/v1"
+	autoscaling1applyconfigurations "k8s.io/client-go/applyconfigurations/autoscaling/v1"
 	corev1applyconfigurations "k8s.io/client-go/applyconfigurations/core/v1"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -1127,6 +1129,34 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(err).NotTo(HaveOccurred())
 				Expect(*dep.Spec.Replicas).To(Equal(replicaCount))
 			})
+
+			It("should be able to apply the scale subresource", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				replicaCount := *dep.Spec.Replicas + 1
+
+				By("Applying the scale subresurce")
+				deploymentAC, err := appsv1applyconfigurations.ExtractDeployment(dep, "foo")
+				Expect(err).NotTo(HaveOccurred())
+				scale := autoscaling1applyconfigurations.Scale().
+					WithSpec(autoscaling1applyconfigurations.ScaleSpec().WithReplicas(replicaCount))
+				err = cl.SubResource("scale").Apply(ctx, deploymentAC,
+					&client.SubResourceApplyOptions{SubResourceBody: scale},
+					client.FieldOwner("foo"),
+					client.ForceOwnership,
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Asserting replicas got updated")
+				dep, err = clientset.AppsV1().Deployments(dep.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*dep.Spec.Replicas).To(Equal(replicaCount))
+			})
 		})
 
 		Context("with unstructured objects", func() {
@@ -1322,8 +1352,8 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				By("Creating a deployment")
 				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				dep.APIVersion = "apps/v1"
-				dep.Kind = "Deployment"
+				dep.APIVersion = appsv1.SchemeGroupVersion.String()
+				dep.Kind = "Deployment" //nolint:goconst
 				depUnstructured, err := toUnstructured(dep)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1365,6 +1395,41 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				patch := client.MergeFrom(scale.DeepCopy())
 				Expect(unstructured.SetNestedField(scale.Object, int64(replicaCount), "spec", "replicas")).NotTo(HaveOccurred())
 				err = cl.SubResource("scale").Patch(ctx, depUnstructured, patch, client.WithSubResourceBody(scale))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(scale.GetAPIVersion()).To(Equal("autoscaling/v1"))
+				Expect(scale.GetKind()).To(Equal("Scale"))
+
+				By("Asserting replicas got updated")
+				dep, err = clientset.AppsV1().Deployments(dep.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*dep.Spec.Replicas).To(Equal(replicaCount))
+			})
+
+			It("should be able to apply the scale subresource", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{Scheme: runtime.NewScheme()})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("Creating a deployment")
+				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				dep.APIVersion = "apps/v1"
+				dep.Kind = "Deployment"
+				depUnstructured, err := toUnstructured(dep)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Updating the scale subresurce")
+				replicaCount := *dep.Spec.Replicas + 1
+				scale := &unstructured.Unstructured{}
+				scale.SetAPIVersion("autoscaling/v1")
+				scale.SetKind("Scale")
+				Expect(unstructured.SetNestedField(scale.Object, int64(replicaCount), "spec", "replicas")).NotTo(HaveOccurred())
+				err = cl.SubResource("scale").Apply(ctx,
+					client.ApplyConfigurationFromUnstructured(depUnstructured),
+					&client.SubResourceApplyOptions{SubResourceBody: client.ApplyConfigurationFromUnstructured(scale)},
+					client.FieldOwner("foo"),
+					client.ForceOwnership,
+				)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(scale.GetAPIVersion()).To(Equal("autoscaling/v1"))
 				Expect(scale.GetKind()).To(Equal("Scale"))
@@ -1438,6 +1503,29 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("validating updated Deployment has type information")
 				Expect(dep.GroupVersionKind()).To(Equal(depGvk))
+			})
+
+			It("should apply status", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dep.Status.Replicas).To(BeEquivalentTo(0))
+
+				By("applying the status of Deployment")
+				deploymentAC, err := appsv1applyconfigurations.ExtractDeployment(dep, "foo")
+				Expect(err).NotTo(HaveOccurred())
+				deploymentAC.WithStatus(&appsv1applyconfigurations.DeploymentStatusApplyConfiguration{
+					Replicas: ptr.To(int32(1)),
+				})
+				Expect(cl.Status().Apply(ctx, deploymentAC, client.FieldOwner("foo"))).To(Succeed())
+
+				dep, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dep.Status.Replicas).To(BeEquivalentTo(1))
 			})
 
 			It("should not update spec of an existing object", func(ctx SpecContext) {
@@ -1580,6 +1668,34 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				dep.Status.Replicas = 1
 				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
 				err = cl.Status().Patch(ctx, u, depPatch)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating updated Deployment has type information")
+				Expect(u.GroupVersionKind()).To(Equal(depGvk))
+
+				By("validating patched Deployment has new status")
+				actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).NotTo(BeNil())
+				Expect(actual.Status.Replicas).To(BeEquivalentTo(1))
+			})
+
+			It("should apply status and preserve type information", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("initially creating a Deployment")
+				dep, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dep.Status.Replicas).To(BeEquivalentTo(0))
+
+				By("applying the status of Deployment")
+				dep.Status.Replicas = 1
+				dep.ManagedFields = nil // Must be unset in SSA requests
+				u := &unstructured.Unstructured{}
+				Expect(scheme.Convert(dep, u, nil)).To(Succeed())
+				err = cl.Status().Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.FieldOwner("foo"))
 				Expect(err).NotTo(HaveOccurred())
 
 				By("validating updated Deployment has type information")

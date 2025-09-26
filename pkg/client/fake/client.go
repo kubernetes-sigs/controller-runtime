@@ -1335,6 +1335,38 @@ func (sw *fakeSubResourceClient) statusPatch(body client.Object, patch client.Pa
 	return sw.client.patch(body, patch, &patchOptions.PatchOptions)
 }
 
+func (sw *fakeSubResourceClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+	if sw.subResource != "status" {
+		return errors.New("fakeSubResourceClient currently only supports Apply for status subresource")
+	}
+
+	applyOpts := &client.SubResourceApplyOptions{}
+	applyOpts.ApplyOpts(opts)
+
+	data, err := json.Marshal(obj)
+	if err != nil {
+		return fmt.Errorf("failed to marshal apply configuration: %w", err)
+	}
+
+	u := &unstructured.Unstructured{}
+	if err := json.Unmarshal(data, u); err != nil {
+		return fmt.Errorf("failed to unmarshal apply configuration: %w", err)
+	}
+
+	patchOpts := &client.SubResourcePatchOptions{}
+	patchOpts.Raw = applyOpts.AsPatchOptions()
+
+	if applyOpts.SubResourceBody != nil {
+		subResourceBody := &unstructured.Unstructured{}
+		if err := json.Unmarshal(data, subResourceBody); err != nil {
+			return fmt.Errorf("failed to unmarshal subresource body: %w", err)
+		}
+		patchOpts.SubResourceBody = subResourceBody
+	}
+
+	return sw.Patch(ctx, u, &fakeApplyPatch{}, patchOpts)
+}
+
 func allowsUnconditionalUpdate(gvk schema.GroupVersionKind) bool {
 	switch gvk.Group {
 	case "apps":

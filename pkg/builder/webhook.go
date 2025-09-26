@@ -17,6 +17,7 @@ limitations under the License.
 package builder
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -49,6 +50,7 @@ type WebhookBuilder struct {
 	config                    *rest.Config
 	recoverPanic              *bool
 	logConstructor            func(base logr.Logger, req *admission.Request) logr.Logger
+	contextFunc               func(context.Context, *http.Request) context.Context
 	err                       error
 }
 
@@ -87,6 +89,12 @@ func (blder *WebhookBuilder) WithValidator(validator admission.CustomValidator) 
 // WithLogConstructor overrides the webhook's LogConstructor.
 func (blder *WebhookBuilder) WithLogConstructor(logConstructor func(base logr.Logger, req *admission.Request) logr.Logger) *WebhookBuilder {
 	blder.logConstructor = logConstructor
+	return blder
+}
+
+// WithContextFunc overrides the webhook's WithContextFunc.
+func (blder *WebhookBuilder) WithContextFunc(contextFunc func(context.Context, *http.Request) context.Context) *WebhookBuilder {
+	blder.contextFunc = contextFunc
 	return blder
 }
 
@@ -205,6 +213,7 @@ func (blder *WebhookBuilder) registerDefaultingWebhook() error {
 	mwh := blder.getDefaultingWebhook()
 	if mwh != nil {
 		mwh.LogConstructor = blder.logConstructor
+		mwh.WithContextFunc = blder.contextFunc
 		path := generateMutatePath(blder.gvk)
 		if blder.customDefaulterCustomPath != "" {
 			generatedCustomPath, err := generateCustomPath(blder.customDefaulterCustomPath)
@@ -243,6 +252,7 @@ func (blder *WebhookBuilder) registerValidatingWebhook() error {
 	vwh := blder.getValidatingWebhook()
 	if vwh != nil {
 		vwh.LogConstructor = blder.logConstructor
+		vwh.WithContextFunc = blder.contextFunc
 		path := generateValidatePath(blder.gvk)
 		if blder.customValidatorCustomPath != "" {
 			generatedCustomPath, err := generateCustomPath(blder.customValidatorCustomPath)

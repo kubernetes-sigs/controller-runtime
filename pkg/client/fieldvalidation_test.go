@@ -119,11 +119,13 @@ func TestWithStrictFieldValidation(t *testing.T) {
 	_ = wrappedClient.Status().Create(ctx, dummyObj, dummyObj)
 	_ = wrappedClient.Status().Update(ctx, dummyObj)
 	_ = wrappedClient.Status().Patch(ctx, dummyObj, nil)
+	_ = wrappedClient.Status().Apply(ctx, corev1applyconfigurations.Namespace(""), nil)
 	_ = wrappedClient.SubResource("some-subresource").Create(ctx, dummyObj, dummyObj)
 	_ = wrappedClient.SubResource("some-subresource").Update(ctx, dummyObj)
 	_ = wrappedClient.SubResource("some-subresource").Patch(ctx, dummyObj, nil)
+	_ = wrappedClient.SubResource("some-subresource").Apply(ctx, corev1applyconfigurations.Namespace(""), nil)
 
-	if expectedCalls := 10; calls != expectedCalls {
+	if expectedCalls := 12; calls != expectedCalls {
 		t.Fatalf("wrong number of calls to assertions: expected=%d; got=%d", expectedCalls, calls)
 	}
 }

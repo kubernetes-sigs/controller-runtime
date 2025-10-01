@@ -545,7 +545,7 @@ func (po *SubResourcePatchOptions) ApplyToSubResourcePatch(o *SubResourcePatchOp
 }
 
 // SubResourceApplyOptions are the options for a subresource
-// apply rquest.
+// apply request.
 type SubResourceApplyOptions struct {
 	ApplyOptions
 	SubResourceBody runtime.ApplyConfiguration

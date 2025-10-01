@@ -1357,8 +1357,12 @@ func (sw *fakeSubResourceClient) Apply(ctx context.Context, obj runtime.ApplyCon
 	patchOpts.Raw = applyOpts.AsPatchOptions()
 
 	if applyOpts.SubResourceBody != nil {
+		subResourceBodySerialized, err := json.Marshal(applyOpts.SubResourceBody)
+		if err != nil {
+			return fmt.Errorf("failed to serialize subresource body: %w", err)
+		}
 		subResourceBody := &unstructured.Unstructured{}
-		if err := json.Unmarshal(data, subResourceBody); err != nil {
+		if err := json.Unmarshal(subResourceBodySerialized, subResourceBody); err != nil {
 			return fmt.Errorf("failed to unmarshal subresource body: %w", err)
 		}
 		patchOpts.SubResourceBody = subResourceBody

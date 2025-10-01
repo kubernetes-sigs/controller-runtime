@@ -97,7 +97,7 @@ type SubResourcePatchOption interface {
 	ApplyToSubResourcePatch(*SubResourcePatchOptions)
 }
 
-// SubResourceApplyOption configures a subresoruce apply request.
+// SubResourceApplyOption configures a subresource apply request.
 type SubResourceApplyOption interface {
 	// ApplyToSubResourceApply applies the configuration on the given patch options.
 	ApplyToSubResourceApply(*SubResourceApplyOptions)

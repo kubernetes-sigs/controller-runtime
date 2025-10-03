@@ -459,6 +459,9 @@ func (c *Controller[request]) reconcileHandler(ctx context.Context, req request,
 	// resource to be synced.
 	log.V(5).Info("Reconciling")
 	result, err := c.Reconcile(ctx, req)
+	if result.Priority != nil {
+		priority = *result.Priority
+	}
 	switch {
 	case err != nil:
 		if errors.Is(err, reconcile.TerminalError(nil)) {
@@ -468,9 +471,6 @@ func (c *Controller[request]) reconcileHandler(ctx context.Context, req request,
 		}
 		ctrlmetrics.ReconcileErrors.WithLabelValues(c.Name).Inc()
 		ctrlmetrics.ReconcileTotal.WithLabelValues(c.Name, labelError).Inc()
-		if !result.IsZero() {
-			log.Info("Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes requeuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler")
-		}
 		log.Error(err, "Reconciler error")
 	case result.RequeueAfter > 0:
 		log.V(5).Info(fmt.Sprintf("Reconcile done, requeueing after %s", result.RequeueAfter))

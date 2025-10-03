@@ -87,7 +87,7 @@ func (c *typedClient) Delete(ctx context.Context, obj Object, opts ...DeleteOpti
 		Name(o.name).
 		Body(deleteOpts.AsDeleteOptions()).
 		Do(ctx).
-		Error()
+		Into(obj)
 }
 
 // DeleteAllOf implements client.Client.

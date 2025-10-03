@@ -439,9 +439,9 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ok).To(BeTrue())
 		})
 
-		It("should configure a priority queue if UsePriorityQueue is set", func() {
+		It("should configure a priority queue per default", func() {
 			m, err := manager.New(cfg, manager.Options{
-				Controller: config.Controller{UsePriorityQueue: ptr.To(true)},
+				Controller: config.Controller{},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -458,12 +458,13 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ok).To(BeTrue())
 		})
 
-		It("should not configure a priority queue if UsePriorityQueue is not set", func() {
+		It("should not configure a priority queue if UsePriorityQueue is set to false", func() {
 			m, err := manager.New(cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-17", m, controller.Options{
-				Reconciler: rec,
+				Reconciler:       rec,
+				UsePriorityQueue: ptr.To(false),
 			})
 			Expect(err).NotTo(HaveOccurred())
 

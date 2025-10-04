@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -129,6 +130,9 @@ type controllerManager struct {
 	// webhookServerOnce will be called in GetWebhookServer() to optionally initialize
 	// webhookServer if unset, and Add() it to controllerManager.
 	webhookServerOnce sync.Once
+
+	// converterRegistry stores conversion.Converter for the conversion endpoint.
+	converterRegistry conversion.Registry
 
 	// leaderElectionID is the name of the resource that leader election
 	// will use for holding the leader lock.
@@ -282,6 +286,10 @@ func (cm *controllerManager) GetWebhookServer() webhook.Server {
 		}
 	})
 	return cm.webhookServer
+}
+
+func (cm *controllerManager) GetConverterRegistry() conversion.Registry {
+	return cm.converterRegistry
 }
 
 func (cm *controllerManager) GetLogger() logr.Logger {

@@ -58,7 +58,7 @@ var _ = Describe("Conversion Webhook", func() {
 		Expect(jobsv3.AddToScheme(scheme)).To(Succeed())
 
 		decoder = conversion.NewDecoder(scheme)
-		wh = conversion.NewWebhookHandler(scheme)
+		wh = conversion.NewWebhookHandler(scheme, conversion.NewRegistry(scheme))
 	})
 
 	doRequest := func(convReq *apix.ConversionReview) *apix.ConversionReview {

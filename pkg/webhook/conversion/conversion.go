@@ -34,6 +34,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	conversionmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/metrics"
@@ -43,14 +45,110 @@ var (
 	log = logf.Log.WithName("conversion-webhook")
 )
 
-func NewWebhookHandler(scheme *runtime.Scheme) http.Handler {
-	return &webhook{scheme: scheme, decoder: NewDecoder(scheme)}
+type Registry struct {
+	scheme            *runtime.Scheme
+	convertersByHubGK map[schema.GroupKind]convertersForHub
+}
+
+func NewRegistry(scheme *runtime.Scheme) Registry {
+	return Registry{
+		scheme:            scheme,
+		convertersByHubGK: map[schema.GroupKind]convertersForHub{},
+	}
+}
+
+type convertersForHub struct {
+	hubGVK               schema.GroupVersionKind
+	convertersBySpokeGVK map[schema.GroupVersionKind]Converter
+}
+
+func (r Registry) Register(hubGVK schema.GroupVersionKind, converters ...Converter) error {
+	if _, ok := r.convertersByHubGK[hubGVK.GroupKind()]; ok {
+		return fmt.Errorf("converter already registered for %s", hubGVK.GroupKind())
+	}
+
+	// TODO: validate against schema that all converters have been registred for a type (similar to previous validation)
+
+	r.convertersByHubGK[hubGVK.GroupKind()] = convertersForHub{
+		hubGVK:               hubGVK,
+		convertersBySpokeGVK: map[schema.GroupVersionKind]Converter{},
+	}
+	for _, converter := range converters {
+		converterHubGVK, err := apiutil.GVKForObject(converter.GetHub(), r.scheme)
+		if err != nil {
+			return err
+		}
+		if hubGVK != converterHubGVK {
+			return fmt.Errorf("converter GVK does not match builder gvk: FIXME")
+		}
+		converterSpokeGVK, err := apiutil.GVKForObject(converter.GetSpoke(), r.scheme)
+		if err != nil {
+			return err
+		}
+		if hubGVK.GroupKind() != converterSpokeGVK.GroupKind() {
+			return fmt.Errorf("converter GVK does not match builder gvk: FIXME")
+		}
+		r.convertersByHubGK[hubGVK.GroupKind()].convertersBySpokeGVK[converterSpokeGVK] = converter
+	}
+
+	return nil
+}
+
+type Converter interface {
+	GetHub() client.Object
+	GetSpoke() client.Object
+	ConvertHubToSpoke(hub, spoke runtime.Object) error
+	ConvertSpokeToHub(hub, spoke runtime.Object) error
+}
+
+func NewConverter[hubObject, spokeObject client.Object](
+	hub hubObject,
+	spoke spokeObject,
+	convertHubToSpokeFunc func(src hubObject, dst spokeObject) error,
+	convertSpokeToHubFunc func(src spokeObject, dst hubObject) error,
+) Converter {
+	return &converter[hubObject, spokeObject]{
+		hub:                   hub,
+		spoke:                 spoke,
+		convertSpokeToHubFunc: convertSpokeToHubFunc,
+		convertHubToSpokeFunc: convertHubToSpokeFunc,
+	}
+}
+
+var _ Converter = converter[client.Object, client.Object]{}
+
+type converter[hubObject, spokeObject client.Object] struct {
+	hub                   hubObject
+	spoke                 spokeObject
+	convertHubToSpokeFunc func(src hubObject, dst spokeObject) error
+	convertSpokeToHubFunc func(src spokeObject, dst hubObject) error
+}
+
+func (c converter[hubObject, spokeObject]) GetHub() client.Object {
+	return c.hub
+}
+
+func (c converter[hubObject, spokeObject]) GetSpoke() client.Object {
+	return c.spoke
+}
+
+func (c converter[hubObject, spokeObject]) ConvertHubToSpoke(hub, spoke runtime.Object) error {
+	return c.convertHubToSpokeFunc(hub.(hubObject), spoke.(spokeObject))
+}
+
+func (c converter[hubObject, spokeObject]) ConvertSpokeToHub(hub, spoke runtime.Object) error {
+	return c.convertSpokeToHubFunc(spoke.(spokeObject), hub.(hubObject))
+}
+
+func NewWebhookHandler(scheme *runtime.Scheme, registry Registry) http.Handler {
+	return &webhook{scheme: scheme, decoder: NewDecoder(scheme), registry: registry}
 }
 
 // webhook implements a CRD conversion webhook HTTP handler.
 type webhook struct {
-	scheme  *runtime.Scheme
-	decoder *Decoder
+	scheme   *runtime.Scheme
+	decoder  *Decoder
+	registry Registry
 }
 
 // ensure Webhook implements http.Handler
@@ -147,6 +245,34 @@ func (wh *webhook) convertObject(src, dst runtime.Object) error {
 
 	if srcGVK == dstGVK {
 		return fmt.Errorf("conversion is not allowed between same type %T", src)
+	}
+
+	if converters, ok := wh.registry.convertersByHubGK[srcGVK.GroupKind()]; ok {
+		srcIsHub := converters.hubGVK == srcGVK
+		dstIsHub := converters.hubGVK == dstGVK
+		_, srcIsConvertible := converters.convertersBySpokeGVK[srcGVK]
+		_, dstIsConvertible := converters.convertersBySpokeGVK[dstGVK]
+
+		switch {
+		case srcIsHub && dstIsConvertible:
+			return converters.convertersBySpokeGVK[dstGVK].ConvertHubToSpoke(src, dst)
+		case dstIsHub && srcIsConvertible:
+			return converters.convertersBySpokeGVK[srcGVK].ConvertSpokeToHub(src, dst)
+		case srcIsConvertible && dstIsConvertible:
+			hubGVK := converters.hubGVK
+			hub, err := wh.scheme.New(hubGVK)
+			if err != nil {
+				return fmt.Errorf("failed to allocate an instance for gvk %v: %w", hubGVK, err)
+			}
+			if err := converters.convertersBySpokeGVK[srcGVK].ConvertSpokeToHub(src, hub); err != nil {
+				return fmt.Errorf("%T failed to convert to hub version %T : %w", src, hub, err)
+			}
+			if err := converters.convertersBySpokeGVK[dstGVK].ConvertHubToSpoke(hub, dst); err != nil {
+				return fmt.Errorf("%T failed to convert from hub version %T : %w", dst, hub, err)
+			}
+		default:
+			return fmt.Errorf("%T is not convertible to %T", src, dst)
+		}
 	}
 
 	srcIsHub, dstIsHub := isHub(src), isHub(dst)

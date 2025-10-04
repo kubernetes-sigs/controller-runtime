@@ -544,6 +544,30 @@ func (po *SubResourcePatchOptions) ApplyToSubResourcePatch(o *SubResourcePatchOp
 	}
 }
 
+// SubResourceApplyOptions are the options for a subresource
+// apply request.
+type SubResourceApplyOptions struct {
+	ApplyOptions
+	SubResourceBody runtime.ApplyConfiguration
+}
+
+// ApplyOpts applies the given options.
+func (ao *SubResourceApplyOptions) ApplyOpts(opts []SubResourceApplyOption) *SubResourceApplyOptions {
+	for _, o := range opts {
+		o.ApplyToSubResourceApply(ao)
+	}
+
+	return ao
+}
+
+// ApplyToSubResourceApply applies the configuration on the given patch options.
+func (ao *SubResourceApplyOptions) ApplyToSubResourceApply(o *SubResourceApplyOptions) {
+	ao.ApplyOptions.ApplyToApply(&o.ApplyOptions)
+	if ao.SubResourceBody != nil {
+		o.SubResourceBody = ao.SubResourceBody
+	}
+}
+
 func (sc *subResourceClient) Get(ctx context.Context, obj Object, subResource Object, opts ...SubResourceGetOption) error {
 	switch obj.(type) {
 	case runtime.Unstructured:
@@ -593,5 +617,15 @@ func (sc *subResourceClient) Patch(ctx context.Context, obj Object, patch Patch,
 		return sc.client.metadataClient.PatchSubResource(ctx, obj, sc.subResource, patch, opts...)
 	default:
 		return sc.client.typedClient.PatchSubResource(ctx, obj, sc.subResource, patch, opts...)
+	}
+}
+
+func (sc *subResourceClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...SubResourceApplyOption) error {
+	switch obj := obj.(type) {
+	case *unstructuredApplyConfiguration:
+		defer sc.client.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
+		return sc.client.unstructuredClient.ApplySubResource(ctx, obj, sc.subResource, opts...)
+	default:
+		return sc.client.typedClient.ApplySubResource(ctx, obj, sc.subResource, opts...)
 	}
 }

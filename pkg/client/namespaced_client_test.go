@@ -37,6 +37,7 @@ import (
 	corev1applyconfigurations "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1applyconfigurations "k8s.io/client-go/applyconfigurations/meta/v1"
 	rbacv1applyconfigurations "k8s.io/client-go/applyconfigurations/rbac/v1"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -612,6 +613,48 @@ var _ = Describe("NamespacedClient", func() {
 			changedDep.SetNamespace("test")
 
 			Expect(getClient().SubResource("status").Patch(ctx, changedDep, client.MergeFrom(dep))).To(HaveOccurred())
+		})
+
+		It("should change objects via status apply", func(ctx SpecContext) {
+			deploymentAC, err := appsv1applyconfigurations.ExtractDeployment(dep, "test-owner")
+			Expect(err).NotTo(HaveOccurred())
+			deploymentAC.WithStatus(&appsv1applyconfigurations.DeploymentStatusApplyConfiguration{
+				Replicas: ptr.To(int32(99)),
+			})
+
+			Expect(getClient().SubResource("status").Apply(ctx, deploymentAC, client.FieldOwner("test-owner"))).To(Succeed())
+
+			actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).NotTo(BeNil())
+			Expect(actual.GetNamespace()).To(BeEquivalentTo(ns))
+			Expect(actual.Status.Replicas).To(BeEquivalentTo(99))
+		})
+
+		It("should set namespace on ApplyConfiguration when applying via SubResource", func(ctx SpecContext) {
+			deploymentAC := appsv1applyconfigurations.Deployment(dep.Name, "")
+			deploymentAC.WithStatus(&appsv1applyconfigurations.DeploymentStatusApplyConfiguration{
+				Replicas: ptr.To(int32(50)),
+			})
+
+			Expect(getClient().SubResource("status").Apply(ctx, deploymentAC, client.FieldOwner("test-owner"))).To(Succeed())
+
+			actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual).NotTo(BeNil())
+			Expect(actual.GetNamespace()).To(BeEquivalentTo(ns))
+			Expect(actual.Status.Replicas).To(BeEquivalentTo(50))
+		})
+
+		It("should fail when applying via SubResource with conflicting namespace", func(ctx SpecContext) {
+			deploymentAC := appsv1applyconfigurations.Deployment(dep.Name, "different-namespace")
+			deploymentAC.WithStatus(&appsv1applyconfigurations.DeploymentStatusApplyConfiguration{
+				Replicas: ptr.To(int32(25)),
+			})
+
+			err := getClient().SubResource("status").Apply(ctx, deploymentAC, client.FieldOwner("test-owner"))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("namespace"))
 		})
 	})
 

@@ -337,7 +337,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		}()
 
 		// Verify the go routine above is now waiting for an item.
-		Eventually(q.waiters.Load).Should(Equal(int64(1)))
+		Eventually(q.(*priorityqueue[string]).waiters.Load).Should(Equal(int64(1)))
 		Consistently(getUnblocked).ShouldNot(BeClosed())
 
 		// shut down

@@ -92,6 +92,15 @@ var _ = Describe("ClientWithFieldValidation", func() {
 		err = wrappedClient.SubResource("status").Patch(ctx, invalidStatusNode, patch)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("strict decoding error: unknown field \"status.invalidStatusField\""))
+
+		invalidApplyConfig := client.ApplyConfigurationFromUnstructured(invalidStatusNode)
+		err = wrappedClient.Status().Apply(ctx, invalidApplyConfig, client.FieldOwner("test-owner"))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("field not declared in schema"))
+
+		err = wrappedClient.SubResource("status").Apply(ctx, invalidApplyConfig, client.FieldOwner("test-owner"))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("field not declared in schema"))
 	})
 })
 
@@ -110,11 +119,13 @@ func TestWithStrictFieldValidation(t *testing.T) {
 	_ = wrappedClient.Status().Create(ctx, dummyObj, dummyObj)
 	_ = wrappedClient.Status().Update(ctx, dummyObj)
 	_ = wrappedClient.Status().Patch(ctx, dummyObj, nil)
+	_ = wrappedClient.Status().Apply(ctx, corev1applyconfigurations.Namespace(""), nil)
 	_ = wrappedClient.SubResource("some-subresource").Create(ctx, dummyObj, dummyObj)
 	_ = wrappedClient.SubResource("some-subresource").Update(ctx, dummyObj)
 	_ = wrappedClient.SubResource("some-subresource").Patch(ctx, dummyObj, nil)
+	_ = wrappedClient.SubResource("some-subresource").Apply(ctx, corev1applyconfigurations.Namespace(""), nil)
 
-	if expectedCalls := 10; calls != expectedCalls {
+	if expectedCalls := 12; calls != expectedCalls {
 		t.Fatalf("wrong number of calls to assertions: expected=%d; got=%d", expectedCalls, calls)
 	}
 }
@@ -276,6 +287,10 @@ func testFieldValidationClient(t *testing.T, expectedFieldValidation string, cal
 			if got := co.FieldValidation; expectedFieldValidation != got {
 				t.Fatalf("wrong field validation: expected=%q; got=%q", expectedFieldValidation, got)
 			}
+			return nil
+		},
+		SubResourceApply: func(ctx context.Context, c client.Client, subResourceName string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+			callback()
 			return nil
 		},
 	}).Build()

@@ -290,9 +290,18 @@ func (w *priorityqueue[T]) GetWithPriority() (_ T, priority int, shutdown bool) 
 
 	w.notifyItemOrWaiterAdded()
 
-	item := <-w.get
-
-	return item.Key, item.Priority, w.shutdown.Load()
+	select {
+	case <-w.done:
+		// Return if the queue was shutdown while we were already waiting for an item here.
+		// For example controller workers are continuously calling GetWithPriority and
+		// GetWithPriority is blocking the workers if there are no items in the queue.
+		// If the controller and accordingly the queue is then shut down, without this code
+		// branch the controller workers remain blocked here and are unable to shut down.
+		var zero T
+		return zero, 0, true
+	case item := <-w.get:
+		return item.Key, item.Priority, w.shutdown.Load()
+	}
 }
 
 func (w *priorityqueue[T]) Get() (item T, shutdown bool) {

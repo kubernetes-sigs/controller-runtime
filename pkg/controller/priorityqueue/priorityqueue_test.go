@@ -321,6 +321,32 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(isShutDown).To(BeTrue())
 	})
 
+	It("Get from priority queue should get unblocked when the priority queue is shut down", func() {
+		q, _ := newQueue()
+
+		getUnblocked := make(chan struct{})
+
+		go func() {
+			defer GinkgoRecover()
+			defer close(getUnblocked)
+
+			item, priority, isShutDown := q.GetWithPriority()
+			Expect(item).To(Equal(""))
+			Expect(priority).To(Equal(0))
+			Expect(isShutDown).To(BeTrue())
+		}()
+
+		// Verify the go routine above is now waiting for an item.
+		Eventually(q.waiters.Load).Should(Equal(int64(1)))
+		Consistently(getUnblocked).ShouldNot(BeClosed())
+
+		// shut down
+		q.ShutDown()
+
+		// Verify the shutdown unblocked the go routine.
+		Eventually(getUnblocked).Should(BeClosed())
+	})
+
 	It("items are included in Len() and the queueDepth metric once they are ready", func() {
 		q, metrics := newQueue()
 		defer q.ShutDown()

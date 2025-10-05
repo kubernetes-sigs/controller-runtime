@@ -93,11 +93,10 @@ var _ = Describe("Controllerworkqueue", func() {
 		q.AddWithOpts(AddOpts{}, "foo")
 		q.AddWithOpts(AddOpts{}, "foo")
 
-		Consistently(q.Len).Should(Equal(1))
+		Expect(q.Len()).To(Equal(1))
 
-		cwq := q.(*priorityqueue[string])
-		cwq.lockedLock.Lock()
-		Expect(cwq.locked.Len()).To(Equal(0))
+		q.lockedLock.Lock()
+		Expect(q.locked.Len()).To(Equal(0))
 
 		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 1}))
 		Expect(metrics.adds["test"]).To(Equal(1))
@@ -156,22 +155,13 @@ var _ = Describe("Controllerworkqueue", func() {
 	})
 
 	It("returns an item only after after has passed", func() {
-		q, metrics := newQueue()
+		q, metrics, forwardQueueTimeBy := newQueueWithTimeForwarder()
 		defer q.ShutDown()
 
-		now := time.Now().Round(time.Second)
-		nowLock := sync.Mutex{}
-		tick := make(chan time.Time)
-
-		cwq := q.(*priorityqueue[string])
-		cwq.now = func() time.Time {
-			nowLock.Lock()
-			defer nowLock.Unlock()
-			return now
-		}
-		cwq.tick = func(d time.Duration) <-chan time.Time {
+		originalTick := q.tick
+		q.tick = func(d time.Duration) <-chan time.Time {
 			Expect(d).To(Equal(time.Second))
-			return tick
+			return originalTick(d)
 		}
 
 		retrievedItem := make(chan struct{})
@@ -186,10 +176,7 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Consistently(retrievedItem).ShouldNot(BeClosed())
 
-		nowLock.Lock()
-		now = now.Add(time.Second)
-		nowLock.Unlock()
-		tick <- now
+		forwardQueueTimeBy(time.Second)
 		Eventually(retrievedItem).Should(BeClosed())
 
 		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
@@ -223,20 +210,11 @@ var _ = Describe("Controllerworkqueue", func() {
 	})
 
 	It("returns multiple items with after in correct order", func() {
-		q, metrics := newQueue()
+		q, metrics, forwardQueueTimeBy := newQueueWithTimeForwarder()
 		defer q.ShutDown()
 
-		now := time.Now().Round(time.Second)
-		nowLock := sync.Mutex{}
-		tick := make(chan time.Time)
-
-		cwq := q.(*priorityqueue[string])
-		cwq.now = func() time.Time {
-			nowLock.Lock()
-			defer nowLock.Unlock()
-			return now
-		}
-		cwq.tick = func(d time.Duration) <-chan time.Time {
+		originalTick := q.tick
+		q.tick = func(d time.Duration) <-chan time.Time {
 			// What a bunch of bs. Deferring in here causes
 			// ginkgo to deadlock, presumably because it
 			// never returns after the defer. Not deferring
@@ -254,7 +232,7 @@ var _ = Describe("Controllerworkqueue", func() {
 				Expect(d).To(Or(Equal(200*time.Millisecond), Equal(time.Second)))
 			}()
 			<-done
-			return tick
+			return originalTick(d)
 		}
 
 		retrievedItem := make(chan struct{})
@@ -276,10 +254,7 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Consistently(retrievedItem).ShouldNot(BeClosed())
 
-		nowLock.Lock()
-		now = now.Add(time.Second)
-		nowLock.Unlock()
-		tick <- now
+		forwardQueueTimeBy(time.Second)
 		Eventually(retrievedItem).Should(BeClosed())
 		Eventually(retrievedSecondItem).Should(BeClosed())
 
@@ -462,21 +437,12 @@ var _ = Describe("Controllerworkqueue", func() {
 	})
 
 	It("When adding items with rateLimit, previous items' rateLimit should not affect subsequent items", func() {
-		q, metrics := newQueue()
+		q, metrics, forwardQueueTimeBy := newQueueWithTimeForwarder()
 		defer q.ShutDown()
 
-		now := time.Now().Round(time.Second)
-		nowLock := sync.Mutex{}
-		tick := make(chan time.Time)
-
-		cwq := q.(*priorityqueue[string])
-		cwq.rateLimiter = workqueue.NewTypedItemExponentialFailureRateLimiter[string](5*time.Millisecond, 1000*time.Second)
-		cwq.now = func() time.Time {
-			nowLock.Lock()
-			defer nowLock.Unlock()
-			return now
-		}
-		cwq.tick = func(d time.Duration) <-chan time.Time {
+		q.rateLimiter = workqueue.NewTypedItemExponentialFailureRateLimiter[string](5*time.Millisecond, 1000*time.Second)
+		originalTick := q.tick
+		q.tick = func(d time.Duration) <-chan time.Time {
 			done := make(chan struct{})
 			go func() {
 				defer GinkgoRecover()
@@ -485,7 +451,7 @@ var _ = Describe("Controllerworkqueue", func() {
 				Expect(d).To(Or(Equal(5*time.Millisecond), Equal(635*time.Millisecond)))
 			}()
 			<-done
-			return tick
+			return originalTick(d)
 		}
 
 		retrievedItem := make(chan struct{})
@@ -504,22 +470,16 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		// after 7 calls, the next When("bar") call will return 640ms.
 		for range 7 {
-			cwq.rateLimiter.When("bar")
+			q.rateLimiter.When("bar")
 		}
 		q.AddWithOpts(AddOpts{RateLimited: true}, "foo", "bar")
 
 		Consistently(retrievedItem).ShouldNot(BeClosed())
-		nowLock.Lock()
-		now = now.Add(5 * time.Millisecond)
-		nowLock.Unlock()
-		tick <- now
+		forwardQueueTimeBy(5 * time.Millisecond)
 		Eventually(retrievedItem).Should(BeClosed())
 
 		Consistently(retrievedSecondItem).ShouldNot(BeClosed())
-		nowLock.Lock()
-		now = now.Add(635 * time.Millisecond)
-		nowLock.Unlock()
-		tick <- now
+		forwardQueueTimeBy(635 * time.Millisecond)
 		Eventually(retrievedSecondItem).Should(BeClosed())
 
 		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
@@ -692,7 +652,31 @@ func TestFuzzPriorityQueue(t *testing.T) {
 	wg.Wait()
 }
 
-func newQueue() (PriorityQueue[string], *fakeMetricsProvider) {
+func newQueueWithTimeForwarder() (_ *priorityqueue[string], _ *fakeMetricsProvider, forwardQueueTime func(time.Duration)) {
+	q, m := newQueue()
+
+	now := time.Now().Round(time.Second)
+	nowLock := sync.Mutex{}
+	tick := make(chan time.Time)
+
+	q.now = func() time.Time {
+		nowLock.Lock()
+		defer nowLock.Unlock()
+		return now
+	}
+	q.tick = func(d time.Duration) <-chan time.Time {
+		return tick
+	}
+
+	return q, m, func(d time.Duration) {
+		nowLock.Lock()
+		now = now.Add(d)
+		nowLock.Unlock()
+		tick <- now
+	}
+}
+
+func newQueue() (*priorityqueue[string], *fakeMetricsProvider) {
 	metrics := newFakeMetricsProvider()
 	q := New("test", func(o *Opts[string]) {
 		o.MetricProvider = metrics
@@ -710,7 +694,7 @@ func newQueue() (PriorityQueue[string], *fakeMetricsProvider) {
 		}
 		return upstreamTick(d)
 	}
-	return q, metrics
+	return q.(*priorityqueue[string]), metrics
 }
 
 type btreeInteractionValidator struct {

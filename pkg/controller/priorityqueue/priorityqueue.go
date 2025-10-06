@@ -234,7 +234,7 @@ func (w *priorityqueue[T]) spin() {
 
 			// Items in the queue tree are sorted first by priority and second by readiness, so
 			// items with a lower priority might be ready further down in the queue.
-			// In search for ready items we use the pivot item to skip through priorities without ascending the whole tree.
+			// We iterate through the priorities high to low until we find a ready item
 			pivot := item[T]{
 				Key:          key,
 				AddedCounter: 0,

@@ -1894,6 +1894,8 @@ var _ = Describe("manger.Manager", func() {
 			return nil
 		}).ShouldNot(BeNil())
 
+		time.Sleep(3 * time.Second)
+
 		By("making sure there's no extra go routines still running after we stop")
 		cancel()
 		<-doneCh

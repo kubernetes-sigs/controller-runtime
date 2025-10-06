@@ -231,6 +231,10 @@ func (w *priorityqueue[T]) spin() {
 			var toDelete []*item[T]
 
 			var key T
+
+			// Items in the queue tree are sorted first by priority and second by readiness, so
+			// items with a lower priority might be ready further down in the queue.
+			// In search for ready items we use the pivot item to skip through priorities without ascending the whole tree.
 			pivot := item[T]{
 				Key:          key,
 				AddedCounter: 0,
@@ -254,6 +258,7 @@ func (w *priorityqueue[T]) spin() {
 								nextItemReadyAt = *item.ReadyAt
 							}
 
+							// Adjusting the pivot item moves the ascend to the next lower priority
 							pivot.Priority = item.Priority - 1
 							pivotChange = true
 							return false

@@ -197,6 +197,47 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(metrics.retries["test"]).To(Equal(1))
 	})
 
+	It("returns high priority item that became ready before low priority item", func() {
+		q, metrics := newQueue()
+		defer q.ShutDown()
+
+		now := time.Now().Round(time.Second)
+		nowLock := sync.Mutex{}
+		tick := make(chan time.Time)
+
+		cwq := q.(*priorityqueue[string])
+		cwq.now = func() time.Time {
+			nowLock.Lock()
+			defer nowLock.Unlock()
+			return now
+		}
+		tickSetup := make(chan any)
+		cwq.tick = func(d time.Duration) <-chan time.Time {
+			Expect(d).To(Equal(time.Second))
+			close(tickSetup)
+			return tick
+		}
+
+		lowPriority := -100
+		highPriority := 0
+		q.AddWithOpts(AddOpts{After: 0, Priority: &lowPriority}, "foo")
+		q.AddWithOpts(AddOpts{After: time.Second, Priority: &highPriority}, "prio")
+
+		Eventually(tickSetup).Should(BeClosed())
+
+		nowLock.Lock()
+		now = now.Add(time.Second)
+		nowLock.Unlock()
+		tick <- now
+		key, prio, _ := q.GetWithPriority()
+
+		Expect(key).To(Equal("prio"))
+		Expect(prio).To(Equal(0))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{-100: 1, 0: 0}))
+		Expect(metrics.adds["test"]).To(Equal(2))
+		Expect(metrics.retries["test"]).To(Equal(1))
+	})
+
 	It("returns an item to a waiter as soon as it has one", func() {
 		q, metrics := newQueue()
 		defer q.ShutDown()

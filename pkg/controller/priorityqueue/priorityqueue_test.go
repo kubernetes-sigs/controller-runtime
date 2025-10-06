@@ -198,24 +198,15 @@ var _ = Describe("Controllerworkqueue", func() {
 	})
 
 	It("returns high priority item that became ready before low priority item", func() {
-		q, metrics := newQueue()
+		q, metrics, forwardQueueTimeBy := newQueueWithTimeForwarder()
 		defer q.ShutDown()
 
-		now := time.Now().Round(time.Second)
-		nowLock := sync.Mutex{}
-		tick := make(chan time.Time)
 		tickSetup := make(chan any)
-
-		cwq := q.(*priorityqueue[string])
-		cwq.now = func() time.Time {
-			nowLock.Lock()
-			defer nowLock.Unlock()
-			return now
-		}
-		cwq.tick = func(d time.Duration) <-chan time.Time {
+		originalTick := q.tick
+		q.tick = func(d time.Duration) <-chan time.Time {
 			Expect(d).To(Equal(time.Second))
 			close(tickSetup)
-			return tick
+			return originalTick(d)
 		}
 
 		lowPriority := -100
@@ -225,11 +216,7 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Eventually(tickSetup).Should(BeClosed())
 
-		nowLock.Lock()
-		now = now.Add(time.Second)
-		nowLock.Unlock()
-		tick <- now
-
+		forwardQueueTimeBy(1 * time.Second)
 		key, prio, _ := q.GetWithPriority()
 
 		Expect(key).To(Equal("prio"))

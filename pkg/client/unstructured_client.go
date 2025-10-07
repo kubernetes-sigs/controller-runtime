@@ -112,7 +112,7 @@ func (uc *unstructuredClient) Delete(ctx context.Context, obj Object, opts ...De
 		Name(o.name).
 		Body(deleteOpts.AsDeleteOptions()).
 		Do(ctx).
-		Error()
+		Into(obj)
 }
 
 // DeleteAllOf implements client.Client.

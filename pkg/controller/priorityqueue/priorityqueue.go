@@ -43,6 +43,7 @@ type Opts[T comparable] struct {
 	RateLimiter    workqueue.TypedRateLimiter[T]
 	MetricProvider workqueue.MetricsProvider
 	Log            logr.Logger
+	Hooks          Hooks[T]
 }
 
 // Opt allows to configure a PriorityQueue.
@@ -80,6 +81,7 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 		get:               make(chan item[T]),
 		now:               time.Now,
 		tick:              time.Tick,
+		hooks:             hooks[T]{opts.Hooks},
 	}
 
 	go pq.spin()
@@ -130,6 +132,9 @@ type priorityqueue[T comparable] struct {
 	// Configurable for testing
 	now  func() time.Time
 	tick func(time.Duration) <-chan time.Time
+
+	// Hooks to customize behavior
+	hooks hooks[T]
 }
 
 func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
@@ -165,6 +170,7 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 			w.queue.ReplaceOrInsert(item)
 			if item.ReadyAt == nil {
 				w.metrics.add(key, item.Priority)
+				w.hooks.OnBecameReady(key, item.Priority)
 			}
 			w.addedCounter++
 			continue
@@ -184,6 +190,7 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 		if item.ReadyAt != nil && (readyAt == nil || readyAt.Before(*item.ReadyAt)) {
 			if readyAt == nil && !w.becameReady.Has(key) {
 				w.metrics.add(key, item.Priority)
+				w.hooks.OnBecameReady(key, item.Priority)
 			}
 			item.ReadyAt = readyAt
 		}
@@ -266,6 +273,7 @@ func (w *priorityqueue[T]) spin() {
 						if !w.becameReady.Has(item.Key) {
 							w.metrics.add(item.Key, item.Priority)
 							w.becameReady.Insert(item.Key)
+							w.hooks.OnBecameReady(item.Key, item.Priority)
 						}
 					}
 

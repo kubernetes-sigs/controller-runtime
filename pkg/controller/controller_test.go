@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/goleak"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
 
@@ -37,6 +38,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
+
+type mockHooks struct {
+	onBecameReadyCalls []onBecameReadyCall
+}
+
+type onBecameReadyCall struct {
+	item     reconcile.Request
+	priority int
+}
+
+func (m *mockHooks) OnBecameReady(item reconcile.Request, priority int) {
+	m.onBecameReadyCalls = append(m.onBecameReadyCalls, onBecameReadyCall{
+		item:     item,
+		priority: priority,
+	})
+}
 
 var _ = Describe("controller.Controller", func() {
 	rec := reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
@@ -474,6 +491,47 @@ var _ = Describe("controller.Controller", func() {
 			q := ctrl.NewQueue("foo", nil)
 			_, ok = q.(priorityqueue.PriorityQueue[reconcile.Request])
 			Expect(ok).To(BeFalse())
+		})
+
+		It("should use the PriorityQueueOptions if specified and NewQueue is not specified", func() {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			customRateLimiter := workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](5*time.Millisecond, 1000*time.Second)
+
+			hooks := &mockHooks{}
+
+			c, err := controller.New("new-controller-18", m, controller.Options{
+				Reconciler:  reconcile.Func(nil),
+				RateLimiter: customRateLimiter,
+				PriorityQueueOptions: []priorityqueue.Opt[reconcile.Request]{
+					func(o *priorityqueue.Opts[reconcile.Request]) {
+						o.Hooks = hooks
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrl, ok := c.(*internalcontroller.Controller[reconcile.Request])
+			Expect(ok).To(BeTrue())
+
+			Expect(ctrl.RateLimiter).To(BeIdenticalTo(customRateLimiter))
+			q := ctrl.NewQueue("controller-pq-hooks", nil)
+			q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+				Name:      "foo",
+				Namespace: "bar",
+			}})
+			item, shutdown := q.Get()
+			Expect(shutdown).To(BeFalse())
+			Expect(item).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{
+				Name:      "foo",
+				Namespace: "bar",
+			}}))
+			Expect(hooks.onBecameReadyCalls).To(HaveLen(1))
+			Expect(hooks.onBecameReadyCalls[0].item).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{
+				Name:      "foo",
+				Namespace: "bar",
+			}}))
 		})
 
 		It("should set EnableWarmup correctly", func() {

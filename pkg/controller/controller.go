@@ -81,6 +81,13 @@ type TypedOptions[request comparable] struct {
 	// Only use a custom NewQueue if you know what you are doing.
 	NewQueue func(controllerName string, rateLimiter workqueue.TypedRateLimiter[request]) workqueue.TypedRateLimitingInterface[request]
 
+	// PriorityQueueOptions are options for the priority queue.
+	// Only used if UsePriorityQueue is true and NewQueue is not set.
+	//
+	// NOTE: LOW LEVEL PRIMITIVE!
+	// Only pass custom options to the priority queue if you know what you are doing.
+	PriorityQueueOptions []priorityqueue.Opt[request]
+
 	// Logger will be used to build a default LogConstructor if unset.
 	Logger logr.Logger
 
@@ -260,10 +267,13 @@ func NewTypedUnmanaged[request comparable](name string, options TypedOptions[req
 	if options.NewQueue == nil {
 		options.NewQueue = func(controllerName string, rateLimiter workqueue.TypedRateLimiter[request]) workqueue.TypedRateLimitingInterface[request] {
 			if ptr.Deref(options.UsePriorityQueue, true) {
-				return priorityqueue.New(controllerName, func(o *priorityqueue.Opts[request]) {
+				var opts []priorityqueue.Opt[request]
+				opts = append(opts, func(o *priorityqueue.Opts[request]) {
 					o.Log = options.Logger.WithValues("controller", controllerName)
 					o.RateLimiter = rateLimiter
 				})
+				opts = append(opts, options.PriorityQueueOptions...)
+				return priorityqueue.New(controllerName, opts...)
 			}
 			return workqueue.NewTypedRateLimitingQueueWithConfig(rateLimiter, workqueue.TypedRateLimitingQueueConfig[request]{
 				Name: controllerName,

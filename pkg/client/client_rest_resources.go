@@ -124,7 +124,7 @@ func (c *clientRestResources) getResource(obj any) (*resourceMeta, error) {
 	r, known := resourceByType[gvk]
 	c.mu.RUnlock()
 
-	if known {
+	if known && !forceDisableProtoBuf {
 		return r, nil
 	}
 

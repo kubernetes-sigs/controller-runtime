@@ -48,11 +48,8 @@ type clientRestResources struct {
 	// codecs are used to create a REST client for a gvk
 	codecs serializer.CodecFactory
 
-	// structuredResourceByType stores structured type metadata
-	structuredResourceByType map[cacheKey]*resourceMeta
-
-	// unstructuredResourceByType stores unstructured type metadata
-	unstructuredResourceByType map[cacheKey]*resourceMeta
+	// resourceByType stores type metadata
+	resourceByType map[cacheKey]*resourceMeta
 
 	mu sync.RWMutex
 }
@@ -127,12 +124,7 @@ func (c *clientRestResources) getResource(obj any) (*resourceMeta, error) {
 
 	cacheKey := cacheKey{gvk: gvk, forceDisableProtoBuf: forceDisableProtoBuf}
 
-	resourceByType := c.structuredResourceByType
-	if isUnstructured {
-		resourceByType = c.unstructuredResourceByType
-	}
-
-	r, known := resourceByType[cacheKey]
+	r, known := c.resourceByType[cacheKey]
 
 	c.mu.RUnlock()
 
@@ -152,7 +144,7 @@ func (c *clientRestResources) getResource(obj any) (*resourceMeta, error) {
 	if err != nil {
 		return nil, err
 	}
-	resourceByType[cacheKey] = r
+	c.resourceByType[cacheKey] = r
 	return r, err
 }
 

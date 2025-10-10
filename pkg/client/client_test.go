@@ -960,10 +960,6 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 					"some-key": []byte("some-value"),
 				}
 				secretObject := &corev1.Secret{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Secret",
-						APIVersion: "v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "secret-one",
 						Namespace: "default",
@@ -973,8 +969,6 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				secretApplyConfiguration := corev1applyconfigurations.
 					Secret("secret-two", "default").
-					WithAPIVersion("v1").
-					WithKind("Secret").
 					WithData(data)
 
 				err = cl.Create(ctx, secretObject)
@@ -983,11 +977,11 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				err = cl.Apply(ctx, secretApplyConfiguration, &client.ApplyOptions{FieldManager: "test-manager"})
 				Expect(err).NotTo(HaveOccurred())
 
-				cm, err := clientset.CoreV1().Secrets(ptr.Deref(secretApplyConfiguration.GetNamespace(), "")).Get(ctx, ptr.Deref(secretApplyConfiguration.GetName(), ""), metav1.GetOptions{})
+				secret, err := clientset.CoreV1().Secrets(ptr.Deref(secretApplyConfiguration.GetNamespace(), "")).Get(ctx, ptr.Deref(secretApplyConfiguration.GetName(), ""), metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(cm.Data).To(BeComparableTo(data))
-				Expect(cm.Data).To(BeComparableTo(secretApplyConfiguration.Data))
+				Expect(secret.Data).To(BeComparableTo(data))
+				Expect(secret.Data).To(BeComparableTo(secretApplyConfiguration.Data))
 
 				data = map[string][]byte{
 					"some-key": []byte("some-new-value"),
@@ -997,11 +991,11 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				err = cl.Apply(ctx, secretApplyConfiguration, &client.ApplyOptions{FieldManager: "test-manager"})
 				Expect(err).NotTo(HaveOccurred())
 
-				cm, err = clientset.CoreV1().Secrets(ptr.Deref(secretApplyConfiguration.GetNamespace(), "")).Get(ctx, ptr.Deref(secretApplyConfiguration.GetName(), ""), metav1.GetOptions{})
+				secret, err = clientset.CoreV1().Secrets(ptr.Deref(secretApplyConfiguration.GetNamespace(), "")).Get(ctx, ptr.Deref(secretApplyConfiguration.GetName(), ""), metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(cm.Data).To(BeComparableTo(data))
-				Expect(cm.Data).To(BeComparableTo(secretApplyConfiguration.Data))
+				Expect(secret.Data).To(BeComparableTo(data))
+				Expect(secret.Data).To(BeComparableTo(secretApplyConfiguration.Data))
 			})
 		})
 	})

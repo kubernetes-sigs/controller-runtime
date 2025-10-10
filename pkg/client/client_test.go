@@ -953,6 +953,58 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(cm.Data).To(BeComparableTo(data))
 				Expect(cm.Data).To(BeComparableTo(obj.Data))
 			})
+
+			It("should create a secret without SSA and later create update a secret using SSA", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+				data := map[string][]byte{
+					"some-key": []byte("some-value"),
+				}
+				secretObject := &corev1.Secret{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Secret",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "secret-one",
+						Namespace: "default",
+					},
+					Data: data,
+				}
+
+				secretApplyConfiguration := corev1applyconfigurations.
+					Secret("secret-two", "default").
+					WithAPIVersion("v1").
+					WithKind("Secret").
+					WithData(data)
+
+				err = cl.Create(ctx, secretObject)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = cl.Apply(ctx, secretApplyConfiguration, &client.ApplyOptions{FieldManager: "test-manager"})
+				Expect(err).NotTo(HaveOccurred())
+
+				cm, err := clientset.CoreV1().Secrets(ptr.Deref(secretApplyConfiguration.GetNamespace(), "")).Get(ctx, ptr.Deref(secretApplyConfiguration.GetName(), ""), metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cm.Data).To(BeComparableTo(data))
+				Expect(cm.Data).To(BeComparableTo(secretApplyConfiguration.Data))
+
+				data = map[string][]byte{
+					"some-key": []byte("some-new-value"),
+				}
+				secretApplyConfiguration.Data = data
+
+				err = cl.Apply(ctx, secretApplyConfiguration, &client.ApplyOptions{FieldManager: "test-manager"})
+				Expect(err).NotTo(HaveOccurred())
+
+				cm, err = clientset.CoreV1().Secrets(ptr.Deref(secretApplyConfiguration.GetNamespace(), "")).Get(ctx, ptr.Deref(secretApplyConfiguration.GetName(), ""), metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cm.Data).To(BeComparableTo(data))
+				Expect(cm.Data).To(BeComparableTo(secretApplyConfiguration.Data))
+			})
 		})
 	})
 

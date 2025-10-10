@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -95,6 +96,9 @@ type Manager interface {
 
 	// GetControllerOptions returns controller global configuration options.
 	GetControllerOptions() config.Controller
+
+	// GetConverterRegistry FIXME.
+	GetConverterRegistry() conversion.Registry
 }
 
 // Options are the arguments for creating a new Manager.
@@ -445,6 +449,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		logger:                        options.Logger,
 		elected:                       make(chan struct{}),
 		webhookServer:                 options.WebhookServer,
+		conversionRegistry:            conversion.NewRegistry(cluster.GetScheme()),
 		leaderElectionID:              options.LeaderElectionID,
 		leaseDuration:                 *options.LeaseDuration,
 		renewDeadline:                 *options.RenewDeadline,

@@ -262,7 +262,7 @@ type ConversionWebhook struct {
 }
 
 func createConversionWebhook(mgr manager.Manager) *ConversionWebhook {
-	conversionHandler := conversion.NewWebhookHandler(mgr.GetScheme())
+	conversionHandler := conversion.NewWebhookHandler(mgr.GetScheme(), conversion.NewRegistry(mgr.GetScheme()))
 	httpClient := http.Client{
 		// Setting a timeout to not get stuck when calling the readiness probe.
 		Timeout: 5 * time.Second,

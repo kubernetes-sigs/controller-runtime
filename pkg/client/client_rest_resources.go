@@ -49,10 +49,17 @@ type clientRestResources struct {
 	codecs serializer.CodecFactory
 
 	// structuredResourceByType stores structured type metadata
-	structuredResourceByType map[schema.GroupVersionKind]*resourceMeta
+	structuredResourceByType map[cacheKey]*resourceMeta
+
 	// unstructuredResourceByType stores unstructured type metadata
-	unstructuredResourceByType map[schema.GroupVersionKind]*resourceMeta
-	mu                         sync.RWMutex
+	unstructuredResourceByType map[cacheKey]*resourceMeta
+
+	mu sync.RWMutex
+}
+
+type cacheKey struct {
+	gvk                  schema.GroupVersionKind
+	forceDisableProtoBuf bool
 }
 
 // newResource maps obj to a Kubernetes Resource and constructs a client for that Resource.
@@ -117,14 +124,19 @@ func (c *clientRestResources) getResource(obj any) (*resourceMeta, error) {
 	// It's better to do creation work twice than to not let multiple
 	// people make requests at once
 	c.mu.RLock()
+
+	cacheKey := cacheKey{gvk: gvk, forceDisableProtoBuf: forceDisableProtoBuf}
+
 	resourceByType := c.structuredResourceByType
 	if isUnstructured {
 		resourceByType = c.unstructuredResourceByType
 	}
-	r, known := resourceByType[gvk]
+
+	r, known := resourceByType[cacheKey]
+
 	c.mu.RUnlock()
 
-	if known && !forceDisableProtoBuf {
+	if known {
 		return r, nil
 	}
 
@@ -140,7 +152,7 @@ func (c *clientRestResources) getResource(obj any) (*resourceMeta, error) {
 	if err != nil {
 		return nil, err
 	}
-	resourceByType[gvk] = r
+	resourceByType[cacheKey] = r
 	return r, err
 }
 

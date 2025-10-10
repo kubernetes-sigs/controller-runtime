@@ -951,6 +951,52 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(cm.Data).To(BeComparableTo(data))
 				Expect(cm.Data).To(BeComparableTo(obj.Data))
 			})
+
+			It("should create a secret without SSA and later create update a secret using SSA", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+				data := map[string][]byte{
+					"some-key": []byte("some-value"),
+				}
+				secretObject := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "secret-one",
+						Namespace: "default",
+					},
+					Data: data,
+				}
+
+				secretApplyConfiguration := corev1applyconfigurations.
+					Secret("secret-two", "default").
+					WithData(data)
+
+				err = cl.Create(ctx, secretObject)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = cl.Apply(ctx, secretApplyConfiguration, &client.ApplyOptions{FieldManager: "test-manager"})
+				Expect(err).NotTo(HaveOccurred())
+
+				secret, err := clientset.CoreV1().Secrets(ptr.Deref(secretApplyConfiguration.GetNamespace(), "")).Get(ctx, ptr.Deref(secretApplyConfiguration.GetName(), ""), metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(secret.Data).To(BeComparableTo(data))
+				Expect(secret.Data).To(BeComparableTo(secretApplyConfiguration.Data))
+
+				data = map[string][]byte{
+					"some-key": []byte("some-new-value"),
+				}
+				secretApplyConfiguration.Data = data
+
+				err = cl.Apply(ctx, secretApplyConfiguration, &client.ApplyOptions{FieldManager: "test-manager"})
+				Expect(err).NotTo(HaveOccurred())
+
+				secret, err = clientset.CoreV1().Secrets(ptr.Deref(secretApplyConfiguration.GetNamespace(), "")).Get(ctx, ptr.Deref(secretApplyConfiguration.GetName(), ""), metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(secret.Data).To(BeComparableTo(data))
+				Expect(secret.Data).To(BeComparableTo(secretApplyConfiguration.Data))
+			})
 		})
 	})
 

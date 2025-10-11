@@ -154,143 +154,6 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(metrics.adds["test"]).To(Equal(1))
 	})
 
-	It("returns an item only after after has passed", func() {
-		q, metrics, forwardQueueTimeBy := newQueueWithTimeForwarder()
-		defer q.ShutDown()
-
-		originalTick := q.tick
-		q.tick = func(d time.Duration) <-chan time.Time {
-			Expect(d).To(Equal(time.Second))
-			return originalTick(d)
-		}
-
-		retrievedItem := make(chan struct{})
-
-		go func() {
-			defer GinkgoRecover()
-			q.GetWithPriority()
-			close(retrievedItem)
-		}()
-
-		q.AddWithOpts(AddOpts{After: time.Second}, "foo")
-
-		Consistently(retrievedItem).ShouldNot(BeClosed())
-
-		forwardQueueTimeBy(time.Second)
-		Eventually(retrievedItem).Should(BeClosed())
-
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
-		Expect(metrics.adds["test"]).To(Equal(1))
-		Expect(metrics.retries["test"]).To(Equal(1))
-	})
-
-	It("returns high priority item that became ready before low priority item", func() {
-		q, metrics, forwardQueueTimeBy := newQueueWithTimeForwarder()
-		defer q.ShutDown()
-
-		tickSetup := make(chan any)
-		originalTick := q.tick
-		q.tick = func(d time.Duration) <-chan time.Time {
-			Expect(d).To(Equal(time.Second))
-			close(tickSetup)
-			return originalTick(d)
-		}
-
-		lowPriority := -100
-		highPriority := 0
-		q.AddWithOpts(AddOpts{After: 0, Priority: &lowPriority}, "foo")
-		q.AddWithOpts(AddOpts{After: time.Second, Priority: &highPriority}, "prio")
-
-		Eventually(tickSetup).Should(BeClosed())
-
-		forwardQueueTimeBy(1 * time.Second)
-		key, prio, _ := q.GetWithPriority()
-
-		Expect(key).To(Equal("prio"))
-		Expect(prio).To(Equal(0))
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{-100: 1, 0: 0}))
-		Expect(metrics.adds["test"]).To(Equal(2))
-		Expect(metrics.retries["test"]).To(Equal(1))
-	})
-
-	It("returns an item to a waiter as soon as it has one", func() {
-		q, metrics := newQueue()
-		defer q.ShutDown()
-
-		retrieved := make(chan struct{})
-		go func() {
-			defer GinkgoRecover()
-			item, _, _ := q.GetWithPriority()
-			Expect(item).To(Equal("foo"))
-			close(retrieved)
-		}()
-
-		// We are waiting for the GetWithPriority() call to be blocked
-		// on retrieving an item. As golang doesn't provide a way to
-		// check if something is listening on a channel without
-		// sending them a message, I can't think of a way to do this
-		// without sleeping.
-		time.Sleep(time.Second)
-		q.AddWithOpts(AddOpts{}, "foo")
-		Eventually(retrieved).Should(BeClosed())
-
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
-		Expect(metrics.adds["test"]).To(Equal(1))
-	})
-
-	It("returns multiple items with after in correct order", func() {
-		q, metrics, forwardQueueTimeBy := newQueueWithTimeForwarder()
-		defer q.ShutDown()
-
-		originalTick := q.tick
-		q.tick = func(d time.Duration) <-chan time.Time {
-			// What a bunch of bs. Deferring in here causes
-			// ginkgo to deadlock, presumably because it
-			// never returns after the defer. Not deferring
-			// hides the actual assertion result and makes
-			// it complain that there should be a defer.
-			// Move the assertion into a goroutine just to
-			// get around that mess.
-			done := make(chan struct{})
-			go func() {
-				defer GinkgoRecover()
-				defer close(done)
-
-				// This is not deterministic and depends on which of
-				// Add() or Spin() gets the lock first.
-				Expect(d).To(Or(Equal(200*time.Millisecond), Equal(time.Second)))
-			}()
-			<-done
-			return originalTick(d)
-		}
-
-		retrievedItem := make(chan struct{})
-		retrievedSecondItem := make(chan struct{})
-
-		go func() {
-			defer GinkgoRecover()
-			first, _, _ := q.GetWithPriority()
-			Expect(first).To(Equal("bar"))
-			close(retrievedItem)
-
-			second, _, _ := q.GetWithPriority()
-			Expect(second).To(Equal("foo"))
-			close(retrievedSecondItem)
-		}()
-
-		q.AddWithOpts(AddOpts{After: time.Second}, "foo")
-		q.AddWithOpts(AddOpts{After: 200 * time.Millisecond}, "bar")
-
-		Consistently(retrievedItem).ShouldNot(BeClosed())
-
-		forwardQueueTimeBy(time.Second)
-		Eventually(retrievedItem).Should(BeClosed())
-		Eventually(retrievedSecondItem).Should(BeClosed())
-
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
-		Expect(metrics.adds["test"]).To(Equal(2))
-	})
-
 	It("doesn't include non-ready items in Len()", func() {
 		q, metrics := newQueue()
 		defer q.ShutDown()
@@ -323,79 +186,6 @@ var _ = Describe("Controllerworkqueue", func() {
 		Expect(item1).To(Equal(""))
 		Expect(priority1).To(Equal(0))
 		Expect(isShutDown).To(BeTrue())
-	})
-
-	It("Get from priority queue should get unblocked when the priority queue is shut down", func() {
-		q, _ := newQueue()
-
-		getUnblocked := make(chan struct{})
-
-		go func() {
-			defer GinkgoRecover()
-			defer close(getUnblocked)
-
-			item, priority, isShutDown := q.GetWithPriority()
-			Expect(item).To(Equal(""))
-			Expect(priority).To(Equal(0))
-			Expect(isShutDown).To(BeTrue())
-		}()
-
-		// Verify the go routine above is now waiting for an item.
-		Eventually(q.waiters.Load).Should(Equal(int64(1)))
-		Consistently(getUnblocked).ShouldNot(BeClosed())
-
-		// shut down
-		q.ShutDown()
-
-		// Verify the shutdown unblocked the go routine.
-		Eventually(getUnblocked).Should(BeClosed())
-	})
-
-	It("items are included in Len() and the queueDepth metric once they are ready", func() {
-		q, metrics := newQueue()
-		defer q.ShutDown()
-
-		q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "foo")
-		q.AddWithOpts(AddOpts{}, "baz")
-		q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "bar")
-		q.AddWithOpts(AddOpts{}, "bal")
-
-		Expect(q.Len()).To(Equal(2))
-		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 2}))
-		metrics.mu.Unlock()
-		time.Sleep(time.Second)
-		Expect(q.Len()).To(Equal(4))
-		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 4}))
-		metrics.mu.Unlock()
-
-		// Drain queue
-		for range 4 {
-			item, _ := q.Get()
-			q.Done(item)
-		}
-		Expect(q.Len()).To(Equal(0))
-		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
-		metrics.mu.Unlock()
-
-		// Validate that doing it again still works to notice bugs with removing
-		// it from the queues becameReady tracking.
-		q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "foo")
-		q.AddWithOpts(AddOpts{}, "baz")
-		q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "bar")
-		q.AddWithOpts(AddOpts{}, "bal")
-
-		Expect(q.Len()).To(Equal(2))
-		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 2}))
-		metrics.mu.Unlock()
-		time.Sleep(time.Second)
-		Expect(q.Len()).To(Equal(4))
-		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 4}))
-		metrics.mu.Unlock()
 	})
 
 	It("returns many items", func() {
@@ -459,87 +249,6 @@ var _ = Describe("Controllerworkqueue", func() {
 		metrics.mu.Lock()
 		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
 		metrics.mu.Unlock()
-	})
-
-	It("Updates metrics correctly for an item whose requeueAfter expired that gets added again without requeueAfter", func() {
-		q, metrics := newQueue()
-		defer q.ShutDown()
-
-		q.AddWithOpts(AddOpts{After: 50 * time.Millisecond}, "foo")
-		time.Sleep(100 * time.Millisecond)
-
-		Expect(q.Len()).To(Equal(1))
-		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 1}))
-		metrics.mu.Unlock()
-
-		q.AddWithOpts(AddOpts{}, "foo")
-		Expect(q.Len()).To(Equal(1))
-		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 1}))
-		metrics.mu.Unlock()
-
-		// Get the item to ensure the codepath in
-		// `spin` for the metrics is passed by so
-		// that this starts failing if it incorrectly
-		// calls `metrics.add` again.
-		item, _ := q.Get()
-		Expect(item).To(Equal("foo"))
-		Expect(q.Len()).To(Equal(0))
-		metrics.mu.Lock()
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
-		metrics.mu.Unlock()
-	})
-
-	It("When adding items with rateLimit, previous items' rateLimit should not affect subsequent items", func() {
-		q, metrics, forwardQueueTimeBy := newQueueWithTimeForwarder()
-		defer q.ShutDown()
-
-		q.rateLimiter = workqueue.NewTypedItemExponentialFailureRateLimiter[string](5*time.Millisecond, 1000*time.Second)
-		originalTick := q.tick
-		q.tick = func(d time.Duration) <-chan time.Time {
-			done := make(chan struct{})
-			go func() {
-				defer GinkgoRecover()
-				defer close(done)
-
-				Expect(d).To(Or(Equal(5*time.Millisecond), Equal(635*time.Millisecond)))
-			}()
-			<-done
-			return originalTick(d)
-		}
-
-		retrievedItem := make(chan struct{})
-		retrievedSecondItem := make(chan struct{})
-
-		go func() {
-			defer GinkgoRecover()
-			first, _, _ := q.GetWithPriority()
-			Expect(first).To(Equal("foo"))
-			close(retrievedItem)
-
-			second, _, _ := q.GetWithPriority()
-			Expect(second).To(Equal("bar"))
-			close(retrievedSecondItem)
-		}()
-
-		// after 7 calls, the next When("bar") call will return 640ms.
-		for range 7 {
-			q.rateLimiter.When("bar")
-		}
-		q.AddWithOpts(AddOpts{RateLimited: true}, "foo", "bar")
-
-		Consistently(retrievedItem).ShouldNot(BeClosed())
-		forwardQueueTimeBy(5 * time.Millisecond)
-		Eventually(retrievedItem).Should(BeClosed())
-
-		Consistently(retrievedSecondItem).ShouldNot(BeClosed())
-		forwardQueueTimeBy(635 * time.Millisecond)
-		Eventually(retrievedSecondItem).Should(BeClosed())
-
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
-		Expect(metrics.adds["test"]).To(Equal(2))
-		Expect(metrics.retries["test"]).To(Equal(2))
 	})
 })
 
@@ -772,4 +481,298 @@ func (b *btreeInteractionValidator) Delete(item *item[string]) (*item[string], b
 		panic(fmt.Sprintf("Delete: item %v not found", item))
 	}
 	return old, existed
+}
+
+func TestItemIsOnlyReturnedAfterAfterHasPassed(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+	q, metrics, forwardQueueTimeBy := newQueueWithTimeForwarder()
+	defer q.ShutDown()
+
+	originalTick := q.tick
+	q.tick = func(d time.Duration) <-chan time.Time {
+		g.Expect(d).To(Equal(time.Second))
+		return originalTick(d)
+	}
+
+	retrievedItem := make(chan struct{})
+
+	go func() {
+		q.GetWithPriority()
+		close(retrievedItem)
+	}()
+
+	q.AddWithOpts(AddOpts{After: time.Second}, "foo")
+
+	g.Consistently(retrievedItem).ShouldNot(BeClosed())
+
+	forwardQueueTimeBy(time.Second)
+	g.Eventually(retrievedItem).Should(BeClosed())
+
+	g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
+	g.Expect(metrics.adds["test"]).To(Equal(1))
+	g.Expect(metrics.retries["test"]).To(Equal(1))
+}
+
+func TestHighPriorityItemThatBecameReadyIsReturnedBeforeLowPriorityItem(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	q, metrics, forwardQueueTimeBy := newQueueWithTimeForwarder()
+	defer q.ShutDown()
+
+	tickSetup := make(chan any)
+	originalTick := q.tick
+	q.tick = func(d time.Duration) <-chan time.Time {
+		g.Expect(d).To(Equal(time.Second))
+		close(tickSetup)
+		return originalTick(d)
+	}
+
+	lowPriority := -100
+	highPriority := 0
+	q.AddWithOpts(AddOpts{After: 0, Priority: &lowPriority}, "foo")
+	q.AddWithOpts(AddOpts{After: time.Second, Priority: &highPriority}, "prio")
+
+	g.Eventually(tickSetup).Should(BeClosed())
+
+	forwardQueueTimeBy(1 * time.Second)
+	key, prio, _ := q.GetWithPriority()
+
+	g.Expect(key).To(Equal("prio"))
+	g.Expect(prio).To(Equal(0))
+	g.Expect(metrics.depth["test"]).To(Equal(map[int]int{-100: 1, 0: 0}))
+	g.Expect(metrics.adds["test"]).To(Equal(2))
+	g.Expect(metrics.retries["test"]).To(Equal(1))
+}
+
+func TestItemIsReturnedAsSoonAsPossible(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	q, metrics := newQueue()
+	defer q.ShutDown()
+
+	retrieved := make(chan struct{})
+	go func() {
+		item, _, _ := q.GetWithPriority()
+		g.Expect(item).To(Equal("foo"))
+		close(retrieved)
+	}()
+
+	// We are waiting for the GetWithPriority() call to be blocked
+	// on retrieving an item. As golang doesn't provide a way to
+	// check if something is listening on a channel without
+	// sending them a message, I can't think of a way to do this
+	// without sleeping.
+	time.Sleep(time.Second)
+	q.AddWithOpts(AddOpts{}, "foo")
+	g.Eventually(retrieved).Should(BeClosed())
+
+	g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
+	g.Expect(metrics.adds["test"]).To(Equal(1))
+}
+
+func TestMultipleItemsWithAfterAreReturnedInCorrectOrder(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	q, metrics, forwardQueueTimeBy := newQueueWithTimeForwarder()
+	defer q.ShutDown()
+
+	originalTick := q.tick
+	q.tick = func(d time.Duration) <-chan time.Time {
+		// This is not deterministic and depends on which of
+		// Add() or Spin() gets the lock first.
+		g.Expect(d).To(Or(Equal(200*time.Millisecond), Equal(time.Second)))
+		return originalTick(d)
+	}
+
+	retrievedItem := make(chan struct{})
+	retrievedSecondItem := make(chan struct{})
+
+	go func() {
+		first, _, _ := q.GetWithPriority()
+		g.Expect(first).To(Equal("bar"))
+		close(retrievedItem)
+
+		second, _, _ := q.GetWithPriority()
+		g.Expect(second).To(Equal("foo"))
+		close(retrievedSecondItem)
+	}()
+
+	q.AddWithOpts(AddOpts{After: time.Second}, "foo")
+	q.AddWithOpts(AddOpts{After: 200 * time.Millisecond}, "bar")
+
+	g.Consistently(retrievedItem).ShouldNot(BeClosed())
+
+	forwardQueueTimeBy(time.Second)
+	g.Eventually(retrievedItem).Should(BeClosed())
+	g.Eventually(retrievedSecondItem).Should(BeClosed())
+
+	g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
+	g.Expect(metrics.adds["test"]).To(Equal(2))
+}
+
+func TestGetFromPriorityQueueIsUnblockedOnShutdown(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	q, _ := newQueue()
+
+	getUnblocked := make(chan struct{})
+
+	go func() {
+		defer close(getUnblocked)
+
+		item, priority, isShutDown := q.GetWithPriority()
+		g.Expect(item).To(Equal(""))
+		g.Expect(priority).To(Equal(0))
+		g.Expect(isShutDown).To(BeTrue())
+	}()
+
+	// Verify the go routine above is now waiting for an item.
+	g.Eventually(q.waiters.Load).Should(Equal(int64(1)))
+	g.Consistently(getUnblocked).ShouldNot(BeClosed())
+
+	// shut down
+	q.ShutDown()
+
+	// Verify the shutdown unblocked the go routine.
+	g.Eventually(getUnblocked).Should(BeClosed())
+}
+
+func TestItemsAreInludedInLenAndMetricsOnceTheyAreReady(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	q, metrics := newQueue()
+	defer q.ShutDown()
+
+	q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "foo")
+	q.AddWithOpts(AddOpts{}, "baz")
+	q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "bar")
+	q.AddWithOpts(AddOpts{}, "bal")
+
+	g.Expect(q.Len()).To(Equal(2))
+	metrics.mu.Lock()
+	g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 2}))
+	metrics.mu.Unlock()
+	time.Sleep(time.Second)
+	g.Expect(q.Len()).To(Equal(4))
+	metrics.mu.Lock()
+	g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 4}))
+	metrics.mu.Unlock()
+
+	// Drain queue
+	for range 4 {
+		item, _ := q.Get()
+		q.Done(item)
+	}
+	g.Expect(q.Len()).To(Equal(0))
+	metrics.mu.Lock()
+	g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
+	metrics.mu.Unlock()
+
+	// Validate that doing it again still works to notice bugs with removing
+	// it from the queues becameReady tracking.
+	q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "foo")
+	q.AddWithOpts(AddOpts{}, "baz")
+	q.AddWithOpts(AddOpts{After: 500 * time.Millisecond}, "bar")
+	q.AddWithOpts(AddOpts{}, "bal")
+
+	g.Expect(q.Len()).To(Equal(2))
+	metrics.mu.Lock()
+	g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 2}))
+	metrics.mu.Unlock()
+	time.Sleep(time.Second)
+	g.Expect(q.Len()).To(Equal(4))
+	metrics.mu.Lock()
+	g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 4}))
+	metrics.mu.Unlock()
+}
+
+func TestMetricsAreUpdatedForItemWhoseRequeueAfterExpiredThatGetsAddedAgainWithoutRequeueAfter(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	q, metrics := newQueue()
+	defer q.ShutDown()
+
+	q.AddWithOpts(AddOpts{After: 50 * time.Millisecond}, "foo")
+	time.Sleep(100 * time.Millisecond)
+
+	g.Expect(q.Len()).To(Equal(1))
+	metrics.mu.Lock()
+	g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 1}))
+	metrics.mu.Unlock()
+
+	q.AddWithOpts(AddOpts{}, "foo")
+	g.Expect(q.Len()).To(Equal(1))
+	metrics.mu.Lock()
+	g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 1}))
+	metrics.mu.Unlock()
+
+	// Get the item to ensure the codepath in
+	// `spin` for the metrics is passed by so
+	// that this starts failing if it incorrectly
+	// calls `metrics.add` again.
+	item, _ := q.Get()
+	g.Expect(item).To(Equal("foo"))
+	g.Expect(q.Len()).To(Equal(0))
+	metrics.mu.Lock()
+	g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
+	metrics.mu.Unlock()
+}
+
+func TesWhenAddingMultipleItemsWithRatelimitTrueTheyDontAffectEachOther(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	q, metrics, forwardQueueTimeBy := newQueueWithTimeForwarder()
+	defer q.ShutDown()
+
+	q.rateLimiter = workqueue.NewTypedItemExponentialFailureRateLimiter[string](5*time.Millisecond, 1000*time.Second)
+	originalTick := q.tick
+	q.tick = func(d time.Duration) <-chan time.Time {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+
+			g.Expect(d).To(Or(Equal(5*time.Millisecond), Equal(635*time.Millisecond)))
+		}()
+		<-done
+		return originalTick(d)
+	}
+
+	retrievedItem := make(chan struct{})
+	retrievedSecondItem := make(chan struct{})
+
+	go func() {
+		first, _, _ := q.GetWithPriority()
+		g.Expect(first).To(Equal("foo"))
+		close(retrievedItem)
+
+		second, _, _ := q.GetWithPriority()
+		g.Expect(second).To(Equal("bar"))
+		close(retrievedSecondItem)
+	}()
+
+	// after 7 calls, the next When("bar") call will return 640ms.
+	for range 7 {
+		q.rateLimiter.When("bar")
+	}
+	q.AddWithOpts(AddOpts{RateLimited: true}, "foo", "bar")
+
+	g.Consistently(retrievedItem).ShouldNot(BeClosed())
+	forwardQueueTimeBy(5 * time.Millisecond)
+	g.Eventually(retrievedItem).Should(BeClosed())
+
+	g.Consistently(retrievedSecondItem).ShouldNot(BeClosed())
+	forwardQueueTimeBy(635 * time.Millisecond)
+	g.Eventually(retrievedSecondItem).Should(BeClosed())
+
+	g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
+	g.Expect(metrics.adds["test"]).To(Equal(2))
+	g.Expect(metrics.retries["test"]).To(Equal(2))
 }

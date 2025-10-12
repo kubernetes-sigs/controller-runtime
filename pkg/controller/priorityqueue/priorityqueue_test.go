@@ -771,13 +771,7 @@ func TesWhenAddingMultipleItemsWithRatelimitTrueTheyDontAffectEachOther(t *testi
 		q.rateLimiter = workqueue.NewTypedItemExponentialFailureRateLimiter[string](5*time.Millisecond, 1000*time.Second)
 		originalTick := q.tick
 		q.tick = func(d time.Duration) <-chan time.Time {
-			done := make(chan struct{})
-			go func() {
-				defer close(done)
-
-				g.Expect(d).To(Or(Equal(5*time.Millisecond), Equal(635*time.Millisecond)))
-			}()
-			<-done
+			g.Expect(d).To(Or(Equal(5*time.Millisecond), Equal(635*time.Millisecond)))
 			return originalTick(d)
 		}
 

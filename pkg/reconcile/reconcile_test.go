@@ -103,10 +103,10 @@ var _ = Describe("reconcile", func() {
 		})
 
 		It("should allow unwrapping inner error from terminal error", func() {
-			inner := apierrors.NewGone("")
+			inner := apierrors.NewResourceExpired("")
 			terminalError := reconcile.TerminalError(inner)
 
-			Expect(apierrors.IsGone(terminalError)).To(BeTrue())
+			Expect(apierrors.IsResourceExpired(terminalError)).To(BeTrue())
 		})
 
 		It("should handle nil terminal errors properly", func() {

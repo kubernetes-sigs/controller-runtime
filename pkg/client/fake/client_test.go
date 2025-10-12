@@ -1489,7 +1489,7 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("should be able to build with given tracker and get resource", func(ctx SpecContext) {
-		clientSet := fake.NewSimpleClientset(dep)
+		clientSet := fake.NewClientset(dep)
 		cl := NewClientBuilder().WithRuntimeObjects(dep2).WithObjectTracker(clientSet.Tracker()).Build()
 
 		By("Getting a deployment")

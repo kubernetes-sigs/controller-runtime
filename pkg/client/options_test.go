@@ -307,7 +307,7 @@ var _ = Describe("MatchingLabels", func() {
 		r, _ := listOpts.LabelSelector.Requirements()
 		_, err := labels.NewRequirement(r[0].Key(), r[0].Operator(), r[0].Values().List())
 		Expect(err).To(HaveOccurred())
-		expectedErrMsg := `values[0][k]: Invalid value: "axahm2EJ8Phiephe2eixohbee9eGeiyees1thuozi1xoh0GiuH3diewi8iem7Nui": must be no more than 63 characters`
+		expectedErrMsg := `values[0][k]: Invalid value: "axahm2EJ8Phiephe2eixohbee9eGeiyees1thuozi1xoh0GiuH3diewi8iem7Nui": must be no more than 63 bytes`
 		Expect(err.Error()).To(Equal(expectedErrMsg))
 	})
 

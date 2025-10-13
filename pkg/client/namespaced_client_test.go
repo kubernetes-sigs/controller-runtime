@@ -53,6 +53,8 @@ var _ = Describe("NamespacedClient", func() {
 
 		err := rbacv1.AddToScheme(sch)
 		Expect(err).ToNot(HaveOccurred())
+		err = corev1.AddToScheme(sch)
+		Expect(err).ToNot(HaveOccurred())
 		err = appsv1.AddToScheme(sch)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -144,6 +146,13 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(getClient().List(ctx, result, opts)).NotTo(HaveOccurred())
 			Expect(len(result.Items)).To(BeEquivalentTo(1))
 			Expect(result.Items[0]).To(BeEquivalentTo(*dep))
+		})
+
+		It("should successfully List objects when object is not namespaced scoped", func(ctx SpecContext) {
+			result := &corev1.NodeList{}
+			opts := &client.ListOptions{}
+			Expect(getClient().List(ctx, result, opts)).NotTo(HaveOccurred())
+			Expect(result.Items).NotTo(BeEmpty())
 		})
 
 		It("should List objects from the namespace specified in the client", func(ctx SpecContext) {

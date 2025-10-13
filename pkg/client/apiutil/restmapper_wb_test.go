@@ -192,7 +192,7 @@ func TestLazyRestMapper_fetchGroupVersionResourcesLocked_CacheInvalidation(t *te
 			g := gmg.NewWithT(t)
 			m := &mapper{
 				mapper:      restmapper.NewDiscoveryRESTMapper([]*restmapper.APIGroupResources{}),
-				client:      &fakeAggregatedDiscoveryClient{DiscoveryInterface: fake.NewSimpleClientset().Discovery()},
+				client:      &fakeAggregatedDiscoveryClient{DiscoveryInterface: fake.NewClientset().Discovery()},
 				apiGroups:   tt.cachedAPIGroups,
 				knownGroups: tt.cachedKnownGroups,
 			}

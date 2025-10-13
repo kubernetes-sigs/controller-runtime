@@ -44,6 +44,7 @@ import (
 
 var _ = Describe("NamespacedClient", func() {
 	var dep *appsv1.Deployment
+	var nameSpace *corev1.Namespace
 	var acDep *appsv1applyconfigurations.DeploymentApplyConfiguration
 	var ns = "default"
 	var count uint64 = 0
@@ -81,6 +82,12 @@ var _ = Describe("NamespacedClient", func() {
 					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}},
 					Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
 				},
+			},
+		}
+		nameSpace = &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   fmt.Sprintf("namespace-%v", count),
+				Labels: map[string]string{"name": fmt.Sprintf("namespace-%v", count)},
 			},
 		}
 		acDep = appsv1applyconfigurations.Deployment(dep.Name, "").
@@ -134,10 +141,13 @@ var _ = Describe("NamespacedClient", func() {
 			var err error
 			dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			nameSpace, err = clientset.CoreV1().Namespaces().Create(ctx, nameSpace, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func(ctx SpecContext) {
 			deleteDeployment(ctx, dep, ns)
+			deleteNamespace(ctx, nameSpace)
 		})
 
 		It("should successfully List objects when namespace is not specified with the object", func(ctx SpecContext) {
@@ -150,7 +160,7 @@ var _ = Describe("NamespacedClient", func() {
 		})
 
 		It("should successfully List objects when object is not namespaced scoped", func(ctx SpecContext) {
-			result := &corev1.NodeList{}
+			result := &corev1.NamespaceList{}
 			opts := &client.ListOptions{}
 			Expect(getClient().List(ctx, result, opts)).NotTo(HaveOccurred())
 			Expect(result.Items).NotTo(BeEmpty())

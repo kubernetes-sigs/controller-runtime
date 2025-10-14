@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
+	"testing"
+	"testing/synctest"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -108,30 +110,6 @@ var _ = Describe("runnables", func() {
 		Expect(r.Warmup.startQueue).To(HaveLen(1))
 		Expect(r.LeaderElection.startQueue).To(HaveLen(1))
 		Expect(r.Others.startQueue).To(BeEmpty())
-	})
-
-	It("should execute the Warmup function when Warmup group is started", func(ctx SpecContext) {
-		var warmupExecuted atomic.Bool
-
-		warmupRunnable := newWarmupRunnableFunc(
-			func(c context.Context) error {
-				<-c.Done()
-				return nil
-			},
-			func(c context.Context) error {
-				warmupExecuted.Store(true)
-				return nil
-			},
-		)
-
-		r := newRunnables(defaultBaseContext, errCh)
-		Expect(r.Add(warmupRunnable)).To(Succeed())
-
-		// Start the Warmup group
-		Expect(r.Warmup.Start(ctx)).To(Succeed())
-
-		// Verify warmup function was called
-		Expect(warmupExecuted.Load()).To(BeTrue())
 	})
 
 	It("should propagate errors from Warmup function to error channel", func(ctx SpecContext) {
@@ -383,4 +361,34 @@ func newLeaderElectionAndWarmupRunnable(
 
 func (r leaderElectionAndWarmupRunnable) NeedLeaderElection() bool {
 	return r.needLeaderElection
+}
+
+func TestWarmupFunctionIsExecutedWhenWarmupGroupIsStarted(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		g := NewWithT(t)
+		var warmupExecuted atomic.Bool
+
+		warmupRunnable := newWarmupRunnableFunc(
+			func(c context.Context) error {
+				<-c.Done()
+				return nil
+			},
+			func(c context.Context) error {
+				warmupExecuted.Store(true)
+				return nil
+			},
+		)
+
+		r := newRunnables(defaultBaseContext, make(chan error))
+		g.Expect(r.Add(warmupRunnable)).To(Succeed())
+
+		// Start the Warmup group
+		g.Expect(r.Warmup.Start(t.Context())).To(Succeed())
+		synctest.Wait()
+
+		// Verify warmup function was called
+		g.Expect(warmupExecuted.Load()).To(BeTrue())
+		r.Warmup.StopAndWait(t.Context())
+	})
 }

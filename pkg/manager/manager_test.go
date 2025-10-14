@@ -36,7 +36,10 @@ import (
 	"go.uber.org/goleak"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
+	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -60,7 +63,6 @@ var _ = Describe("manger.Manager", func() {
 			m, err := New(nil, Options{})
 			Expect(m).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Config"))
-
 		})
 
 		It("should return an error if it can't create a RestMapper", func() {
@@ -70,7 +72,6 @@ var _ = Describe("manger.Manager", func() {
 			})
 			Expect(m).To(BeNil())
 			Expect(err).To(Equal(expected))
-
 		})
 
 		It("should return an error it can't create a client.Client", func() {
@@ -207,7 +208,6 @@ var _ = Describe("manger.Manager", func() {
 				}
 				// Don't leak routines
 				<-mgrDone
-
 			})
 			It("should disable gracefulShutdown when stopping to lead", func(ctx SpecContext) {
 				m, err := New(cfg, Options{
@@ -443,7 +443,6 @@ var _ = Describe("manger.Manager", func() {
 				Expect(ok).To(BeTrue())
 				_, isLeaseLock := cm.resourceLock.(*resourcelock.LeaseLock)
 				Expect(isLeaseLock).To(BeTrue())
-
 			})
 			It("should use the specified ResourceLock", func() {
 				m, err := New(cfg, Options{
@@ -671,7 +670,7 @@ var _ = Describe("manger.Manager", func() {
 	})
 
 	Describe("Start", func() {
-		var startSuite = func(options Options, callbacks ...func(Manager)) {
+		startSuite := func(options Options, callbacks ...func(Manager)) {
 			It("should Start each Component", func(ctx SpecContext) {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
@@ -1256,7 +1255,6 @@ var _ = Describe("manger.Manager", func() {
 				<-managerStopDone
 				Expect(time.Since(beforeDone)).To(BeNumerically(">=", 1500*time.Millisecond))
 			})
-
 		}
 
 		Context("with defaults", func() {
@@ -1790,7 +1788,6 @@ var _ = Describe("manger.Manager", func() {
 			err = m.Start(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("manager already started"))
-
 		})
 	})
 
@@ -1810,7 +1807,7 @@ var _ = Describe("manger.Manager", func() {
 		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 
-	It("should not leak goroutines if the default event broadcaster is used & events are emitted", func(specCtx SpecContext) {
+	It("should not leak goroutines if the deprecated event broadcaster is used & events are emitted", func(specCtx SpecContext) {
 		currentGRs := goleak.IgnoreCurrent()
 
 		m, err := New(cfg, Options{ /* implicit: default setting for EventBroadcaster */ })
@@ -1820,7 +1817,7 @@ var _ = Describe("manger.Manager", func() {
 		ns := corev1.Namespace{}
 		ns.Name = "default"
 
-		recorder := m.GetEventRecorderFor("rock-and-roll")
+		recorder := m.GetEventRecorderFor("rock-and-roll") //nolint:staticcheck
 		Expect(m.Add(RunnableFunc(func(_ context.Context) error {
 			recorder.Event(&ns, "Warning", "BallroomBlitz", "yeah, yeah, yeah-yeah-yeah")
 			return nil
@@ -1858,6 +1855,60 @@ var _ = Describe("manger.Manager", func() {
 		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 
+	It("should not leak goroutines if the default event broadcaster is used & events are emitted", func(specCtx SpecContext) {
+		currentGRs := goleak.IgnoreCurrent()
+
+		m, err := New(cfg, Options{ /* implicit: default setting for EventBroadcaster */ })
+		Expect(err).NotTo(HaveOccurred())
+
+		By("adding a runnable that emits an event")
+		ns := corev1.Namespace{}
+		ns.Name = "default"
+
+		recorder := m.GetEventRecorder("rock-and-roll")
+		Expect(m.Add(RunnableFunc(func(_ context.Context) error {
+			recorder.Eventf(&ns, nil, "Warning", "BallroomBlitz", "dance action", "yeah, yeah, yeah-yeah-yeah")
+			return nil
+		}))).To(Succeed())
+
+		By("starting the manager & waiting till we've sent our event")
+		ctx, cancel := context.WithCancel(specCtx)
+		doneCh := make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			defer close(doneCh)
+			Expect(m.Start(ctx)).To(Succeed())
+		}()
+		<-m.Elected()
+
+		Eventually(func() *eventsv1.Event {
+			evts, err := clientset.EventsV1().Events("").List(ctx,
+				metav1.ListOptions{FieldSelector: fields.OneTermEqualSelector("regarding.name", ns.Name).String()})
+			Expect(err).NotTo(HaveOccurred())
+
+			for i, evt := range evts.Items {
+				if evt.Reason == "BallroomBlitz" {
+					return &evts.Items[i]
+				}
+			}
+			return nil
+		}).ShouldNot(BeNil())
+
+		// Sleep between broadcasting start and shutdown to prevent a race condition
+		// that causes goroutines to leak.
+		// See pkg/internal/recorder/recorder.go:103 for more info.
+		time.Sleep(3 * time.Second)
+
+		By("making sure there's no extra go routines still running after we stop")
+		cancel()
+		<-doneCh
+
+		// force-close keep-alive connections.  These'll time anyway (after
+		// like 30s or so) but force it to speed up the tests.
+		clientTransport.CloseIdleConnections()
+		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
+	})
+
 	It("should not leak goroutines when a runnable returns error slowly after being signaled to stop", func(specCtx SpecContext) {
 		// This test reproduces the race condition where the manager's Start method
 		// exits due to context cancellation, leaving no one to drain errChan
@@ -1872,7 +1923,7 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Add the slow runnable that will return an error after some delay
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			slowRunnable := RunnableFunc(func(c context.Context) error {
 				<-c.Done()
 
@@ -1938,10 +1989,15 @@ var _ = Describe("manger.Manager", func() {
 		Expect(m.GetFieldIndexer()).To(Equal(mgr.cluster.GetFieldIndexer()))
 	})
 
+	It("should provide a function to get the deprecated EventRecorder", func() {
+		m, err := New(cfg, Options{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetEventRecorderFor("test")).NotTo(BeNil()) //nolint:staticcheck
+	})
 	It("should provide a function to get the EventRecorder", func() {
 		m, err := New(cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(m.GetEventRecorderFor("test")).NotTo(BeNil())
+		Expect(m.GetEventRecorder("test")).NotTo(BeNil())
 	})
 	It("should provide a function to get the APIReader", func() {
 		m, err := New(cfg, Options{})
@@ -2020,8 +2076,7 @@ var _ = Describe("manger.Manager", func() {
 	})
 })
 
-type runnableError struct {
-}
+type runnableError struct{}
 
 func (runnableError) Error() string {
 	return "not feeling like that"

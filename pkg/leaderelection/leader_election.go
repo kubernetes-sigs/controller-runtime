@@ -127,8 +127,10 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 		corev1Client,
 		coordinationClient,
 		resourcelock.ResourceLockConfig{
-			Identity:      id,
-			EventRecorder: recorderProvider.GetEventRecorderFor(id),
+			Identity: id,
+			// TODO(clebs): Replace with the new events API after leader election is updated upstream.
+			// REF: https://github.com/kubernetes/kubernetes/issues/82846
+			EventRecorder: recorderProvider.GetEventRecorderFor(id), //nolint:staticcheck
 		},
 		options.LeaderLabels,
 	)

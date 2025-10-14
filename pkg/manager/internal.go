@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
@@ -256,7 +257,11 @@ func (cm *controllerManager) GetCache() cache.Cache {
 }
 
 func (cm *controllerManager) GetEventRecorderFor(name string) record.EventRecorder {
-	return cm.cluster.GetEventRecorderFor(name)
+	return cm.cluster.GetEventRecorderFor(name) //nolint:staticcheck
+}
+
+func (cm *controllerManager) GetEventRecorder(name string) events.EventRecorder {
+	return cm.cluster.GetEventRecorder(name)
 }
 
 func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {

@@ -60,8 +60,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := ctrl.NewWebhookManagedBy(mgr).
-		For(&corev1.Pod{}).
+	if err := ctrl.NewWebhookManagedBy[*corev1.Pod](mgr).
 		WithDefaulter(&podAnnotator{}).
 		WithValidator(&podValidator{}).
 		Complete(); err != nil {

@@ -19,6 +19,7 @@ package builder_test
 import (
 	"os"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -40,8 +41,8 @@ func ExampleWebhookBuilder() {
 	}
 
 	err = builder.
-		WebhookManagedBy(mgr).         // Create the WebhookManagedBy
-		For(&examplegroup.ChaosPod{}). // ChaosPod is a CRD.
+		WebhookManagedBy[runtime.Object](mgr). // Create the WebhookManagedBy
+		For(&examplegroup.ChaosPod{}).         // ChaosPod is a CRD.
 		Complete()
 	if err != nil {
 		log.Error(err, "could not create webhook")

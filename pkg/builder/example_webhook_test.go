@@ -41,8 +41,7 @@ func ExampleWebhookBuilder() {
 	}
 
 	err = builder.
-		WebhookManagedBy[runtime.Object](mgr). // Create the WebhookManagedBy
-		For(&examplegroup.ChaosPod{}).         // ChaosPod is a CRD.
+		WebhookFor[runtime.Object](mgr, &examplegroup.ChaosPod{}). // Create the WebhookManagedBy
 		Complete()
 	if err != nil {
 		log.Error(err, "could not create webhook")

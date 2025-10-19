@@ -96,7 +96,7 @@ func runTests(admissionReviewVersion string) {
 		err = builder.AddToScheme(m.GetScheme())
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		err = WebhookManagedBy[runtime.Object](m).
+		err = WebhookManagedBy(m).
 			For(&TestDefaulter{}).
 			WithDefaulter(&TestCustomDefaulter{}).
 			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
@@ -173,7 +173,7 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 		customPath := "/custom-defaulting-path"
-		err = WebhookManagedBy[runtime.Object](m).
+		err = WebhookManagedBy(m).
 			For(&TestDefaulter{}).
 			WithDefaulter(&TestCustomDefaulter{}).
 			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
@@ -251,7 +251,7 @@ func runTests(admissionReviewVersion string) {
 		err = builder.AddToScheme(m.GetScheme())
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		err = WebhookManagedBy[runtime.Object](m).
+		err = WebhookManagedBy(m).
 			For(&TestDefaulter{}).
 			WithDefaulter(&TestCustomDefaulter{}).
 			RecoverPanic(true).
@@ -315,7 +315,7 @@ func runTests(admissionReviewVersion string) {
 		err = builder.AddToScheme(m.GetScheme())
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		err = WebhookManagedBy[runtime.Object](m).
+		err = WebhookManagedBy(m).
 			For(&TestValidator{}).
 			WithValidator(&TestCustomValidator{}).
 			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
@@ -434,7 +434,7 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 		customPath := "/custom-validating-path"
-		err = WebhookManagedBy[runtime.Object](m).
+		err = WebhookManagedBy(m).
 			For(&TestValidator{}).
 			WithValidator(&TestCustomValidator{}).
 			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
@@ -513,7 +513,7 @@ func runTests(admissionReviewVersion string) {
 		err = builder.AddToScheme(m.GetScheme())
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		err = WebhookManagedBy[runtime.Object](m).
+		err = WebhookManagedBy(m).
 			For(&TestValidator{}).
 			WithValidator(&TestCustomValidator{}).
 			RecoverPanic(true).
@@ -579,7 +579,7 @@ func runTests(admissionReviewVersion string) {
 		err = builder.AddToScheme(m.GetScheme())
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		err = WebhookManagedBy[runtime.Object](m).
+		err = WebhookManagedBy(m).
 			For(&TestValidator{}).
 			WithValidator(&TestCustomValidator{}).
 			Complete()
@@ -670,7 +670,7 @@ func runTests(admissionReviewVersion string) {
 		err = builder.AddToScheme(m.GetScheme())
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		err = WebhookManagedBy[runtime.Object](m).
+		err = WebhookManagedBy(m).
 			For(&TestDefaulter{}).
 			For(&TestDefaulter{}).
 			Complete()
@@ -688,7 +688,7 @@ func runTests(admissionReviewVersion string) {
 		err = builder.AddToScheme(m.GetScheme())
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		err = WebhookManagedBy[runtime.Object](m).
+		err = WebhookManagedBy(m).
 			For(&TestDefaultValidator{}).
 			WithDefaulter(&TestCustomDefaultValidator{}).
 			WithValidator(&TestCustomDefaultValidator{}).
@@ -773,7 +773,7 @@ func runTests(admissionReviewVersion string) {
 
 		validatingCustomPath := "/custom-validating-path"
 		defaultingCustomPath := "/custom-defaulting-path"
-		err = WebhookManagedBy[runtime.Object](m).
+		err = WebhookManagedBy(m).
 			For(&TestDefaultValidator{}).
 			WithDefaulter(&TestCustomDefaultValidator{}).
 			WithValidator(&TestCustomDefaultValidator{}).
@@ -878,7 +878,7 @@ func runTests(admissionReviewVersion string) {
 		err = builder.AddToScheme(m.GetScheme())
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		err = WebhookManagedBy[runtime.Object](m).
+		err = WebhookManagedBy(m).
 			For(&TestDefaultValidator{}).
 			WithDefaulter(&TestCustomDefaultValidator{}).
 			WithValidator(&TestCustomDefaultValidator{}).
@@ -901,7 +901,7 @@ func runTests(admissionReviewVersion string) {
 		err = builder.AddToScheme(m.GetScheme())
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		err = WebhookManagedBy[runtime.Object](m).
+		err = WebhookManagedBy(m).
 			For(&TestDefaulter{}).
 			WithDefaulter(&TestCustomDefaulter{}).
 			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
@@ -924,7 +924,7 @@ func runTests(admissionReviewVersion string) {
 		err = builder.AddToScheme(m.GetScheme())
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		err = WebhookManagedBy[runtime.Object](m).
+		err = WebhookManagedBy(m).
 			For(&TestValidator{}).
 			WithValidator(&TestCustomValidator{}).
 			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {

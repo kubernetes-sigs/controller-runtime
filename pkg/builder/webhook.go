@@ -56,7 +56,13 @@ type WebhookBuilder[T runtime.Object] struct {
 }
 
 // WebhookManagedBy returns a new webhook builder.
-func WebhookManagedBy[T runtime.Object](m manager.Manager) *WebhookBuilder[T] {
+// Deprecated: Use WebhookFor instead.
+func WebhookManagedBy(m manager.Manager) *WebhookBuilder[runtime.Object] {
+	return &WebhookBuilder[runtime.Object]{mgr: m}
+}
+
+// WebhookFor return a new webhook builder for the provided type T.
+func WebhookFor[T runtime.Object](m manager.Manager, object T) *WebhookBuilder[T] {
 	return &WebhookBuilder[T]{mgr: m}
 }
 

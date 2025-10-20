@@ -64,7 +64,7 @@ func WebhookManagedBy[T runtime.Object](m manager.Manager, object T) *WebhookBui
 
 // WithDefaulter takes an admission.CustomDefaulter interface, a MutatingWebhook with the provided opts (admission.DefaulterOption)
 // will be wired for this type.
-// deprecated: Use WithAdmissionDefaulter instead.
+// Deprecated: Use WithAdmissionDefaulter instead.
 func (blder *WebhookBuilder[T]) WithDefaulter(defaulter admission.CustomDefaulter, opts ...admission.DefaulterOption) *WebhookBuilder[T] {
 	blder.customDefaulter = defaulter
 	blder.customDefaulterOpts = opts
@@ -79,7 +79,7 @@ func (blder *WebhookBuilder[T]) WithAdmissionDefaulter(defaulter admission.Defau
 }
 
 // WithValidator takes a admission.CustomValidator interface, a ValidatingWebhook will be wired for this type.
-// deprecated: Use WithAdmissionValidator instead.
+// Deprecated: Use WithAdmissionValidator instead.
 func (blder *WebhookBuilder[T]) WithValidator(validator admission.CustomValidator) *WebhookBuilder[T] {
 	blder.customValidator = validator
 	return blder
@@ -254,9 +254,6 @@ func (blder *WebhookBuilder[T]) getDefaultingWebhook() *admission.Webhook {
 		w = admission.WithDefaulter(blder.mgr.GetScheme(), blder.defaulter, blder.customDefaulterOpts...)
 	} else if customDefaulter := blder.customDefaulter; customDefaulter != nil {
 		w = admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, customDefaulter, blder.customDefaulterOpts...)
-		if blder.recoverPanic != nil {
-		}
-		return w
 	}
 	if w != nil && blder.recoverPanic != nil {
 		w = w.WithRecoverPanic(*blder.recoverPanic)
@@ -298,12 +295,11 @@ func (blder *WebhookBuilder[T]) getValidatingWebhook() *admission.Webhook {
 		w = admission.WithValidator(blder.mgr.GetScheme(), validator)
 	} else if customValidator := blder.customValidator; customValidator != nil {
 		w = admission.WithCustomValidator(blder.mgr.GetScheme(), blder.apiType, customValidator)
-		return w
 	}
 	if w != nil && blder.recoverPanic != nil {
 		w = w.WithRecoverPanic(*blder.recoverPanic)
 	}
-	return nil
+	return w
 }
 
 func (blder *WebhookBuilder[T]) registerConversionWebhook() error {

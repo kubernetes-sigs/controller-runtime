@@ -23,12 +23,6 @@ import (
 
 // define some aliases for common bits of the webhook functionality
 
-// CustomDefaulter defines functions for setting defaults on resources.
-type CustomDefaulter = admission.CustomDefaulter
-
-// CustomValidator defines functions for validating an operation.
-type CustomValidator = admission.CustomValidator
-
 // AdmissionRequest defines the input for an admission handler.
 // It contains information to identify the object in
 // question (group, version, kind, resource, subresource,

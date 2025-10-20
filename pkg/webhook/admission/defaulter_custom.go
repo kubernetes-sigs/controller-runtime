@@ -36,6 +36,7 @@ type Defaulter[T runtime.Object] interface {
 	Default(ctx context.Context, obj T) error
 }
 
+// CustomDefaulter defines functions for setting defaults on resources.
 // Deprecated: CustomDefaulter is deprecated, use Defaulter instead
 type CustomDefaulter = Defaulter[runtime.Object]
 
@@ -53,7 +54,7 @@ func DefaulterRemoveUnknownOrOmitableFields(o *defaulterOptions) {
 	o.removeUnknownOrOmitableFields = true
 }
 
-// WithDefaulter creates a new Webhook for a CustomDefaulter interface.
+// WithDefaulter creates a new Webhook for a Defaulter interface.
 func WithDefaulter[T runtime.Object](scheme *runtime.Scheme, defaulter Defaulter[T], opts ...DefaulterOption) *Webhook {
 	options := &defaulterOptions{}
 	for _, o := range opts {
@@ -69,6 +70,7 @@ func WithDefaulter[T runtime.Object](scheme *runtime.Scheme, defaulter Defaulter
 	}
 }
 
+// WithCustomDefaulter creates a new Webhook for a CustomDefaulter interface.
 func WithCustomDefaulter(scheme *runtime.Scheme, obj runtime.Object, defaulter CustomDefaulter, opts ...DefaulterOption) *Webhook {
 	options := &defaulterOptions{}
 	for _, o := range opts {

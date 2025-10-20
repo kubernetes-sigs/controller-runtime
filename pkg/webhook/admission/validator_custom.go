@@ -30,7 +30,7 @@ import (
 // Warnings represents warning messages.
 type Warnings []string
 
-// CustomValidator defines functions for validating an operation.
+// Validator defines functions for validating an operation.
 // The object to be validated is passed into methods as a parameter.
 type Validator[T runtime.Object] interface {
 	// ValidateCreate validates the object on creation.
@@ -49,7 +49,8 @@ type Validator[T runtime.Object] interface {
 	ValidateDelete(ctx context.Context, obj T) (warnings Warnings, err error)
 }
 
-// deprecated: CustomValidator is deprecated, use Validator instead
+// CustomValidator defines functions for validating an operation.
+// Deprecated: CustomValidator is deprecated, use Validator instead
 type CustomValidator = Validator[runtime.Object]
 
 // WithValidator creates a new Webhook for validating the provided type.
@@ -63,7 +64,8 @@ func WithValidator[T runtime.Object](scheme *runtime.Scheme, validator Validator
 	}
 }
 
-// deprecated: WithCustomValidator is deprecated, use WithValidator instead
+// WithCustomValidator creates a new Webhook for a CustomValidator.
+// Deprecated: WithCustomValidator is deprecated, use WithValidator instead
 func WithCustomValidator(scheme *runtime.Scheme, obj runtime.Object, validator CustomValidator) *Webhook {
 	return &Webhook{
 		Handler: &validatorForType[runtime.Object]{

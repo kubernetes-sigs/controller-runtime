@@ -154,7 +154,7 @@ var (
 	SetLogger = log.SetLogger
 )
 
-// WebhookManagedBy returns a new webhook builder for the provided type T.
-func WebhookManagedBy[T runtime.Object](mgr manager.Manager, obj T) *builder.WebhookBuilder[T] {
+// NewWebhookManagedBy returns a new webhook builder for the provided type T.
+func NewWebhookManagedBy[T runtime.Object](mgr manager.Manager, obj T) *builder.WebhookBuilder[T] {
 	return builder.WebhookManagedBy(mgr, obj)
 }

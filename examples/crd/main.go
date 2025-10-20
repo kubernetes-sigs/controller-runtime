@@ -129,7 +129,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = ctrl.WebhookManagedBy(mgr, &api.ChaosPod{}).
+	err = ctrl.NewWebhookManagedBy(mgr, &api.ChaosPod{}).
 		Complete()
 	if err != nil {
 		setupLog.Error(err, "unable to create webhook")

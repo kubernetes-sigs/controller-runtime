@@ -60,7 +60,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := ctrl.WebhookManagedBy(mgr, &corev1.Pod{}).
+	if err := ctrl.NewWebhookManagedBy(mgr, &corev1.Pod{}).
 		WithAdmissionDefaulter(&podAnnotator{}).
 		WithAdmissionValidator(&podValidator{}).
 		Complete(); err != nil {

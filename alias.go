@@ -105,10 +105,6 @@ var (
 	// NewControllerManagedBy returns a new controller builder that will be started by the provided Manager.
 	NewControllerManagedBy = builder.ControllerManagedBy
 
-	// NewWebhookManagedBy returns a new webhook builder that will be started by the provided Manager.
-	// Deprecated: Use NewWebhookFor instead.
-	NewWebhookManagedBy = builder.WebhookManagedBy
-
 	// NewManager returns a new Manager for creating Controllers.
 	// Note that if ContentType in the given config is not set, "application/vnd.kubernetes.protobuf"
 	// will be used for all built-in resources of Kubernetes, and "application/json" is for other types
@@ -158,7 +154,7 @@ var (
 	SetLogger = log.SetLogger
 )
 
-// NewWebhookFor returns a new webhook builder for the provided type T.
-func NewWebhookFor[T runtime.Object](mgr manager.Manager, obj T) *builder.WebhookBuilder[T] {
-	return builder.WebhookFor(mgr, obj)
+// WebhookManagedBy returns a new webhook builder for the provided type T.
+func WebhookManagedBy[T runtime.Object](mgr manager.Manager, obj T) *builder.WebhookBuilder[T] {
+	return builder.WebhookManagedBy(mgr, obj)
 }

@@ -60,9 +60,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := ctrl.NewWebhookFor(mgr, &corev1.Pod{}).
-		WithDefaulter(&podAnnotator{}).
-		WithValidator(&podValidator{}).
+	if err := ctrl.WebhookManagedBy(mgr, &corev1.Pod{}).
+		WithAdmissionDefaulter(&podAnnotator{}).
+		WithAdmissionValidator(&podValidator{}).
 		Complete(); err != nil {
 		entryLog.Error(err, "unable to create webhook", "webhook", "Pod")
 		os.Exit(1)

@@ -39,9 +39,11 @@ import (
 // WebhookBuilder builds a Webhook.
 type WebhookBuilder[T runtime.Object] struct {
 	apiType                   runtime.Object
-	customDefaulter           admission.Defaulter[T]
+	customDefaulter           admission.CustomDefaulter
+	defaulter                 admission.Defaulter[T]
 	customDefaulterOpts       []admission.DefaulterOption
-	customValidator           admission.Validator[T]
+	customValidator           admission.CustomValidator
+	validator                 admission.Validator[T]
 	customPath                string
 	customValidatorCustomPath string
 	customDefaulterCustomPath string
@@ -56,43 +58,42 @@ type WebhookBuilder[T runtime.Object] struct {
 }
 
 // WebhookManagedBy returns a new webhook builder.
-// Deprecated: Use WebhookFor instead.
-func WebhookManagedBy(m manager.Manager) *WebhookBuilder[runtime.Object] {
-	return &WebhookBuilder[runtime.Object]{mgr: m}
-}
-
-// WebhookFor return a new webhook builder for the provided type T.
-func WebhookFor[T runtime.Object](m manager.Manager, object T) *WebhookBuilder[T] {
-	return &WebhookBuilder[T]{mgr: m}
-}
-
-// For takes a runtime.Object which should be a CR. It is only required
-// if the webhooks generic type is runtime.Object
-func (blder *WebhookBuilder[T]) For(apiType runtime.Object) *WebhookBuilder[T] {
-	if blder.apiType != nil {
-		blder.err = errors.New("For(...) should only be called once, could not assign multiple objects for webhook registration")
-	}
-	blder.apiType = apiType
-	return blder
+func WebhookManagedBy[T runtime.Object](m manager.Manager, object T) *WebhookBuilder[T] {
+	return &WebhookBuilder[T]{mgr: m, apiType: object}
 }
 
 // WithDefaulter takes an admission.CustomDefaulter interface, a MutatingWebhook with the provided opts (admission.DefaulterOption)
 // will be wired for this type.
-func (blder *WebhookBuilder[T]) WithDefaulter(defaulter admission.Defaulter[T], opts ...admission.DefaulterOption) *WebhookBuilder[T] {
+// deprecated: Use WithAdmissionDefaulter instead.
+func (blder *WebhookBuilder[T]) WithDefaulter(defaulter admission.CustomDefaulter, opts ...admission.DefaulterOption) *WebhookBuilder[T] {
 	blder.customDefaulter = defaulter
 	blder.customDefaulterOpts = opts
 	return blder
 }
 
+// WithAdmissionDefaulter sets up the provided admission.Defaulter in a defaulting webhook.
+func (blder *WebhookBuilder[T]) WithAdmissionDefaulter(defaulter admission.Defaulter[T], opts ...admission.DefaulterOption) *WebhookBuilder[T] {
+	blder.defaulter = defaulter
+	blder.customDefaulterOpts = opts
+	return blder
+}
+
 // WithValidator takes a admission.CustomValidator interface, a ValidatingWebhook will be wired for this type.
-func (blder *WebhookBuilder[T]) WithValidator(validator admission.Validator[T]) *WebhookBuilder[T] {
+// deprecated: Use WithAdmissionValidator instead.
+func (blder *WebhookBuilder[T]) WithValidator(validator admission.CustomValidator) *WebhookBuilder[T] {
 	blder.customValidator = validator
+	return blder
+}
+
+// WithAdmissionValidator sets up the provided admission.Validator in a validating webhook.
+func (blder *WebhookBuilder[T]) WithAdmissionValidator(validator admission.Validator[T]) *WebhookBuilder[T] {
+	blder.validator = validator
 	return blder
 }
 
 // WithConverter takes a func that constructs a converter.Converter.
 // The Converter will then be used by the conversion endpoint for the type passed into For().
-func (blder *WebhookBuilder) WithConverter(converterConstructor func(*runtime.Scheme) (conversion.Converter, error)) *WebhookBuilder {
+func (blder *WebhookBuilder[T]) WithConverter(converterConstructor func(*runtime.Scheme) (conversion.Converter, error)) *WebhookBuilder[T] {
 	blder.converterConstructor = converterConstructor
 	return blder
 }
@@ -248,28 +249,19 @@ func (blder *WebhookBuilder[T]) registerDefaultingWebhook() error {
 }
 
 func (blder *WebhookBuilder[T]) getDefaultingWebhook() *admission.Webhook {
-	if defaulter := blder.customDefaulter; defaulter != nil {
-		var w *admission.Webhook
-		switch any(*new(T)).(type) {
-		case runtime.Object:
-			w = admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, &defaulterWrapper[T]{defaulter: defaulter}, blder.customDefaulterOpts...)
-		default:
-			w = admission.WithDefaulter(blder.mgr.GetScheme(), defaulter, blder.customDefaulterOpts...)
-		}
+	var w *admission.Webhook
+	if defaulter := blder.defaulter; defaulter != nil {
+		w = admission.WithDefaulter(blder.mgr.GetScheme(), blder.defaulter, blder.customDefaulterOpts...)
+	} else if customDefaulter := blder.customDefaulter; customDefaulter != nil {
+		w = admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, customDefaulter, blder.customDefaulterOpts...)
 		if blder.recoverPanic != nil {
-			w = w.WithRecoverPanic(*blder.recoverPanic)
 		}
 		return w
 	}
-	return nil
-}
-
-type defaulterWrapper[T runtime.Object] struct {
-	defaulter admission.Defaulter[T]
-}
-
-func (d *defaulterWrapper[T]) Default(ctx context.Context, obj runtime.Object) error {
-	return d.defaulter.Default(ctx, obj.(T))
+	if w != nil && blder.recoverPanic != nil {
+		w = w.WithRecoverPanic(*blder.recoverPanic)
+	}
+	return w
 }
 
 // registerValidatingWebhook registers a validating webhook if necessary.
@@ -301,18 +293,15 @@ func (blder *WebhookBuilder[T]) registerValidatingWebhook() error {
 }
 
 func (blder *WebhookBuilder[T]) getValidatingWebhook() *admission.Webhook {
-	if validator := blder.customValidator; validator != nil {
-		var w *admission.Webhook
-		switch any(*new(T)).(type) {
-		case runtime.Object:
-			w = admission.WithCustomValidator(blder.mgr.GetScheme(), blder.apiType, &validatorWrapper[T]{validator: validator})
-		default:
-			w = admission.WithValidator(blder.mgr.GetScheme(), validator)
-		}
-		if blder.recoverPanic != nil {
-			w = w.WithRecoverPanic(*blder.recoverPanic)
-		}
+	var w *admission.Webhook
+	if validator := blder.validator; validator != nil {
+		w = admission.WithValidator(blder.mgr.GetScheme(), validator)
+	} else if customValidator := blder.customValidator; customValidator != nil {
+		w = admission.WithCustomValidator(blder.mgr.GetScheme(), blder.apiType, customValidator)
 		return w
+	}
+	if w != nil && blder.recoverPanic != nil {
+		w = w.WithRecoverPanic(*blder.recoverPanic)
 	}
 	return nil
 }

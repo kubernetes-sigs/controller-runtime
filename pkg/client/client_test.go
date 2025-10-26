@@ -2516,6 +2516,43 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(hasDep).To(BeTrue())
 			})
 
+			It("should fetch unstructured collection of objects when setting a non-list kind", func(ctx SpecContext) {
+				// While it is not ideal to omit the List suffix it can easily happen.
+				// As the client is using TrimSuffix(gvk.Kind,"List") this also works.
+				// As it works it is part of our API and we should test it accordingly.
+				By("create an initial object")
+				_, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("listing all objects of that type in the cluster")
+				deps := &unstructured.UnstructuredList{}
+				deps.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Kind:    "Deployment",
+					Version: "v1",
+				})
+				err = cl.List(ctx, deps)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(deps.Items).NotTo(BeEmpty())
+				hasDep := false
+				for _, item := range deps.Items {
+					Expect(item.GroupVersionKind()).To(Equal(schema.GroupVersionKind{
+						Group:   "apps",
+						Kind:    "Deployment",
+						Version: "v1",
+					}))
+					if item.GetName() == dep.Name && item.GetNamespace() == dep.Namespace {
+						hasDep = true
+						break
+					}
+				}
+				Expect(hasDep).To(BeTrue())
+			})
+
 			It("should fetch unstructured collection of objects, even if scheme is empty", func(ctx SpecContext) {
 				By("create an initial object")
 				_, err := clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})

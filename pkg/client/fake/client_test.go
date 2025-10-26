@@ -2939,6 +2939,40 @@ var _ = Describe("Fake client", func() {
 		Expect(result.Object["spec"]).To(Equal(map[string]any{"other": "data"}))
 	})
 
+	It("supports server-side apply of a custom resource via Apply method after List with a non-list kind", func(ctx SpecContext) {
+		cl := NewClientBuilder().Build()
+
+		// Previously this List call lead to addToSchemeIfUnknownAndUnstructuredOrPartial adding FakeResource as UnstructuredList to the scheme.
+		// This broke the subsequent SSA call as it was trying to create a new FakeResource object as an UnstructuredList.
+		// After a fix this List call leads to addToSchemeIfUnknownAndUnstructuredOrPartial adding FakeResourceList as UnstructuredList to the
+		// scheme even if the UnstructuredList here is missing the List suffix.
+		objList := &unstructured.UnstructuredList{}
+		objList.SetAPIVersion("custom/v1")
+		objList.SetKind("FakeResource")
+		Expect(cl.List(ctx, objList)).To(Succeed())
+
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("custom/v1")
+		obj.SetKind("FakeResource")
+		obj.SetName("foo")
+		result := obj.DeepCopy()
+
+		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"some": "data"}, "spec")).To(Succeed())
+
+		applyConfig := client.ApplyConfigurationFromUnstructured(obj)
+		Expect(cl.Apply(ctx, applyConfig, &client.ApplyOptions{FieldManager: "test-manager"})).To(Succeed())
+
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(result), result)).To(Succeed())
+		Expect(result.Object["spec"]).To(Equal(map[string]any{"some": "data"}))
+
+		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "spec")).To(Succeed())
+		applyConfig2 := client.ApplyConfigurationFromUnstructured(obj)
+		Expect(cl.Apply(ctx, applyConfig2, &client.ApplyOptions{FieldManager: "test-manager"})).To(Succeed())
+
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(result), result)).To(Succeed())
+		Expect(result.Object["spec"]).To(Equal(map[string]any{"other": "data"}))
+	})
+
 	It("sets the fieldManager in create, patch and update", func(ctx SpecContext) {
 		owner := "test-owner"
 		cl := client.WithFieldOwner(

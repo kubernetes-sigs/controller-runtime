@@ -1701,6 +1701,12 @@ func (c *fakeClient) addToSchemeIfUnknownAndUnstructuredOrPartial(obj runtime.Ob
 		return err
 	}
 
+	if isUnstructuredList || isPartialList {
+		if !strings.HasSuffix(gvk.Kind, "List") {
+			gvk.Kind += "List"
+		}
+	}
+
 	if !c.scheme.Recognizes(gvk) {
 		c.scheme.AddKnownTypeWithName(gvk, obj)
 	}

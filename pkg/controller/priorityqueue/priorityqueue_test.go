@@ -441,6 +441,60 @@ func newQueueWithTimeForwarder() (_ *priorityqueue[string], _ *fakeMetricsProvid
 	}
 }
 
+func TestHighPriorityItemsAreReturnedBeforeLowPriorityItemMultipleTimes(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		g := NewWithT(t)
+
+		q, metrics := newQueue()
+		defer q.ShutDown()
+
+		const itemsPerPriority = 1000
+		lowPriority := 0
+		lowMiddlePriority := 5
+		middlePriority := 10
+		upperMiddlePriority := 15
+		highPriority := 20
+		for i := range itemsPerPriority {
+			q.AddWithOpts(AddOpts{Priority: &highPriority}, fmt.Sprintf("high-%d", i))
+			q.AddWithOpts(AddOpts{Priority: &upperMiddlePriority}, fmt.Sprintf("upperMiddle-%d", i))
+			q.AddWithOpts(AddOpts{Priority: &middlePriority}, fmt.Sprintf("middle-%d", i))
+			q.AddWithOpts(AddOpts{Priority: &lowMiddlePriority}, fmt.Sprintf("lowMiddle-%d", i))
+			q.AddWithOpts(AddOpts{Priority: &lowPriority}, fmt.Sprintf("low-%d", i))
+		}
+		synctest.Wait()
+
+		for range itemsPerPriority {
+			key, prio, _ := q.GetWithPriority()
+			g.Expect(prio).To(Equal(highPriority))
+			g.Expect(key).To(HavePrefix("high-"))
+		}
+		for range itemsPerPriority {
+			key, prio, _ := q.GetWithPriority()
+			g.Expect(prio).To(Equal(upperMiddlePriority))
+			g.Expect(key).To(HavePrefix("upperMiddle-"))
+		}
+		for range itemsPerPriority {
+			key, prio, _ := q.GetWithPriority()
+			g.Expect(prio).To(Equal(middlePriority))
+			g.Expect(key).To(HavePrefix("middle-"))
+		}
+		for range itemsPerPriority {
+			key, prio, _ := q.GetWithPriority()
+			g.Expect(prio).To(Equal(lowMiddlePriority))
+			g.Expect(key).To(HavePrefix("lowMiddle-"))
+		}
+		for range itemsPerPriority {
+			key, prio, _ := q.GetWithPriority()
+			g.Expect(prio).To(Equal(lowPriority))
+			g.Expect(key).To(HavePrefix("low-"))
+		}
+		g.Expect(metrics.depth["test"]).To(Equal(map[int]int{10: 0, 5: 0, 0: 0, 20: 0, 15: 0}))
+		g.Expect(metrics.adds["test"]).To(Equal(itemsPerPriority * 5))
+		g.Expect(metrics.retries["test"]).To(Equal(0))
+	})
+}
+
 func newQueue() (*priorityqueue[string], *fakeMetricsProvider) {
 	metrics := newFakeMetricsProvider()
 	q := New("test", func(o *Opts[string]) {

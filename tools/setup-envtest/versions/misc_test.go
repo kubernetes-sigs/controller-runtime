@@ -36,13 +36,13 @@ var _ = Describe("Concrete", func() {
 	Describe("when ordering relative to other versions", func() {
 		ver1163 := Concrete{Major: 1, Minor: 16, Patch: 3}
 		Specify("newer patch should be newer", func() {
-			Expect(ver1163.NewerThan(Concrete{Major: 1, Minor: 16})).To(BeTrue())
+			Expect(ver1163.Compare(Concrete{Major: 1, Minor: 16})).To(Equal(1))
 		})
 		Specify("newer minor should be newer", func() {
-			Expect(ver1163.NewerThan(Concrete{Major: 1, Minor: 15, Patch: 3})).To(BeTrue())
+			Expect(ver1163.Compare(Concrete{Major: 1, Minor: 15, Patch: 3})).To(Equal(1))
 		})
 		Specify("newer major should be newer", func() {
-			Expect(ver1163.NewerThan(Concrete{Major: 0, Minor: 16, Patch: 3})).To(BeTrue())
+			Expect(ver1163.Compare(Concrete{Major: 0, Minor: 16, Patch: 3})).To(Equal(1))
 		})
 	})
 })

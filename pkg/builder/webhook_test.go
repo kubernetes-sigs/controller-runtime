@@ -710,29 +710,30 @@ func runTests(admissionReviewVersion string) {
 		}),
 	)
 
-	It("should scaffold a custom defaulting and validating webhook", func(specCtx SpecContext) {
-		By("creating a controller manager")
-		m, err := manager.New(cfg, manager.Options{})
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	DescribeTable("should scaffold a custom defaulting and validating webhook",
+		func(specCtx SpecContext, build func(*WebhookBuilder[*TestDefaultValidator])) {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		By("registering the type in the Scheme")
-		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-		builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
-		err = builder.AddToScheme(m.GetScheme())
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			By("registering the type in the Scheme")
+			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+			builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
+			err = builder.AddToScheme(m.GetScheme())
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		err = WebhookManagedBy(m, &TestDefaultValidator{}).
-			WithCustomDefaulter(&TestCustomDefaultValidator{}).
-			WithCustomValidator(&TestCustomDefaultValidator{}).
-			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
-				return admission.DefaultLogConstructor(testingLogger, req)
-			}).
-			Complete()
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		svr := m.GetWebhookServer()
-		ExpectWithOffset(1, svr).NotTo(BeNil())
+			webhookBuilder := WebhookManagedBy(m, &TestDefaultValidator{})
+			build(webhookBuilder)
+			err = webhookBuilder.
+				WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
+					return admission.DefaultLogConstructor(testingLogger, req)
+				}).
+				Complete()
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			svr := m.GetWebhookServer()
+			ExpectWithOffset(1, svr).NotTo(BeNil())
 
-		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
+			reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -757,68 +758,86 @@ func runTests(admissionReviewVersion string) {
   }
 }`)
 
-		ctx, cancel := context.WithCancel(specCtx)
-		cancel()
-		err = svr.Start(ctx)
-		if err != nil && !os.IsNotExist(err) {
+			ctx, cancel := context.WithCancel(specCtx)
+			cancel()
+			err = svr.Start(ctx)
+			if err != nil && !os.IsNotExist(err) {
+				ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			}
+
+			By("sending a request to a mutating webhook path")
+			path := generateMutatePath(testDefaultValidatorGVK)
+			req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
+			req.Header.Add("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			svr.WebhookMux().ServeHTTP(w, req)
+			ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+			By("sanity checking the response contains reasonable fields")
+			ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":true`))
+			ExpectWithOffset(1, w.Body).To(ContainSubstring(`"patch":`))
+			ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":200`))
+			EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Defaulting object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaultvalidator"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
+
+			By("sending a request to a validating webhook path")
+			path = generateValidatePath(testDefaultValidatorGVK)
+			_, err = reader.Seek(0, 0)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		}
+			req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
+			req.Header.Add("Content-Type", "application/json")
+			w = httptest.NewRecorder()
+			svr.WebhookMux().ServeHTTP(w, req)
+			ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+			By("sanity checking the response contains reasonable field")
+			ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
+			ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":403`))
+			EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Validating object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaultvalidator"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
+		},
+		Entry("CustomDefaulter + CustomValidator", func(b *WebhookBuilder[*TestDefaultValidator]) {
+			b.WithCustomDefaulter(&TestCustomDefaultValidator{})
+			b.WithCustomValidator(&TestCustomDefaultValidator{})
+		}),
+		Entry("CustomDefaulter + Validator", func(b *WebhookBuilder[*TestDefaultValidator]) {
+			b.WithCustomDefaulter(&TestCustomDefaultValidator{})
+			b.WithValidator(&testDefaultValidatorValidator{})
+		}),
+		Entry("Defaulter + CustomValidator", func(b *WebhookBuilder[*TestDefaultValidator]) {
+			b.WithDefaulter(&testValidatorDefaulter{})
+			b.WithCustomValidator(&TestCustomDefaultValidator{})
+		}),
+		Entry("Defaulter + Validator", func(b *WebhookBuilder[*TestDefaultValidator]) {
+			b.WithDefaulter(&testValidatorDefaulter{})
+			b.WithValidator(&testDefaultValidatorValidator{})
+		}),
+	)
 
-		By("sending a request to a mutating webhook path")
-		path := generateMutatePath(testDefaultValidatorGVK)
-		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
-		req.Header.Add("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		svr.WebhookMux().ServeHTTP(w, req)
-		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
-		By("sanity checking the response contains reasonable fields")
-		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":true`))
-		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"patch":`))
-		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":200`))
-		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Defaulting object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaultvalidator"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
+	DescribeTable("should scaffold a custom defaulting and validating webhook with a custom path for each of them",
+		func(specCtx SpecContext, build func(*WebhookBuilder[*TestDefaultValidator])) {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		By("sending a request to a validating webhook path")
-		path = generateValidatePath(testDefaultValidatorGVK)
-		_, err = reader.Seek(0, 0)
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
-		req.Header.Add("Content-Type", "application/json")
-		w = httptest.NewRecorder()
-		svr.WebhookMux().ServeHTTP(w, req)
-		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
-		By("sanity checking the response contains reasonable field")
-		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
-		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":403`))
-		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Validating object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaultvalidator"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
-	})
+			By("registering the type in the Scheme")
+			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+			builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
+			err = builder.AddToScheme(m.GetScheme())
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-	It("should scaffold a custom defaulting and validating webhook with a custom path for each of them", func(specCtx SpecContext) {
-		By("creating a controller manager")
-		m, err := manager.New(cfg, manager.Options{})
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			validatingCustomPath := "/custom-validating-path"
+			defaultingCustomPath := "/custom-defaulting-path"
+			webhookBuilder := WebhookManagedBy(m, &TestDefaultValidator{})
+			build(webhookBuilder)
+			err = webhookBuilder.
+				WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
+					return admission.DefaultLogConstructor(testingLogger, req)
+				}).
+				WithValidatorCustomPath(validatingCustomPath).
+				WithDefaulterCustomPath(defaultingCustomPath).
+				Complete()
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			svr := m.GetWebhookServer()
+			ExpectWithOffset(1, svr).NotTo(BeNil())
 
-		By("registering the type in the Scheme")
-		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-		builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
-		err = builder.AddToScheme(m.GetScheme())
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-		validatingCustomPath := "/custom-validating-path"
-		defaultingCustomPath := "/custom-defaulting-path"
-		err = WebhookManagedBy(m, &TestDefaultValidator{}).
-			WithCustomDefaulter(&TestCustomDefaultValidator{}).
-			WithCustomValidator(&TestCustomDefaultValidator{}).
-			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
-				return admission.DefaultLogConstructor(testingLogger, req)
-			}).
-			WithValidatorCustomPath(validatingCustomPath).
-			WithDefaulterCustomPath(defaultingCustomPath).
-			Complete()
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		svr := m.GetWebhookServer()
-		ExpectWithOffset(1, svr).NotTo(BeNil())
-
-		reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
+			reader := strings.NewReader(admissionReviewGV + admissionReviewVersion + `",
   "request":{
     "uid":"07e52e8d-4513-11e9-a716-42010a800270",
     "kind":{
@@ -843,60 +862,77 @@ func runTests(admissionReviewVersion string) {
   }
 }`)
 
-		ctx, cancel := context.WithCancel(specCtx)
-		cancel()
-		err = svr.Start(ctx)
-		if err != nil && !os.IsNotExist(err) {
+			ctx, cancel := context.WithCancel(specCtx)
+			cancel()
+			err = svr.Start(ctx)
+			if err != nil && !os.IsNotExist(err) {
+				ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			}
+
+			By("sending a request to a mutating webhook path that have been overriten by the custom path")
+			path, err := generateCustomPath(defaultingCustomPath)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		}
+			req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
+			req.Header.Add("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			svr.WebhookMux().ServeHTTP(w, req)
+			ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+			By("sanity checking the response contains reasonable fields")
+			ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":true`))
+			ExpectWithOffset(1, w.Body).To(ContainSubstring(`"patch":`))
+			ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":200`))
+			EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Defaulting object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaultvalidator"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
 
-		By("sending a request to a mutating webhook path that have been overriten by the custom path")
-		path, err := generateCustomPath(defaultingCustomPath)
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		req := httptest.NewRequest("POST", svcBaseAddr+path, reader)
-		req.Header.Add("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		svr.WebhookMux().ServeHTTP(w, req)
-		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
-		By("sanity checking the response contains reasonable fields")
-		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":true`))
-		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"patch":`))
-		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":200`))
-		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Defaulting object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaultvalidator"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
+			By("sending a request to a mutating webhook path")
+			path = generateMutatePath(testDefaultValidatorGVK)
+			_, err = reader.Seek(0, 0)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
+			req.Header.Add("Content-Type", "application/json")
+			w = httptest.NewRecorder()
+			svr.WebhookMux().ServeHTTP(w, req)
+			ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
 
-		By("sending a request to a mutating webhook path")
-		path = generateMutatePath(testDefaultValidatorGVK)
-		_, err = reader.Seek(0, 0)
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
-		req.Header.Add("Content-Type", "application/json")
-		w = httptest.NewRecorder()
-		svr.WebhookMux().ServeHTTP(w, req)
-		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
+			By("sending a request to a valiting webhook path that have been overriten by a custom path")
+			path, err = generateCustomPath(validatingCustomPath)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			_, err = reader.Seek(0, 0)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
+			req.Header.Add("Content-Type", "application/json")
+			w = httptest.NewRecorder()
+			svr.WebhookMux().ServeHTTP(w, req)
+			ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
+			By("sanity checking the response contains reasonable field")
+			ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
+			ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":403`))
+			EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Validating object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaultvalidator"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
 
-		By("sending a request to a valiting webhook path that have been overriten by a custom path")
-		path, err = generateCustomPath(validatingCustomPath)
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		_, err = reader.Seek(0, 0)
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
-		req.Header.Add("Content-Type", "application/json")
-		w = httptest.NewRecorder()
-		svr.WebhookMux().ServeHTTP(w, req)
-		ExpectWithOffset(1, w.Code).To(Equal(http.StatusOK))
-		By("sanity checking the response contains reasonable field")
-		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"allowed":false`))
-		ExpectWithOffset(1, w.Body).To(ContainSubstring(`"code":403`))
-		EventuallyWithOffset(1, logBuffer).Should(gbytes.Say(`"msg":"Validating object","object":{"name":"foo","namespace":"default"},"namespace":"default","name":"foo","resource":{"group":"foo.test.org","version":"v1","resource":"testdefaultvalidator"},"user":"","requestID":"07e52e8d-4513-11e9-a716-42010a800270"`))
-
-		By("sending a request to a validating webhook path")
-		path = generateValidatePath(testValidatorGVK)
-		req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
-		req.Header.Add("Content-Type", "application/json")
-		w = httptest.NewRecorder()
-		svr.WebhookMux().ServeHTTP(w, req)
-		ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
-	})
+			By("sending a request to a validating webhook path")
+			path = generateValidatePath(testValidatorGVK)
+			req = httptest.NewRequest("POST", svcBaseAddr+path, reader)
+			req.Header.Add("Content-Type", "application/json")
+			w = httptest.NewRecorder()
+			svr.WebhookMux().ServeHTTP(w, req)
+			ExpectWithOffset(1, w.Code).To(Equal(http.StatusNotFound))
+		},
+		Entry("CustomDefaulter + CustomValidator", func(b *WebhookBuilder[*TestDefaultValidator]) {
+			b.WithCustomDefaulter(&TestCustomDefaultValidator{})
+			b.WithCustomValidator(&TestCustomDefaultValidator{})
+		}),
+		Entry("CustomDefaulter + Validator", func(b *WebhookBuilder[*TestDefaultValidator]) {
+			b.WithCustomDefaulter(&TestCustomDefaultValidator{})
+			b.WithValidator(&testDefaultValidatorValidator{})
+		}),
+		Entry("Defaulter + CustomValidator", func(b *WebhookBuilder[*TestDefaultValidator]) {
+			b.WithDefaulter(&testValidatorDefaulter{})
+			b.WithCustomValidator(&TestCustomDefaultValidator{})
+		}),
+		Entry("Defaulter + Validator", func(b *WebhookBuilder[*TestDefaultValidator]) {
+			b.WithDefaulter(&testValidatorDefaulter{})
+			b.WithValidator(&testDefaultValidatorValidator{})
+		}),
+	)
 
 	It("should not scaffold a custom defaulting and a custom validating webhook with the same custom path", func() {
 		By("creating a controller manager")
@@ -920,49 +956,67 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, err).To(HaveOccurred())
 	})
 
-	It("should not scaffold a custom defaulting when setting a custom path and a defaulting custom path", func() {
-		By("creating a controller manager")
-		m, err := manager.New(cfg, manager.Options{})
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	DescribeTable("should not scaffold a custom defaulting when setting a custom path and a defaulting custom path",
+		func(build func(*WebhookBuilder[*TestDefaulterObject])) {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		By("registering the type in the Scheme")
-		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-		builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
-		err = builder.AddToScheme(m.GetScheme())
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			By("registering the type in the Scheme")
+			builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
+			builder.Register(&TestDefaulterObject{}, &TestDefaulterList{})
+			err = builder.AddToScheme(m.GetScheme())
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		err = WebhookManagedBy(m, &TestDefaulterObject{}).
-			WithCustomDefaulter(&TestCustomDefaulter{}).
-			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
-				return admission.DefaultLogConstructor(testingLogger, req)
-			}).
-			WithDefaulterCustomPath(customPath).
-			WithCustomPath(customPath).
-			Complete()
-		ExpectWithOffset(1, err).To(HaveOccurred())
-	})
+			webhookBuilder := WebhookManagedBy(m, &TestDefaulterObject{})
+			build(webhookBuilder)
+			err = webhookBuilder.
+				WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
+					return admission.DefaultLogConstructor(testingLogger, req)
+				}).
+				WithDefaulterCustomPath(customPath).
+				WithCustomPath(customPath).
+				Complete()
+			ExpectWithOffset(1, err).To(HaveOccurred())
+		},
+		Entry("CustomDefaulter", func(b *WebhookBuilder[*TestDefaulterObject]) {
+			b.WithCustomDefaulter(&TestCustomDefaulter{})
+		}),
+		Entry("Defaulter", func(b *WebhookBuilder[*TestDefaulterObject]) {
+			b.WithDefaulter(&testDefaulter{})
+		}),
+	)
 
-	It("should not scaffold a custom defaulting when setting a custom path and a validating custom path", func() {
-		By("creating a controller manager")
-		m, err := manager.New(cfg, manager.Options{})
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	DescribeTable("should not scaffold a custom validating when setting a custom path and a validating custom path",
+		func(build func(*WebhookBuilder[*TestValidatorObject])) {
+			By("creating a controller manager")
+			m, err := manager.New(cfg, manager.Options{})
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		By("registering the type in the Scheme")
-		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-		builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
-		err = builder.AddToScheme(m.GetScheme())
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			By("registering the type in the Scheme")
+			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+			builder.Register(&TestValidatorObject{}, &TestValidatorList{})
+			err = builder.AddToScheme(m.GetScheme())
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		err = WebhookManagedBy(m, &TestValidatorObject{}).
-			WithCustomValidator(&TestCustomValidator{}).
-			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
-				return admission.DefaultLogConstructor(testingLogger, req)
-			}).
-			WithDefaulterCustomPath(customPath).
-			WithCustomPath(customPath).
-			Complete()
-		ExpectWithOffset(1, err).To(HaveOccurred())
-	})
+			webhookBuilder := WebhookManagedBy(m, &TestValidatorObject{})
+			build(webhookBuilder)
+			err = webhookBuilder.
+				WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
+					return admission.DefaultLogConstructor(testingLogger, req)
+				}).
+				WithValidatorCustomPath(customPath).
+				WithCustomPath(customPath).
+				Complete()
+			ExpectWithOffset(1, err).To(HaveOccurred())
+		},
+		Entry("CustomValidator", func(b *WebhookBuilder[*TestValidatorObject]) {
+			b.WithCustomValidator(&TestCustomValidator{})
+		}),
+		Entry("Validator", func(b *WebhookBuilder[*TestValidatorObject]) {
+			b.WithValidator(&testValidator{})
+		}),
+	)
 }
 
 // TestDefaulter.
@@ -1259,3 +1313,23 @@ func (*TestCustomDefaultValidator) ValidateDelete(ctx context.Context, obj runti
 }
 
 var _ admission.CustomValidator = &TestCustomValidator{}
+
+type testValidatorDefaulter struct{}
+
+func (*testValidatorDefaulter) Default(ctx context.Context, obj *TestDefaultValidator) error {
+	return (&TestCustomDefaultValidator{}).Default(ctx, obj)
+}
+
+type testDefaultValidatorValidator struct{}
+
+func (*testDefaultValidatorValidator) ValidateCreate(ctx context.Context, obj *TestDefaultValidator) (admission.Warnings, error) {
+	return (&TestCustomDefaultValidator{}).ValidateCreate(ctx, obj)
+}
+
+func (*testDefaultValidatorValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *TestDefaultValidator) (admission.Warnings, error) {
+	return (&TestCustomDefaultValidator{}).ValidateUpdate(ctx, oldObj, newObj)
+}
+
+func (*testDefaultValidatorValidator) ValidateDelete(ctx context.Context, obj *TestDefaultValidator) (admission.Warnings, error) {
+	return (&TestCustomDefaultValidator{}).ValidateDelete(ctx, obj)
+}

@@ -60,7 +60,7 @@ func WithValidator[T runtime.Object](scheme *runtime.Scheme, validator Validator
 		Handler: &validatorForType[T]{
 			validator: validator,
 			decoder:   NewDecoder(scheme),
-			new: func() runtime.Object {
+			new: func() T {
 				var zero T
 				typ := reflect.TypeOf(zero)
 				if typ.Kind() == reflect.Ptr {
@@ -87,7 +87,7 @@ func WithCustomValidator(scheme *runtime.Scheme, obj runtime.Object, validator C
 type validatorForType[T runtime.Object] struct {
 	validator Validator[T]
 	decoder   Decoder
-	new       func() runtime.Object
+	new       func() T
 }
 
 // Handle handles admission requests.
@@ -101,7 +101,7 @@ func (h *validatorForType[T]) Handle(ctx context.Context, req Request) Response 
 
 	ctx = NewContextWithRequest(ctx, req)
 
-	obj := h.new().(T)
+	obj := h.new()
 
 	var err error
 	var warnings []string

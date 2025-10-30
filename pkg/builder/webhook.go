@@ -62,37 +62,37 @@ func WebhookManagedBy[T runtime.Object](m manager.Manager, object T) *WebhookBui
 	return &WebhookBuilder[T]{mgr: m, apiType: object}
 }
 
-// WithDefaulter takes an admission.CustomDefaulter interface, a MutatingWebhook with the provided opts (admission.DefaulterOption)
+// WithCustomDefaulter takes an admission.CustomDefaulter interface, a MutatingWebhook with the provided opts (admission.DefaulterOption)
 // will be wired for this type.
 // Deprecated: Use WithAdmissionDefaulter instead.
-func (blder *WebhookBuilder[T]) WithDefaulter(defaulter admission.CustomDefaulter, opts ...admission.DefaulterOption) *WebhookBuilder[T] {
+func (blder *WebhookBuilder[T]) WithCustomDefaulter(defaulter admission.CustomDefaulter, opts ...admission.DefaulterOption) *WebhookBuilder[T] {
 	blder.customDefaulter = defaulter
 	blder.customDefaulterOpts = opts
 	return blder
 }
 
-// WithAdmissionDefaulter sets up the provided admission.Defaulter in a defaulting webhook.
-func (blder *WebhookBuilder[T]) WithAdmissionDefaulter(defaulter admission.Defaulter[T], opts ...admission.DefaulterOption) *WebhookBuilder[T] {
+// WithDefaulter sets up the provided admission.Defaulter in a defaulting webhook.
+func (blder *WebhookBuilder[T]) WithDefaulter(defaulter admission.Defaulter[T], opts ...admission.DefaulterOption) *WebhookBuilder[T] {
 	blder.defaulter = defaulter
 	blder.customDefaulterOpts = opts
 	return blder
 }
 
-// WithValidator takes a admission.CustomValidator interface, a ValidatingWebhook will be wired for this type.
+// WithCustomValidator takes a admission.CustomValidator interface, a ValidatingWebhook will be wired for this type.
 // Deprecated: Use WithAdmissionValidator instead.
-func (blder *WebhookBuilder[T]) WithValidator(validator admission.CustomValidator) *WebhookBuilder[T] {
+func (blder *WebhookBuilder[T]) WithCustomValidator(validator admission.CustomValidator) *WebhookBuilder[T] {
 	blder.customValidator = validator
 	return blder
 }
 
-// WithAdmissionValidator sets up the provided admission.Validator in a validating webhook.
-func (blder *WebhookBuilder[T]) WithAdmissionValidator(validator admission.Validator[T]) *WebhookBuilder[T] {
+// WithValidator sets up the provided admission.Validator in a validating webhook.
+func (blder *WebhookBuilder[T]) WithValidator(validator admission.Validator[T]) *WebhookBuilder[T] {
 	blder.validator = validator
 	return blder
 }
 
 // WithConverter takes a func that constructs a converter.Converter.
-// The Converter will then be used by the conversion endpoint for the type passed into For().
+// The Converter will then be used by the conversion endpoint for the type passed into NewWebhookManagedBy()
 func (blder *WebhookBuilder[T]) WithConverter(converterConstructor func(*runtime.Scheme) (conversion.Converter, error)) *WebhookBuilder[T] {
 	blder.converterConstructor = converterConstructor
 	return blder
@@ -335,7 +335,7 @@ func (blder *WebhookBuilder[T]) getType() (runtime.Object, error) {
 	if blder.apiType != nil {
 		return blder.apiType, nil
 	}
-	return nil, errors.New("For() must be called with a valid object")
+	return nil, errors.New("NewWebhookManagedBy() must be called with a valid object")
 }
 
 func (blder *WebhookBuilder[T]) isAlreadyHandled(path string) bool {

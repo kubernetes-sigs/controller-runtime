@@ -253,13 +253,13 @@ func (blder *WebhookBuilder[T]) registerDefaultingWebhook() error {
 
 func (blder *WebhookBuilder[T]) getDefaultingWebhook() (*admission.Webhook, error) {
 	var w *admission.Webhook
-	if defaulter := blder.defaulter; defaulter != nil {
+	if blder.defaulter != nil {
 		if blder.customDefaulter != nil {
 			return nil, errors.New("only one of Defaulter or CustomDefaulter can be set")
 		}
 		w = admission.WithDefaulter(blder.mgr.GetScheme(), blder.defaulter, blder.customDefaulterOpts...)
-	} else if customDefaulter := blder.customDefaulter; customDefaulter != nil {
-		w = admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, customDefaulter, blder.customDefaulterOpts...)
+	} else if blder.customDefaulter != nil {
+		w = admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, blder.customDefaulter, blder.customDefaulterOpts...)
 	}
 	if w != nil && blder.recoverPanic != nil {
 		w = w.WithRecoverPanic(*blder.recoverPanic)
@@ -300,13 +300,13 @@ func (blder *WebhookBuilder[T]) registerValidatingWebhook() error {
 
 func (blder *WebhookBuilder[T]) getValidatingWebhook() (*admission.Webhook, error) {
 	var w *admission.Webhook
-	if validator := blder.validator; validator != nil {
+	if blder.validator != nil {
 		if blder.customValidator != nil {
 			return nil, errors.New("only one of Validator or CustomValidator can be set")
 		}
-		w = admission.WithValidator(blder.mgr.GetScheme(), validator)
-	} else if customValidator := blder.customValidator; customValidator != nil {
-		w = admission.WithCustomValidator(blder.mgr.GetScheme(), blder.apiType, customValidator)
+		w = admission.WithValidator(blder.mgr.GetScheme(), blder.validator)
+	} else if blder.customValidator != nil {
+		w = admission.WithCustomValidator(blder.mgr.GetScheme(), blder.apiType, blder.customValidator)
 	}
 	if w != nil && blder.recoverPanic != nil {
 		w = w.WithRecoverPanic(*blder.recoverPanic)

@@ -963,4 +963,56 @@ var _ = Describe("Test", func() {
 			Expect(env.WebhookInstallOptions.LocalServingCertDir).ShouldNot(BeADirectory())
 		})
 	})
+
+	Describe("Binary Path Handling", func() {
+		It("should respect pre-configured binary paths when not downloading", func() {
+			// Setup custom paths
+			customAPIServerPath := "/custom/path/to/kube-apiserver"
+			customEtcdPath := "/custom/path/to/etcd"
+			customKubectlPath := "/custom/path/to/kubectl"
+
+			// Create an environment with pre-configured paths
+			testEnv := &Environment{}
+			testEnv.ControlPlane.GetAPIServer().Path = customAPIServerPath
+			testEnv.ControlPlane.Etcd = &Etcd{}
+			testEnv.ControlPlane.Etcd.Path = customEtcdPath
+			testEnv.ControlPlane.KubectlPath = customKubectlPath
+
+			// Set BinaryAssetsDirectory to ensure it's not using defaults
+			testEnv.BinaryAssetsDirectory = "/should/not/be/used"
+			testEnv.DownloadBinaryAssets = false
+
+			// Call configureBinaryPaths to test the path configuration logic
+			err := testEnv.configureBinaryPaths()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify paths were preserved (not overwritten)
+			apiServer := testEnv.ControlPlane.GetAPIServer()
+			Expect(apiServer.Path).To(Equal(customAPIServerPath))
+			Expect(testEnv.ControlPlane.Etcd.Path).To(Equal(customEtcdPath))
+			Expect(testEnv.ControlPlane.KubectlPath).To(Equal(customKubectlPath))
+		})
+
+		It("should auto-configure binary paths when not pre-configured", func() {
+			// Create an environment without pre-configured paths
+			testEnv := &Environment{}
+			testEnv.BinaryAssetsDirectory = "/test/assets"
+			testEnv.DownloadBinaryAssets = false
+
+			// Call configureBinaryPaths
+			err := testEnv.configureBinaryPaths()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify paths were set using BinPathFinder
+			apiServer := testEnv.ControlPlane.GetAPIServer()
+			Expect(apiServer.Path).NotTo(BeEmpty())
+			Expect(testEnv.ControlPlane.Etcd.Path).NotTo(BeEmpty())
+			Expect(testEnv.ControlPlane.KubectlPath).NotTo(BeEmpty())
+
+			// Verify the paths contain the binary names
+			Expect(apiServer.Path).To(ContainSubstring("kube-apiserver"))
+			Expect(testEnv.ControlPlane.Etcd.Path).To(ContainSubstring("etcd"))
+			Expect(testEnv.ControlPlane.KubectlPath).To(ContainSubstring("kubectl"))
+		})
+	})
 })

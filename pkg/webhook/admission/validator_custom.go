@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 
 	v1 "k8s.io/api/admission/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -59,7 +60,14 @@ func WithValidator[T runtime.Object](scheme *runtime.Scheme, validator Validator
 		Handler: &validatorForType[T]{
 			validator: validator,
 			decoder:   NewDecoder(scheme),
-			new:       func() runtime.Object { return *new(T) },
+			new: func() runtime.Object {
+				var zero T
+				typ := reflect.TypeOf(zero)
+				if typ.Kind() == reflect.Ptr {
+					return reflect.New(typ.Elem()).Interface().(T)
+				}
+				return zero
+			},
 		},
 	}
 }

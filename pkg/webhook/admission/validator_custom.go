@@ -117,7 +117,7 @@ func (h *validatorForType[T]) Handle(ctx context.Context, req Request) Response 
 
 		warnings, err = h.validator.ValidateCreate(ctx, obj)
 	case v1.Update:
-		oldObj := h.new().(T)
+		oldObj := h.new()
 		if err := h.decoder.DecodeRaw(req.Object, obj); err != nil {
 			return Errored(http.StatusBadRequest, err)
 		}

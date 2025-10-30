@@ -1017,6 +1017,39 @@ func runTests(admissionReviewVersion string) {
 			b.WithValidator(&testValidator{})
 		}),
 	)
+
+	It("should error if both a defaulter and a custom defaulter are set", func() {
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
+		builder.Register(&TestDefaulterObject{}, &TestDefaulterList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		err = WebhookManagedBy(m, &TestDefaulterObject{}).
+			WithDefaulter(&testDefaulter{}).
+			WithCustomDefaulter(&TestCustomDefaulter{}).
+			Complete()
+		ExpectWithOffset(1, err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("only one of Defaulter or CustomDefaulter can be set"))
+	})
+	It("should error if both a validator and a custom validator are set", func() {
+		m, err := manager.New(cfg, manager.Options{})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
+		builder.Register(&TestValidatorObject{}, &TestValidatorList{})
+		err = builder.AddToScheme(m.GetScheme())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+		err = WebhookManagedBy(m, &TestValidatorObject{}).
+			WithValidator(&testValidator{}).
+			WithCustomValidator(&TestCustomValidator{}).
+			Complete()
+		ExpectWithOffset(1, err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("only one of Validator or CustomValidator can be set"))
+	})
 }
 
 // TestDefaulter.

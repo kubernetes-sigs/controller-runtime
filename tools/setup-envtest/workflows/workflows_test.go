@@ -9,7 +9,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"runtime/debug"
-	"sort"
+	"slices"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -333,7 +333,7 @@ var _ = Describe("Workflows", func() {
 							archiveNames = append(archiveNames, archiveName)
 						}
 					}
-					sort.Strings(archiveNames)
+					slices.Sort(archiveNames)
 					archiveNamesSet := sets.Set[string]{}.Insert(archiveNames[:7]...)
 					// Delete all other archives
 					for _, release := range remoteHTTPItems.index.Releases {

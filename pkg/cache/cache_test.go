@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -808,8 +808,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 						By("verifying the pointer fields in pod have the same addresses")
 						Expect(outList1.Items).To(HaveLen(len(outList2.Items)))
-						sort.SliceStable(outList1.Items, func(i, j int) bool { return outList1.Items[i].Name <= outList1.Items[j].Name })
-						sort.SliceStable(outList2.Items, func(i, j int) bool { return outList2.Items[i].Name <= outList2.Items[j].Name })
+						slices.SortStableFunc(outList1.Items, func(i, j corev1.Pod) int { return strings.Compare(i.Name, j.Name) })
+						slices.SortStableFunc(outList2.Items, func(i, j corev1.Pod) int { return strings.Compare(i.Name, j.Name) })
 						for i := range outList1.Items {
 							a := &outList1.Items[i]
 							b := &outList2.Items[i]
@@ -1134,8 +1134,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 						By("verifying the pointer fields in pod have the same addresses")
 						Expect(outList1.Items).To(HaveLen(len(outList2.Items)))
-						sort.SliceStable(outList1.Items, func(i, j int) bool { return outList1.Items[i].GetName() <= outList1.Items[j].GetName() })
-						sort.SliceStable(outList2.Items, func(i, j int) bool { return outList2.Items[i].GetName() <= outList2.Items[j].GetName() })
+						slices.SortStableFunc(outList1.Items, func(i, j unstructured.Unstructured) int { return strings.Compare(i.GetName(), j.GetName()) })
+						slices.SortStableFunc(outList2.Items, func(i, j unstructured.Unstructured) int { return strings.Compare(i.GetName(), j.GetName()) })
 						for i := range outList1.Items {
 							a := &outList1.Items[i]
 							b := &outList2.Items[i]
@@ -1519,8 +1519,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 						By("verifying the pointer fields in pod have the same addresses")
 						Expect(outList1.Items).To(HaveLen(len(outList2.Items)))
-						sort.SliceStable(outList1.Items, func(i, j int) bool { return outList1.Items[i].Name <= outList1.Items[j].Name })
-						sort.SliceStable(outList2.Items, func(i, j int) bool { return outList2.Items[i].Name <= outList2.Items[j].Name })
+						slices.SortStableFunc(outList1.Items, func(i, j metav1.PartialObjectMetadata) int { return strings.Compare(i.Name, j.Name) })
+						slices.SortStableFunc(outList2.Items, func(i, j metav1.PartialObjectMetadata) int { return strings.Compare(i.Name, j.Name) })
 						for i := range outList1.Items {
 							a := &outList1.Items[i]
 							b := &outList2.Items[i]

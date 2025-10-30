@@ -19,7 +19,7 @@ package process
 import (
 	"bytes"
 	"html/template"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -230,7 +230,7 @@ func (a *Arguments) AsStrings(defaults map[string][]string) []string {
 	for key := range a.values {
 		keysInOrder = append(keysInOrder, key)
 	}
-	sort.Strings(keysInOrder)
+	slices.Sort(keysInOrder)
 
 	var res []string
 	for _, key := range keysInOrder {

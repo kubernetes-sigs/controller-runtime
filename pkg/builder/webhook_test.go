@@ -1236,7 +1236,7 @@ func (*testValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *TestVa
 		return nil, errors.New("number of replica should be greater than or equal to 0")
 	}
 	if newObj.Replica < oldObj.Replica {
-		return nil, fmt.Errorf("new replica %v should not be fewer than old replica %v", oldObj.Replica, newObj.Replica)
+		return nil, fmt.Errorf("new replica %v should not be fewer than old replica %v", newObj.Replica, oldObj.Replica)
 	}
 
 	userAgent, ok := ctx.Value(userAgentCtxKey).(string)

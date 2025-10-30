@@ -64,7 +64,7 @@ func WebhookManagedBy[T runtime.Object](m manager.Manager, object T) *WebhookBui
 
 // WithCustomDefaulter takes an admission.CustomDefaulter interface, a MutatingWebhook with the provided opts (admission.DefaulterOption)
 // will be wired for this type.
-// Deprecated: Use WithAdmissionDefaulter instead.
+// Deprecated: Use WithDefaulter instead.
 func (blder *WebhookBuilder[T]) WithCustomDefaulter(defaulter admission.CustomDefaulter, opts ...admission.DefaulterOption) *WebhookBuilder[T] {
 	blder.customDefaulter = defaulter
 	blder.customDefaulterOpts = opts
@@ -79,7 +79,7 @@ func (blder *WebhookBuilder[T]) WithDefaulter(defaulter admission.Defaulter[T], 
 }
 
 // WithCustomValidator takes a admission.CustomValidator interface, a ValidatingWebhook will be wired for this type.
-// Deprecated: Use WithAdmissionValidator instead.
+// Deprecated: Use WithValidator instead.
 func (blder *WebhookBuilder[T]) WithCustomValidator(validator admission.CustomValidator) *WebhookBuilder[T] {
 	blder.customValidator = validator
 	return blder

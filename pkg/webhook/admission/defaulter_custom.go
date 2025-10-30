@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"reflect"
 	"slices"
 
 	"gomodules.xyz/jsonpatch/v2"
@@ -65,7 +66,14 @@ func WithDefaulter[T runtime.Object](scheme *runtime.Scheme, defaulter Defaulter
 			defaulter:                     defaulter,
 			decoder:                       NewDecoder(scheme),
 			removeUnknownOrOmitableFields: options.removeUnknownOrOmitableFields,
-			new:                           func() T { return *new(T) },
+			new: func() T {
+				var zero T
+				typ := reflect.TypeOf(zero)
+				if typ.Kind() == reflect.Ptr {
+					return reflect.New(typ.Elem()).Interface().(T)
+				}
+				return zero
+			},
 		},
 	}
 }

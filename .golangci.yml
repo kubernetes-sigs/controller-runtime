@@ -11,6 +11,7 @@ linters:
     - bidichk
     - bodyclose
     - copyloopvar
+    - depguard
     - dogsled
     - dupl
     - errcheck
@@ -42,6 +43,12 @@ linters:
     - unused
     - whitespace
   settings:
+    depguard:
+      rules:
+        forbid-pkg-errors:
+          deny:
+            - pkg: sort
+              desc: Should be replaced with slices package
     forbidigo:
         forbid:
           - pattern: context.Background

@@ -250,6 +250,30 @@ func TestDefaultOpts(t *testing.T) {
 			},
 		},
 		{
+			name: "ByObject.SyncPeriod gets defaulted from SyncPeriod",
+			in: Options{
+				ByObject:   map[client.Object]ByObject{pod: {}},
+				SyncPeriod: ptr.To(5 * time.Minute),
+			},
+
+			verification: func(o Options) string {
+				expected := ptr.To(5 * time.Minute)
+				return cmp.Diff(expected, o.ByObject[pod].SyncPeriod)
+			},
+		},
+		{
+			name: "ByObject.SyncPeriod doesn't get defaulted when set",
+			in: Options{
+				ByObject:   map[client.Object]ByObject{pod: {SyncPeriod: ptr.To(1 * time.Minute)}},
+				SyncPeriod: ptr.To(5 * time.Minute),
+			},
+
+			verification: func(o Options) string {
+				expected := ptr.To(1 * time.Minute)
+				return cmp.Diff(expected, o.ByObject[pod].SyncPeriod)
+			},
+		},
+		{
 			name: "DefaultNamespace label selector gets defaulted from DefaultLabelSelector",
 			in: Options{
 				DefaultNamespaces:    map[string]Config{"default": {}},

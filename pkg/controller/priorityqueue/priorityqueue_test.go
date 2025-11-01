@@ -595,8 +595,13 @@ func newQueue() (*priorityqueue[string], *fakeMetricsProvider) {
 	q := New("test", func(o *Opts[string]) {
 		o.MetricProvider = metrics
 	})
-	q.(*priorityqueue[string]).queue = &btreeInteractionValidator{
-		bTree: q.(*priorityqueue[string]).queue,
+	q.(*priorityqueue[string]).waiting = &btreeInteractionValidator{
+		bTree:             q.(*priorityqueue[string]).waiting,
+		shouldHaveReadyAt: true,
+	}
+	q.(*priorityqueue[string]).ready = &btreeInteractionValidator{
+		bTree:             q.(*priorityqueue[string]).ready,
+		shouldHaveReadyAt: false,
 	}
 
 	// validate that tick always gets a positive value as it will just return
@@ -613,9 +618,13 @@ func newQueue() (*priorityqueue[string], *fakeMetricsProvider) {
 
 type btreeInteractionValidator struct {
 	bTree[*item[string]]
+	shouldHaveReadyAt bool
 }
 
 func (b *btreeInteractionValidator) ReplaceOrInsert(item *item[string]) (*item[string], bool) {
+	if hasReadyAt := item.ReadyAt != nil; hasReadyAt != b.shouldHaveReadyAt {
+		panic(fmt.Sprintf("ReplaceOrInsert: item has unexpected ReadyAt presence: %v, expected: %v", hasReadyAt, b.shouldHaveReadyAt))
+	}
 	// There is no codepath that updates an item
 	item, alreadyExist := b.bTree.ReplaceOrInsert(item)
 	if alreadyExist {
@@ -692,6 +701,7 @@ func TestHighPriorityItemThatBecameReadyIsReturnedBeforeLowPriorityItem(t *testi
 		g.Expect(tickSetup).To(BeClosed())
 
 		forwardQueueTimeBy(1 * time.Second)
+		synctest.Wait()
 		key, prio, _ := q.GetWithPriority()
 
 		g.Expect(key).To(Equal("prio"))
@@ -721,6 +731,36 @@ func TestItemIsReturnedAsSoonAsPossible(t *testing.T) {
 		q.AddWithOpts(AddOpts{}, "foo")
 		synctest.Wait() // Wait until the priorityqueue and the above goroutine finish running
 
+		g.Expect(retrieved).Should(BeClosed())
+
+		g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))
+		g.Expect(metrics.adds["test"]).To(Equal(1))
+	})
+}
+
+func TestWaitingItemIsReturnedRightAfterReadWithoutAfter(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		g := NewWithT(t)
+
+		q, metrics := newQueue()
+		defer q.ShutDown()
+
+		retrieved := make(chan struct{})
+		go func() {
+			item, _, _ := q.GetWithPriority()
+			g.Expect(item).To(Equal("foo"))
+			close(retrieved)
+		}()
+		synctest.Wait() // Wait for the above goroutine to be blocked
+
+		q.AddWithOpts(AddOpts{After: time.Minute}, "foo")
+		synctest.Wait() // Wait until the priorityqueue and the above goroutine finish running
+
+		g.Expect(retrieved).ShouldNot(BeClosed())
+
+		q.AddWithOpts(AddOpts{}, "foo")
+		synctest.Wait() // Wait until the priorityqueue and the above goroutine finish running
 		g.Expect(retrieved).Should(BeClosed())
 
 		g.Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 0}))

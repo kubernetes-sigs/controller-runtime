@@ -111,6 +111,14 @@ var (
 	// including all CRD resources.
 	NewManager = manager.New
 
+	// CreateOrPatch creates or patches the given object obj in the Kubernetes
+	// cluster. The object's desired state should be reconciled with the existing
+	// state using the passed in ReconcileFn. obj must be a struct pointer so that
+	// obj can be patched with the content returned by the Server.
+	//
+	// It returns the executed operation and an error.
+	CreateOrPatch = controllerutil.CreateOrPatch
+
 	// CreateOrUpdate creates or updates the given object obj in the Kubernetes
 	// cluster. The object's desired state should be reconciled with the existing
 	// state using the passed in ReconcileFn. obj must be a struct pointer so that

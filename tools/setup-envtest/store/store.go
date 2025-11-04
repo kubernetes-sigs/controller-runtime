@@ -105,7 +105,8 @@ func (s *Store) List(ctx context.Context, matching Filter) ([]Item, error) {
 
 	slices.SortStableFunc(res, func(i, j Item) int {
 		if !i.Version.Matches(j.Version) {
-			return i.Version.Compare(j.Version)
+			// sort in inverse order so that the newest one is first
+			return j.Version.Compare(i.Version)
 		}
 		return orderPlatforms(i.Platform, j.Platform)
 	})

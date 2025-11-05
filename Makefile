@@ -69,12 +69,8 @@ help:  ## Display this help
 ## --------------------------------------
 
 .PHONY: test
-test: test-tools ## Run the script check-everything.sh which will check all.
+test: ## Run the script check-everything.sh which will check all.
 	TRACE=1 ./hack/check-everything.sh
-
-.PHONY: test-tools
-test-tools: ## tests the tools codebase (setup-envtest)
-	cd tools/setup-envtest && go test ./...
 
 ## --------------------------------------
 ## Binaries

@@ -155,6 +155,128 @@ var _ = Describe("controller", func() {
 			Expect(err).To(Equal(context.DeadlineExceeded))
 		})
 
+		Context("prometheus metric reconcile_timeouts", func() {
+			var reconcileTimeouts dto.Metric
+
+			BeforeEach(func() {
+				ctrlmetrics.ReconcileTimeouts.Reset()
+				reconcileTimeouts.Reset()
+				ctrl.Name = testControllerName
+				Expect(ctrlmetrics.ReconcileTimeouts.WithLabelValues(ctrl.Name).Write(&reconcileTimeouts)).To(Succeed())
+				Expect(reconcileTimeouts.GetCounter().GetValue()).To(Equal(0.0))
+			})
+
+			It("should increment when ReconciliationTimeout context timeout hits DeadlineExceeded", func(ctx SpecContext) {
+				ctrl.ReconciliationTimeout = time.Duration(1)
+				ctrl.Do = reconcile.Func(func(ctx context.Context, _ reconcile.Request) (reconcile.Result, error) {
+					<-ctx.Done()
+					return reconcile.Result{}, ctx.Err()
+				})
+				_, err := ctrl.Reconcile(ctx,
+					reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(Equal(context.DeadlineExceeded))
+
+				Expect(ctrlmetrics.ReconcileTimeouts.WithLabelValues(ctrl.Name).Write(&reconcileTimeouts)).To(Succeed())
+				Expect(reconcileTimeouts.GetCounter().GetValue()).To(Equal(1.0))
+			})
+
+			It("should not increment when user code cancels context earlier than the ReconciliationTimeout", func(ctx SpecContext) {
+				ctrl.ReconciliationTimeout = 10 * time.Second
+				userCancelCause := errors.New("user cancellation")
+				ctrl.Do = reconcile.Func(func(ctx context.Context, _ reconcile.Request) (reconcile.Result, error) {
+					// User code creates its own timeout with a different cause
+					userCtx, cancel := context.WithTimeoutCause(ctx, time.Millisecond, userCancelCause)
+					defer cancel()
+					<-userCtx.Done()
+					return reconcile.Result{}, context.Cause(userCtx)
+				})
+				_, err := ctrl.Reconcile(ctx,
+					reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+				Expect(err).To(HaveOccurred())
+				Expect(errors.Is(err, userCancelCause)).To(BeTrue())
+
+				// Metric should not be incremented because the context timeout didn't hit DeadlineExceeded
+				Expect(ctrlmetrics.ReconcileTimeouts.WithLabelValues(ctrl.Name).Write(&reconcileTimeouts)).To(Succeed())
+				Expect(reconcileTimeouts.GetCounter().GetValue()).To(Equal(0.0))
+			})
+
+			It("should not increment when reconciliation completes before timeout", func(ctx SpecContext) {
+				ctrl.ReconciliationTimeout = 10 * time.Second
+				ctrl.Do = reconcile.Func(func(ctx context.Context, _ reconcile.Request) (reconcile.Result, error) {
+					// Reconcile completes successfully before timeout
+					return reconcile.Result{}, nil
+				})
+				_, err := ctrl.Reconcile(ctx,
+					reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+				Expect(err).NotTo(HaveOccurred())
+
+				// Metric should not be incremented because the timeout was not exceeded
+				Expect(ctrlmetrics.ReconcileTimeouts.WithLabelValues(ctrl.Name).Write(&reconcileTimeouts)).To(Succeed())
+				Expect(reconcileTimeouts.GetCounter().GetValue()).To(Equal(0.0))
+			})
+
+			It("should increment multiple times when multiple reconciles timeout", func(ctx SpecContext) {
+				ctrl.ReconciliationTimeout = time.Duration(1)
+				ctrl.Do = reconcile.Func(func(ctx context.Context, _ reconcile.Request) (reconcile.Result, error) {
+					<-ctx.Done()
+					return reconcile.Result{}, ctx.Err()
+				})
+
+				const numTimeouts = 3
+				// Call Reconcile multiple times, each should timeout and increment the metric
+				for i := range numTimeouts {
+					_, err := ctrl.Reconcile(ctx,
+						reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: fmt.Sprintf("bar%d", i)}})
+					Expect(err).To(HaveOccurred())
+					Expect(err).To(Equal(context.DeadlineExceeded))
+				}
+
+				// Metric should be incremented 3 times
+				Expect(ctrlmetrics.ReconcileTimeouts.WithLabelValues(ctrl.Name).Write(&reconcileTimeouts)).To(Succeed())
+				Expect(reconcileTimeouts.GetCounter().GetValue()).To(Equal(float64(numTimeouts)))
+			})
+
+			It("should not increment when parent context is cancelled", func(ctx SpecContext) {
+				parentCtx, cancel := context.WithCancel(ctx)
+				defer cancel()
+
+				ctrl.ReconciliationTimeout = 10 * time.Second
+				ctrl.Do = reconcile.Func(func(ctx context.Context, _ reconcile.Request) (reconcile.Result, error) {
+					// Wait for parent cancellation
+					<-ctx.Done()
+					return reconcile.Result{}, ctx.Err()
+				})
+
+				// Cancel parent context immediately
+				cancel()
+
+				_, err := ctrl.Reconcile(parentCtx,
+					reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(Equal(context.Canceled))
+
+				// Metric should not be incremented because the wrapper timeout didn't fire
+				Expect(ctrlmetrics.ReconcileTimeouts.WithLabelValues(ctrl.Name).Write(&reconcileTimeouts)).To(Succeed())
+				Expect(reconcileTimeouts.GetCounter().GetValue()).To(Equal(0.0))
+			})
+
+			It("should not increment when ReconciliationTimeout is zero", func(ctx SpecContext) {
+				// Ensure ReconciliationTimeout is zero (not set)
+				ctrl.ReconciliationTimeout = 0
+				ctrl.Do = reconcile.Func(func(ctx context.Context, _ reconcile.Request) (reconcile.Result, error) {
+					return reconcile.Result{}, nil
+				})
+				_, err := ctrl.Reconcile(ctx,
+					reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+				Expect(err).NotTo(HaveOccurred())
+
+				// Metric should not be incremented because ReconciliationTimeout is not set
+				Expect(ctrlmetrics.ReconcileTimeouts.WithLabelValues(ctrl.Name).Write(&reconcileTimeouts)).To(Succeed())
+				Expect(reconcileTimeouts.GetCounter().GetValue()).To(Equal(0.0))
+			})
+		})
+
 		It("should not configure a timeout if ReconciliationTimeout is zero", func(ctx SpecContext) {
 			ctrl.Do = reconcile.Func(func(ctx context.Context, _ reconcile.Request) (reconcile.Result, error) {
 				defer GinkgoRecover()

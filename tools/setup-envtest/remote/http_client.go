@@ -88,7 +88,7 @@ func (c *HTTPClient) ListVersions(ctx context.Context) ([]versions.Set, error) {
 	}
 	// sort in inverse order so that the newest one is first
 	slices.SortStableFunc(res, func(i, j versions.Set) int {
-		return i.Version.Compare(j.Version)
+		return j.Version.Compare(i.Version)
 	})
 
 	return res, nil

@@ -39,10 +39,10 @@ import (
 // WebhookBuilder builds a Webhook.
 type WebhookBuilder[T runtime.Object] struct {
 	apiType                   runtime.Object
-	customDefaulter           admission.CustomDefaulter
+	customDefaulter           admission.CustomDefaulter //nolint:staticcheck
 	defaulter                 admission.Defaulter[T]
 	customDefaulterOpts       []admission.DefaulterOption
-	customValidator           admission.CustomValidator
+	customValidator           admission.CustomValidator //nolint:staticcheck
 	validator                 admission.Validator[T]
 	customPath                string
 	customValidatorCustomPath string
@@ -64,6 +64,7 @@ func WebhookManagedBy[T runtime.Object](m manager.Manager, object T) *WebhookBui
 
 // WithCustomDefaulter takes an admission.CustomDefaulter interface, a MutatingWebhook with the provided opts (admission.DefaulterOption)
 // will be wired for this type.
+//
 // Deprecated: Use WithDefaulter instead.
 func (blder *WebhookBuilder[T]) WithCustomDefaulter(defaulter admission.CustomDefaulter, opts ...admission.DefaulterOption) *WebhookBuilder[T] {
 	blder.customDefaulter = defaulter
@@ -79,6 +80,7 @@ func (blder *WebhookBuilder[T]) WithDefaulter(defaulter admission.Defaulter[T], 
 }
 
 // WithCustomValidator takes a admission.CustomValidator interface, a ValidatingWebhook will be wired for this type.
+//
 // Deprecated: Use WithValidator instead.
 func (blder *WebhookBuilder[T]) WithCustomValidator(validator admission.CustomValidator) *WebhookBuilder[T] {
 	blder.customValidator = validator
@@ -306,6 +308,7 @@ func (blder *WebhookBuilder[T]) getValidatingWebhook() (*admission.Webhook, erro
 		}
 		w = admission.WithValidator(blder.mgr.GetScheme(), blder.validator)
 	} else if blder.customValidator != nil {
+		//nolint:staticcheck
 		w = admission.WithCustomValidator(blder.mgr.GetScheme(), blder.apiType, blder.customValidator)
 	}
 	if w != nil && blder.recoverPanic != nil {

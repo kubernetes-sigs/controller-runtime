@@ -126,7 +126,7 @@ func suggest(listenHost string) (*net.TCPListener, int, string, error) {
 // It makes sure that new port allocated does not conflict with old ports
 // allocated within 2 minute.
 func Suggest(listenHost string) (int, string, error) {
-	for i := 0; i < portConflictRetry; i++ {
+	for range portConflictRetry {
 		listener, port, resolvedHost, err := suggest(listenHost)
 		if err != nil {
 			return -1, "", err

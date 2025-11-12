@@ -209,14 +209,12 @@ var _ = Describe("Controllerworkqueue", func() {
 
 			wg := sync.WaitGroup{}
 			for range 100 { // The panic only occurred relatively frequently with a high number of go routines.
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					for range 10 {
 						obj, _, _ := q.GetWithPriority()
 						q.Done(obj)
 					}
-				}()
+				})
 			}
 
 			wg.Wait()
@@ -256,9 +254,9 @@ var _ = Describe("Controllerworkqueue", func() {
 func BenchmarkAddGetDone(b *testing.B) {
 	q := New[int]("")
 	defer q.ShutDown()
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		for i := 0; i < 1000; i++ {
+
+	for b.Loop() {
+		for i := range 1000 {
 			q.Add(i)
 		}
 		for range 1000 {
@@ -271,9 +269,9 @@ func BenchmarkAddGetDone(b *testing.B) {
 func BenchmarkAddOnly(b *testing.B) {
 	q := New[int]("")
 	defer q.ShutDown()
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		for i := 0; i < 1000; i++ {
+
+	for b.Loop() {
+		for i := range 1000 {
 			q.Add(i)
 		}
 	}
@@ -288,9 +286,9 @@ func BenchmarkAddLockContended(b *testing.B) {
 			q.Done(item)
 		}
 	}()
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		for i := 0; i < 1000; i++ {
+
+	for b.Loop() {
+		for i := range 1000 {
 			q.Add(i)
 		}
 	}
@@ -329,10 +327,7 @@ func TestFuzzPriorityQueue(t *testing.T) {
 	q, metrics := newQueue()
 
 	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for range 1000 {
 				opts, item := AddOpts{}, ""
 
@@ -354,15 +349,11 @@ func TestFuzzPriorityQueue(t *testing.T) {
 					}
 				}()
 			}
-		}()
+		})
 	}
 
 	for range 100 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for {
 				item, cont := func() (string, bool) {
 					inQueueLock.Lock()
@@ -411,7 +402,7 @@ func TestFuzzPriorityQueue(t *testing.T) {
 					q.Done(item)
 				}()
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

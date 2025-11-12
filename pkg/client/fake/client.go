@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -588,13 +589,7 @@ func (c *fakeClient) objMatchesFieldSelector(o runtime.Object, extractIndex clie
 		panic(fmt.Errorf("expected object %v to be of type client.Object, but it's not", o))
 	}
 
-	for _, extractedVal := range extractIndex(obj) {
-		if extractedVal == val {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(extractIndex(obj), val)
 }
 
 func (c *fakeClient) Scheme() *runtime.Scheme {
@@ -626,10 +621,8 @@ func (c *fakeClient) Create(ctx context.Context, obj client.Object, opts ...clie
 	createOptions := &client.CreateOptions{}
 	createOptions.ApplyOptions(opts)
 
-	for _, dryRunOpt := range createOptions.DryRun {
-		if dryRunOpt == metav1.DryRunAll {
-			return nil
-		}
+	if slices.Contains(createOptions.DryRun, metav1.DryRunAll) {
+		return nil
 	}
 
 	gvr, err := getGVRFromObject(obj, c.scheme)
@@ -693,10 +686,8 @@ func (c *fakeClient) Delete(ctx context.Context, obj client.Object, opts ...clie
 	delOptions := client.DeleteOptions{}
 	delOptions.ApplyOptions(opts)
 
-	for _, dryRunOpt := range delOptions.DryRun {
-		if dryRunOpt == metav1.DryRunAll {
-			return nil
-		}
+	if slices.Contains(delOptions.DryRun, metav1.DryRunAll) {
+		return nil
 	}
 
 	c.trackerWriteLock.Lock()
@@ -742,10 +733,8 @@ func (c *fakeClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ..
 	dcOptions := client.DeleteAllOfOptions{}
 	dcOptions.ApplyOptions(opts)
 
-	for _, dryRunOpt := range dcOptions.DryRun {
-		if dryRunOpt == metav1.DryRunAll {
-			return nil
-		}
+	if slices.Contains(dcOptions.DryRun, metav1.DryRunAll) {
+		return nil
 	}
 
 	c.trackerWriteLock.Lock()
@@ -793,10 +782,8 @@ func (c *fakeClient) update(obj client.Object, isStatus bool, opts ...client.Upd
 	updateOptions := &client.UpdateOptions{}
 	updateOptions.ApplyOptions(opts)
 
-	for _, dryRunOpt := range updateOptions.DryRun {
-		if dryRunOpt == metav1.DryRunAll {
-			return nil
-		}
+	if slices.Contains(updateOptions.DryRun, metav1.DryRunAll) {
+		return nil
 	}
 
 	gvr, err := getGVRFromObject(obj, c.scheme)
@@ -908,10 +895,8 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 	c.schemeLock.RLock()
 	defer c.schemeLock.RUnlock()
 
-	for _, dryRunOpt := range patchOptions.DryRun {
-		if dryRunOpt == metav1.DryRunAll {
-			return nil
-		}
+	if slices.Contains(patchOptions.DryRun, metav1.DryRunAll) {
+		return nil
 	}
 
 	gvr, err := getGVRFromObject(obj, c.scheme)
@@ -1507,7 +1492,7 @@ func inTreeResourcesWithStatus() []schema.GroupVersionKind {
 }
 
 // zero zeros the value of a pointer.
-func zero(x interface{}) {
+func zero(x any) {
 	if x == nil {
 		return
 	}

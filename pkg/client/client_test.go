@@ -97,7 +97,7 @@ func deleteNamespace(ctx context.Context, ns *corev1.Namespace) {
 	Expect(err).NotTo(HaveOccurred())
 
 WAIT_LOOP:
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		ns, err = clientset.CoreV1().Namespaces().Get(ctx, ns.Name, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			// success!
@@ -1215,7 +1215,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				dep.APIVersion = appsv1.SchemeGroupVersion.String()
-				dep.Kind = reflect.TypeOf(dep).Elem().Name()
+				dep.Kind = reflect.TypeFor[appsv1.Deployment]().Name()
 				depUnstructured, err := toUnstructured(dep)
 				Expect(err).NotTo(HaveOccurred())
 

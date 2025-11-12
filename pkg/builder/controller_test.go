@@ -61,10 +61,10 @@ func (l *testLogger) Enabled(int) bool {
 	return true
 }
 
-func (l *testLogger) Info(level int, msg string, keysAndValues ...interface{}) {
+func (l *testLogger) Info(level int, msg string, keysAndValues ...any) {
 }
 
-func (l *testLogger) WithValues(keysAndValues ...interface{}) logr.LogSink {
+func (l *testLogger) WithValues(keysAndValues ...any) logr.LogSink {
 	return l
 }
 

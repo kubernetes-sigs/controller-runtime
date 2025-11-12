@@ -51,6 +51,7 @@ type Validator[T runtime.Object] interface {
 }
 
 // CustomValidator defines functions for validating an operation.
+//
 // Deprecated: CustomValidator is deprecated, use Validator instead
 type CustomValidator = Validator[runtime.Object]
 
@@ -73,6 +74,7 @@ func WithValidator[T runtime.Object](scheme *runtime.Scheme, validator Validator
 }
 
 // WithCustomValidator creates a new Webhook for a CustomValidator.
+//
 // Deprecated: WithCustomValidator is deprecated, use WithValidator instead
 func WithCustomValidator(scheme *runtime.Scheme, obj runtime.Object, validator CustomValidator) *Webhook {
 	return &Webhook{

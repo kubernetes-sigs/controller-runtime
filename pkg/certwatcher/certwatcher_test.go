@@ -255,7 +255,7 @@ var _ = Describe("CertWatcher", func() {
 })
 
 func writeCerts(certPath, keyPath, ip string) error {
-	var priv interface{}
+	var priv any
 	var err error
 	priv, err = rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {

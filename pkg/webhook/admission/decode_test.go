@@ -139,7 +139,7 @@ var _ = Describe("Admission Webhook Decoder", func() {
 		Expect(decoder.Decode(req, &target)).To(Succeed())
 
 		By("sanity-checking the metadata on the output object")
-		Expect(target.Object["metadata"]).To(Equal(map[string]interface{}{
+		Expect(target.Object["metadata"]).To(Equal(map[string]any{
 			"name":      "foo",
 			"namespace": "default",
 		}))
@@ -149,7 +149,7 @@ var _ = Describe("Admission Webhook Decoder", func() {
 		Expect(decoder.DecodeRaw(req.Object, &target2)).To(Succeed())
 
 		By("sanity-checking the metadata on the output object")
-		Expect(target2.Object["metadata"]).To(Equal(map[string]interface{}{
+		Expect(target2.Object["metadata"]).To(Equal(map[string]any{
 			"name":      "foo",
 			"namespace": "default",
 		}))

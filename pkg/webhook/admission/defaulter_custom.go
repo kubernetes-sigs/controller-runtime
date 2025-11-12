@@ -38,6 +38,7 @@ type Defaulter[T runtime.Object] interface {
 }
 
 // CustomDefaulter defines functions for setting defaults on resources.
+//
 // Deprecated: CustomDefaulter is deprecated, use Defaulter instead
 type CustomDefaulter = Defaulter[runtime.Object]
 

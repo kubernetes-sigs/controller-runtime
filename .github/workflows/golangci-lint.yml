@@ -34,6 +34,6 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@0a35821d5c230e903fcfe077583637dea1b27b47 # tag=v9.0.0
         with:
-          version: v2.5.0
+          version: v2.6.1
           args: --output.text.print-linter-name=true --output.text.colors=true --timeout 10m
           working-directory: ${{matrix.working-directory}}

@@ -31,6 +31,7 @@ linters:
     - iotamixing
     - makezero
     - misspell
+    - modernize
     - nakedret
     - nilerr
     - nolintlint
@@ -75,6 +76,9 @@ linters:
         - pkg: sigs.k8s.io/controller-runtime
           alias: ctrl
       no-unaliased: true
+    modernize:
+      disable:
+        - omitzero
     revive:
       rules:
         # The following rules are recommended https://github.com/mgechev/revive#recommended-configuration
@@ -125,6 +129,9 @@ linters:
       - linters:
           - staticcheck
         text: 'SA1019: .*The component config package has been deprecated and will be removed in a future release.'
+      - linters:
+          - staticcheck
+        text: 'SA1019: .* is deprecated: .* is deprecated, use .* instead '
       # With Go 1.16, the new embed directive can be used with an un-named import,
       # revive (previously, golint) only allows these to be imported in a main.go, which wouldn't work for us.
       # This directive allows the embed package to be imported with an underscore everywhere.

@@ -216,7 +216,7 @@ var _ = Describe("Cache with transformers", func() {
 
 		By("creating the informer cache")
 		informerCache, err = cache.New(cfg, cache.Options{
-			DefaultTransform: func(i interface{}) (interface{}, error) {
+			DefaultTransform: func(i any) (any, error) {
 				obj := i.(runtime.Object)
 				Expect(obj).NotTo(BeNil())
 
@@ -238,7 +238,7 @@ var _ = Describe("Cache with transformers", func() {
 			},
 			ByObject: map[client.Object]cache.ByObject{
 				&corev1.Pod{}: {
-					Transform: func(i interface{}) (interface{}, error) {
+					Transform: func(i any) (any, error) {
 						obj := i.(runtime.Object)
 						Expect(obj).NotTo(BeNil())
 						accessor, err := meta.Accessor(obj)
@@ -1103,7 +1103,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						Expect(out).To(Equal(uKnownPod2))
 
 						By("altering a field in the retrieved pod")
-						m, _ := out.Object["spec"].(map[string]interface{})
+						m, _ := out.Object["spec"].(map[string]any)
 						m["activeDeadlineSeconds"] = 4
 
 						By("verifying the pods are no longer equal")
@@ -1954,8 +1954,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(sii.HasSynced()).To(BeTrue())
 
 					By("adding an event handler listening for object creation which sends the object to a channel")
-					out := make(chan interface{})
-					addFunc := func(obj interface{}) {
+					out := make(chan any)
+					addFunc := func(obj any) {
 						out <- obj
 					}
 					_, _ = sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
@@ -2014,8 +2014,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(sii.HasSynced()).To(BeTrue())
 
 					By("adding an event handler listening for object creation which sends the object to a channel")
-					out := make(chan interface{})
-					addFunc := func(obj interface{}) {
+					out := make(chan any)
+					addFunc := func(obj any) {
 						out <- obj
 					}
 					_, _ = sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
@@ -2196,9 +2196,9 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("getting a shared index informer for a pod")
 
 					pod := &unstructured.Unstructured{
-						Object: map[string]interface{}{
-							"spec": map[string]interface{}{
-								"containers": []map[string]interface{}{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"containers": []map[string]any{
 									{
 										"name":  "nginx",
 										"image": "nginx",
@@ -2220,8 +2220,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(sii.HasSynced()).To(BeTrue())
 
 					By("adding an event handler listening for object creation which sends the object to a channel")
-					out := make(chan interface{})
-					addFunc := func(obj interface{}) {
+					out := make(chan any)
+					addFunc := func(obj any) {
 						out <- obj
 					}
 					_, _ = sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
@@ -2239,9 +2239,9 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				It("should be able to stop and restart informers", func(ctx SpecContext) {
 					By("getting a shared index informer for a pod")
 					pod := &unstructured.Unstructured{
-						Object: map[string]interface{}{
-							"spec": map[string]interface{}{
-								"containers": []map[string]interface{}{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"containers": []map[string]any{
 									{
 										"name":  "nginx",
 										"image": "nginx",
@@ -2294,7 +2294,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 						if !ok {
 							return []string{}
 						}
-						m, ok := s.(map[string]interface{})
+						m, ok := s.(map[string]any)
 						if !ok {
 							return []string{}
 						}
@@ -2379,8 +2379,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(sii.HasSynced()).To(BeTrue())
 
 					By("adding an event handler listening for object creation which sends the object to a channel")
-					out := make(chan interface{})
-					addFunc := func(obj interface{}) {
+					out := make(chan any)
+					addFunc := func(obj any) {
 						out <- obj
 					}
 					_, _ = sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})

@@ -97,7 +97,7 @@ func deleteNamespace(ctx context.Context, ns *corev1.Namespace) {
 	Expect(err).NotTo(HaveOccurred())
 
 WAIT_LOOP:
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		ns, err = clientset.CoreV1().Namespaces().Get(ctx, ns.Name, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			// success!
@@ -1215,7 +1215,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				dep.APIVersion = appsv1.SchemeGroupVersion.String()
-				dep.Kind = reflect.TypeOf(dep).Elem().Name()
+				dep.Kind = reflect.TypeFor[appsv1.Deployment]().Name()
 				depUnstructured, err := toUnstructured(dep)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -4133,7 +4133,7 @@ var _ = Describe("Patch", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("returning a patch with data only containing the annotation change")
-			Expect(data).To(Equal([]byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`, annotationKey, annotationValue))))
+			Expect(data).To(Equal(fmt.Appendf(nil, `{"metadata":{"annotations":{"%s":"%s"}}}`, annotationKey, annotationValue)))
 		})
 
 		It("creates a merge patch with the modifications applied during the mutation, using optimistic locking", func() {
@@ -4158,7 +4158,7 @@ var _ = Describe("Patch", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("returning a patch with data containing the annotation change and the resourceVersion change")
-			Expect(data).To(Equal([]byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"},"resourceVersion":"%s"}}`, annotationKey, annotationValue, cm.ResourceVersion))))
+			Expect(data).To(Equal(fmt.Appendf(nil, `{"metadata":{"annotations":{"%s":"%s"},"resourceVersion":"%s"}}`, annotationKey, annotationValue, cm.ResourceVersion)))
 		})
 	})
 
@@ -4234,9 +4234,9 @@ var _ = Describe("Patch", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("returning a patch with data containing the image change and the resourceVersion change")
-			Expect(data).To(Equal([]byte(fmt.Sprintf(`{"metadata":{"resourceVersion":"%s"},`+
+			Expect(data).To(Equal(fmt.Appendf(nil, `{"metadata":{"resourceVersion":"%s"},`+
 				`"spec":{"template":{"spec":{"$setElementOrder/containers":[{"name":"main"},{"name":"sidecar"}],"containers":[{"image":"foo:v2","name":"main"}]}}}}`,
-				dep.ResourceVersion))))
+				dep.ResourceVersion)))
 		})
 	})
 })

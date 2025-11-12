@@ -746,7 +746,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 
 				wg := sync.WaitGroup{}
 				wg.Add(50)
-				for i := 0; i < 50; i++ {
+				for range 50 {
 					go func() {
 						defer wg.Done()
 						httpClient, err := rest.HTTPClientFor(restCfg)
@@ -811,7 +811,7 @@ type errorMatcher struct {
 	message   string
 }
 
-func (e *errorMatcher) Match(actual interface{}) (success bool, err error) {
+func (e *errorMatcher) Match(actual any) (success bool, err error) {
 	if actual == nil {
 		return false, nil
 	}
@@ -824,10 +824,10 @@ func (e *errorMatcher) Match(actual interface{}) (success bool, err error) {
 	return e.checkFunc(actualErr), nil
 }
 
-func (e *errorMatcher) FailureMessage(actual interface{}) (message string) {
+func (e *errorMatcher) FailureMessage(actual any) (message string) {
 	return format.Message(actual, fmt.Sprintf("to be %s error", e.message))
 }
 
-func (e *errorMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+func (e *errorMatcher) NegatedFailureMessage(actual any) (message string) {
 	return format.Message(actual, fmt.Sprintf("not to be %s error", e.message))
 }

@@ -88,7 +88,7 @@ type MergeFromOptions struct {
 
 type mergeFromPatch struct {
 	patchType   types.PatchType
-	createPatch func(originalJSON, modifiedJSON []byte, dataStruct interface{}) ([]byte, error)
+	createPatch func(originalJSON, modifiedJSON []byte, dataStruct any) ([]byte, error)
 	from        Object
 	opts        MergeFromOptions
 }
@@ -134,11 +134,11 @@ func (s *mergeFromPatch) Data(obj Object) ([]byte, error) {
 	return data, nil
 }
 
-func createMergePatch(originalJSON, modifiedJSON []byte, _ interface{}) ([]byte, error) {
+func createMergePatch(originalJSON, modifiedJSON []byte, _ any) ([]byte, error) {
 	return jsonpatch.CreateMergePatch(originalJSON, modifiedJSON)
 }
 
-func createStrategicMergePatch(originalJSON, modifiedJSON []byte, dataStruct interface{}) ([]byte, error) {
+func createStrategicMergePatch(originalJSON, modifiedJSON []byte, dataStruct any) ([]byte, error) {
 	return strategicpatch.CreateTwoWayMergePatch(originalJSON, modifiedJSON, dataStruct)
 }
 

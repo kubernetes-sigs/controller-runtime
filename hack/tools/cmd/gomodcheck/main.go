@@ -162,7 +162,7 @@ func modulesFromUpstreamModGraph(upstreamRefList []string) (map[string]map[strin
 	}
 
 	modToVersionToUpstreamRef := make(map[string]map[string]string)
-	for _, line := range strings.Split(graph, "\n") {
+	for line := range strings.SplitSeq(graph, "\n") {
 		ref := strings.SplitN(line, "@", 2)[0]
 
 		if _, ok := upstreamRefs[ref]; !ok {

@@ -103,10 +103,7 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 	// RenewDeadline to keep a single hung request from forcing a leader loss.
 	// Setting it to max(time.Second, RenewDeadline/2) as a reasonable heuristic.
 	if options.RenewDeadline != 0 {
-		timeout := options.RenewDeadline / 2
-		if timeout < time.Second {
-			timeout = time.Second
-		}
+		timeout := max(options.RenewDeadline/2, time.Second)
 		config.Timeout = timeout
 	}
 

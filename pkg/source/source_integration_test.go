@@ -41,7 +41,7 @@ var _ = Describe("Source", func() {
 	var instance1, instance2 source.Source
 	var obj client.Object
 	var q workqueue.TypedRateLimitingInterface[reconcile.Request]
-	var c1, c2 chan interface{}
+	var c1, c2 chan any
 	var ns string
 	count := 0
 
@@ -59,8 +59,8 @@ var _ = Describe("Source", func() {
 			workqueue.TypedRateLimitingQueueConfig[reconcile.Request]{
 				Name: "test",
 			})
-		c1 = make(chan interface{})
-		c2 = make(chan interface{})
+		c1 = make(chan any)
+		c2 = make(chan any)
 	})
 
 	AfterEach(func(ctx SpecContext) {
@@ -101,7 +101,7 @@ var _ = Describe("Source", func() {
 				}
 
 				// Create an event handler to verify the events
-				newHandler := func(c chan interface{}) handler.Funcs {
+				newHandler := func(c chan any) handler.Funcs {
 					return handler.Funcs{
 						CreateFunc: func(ctx context.Context, evt event.CreateEvent, rli workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()

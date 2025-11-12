@@ -41,8 +41,8 @@ var _ = Describe("Scheme", func() {
 			internalGv := schema.GroupVersion{Group: "core", Version: "__internal"}
 			emptyGv := schema.GroupVersion{Group: "", Version: "v1"}
 			Expect(s.AllKnownTypes()).To(MatchAllKeys(Keys{
-				gv.WithKind("Pod"):     Equal(reflect.TypeOf(corev1.Pod{})),
-				gv.WithKind("PodList"): Equal(reflect.TypeOf(corev1.PodList{})),
+				gv.WithKind("Pod"):     Equal(reflect.TypeFor[corev1.Pod]()),
+				gv.WithKind("PodList"): Equal(reflect.TypeFor[corev1.PodList]()),
 
 				// Base types
 				gv.WithKind("CreateOptions"): Ignore(),
@@ -80,12 +80,12 @@ var _ = Describe("Scheme", func() {
 			emptyGv := schema.GroupVersion{Group: "", Version: "v1"}
 			Expect(s.AllKnownTypes()).To(MatchAllKeys(Keys{
 				// Types from b1
-				gv1.WithKind("Pod"):     Equal(reflect.TypeOf(corev1.Pod{})),
-				gv1.WithKind("PodList"): Equal(reflect.TypeOf(corev1.PodList{})),
+				gv1.WithKind("Pod"):     Equal(reflect.TypeFor[corev1.Pod]()),
+				gv1.WithKind("PodList"): Equal(reflect.TypeFor[corev1.PodList]()),
 
 				// Types from b2
-				gv2.WithKind("Deployment"):     Equal(reflect.TypeOf(appsv1.Deployment{})),
-				gv2.WithKind("DeploymentList"): Equal(reflect.TypeOf(appsv1.DeploymentList{})),
+				gv2.WithKind("Deployment"):     Equal(reflect.TypeFor[appsv1.Deployment]()),
+				gv2.WithKind("DeploymentList"): Equal(reflect.TypeFor[appsv1.DeploymentList]()),
 
 				// Base types
 				gv1.WithKind("CreateOptions"): Ignore(),

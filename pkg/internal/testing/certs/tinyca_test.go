@@ -120,7 +120,7 @@ var _ = Describe("TinyCA", func() {
 
 				localhostAddrs, err := net.LookupHost("localhost")
 				Expect(err).NotTo(HaveOccurred(), "should be able to find IPs for localhost")
-				localhostIPs := make([]interface{}, len(localhostAddrs))
+				localhostIPs := make([]any, len(localhostAddrs))
 				for i, addr := range localhostAddrs {
 					// normalize the elements with To16 so we can compare them to the output of
 					// of ParseIP safely (the alternative is a custom matcher that calls Equal,

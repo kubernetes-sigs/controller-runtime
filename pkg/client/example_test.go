@@ -122,24 +122,24 @@ func ExampleClient_create() {
 
 	// Using a unstructured object.
 	u := &unstructured.Unstructured{}
-	u.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{
+	u.Object = map[string]any{
+		"metadata": map[string]any{
 			"name":      "name",
 			"namespace": "namespace",
 		},
-		"spec": map[string]interface{}{
+		"spec": map[string]any{
 			"replicas": 2,
-			"selector": map[string]interface{}{
-				"matchLabels": map[string]interface{}{
+			"selector": map[string]any{
+				"matchLabels": map[string]any{
 					"foo": "bar",
 				},
 			},
-			"template": map[string]interface{}{
-				"labels": map[string]interface{}{
+			"template": map[string]any{
+				"labels": map[string]any{
 					"foo": "bar",
 				},
-				"spec": map[string]interface{}{
-					"containers": []map[string]interface{}{
+				"spec": map[string]any{
+					"containers": []map[string]any{
 						{
 							"name":  "nginx",
 							"image": "nginx",
@@ -227,8 +227,8 @@ func ExampleClient_apply() {
 // This example shows how to use the client with typed and unstructured objects to patch objects' status.
 func ExampleClient_patchStatus() {
 	u := &unstructured.Unstructured{}
-	u.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{
+	u.Object = map[string]any{
+		"metadata": map[string]any{
 			"name":      "foo",
 			"namespace": "namespace",
 		},
@@ -238,7 +238,7 @@ func ExampleClient_patchStatus() {
 		Version: "v1beta1",
 		Kind:    "CronJob",
 	})
-	patch := []byte(fmt.Sprintf(`{"status":{"lastScheduleTime":"%s"}}`, time.Now().Format(time.RFC3339)))
+	patch := fmt.Appendf(nil, `{"status":{"lastScheduleTime":"%s"}}`, time.Now().Format(time.RFC3339))
 	_ = c.Status().Patch(context.Background(), u, client.RawPatch(types.MergePatchType, patch))
 }
 

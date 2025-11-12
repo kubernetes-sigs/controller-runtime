@@ -69,7 +69,7 @@ func (t *Task) Run(c chan os.Signal) {
 }
 
 func handle() {
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		fmt.Print("#")
 		time.Sleep(time.Millisecond * 100)
 	}

@@ -181,7 +181,7 @@ var _ = Describe("runnableGroup", func() {
 			Expect(rg.Start(ctx)).To(Succeed())
 		}()
 
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			go func(i int) {
 				defer GinkgoRecover()
 
@@ -199,7 +199,7 @@ var _ = Describe("runnableGroup", func() {
 
 		exited := ptr.To(int64(0))
 		rg := newRunnableGroup(defaultBaseContext, errCh)
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			Expect(rg.Add(RunnableFunc(func(c context.Context) error {
 				defer atomic.AddInt64(exited, 1)
 				<-ctx.Done()
@@ -231,7 +231,7 @@ var _ = Describe("runnableGroup", func() {
 			Expect(rg.Start(ctx)).To(Succeed())
 		}()
 
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			go func(i int) {
 				defer GinkgoRecover()
 
@@ -264,7 +264,7 @@ var _ = Describe("runnableGroup", func() {
 			rg.StopAndWait(ctx)
 		}()
 
-		for i := 0; i < 200; i++ {
+		for i := range 200 {
 			go func(i int) {
 				defer GinkgoRecover()
 
@@ -293,7 +293,7 @@ var _ = Describe("runnableGroup", func() {
 			Expect(rg.Start(ctx)).To(Succeed())
 		}()
 
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			go func(i int) {
 				defer GinkgoRecover()
 

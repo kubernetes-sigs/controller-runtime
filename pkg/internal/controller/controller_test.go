@@ -636,14 +636,12 @@ var _ = Describe("controller", func() {
 
 			By("Calling startEventSourcesAndQueueLocked multiple times in parallel")
 			var wg sync.WaitGroup
-			for i := 1; i <= 5; i++ {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+			for range 5 {
+				wg.Go(func() {
 					err := ctrl.startEventSourcesAndQueueLocked(ctx)
 					// All calls should return the same nil error
 					Expect(err).NotTo(HaveOccurred())
-				}()
+				})
 			}
 
 			wg.Wait()
@@ -1625,7 +1623,7 @@ var _ = Describe("controller", func() {
 			}
 
 			var wg sync.WaitGroup
-			for i := 0; i < 5; i++ {
+			for range 5 {
 				wg.Add(1)
 				go func() {
 					defer GinkgoRecover()

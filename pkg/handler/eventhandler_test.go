@@ -183,7 +183,7 @@ var _ = Describe("Eventhandler", func() {
 
 			i1, _ := q.Get()
 			i2, _ := q.Get()
-			Expect([]interface{}{i1, i2}).To(ConsistOf(
+			Expect([]any{i1, i2}).To(ConsistOf(
 				reconcile.Request{
 					NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}},
 				reconcile.Request{
@@ -215,7 +215,7 @@ var _ = Describe("Eventhandler", func() {
 
 			i1, _ := q.Get()
 			i2, _ := q.Get()
-			Expect([]interface{}{i1, i2}).To(ConsistOf(
+			Expect([]any{i1, i2}).To(ConsistOf(
 				reconcile.Request{
 					NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}},
 				reconcile.Request{
@@ -280,7 +280,7 @@ var _ = Describe("Eventhandler", func() {
 
 			i1, _ := q.Get()
 			i2, _ := q.Get()
-			Expect([]interface{}{i1, i2}).To(ConsistOf(
+			Expect([]any{i1, i2}).To(ConsistOf(
 				reconcile.Request{
 					NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}},
 				reconcile.Request{
@@ -362,7 +362,7 @@ var _ = Describe("Eventhandler", func() {
 
 			i1, _ := q.Get()
 			i2, _ := q.Get()
-			Expect([]interface{}{i1, i2}).To(ConsistOf(
+			Expect([]any{i1, i2}).To(ConsistOf(
 				reconcile.Request{
 					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo1-parent"}},
 				reconcile.Request{
@@ -602,7 +602,7 @@ var _ = Describe("Eventhandler", func() {
 				i1, _ := q.Get()
 				i2, _ := q.Get()
 				i3, _ := q.Get()
-				Expect([]interface{}{i1, i2, i3}).To(ConsistOf(
+				Expect([]any{i1, i2, i3}).To(ConsistOf(
 					reconcile.Request{
 						NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo1-parent"}},
 					reconcile.Request{

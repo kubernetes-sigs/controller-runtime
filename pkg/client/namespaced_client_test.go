@@ -706,9 +706,9 @@ var _ = Describe("NamespacedClient", func() {
 })
 
 func generatePatch() []byte {
-	mergePatch, err := json.Marshal(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"annotations": map[string]interface{}{
+	mergePatch, err := json.Marshal(map[string]any{
+		"metadata": map[string]any{
+			"annotations": map[string]any{
 				"foo": "bar",
 			},
 		},

@@ -857,7 +857,7 @@ var _ = Describe("Fake client", func() {
 		})
 
 		It("should handle finalizers deleting a collection", func(ctx SpecContext) {
-			for i := 0; i < 5; i++ {
+			for i := range 5 {
 				namespacedName := types.NamespacedName{
 					Name:      fmt.Sprintf("test-cm-%d", i),
 					Namespace: "delete-collection-with-finalizers",
@@ -992,9 +992,9 @@ var _ = Describe("Fake client", func() {
 
 		It("should be able to Patch", func(ctx SpecContext) {
 			By("Patching a deployment")
-			mergePatch, err := json.Marshal(map[string]interface{}{
-				"metadata": map[string]interface{}{
-					"annotations": map[string]interface{}{
+			mergePatch, err := json.Marshal(map[string]any{
+				"metadata": map[string]any{
+					"annotations": map[string]any{
 						"foo": "bar",
 					},
 				},
@@ -1209,8 +1209,8 @@ var _ = Describe("Fake client", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Removing the finalizer")
-			mergePatch, err := json.Marshal(map[string]interface{}{
-				"metadata": map[string]interface{}{
+			mergePatch, err := json.Marshal(map[string]any{
+				"metadata": map[string]any{
 					"$deleteFromPrimitiveList/finalizers": []string{
 						"finalizers.sigs.k8s.io/test",
 					},
@@ -2012,7 +2012,7 @@ var _ = Describe("Fake client", func() {
 		Expect(cl.Create(ctx, obj)).To(Succeed())
 		original := obj.DeepCopy()
 
-		err := unstructured.SetNestedField(obj.Object, map[string]interface{}{"count": int64(2)}, "status")
+		err := unstructured.SetNestedField(obj.Object, map[string]any{"count": int64(2)}, "status")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cl.Patch(ctx, obj, client.MergeFrom(original))).To(Succeed())
 
@@ -3092,12 +3092,12 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("will error out if an object with invalid managedFields is added", func(ctx SpecContext) {
-		fieldV1Map := map[string]interface{}{
-			"f:metadata": map[string]interface{}{
-				"f:name":        map[string]interface{}{},
-				"f:labels":      map[string]interface{}{},
-				"f:annotations": map[string]interface{}{},
-				"f:finalizers":  map[string]interface{}{},
+		fieldV1Map := map[string]any{
+			"f:metadata": map[string]any{
+				"f:name":        map[string]any{},
+				"f:labels":      map[string]any{},
+				"f:annotations": map[string]any{},
+				"f:finalizers":  map[string]any{},
 			},
 		}
 		fieldV1, err := json.Marshal(fieldV1Map)
@@ -3120,12 +3120,12 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("allows adding an object with managedFields", func(ctx SpecContext) {
-		fieldV1Map := map[string]interface{}{
-			"f:metadata": map[string]interface{}{
-				"f:name":        map[string]interface{}{},
-				"f:labels":      map[string]interface{}{},
-				"f:annotations": map[string]interface{}{},
-				"f:finalizers":  map[string]interface{}{},
+		fieldV1Map := map[string]any{
+			"f:metadata": map[string]any{
+				"f:name":        map[string]any{},
+				"f:labels":      map[string]any{},
+				"f:annotations": map[string]any{},
+				"f:finalizers":  map[string]any{},
 			},
 		}
 		fieldV1, err := json.Marshal(fieldV1Map)
@@ -3147,12 +3147,12 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("allows adding an object with invalid managedFields when not using the FieldManagedObjectTracker", func(ctx SpecContext) {
-		fieldV1Map := map[string]interface{}{
-			"f:metadata": map[string]interface{}{
-				"f:name":        map[string]interface{}{},
-				"f:labels":      map[string]interface{}{},
-				"f:annotations": map[string]interface{}{},
-				"f:finalizers":  map[string]interface{}{},
+		fieldV1Map := map[string]any{
+			"f:metadata": map[string]any{
+				"f:name":        map[string]any{},
+				"f:labels":      map[string]any{},
+				"f:annotations": map[string]any{},
+				"f:finalizers":  map[string]any{},
 			},
 		}
 		fieldV1, err := json.Marshal(fieldV1Map)
@@ -3270,7 +3270,7 @@ var _ = Describe("Fake client", func() {
 	}
 })
 
-type Schemaless map[string]interface{}
+type Schemaless map[string]any
 
 type WithSchemalessSpec struct {
 	metav1.TypeMeta   `json:",inline"`

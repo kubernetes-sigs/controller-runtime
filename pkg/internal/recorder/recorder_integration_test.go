@@ -45,14 +45,14 @@ var _ = Describe("recorder", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
-			deprecatedRecorder := cm.GetEventRecorderFor("test-deprecated-recorder") //nolint:staticcheck
+			deprecatedRecorder := cm.GetEventRecorder("test-deprecated-recorder")
 			recorder := cm.GetEventRecorder("test-recorder")
 			instance, err := controller.New("foo-controller", cm, controller.Options{
 				Reconciler: reconcile.Func(
 					func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 						dp, err := clientset.AppsV1().Deployments(request.Namespace).Get(ctx, request.Name, metav1.GetOptions{})
 						Expect(err).NotTo(HaveOccurred())
-						deprecatedRecorder.Event(dp, corev1.EventTypeNormal, "deprecated-test-reason", "deprecated-test-msg")
+						deprecatedRecorder.Eventf(dp, nil, corev1.EventTypeNormal, "deprecated-test-reason", "deprecatedAction", "deprecated-test-msg")
 						recorder.Eventf(dp, nil, corev1.EventTypeNormal, "test-reason", "test-action", "test-note")
 						return reconcile.Result{}, nil
 					}),

@@ -1180,6 +1180,7 @@ func (*testDefaulter) Default(ctx context.Context, obj *TestDefaulterObject) err
 	return nil
 }
 
+//nolint:staticcheck
 var _ admission.CustomDefaulter = &TestCustomDefaulter{}
 
 type TestCustomValidator struct{}
@@ -1263,6 +1264,7 @@ func (*testValidator) ValidateDelete(ctx context.Context, obj *TestValidatorObje
 	return nil, nil
 }
 
+//nolint:staticcheck
 var _ admission.CustomValidator = &TestCustomValidator{}
 
 // TestCustomDefaultValidator for default
@@ -1286,6 +1288,7 @@ func (*TestCustomDefaultValidator) Default(ctx context.Context, obj runtime.Obje
 	return nil
 }
 
+//nolint:staticcheck
 var _ admission.CustomDefaulter = &TestCustomDefaulter{}
 
 // TestCustomDefaultValidator for validation
@@ -1345,6 +1348,7 @@ func (*TestCustomDefaultValidator) ValidateDelete(ctx context.Context, obj runti
 	return nil, nil
 }
 
+//nolint:staticcheck
 var _ admission.CustomValidator = &TestCustomValidator{}
 
 type testValidatorDefaulter struct{}

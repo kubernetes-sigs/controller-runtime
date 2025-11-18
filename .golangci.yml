@@ -31,6 +31,7 @@ linters:
     - iotamixing
     - makezero
     - misspell
+    - modernize
     - nakedret
     - nilerr
     - nolintlint
@@ -75,6 +76,10 @@ linters:
         - pkg: sigs.k8s.io/controller-runtime
           alias: ctrl
       no-unaliased: true
+    modernize:
+      disable:
+        - omitzero
+        - fmtappendf
     revive:
       rules:
         # The following rules are recommended https://github.com/mgechev/revive#recommended-configuration

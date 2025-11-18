@@ -474,11 +474,9 @@ func TestDefaultOptsRace(t *testing.T) {
 	// Start go routines which re-use the above options struct.
 	wg := sync.WaitGroup{}
 	for range 2 {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			_, _ = defaultOpts(&rest.Config{}, opts)
-			wg.Done()
-		}()
+		})
 	}
 
 	// Wait for the go routines to finish.
@@ -509,7 +507,7 @@ func TestDefaultConfigConsidersAllFields(t *testing.T) {
 		},
 	)
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		fuzzed := Config{}
 		f.Fuzz(&fuzzed)
 

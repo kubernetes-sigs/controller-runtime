@@ -52,6 +52,9 @@ type Options struct {
 
 	// DryRun instructs the client to only perform dry run requests.
 	DryRun *bool
+
+	// FieldOwner, if provided, instructs the client to be wrapped with WithFieldOwner function
+	FieldOwner string
 }
 
 // CacheOptions are options for creating a cache-backed client.
@@ -99,6 +102,10 @@ func New(config *rest.Config, options Options) (c Client, err error) {
 	if err == nil && options.DryRun != nil && *options.DryRun {
 		c = NewDryRunClient(c)
 	}
+	if fo := options.FieldOwner; fo != "" {
+		c = WithFieldOwner(c, fo)
+	}
+
 	return c, err
 }
 

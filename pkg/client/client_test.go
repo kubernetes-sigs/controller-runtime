@@ -365,6 +365,19 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			Expect(cl.List(ctx, &corev1.NamespaceList{})).To(Succeed())
 			Expect(cache.Called).To(Equal(0))
 		})
+
+		It("should use the provided FieldOwner if provided", func(ctx SpecContext) {
+			cl, err := client.New(cfg, client.Options{FieldOwner: "test-owner"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cl).NotTo(BeNil())
+			// no explicit FieldOwner option set on Apply method call
+			err = cl.Apply(ctx, corev1applyconfigurations.ConfigMap("test-cm", "default").WithData(map[string]string{"foo": "bar"}))
+			Expect(err).NotTo(HaveOccurred())
+			actual, err := clientset.CoreV1().ConfigMaps("default").Get(ctx, "test-cm", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual.ManagedFields).To(HaveLen(1))
+			Expect(actual.ManagedFields[0].Manager).To(Equal("test-owner"))
+		})
 	})
 
 	Describe("Create", func() {

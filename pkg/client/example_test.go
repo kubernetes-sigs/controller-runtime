@@ -25,7 +25,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -218,10 +217,23 @@ func ExampleClient_patch() {
 func ExampleClient_apply() {
 	// Using a typed object.
 	configMap := corev1ac.ConfigMap("name", "namespace").WithData(map[string]string{"key": "value"})
-	// c is a created client.
-	u := &unstructured.Unstructured{}
-	u.Object, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(configMap)
-	_ = c.Patch(context.Background(), u, client.Apply, client.ForceOwnership, client.FieldOwner("field-owner"))
+	_ = c.Apply(context.Background(), configMap)
+
+	// Using a unstructured object.
+	u := &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "ConfigMap",
+			"metadata": map[string]any{
+				"name":      "name",
+				"namespace": "namespace",
+			},
+			"data": map[string]any{
+				"key": "value",
+			},
+		},
+	}
+	_ = c.Apply(context.Background(), client.ApplyConfigurationFromUnstructured(u))
 }
 
 // This example shows how to use the client with typed and unstructured objects to patch objects' status.

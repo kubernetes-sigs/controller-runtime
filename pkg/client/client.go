@@ -53,7 +53,13 @@ type Options struct {
 	// DryRun instructs the client to only perform dry run requests.
 	DryRun *bool
 
-	// FieldOwner, if provided, instructs the client to be wrapped with WithFieldOwner function
+	// FieldOwner, if provided, sets the default field manager for all write operations
+	// (Create, Update, Patch, Apply) performed by this client. The field manager is used by
+	// the server for Server-Side Apply to track field ownership.
+	// For more details, see: https://kubernetes.io/docs/reference/using-api/server-side-apply/#field-management
+	//
+	// This default can be overridden for a specific call by passing a [FieldOwner] option
+	// to the method.
 	FieldOwner string
 }
 

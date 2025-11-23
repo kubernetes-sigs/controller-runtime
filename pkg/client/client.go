@@ -65,7 +65,6 @@ type Options struct {
 	// FieldValidation sets the field validation strategy for all mutating operations performed by this client
 	// and subresource clients created from it.
 	// The exception are apply requests which are always strict, regardless of the FieldValidation setting
-	// This option does not affect Apply operations.
 	// Available values for this option can be found in "k8s.io/apimachinery/pkg/apis/meta/v1" package and are:
 	//  - FieldValidationIgnore
 	//  - FieldValidationWarn

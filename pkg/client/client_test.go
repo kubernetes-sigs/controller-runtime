@@ -43,6 +43,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/rand"
 	appsv1applyconfigurations "k8s.io/client-go/applyconfigurations/apps/v1"
 	autoscaling1applyconfigurations "k8s.io/client-go/applyconfigurations/autoscaling/v1"
 	corev1applyconfigurations "k8s.io/client-go/applyconfigurations/core/v1"
@@ -377,6 +378,52 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			Expect(err).NotTo(HaveOccurred())
 			Expect(actual.ManagedFields).To(HaveLen(1))
 			Expect(actual.ManagedFields[0].Manager).To(Equal("test-owner"))
+		})
+
+		Context("with the FieldValidation option", func() {
+			It("should log warnings with FieldValidation equal to Warn", func(ctx SpecContext) {
+				restCfg := rest.CopyConfig(cfg)
+				var testLog bytes.Buffer
+				restCfg.WarningHandler = rest.NewWarningWriter(&testLog, rest.WarningWriterOptions{})
+
+				warnClient, err := client.New(restCfg, client.Options{FieldValidation: metav1.FieldValidationWarn})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(warnClient).NotTo(BeNil())
+
+				unstrContent, err := runtime.DefaultUnstructuredConverter.ToUnstructured(
+					corev1applyconfigurations.ConfigMap("test-cm-"+rand.String(3), "default").
+						WithData(map[string]string{"foo": "bar"}),
+				)
+				Expect(err).NotTo(HaveOccurred())
+				unstrContent["additionalField"] = "test"
+				cm := &unstructured.Unstructured{Object: unstrContent}
+
+				err = warnClient.Create(ctx, cm)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(testLog.String()).To(ContainSubstring(`Warning: unknown field "additionalField"`))
+
+			})
+			It("should fail write operation if FieldValidation equals Strict", func(ctx SpecContext) {
+				restCfg := rest.CopyConfig(cfg)
+				var testLog bytes.Buffer
+				restCfg.WarningHandler = rest.NewWarningWriter(&testLog, rest.WarningWriterOptions{})
+				strictClient, err := client.New(restCfg, client.Options{FieldValidation: metav1.FieldValidationStrict})
+				Expect(err).NotTo(HaveOccurred())
+
+				unstrContent, err := runtime.DefaultUnstructuredConverter.ToUnstructured(
+					corev1applyconfigurations.ConfigMap("test-cm-"+rand.String(3), "default").
+						WithData(map[string]string{"foo": "bar"}),
+				)
+				Expect(err).NotTo(HaveOccurred())
+				unstrContent["additionalField"] = "test"
+				cm := &unstructured.Unstructured{Object: unstrContent}
+
+				err = strictClient.Create(ctx, cm)
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError(ContainSubstring("unknown field \"additionalField\"")))
+				Expect(err).To(MatchError(ContainSubstring("strict decoding error")))
+				Expect(testLog.String()).To(BeEmpty())
+			})
 		})
 	})
 

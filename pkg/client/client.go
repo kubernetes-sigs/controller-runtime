@@ -61,6 +61,16 @@ type Options struct {
 	// This default can be overridden for a specific call by passing a [FieldOwner] option
 	// to the method.
 	FieldOwner string
+
+	// FieldValidation sets the field validation strategy for all mutating operations performed by this client
+	// and subresource clients created from it.
+	// The exception are apply requests which are always strict, regardless of the FieldValidation setting.
+	// Available values for this option can be found in "k8s.io/apimachinery/pkg/apis/meta/v1" package and are:
+	//  - FieldValidationIgnore
+	//  - FieldValidationWarn
+	//  - FieldValidationStrict
+	// For more details, see: https://kubernetes.io/docs/reference/using-api/api-concepts/#field-validation
+	FieldValidation string
 }
 
 // CacheOptions are options for creating a cache-backed client.
@@ -110,6 +120,9 @@ func New(config *rest.Config, options Options) (c Client, err error) {
 	}
 	if fo := options.FieldOwner; fo != "" {
 		c = WithFieldOwner(c, fo)
+	}
+	if fv := options.FieldValidation; fv != "" {
+		c = WithFieldValidation(c, FieldValidation(fv))
 	}
 
 	return c, err

@@ -889,7 +889,7 @@ func TestMetricsAreUpdatedForItemWhoseRequeueAfterExpiredThatGetsAddedAgainWitho
 	})
 }
 
-func TesWhenAddingMultipleItemsWithRatelimitTrueTheyDontAffectEachOther(t *testing.T) {
+func TestWhenAddingMultipleItemsWithRatelimitTrueTheyDontAffectEachOther(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		g := NewWithT(t)
@@ -927,7 +927,7 @@ func TesWhenAddingMultipleItemsWithRatelimitTrueTheyDontAffectEachOther(t *testi
 
 		forwardQueueTimeBy(5 * time.Millisecond)
 		synctest.Wait()
-		g.Expect(retrievedItem).NotTo(BeClosed())
+		g.Expect(retrievedItem).To(BeClosed())
 		g.Expect(retrievedSecondItem).NotTo(BeClosed())
 
 		forwardQueueTimeBy(635 * time.Millisecond)

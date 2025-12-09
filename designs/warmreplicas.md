@@ -1,131 +1,78 @@
-Add support for warm replicas
-===================
+Add Support for Warm Replicas
+=============================
+
+## Summary
+
+When controllers manage huge caches, failover takes minutes because follower replicas wait to win leader election before starting informers. “Warm replicas” allow controller-runtime to start sources while a manager instance is still on standby, so the new leader can immediately schedule workers with already-populated queues. This design documents the feature implemented in [PR #3192](https://github.com/kubernetes-sigs/controller-runtime/pull/3192) and answers the outstanding review questions.
 
 ## Motivation
-Controllers reconcile all objects during startup / leader election failover to account for changes
-in the reconciliation logic. For certain sources, the time to do the cache sync can be
-significant in the order of minutes. This is problematic because by default controllers (and by
-extension watches) do not start until they have won leader election. This implies guaranteed
-downtime as even after leader election, the controller has to wait for the initial list to be served
-before it can start reconciling.
 
-## Proposal
-A warm replica is a replica with a queue pre-filled by sources started even when leader election is
-not won so that it is ready to start processing items as soon as the leader election is won. This
-proposal aims to add support for warm replicas in controller-runtime.
+Controllers reconcile every object from their sources at startup and after leader failover. For sources with millions of objects (e.g., Secrets, ConfigMaps, custom resources across all namespaces) the initial List+Watch can take tens of minutes, delaying recovery. Today a controller only starts its sources inside `Start`, which manager runs **after** acquiring the leader lock. That guarantees downtime equal to the cache warmup time whenever the leader rotates.
 
-### Context
-Mostly written to confirm my understanding, but also to provide context for the proposal.
+## Goals
 
-Controllers are a monolithic runnable with a `Start(ctx)` that
-1. Starts the watches [here](https://github.com/kubernetes-sigs/controller-runtime/blob/v0.20.2/pkg/internal/controller/controller.go#L196-L213)
-2. Starts the workers [here](https://github.com/kubernetes-sigs/controller-runtime/blob/v0.20.2/pkg/internal/controller/controller.go#L244-L252)
-There needs to be a way to decouple the two so that the watches can be started before the workers
-even as part of the same Runnable.
+- Allow controller authors to opt a controller (or all controllers) into warmup behavior with a single option (`EnableWarmup`).
+- Ensure warmup never changes behavior when disabled.
+- Keep the API surface minimal (no exported warmup interface yet).
 
-If a runnable implements the `LeaderElectionRunnable` interface, the return value of the
-`NeedLeaderElection` function dictates whether or not it gets binned into the leader election
-runnables group [code](https://github.com/kubernetes-sigs/controller-runtime/blob/v0.20.2/pkg/manager/runnable_group.go).
+## Implemented Changes
 
-Runnables in the leader election group are started only after the manager has won leader election,
-and all controllers are leader election runnables by default.
+### Manager Warmup Phase
 
-### Design
-1. Add a new interface `WarmupRunnable` that allows for leader election runnables to specify
-behavior when manager is not in leader mode. This interface should be as follows:
+Manager already buckets runnables (HTTP servers, caches, others, leader election). We added an internal `warmupRunnable` interface:
+
 ```go
-type WarmupRunnable interface {
-    Warmup(context.Context) error
+type warmupRunnable interface {
+	Warmup(context.Context) error
 }
 ```
 
-2. Controllers will implement this interface to specify behavior when the manager is not the leader.
-Add a new controller option `ShouldWarmupWithoutLeadership`. If set to true, then the main
-controller runnable will not start sources, and instead rely on the warmup runnable to start sources
-The option will be used as follows:
+During `Start`, the manager now runs:
+
+1. HTTP servers
+2. Webhooks
+3. Caches
+4. `Others`
+5. **Warmup runnables (new)**
+6. Leader election runnables once the lock is acquired
+
+Warmup runnables are also stopped in parallel with non-leader runnables during shutdown to avoid deadlocks.
+
+### Controller Opt-in
+
+Controllers expose the option via:
+
+- `ctrl.Options{Controller: config.Controller{EnableWarmup: ptr.To(true)}}`
+
+If both `EnableWarmup` and `NeedLeaderElection` are true, controller-runtime registers the controller as a warmup runnable. Calling `Warmup` launches the same event sources and cache sync logic as `Start`, but it does **not** start worker goroutines. Once the manager becomes leader, the controller’s normal `Start` simply spins up workers against the already-initialized queue. Enabling warmup on a controller that does not use leader election is a no-op, as the worker threads do not block on leader election being won.
+
+### Usage Example
+
 ```go
-type Controller struct {
-    // ...
-
-    // ShouldWarmupWithoutLeadership specifies whether the controller should start its sources
-    // when the manager is not the leader.
-    // Defaults to false, which means that the controller will wait for leader election to start
-    // before starting sources.
-    ShouldWarmupWithoutLeadership *bool
-
-    // ...
+mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+	Controller: config.Controller{
+		EnableWarmup: ptr.To(true), // make every controller warm up
+	},
+})
+if err != nil {
+    panic(err)
 }
 
-type runnableWrapper struct {
-    startFunc func (ctx context.Context) error
-}
-
-func(rw runnableWrapper) Start(ctx context.Context) error {
-    return rw.startFunc(ctx)
-}
-
-func (c *Controller[request]) Warmup(ctx context.Context) error {
-    if !c.ShouldWarmupWithoutLeadership {
-        return nil
-    }
-
-    return c.startEventSources(ctx)
-}
+builder.ControllerManagedBy(mgr).
+	Named("slow-source").
+	WithOptions(controller.Options{
+		EnableWarmup: ptr.To(true), // optional per-controller override
+	}).
+	For(&examplev1.Example{}).
+	Complete(reconciler)
 ```
 
-3. Add a separate runnable category for warmup runnables to specify behavior when the
-manager is not the leader. [ref](https://github.com/kubernetes-sigs/controller-runtime/blob/v0.20.2/pkg/manager/runnable_group.go#L55-L76)
-```go
-type runnables struct {
-    // ...
+### Operational Considerations
 
-	LeaderElection *runnableGroup
-    Warmup *runnableGroup
+- **API server load** – Warm replicas temporarily duplicate List/Watch traffic: each standby replica performs the initial List and opens watches even though the current leader is already doing so. The additional load exists only while a replica is warming its caches, but on huge clusters this can still be expensive depending on the number of warm replicas.
+- **Queue depth metrics** – Because warm replicas start their sources before workers run, the `workqueue_depth` metric spikes during warmup even though reconcilers have not begun processing. Alerting or SLOs based on that metric should either ignore the warmup window or switch to per-controller gauges that reset when workers start.
 
-    // ...
-}
+### References
 
-func (r *runnables) Add(fn Runnable) error {
-	switch runnable := fn.(type) {
-    // ...
-    case WarmupRunnable:
-        r.Warmup.Add(RunnableFunc(fn.Warmup), nil)
-
-        // fallthrough to ensure that a runnable that implements both LeaderElection and
-        // Warmup interfaces are added to both groups
-        fallthrough
-	case LeaderElectionRunnable:
-		if !runnable.NeedLeaderElection() {
-			return r.Others.Add(fn, nil)
-		}
-		return r.LeaderElection.Add(fn, nil)
-    // ...
-	}
-}
-```
-
-4. Start the non-leader runnables during manager startup.
-```go
-func (cm *controllerManager) Start(ctx context.Context) (err error) {
-    // ...
-
-    // Start the warmup runnables
-	if err := cm.runnables.Warmup.Start(cm.internalCtx); err != nil {
-		return fmt.Errorf("failed to start other runnables: %w", err)
-	}
-
-    // ...
-}
-```
-
-## Concerns/Questions
-1. Controllers opted into this feature will break the workqueue.depth metric as the controller will
-   have a pre filled queue before it starts processing items.
-2. Ideally, non-leader runnables should block readyz and healthz checks until they are in sync. I am
-   not sure what the best way of implementing this is, because we would have to add a healthz check
-   that blocks on WaitForSync for all the sources started as part of the non-leader runnables.
-3. An alternative way of implementing the above is to moving the source starting / management code
-   out into their own runnables instead of having them as part of the controller runnable and
-   exposing a method to fetch the sources. I am not convinced that that is the right change as it
-   would introduce the problem of leader election runnables potentially blocking each other as they
-   wait for the sources to be in sync.
+- Implementation: [#3192](https://github.com/kubernetes-sigs/controller-runtime/pull/3192)
+- Earlier context: [#2005](https://github.com/kubernetes-sigs/controller-runtime/pull/2005), [#2600](https://github.com/kubernetes-sigs/controller-runtime/issues/2600)

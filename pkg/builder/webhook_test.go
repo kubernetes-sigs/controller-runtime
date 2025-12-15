@@ -1153,7 +1153,7 @@ func (*TestDefaultValidatorList) DeepCopyObject() runtime.Object   { return nil 
 type TestCustomDefaulter struct{}
 
 func (*TestCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
-	d := obj.(*TestDefaulterObject) //nolint:ifshort
+	d := obj.(*TestDefaulterObject)
 	return (&testDefaulter{}).Default(ctx, d)
 }
 
@@ -1186,7 +1186,7 @@ var _ admission.CustomDefaulter = &TestCustomDefaulter{}
 type TestCustomValidator struct{}
 
 func (*TestCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	v := obj.(*TestValidatorObject) //nolint:ifshort
+	v := obj.(*TestValidatorObject)
 	return (&testValidator{}).ValidateCreate(ctx, v)
 }
 
@@ -1197,7 +1197,7 @@ func (*TestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj r
 }
 
 func (*TestCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	v := obj.(*TestValidatorObject) //nolint:ifshort
+	v := obj.(*TestValidatorObject)
 	return (&testValidator{}).ValidateDelete(ctx, v)
 }
 
@@ -1280,7 +1280,7 @@ func (*TestCustomDefaultValidator) Default(ctx context.Context, obj runtime.Obje
 		return fmt.Errorf("expected Kind TestDefaultValidator got %q", req.Kind.Kind)
 	}
 
-	d := obj.(*TestDefaultValidator) //nolint:ifshort
+	d := obj.(*TestDefaultValidator)
 
 	if d.Replica < 2 {
 		d.Replica = 2
@@ -1303,7 +1303,7 @@ func (*TestCustomDefaultValidator) ValidateCreate(ctx context.Context, obj runti
 		return nil, fmt.Errorf("expected Kind TestDefaultValidator got %q", req.Kind.Kind)
 	}
 
-	v := obj.(*TestDefaultValidator) //nolint:ifshort
+	v := obj.(*TestDefaultValidator)
 	if v.Replica < 0 {
 		return nil, errors.New("number of replica should be greater than or equal to 0")
 	}
@@ -1341,7 +1341,7 @@ func (*TestCustomDefaultValidator) ValidateDelete(ctx context.Context, obj runti
 		return nil, fmt.Errorf("expected Kind TestDefaultValidator got %q", req.Kind.Kind)
 	}
 
-	v := obj.(*TestDefaultValidator) //nolint:ifshort
+	v := obj.(*TestDefaultValidator)
 	if v.Replica > 0 {
 		return nil, errors.New("number of replica should be less than or equal to 0 to delete")
 	}

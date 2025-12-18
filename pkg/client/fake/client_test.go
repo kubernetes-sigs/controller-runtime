@@ -2875,11 +2875,20 @@ var _ = Describe("Fake client", func() {
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(cm), cm)).To(Succeed())
 		Expect(cm.Data).To(BeComparableTo(map[string]string{"some": "data"}))
 
+		// Apply with ResourceVersion set
 		obj.Data = map[string]string{"other": "data"}
 		Expect(cl.Apply(ctx, obj, &client.ApplyOptions{FieldManager: "test-manager"})).To(Succeed())
 
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(cm), cm)).To(Succeed())
 		Expect(cm.Data).To(BeComparableTo(map[string]string{"other": "data"}))
+
+		// Apply with ResourceVersion unset
+		obj.ResourceVersion = ptr.To("")
+		obj.Data = map[string]string{"another": "data"}
+		Expect(cl.Apply(ctx, obj, &client.ApplyOptions{FieldManager: "test-manager"})).To(Succeed())
+
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(cm), cm)).To(Succeed())
+		Expect(cm.Data).To(BeComparableTo(map[string]string{"another": "data"}))
 	})
 
 	It("returns a conflict when trying to Create an object with UID set through Apply", func(ctx SpecContext) {
@@ -2931,12 +2940,22 @@ var _ = Describe("Fake client", func() {
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(result), result)).To(Succeed())
 		Expect(result.Object["spec"]).To(Equal(map[string]any{"some": "data"}))
 
+		// Apply with ResourceVersion set
 		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"other": "data"}, "spec")).To(Succeed())
 		applyConfig2 := client.ApplyConfigurationFromUnstructured(obj)
 		Expect(cl.Apply(ctx, applyConfig2, &client.ApplyOptions{FieldManager: "test-manager"})).To(Succeed())
 
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(result), result)).To(Succeed())
 		Expect(result.Object["spec"]).To(Equal(map[string]any{"other": "data"}))
+
+		// Apply with ResourceVersion unset
+		obj.SetResourceVersion("")
+		Expect(unstructured.SetNestedField(obj.Object, map[string]any{"another": "data"}, "spec")).To(Succeed())
+		applyConfig3 := client.ApplyConfigurationFromUnstructured(obj)
+		Expect(cl.Apply(ctx, applyConfig3, &client.ApplyOptions{FieldManager: "test-manager"})).To(Succeed())
+
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(result), result)).To(Succeed())
+		Expect(result.Object["spec"]).To(Equal(map[string]any{"another": "data"}))
 	})
 
 	It("supports server-side apply of a custom resource via Apply method after List with a non-list kind", func(ctx SpecContext) {

@@ -955,8 +955,31 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(actualData).To(BeComparableTo(data))
 				Expect(actualData).To(BeComparableTo(obj.Object["data"]))
 
+				// Apply with ResourceVersion set
 				data = map[string]any{
 					"a-new-key": "a-new-value",
+				}
+				obj.Object["data"] = data
+				unstructured.RemoveNestedField(obj.Object, "metadata", "managedFields")
+
+				err = cl.Apply(ctx, client.ApplyConfigurationFromUnstructured(obj), &client.ApplyOptions{FieldManager: "test-manager"})
+				Expect(err).NotTo(HaveOccurred())
+
+				cm, err = clientset.CoreV1().ConfigMaps(obj.GetNamespace()).Get(ctx, obj.GetName(), metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				actualData = map[string]any{}
+				for k, v := range cm.Data {
+					actualData[k] = v
+				}
+
+				Expect(actualData).To(BeComparableTo(data))
+				Expect(actualData).To(BeComparableTo(obj.Object["data"]))
+
+				// Apply with ResourceVersion unset
+				obj.SetResourceVersion("")
+				data = map[string]any{
+					"another-new-key": "another-new-value",
 				}
 				obj.Object["data"] = data
 				unstructured.RemoveNestedField(obj.Object, "metadata", "managedFields")
@@ -999,6 +1022,23 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(cm.Data).To(BeComparableTo(data))
 				Expect(cm.Data).To(BeComparableTo(obj.Data))
 
+				// Apply with ResourceVersion set
+				data = map[string]string{
+					"a-new-key": "a-new-value",
+				}
+				obj.Data = data
+
+				err = cl.Apply(ctx, obj, &client.ApplyOptions{FieldManager: "test-manager"})
+				Expect(err).NotTo(HaveOccurred())
+
+				cm, err = clientset.CoreV1().ConfigMaps(ptr.Deref(obj.GetNamespace(), "")).Get(ctx, ptr.Deref(obj.GetName(), ""), metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cm.Data).To(BeComparableTo(data))
+				Expect(cm.Data).To(BeComparableTo(obj.Data))
+
+				// Apply with ResourceVersion unset
+				obj.ResourceVersion = ptr.To("")
 				data = map[string]string{
 					"a-new-key": "a-new-value",
 				}

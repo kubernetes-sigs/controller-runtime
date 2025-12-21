@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"reflect"
 	"runtime/debug"
 	"strconv"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -34,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/testing"
+
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
@@ -111,12 +114,23 @@ func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Ob
 		return apierrors.NewBadRequest("resourceVersion can not be set for Create requests")
 	}
 	accessor.SetResourceVersion("1")
+	if !reflect.DeepEqual(accessor.GetCreationTimestamp(), metav1.Time{}) {
+		return apierrors.NewBadRequest("creationTimestamp can not be set for Create requests")
+	}
+	now, err := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+	if err != nil {
+		return apierrors.NewInternalError(err)
+	}
+	accessor.SetCreationTimestamp(metav1.Time{
+		Time: now,
+	})
 	obj, err = convertFromUnstructuredIfNecessary(t.scheme, obj)
 	if err != nil {
 		return err
 	}
 	if err := t.upstream.Create(gvr, obj, ns, opts...); err != nil {
 		accessor.SetResourceVersion("")
+		accessor.SetCreationTimestamp(metav1.Time{})
 		return err
 	}
 

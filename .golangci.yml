@@ -60,6 +60,7 @@ linters:
       disable:
         - fieldalignment
         - shadow
+        - buildtag
       enable-all: true
     importas:
       alias:

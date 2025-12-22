@@ -414,6 +414,7 @@ var _ = Describe("Fake client", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(obj).To(Equal(newcm))
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
+			Expect(obj.ObjectMeta.CreationTimestamp.IsZero()).To(BeFalse())
 		})
 
 		It("should error on create with set resourceVersion", func(ctx SpecContext) {
@@ -423,6 +424,19 @@ var _ = Describe("Fake client", func() {
 					Name:            "new-test-cm",
 					Namespace:       "ns2",
 					ResourceVersion: "1",
+				},
+			}
+			err := cl.Create(ctx, newcm)
+			Expect(apierrors.IsBadRequest(err)).To(BeTrue())
+		})
+
+		It("should error on create with set creationTimestamp", func(ctx SpecContext) {
+			By("Creating a new configmap")
+			newcm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "new-test-cm",
+					Namespace:         "ns2",
+					CreationTimestamp: metav1.Now(),
 				},
 			}
 			err := cl.Create(ctx, newcm)
@@ -3066,6 +3080,16 @@ var _ = Describe("Fake client", func() {
 		// Ideally we should only test for it to not be empty, realistically we will
 		// break ppl if we ever start setting a different value.
 		Expect(obj.ResourceVersion).To(BeEquivalentTo(ptr.To("1")))
+	})
+
+	It("sets creatioTimestamp on SSA create", func(ctx SpecContext) {
+		obj := corev1applyconfigurations.
+			ConfigMap("foo", "default").
+			WithData(map[string]string{"some": "data"})
+
+		cl := NewClientBuilder().Build()
+		Expect(cl.Apply(ctx, obj, client.FieldOwner("foo"))).NotTo(HaveOccurred())
+		Expect(obj.CreationTimestamp.IsZero()).To(BeFalse())
 	})
 
 	It("ignores a passed resourceVersion on SSA create", func(ctx SpecContext) {

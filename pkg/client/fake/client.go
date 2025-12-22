@@ -933,6 +933,14 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 			// Overwrite it unconditionally, this matches the apiserver behavior
 			// which allows to set it on create, but will then ignore it.
 			obj.SetResourceVersion("1")
+
+			now, err := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+			if err != nil {
+				return apierrors.NewInternalError(err)
+			}
+			obj.SetCreationTimestamp(metav1.Time{
+				Time: now,
+			})
 		} else {
 			// SSA deletionTimestamp updates are silently ignored
 			obj.SetDeletionTimestamp(oldAccessor.GetDeletionTimestamp())

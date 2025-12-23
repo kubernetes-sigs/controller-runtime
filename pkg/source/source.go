@@ -73,6 +73,18 @@ type TypedSyncingSource[request comparable] interface {
 	WaitForSync(ctx context.Context) error
 }
 
+// KindOption is a functional option for Kind sources.
+type KindOption[object client.Object, request comparable] func(*internal.Kind[object, request])
+
+// WithWaitForHandlerSync configures the Kind source to wait for the handler registration's
+// HasSynced before starting reconciliation. This ensures all initial objects from the first
+// List have been delivered to the event handlers before reconciliation starts.
+func WithWaitForHandlerSync[object client.Object, request comparable]() KindOption[object, request] {
+	return func(k *internal.Kind[object, request]) {
+		k.WaitForHandlerSync = true
+	}
+}
+
 // Kind creates a KindSource with the given cache provider.
 func Kind[object client.Object](
 	cache cache.Cache,
@@ -83,6 +95,17 @@ func Kind[object client.Object](
 	return TypedKind(cache, obj, handler, predicates...)
 }
 
+// KindWithOptions creates a KindSource with the given cache provider and options.
+func KindWithOptions[object client.Object](
+	cache cache.Cache,
+	obj object,
+	handler handler.TypedEventHandler[object, reconcile.Request],
+	opts []KindOption[object, reconcile.Request],
+	predicates ...predicate.TypedPredicate[object],
+) SyncingSource {
+	return TypedKindWithOptions(cache, obj, handler, opts, predicates...)
+}
+
 // TypedKind creates a KindSource with the given cache provider.
 func TypedKind[object client.Object, request comparable](
 	cache cache.Cache,
@@ -90,12 +113,27 @@ func TypedKind[object client.Object, request comparable](
 	handler handler.TypedEventHandler[object, request],
 	predicates ...predicate.TypedPredicate[object],
 ) TypedSyncingSource[request] {
-	return &internal.Kind[object, request]{
+	return TypedKindWithOptions(cache, obj, handler, nil, predicates...)
+}
+
+// TypedKindWithOptions creates a KindSource with the given cache provider and options.
+func TypedKindWithOptions[object client.Object, request comparable](
+	cache cache.Cache,
+	obj object,
+	handler handler.TypedEventHandler[object, request],
+	opts []KindOption[object, request],
+	predicates ...predicate.TypedPredicate[object],
+) TypedSyncingSource[request] {
+	k := &internal.Kind[object, request]{
 		Type:       obj,
 		Cache:      cache,
 		Handler:    handler,
 		Predicates: predicates,
 	}
+	for _, opt := range opts {
+		opt(k)
+	}
+	return k
 }
 
 var _ Source = &channel[string, reconcile.Request]{}

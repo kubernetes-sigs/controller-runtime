@@ -34,6 +34,10 @@ type Kind[object client.Object, request comparable] struct {
 
 	Predicates []predicate.TypedPredicate[object]
 
+	// WaitForHandlerSync when set to true, waits for the handler registration's HasSynced
+	// before starting reconciliation.
+	WaitForHandlerSync bool
+
 	// startedErr may contain an error if one was encountered during startup. If its closed and does not
 	// contain an error, startup and syncing finished.
 	startedErr  chan error
@@ -91,16 +95,24 @@ func (ks *Kind[object, request]) Start(ctx context.Context, queue workqueue.Type
 			return
 		}
 
-		_, err := i.AddEventHandlerWithOptions(NewEventHandler(ctx, queue, ks.Handler, ks.Predicates), toolscache.HandlerOptions{
+		handlerRegistration, err := i.AddEventHandlerWithOptions(NewEventHandler(ctx, queue, ks.Handler, ks.Predicates), toolscache.HandlerOptions{
 			Logger: &logKind,
 		})
 		if err != nil {
 			ks.startedErr <- err
 			return
 		}
+		sentError := false
+		if ks.WaitForHandlerSync && !toolscache.WaitForCacheSync(ctx.Done(), handlerRegistration.HasSynced) {
+			sentError = true
+			ks.startedErr <- errors.New("cache did not sync")
+		}
 		if !ks.Cache.WaitForCacheSync(ctx) {
 			// Would be great to return something more informative here
-			ks.startedErr <- errors.New("cache did not sync")
+			if !sentError {
+				sentError = true
+				ks.startedErr <- errors.New("cache did not sync")
+			}
 		}
 		close(ks.startedErr)
 	}()

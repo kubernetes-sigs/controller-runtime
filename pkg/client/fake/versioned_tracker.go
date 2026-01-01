@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"reflect"
 	"runtime/debug"
 	"strconv"
 	"time"
@@ -47,6 +46,7 @@ type versionedTracker struct {
 	scheme                        *runtime.Scheme
 	withStatusSubresource         sets.Set[schema.GroupVersionKind]
 	usesFieldManagedObjectTracker bool
+	setCreationTimestamp          bool
 }
 
 func (t versionedTracker) Add(obj runtime.Object) error {
@@ -114,23 +114,24 @@ func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Ob
 		return apierrors.NewBadRequest("resourceVersion can not be set for Create requests")
 	}
 	accessor.SetResourceVersion("1")
-	if !reflect.DeepEqual(accessor.GetCreationTimestamp(), metav1.Time{}) {
-		return apierrors.NewBadRequest("creationTimestamp can not be set for Create requests")
+
+	originalCreationTimestamp := accessor.GetCreationTimestamp()
+	if t.setCreationTimestamp {
+		now, err := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+		if err != nil {
+			return apierrors.NewInternalError(err)
+		}
+		accessor.SetCreationTimestamp(metav1.Time{
+			Time: now,
+		})
 	}
-	now, err := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
-	if err != nil {
-		return apierrors.NewInternalError(err)
-	}
-	accessor.SetCreationTimestamp(metav1.Time{
-		Time: now,
-	})
 	obj, err = convertFromUnstructuredIfNecessary(t.scheme, obj)
 	if err != nil {
 		return err
 	}
 	if err := t.upstream.Create(gvr, obj, ns, opts...); err != nil {
 		accessor.SetResourceVersion("")
-		accessor.SetCreationTimestamp(metav1.Time{})
+		accessor.SetCreationTimestamp(originalCreationTimestamp)
 		return err
 	}
 

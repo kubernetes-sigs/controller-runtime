@@ -320,6 +320,26 @@ var _ = Describe("Controllerworkqueue", func() {
 			Expect(depth).To(Equal(0))
 		}
 	})
+
+	It("follows FIFO order in the new priority queue when item priority changes", func() {
+		q, _ := newQueue()
+		defer q.ShutDown()
+
+		q.AddWithOpts(AddOpts{Priority: ptr.To(0)}, "foo")
+		q.AddWithOpts(AddOpts{Priority: ptr.To(1)}, "bar")
+		q.AddWithOpts(AddOpts{Priority: ptr.To(1)}, "foo")
+		Expect(q.Len()).To(Equal(2))
+
+		item, priority, _ := q.GetWithPriority()
+		Expect(item).To(Equal("bar"))
+		Expect(priority).To(Equal(1))
+		Expect(q.Len()).To(Equal(1))
+
+		item, priority, _ = q.GetWithPriority()
+		Expect(item).To(Equal("foo"))
+		Expect(priority).To(Equal(1))
+		Expect(q.Len()).To(Equal(0))
+	})
 })
 
 func BenchmarkAddGetDone(b *testing.B) {

@@ -91,14 +91,16 @@ func (ks *Kind[object, request]) Start(ctx context.Context, queue workqueue.Type
 			return
 		}
 
-		_, err := i.AddEventHandlerWithOptions(NewEventHandler(ctx, queue, ks.Handler, ks.Predicates), toolscache.HandlerOptions{
+		handlerRegistration, err := i.AddEventHandlerWithOptions(NewEventHandler(ctx, queue, ks.Handler, ks.Predicates), toolscache.HandlerOptions{
 			Logger: &logKind,
 		})
 		if err != nil {
 			ks.startedErr <- err
 			return
 		}
-		if !ks.Cache.WaitForCacheSync(ctx) {
+		if !toolscache.WaitForCacheSync(ctx.Done(), handlerRegistration.HasSynced) {
+			ks.startedErr <- errors.New("cache did not sync")
+		} else if !ks.Cache.WaitForCacheSync(ctx) {
 			// Would be great to return something more informative here
 			ks.startedErr <- errors.New("cache did not sync")
 		}

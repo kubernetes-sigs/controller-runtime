@@ -37,6 +37,16 @@ type FakeInformer struct {
 	handlers []cache.ResourceEventHandler
 }
 
+// fakeHandlerRegistration implements cache.ResourceEventHandlerRegistration for testing.
+type fakeHandlerRegistration struct {
+	informer *FakeInformer
+}
+
+// HasSynced implements cache.ResourceEventHandlerRegistration.
+func (f *fakeHandlerRegistration) HasSynced() bool {
+	return f.informer.Synced
+}
+
 // AddIndexers does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) AddIndexers(indexers cache.Indexers) error {
 	return nil
@@ -60,19 +70,19 @@ func (f *FakeInformer) HasSynced() bool {
 // AddEventHandler implements the Informer interface. Adds an EventHandler to the fake Informers. TODO(community): Implement Registration.
 func (f *FakeInformer) AddEventHandler(handler cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
 	f.handlers = append(f.handlers, handler)
-	return nil, nil
+	return &fakeHandlerRegistration{informer: f}, nil
 }
 
 // AddEventHandlerWithResyncPeriod implements the Informer interface. Adds an EventHandler to the fake Informers (ignores resyncPeriod). TODO(community): Implement Registration.
 func (f *FakeInformer) AddEventHandlerWithResyncPeriod(handler cache.ResourceEventHandler, _ time.Duration) (cache.ResourceEventHandlerRegistration, error) {
 	f.handlers = append(f.handlers, handler)
-	return nil, nil
+	return &fakeHandlerRegistration{informer: f}, nil
 }
 
 // AddEventHandlerWithOptions implements the Informer interface. Adds an EventHandler to the fake Informers (ignores options). TODO(community): Implement Registration.
 func (f *FakeInformer) AddEventHandlerWithOptions(handler cache.ResourceEventHandler, _ cache.HandlerOptions) (cache.ResourceEventHandlerRegistration, error) {
 	f.handlers = append(f.handlers, handler)
-	return nil, nil
+	return &fakeHandlerRegistration{informer: f}, nil
 }
 
 // Run implements the Informer interface.  Increments f.RunCount.

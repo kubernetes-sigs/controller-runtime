@@ -371,12 +371,20 @@ func BenchmarkAddOnly(b *testing.B) {
 func BenchmarkAddLockContended(b *testing.B) {
 	q := New[int]("")
 	defer q.ShutDown()
-	go func() {
-		for range 1000 {
-			item, _ := q.Get()
-			q.Done(item)
-		}
-	}()
+
+	for i := range 1000000 {
+		q.Add(i)
+	}
+
+	for range 1000 {
+		go func() {
+			for {
+				item, _ := q.Get()
+				time.Sleep(1 * time.Millisecond)
+				q.Done(item)
+			}
+		}()
+	}
 
 	for b.Loop() {
 		for i := range 1000 {

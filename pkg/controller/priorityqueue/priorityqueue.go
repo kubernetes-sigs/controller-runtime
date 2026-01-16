@@ -54,6 +54,11 @@ type Opts[T comparable] struct {
 // Opt allows to configure a PriorityQueue.
 type Opt[T comparable] func(*Opts[T])
 
+type bufferItem[T comparable] struct {
+	opts  AddOpts
+	items []T
+}
+
 // New constructs a new PriorityQueue.
 func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 	opts := &Opts[T]{}
@@ -70,11 +75,12 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 	}
 
 	pq := &priorityqueue[T]{
-		log:     opts.Log,
-		items:   map[T]*item[T]{},
-		ready:   btree.NewG(32, lessReady[T]),
-		waiting: btree.NewG(32, lessWaiting[T]),
-		metrics: newQueueMetrics[T](opts.MetricProvider, name, clock.RealClock{}),
+		log:                  opts.Log,
+		itemAddedToAddBuffer: make(chan struct{}, 1),
+		items:                map[T]*item[T]{},
+		ready:                btree.NewG(32, lessReady[T]),
+		waiting:              btree.NewG(32, lessWaiting[T]),
+		metrics:              newQueueMetrics[T](opts.MetricProvider, name, clock.RealClock{}),
 		// readyItemOrWaiterAdded indicates that a ready item or
 		// waiter was added. It must be buffered, because
 		// if we currently process items we can't tell
@@ -89,6 +95,7 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 		tick:                      time.Tick,
 	}
 
+	go pq.handleAddBuffer()
 	go pq.handleReadyItems()
 	go pq.handleWaitingItems()
 	go pq.logState()
@@ -101,6 +108,11 @@ func New[T comparable](name string, o ...Opt[T]) PriorityQueue[T] {
 
 type priorityqueue[T comparable] struct {
 	log logr.Logger
+
+	addBufferLock        sync.Mutex
+	addBuffer            []bufferItem[T]
+	itemAddedToAddBuffer chan struct{}
+
 	// lock has to be acquired for any access to any of items, ready, waiting,
 	// addedCounter or waiters.
 	lock    sync.Mutex
@@ -143,11 +155,52 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 		return
 	}
 
+	if len(items) == 0 {
+		return
+	}
+
+	w.addBufferLock.Lock()
+	w.addBuffer = append(w.addBuffer, bufferItem[T]{
+		opts:  o,
+		items: items,
+	})
+	w.addBufferLock.Unlock()
+
+	w.notifyItemAddedToAddBuffer()
+}
+
+func (w *priorityqueue[T]) handleAddBuffer() {
+	for {
+		select {
+		case <-w.done:
+			return
+		case <-w.itemAddedToAddBuffer:
+		}
+
+		w.lock.Lock()
+		w.lockedFlushAddBuffer()
+		w.lock.Unlock()
+	}
+}
+
+func (w *priorityqueue[T]) lockedFlushAddBuffer() {
+	w.addBufferLock.Lock()
+	buffer := w.addBuffer
+	w.addBuffer = make([]bufferItem[T], 0, len(buffer))
+	w.addBufferLock.Unlock()
+
+	for _, v := range buffer {
+		w.lockedAddWithOpts(v.opts, v.items...)
+	}
+}
+
+func (w *priorityqueue[T]) lockedAddWithOpts(o AddOpts, items ...T) {
+	if w.shutdown.Load() {
+		return
+	}
+
 	var readyItemAdded bool
 	var waitingItemAddedOrUpdated bool
-
-	w.lock.Lock()
-	defer w.lock.Unlock()
 
 	for _, key := range items {
 		after := o.After
@@ -232,6 +285,13 @@ func (w *priorityqueue[T]) AddWithOpts(o AddOpts, items ...T) {
 	}
 }
 
+func (w *priorityqueue[T]) notifyItemAddedToAddBuffer() {
+	select {
+	case w.itemAddedToAddBuffer <- struct{}{}:
+	default:
+	}
+}
+
 func (w *priorityqueue[T]) notifyReadyItemOrWaiterAdded() {
 	select {
 	case w.readyItemOrWaiterAdded <- struct{}{}:
@@ -308,6 +368,12 @@ func (w *priorityqueue[T]) handleReadyItems() {
 		func() {
 			w.lock.Lock()
 			defer w.lock.Unlock()
+
+			// Flush is performed before reading items to avoid errors caused by asynchronous behavior,
+			// primarily for unit testing purposes.
+			// Successfully adding a ready item may result in an additional call to handleReadyItems(),
+			// but the cost is negligible.
+			w.lockedFlushAddBuffer()
 
 			if w.waiters == 0 {
 				return
@@ -423,6 +489,10 @@ func (w *priorityqueue[T]) ShutDownWithDrain() {
 func (w *priorityqueue[T]) Len() int {
 	w.lock.Lock()
 	defer w.lock.Unlock()
+
+	// Flush is performed before reading items to avoid errors caused by asynchronous behavior,
+	// primarily for unit testing purposes.
+	w.lockedFlushAddBuffer()
 
 	return w.ready.Len()
 }

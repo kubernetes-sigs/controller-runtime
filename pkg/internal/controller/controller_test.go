@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -387,16 +388,12 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should not call Reconcile until all event handlers have processed initial objects", func(specCtx SpecContext) {
-			genPodName := func(i int) string {
-				return fmt.Sprintf("test-reconcile-order-pod-%d", i)
-			}
-			// Create some pods in the API server before starting the controller.
 			nPods := 20
 			pods := make([]*corev1.Pod, nPods)
 			for i := range nPods {
 				pods[i] = &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      genPodName(i),
+						Name:      strconv.Itoa(i),
 						Namespace: "default",
 					},
 					Spec: corev1.PodSpec{
@@ -415,6 +412,13 @@ var _ = Describe("controller", func() {
 			testCache, err := cache.New(cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
+			ctx, cancel := context.WithCancel(specCtx)
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				_ = testCache.Start(ctx)
+			}()
+
 			// Tracks how many objects have been processed by the event handler.
 			var handlerProcessedCount atomic.Int32
 
@@ -425,8 +429,7 @@ var _ = Describe("controller", func() {
 			var reconcileCalled atomic.Bool
 
 			// Create the controller.
-			var timeFirstReconcile time.Time
-			testCtrl := New[reconcile.Request](Options[reconcile.Request]{
+			testCtrl := New(Options[reconcile.Request]{
 				MaxConcurrentReconciles: 1,
 				CacheSyncTimeout:        10 * time.Second,
 				NewQueue: func(string, workqueue.TypedRateLimiter[reconcile.Request]) workqueue.TypedRateLimitingInterface[reconcile.Request] {
@@ -439,62 +442,36 @@ var _ = Describe("controller", func() {
 					return log.RuntimeLog.WithName("test-reconcile-order")
 				},
 				Do: reconcile.Func(func(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-					if timeFirstReconcile.IsZero() {
-						timeFirstReconcile = time.Now()
-					}
 					// handlerProcessedCount should be equal to the number of pods created since we are waiting
 					// for the handlers to finish processing before reconciling.
-					Expect(handlerProcessedCount.Load()).To(BeNumerically("==", nPods))
+					Expect(handlerProcessedCount.Load()).To(Equal(int32(nPods)))
 					reconcileCalled.Store(true)
 					return reconcile.Result{}, nil
 				})},
 			)
 
-			// Watch pods with an event handler that blocks all pods but the first one in the list.
-			// Kind sources wait for handler sync to ensure that Reconcile is not called until all
-			// initial objects have been processed by the event handlers.
-			var timeLastCreate time.Time
-			firstPod := true
 			err = testCtrl.Watch(source.Kind(testCache, &corev1.Pod{}, handler.TypedFuncs[*corev1.Pod, reconcile.Request]{
 				CreateFunc: func(ctx context.Context, evt event.TypedCreateEvent[*corev1.Pod], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-					if !firstPod {
-						<-blockHandler
-					}
-					firstPod = false
-					if val := handlerProcessedCount.Add(1); val == int32(nPods) {
-						timeLastCreate = time.Now()
-					}
+					<-blockHandler
+					handlerProcessedCount.Add(1)
 					q.Add(reconcile.Request{NamespacedName: types.NamespacedName{Name: evt.Object.GetName(), Namespace: evt.Object.GetNamespace()}})
 				},
 			}))
 			Expect(err).NotTo(HaveOccurred())
 
-			ctx, cancel := context.WithCancel(specCtx)
-			defer cancel()
-			go func() {
-				defer GinkgoRecover()
-				_ = testCache.Start(ctx)
-			}()
 			controllerDone := make(chan error)
 			go func() {
 				defer GinkgoRecover()
 				controllerDone <- testCtrl.Start(ctx)
 			}()
 
-			// Verify the first pod was processed but the rest are still blocked.
-			Eventually(handlerProcessedCount.Load, 10*time.Second, 1*time.Second).
-				Should(Equal(int32(1)), "Only the first pod should have been processed")
-
-			// Unblock the handler which should result in Reconcile being called at some point.
+			// Give the controller time to start the reconciler. We asserts
+			// in there that all events have been processed, so if we start it
+			// prematurely, that assertion will fail. We can not get rid of the
+			// sleep unless we stop using envtest for this test.
+			time.Sleep(1 * time.Second)
 			close(blockHandler)
-			Eventually(reconcileCalled.Load, 5*time.Second).Should(BeTrue())
-
-			// All handlers should have been eventually processed.
-			Eventually(handlerProcessedCount.Load, 5*time.Second, 1*time.Second).
-				Should(BeNumerically("==", nPods))
-
-			// Reconcile should not have been called until all handlers have processed the initial objects.
-			Expect(timeFirstReconcile.After(timeLastCreate)).To(BeTrue())
+			Eventually(reconcileCalled.Load).Should(BeTrue())
 
 			cancel()
 			Eventually(controllerDone, 5*time.Second).Should(Receive())

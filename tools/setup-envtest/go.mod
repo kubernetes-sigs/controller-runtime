@@ -10,7 +10,7 @@ require (
 	github.com/spf13/afero v1.12.0
 	github.com/spf13/pflag v1.0.6
 	go.uber.org/zap v1.27.0
-	k8s.io/apimachinery v0.34.1
+	k8s.io/apimachinery v0.34.3
 	sigs.k8s.io/yaml v1.6.0
 )
 

@@ -14,8 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package zap contains helpers for setting up a new logr.Logger instance
-// using the Zap logging framework.
 package zap
 
 import (
@@ -32,6 +30,7 @@ var levelStrings = map[string]zapcore.Level{
 	"debug": zap.DebugLevel,
 	"info":  zap.InfoLevel,
 	"error": zap.ErrorLevel,
+	"panic": zap.PanicLevel,
 }
 
 var stackLevelStrings = map[string]zapcore.Level{

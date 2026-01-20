@@ -18,6 +18,7 @@ package cache
 
 import (
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -225,6 +226,54 @@ func TestDefaultOpts(t *testing.T) {
 			},
 		},
 		{
+			name: "ByObject.EnableWatchBookmarks gets defaulted from DefaultEnableWatchBookmarks",
+			in: Options{
+				ByObject:                    map[client.Object]ByObject{pod: {}},
+				DefaultEnableWatchBookmarks: ptr.To(true),
+			},
+
+			verification: func(o Options) string {
+				expected := ptr.To(true)
+				return cmp.Diff(expected, o.ByObject[pod].EnableWatchBookmarks)
+			},
+		},
+		{
+			name: "ByObject.EnableWatchBookmarks doesn't get defaulted when set",
+			in: Options{
+				ByObject:                    map[client.Object]ByObject{pod: {EnableWatchBookmarks: ptr.To(false)}},
+				DefaultEnableWatchBookmarks: ptr.To(true),
+			},
+
+			verification: func(o Options) string {
+				expected := ptr.To(false)
+				return cmp.Diff(expected, o.ByObject[pod].EnableWatchBookmarks)
+			},
+		},
+		{
+			name: "ByObject.SyncPeriod gets defaulted from SyncPeriod",
+			in: Options{
+				ByObject:   map[client.Object]ByObject{pod: {}},
+				SyncPeriod: ptr.To(5 * time.Minute),
+			},
+
+			verification: func(o Options) string {
+				expected := ptr.To(5 * time.Minute)
+				return cmp.Diff(expected, o.ByObject[pod].SyncPeriod)
+			},
+		},
+		{
+			name: "ByObject.SyncPeriod doesn't get defaulted when set",
+			in: Options{
+				ByObject:   map[client.Object]ByObject{pod: {SyncPeriod: ptr.To(1 * time.Minute)}},
+				SyncPeriod: ptr.To(5 * time.Minute),
+			},
+
+			verification: func(o Options) string {
+				expected := ptr.To(1 * time.Minute)
+				return cmp.Diff(expected, o.ByObject[pod].SyncPeriod)
+			},
+		},
+		{
 			name: "DefaultNamespace label selector gets defaulted from DefaultLabelSelector",
 			in: Options{
 				DefaultNamespaces:    map[string]Config{"default": {}},
@@ -408,6 +457,32 @@ func TestDefaultOpts(t *testing.T) {
 	}
 }
 
+func TestDefaultOptsRace(t *testing.T) {
+	opts := Options{
+		Mapper: &fakeRESTMapper{},
+		ByObject: map[client.Object]ByObject{
+			&corev1.Pod{}: {
+				Label: labels.SelectorFromSet(map[string]string{"from": "pod"}),
+				Namespaces: map[string]Config{"default": {
+					LabelSelector: labels.SelectorFromSet(map[string]string{"from": "pod"}),
+				}},
+			},
+		},
+		DefaultNamespaces: map[string]Config{"default": {}},
+	}
+
+	// Start go routines which re-use the above options struct.
+	wg := sync.WaitGroup{}
+	for range 2 {
+		wg.Go(func() {
+			_, _ = defaultOpts(&rest.Config{}, opts)
+		})
+	}
+
+	// Wait for the go routines to finish.
+	wg.Wait()
+}
+
 type fakeRESTMapper struct {
 	meta.RESTMapper
 }
@@ -432,7 +507,7 @@ func TestDefaultConfigConsidersAllFields(t *testing.T) {
 		},
 	)
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		fuzzed := Config{}
 		f.Fuzz(&fuzzed)
 

@@ -37,9 +37,8 @@ import (
 )
 
 var _ = Describe("Test", func() {
-
 	Describe("Webhook", func() {
-		It("should reject create request for webhook that rejects all requests", func() {
+		It("should reject create request for webhook that rejects all requests", func(specCtx SpecContext) {
 			m, err := manager.New(env.Config, manager.Options{
 				WebhookServer: webhook.NewServer(webhook.Options{
 					Port:    env.WebhookInstallOptions.LocalServingPort,
@@ -52,7 +51,7 @@ var _ = Describe("Test", func() {
 			server := m.GetWebhookServer()
 			server.Register("/failing", &webhook.Admission{Handler: &rejectingValidator{}})
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(specCtx)
 			go func() {
 				_ = server.Start(ctx)
 			}()
@@ -88,7 +87,7 @@ var _ = Describe("Test", func() {
 			}
 
 			Eventually(func() bool {
-				err = c.Create(context.TODO(), obj)
+				err = c.Create(ctx, obj)
 				return err != nil && strings.HasSuffix(err.Error(), "Always denied") && apierrors.ReasonForError(err) == metav1.StatusReasonForbidden
 			}, 1*time.Second).Should(BeTrue())
 

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
+	"testing"
+	"testing/synctest"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -27,6 +29,7 @@ var _ = Describe("runnables", func() {
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(server)).To(Succeed())
 		Expect(r.HTTPServers.startQueue).To(HaveLen(1))
+		Expect(r.Others.startQueue).To(BeEmpty())
 	})
 
 	It("should add caches to the appropriate group", func() {
@@ -34,6 +37,7 @@ var _ = Describe("runnables", func() {
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(cache)).To(Succeed())
 		Expect(r.Caches.startQueue).To(HaveLen(1))
+		Expect(r.Others.startQueue).To(BeEmpty())
 	})
 
 	It("should add webhooks to the appropriate group", func() {
@@ -41,6 +45,7 @@ var _ = Describe("runnables", func() {
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(webhook)).To(Succeed())
 		Expect(r.Webhooks.startQueue).To(HaveLen(1))
+		Expect(r.Others.startQueue).To(BeEmpty())
 	})
 
 	It("should add any runnable to the leader election group", func() {
@@ -52,15 +57,98 @@ var _ = Describe("runnables", func() {
 		r := newRunnables(defaultBaseContext, errCh)
 		Expect(r.Add(runnable)).To(Succeed())
 		Expect(r.LeaderElection.startQueue).To(HaveLen(1))
+		Expect(r.Others.startQueue).To(BeEmpty())
+	})
+
+	It("should add WarmupRunnable to the Warmup and LeaderElection group", func() {
+		warmupRunnable := newWarmupRunnableFunc(
+			func(c context.Context) error {
+				<-c.Done()
+				return nil
+			},
+			func(c context.Context) error { return nil },
+		)
+
+		r := newRunnables(defaultBaseContext, errCh)
+		Expect(r.Add(warmupRunnable)).To(Succeed())
+		Expect(r.Warmup.startQueue).To(HaveLen(1))
+		Expect(r.LeaderElection.startQueue).To(HaveLen(1))
+		Expect(r.Others.startQueue).To(BeEmpty())
+	})
+
+	It("should add WarmupRunnable that doesn't needs leader election to warmup group only", func() {
+		warmupRunnable := newLeaderElectionAndWarmupRunnable(
+			func(c context.Context) error {
+				<-c.Done()
+				return nil
+			},
+			func(c context.Context) error { return nil },
+			false,
+		)
+
+		r := newRunnables(defaultBaseContext, errCh)
+		Expect(r.Add(warmupRunnable)).To(Succeed())
+
+		Expect(r.Warmup.startQueue).To(HaveLen(1))
+		Expect(r.LeaderElection.startQueue).To(BeEmpty())
+		Expect(r.Others.startQueue).To(HaveLen(1))
+	})
+
+	It("should add WarmupRunnable that needs leader election to Warmup and LeaderElection group, not Others", func() {
+		warmupRunnable := newLeaderElectionAndWarmupRunnable(
+			func(c context.Context) error {
+				<-c.Done()
+				return nil
+			},
+			func(c context.Context) error { return nil },
+			true,
+		)
+
+		r := newRunnables(defaultBaseContext, errCh)
+		Expect(r.Add(warmupRunnable)).To(Succeed())
+
+		Expect(r.Warmup.startQueue).To(HaveLen(1))
+		Expect(r.LeaderElection.startQueue).To(HaveLen(1))
+		Expect(r.Others.startQueue).To(BeEmpty())
+	})
+
+	It("should propagate errors from Warmup function to error channel", func(ctx SpecContext) {
+		expectedErr := fmt.Errorf("expected warmup error")
+
+		warmupRunnable := newWarmupRunnableFunc(
+			func(c context.Context) error {
+				<-c.Done()
+				return nil
+			},
+			func(c context.Context) error { return expectedErr },
+		)
+
+		testErrChan := make(chan error, 1)
+		r := newRunnables(defaultBaseContext, testErrChan)
+		Expect(r.Add(warmupRunnable)).To(Succeed())
+
+		// Start the Warmup group in a goroutine
+		go func() {
+			Expect(r.Warmup.Start(ctx)).To(Succeed())
+		}()
+
+		// Error from Warmup should be sent to error channel
+		var receivedErr error
+		Eventually(func() error {
+			select {
+			case receivedErr = <-testErrChan:
+				return receivedErr
+			default:
+				return nil
+			}
+		}).Should(Equal(expectedErr))
 	})
 })
 
 var _ = Describe("runnableGroup", func() {
 	errCh := make(chan error)
 
-	It("should be able to add new runnables before it starts", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+	It("should be able to add new runnables before it starts", func(ctx SpecContext) {
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 		Expect(rg.Add(RunnableFunc(func(c context.Context) error {
 			<-ctx.Done()
@@ -70,9 +158,7 @@ var _ = Describe("runnableGroup", func() {
 		Expect(rg.Started()).To(BeFalse())
 	})
 
-	It("should be able to add new runnables before and after start", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+	It("should be able to add new runnables before and after start", func(ctx SpecContext) {
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 		Expect(rg.Add(RunnableFunc(func(c context.Context) error {
 			<-ctx.Done()
@@ -86,9 +172,7 @@ var _ = Describe("runnableGroup", func() {
 		}), nil)).To(Succeed())
 	})
 
-	It("should be able to add new runnables before and after start concurrently", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+	It("should be able to add new runnables before and after start concurrently", func(ctx SpecContext) {
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 
 		go func() {
@@ -97,7 +181,7 @@ var _ = Describe("runnableGroup", func() {
 			Expect(rg.Start(ctx)).To(Succeed())
 		}()
 
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			go func(i int) {
 				defer GinkgoRecover()
 
@@ -110,12 +194,12 @@ var _ = Describe("runnableGroup", func() {
 		}
 	})
 
-	It("should be able to close the group and wait for all runnables to finish", func() {
-		ctx, cancel := context.WithCancel(context.Background())
+	It("should be able to close the group and wait for all runnables to finish", func(specCtx SpecContext) {
+		ctx, cancel := context.WithCancel(specCtx)
 
 		exited := ptr.To(int64(0))
 		rg := newRunnableGroup(defaultBaseContext, errCh)
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			Expect(rg.Add(RunnableFunc(func(c context.Context) error {
 				defer atomic.AddInt64(exited, 1)
 				<-ctx.Done()
@@ -127,7 +211,7 @@ var _ = Describe("runnableGroup", func() {
 
 		// Cancel the context, asking the runnables to exit.
 		cancel()
-		rg.StopAndWait(context.Background())
+		rg.StopAndWait(specCtx)
 
 		Expect(rg.Add(RunnableFunc(func(c context.Context) error {
 			return nil
@@ -136,8 +220,8 @@ var _ = Describe("runnableGroup", func() {
 		Expect(atomic.LoadInt64(exited)).To(BeNumerically("==", 10))
 	})
 
-	It("should be able to wait for all runnables to be ready at different intervals", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	It("should be able to wait for all runnables to be ready at different intervals", func(specCtx SpecContext) {
+		ctx, cancel := context.WithTimeout(specCtx, 1*time.Second)
 		defer cancel()
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 
@@ -147,7 +231,7 @@ var _ = Describe("runnableGroup", func() {
 			Expect(rg.Start(ctx)).To(Succeed())
 		}()
 
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			go func(i int) {
 				defer GinkgoRecover()
 
@@ -162,8 +246,8 @@ var _ = Describe("runnableGroup", func() {
 		}
 	})
 
-	It("should be able to handle adding runnables while stopping", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	It("should be able to handle adding runnables while stopping", func(specCtx SpecContext) {
+		ctx, cancel := context.WithTimeout(specCtx, 10*time.Second)
 		defer cancel()
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 
@@ -175,12 +259,12 @@ var _ = Describe("runnableGroup", func() {
 		go func() {
 			defer GinkgoRecover()
 			<-time.After(1 * time.Millisecond)
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(ctx)
 			cancel()
 			rg.StopAndWait(ctx)
 		}()
 
-		for i := 0; i < 200; i++ {
+		for i := range 200 {
 			go func(i int) {
 				defer GinkgoRecover()
 
@@ -198,8 +282,8 @@ var _ = Describe("runnableGroup", func() {
 		}
 	})
 
-	It("should not turn ready if some readiness check fail", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	It("should not turn ready if some readiness check fail", func(specCtx SpecContext) {
+		ctx, cancel := context.WithTimeout(specCtx, 2*time.Second)
 		defer cancel()
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 
@@ -209,7 +293,7 @@ var _ = Describe("runnableGroup", func() {
 			Expect(rg.Start(ctx)).To(Succeed())
 		}()
 
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			go func(i int) {
 				defer GinkgoRecover()
 
@@ -224,3 +308,87 @@ var _ = Describe("runnableGroup", func() {
 		}
 	})
 })
+
+var _ warmupRunnable = &warmupRunnableFunc{}
+
+func newWarmupRunnableFunc(
+	startFunc func(context.Context) error,
+	warmupFunc func(context.Context) error,
+) *warmupRunnableFunc {
+	return &warmupRunnableFunc{
+		startFunc:  startFunc,
+		warmupFunc: warmupFunc,
+	}
+}
+
+// warmupRunnableFunc is a helper struct that implements WarmupRunnable
+// for testing purposes.
+type warmupRunnableFunc struct {
+	startFunc  func(context.Context) error
+	warmupFunc func(context.Context) error
+}
+
+func (r *warmupRunnableFunc) Start(ctx context.Context) error {
+	return r.startFunc(ctx)
+}
+
+func (r *warmupRunnableFunc) Warmup(ctx context.Context) error {
+	return r.warmupFunc(ctx)
+}
+
+var _ LeaderElectionRunnable = &leaderElectionAndWarmupRunnable{}
+var _ warmupRunnable = &leaderElectionAndWarmupRunnable{}
+
+// leaderElectionAndWarmupRunnable implements both WarmupRunnable and LeaderElectionRunnable
+type leaderElectionAndWarmupRunnable struct {
+	*warmupRunnableFunc
+	needLeaderElection bool
+}
+
+func newLeaderElectionAndWarmupRunnable(
+	startFunc func(context.Context) error,
+	warmupFunc func(context.Context) error,
+	needLeaderElection bool,
+) *leaderElectionAndWarmupRunnable {
+	return &leaderElectionAndWarmupRunnable{
+		warmupRunnableFunc: &warmupRunnableFunc{
+			startFunc:  startFunc,
+			warmupFunc: warmupFunc,
+		},
+		needLeaderElection: needLeaderElection,
+	}
+}
+
+func (r leaderElectionAndWarmupRunnable) NeedLeaderElection() bool {
+	return r.needLeaderElection
+}
+
+func TestWarmupFunctionIsExecutedWhenWarmupGroupIsStarted(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		g := NewWithT(t)
+		var warmupExecuted atomic.Bool
+
+		warmupRunnable := newWarmupRunnableFunc(
+			func(c context.Context) error {
+				<-c.Done()
+				return nil
+			},
+			func(c context.Context) error {
+				warmupExecuted.Store(true)
+				return nil
+			},
+		)
+
+		r := newRunnables(defaultBaseContext, make(chan error))
+		g.Expect(r.Add(warmupRunnable)).To(Succeed())
+
+		// Start the Warmup group
+		g.Expect(r.Warmup.Start(t.Context())).To(Succeed())
+		synctest.Wait()
+
+		// Verify warmup function was called
+		g.Expect(warmupExecuted.Load()).To(BeTrue())
+		r.Warmup.StopAndWait(t.Context())
+	})
+}

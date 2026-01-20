@@ -63,7 +63,7 @@ var _ = Describe("reconcile", func() {
 	})
 
 	Describe("Func", func() {
-		It("should call the function with the request and return a nil error.", func() {
+		It("should call the function with the request and return a nil error.", func(ctx SpecContext) {
 			request := reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: "foo", Namespace: "bar"},
 			}
@@ -77,12 +77,12 @@ var _ = Describe("reconcile", func() {
 
 				return result, nil
 			})
-			actualResult, actualErr := instance.Reconcile(context.Background(), request)
+			actualResult, actualErr := instance.Reconcile(ctx, request)
 			Expect(actualResult).To(Equal(result))
 			Expect(actualErr).NotTo(HaveOccurred())
 		})
 
-		It("should call the function with the request and return an error.", func() {
+		It("should call the function with the request and return an error.", func(ctx SpecContext) {
 			request := reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: "foo", Namespace: "bar"},
 			}
@@ -97,16 +97,16 @@ var _ = Describe("reconcile", func() {
 
 				return result, err
 			})
-			actualResult, actualErr := instance.Reconcile(context.Background(), request)
+			actualResult, actualErr := instance.Reconcile(ctx, request)
 			Expect(actualResult).To(Equal(result))
 			Expect(actualErr).To(Equal(err))
 		})
 
 		It("should allow unwrapping inner error from terminal error", func() {
-			inner := apierrors.NewGone("")
+			inner := apierrors.NewResourceExpired("")
 			terminalError := reconcile.TerminalError(inner)
 
-			Expect(apierrors.IsGone(terminalError)).To(BeTrue())
+			Expect(apierrors.IsResourceExpired(terminalError)).To(BeTrue())
 		})
 
 		It("should handle nil terminal errors properly", func() {
@@ -136,7 +136,7 @@ var _ = Describe("reconcile", func() {
 		Context("with an existing object", func() {
 			var key client.ObjectKey
 
-			BeforeEach(func() {
+			BeforeEach(func(ctx SpecContext) {
 				cm := &corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "default",
@@ -145,11 +145,11 @@ var _ = Describe("reconcile", func() {
 				}
 				key = client.ObjectKeyFromObject(cm)
 
-				err := testClient.Create(context.Background(), cm)
+				err := testClient.Create(ctx, cm)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should Get the object and call the ObjectReconciler", func() {
+			It("should Get the object and call the ObjectReconciler", func(ctx SpecContext) {
 				var actual *corev1.ConfigMap
 				reconciler := reconcile.AsReconciler(testClient, &mockObjectReconciler{
 					reconcileFunc: func(ctx context.Context, cm *corev1.ConfigMap) (reconcile.Result, error) {
@@ -158,7 +158,7 @@ var _ = Describe("reconcile", func() {
 					},
 				})
 
-				res, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: key})
+				res, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: key})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(res).To(BeZero())
 				Expect(actual).NotTo(BeNil())
@@ -168,7 +168,7 @@ var _ = Describe("reconcile", func() {
 		})
 
 		Context("with an object that doesn't exist", func() {
-			It("should not call the ObjectReconciler", func() {
+			It("should not call the ObjectReconciler", func(ctx SpecContext) {
 				called := false
 				reconciler := reconcile.AsReconciler(testClient, &mockObjectReconciler{
 					reconcileFunc: func(ctx context.Context, cm *corev1.ConfigMap) (reconcile.Result, error) {
@@ -178,7 +178,7 @@ var _ = Describe("reconcile", func() {
 				})
 
 				key := types.NamespacedName{Namespace: "default", Name: "fake-obj"}
-				res, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: key})
+				res, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: key})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(res).To(BeZero())
 				Expect(called).To(BeFalse())

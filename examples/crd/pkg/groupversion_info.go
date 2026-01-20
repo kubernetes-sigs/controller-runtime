@@ -14,19 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package pkg contains API Schema definitions for the chaosapps v1 API group
 // +kubebuilder:object:generate=true
 // +groupName=chaosapps.metamagical.io
 package pkg
 
 import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
 var (
-	log = logf.Log.WithName("chaospod-resource")
-
 	// SchemeGroupVersion is group version used to register these objects
 	SchemeGroupVersion = schema.GroupVersion{Group: "chaosapps.metamagical.io", Version: "v1"}
 

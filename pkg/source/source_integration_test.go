@@ -41,11 +41,11 @@ var _ = Describe("Source", func() {
 	var instance1, instance2 source.Source
 	var obj client.Object
 	var q workqueue.TypedRateLimitingInterface[reconcile.Request]
-	var c1, c2 chan interface{}
+	var c1, c2 chan any
 	var ns string
 	count := 0
 
-	BeforeEach(func() {
+	BeforeEach(func(ctx SpecContext) {
 		// Create the namespace for the test
 		ns = fmt.Sprintf("controller-source-kindsource-%v", count)
 		count++
@@ -59,11 +59,11 @@ var _ = Describe("Source", func() {
 			workqueue.TypedRateLimitingQueueConfig[reconcile.Request]{
 				Name: "test",
 			})
-		c1 = make(chan interface{})
-		c2 = make(chan interface{})
+		c1 = make(chan any)
+		c2 = make(chan any)
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx SpecContext) {
 		err := clientset.CoreV1().Namespaces().Delete(ctx, ns, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		close(c1)
@@ -74,7 +74,7 @@ var _ = Describe("Source", func() {
 		Context("for a Deployment resource", func() {
 			obj = &appsv1.Deployment{}
 
-			It("should provide Deployment Events", func() {
+			It("should provide Deployment Events", func(ctx SpecContext) {
 				var created, updated, deleted *appsv1.Deployment
 				var err error
 
@@ -101,7 +101,7 @@ var _ = Describe("Source", func() {
 				}
 
 				// Create an event handler to verify the events
-				newHandler := func(c chan interface{}) handler.Funcs {
+				newHandler := func(c chan any) handler.Funcs {
 					return handler.Funcs{
 						CreateFunc: func(ctx context.Context, evt event.CreateEvent, rli workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 							defer GinkgoRecover()
@@ -239,7 +239,7 @@ var _ = Describe("Source", func() {
 		})
 
 		Context("for a ReplicaSet resource", func() {
-			It("should provide a ReplicaSet CreateEvent", func() {
+			It("should provide a ReplicaSet CreateEvent", func(ctx SpecContext) {
 				c := make(chan struct{})
 
 				q := workqueue.NewTypedRateLimitingQueueWithConfig(
@@ -282,7 +282,7 @@ var _ = Describe("Source", func() {
 				<-c
 			})
 
-			It("should provide a ReplicaSet UpdateEvent", func() {
+			It("should provide a ReplicaSet UpdateEvent", func(ctx SpecContext) {
 				var err error
 				rs, err = clientset.AppsV1().ReplicaSets("default").Get(ctx, rs.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -331,7 +331,7 @@ var _ = Describe("Source", func() {
 				<-c
 			})
 
-			It("should provide a ReplicaSet DeletedEvent", func() {
+			It("should provide a ReplicaSet DeletedEvent", func(ctx SpecContext) {
 				c := make(chan struct{})
 
 				q := workqueue.NewTypedRateLimitingQueueWithConfig(

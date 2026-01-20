@@ -132,16 +132,16 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "works with unstructured.Unstructured",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
 						"name":      "something",
 						"namespace": "test",
 					},
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
 						"name":      "somethingelse",
 						"namespace": "test",
 					},
@@ -159,15 +159,15 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Equal field (spec) both in original and in modified",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"foo": "bar",
 					},
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"foo": "bar",
 					},
 				},
@@ -178,10 +178,10 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Equal nested field both in original and in modified",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
-						"template": map[string]interface{}{
-							"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"template": map[string]any{
+							"spec": map[string]any{
 								"A": "A",
 							},
 						},
@@ -189,10 +189,10 @@ func TestEqualObjectMatcher(t *testing.T) {
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
-						"template": map[string]interface{}{
-							"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"template": map[string]any{
+							"spec": map[string]any{
 								"A": "A",
 							},
 						},
@@ -206,15 +206,15 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Unequal field both in original and in modified",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"foo": "bar-changed",
 					},
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"foo": "bar",
 					},
 				},
@@ -224,10 +224,10 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Unequal nested field both in original and modified",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
-						"template": map[string]interface{}{
-							"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"template": map[string]any{
+							"spec": map[string]any{
 								"A": "A-Changed",
 							},
 						},
@@ -235,10 +235,10 @@ func TestEqualObjectMatcher(t *testing.T) {
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
-						"template": map[string]interface{}{
-							"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"template": map[string]any{
+							"spec": map[string]any{
 								"A": "A",
 							},
 						},
@@ -251,8 +251,8 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Value of type map with different values",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"map": map[string]string{
 							"A": "A-changed",
 							"B": "B",
@@ -262,8 +262,8 @@ func TestEqualObjectMatcher(t *testing.T) {
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"map": map[string]string{
 							"A": "A",
 							// B missing
@@ -278,8 +278,8 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Value of type Array or Slice with same length but different values",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"slice": []string{
 							"D",
 							"C",
@@ -289,8 +289,8 @@ func TestEqualObjectMatcher(t *testing.T) {
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"slice": []string{
 							"A",
 							"B",
@@ -306,22 +306,22 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Creation timestamp set to empty value on both original and modified",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"A": "A",
 					},
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"selfLink":          "foo",
 						"creationTimestamp": metav1.Time{},
 					},
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"A": "A",
 					},
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"selfLink":          "foo",
 						"creationTimestamp": metav1.Time{},
 					},
@@ -334,11 +334,11 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Field only in modified",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"foo": "bar",
 					},
 				},
@@ -348,13 +348,13 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Nested field only in modified",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
-						"template": map[string]interface{}{
-							"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"template": map[string]any{
+							"spec": map[string]any{
 								"A": "A",
 							},
 						},
@@ -366,18 +366,18 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Creation timestamp exists on modified but not on original",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"A": "A",
 					},
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"A": "A",
 					},
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"selfLink":          "foo",
 						"creationTimestamp": "2021-11-03T11:05:17Z",
 					},
@@ -390,24 +390,24 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Field only in original",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"foo": "bar",
 					},
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 			want: false,
 		},
 		{
 			name: "Nested field only in original",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
-						"template": map[string]interface{}{
-							"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"template": map[string]any{
+							"spec": map[string]any{
 								"A": "A",
 							},
 						},
@@ -415,26 +415,26 @@ func TestEqualObjectMatcher(t *testing.T) {
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 			want: false,
 		},
 		{
 			name: "Creation timestamp exists on original but not on modified",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"A": "A",
 					},
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"selfLink":          "foo",
 						"creationTimestamp": "2021-11-03T11:05:17Z",
 					},
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"A": "A",
 					},
 				},
@@ -447,18 +447,18 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Unequal Metadata fields computed by the system or in status",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
 						"selfLink":        "foo",
 						"uid":             "foo",
 						"resourceVersion": "foo",
 						"generation":      "foo",
 						"managedFields":   "foo",
 					},
-					"status": map[string]interface{}{
+					"status": map[string]any{
 						"foo": "bar",
 					},
 				},
@@ -468,15 +468,15 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Unequal labels and annotations",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"labels": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"labels": map[string]any{
 							"foo": "bar",
 						},
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							"foo": "bar",
 						},
 					},
@@ -489,15 +489,15 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Unequal metadata fields ignored by IgnorePaths MatchOption",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
 						"name": "test",
 					},
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
 						"name":            "test",
 						"selfLink":        "foo",
 						"uid":             "foo",
@@ -513,20 +513,20 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Unequal labels and annotations ignored by IgnorePaths MatchOption",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
 						"name": "test",
 					},
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
 						"name": "test",
-						"labels": map[string]interface{}{
+						"labels": map[string]any{
 							"foo": "bar",
 						},
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							"foo": "bar",
 						},
 					},
@@ -538,14 +538,14 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Ignore fields are not compared",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{},
+				Object: map[string]any{
+					"spec": map[string]any{},
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
-						"controlPlaneEndpoint": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"controlPlaneEndpoint": map[string]any{
 							"host": "",
 							"port": 0,
 						},
@@ -558,16 +558,16 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Not-ignored fields are still compared",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{},
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{},
 					},
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							"ignored":    "somevalue",
 							"superflous": "shouldcausefailure",
 						},
@@ -582,18 +582,18 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Unequal metadata fields not compared by setting MatchPaths MatchOption",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"A": "A",
 					},
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"A": "A",
 					},
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"selfLink": "foo",
 						"uid":      "foo",
 					},
@@ -607,8 +607,8 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "No changes",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"A": "A",
 						"B": "B",
 						"C": "C", // C only in original
@@ -616,8 +616,8 @@ func TestEqualObjectMatcher(t *testing.T) {
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"A": "A",
 						"B": "B",
 					},
@@ -628,8 +628,8 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "Many changes",
 			original: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"A": "A",
 						// B missing
 						"C": "C", // C only in original
@@ -637,8 +637,8 @@ func TestEqualObjectMatcher(t *testing.T) {
 				},
 			},
 			modified: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"A": "A",
 						"B": "B",
 					},

@@ -18,31 +18,39 @@ package recorder_test
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	_ "github.com/onsi/ginkgo/v2"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
 
 var (
-	recorderProvider recorder.Provider
-	somePod          *corev1.Pod // the object you're reconciling, for example
+	recorderProvider  recorder.Provider
+	somePod           *corev1.Pod    // the object you're reconciling, for example
+	someRelatedObject runtime.Object // another object related to the reconciled object and the event.
 )
 
 func Example_event() {
 	// recorderProvider is a recorder.Provider
-	recorder := recorderProvider.GetEventRecorderFor("my-controller")
+	deprecatedRecorder := recorderProvider.GetEventRecorderFor("my-controller")
 
 	// emit an event with a fixed message
-	recorder.Event(somePod, corev1.EventTypeWarning,
+	deprecatedRecorder.Event(somePod, corev1.EventTypeWarning,
 		"WrongTrousers", "It's the wrong trousers, Gromit!")
 }
 
 func Example_eventf() {
 	// recorderProvider is a recorder.Provider
-	recorder := recorderProvider.GetEventRecorderFor("my-controller")
+	deprecatedRecorder := recorderProvider.GetEventRecorderFor("my-controller")
 
 	// emit an event with a variable message
 	mildCheese := "Wensleydale"
-	recorder.Eventf(somePod, corev1.EventTypeNormal,
+	deprecatedRecorder.Eventf(somePod, corev1.EventTypeNormal,
 		"DislikesCheese", "Not even %s?", mildCheese)
+
+	recorder := recorderProvider.GetEventRecorder("my-controller")
+
+	// emit an event with a fixed message
+	recorder.Eventf(somePod, someRelatedObject, corev1.EventTypeWarning,
+		"WrongTrousers", "getting dressed", "It's the wrong trousers, Gromit!")
 }

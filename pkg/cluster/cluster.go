@@ -19,14 +19,16 @@ package cluster
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	eventsv1client "k8s.io/client-go/kubernetes/typed/events/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -34,10 +36,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
+	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
 
 // Cluster provides various methods to interact with a cluster.
 type Cluster interface {
+	recorder.Provider
+
 	// GetHTTPClient returns an HTTP client that can be used to talk to the apiserver
 	GetHTTPClient() *http.Client
 
@@ -59,14 +64,11 @@ type Cluster interface {
 	// GetFieldIndexer returns a client.FieldIndexer configured with the client
 	GetFieldIndexer() client.FieldIndexer
 
-	// GetEventRecorderFor returns a new EventRecorder for the provided name
-	GetEventRecorderFor(name string) record.EventRecorder
-
 	// GetRESTMapper returns a RESTMapper
 	GetRESTMapper() meta.RESTMapper
 
-	// GetAPIReader returns a reader that will be configured to use the API server.
-	// This should be used sparingly and only when the client does not fit your
+	// GetAPIReader returns a reader that will be configured to use the API server directly.
+	// This should be used sparingly and only when the cached client does not fit your
 	// use case.
 	GetAPIReader() client.Reader
 
@@ -87,16 +89,6 @@ type Options struct {
 	// Logger is the logger that should be used by this Cluster.
 	// If none is set, it defaults to log.Log global logger.
 	Logger logr.Logger
-
-	// SyncPeriod determines the minimum frequency at which watched resources are
-	// reconciled. A lower period will correct entropy more quickly, but reduce
-	// responsiveness to change if there are many watched resources. Change this
-	// value only if you know what you are doing. Defaults to 10 hours if unset.
-	// there will a 10 percent jitter between the SyncPeriod of all controllers
-	// so that all controllers will not send list requests simultaneously.
-	//
-	// Deprecated: Use Cache.SyncPeriod instead.
-	SyncPeriod *time.Duration
 
 	// HTTPClient is the http client that will be used to create the default
 	// Cache and Client. If not set the rest.HTTPClientFor function will be used
@@ -171,8 +163,7 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	}
 	options, err := setOptionsDefaults(options, config)
 	if err != nil {
-		options.Logger.Error(err, "Failed to set defaults")
-		return nil, err
+		return nil, fmt.Errorf("failed setting cluster default options: %w", err)
 	}
 
 	// Create the mapper provider
@@ -193,9 +184,6 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 		}
 		if cacheOpts.HTTPClient == nil {
 			cacheOpts.HTTPClient = options.HTTPClient
-		}
-		if cacheOpts.SyncPeriod == nil {
-			cacheOpts.SyncPeriod = options.SyncPeriod
 		}
 	}
 	cache, err := options.NewCache(config, cacheOpts)
@@ -297,14 +285,22 @@ func setOptionsDefaults(options Options, config *rest.Config) (Options, error) {
 
 	// This is duplicated with pkg/manager, we need it here to provide
 	// the user with an EventBroadcaster and there for the Leader election
+	evtCl, err := eventsv1client.NewForConfigAndClient(config, options.HTTPClient)
+	if err != nil {
+		return options, err
+	}
+
+	// This is duplicated with pkg/manager, we need it here to provide
+	// the user with an EventBroadcaster and there for the Leader election
 	if options.EventBroadcaster == nil {
 		// defer initialization to avoid leaking by default
-		options.makeBroadcaster = func() (record.EventBroadcaster, bool) {
-			return record.NewBroadcaster(), true
+		options.makeBroadcaster = func() (record.EventBroadcaster, events.EventBroadcaster, bool) {
+			return record.NewBroadcaster(), events.NewBroadcaster(&events.EventSinkImpl{Interface: evtCl}), true
 		}
 	} else {
-		options.makeBroadcaster = func() (record.EventBroadcaster, bool) {
-			return options.EventBroadcaster, false
+		// keep supporting the options.EventBroadcaster in the old API, but do not introduce it for the new one.
+		options.makeBroadcaster = func() (record.EventBroadcaster, events.EventBroadcaster, bool) {
+			return options.EventBroadcaster, events.NewBroadcaster(&events.EventSinkImpl{Interface: evtCl}), false
 		}
 	}
 

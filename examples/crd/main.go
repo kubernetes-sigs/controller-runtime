@@ -65,7 +65,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if podFound {
 		shouldStop := chaospod.Spec.NextStop.Time.Before(time.Now())
 		if !shouldStop {
-			return ctrl.Result{RequeueAfter: chaospod.Spec.NextStop.Sub(time.Now()) + 1*time.Second}, nil
+			return ctrl.Result{RequeueAfter: time.Until(chaospod.Spec.NextStop.Time) + 1*time.Second}, nil
 		}
 
 		if err := r.Delete(ctx, &pod); err != nil {
@@ -129,8 +129,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = ctrl.NewWebhookManagedBy(mgr).
-		For(&api.ChaosPod{}).
+	err = ctrl.NewWebhookManagedBy(mgr, &api.ChaosPod{}).
 		Complete()
 	if err != nil {
 		setupLog.Error(err, "unable to create webhook")

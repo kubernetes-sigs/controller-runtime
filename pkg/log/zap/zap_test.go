@@ -54,7 +54,7 @@ func (w *fakeSyncWriter) Sync() error {
 // logInfo is the information for a particular fakeLogger message.
 type logInfo struct {
 	name []string
-	tags []interface{}
+	tags []any
 	msg  string
 }
 
@@ -70,7 +70,7 @@ var _ logr.LogSink = &fakeLogger{}
 // just records the name.
 type fakeLogger struct {
 	name []string
-	tags []interface{}
+	tags []any
 
 	root *fakeLoggerRoot
 }
@@ -88,8 +88,8 @@ func (f *fakeLogger) WithName(name string) logr.LogSink {
 	}
 }
 
-func (f *fakeLogger) WithValues(vals ...interface{}) logr.LogSink {
-	tags := append([]interface{}(nil), f.tags...)
+func (f *fakeLogger) WithValues(vals ...any) logr.LogSink {
+	tags := append([]any(nil), f.tags...)
 	tags = append(tags, vals...)
 	return &fakeLogger{
 		name: f.name,
@@ -98,8 +98,8 @@ func (f *fakeLogger) WithValues(vals ...interface{}) logr.LogSink {
 	}
 }
 
-func (f *fakeLogger) Error(err error, msg string, vals ...interface{}) {
-	tags := append([]interface{}(nil), f.tags...)
+func (f *fakeLogger) Error(err error, msg string, vals ...any) {
+	tags := append([]any(nil), f.tags...)
 	tags = append(tags, "error", err)
 	tags = append(tags, vals...)
 	f.root.messages = append(f.root.messages, logInfo{
@@ -109,8 +109,8 @@ func (f *fakeLogger) Error(err error, msg string, vals ...interface{}) {
 	})
 }
 
-func (f *fakeLogger) Info(level int, msg string, vals ...interface{}) {
-	tags := append([]interface{}(nil), f.tags...)
+func (f *fakeLogger) Info(level int, msg string, vals ...any) {
+	tags := append([]any(nil), f.tags...)
 	tags = append(tags, vals...)
 	f.root.messages = append(f.root.messages, logInfo{
 		name: append([]string(nil), f.name...),
@@ -159,10 +159,10 @@ var _ = Describe("Zap logger setup", func() {
 				logger.Info("here's a kubernetes object", "thing", pod)
 
 				outRaw := logOut.Bytes()
-				res := map[string]interface{}{}
+				res := map[string]any{}
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
-				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+				Expect(res).To(HaveKeyWithValue("thing", map[string]any{
 					"name":      pod.Name,
 					"namespace": pod.Namespace,
 				}))
@@ -171,7 +171,7 @@ var _ = Describe("Zap logger setup", func() {
 			It("should work fine with normal stringers", func() {
 				logger.Info("here's a non-kubernetes stringer", "thing", testStringer{})
 				outRaw := logOut.Bytes()
-				res := map[string]interface{}{}
+				res := map[string]any{}
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
 				Expect(res).To(HaveKeyWithValue("thing", "value"))
@@ -183,10 +183,10 @@ var _ = Describe("Zap logger setup", func() {
 				logger.Info("here's a kubernetes object", "thing", node)
 
 				outRaw := logOut.Bytes()
-				res := map[string]interface{}{}
+				res := map[string]any{}
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
-				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+				Expect(res).To(HaveKeyWithValue("thing", map[string]any{
 					"name": node.Name,
 				}))
 			})
@@ -199,10 +199,10 @@ var _ = Describe("Zap logger setup", func() {
 				logger.Info("here's a kubernetes object", "thing", node)
 
 				outRaw := logOut.Bytes()
-				res := map[string]interface{}{}
+				res := map[string]any{}
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
-				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+				Expect(res).To(HaveKeyWithValue("thing", map[string]any{
 					"name":       node.Name,
 					"apiVersion": "v1",
 					"kind":       "Node",
@@ -214,18 +214,18 @@ var _ = Describe("Zap logger setup", func() {
 				logger.Info("here's a kubernetes object", "thing", name)
 
 				outRaw := logOut.Bytes()
-				res := map[string]interface{}{}
+				res := map[string]any{}
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
-				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+				Expect(res).To(HaveKeyWithValue("thing", map[string]any{
 					"name": name.Name,
 				}))
 			})
 
 			It("should log an unstructured Kubernetes object", func() {
 				pod := &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"metadata": map[string]interface{}{
+					Object: map[string]any{
+						"metadata": map[string]any{
 							"name":      "some-pod",
 							"namespace": "some-ns",
 						},
@@ -234,10 +234,10 @@ var _ = Describe("Zap logger setup", func() {
 				logger.Info("here's a kubernetes object", "thing", pod)
 
 				outRaw := logOut.Bytes()
-				res := map[string]interface{}{}
+				res := map[string]any{}
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
-				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+				Expect(res).To(HaveKeyWithValue("thing", map[string]any{
 					"name":      "some-pod",
 					"namespace": "some-ns",
 				}))
@@ -248,10 +248,10 @@ var _ = Describe("Zap logger setup", func() {
 				logger.Info("here's a kubernetes object", "thing", name)
 
 				outRaw := logOut.Bytes()
-				res := map[string]interface{}{}
+				res := map[string]any{}
 				Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 
-				Expect(res).To(HaveKeyWithValue("thing", map[string]interface{}{
+				Expect(res).To(HaveKeyWithValue("thing", map[string]any{
 					"name":      name.Name,
 					"namespace": name.Namespace,
 				}))
@@ -322,6 +322,24 @@ var _ = Describe("Zap log level flag options setup", func() {
 			logger := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
 			logger.V(0).Info(logInfoLevel0)
 			logger.V(1).Info(logDebugLevel1)
+
+			outRaw := logOut.Bytes()
+
+			Expect(outRaw).To(BeEmpty())
+		})
+
+		It("Should output only panic logs, otherwise empty logs", func() {
+			args := []string{"--zap-log-level=panic"}
+			fromFlags.BindFlags(&fs)
+			err := fs.Parse(args)
+			Expect(err).ToNot(HaveOccurred())
+
+			logOut := new(bytes.Buffer)
+
+			logger := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
+			logger.V(0).Info(logInfoLevel0)
+			logger.V(1).Info(logDebugLevel1)
+			logger.V(2).Info(logDebugLevel2)
 
 			outRaw := logOut.Bytes()
 
@@ -532,7 +550,7 @@ var _ = Describe("Zap log level flag options setup", func() {
 
 			outRaw := logOut.Bytes()
 
-			res := map[string]interface{}{}
+			res := map[string]any{}
 			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 			Expect(res["ts"]).Should(MatchRegexp(iso8601Pattern))
 		})
@@ -551,7 +569,7 @@ var _ = Describe("Zap log level flag options setup", func() {
 			log.Info("This is a test message")
 			outRaw := logOut.Bytes()
 			// Assert for JSON Encoder
-			res := map[string]interface{}{}
+			res := map[string]any{}
 			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
 			// Assert for MessageKey
 			Expect(string(outRaw)).Should(ContainSubstring("MillisTimeFormat"))

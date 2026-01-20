@@ -105,7 +105,7 @@ func run() error {
 		clients[targetClusterName] = targetCluster.GetClient()
 	}
 
-	if err := b.Complete(&secretSyncReconcier{
+	if err := b.Complete(&secretSyncReconciler{
 		source:  mgr.GetClient(),
 		targets: clients,
 	}); err != nil {
@@ -125,14 +125,14 @@ type request struct {
 	clusterName string
 }
 
-// secretSyncReconcier is a simple reconciler that keeps all secrets in the source namespace of a given
+// secretSyncReconciler is a simple reconciler that keeps all secrets in the source namespace of a given
 // source cluster in sync with the secrets in the target namespace of all target clusters.
-type secretSyncReconcier struct {
+type secretSyncReconciler struct {
 	source  client.Client
 	targets map[string]client.Client
 }
 
-func (s *secretSyncReconcier) Reconcile(ctx context.Context, req request) (reconcile.Result, error) {
+func (s *secretSyncReconciler) Reconcile(ctx context.Context, req request) (reconcile.Result, error) {
 	targetClient, found := s.targets[req.clusterName]
 	if !found {
 		return reconcile.Result{}, reconcile.TerminalError(fmt.Errorf("target cluster %s not found", req.clusterName))

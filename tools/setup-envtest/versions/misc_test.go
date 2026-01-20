@@ -17,6 +17,9 @@ limitations under the License.
 package versions_test
 
 import (
+	"math/rand/v2"
+	"slices"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -36,13 +39,30 @@ var _ = Describe("Concrete", func() {
 	Describe("when ordering relative to other versions", func() {
 		ver1163 := Concrete{Major: 1, Minor: 16, Patch: 3}
 		Specify("newer patch should be newer", func() {
-			Expect(ver1163.NewerThan(Concrete{Major: 1, Minor: 16})).To(BeTrue())
+			Expect(ver1163.Compare(Concrete{Major: 1, Minor: 16})).To(Equal(1))
 		})
 		Specify("newer minor should be newer", func() {
-			Expect(ver1163.NewerThan(Concrete{Major: 1, Minor: 15, Patch: 3})).To(BeTrue())
+			Expect(ver1163.Compare(Concrete{Major: 1, Minor: 15, Patch: 3})).To(Equal(1))
 		})
 		Specify("newer major should be newer", func() {
-			Expect(ver1163.NewerThan(Concrete{Major: 0, Minor: 16, Patch: 3})).To(BeTrue())
+			Expect(ver1163.Compare(Concrete{Major: 0, Minor: 16, Patch: 3})).To(Equal(1))
+		})
+
+		Describe("sorting", func() {
+			ver16 := Concrete{Major: 1, Minor: 16}
+			ver17 := Concrete{Major: 1, Minor: 17}
+			many := []Concrete{ver16, ver17, ver1163}
+
+			BeforeEach(func() {
+				rand.Shuffle(len(many), func(i, j int) {
+					many[i], many[j] = many[j], many[i]
+				})
+			})
+
+			Specify("newer versions are later", func() {
+				slices.SortStableFunc(many, Concrete.Compare)
+				Expect(many).To(Equal([]Concrete{ver16, ver1163, ver17}))
+			})
 		})
 	})
 })

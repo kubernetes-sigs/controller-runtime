@@ -21,6 +21,8 @@ import (
 
 	gmg "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/restmapper"
 )
@@ -190,7 +192,7 @@ func TestLazyRestMapper_fetchGroupVersionResourcesLocked_CacheInvalidation(t *te
 			g := gmg.NewWithT(t)
 			m := &mapper{
 				mapper:      restmapper.NewDiscoveryRESTMapper([]*restmapper.APIGroupResources{}),
-				client:      fake.NewSimpleClientset().Discovery(),
+				client:      &fakeAggregatedDiscoveryClient{DiscoveryInterface: fake.NewClientset().Discovery()},
 				apiGroups:   tt.cachedAPIGroups,
 				knownGroups: tt.cachedKnownGroups,
 			}
@@ -200,4 +202,13 @@ func TestLazyRestMapper_fetchGroupVersionResourcesLocked_CacheInvalidation(t *te
 			g.Expect(m.knownGroups).To(gmg.BeComparableTo(tt.expectedKnownGroups))
 		})
 	}
+}
+
+type fakeAggregatedDiscoveryClient struct {
+	discovery.DiscoveryInterface
+}
+
+func (f *fakeAggregatedDiscoveryClient) GroupsAndMaybeResources() (*metav1.APIGroupList, map[schema.GroupVersion]*metav1.APIResourceList, map[schema.GroupVersion]error, error) {
+	groupList, err := f.DiscoveryInterface.ServerGroups()
+	return groupList, nil, nil, err
 }

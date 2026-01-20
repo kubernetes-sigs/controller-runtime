@@ -72,11 +72,11 @@ var _ = Describe("manger.Manager", func() {
 					Elem().
 					Set(reflect.ValueOf(newMetricsServer))
 				httpClient = &http.Client{Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 				}}
 			})
 
-			It("should serve metrics in its registry", func() {
+			It("should serve metrics in its registry", func(ctx SpecContext) {
 				one := prometheus.NewCounter(prometheus.CounterOpts{
 					Name: "test_one",
 					Help: "test metric for testing",
@@ -88,8 +88,6 @@ var _ = Describe("manger.Manager", func() {
 				m, err := manager.New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
 				go func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
@@ -128,7 +126,7 @@ var _ = Describe("manger.Manager", func() {
 				Expect(ok).To(BeTrue())
 			})
 
-			It("should serve extra endpoints", func() {
+			It("should serve extra endpoints", func(ctx SpecContext) {
 				opts.Metrics.ExtraHandlers = map[string]http.Handler{
 					"/debug": http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 						_, _ = w.Write([]byte("Some debug info"))
@@ -137,8 +135,6 @@ var _ = Describe("manger.Manager", func() {
 				m, err := manager.New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
 				go func() {
 					defer GinkgoRecover()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())

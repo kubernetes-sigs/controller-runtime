@@ -24,11 +24,13 @@ source ${hack_dir}/common.sh
 tmp_root=/tmp
 kb_root_dir=$tmp_root/kubebuilder
 
+export GOTOOLCHAIN="go$(make --silent go-version)"
+
 # Run verification scripts.
 ${hack_dir}/verify.sh
 
 # Envtest.
-ENVTEST_K8S_VERSION=${ENVTEST_K8S_VERSION:-"1.28.0"}
+ENVTEST_K8S_VERSION=${ENVTEST_K8S_VERSION:-"1.32.0"}
 
 header_text "installing envtest tools@${ENVTEST_K8S_VERSION} with setup-envtest if necessary"
 tmp_bin=/tmp/cr-tests-bin

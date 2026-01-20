@@ -184,6 +184,9 @@ Commands:
 		reads a .tar.gz file from stdin and expand it into the store.
 		must have a concrete version and platform.
 
+	version:
+		list the installed version of setup-envtest.
+
 Versions:
 
 	Versions take the form of a small subset of semver selectors.
@@ -256,7 +259,6 @@ Environment Variables:
 		version = flag.Arg(1)
 	}
 	env := setupEnv(globalLog, version)
-
 	// perform our main set of actions
 	switch action := flag.Arg(0); action {
 	case "use":
@@ -274,6 +276,8 @@ Environment Variables:
 			Input:       os.Stdin,
 			PrintFormat: printFormat,
 		}.Do(env)
+	case "version":
+		workflows.Version{}.Do(env)
 	default:
 		flag.Usage()
 		envp.Exit(2, "unknown action %q", action)

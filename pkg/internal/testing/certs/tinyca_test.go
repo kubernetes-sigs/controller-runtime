@@ -21,7 +21,7 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net"
-	"sort"
+	"slices"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -67,10 +67,11 @@ var _ = Describe("TinyCA", func() {
 			secondCerts.Cert.SerialNumber,
 			thirdCerts.Cert.SerialNumber,
 		}
-		// quick uniqueness check of numbers: sort, then you only have to compare sequential entries
-		sort.Slice(serials, func(i, j int) bool {
-			return serials[i].Cmp(serials[j]) == -1
+		// quick uniqueness check of numbers: slices sort, then you only have to compare sequential entries
+		slices.SortStableFunc(serials, func(i, j *big.Int) int {
+			return i.Cmp(j)
 		})
+
 		Expect(serials[1].Cmp(serials[0])).NotTo(Equal(0), "serials shouldn't be equal")
 		Expect(serials[2].Cmp(serials[1])).NotTo(Equal(0), "serials shouldn't be equal")
 	})
@@ -119,7 +120,7 @@ var _ = Describe("TinyCA", func() {
 
 				localhostAddrs, err := net.LookupHost("localhost")
 				Expect(err).NotTo(HaveOccurred(), "should be able to find IPs for localhost")
-				localhostIPs := make([]interface{}, len(localhostAddrs))
+				localhostIPs := make([]any, len(localhostAddrs))
 				for i, addr := range localhostAddrs {
 					// normalize the elements with To16 so we can compare them to the output of
 					// of ParseIP safely (the alternative is a custom matcher that calls Equal,

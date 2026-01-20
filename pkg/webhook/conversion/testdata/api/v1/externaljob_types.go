@@ -17,6 +17,7 @@ package v1
 
 import (
 	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 
@@ -31,6 +32,9 @@ type ExternalJobSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	RunAt string `json:"runAt"`
+
+	// PanicInConversion triggers a panic during conversion when set to true.
+	PanicInConversion bool `json:"panicInConversion"`
 }
 
 // ExternalJobStatus defines the observed state of ExternalJob
@@ -66,6 +70,9 @@ func init() {
 // ConvertTo implements conversion logic to convert to Hub type (v2.ExternalJob
 // in this case)
 func (ej *ExternalJob) ConvertTo(dst conversion.Hub) error {
+	if ej.Spec.PanicInConversion {
+		panic("PanicInConversion field set to true")
+	}
 	switch t := dst.(type) {
 	case *v2.ExternalJob:
 		jobv2 := dst.(*v2.ExternalJob)
@@ -80,6 +87,9 @@ func (ej *ExternalJob) ConvertTo(dst conversion.Hub) error {
 // ConvertFrom implements conversion logic to convert from Hub type (v2.ExternalJob
 // in this case)
 func (ej *ExternalJob) ConvertFrom(src conversion.Hub) error {
+	if ej.Spec.PanicInConversion {
+		panic("PanicInConversion field set to true")
+	}
 	switch t := src.(type) {
 	case *v2.ExternalJob:
 		jobv2 := src.(*v2.ExternalJob)

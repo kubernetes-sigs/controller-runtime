@@ -38,11 +38,10 @@ import (
 )
 
 var _ = Describe("Internal", func() {
-	var ctx = context.Background()
 	var instance *internal.EventHandler[client.Object, reconcile.Request]
 	var funcs, setfuncs *handler.Funcs
 	var set bool
-	BeforeEach(func() {
+	BeforeEach(func(ctx SpecContext) {
 		funcs = &handler.Funcs{
 			CreateFunc: func(context.Context, event.CreateEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
@@ -92,27 +91,27 @@ var _ = Describe("Internal", func() {
 			newPod.Labels = map[string]string{"foo": "bar"}
 		})
 
-		It("should create a CreateEvent", func() {
+		It("should create a CreateEvent", func(ctx SpecContext) {
 			funcs.CreateFunc = func(ctx context.Context, evt event.CreateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Expect(evt.Object).To(Equal(pod))
 			}
-			instance.OnAdd(pod)
+			instance.OnAdd(pod, false)
 		})
 
-		It("should used Predicates to filter CreateEvents", func() {
+		It("should used Predicates to filter CreateEvents", func(ctx SpecContext) {
 			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
 			})
 			set = false
-			instance.OnAdd(pod)
+			instance.OnAdd(pod, false)
 			Expect(set).To(BeFalse())
 
 			set = false
 			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 			})
-			instance.OnAdd(pod)
+			instance.OnAdd(pod, false)
 			Expect(set).To(BeTrue())
 
 			set = false
@@ -120,7 +119,7 @@ var _ = Describe("Internal", func() {
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
 			})
-			instance.OnAdd(pod)
+			instance.OnAdd(pod, false)
 			Expect(set).To(BeFalse())
 
 			set = false
@@ -128,7 +127,7 @@ var _ = Describe("Internal", func() {
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return false }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 			})
-			instance.OnAdd(pod)
+			instance.OnAdd(pod, false)
 			Expect(set).To(BeFalse())
 
 			set = false
@@ -136,19 +135,19 @@ var _ = Describe("Internal", func() {
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 				predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }},
 			})
-			instance.OnAdd(pod)
+			instance.OnAdd(pod, false)
 			Expect(set).To(BeTrue())
 		})
 
 		It("should not call Create EventHandler if the object is not a runtime.Object", func() {
-			instance.OnAdd(&metav1.ObjectMeta{})
+			instance.OnAdd(&metav1.ObjectMeta{}, false)
 		})
 
 		It("should not call Create EventHandler if the object does not have metadata", func() {
-			instance.OnAdd(FooRuntimeObject{})
+			instance.OnAdd(FooRuntimeObject{}, false)
 		})
 
-		It("should create an UpdateEvent", func() {
+		It("should create an UpdateEvent", func(ctx SpecContext) {
 			funcs.UpdateFunc = func(ctx context.Context, evt event.UpdateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Expect(evt.ObjectOld).To(Equal(pod))
@@ -157,7 +156,7 @@ var _ = Describe("Internal", func() {
 			instance.OnUpdate(pod, newPod)
 		})
 
-		It("should used Predicates to filter UpdateEvents", func() {
+		It("should used Predicates to filter UpdateEvents", func(ctx SpecContext) {
 			set = false
 			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{UpdateFunc: func(updateEvent event.UpdateEvent) bool { return false }},
@@ -215,7 +214,7 @@ var _ = Describe("Internal", func() {
 			instance.OnDelete(pod)
 		})
 
-		It("should used Predicates to filter DeleteEvents", func() {
+		It("should used Predicates to filter DeleteEvents", func(ctx SpecContext) {
 			set = false
 			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
@@ -281,7 +280,7 @@ var _ = Describe("Internal", func() {
 			instance.OnDelete(tombstone)
 		})
 		It("should ignore objects without meta", func() {
-			instance.OnAdd(Foo{})
+			instance.OnAdd(Foo{}, false)
 			instance.OnUpdate(Foo{}, Foo{})
 			instance.OnDelete(Foo{})
 		})

@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -43,13 +43,13 @@ func (r *reconcileReplicaSet) Reconcile(ctx context.Context, request reconcile.R
 	// Fetch the ReplicaSet from the cache
 	rs := &appsv1.ReplicaSet{}
 	err := r.client.Get(ctx, request.NamespacedName, rs)
-	if errors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) {
 		log.Error(nil, "Could not find ReplicaSet")
 		return reconcile.Result{}, nil
 	}
 
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("could not fetch ReplicaSet: %+v", err)
+		return reconcile.Result{}, fmt.Errorf("could not fetch ReplicaSet: %+w", err)
 	}
 
 	// Print the ReplicaSet
@@ -67,7 +67,7 @@ func (r *reconcileReplicaSet) Reconcile(ctx context.Context, request reconcile.R
 	rs.Labels["hello"] = "world"
 	err = r.client.Update(ctx, rs)
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("could not write ReplicaSet: %+v", err)
+		return reconcile.Result{}, fmt.Errorf("could not write ReplicaSet: %+w", err)
 	}
 
 	return reconcile.Result{}, nil

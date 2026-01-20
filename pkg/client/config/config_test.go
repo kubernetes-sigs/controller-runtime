@@ -52,7 +52,7 @@ var _ = Describe("Config", func() {
 	})
 
 	AfterEach(func() {
-		os.Unsetenv(clientcmd.RecommendedConfigPathEnvVar)
+		_ = os.Unsetenv(clientcmd.RecommendedConfigPathEnvVar)
 		kubeconfig = ""
 		clientcmd.RecommendedHomeFile = origRecommendedHomeFile
 
@@ -72,6 +72,7 @@ var _ = Describe("Config", func() {
 					cfg, err := GetConfigWithContext(tc.context)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cfg.Host).To(Equal(tc.wantHost))
+					Expect(cfg.QPS).To(Equal(float32(-1)))
 				})
 			}
 		}
@@ -82,8 +83,8 @@ var _ = Describe("Config", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				cfg, err := GetConfigWithContext("")
-				Expect(cfg).To(BeNil())
 				Expect(err).To(HaveOccurred())
+				Expect(cfg).To(BeNil())
 			})
 		})
 
@@ -191,7 +192,7 @@ func setConfigs(tc testCase, dir string) {
 
 func createFiles(files map[string]string, dir string) error {
 	for path, data := range files {
-		if err := os.WriteFile(filepath.Join(dir, path), []byte(data), 0644); err != nil { //nolint:gosec
+		if err := os.WriteFile(filepath.Join(dir, path), []byte(data), 0644); err != nil {
 			return err
 		}
 	}

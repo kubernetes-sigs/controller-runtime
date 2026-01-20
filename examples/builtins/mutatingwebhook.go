@@ -18,10 +18,8 @@ package main
 
 import (
 	"context"
-	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -31,12 +29,8 @@ import (
 // podAnnotator annotates Pods
 type podAnnotator struct{}
 
-func (a *podAnnotator) Default(ctx context.Context, obj runtime.Object) error {
+func (a *podAnnotator) Default(ctx context.Context, pod *corev1.Pod) error {
 	log := logf.FromContext(ctx)
-	pod, ok := obj.(*corev1.Pod)
-	if !ok {
-		return fmt.Errorf("expected a Pod but got a %T", obj)
-	}
 
 	if pod.Annotations == nil {
 		pod.Annotations = map[string]string{}

@@ -40,8 +40,7 @@ func ExampleWebhookBuilder() {
 	}
 
 	err = builder.
-		WebhookManagedBy(mgr).         // Create the WebhookManagedBy
-		For(&examplegroup.ChaosPod{}). // ChaosPod is a CRD.
+		WebhookManagedBy(mgr, &examplegroup.ChaosPod{}). // Create the WebhookManagedBy
 		Complete()
 	if err != nil {
 		log.Error(err, "could not create webhook")

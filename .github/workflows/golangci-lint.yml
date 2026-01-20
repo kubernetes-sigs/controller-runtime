@@ -23,17 +23,17 @@ jobs:
           - ""
           - tools/setup-envtest
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # tag=v4.1.7
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # tag=v6.0.1
       - name: Calculate go version
         id: vars
         run: echo "go_version=$(make go-version)" >> $GITHUB_OUTPUT
       - name: Set up Go
-        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # tag=v5.0.2
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # tag=v6.2.0
         with:
           go-version: ${{ steps.vars.outputs.go_version }}
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # tag=v6.1.0
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # tag=v9.2.0
         with:
-          version: v1.57.2
-          args: --out-format=colored-line-number
+          version: v2.7.2
+          args: --output.text.print-linter-name=true --output.text.colors=true --timeout 10m
           working-directory: ${{matrix.working-directory}}

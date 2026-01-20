@@ -17,7 +17,6 @@ limitations under the License.
 package log
 
 import (
-	"context"
 	"errors"
 
 	"github.com/go-logr/logr"
@@ -30,7 +29,7 @@ var _ logr.LogSink = &delegatingLogSink{}
 // logInfo is the information for a particular fakeLogger message.
 type logInfo struct {
 	name []string
-	tags []interface{}
+	tags []any
 	msg  string
 }
 
@@ -44,7 +43,7 @@ type fakeLoggerRoot struct {
 // just records the name.
 type fakeLogger struct {
 	name []string
-	tags []interface{}
+	tags []any
 
 	root *fakeLoggerRoot
 }
@@ -62,8 +61,8 @@ func (f *fakeLogger) WithName(name string) logr.LogSink {
 	}
 }
 
-func (f *fakeLogger) WithValues(vals ...interface{}) logr.LogSink {
-	tags := append([]interface{}(nil), f.tags...)
+func (f *fakeLogger) WithValues(vals ...any) logr.LogSink {
+	tags := append([]any(nil), f.tags...)
 	tags = append(tags, vals...)
 	return &fakeLogger{
 		name: f.name,
@@ -72,8 +71,8 @@ func (f *fakeLogger) WithValues(vals ...interface{}) logr.LogSink {
 	}
 }
 
-func (f *fakeLogger) Error(err error, msg string, vals ...interface{}) {
-	tags := append([]interface{}(nil), f.tags...)
+func (f *fakeLogger) Error(err error, msg string, vals ...any) {
+	tags := append([]any(nil), f.tags...)
 	tags = append(tags, "error", err)
 	tags = append(tags, vals...)
 	f.root.messages = append(f.root.messages, logInfo{
@@ -83,8 +82,8 @@ func (f *fakeLogger) Error(err error, msg string, vals ...interface{}) {
 	})
 }
 
-func (f *fakeLogger) Info(level int, msg string, vals ...interface{}) {
-	tags := append([]interface{}(nil), f.tags...)
+func (f *fakeLogger) Info(level int, msg string, vals ...any) {
+	tags := append([]any(nil), f.tags...)
 	tags = append(tags, vals...)
 	f.root.messages = append(f.root.messages, logInfo{
 		name: append([]string(nil), f.name...),
@@ -114,8 +113,8 @@ var _ = Describe("logging", func() {
 
 			By("ensuring that messages after the logger was set were logged")
 			Expect(logger.root.messages).To(ConsistOf(
-				logInfo{name: []string{"runtimeLog"}, tags: []interface{}{"newtag", "newvalue1"}, msg: "after msg 1"},
-				logInfo{name: []string{"runtimeLog"}, tags: []interface{}{"newtag", "newvalue2"}, msg: "after msg 2"},
+				logInfo{name: []string{"runtimeLog"}, tags: []any{"newtag", "newvalue1"}, msg: "after msg 1"},
+				logInfo{name: []string{"runtimeLog"}, tags: []any{"newtag", "newvalue2"}, msg: "after msg 2"},
 			))
 		})
 	})
@@ -194,12 +193,12 @@ var _ = Describe("logging", func() {
 			}()
 			go func() {
 				defer GinkgoRecover()
-				delegLog.WithValues("with-value")
+				delegLog.WithValues("key", "with-value")
 				close(withValuesDone)
 			}()
 			go func() {
 				defer GinkgoRecover()
-				child.WithValues("grandchild")
+				child.WithValues("key", "grandchild")
 				close(grandChildDone)
 			}()
 			go func() {
@@ -260,10 +259,10 @@ var _ = Describe("logging", func() {
 
 			By("ensuring that the messages are appropriately named")
 			Expect(root.messages).To(ConsistOf(
-				logInfo{tags: []interface{}{"tag1", "val1"}, msg: "after 1"},
-				logInfo{tags: []interface{}{"tag1", "val1", "tag2", "val2"}, msg: "after 2"},
-				logInfo{tags: []interface{}{"tag1", "val1", "tag3", "val3"}, msg: "after 3"},
-				logInfo{tags: []interface{}{"tag3", "val3"}, msg: "after 4"},
+				logInfo{tags: []any{"tag1", "val1"}, msg: "after 1"},
+				logInfo{tags: []any{"tag1", "val1", "tag2", "val2"}, msg: "after 2"},
+				logInfo{tags: []any{"tag1", "val1", "tag3", "val3"}, msg: "after 3"},
+				logInfo{tags: []any{"tag3", "val3"}, msg: "after 4"},
 			))
 		})
 
@@ -297,17 +296,17 @@ var _ = Describe("logging", func() {
 	})
 
 	Describe("logger from context", func() {
-		It("should return default logger when context is empty", func() {
-			gotLog := FromContext(context.Background())
+		It("should return default logger when context is empty", func(ctx SpecContext) {
+			gotLog := FromContext(ctx)
 			Expect(gotLog).To(Not(BeNil()))
 		})
 
-		It("should return existing logger", func() {
+		It("should return existing logger", func(specCtx SpecContext) {
 			root := &fakeLoggerRoot{}
 			baseLog := &fakeLogger{root: root}
 
 			wantLog := logr.New(baseLog).WithName("my-logger")
-			ctx := IntoContext(context.Background(), wantLog)
+			ctx := IntoContext(specCtx, wantLog)
 
 			gotLog := FromContext(ctx)
 			Expect(gotLog).To(Not(BeNil()))
@@ -318,19 +317,19 @@ var _ = Describe("logging", func() {
 			))
 		})
 
-		It("should have added key-values", func() {
+		It("should have added key-values", func(specCtx SpecContext) {
 			root := &fakeLoggerRoot{}
 			baseLog := &fakeLogger{root: root}
 
 			wantLog := logr.New(baseLog).WithName("my-logger")
-			ctx := IntoContext(context.Background(), wantLog)
+			ctx := IntoContext(specCtx, wantLog)
 
 			gotLog := FromContext(ctx, "tag1", "value1")
 			Expect(gotLog).To(Not(BeNil()))
 
 			gotLog.Info("test message")
 			Expect(root.messages).To(ConsistOf(
-				logInfo{name: []string{"my-logger"}, tags: []interface{}{"tag1", "value1"}, msg: "test message"},
+				logInfo{name: []string{"my-logger"}, tags: []any{"tag1", "value1"}, msg: "test message"},
 			))
 		})
 	})

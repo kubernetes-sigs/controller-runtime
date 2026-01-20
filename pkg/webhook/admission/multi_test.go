@@ -46,23 +46,46 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 		},
 	}
 
+	withWarnings := &fakeHandler{
+		fn: func(ctx context.Context, req Request) Response {
+			return Response{
+				AdmissionResponse: admissionv1.AdmissionResponse{
+					Allowed:  true,
+					Warnings: []string{"handler-warning"},
+				},
+			}
+		},
+	}
+
 	Context("with validating handlers", func() {
-		It("should deny the request if any handler denies the request", func() {
+		It("should deny the request if any handler denies the request", func(ctx SpecContext) {
 			By("setting up a handler with accept and deny")
 			handler := MultiValidatingHandler(alwaysAllow, alwaysDeny)
 
 			By("checking that the handler denies the request")
-			resp := handler.Handle(context.Background(), Request{})
+			resp := handler.Handle(ctx, Request{})
 			Expect(resp.Allowed).To(BeFalse())
+			Expect(resp.Warnings).To(BeEmpty())
 		})
 
-		It("should allow the request if all handlers allow the request", func() {
+		It("should allow the request if all handlers allow the request", func(ctx SpecContext) {
 			By("setting up a handler with only accept")
 			handler := MultiValidatingHandler(alwaysAllow, alwaysAllow)
 
 			By("checking that the handler allows the request")
-			resp := handler.Handle(context.Background(), Request{})
+			resp := handler.Handle(ctx, Request{})
 			Expect(resp.Allowed).To(BeTrue())
+			Expect(resp.Warnings).To(BeEmpty())
+		})
+
+		It("should show the warnings if all handlers allow the request", func(ctx SpecContext) {
+			By("setting up a handler with only accept")
+			handler := MultiValidatingHandler(alwaysAllow, withWarnings)
+
+			By("checking that the handler allows the request")
+			resp := handler.Handle(ctx, Request{})
+			Expect(resp.Allowed).To(BeTrue())
+			Expect(resp.Warnings).To(HaveLen(1))
 		})
 	})
 
@@ -107,26 +130,60 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 			},
 		}
 
-		It("should not return any patches if the request is denied", func() {
+		patcher3 := &fakeHandler{
+			fn: func(ctx context.Context, req Request) Response {
+				return Response{
+					Patches: []jsonpatch.JsonPatchOperation{
+						{
+							Operation: "add",
+							Path:      "/metadata/annotation/newest-key",
+							Value:     "value",
+						},
+					},
+					AdmissionResponse: admissionv1.AdmissionResponse{
+						Allowed:   true,
+						Warnings:  []string{"annotation-warning"},
+						PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
+					},
+				}
+			},
+		}
+
+		It("should not return any patches if the request is denied", func(ctx SpecContext) {
 			By("setting up a webhook with some patches and a deny")
 			handler := MultiMutatingHandler(patcher1, patcher2, alwaysDeny)
 
 			By("checking that the handler denies the request and produces no patches")
-			resp := handler.Handle(context.Background(), Request{})
+			resp := handler.Handle(ctx, Request{})
 			Expect(resp.Allowed).To(BeFalse())
 			Expect(resp.Patches).To(BeEmpty())
 		})
 
-		It("should produce all patches if the requests are all allowed", func() {
+		It("should produce all patches if the requests are all allowed", func(ctx SpecContext) {
 			By("setting up a webhook with some patches")
 			handler := MultiMutatingHandler(patcher1, patcher2, alwaysAllow)
 
 			By("checking that the handler accepts the request and returns all patches")
-			resp := handler.Handle(context.Background(), Request{})
+			resp := handler.Handle(ctx, Request{})
 			Expect(resp.Allowed).To(BeTrue())
 			Expect(resp.Patch).To(Equal([]byte(
 				`[{"op":"add","path":"/metadata/annotation/new-key","value":"new-value"},` +
 					`{"op":"replace","path":"/spec/replicas","value":"2"},{"op":"add","path":"/metadata/annotation/hello","value":"world"}]`)))
 		})
+
+		It("should produce all patches if the requests are all allowed and show warnings", func(ctx SpecContext) {
+			By("setting up a webhook with some patches")
+			handler := MultiMutatingHandler(patcher1, patcher2, alwaysAllow, patcher3)
+
+			By("checking that the handler accepts the request and returns all patches")
+			resp := handler.Handle(ctx, Request{})
+			Expect(resp.Allowed).To(BeTrue())
+			Expect(resp.Patch).To(Equal([]byte(
+				`[{"op":"add","path":"/metadata/annotation/new-key","value":"new-value"},` +
+					`{"op":"replace","path":"/spec/replicas","value":"2"},{"op":"add","path":"/metadata/annotation/hello","value":"world"},` +
+					`{"op":"add","path":"/metadata/annotation/newest-key","value":"value"}]`)))
+			Expect(resp.Warnings).To(HaveLen(1))
+		})
+
 	})
 })

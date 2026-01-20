@@ -17,6 +17,7 @@ limitations under the License.
 package controllertest
 
 import (
+	"context"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,49 +34,17 @@ type FakeInformer struct {
 	// RunCount is incremented each time RunInformersAndControllers is called
 	RunCount int
 
-	handlers []eventHandlerWrapper
+	handlers []cache.ResourceEventHandler
 }
 
-type modernResourceEventHandler interface {
-	OnAdd(obj interface{}, isInInitialList bool)
-	OnUpdate(oldObj, newObj interface{})
-	OnDelete(obj interface{})
+// fakeHandlerRegistration implements cache.ResourceEventHandlerRegistration for testing.
+type fakeHandlerRegistration struct {
+	informer *FakeInformer
 }
 
-type legacyResourceEventHandler interface {
-	OnAdd(obj interface{})
-	OnUpdate(oldObj, newObj interface{})
-	OnDelete(obj interface{})
-}
-
-// eventHandlerWrapper wraps a ResourceEventHandler in a manner that is compatible with client-go 1.27+ and older.
-// The interface was changed in these versions.
-type eventHandlerWrapper struct {
-	handler any
-}
-
-func (e eventHandlerWrapper) OnAdd(obj interface{}) {
-	if m, ok := e.handler.(modernResourceEventHandler); ok {
-		m.OnAdd(obj, false)
-		return
-	}
-	e.handler.(legacyResourceEventHandler).OnAdd(obj)
-}
-
-func (e eventHandlerWrapper) OnUpdate(oldObj, newObj interface{}) {
-	if m, ok := e.handler.(modernResourceEventHandler); ok {
-		m.OnUpdate(oldObj, newObj)
-		return
-	}
-	e.handler.(legacyResourceEventHandler).OnUpdate(oldObj, newObj)
-}
-
-func (e eventHandlerWrapper) OnDelete(obj interface{}) {
-	if m, ok := e.handler.(modernResourceEventHandler); ok {
-		m.OnDelete(obj)
-		return
-	}
-	e.handler.(legacyResourceEventHandler).OnDelete(obj)
+// HasSynced implements cache.ResourceEventHandlerRegistration.
+func (f *fakeHandlerRegistration) HasSynced() bool {
+	return f.informer.Synced
 }
 
 // AddIndexers does nothing.  TODO(community): Implement this.
@@ -98,10 +67,22 @@ func (f *FakeInformer) HasSynced() bool {
 	return f.Synced
 }
 
-// AddEventHandler implements the Informer interface.  Adds an EventHandler to the fake Informers. TODO(community): Implement Registration.
+// AddEventHandler implements the Informer interface. Adds an EventHandler to the fake Informers. TODO(community): Implement Registration.
 func (f *FakeInformer) AddEventHandler(handler cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
-	f.handlers = append(f.handlers, eventHandlerWrapper{handler})
-	return nil, nil
+	f.handlers = append(f.handlers, handler)
+	return &fakeHandlerRegistration{informer: f}, nil
+}
+
+// AddEventHandlerWithResyncPeriod implements the Informer interface. Adds an EventHandler to the fake Informers (ignores resyncPeriod). TODO(community): Implement Registration.
+func (f *FakeInformer) AddEventHandlerWithResyncPeriod(handler cache.ResourceEventHandler, _ time.Duration) (cache.ResourceEventHandlerRegistration, error) {
+	f.handlers = append(f.handlers, handler)
+	return &fakeHandlerRegistration{informer: f}, nil
+}
+
+// AddEventHandlerWithOptions implements the Informer interface. Adds an EventHandler to the fake Informers (ignores options). TODO(community): Implement Registration.
+func (f *FakeInformer) AddEventHandlerWithOptions(handler cache.ResourceEventHandler, _ cache.HandlerOptions) (cache.ResourceEventHandlerRegistration, error) {
+	f.handlers = append(f.handlers, handler)
+	return &fakeHandlerRegistration{informer: f}, nil
 }
 
 // Run implements the Informer interface.  Increments f.RunCount.
@@ -109,10 +90,14 @@ func (f *FakeInformer) Run(<-chan struct{}) {
 	f.RunCount++
 }
 
+func (f *FakeInformer) RunWithContext(_ context.Context) {
+	f.RunCount++
+}
+
 // Add fakes an Add event for obj.
 func (f *FakeInformer) Add(obj metav1.Object) {
 	for _, h := range f.handlers {
-		h.OnAdd(obj)
+		h.OnAdd(obj, false)
 	}
 }
 
@@ -128,11 +113,6 @@ func (f *FakeInformer) Delete(obj metav1.Object) {
 	for _, h := range f.handlers {
 		h.OnDelete(obj)
 	}
-}
-
-// AddEventHandlerWithResyncPeriod does nothing.  TODO(community): Implement this.
-func (f *FakeInformer) AddEventHandlerWithResyncPeriod(handler cache.ResourceEventHandler, resyncPeriod time.Duration) (cache.ResourceEventHandlerRegistration, error) {
-	return nil, nil
 }
 
 // RemoveEventHandler does nothing.  TODO(community): Implement this.
@@ -157,6 +137,11 @@ func (f *FakeInformer) LastSyncResourceVersion() string {
 
 // SetWatchErrorHandler does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) SetWatchErrorHandler(cache.WatchErrorHandler) error {
+	return nil
+}
+
+// SetWatchErrorHandlerWithContext does nothing.  TODO(community): Implement this.
+func (f *FakeInformer) SetWatchErrorHandlerWithContext(cache.WatchErrorHandlerWithContext) error {
 	return nil
 }
 

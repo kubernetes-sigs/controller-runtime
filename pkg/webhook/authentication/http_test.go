@@ -50,10 +50,10 @@ var _ = Describe("Authentication Webhooks", func() {
 		It("should return bad-request when given an empty body", func() {
 			req := &http.Request{Body: nil}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"request body is empty"}}
+			expected := `{"metadata":{},"spec":{},"status":{"user":{},"error":"request body is empty"}}
 `
 			webhook.ServeHTTP(respRecorder, req)
-			Expect(respRecorder.Body.String()).To(Equal(expected))
+			Expect(respRecorder.Body.String()).To(BeComparableTo(expected))
 		})
 
 		It("should return bad-request when given the wrong content-type", func() {
@@ -63,7 +63,7 @@ var _ = Describe("Authentication Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBuffer(nil)},
 			}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"contentType=application/foo, expected application/json"}}
+			expected := `{"metadata":{},"spec":{},"status":{"user":{},"error":"contentType=application/foo, expected application/json"}}
 `
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
@@ -76,7 +76,7 @@ var _ = Describe("Authentication Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBufferString("{")},
 			}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"couldn't get version/kind; json parse error: unexpected end of JSON input"}}
+			expected := `{"metadata":{},"spec":{},"status":{"user":{},"error":"couldn't get version/kind; json parse error: unexpected end of JSON input"}}
 `
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
@@ -89,7 +89,7 @@ var _ = Describe("Authentication Webhooks", func() {
 				Body:   nopCloser{Reader: bytes.NewBufferString(`{"spec":{"token":""}}`)},
 			}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"token is empty"}}
+			expected := `{"metadata":{},"spec":{},"status":{"user":{},"error":"token is empty"}}
 `
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
@@ -102,7 +102,7 @@ var _ = Describe("Authentication Webhooks", func() {
 				Body:   http.NoBody,
 			}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"request body is empty"}}
+			expected := `{"metadata":{},"spec":{},"status":{"user":{},"error":"request body is empty"}}
 `
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
@@ -115,7 +115,7 @@ var _ = Describe("Authentication Webhooks", func() {
 				Body:   nopCloser{Reader: rand.Reader},
 			}
 
-			expected := `{"metadata":{"creationTimestamp":null},"spec":{},"status":{"user":{},"error":"request entity is too large; limit is 1048576 bytes"}}
+			expected := `{"metadata":{},"spec":{},"status":{"user":{},"error":"request entity is too large; limit is 1048576 bytes"}}
 `
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
@@ -131,7 +131,7 @@ var _ = Describe("Authentication Webhooks", func() {
 				Handler: &fakeHandler{},
 			}
 
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{}}}
+			expected := fmt.Sprintf(`{%s,"metadata":{},"spec":{},"status":{"authenticated":true,"user":{}}}
 `, gvkJSONv1)
 
 			webhook.ServeHTTP(respRecorder, req)
@@ -148,13 +148,13 @@ var _ = Describe("Authentication Webhooks", func() {
 				Handler: &fakeHandler{},
 			}
 
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{}}}
+			expected := fmt.Sprintf(`{%s,"metadata":{},"spec":{},"status":{"authenticated":true,"user":{}}}
 `, gvkJSONv1)
 			webhook.ServeHTTP(respRecorder, req)
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
 
-		It("should present the Context from the HTTP request, if any", func() {
+		It("should present the Context from the HTTP request, if any", func(specContext SpecContext) {
 			req := &http.Request{
 				Header: http.Header{"Content-Type": []string{"application/json"}},
 				Method: http.MethodPost,
@@ -172,16 +172,16 @@ var _ = Describe("Authentication Webhooks", func() {
 				},
 			}
 
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{},"error":%q}}
+			expected := fmt.Sprintf(`{%s,"metadata":{},"spec":{},"status":{"authenticated":true,"user":{},"error":%q}}
 `, gvkJSONv1, value)
 
-			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), key, value))
+			ctx, cancel := context.WithCancel(context.WithValue(specContext, key, value))
 			cancel()
 			webhook.ServeHTTP(respRecorder, req.WithContext(ctx))
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
 
-		It("should mutate the Context from the HTTP request, if func supplied", func() {
+		It("should mutate the Context from the HTTP request, if func supplied", func(specContext SpecContext) {
 			req := &http.Request{
 				Header: http.Header{"Content-Type": []string{"application/json"}},
 				Method: http.MethodPost,
@@ -200,10 +200,10 @@ var _ = Describe("Authentication Webhooks", func() {
 				},
 			}
 
-			expected := fmt.Sprintf(`{%s,"metadata":{"creationTimestamp":null},"spec":{},"status":{"authenticated":true,"user":{},"error":%q}}
+			expected := fmt.Sprintf(`{%s,"metadata":{},"spec":{},"status":{"authenticated":true,"user":{},"error":%q}}
 `, gvkJSONv1, "application/json")
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(specContext)
 			cancel()
 			webhook.ServeHTTP(respRecorder, req.WithContext(ctx))
 			Expect(respRecorder.Body.String()).To(Equal(expected))

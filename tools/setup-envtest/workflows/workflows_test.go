@@ -8,7 +8,8 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
-	"sort"
+	"runtime/debug"
+	"slices"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -332,7 +333,7 @@ var _ = Describe("Workflows", func() {
 							archiveNames = append(archiveNames, archiveName)
 						}
 					}
-					sort.Strings(archiveNames)
+					slices.Sort(archiveNames)
 					archiveNamesSet := sets.Set[string]{}.Insert(archiveNames[:7]...)
 					// Delete all other archives
 					for _, release := range remoteHTTPItems.index.Releases {
@@ -443,4 +444,16 @@ var _ = Describe("Workflows", func() {
 			Expect(string(outContents)).To(HavePrefix(expectedPrefix), "should have the debugging prefix")
 		})
 	})
+
+	Describe("version", func() {
+		It("should print out the version if the RELEASE_TAG is empty", func() {
+			v := wf.Version{}
+			v.Do(env)
+			info, ok := debug.ReadBuildInfo()
+			Expect(ok).To(BeTrue())
+			Expect(out.String()).ToNot(BeEmpty())
+			Expect(out.String()).To(Equal(fmt.Sprintf("setup-envtest version: %s\n", info.Main.Version)))
+		})
+	})
+
 })

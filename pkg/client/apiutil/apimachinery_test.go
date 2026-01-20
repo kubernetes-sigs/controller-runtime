@@ -18,6 +18,7 @@ package apiutil_test
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	gmg "github.com/onsi/gomega"
@@ -32,127 +33,129 @@ import (
 )
 
 func TestApiMachinery(t *testing.T) {
-	restCfg, tearDownFn := setupEnvtest(t)
-	defer tearDownFn(t)
+	for _, aggregatedDiscovery := range []bool{true, false} {
+		t.Run("aggregatedDiscovery="+strconv.FormatBool(aggregatedDiscovery), func(t *testing.T) {
+			restCfg := setupEnvtest(t, !aggregatedDiscovery)
 
-	// Details of the GVK registered at initialization.
-	initialGvk := metav1.GroupVersionKind{
-		Group:   "crew.example.com",
-		Version: "v1",
-		Kind:    "Driver",
-	}
-
-	// A set of GVKs to register at runtime with varying properties.
-	runtimeGvks := []struct {
-		name   string
-		gvk    metav1.GroupVersionKind
-		plural string
-	}{
-		{
-			name: "new Kind and Version added to existing Group",
-			gvk: metav1.GroupVersionKind{
-				Group:   "crew.example.com",
-				Version: "v1alpha1",
-				Kind:    "Passenger",
-			},
-			plural: "passengers",
-		},
-		{
-			name: "new Kind added to existing Group and Version",
-			gvk: metav1.GroupVersionKind{
+			// Details of the GVK registered at initialization.
+			initialGvk := metav1.GroupVersionKind{
 				Group:   "crew.example.com",
 				Version: "v1",
-				Kind:    "Garage",
-			},
-			plural: "garages",
-		},
-		{
-			name: "new GVK",
-			gvk: metav1.GroupVersionKind{
-				Group:   "inventory.example.com",
-				Version: "v1",
-				Kind:    "Taxi",
-			},
-			plural: "taxis",
-		},
-	}
+				Kind:    "Driver",
+			}
 
-	t.Run("IsGVKNamespaced should report scope for GVK registered at initialization", func(t *testing.T) {
-		g := gmg.NewWithT(t)
+			// A set of GVKs to register at runtime with varying properties.
+			runtimeGvks := []struct {
+				name   string
+				gvk    metav1.GroupVersionKind
+				plural string
+			}{
+				{
+					name: "new Kind and Version added to existing Group",
+					gvk: metav1.GroupVersionKind{
+						Group:   "crew.example.com",
+						Version: "v1alpha1",
+						Kind:    "Passenger",
+					},
+					plural: "passengers",
+				},
+				{
+					name: "new Kind added to existing Group and Version",
+					gvk: metav1.GroupVersionKind{
+						Group:   "crew.example.com",
+						Version: "v1",
+						Kind:    "Garage",
+					},
+					plural: "garages",
+				},
+				{
+					name: "new GVK",
+					gvk: metav1.GroupVersionKind{
+						Group:   "inventory.example.com",
+						Version: "v1",
+						Kind:    "Taxi",
+					},
+					plural: "taxis",
+				},
+			}
 
-		httpClient, err := rest.HTTPClientFor(restCfg)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
+			t.Run("IsGVKNamespaced should report scope for GVK registered at initialization", func(t *testing.T) {
+				g := gmg.NewWithT(t)
 
-		lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
+				httpClient, err := rest.HTTPClientFor(restCfg)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
 
-		s := scheme.Scheme
-		err = apiextensionsv1.AddToScheme(s)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
+				lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
 
-		// Query the scope of a GVK that was registered at initialization.
-		scope, err := apiutil.IsGVKNamespaced(
-			schema.GroupVersionKind(initialGvk),
-			lazyRestMapper,
-		)
-		g.Expect(err).NotTo(gmg.HaveOccurred())
-		g.Expect(scope).To(gmg.BeTrue())
-	})
+				s := scheme.Scheme
+				err = apiextensionsv1.AddToScheme(s)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
 
-	for _, runtimeGvk := range runtimeGvks {
-		t.Run("IsGVKNamespaced should report scope for "+runtimeGvk.name, func(t *testing.T) {
-			g := gmg.NewWithT(t)
-			ctx := context.Background()
-
-			httpClient, err := rest.HTTPClientFor(restCfg)
-			g.Expect(err).NotTo(gmg.HaveOccurred())
-
-			lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
-			g.Expect(err).NotTo(gmg.HaveOccurred())
-
-			s := scheme.Scheme
-			err = apiextensionsv1.AddToScheme(s)
-			g.Expect(err).NotTo(gmg.HaveOccurred())
-
-			c, err := client.New(restCfg, client.Options{Scheme: s})
-			g.Expect(err).NotTo(gmg.HaveOccurred())
-
-			// Run a valid query to initialize cache.
-			scope, err := apiutil.IsGVKNamespaced(
-				schema.GroupVersionKind(initialGvk),
-				lazyRestMapper,
-			)
-			g.Expect(err).NotTo(gmg.HaveOccurred())
-			g.Expect(scope).To(gmg.BeTrue())
-
-			// Register a new CRD at runtime.
-			crd := newCRD(ctx, g, c, runtimeGvk.gvk.Group, runtimeGvk.gvk.Kind, runtimeGvk.plural)
-			version := crd.Spec.Versions[0]
-			version.Name = runtimeGvk.gvk.Version
-			version.Storage = true
-			version.Served = true
-			crd.Spec.Versions = []apiextensionsv1.CustomResourceDefinitionVersion{version}
-			crd.Spec.Scope = apiextensionsv1.NamespaceScoped
-
-			g.Expect(c.Create(ctx, crd)).To(gmg.Succeed())
-			t.Cleanup(func() {
-				g.Expect(c.Delete(ctx, crd)).To(gmg.Succeed())
+				// Query the scope of a GVK that was registered at initialization.
+				scope, err := apiutil.IsGVKNamespaced(
+					schema.GroupVersionKind(initialGvk),
+					lazyRestMapper,
+				)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+				g.Expect(scope).To(gmg.BeTrue())
 			})
 
-			// Wait until the CRD is registered.
-			g.Eventually(func(g gmg.Gomega) {
-				isRegistered, err := isCrdRegistered(restCfg, runtimeGvk.gvk)
-				g.Expect(err).NotTo(gmg.HaveOccurred())
-				g.Expect(isRegistered).To(gmg.BeTrue())
-			}).Should(gmg.Succeed(), "GVK should be available")
+			for _, runtimeGvk := range runtimeGvks {
+				t.Run("IsGVKNamespaced should report scope for "+runtimeGvk.name, func(t *testing.T) {
+					g := gmg.NewWithT(t)
 
-			// Query the scope of the GVK registered at runtime.
-			scope, err = apiutil.IsGVKNamespaced(
-				schema.GroupVersionKind(runtimeGvk.gvk),
-				lazyRestMapper,
-			)
-			g.Expect(err).NotTo(gmg.HaveOccurred())
-			g.Expect(scope).To(gmg.BeTrue())
+					httpClient, err := rest.HTTPClientFor(restCfg)
+					g.Expect(err).NotTo(gmg.HaveOccurred())
+
+					lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
+					g.Expect(err).NotTo(gmg.HaveOccurred())
+
+					s := scheme.Scheme
+					err = apiextensionsv1.AddToScheme(s)
+					g.Expect(err).NotTo(gmg.HaveOccurred())
+
+					c, err := client.New(restCfg, client.Options{Scheme: s})
+					g.Expect(err).NotTo(gmg.HaveOccurred())
+
+					// Run a valid query to initialize cache.
+					scope, err := apiutil.IsGVKNamespaced(
+						schema.GroupVersionKind(initialGvk),
+						lazyRestMapper,
+					)
+					g.Expect(err).NotTo(gmg.HaveOccurred())
+					g.Expect(scope).To(gmg.BeTrue())
+
+					// Register a new CRD at runtime.
+					crd := newCRD(t.Context(), g, c, runtimeGvk.gvk.Group, runtimeGvk.gvk.Kind, runtimeGvk.plural)
+					version := crd.Spec.Versions[0]
+					version.Name = runtimeGvk.gvk.Version
+					version.Storage = true
+					version.Served = true
+					crd.Spec.Versions = []apiextensionsv1.CustomResourceDefinitionVersion{version}
+					crd.Spec.Scope = apiextensionsv1.NamespaceScoped
+
+					g.Expect(c.Create(t.Context(), crd)).To(gmg.Succeed())
+					t.Cleanup(func() {
+						g.Expect(c.Delete(context.Background(), crd)).To(gmg.Succeed()) //nolint:forbidigo //t.Context is cancelled in t.Cleanup
+					})
+
+					// Wait until the CRD is registered.
+					g.Eventually(func(g gmg.Gomega) {
+						isRegistered, err := isCrdRegistered(restCfg, runtimeGvk.gvk)
+						g.Expect(err).NotTo(gmg.HaveOccurred())
+						g.Expect(isRegistered).To(gmg.BeTrue())
+					}).Should(gmg.Succeed(), "GVK should be available")
+
+					// Query the scope of the GVK registered at runtime.
+					scope, err = apiutil.IsGVKNamespaced(
+						schema.GroupVersionKind(runtimeGvk.gvk),
+						lazyRestMapper,
+					)
+					g.Expect(err).NotTo(gmg.HaveOccurred())
+					g.Expect(scope).To(gmg.BeTrue())
+				})
+			}
 		})
 	}
 }

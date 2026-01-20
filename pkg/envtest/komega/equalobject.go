@@ -74,7 +74,7 @@ func EqualObject(original runtime.Object, opts ...EqualObjectOption) types.Gomeg
 
 // Match compares the current object to the passed object and returns true if the objects are the same according to
 // the Matcher and MatchOptions.
-func (m *equalObjectMatcher) Match(actual interface{}) (success bool, err error) {
+func (m *equalObjectMatcher) Match(actual any) (success bool, err error) {
 	// Nil checks required first here for:
 	//     1) Nil equality which returns true
 	//     2) One object nil which returns an error
@@ -93,13 +93,13 @@ func (m *equalObjectMatcher) Match(actual interface{}) (success bool, err error)
 }
 
 // FailureMessage returns a message comparing the full objects after an unexpected failure to match has occurred.
-func (m *equalObjectMatcher) FailureMessage(actual interface{}) (message string) {
+func (m *equalObjectMatcher) FailureMessage(actual any) (message string) {
 	return fmt.Sprintf("the following fields were expected to match but did not:\n%v\n%s", m.diffPaths,
 		format.Message(actual, "expected to match", m.original))
 }
 
 // NegatedFailureMessage returns a string stating that all fields matched, even though that was not expected.
-func (m *equalObjectMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+func (m *equalObjectMatcher) NegatedFailureMessage(actual any) (message string) {
 	return "it was expected that some fields do not match, but all of them did"
 }
 
@@ -167,8 +167,8 @@ func (r *diffReporter) PopStep() {
 
 // calculateDiff calculates the difference between two objects and returns the
 // paths of the fields that do not match.
-func (m *equalObjectMatcher) calculateDiff(actual interface{}) []diffPath {
-	var original interface{} = m.original
+func (m *equalObjectMatcher) calculateDiff(actual any) []diffPath {
+	var original any = m.original
 	// Remove the wrapping Object from unstructured.Unstructured to make comparison behave similar to
 	// regular objects.
 	if u, isUnstructured := actual.(runtime.Unstructured); isUnstructured {

@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	corev1applyconfigurations "k8s.io/client-go/applyconfigurations/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -31,20 +33,24 @@ func TestWithFieldOwner(t *testing.T) {
 	fakeClient := testClient(t, "custom-field-mgr", func() { calls++ })
 	wrappedClient := client.WithFieldOwner(fakeClient, "custom-field-mgr")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	dummyObj := &corev1.Namespace{}
+	dummyObjectAC := corev1applyconfigurations.Namespace(dummyObj.Name)
 
 	_ = wrappedClient.Create(ctx, dummyObj)
 	_ = wrappedClient.Update(ctx, dummyObj)
 	_ = wrappedClient.Patch(ctx, dummyObj, nil)
+	_ = wrappedClient.Apply(ctx, dummyObjectAC)
 	_ = wrappedClient.Status().Create(ctx, dummyObj, dummyObj)
 	_ = wrappedClient.Status().Update(ctx, dummyObj)
 	_ = wrappedClient.Status().Patch(ctx, dummyObj, nil)
+	_ = wrappedClient.Status().Apply(ctx, dummyObjectAC)
 	_ = wrappedClient.SubResource("some-subresource").Create(ctx, dummyObj, dummyObj)
 	_ = wrappedClient.SubResource("some-subresource").Update(ctx, dummyObj)
 	_ = wrappedClient.SubResource("some-subresource").Patch(ctx, dummyObj, nil)
+	_ = wrappedClient.SubResource("some-subresource").Apply(ctx, dummyObjectAC)
 
-	if expectedCalls := 9; calls != expectedCalls {
+	if expectedCalls := 12; calls != expectedCalls {
 		t.Fatalf("wrong number of calls to assertions: expected=%d; got=%d", expectedCalls, calls)
 	}
 }
@@ -55,20 +61,24 @@ func TestWithFieldOwnerOverridden(t *testing.T) {
 	fakeClient := testClient(t, "new-field-manager", func() { calls++ })
 	wrappedClient := client.WithFieldOwner(fakeClient, "old-field-manager")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	dummyObj := &corev1.Namespace{}
+	dummyObjectAC := corev1applyconfigurations.Namespace(dummyObj.Name)
 
 	_ = wrappedClient.Create(ctx, dummyObj, client.FieldOwner("new-field-manager"))
 	_ = wrappedClient.Update(ctx, dummyObj, client.FieldOwner("new-field-manager"))
 	_ = wrappedClient.Patch(ctx, dummyObj, nil, client.FieldOwner("new-field-manager"))
+	_ = wrappedClient.Apply(ctx, dummyObjectAC, client.FieldOwner("new-field-manager"))
 	_ = wrappedClient.Status().Create(ctx, dummyObj, dummyObj, client.FieldOwner("new-field-manager"))
 	_ = wrappedClient.Status().Update(ctx, dummyObj, client.FieldOwner("new-field-manager"))
 	_ = wrappedClient.Status().Patch(ctx, dummyObj, nil, client.FieldOwner("new-field-manager"))
+	_ = wrappedClient.Status().Apply(ctx, dummyObjectAC, client.FieldOwner("new-field-manager"))
 	_ = wrappedClient.SubResource("some-subresource").Create(ctx, dummyObj, dummyObj, client.FieldOwner("new-field-manager"))
 	_ = wrappedClient.SubResource("some-subresource").Update(ctx, dummyObj, client.FieldOwner("new-field-manager"))
 	_ = wrappedClient.SubResource("some-subresource").Patch(ctx, dummyObj, nil, client.FieldOwner("new-field-manager"))
+	_ = wrappedClient.SubResource("some-subresource").Apply(ctx, dummyObjectAC, client.FieldOwner("new-field-manager"))
 
-	if expectedCalls := 9; calls != expectedCalls {
+	if expectedCalls := 12; calls != expectedCalls {
 		t.Fatalf("wrong number of calls to assertions: expected=%d; got=%d", expectedCalls, calls)
 	}
 }
@@ -138,6 +148,28 @@ func testClient(t *testing.T, expectedFieldManager string, callback func()) clie
 			out := &client.SubResourcePatchOptions{}
 			for _, f := range opts {
 				f.ApplyToSubResourcePatch(out)
+			}
+			if got := out.FieldManager; expectedFieldManager != got {
+				t.Fatalf("wrong field manager: expected=%q; got=%q", expectedFieldManager, got)
+			}
+			return nil
+		},
+		Apply: func(ctx context.Context, c client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+			callback()
+			out := &client.ApplyOptions{}
+			for _, f := range opts {
+				f.ApplyToApply(out)
+			}
+			if got := out.FieldManager; expectedFieldManager != got {
+				t.Fatalf("wrong field manager: expected=%q; got=%q", expectedFieldManager, got)
+			}
+			return nil
+		},
+		SubResourceApply: func(ctx context.Context, c client.Client, subResourceName string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+			callback()
+			out := &client.SubResourceApplyOptions{}
+			for _, f := range opts {
+				f.ApplyToSubResourceApply(out)
 			}
 			if got := out.FieldManager; expectedFieldManager != got {
 				t.Fatalf("wrong field manager: expected=%q; got=%q", expectedFieldManager, got)

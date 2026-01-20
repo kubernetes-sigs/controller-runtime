@@ -129,7 +129,7 @@ func ExampleNewUnmanaged() {
 
 	// Configure creates a new controller but does not add it to the supplied
 	// manager.
-	c, err := controller.NewUnmanaged("pod-controller", mgr, controller.Options{
+	c, err := controller.NewUnmanaged("pod-controller", controller.Options{
 		Reconciler: reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 			return reconcile.Result{}, nil
 		}),

@@ -1281,10 +1281,10 @@ var _ = Describe("manger.Manager", func() {
 				go func() {
 					defer GinkgoRecover()
 					Expect(m.Elected()).ShouldNot(BeClosed())
-					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+					Expect(m.Start(ctx)).To(Succeed())
 				}()
 
-				<-m.Elected()
+				Eventually(m.Elected()).Should(BeClosed())
 			})
 
 			It("should run prestart hooks with timeout", func(ctx context.Context) {
@@ -1319,7 +1319,6 @@ var _ = Describe("manger.Manager", func() {
 				m.(*controllerManager).hookTimeout = -1 * time.Second
 
 				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
-					fmt.Println("runnable returning")
 					return nil
 				}))).ToNot(HaveOccurred())
 

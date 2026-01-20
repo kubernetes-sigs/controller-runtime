@@ -260,9 +260,10 @@ func (cm *controllerManager) Hook(hook HookType, runnable Runnable) error {
 	switch hook {
 	case HookPrestartType:
 		cm.prestartHooks = append(cm.prestartHooks, runnable)
+		return nil
 	}
 
-	return nil
+	return errors.New("hook type now supported")
 }
 
 func (cm *controllerManager) GetConfig() *rest.Config {
@@ -684,11 +685,11 @@ func (cm *controllerManager) startLeaderElectionRunnables() error {
 			ctx, cancel = context.WithTimeout(cm.internalCtx, cm.hookTimeout)
 		}
 
+		defer cancel()
+
 		if err := hook.Start(ctx); err != nil {
-			cancel()
 			return err
 		}
-		cancel()
 	}
 
 	// All the prestart hooks have ben run, clear the slice to free the underlying resources.

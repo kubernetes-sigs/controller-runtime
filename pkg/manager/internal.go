@@ -55,6 +55,7 @@ const (
 	defaultRenewDeadline          = 10 * time.Second
 	defaultRetryPeriod            = 2 * time.Second
 	defaultGracefulShutdownPeriod = 30 * time.Second
+	defaultHookPeriod             = 15 * time.Second
 
 	defaultReadinessEndpoint = "/readyz"
 	defaultLivenessEndpoint  = "/healthz"
@@ -166,6 +167,13 @@ type controllerManager struct {
 	// internalProceduresStop channel is used internally to the manager when coordinating
 	// the proper shutdown of servers. This channel is also used for dependency injection.
 	internalProceduresStop chan struct{}
+
+	// prestartHooks are functions that are run immediately before calling the Start functions
+	// of the leader election runnables.
+	prestartHooks []Runnable
+
+	// hookTimeout is the duration given to each hook to return successfully.
+	hookTimeout time.Duration
 }
 
 type hasCache interface {
@@ -238,6 +246,23 @@ func (cm *controllerManager) AddReadyzCheck(name string, check healthz.Checker) 
 
 func (cm *controllerManager) GetHTTPClient() *http.Client {
 	return cm.cluster.GetHTTPClient()
+}
+
+// Hook allows you to add hooks.
+func (cm *controllerManager) Hook(hook HookType, runnable Runnable) error {
+	cm.Lock()
+	defer cm.Unlock()
+
+	if cm.started {
+		return fmt.Errorf("unable to add new hook because the manager has already been started")
+	}
+
+	switch hook {
+	case HookPrestartType:
+		cm.prestartHooks = append(cm.prestartHooks, runnable)
+	}
+
+	return nil
 }
 
 func (cm *controllerManager) GetConfig() *rest.Config {
@@ -648,6 +673,27 @@ func (cm *controllerManager) initLeaderElector() (*leaderelection.LeaderElector,
 }
 
 func (cm *controllerManager) startLeaderElectionRunnables() error {
+	cm.logger.Info("Running prestart hooks")
+	for _, hook := range cm.prestartHooks {
+		var ctx context.Context
+		var cancel context.CancelFunc
+
+		if cm.hookTimeout < 0 {
+			ctx, cancel = context.WithCancel(cm.internalCtx)
+		} else {
+			ctx, cancel = context.WithTimeout(cm.internalCtx, cm.hookTimeout)
+		}
+
+		if err := hook.Start(ctx); err != nil {
+			cancel()
+			return err
+		}
+		cancel()
+	}
+
+	// All the prestart hooks have ben run, clear the slice to free the underlying resources.
+	cm.prestartHooks = nil
+
 	return cm.runnables.LeaderElection.Start(cm.internalCtx)
 }
 

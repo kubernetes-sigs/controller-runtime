@@ -1255,6 +1255,122 @@ var _ = Describe("manger.Manager", func() {
 				<-managerStopDone
 				Expect(time.Since(beforeDone)).To(BeNumerically(">=", 1500*time.Millisecond))
 			})
+
+			It("should run prestart hooks before calling Start on leader election runnables", func(ctx context.Context) {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+
+				runnableRan := make(chan struct{})
+
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					close(runnableRan)
+					return nil
+				}))).ToNot(HaveOccurred())
+
+				Expect(m.Hook(HookPrestartType, RunnableFunc(func(ctx context.Context) error {
+					Expect(m.Elected()).ShouldNot(BeClosed())
+					Consistently(runnableRan).ShouldNot(BeClosed())
+					return nil
+				}))).ToNot(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(ctx)
+				defer cancel()
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Elected()).ShouldNot(BeClosed())
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+				}()
+
+				<-m.Elected()
+			})
+
+			It("should run prestart hooks with timeout", func(ctx context.Context) {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+				m.(*controllerManager).hookTimeout = 1 * time.Nanosecond
+
+				Expect(m.Hook(HookPrestartType, RunnableFunc(func(ctx context.Context) error {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case <-time.After(1 * time.Second):
+						return errors.New("prestart hook timeout exceeded expected")
+					}
+				}))).ToNot(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(ctx)
+				defer cancel()
+
+				Expect(m.Start(ctx)).Should(MatchError(context.DeadlineExceeded))
+			})
+
+			It("should run prestart hooks without timeout", func(ctx context.Context) {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+				m.(*controllerManager).hookTimeout = -1 * time.Second
+
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					fmt.Println("runnable returning")
+					return nil
+				}))).ToNot(HaveOccurred())
+
+				Expect(m.Hook(HookPrestartType, RunnableFunc(func(ctx context.Context) error {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case <-time.After(1 * time.Second):
+						fmt.Println("prestart hook returning")
+						return nil
+					}
+				}))).ToNot(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(ctx)
+				defer cancel()
+
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Elected()).ShouldNot(BeClosed())
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+				}()
+
+				<-m.Elected()
+			})
+
+			It("should not run leader election runnables if prestart hooks fail", func(ctx context.Context) {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				for _, cb := range callbacks {
+					cb(m)
+				}
+
+				runnableRan := make(chan struct{})
+
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					close(runnableRan)
+					return nil
+				}))).ToNot(HaveOccurred())
+
+				Expect(m.Hook(HookPrestartType, RunnableFunc(func(ctx context.Context) error {
+					Expect(m.Elected()).ShouldNot(BeClosed())
+					Consistently(runnableRan).ShouldNot(BeClosed())
+					return errors.New("prestart hook failed")
+				}))).ToNot(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(ctx)
+				defer cancel()
+
+				Expect(m.Elected()).ShouldNot(BeClosed())
+				Expect(m.Start(ctx)).Should(MatchError(ContainSubstring("prestart hook failed")))
+			})
 		}
 
 		Context("with defaults", func() {

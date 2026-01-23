@@ -29,7 +29,7 @@ func RequiresExactMatch(sel fields.Selector) bool {
 	}
 
 	for _, req := range reqs {
-		if req.Operator != selection.Equals && req.Operator != selection.DoubleEquals {
+		if req.Operator != selection.Equals && req.Operator != selection.DoubleEquals && req.Operator != selection.NotEquals {
 			return false
 		}
 	}

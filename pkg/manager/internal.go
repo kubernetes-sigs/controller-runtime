@@ -263,7 +263,7 @@ func (cm *controllerManager) Hook(hook HookType, runnable Runnable) error {
 		return nil
 	}
 
-	return errors.New("hook type now supported")
+	return errors.New("hook type not supported")
 }
 
 func (cm *controllerManager) GetConfig() *rest.Config {

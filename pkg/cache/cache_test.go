@@ -24,6 +24,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"testing"
+	"testing/synctest"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -2587,4 +2589,71 @@ func cancelledCtx(ctx context.Context) context.Context {
 	cancelCtx, cancel := context.WithCancel(ctx)
 	cancel()
 	return cancelCtx
+}
+
+type fakeRESTMapper struct {
+	meta.RESTMapper
+}
+
+func (f *fakeRESTMapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
+	return &meta.RESTMapping{Scope: meta.RESTScopeNamespace}, nil
+}
+
+func TestReaderWaitsForCacheSync(t *testing.T) {
+	t.Parallel()
+	for _, readerFailOnMissingInformer := range []bool{true, false} {
+		t.Run(fmt.Sprintf("ReaderFailOnMissingInformer=%v", readerFailOnMissingInformer), func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				g := NewWithT(t)
+
+				fakeInformer := &controllertest.FakeInformer{Synced: false}
+				c, err := cache.New(&rest.Config{}, cache.Options{
+					ReaderFailOnMissingInformer: readerFailOnMissingInformer,
+					Mapper:                      &fakeRESTMapper{},
+					NewInformer: func(kcache.ListerWatcher, runtime.Object, time.Duration, kcache.Indexers) kcache.SharedIndexInformer {
+						return fakeInformer
+					},
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				cacheDone := make(chan struct{})
+				go func() {
+					g.Expect(c.Start(ctx)).To(Succeed())
+					close(cacheDone)
+				}()
+				synctest.Wait() // Let the cache finish starting
+				_, err = c.GetInformer(ctx, &corev1.Service{}, cache.BlockUntilSynced(false))
+				g.Expect(err).ToNot(HaveOccurred())
+
+				listCtx, listCtxCancel := context.WithTimeout(ctx, time.Second)
+				defer listCtxCancel()
+				services := &corev1.ServiceList{}
+				err = c.List(listCtx, services)
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(apierrors.IsTimeout(err)).To(BeTrue())
+
+				getCtx, getCtxCancel := context.WithTimeout(ctx, time.Second)
+				defer getCtxCancel()
+				err = c.Get(getCtx, client.ObjectKey{Name: "default", Namespace: "kubernetes"}, &corev1.Service{})
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(apierrors.IsTimeout(err)).To(BeTrue())
+
+				fakeInformer.SyncedLock.Lock()
+				fakeInformer.Synced = true
+				fakeInformer.SyncedLock.Unlock()
+
+				g.Expect(c.List(ctx, services)).To(Succeed())
+
+				err = c.Get(getCtx, client.ObjectKey{Name: "default", Namespace: "kubernetes"}, &corev1.Service{})
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+				cancel()
+				<-cacheDone
+			})
+		})
+	}
 }

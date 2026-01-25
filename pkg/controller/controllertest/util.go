@@ -18,6 +18,7 @@ package controllertest
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,7 +30,8 @@ var _ cache.SharedIndexInformer = &FakeInformer{}
 // FakeInformer provides fake Informer functionality for testing.
 type FakeInformer struct {
 	// Synced is returned by the HasSynced functions to implement the Informer interface
-	Synced bool
+	Synced     bool
+	SyncedLock sync.Mutex
 
 	// RunCount is incremented each time RunInformersAndControllers is called
 	RunCount int
@@ -44,6 +46,9 @@ type fakeHandlerRegistration struct {
 
 // HasSynced implements cache.ResourceEventHandlerRegistration.
 func (f *fakeHandlerRegistration) HasSynced() bool {
+	f.informer.SyncedLock.Lock()
+	defer f.informer.SyncedLock.Unlock()
+
 	return f.informer.Synced
 }
 
@@ -54,7 +59,7 @@ func (f *FakeInformer) AddIndexers(indexers cache.Indexers) error {
 
 // GetIndexer does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) GetIndexer() cache.Indexer {
-	return nil
+	return cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, nil)
 }
 
 // Informer returns the fake Informer.
@@ -64,6 +69,9 @@ func (f *FakeInformer) Informer() cache.SharedIndexInformer {
 
 // HasSynced implements the Informer interface.  Returns f.Synced.
 func (f *FakeInformer) HasSynced() bool {
+	f.SyncedLock.Lock()
+	defer f.SyncedLock.Unlock()
+
 	return f.Synced
 }
 

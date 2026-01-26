@@ -1884,6 +1884,19 @@ var _ = Describe("Fake client", func() {
 		Expect(obj.Spec).To(BeEquivalentTo(spec))
 	})
 
+	It("works with types that have an embedded struct pointer", func(ctx SpecContext) {
+		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
+		schemeBuilder.Register(&EmbeddedPointerStructCRD{})
+
+		scheme := runtime.NewScheme()
+		Expect(schemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+
+		c := NewClientBuilder().WithScheme(scheme).Build()
+
+		object := &EmbeddedPointerStructCRD{ObjectMeta: metav1.ObjectMeta{Name: "eps"}}
+		Expect(c.Create(ctx, object)).NotTo(HaveOccurred())
+	})
+
 	It("should not change the status of unstructured objects that are configured to have a status subresource on update", func(ctx SpecContext) {
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("foo/v1")
@@ -3371,3 +3384,26 @@ var _ = Describe("Fake client builder", func() {
 		}).To(Panic())
 	})
 })
+
+type EmbeddedPointerStructCRD struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitzero"`
+	*EmbededField     `json:",inline"`
+}
+
+type EmbededField struct {
+	AnInt int `json:"anInt"`
+}
+
+func (in *EmbeddedPointerStructCRD) DeepCopyObject() runtime.Object {
+	s, err := json.Marshal(in)
+	if err != nil {
+		panic(err)
+	}
+	var out EmbeddedPointerStructCRD
+	if err := json.Unmarshal(s, &out); err != nil {
+		panic(err)
+	}
+
+	return &out
+}

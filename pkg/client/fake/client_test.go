@@ -1834,6 +1834,41 @@ var _ = Describe("Fake client", func() {
 		Expect(initial).To(BeComparableTo(actual))
 	})
 
+	// https://github.com/kubernetes-sigs/controller-runtime/issues/3423
+	It("should be able to status apply existing objects that have managedFields set", func(ctx SpecContext) {
+		cl := NewClientBuilder().WithStatusSubresource(&corev1.Node{}).Build()
+		node := corev1applyconfigurations.Node("a-node").
+			WithSpec(corev1applyconfigurations.NodeSpec().WithPodCIDR("some-value"))
+		Expect(cl.Apply(ctx, node, client.FieldOwner("test-owner"))).To(Succeed())
+
+		node = node.
+			WithStatus(corev1applyconfigurations.NodeStatus().WithPhase(corev1.NodeRunning))
+
+		Expect(cl.Status().Apply(ctx, node, client.FieldOwner("test-owner"))).To(Succeed())
+	})
+
+	It("should not be able to manually update the fieldManager through a status update", func(ctx SpecContext) {
+		node := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node",
+			},
+			Spec: corev1.NodeSpec{
+				PodCIDR: "old-cidr",
+			},
+		}
+		cl := NewClientBuilder().WithStatusSubresource(&corev1.Node{}).WithObjects(node).WithReturnManagedFields().Build()
+		node.Spec.PodCIDR = "new-cidr"
+		Expect(cl.Update(ctx, node, client.FieldOwner("spec-owner"))).To(Succeed())
+
+		node.ManagedFields = []metav1.ManagedFieldsEntry{{}}
+		node.Status.Phase = corev1.NodeRunning
+
+		Expect(cl.Status().Update(ctx, node, client.FieldOwner("status-owner"))).To(Succeed())
+		Expect(node.ManagedFields).To(HaveLen(2))
+		Expect(node.ManagedFields[0].Manager).To(Equal("spec-owner"))
+		Expect(node.ManagedFields[1].Manager).To(Equal("status-owner"))
+	})
+
 	It("should Unmarshal the schemaless object with int64 to preserve ints", func(ctx SpecContext) {
 		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
 		schemeBuilder.Register(&WithSchemalessSpec{})

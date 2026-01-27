@@ -82,9 +82,12 @@ type Options struct {
 	// endpoint by setting this field to filters.WithAuthenticationAndAuthorization.
 	FilterProvider func(c *rest.Config, httpClient *http.Client) (Filter, error)
 
-	// CertDir is the directory that contains the server key and certificate. Defaults to
-	// <temp-dir>/k8s-metrics-server/serving-certs.
-	//
+	// CertDir is the directory that contains the server key and certificate.
+	// If not set, the webhook server will look up the server key and certificate in
+	// the following preference order:
+	// 1. {TempDir}/k8s-metrics-server/serving-certs (for backward compatibility)
+	// 2. The current working directory
+	// The server key and certificate must be named tls.key and tls.crt, respectively.
 	// Note: This option is only used when TLSOpts does not set GetCertificate.
 	// Note: If certificate or key doesn't exist a self-signed certificate will be used.
 	CertDir string
@@ -166,9 +169,8 @@ func (o *Options) setDefaults() {
 		o.BindAddress = DefaultBindAddress
 	}
 
-	if len(o.CertDir) == 0 {
-		o.CertDir = filepath.Join(os.TempDir(), "k8s-metrics-server", "serving-certs")
-	}
+	// If CertDir is empty, we don't default it to the temp dir anymore.
+	// We will check for the certs in the current directory if they are not provided.
 
 	if len(o.CertName) == 0 {
 		o.CertName = "tls.crt"
@@ -284,6 +286,25 @@ func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (ne
 	}
 
 	if cfg.GetCertificate == nil {
+		// If CertDir is not specified, check the following in order:
+		// 1. The legacy default directory {TempDir}/k8s-metrics-server/serving-certs
+		// 2. The current working directory
+		if len(s.options.CertDir) == 0 {
+			tempDir := filepath.Join(os.TempDir(), "k8s-metrics-server", "serving-certs")
+			certPath := filepath.Join(tempDir, s.options.CertName)
+			keyPath := filepath.Join(tempDir, s.options.KeyName)
+
+			// Simple check for existence.
+			// If both exist, we'll use the temp dir and log a warning.
+			// Otherwise we'll fallback to the CWD (and then eventually self-signed).
+			_, certErr := os.Stat(certPath)
+			_, keyErr := os.Stat(keyPath)
+			if certErr == nil && keyErr == nil {
+				log.Info("WARNING: usage of the default certificate directory is deprecated and will be removed in future versions. Please properly configure the Certificate Directory", "directory", tempDir)
+				s.options.CertDir = tempDir
+			}
+		}
+
 		certPath := filepath.Join(s.options.CertDir, s.options.CertName)
 		keyPath := filepath.Join(s.options.CertDir, s.options.KeyName)
 

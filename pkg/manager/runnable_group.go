@@ -194,6 +194,7 @@ func (r *runnableGroup) Start(ctx context.Context) error {
 				if err := ctx.Err(); !errors.Is(err, context.Canceled) {
 					retErr = err
 				}
+				return
 			case rn := <-r.startReadyCh:
 				for i, existing := range r.startQueue {
 					if existing == rn {

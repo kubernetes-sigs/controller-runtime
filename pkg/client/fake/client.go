@@ -810,7 +810,7 @@ func (c *fakeClient) update(obj client.Object, isStatus bool, opts ...client.Upd
 		obj.SetManagedFields(currentMetaObj.GetManagedFields())
 	}
 
-	if err := c.tracker.update(gvr, obj, accessor.GetNamespace(), isStatus, false, *updateOptions.AsUpdateOptions()); err != nil {
+	if err := c.tracker.update(gvr, obj, accessor.GetNamespace(), isStatus, false, *updateOptions.AsUpdateOptions(), false); err != nil {
 		return err
 	}
 
@@ -1190,7 +1190,7 @@ func (c *fakeClient) deleteObjectLocked(gvr schema.GroupVersionResource, accesso
 				oldAccessor.SetDeletionTimestamp(&now)
 				// Call update directly with mutability parameter set to true to allow
 				// changes to deletionTimestamp
-				return c.tracker.update(gvr, old, accessor.GetNamespace(), false, true, metav1.UpdateOptions{})
+				return c.tracker.update(gvr, old, accessor.GetNamespace(), false, true, metav1.UpdateOptions{}, false)
 			}
 		}
 	}

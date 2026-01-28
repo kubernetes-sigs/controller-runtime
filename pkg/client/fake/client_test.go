@@ -1847,6 +1847,60 @@ var _ = Describe("Fake client", func() {
 		Expect(cl.Status().Apply(ctx, node, client.FieldOwner("test-owner"))).To(Succeed())
 	})
 
+	It("should allow SSA apply on status even when resourceVersion does not match", func(ctx SpecContext) {
+		// This test demonstrates the bug: SSA operations should not check resourceVersion,
+		// but currently they do, causing failures when the resourceVersion doesn't match.
+		// This test will fail until the bug is fixed.
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "test-pod",
+				Namespace:       "default",
+				ResourceVersion: "1",
+			},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "test-container",
+						Image: "test-image",
+					},
+				},
+			},
+		}
+		cl := NewClientBuilder().WithStatusSubresource(&corev1.Pod{}).WithObjects(pod).Build()
+
+		// Update the pod spec, which will change its resourceVersion
+		pod.Spec.Containers[0].Image = "updated-image"
+		Expect(cl.Update(ctx, pod)).To(Succeed())
+
+		// Get the updated pod to see the new resourceVersion
+		updatedPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "default"}}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(updatedPod), updatedPod)).To(Succeed())
+		Expect(updatedPod.ResourceVersion).NotTo(Equal("1"))
+		originalRV := updatedPod.ResourceVersion
+
+		// Now try to do an SSA apply on the status with an explicitly mismatched resourceVersion.
+		// SSA should still succeed because SSA operations should not check resourceVersion -
+		// that's the whole point of SSA vs regular updates.
+		// We set the resourceVersion to "1" (the original value) even though the pod now has
+		// a different resourceVersion after the update.
+		podAC := corev1applyconfigurations.Pod("test-pod", "default").
+			WithResourceVersion("1").
+			WithStatus(corev1applyconfigurations.PodStatus().WithPhase(corev1.PodRunning))
+
+		// This currently fails with a resourceVersion mismatch error, but it should succeed.
+		// The bug is that SSA operations are incorrectly checking resourceVersion.
+		err := cl.Status().Apply(ctx, podAC, client.FieldOwner("test-owner"))
+		Expect(err).NotTo(HaveOccurred(), "SSA apply on status should succeed even when resourceVersion doesn't match. "+
+			"This is a bug: SSA operations should not check resourceVersion.")
+
+		// Verify the status was actually applied
+		finalPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "default"}}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(finalPod), finalPod)).To(Succeed())
+		Expect(finalPod.Status.Phase).To(Equal(corev1.PodRunning))
+		// ResourceVersion should have been incremented by the apply
+		Expect(finalPod.ResourceVersion).NotTo(Equal(originalRV))
+	})
+
 	It("should not be able to manually update the fieldManager through a status update", func(ctx SpecContext) {
 		node := &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{

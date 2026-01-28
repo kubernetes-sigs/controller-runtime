@@ -129,15 +129,15 @@ func (t versionedTracker) Update(gvr schema.GroupVersionResource, obj runtime.Ob
 		return err
 	}
 
-	return t.update(gvr, obj, ns, false, false, updateOpts)
+	return t.update(gvr, obj, ns, false, false, updateOpts, false)
 }
 
-func (t versionedTracker) update(gvr schema.GroupVersionResource, obj runtime.Object, ns string, isStatus, deleting bool, opts metav1.UpdateOptions) error {
+func (t versionedTracker) update(gvr schema.GroupVersionResource, obj runtime.Object, ns string, isStatus, deleting bool, opts metav1.UpdateOptions, isSSA bool) error {
 	gvk, err := apiutil.GVKForObject(obj, t.scheme)
 	if err != nil {
 		return err
 	}
-	obj, needsCreate, err := t.updateObject(gvr, gvk, obj, ns, isStatus, deleting, allowsCreateOnUpdate(gvk), opts.DryRun)
+	obj, needsCreate, err := t.updateObject(gvr, gvk, obj, ns, isStatus, deleting, allowsCreateOnUpdate(gvk), opts.DryRun, isSSA)
 	if err != nil {
 		return err
 	}
@@ -173,7 +173,7 @@ func (t versionedTracker) Patch(gvr schema.GroupVersionResource, obj runtime.Obj
 	// that reaction, we use the callstack to figure out if this originated from the status client.
 	isStatus := bytes.Contains(debug.Stack(), []byte("sigs.k8s.io/controller-runtime/pkg/client/fake.(*fakeSubResourceClient).statusPatch"))
 
-	obj, needsCreate, err := t.updateObject(gvr, gvk, obj, ns, isStatus, false, allowsCreateOnUpdate(gvk), patchOptions.DryRun)
+	obj, needsCreate, err := t.updateObject(gvr, gvk, obj, ns, isStatus, false, allowsCreateOnUpdate(gvk), patchOptions.DryRun, false)
 	if err != nil {
 		return err
 	}
@@ -200,6 +200,7 @@ func (t versionedTracker) updateObject(
 	deleting bool,
 	allowCreateOnUpdate bool,
 	dryRun []string,
+	isSSA bool,
 ) (result runtime.Object, needsCreate bool, _ error) {
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
@@ -278,7 +279,8 @@ func (t versionedTracker) updateObject(
 		}
 	}
 
-	if accessor.GetResourceVersion() != oldAccessor.GetResourceVersion() {
+	// SSA operations should not check resourceVersion - that's the whole point of SSA vs regular updates
+	if !isSSA && accessor.GetResourceVersion() != oldAccessor.GetResourceVersion() {
 		return nil, false, apierrors.NewConflict(gvr.GroupResource(), accessor.GetName(), errors.New("object was modified"))
 	}
 	if oldAccessor.GetResourceVersion() == "" {
@@ -314,7 +316,7 @@ func (t versionedTracker) Apply(gvr schema.GroupVersionResource, applyConfigurat
 	}
 	isStatus := bytes.Contains(debug.Stack(), []byte("sigs.k8s.io/controller-runtime/pkg/client/fake.(*fakeSubResourceClient).statusPatch"))
 
-	applyConfiguration, needsCreate, err := t.updateObject(gvr, gvk, applyConfiguration, ns, isStatus, false, true, patchOptions.DryRun)
+	applyConfiguration, needsCreate, err := t.updateObject(gvr, gvk, applyConfiguration, ns, isStatus, false, true, patchOptions.DryRun, true)
 	if err != nil {
 		return err
 	}

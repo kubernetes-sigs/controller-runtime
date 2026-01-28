@@ -1847,6 +1847,117 @@ var _ = Describe("Fake client", func() {
 		Expect(cl.Status().Apply(ctx, node, client.FieldOwner("test-owner"))).To(Succeed())
 	})
 
+	It("should allow SSA apply on status even when resourceVersion is not set", func(ctx SpecContext) {
+		// This test demonstrates the bug: SSA operations should not check resourceVersion,
+		// but currently they do, causing failures when the resourceVersion doesn't match.
+		// This test uses a typed custom resource (CRD) to properly reproduce the issue where
+		// the oldObject retrieved from the tracker has a resourceVersion set (e.g., "1000")
+		// that doesn't match the empty resourceVersion in the apply configuration.
+		// Register the custom resource type in a scheme
+		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "chaosapps.metamagical.io", Version: "v1"}}
+		schemeBuilder.Register(&ChaosPod{})
+		testScheme := runtime.NewScheme()
+		Expect(schemeBuilder.AddToScheme(testScheme)).NotTo(HaveOccurred())
+
+		customResource := &ChaosPod{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "chaosapps.metamagical.io/v1",
+				Kind:       "ChaosPod",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-chaospod",
+				Namespace: "default",
+			},
+			Spec: ChaosPodSpec{
+				Image: "test-image",
+			},
+		}
+		cl := NewClientBuilder().WithScheme(testScheme).WithStatusSubresource(customResource).WithObjects(customResource).Build()
+
+		// Read the initial resourceVersion
+		initialResource := &ChaosPod{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "chaosapps.metamagical.io/v1",
+				Kind:       "ChaosPod",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-chaospod",
+				Namespace: "default",
+			},
+		}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(initialResource), initialResource)).To(Succeed())
+		initialRV := initialResource.GetResourceVersion()
+		Expect(initialRV).NotTo(BeEmpty())
+
+		// Update the spec, which will change its resourceVersion
+		customResource.Spec.Image = "updated-image"
+		Expect(cl.Update(ctx, customResource)).To(Succeed())
+
+		// Read the resourceVersion after the update
+		updatedResource := &ChaosPod{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "chaosapps.metamagical.io/v1",
+				Kind:       "ChaosPod",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-chaospod",
+				Namespace: "default",
+			},
+		}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(updatedResource), updatedResource)).To(Succeed())
+		updatedRV := updatedResource.GetResourceVersion()
+		Expect(updatedRV).NotTo(BeEmpty())
+		Expect(updatedRV).NotTo(Equal(initialRV))
+
+		// Now try to do an SSA apply on the status without setting resourceVersion.
+		// SSA should succeed when no resourceVersion is provided, even if the server object
+		// has a different resourceVersion. This matches real Kubernetes API server behavior:
+		// - If you pass an incorrect RV, the request will fail
+		// - Only if you pass NO RV (which is the common case for SSA) will it succeed regardless of server RV
+		// Create an unstructured apply configuration with status but no resourceVersion
+		resourceForApply := &unstructured.Unstructured{}
+		resourceForApply.SetName("test-chaospod")
+		resourceForApply.SetNamespace("default")
+		resourceForApply.SetAPIVersion("chaosapps.metamagical.io/v1")
+		resourceForApply.SetKind("ChaosPod")
+		// Ensure resourceVersion is not set (unset it explicitly)
+		// This simulates the common SSA case where resourceVersion is not provided
+		resourceForApply.SetResourceVersion("")
+		// Set the status we want to apply (status must be set as a map)
+		Expect(unstructured.SetNestedField(resourceForApply.Object, map[string]any{"phase": "Ready"}, "status")).To(Succeed())
+
+		// Create apply configuration from unstructured
+		resourceAC := client.ApplyConfigurationFromUnstructured(resourceForApply)
+
+		// This currently fails with a resourceVersion mismatch error, but it should succeed.
+		// The bug is that SSA operations are incorrectly checking resourceVersion when it's unset.
+		// When oldObject is retrieved at versioned_tracker.go:216, it's a typed ChaosPod object
+		// with resourceVersion set (e.g., "1000"), which doesn't match the empty RV in the apply config.
+		err := cl.Status().Apply(ctx, resourceAC, client.FieldOwner("test-owner"), client.ForceOwnership)
+		Expect(err).NotTo(HaveOccurred(), "SSA apply on status should succeed when resourceVersion is not set, "+
+			"even if the server object has a different resourceVersion. "+
+			"This is a bug: SSA operations should not check resourceVersion when it's unset.")
+
+		// Verify the status was actually applied and read the final resourceVersion
+		finalResource := &ChaosPod{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "chaosapps.metamagical.io/v1",
+				Kind:       "ChaosPod",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-chaospod",
+				Namespace: "default",
+			},
+		}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(finalResource), finalResource)).To(Succeed())
+		Expect(finalResource.Status.Phase).To(Equal("Ready"))
+		// ResourceVersion should have been incremented by the apply and differ from both initial and updated RVs
+		finalRV := finalResource.GetResourceVersion()
+		Expect(finalRV).NotTo(BeEmpty())
+		Expect(finalRV).NotTo(Equal(initialRV))
+		Expect(finalRV).NotTo(Equal(updatedRV))
+	})
+
 	It("should not be able to manually update the fieldManager through a status update", func(ctx SpecContext) {
 		node := &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
@@ -3441,4 +3552,36 @@ func (in *EmbeddedPointerStructCRD) DeepCopyObject() runtime.Object {
 	}
 
 	return &out
+}
+
+// ChaosPod is a custom resource type used for testing SSA apply operations
+// on custom resources with status subresources.
+type ChaosPod struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   ChaosPodSpec   `json:"spec,omitempty"`
+	Status ChaosPodStatus `json:"status,omitempty"`
+}
+
+// ChaosPodSpec defines the spec for ChaosPod
+type ChaosPodSpec struct {
+	Image string `json:"image,omitempty"`
+}
+
+// ChaosPodStatus defines the status for ChaosPod
+type ChaosPodStatus struct {
+	Phase string `json:"phase,omitempty"`
+}
+
+func (in *ChaosPod) DeepCopyObject() runtime.Object {
+	if in == nil {
+		return nil
+	}
+	out := &ChaosPod{}
+	out.TypeMeta = in.TypeMeta
+	out.ObjectMeta = *in.ObjectMeta.DeepCopy()
+	out.Spec = in.Spec
+	out.Status = in.Status
+	return out
 }

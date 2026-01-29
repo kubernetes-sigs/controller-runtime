@@ -1141,7 +1141,7 @@ func copyFrom(old, n runtime.Object) error {
 
 func toMapStringAny(obj runtime.Object) (map[string]any, error) {
 	if unstructured, isUnstructured := obj.(*unstructured.Unstructured); isUnstructured {
-		return unstructured.Object, nil
+		return unstructured.DeepCopy().Object, nil
 	}
 
 	serialized, err := json.Marshal(obj)

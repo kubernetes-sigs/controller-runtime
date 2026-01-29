@@ -2094,6 +2094,34 @@ var _ = Describe("Fake client", func() {
 		Expect(obj.Object["spec"]).To(BeEquivalentTo("original"))
 	})
 
+	It("should not change non-status fields of unstructured objects on status patch with server-side client.Status apply", func(ctx SpecContext) {
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("foo/v1")
+		obj.SetKind("Foo")
+		obj.SetName("a-foo")
+
+		Expect(unstructured.SetNestedField(obj.Object, "original", "spec")).To(Succeed())
+
+		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
+
+		newObj := obj.DeepCopy()
+		Expect(unstructured.SetNestedField(newObj.Object, "modified", "spec")).To(Succeed())
+		Expect(unstructured.SetNestedField(newObj.Object, map[string]any{"state": "new"}, "status")).To(Succeed())
+
+		// Apply the whole new object to status - only status should change
+		applyConfig := client.ApplyConfigurationFromUnstructured(newObj)
+		Expect(cl.Status().Apply(ctx, applyConfig, client.FieldOwner("test-manager"))).To(Succeed())
+
+		retrieved := &unstructured.Unstructured{}
+		retrieved.SetAPIVersion("foo/v1")
+		retrieved.SetKind("Foo")
+		retrieved.SetName("a-foo")
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), retrieved)).To(Succeed())
+
+		Expect(retrieved.Object["status"]).To(BeEquivalentTo(map[string]any{"state": "new"}))
+		Expect(retrieved.Object["spec"]).To(BeEquivalentTo("original"))
+	})
+
 	It("should return not found on status update of resources that don't have a status subresource", func(ctx SpecContext) {
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("foo/v1")

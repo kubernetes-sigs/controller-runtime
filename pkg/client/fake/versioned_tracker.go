@@ -275,6 +275,14 @@ func (t versionedTracker) updateObject(
 			// We apply patches using a client-go reaction that ends up calling the trackers Update. As we can't change
 			// that reaction, we use the callstack to figure out if this originated from the "fakeClient.Apply" func.
 			accessor.SetResourceVersion(oldAccessor.GetResourceVersion())
+		case bytes.Contains(debug.Stack(), []byte("sigs.k8s.io/controller-runtime/pkg/client/fake.(*fakeSubResourceClient).Patch")):
+			// We apply patches using a client-go reaction that ends up calling the trackers Update. As we can't change
+			// that reaction, we use the callstack to figure out if this originated from the "fakeSubResourceClient.Patch" func.
+			accessor.SetResourceVersion(oldAccessor.GetResourceVersion())
+		case bytes.Contains(debug.Stack(), []byte("sigs.k8s.io/controller-runtime/pkg/client/fake.(*fakeSubResourceClient).Apply")):
+			// We apply patches using a client-go reaction that ends up calling the trackers Update. As we can't change
+			// that reaction, we use the callstack to figure out if this originated from the "fakeSubResourceClient.Apply" func.
+			accessor.SetResourceVersion(oldAccessor.GetResourceVersion())
 		}
 	}
 

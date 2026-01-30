@@ -1918,7 +1918,7 @@ var _ = Describe("Fake client", func() {
 		}
 		cl := NewClientBuilder().WithScheme(testScheme).WithStatusSubresource(customResource).WithObjects(customResource).Build()
 
-		// Create an unstructured apply configuration with status but no resourceVersion
+		// Create an unstructured apply configuration with status but wrong non empty resourceVersion
 		resourceForApply := &unstructured.Unstructured{}
 		resourceForApply.SetName("test-chaospod")
 		resourceForApply.SetNamespace("default")

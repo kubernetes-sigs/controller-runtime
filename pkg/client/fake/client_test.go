@@ -1929,7 +1929,7 @@ var _ = Describe("Fake client", func() {
 
 		resourceAC := client.ApplyConfigurationFromUnstructured(resourceForApply)
 
-		// This is expected to fail with the wring rv value passed in in the applied config
+		// This is expected to fail with the wrong rv value passed in in the applied config
 		err := cl.Status().Apply(ctx, resourceAC, client.FieldOwner("test-owner"), client.ForceOwnership)
 		Expect(err).To(HaveOccurred(), "SSA apply on status should not succeed when resourceVersion is wrongly set")
 		Expect(apierrors.IsConflict(err)).To(BeTrue())

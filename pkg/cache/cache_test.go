@@ -2657,3 +2657,43 @@ func TestReaderWaitsForCacheSync(t *testing.T) {
 		})
 	}
 }
+
+func TestIndexFieldDoesNotBlock(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		g := NewWithT(t)
+
+		fakeInformer := &controllertest.FakeInformer{Synced: false}
+		c, err := cache.New(&rest.Config{}, cache.Options{
+			Mapper: &fakeRESTMapper{},
+			NewInformer: func(kcache.ListerWatcher, runtime.Object, time.Duration, kcache.Indexers) kcache.SharedIndexInformer {
+				return fakeInformer
+			},
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		cacheDone := make(chan struct{})
+		go func() {
+			g.Expect(c.Start(ctx)).To(Succeed())
+			close(cacheDone)
+		}()
+		synctest.Wait() // Let the cache finish starting
+
+		// Call IndexField before informer is synced with a short timeout
+		// If IndexField blocks waiting for sync, this will timeout
+		indexCtx, indexCancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		defer indexCancel()
+		fieldName := "testField"
+		indexFunc := func(obj client.Object) []string {
+			return []string{"test-value"}
+		}
+		pod := &corev1.Pod{}
+		err = c.IndexField(indexCtx, pod, fieldName, indexFunc)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		cancel()
+		<-cacheDone
+	})
+}

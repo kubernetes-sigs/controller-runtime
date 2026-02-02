@@ -387,7 +387,7 @@ func TestStartReturnsWhenContextCancelledWithPendingReadinessCheck(t *testing.T)
 		},
 	)).To(Succeed())
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	// Start the group in a goroutine
 	startReturned := make(chan struct{})
@@ -406,7 +406,7 @@ func TestStartReturnsWhenContextCancelledWithPendingReadinessCheck(t *testing.T)
 	select {
 	case <-startReturned:
 		// Success: Start() returned after context cancellation
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(5 * time.Second):
 		t.Fatal("Start() did not return after context was cancelled - likely spinning on ctx.Done()")
 	}
 

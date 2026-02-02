@@ -396,9 +396,6 @@ func TestStartReturnsWhenContextCancelledWithPendingReadinessCheck(t *testing.T)
 		_ = rg.Start(ctx)
 	}()
 
-	// Give Start() a moment to enter the wait loop
-	time.Sleep(10 * time.Millisecond)
-
 	// Cancel the context
 	cancel()
 

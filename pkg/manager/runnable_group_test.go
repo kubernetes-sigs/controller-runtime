@@ -408,7 +408,7 @@ func TestStartReturnsWhenContextCancelledWithPendingReadinessCheck(t *testing.T)
 	}
 
 	// Cleanup
-	rg.StopAndWait(context.Background())
+	rg.StopAndWait(t.Context())
 }
 
 func TestWarmupFunctionIsExecutedWhenWarmupGroupIsStarted(t *testing.T) {

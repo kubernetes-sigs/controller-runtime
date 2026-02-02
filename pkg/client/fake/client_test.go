@@ -1847,6 +1847,94 @@ var _ = Describe("Fake client", func() {
 		Expect(cl.Status().Apply(ctx, node, client.FieldOwner("test-owner"))).To(Succeed())
 	})
 
+	It("should allow SSA apply on status without object has changed issues", func(ctx SpecContext) {
+		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "chaosapps.metamagical.io", Version: "v1"}}
+		schemeBuilder.Register(&ChaosPod{})
+		testScheme := runtime.NewScheme()
+		Expect(schemeBuilder.AddToScheme(testScheme)).NotTo(HaveOccurred())
+
+		customResource := &ChaosPod{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "chaosapps.metamagical.io/v1",
+				Kind:       "ChaosPod",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-chaospod",
+				Namespace: "default",
+			},
+			Spec: ChaosPodSpec{
+				Image: "test-image",
+			},
+		}
+		cl := NewClientBuilder().WithScheme(testScheme).WithStatusSubresource(customResource).WithObjects(customResource).Build()
+
+		// Create an unstructured apply configuration with status but no resourceVersion
+		resourceForApply := &unstructured.Unstructured{}
+		resourceForApply.SetName("test-chaospod")
+		resourceForApply.SetNamespace("default")
+		resourceForApply.SetAPIVersion("chaosapps.metamagical.io/v1")
+		resourceForApply.SetKind("ChaosPod")
+		resourceForApply.SetResourceVersion("")
+		Expect(unstructured.SetNestedField(resourceForApply.Object, map[string]any{"phase": "Ready"}, "status")).To(Succeed())
+
+		resourceAC := client.ApplyConfigurationFromUnstructured(resourceForApply)
+
+		err := cl.Status().Apply(ctx, resourceAC, client.FieldOwner("test-owner"), client.ForceOwnership)
+		Expect(err).NotTo(HaveOccurred(), "SSA apply on status should succeed when resourceVersion is not set")
+
+		// Verify the status was applied
+		finalResource := &ChaosPod{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "chaosapps.metamagical.io/v1",
+				Kind:       "ChaosPod",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-chaospod",
+				Namespace: "default",
+			},
+		}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(finalResource), finalResource)).To(Succeed())
+		Expect(finalResource.Status.Phase).To(Equal("Ready"))
+	})
+
+	It("should block SSA apply on status when passing the wrong non empty resource version", func(ctx SpecContext) {
+		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "chaosapps.metamagical.io", Version: "v1"}}
+		schemeBuilder.Register(&ChaosPod{})
+		testScheme := runtime.NewScheme()
+		Expect(schemeBuilder.AddToScheme(testScheme)).NotTo(HaveOccurred())
+
+		customResource := &ChaosPod{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "chaosapps.metamagical.io/v1",
+				Kind:       "ChaosPod",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-chaospod",
+				Namespace: "default",
+			},
+			Spec: ChaosPodSpec{
+				Image: "test-image",
+			},
+		}
+		cl := NewClientBuilder().WithScheme(testScheme).WithStatusSubresource(customResource).WithObjects(customResource).Build()
+
+		// Create an unstructured apply configuration with status but wrong non empty resourceVersion
+		resourceForApply := &unstructured.Unstructured{}
+		resourceForApply.SetName("test-chaospod")
+		resourceForApply.SetNamespace("default")
+		resourceForApply.SetAPIVersion("chaosapps.metamagical.io/v1")
+		resourceForApply.SetKind("ChaosPod")
+		resourceForApply.SetResourceVersion("bad-resource-version") // forces the error
+		Expect(unstructured.SetNestedField(resourceForApply.Object, map[string]any{"phase": "Ready"}, "status")).To(Succeed())
+
+		resourceAC := client.ApplyConfigurationFromUnstructured(resourceForApply)
+
+		// This is expected to fail with the wrong rv value passed in in the applied config
+		err := cl.Status().Apply(ctx, resourceAC, client.FieldOwner("test-owner"), client.ForceOwnership)
+		Expect(err).To(HaveOccurred(), "SSA apply on status should not succeed when resourceVersion is wrongly set")
+		Expect(apierrors.IsConflict(err)).To(BeTrue())
+	})
+
 	It("should not be able to manually update the fieldManager through a status update", func(ctx SpecContext) {
 		node := &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
@@ -3441,4 +3529,36 @@ func (in *EmbeddedPointerStructCRD) DeepCopyObject() runtime.Object {
 	}
 
 	return &out
+}
+
+// ChaosPod is a custom resource type used for testing SSA apply operations
+// on custom resources with status subresources.
+type ChaosPod struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   ChaosPodSpec   `json:"spec,omitempty"`
+	Status ChaosPodStatus `json:"status,omitempty"`
+}
+
+// ChaosPodSpec defines the spec for ChaosPod
+type ChaosPodSpec struct {
+	Image string `json:"image,omitempty"`
+}
+
+// ChaosPodStatus defines the status for ChaosPod
+type ChaosPodStatus struct {
+	Phase string `json:"phase,omitempty"`
+}
+
+func (in *ChaosPod) DeepCopyObject() runtime.Object {
+	if in == nil {
+		return nil
+	}
+	out := &ChaosPod{}
+	out.TypeMeta = in.TypeMeta
+	out.ObjectMeta = *in.ObjectMeta.DeepCopy()
+	out.Spec = in.Spec
+	out.Status = in.Status
+	return out
 }

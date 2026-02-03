@@ -167,7 +167,11 @@ func (r *runnableGroup) Start(ctx context.Context) error {
 	var retErr error
 
 	r.startOnce.Do(func() {
-		defer close(r.startReadyCh)
+		// NOTE: We intentionally do NOT close startReadyCh here.
+		// Closing a channel that has multiple senders (the readiness check
+		// goroutines in reconcile()) violates Go's channel ownership rules
+		// and causes "send on closed channel" panics. Instead, senders check
+		// ctx.Done() before sending, and the channel is left for GC.
 
 		// Start the internal reconciler.
 		go r.reconcile()
@@ -194,6 +198,11 @@ func (r *runnableGroup) Start(ctx context.Context) error {
 				if err := ctx.Err(); !errors.Is(err, context.Canceled) {
 					retErr = err
 				}
+				return
+			case <-r.ctx.Done():
+				// The group's internal context was cancelled (by StopAndWait).
+				// This unblocks readiness waiting when senders have exited via
+				// r.ctx.Done() and will no longer send to startReadyCh.
 				return
 			case rn := <-r.startReadyCh:
 				for i, existing := range r.startQueue {
@@ -246,7 +255,14 @@ func (r *runnableGroup) reconcile() {
 			go func() {
 				if rn.Check(r.ctx) {
 					if rn.signalReady {
-						r.startReadyCh <- rn
+						// Use select to avoid sending after Start() has returned.
+						// When ctx is cancelled, Start() exits and is no longer
+						// receiving from startReadyCh. Without this select, we'd
+						// either block forever or panic if the channel were closed.
+						select {
+						case r.startReadyCh <- rn:
+						case <-r.ctx.Done():
+						}
 					}
 				}
 			}()

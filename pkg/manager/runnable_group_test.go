@@ -363,6 +363,54 @@ func (r leaderElectionAndWarmupRunnable) NeedLeaderElection() bool {
 	return r.needLeaderElection
 }
 
+// TestStartReturnsWhenContextCancelledWithPendingReadinessCheck verifies that
+// runnableGroup.Start() returns promptly when the context is cancelled, even if
+// some runnables have not signaled readiness. This is a regression test for a bug
+// where Start() would spin indefinitely on ctx.Done() without returning.
+func TestStartReturnsWhenContextCancelledWithPendingReadinessCheck(t *testing.T) {
+	t.Parallel()
+
+	g := NewWithT(t)
+	rg := newRunnableGroup(defaultBaseContext, make(chan error, 1))
+
+	// Add a runnable with a readiness check that never completes.
+	// This simulates a cache sync that hangs or fails.
+	g.Expect(rg.Add(
+		RunnableFunc(func(c context.Context) error {
+			<-c.Done()
+			return nil
+		}),
+		func(ctx context.Context) bool {
+			// Block forever - never signal ready
+			<-ctx.Done()
+			return false
+		},
+	)).To(Succeed())
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	// Start the group in a goroutine
+	startReturned := make(chan struct{})
+	go func() {
+		defer close(startReturned)
+		_ = rg.Start(ctx)
+	}()
+
+	// Cancel the context
+	cancel()
+
+	// Start() should return promptly (within 100ms), not hang or spin
+	select {
+	case <-startReturned:
+		// Success: Start() returned after context cancellation
+	case <-time.After(5 * time.Second):
+		t.Fatal("Start() did not return after context was cancelled - likely spinning on ctx.Done()")
+	}
+
+	// Cleanup
+	rg.StopAndWait(t.Context())
+}
+
 func TestWarmupFunctionIsExecutedWhenWarmupGroupIsStarted(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {

@@ -165,7 +165,7 @@ var _ = Describe("Test download binaries", func() {
 
 		dirEntries, err := os.ReadDir(versionDownloadDirectory)
 		Expect(err).ToNot(HaveOccurred())
-		var actualFiles []string
+		actualFiles := make([]string, 0, len(dirEntries))
 		for _, e := range dirEntries {
 			actualFiles = append(actualFiles, e.Name())
 		}
@@ -184,7 +184,7 @@ var _ = Describe("Test download binaries", func() {
 
 		dirEntries, err := os.ReadDir(versionDownloadDirectory)
 		Expect(err).ToNot(HaveOccurred())
-		var actualFiles []string
+		actualFiles := make([]string, 0, len(dirEntries))
 		for _, e := range dirEntries {
 			actualFiles = append(actualFiles, e.Name())
 		}
@@ -203,7 +203,7 @@ var _ = Describe("Test download binaries", func() {
 
 		dirEntries, err := os.ReadDir(versionDownloadDirectory)
 		Expect(err).ToNot(HaveOccurred())
-		var actualFiles []string
+		actualFiles := make([]string, 0, len(dirEntries))
 		for _, e := range dirEntries {
 			actualFiles = append(actualFiles, e.Name())
 		}

@@ -1595,7 +1595,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				obtainedStructuredPodList := corev1.PodList{}
 				Expect(informer.List(ctx, &obtainedStructuredPodList)).To(Succeed())
 				Expect(obtainedStructuredPodList.Items).Should(WithTransform(func(pods []corev1.Pod) []string {
-					obtainedPodNames := []string{}
+					obtainedPodNames := make([]string, 0, len(pods))
 					for _, pod := range pods {
 						obtainedPodNames = append(obtainedPodNames, pod.Name)
 					}
@@ -1615,7 +1615,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				err = informer.List(ctx, &obtainedUnstructuredPodList)
 				Expect(err).To(Succeed())
 				Expect(obtainedUnstructuredPodList.Items).Should(WithTransform(func(pods []unstructured.Unstructured) []string {
-					obtainedPodNames := []string{}
+					obtainedPodNames := make([]string, 0, len(pods))
 					for _, pod := range pods {
 						obtainedPodNames = append(obtainedPodNames, pod.GetName())
 					}
@@ -1635,7 +1635,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				err = informer.List(ctx, &obtainedMetadataPodList)
 				Expect(err).To(Succeed())
 				Expect(obtainedMetadataPodList.Items).Should(WithTransform(func(pods []metav1.PartialObjectMetadata) []string {
-					obtainedPodNames := []string{}
+					obtainedPodNames := make([]string, 0, len(pods))
 					for _, pod := range pods {
 						obtainedPodNames = append(obtainedPodNames, pod.Name)
 					}

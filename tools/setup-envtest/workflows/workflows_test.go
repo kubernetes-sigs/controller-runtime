@@ -327,7 +327,8 @@ var _ = Describe("Workflows", func() {
 					remoteHTTPItems = makeContentsHTTP(remoteNamesHTTP)
 					// Also only keep the first 7 items.
 					// Get the first 7 archive names
-					var archiveNames []string
+					archiveNames := make([]string, 0, len(remoteHTTPItems.index.Releases))
+
 					for _, release := range remoteHTTPItems.index.Releases {
 						for archiveName := range release {
 							archiveNames = append(archiveNames, archiveName)

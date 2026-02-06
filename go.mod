@@ -7,7 +7,6 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-logr/logr v1.4.3
 	github.com/go-logr/zapr v1.3.0
-	github.com/google/btree v1.1.3
 	github.com/google/go-cmp v0.7.0
 	github.com/google/gofuzz v1.2.0
 	github.com/onsi/ginkgo/v2 v2.27.2
@@ -27,7 +26,7 @@ require (
 	k8s.io/apiserver v0.35.0
 	k8s.io/client-go v0.35.0
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
+	k8s.io/utils v0.0.0-20260108192941-914a6e750570
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2-0.20260122202528-d9cc6641c482
 	sigs.k8s.io/yaml v1.6.0
 )

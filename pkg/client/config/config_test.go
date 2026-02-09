@@ -182,7 +182,7 @@ func setConfigs(tc testCase, dir string) {
 
 	// Set KUBECONFIG env value
 	if len(tc.kubeconfigEnv) > 0 {
-		kubeconfigEnvPaths := []string{}
+		kubeconfigEnvPaths := make([]string, 0, len(tc.kubeconfigEnv))
 		for _, k := range tc.kubeconfigEnv {
 			kubeconfigEnvPaths = append(kubeconfigEnvPaths, filepath.Join(dir, k))
 		}

@@ -1,7 +1,7 @@
-//go:build aix || darwin || dragonfly || freebsd || linux || netbsd || openbsd || solaris || zos
+//go:build !aix && !darwin && !dragonfly && !freebsd && !linux && !netbsd && !openbsd && !solaris && !zos
 
 /*
-Copyright 2023 The Kubernetes Authors.
+Copyright 2026 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,14 +19,10 @@ limitations under the License.
 package process
 
 import (
-	"golang.org/x/sys/unix"
+	"os"
+	"syscall"
 )
 
-// GetSysProcAttr returns the SysProcAttr to use for the process,
-// for unix systems this returns a SysProcAttr with Setpgid set to true,
-// which creates a new process group for the child process.
-func GetSysProcAttr() *unix.SysProcAttr {
-	return &unix.SysProcAttr{
-		Setpgid: true,
-	}
+func signalProcess(process *os.Process, sig syscall.Signal) error {
+	return process.Signal(sig)
 }

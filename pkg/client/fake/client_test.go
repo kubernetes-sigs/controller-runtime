@@ -414,6 +414,7 @@ var _ = Describe("Fake client", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(obj).To(Equal(newcm))
 			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
+			Expect(obj.ObjectMeta.CreationTimestamp.IsZero()).To(BeTrue())
 		})
 
 		It("should error on create with set resourceVersion", func(ctx SpecContext) {
@@ -1229,7 +1230,6 @@ var _ = Describe("Fake client", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(newObj.Finalizers).To(BeEmpty())
 		})
-
 	}
 
 	Context("with default scheme.Scheme", func() {
@@ -1470,6 +1470,48 @@ var _ = Describe("Fake client", func() {
 					Expect(list.Items).To(ConsistOf(*dep))
 				})
 			})
+		})
+	})
+
+	Context("with SetCreationTimestamp option", func() {
+		BeforeEach(func() {
+			cl = NewClientBuilder().
+				WithSetCreationTimestamp().
+				Build()
+		})
+
+		It("should be able to Create and set metadata.CreationTimestamp", func(ctx SpecContext) {
+			By("Creating a new configmap")
+			newcm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cm-with-creation-timestamp",
+					Namespace: "ns2",
+				},
+			}
+			err := cl.Create(ctx, newcm)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Getting the new configmap")
+			namespacedName := types.NamespacedName{
+				Name:      "test-cm-with-creation-timestamp",
+				Namespace: "ns2",
+			}
+			obj := &corev1.ConfigMap{}
+			err = cl.Get(ctx, namespacedName, obj)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(obj).To(Equal(newcm))
+			Expect(obj.ObjectMeta.ResourceVersion).To(Equal("1"))
+			Expect(obj.ObjectMeta.CreationTimestamp.IsZero()).ToNot(BeTrue())
+		})
+
+		It("sets creatioTimestamp on SSA create when required to do so", func(ctx SpecContext) {
+			obj := corev1applyconfigurations.
+				ConfigMap("foo-with-creation-timestamp", "default").
+				WithData(map[string]string{"some": "data"})
+
+			cl := NewClientBuilder().WithSetCreationTimestamp().Build()
+			Expect(cl.Apply(ctx, obj, client.FieldOwner("foo"))).NotTo(HaveOccurred())
+			Expect(obj.CreationTimestamp.IsZero()).To(BeFalse())
 		})
 	})
 
@@ -3202,6 +3244,16 @@ var _ = Describe("Fake client", func() {
 		// Ideally we should only test for it to not be empty, realistically we will
 		// break ppl if we ever start setting a different value.
 		Expect(obj.ResourceVersion).To(BeEquivalentTo(ptr.To("1")))
+	})
+
+	It("does not set creatioTimestamp on SSA create", func(ctx SpecContext) {
+		obj := corev1applyconfigurations.
+			ConfigMap("foo", "default").
+			WithData(map[string]string{"some": "data"})
+
+		cl := NewClientBuilder().Build()
+		Expect(cl.Apply(ctx, obj, client.FieldOwner("foo"))).NotTo(HaveOccurred())
+		Expect(obj.CreationTimestamp.IsZero()).To(BeTrue())
 	})
 
 	It("ignores a passed resourceVersion on SSA create", func(ctx SpecContext) {

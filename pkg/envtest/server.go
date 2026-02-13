@@ -98,13 +98,11 @@ type (
 	Arg = process.Arg
 )
 
-var (
-	// EmptyArguments constructs a new set of flags with nothing set.
-	//
-	// This is mostly useful for testing helper methods -- you'll want to call
-	// Configure on the APIServer (or etcd) to configure their arguments.
-	EmptyArguments = process.EmptyArguments
-)
+// EmptyArguments constructs a new set of flags with nothing set.
+//
+// This is mostly useful for testing helper methods -- you'll want to call
+// Configure on the APIServer (or etcd) to configure their arguments.
+var EmptyArguments = process.EmptyArguments
 
 // Environment creates a Kubernetes test environment that will start / stop the Kubernetes control plane and
 // install extension APIs.
@@ -341,8 +339,10 @@ func (te *Environment) Start() (*rest.Config, error) {
 
 	// Call PrepWithoutInstalling to setup certificates first
 	// and have them available to patch CRD conversion webhook as well.
-	if err := te.WebhookInstallOptions.PrepWithoutInstalling(); err != nil {
-		return nil, err
+	if webhooksNeeded(te) {
+		if err := te.WebhookInstallOptions.PrepWithoutInstalling(); err != nil {
+			return nil, err
+		}
 	}
 
 	log.V(1).Info("installing CRDs")
@@ -364,6 +364,18 @@ func (te *Environment) Start() (*rest.Config, error) {
 		return nil, fmt.Errorf("unable to install webhooks onto control plane: %w", err)
 	}
 	return te.Config, nil
+}
+
+func webhooksNeeded(te *Environment) bool {
+	for _, crd := range te.CRDs {
+		if crd.Spec.Conversion != nil &&
+			crd.Spec.Conversion.Webhook != nil {
+			return true
+		}
+	}
+
+	return len(te.WebhookInstallOptions.ValidatingWebhooks) > 0 ||
+		len(te.WebhookInstallOptions.MutatingWebhooks) > 0
 }
 
 // AddUser provisions a new user for connecting to this Environment.  The user will

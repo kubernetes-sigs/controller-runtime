@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // EventBroadcasterProducer makes an event broadcaster, returning
@@ -117,6 +118,7 @@ func (p *Provider) getBroadcaster() (record.EventBroadcaster, events.EventBroadc
 
 		// init new broadcaster
 		ctx, cancel := context.WithCancel(context.Background())
+		ctx = log.IntoContext(ctx, p.logger)
 		p.cancelSinkRecordingFunc = cancel
 		if err := p.broadcaster.StartRecordingToSinkWithContext(ctx); err != nil {
 			p.logger.Error(err, "error starting recording for broadcaster")

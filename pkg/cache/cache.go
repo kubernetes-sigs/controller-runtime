@@ -133,6 +133,11 @@ type Informer interface {
 
 	// IsStopped returns true if the informer has been stopped.
 	IsStopped() bool
+
+	// LastSyncResourceVersion is the resource version observed when last synced with the underlying
+	// store. The value returned is not synchronized with access to the underlying store and is not
+	// thread-safe.
+	LastSyncResourceVersion() string
 }
 
 // AllNamespaces should be used as the map key to deliminate namespace settings

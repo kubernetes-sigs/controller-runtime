@@ -260,8 +260,8 @@ func (r *runnableGroup) reconcile() {
 						// receiving from startReadyCh. Without this select, we'd
 						// either block forever or panic if the channel were closed.
 						select {
-						case r.startReadyCh <- rn:
 						case <-r.ctx.Done():
+						case r.startReadyCh <- rn:
 						}
 					}
 				}

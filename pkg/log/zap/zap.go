@@ -155,8 +155,7 @@ type Options struct {
 	// See https://pkg.go.dev/github.com/go-logr/zapr for how zap level relates to logr verbosity.
 	Level zapcore.LevelEnabler
 	// StacktraceLevel is the level at and above which stacktraces will
-	// be recorded for all messages. Defaults to Warn when Development
-	// is true and Error otherwise.
+	// be recorded for all messages. Defaults to DPanic.
 	// See Level for the relationship of zap log level to logr verbosity.
 	StacktraceLevel zapcore.LevelEnabler
 	// ZapOpts allows passing arbitrary zap.Options to configure on the
@@ -173,6 +172,11 @@ func (o *Options) addDefaults() {
 		o.DestWriter = os.Stderr
 	}
 
+	if o.StacktraceLevel == nil {
+		lvl := zap.NewAtomicLevelAt(zap.DPanicLevel)
+		o.StacktraceLevel = &lvl
+	}
+
 	if o.Development {
 		if o.NewEncoder == nil {
 			o.NewEncoder = newConsoleEncoder
@@ -180,10 +184,6 @@ func (o *Options) addDefaults() {
 		if o.Level == nil {
 			lvl := zap.NewAtomicLevelAt(zap.DebugLevel)
 			o.Level = &lvl
-		}
-		if o.StacktraceLevel == nil {
-			lvl := zap.NewAtomicLevelAt(zap.WarnLevel)
-			o.StacktraceLevel = &lvl
 		}
 		o.ZapOpts = append(o.ZapOpts, zap.Development())
 	} else {
@@ -193,10 +193,6 @@ func (o *Options) addDefaults() {
 		if o.Level == nil {
 			lvl := zap.NewAtomicLevelAt(zap.InfoLevel)
 			o.Level = &lvl
-		}
-		if o.StacktraceLevel == nil {
-			lvl := zap.NewAtomicLevelAt(zap.ErrorLevel)
-			o.StacktraceLevel = &lvl
 		}
 		// Disable sampling for increased Debug levels. Otherwise, this will
 		// cause index out of bounds errors in the sampling code.

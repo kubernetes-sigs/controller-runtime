@@ -399,7 +399,7 @@ func TestStartReturnsWhenContextCancelledWithPendingReadinessCheck(t *testing.T)
 	// Cancel the context
 	cancel()
 
-	// Start() should return promptly (within 100ms), not hang or spin
+	// Start() should return promptly after context cancellation, not hang or spin
 	select {
 	case <-startReturned:
 		// Success: Start() returned after context cancellation

@@ -167,12 +167,6 @@ func (r *runnableGroup) Start(ctx context.Context) error {
 	var retErr error
 
 	r.startOnce.Do(func() {
-		// NOTE: We intentionally do NOT close startReadyCh here.
-		// Closing a channel that has multiple senders (the readiness check
-		// goroutines in reconcile()) violates Go's channel ownership rules
-		// and causes "send on closed channel" panics. Instead, senders check
-		// ctx.Done() before sending, and the channel is left for GC.
-
 		// Start the internal reconciler.
 		go r.reconcile()
 
@@ -212,8 +206,10 @@ func (r *runnableGroup) Start(ctx context.Context) error {
 						break
 					}
 				}
-				// We're done waiting if the queue is empty, return.
+				// We're done waiting if the queue is empty.
+				// All senders have already sent, so it is safe to close.
 				if len(r.startQueue) == 0 {
+					close(r.startReadyCh)
 					return
 				}
 			}

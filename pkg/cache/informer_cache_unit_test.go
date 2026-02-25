@@ -29,7 +29,6 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/cache/internal"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
-	crscheme "sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
 const (
@@ -86,14 +85,9 @@ var _ = Describe("ip.objectTypeForListObject", func() {
 	It("should find the object type of a list with a slice of pointers items field", func() {
 		By("registering the type", func() {
 			ip.scheme = runtime.NewScheme()
-			err := (&crscheme.Builder{
-				GroupVersion: schema.GroupVersion{Group: itemPointerSliceTypeGroupName, Version: itemPointerSliceTypeVersion},
-			}).
-				Register(
-					&controllertest.UnconventionalListType{},
-					&controllertest.UnconventionalListTypeList{},
-				).AddToScheme(ip.scheme)
-			Expect(err).ToNot(HaveOccurred())
+			gv := schema.GroupVersion{Group: itemPointerSliceTypeGroupName, Version: itemPointerSliceTypeVersion}
+			ip.scheme.AddKnownTypes(gv, &controllertest.UnconventionalListType{}, &controllertest.UnconventionalListTypeList{})
+			metav1.AddToGroupVersion(ip.scheme, gv)
 		})
 
 		By("calling objectTypeForListObject", func() {

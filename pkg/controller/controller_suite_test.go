@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -32,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	crscheme "sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
 func TestSource(t *testing.T) {
@@ -50,19 +50,15 @@ var clientTransport *http.Transport
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
-	err := (&crscheme.Builder{
-		GroupVersion: schema.GroupVersion{Group: "chaosapps.metamagical.io", Version: "v1"},
-	}).
-		Register(
-			&controllertest.UnconventionalListType{},
-			&controllertest.UnconventionalListTypeList{},
-		).AddToScheme(scheme.Scheme)
-	Expect(err).ToNot(HaveOccurred())
+	gv := schema.GroupVersion{Group: "chaosapps.metamagical.io", Version: "v1"}
+	scheme.Scheme.AddKnownTypes(gv, &controllertest.UnconventionalListType{}, &controllertest.UnconventionalListTypeList{})
+	metav1.AddToGroupVersion(scheme.Scheme, gv)
 
 	testenv = &envtest.Environment{
 		CRDDirectoryPaths: []string{"testdata/crds"},
 	}
 
+	var err error
 	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
 

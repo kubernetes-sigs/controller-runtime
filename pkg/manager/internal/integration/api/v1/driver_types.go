@@ -34,10 +34,6 @@ type DriverList struct {
 	Items           []Driver `json:"items"`
 }
 
-func init() {
-	SchemeBuilder.Register(&Driver{}, &DriverList{})
-}
-
 // DeepCopyInto deep copies into the given Driver.
 func (d *Driver) DeepCopyInto(out *Driver) {
 	*out = *d

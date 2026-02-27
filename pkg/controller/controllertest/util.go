@@ -18,7 +18,6 @@ package controllertest
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,15 +27,26 @@ import (
 var _ cache.SharedIndexInformer = &FakeInformer{}
 
 // FakeInformer provides fake Informer functionality for testing.
+// FakeInformer must be constructed via NewFakeInformer.
 type FakeInformer struct {
-	// Synced is returned by the HasSynced functions to implement the Informer interface
-	Synced     bool
-	SyncedLock sync.Mutex
+	// synced is used to signal that the informer is synced.
+	// This field is used in various HasSynced and HasSyncedChecker methods.
+	synced chan struct{}
 
 	// RunCount is incremented each time RunInformersAndControllers is called
 	RunCount int
 
 	handlers []cache.ResourceEventHandler
+}
+
+func NewFakeInformer(synced bool) *FakeInformer {
+	f := &FakeInformer{
+		synced: make(chan struct{}),
+	}
+	if synced {
+		f.Synced()
+	}
+	return f
 }
 
 // fakeHandlerRegistration implements cache.ResourceEventHandlerRegistration for testing.
@@ -46,10 +56,20 @@ type fakeHandlerRegistration struct {
 
 // HasSynced implements cache.ResourceEventHandlerRegistration.
 func (f *fakeHandlerRegistration) HasSynced() bool {
-	f.informer.SyncedLock.Lock()
-	defer f.informer.SyncedLock.Unlock()
+	return f.informer.HasSynced()
+}
 
-	return f.informer.Synced
+// HasSyncedChecker implements cache.ResourceEventHandlerRegistration.
+func (f *fakeHandlerRegistration) HasSyncedChecker() cache.DoneChecker {
+	return f
+}
+
+func (f *fakeHandlerRegistration) Name() string {
+	return "FakeHandlerRegistration"
+}
+
+func (f *fakeHandlerRegistration) Done() <-chan struct{} {
+	return f.informer.synced
 }
 
 // AddIndexers does nothing.  TODO(community): Implement this.
@@ -67,12 +87,32 @@ func (f *FakeInformer) Informer() cache.SharedIndexInformer {
 	return f
 }
 
-// HasSynced implements the Informer interface.  Returns f.Synced.
-func (f *FakeInformer) HasSynced() bool {
-	f.SyncedLock.Lock()
-	defer f.SyncedLock.Unlock()
+// Synced sets the FakeInformer state to "synced".
+func (f *FakeInformer) Synced() {
+	close(f.synced)
+}
 
-	return f.Synced
+// HasSynced implements the Informer interface. Returns f.Synced.
+func (f *FakeInformer) HasSynced() bool {
+	select {
+	case <-f.synced:
+		return true
+	default:
+		return false
+	}
+}
+
+// HasSyncedChecker implements the Informer interface.
+func (f *FakeInformer) HasSyncedChecker() cache.DoneChecker {
+	return f
+}
+
+func (f *FakeInformer) Name() string {
+	return "FakeInformer"
+}
+
+func (f *FakeInformer) Done() <-chan struct{} {
+	return f.synced
 }
 
 // AddEventHandler implements the Informer interface. Adds an EventHandler to the fake Informers. TODO(community): Implement Registration.

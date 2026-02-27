@@ -117,7 +117,7 @@ func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, _ runtime.Objec
 	}
 
 	// Set Synced to true by default so that WaitForCacheSync returns immediately
-	c.InformersByGVK[gvk] = &controllertest.FakeInformer{Synced: true}
+	c.InformersByGVK[gvk] = controllertest.NewFakeInformer(true)
 	return c.InformersByGVK[gvk], nil
 }
 

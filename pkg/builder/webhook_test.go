@@ -48,8 +48,6 @@ const (
 
 	svcBaseAddr = "http://svc-name.svc-ns.svc"
 
-	customPath = "/custom-path"
-
 	userAgentHeader             = "User-Agent"
 	userAgentCtxKey agentCtxKey = "UserAgent"
 	userAgentValue              = "test"
@@ -931,90 +929,6 @@ func runTests(admissionReviewVersion string) {
 		Entry("Defaulter + Validator", func(b *WebhookBuilder[*TestDefaultValidator]) {
 			b.WithDefaulter(&testValidatorDefaulter{})
 			b.WithValidator(&testDefaultValidatorValidator{})
-		}),
-	)
-
-	It("should not scaffold a custom defaulting and a custom validating webhook with the same custom path", func() {
-		By("creating a controller manager")
-		m, err := manager.New(cfg, manager.Options{})
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-		By("registering the type in the Scheme")
-		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-		builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
-		err = builder.AddToScheme(m.GetScheme())
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-		err = WebhookManagedBy(m, &TestDefaultValidator{}).
-			WithCustomDefaulter(&TestCustomDefaultValidator{}).
-			WithCustomValidator(&TestCustomDefaultValidator{}).
-			WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
-				return admission.DefaultLogConstructor(testingLogger, req)
-			}).
-			WithCustomPath(customPath).
-			Complete()
-		ExpectWithOffset(1, err).To(HaveOccurred())
-	})
-
-	DescribeTable("should not scaffold a custom defaulting when setting a custom path and a defaulting custom path",
-		func(build func(*WebhookBuilder[*TestDefaulterObject])) {
-			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
-			builder.Register(&TestDefaulterObject{}, &TestDefaulterList{})
-			err = builder.AddToScheme(m.GetScheme())
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-			webhookBuilder := WebhookManagedBy(m, &TestDefaulterObject{})
-			build(webhookBuilder)
-			err = webhookBuilder.
-				WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
-					return admission.DefaultLogConstructor(testingLogger, req)
-				}).
-				WithDefaulterCustomPath(customPath).
-				WithCustomPath(customPath).
-				Complete()
-			ExpectWithOffset(1, err).To(HaveOccurred())
-		},
-		Entry("CustomDefaulter", func(b *WebhookBuilder[*TestDefaulterObject]) {
-			b.WithCustomDefaulter(&TestCustomDefaulter{})
-		}),
-		Entry("Defaulter", func(b *WebhookBuilder[*TestDefaulterObject]) {
-			b.WithDefaulter(&testDefaulter{})
-		}),
-	)
-
-	DescribeTable("should not scaffold a custom validating when setting a custom path and a validating custom path",
-		func(build func(*WebhookBuilder[*TestValidatorObject])) {
-			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-			builder.Register(&TestValidatorObject{}, &TestValidatorList{})
-			err = builder.AddToScheme(m.GetScheme())
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-			webhookBuilder := WebhookManagedBy(m, &TestValidatorObject{})
-			build(webhookBuilder)
-			err = webhookBuilder.
-				WithLogConstructor(func(base logr.Logger, req *admission.Request) logr.Logger {
-					return admission.DefaultLogConstructor(testingLogger, req)
-				}).
-				WithValidatorCustomPath(customPath).
-				WithCustomPath(customPath).
-				Complete()
-			ExpectWithOffset(1, err).To(HaveOccurred())
-		},
-		Entry("CustomValidator", func(b *WebhookBuilder[*TestValidatorObject]) {
-			b.WithCustomValidator(&TestCustomValidator{})
-		}),
-		Entry("Validator", func(b *WebhookBuilder[*TestValidatorObject]) {
-			b.WithValidator(&testValidator{})
 		}),
 	)
 

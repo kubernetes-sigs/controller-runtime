@@ -145,7 +145,9 @@ func (h *defaulterForType[T]) Handle(ctx context.Context, req Request) Response 
 	// * json.Marshal that we use below sorts fields alphabetically
 	// * for builtin types the apiserver also sorts alphabetically (but it seems like it adds an empty line at the end)
 	// * for CRDs the apiserver uses the field order in the OpenAPI schema which very likely is not alphabetically sorted
-	if reflect.DeepEqual(originalObj, obj) {
+	// Note: If removeUnknownOrOmitableFields is set we have to compute a patch to remove unknown or omitable fields even
+	// if the objects are equal
+	if !h.removeUnknownOrOmitableFields && reflect.DeepEqual(originalObj, obj) {
 		return Response{
 			AdmissionResponse: admissionv1.AdmissionResponse{
 				Allowed: true,

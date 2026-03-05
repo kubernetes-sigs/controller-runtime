@@ -37,7 +37,7 @@ import (
 
 var _ = Describe("Defaulter Handler", func() {
 
-	It("should remove unknown fields when DefaulterRemoveUnknownFields is passed", func(ctx SpecContext) {
+	It("should remove unknown fields when DefaulterRemoveUnknownFields is passed and some fields are defaulted", func(ctx SpecContext) {
 		obj := &TestDefaulter{}
 		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{}, DefaulterRemoveUnknownOrOmitableFields)
 
@@ -66,6 +66,29 @@ var _ = Describe("Defaulter Handler", func() {
 				Operation: "remove",
 				Path:      "/newField",
 			},
+			jsonpatch.JsonPatchOperation{
+				Operation: "remove",
+				Path:      "/totalReplicas",
+			},
+		))
+		Expect(resp.Result.Code).Should(Equal(int32(http.StatusOK)))
+	})
+
+	It("should remove unknown fields when DefaulterRemoveUnknownFields is passed and no fields are defaulted", func(ctx SpecContext) {
+		obj := &TestDefaulter{}
+		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{}, DefaulterRemoveUnknownOrOmitableFields)
+
+		resp := handler.Handle(ctx, Request{
+			AdmissionRequest: admissionv1.AdmissionRequest{
+				Operation: admissionv1.Create,
+				Object: runtime.RawExtension{
+					Raw: []byte(`{"labels":{"foo": "bar"}, "replica": 2, "totalReplicas":0}`),
+				},
+			},
+		})
+		Expect(resp.Allowed).Should(BeTrue())
+		Expect(resp.Patches).To(HaveLen(1))
+		Expect(resp.Patches).To(ContainElements(
 			jsonpatch.JsonPatchOperation{
 				Operation: "remove",
 				Path:      "/totalReplicas",

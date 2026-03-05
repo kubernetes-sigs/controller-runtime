@@ -2,11 +2,9 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"sync"
-	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,66 +27,61 @@ func ConsistentClient(upstream Client, ig informerGetter) Client {
 }
 
 type consistentClient struct {
+	upstream       Client
 	informerGetter informerGetter
 	scheme         *runtime.Scheme
 
 	trackers     map[schema.GroupVersionKind]*highestSeenRVTracker
 	trackersLock sync.Mutex
 
-	lockedKeysByGVK map[schema.GroupVersionKind]*lockedKeys
-	lockedKeysLock  sync.Mutex
+	// lockedKeysByGVK maps gvk -> key -> keyLocker
+	lockedKeysByGVK threadSafeMap[schema.GroupVersionKind, *threadSafeMap[types.NamespacedName, *keyLocker]]
 }
 
-type lockedKeys struct {
-	lock       sync.RWMutex
-	lockedKeys map[types.NamespacedName]rvWaiter
-}
-
-type rvWaiter struct {
-	waitingForRV int64
-	done         chan struct{}
-}
-
-func (c *consistentClient) waitForObject(ctx context.Context, obj Object) error {
+func (c *consistentClient) Get(ctx context.Context, key ObjectKey, obj Object, opts ...GetOption) error {
 	gvk, err := apiutil.GVKForObject(obj, c.scheme)
 	if err != nil {
-		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
-	}
-	key := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
-
-	c.lockedKeysLock.Lock()
-	keys := c.lockedKeysByGVK[gvk]
-	c.lockedKeysLock.Unlock()
-	if keys == nil {
-		return nil
+		return fmt.Errorf("failed to get GVK for object %T: %v", obj, err)
 	}
 
-	done := func() chan struct{} {
-		keys.lock.RLock()
-		defer keys.lock.RUnlock()
+	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(key)
+	if err := keyLock.wait(ctx); err != nil {
+		return err
+	}
 
-		waiter, found := keys.lockedKeys[key]
-		if !found {
-			return nil
+	return c.upstream.Get(ctx, key, obj, opts...)
+}
+
+func (c *consistentClient) List(ctx context.Context, list ObjectList, opts ...ListOption) error {
+	gvk, err := apiutil.GVKForObject(list, c.scheme)
+	if err != nil {
+		return fmt.Errorf("failed to get GVK for list %T: %v", list, err)
+	}
+
+	keys := c.lockedKeysByGVK.getOrCreate(gvk).allValues()
+	for _, keyLock := range keys {
+		if err := keyLock.wait(ctx); err != nil {
+			return err
 		}
-
-		return waiter.done
-	}()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.NewTimer(5 * time.Second).C:
-		return errors.New("timed out waiting for cache to have latest changes to object")
-	case <-done:
-		return nil
 	}
+
+	return c.upstream.List(ctx, list, opts...)
 }
 
-func (c *consistentClient) blockForObject(ctx context.Context, obj Object) error {
+func (c *consistentClient) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	gvk, err := apiutil.GVKForObject(obj, c.scheme)
 	if err != nil {
 		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
+	}
+
+	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
+
+	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
+	keyLock.lock()
+	defer keyLock.unlock()
+
+	if err := c.upstream.Update(ctx, obj, opts...); err != nil {
+		return err
 	}
 
 	rvRaw := obj.GetResourceVersion()
@@ -97,31 +90,78 @@ func (c *consistentClient) blockForObject(ctx context.Context, obj Object) error
 		return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
 	}
 
-	tracker, err := c.trackerFor(ctx, gvk)
-	if err != nil {
-		return fmt.Errorf("failed to set up tracker for %v: %v", obj, err)
-	}
+	go func() {
+		_ = c.blockFor(ctx, gvk, rv)
+	}()
+	return nil
+}
 
-	key := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
-	c.lockedKeysLock.Lock()
-	if _, exists := c.lockedKeysByGVK[gvk]; !exists {
-		c.lockedKeysByGVK[gvk] = &lockedKeys{lockedKeys: make(map[types.NamespacedName]rvWaiter)}
-	}
-	keys := c.lockedKeysByGVK[gvk]
-	c.lockedKeysLock.Unlock()
+type lockedKeys struct {
+	lock       sync.RWMutex
+	lockedKeys map[types.NamespacedName]*keyLocker
+}
 
-	keys.lock.Lock()
-	defer keys.lock.Unlock()
-	if existing, alreadyWaiting := keys.lockedKeys[key]; alreadyWaiting && existing.waitingForRV >= rv {
+type keyLocker struct {
+	// mutex must be held to access any other field
+	mutex sync.Mutex
+
+	// holders counts the holders. If zero, done
+	// may be nil
+	holders int
+	done    chan struct{}
+}
+
+func (l *keyLocker) lock() {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	if l.holders == 0 {
+		l.done = make(chan struct{})
+	}
+	l.holders++
+}
+
+func (l *keyLocker) unlock() {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	l.holders--
+	if l.holders == 0 {
+		close(l.done)
+	}
+}
+
+func (l *keyLocker) wait(ctx context.Context) error {
+	l.mutex.Lock()
+	if l.holders == 0 {
+		l.mutex.Unlock()
 		return nil
 	}
+	done := l.done
+	l.mutex.Unlock()
 
-	keys.lockedKeys[key] = rvWaiter{
-		waitingForRV: rv,
-		done:         tracker.blockUntil(ctx, rv),
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-done:
+		return nil
+	}
+}
+
+// blockForObject blocks until the context is done or the RV in obj is observed. It may end up
+// creating an informer.
+func (c *consistentClient) blockFor(ctx context.Context, gvk schema.GroupVersionKind, rv int64) error {
+	tracker, err := c.trackerFor(ctx, gvk)
+	if err != nil {
+		return fmt.Errorf("failed to set up tracker for %v: %v", gvk, err)
 	}
 
-	return nil
+	select {
+	case <-tracker.blockUntil(ctx, rv):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (c *consistentClient) trackerFor(ctx context.Context, obj schema.GroupVersionKind) (*highestSeenRVTracker, error) {
@@ -211,4 +251,45 @@ func (h *highestSeenRVTracker) OnDelete(raw interface{}) {
 		return
 	}
 	go func() { h.update(obj.GetResourceVersion()) }()
+}
+
+type threadSafeMap[k comparable, v any] struct {
+	lock sync.Mutex
+	data map[k]v
+}
+
+func (t *threadSafeMap[k, v]) getOrCreate(key k) v {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	val, exists := t.data[key]
+	if !exists {
+		if t.data == nil {
+			t.data = make(map[k]v)
+		}
+		t.data[key] = *new(v)
+		val = t.data[key]
+	}
+
+	return val
+}
+
+func (t *threadSafeMap[k, v]) get(key k) (v, bool) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	val, ok := t.data[key]
+	return val, ok
+}
+
+func (t *threadSafeMap[k, v]) allValues() []v {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	result := make([]v, 0, len(t.data))
+	for _, val := range t.data {
+		result = append(result, val)
+	}
+
+	return result
 }

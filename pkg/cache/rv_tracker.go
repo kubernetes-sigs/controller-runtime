@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"fmt"
 	"strconv"
 	"sync"
 
@@ -102,6 +103,7 @@ func (h *highestSeenRVTracker) blockUntil(rv int64) <-chan struct{} {
 func (h *highestSeenRVTracker) update(rv string) {
 	parsed, err := strconv.ParseInt(rv, 10, 64)
 	if err != nil {
+		fmt.Printf("Failed to parse resource version %s: %v\n", rv, err)
 		return
 	}
 
@@ -117,6 +119,7 @@ func (h *highestSeenRVTracker) update(rv string) {
 func (h *highestSeenRVTracker) OnAdd(raw any, _ bool) {
 	obj, ok := raw.(client.Object)
 	if !ok {
+		// Never expected, should we log an error?
 		return
 	}
 	go func() { h.update(obj.GetResourceVersion()) }()
@@ -125,6 +128,7 @@ func (h *highestSeenRVTracker) OnAdd(raw any, _ bool) {
 func (h *highestSeenRVTracker) OnUpdate(_, newObj any) {
 	obj, ok := newObj.(client.Object)
 	if !ok {
+		// Never expected, should we log an error?
 		return
 	}
 	go func() { h.update(obj.GetResourceVersion()) }()
@@ -133,6 +137,8 @@ func (h *highestSeenRVTracker) OnUpdate(_, newObj any) {
 func (h *highestSeenRVTracker) OnDelete(raw any) {
 	obj, ok := raw.(client.Object)
 	if !ok {
+		// Could be cache.DeletedFinalStateUnknown, will we
+		// get the latest RV through `OnUpdate` if that happens?
 		return
 	}
 	go func() { h.update(obj.GetResourceVersion()) }()

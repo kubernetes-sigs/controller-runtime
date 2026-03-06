@@ -21,7 +21,7 @@ func ConsistentClient(upstream Client, cache cache) Client {
 }
 
 type consistentClient struct {
-	upstream Client
+	upstream *client
 	cache    cache
 	scheme   *runtime.Scheme
 
@@ -139,6 +139,36 @@ func (c *consistentClient) Patch(ctx context.Context, obj Object, patch Patch, o
 		return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
 	}
 	c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
+
+	return nil
+}
+
+func (c *consistentClient) Delete(ctx context.Context, obj Object, patch Patch, opts ...DeleteOption) error {
+	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	if err != nil {
+		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
+	}
+
+	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
+
+	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
+	if err := keyLock.lock(ctx); err != nil {
+		return fmt.Errorf("failed to acquire lock for %s/%s: %v", namespacedName.Namespace, namespacedName.Name, err)
+	}
+	defer keyLock.unlock()
+
+	response, err := c.upstream.delete(ctx, obj, opts...)
+	if err != nil {
+		return err
+	}
+
+	if rvRaw := response.GetResourceVersion(); rvRaw != "" {
+		rv, err := strconv.ParseInt(rvRaw, 10, 64)
+		if err != nil {
+			return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
+		}
+		c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
+	}
 
 	return nil
 }

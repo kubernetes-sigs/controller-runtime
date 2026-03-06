@@ -223,6 +223,22 @@ func (c *multiNamespaceCache) IndexField(ctx context.Context, obj client.Object,
 	return nil
 }
 
+func (c *multiNamespaceCache) SetMinimumRVForGVKAndKey(gvk schema.GroupVersionKind, key client.ObjectKey, rv int64) {
+	if key.Namespace == "" {
+		if c.clusterCache != nil {
+			c.clusterCache.SetMinimumRVForGVKAndKey(gvk, key, rv)
+		}
+		return
+	}
+	if cache, ok := c.namespaceToCache[key.Namespace]; ok {
+		cache.SetMinimumRVForGVKAndKey(gvk, key, rv)
+		return
+	}
+	if global, ok := c.namespaceToCache[metav1.NamespaceAll]; ok {
+		global.SetMinimumRVForGVKAndKey(gvk, key, rv)
+	}
+}
+
 func (c *multiNamespaceCache) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	isNamespaced, err := apiutil.IsObjectNamespaced(obj, c.Scheme, c.RESTMapper)
 	if err != nil {
@@ -444,4 +460,13 @@ func (i *multiNamespaceInformer) IsStopped() bool {
 		}
 	}
 	return true
+}
+
+// LastSyncResourceVersion returns the resource version from the last namespace informer.
+func (i *multiNamespaceInformer) LastSyncResourceVersion() string {
+	var rv string
+	for _, informer := range i.namespaceToInformer {
+		rv = informer.LastSyncResourceVersion()
+	}
+	return rv
 }

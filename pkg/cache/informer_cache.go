@@ -19,7 +19,9 @@ package cache
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
+	"sync"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,6 +61,10 @@ type informerCache struct {
 	scheme *runtime.Scheme
 	*internal.Informers
 	readerFailOnMissingInformer bool
+
+	minimums     *minimumRVStore
+	trackers     map[schema.GroupVersionKind]*highestSeenRVTracker
+	trackersLock sync.Mutex
 }
 
 // Get implements Reader.
@@ -76,6 +82,20 @@ func (ic *informerCache) Get(ctx context.Context, key client.ObjectKey, out clie
 	if !started {
 		return &ErrCacheNotStarted{}
 	}
+
+	if minRV, ok := ic.minimums.GetForKey(gvk, key); ok {
+		tracker, err := ic.trackerFor(ctx, gvk)
+		if err != nil {
+			return err
+		}
+		select {
+		case <-tracker.blockUntil(minRV):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		ic.minimums.Cleanup(gvk, minRV)
+	}
+
 	return cache.Reader.Get(ctx, key, out, opts...)
 }
 
@@ -93,6 +113,19 @@ func (ic *informerCache) List(ctx context.Context, out client.ObjectList, opts .
 
 	if !started {
 		return &ErrCacheNotStarted{}
+	}
+
+	if minRV, ok := ic.minimums.GetMaxForGVK(*gvk); ok {
+		tracker, err := ic.trackerFor(ctx, *gvk)
+		if err != nil {
+			return err
+		}
+		select {
+		case <-tracker.blockUntil(minRV):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		ic.minimums.Cleanup(*gvk, minRV)
 	}
 
 	return cache.Reader.List(ctx, out, opts...)
@@ -175,6 +208,40 @@ func (ic *informerCache) getInformerForKind(ctx context.Context, gvk schema.Grou
 		return false, nil, err
 	}
 	return started, cache, nil
+}
+
+func (ic *informerCache) SetMinimumRVForGVKAndKey(gvk schema.GroupVersionKind, key client.ObjectKey, rv int64) {
+	ic.minimums.Set(gvk, key, rv)
+}
+
+func (ic *informerCache) trackerFor(ctx context.Context, gvk schema.GroupVersionKind) (*highestSeenRVTracker, error) {
+	ic.trackersLock.Lock()
+	defer ic.trackersLock.Unlock()
+
+	if tracker, ok := ic.trackers[gvk]; ok {
+		return tracker, nil
+	}
+
+	informer, err := ic.GetInformerForKind(ctx, gvk, BlockUntilSynced(false))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get informer for %v: %w", gvk, err)
+	}
+
+	var initialRV int64
+	if lastSynced := informer.LastSyncResourceVersion(); lastSynced != "" {
+		initialRV, err = strconv.ParseInt(lastSynced, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse last synced resource version %q for %v: %w", lastSynced, gvk, err)
+		}
+	}
+
+	tracker := newHighestSeenRVTracker(initialRV)
+	if _, err := informer.AddEventHandler(tracker); err != nil {
+		return nil, fmt.Errorf("failed to add event handler for %v: %w", gvk, err)
+	}
+
+	ic.trackers[gvk] = tracker
+	return tracker, nil
 }
 
 // RemoveInformer deactivates and removes the informer from the cache.

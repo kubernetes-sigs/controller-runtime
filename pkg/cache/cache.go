@@ -68,6 +68,19 @@ type Cache interface {
 
 	// Informers loads informers and adds field indices.
 	Informers
+
+	// SetMinimumRVForGVKAndKey causes subsequent Get requests for the given
+	// GVK and key to block until the informer for that GVK has observed a
+	// resource version >= rv (or the context times out). For List requests
+	// on the given GVK, it blocks until the highest minimum RV across all
+	// keys for that GVK has been observed.
+	//
+	// The rv value is snapshotted at the time of the Get/List call, so
+	// calling SetMinimumRVForGVKAndKey again while a Get/List is already
+	// waiting does not affect the in-flight wait.
+	//
+	// TODO: This shouldn't be part of the public interface
+	SetMinimumRVForGVKAndKey(gvk schema.GroupVersionKind, key client.ObjectKey, rv int64)
 }
 
 // Informers knows how to create or fetch informers for different
@@ -527,6 +540,8 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 				NewInformer:           opts.NewInformer,
 			}),
 			readerFailOnMissingInformer: opts.ReaderFailOnMissingInformer,
+			minimums:                    newMinimumRVStore(),
+			trackers:                    make(map[schema.GroupVersionKind]*highestSeenRVTracker),
 		}
 	}
 }

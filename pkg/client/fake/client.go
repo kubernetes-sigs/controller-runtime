@@ -95,7 +95,8 @@ type fakeClient struct {
 	// indexesLock must be held when accessing indexes.
 	indexesLock sync.RWMutex
 
-	returnManagedFields bool
+	returnManagedFields  bool
+	setCreationTimestamp bool
 }
 
 var _ client.WithWatch = &fakeClient{}
@@ -131,6 +132,7 @@ type ClientBuilder struct {
 	interceptorFuncs      *interceptor.Funcs
 	typeConverters        []managedfields.TypeConverter
 	returnManagedFields   bool
+	setCreationTimestamp  bool
 	isBuilt               bool
 
 	// indexes maps each GroupVersionKind (GVK) to the indexes registered for that GVK.
@@ -256,6 +258,13 @@ func (f *ClientBuilder) WithReturnManagedFields() *ClientBuilder {
 	return f
 }
 
+// WithSetCreationTimestamp configures the fake client to set metadata.creationTimestamp on Create and first Apply.
+// on objects.
+func (f *ClientBuilder) WithSetCreationTimestamp() *ClientBuilder {
+	f.setCreationTimestamp = true
+	return f
+}
+
 // Build builds and returns a new fake client.
 func (f *ClientBuilder) Build() client.WithWatch {
 	if f.isBuilt {
@@ -307,6 +316,7 @@ func (f *ClientBuilder) Build() client.WithWatch {
 		scheme:                        f.scheme,
 		withStatusSubresource:         withStatusSubResource,
 		usesFieldManagedObjectTracker: usesFieldManagedObjectTracker,
+		setCreationTimestamp:          f.setCreationTimestamp,
 	}
 
 	for _, obj := range f.initObject {
@@ -332,6 +342,7 @@ func (f *ClientBuilder) Build() client.WithWatch {
 		indexes:               f.indexes,
 		withStatusSubresource: withStatusSubResource,
 		returnManagedFields:   f.returnManagedFields,
+		setCreationTimestamp:  f.setCreationTimestamp,
 	}
 
 	if f.interceptorFuncs != nil {
@@ -933,6 +944,16 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 			// Overwrite it unconditionally, this matches the apiserver behavior
 			// which allows to set it on create, but will then ignore it.
 			obj.SetResourceVersion("1")
+
+			if c.setCreationTimestamp {
+				now, err := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+				if err != nil {
+					return apierrors.NewInternalError(err)
+				}
+				obj.SetCreationTimestamp(metav1.Time{
+					Time: now,
+				})
+			}
 		} else {
 			// SSA deletionTimestamp updates are silently ignored
 			obj.SetDeletionTimestamp(oldAccessor.GetDeletionTimestamp())

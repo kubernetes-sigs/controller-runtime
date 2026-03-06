@@ -59,6 +59,34 @@ func (c *consistentClient) List(ctx context.Context, list ObjectList, opts ...Li
 	return c.upstream.List(ctx, list, opts...)
 }
 
+func (c *consistentClient) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
+	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	if err != nil {
+		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
+	}
+
+	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
+
+	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
+	if err := keyLock.lock(ctx); err != nil {
+		return fmt.Errorf("failed to acquire lock for %s/%s: %v", namespacedName.Namespace, namespacedName.Name, err)
+	}
+	defer keyLock.unlock()
+
+	if err := c.upstream.Create(ctx, obj, opts...); err != nil {
+		return err
+	}
+
+	rvRaw := obj.GetResourceVersion()
+	rv, err := strconv.ParseInt(rvRaw, 10, 64)
+	if err != nil {
+		return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
+	}
+	c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
+
+	return nil
+}
+
 func (c *consistentClient) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	gvk, err := apiutil.GVKForObject(obj, c.scheme)
 	if err != nil {

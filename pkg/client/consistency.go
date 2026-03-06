@@ -9,30 +9,21 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	toolscache "k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
-type informerGetter interface {
-	GetInformer(context.Context, schema.GroupVersionKind) (informer, error)
+type cache interface {
+	SetMinimumRVForGVKAndKey(gvk schema.GroupVersionKind, key ObjectKey, rv int64)
 }
 
-type informer interface {
-	AddEventHandler(handler toolscache.ResourceEventHandler) (toolscache.ResourceEventHandlerRegistration, error)
-	LastSyncResourceVersion() string
-}
-
-func ConsistentClient(upstream Client, ig informerGetter) Client {
+func ConsistentClient(upstream Client, cache cache) Client {
 
 }
 
 type consistentClient struct {
-	upstream       Client
-	informerGetter informerGetter
-	scheme         *runtime.Scheme
-
-	trackers     map[schema.GroupVersionKind]*highestSeenRVTracker
-	trackersLock sync.Mutex
+	upstream Client
+	cache    cache
+	scheme   *runtime.Scheme
 
 	// lockedKeysByGVK maps gvk -> key -> keyLocker
 	lockedKeysByGVK threadSafeMap[schema.GroupVersionKind, *threadSafeMap[types.NamespacedName, *keyLocker]]
@@ -77,7 +68,9 @@ func (c *consistentClient) Update(ctx context.Context, obj Object, opts ...Updat
 	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 
 	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
-	keyLock.lock()
+	if err := keyLock.lock(ctx); err != nil {
+		return fmt.Errorf("failed to acquire lock for %s/%s: %v", namespacedName.Namespace, namespacedName.Name, err)
+	}
 	defer keyLock.unlock()
 
 	if err := c.upstream.Update(ctx, obj, opts...); err != nil {
@@ -89,10 +82,36 @@ func (c *consistentClient) Update(ctx context.Context, obj Object, opts ...Updat
 	if err != nil {
 		return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
 	}
+	c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
 
-	go func() {
-		_ = c.blockFor(ctx, gvk, rv)
-	}()
+	return nil
+}
+
+func (c *consistentClient) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
+	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	if err != nil {
+		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
+	}
+
+	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
+
+	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
+	if err := keyLock.lock(ctx); err != nil {
+		return fmt.Errorf("failed to acquire lock for %s/%s: %v", namespacedName.Namespace, namespacedName.Name, err)
+	}
+	defer keyLock.unlock()
+
+	if err := c.upstream.Patch(ctx, obj, patch, opts...); err != nil {
+		return err
+	}
+
+	rvRaw := obj.GetResourceVersion()
+	rv, err := strconv.ParseInt(rvRaw, 10, 64)
+	if err != nil {
+		return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
+	}
+	c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
+
 	return nil
 }
 
@@ -101,156 +120,64 @@ type lockedKeys struct {
 	lockedKeys map[types.NamespacedName]*keyLocker
 }
 
+// keyLocker implements a mutex with context support
+// that also allows to wait for the current lock to
+// be released.
+// TODO: find a better name
 type keyLocker struct {
-	// mutex must be held to access any other field
+	// mutex must be held to access done
 	mutex sync.Mutex
-
-	// holders counts the holders. If zero, done
-	// may be nil
-	holders int
-	done    chan struct{}
+	// done is nil when no one is holding the lock
+	done chan struct{}
 }
 
-func (l *keyLocker) lock() {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
+func (l *keyLocker) lock(ctx context.Context) error {
+	for {
+		l.mutex.Lock()
+		if l.done == nil {
+			l.done = make(chan struct{})
+			l.mutex.Unlock()
+			return nil
+		}
 
-	if l.holders == 0 {
-		l.done = make(chan struct{})
+		done := l.done
+		l.mutex.Unlock()
+		select {
+		case <-done: // released, try acquire
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
-	l.holders++
 }
 
 func (l *keyLocker) unlock() {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	l.holders--
-	if l.holders == 0 {
-		close(l.done)
+	if l.done == nil {
+		panic("unlock of unlocked mutex")
 	}
+	close(l.done)
+	l.done = nil
 }
 
+// wait waits for the current lock holder if any to
+// release the lock.
 func (l *keyLocker) wait(ctx context.Context) error {
 	l.mutex.Lock()
-	if l.holders == 0 {
-		l.mutex.Unlock()
-		return nil
-	}
 	done := l.done
 	l.mutex.Unlock()
 
+	if done == nil {
+		return nil
+	}
+
 	select {
-	case <-ctx.Done():
-		return ctx.Err()
 	case <-done:
 		return nil
-	}
-}
-
-// blockForObject blocks until the context is done or the RV in obj is observed. It may end up
-// creating an informer.
-func (c *consistentClient) blockFor(ctx context.Context, gvk schema.GroupVersionKind, rv int64) error {
-	tracker, err := c.trackerFor(ctx, gvk)
-	if err != nil {
-		return fmt.Errorf("failed to set up tracker for %v: %v", gvk, err)
-	}
-
-	select {
-	case <-tracker.blockUntil(ctx, rv):
-		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-func (c *consistentClient) trackerFor(ctx context.Context, obj schema.GroupVersionKind) (*highestSeenRVTracker, error) {
-	c.trackersLock.Lock()
-	defer c.trackersLock.Unlock()
-
-	tracker, ok := c.trackers[obj]
-	if ok {
-		return tracker, nil
-	}
-
-	informer, err := c.informerGetter.GetInformer(ctx, obj)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to get informer for %v: %v", obj, err)
-	}
-
-	stringRV := informer.LastSyncResourceVersion()
-	rv, err := strconv.ParseInt(stringRV, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse resource version %s: %v", stringRV, err)
-	}
-
-	c.trackers[obj] = &highestSeenRVTracker{
-		rv:   rv,
-		cond: &sync.Cond{},
-	}
-
-	return c.trackers[obj], nil
-}
-
-type highestSeenRVTracker struct {
-	rv   int64
-	cond *sync.Cond
-}
-
-func (h *highestSeenRVTracker) blockUntil(ctx context.Context, rv int64) chan struct{} {
-	c := make(chan struct{})
-	go func() {
-		h.cond.L.Lock()
-		for h.rv < rv {
-			h.cond.Wait()
-		}
-		h.cond.L.Unlock()
-		close(c)
-	}()
-
-	return c
-}
-
-func (h *highestSeenRVTracker) update(rv string) {
-	parsed, err := strconv.ParseInt(rv, 10, 64)
-	if err != nil {
-		fmt.Printf("Failed to parse resource version %s: %v\n", rv, err)
-		return
-	}
-
-	h.cond.L.Lock()
-	defer h.cond.L.Unlock()
-
-	if parsed > h.rv {
-		h.rv = parsed
-		h.cond.Broadcast()
-	}
-}
-
-func (h *highestSeenRVTracker) OnAdd(raw interface{}, isInInitialList bool) {
-	obj, ok := raw.(Object)
-	if !ok {
-		// Never expected, should we log an error?
-		return
-	}
-	go func() { h.update(obj.GetResourceVersion()) }()
-}
-func (h *highestSeenRVTracker) OnUpdate(oldObj, newObj interface{}) {
-	obj, ok := newObj.(Object)
-	if !ok {
-		// Never expected, should we log an error?
-		return
-	}
-	go func() { h.update(obj.GetResourceVersion()) }()
-}
-func (h *highestSeenRVTracker) OnDelete(raw interface{}) {
-	obj, ok := raw.(Object)
-	if !ok {
-		// Could be cache.DeletedFinalStateUnknown, will we
-		// get the latest RV through `OnUpdate` if that happens?
-		return
-	}
-	go func() { h.update(obj.GetResourceVersion()) }()
 }
 
 type threadSafeMap[k comparable, v any] struct {

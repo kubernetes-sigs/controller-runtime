@@ -131,6 +131,10 @@ func (c *FakeInformers) IndexField(ctx context.Context, obj client.Object, field
 	return nil
 }
 
+// SetMinimumRVForGVKAndKey implements Cache.
+func (c *FakeInformers) SetMinimumRVForGVKAndKey(_ schema.GroupVersionKind, _ client.ObjectKey, _ int64) {
+}
+
 // Get implements Cache.
 func (c *FakeInformers) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	return nil

@@ -69,6 +69,10 @@ func (dbt *delegatingByGVKCache) GetInformer(ctx context.Context, obj client.Obj
 	return cache.GetInformer(ctx, obj, opts...)
 }
 
+func (dbt *delegatingByGVKCache) SetMinimumRVForGVKAndKey(gvk schema.GroupVersionKind, key client.ObjectKey, rv int64) {
+	dbt.cacheForGVK(gvk).SetMinimumRVForGVKAndKey(gvk, key, rv)
+}
+
 func (dbt *delegatingByGVKCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, opts ...InformerGetOption) (Informer, error) {
 	return dbt.cacheForGVK(gvk).GetInformerForKind(ctx, gvk, opts...)
 }

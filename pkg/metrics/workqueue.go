@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package metrics
+package metrics //nolint:revive
 
 // Metrics subsystem and all keys used by the workqueue.
 const (

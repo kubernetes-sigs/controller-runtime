@@ -177,6 +177,11 @@ linters:
       - linters:
           - revive
         path: .*/internal/.*
+      # Allow 'version' as a package name even though it conflicts with Go 1.24+ stdlib
+      - linters:
+          - revive
+        path: tools/setup-envtest/version/.*\.go$
+        text: 'var-naming: avoid package names that conflict with Go standard library package names'
       - linters:
           - unused
         # Seems to incorrectly trigger on the two implementations that are only

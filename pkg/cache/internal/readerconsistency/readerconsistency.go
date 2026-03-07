@@ -29,11 +29,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func NewHandler() *ConsistencyHandler {
+func NewHandler(rvCleanup func(int64)) *ConsistencyHandler {
 	return &ConsistencyHandler{
 		rvCond:             sync.NewCond(&sync.Mutex{}),
 		pendingDeletesCond: sync.NewCond(&sync.Mutex{}),
 		pendingDeletes:     make(map[client.ObjectKey]sets.Set[types.UID]),
+		rvCleanup:          rvCleanup,
 	}
 }
 
@@ -44,6 +45,8 @@ type ConsistencyHandler struct {
 	pendingDeletesCond *sync.Cond
 	// pendingDeletes holds pending deletes. Must only be acquired when holding pendingDeletesCond.L
 	pendingDeletes map[client.ObjectKey]sets.Set[types.UID]
+
+	rvCleanup func(int64)
 }
 
 func (h *ConsistencyHandler) AddPendingDelete(key client.ObjectKey, uid types.UID) {
@@ -182,6 +185,8 @@ func (h *ConsistencyHandler) observeResourceVersion(rv string) {
 		h.observedRV = parsed
 		h.rvCond.Broadcast()
 	}
+
+	go h.rvCleanup(parsed)
 }
 
 func (h *ConsistencyHandler) OnAdd(raw any, _ bool) {

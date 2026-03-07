@@ -552,7 +552,6 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 				NewInformer:           opts.NewInformer,
 			}),
 			readerFailOnMissingInformer: opts.ReaderFailOnMissingInformer,
-			minimumRVs:                  newMinimumRVStore(),
 		}
 	}
 }

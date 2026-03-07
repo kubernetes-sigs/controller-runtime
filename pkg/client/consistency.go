@@ -2,10 +2,13 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -17,17 +20,18 @@ type cache interface {
 	AddRequiredDeleteForObject(Object) error
 }
 
+var _ Client = (*consistentClient)(nil)
+
 type consistentClient struct {
 	upstream *client
 	cache    cache
-	scheme   *runtime.Scheme
 
 	// lockedKeysByGVK maps gvk -> key -> keyLocker
 	lockedKeysByGVK threadSafeMap[schema.GroupVersionKind, *threadSafeMap[types.NamespacedName, *keyLocker]]
 }
 
 func (c *consistentClient) Get(ctx context.Context, key ObjectKey, obj Object, opts ...GetOption) error {
-	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	gvk, err := apiutil.GVKForObject(obj, c.upstream.Scheme())
 	if err != nil {
 		return fmt.Errorf("failed to get GVK for object %T: %v", obj, err)
 	}
@@ -41,7 +45,7 @@ func (c *consistentClient) Get(ctx context.Context, key ObjectKey, obj Object, o
 }
 
 func (c *consistentClient) List(ctx context.Context, list ObjectList, opts ...ListOption) error {
-	gvk, err := apiutil.GVKForObject(list, c.scheme)
+	gvk, err := apiutil.GVKForObject(list, c.upstream.Scheme())
 	if err != nil {
 		return fmt.Errorf("failed to get GVK for list %T: %v", list, err)
 	}
@@ -57,7 +61,7 @@ func (c *consistentClient) List(ctx context.Context, list ObjectList, opts ...Li
 }
 
 func (c *consistentClient) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
-	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	gvk, err := apiutil.GVKForObject(obj, c.upstream.Scheme())
 	if err != nil {
 		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
 	}
@@ -85,7 +89,7 @@ func (c *consistentClient) Create(ctx context.Context, obj Object, opts ...Creat
 }
 
 func (c *consistentClient) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
-	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	gvk, err := apiutil.GVKForObject(obj, c.upstream.Scheme())
 	if err != nil {
 		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
 	}
@@ -113,7 +117,7 @@ func (c *consistentClient) Update(ctx context.Context, obj Object, opts ...Updat
 }
 
 func (c *consistentClient) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
-	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	gvk, err := apiutil.GVKForObject(obj, c.upstream.Scheme())
 	if err != nil {
 		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
 	}
@@ -140,8 +144,81 @@ func (c *consistentClient) Patch(ctx context.Context, obj Object, patch Patch, o
 	return nil
 }
 
+func (c *consistentClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ApplyOption) error {
+	var gvk schema.GroupVersionKind
+	var namespacedName types.NamespacedName
+	var getResourceVersion func() (string, error)
+	switch t := obj.(type) {
+	case *unstructuredApplyConfiguration:
+		gvk = t.Unstructured.GroupVersionKind()
+		namespacedName.Namespace = t.Unstructured.GetNamespace()
+		namespacedName.Name = t.Unstructured.GetName()
+		getResourceVersion = func() (string, error) {
+			return t.Unstructured.GetResourceVersion(), nil
+		}
+	case applyConfiguration:
+		gv, err := schema.ParseGroupVersion(*t.GetAPIVersion())
+		if err != nil {
+			return fmt.Errorf("failed to parse group version %s: %v", *t.GetAPIVersion(), err)
+		}
+		gvk.Group = gv.Group
+		gvk.Version = gv.Version
+		gvk.Kind = *t.GetKind()
+		namespacedName.Namespace = *t.GetNamespace()
+		namespacedName.Name = *t.GetName()
+		getResourceVersion = func() (string, error) {
+			return resourceVersionFromApplyConfiguration(t)
+		}
+	default:
+		return fmt.Errorf("unsupported type for Apply: %T, must be either %T or %T", obj, &unstructuredApplyConfiguration{}, applyConfiguration(nil))
+	}
+
+	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
+	if err := keyLock.lock(ctx); err != nil {
+		return fmt.Errorf("failed to acquire lock for %s/%s: %v", namespacedName.Namespace, namespacedName.Name, err)
+	}
+	defer keyLock.unlock()
+
+	if err := c.upstream.Apply(ctx, obj, opts...); err != nil {
+		return err
+	}
+
+	rvRaw, err := getResourceVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get resource version from apply configuration: %v", err)
+	}
+	rv, err := strconv.ParseInt(rvRaw, 10, 64)
+	if err != nil {
+		return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
+	}
+	c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
+
+	return nil
+}
+
+func resourceVersionFromApplyConfiguration(obj applyConfiguration) (string, error) {
+	v := reflect.ValueOf(obj)
+	for v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return "", fmt.Errorf("expected struct, got %s", v.Kind())
+	}
+	rv := v.FieldByName("ResourceVersion")
+	if !rv.IsValid() {
+		return "", fmt.Errorf("type %T has no ResourceVersion field", obj)
+	}
+	if rv.Kind() != reflect.Ptr || rv.Type().Elem().Kind() != reflect.String {
+		return "", fmt.Errorf("ResourceVersion field in %T is not *string", obj)
+	}
+	if rv.IsNil() {
+		return "", fmt.Errorf("ResourceVersion field in %T is nil", obj)
+	}
+	return rv.Elem().String(), nil
+}
+
 func (c *consistentClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
-	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	gvk, err := apiutil.GVKForObject(obj, c.upstream.Scheme())
 	if err != nil {
 		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
 	}
@@ -172,6 +249,34 @@ func (c *consistentClient) Delete(ctx context.Context, obj Object, opts ...Delet
 	}
 
 	return nil
+}
+
+func (c *consistentClient) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllOfOption) error {
+	return errors.New("DeleteAllOf is not supported by consistentClient, please use List and Delete instead")
+}
+
+func (c *consistentClient) Status() SubResourceWriter {
+	return c.SubResource("status")
+}
+
+func (c *consistentClient) SubResource(subResource string) SubResourceClient {
+	panic("not implemented")
+}
+
+func (c *consistentClient) Scheme() *runtime.Scheme {
+	return c.upstream.Scheme()
+}
+
+func (c *consistentClient) RESTMapper() meta.RESTMapper {
+	return c.upstream.RESTMapper()
+}
+
+func (c *consistentClient) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
+	return c.upstream.GroupVersionKindFor(obj)
+}
+
+func (c *consistentClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
+	return c.upstream.IsObjectNamespaced(obj)
 }
 
 // keyLocker implements a mutex with context support

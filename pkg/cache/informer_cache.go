@@ -19,7 +19,6 @@ package cache
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -62,9 +61,11 @@ type informerCache struct {
 	*internal.Informers
 	readerFailOnMissingInformer bool
 
-	minimums     *minimumRVStore
-	trackers     map[schema.GroupVersionKind]*highestSeenRVTracker
-	trackersLock sync.Mutex
+	// minimumRVs stores the minimum RVs we must have seen before returning reads. Due to RV
+	// being just a version, we can store this before we have an informer. This is
+	// different from deletes, where we can only observe deletes once we do have an informer,
+	// so we only allow storing required deletes as part of the informer.
+	minimumRVs *minimumRVStore
 }
 
 // Get implements Reader.
@@ -83,20 +84,7 @@ func (ic *informerCache) Get(ctx context.Context, key client.ObjectKey, out clie
 		return &ErrCacheNotStarted{}
 	}
 
-	if minRV, ok := ic.minimums.GetForKey(gvk, key); ok {
-		tracker, err := ic.trackerFor(ctx, gvk)
-		if err != nil {
-			return err
-		}
-		select {
-		case <-tracker.blockUntil(minRV):
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-		ic.minimums.Cleanup(gvk, minRV)
-	}
-
-	return cache.Reader.Get(ctx, key, out, opts...)
+	return cache.Reader.Get(ctx, key, out, ic.minimumRVs.GetForKey(gvk, key), opts...)
 }
 
 // List implements Reader.
@@ -115,20 +103,7 @@ func (ic *informerCache) List(ctx context.Context, out client.ObjectList, opts .
 		return &ErrCacheNotStarted{}
 	}
 
-	if minRV, ok := ic.minimums.GetMaxForGVK(*gvk); ok {
-		tracker, err := ic.trackerFor(ctx, *gvk)
-		if err != nil {
-			return err
-		}
-		select {
-		case <-tracker.blockUntil(minRV):
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-		ic.minimums.Cleanup(*gvk, minRV)
-	}
-
-	return cache.Reader.List(ctx, out, opts...)
+	return cache.Reader.List(ctx, out, ic.minimumRVs.GetMaxForGVK(*gvk), opts...)
 }
 
 // objectTypeForListObject tries to find the runtime.Object and associated GVK
@@ -211,37 +186,30 @@ func (ic *informerCache) getInformerForKind(ctx context.Context, gvk schema.Grou
 }
 
 func (ic *informerCache) SetMinimumRVForGVKAndKey(gvk schema.GroupVersionKind, key client.ObjectKey, rv int64) {
-	ic.minimums.Set(gvk, key, rv)
+	ic.minimumRVs.Set(gvk, key, rv)
 }
 
-func (ic *informerCache) trackerFor(ctx context.Context, gvk schema.GroupVersionKind) (*highestSeenRVTracker, error) {
-	ic.trackersLock.Lock()
-	defer ic.trackersLock.Unlock()
-
-	if tracker, ok := ic.trackers[gvk]; ok {
-		return tracker, nil
-	}
-
-	informer, err := ic.GetInformerForKind(ctx, gvk, BlockUntilSynced(false))
+func (ic *informerCache) AddRequiredDeleteForObject(obj client.Object) error {
+	gvk, err := apiutil.GVKForObject(obj, ic.scheme)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get informer for %v: %w", gvk, err)
+		return err
+	}
+	cache, started, ok := ic.Peek(gvk, obj)
+	if !ok {
+		return fmt.Errorf("informer for GVK %v not found in cache", gvk)
+	}
+	if !started {
+		return &ErrCacheNotStarted{}
+	}
+	if !cache.Informer.HasSynced() {
+		return fmt.Errorf("informer for GVK %v is not synced", gvk)
 	}
 
-	var initialRV int64
-	if lastSynced := informer.LastSyncResourceVersion(); lastSynced != "" {
-		initialRV, err = strconv.ParseInt(lastSynced, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse last synced resource version %q for %v: %w", lastSynced, gvk, err)
-		}
-	}
-
-	tracker := newHighestSeenRVTracker(initialRV)
-	if _, err := informer.AddEventHandler(tracker); err != nil {
-		return nil, fmt.Errorf("failed to add event handler for %v: %w", gvk, err)
-	}
-
-	ic.trackers[gvk] = tracker
-	return tracker, nil
+	cache.Reader.ConsistencyHandler.AddPendingDelete(
+		client.ObjectKey{Namespace: obj.GetNamespace(), Name: obj.GetName()},
+		obj.GetUID(),
+	)
+	return nil
 }
 
 // RemoveInformer deactivates and removes the informer from the cache.
@@ -311,4 +279,68 @@ func indexByField(informer Informer, field string, extractValue client.IndexerFu
 	}
 
 	return informer.AddIndexers(cache.Indexers{internal.FieldIndexName(field): indexFunc})
+}
+
+type minimumRVStore struct {
+	mu       sync.Mutex
+	minimums map[schema.GroupVersionKind]map[client.ObjectKey]int64
+}
+
+func newMinimumRVStore() *minimumRVStore {
+	return &minimumRVStore{
+		minimums: make(map[schema.GroupVersionKind]map[client.ObjectKey]int64),
+	}
+}
+
+func (s *minimumRVStore) Set(gvk schema.GroupVersionKind, key client.ObjectKey, rv int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.minimums[gvk] == nil {
+		s.minimums[gvk] = make(map[client.ObjectKey]int64)
+	}
+	s.minimums[gvk][key] = rv
+}
+
+func (s *minimumRVStore) GetForKey(gvk schema.GroupVersionKind, key client.ObjectKey) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	keys, ok := s.minimums[gvk]
+	if !ok {
+		return 0
+	}
+	return keys[key]
+}
+
+func (s *minimumRVStore) GetMaxForGVK(gvk schema.GroupVersionKind) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	keys, ok := s.minimums[gvk]
+	if !ok || len(keys) == 0 {
+		return 0
+	}
+	var maxRV int64
+	for _, rv := range keys {
+		if rv > maxRV {
+			maxRV = rv
+		}
+	}
+	return maxRV
+}
+
+func (s *minimumRVStore) Cleanup(gvk schema.GroupVersionKind, currentRV int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	keys, ok := s.minimums[gvk]
+	if !ok {
+		return
+	}
+	for key, rv := range keys {
+		if rv <= currentRV {
+			delete(keys, key)
+		}
+	}
 }

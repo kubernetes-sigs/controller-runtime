@@ -26,7 +26,6 @@ import (
 )
 
 var _ Reader = &typedClient{}
-var _ Writer = &typedClient{}
 
 type typedClient struct {
 	resources  *clientRestResources

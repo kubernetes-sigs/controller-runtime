@@ -38,6 +38,7 @@ import (
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/cache/internal/readerconsistency"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/internal/syncs"
@@ -412,14 +413,20 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 		return nil, false, err
 	}
 
+	consistencyHandler := readerconsistency.NewHandler()
+	if _, err := sharedIndexInformer.AddEventHandler(consistencyHandler); err != nil {
+		return nil, false, fmt.Errorf("failed to add readerconsistency handler: %w", err)
+	}
+
 	// Create the new entry and set it in the map.
 	i := &Cache{
 		Informer: sharedIndexInformer,
 		Reader: CacheReader{
-			indexer:          sharedIndexInformer.GetIndexer(),
-			groupVersionKind: gvk,
-			scopeName:        mapping.Scope.Name(),
-			disableDeepCopy:  ip.unsafeDisableDeepCopy,
+			indexer:            sharedIndexInformer.GetIndexer(),
+			groupVersionKind:   gvk,
+			scopeName:          mapping.Scope.Name(),
+			disableDeepCopy:    ip.unsafeDisableDeepCopy,
+			ConsistencyHandler: consistencyHandler,
 		},
 		stop: make(chan struct{}),
 	}

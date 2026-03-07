@@ -73,6 +73,14 @@ func (dbt *delegatingByGVKCache) SetMinimumRVForGVKAndKey(gvk schema.GroupVersio
 	dbt.cacheForGVK(gvk).SetMinimumRVForGVKAndKey(gvk, key, rv)
 }
 
+func (dbt *delegatingByGVKCache) AddRequiredDeleteForObject(obj client.Object) error {
+	cache, err := dbt.cacheForObject(obj)
+	if err != nil {
+		return err
+	}
+	return cache.AddRequiredDeleteForObject(obj)
+}
+
 func (dbt *delegatingByGVKCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, opts ...InformerGetOption) (Informer, error) {
 	return dbt.cacheForGVK(gvk).GetInformerForKind(ctx, gvk, opts...)
 }

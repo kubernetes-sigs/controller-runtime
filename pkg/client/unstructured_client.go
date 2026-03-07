@@ -27,7 +27,6 @@ import (
 )
 
 var _ Reader = &unstructuredClient{}
-var _ Writer = &unstructuredClient{}
 
 type unstructuredClient struct {
 	resources  *clientRestResources

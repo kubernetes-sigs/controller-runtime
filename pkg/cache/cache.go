@@ -75,12 +75,20 @@ type Cache interface {
 	// on the given GVK, it blocks until the highest minimum RV across all
 	// keys for that GVK has been observed.
 	//
-	// The rv value is snapshotted at the time of the Get/List call, so
-	// calling SetMinimumRVForGVKAndKey again while a Get/List is already
-	// waiting does not affect the in-flight wait.
-	//
 	// TODO: This shouldn't be part of the public interface
 	SetMinimumRVForGVKAndKey(gvk schema.GroupVersionKind, key client.ObjectKey, rv int64)
+
+	// AddRequiredDeleteForGVKKeyAndUID causes subsequent Get requests for the
+	// given GVK and key to block until the UID has been observed as deleted.
+	// For List requests on the given GVK, it blocks until all pending delete
+	// UIDs across all keys for that GVK have been observed.
+	//
+	//
+	// An informer for the given object must have been created before the delete
+	// added here was executed, otherwise this will cause a deadlock.
+	//
+	// TODO: This shouldn't be part of the public interface
+	AddRequiredDeleteForObject(obj client.Object) error
 }
 
 // Informers knows how to create or fetch informers for different
@@ -540,8 +548,7 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 				NewInformer:           opts.NewInformer,
 			}),
 			readerFailOnMissingInformer: opts.ReaderFailOnMissingInformer,
-			minimums:                    newMinimumRVStore(),
-			trackers:                    make(map[schema.GroupVersionKind]*highestSeenRVTracker),
+			minimumRVs:                  newMinimumRVStore(),
 		}
 	}
 }

@@ -239,6 +239,16 @@ func (c *multiNamespaceCache) SetMinimumRVForGVKAndKey(gvk schema.GroupVersionKi
 	}
 }
 
+func (c *multiNamespaceCache) AddRequiredDeleteForObject(obj client.Object) error {
+	if ns := obj.GetNamespace(); ns == "" && c.clusterCache != nil {
+		return c.clusterCache.AddRequiredDeleteForObject(obj)
+	} else if cache, ok := c.namespaceToCache[ns]; ok {
+		cache.AddRequiredDeleteForObject(obj)
+	}
+
+	return nil
+}
+
 func (c *multiNamespaceCache) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	isNamespaced, err := apiutil.IsObjectNamespaced(obj, c.Scheme, c.RESTMapper)
 	if err != nil {

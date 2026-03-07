@@ -14,10 +14,7 @@ import (
 
 type cache interface {
 	SetMinimumRVForGVKAndKey(gvk schema.GroupVersionKind, key ObjectKey, rv int64)
-}
-
-func ConsistentClient(upstream Client, cache cache) Client {
-
+	AddRequiredDeleteForObject(Object) error
 }
 
 type consistentClient struct {
@@ -143,7 +140,7 @@ func (c *consistentClient) Patch(ctx context.Context, obj Object, patch Patch, o
 	return nil
 }
 
-func (c *consistentClient) Delete(ctx context.Context, obj Object, patch Patch, opts ...DeleteOption) error {
+func (c *consistentClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
 	gvk, err := apiutil.GVKForObject(obj, c.scheme)
 	if err != nil {
 		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
@@ -168,14 +165,13 @@ func (c *consistentClient) Delete(ctx context.Context, obj Object, patch Patch, 
 			return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
 		}
 		c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
+	} else {
+		if err := c.cache.AddRequiredDeleteForObject(obj); err != nil {
+			return fmt.Errorf("failed to add required delete for object: %v", err)
+		}
 	}
 
 	return nil
-}
-
-type lockedKeys struct {
-	lock       sync.RWMutex
-	lockedKeys map[types.NamespacedName]*keyLocker
 }
 
 // keyLocker implements a mutex with context support

@@ -25,8 +25,8 @@ var _ = Describe("ConsistentClient", func() {
 		counter uint64
 	)
 
-	BeforeEach(func() {
-		ctx, cancel = context.WithCancel(context.Background())
+	BeforeEach(func(specCtx context.Context) {
+		ctx, cancel = context.WithCancel(specCtx)
 
 		c, err := cache.New(cfg, cache.Options{Scheme: kscheme.Scheme})
 		Expect(err).NotTo(HaveOccurred())

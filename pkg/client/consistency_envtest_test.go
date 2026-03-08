@@ -30,6 +30,10 @@ var _ = Describe("ConsistentClient", func() {
 		c, err := cache.New(cfg, cache.Options{Scheme: kscheme.Scheme})
 		Expect(err).NotTo(HaveOccurred())
 
+		// Set up a Namespace informer as tests will delete namespaces through the consistent client.
+		_, err = c.GetInformer(ctx, &corev1.Namespace{})
+		Expect(err).NotTo(HaveOccurred())
+
 		go func() {
 			defer GinkgoRecover()
 			Expect(c.Start(ctx)).To(Succeed())

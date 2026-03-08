@@ -943,6 +943,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				err = cl.Apply(ctx, client.ApplyConfigurationFromUnstructured(obj), &client.ApplyOptions{FieldManager: "test-manager"})
 				Expect(err).NotTo(HaveOccurred())
+				Expect(obj.GetResourceVersion()).NotTo(BeEmpty())
 
 				cm, err := clientset.CoreV1().ConfigMaps(obj.GetNamespace()).Get(ctx, obj.GetName(), metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1015,6 +1016,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				err = cl.Apply(ctx, obj, &client.ApplyOptions{FieldManager: "test-manager"})
 				Expect(err).NotTo(HaveOccurred())
+				Expect(obj.ResourceVersion).NotTo(BeNil())
 
 				cm, err := clientset.CoreV1().ConfigMaps(ptr.Deref(obj.GetNamespace(), "")).Get(ctx, ptr.Deref(obj.GetName(), ""), metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1289,6 +1291,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				By("Applying the scale subresurce")
 				deploymentAC, err := appsv1applyconfigurations.ExtractDeployment(dep, "foo")
 				Expect(err).NotTo(HaveOccurred())
+				initialRV := deploymentAC.ResourceVersion
 				scale := autoscaling1applyconfigurations.Scale().
 					WithSpec(autoscaling1applyconfigurations.ScaleSpec().WithReplicas(replicaCount))
 				err = cl.SubResource("scale").Apply(ctx, deploymentAC,
@@ -1297,6 +1300,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 					client.ForceOwnership,
 				)
 				Expect(err).NotTo(HaveOccurred())
+				Expect(deploymentAC.ResourceVersion).ToNot(Equal(initialRV))
 
 				By("Asserting replicas got updated")
 				dep, err = clientset.AppsV1().Deployments(dep.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})

@@ -89,6 +89,11 @@ type Cache interface {
 	//
 	// TODO: This shouldn't be part of the public interface
 	AddRequiredDeleteForObject(obj client.Object) error
+
+	// RemoveRequiredDeleteForObject removes a previously added pending delete.
+	//
+	// TODO: This shouldn't be part of the public interface
+	RemoveRequiredDeleteForObject(obj client.Object) error
 }
 
 // Informers knows how to create or fetch informers for different

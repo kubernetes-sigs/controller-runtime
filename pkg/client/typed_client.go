@@ -18,6 +18,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -81,14 +82,25 @@ func (c *typedClient) Delete(ctx context.Context, obj Object, opts ...DeleteOpti
 	deleteOpts := DeleteOptions{}
 	deleteOpts.ApplyOptions(opts)
 
-	response := &unstructured.Unstructured{}
-	return response, o.Delete().
+	runtimeObj, err := o.Delete().
 		NamespaceIfScoped(o.namespace, o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.name).
 		Body(deleteOpts.AsDeleteOptions()).
 		Do(ctx).
-		Into(response)
+		Get()
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(runtimeObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal delete response: %w", err)
+	}
+	response := &unstructured.Unstructured{}
+	if err := json.Unmarshal(data, &response.Object); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal delete response: %w", err)
+	}
+	return response, nil
 }
 
 // DeleteAllOf implements client.Client.

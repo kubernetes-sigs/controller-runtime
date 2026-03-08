@@ -140,6 +140,11 @@ func (c *FakeInformers) AddRequiredDeleteForObject(client.Object) error {
 	return nil
 }
 
+// RemoveRequiredDeleteForObject implements Cache.
+func (c *FakeInformers) RemoveRequiredDeleteForObject(client.Object) error {
+	return nil
+}
+
 // Get implements Cache.
 func (c *FakeInformers) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	return nil

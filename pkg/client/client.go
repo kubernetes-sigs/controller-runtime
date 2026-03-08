@@ -345,7 +345,7 @@ func (c *client) Delete(ctx context.Context, obj Object, opts ...DeleteOption) e
 // is gone from storage or the object if it remains, for example because of finalizers.
 func (c *client) delete(ctx context.Context, obj Object, opts ...DeleteOption) (*unstructured.Unstructured, error) {
 	switch obj.(type) {
-	case runtime.Unstructured, *metav1.PartialObjectMetadata:
+	case runtime.Unstructured:
 		return c.unstructuredClient.Delete(ctx, obj, opts...)
 	default:
 		return c.typedClient.Delete(ctx, obj, opts...)

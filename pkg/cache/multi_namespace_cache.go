@@ -249,6 +249,16 @@ func (c *multiNamespaceCache) AddRequiredDeleteForObject(obj client.Object) erro
 	return nil
 }
 
+func (c *multiNamespaceCache) RemoveRequiredDeleteForObject(obj client.Object) error {
+	if ns := obj.GetNamespace(); ns == "" && c.clusterCache != nil {
+		return c.clusterCache.RemoveRequiredDeleteForObject(obj)
+	} else if cache, ok := c.namespaceToCache[ns]; ok {
+		return cache.RemoveRequiredDeleteForObject(obj)
+	}
+
+	return nil
+}
+
 func (c *multiNamespaceCache) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	isNamespaced, err := apiutil.IsObjectNamespaced(obj, c.Scheme, c.RESTMapper)
 	if err != nil {

@@ -60,6 +60,19 @@ func (h *ConsistencyHandler) AddPendingDelete(key client.ObjectKey, uid types.UI
 	h.pendingDeletes[key].Insert(uid)
 }
 
+func (h *ConsistencyHandler) RemovePendingDelete(key client.ObjectKey, uid types.UID) {
+	h.pendingDeletesCond.L.Lock()
+	defer h.pendingDeletesCond.L.Unlock()
+
+	if h.pendingDeletes[key] != nil {
+		h.pendingDeletes[key].Delete(uid)
+		if len(h.pendingDeletes[key]) == 0 {
+			delete(h.pendingDeletes, key)
+		}
+		h.pendingDeletesCond.Broadcast()
+	}
+}
+
 func (h *ConsistencyHandler) WaitForList(ctx context.Context, minRV int64) error {
 	if err := h.waitForRV(ctx, minRV); err != nil {
 		return err
@@ -153,7 +166,7 @@ func (h *ConsistencyHandler) waitForRV(ctx context.Context, rv int64) error {
 	observed := make(chan struct{})
 	go func() {
 		h.rvCond.L.Lock()
-		for h.observedRV <= rv {
+		for h.observedRV < rv {
 			if ctx.Err() != nil {
 				break
 			}

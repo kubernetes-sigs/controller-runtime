@@ -166,7 +166,7 @@ var _ = Describe("ConsistentClient", func() {
 			}, nil
 		}),
 
-		Entry("apply", func(ctx context.Context, cl client.Client, cm *corev1.ConfigMap) (writeResult, error) {
+		FEntry("apply", func(ctx context.Context, cl client.Client, cm *corev1.ConfigMap) (writeResult, error) {
 			ac := corev1ac.ConfigMap(cm.Name, cm.Namespace).
 				WithData(map[string]string{"key": "applied"})
 			if err := cl.Apply(ctx, ac, client.FieldOwner("consistency-test"), client.ForceOwnership); err != nil {

@@ -19,47 +19,9 @@ package client
 import (
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 )
-
-type unstructuredApplyConfiguration struct {
-	*unstructured.Unstructured
-}
-
-func (u *unstructuredApplyConfiguration) IsApplyConfiguration() {}
-
-// ApplyConfigurationFromUnstructured creates a runtime.ApplyConfiguration from an *unstructured.Unstructured object.
-//
-// Do not use Unstructured objects here that were generated from API objects, as its impossible to tell
-// if a zero value was explicitly set.
-func ApplyConfigurationFromUnstructured(u *unstructured.Unstructured) runtime.ApplyConfiguration {
-	return &unstructuredApplyConfiguration{Unstructured: u}
-}
-
-type applyconfigurationRuntimeObject struct {
-	runtime.ApplyConfiguration
-}
-
-func (a *applyconfigurationRuntimeObject) GetObjectKind() schema.ObjectKind {
-	return a
-}
-
-func (a *applyconfigurationRuntimeObject) GroupVersionKind() schema.GroupVersionKind {
-	return schema.GroupVersionKind{}
-}
-
-func (a *applyconfigurationRuntimeObject) SetGroupVersionKind(gvk schema.GroupVersionKind) {}
-
-func (a *applyconfigurationRuntimeObject) DeepCopyObject() runtime.Object {
-	panic("applyconfigurationRuntimeObject does not support DeepCopyObject")
-}
-
-func runtimeObjectFromApplyConfiguration(ac runtime.ApplyConfiguration) runtime.Object {
-	return &applyconfigurationRuntimeObject{ApplyConfiguration: ac}
-}
 
 func gvkFromApplyConfiguration(ac applyConfiguration) (schema.GroupVersionKind, error) {
 	var gvk schema.GroupVersionKind

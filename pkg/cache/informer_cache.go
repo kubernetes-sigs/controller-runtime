@@ -205,6 +205,23 @@ func (ic *informerCache) AddRequiredDeleteForObject(obj client.Object) error {
 	return nil
 }
 
+func (ic *informerCache) RemoveRequiredDeleteForObject(obj client.Object) error {
+	gvk, err := apiutil.GVKForObject(obj, ic.scheme)
+	if err != nil {
+		return fmt.Errorf("failed to get GVK for object: %w", err)
+	}
+	cache, _, ok := ic.Peek(gvk, obj)
+	if !ok {
+		return fmt.Errorf("informer for GVK %v not found in cache", gvk)
+	}
+	cache.Reader.ConsistencyHandler.RemovePendingDelete(
+		client.ObjectKey{Namespace: obj.GetNamespace(), Name: obj.GetName()},
+		obj.GetUID(),
+	)
+
+	return nil
+}
+
 // RemoveInformer deactivates and removes the informer from the cache.
 func (ic *informerCache) RemoveInformer(_ context.Context, obj client.Object) error {
 	gvk, err := apiutil.GVKForObject(obj, ic.scheme)

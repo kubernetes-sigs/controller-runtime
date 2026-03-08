@@ -18,6 +18,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -79,6 +80,16 @@ func (dbt *delegatingByGVKCache) AddRequiredDeleteForObject(obj client.Object) e
 		return err
 	}
 	return cache.AddRequiredDeleteForObject(obj)
+}
+
+func (dbt *delegatingByGVKCache) RemoveRequiredDeleteForObject(obj client.Object) error {
+	cache, err := dbt.cacheForObject(obj)
+	if err != nil {
+		return fmt.Errorf("getting cache for object: %w", err)
+	}
+	cache.RemoveRequiredDeleteForObject(obj)
+
+	return nil
 }
 
 func (dbt *delegatingByGVKCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, opts ...InformerGetOption) (Informer, error) {

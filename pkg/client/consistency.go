@@ -18,6 +18,7 @@ import (
 type cache interface {
 	SetMinimumRVForGVKAndKey(gvk schema.GroupVersionKind, key ObjectKey, rv int64)
 	AddRequiredDeleteForObject(Object) error
+	RemoveRequiredDeleteForObject(Object) error
 }
 
 var _ Client = (*consistentClient)(nil)
@@ -231,21 +232,29 @@ func (c *consistentClient) Delete(ctx context.Context, obj Object, opts ...Delet
 	}
 	defer keyLock.unlock()
 
+	// Register the delete before we execute it, otherwise it may be in the cache
+	// before we register it, causing a deadlock.
+	if err := c.cache.AddRequiredDeleteForObject(obj); err != nil {
+		return fmt.Errorf("failed to add required delete for object: %v", err)
+	}
+
 	response, err := c.upstream.delete(ctx, obj, opts...)
 	if err != nil {
+		if removeErr := c.cache.RemoveRequiredDeleteForObject(obj); removeErr != nil {
+			return errors.Join(err, fmt.Errorf("failed to remove required delete for object after delete error: %v", removeErr))
+		}
 		return err
 	}
 
 	if rvRaw := response.GetResourceVersion(); rvRaw != "" {
+		if err := c.cache.RemoveRequiredDeleteForObject(obj); err != nil {
+			return fmt.Errorf("failed to remove required delete for object after successful delete: %v", err)
+		}
 		rv, err := strconv.ParseInt(rvRaw, 10, 64)
 		if err != nil {
 			return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
 		}
 		c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
-	} else {
-		if err := c.cache.AddRequiredDeleteForObject(obj); err != nil {
-			return fmt.Errorf("failed to add required delete for object: %v", err)
-		}
 	}
 
 	return nil
@@ -353,19 +362,11 @@ func (t *threadSafeMap[k, v]) getOrCreate(key k) v {
 		if t.data == nil {
 			t.data = make(map[k]v)
 		}
-		t.data[key] = *new(v)
-		val = t.data[key]
+		val = reflect.New(reflect.TypeOf(val).Elem()).Interface().(v)
+		t.data[key] = val
 	}
 
 	return val
-}
-
-func (t *threadSafeMap[k, v]) get(key k) (v, bool) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
-	val, ok := t.data[key]
-	return val, ok
 }
 
 func (t *threadSafeMap[k, v]) allValues() []v {

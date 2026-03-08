@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/json"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
@@ -199,13 +198,8 @@ func (c *consistentClient) Apply(ctx context.Context, obj runtime.ApplyConfigura
 }
 
 func resourceVersionFromApplyConfiguration(obj applyConfiguration) (string, error) {
-	s, err := json.Marshal(obj)
-	if err != nil {
-		panic(err)
-	}
-	println(string(s))
 	v := reflect.ValueOf(obj)
-	for v.Kind() == reflect.Ptr {
+	for v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	if v.Kind() != reflect.Struct {

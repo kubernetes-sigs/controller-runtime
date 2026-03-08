@@ -135,7 +135,7 @@ func (c *FakeInformers) IndexField(ctx context.Context, obj client.Object, field
 func (c *FakeInformers) SetMinimumRVForGVKAndKey(_ schema.GroupVersionKind, _ client.ObjectKey, _ int64) {
 }
 
-// AddRequiredDeleteForGVKKeyAndUID implements Cache.
+// AddRequiredDeleteForObject implements Cache.
 func (c *FakeInformers) AddRequiredDeleteForObject(client.Object) error {
 	return nil
 }

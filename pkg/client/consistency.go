@@ -34,7 +34,7 @@ type consistentClient struct {
 func (c *consistentClient) Get(ctx context.Context, key ObjectKey, obj Object, opts ...GetOption) error {
 	gvk, err := apiutil.GVKForObject(obj, c.upstream.Scheme())
 	if err != nil {
-		return fmt.Errorf("failed to get GVK for object %T: %v", obj, err)
+		return fmt.Errorf("failed to get GVK for object %T: %w", obj, err)
 	}
 
 	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(key)
@@ -48,7 +48,7 @@ func (c *consistentClient) Get(ctx context.Context, key ObjectKey, obj Object, o
 func (c *consistentClient) List(ctx context.Context, list ObjectList, opts ...ListOption) error {
 	gvk, err := apiutil.GVKForObject(list, c.upstream.Scheme())
 	if err != nil {
-		return fmt.Errorf("failed to get GVK for list %T: %v", list, err)
+		return fmt.Errorf("failed to get GVK for list %T: %w", list, err)
 	}
 
 	keys := c.lockedKeysByGVK.getOrCreate(gvk).allValues()
@@ -64,14 +64,14 @@ func (c *consistentClient) List(ctx context.Context, list ObjectList, opts ...Li
 func (c *consistentClient) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
 	gvk, err := apiutil.GVKForObject(obj, c.upstream.Scheme())
 	if err != nil {
-		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
+		return fmt.Errorf("failed to get GVK for object %v: %w", obj, err)
 	}
 
 	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 
 	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
 	if err := keyLock.lock(ctx); err != nil {
-		return fmt.Errorf("failed to acquire lock for %s/%s: %v", namespacedName.Namespace, namespacedName.Name, err)
+		return fmt.Errorf("failed to acquire lock for %s/%s: %w", namespacedName.Namespace, namespacedName.Name, err)
 	}
 	defer keyLock.unlock()
 
@@ -82,7 +82,7 @@ func (c *consistentClient) Create(ctx context.Context, obj Object, opts ...Creat
 	rvRaw := obj.GetResourceVersion()
 	rv, err := strconv.ParseInt(rvRaw, 10, 64)
 	if err != nil {
-		return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
+		return fmt.Errorf("failed to parse resource version %s: %w", rvRaw, err)
 	}
 	c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
 
@@ -92,14 +92,14 @@ func (c *consistentClient) Create(ctx context.Context, obj Object, opts ...Creat
 func (c *consistentClient) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	gvk, err := apiutil.GVKForObject(obj, c.upstream.Scheme())
 	if err != nil {
-		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
+		return fmt.Errorf("failed to get GVK for object %v: %w", obj, err)
 	}
 
 	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 
 	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
 	if err := keyLock.lock(ctx); err != nil {
-		return fmt.Errorf("failed to acquire lock for %s/%s: %v", namespacedName.Namespace, namespacedName.Name, err)
+		return fmt.Errorf("failed to acquire lock for %s/%s: %w", namespacedName.Namespace, namespacedName.Name, err)
 	}
 	defer keyLock.unlock()
 
@@ -110,7 +110,7 @@ func (c *consistentClient) Update(ctx context.Context, obj Object, opts ...Updat
 	rvRaw := obj.GetResourceVersion()
 	rv, err := strconv.ParseInt(rvRaw, 10, 64)
 	if err != nil {
-		return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
+		return fmt.Errorf("failed to parse resource version %s: %w", rvRaw, err)
 	}
 	c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
 
@@ -120,14 +120,14 @@ func (c *consistentClient) Update(ctx context.Context, obj Object, opts ...Updat
 func (c *consistentClient) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
 	gvk, err := apiutil.GVKForObject(obj, c.upstream.Scheme())
 	if err != nil {
-		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
+		return fmt.Errorf("failed to get GVK for object %v: %w", obj, err)
 	}
 
 	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 
 	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
 	if err := keyLock.lock(ctx); err != nil {
-		return fmt.Errorf("failed to acquire lock for %s/%s: %v", namespacedName.Namespace, namespacedName.Name, err)
+		return fmt.Errorf("failed to acquire lock for %s/%s: %w", namespacedName.Namespace, namespacedName.Name, err)
 	}
 	defer keyLock.unlock()
 
@@ -138,7 +138,7 @@ func (c *consistentClient) Patch(ctx context.Context, obj Object, patch Patch, o
 	rvRaw := obj.GetResourceVersion()
 	rv, err := strconv.ParseInt(rvRaw, 10, 64)
 	if err != nil {
-		return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
+		return fmt.Errorf("failed to parse resource version %s: %w", rvRaw, err)
 	}
 	c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
 
@@ -160,7 +160,7 @@ func (c *consistentClient) Apply(ctx context.Context, obj runtime.ApplyConfigura
 	case applyConfiguration:
 		gv, err := schema.ParseGroupVersion(*t.GetAPIVersion())
 		if err != nil {
-			return fmt.Errorf("failed to parse group version %s: %v", *t.GetAPIVersion(), err)
+			return fmt.Errorf("failed to parse group version %s: %w", *t.GetAPIVersion(), err)
 		}
 		gvk.Group = gv.Group
 		gvk.Version = gv.Version
@@ -176,7 +176,7 @@ func (c *consistentClient) Apply(ctx context.Context, obj runtime.ApplyConfigura
 
 	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
 	if err := keyLock.lock(ctx); err != nil {
-		return fmt.Errorf("failed to acquire lock for %s/%s: %v", namespacedName.Namespace, namespacedName.Name, err)
+		return fmt.Errorf("failed to acquire lock for %s/%s: %w", namespacedName.Namespace, namespacedName.Name, err)
 	}
 	defer keyLock.unlock()
 
@@ -186,11 +186,11 @@ func (c *consistentClient) Apply(ctx context.Context, obj runtime.ApplyConfigura
 
 	rvRaw, err := getResourceVersion()
 	if err != nil {
-		return fmt.Errorf("failed to get resource version from apply configuration: %v", err)
+		return fmt.Errorf("failed to get resource version from apply configuration: %w", err)
 	}
 	rv, err := strconv.ParseInt(rvRaw, 10, 64)
 	if err != nil {
-		return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
+		return fmt.Errorf("failed to parse resource version %s: %w", rvRaw, err)
 	}
 	c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
 
@@ -221,38 +221,38 @@ func resourceVersionFromApplyConfiguration(obj applyConfiguration) (string, erro
 func (c *consistentClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
 	gvk, err := apiutil.GVKForObject(obj, c.upstream.Scheme())
 	if err != nil {
-		return fmt.Errorf("failed to get GVK for object %v: %v", obj, err)
+		return fmt.Errorf("failed to get GVK for object %v: %w", obj, err)
 	}
 
 	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 
 	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
 	if err := keyLock.lock(ctx); err != nil {
-		return fmt.Errorf("failed to acquire lock for %s/%s: %v", namespacedName.Namespace, namespacedName.Name, err)
+		return fmt.Errorf("failed to acquire lock for %s/%s: %w", namespacedName.Namespace, namespacedName.Name, err)
 	}
 	defer keyLock.unlock()
 
 	// Register the delete before we execute it, otherwise it may be in the cache
 	// before we register it, causing a deadlock.
 	if err := c.cache.AddRequiredDeleteForObject(obj); err != nil {
-		return fmt.Errorf("failed to add required delete for object: %v", err)
+		return fmt.Errorf("failed to add required delete for object: %w", err)
 	}
 
 	response, err := c.upstream.delete(ctx, obj, opts...)
 	if err != nil {
 		if removeErr := c.cache.RemoveRequiredDeleteForObject(obj); removeErr != nil {
-			return errors.Join(err, fmt.Errorf("failed to remove required delete for object after delete error: %v", removeErr))
+			return errors.Join(err, fmt.Errorf("failed to remove required delete for object after delete error: %w", removeErr))
 		}
 		return err
 	}
 
 	if rvRaw := response.GetResourceVersion(); rvRaw != "" {
 		if err := c.cache.RemoveRequiredDeleteForObject(obj); err != nil {
-			return fmt.Errorf("failed to remove required delete for object after successful delete: %v", err)
+			return fmt.Errorf("failed to remove required delete for object after successful delete: %w", err)
 		}
 		rv, err := strconv.ParseInt(rvRaw, 10, 64)
 		if err != nil {
-			return fmt.Errorf("failed to parse resource version %s: %v", rvRaw, err)
+			return fmt.Errorf("failed to parse resource version %s: %w", rvRaw, err)
 		}
 		c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
 	}

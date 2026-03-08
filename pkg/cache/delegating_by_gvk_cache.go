@@ -87,9 +87,7 @@ func (dbt *delegatingByGVKCache) RemoveRequiredDeleteForObject(obj client.Object
 	if err != nil {
 		return fmt.Errorf("getting cache for object: %w", err)
 	}
-	cache.RemoveRequiredDeleteForObject(obj)
-
-	return nil
+	return cache.RemoveRequiredDeleteForObject(obj)
 }
 
 func (dbt *delegatingByGVKCache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, opts ...InformerGetOption) (Informer, error) {

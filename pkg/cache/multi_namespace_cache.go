@@ -243,7 +243,7 @@ func (c *multiNamespaceCache) AddRequiredDeleteForObject(obj client.Object) erro
 	if ns := obj.GetNamespace(); ns == "" && c.clusterCache != nil {
 		return c.clusterCache.AddRequiredDeleteForObject(obj)
 	} else if cache, ok := c.namespaceToCache[ns]; ok {
-		cache.AddRequiredDeleteForObject(obj)
+		return cache.AddRequiredDeleteForObject(obj)
 	}
 
 	return nil

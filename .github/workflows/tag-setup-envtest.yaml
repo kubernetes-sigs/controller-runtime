@@ -3,7 +3,7 @@ name: Tag setup-envtest
 on:
   push:
     tags:
-      - '*' # Triggers on all tags, but the action skips non-semver ones.
+      - 'v*' # Code below does further filtering.
 
 jobs:
   create-mangled-tag:
@@ -15,12 +15,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create mapped tag
-        id: map-tag
-        uses: stackrox/clone-tag@v1 
-        with:
-          prefix: 'tools/setup-envtest/'
+      - name: Validate and Create Tag
+        id: copy-tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          PREFIX="tools/setup-envtest/"
+    
+          if [[ "${{ github.ref_type }}" != "tag" ]]; then
+            echo "Current ref is not a tag. Skipping."
+            exit 0
+          fi
           
-      - name: Report result
-        if: steps.map-tag.outputs.skipped == 'false'
-        run: echo "Successfully generated tag ${{ steps.map-tag.outputs.new-tag }}"
+          ORIGINAL_TAG="${GITHUB_REF#refs/tags/}"
+          REGEX="^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$"
+          
+          if [[ ! "$ORIGINAL_TAG" =~ $REGEX ]]; then
+            echo "Original tag '$ORIGINAL_TAG' does not match expression '$REGEX', skipping."
+            exit 0
+          fi
+    
+          echo "skipped=false" >> $GITHUB_OUTPUT
+          NEW_TAG="${PREFIX}${ORIGINAL_TAG}"
+    
+          echo "Original tag '$ORIGINAL_TAG' matches expression '$REGEX'."
+          echo "Creating new tag: '$NEW_TAG' at SHA: ${{ github.sha }}"
+        
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            '/repos/${{ github.repository }}/git/refs' \
+            -f ref="refs/tags/$NEW_TAG" \
+            -f sha="${{ github.sha }}"
+          echo
+          echo "Successfully created $NEW_TAG"

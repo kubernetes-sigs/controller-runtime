@@ -1,0 +1,26 @@
+name: Tag setup-envtest
+
+on:
+  push:
+    tags:
+      - '*' # Triggers on all tags, but the action skips non-semver ones.
+
+jobs:
+  create-mangled-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create a new tag via API
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create mapped tag
+        id: map-tag
+        uses: stackrox/clone-tag@v1 
+        with:
+          prefix: 'tools/setup-envtest/'
+          
+      - name: Report result
+        if: steps.map-tag.outputs.skipped == 'false'
+        run: echo "Successfully generated tag ${{ steps.map-tag.outputs.new-tag }}"

@@ -554,7 +554,7 @@ func NonBlockingGetTest(createCacheFunc func(config *rest.Config, opts cache.Opt
 
 			By("creating the informer cache")
 			opts.NewInformer = func(_ kcache.ListerWatcher, _ runtime.Object, _ time.Duration, _ kcache.Indexers) kcache.SharedIndexInformer {
-				return &controllertest.FakeInformer{Synced: false}
+				return controllertest.NewFakeInformer()
 			}
 			informerCache, err = createCacheFunc(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
@@ -1353,6 +1353,11 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					}()
 					Expect(namespacedCache.WaitForCacheSync(ctx)).To(BeTrue())
 
+					By("check informer has synced")
+					informer, err := namespacedCache.GetInformer(ctx, &corev1.Pod{})
+					Expect(err).ToNot(HaveOccurred())
+					Eventually(informer.HasSyncedChecker().Done(), 1*time.Second).Should(BeClosed())
+
 					By("listing pods in all namespaces")
 					out := &metav1.PartialObjectMetadataList{}
 					out.SetGroupVersionKind(schema.GroupVersionKind{
@@ -1960,7 +1965,23 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					addFunc := func(obj any) {
 						out <- obj
 					}
-					_, _ = sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+					handlerRegistration, err := sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+					Expect(err).ToNot(HaveOccurred())
+
+					By("draining the channel until the handler is synced")
+					timeout := time.After(5 * time.Second)
+				drainLoop:
+					for {
+						select {
+						case <-out:
+							continue
+						case <-handlerRegistration.HasSyncedChecker().Done():
+							break drainLoop
+						case <-timeout:
+							break drainLoop
+						}
+					}
+					Expect(handlerRegistration.HasSyncedChecker().Done()).Should(BeClosed())
 
 					By("adding an object")
 					cl, err := client.New(cfg, client.Options{})
@@ -2020,7 +2041,23 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					addFunc := func(obj any) {
 						out <- obj
 					}
-					_, _ = sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+					handlerRegistration, err := sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+					Expect(err).ToNot(HaveOccurred())
+
+					By("draining the channel until the handler is synced")
+					timeout := time.After(5 * time.Second)
+				drainLoop:
+					for {
+						select {
+						case <-out:
+							continue
+						case <-handlerRegistration.HasSyncedChecker().Done():
+							break drainLoop
+						case <-timeout:
+							break drainLoop
+						}
+					}
+					Expect(handlerRegistration.HasSyncedChecker().Done()).Should(BeClosed())
 
 					By("adding an object")
 					cl, err := client.New(cfg, client.Options{})
@@ -2226,7 +2263,23 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					addFunc := func(obj any) {
 						out <- obj
 					}
-					_, _ = sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+					handlerRegistration, err := sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+					Expect(err).ToNot(HaveOccurred())
+
+					By("draining the channel until the handler is synced")
+					timeout := time.After(5 * time.Second)
+				drainLoop:
+					for {
+						select {
+						case <-out:
+							continue
+						case <-handlerRegistration.HasSyncedChecker().Done():
+							break drainLoop
+						case <-timeout:
+							break drainLoop
+						}
+					}
+					Expect(handlerRegistration.HasSyncedChecker().Done()).Should(BeClosed())
 
 					By("adding an object")
 					cl, err := client.New(cfg, client.Options{})
@@ -2385,7 +2438,23 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					addFunc := func(obj any) {
 						out <- obj
 					}
-					_, _ = sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+					handlerRegistration, err := sii.AddEventHandler(kcache.ResourceEventHandlerFuncs{AddFunc: addFunc})
+					Expect(err).ToNot(HaveOccurred())
+
+					By("draining the channel until the handler is synced")
+					timeout := time.After(5 * time.Second)
+				drainLoop:
+					for {
+						select {
+						case <-out:
+							continue
+						case <-handlerRegistration.HasSyncedChecker().Done():
+							break drainLoop
+						case <-timeout:
+							break drainLoop
+						}
+					}
+					Expect(handlerRegistration.HasSyncedChecker().Done()).Should(BeClosed())
 
 					By("adding an object")
 					cl, err := client.New(cfg, client.Options{})
@@ -2607,7 +2676,7 @@ func TestReaderWaitsForCacheSync(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				g := NewWithT(t)
 
-				fakeInformer := &controllertest.FakeInformer{Synced: false}
+				fakeInformer := controllertest.NewFakeInformer()
 				c, err := cache.New(&rest.Config{}, cache.Options{
 					ReaderFailOnMissingInformer: readerFailOnMissingInformer,
 					Mapper:                      &fakeRESTMapper{},
@@ -2641,9 +2710,7 @@ func TestReaderWaitsForCacheSync(t *testing.T) {
 				g.Expect(err).To(HaveOccurred())
 				g.Expect(apierrors.IsTimeout(err)).To(BeTrue())
 
-				fakeInformer.SyncedLock.Lock()
-				fakeInformer.Synced = true
-				fakeInformer.SyncedLock.Unlock()
+				fakeInformer.Synced()
 
 				g.Expect(c.List(ctx, services)).To(Succeed())
 
@@ -2663,7 +2730,7 @@ func TestIndexFieldDoesNotBlock(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		g := NewWithT(t)
 
-		fakeInformer := &controllertest.FakeInformer{Synced: false}
+		fakeInformer := controllertest.NewFakeInformer()
 		c, err := cache.New(&rest.Config{}, cache.Options{
 			Mapper: &fakeRESTMapper{},
 			NewInformer: func(kcache.ListerWatcher, runtime.Object, time.Duration, kcache.Indexers) kcache.SharedIndexInformer {

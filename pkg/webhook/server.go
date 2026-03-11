@@ -77,8 +77,12 @@ type Options struct {
 	// It will be defaulted to 9443 if unspecified.
 	Port int
 
-	// CertDir is the directory that contains the server key and certificate. Defaults to
-	// <temp-dir>/k8s-webhook-server/serving-certs.
+	// CertDir is the directory that contains the server key and certificate.
+	// If not set, the webhook server will look up the server key and certificate in
+	// the following preference order:
+	// 1. {TempDir}/k8s-webhook-server/serving-certs (for backward compatibility)
+	// 2. The current working directory
+	// The server key and certificate must be named tls.key and tls.crt, respectively.
 	CertDir string
 
 	// CertName is the server certificate name. Defaults to tls.crt.
@@ -140,9 +144,8 @@ func (o *Options) setDefaults() {
 		o.Port = DefaultPort
 	}
 
-	if len(o.CertDir) == 0 {
-		o.CertDir = filepath.Join(os.TempDir(), "k8s-webhook-server", "serving-certs")
-	}
+	// If CertDir is empty, we don't default it to the temp dir anymore.
+	// We will check for the certs in the current directory if they are not provided.
 
 	if len(o.CertName) == 0 {
 		o.CertName = "tls.crt"
@@ -199,6 +202,34 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 	}
 
 	if cfg.GetCertificate == nil {
+		// If CertDir is not specified, check the following in order:
+		// 1. The legacy default directory {TempDir}/k8s-webhook-server/serving-certs
+		// 2. The current working directory
+		if len(s.Options.CertDir) == 0 {
+			tempDir := filepath.Join(os.TempDir(), "k8s-webhook-server", "serving-certs")
+			certPath := filepath.Join(tempDir, s.Options.CertName)
+			keyPath := filepath.Join(tempDir, s.Options.KeyName)
+
+			// Simple check for existence.
+			// If both exist, we'll use the temp dir and log a warning.
+			// Otherwise we'll fallback to the CWD.
+			_, certErr := os.Stat(certPath)
+			_, keyErr := os.Stat(keyPath)
+			if certErr == nil && keyErr == nil {
+				log.Info("WARNING: usage of the default certificate directory is deprecated and will be removed in future versions. Please properly configure the Certificate Directory", "directory", tempDir)
+				s.Options.CertDir = tempDir
+			} else {
+				// We're falling back to CWD, which is the new default.
+				// However, if the certs aren't there either, we should warn the user
+				// so they know *why* we're failing (since they might expect the old default).
+				_, cwdCertErr := os.Stat(s.Options.CertName)
+				_, cwdKeyErr := os.Stat(s.Options.KeyName)
+				if os.IsNotExist(cwdCertErr) || os.IsNotExist(cwdKeyErr) {
+					log.Info("WARNING: The legacy default certificate directory does not exist or is missing certs, so we are checking the current directory. However, we could not find the required certificates in the current directory either. The webhook server will likely fail to start.", "certName", s.Options.CertName, "keyName", s.Options.KeyName)
+				}
+			}
+		}
+
 		certPath := filepath.Join(s.Options.CertDir, s.Options.CertName)
 		keyPath := filepath.Join(s.Options.CertDir, s.Options.KeyName)
 

@@ -55,7 +55,3 @@ type ChaosPodList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ChaosPod `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&ChaosPod{}, &ChaosPodList{})
-}

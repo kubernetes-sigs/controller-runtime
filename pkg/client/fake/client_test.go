@@ -54,7 +54,6 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
-	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
 const (
@@ -1848,10 +1847,8 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("should allow SSA apply on status without object has changed issues", func(ctx SpecContext) {
-		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "chaosapps.metamagical.io", Version: "v1"}}
-		schemeBuilder.Register(&ChaosPod{})
 		testScheme := runtime.NewScheme()
-		Expect(schemeBuilder.AddToScheme(testScheme)).NotTo(HaveOccurred())
+		addChaosPodToScheme(testScheme)
 
 		customResource := &ChaosPod{
 			TypeMeta: metav1.TypeMeta{
@@ -1898,10 +1895,8 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("should block SSA apply on status when passing the wrong non empty resource version", func(ctx SpecContext) {
-		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "chaosapps.metamagical.io", Version: "v1"}}
-		schemeBuilder.Register(&ChaosPod{})
 		testScheme := runtime.NewScheme()
-		Expect(schemeBuilder.AddToScheme(testScheme)).NotTo(HaveOccurred())
+		addChaosPodToScheme(testScheme)
 
 		customResource := &ChaosPod{
 			TypeMeta: metav1.TypeMeta{
@@ -1958,11 +1953,10 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("should Unmarshal the schemaless object with int64 to preserve ints", func(ctx SpecContext) {
-		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
-		schemeBuilder.Register(&WithSchemalessSpec{})
-
+		gv := schema.GroupVersion{Group: "test", Version: "v1"}
 		scheme := runtime.NewScheme()
-		Expect(schemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		scheme.AddKnownTypes(gv, &WithSchemalessSpec{})
+		metav1.AddToGroupVersion(scheme, gv)
 
 		spec := Schemaless{
 			"key": int64(1),
@@ -1983,11 +1977,10 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("should Unmarshal the schemaless object with float64 to preserve ints", func(ctx SpecContext) {
-		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
-		schemeBuilder.Register(&WithSchemalessSpec{})
-
+		gv := schema.GroupVersion{Group: "test", Version: "v1"}
 		scheme := runtime.NewScheme()
-		Expect(schemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		scheme.AddKnownTypes(gv, &WithSchemalessSpec{})
+		metav1.AddToGroupVersion(scheme, gv)
 
 		spec := Schemaless{
 			"key": 1.1,
@@ -2008,11 +2001,10 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("works with types that have an embedded struct pointer", func(ctx SpecContext) {
-		schemeBuilder := &scheme.Builder{GroupVersion: schema.GroupVersion{Group: "test", Version: "v1"}}
-		schemeBuilder.Register(&EmbeddedPointerStructCRD{})
-
+		gv := schema.GroupVersion{Group: "test", Version: "v1"}
 		scheme := runtime.NewScheme()
-		Expect(schemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		scheme.AddKnownTypes(gv, &EmbeddedPointerStructCRD{})
+		metav1.AddToGroupVersion(scheme, gv)
 
 		c := NewClientBuilder().WithScheme(scheme).Build()
 
@@ -3529,6 +3521,13 @@ func (in *EmbeddedPointerStructCRD) DeepCopyObject() runtime.Object {
 	}
 
 	return &out
+}
+
+var chaosPodGV = schema.GroupVersion{Group: "chaosapps.metamagical.io", Version: "v1"}
+
+func addChaosPodToScheme(scheme *runtime.Scheme) {
+	scheme.AddKnownTypes(chaosPodGV, &ChaosPod{})
+	metav1.AddToGroupVersion(scheme, chaosPodGV)
 }
 
 // ChaosPod is a custom resource type used for testing SSA apply operations

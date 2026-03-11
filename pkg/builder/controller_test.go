@@ -44,7 +44,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -377,10 +376,11 @@ var _ = Describe("application", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testDefaultValidatorGVK.GroupVersion()}
-			builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
-			err = builder.AddToScheme(m.GetScheme())
-			Expect(err).NotTo(HaveOccurred())
+			m.GetScheme().AddKnownTypes(testDefaultValidatorGVK.GroupVersion(),
+				&TestDefaultValidator{},
+				&TestDefaultValidatorList{},
+			)
+			metav1.AddToGroupVersion(m.GetScheme(), testDefaultValidatorGVK.GroupVersion())
 
 			By("creating the 1st controller")
 			ctrl1, err := ControllerManagedBy(m).

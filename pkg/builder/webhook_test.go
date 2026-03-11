@@ -37,7 +37,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -90,10 +89,7 @@ func runTests(admissionReviewVersion string) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
-			builder.Register(&TestDefaulterObject{}, &TestDefaulterList{})
-			err = builder.AddToScheme(m.GetScheme())
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			addToScheme(m.GetScheme())
 
 			webhookBuilder := WebhookManagedBy(m, &TestDefaulterObject{})
 			build(webhookBuilder)
@@ -174,10 +170,7 @@ func runTests(admissionReviewVersion string) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
-			builder.Register(&TestDefaulterObject{}, &TestDefaulterList{})
-			err = builder.AddToScheme(m.GetScheme())
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			addToScheme(m.GetScheme())
 
 			customPath := "/custom-defaulting-path"
 			webhookBuilder := WebhookManagedBy(m, &TestDefaulterObject{})
@@ -261,10 +254,7 @@ func runTests(admissionReviewVersion string) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
-			builder.Register(&TestDefaulterObject{}, &TestDefaulterList{})
-			err = builder.AddToScheme(m.GetScheme())
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			addToScheme(m.GetScheme())
 
 			webhookBuilder := WebhookManagedBy(m, &TestDefaulterObject{})
 			build(webhookBuilder)
@@ -332,10 +322,7 @@ func runTests(admissionReviewVersion string) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-			builder.Register(&TestValidatorObject{}, &TestValidatorList{})
-			err = builder.AddToScheme(m.GetScheme())
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			addToScheme(m.GetScheme())
 
 			webhook := WebhookManagedBy(m, &TestValidatorObject{})
 			build(webhook)
@@ -457,10 +444,7 @@ func runTests(admissionReviewVersion string) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-			builder.Register(&TestValidatorObject{}, &TestValidatorList{})
-			err = builder.AddToScheme(m.GetScheme())
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			addToScheme(m.GetScheme())
 
 			customPath := "/custom-validating-path"
 			webhookBuilder := WebhookManagedBy(m, &TestValidatorObject{})
@@ -544,10 +528,7 @@ func runTests(admissionReviewVersion string) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-			builder.Register(&TestValidatorObject{}, &TestValidatorList{})
-			err = builder.AddToScheme(m.GetScheme())
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			addToScheme(m.GetScheme())
 
 			webhookBuilder := WebhookManagedBy(m, &TestValidatorObject{})
 			build(webhookBuilder)
@@ -617,10 +598,7 @@ func runTests(admissionReviewVersion string) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-			builder.Register(&TestValidatorObject{}, &TestValidatorList{})
-			err = builder.AddToScheme(m.GetScheme())
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			addToScheme(m.GetScheme())
 
 			webhookBuilder := WebhookManagedBy(m, &TestValidatorObject{})
 			build(webhookBuilder)
@@ -715,10 +693,7 @@ func runTests(admissionReviewVersion string) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-			builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
-			err = builder.AddToScheme(m.GetScheme())
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			addToScheme(m.GetScheme())
 
 			webhookBuilder := WebhookManagedBy(m, &TestDefaultValidator{})
 			build(webhookBuilder)
@@ -815,10 +790,7 @@ func runTests(admissionReviewVersion string) {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
-			builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-			builder.Register(&TestDefaultValidator{}, &TestDefaultValidatorList{})
-			err = builder.AddToScheme(m.GetScheme())
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			addToScheme(m.GetScheme())
 
 			validatingCustomPath := "/custom-validating-path"
 			defaultingCustomPath := "/custom-defaulting-path"
@@ -936,10 +908,7 @@ func runTests(admissionReviewVersion string) {
 		m, err := manager.New(cfg, manager.Options{})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		builder := scheme.Builder{GroupVersion: testDefaulterGVK.GroupVersion()}
-		builder.Register(&TestDefaulterObject{}, &TestDefaulterList{})
-		err = builder.AddToScheme(m.GetScheme())
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		addToScheme(m.GetScheme())
 
 		err = WebhookManagedBy(m, &TestDefaulterObject{}).
 			WithDefaulter(&testDefaulter{}).
@@ -952,10 +921,7 @@ func runTests(admissionReviewVersion string) {
 		m, err := manager.New(cfg, manager.Options{})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		builder := scheme.Builder{GroupVersion: testValidatorGVK.GroupVersion()}
-		builder.Register(&TestValidatorObject{}, &TestValidatorList{})
-		err = builder.AddToScheme(m.GetScheme())
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		addToScheme(m.GetScheme())
 
 		err = WebhookManagedBy(m, &TestValidatorObject{}).
 			WithValidator(&testValidator{}).
@@ -977,6 +943,18 @@ type TestDefaulterObject struct {
 }
 
 var testDefaulterGVK = schema.GroupVersionKind{Group: "foo.test.org", Version: "v1", Kind: testDefaulterKind}
+
+func addToScheme(scheme *runtime.Scheme) {
+	scheme.AddKnownTypes(testDefaulterGVK.GroupVersion(),
+		&TestDefaulterObject{},
+		&TestDefaulterList{},
+		&TestValidatorObject{},
+		&TestValidatorList{},
+		&TestDefaultValidator{},
+		&TestDefaultValidatorList{},
+	)
+	metav1.AddToGroupVersion(scheme, testDefaulterGVK.GroupVersion())
+}
 
 func (d *TestDefaulterObject) GetObjectKind() schema.ObjectKind { return d }
 func (d *TestDefaulterObject) DeepCopyObject() runtime.Object {

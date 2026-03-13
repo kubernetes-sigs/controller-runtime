@@ -347,6 +347,18 @@ func (t versionedTracker) Apply(gvr schema.GroupVersionResource, applyConfigurat
 		// We restore everything but status from the tracker where we don't put GVK
 		// into the object but it must be set for the ManagedFieldsObjectTracker
 		applyConfiguration.GetObjectKind().SetGroupVersionKind(gvk)
+
+		// The upstream tracker calls managedfields.FieldManager.Apply which
+		// rejects objects that have managedFields set. A real API server strips
+		// managedFields from the request body before applying, so clear them
+		// here to match. Without this, Status().Patch with client.Apply fails
+		// with "metadata.managedFields must be nil" when the object (e.g. from
+		// a watch cache) carries managedFields from a prior Update/Apply.
+		statusAccessor, err := meta.Accessor(applyConfiguration)
+		if err != nil {
+			return fmt.Errorf("failed to get accessor for apply configuration: %w", err)
+		}
+		statusAccessor.SetManagedFields(nil)
 	}
 	return t.upstream.Apply(gvr, applyConfiguration, ns, opts...)
 }

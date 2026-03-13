@@ -1846,6 +1846,36 @@ var _ = Describe("Fake client", func() {
 		Expect(cl.Status().Apply(ctx, node, client.FieldOwner("test-owner"))).To(Succeed())
 	})
 
+	It("should be able to status patch apply when object has managedFields from a prior update", func(ctx SpecContext) {
+		node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "test-node"}}
+		cl := NewClientBuilder().
+			WithObjects(node).
+			WithStatusSubresource(node).
+			WithReturnManagedFields().
+			Build()
+
+		// A regular Update populates managedFields on the stored object.
+		got := &corev1.Node{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(node), got)).To(Succeed())
+		got.Labels = map[string]string{"foo": "bar"}
+		Expect(cl.Update(ctx, got)).To(Succeed())
+
+		// Re-fetch: object now carries managedFields.
+		got2 := &corev1.Node{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(node), got2)).To(Succeed())
+		Expect(got2.ManagedFields).NotTo(BeEmpty())
+
+		// Status().Patch with Apply should succeed despite managedFields on the object.
+		got2.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Node"))
+		got2.Status.Phase = corev1.NodeRunning
+		Expect(cl.Status().Patch(ctx, got2, client.Apply,
+			client.ForceOwnership, client.FieldOwner("my-controller"))).To(Succeed())
+
+		final := &corev1.Node{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(node), final)).To(Succeed())
+		Expect(final.Status.Phase).To(Equal(corev1.NodeRunning))
+	})
+
 	It("should allow SSA apply on status without object has changed issues", func(ctx SpecContext) {
 		testScheme := runtime.NewScheme()
 		addChaosPodToScheme(testScheme)

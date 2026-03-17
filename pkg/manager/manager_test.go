@@ -159,14 +159,19 @@ var _ = Describe("manger.Manager", func() {
 			_, isCustomWebhook := svr.(customWebhook)
 			Expect(isCustomWebhook).To(BeTrue())
 		})
-		It("should disable the webhook", func() {
+
+		It("should create a webhook server that is disabled", func(specCtx SpecContext) {
 			By("setting the port to -1", func() {
-				m, err := New(cfg, Options{WebhookServer: webhook.NewServer(webhook.Options{Port: -1})})
+				srv := webhook.NewServer(webhook.Options{Port: -1})
+				m, err := New(cfg, Options{WebhookServer: srv})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(m).NotTo(BeNil())
 
 				svr := m.GetWebhookServer()
-				Expect(svr).To(BeNil())
+				Expect(svr).NotTo(BeNil())
+				Expect(svr.(*webhook.DefaultServer).Options.Port).To(Equal(-1))
+				Expect(svr.Start(specCtx)).NotTo(HaveOccurred())
+				Expect(svr.WebhookMux()).ToNot(BeNil())
 			})
 		})
 

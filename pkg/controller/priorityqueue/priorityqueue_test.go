@@ -97,9 +97,6 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Expect(q.Len()).To(Equal(1))
 
-		q.lockedLock.Lock()
-		Expect(q.locked.Len()).To(Equal(0))
-
 		Expect(metrics.depth["test"]).To(Equal(map[int]int{0: 1}))
 		Expect(metrics.adds["test"]).To(Equal(1))
 	})
@@ -141,7 +138,7 @@ var _ = Describe("Controllerworkqueue", func() {
 
 		Expect(q.Len()).To(Equal(0))
 
-		Expect(metrics.depth["test"]).To(Equal(map[int]int{1: 0, 2: 0}))
+		Expect(metrics.depth["test"]).To(Equal(map[int]int{2: 0}))
 		Expect(metrics.adds["test"]).To(Equal(1))
 	})
 

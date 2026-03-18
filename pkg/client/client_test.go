@@ -943,6 +943,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				err = cl.Apply(ctx, client.ApplyConfigurationFromUnstructured(obj), &client.ApplyOptions{FieldManager: "test-manager"})
 				Expect(err).NotTo(HaveOccurred())
+				Expect(obj.GetResourceVersion()).NotTo(BeEmpty())
 
 				cm, err := clientset.CoreV1().ConfigMaps(obj.GetNamespace()).Get(ctx, obj.GetName(), metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1015,6 +1016,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				err = cl.Apply(ctx, obj, &client.ApplyOptions{FieldManager: "test-manager"})
 				Expect(err).NotTo(HaveOccurred())
+				Expect(obj.ResourceVersion).NotTo(BeNil())
 
 				cm, err := clientset.CoreV1().ConfigMaps(ptr.Deref(obj.GetNamespace(), "")).Get(ctx, ptr.Deref(obj.GetName(), ""), metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())

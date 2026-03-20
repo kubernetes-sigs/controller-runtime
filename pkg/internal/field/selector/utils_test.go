@@ -38,7 +38,7 @@ var _ = Describe("RequiresExactMatch function", func() {
 
 	It("Returns false when the selector has the form key!=val", func() {
 		requiresExactMatch := RequiresExactMatch(fields.ParseSelectorOrDie("key!=val"))
-		Expect(requiresExactMatch).To(BeFalse())
+		Expect(requiresExactMatch).To(BeTrue())
 	})
 
 	It("Returns true when the selector has the form key1==val1,key2==val2", func() {

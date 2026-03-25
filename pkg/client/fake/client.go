@@ -802,12 +802,21 @@ func (c *fakeClient) update(obj client.Object, isStatus bool, opts ...client.Upd
 	c.trackerWriteLock.Lock()
 	defer c.trackerWriteLock.Unlock()
 
-	// Retain managed fields
-	// We can ignore all errors here since update will fail if we encounter an error.
-	obj.SetManagedFields(nil)
-	current, _ := c.tracker.Get(gvr, accessor.GetNamespace(), accessor.GetName())
-	if currentMetaObj, ok := current.(metav1.Object); ok {
-		obj.SetManagedFields(currentMetaObj.GetManagedFields())
+	if isStatus {
+		// Disallow updates of managed fields directly on the (status) subresource.
+		//
+		// Note that managed fields tracking on the subresources other than status is
+		// broken anyway and this place is one of those that will need to change when
+		// proper support for subresource managed fields tracking is introduced.
+		//
+		// By re-reading the managed fields here, we at least retain the main resource's
+		// managed fields in case the subresource uses the main resource's body for
+		// the update (see fakeSubResourceClient.Update).
+		obj.SetManagedFields(nil)
+		current, _ := c.tracker.Get(gvr, accessor.GetNamespace(), accessor.GetName())
+		if currentMetaObj, ok := current.(metav1.Object); ok {
+			obj.SetManagedFields(currentMetaObj.GetManagedFields())
+		}
 	}
 
 	if err := c.tracker.update(gvr, obj, accessor.GetNamespace(), isStatus, false, *updateOptions.AsUpdateOptions()); err != nil {

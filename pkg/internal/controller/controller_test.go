@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -35,6 +36,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -1803,6 +1805,13 @@ var _ = Describe("controller", func() {
 				testenv = &envtest.Environment{}
 				cfg, err := testenv.Start()
 				Expect(err).NotTo(HaveOccurred())
+
+				var clientRoundTripper http.RoundTripper
+				cfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+					clientRoundTripper = rt
+					return rt
+				}
+
 				m, err := manager.New(cfg, manager.Options{
 					LeaderElection:          leaderElection,
 					LeaderElectionID:        "some-leader-election-id",
@@ -1831,9 +1840,14 @@ var _ = Describe("controller", func() {
 				<-m.Elected()
 				By("stopping the manager via context")
 				cancel()
-
-				Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 				<-waitChan
+
+				// Stop the test environment to close the API server, which
+				// force-closes HTTP/2 client connections and their read loop
+				// goroutines.
+				Expect(testenv.Stop()).To(Succeed())
+				utilnet.CloseIdleConnectionsFor(clientRoundTripper)
+				Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 			},
 			Entry("and with leader election enabled", true),
 			Entry("and without leader election enabled", false),

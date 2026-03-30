@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/goleak"
 	corev1 "k8s.io/api/core/v1"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
 
@@ -178,7 +179,7 @@ var _ = Describe("controller.Controller", func() {
 
 			// force-close keep-alive connections.  These'll time anyway (after
 			// like 30s or so) but force it to speed up the tests.
-			clientTransport.CloseIdleConnections()
+			utilnet.CloseIdleConnectionsFor(clientRoundTripper)
 			Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 		})
 
@@ -193,7 +194,7 @@ var _ = Describe("controller.Controller", func() {
 
 			// force-close keep-alive connections.  These'll time anyway (after
 			// like 30s or so) but force it to speed up the tests.
-			clientTransport.CloseIdleConnections()
+			utilnet.CloseIdleConnectionsFor(clientRoundTripper)
 			Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 		})
 

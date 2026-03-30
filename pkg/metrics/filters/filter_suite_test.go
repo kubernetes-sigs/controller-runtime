@@ -17,8 +17,6 @@ limitations under the License.
 package filters
 
 import (
-	"fmt"
-	"net/http"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -40,9 +38,6 @@ var testenv *envtest.Environment
 var cfg *rest.Config
 var clientset *kubernetes.Clientset
 
-// clientTransport is used to force-close keep-alives in tests that check for leaks.
-var clientTransport *http.Transport
-
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
@@ -51,19 +46,6 @@ var _ = BeforeSuite(func() {
 	var err error
 	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
-
-	cfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
-		// NB(directxman12): we can't set Transport *and* use TLS options,
-		// so we grab the transport right after it gets created so that we can
-		// type-assert on it (hopefully)?
-		// hopefully this doesn't break 🤞
-		transport, isTransport := rt.(*http.Transport)
-		if !isTransport {
-			panic(fmt.Sprintf("wasn't able to grab underlying transport from REST client's RoundTripper, can't figure out how to close keep-alives: expected an *http.Transport, got %#v", rt))
-		}
-		clientTransport = transport
-		return rt
-	}
 
 	clientset, err = kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())

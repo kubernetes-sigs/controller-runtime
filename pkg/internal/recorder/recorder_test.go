@@ -62,6 +62,15 @@ var _ = Describe("recorder.Provider", func() {
 			Expect(recorder).NotTo(BeNil())
 		})
 	})
+	Describe("GetAnnotatedEventRecorder", func() {
+		It("should return a recorder instance.", func() {
+			provider, err := recorder.NewProvider(cfg, httpClient, scheme.Scheme, logr.Discard(), makeBroadcaster())
+			Expect(err).NotTo(HaveOccurred())
+
+			recorder := provider.GetAnnotatedEventRecorder("test")
+			Expect(recorder).NotTo(BeNil())
+		})
+	})
 })
 
 func makeBroadcaster() func() (record.EventBroadcaster, events.EventBroadcaster, bool) {

@@ -156,6 +156,12 @@ var _ = Describe("cluster.Cluster", func() {
 		Expect(c.GetFieldIndexer()).To(Equal(cluster.cache))
 	})
 
+	It("should provide a function to get the AnnotatedEventRecorder", func() {
+		c, err := New(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.GetAnnotatedEventRecorder("test")).NotTo(BeNil())
+	})
+
 	It("should provide a function to get the EventRecorder", func() {
 		c, err := New(cfg)
 		Expect(err).NotTo(HaveOccurred())

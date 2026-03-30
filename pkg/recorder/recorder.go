@@ -40,4 +40,7 @@ type Provider interface {
 	// characters, so callers should ensure that len(name) + 1 + len(hostname)
 	// is at most 128.
 	GetEventRecorder(name string) events.EventRecorder
+	// GetAnnotatedEventRecorder returns an AnnotatedEventRecorder that supports
+	// attaching annotations to events.
+	GetAnnotatedEventRecorder(name string) events.AnnotatedEventRecorder
 }

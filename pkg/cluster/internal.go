@@ -92,6 +92,10 @@ func (c *cluster) GetEventRecorder(name string) events.EventRecorder {
 	return c.recorderProvider.GetEventRecorder(name)
 }
 
+func (c *cluster) GetAnnotatedEventRecorder(name string) events.AnnotatedEventRecorder {
+	return c.recorderProvider.GetAnnotatedEventRecorder(name)
+}
+
 func (c *cluster) GetRESTMapper() meta.RESTMapper {
 	return c.mapper
 }

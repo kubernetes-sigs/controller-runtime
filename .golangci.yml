@@ -1,6 +1,6 @@
 version: "2"
 run:
-  go: "1.25"
+  go: "1.26"
   timeout: 10m
   allow-parallel-runners: true
 linters:
@@ -81,6 +81,7 @@ linters:
       disable:
         - omitzero
         - fmtappendf
+        - newexpr
     revive:
       rules:
         # The following rules are recommended https://github.com/mgechev/revive#recommended-configuration

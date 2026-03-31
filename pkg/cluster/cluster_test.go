@@ -28,6 +28,8 @@ import (
 	"go.uber.org/goleak"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
+
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -118,7 +120,7 @@ var _ = Describe("cluster.Cluster", func() {
 
 		// force-close keep-alive connections.  These'll time anyway (after
 		// like 30s or so) but force it to speed up the tests.
-		clientTransport.CloseIdleConnections()
+		utilnet.CloseIdleConnectionsFor(clientRoundTripper)
 		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 

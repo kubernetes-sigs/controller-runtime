@@ -1,6 +1,6 @@
 module sigs.k8s.io/controller-runtime/tools/setup-envtest
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/go-logr/logr v1.4.3
@@ -10,7 +10,7 @@ require (
 	github.com/spf13/afero v1.12.0
 	github.com/spf13/pflag v1.0.9
 	go.uber.org/zap v1.27.0
-	k8s.io/apimachinery v0.36.0-alpha.2
+	k8s.io/apimachinery v0.36.0-beta.0
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -28,5 +28,5 @@ require (
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
 	golang.org/x/tools v0.40.0 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 )

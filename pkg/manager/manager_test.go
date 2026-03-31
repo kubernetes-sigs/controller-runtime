@@ -42,6 +42,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -1803,7 +1804,7 @@ var _ = Describe("manger.Manager", func() {
 
 		// force-close keep-alive connections.  These'll time anyway (after
 		// like 30s or so) but force it to speed up the tests.
-		clientTransport.CloseIdleConnections()
+		utilnet.CloseIdleConnectionsFor(clientRoundTripper)
 		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 
@@ -1851,7 +1852,7 @@ var _ = Describe("manger.Manager", func() {
 
 		// force-close keep-alive connections.  These'll time anyway (after
 		// like 30s or so) but force it to speed up the tests.
-		clientTransport.CloseIdleConnections()
+		utilnet.CloseIdleConnectionsFor(clientRoundTripper)
 		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 
@@ -1905,7 +1906,7 @@ var _ = Describe("manger.Manager", func() {
 
 		// force-close keep-alive connections.  These'll time anyway (after
 		// like 30s or so) but force it to speed up the tests.
-		clientTransport.CloseIdleConnections()
+		utilnet.CloseIdleConnectionsFor(clientRoundTripper)
 		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 
@@ -1953,7 +1954,7 @@ var _ = Describe("manger.Manager", func() {
 		time.Sleep(300 * time.Millisecond)
 
 		// force-close keep-alive connections
-		clientTransport.CloseIdleConnections()
+		utilnet.CloseIdleConnectionsFor(clientRoundTripper)
 		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 

@@ -60,7 +60,7 @@ type Komega interface {
 	// Object returns a function that fetches a resource and returns the object.
 	// It can be used with gomega.Eventually() like this:
 	//   deployment := appsv1.Deployment{ ... }
-	//   gomega.Eventually(k.Object(&deployment)).To(HaveField("Spec.Replicas", gomega.Equal(ptr.To(int32(3)))))
+	//   gomega.Eventually(k.Object(&deployment)).To(HaveField("Spec.Replicas", gomega.Equal(new(int32(3)))))
 	// By calling the returned function directly it can also be used as gomega.Expect(k.Object(...)()).To(...)
 	Object(client.Object) func() (client.Object, error)
 

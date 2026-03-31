@@ -28,7 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	appsv1applyconfigurations "k8s.io/client-go/applyconfigurations/apps/v1"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -40,7 +39,7 @@ var _ = Describe("DryRunClient", func() {
 	var ns = "default"
 
 	getClient := func() client.Client {
-		cl, err := client.New(cfg, client.Options{DryRun: ptr.To(true)})
+		cl, err := client.New(cfg, client.Options{DryRun: new(true)})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cl).NotTo(BeNil())
 		return cl
@@ -266,7 +265,7 @@ var _ = Describe("DryRunClient", func() {
 		deploymentAC, err := appsv1applyconfigurations.ExtractDeployment(dep, "test-owner")
 		Expect(err).NotTo(HaveOccurred())
 		deploymentAC.WithStatus(&appsv1applyconfigurations.DeploymentStatusApplyConfiguration{
-			Replicas: ptr.To(int32(99)),
+			Replicas: new(int32(99)),
 		})
 
 		Expect(getClient().Status().Apply(ctx, deploymentAC, client.FieldOwner("test-owner"))).NotTo(HaveOccurred())
@@ -281,7 +280,7 @@ var _ = Describe("DryRunClient", func() {
 		deploymentAC, err := appsv1applyconfigurations.ExtractDeployment(dep, "test-owner")
 		Expect(err).NotTo(HaveOccurred())
 		deploymentAC.WithStatus(&appsv1applyconfigurations.DeploymentStatusApplyConfiguration{
-			Replicas: ptr.To(int32(99)),
+			Replicas: new(int32(99)),
 		})
 
 		opts := &client.SubResourceApplyOptions{ApplyOptions: client.ApplyOptions{DryRun: []string{"Bye", "Pippa"}}}

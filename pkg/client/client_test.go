@@ -516,7 +516,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 			Context("with the DryRun option", func() {
 				It("should not create a new object, global option", func(ctx SpecContext) {
-					cl, err := client.New(cfg, client.Options{DryRun: ptr.To(true)})
+					cl, err := client.New(cfg, client.Options{DryRun: new(true)})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cl).NotTo(BeNil())
 
@@ -1038,7 +1038,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(cm.Data).To(BeComparableTo(obj.Data))
 
 				// Apply with ResourceVersion unset
-				obj.ResourceVersion = ptr.To("")
+				obj.ResourceVersion = new("")
 				data = map[string]string{
 					"a-new-key": "a-new-value",
 				}
@@ -1149,7 +1149,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("Creating the eviction")
 				eviction := &policyv1.Eviction{
-					DeleteOptions: &metav1.DeleteOptions{GracePeriodSeconds: ptr.To(int64(0))},
+					DeleteOptions: &metav1.DeleteOptions{GracePeriodSeconds: new(int64(0))},
 				}
 				err = cl.SubResource("eviction").Create(ctx, pod, eviction, &client.SubResourceCreateOptions{})
 				Expect((err)).NotTo(HaveOccurred())
@@ -1665,7 +1665,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				deploymentAC, err := appsv1applyconfigurations.ExtractDeployment(dep, "foo")
 				Expect(err).NotTo(HaveOccurred())
 				deploymentAC.WithStatus(&appsv1applyconfigurations.DeploymentStatusApplyConfiguration{
-					Replicas: ptr.To(int32(1)),
+					Replicas: new(int32(1)),
 				})
 				Expect(cl.Status().Apply(ctx, deploymentAC, client.FieldOwner("foo"))).To(Succeed())
 

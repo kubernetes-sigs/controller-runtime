@@ -11,7 +11,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -197,7 +196,7 @@ var _ = Describe("runnableGroup", func() {
 	It("should be able to close the group and wait for all runnables to finish", func(specCtx SpecContext) {
 		ctx, cancel := context.WithCancel(specCtx)
 
-		exited := ptr.To(int64(0))
+		exited := new(int64(0))
 		rg := newRunnableGroup(defaultBaseContext, errCh)
 		for i := range 10 {
 			Expect(rg.Add(RunnableFunc(func(c context.Context) error {

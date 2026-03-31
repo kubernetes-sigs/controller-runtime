@@ -23,7 +23,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -143,7 +142,7 @@ var _ = Describe("ApplyOptions", func() {
 		Expect(newApplyOpts).To(Equal(o))
 	})
 	It("Should set Force", func() {
-		o := &client.ApplyOptions{Force: ptr.To(true)}
+		o := &client.ApplyOptions{Force: new(true)}
 		newApplyOpts := &client.ApplyOptions{}
 		o.ApplyToApply(newApplyOpts)
 		Expect(newApplyOpts).To(Equal(o))
@@ -185,7 +184,7 @@ var _ = Describe("CreateOptions", func() {
 
 var _ = Describe("DeleteOptions", func() {
 	It("Should set GracePeriodSeconds", func() {
-		o := &client.DeleteOptions{GracePeriodSeconds: ptr.To(int64(42))}
+		o := &client.DeleteOptions{GracePeriodSeconds: new(int64(42))}
 		newDeleteOpts := &client.DeleteOptions{}
 		o.ApplyToDelete(newDeleteOpts)
 		Expect(newDeleteOpts).To(Equal(o))
@@ -258,7 +257,7 @@ var _ = Describe("PatchOptions", func() {
 		Expect(newPatchOpts).To(Equal(o))
 	})
 	It("Should set Force", func() {
-		o := &client.PatchOptions{Force: ptr.To(true)}
+		o := &client.PatchOptions{Force: new(true)}
 		newPatchOpts := &client.PatchOptions{}
 		o.ApplyToPatch(newPatchOpts)
 		Expect(newPatchOpts).To(Equal(o))
@@ -291,7 +290,7 @@ var _ = Describe("DeleteAllOfOptions", func() {
 		Expect(newDeleteAllOfOpts).To(Equal(o))
 	})
 	It("Should set DeleleteOptions", func() {
-		o := &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: ptr.To(int64(44))}}
+		o := &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: new(int64(44))}}
 		newDeleteAllOfOpts := &client.DeleteAllOfOptions{}
 		o.ApplyToDeleteAllOf(newDeleteAllOfOpts)
 		Expect(newDeleteAllOfOpts).To(Equal(o))

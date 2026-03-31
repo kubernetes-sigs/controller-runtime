@@ -67,7 +67,6 @@ import (
 	clientgoapplyconfigurations "k8s.io/client-go/applyconfigurations"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/testing"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -1621,13 +1620,13 @@ func extractScale(obj client.Object) (*autoscalingv1.Scale, error) {
 func applyScale(obj client.Object, scale *autoscalingv1.Scale) error {
 	switch obj := obj.(type) {
 	case *appsv1.Deployment:
-		obj.Spec.Replicas = ptr.To(scale.Spec.Replicas)
+		obj.Spec.Replicas = new(scale.Spec.Replicas)
 	case *appsv1.ReplicaSet:
-		obj.Spec.Replicas = ptr.To(scale.Spec.Replicas)
+		obj.Spec.Replicas = new(scale.Spec.Replicas)
 	case *corev1.ReplicationController:
-		obj.Spec.Replicas = ptr.To(scale.Spec.Replicas)
+		obj.Spec.Replicas = new(scale.Spec.Replicas)
 	case *appsv1.StatefulSet:
-		obj.Spec.Replicas = ptr.To(scale.Spec.Replicas)
+		obj.Spec.Replicas = new(scale.Spec.Replicas)
 	default:
 		// TODO: CRDs https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#scale-subresource
 		return fmt.Errorf("unimplemented scale subresource for resource %T", obj)

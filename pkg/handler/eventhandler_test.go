@@ -31,7 +31,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
@@ -508,7 +507,7 @@ var _ = Describe("Eventhandler", func() {
 						Name:       "foo2-parent",
 						Kind:       "ReplicaSet",
 						APIVersion: "apps/v1",
-						Controller: ptr.To(true),
+						Controller: new(true),
 					},
 					{
 						Name:       "foo3-parent",
@@ -519,7 +518,7 @@ var _ = Describe("Eventhandler", func() {
 						Name:       "foo4-parent",
 						Kind:       "ReplicaSet",
 						APIVersion: "apps/v1",
-						Controller: ptr.To(true),
+						Controller: new(true),
 					},
 					{
 						Name:       "foo5-parent",
@@ -910,7 +909,7 @@ var _ = Describe("Eventhandler", func() {
 						handler.TypedFuncs[client.Object, reconcile.Request]{
 							CreateFunc: func(ctx context.Context, tce event.TypedCreateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 								if pq, isPQ := wq.(priorityqueue.PriorityQueue[reconcile.Request]); isPQ {
-									pq.AddWithOpts(priorityqueue.AddOpts{Priority: ptr.To(100)}, reconcile.Request{NamespacedName: types.NamespacedName{
+									pq.AddWithOpts(priorityqueue.AddOpts{Priority: new(100)}, reconcile.Request{NamespacedName: types.NamespacedName{
 										Namespace: tce.Object.GetNamespace(),
 										Name:      tce.Object.GetName(),
 									}})
@@ -923,7 +922,7 @@ var _ = Describe("Eventhandler", func() {
 							},
 							UpdateFunc: func(ctx context.Context, tue event.TypedUpdateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 								if pq, isPQ := wq.(priorityqueue.PriorityQueue[reconcile.Request]); isPQ {
-									pq.AddWithOpts(priorityqueue.AddOpts{Priority: ptr.To(100)}, reconcile.Request{NamespacedName: types.NamespacedName{
+									pq.AddWithOpts(priorityqueue.AddOpts{Priority: new(100)}, reconcile.Request{NamespacedName: types.NamespacedName{
 										Namespace: tue.ObjectNew.GetNamespace(),
 										Name:      tue.ObjectNew.GetName(),
 									}})
@@ -969,7 +968,7 @@ var _ = Describe("Eventhandler", func() {
 					}
 
 					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{
-						Priority:    ptr.To(expected),
+						Priority:    new(expected),
 						After:       test.after,
 						RateLimited: test.ratelimited,
 					}))
@@ -1039,7 +1038,7 @@ var _ = Describe("Eventhandler", func() {
 						expectedPriority = test.overridePriority
 					}
 
-					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{After: test.after, RateLimited: test.ratelimited, Priority: ptr.To(expectedPriority)}))
+					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{After: test.after, RateLimited: test.ratelimited, Priority: new(expectedPriority)}))
 					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
 				})
 

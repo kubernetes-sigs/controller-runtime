@@ -42,7 +42,7 @@ Warmup runnables are also stopped in parallel with non-leader runnables during s
 
 Controllers expose the option via:
 
-- `ctrl.Options{Controller: config.Controller{EnableWarmup: ptr.To(true)}}`
+- `ctrl.Options{Controller: config.Controller{EnableWarmup: new(true)}}`
 
 If both `EnableWarmup` and `NeedLeaderElection` are true, controller-runtime registers the controller as a warmup runnable. Calling `Warmup` launches the same event sources and cache sync logic as `Start`, but it does **not** start worker goroutines. Once the manager becomes leader, the controller’s normal `Start` simply spins up workers against the already-initialized queue. Enabling warmup on a controller that does not use leader election is a no-op, as the worker threads do not block on leader election being won.
 
@@ -51,7 +51,7 @@ If both `EnableWarmup` and `NeedLeaderElection` are true, controller-runtime reg
 ```go
 mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 	Controller: config.Controller{
-		EnableWarmup: ptr.To(true), // make every controller warm up
+		EnableWarmup: new(true), // make every controller warm up
 	},
 })
 if err != nil {
@@ -61,7 +61,7 @@ if err != nil {
 builder.ControllerManagedBy(mgr).
 	Named("slow-source").
 	WithOptions(controller.Options{
-		EnableWarmup: ptr.To(true), // optional per-controller override
+		EnableWarmup: new(true), // optional per-controller override
 	}).
 	For(&examplev1.Example{}).
 	Complete(reconciler)

@@ -38,7 +38,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -107,7 +106,7 @@ var _ = Describe("controller", func() {
 			defer func() {
 				Expect(recover()).ShouldNot(BeNil())
 			}()
-			ctrl.RecoverPanic = ptr.To(false)
+			ctrl.RecoverPanic = new(false)
 			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 				var res *reconcile.Result
 				return *res, nil
@@ -135,7 +134,7 @@ var _ = Describe("controller", func() {
 			defer func() {
 				Expect(recover()).To(BeNil())
 			}()
-			ctrl.RecoverPanic = ptr.To(true)
+			ctrl.RecoverPanic = new(true)
 			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 				var res *reconcile.Result
 				return *res, nil
@@ -637,7 +636,7 @@ var _ = Describe("controller", func() {
 
 		It("should return an error if a source fails to sync", func(ctx SpecContext) {
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
-				source.Kind(&informertest.FakeInformers{Synced: ptr.To(false)}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
+				source.Kind(&informertest.FakeInformers{Synced: new(false)}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
 			}
 			ctrl.Name = "test-controller"
 			ctrl.CacheSyncTimeout = 5 * time.Second
@@ -650,7 +649,7 @@ var _ = Describe("controller", func() {
 		It("should not return an error when sources start and sync successfully", func(ctx SpecContext) {
 			// Create a source that starts and syncs successfully
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
-				source.Kind(&informertest.FakeInformers{Synced: ptr.To(true)}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
+				source.Kind(&informertest.FakeInformers{Synced: new(true)}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
 			}
 			ctrl.Name = "test-controller"
 			ctrl.CacheSyncTimeout = 5 * time.Second
@@ -940,7 +939,7 @@ var _ = Describe("controller", func() {
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
-			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: ptr.To(10)}, request)
+			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: new(10)}, request)
 
 			By("Invoking Reconciler which will request a requeue")
 			fakeReconcile.AddResult(reconcile.Result{Requeue: true}, nil)
@@ -952,7 +951,7 @@ var _ = Describe("controller", func() {
 			}).Should(Equal([]priorityQueueAddition{{
 				AddOpts: priorityqueue.AddOpts{
 					RateLimited: true,
-					Priority:    ptr.To(10),
+					Priority:    new(10),
 				},
 				items: []reconcile.Request{request},
 			}}))
@@ -969,10 +968,10 @@ var _ = Describe("controller", func() {
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
-			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: ptr.To(10)}, request)
+			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: new(10)}, request)
 
 			By("Invoking Reconciler which will request a requeue")
-			fakeReconcile.AddResult(reconcile.Result{Requeue: true, Priority: ptr.To(99)}, nil)
+			fakeReconcile.AddResult(reconcile.Result{Requeue: true, Priority: new(99)}, nil)
 			Expect(<-reconciled).To(Equal(request))
 			Eventually(func() []priorityQueueAddition {
 				q.lock.Lock()
@@ -981,7 +980,7 @@ var _ = Describe("controller", func() {
 			}).Should(Equal([]priorityQueueAddition{{
 				AddOpts: priorityqueue.AddOpts{
 					RateLimited: true,
-					Priority:    ptr.To(99),
+					Priority:    new(99),
 				},
 				items: []reconcile.Request{request},
 			}}))
@@ -1028,7 +1027,7 @@ var _ = Describe("controller", func() {
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
-			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: ptr.To(10)}, request)
+			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: new(10)}, request)
 
 			By("Invoking Reconciler which will ask for RequeueAfter")
 			fakeReconcile.AddResult(reconcile.Result{RequeueAfter: time.Millisecond * 100}, nil)
@@ -1040,7 +1039,7 @@ var _ = Describe("controller", func() {
 			}).Should(Equal([]priorityQueueAddition{{
 				AddOpts: priorityqueue.AddOpts{
 					After:    time.Millisecond * 100,
-					Priority: ptr.To(10),
+					Priority: new(10),
 				},
 				items: []reconcile.Request{request},
 			}}))
@@ -1057,10 +1056,10 @@ var _ = Describe("controller", func() {
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
-			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: ptr.To(10)}, request)
+			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: new(10)}, request)
 
 			By("Invoking Reconciler which will ask for RequeueAfter")
-			fakeReconcile.AddResult(reconcile.Result{RequeueAfter: time.Millisecond * 100, Priority: ptr.To(99)}, nil)
+			fakeReconcile.AddResult(reconcile.Result{RequeueAfter: time.Millisecond * 100, Priority: new(99)}, nil)
 			Expect(<-reconciled).To(Equal(request))
 			Eventually(func() []priorityQueueAddition {
 				q.lock.Lock()
@@ -1069,7 +1068,7 @@ var _ = Describe("controller", func() {
 			}).Should(Equal([]priorityQueueAddition{{
 				AddOpts: priorityqueue.AddOpts{
 					After:    time.Millisecond * 100,
-					Priority: ptr.To(99),
+					Priority: new(99),
 				},
 				items: []reconcile.Request{request},
 			}}))
@@ -1115,7 +1114,7 @@ var _ = Describe("controller", func() {
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
-			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: ptr.To(10)}, request)
+			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: new(10)}, request)
 
 			By("Invoking Reconciler which will return an error")
 			fakeReconcile.AddResult(reconcile.Result{}, errors.New("oups, I did it again"))
@@ -1127,7 +1126,7 @@ var _ = Describe("controller", func() {
 			}).Should(Equal([]priorityQueueAddition{{
 				AddOpts: priorityqueue.AddOpts{
 					RateLimited: true,
-					Priority:    ptr.To(10),
+					Priority:    new(10),
 				},
 				items: []reconcile.Request{request},
 			}}))
@@ -1144,10 +1143,10 @@ var _ = Describe("controller", func() {
 				Expect(ctrl.Start(ctx)).NotTo(HaveOccurred())
 			}()
 
-			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: ptr.To(10)}, request)
+			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: new(10)}, request)
 
 			By("Invoking Reconciler which will return an error")
-			fakeReconcile.AddResult(reconcile.Result{Priority: ptr.To(99)}, errors.New("oups, I did it again"))
+			fakeReconcile.AddResult(reconcile.Result{Priority: new(99)}, errors.New("oups, I did it again"))
 			Expect(<-reconciled).To(Equal(request))
 			Eventually(func() []priorityQueueAddition {
 				q.lock.Lock()
@@ -1156,7 +1155,7 @@ var _ = Describe("controller", func() {
 			}).Should(Equal([]priorityQueueAddition{{
 				AddOpts: priorityqueue.AddOpts{
 					RateLimited: true,
-					Priority:    ptr.To(99),
+					Priority:    new(99),
 				},
 				items: []reconcile.Request{request},
 			}}))
@@ -1373,7 +1372,7 @@ var _ = Describe("controller", func() {
 
 	Describe("Warmup", func() {
 		JustBeforeEach(func() {
-			ctrl.EnableWarmup = ptr.To(true)
+			ctrl.EnableWarmup = new(true)
 		})
 
 		It("should track warmup status correctly with successful sync", func(ctx SpecContext) {
@@ -1391,7 +1390,7 @@ var _ = Describe("controller", func() {
 		It("should return an error if there is an error waiting for the informers", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = time.Second
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
-				source.Kind(&informertest.FakeInformers{Synced: ptr.To(false)}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
+				source.Kind(&informertest.FakeInformers{Synced: new(false)}, &corev1.Pod{}, &handler.TypedEnqueueRequestForObject[*corev1.Pod]{}),
 			}
 			ctrl.Name = testControllerName
 			err := ctrl.Warmup(ctx)
@@ -1652,8 +1651,8 @@ var _ = Describe("controller", func() {
 					return log.RuntimeLog.WithName("controller").WithName("test")
 				},
 				CacheSyncTimeout: time.Second,
-				EnableWarmup:     ptr.To(false),
-				LeaderElected:    ptr.To(true),
+				EnableWarmup:     new(false),
+				LeaderElected:    new(true),
 			})
 			nonWarmupCtrl.startWatches = []source.TypedSource[reconcile.Request]{
 				source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
@@ -1856,7 +1855,7 @@ var _ = Describe("controller", func() {
 
 	Describe("Warmup with warmup disabled", func() {
 		JustBeforeEach(func() {
-			ctrl.EnableWarmup = ptr.To(false)
+			ctrl.EnableWarmup = new(false)
 		})
 
 		It("should not start sources when Warmup is called if warmup is disabled but start it when Start is called.", func(specCtx SpecContext) {

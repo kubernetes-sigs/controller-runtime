@@ -34,7 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/utils/ptr"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -169,7 +168,7 @@ var _ = Describe("manger.Manager Start", func() {
 			ctrl.NewControllerManagedBy(mgr).
 				For(&crewv2.Driver{}).
 				Named(fmt.Sprintf("driver_warmup_%t", warmupEnabled)).
-				WithOptions(controller.Options{EnableWarmup: ptr.To(warmupEnabled)}).
+				WithOptions(controller.Options{EnableWarmup: new(warmupEnabled)}).
 				Complete(driverReconciler),
 		).To(Succeed())
 

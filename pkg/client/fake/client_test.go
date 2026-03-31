@@ -50,7 +50,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/testing"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -1727,7 +1726,7 @@ var _ = Describe("Fake client", func() {
 		objOriginal.APIVersion = actual.APIVersion
 		objOriginal.Kind = actual.Kind
 		objOriginal.ResourceVersion = actual.ResourceVersion
-		objOriginal.Spec.Replicas = ptr.To(int32(2))
+		objOriginal.Spec.Replicas = new(int32(2))
 		Expect(cmp.Diff(objOriginal, actual)).To(BeEmpty())
 	})
 
@@ -2590,7 +2589,7 @@ var _ = Describe("Fake client", func() {
 				Name: "foo",
 			},
 			Spec: appsv1.DeploymentSpec{
-				Replicas: ptr.To[int32](2),
+				Replicas: new(int32(2)),
 			},
 		}
 		cl := NewClientBuilder().Build()
@@ -3011,7 +3010,7 @@ var _ = Describe("Fake client", func() {
 		Expect(cm.Data).To(BeComparableTo(map[string]string{"other": "data"}))
 
 		// Apply with ResourceVersion unset
-		obj.ResourceVersion = ptr.To("")
+		obj.ResourceVersion = new("")
 		obj.Data = map[string]string{"another": "data"}
 		Expect(cl.Apply(ctx, obj, &client.ApplyOptions{FieldManager: "test-manager"})).To(Succeed())
 
@@ -3193,7 +3192,7 @@ var _ = Describe("Fake client", func() {
 		Expect(cl.Apply(ctx, obj, client.FieldOwner("foo"))).NotTo(HaveOccurred())
 		// Ideally we should only test for it to not be empty, realistically we will
 		// break ppl if we ever start setting a different value.
-		Expect(obj.ResourceVersion).To(BeEquivalentTo(ptr.To("1")))
+		Expect(obj.ResourceVersion).To(BeEquivalentTo(new("1")))
 	})
 
 	It("ignores a passed resourceVersion on SSA create", func(ctx SpecContext) {
@@ -3204,7 +3203,7 @@ var _ = Describe("Fake client", func() {
 
 		cl := NewClientBuilder().Build()
 		Expect(cl.Apply(ctx, obj, client.FieldOwner("foo"))).NotTo(HaveOccurred())
-		Expect(obj.ResourceVersion).To(BeEquivalentTo(ptr.To("1")))
+		Expect(obj.ResourceVersion).To(BeEquivalentTo(new("1")))
 	})
 
 	It("allows to set deletionTimestamp on an object during SSA create", func(ctx SpecContext) {
@@ -3331,7 +3330,7 @@ var _ = Describe("Fake client", func() {
 				Name: "foo",
 			},
 			Spec: appsv1.DeploymentSpec{
-				Replicas: ptr.To[int32](2),
+				Replicas: new(int32(2)),
 			},
 		},
 		&appsv1.ReplicaSet{
@@ -3339,7 +3338,7 @@ var _ = Describe("Fake client", func() {
 				Name: "foo",
 			},
 			Spec: appsv1.ReplicaSetSpec{
-				Replicas: ptr.To[int32](2),
+				Replicas: new(int32(2)),
 			},
 		},
 		&corev1.ReplicationController{
@@ -3347,7 +3346,7 @@ var _ = Describe("Fake client", func() {
 				Name: "foo",
 			},
 			Spec: corev1.ReplicationControllerSpec{
-				Replicas: ptr.To[int32](2),
+				Replicas: new(int32(2)),
 			},
 		},
 		&appsv1.StatefulSet{
@@ -3355,7 +3354,7 @@ var _ = Describe("Fake client", func() {
 				Name: "foo",
 			},
 			Spec: appsv1.StatefulSetSpec{
-				Replicas: ptr.To[int32](2),
+				Replicas: new(int32(2)),
 			},
 		},
 	}
@@ -3392,16 +3391,16 @@ var _ = Describe("Fake client", func() {
 			switch expected := objExpected.(type) {
 			case *appsv1.Deployment:
 				expected.ResourceVersion = objActual.GetResourceVersion()
-				expected.Spec.Replicas = ptr.To(int32(3))
+				expected.Spec.Replicas = new(int32(3))
 			case *appsv1.ReplicaSet:
 				expected.ResourceVersion = objActual.GetResourceVersion()
-				expected.Spec.Replicas = ptr.To(int32(3))
+				expected.Spec.Replicas = new(int32(3))
 			case *corev1.ReplicationController:
 				expected.ResourceVersion = objActual.GetResourceVersion()
-				expected.Spec.Replicas = ptr.To(int32(3))
+				expected.Spec.Replicas = new(int32(3))
 			case *appsv1.StatefulSet:
 				expected.ResourceVersion = objActual.GetResourceVersion()
-				expected.Spec.Replicas = ptr.To(int32(3))
+				expected.Spec.Replicas = new(int32(3))
 			}
 			Expect(cmp.Diff(objExpected, objActual)).To(BeEmpty())
 

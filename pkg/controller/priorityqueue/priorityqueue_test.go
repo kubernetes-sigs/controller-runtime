@@ -132,8 +132,8 @@ var _ = Describe("Controllerworkqueue", func() {
 		q, metrics := newQueue()
 		defer q.ShutDown()
 
-		q.AddWithOpts(AddOpts{Priority: ptr.To(1)}, "foo")
-		q.AddWithOpts(AddOpts{Priority: ptr.To(2)}, "foo")
+		q.AddWithOpts(AddOpts{Priority: new(1)}, "foo")
+		q.AddWithOpts(AddOpts{Priority: new(2)}, "foo")
 
 		item, priority, _ := q.GetWithPriority()
 		Expect(item).To(Equal("foo"))
@@ -149,8 +149,8 @@ var _ = Describe("Controllerworkqueue", func() {
 		q, metrics := newQueue()
 		defer q.ShutDown()
 
-		q.AddWithOpts(AddOpts{Priority: ptr.To(2)}, "foo")
-		q.AddWithOpts(AddOpts{Priority: ptr.To(1)}, "foo")
+		q.AddWithOpts(AddOpts{Priority: new(2)}, "foo")
+		q.AddWithOpts(AddOpts{Priority: new(1)}, "foo")
 
 		item, priority, _ := q.GetWithPriority()
 		Expect(item).To(Equal("foo"))
@@ -169,7 +169,7 @@ var _ = Describe("Controllerworkqueue", func() {
 		q.AddWithOpts(AddOpts{}, "foo")
 		q.AddWithOpts(AddOpts{}, "bar")
 		q.AddWithOpts(AddOpts{}, "baz")
-		q.AddWithOpts(AddOpts{Priority: ptr.To(1)}, "baz")
+		q.AddWithOpts(AddOpts{Priority: new(1)}, "baz")
 
 		item, priority, _ := q.GetWithPriority()
 		Expect(item).To(Equal("baz"))
@@ -296,13 +296,13 @@ var _ = Describe("Controllerworkqueue", func() {
 		q, metrics := newQueue()
 		defer q.ShutDown()
 
-		q.AddWithOpts(AddOpts{After: time.Hour, Priority: ptr.To(0)}, "foo")
+		q.AddWithOpts(AddOpts{After: time.Hour, Priority: new(0)}, "foo")
 		Expect(q.Len()).To(Equal(0))
 		metrics.mu.Lock()
 		Expect(metrics.depth["test"]).To(Equal(map[int]int{}))
 		metrics.mu.Unlock()
 
-		q.AddWithOpts(AddOpts{Priority: ptr.To(1)}, "foo")
+		q.AddWithOpts(AddOpts{Priority: new(1)}, "foo")
 
 		Expect(q.Len()).To(Equal(1))
 		metrics.mu.Lock()
@@ -325,9 +325,9 @@ var _ = Describe("Controllerworkqueue", func() {
 		q, _ := newQueue()
 		defer q.ShutDown()
 
-		q.AddWithOpts(AddOpts{Priority: ptr.To(0)}, "foo")
-		q.AddWithOpts(AddOpts{Priority: ptr.To(1)}, "bar")
-		q.AddWithOpts(AddOpts{Priority: ptr.To(1)}, "foo")
+		q.AddWithOpts(AddOpts{Priority: new(0)}, "foo")
+		q.AddWithOpts(AddOpts{Priority: new(1)}, "bar")
+		q.AddWithOpts(AddOpts{Priority: new(1)}, "foo")
 		Expect(q.Len()).To(Equal(2))
 
 		item, priority, _ := q.GetWithPriority()

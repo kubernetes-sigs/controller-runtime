@@ -26,7 +26,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -79,7 +78,7 @@ var _ = Describe("controller.Controller", func() {
 		It("should return an error if two controllers are registered with the same name and SkipNameValidation is set to false on the manager", func() {
 			m, err := manager.New(cfg, manager.Options{
 				Controller: config.Controller{
-					SkipNameValidation: ptr.To(false),
+					SkipNameValidation: new(false),
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -97,7 +96,7 @@ var _ = Describe("controller.Controller", func() {
 		It("should not return an error if two controllers are registered with the same name and SkipNameValidation is set on the manager", func() {
 			m, err := manager.New(cfg, manager.Options{
 				Controller: config.Controller{
-					SkipNameValidation: ptr.To(true),
+					SkipNameValidation: new(true),
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -119,7 +118,7 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(c1).ToNot(BeNil())
 
-			c2, err := controller.New("c6", m, controller.Options{Reconciler: rec, SkipNameValidation: ptr.To(true)})
+			c2, err := controller.New("c6", m, controller.Options{Reconciler: rec, SkipNameValidation: new(true)})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(c2).ToNot(BeNil())
 		})
@@ -241,7 +240,7 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should default RecoverPanic from the manager", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{RecoverPanic: ptr.To(true)}})
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{RecoverPanic: new(true)}})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-4", m, controller.Options{
@@ -257,11 +256,11 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should not override RecoverPanic on the controller", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{RecoverPanic: ptr.To(true)}})
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{RecoverPanic: new(true)}})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{
-				RecoverPanic: ptr.To(false),
+				RecoverPanic: new(false),
 				Reconciler:   reconcile.Func(nil),
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -274,7 +273,7 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should default NeedLeaderElection from the manager", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: ptr.To(true)}})
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: new(true)}})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-5", m, controller.Options{
@@ -289,11 +288,11 @@ var _ = Describe("controller.Controller", func() {
 		})
 
 		It("should not override NeedLeaderElection on the controller", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: ptr.To(true)}})
+			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: new(true)}})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-6", m, controller.Options{
-				NeedLeaderElection: ptr.To(false),
+				NeedLeaderElection: new(false),
 				Reconciler:         reconcile.Func(nil),
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -416,7 +415,7 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-14", m, controller.Options{
-				NeedLeaderElection: ptr.To(false),
+				NeedLeaderElection: new(false),
 				Reconciler:         rec,
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -465,7 +464,7 @@ var _ = Describe("controller.Controller", func() {
 
 			c, err := controller.New("new-controller-17", m, controller.Options{
 				Reconciler:       rec,
-				UsePriorityQueue: ptr.To(false),
+				UsePriorityQueue: new(false),
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -484,7 +483,7 @@ var _ = Describe("controller.Controller", func() {
 			// Test with EnableWarmup set to true
 			ctrlWithWarmup, err := controller.New("warmup-enabled-ctrl", m, controller.Options{
 				Reconciler:   reconcile.Func(nil),
-				EnableWarmup: ptr.To(true),
+				EnableWarmup: new(true),
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -495,7 +494,7 @@ var _ = Describe("controller.Controller", func() {
 			// Test with EnableWarmup set to false
 			ctrlWithoutWarmup, err := controller.New("warmup-disabled-ctrl", m, controller.Options{
 				Reconciler:   reconcile.Func(nil),
-				EnableWarmup: ptr.To(false),
+				EnableWarmup: new(false),
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -518,7 +517,7 @@ var _ = Describe("controller.Controller", func() {
 			// Test with manager default setting EnableWarmup to true
 			managerWithWarmup, err := manager.New(cfg, manager.Options{
 				Controller: config.Controller{
-					EnableWarmup: ptr.To(true),
+					EnableWarmup: new(true),
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -534,7 +533,7 @@ var _ = Describe("controller.Controller", func() {
 			// Test that explicit controller setting overrides manager setting
 			ctrlOverridingWarmup, err := controller.New("override-warmup-disabled", managerWithWarmup, controller.Options{
 				Reconciler:   reconcile.Func(nil),
-				EnableWarmup: ptr.To(false),
+				EnableWarmup: new(false),
 			})
 			Expect(err).NotTo(HaveOccurred())
 

@@ -81,7 +81,7 @@ func UpdateStatus(obj client.Object, f func(), opts ...client.SubResourceUpdateO
 // It can be used with gomega.Eventually() like this:
 //
 //	deployment := appsv1.Deployment{ ... }
-//	gomega.Eventually(k.Object(&deployment)).Should(HaveField("Spec.Replicas", gomega.Equal(ptr.To(3))))
+//	gomega.Eventually(k.Object(&deployment)).Should(HaveField("Spec.Replicas", gomega.Equal(new(3))))
 //
 // By calling the returned function directly it can also be used as gomega.Expect(k.Object(...)()).To(...)
 func Object(obj client.Object) func() (client.Object, error) {

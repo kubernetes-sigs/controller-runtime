@@ -30,7 +30,6 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	machinerytypes "k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -236,7 +235,7 @@ var _ = Describe("Admission Webhooks", func() {
 				}
 				webhook := &Webhook{
 					Handler:      handler,
-					RecoverPanic: ptr.To[bool](true),
+					RecoverPanic: new(true),
 				}
 
 				return webhook
@@ -263,7 +262,7 @@ var _ = Describe("Admission Webhooks", func() {
 				}
 				webhook := &Webhook{
 					Handler:      handler,
-					RecoverPanic: ptr.To[bool](false),
+					RecoverPanic: new(false),
 				}
 
 				return webhook

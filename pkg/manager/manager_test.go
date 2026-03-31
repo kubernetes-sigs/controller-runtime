@@ -895,11 +895,11 @@ var _ = Describe("manger.Manager", func() {
 				}
 
 				var lock sync.Mutex
-				var runnableDoneCount int64
+				var runnableDoneCount atomic.Int64
 				runnableDoneFunc := func() {
 					lock.Lock()
 					defer lock.Unlock()
-					atomic.AddInt64(&runnableDoneCount, 1)
+					runnableDoneCount.Add(1)
 				}
 				var wgRunnableRunning sync.WaitGroup
 				wgRunnableRunning.Add(2)
@@ -929,9 +929,7 @@ var _ = Describe("manger.Manager", func() {
 					defer GinkgoRecover()
 					defer wgManagerRunning.Done()
 					Expect(m.Start(ctx)).NotTo(HaveOccurred())
-					Eventually(func() int64 {
-						return atomic.LoadInt64(&runnableDoneCount)
-					}).Should(BeEquivalentTo(2))
+					Eventually(runnableDoneCount.Load).Should(BeEquivalentTo(2))
 				}()
 				wgRunnableRunning.Wait()
 				cancel()

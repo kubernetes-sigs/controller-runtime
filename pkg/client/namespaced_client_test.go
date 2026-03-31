@@ -37,7 +37,6 @@ import (
 	corev1applyconfigurations "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1applyconfigurations "k8s.io/client-go/applyconfigurations/meta/v1"
 	rbacv1applyconfigurations "k8s.io/client-go/applyconfigurations/rbac/v1"
-	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -638,7 +637,7 @@ var _ = Describe("NamespacedClient", func() {
 			deploymentAC, err := appsv1applyconfigurations.ExtractDeployment(dep, "test-owner")
 			Expect(err).NotTo(HaveOccurred())
 			deploymentAC.WithStatus(&appsv1applyconfigurations.DeploymentStatusApplyConfiguration{
-				Replicas: ptr.To(int32(99)),
+				Replicas: new(int32(99)),
 			})
 
 			Expect(getClient().SubResource("status").Apply(ctx, deploymentAC, client.FieldOwner("test-owner"))).To(Succeed())
@@ -653,7 +652,7 @@ var _ = Describe("NamespacedClient", func() {
 		It("should set namespace on ApplyConfiguration when applying via SubResource", func(ctx SpecContext) {
 			deploymentAC := appsv1applyconfigurations.Deployment(dep.Name, "")
 			deploymentAC.WithStatus(&appsv1applyconfigurations.DeploymentStatusApplyConfiguration{
-				Replicas: ptr.To(int32(50)),
+				Replicas: new(int32(50)),
 			})
 
 			Expect(getClient().SubResource("status").Apply(ctx, deploymentAC, client.FieldOwner("test-owner"))).To(Succeed())
@@ -668,7 +667,7 @@ var _ = Describe("NamespacedClient", func() {
 		It("should fail when applying via SubResource with conflicting namespace", func(ctx SpecContext) {
 			deploymentAC := appsv1applyconfigurations.Deployment(dep.Name, "different-namespace")
 			deploymentAC.WithStatus(&appsv1applyconfigurations.DeploymentStatusApplyConfiguration{
-				Replicas: ptr.To(int32(25)),
+				Replicas: new(int32(25)),
 			})
 
 			err := getClient().SubResource("status").Apply(ctx, deploymentAC, client.FieldOwner("test-owner"))

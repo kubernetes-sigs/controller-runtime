@@ -17,6 +17,7 @@ limitations under the License.
 package metrics
 
 import (
+	"strings"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -41,10 +42,7 @@ func (f *fakeGaugeVec) WithLabelValues(lvs ...string) prometheus.Gauge {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	key := ""
-	for _, lv := range lvs {
-		key += lv + "|"
-	}
+	key := strings.Join(lvs, "|") + "|"
 	if _, ok := f.gauges[key]; !ok {
 		f.gauges[key] = 0
 	}

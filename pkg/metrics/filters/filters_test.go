@@ -34,7 +34,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -256,7 +255,7 @@ func setupServiceAccountForURL(ctx context.Context, c client.Client, path string
 
 	tokenRequest := &authenticationv1.TokenRequest{
 		Spec: authenticationv1.TokenRequestSpec{
-			ExpirationSeconds: ptr.To(int64(2 * 60 * 60)), // 2 hours.
+			ExpirationSeconds: new(int64(2 * 60 * 60)), // 2 hours.
 		},
 	}
 	if err := c.SubResource("token").Create(ctx, sa, tokenRequest); err != nil {

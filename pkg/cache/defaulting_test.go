@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -205,23 +204,23 @@ func TestDefaultOpts(t *testing.T) {
 			name: "ByObject.UnsafeDisableDeepCopy gets defaulted from DefaultUnsafeDisableDeepCopy",
 			in: Options{
 				ByObject:                     map[client.Object]ByObject{pod: {}},
-				DefaultUnsafeDisableDeepCopy: ptr.To(true),
+				DefaultUnsafeDisableDeepCopy: new(true),
 			},
 
 			verification: func(o Options) string {
-				expected := ptr.To(true)
+				expected := new(true)
 				return cmp.Diff(expected, o.ByObject[pod].UnsafeDisableDeepCopy)
 			},
 		},
 		{
 			name: "ByObject.UnsafeDisableDeepCopy doesn't get defaulted when set",
 			in: Options{
-				ByObject:                     map[client.Object]ByObject{pod: {UnsafeDisableDeepCopy: ptr.To(false)}},
-				DefaultUnsafeDisableDeepCopy: ptr.To(true),
+				ByObject:                     map[client.Object]ByObject{pod: {UnsafeDisableDeepCopy: new(false)}},
+				DefaultUnsafeDisableDeepCopy: new(true),
 			},
 
 			verification: func(o Options) string {
-				expected := ptr.To(false)
+				expected := new(false)
 				return cmp.Diff(expected, o.ByObject[pod].UnsafeDisableDeepCopy)
 			},
 		},
@@ -229,23 +228,23 @@ func TestDefaultOpts(t *testing.T) {
 			name: "ByObject.EnableWatchBookmarks gets defaulted from DefaultEnableWatchBookmarks",
 			in: Options{
 				ByObject:                    map[client.Object]ByObject{pod: {}},
-				DefaultEnableWatchBookmarks: ptr.To(true),
+				DefaultEnableWatchBookmarks: new(true),
 			},
 
 			verification: func(o Options) string {
-				expected := ptr.To(true)
+				expected := new(true)
 				return cmp.Diff(expected, o.ByObject[pod].EnableWatchBookmarks)
 			},
 		},
 		{
 			name: "ByObject.EnableWatchBookmarks doesn't get defaulted when set",
 			in: Options{
-				ByObject:                    map[client.Object]ByObject{pod: {EnableWatchBookmarks: ptr.To(false)}},
-				DefaultEnableWatchBookmarks: ptr.To(true),
+				ByObject:                    map[client.Object]ByObject{pod: {EnableWatchBookmarks: new(false)}},
+				DefaultEnableWatchBookmarks: new(true),
 			},
 
 			verification: func(o Options) string {
-				expected := ptr.To(false)
+				expected := new(false)
 				return cmp.Diff(expected, o.ByObject[pod].EnableWatchBookmarks)
 			},
 		},
@@ -253,23 +252,23 @@ func TestDefaultOpts(t *testing.T) {
 			name: "ByObject.SyncPeriod gets defaulted from SyncPeriod",
 			in: Options{
 				ByObject:   map[client.Object]ByObject{pod: {}},
-				SyncPeriod: ptr.To(5 * time.Minute),
+				SyncPeriod: new(5 * time.Minute),
 			},
 
 			verification: func(o Options) string {
-				expected := ptr.To(5 * time.Minute)
+				expected := new(5 * time.Minute)
 				return cmp.Diff(expected, o.ByObject[pod].SyncPeriod)
 			},
 		},
 		{
 			name: "ByObject.SyncPeriod doesn't get defaulted when set",
 			in: Options{
-				ByObject:   map[client.Object]ByObject{pod: {SyncPeriod: ptr.To(1 * time.Minute)}},
-				SyncPeriod: ptr.To(5 * time.Minute),
+				ByObject:   map[client.Object]ByObject{pod: {SyncPeriod: new(1 * time.Minute)}},
+				SyncPeriod: new(5 * time.Minute),
 			},
 
 			verification: func(o Options) string {
-				expected := ptr.To(1 * time.Minute)
+				expected := new(1 * time.Minute)
 				return cmp.Diff(expected, o.ByObject[pod].SyncPeriod)
 			},
 		},

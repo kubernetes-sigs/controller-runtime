@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("Defaulter Handler", func() {
@@ -273,7 +272,7 @@ func createSuperPod(hostname string) *corev1.Pod {
 			InitContainers: []corev1.Container{
 				{
 					Name: "vault-init", Image: "vault:1.13.1",
-					SecurityContext: &corev1.SecurityContext{RunAsUser: ptr.To[int64](1000)},
+					SecurityContext: &corev1.SecurityContext{RunAsUser: new(int64(1000))},
 				},
 			},
 			Containers: []corev1.Container{
@@ -328,10 +327,10 @@ func createSuperPod(hostname string) *corev1.Pod {
 				},
 			},
 			SecurityContext: &corev1.PodSecurityContext{
-				RunAsNonRoot:   ptr.To(true),
+				RunAsNonRoot:   new(true),
 				SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 			},
-			TerminationGracePeriodSeconds: ptr.To[int64](60),
+			TerminationGracePeriodSeconds: new(int64(60)),
 			ReadinessGates: []corev1.PodReadinessGate{
 				{ConditionType: "target-health.lbv3.k8s.cloud/my-tg"},
 			},

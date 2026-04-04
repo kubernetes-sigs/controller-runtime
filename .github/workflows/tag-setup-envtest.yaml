@@ -1,0 +1,25 @@
+name: Tag setup-envtest
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+jobs:
+  create-mangled-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create a new tag via API
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # tag=v6.0.2
+        with:
+          fetch-tags: true
+
+      - name: Validate and Create Tag
+        id: copy-tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./hack/tag-setup-envtest.sh

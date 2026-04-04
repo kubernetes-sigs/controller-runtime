@@ -279,7 +279,7 @@ func (cm *controllerManager) GetAPIReader() client.Reader {
 func (cm *controllerManager) GetWebhookServer() webhook.Server {
 	cm.webhookServerOnce.Do(func() {
 		if cm.webhookServer == nil {
-			panic("webhook should not be nil")
+			return
 		}
 		if err := cm.Add(cm.webhookServer); err != nil {
 			panic(fmt.Sprintf("unable to add webhook server to the controller manager: %s", err))

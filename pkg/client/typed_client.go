@@ -18,14 +18,15 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/apply"
 )
 
 var _ Reader = &typedClient{}
-var _ Writer = &typedClient{}
 
 type typedClient struct {
 	resources  *clientRestResources
@@ -72,22 +73,34 @@ func (c *typedClient) Update(ctx context.Context, obj Object, opts ...UpdateOpti
 }
 
 // Delete implements client.Client.
-func (c *typedClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
+func (c *typedClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) (*unstructured.Unstructured, error) {
 	o, err := c.resources.getObjMeta(obj)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	deleteOpts := DeleteOptions{}
 	deleteOpts.ApplyOptions(opts)
 
-	return o.Delete().
+	runtimeObj, err := o.Delete().
 		NamespaceIfScoped(o.namespace, o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.name).
 		Body(deleteOpts.AsDeleteOptions()).
 		Do(ctx).
-		Error()
+		Get()
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(runtimeObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal delete response: %w", err)
+	}
+	response := &unstructured.Unstructured{}
+	if err := json.Unmarshal(data, &response.Object); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal delete response: %w", err)
+	}
+	return response, nil
 }
 
 // DeleteAllOf implements client.Client.
@@ -146,17 +159,21 @@ func (c *typedClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration,
 	applyOpts := &ApplyOptions{}
 	applyOpts.ApplyOptions(opts)
 
-	return req.
+	into := &unstructured.Unstructured{}
+	if err := req.
 		NamespaceIfScoped(o.namespace, o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.name).
 		VersionedParams(applyOpts.AsPatchOptions(), c.paramCodec).
 		Do(ctx).
-		// This is hacky, it is required because `Into` takes a `runtime.Object` and
-		// that is not implemented by the ApplyConfigurations. The generated clients
-		// don't have this problem because they deserialize into the api type, not the
-		// apply configuration: https://github.com/kubernetes/kubernetes/blob/22f5e01a37c0bc6a5f494dec14dd4e3688ee1d55/staging/src/k8s.io/client-go/gentype/type.go#L296-L317
-		Into(runtimeObjectFromApplyConfiguration(obj))
+		Into(into); err != nil {
+		return err
+	}
+	raw, err := json.Marshal(into)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, &obj)
 }
 
 // Get implements client.Client.
@@ -324,16 +341,20 @@ func (c *typedClient) ApplySubResource(ctx context.Context, obj runtime.ApplyCon
 		return fmt.Errorf("failed to create apply request: %w", err)
 	}
 
-	return req.
+	into := &unstructured.Unstructured{}
+	if err := req.
 		NamespaceIfScoped(o.namespace, o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.name).
 		SubResource(subResource).
 		VersionedParams(applyOpts.AsPatchOptions(), c.paramCodec).
 		Do(ctx).
-		// This is hacky, it is required because `Into` takes a `runtime.Object` and
-		// that is not implemented by the ApplyConfigurations. The generated clients
-		// don't have this problem because they deserialize into the api type, not the
-		// apply configuration: https://github.com/kubernetes/kubernetes/blob/22f5e01a37c0bc6a5f494dec14dd4e3688ee1d55/staging/src/k8s.io/client-go/gentype/type.go#L296-L317
-		Into(runtimeObjectFromApplyConfiguration(obj))
+		Into(into); err != nil {
+		return err
+	}
+	raw, err := json.Marshal(into)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, &obj)
 }

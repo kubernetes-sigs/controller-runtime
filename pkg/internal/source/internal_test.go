@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -292,6 +293,28 @@ var _ = Describe("Internal", func() {
 				Type: &corev1.Pod{},
 			}
 			Expect(kind.String()).Should(Equal("kind source: *v1.Pod"))
+		})
+		It("should return kind source underlying type for Unstructured", func() {
+			kind := internal.Kind[*unstructured.Unstructured, reconcile.Request]{
+				Type: &unstructured.Unstructured{
+					Object: map[string]any{
+						"apiVersion": "apps/v1",
+						"kind":       "Deployment",
+					},
+				},
+			}
+			Expect(kind.String()).Should(Equal("kind source: *unstructured.Unstructured[apps/v1 Deployment]"))
+		})
+		It("should return kind source underlying type for PartialObjectMetadata", func() {
+			kind := internal.Kind[*metav1.PartialObjectMetadata, reconcile.Request]{
+				Type: &metav1.PartialObjectMetadata{
+					TypeMeta: metav1.TypeMeta{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+					},
+				},
+			}
+			Expect(kind.String()).Should(Equal("kind source: *v1.PartialObjectMetadata[apps/v1 Deployment]"))
 		})
 	})
 })

@@ -485,6 +485,46 @@ var _ = Describe("Fake client", func() {
 			Expect(list.Items[0].Name).NotTo(BeEmpty())
 		})
 
+		It("should retry GenerateName on name collision and succeed", func(ctx SpecContext) {
+			// Create many objects with the same short GenerateName prefix so that
+			// birthday-paradox collisions are highly likely. The retry loop
+			// (max 7 attempts per object) must absorb every collision.
+			const n = 500
+			names := make(map[string]struct{}, n)
+			for i := 0; i < n; i++ {
+				cm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						GenerateName: "x",
+						Namespace:    "ns2",
+					},
+				}
+				Expect(cl.Create(ctx, cm)).To(Succeed(), "create #%d failed", i)
+				Expect(cm.Name).NotTo(BeEmpty())
+				Expect(names).NotTo(HaveKey(cm.Name), "duplicate name %q", cm.Name)
+				names[cm.Name] = struct{}{}
+			}
+		})
+
+		It("should not retry AlreadyExists when Name is set explicitly", func(ctx SpecContext) {
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "explicit-name",
+					Namespace: "ns2",
+				},
+			}
+			Expect(cl.Create(ctx, cm)).To(Succeed())
+
+			// Second create with the same explicit name must fail immediately.
+			cm2 := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "explicit-name",
+					Namespace: "ns2",
+				},
+			}
+			err := cl.Create(ctx, cm2)
+			Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
+		})
+
 		It("should be able to Update", func(ctx SpecContext) {
 			By("Updating a new configmap")
 			newcm := &corev1.ConfigMap{

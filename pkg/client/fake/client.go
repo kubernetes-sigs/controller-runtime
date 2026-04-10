@@ -633,7 +633,8 @@ func (c *fakeClient) Create(ctx context.Context, obj client.Object, opts ...clie
 		return err
 	}
 
-	if accessor.GetName() == "" && accessor.GetGenerateName() != "" {
+	usingGenerateName := accessor.GetName() == "" && accessor.GetGenerateName() != ""
+	if usingGenerateName {
 		base := accessor.GetGenerateName()
 		if len(base) > maxGeneratedNameLength {
 			base = base[:maxGeneratedNameLength]
@@ -653,10 +654,26 @@ func (c *fakeClient) Create(ctx context.Context, obj client.Object, opts ...clie
 	c.trackerWriteLock.Lock()
 	defer c.trackerWriteLock.Unlock()
 
-	if err := c.tracker.Create(gvr, obj, accessor.GetNamespace(), *createOptions.AsCreateOptions()); err != nil {
+	const maxRetries = 7
+	var createErr error
+	for i := 0; i < maxRetries; i++ {
+		if i > 0 {
+			// Regenerate name on retry
+			base := accessor.GetGenerateName()
+			if len(base) > maxGeneratedNameLength {
+				base = base[:maxGeneratedNameLength]
+			}
+			accessor.SetName(fmt.Sprintf("%s%s", base, utilrand.String(randomLength)))
+		}
+		createErr = c.tracker.Create(gvr, obj, accessor.GetNamespace(), *createOptions.AsCreateOptions())
+		if createErr == nil || !usingGenerateName || !apierrors.IsAlreadyExists(createErr) {
+			break
+		}
+	}
+	if createErr != nil {
 		// The managed fields tracker sets gvk even on errors
 		_ = ensureTypeMeta(obj, gvk)
-		return err
+		return createErr
 	}
 
 	if !c.returnManagedFields {

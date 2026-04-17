@@ -566,6 +566,11 @@ var _ = Describe("controller", func() {
 			err := ctrl.Start(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("controller was started more than once. This is likely to be caused by being added to a manager multiple times"))
+
+			// test again to check if locks were properly released
+			err = ctrl.Start(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("controller was started more than once. This is likely to be caused by being added to a manager multiple times"))
 		})
 
 		It("should check for correct TypedSyncingSource if custom types are used", func(specCtx SpecContext) {

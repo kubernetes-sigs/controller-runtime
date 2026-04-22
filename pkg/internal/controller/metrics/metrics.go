@@ -103,7 +103,17 @@ func init() {
 		ReconcileTimeouts,
 		// expose process metrics like CPU, Memory, file descriptor usage etc.
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		// expose all Go runtime metrics like GC stats, memory stats etc.
-		collectors.NewGoCollector(collectors.WithGoCollectorRuntimeMetrics(collectors.MetricsAll)),
+		// expose the default Go runtime metrics (GC stats, memory
+		// stats, etc.). The collectors.MetricsAll variant this
+		// previously used balloons cardinality roughly 5x: a v0.19
+		// -> v0.23 bump took an unchanged daemonset controller
+		// from ~31 go_* series per pod to ~142, enough to blow past
+		// per-project metric quotas. The opt-out was reverted on the
+		// 0.19 / 0.20 release branches via #3147 / #3148 but the
+		// revert was never forward-ported to 0.21+. Restore the
+		// conservative default; operators who want the extra
+		// metrics can register their own GoCollector with MetricsAll
+		// on the Registry themselves (#3505).
+		collectors.NewGoCollector(),
 	)
 }

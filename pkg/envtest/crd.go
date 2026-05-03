@@ -90,6 +90,10 @@ const (
 
 // InstallCRDs installs a collection of CRDs into a cluster by reading the crd yaml files from a directory.
 func InstallCRDs(config *rest.Config, options CRDInstallOptions) ([]*apiextensionsv1.CustomResourceDefinition, error) {
+	if config == nil {
+		return nil, fmt.Errorf("must provide non-nil rest.Config to InstallCRDs")
+	}
+
 	defaultCRDOptions(&options)
 
 	// Read the CRD yamls into options.CRDs
@@ -142,6 +146,10 @@ func defaultCRDOptions(o *CRDInstallOptions) {
 
 // WaitForCRDs waits for the CRDs to appear in discovery.
 func WaitForCRDs(config *rest.Config, crds []*apiextensionsv1.CustomResourceDefinition, options CRDInstallOptions) error {
+	if config == nil {
+		return fmt.Errorf("must provide non-nil rest.Config to WaitForCRDs")
+	}
+
 	// Add each CRD to a map of GroupVersion to Resource
 	waitingFor := map[schema.GroupVersion]*sets.Set[string]{}
 	for _, crd := range crds {
@@ -215,6 +223,10 @@ func (p *poller) poll(ctx context.Context) (done bool, err error) {
 
 // UninstallCRDs uninstalls a collection of CRDs by reading the crd yaml files from a directory.
 func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
+	if config == nil {
+		return fmt.Errorf("must provide non-nil rest.Config to UninstallCRDs")
+	}
+
 	// Read the CRD yamls into options.CRDs
 	if err := ReadCRDFiles(&options); err != nil {
 		return err
@@ -242,6 +254,10 @@ func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
 
 // CreateCRDs creates the CRDs.
 func CreateCRDs(config *rest.Config, crds []*apiextensionsv1.CustomResourceDefinition) error {
+	if config == nil {
+		return fmt.Errorf("must provide non-nil rest.Config to CreateCRDs")
+	}
+
 	cs, err := client.New(config, client.Options{})
 	if err != nil {
 		return fmt.Errorf("unable to create client: %w", err)

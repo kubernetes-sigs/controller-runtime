@@ -1368,7 +1368,7 @@ func (sw *fakeSubResourceClient) Apply(ctx context.Context, obj runtime.ApplyCon
 
 func allowsUnconditionalUpdate(gvk schema.GroupVersionKind) bool {
 	switch gvk.Group {
-	case "apps":
+	case "apps": //nolint:goconst
 		switch gvk.Kind {
 		case "ControllerRevision", "DaemonSet", "Deployment", "ReplicaSet", "StatefulSet":
 			return true

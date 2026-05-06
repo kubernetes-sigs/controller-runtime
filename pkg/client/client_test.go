@@ -1503,7 +1503,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				dep, err := clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				dep.APIVersion = appsv1.SchemeGroupVersion.String()
-				dep.Kind = "Deployment" //nolint:goconst
+				dep.Kind = "Deployment"
 				depUnstructured, err := toUnstructured(dep)
 				Expect(err).NotTo(HaveOccurred())
 

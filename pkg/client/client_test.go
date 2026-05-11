@@ -38,6 +38,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1100,6 +1101,26 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				Expect(secret.Data).To(BeComparableTo(data))
 				Expect(secret.Data).To(BeComparableTo(secretApplyConfiguration.Data))
+			})
+
+			It("should propagate a typed error", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				obj := corev1applyconfigurations.
+					Secret("typed-secret", "default").
+					WithType(corev1.SecretTypeDockercfg).
+					WithStringData(map[string]string{".dockercfg": "{}"})
+
+				err = cl.Apply(ctx, obj, &client.ApplyOptions{FieldManager: "test-manager"})
+				Expect(err).ToNot(HaveOccurred())
+
+				obj = corev1applyconfigurations.
+					Secret(*obj.Name, *obj.Namespace).
+					WithType(corev1.SecretTypeOpaque)
+				err = cl.Apply(ctx, obj, &client.ApplyOptions{FieldManager: "test-manager"})
+				Expect(isImmutableError(err)).To(BeTrue())
 			})
 		})
 	})
@@ -4432,4 +4453,9 @@ func toUnstructured(o client.Object) (*unstructured.Unstructured, error) {
 	}
 	u := &unstructured.Unstructured{}
 	return u, json.Unmarshal(serialized, u)
+}
+
+func isImmutableError(err error) bool {
+	return apierrors.IsInvalid(err) &&
+		strings.Contains(err.Error(), validation.FieldImmutableErrorMsg)
 }

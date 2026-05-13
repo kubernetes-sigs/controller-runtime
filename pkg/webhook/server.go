@@ -75,6 +75,8 @@ type Options struct {
 
 	// Port is the port number that the server will serve.
 	// It will be defaulted to 9443 if unspecified.
+	//
+	// To disable the webhook server set Port to -1.
 	Port int
 
 	// CertDir is the directory that contains the server key and certificate. Defaults to
@@ -105,6 +107,9 @@ type Options struct {
 
 // NewServer constructs a new webhook.Server from the provided options.
 func NewServer(o Options) Server {
+	if o.Port == -1 {
+		return &DisabledServer{}
+	}
 	return &DefaultServer{
 		Options: o,
 	}
@@ -299,4 +304,36 @@ func (s *DefaultServer) StartedChecker() healthz.Checker {
 // WebhookMux returns the servers WebhookMux
 func (s *DefaultServer) WebhookMux() *http.ServeMux {
 	return s.webhookMux
+}
+
+var _ Server = &DisabledServer{}
+
+// DisabledServer is a no-op implementation of Server
+// that can be used when you want to disable the webhook server.
+type DisabledServer struct{}
+
+// NeedLeaderElection returns false since the server is disabled and thus does not need leader election.
+func (*DisabledServer) NeedLeaderElection() bool {
+	return false
+}
+
+// Register returns immediately since the server is disabled and thus does not serve any webhooks.
+func (d *DisabledServer) Register(path string, hook http.Handler) {
+}
+
+// Start does nothing since the server is disabled and thus does not need to be started.
+func (d *DisabledServer) Start(ctx context.Context) error {
+	return nil
+}
+
+// StartedChecker returns nil since the server is disabled
+// and thus does not have a started state or healthz checker for whether the
+// server has been started.
+func (d *DisabledServer) StartedChecker() healthz.Checker {
+	return nil
+}
+
+// WebhookMux returns nil since the server is disabled and does not have a webhook mux.
+func (d *DisabledServer) WebhookMux() *http.ServeMux {
+	return nil
 }

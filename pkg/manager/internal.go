@@ -268,6 +268,10 @@ func (cm *controllerManager) GetEventRecorder(name string) events.EventRecorder 
 	return cm.cluster.GetEventRecorder(name)
 }
 
+func (cm *controllerManager) GetAnnotatedEventRecorder(name string) events.AnnotatedEventRecorder {
+	return cm.cluster.GetAnnotatedEventRecorder(name)
+}
+
 func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
 	return cm.cluster.GetRESTMapper()
 }

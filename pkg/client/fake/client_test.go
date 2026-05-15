@@ -59,6 +59,7 @@ import (
 const (
 	machineIDFromStatusUpdate = "machine-id-from-status-update"
 	cidrFromStatusUpdate      = "cidr-from-status-update"
+	testOwner                 = "test-owner"
 )
 
 var _ = Describe("Fake client", func() {
@@ -1864,7 +1865,7 @@ var _ = Describe("Fake client", func() {
 			WithSpec(corev1applyconfigurations.NodeSpec().WithPodCIDR(initial.Spec.PodCIDR + "-updated")).
 			WithStatus(corev1applyconfigurations.NodeStatus().WithPhase(corev1.NodeRunning))
 
-		Expect(cl.Status().Apply(ctx, ac, client.FieldOwner("test-owner"))).To(Succeed())
+		Expect(cl.Status().Apply(ctx, ac, client.FieldOwner(testOwner))).To(Succeed())
 
 		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: initial.Name}}
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(actual), actual)).To(Succeed())
@@ -1879,12 +1880,12 @@ var _ = Describe("Fake client", func() {
 		cl := NewClientBuilder().WithStatusSubresource(&corev1.Node{}).Build()
 		node := corev1applyconfigurations.Node("a-node").
 			WithSpec(corev1applyconfigurations.NodeSpec().WithPodCIDR("some-value"))
-		Expect(cl.Apply(ctx, node, client.FieldOwner("test-owner"))).To(Succeed())
+		Expect(cl.Apply(ctx, node, client.FieldOwner(testOwner))).To(Succeed())
 
 		node = node.
 			WithStatus(corev1applyconfigurations.NodeStatus().WithPhase(corev1.NodeRunning))
 
-		Expect(cl.Status().Apply(ctx, node, client.FieldOwner("test-owner"))).To(Succeed())
+		Expect(cl.Status().Apply(ctx, node, client.FieldOwner(testOwner))).To(Succeed())
 	})
 
 	It("should allow SSA apply on status without object has changed issues", func(ctx SpecContext) {
@@ -1917,7 +1918,7 @@ var _ = Describe("Fake client", func() {
 
 		resourceAC := client.ApplyConfigurationFromUnstructured(resourceForApply)
 
-		err := cl.Status().Apply(ctx, resourceAC, client.FieldOwner("test-owner"), client.ForceOwnership)
+		err := cl.Status().Apply(ctx, resourceAC, client.FieldOwner(testOwner), client.ForceOwnership)
 		Expect(err).NotTo(HaveOccurred(), "SSA apply on status should succeed when resourceVersion is not set")
 
 		// Verify the status was applied
@@ -1966,7 +1967,7 @@ var _ = Describe("Fake client", func() {
 		resourceAC := client.ApplyConfigurationFromUnstructured(resourceForApply)
 
 		// This is expected to fail with the wrong rv value passed in in the applied config
-		err := cl.Status().Apply(ctx, resourceAC, client.FieldOwner("test-owner"), client.ForceOwnership)
+		err := cl.Status().Apply(ctx, resourceAC, client.FieldOwner(testOwner), client.ForceOwnership)
 		Expect(err).To(HaveOccurred(), "SSA apply on status should not succeed when resourceVersion is wrongly set")
 		Expect(apierrors.IsConflict(err)).To(BeTrue())
 	})
@@ -1991,6 +1992,62 @@ var _ = Describe("Fake client", func() {
 		Expect(node.ManagedFields).To(HaveLen(2))
 		Expect(node.ManagedFields[0].Manager).To(Equal("spec-owner"))
 		Expect(node.ManagedFields[1].Manager).To(Equal("status-owner"))
+	})
+
+	// this is not working properly and can't without a larger change to the codebase
+	PIt("should not be able to manually update the managed fields through a subresource create,update", func(ctx SpecContext) {
+		// test with update
+		dep := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "dep",
+				Namespace: "default",
+			},
+		}
+		cl := NewClientBuilder().WithObjects(dep).WithReturnManagedFields().Build()
+
+		scale := &autoscalingv1.Scale{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:          "funnyScale",
+				Namespace:     "default",
+				ManagedFields: []metav1.ManagedFieldsEntry{},
+			},
+			Spec: autoscalingv1.ScaleSpec{Replicas: 15},
+		}
+
+		dep.Spec.Replicas = ptr.To(int32(2))
+		Expect(cl.Update(ctx, dep, client.FieldOwner("depManager"))).To(Succeed())
+
+		Expect(cl.SubResource("scale").
+			Update(ctx, dep, client.WithSubResourceBody(scale), client.FieldOwner("scaleManager"))).
+			To(Succeed())
+		Expect(dep.ManagedFields).To(HaveLen(2))
+		Expect(dep.ManagedFields[0].Manager).To(Equal("depManager"))
+		Expect(dep.ManagedFields[1].Manager).To(Equal("scaleManager"))
+		Expect(dep.ManagedFields[1].Subresource).To(Equal("scale"))
+
+		// test with create
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod",
+				Namespace: "default",
+			},
+		}
+		Expect(cl.Create(ctx, pod, client.FieldOwner("podManager"))).To(Succeed())
+
+		binding := &corev1.Binding{
+			ObjectMeta: metav1.ObjectMeta{
+				ManagedFields: []metav1.ManagedFieldsEntry{},
+			},
+			Target: corev1.ObjectReference{Name: "the-node"},
+		}
+
+		Expect(cl.SubResource("binding").
+			Create(ctx, pod, binding, client.FieldOwner("bindingManager"))).
+			To(Succeed())
+		Expect(dep.ManagedFields).To(HaveLen(2))
+		Expect(dep.ManagedFields[0].Manager).To(Equal("podManager"))
+		Expect(dep.ManagedFields[1].Manager).To(Equal("bindingManager"))
+		Expect(dep.ManagedFields[1].Subresource).To(Equal("binding"))
 	})
 
 	It("should Unmarshal the schemaless object with int64 to preserve ints", func(ctx SpecContext) {
@@ -3162,7 +3219,7 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("sets the fieldManager in create, patch and update", func(ctx SpecContext) {
-		owner := "test-owner"
+		owner := testOwner
 		cl := client.WithFieldOwner(
 			NewClientBuilder().WithReturnManagedFields().Build(),
 			owner,
@@ -3196,7 +3253,7 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("sets the fieldManager when creating through update", func(ctx SpecContext) {
-		owner := "test-owner"
+		owner := testOwner
 		cl := client.WithFieldOwner(
 			NewClientBuilder().WithReturnManagedFields().Build(),
 			owner,
@@ -3207,6 +3264,65 @@ var _ = Describe("Fake client", func() {
 		for _, f := range obj.ManagedFields {
 			Expect(f.Manager).To(BeEquivalentTo(owner))
 		}
+	})
+
+	// GH-3484
+	It("respects the ManagedFields during create, update, merge patch", func(ctx SpecContext) {
+		cl := NewClientBuilder().WithReturnManagedFields().Build()
+		fieldV1Map := map[string]any{
+			"f:metadata": map[string]any{
+				"f:name":        map[string]any{},
+				"f:labels":      map[string]any{},
+				"f:annotations": map[string]any{},
+				"f:finalizers":  map[string]any{},
+			},
+		}
+		fieldV1, err := json.Marshal(fieldV1Map)
+		Expect(err).NotTo(HaveOccurred())
+
+		obj := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+			Name:      "cm-1",
+			Namespace: "default",
+			ManagedFields: []metav1.ManagedFieldsEntry{{
+				Manager:    testOwner,
+				Operation:  metav1.ManagedFieldsOperationUpdate,
+				FieldsType: "FieldsV1",
+				FieldsV1:   &metav1.FieldsV1{Raw: fieldV1},
+				APIVersion: "v1",
+			}},
+		}}
+		Expect(cl.Create(ctx, obj)).To(Succeed())
+
+		persisted := &corev1.ConfigMap{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), persisted)).To(Succeed())
+
+		Expect(persisted.ManagedFields).To(HaveLen(1))
+		Expect(persisted.ManagedFields[0].Manager).To(Equal(testOwner))
+		Expect(persisted.ManagedFields[0].Operation).To(Equal(metav1.ManagedFieldsOperationUpdate))
+
+		// This is similar to what e.g. csaupgrade package from client-go does.
+		obj = persisted
+		obj.ManagedFields[0].Manager = "updated-manager"
+		obj.ManagedFields[0].Operation = metav1.ManagedFieldsOperationApply
+		Expect(cl.Update(ctx, obj)).To(Succeed())
+
+		persisted = &corev1.ConfigMap{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), persisted)).To(Succeed())
+		Expect(persisted.ManagedFields).To(HaveLen(1))
+		Expect(persisted.ManagedFields[0].Manager).To(Equal("updated-manager"))
+		Expect(persisted.ManagedFields[0].Operation).To(Equal(metav1.ManagedFieldsOperationApply))
+
+		// and the same thing using a merge patch
+		obj = persisted.DeepCopy()
+		obj.ManagedFields[0].Manager = "updated-manager-using-patch"
+		obj.ManagedFields[0].Operation = metav1.ManagedFieldsOperationUpdate
+		Expect(cl.Patch(ctx, obj, client.MergeFrom(persisted))).To(Succeed())
+
+		persisted = &corev1.ConfigMap{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), persisted)).To(Succeed())
+		Expect(persisted.ManagedFields).To(HaveLen(1))
+		Expect(persisted.ManagedFields[0].Manager).To(Equal("updated-manager-using-patch"))
+		Expect(persisted.ManagedFields[0].Operation).To(Equal(metav1.ManagedFieldsOperationUpdate))
 	})
 
 	// GH-3267

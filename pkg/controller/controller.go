@@ -49,7 +49,7 @@ type TypedOptions[request comparable] struct {
 	// that can be run. Defaults to 1.
 	//
 	// This value controls the number of worker goroutines that process items from
-	// the controller's work queue. Increasing it allows different queue items to be
+	// the controller's workqueue. Increasing it allows different queue items to be
 	// reconciled in parallel, which can improve throughput when a controller manages
 	// many objects or when reconciliation involves slow operations such as external
 	// API calls.

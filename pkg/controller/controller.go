@@ -54,7 +54,7 @@ type TypedOptions[request comparable] struct {
 	// many objects or when reconciliation involves slow operations such as external
 	// API calls.
 	//
-	// The work queue ensures that the same item is not processed by multiple
+	// The workqueue ensures that the same item is not processed by multiple
 	// workers at the same time. If the same item is added again while it is being
 	// processed, it is marked dirty and requeued after the current reconciliation
 	// finishes. For the default reconcile.Request type, the item key is the

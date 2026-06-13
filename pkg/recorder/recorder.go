@@ -33,4 +33,7 @@ type Provider interface {
 	GetEventRecorderFor(name string) record.EventRecorder
 	// GetEventRecorder returns a EventRecorder with given name.
 	GetEventRecorder(name string) events.EventRecorder
+	// GetAnnotatedEventRecorder returns an AnnotatedEventRecorder that supports
+	// attaching annotations to events.
+	GetAnnotatedEventRecorder(name string) events.AnnotatedEventRecorder
 }

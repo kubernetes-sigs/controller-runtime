@@ -45,15 +45,17 @@ var _ = Describe("recorder", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
-			deprecatedRecorder := cm.GetEventRecorder("test-deprecated-recorder")
+			deprecatedRecorder := cm.GetEventRecorderFor("test-deprecated-recorder") //nolint:staticcheck // testing deprecated API
 			recorder := cm.GetEventRecorder("test-recorder")
+			annotatedRecorder := cm.GetAnnotatedEventRecorder("test-annotated-recorder")
 			instance, err := controller.New("foo-controller", cm, controller.Options{
 				Reconciler: reconcile.Func(
 					func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 						dp, err := clientset.AppsV1().Deployments(request.Namespace).Get(ctx, request.Name, metav1.GetOptions{})
 						Expect(err).NotTo(HaveOccurred())
-						deprecatedRecorder.Eventf(dp, nil, corev1.EventTypeNormal, "deprecated-test-reason", "deprecatedAction", "deprecated-test-msg")
+						deprecatedRecorder.Eventf(dp, corev1.EventTypeNormal, "deprecated-test-reason", "deprecated-test-msg")
 						recorder.Eventf(dp, nil, corev1.EventTypeNormal, "test-reason", "test-action", "test-note")
+						annotatedRecorder.AnnotatedEventf(dp, nil, map[string]string{"key": "value"}, corev1.EventTypeNormal, "test-annotated-reason", "test-annotated-action", "test-annotated-note")
 						return reconcile.Result{}, nil
 					}),
 			})
@@ -129,6 +131,24 @@ var _ = Describe("recorder", func() {
 			Expect(evt.Reason).To(Equal("test-reason"))
 			Expect(evt.Action).To(Equal("test-action"))
 			Expect(evt.Note).To(Equal("test-note"))
+
+			By("Validate annotated event is published as expected")
+			annotatedEvtWatcher, err := clientset.EventsV1().Events("default").Watch(ctx,
+				metav1.ListOptions{FieldSelector: fields.OneTermEqualSelector("reason", "test-annotated-reason").String()})
+			Expect(err).NotTo(HaveOccurred())
+
+			resultEvent = <-annotatedEvtWatcher.ResultChan()
+
+			Expect(resultEvent.Type).To(Equal(watch.Added))
+			annotatedEvt, isEvent := resultEvent.Object.(*eventsv1.Event)
+			Expect(isEvent).To(BeTrue())
+
+			Expect(annotatedEvt.Regarding).To(Equal(*dpRef))
+			Expect(annotatedEvt.Type).To(Equal(corev1.EventTypeNormal))
+			Expect(annotatedEvt.Reason).To(Equal("test-annotated-reason"))
+			Expect(annotatedEvt.Action).To(Equal("test-annotated-action"))
+			Expect(annotatedEvt.Note).To(Equal("test-annotated-note"))
+			Expect(annotatedEvt.Annotations).To(HaveKeyWithValue("key", "value"))
 		})
 	})
 })

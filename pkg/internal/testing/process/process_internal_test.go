@@ -33,9 +33,9 @@ func TestStopReturnsTimeoutWhenKillAfterTimeoutFails(t *testing.T) {
 	}
 
 	originalSignalProcess := signalProcess
-	defer func() {
+	t.Cleanup(func() {
 		signalProcess = originalSignalProcess
-	}()
+	})
 
 	signalCount := 0
 	signalProcess = func(_ *os.Process, sig syscall.Signal) error {

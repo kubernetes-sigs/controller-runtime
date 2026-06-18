@@ -161,7 +161,9 @@ func (p *Provider) GetEventRecorderFor(name string) record.EventRecorder {
 }
 
 // GetEventRecorder returns an event recorder that broadcasts to this provider's
-// broadcaster.  All events will be associated with a component of the given name.
+// broadcaster. All events will be associated with the given reportingController
+// name. client-go appends "-" and the hostname to derive reportingInstance,
+// which must fit within the events.k8s.io/v1 128-character limit.
 func (p *Provider) GetEventRecorder(name string) events.EventRecorder {
 	return &lazyRecorder{
 		prov: p,

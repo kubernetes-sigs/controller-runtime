@@ -31,6 +31,13 @@ type Provider interface {
 	//
 	// Deprecated: this uses the old events API and will be removed in a future release. Please use GetEventRecorder instead.
 	GetEventRecorderFor(name string) record.EventRecorder
-	// GetEventRecorder returns a EventRecorder with given name.
+	// GetEventRecorder returns an EventRecorder with given name.
+	//
+	// The name is used as the reportingController of events.k8s.io/v1 Events
+	// and must be a valid Kubernetes qualified name. client-go derives the
+	// reportingInstance by appending "-" and the current hostname to
+	// reportingController. reportingInstance must be no more than 128
+	// characters, so callers should ensure that len(name) + 1 + len(hostname)
+	// is at most 128.
 	GetEventRecorder(name string) events.EventRecorder
 }

@@ -31,6 +31,7 @@ import (
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
@@ -156,16 +157,14 @@ var _ = Describe("cluster.Cluster", func() {
 		Expect(c.GetFieldIndexer()).To(Equal(cluster.cache))
 	})
 
-	It("should provide a function to get the AnnotatedEventRecorder", func() {
-		c, err := New(cfg)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(c.GetAnnotatedEventRecorder("test")).NotTo(BeNil())
-	})
-
 	It("should provide a function to get the EventRecorder", func() {
 		c, err := New(cfg)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(c.GetEventRecorder("test")).NotTo(BeNil())
+		recorder := c.GetEventRecorder("test")
+		Expect(recorder).NotTo(BeNil())
+		// The returned recorder should support both Eventf and AnnotatedEventf
+		var _ events.EventRecorder = recorder
+		var _ events.AnnotatedEventRecorder = recorder
 	})
 
 	It("should provide a function to get the deprecated EventRecorder", func() {

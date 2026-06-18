@@ -47,7 +47,6 @@ var _ = Describe("recorder", func() {
 			By("Creating the Controller")
 			deprecatedRecorder := cm.GetEventRecorderFor("test-deprecated-recorder") //nolint:staticcheck // testing deprecated API
 			recorder := cm.GetEventRecorder("test-recorder")
-			annotatedRecorder := cm.GetAnnotatedEventRecorder("test-annotated-recorder")
 			instance, err := controller.New("foo-controller", cm, controller.Options{
 				Reconciler: reconcile.Func(
 					func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
@@ -55,7 +54,7 @@ var _ = Describe("recorder", func() {
 						Expect(err).NotTo(HaveOccurred())
 						deprecatedRecorder.Eventf(dp, corev1.EventTypeNormal, "deprecated-test-reason", "deprecated-test-msg")
 						recorder.Eventf(dp, nil, corev1.EventTypeNormal, "test-reason", "test-action", "test-note")
-						annotatedRecorder.AnnotatedEventf(dp, nil, map[string]string{"key": "value"}, corev1.EventTypeNormal, "test-annotated-reason", "test-annotated-action", "test-annotated-note")
+						recorder.AnnotatedEventf(dp, nil, map[string]string{"key": "value"}, corev1.EventTypeNormal, "test-annotated-reason", "test-annotated-action", "test-annotated-note")
 						return reconcile.Result{}, nil
 					}),
 			})

@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
 
 // EventBroadcasterProducer makes an event broadcaster, returning
@@ -164,16 +165,8 @@ func (p *Provider) GetEventRecorderFor(name string) record.EventRecorder {
 // broadcaster. All events will be associated with the given reportingController
 // name. client-go appends "-" and the hostname to derive reportingInstance,
 // which must fit within the events.k8s.io/v1 128-character limit.
-func (p *Provider) GetEventRecorder(name string) events.EventRecorder {
-	return &lazyRecorder{
-		prov: p,
-		name: name,
-	}
-}
-
-// GetAnnotatedEventRecorder returns an annotated event recorder that broadcasts to this provider's
-// broadcaster. All events will be associated with a component of the given name.
-func (p *Provider) GetAnnotatedEventRecorder(name string) events.AnnotatedEventRecorder {
+// The returned recorder supports both Eventf and AnnotatedEventf.
+func (p *Provider) GetEventRecorder(name string) recorder.EventRecorder {
 	return &lazyRecorder{
 		prov: p,
 		name: name,
@@ -182,6 +175,8 @@ func (p *Provider) GetAnnotatedEventRecorder(name string) events.AnnotatedEventR
 
 // lazyRecorder is a recorder that doesn't actually instantiate any underlying
 // recorder until the first event is emitted.
+var _ recorder.EventRecorder = (*lazyRecorder)(nil)
+
 type lazyRecorder struct {
 	prov *Provider
 	name string

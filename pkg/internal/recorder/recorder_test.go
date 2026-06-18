@@ -54,21 +54,15 @@ var _ = Describe("recorder.Provider", func() {
 		})
 	})
 	Describe("GetEventRecorder", func() {
-		It("should return a recorder instance.", func() {
+		It("should return a recorder instance that supports both Eventf and AnnotatedEventf.", func() {
 			provider, err := recorder.NewProvider(cfg, httpClient, scheme.Scheme, logr.Discard(), makeBroadcaster())
 			Expect(err).NotTo(HaveOccurred())
 
-			recorder := provider.GetEventRecorder("test")
-			Expect(recorder).NotTo(BeNil())
-		})
-	})
-	Describe("GetAnnotatedEventRecorder", func() {
-		It("should return a recorder instance.", func() {
-			provider, err := recorder.NewProvider(cfg, httpClient, scheme.Scheme, logr.Discard(), makeBroadcaster())
-			Expect(err).NotTo(HaveOccurred())
-
-			recorder := provider.GetAnnotatedEventRecorder("test")
-			Expect(recorder).NotTo(BeNil())
+			rec := provider.GetEventRecorder("test")
+			Expect(rec).NotTo(BeNil())
+			// Verify it satisfies both interfaces
+			var _ events.EventRecorder = rec
+			var _ events.AnnotatedEventRecorder = rec
 		})
 	})
 })

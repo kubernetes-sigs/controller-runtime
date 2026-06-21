@@ -80,6 +80,8 @@ linters:
         - pkg: sigs.k8s.io/controller-runtime
           alias: ctrl
       no-unaliased: true
+    misspell:
+      mode: default
     modernize:
       disable:
         - omitzero

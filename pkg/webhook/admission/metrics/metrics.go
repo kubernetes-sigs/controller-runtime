@@ -51,6 +51,19 @@ func init() {
 	WebhookPanics.WithLabelValues().Add(0)
 }
 
+// InitializeAdmissionResponseTotal initializes the most common admission
+// response label combinations for the given webhook path.
+func InitializeAdmissionResponseTotal(path string) {
+	for _, labels := range [][2]string{
+		{"true", "200"},
+		{"false", "400"},
+		{"false", "403"},
+		{"false", "500"},
+	} {
+		AdmissionResponseTotal.WithLabelValues(path, labels[0], labels[1]).Add(0)
+	}
+}
+
 // ObserveAdmissionResponse records an admission response if the webhook is
 // instrumented.
 func ObserveAdmissionResponse(ctx context.Context, allowed bool, code int32) {

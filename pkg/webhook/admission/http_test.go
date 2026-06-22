@@ -31,6 +31,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	admissionmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/admission/metrics"
 )
@@ -233,11 +234,26 @@ var _ = Describe("Admission Webhooks", func() {
 			const metricsPath = "/admission-response-metrics-test"
 			webhook := &Webhook{
 				Handler: HandlerFunc(func(context.Context, Request) Response {
-					return Denied("denied")
+					return Response{AdmissionResponse: admissionv1.AdmissionResponse{
+						Allowed: false,
+						Result: &metav1.Status{
+							Code:    http.StatusTooManyRequests,
+							Message: "rate limited",
+						},
+					}}
 				}),
 			}
 			instrumentedWebhook, err := StandaloneWebhook(webhook, StandaloneOptions{MetricsPath: metricsPath})
 			Expect(err).NotTo(HaveOccurred())
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "true", "200",
+			))).To(BeZero())
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "false", "403",
+			))).To(BeZero())
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "false", "500",
+			))).To(BeZero())
 
 			req := httptest.NewRequest(http.MethodPost, metricsPath, bytes.NewBufferString(`{"request":{}}`))
 			req.Header.Set("Content-Type", "application/json")
@@ -247,7 +263,7 @@ var _ = Describe("Admission Webhooks", func() {
 			instrumentedWebhook.ServeHTTP(httptest.NewRecorder(), badReq)
 
 			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
-				metricsPath, "false", "403",
+				metricsPath, "false", "429",
 			))).To(Equal(float64(1)))
 			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
 				metricsPath, "false", "400",

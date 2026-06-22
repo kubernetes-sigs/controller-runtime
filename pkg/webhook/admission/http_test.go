@@ -285,6 +285,25 @@ var _ = Describe("Admission Webhooks", func() {
 				metricsPath, "false", "200",
 			))).To(Equal(float64(1)))
 		})
+
+		It("should report an allowed response without a result as 200", func() {
+			const metricsPath = "/admission-response-allowed-default-code-test"
+			webhook := &Webhook{
+				Handler: HandlerFunc(func(context.Context, Request) Response {
+					return Response{AdmissionResponse: admissionv1.AdmissionResponse{Allowed: true}}
+				}),
+			}
+			instrumentedWebhook, err := StandaloneWebhook(webhook, StandaloneOptions{MetricsPath: metricsPath})
+			Expect(err).NotTo(HaveOccurred())
+
+			req := httptest.NewRequest(http.MethodPost, metricsPath, bytes.NewBufferString(`{"request":{}}`))
+			req.Header.Set("Content-Type", "application/json")
+			instrumentedWebhook.ServeHTTP(httptest.NewRecorder(), req)
+
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "true", "200",
+			))).To(Equal(float64(1)))
+		})
 	})
 })
 

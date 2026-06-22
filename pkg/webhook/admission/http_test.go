@@ -28,8 +28,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	admissionv1 "k8s.io/api/admission/v1"
+
+	admissionmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/admission/metrics"
 )
 
 var _ = Describe("Admission Webhooks", func() {
@@ -224,6 +227,31 @@ var _ = Describe("Admission Webhooks", func() {
 				webhook.ServeHTTP(bw, req)
 				return respRecorder.Body.Len()
 			}, time.Second*3).Should(Equal(0))
+		})
+
+		It("should report admission response status codes", func() {
+			const metricsPath = "/admission-response-metrics-test"
+			webhook := &Webhook{
+				Handler: HandlerFunc(func(context.Context, Request) Response {
+					return Denied("denied")
+				}),
+			}
+			instrumentedWebhook, err := StandaloneWebhook(webhook, StandaloneOptions{MetricsPath: metricsPath})
+			Expect(err).NotTo(HaveOccurred())
+
+			req := httptest.NewRequest(http.MethodPost, metricsPath, bytes.NewBufferString(`{"request":{}}`))
+			req.Header.Set("Content-Type", "application/json")
+			instrumentedWebhook.ServeHTTP(httptest.NewRecorder(), req)
+
+			badReq := httptest.NewRequest(http.MethodPost, metricsPath, nil)
+			instrumentedWebhook.ServeHTTP(httptest.NewRecorder(), badReq)
+
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "false", "403",
+			))).To(Equal(float64(1)))
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "false", "400",
+			))).To(Equal(float64(1)))
 		})
 	})
 })

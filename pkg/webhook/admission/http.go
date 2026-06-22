@@ -17,6 +17,7 @@ limitations under the License.
 package admission
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+
+	admissionmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/admission/metrics"
 )
 
 var admissionScheme = runtime.NewScheme()
@@ -62,6 +65,7 @@ func init() {
 var _ http.Handler = &Webhook{}
 
 func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	metricCtx := r.Context()
 	ctx := r.Context()
 	if wh.WithContextFunc != nil {
 		ctx = wh.WithContextFunc(ctx, r)
@@ -70,7 +74,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Body == nil || r.Body == http.NoBody {
 		err := errors.New("request body is empty")
 		wh.getLogger(nil).Error(err, "bad request")
-		wh.writeResponse(w, Errored(http.StatusBadRequest, err))
+		wh.writeResponse(metricCtx, w, Errored(http.StatusBadRequest, err))
 		return
 	}
 
@@ -79,13 +83,13 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(limitedReader)
 	if err != nil {
 		wh.getLogger(nil).Error(err, "unable to read the body from the incoming request")
-		wh.writeResponse(w, Errored(http.StatusBadRequest, err))
+		wh.writeResponse(metricCtx, w, Errored(http.StatusBadRequest, err))
 		return
 	}
 	if limitedReader.N <= 0 {
 		err := fmt.Errorf("request entity is too large; limit is %d bytes", maxRequestSize)
 		wh.getLogger(nil).Error(err, "unable to read the body from the incoming request; limit reached")
-		wh.writeResponse(w, Errored(http.StatusRequestEntityTooLarge, err))
+		wh.writeResponse(metricCtx, w, Errored(http.StatusRequestEntityTooLarge, err))
 		return
 	}
 
@@ -93,7 +97,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
 		err = fmt.Errorf("contentType=%s, expected application/json", contentType)
 		wh.getLogger(nil).Error(err, "unable to process a request with unknown content type")
-		wh.writeResponse(w, Errored(http.StatusBadRequest, err))
+		wh.writeResponse(metricCtx, w, Errored(http.StatusBadRequest, err))
 		return
 	}
 
@@ -111,22 +115,22 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, actualAdmRevGVK, err := admissionCodecs.UniversalDeserializer().Decode(body, nil, &ar)
 	if err != nil {
 		wh.getLogger(nil).Error(err, "unable to decode the request")
-		wh.writeResponse(w, Errored(http.StatusBadRequest, err))
+		wh.writeResponse(metricCtx, w, Errored(http.StatusBadRequest, err))
 		return
 	}
 	wh.getLogger(&req).V(5).Info("received request")
 
-	wh.writeResponseTyped(w, wh.Handle(ctx, req), actualAdmRevGVK)
+	wh.writeResponseTyped(metricCtx, w, wh.Handle(ctx, req), actualAdmRevGVK)
 }
 
 // writeResponse writes response to w generically, i.e. without encoding GVK information.
-func (wh *Webhook) writeResponse(w io.Writer, response Response) {
-	wh.writeAdmissionResponse(w, v1.AdmissionReview{Response: &response.AdmissionResponse})
+func (wh *Webhook) writeResponse(ctx context.Context, w io.Writer, response Response) {
+	wh.writeAdmissionResponse(ctx, w, v1.AdmissionReview{Response: &response.AdmissionResponse})
 }
 
 // writeResponseTyped writes response to w with GVK set to admRevGVK, which is necessary
 // if multiple AdmissionReview versions are permitted by the webhook.
-func (wh *Webhook) writeResponseTyped(w io.Writer, response Response, admRevGVK *schema.GroupVersionKind) {
+func (wh *Webhook) writeResponseTyped(ctx context.Context, w io.Writer, response Response, admRevGVK *schema.GroupVersionKind) {
 	ar := v1.AdmissionReview{
 		Response: &response.AdmissionResponse,
 	}
@@ -138,11 +142,11 @@ func (wh *Webhook) writeResponseTyped(w io.Writer, response Response, admRevGVK 
 	} else {
 		ar.SetGroupVersionKind(*admRevGVK)
 	}
-	wh.writeAdmissionResponse(w, ar)
+	wh.writeAdmissionResponse(ctx, w, ar)
 }
 
 // writeAdmissionResponse writes ar to w.
-func (wh *Webhook) writeAdmissionResponse(w io.Writer, ar v1.AdmissionReview) {
+func (wh *Webhook) writeAdmissionResponse(ctx context.Context, w io.Writer, ar v1.AdmissionReview) {
 	if err := json.NewEncoder(w).Encode(ar); err != nil {
 		wh.getLogger(nil).Error(err, "unable to encode and write the response")
 		// Since the `ar v1.AdmissionReview` is a clear and legal object,
@@ -153,9 +157,16 @@ func (wh *Webhook) writeAdmissionResponse(w io.Writer, ar v1.AdmissionReview) {
 		serverError := Errored(http.StatusInternalServerError, err)
 		if err = json.NewEncoder(w).Encode(v1.AdmissionReview{Response: &serverError.AdmissionResponse}); err != nil {
 			wh.getLogger(nil).Error(err, "still unable to encode and write the InternalServerError response")
+		} else {
+			admissionmetrics.ObserveAdmissionResponse(ctx, serverError.Allowed, serverError.Result.Code)
 		}
 	} else {
 		res := ar.Response
+		code := int32(0)
+		if res.Result != nil {
+			code = res.Result.Code
+		}
+		admissionmetrics.ObserveAdmissionResponse(ctx, res.Allowed, code)
 		if log := wh.getLogger(nil); log.V(5).Enabled() {
 			if res.Result != nil {
 				log = log.WithValues("code", res.Result.Code, "reason", res.Result.Reason, "message", res.Result.Message)

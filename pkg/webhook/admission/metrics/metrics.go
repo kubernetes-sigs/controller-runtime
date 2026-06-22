@@ -17,8 +17,12 @@ limitations under the License.
 package metrics
 
 import (
+	"context"
+	"strconv"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+	internalmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
 var (
@@ -28,12 +32,36 @@ var (
 		Name: "controller_runtime_webhook_panics_total",
 		Help: "Total number of webhook panics",
 	}, []string{})
+
+	// AdmissionResponseTotal is a prometheus counter metric which holds the
+	// total number of admission responses by webhook, allowed status, and
+	// admission response status code.
+	AdmissionResponseTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "controller_runtime_webhook_admission_responses_total",
+		Help: "Total number of admission responses by status code and allowed status.",
+	}, []string{"webhook", "allowed", "admission_code"})
 )
 
 func init() {
 	metrics.Registry.MustRegister(
 		WebhookPanics,
+		AdmissionResponseTotal,
 	)
 	// Init metric.
 	WebhookPanics.WithLabelValues().Add(0)
+}
+
+// ObserveAdmissionResponse records an admission response if the webhook is
+// instrumented.
+func ObserveAdmissionResponse(ctx context.Context, allowed bool, code int32) {
+	path, ok := internalmetrics.WebhookPathFromContext(ctx)
+	if !ok {
+		return
+	}
+
+	AdmissionResponseTotal.WithLabelValues(
+		path,
+		strconv.FormatBool(allowed),
+		strconv.FormatInt(int64(code), 10),
+	).Inc()
 }

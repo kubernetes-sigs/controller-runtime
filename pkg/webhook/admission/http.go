@@ -162,8 +162,8 @@ func (wh *Webhook) writeAdmissionResponse(ctx context.Context, w io.Writer, ar v
 		}
 	} else {
 		res := ar.Response
-		code := int32(0)
-		if res.Result != nil {
+		code := int32(http.StatusOK)
+		if res.Result != nil && res.Result.Code != 0 {
 			code = res.Result.Code
 		}
 		admissionmetrics.ObserveAdmissionResponse(ctx, res.Allowed, code)

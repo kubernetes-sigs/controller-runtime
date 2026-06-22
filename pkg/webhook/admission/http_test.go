@@ -34,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	admissionmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/admission/metrics"
+	internalmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
 var _ = Describe("Admission Webhooks", func() {
@@ -267,6 +268,21 @@ var _ = Describe("Admission Webhooks", func() {
 			))).To(Equal(float64(1)))
 			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
 				metricsPath, "false", "400",
+			))).To(Equal(float64(1)))
+		})
+
+		It("should report an unset admission response status code as 200", func() {
+			const metricsPath = "/admission-response-default-code-test"
+			instrumentedWebhook := internalmetrics.InstrumentedHook(metricsPath, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				webhook.writeAdmissionResponse(r.Context(), w, admissionv1.AdmissionReview{
+					Response: &admissionv1.AdmissionResponse{Allowed: false},
+				})
+			}))
+
+			instrumentedWebhook.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, metricsPath, nil))
+
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "false", "200",
 			))).To(Equal(float64(1)))
 		})
 	})

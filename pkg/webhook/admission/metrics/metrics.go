@@ -58,6 +58,7 @@ func InitializeAdmissionResponseTotal(path string) {
 		{"true", "200"},
 		{"false", "400"},
 		{"false", "403"},
+		{"false", "429"},
 		{"false", "500"},
 	} {
 		AdmissionResponseTotal.WithLabelValues(path, labels[0], labels[1]).Add(0)

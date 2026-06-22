@@ -258,7 +258,9 @@ var _ = Describe("Admission Webhooks", func() {
 
 			req := httptest.NewRequest(http.MethodPost, metricsPath, bytes.NewBufferString(`{"request":{}}`))
 			req.Header.Set("Content-Type", "application/json")
-			instrumentedWebhook.ServeHTTP(httptest.NewRecorder(), req)
+			respRecorder := httptest.NewRecorder()
+			instrumentedWebhook.ServeHTTP(respRecorder, req)
+			Expect(respRecorder.Code).To(Equal(http.StatusOK))
 
 			badReq := httptest.NewRequest(http.MethodPost, metricsPath, nil)
 			instrumentedWebhook.ServeHTTP(httptest.NewRecorder(), badReq)

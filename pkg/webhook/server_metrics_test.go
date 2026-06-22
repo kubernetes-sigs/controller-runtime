@@ -35,6 +35,7 @@ func TestRegisterInitializesAdmissionResponseMetrics(t *testing.T) {
 		"true/200":  false,
 		"false/400": false,
 		"false/403": false,
+		"false/429": false,
 		"false/500": false,
 	}
 	for _, family := range metricFamilies {

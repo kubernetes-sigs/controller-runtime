@@ -45,6 +45,7 @@ import (
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -2074,39 +2075,30 @@ var _ = Describe("manger.Manager", func() {
 		Expect(<-runnableExecutionOrderChan).To(Equal(leaderElectionRunnableName))
 	})
 
-	It("should not log an error when leader election is lost during graceful shutdown", func() {
-		// This is the scenario from https://github.com/kubernetes-sigs/controller-runtime/issues/3535:
-		// Stopping the manager releases the leader lock, which triggers OnStoppedLeading.
-		// That callback sends errLeaderElectionLost onto errChan. The drain goroutine in
-		// engageStopProcedure must not log this as an unexpected error.
-		ctx, cancel := context.WithCancel(context.Background())
+	It("should not return leader election lost during graceful shutdown", func(ctx SpecContext) {
+		runCtx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
 		m, err := New(cfg, Options{
 			LeaderElection:          true,
 			LeaderElectionID:        "leader-election-lost-on-stop-test",
 			LeaderElectionNamespace: "default",
-			GracefulShutdownTimeout: func() *time.Duration { d := 5 * time.Second; return &d }(),
+			GracefulShutdownTimeout: ptr.To(5 * time.Second),
 		})
 		Expect(err).NotTo(HaveOccurred())
 
 		doneCh := make(chan error, 1)
 		go func() {
-			doneCh <- m.Start(ctx)
+			doneCh <- m.Start(runCtx)
 		}()
 
-		// Wait until elected.
-		select {
-		case <-m.Elected():
-		case <-time.After(10 * time.Second):
-			Fail("timed out waiting for manager to be elected")
-		}
+		Eventually(m.Elected()).Should(BeClosed())
 
-		// Cancel the context — this is the normal shutdown path.
 		cancel()
 
-		// Start() must return cleanly (nil or context.Canceled), not "leader election lost".
-		Eventually(doneCh, "10s").Should(Receive(Or(BeNil(), MatchError(context.Canceled))))
+		Eventually(doneCh).Should(
+			Receive(Or(BeNil(), MatchError(context.Canceled))),
+		)
 	})
 })
 

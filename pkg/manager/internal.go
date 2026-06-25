@@ -533,6 +533,13 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 				cm.internalCancel()
 			})
 			select {
+			// errLeaderElectionLost is safe to suppress here. This drain goroutine
+			// is only started from engageStopProcedure, which is called via defer
+			// in Start() — meaning Start() has already exited its select loop and
+			// returned any mid-run errLeaderElectionLost to the caller before this
+			// goroutine ever reads from errChan. Any errLeaderElectionLost seen
+			// here is therefore always the result of our own cm.internalCancel()
+			// call above, not a genuine unexpected loss.
 			case err := <-cm.errChan:
 				if !errors.Is(err, context.Canceled) && !errors.Is(err, errLeaderElectionLost) {
 					cm.logger.Error(err, "error received after stop sequence was engaged")

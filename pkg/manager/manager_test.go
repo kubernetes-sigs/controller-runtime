@@ -2073,6 +2073,41 @@ var _ = Describe("manger.Manager", func() {
 		<-m.Elected()
 		Expect(<-runnableExecutionOrderChan).To(Equal(leaderElectionRunnableName))
 	})
+
+	It("should not log an error when leader election is lost during graceful shutdown", func() {
+		// This is the scenario from https://github.com/kubernetes-sigs/controller-runtime/issues/3535:
+		// Stopping the manager releases the leader lock, which triggers OnStoppedLeading.
+		// That callback sends errLeaderElectionLost onto errChan. The drain goroutine in
+		// engageStopProcedure must not log this as an unexpected error.
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		m, err := New(cfg, Options{
+			LeaderElection:          true,
+			LeaderElectionID:        "leader-election-lost-on-stop-test",
+			LeaderElectionNamespace: "default",
+			GracefulShutdownTimeout: func() *time.Duration { d := 5 * time.Second; return &d }(),
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		doneCh := make(chan error, 1)
+		go func() {
+			doneCh <- m.Start(ctx)
+		}()
+
+		// Wait until elected.
+		select {
+		case <-m.Elected():
+		case <-time.After(10 * time.Second):
+			Fail("timed out waiting for manager to be elected")
+		}
+
+		// Cancel the context — this is the normal shutdown path.
+		cancel()
+
+		// Start() must return cleanly (nil or context.Canceled), not "leader election lost".
+		Eventually(doneCh, "10s").Should(Receive(Or(BeNil(), MatchError(context.Canceled))))
+	})
 })
 
 type runnableError struct{}

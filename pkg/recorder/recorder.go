@@ -25,6 +25,13 @@ import (
 	"k8s.io/client-go/tools/record"
 )
 
+// EventRecorder combines both events.EventRecorder and events.AnnotatedEventRecorder
+// so that callers only need a single recorder to emit both regular and annotated events.
+type EventRecorder interface {
+	events.EventRecorder
+	events.AnnotatedEventRecorder
+}
+
 // Provider knows how to generate new event recorders with given name.
 type Provider interface {
 	// GetEventRecorderFor returns an EventRecorder for the old events API.
@@ -39,5 +46,6 @@ type Provider interface {
 	// reportingController. reportingInstance must be no more than 128
 	// characters, so callers should ensure that len(name) + 1 + len(hostname)
 	// is at most 128.
-	GetEventRecorder(name string) events.EventRecorder
+	// The returned recorder supports both Eventf and AnnotatedEventf.
+	GetEventRecorder(name string) EventRecorder
 }

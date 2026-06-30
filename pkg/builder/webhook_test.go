@@ -21,9 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -128,7 +128,7 @@ func runTests(admissionReviewVersion string) {
 			ctx, cancel := context.WithCancel(specCtx)
 			cancel()
 			err = svr.Start(ctx)
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			}
 
@@ -211,7 +211,7 @@ func runTests(admissionReviewVersion string) {
 			ctx, cancel := context.WithCancel(specCtx)
 			cancel()
 			err = svr.Start(ctx)
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			}
 
@@ -291,7 +291,7 @@ func runTests(admissionReviewVersion string) {
 			ctx, cancel := context.WithCancel(specCtx)
 			cancel()
 			err = svr.Start(ctx)
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			}
 
@@ -389,7 +389,7 @@ func runTests(admissionReviewVersion string) {
 			ctx, cancel := context.WithCancel(specCtx)
 			cancel()
 			err = svr.Start(ctx)
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			}
 
@@ -486,7 +486,7 @@ func runTests(admissionReviewVersion string) {
 			ctx, cancel := context.WithCancel(specCtx)
 			cancel()
 			err = svr.Start(ctx)
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			}
 
@@ -563,7 +563,7 @@ func runTests(admissionReviewVersion string) {
 			ctx, cancel := context.WithCancel(specCtx)
 			cancel()
 			err = svr.Start(ctx)
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			}
 
@@ -631,7 +631,7 @@ func runTests(admissionReviewVersion string) {
 
 			cancel()
 			err = svr.Start(ctx)
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			}
 
@@ -734,7 +734,7 @@ func runTests(admissionReviewVersion string) {
 			ctx, cancel := context.WithCancel(specCtx)
 			cancel()
 			err = svr.Start(ctx)
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			}
 
@@ -835,7 +835,7 @@ func runTests(admissionReviewVersion string) {
 			ctx, cancel := context.WithCancel(specCtx)
 			cancel()
 			err = svr.Start(ctx)
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			}
 

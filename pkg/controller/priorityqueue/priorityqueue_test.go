@@ -1007,3 +1007,50 @@ func TestWhenAddingMultipleItemsWithRatelimitTrueTheyDontAffectEachOther(t *test
 		g.Expect(metrics.retries["test"]).To(Equal(2))
 	})
 }
+
+// TestPriorityQueueDoesNotDeadlockOnShutdownWhileHandingOutItems reproduces
+// https://github.com/kubernetes-sigs/controller-runtime/issues/3538: if
+// handleReadyItems is handing an item to a consumer over the unbuffered w.get
+// channel while ShutDown runs, the parked GetWithPriority consumer can return
+// through <-w.done instead of receiving from w.get. handleReadyItems is then
+// stuck on the send while still holding w.lock, so every later GetWithPriority
+// (and handleAddBuffer) blocks and the whole queue deadlocks. This is a timing
+// race, so we run several rounds of the reporter's add/get loop and fail via a
+// bounded wait if any round leaves workers blocked. After the fix the send is
+// cancelled on shutdown and all workers return.
+func TestPriorityQueueDoesNotDeadlockOnShutdownWhileHandingOutItems(t *testing.T) {
+	t.Parallel()
+
+	for round := 0; round < 50; round++ {
+		q := New[string]("test")
+
+		var wg sync.WaitGroup
+		for i := 0; i < 20; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for {
+					q.AddWithOpts(AddOpts{Priority: ptr.To(rand.IntN(100))}, strconv.Itoa(rand.IntN(1000)))
+					if _, _, shutdown := q.GetWithPriority(); shutdown {
+						return
+					}
+				}
+			}()
+		}
+
+		time.Sleep(time.Millisecond)
+		q.ShutDown()
+
+		returned := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(returned)
+		}()
+
+		select {
+		case <-returned:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("workers did not return within 10s after ShutDown in round %d: queue deadlocked", round)
+		}
+	}
+}

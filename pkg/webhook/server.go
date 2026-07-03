@@ -77,8 +77,8 @@ type Options struct {
 	// It will be defaulted to 9443 if unspecified.
 	Port int
 
-	// CertDir is the directory that contains the server key and certificate. Defaults to
-	// <temp-dir>/k8s-webhook-server/serving-certs.
+	// CertDir is the directory that contains the server key and certificate.
+	// This field is required if TLSOpts does not provide a custom GetCertificate.
 	CertDir string
 
 	// CertName is the server certificate name. Defaults to tls.crt.
@@ -140,10 +140,6 @@ func (o *Options) setDefaults() {
 		o.Port = DefaultPort
 	}
 
-	if len(o.CertDir) == 0 {
-		o.CertDir = filepath.Join(os.TempDir(), "k8s-webhook-server", "serving-certs")
-	}
-
 	if len(o.CertName) == 0 {
 		o.CertName = "tls.crt"
 	}
@@ -199,6 +195,9 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 	}
 
 	if cfg.GetCertificate == nil {
+		if s.Options.CertDir == "" {
+			return fmt.Errorf("CertDir must be specified or a custom GetCertificate must be provided via TLSOpts")
+		}
 		certPath := filepath.Join(s.Options.CertDir, s.Options.CertName)
 		keyPath := filepath.Join(s.Options.CertDir, s.Options.KeyName)
 

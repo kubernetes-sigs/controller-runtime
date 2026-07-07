@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/evanphx/json-patch/v5 v5.9.11
 	github.com/fsnotify/fsnotify v1.9.0
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/go-logr/logr v1.4.3
 	github.com/go-logr/zapr v1.3.0
 	github.com/google/go-cmp v0.7.0

@@ -25,6 +25,7 @@ import (
 
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/api/admission/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -116,7 +117,31 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	wh.getLogger(&req).V(5).Info("received request")
 
+	if wh.Authenticator != nil {
+		response := wh.Authenticator.Authenticate(ctx, r, req)
+		if !response.Allowed {
+			if err := completeDeniedAuthenticationResponse(&response, req); err != nil {
+				wh.getLogger(&req).Error(err, "unable to encode authentication response")
+				response = Errored(http.StatusInternalServerError, errUnableToEncodeResponse)
+				response.UID = req.UID
+			}
+			wh.writeResponseTyped(w, response, actualAdmRevGVK)
+			return
+		}
+	}
+
 	wh.writeResponseTyped(w, wh.Handle(ctx, req), actualAdmRevGVK)
+}
+
+func completeDeniedAuthenticationResponse(response *Response, req Request) error {
+	if response.Result == nil {
+		response.Result = &metav1.Status{}
+	}
+	if response.Result.Code == 0 {
+		response.Result.Code = http.StatusForbidden
+		response.Result.Reason = metav1.StatusReasonForbidden
+	}
+	return response.Complete(req)
 }
 
 // writeResponse writes response to w generically, i.e. without encoding GVK information.

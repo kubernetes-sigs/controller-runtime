@@ -59,6 +59,32 @@ func Errored(code int32, err error) Response {
 	}
 }
 
+// Unauthenticated constructs a response indicating that the caller could not be authenticated.
+func Unauthenticated(message string) Response {
+	return authenticationResponse(http.StatusUnauthorized, metav1.StatusReasonUnauthorized, message)
+}
+
+// Unauthorized constructs a response indicating that the authenticated caller is not authorized.
+func Unauthorized(message string) Response {
+	return authenticationResponse(http.StatusForbidden, metav1.StatusReasonForbidden, message)
+}
+
+func authenticationResponse(code int, reason metav1.StatusReason, message string) Response {
+	resp := Response{
+		AdmissionResponse: admissionv1.AdmissionResponse{
+			Allowed: false,
+			Result: &metav1.Status{
+				Code:   int32(code),
+				Reason: reason,
+			},
+		},
+	}
+	if len(message) > 0 {
+		resp.Result.Message = message
+	}
+	return resp
+}
+
 // ValidationResponse returns a response for admitting a request.
 func ValidationResponse(allowed bool, message string) Response {
 	code := http.StatusForbidden

@@ -104,6 +104,15 @@ type Handler interface {
 	Handle(context.Context, Request) Response
 }
 
+// Authenticator verifies the HTTP caller for an already-decoded AdmissionRequest.
+// A nil Authenticator preserves the default admission webhook behavior.
+type Authenticator interface {
+	// Authenticate returns an allowed response when the caller is authenticated and
+	// authorized for req. Any non-allowed response rejects the request before Handler
+	// is called.
+	Authenticate(context.Context, *http.Request, Request) Response
+}
+
 // HandlerFunc implements Handler interface using a single function.
 type HandlerFunc func(context.Context, Request) Response
 
@@ -137,6 +146,10 @@ type Webhook struct {
 	// Note: LogConstructor has to be able to handle nil requests as we are also using it
 	// outside the context of requests.
 	LogConstructor func(base logr.Logger, req *Request) logr.Logger
+
+	// Authenticator verifies the HTTP caller after the AdmissionReview is decoded
+	// and before Handler is called. Nil preserves existing behavior.
+	Authenticator Authenticator
 
 	setupLogOnce sync.Once
 	log          logr.Logger

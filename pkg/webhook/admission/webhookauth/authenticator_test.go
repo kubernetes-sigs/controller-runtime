@@ -14,124 +14,252 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package webhookauth
+package webhookauth_test
 
 import (
+	"bytes"
 	"context"
-	"errors"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/webhook-auth/verify"
+
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/webhookauth"
 )
 
-type fakeVerifier struct {
-	called bool
-	token  string
-	err    error
+const (
+	testIssuer   = "https://issuer.example.com"
+	testAudience = "webhook.example.com"
+)
+
+// fakeKeySet treats the raw token string as the already-signature-verified JSON
+// claims payload and returns it verbatim. This is the stdlib-only fake from the
+// k8s.io/webhook-auth examples: "signing" is just JSON marshaling, so the test
+// carries no JOSE/OIDC dependency.
+type fakeKeySet struct{}
+
+func (fakeKeySet) VerifySignature(_ context.Context, rawToken string) ([]byte, error) {
+	return []byte(rawToken), nil
 }
 
-func (f *fakeVerifier) Verify(_ context.Context, token string, _ admission.Request) (*Result, error) {
-	f.called = true
-	f.token = token
-	if f.err != nil {
-		return nil, f.err
-	}
-	return &Result{}, nil
-}
-
-func TestAuthenticatorAuthorizationHeaderParsing(t *testing.T) {
-	tests := []struct {
-		name       string
-		headers    []string
-		wantCalled bool
-		wantToken  string
-	}{
-		{name: "missing"},
-		{name: "wrong scheme", headers: []string{"Basic abc"}},
-		{name: "empty bearer", headers: []string{"Bearer"}},
-		{name: "extra fields", headers: []string{"Bearer abc def"}},
-		{name: "multiple values", headers: []string{"Bearer abc", "Bearer def"}},
-		{name: "valid bearer", headers: []string{"Bearer abc.def.ghi"}, wantCalled: true, wantToken: "abc.def.ghi"},
-		{name: "case-insensitive scheme", headers: []string{"bearer abc.def.ghi"}, wantCalled: true, wantToken: "abc.def.ghi"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			verifier := &fakeVerifier{}
-			authenticator := NewAuthenticator(verifier)
-			req := httptest.NewRequest(http.MethodPost, "/", nil)
-			for _, header := range tt.headers {
-				req.Header.Add("Authorization", header)
-			}
-
-			resp := authenticator.Authenticate(context.Background(), req, admission.Request{})
-
-			if verifier.called != tt.wantCalled {
-				t.Fatalf("verifier called = %t, want %t", verifier.called, tt.wantCalled)
-			}
-			if verifier.token != tt.wantToken {
-				t.Fatalf("verifier token = %q, want %q", verifier.token, tt.wantToken)
-			}
-			if tt.wantCalled && !resp.Allowed {
-				t.Fatalf("Authenticate() denied unexpectedly: %#v", resp.Result)
-			}
-			if !tt.wantCalled && (resp.Allowed || resp.Result.Code != http.StatusUnauthorized) {
-				t.Fatalf("Authenticate() = %#v, want 401 denial", resp)
-			}
-		})
-	}
-}
-
-func TestAuthenticatorMapsVerifierErrors(t *testing.T) {
-	tests := []struct {
-		name   string
-		err    error
-		code   int32
-		reason metav1.StatusReason
-	}{
-		{name: "unauthenticated", err: unauthenticated("bad token"), code: http.StatusUnauthorized, reason: metav1.StatusReasonUnauthorized},
-		{name: "unauthorized", err: unauthorized("wrong group"), code: http.StatusForbidden, reason: metav1.StatusReasonForbidden},
-		{name: "unknown", err: errors.New("boom"), code: http.StatusUnauthorized, reason: metav1.StatusReasonUnauthorized},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			verifier := &fakeVerifier{err: tt.err}
-			authenticator := NewAuthenticator(verifier)
-			req := httptest.NewRequest(http.MethodPost, "/", nil)
-			req.Header.Set("Authorization", "Bearer secret-token")
-
-			resp := authenticator.Authenticate(context.Background(), req, admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{UID: "uid"},
-			})
-
-			if resp.Allowed || resp.Result.Code != tt.code || resp.Result.Reason != tt.reason {
-				t.Fatalf("Authenticate() = %#v, want %d %s denial", resp, tt.code, tt.reason)
-			}
-			if strings.Contains(resp.Result.Message, "secret-token") {
-				t.Fatalf("response leaked token material: %q", resp.Result.Message)
-			}
-		})
-	}
-}
-
-func TestVerifierAllowsCoreAPIGroup(t *testing.T) {
-	f := newFixture(t)
-	token := f.token(t, tokenOptions{allowedAPIGroup: []string{""}})
-
-	result, err := f.verifier.Verify(context.Background(), token, admission.Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			Resource: metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"},
+// mkToken mints a token string (== JSON claims payload) matching the KEP-6060
+// contract shape used in the library's admissionhttp example_test.go.
+func mkToken(aud []string, exp time.Time, group string) string {
+	claims := map[string]interface{}{
+		"iss": testIssuer,
+		"aud": aud,
+		"exp": exp.Unix(),
+		"kubernetes.io": map[string]interface{}{
+			"validatingWebhookConfiguration": map[string]string{
+				"name": "my-webhook",
+				"uid":  "webhook-uid",
+			},
+			"attestationClaims": map[string][]string{
+				verify.AllowedAPIGroupClaimKey: {group},
+			},
 		},
+	}
+	payload, _ := json.Marshal(claims)
+	return string(payload)
+}
+
+func newVerifier(t *testing.T) *verify.Verifier {
+	t.Helper()
+	v, err := verify.NewVerifier(fakeKeySet{}, testIssuer, []string{testAudience})
+	if err != nil {
+		t.Fatalf("NewVerifier: %v", err)
+	}
+	return v
+}
+
+func reqForGroup(group string) admission.Request {
+	return admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			UID:      "req-uid",
+			Resource: metav1.GroupVersionResource{Group: group, Version: "v1", Resource: "deployments"},
+			Name:     "my-deploy",
+		},
+	}
+}
+
+func TestAuthenticate(t *testing.T) {
+	future := time.Now().Add(5 * time.Minute)
+	past := time.Now().Add(-5 * time.Minute)
+
+	tests := []struct {
+		name        string
+		setAuthHdr  bool
+		authHeader  string
+		token       string
+		reqGroup    string
+		wantAllowed bool
+	}{
+		{
+			name:        "valid token, matching group and audience, future exp",
+			setAuthHdr:  true,
+			token:       mkToken([]string{testAudience}, future, "apps"),
+			reqGroup:    "apps",
+			wantAllowed: true,
+		},
+		{
+			name:        "missing token",
+			setAuthHdr:  false,
+			reqGroup:    "apps",
+			wantAllowed: false,
+		},
+		{
+			name:        "wrong scheme",
+			setAuthHdr:  true,
+			authHeader:  "Basic abc",
+			reqGroup:    "apps",
+			wantAllowed: false,
+		},
+		{
+			name:        "expired token",
+			setAuthHdr:  true,
+			token:       mkToken([]string{testAudience}, past, "apps"),
+			reqGroup:    "apps",
+			wantAllowed: false,
+		},
+		{
+			name:        "wrong audience",
+			setAuthHdr:  true,
+			token:       mkToken([]string{"someone.else"}, future, "apps"),
+			reqGroup:    "apps",
+			wantAllowed: false,
+		},
+		{
+			name:        "group mismatch",
+			setAuthHdr:  true,
+			token:       mkToken([]string{testAudience}, future, "apps"),
+			reqGroup:    "batch",
+			wantAllowed: false,
+		},
+	}
+
+	auth := webhookauth.NewAuthenticator(newVerifier(t))
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			httpReq := httptest.NewRequest(http.MethodPost, "/", nil)
+			if tc.setAuthHdr {
+				header := tc.authHeader
+				if header == "" {
+					header = "Bearer " + tc.token
+				}
+				httpReq.Header.Set("Authorization", header)
+			}
+
+			resp := auth.Authenticate(context.Background(), httpReq, reqForGroup(tc.reqGroup))
+			if resp.Allowed != tc.wantAllowed {
+				t.Fatalf("Authenticate allowed=%v, want %v", resp.Allowed, tc.wantAllowed)
+			}
+			if !resp.Allowed {
+				if resp.Result == nil || resp.Result.Code != http.StatusUnauthorized {
+					t.Fatalf("denied response = %#v, want 401", resp.Result)
+				}
+				if strings.Contains(resp.Result.Message, tc.token) && tc.token != "" {
+					t.Fatalf("response leaked token material: %q", resp.Result.Message)
+				}
+			}
+		})
+	}
+}
+
+// TestNilVerifierFailsClosed ensures a misconfigured authenticator (nil verifier)
+// denies rather than panicking or allowing.
+func TestNilVerifierFailsClosed(t *testing.T) {
+	auth := webhookauth.NewAuthenticator(nil)
+	httpReq := httptest.NewRequest(http.MethodPost, "/", nil)
+	httpReq.Header.Set("Authorization", "Bearer "+mkToken([]string{testAudience}, time.Now().Add(time.Minute), "apps"))
+
+	resp := auth.Authenticate(context.Background(), httpReq, reqForGroup("apps"))
+	if resp.Allowed {
+		t.Fatal("nil verifier must deny")
+	}
+}
+
+// TestAuthenticatorEndToEnd drives the authenticator through the real
+// admission.Webhook.ServeHTTP pipeline (decode -> Authenticate -> Handle),
+// proving the hook short-circuits an unauthenticated request before the handler
+// and reuses controller-runtime's single AdmissionReview decode.
+func TestAuthenticatorEndToEnd(t *testing.T) {
+	v := newVerifier(t)
+
+	var reached bool
+	spy := admission.HandlerFunc(func(_ context.Context, _ admission.Request) admission.Response {
+		reached = true
+		return admission.Allowed("")
 	})
 
+	wh := &admission.Webhook{
+		Handler:       spy,
+		Authenticator: webhookauth.NewAuthenticator(v),
+	}
+	srv := httptest.NewServer(wh)
+	defer srv.Close()
+
+	review := admissionv1.AdmissionReview{
+		TypeMeta: metav1.TypeMeta{APIVersion: "admission.k8s.io/v1", Kind: "AdmissionReview"},
+		Request: &admissionv1.AdmissionRequest{
+			UID:      "req-uid",
+			Resource: metav1.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
+			Name:     "my-deploy",
+		},
+	}
+	body, err := json.Marshal(review)
 	if err != nil {
-		t.Fatalf("Verify() unexpected error: %v", err)
+		t.Fatalf("marshal review: %v", err)
 	}
-	if result.AllowedAPIGroup != "" {
-		t.Fatalf("AllowedAPIGroup = %q, want core API group", result.AllowedAPIGroup)
+
+	post := func(withToken bool) admissionv1.AdmissionReview {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodPost, srv.URL, bytes.NewReader(body))
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if withToken {
+			req.Header.Set("Authorization", "Bearer "+mkToken([]string{testAudience}, time.Now().Add(5*time.Minute), "apps"))
+		}
+		resp, err := srv.Client().Do(req)
+		if err != nil {
+			t.Fatalf("do request: %v", err)
+		}
+		defer resp.Body.Close()
+		var out admissionv1.AdmissionReview
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		return out
 	}
+
+	t.Run("valid token reaches handler and is allowed", func(t *testing.T) {
+		reached = false
+		out := post(true)
+		if out.Response == nil || !out.Response.Allowed {
+			t.Fatalf("expected Allowed=true, got %+v", out.Response)
+		}
+		if !reached {
+			t.Fatal("expected downstream handler to be reached")
+		}
+	})
+
+	t.Run("missing token is denied before handler", func(t *testing.T) {
+		reached = false
+		out := post(false)
+		if out.Response == nil || out.Response.Allowed {
+			t.Fatalf("expected Allowed=false, got %+v", out.Response)
+		}
+		if reached {
+			t.Fatal("expected downstream handler NOT to be reached")
+		}
+	})
 }

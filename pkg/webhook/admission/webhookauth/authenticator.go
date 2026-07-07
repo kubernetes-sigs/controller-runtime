@@ -18,62 +18,68 @@ package webhookauth
 
 import (
 	"context"
-	"errors"
 	"net/http"
-	"strings"
 
+	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/webhook-auth/verify"
+	"k8s.io/webhook-auth/verify/admissionhttp"
+
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-const authorizationSchemeBearer = "bearer"
-
-type authenticator struct {
-	verifier Verifier
-}
+// authenticator adapts a k8s.io/webhook-auth *verify.Verifier onto the
+// controller-runtime admission.Authenticator seam.
+type authenticator struct{ v *verify.Verifier }
 
 var _ admission.Authenticator = authenticator{}
 
-func NewAuthenticator(verifier Verifier) admission.Authenticator {
-	return authenticator{verifier: verifier}
+// NewAuthenticator returns an admission.Authenticator that enforces KEP-6060
+// API server authentication using the supplied k8s.io/webhook-auth verifier.
+//
+// The caller owns verifier construction, which keeps controller-runtime free of
+// any JOSE/OIDC dependency: build v with
+//
+//	verify.NewVerifier(keySet, issuer, audiences)
+//
+// supplying your own verify.KeySet (the single piece a real deployment provides).
+//
+// Opt-in / default-off: assign the returned value to Webhook.Authenticator to
+// turn verification on; leaving it nil preserves existing behavior exactly.
+//
+// Zero-config alternative (deliberately not wired here): the library also offers
+// k8s.io/webhook-auth/verify/oidckeyset.NewInClusterVerifier, which discovers the
+// cluster issuer from the pod's projected service-account token and builds an
+// OIDC-discovery/JWKS KeySet with no explicit configuration. We do NOT call it
+// from this package because it would pull the go-oidc dependency into
+// controller-runtime's module graph. If a zero-config helper is desired, we could
+// add a thin optional constructor (for example NewInClusterAuthenticator) in a
+// separate, optional package so consumers opt into the extra dependency. Pending
+// review with SIG-Auth.
+func NewAuthenticator(v *verify.Verifier) admission.Authenticator {
+	return authenticator{v: v}
 }
 
-func (a authenticator) Authenticate(ctx context.Context, httpReq *http.Request, req admission.Request) admission.Response {
-	token, ok := bearerToken(httpReq)
+// Authenticate verifies the API server's bearer token against the KEP-6060
+// contract and fails closed on any error. It reuses the AdmissionRequest that
+// controller-runtime already decoded, so the review is never decoded twice.
+//
+// The library's failure model is deliberately opaque: every rejection is a single
+// generic error. We therefore always deny with a 401 and log only the
+// non-sensitive verify.Reason string; callers must not branch on the reason.
+func (a authenticator) Authenticate(ctx context.Context, r *http.Request, req admission.Request) admission.Response {
+	token, ok := admissionhttp.BearerToken(r)
 	if !ok {
 		return admission.Unauthenticated("missing or malformed bearer token")
 	}
-	if a.verifier == nil {
+	if a.v == nil {
 		return admission.Unauthenticated("verifier is not configured")
 	}
-	if _, err := a.verifier.Verify(ctx, token, req); err != nil {
-		return responseForVerifierError(err)
+	// Reuse controller-runtime's single decode; never re-read r.Body.
+	ar := &admissionv1.AdmissionReview{Request: &req.AdmissionRequest}
+	if err := admissionhttp.VerifyAdmissionReview(ctx, a.v, ar, token); err != nil {
+		logf.FromContext(ctx).Info("webhook-auth: denied unauthenticated request", "reason", verify.Reason(err))
+		return admission.Unauthenticated("unauthenticated")
 	}
 	return admission.Allowed("")
-}
-
-func bearerToken(req *http.Request) (string, bool) {
-	if req == nil {
-		return "", false
-	}
-	values := req.Header.Values("Authorization")
-	if len(values) != 1 {
-		return "", false
-	}
-	fields := strings.Fields(values[0])
-	if len(fields) != 2 || !strings.EqualFold(fields[0], authorizationSchemeBearer) || fields[1] == "" {
-		return "", false
-	}
-	return fields[1], true
-}
-
-func responseForVerifierError(err error) admission.Response {
-	message := "authentication failed"
-	var verifierErr *Error
-	if errors.As(err, &verifierErr) && verifierErr.Message != "" {
-		message = verifierErr.Message
-	}
-	if IsUnauthorized(err) {
-		return admission.Unauthorized(message)
-	}
-	return admission.Unauthenticated(message)
 }

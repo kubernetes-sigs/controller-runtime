@@ -31,5 +31,7 @@ if [[ -n ${CI} ]]; then
     make verify-modules
 fi
 
+make verify-boilerplate
+
 header_text "running golangci-lint"
 make lint

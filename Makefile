@@ -198,6 +198,10 @@ verify-modules: modules $(GO_MOD_CHECK) ## Verify go modules are up to date
 	fi
 	$(GO_MOD_CHECK) $(GO_MOD_CHECK_IGNORE)
 
+.PHONY: verify-boilerplate
+verify-boilerplate:
+	./hack/verify-boilerplate.sh
+
 APIDIFF_OLD_COMMIT ?= $(shell git rev-parse origin/main)
 
 .PHONY: apidiff

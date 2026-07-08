@@ -1021,21 +1021,19 @@ func TestWhenAddingMultipleItemsWithRatelimitTrueTheyDontAffectEachOther(t *test
 func TestPriorityQueueDoesNotDeadlockOnShutdownWhileHandingOutItems(t *testing.T) {
 	t.Parallel()
 
-	for round := 0; round < 50; round++ {
+	for round := range 50 {
 		q := New[string]("test")
 
 		var wg sync.WaitGroup
-		for i := 0; i < 20; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 20 {
+			wg.Go(func() {
 				for {
-					q.AddWithOpts(AddOpts{Priority: ptr.To(rand.IntN(100))}, strconv.Itoa(rand.IntN(1000)))
+					q.AddWithOpts(AddOpts{Priority: new(rand.IntN(100))}, strconv.Itoa(rand.IntN(1000)))
 					if _, _, shutdown := q.GetWithPriority(); shutdown {
 						return
 					}
 				}
-			}()
+			})
 		}
 
 		time.Sleep(time.Millisecond)

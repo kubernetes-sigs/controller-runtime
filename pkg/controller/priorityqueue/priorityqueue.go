@@ -413,7 +413,16 @@ func (w *priorityqueue[T]) handleReadyItems() {
 				w.waiters--
 				delete(w.items, item.Key)
 				toDelete = append(toDelete, item)
-				w.get <- *item
+				// w.get is unbuffered, so this send blocks until a GetWithPriority
+				// consumer receives. A consumer that is parked in GetWithPriority can
+				// instead return via <-w.done once ShutDown closes it, leaving no one
+				// to receive here. Also watch w.done so the send does not block forever
+				// and deadlock the queue (the whole queue stalls because w.lock is held).
+				select {
+				case w.get <- *item:
+				case <-w.done:
+					return false
+				}
 
 				return w.waiters > 0
 			})

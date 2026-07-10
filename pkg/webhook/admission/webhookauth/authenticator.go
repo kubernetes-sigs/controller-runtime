@@ -40,17 +40,20 @@ var _ admission.Authenticator = authenticator{}
 // The caller owns verifier construction, which keeps controller-runtime free of
 // any JOSE/OIDC dependency: build v with
 //
-//	verify.NewVerifier(keySet, issuer, audiences)
+//	verify.NewVerifier(authenticator)
 //
-// supplying your own verify.KeySet (the single piece a real deployment provides).
+// supplying your own verify.TokenAuthenticator (the single piece a real
+// deployment provides): it verifies the token's signature and standard iss/aud/exp
+// claims and returns a *verify.VerifiedClaims for the policy layer to finish.
 //
 // Opt-in / default-off: assign the returned value to Webhook.Authenticator to
 // turn verification on; leaving it nil preserves existing behavior exactly.
 //
 // Zero-config alternative (deliberately not wired here): the library also offers
-// k8s.io/webhook-auth/verify/oidckeyset.NewInClusterVerifier, which discovers the
-// cluster issuer from the pod's projected service-account token and builds an
-// OIDC-discovery/JWKS KeySet with no explicit configuration. We do NOT call it
+// k8s.io/webhook-auth/verify/oidc.InCluster, which discovers the cluster issuer
+// from the pod's projected service-account token and builds an
+// OIDC-discovery/JWKS authenticator with no explicit configuration (option-free;
+// for an explicit issuer/audience use oidc.NewRemoteVerifier). We do NOT call it
 // from this package because it would pull the go-oidc dependency into
 // controller-runtime's module graph. If a zero-config helper is desired, we could
 // add a thin optional constructor (for example NewInClusterAuthenticator) in a

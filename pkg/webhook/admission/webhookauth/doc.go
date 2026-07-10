@@ -30,9 +30,10 @@ limitations under the License.
 // so a webhook that does not adopt verification is unaffected.
 //
 // This package intentionally adds no crypto/OIDC dependency of its own. The
-// caller constructs the verify.Verifier (supplying a verify.KeySet) and thus
-// decides whether to pull in go-oidc. See NewAuthenticator for the zero-config
-// in-cluster verifier the library offers and why it is left to the consumer.
+// caller constructs the verify.Verifier (supplying a verify.TokenAuthenticator)
+// and thus decides whether to pull in go-oidc. See NewAuthenticator for the
+// zero-config in-cluster verifier the library offers and why it is left to the
+// consumer.
 //
 // KEP-6060's wire format is provisional; the claim contract lives in
 // k8s.io/webhook-auth and must be reconciled after upstream API review.

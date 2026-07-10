@@ -118,6 +118,10 @@ var _ = Describe("Admission webhook authenticators", func() {
 		},
 		Entry("unauthenticated", Unauthenticated("missing bearer token"), int32(http.StatusUnauthorized), metav1.StatusReasonUnauthorized, "missing bearer token"),
 		Entry("unauthorized", Unauthorized("api group is not allowed"), int32(http.StatusForbidden), metav1.StatusReasonForbidden, "api group is not allowed"),
+		// A bare denied Response (nil Result / zero Code) must be defaulted to 403
+		// Forbidden. Without completeDeniedAuthenticationResponse doing this, Complete
+		// would silently default the code to 200 for a denied response.
+		Entry("bare denial defaults to forbidden", Response{}, int32(http.StatusForbidden), metav1.StatusReasonForbidden, ""),
 	)
 
 	It("keeps typed, multi-handler, and standalone webhooks compatible", func() {

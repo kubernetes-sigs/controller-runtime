@@ -20,11 +20,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,42 +37,75 @@ import (
 const (
 	testIssuer   = "https://issuer.example.com"
 	testAudience = "webhook.example.com"
+
+	// allowedAPIGroupClaimKey mirrors the (unexported) claim key in
+	// k8s.io/webhook-auth/verify; external consumers must hardcode the literal.
+	allowedAPIGroupClaimKey = "webhook-authentication.k8s.io/allowedAPIGroup"
+
+	// authFailureToken is a raw token that is NOT a decodable claims payload, so
+	// fakeAuthenticator's json.Unmarshal fails and it returns an error. In the v2
+	// seam the core verify.Verifier no longer checks the signature or the standard
+	// iss/aud/exp claims — those move into the TokenAuthenticator — so this stands
+	// in for the real authenticator rejecting an expired / wrong-audience /
+	// bad-signature token. The Verifier collapses that into its single generic
+	// failure and the adapter fails closed.
+	authFailureToken = "simulated-signature-or-standard-claim-failure"
 )
 
-// fakeKeySet treats the raw token string as the already-signature-verified JSON
-// claims payload and returns it verbatim. This is the stdlib-only fake from the
-// k8s.io/webhook-auth examples: "signing" is just JSON marshaling, so the test
-// carries no JOSE/OIDC dependency.
-type fakeKeySet struct{}
+// fakeAuthenticator is a stand-in verify.TokenAuthenticator that keeps the test
+// pure-stdlib and offline. It treats the raw token as the already
+// signature-verified JSON claims payload and decodes it into a
+// *verify.VerifiedClaims — the only supported way to populate the unexported
+// Kubernetes claims from outside the library. A json.Unmarshal failure plays the
+// role of the real authenticator rejecting a token whose signature or standard
+// claims (iss/aud/exp) did not verify.
+type fakeAuthenticator struct{}
 
-func (fakeKeySet) VerifySignature(_ context.Context, rawToken string) ([]byte, error) {
-	return []byte(rawToken), nil
+func (fakeAuthenticator) AuthenticateToken(_ context.Context, rawToken string) (*verify.VerifiedClaims, error) {
+	var claims verify.VerifiedClaims
+	if err := json.Unmarshal([]byte(rawToken), &claims); err != nil {
+		return nil, fmt.Errorf("simulated authentication failure: %w", err)
+	}
+	return &claims, nil
 }
 
 // mkToken mints a token string (== JSON claims payload) matching the KEP-6060
-// contract shape used in the library's admissionhttp example_test.go.
-func mkToken(aud []string, exp time.Time, group string) string {
-	claims := map[string]interface{}{
-		"iss": testIssuer,
-		"aud": aud,
-		"exp": exp.Unix(),
-		"kubernetes.io": map[string]interface{}{
-			"validatingWebhookConfiguration": map[string]string{
-				"name": "my-webhook",
-				"uid":  "webhook-uid",
-			},
-			"attestationClaims": map[string][]string{
-				verify.AllowedAPIGroupClaimKey: {group},
-			},
+// contract. Only the "kubernetes.io" object is consulted by fakeAuthenticator's
+// decode (and thus by the core policy); iss/sub/aud are carried for realism and
+// are inert here because the real signature/standard-claim checks live in the
+// authenticator, which this fake simulates. mutate customizes the
+// "kubernetes.io" claims before marshaling; nil leaves the valid baseline
+// (a single validating-webhook binding authorized for group).
+func mkToken(t *testing.T, group string, mutate func(k8s map[string]any)) string {
+	t.Helper()
+	k8s := map[string]any{
+		"validatingWebhookConfiguration": map[string]string{
+			"name": "my-webhook",
+			"uid":  "webhook-uid",
+		},
+		"attestationClaims": map[string][]string{
+			allowedAPIGroupClaimKey: {group},
 		},
 	}
-	payload, _ := json.Marshal(claims)
+	if mutate != nil {
+		mutate(k8s)
+	}
+	claims := map[string]any{
+		"iss":           testIssuer,
+		"sub":           "system:serviceaccount:kube-system:webhook",
+		"aud":           []string{testAudience},
+		"kubernetes.io": k8s,
+	}
+	payload, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatalf("marshal claims: %v", err)
+	}
 	return string(payload)
 }
 
 func newVerifier(t *testing.T) *verify.Verifier {
 	t.Helper()
-	v, err := verify.NewVerifier(fakeKeySet{}, testIssuer, []string{testAudience})
+	v, err := verify.NewVerifier(fakeAuthenticator{})
 	if err != nil {
 		t.Fatalf("NewVerifier: %v", err)
 	}
@@ -90,8 +123,22 @@ func reqForGroup(group string) admission.Request {
 }
 
 func TestAuthenticate(t *testing.T) {
-	future := time.Now().Add(5 * time.Minute)
-	past := time.Now().Add(-5 * time.Minute)
+	validApps := mkToken(t, "apps", nil)
+	wildcard := mkToken(t, "*", nil)
+	mutatingApps := mkToken(t, "apps", func(k8s map[string]any) {
+		// Exactly one bound object, but mutating instead of validating: the
+		// exactly-one rule treats the two symmetrically, so this must be accepted.
+		delete(k8s, "validatingWebhookConfiguration")
+		k8s["mutatingWebhookConfiguration"] = map[string]string{"name": "mwc", "uid": "mwc-uid"}
+	})
+	bothBound := mkToken(t, "apps", func(k8s map[string]any) {
+		// Two bound objects violates the exactly-one rule.
+		k8s["mutatingWebhookConfiguration"] = map[string]string{"name": "mwc", "uid": "mwc-uid"}
+	})
+	noBound := mkToken(t, "apps", func(k8s map[string]any) {
+		// Zero bound objects violates the exactly-one rule.
+		delete(k8s, "validatingWebhookConfiguration")
+	})
 
 	tests := []struct {
 		name        string
@@ -102,9 +149,23 @@ func TestAuthenticate(t *testing.T) {
 		wantAllowed bool
 	}{
 		{
-			name:        "valid token, matching group and audience, future exp",
+			name:        "valid token, matching group",
 			setAuthHdr:  true,
-			token:       mkToken([]string{testAudience}, future, "apps"),
+			token:       validApps,
+			reqGroup:    "apps",
+			wantAllowed: true,
+		},
+		{
+			name:        "wildcard allowedAPIGroup matches any review group",
+			setAuthHdr:  true,
+			token:       wildcard,
+			reqGroup:    "batch",
+			wantAllowed: true,
+		},
+		{
+			name:        "valid token bound to mutating webhook, matching group",
+			setAuthHdr:  true,
+			token:       mutatingApps,
 			reqGroup:    "apps",
 			wantAllowed: true,
 		},
@@ -122,23 +183,41 @@ func TestAuthenticate(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
-			name:        "expired token",
+			// A "Bearer" scheme with no token must be treated as absent, not as an
+			// empty-string token handed to the verifier.
+			name:        "empty bearer token",
 			setAuthHdr:  true,
-			token:       mkToken([]string{testAudience}, past, "apps"),
+			authHeader:  "Bearer ",
 			reqGroup:    "apps",
 			wantAllowed: false,
 		},
 		{
-			name:        "wrong audience",
+			// Stands in for expired / wrong-audience / bad-signature: in v2 those
+			// checks live in the authenticator, which here returns an error.
+			name:        "authenticator error",
 			setAuthHdr:  true,
-			token:       mkToken([]string{"someone.else"}, future, "apps"),
+			token:       authFailureToken,
 			reqGroup:    "apps",
 			wantAllowed: false,
 		},
 		{
-			name:        "group mismatch",
+			name:        "bound-object violation: both validating and mutating",
 			setAuthHdr:  true,
-			token:       mkToken([]string{testAudience}, future, "apps"),
+			token:       bothBound,
+			reqGroup:    "apps",
+			wantAllowed: false,
+		},
+		{
+			name:        "bound-object violation: neither validating nor mutating",
+			setAuthHdr:  true,
+			token:       noBound,
+			reqGroup:    "apps",
+			wantAllowed: false,
+		},
+		{
+			name:        "allowedAPIGroup mismatch",
+			setAuthHdr:  true,
+			token:       validApps,
 			reqGroup:    "batch",
 			wantAllowed: false,
 		},
@@ -165,7 +244,7 @@ func TestAuthenticate(t *testing.T) {
 				if resp.Result == nil || resp.Result.Code != http.StatusUnauthorized {
 					t.Fatalf("denied response = %#v, want 401", resp.Result)
 				}
-				if strings.Contains(resp.Result.Message, tc.token) && tc.token != "" {
+				if tc.token != "" && strings.Contains(resp.Result.Message, tc.token) {
 					t.Fatalf("response leaked token material: %q", resp.Result.Message)
 				}
 			}
@@ -178,7 +257,7 @@ func TestAuthenticate(t *testing.T) {
 func TestNilVerifierFailsClosed(t *testing.T) {
 	auth := webhookauth.NewAuthenticator(nil)
 	httpReq := httptest.NewRequest(http.MethodPost, "/", nil)
-	httpReq.Header.Set("Authorization", "Bearer "+mkToken([]string{testAudience}, time.Now().Add(time.Minute), "apps"))
+	httpReq.Header.Set("Authorization", "Bearer "+mkToken(t, "apps", nil))
 
 	resp := auth.Authenticate(context.Background(), httpReq, reqForGroup("apps"))
 	if resp.Allowed {
@@ -227,7 +306,7 @@ func TestAuthenticatorEndToEnd(t *testing.T) {
 		}
 		req.Header.Set("Content-Type", "application/json")
 		if withToken {
-			req.Header.Set("Authorization", "Bearer "+mkToken([]string{testAudience}, time.Now().Add(5*time.Minute), "apps"))
+			req.Header.Set("Authorization", "Bearer "+mkToken(t, "apps", nil))
 		}
 		resp, err := srv.Client().Do(req)
 		if err != nil {

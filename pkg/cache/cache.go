@@ -68,7 +68,12 @@ type Cache interface {
 
 	// Informers loads informers and adds field indices.
 	Informers
+}
 
+// internalCache is implemented by all cache implementations in controller-runtime. It
+// adds the requirement methods to be able to work for a consistent client.
+type internalCache interface {
+	Cache
 	// SetMinimumRVForGVKAndKey causes subsequent Get requests for the given
 	// GVK and key to block until the informer for that GVK has observed a
 	// resource version >= rv (or the context times out). For List requests
@@ -463,7 +468,7 @@ func New(cfg *rest.Config, opts Options) (Cache, error) {
 
 	newCacheFunc := newCache(cfg, opts)
 
-	var defaultCache Cache
+	var defaultCache internalCache
 	if len(opts.DefaultNamespaces) > 0 {
 		defaultConfig := optionDefaultsToConfig(&opts)
 		defaultCache = newMultiNamespaceCache(newCacheFunc, opts.Scheme, opts.Mapper, opts.DefaultNamespaces, &defaultConfig)
@@ -477,7 +482,7 @@ func New(cfg *rest.Config, opts Options) (Cache, error) {
 
 	delegating := &delegatingByGVKCache{
 		scheme:       opts.Scheme,
-		caches:       make(map[schema.GroupVersionKind]Cache, len(opts.ByObject)),
+		caches:       make(map[schema.GroupVersionKind]internalCache, len(opts.ByObject)),
 		defaultCache: defaultCache,
 	}
 
@@ -486,7 +491,7 @@ func New(cfg *rest.Config, opts Options) (Cache, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to get GVK for type %T: %w", obj, err)
 		}
-		var cache Cache
+		var cache internalCache
 		if len(config.Namespaces) > 0 {
 			cache = newMultiNamespaceCache(newCacheFunc, opts.Scheme, opts.Mapper, config.Namespaces, nil)
 		} else {
@@ -534,10 +539,10 @@ func byObjectToConfig(byObject ByObject) Config {
 	}
 }
 
-type newCacheFunc func(config Config, namespace string) Cache
+type newCacheFunc func(config Config, namespace string) internalCache
 
 func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
-	return func(config Config, namespace string) Cache {
+	return func(config Config, namespace string) internalCache {
 		return &informerCache{
 			scheme: opts.Scheme,
 			Informers: internal.NewInformers(restConfig, &internal.InformersOpts{

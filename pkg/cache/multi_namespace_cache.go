@@ -42,15 +42,15 @@ func newMultiNamespaceCache(
 	restMapper apimeta.RESTMapper,
 	namespaces map[string]Config,
 	globalConfig *Config, // may be nil in which case no cache for cluster-scoped objects will be created
-) Cache {
+) internalCache {
 	// Create every namespace cache.
-	caches := map[string]Cache{}
+	caches := map[string]internalCache{}
 	for namespace, config := range namespaces {
 		caches[namespace] = newCache(config, namespace)
 	}
 
 	// Create a cache for cluster scoped resources if requested
-	var clusterCache Cache
+	var clusterCache internalCache
 	if globalConfig != nil {
 		clusterCache = newCache(*globalConfig, corev1.NamespaceAll)
 	}
@@ -70,11 +70,11 @@ func newMultiNamespaceCache(
 type multiNamespaceCache struct {
 	Scheme           *runtime.Scheme
 	RESTMapper       apimeta.RESTMapper
-	namespaceToCache map[string]Cache
-	clusterCache     Cache
+	namespaceToCache map[string]internalCache
+	clusterCache     internalCache
 }
 
-var _ Cache = &multiNamespaceCache{}
+var _ internalCache = &multiNamespaceCache{}
 
 // Methods for multiNamespaceCache to conform to the Informers interface.
 

@@ -34,8 +34,8 @@ import (
 // and uses the defaultCache otherwise.
 type delegatingByGVKCache struct {
 	scheme       *runtime.Scheme
-	caches       map[schema.GroupVersionKind]Cache
-	defaultCache Cache
+	caches       map[schema.GroupVersionKind]internalCache
+	defaultCache internalCache
 }
 
 func (dbt *delegatingByGVKCache) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
@@ -137,7 +137,7 @@ func (dbt *delegatingByGVKCache) IndexField(ctx context.Context, obj client.Obje
 	return cache.IndexField(ctx, obj, field, extractValue)
 }
 
-func (dbt *delegatingByGVKCache) cacheForObject(o runtime.Object) (Cache, error) {
+func (dbt *delegatingByGVKCache) cacheForObject(o runtime.Object) (internalCache, error) {
 	gvk, err := apiutil.GVKForObject(o, dbt.scheme)
 	if err != nil {
 		return nil, err
@@ -146,7 +146,7 @@ func (dbt *delegatingByGVKCache) cacheForObject(o runtime.Object) (Cache, error)
 	return dbt.cacheForGVK(gvk), nil
 }
 
-func (dbt *delegatingByGVKCache) cacheForGVK(gvk schema.GroupVersionKind) Cache {
+func (dbt *delegatingByGVKCache) cacheForGVK(gvk schema.GroupVersionKind) internalCache {
 	if specific, hasSpecific := dbt.caches[gvk]; hasSpecific {
 		return specific
 	}

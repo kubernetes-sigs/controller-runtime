@@ -67,26 +67,9 @@ func (c *consistentClient) Create(ctx context.Context, obj Object, opts ...Creat
 		return fmt.Errorf("failed to get GVK for object %v: %w", obj, err)
 	}
 
-	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
-
-	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
-	if err := keyLock.lock(ctx); err != nil {
-		return fmt.Errorf("failed to acquire lock for %s/%s: %w", namespacedName.Namespace, namespacedName.Name, err)
-	}
-	defer keyLock.unlock()
-
-	if err := c.upstream.Create(ctx, obj, opts...); err != nil {
-		return err
-	}
-
-	rvRaw := obj.GetResourceVersion()
-	rv, err := strconv.ParseInt(rvRaw, 10, 64)
-	if err != nil {
-		return fmt.Errorf("failed to parse resource version %s: %w", rvRaw, err)
-	}
-	c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
-
-	return nil
+	return c.writeAndRecordRV(ctx, gvk, obj, func() error {
+		return c.upstream.Create(ctx, obj, opts...)
+	})
 }
 
 func (c *consistentClient) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
@@ -95,26 +78,9 @@ func (c *consistentClient) Update(ctx context.Context, obj Object, opts ...Updat
 		return fmt.Errorf("failed to get GVK for object %v: %w", obj, err)
 	}
 
-	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
-
-	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
-	if err := keyLock.lock(ctx); err != nil {
-		return fmt.Errorf("failed to acquire lock for %s/%s: %w", namespacedName.Namespace, namespacedName.Name, err)
-	}
-	defer keyLock.unlock()
-
-	if err := c.upstream.Update(ctx, obj, opts...); err != nil {
-		return err
-	}
-
-	rvRaw := obj.GetResourceVersion()
-	rv, err := strconv.ParseInt(rvRaw, 10, 64)
-	if err != nil {
-		return fmt.Errorf("failed to parse resource version %s: %w", rvRaw, err)
-	}
-	c.cache.SetMinimumRVForGVKAndKey(gvk, namespacedName, rv)
-
-	return nil
+	return c.writeAndRecordRV(ctx, gvk, obj, func() error {
+		return c.upstream.Update(ctx, obj, opts...)
+	})
 }
 
 func (c *consistentClient) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
@@ -123,6 +89,12 @@ func (c *consistentClient) Patch(ctx context.Context, obj Object, patch Patch, o
 		return fmt.Errorf("failed to get GVK for object %v: %w", obj, err)
 	}
 
+	return c.writeAndRecordRV(ctx, gvk, obj, func() error {
+		return c.upstream.Patch(ctx, obj, patch, opts...)
+	})
+}
+
+func (c *consistentClient) writeAndRecordRV(ctx context.Context, gvk schema.GroupVersionKind, obj Object, write func() error) error {
 	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 
 	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
@@ -131,7 +103,7 @@ func (c *consistentClient) Patch(ctx context.Context, obj Object, patch Patch, o
 	}
 	defer keyLock.unlock()
 
-	if err := c.upstream.Patch(ctx, obj, patch, opts...); err != nil {
+	if err := write(); err != nil {
 		return err
 	}
 
@@ -209,7 +181,7 @@ func resourceVersionFromApplyConfiguration(obj applyConfiguration) (string, erro
 	if !rv.IsValid() {
 		return "", fmt.Errorf("type %T has no ResourceVersion field", obj)
 	}
-	if rv.Kind() != reflect.Ptr || rv.Type().Elem().Kind() != reflect.String {
+	if rv.Kind() != reflect.Pointer || rv.Type().Elem().Kind() != reflect.String {
 		return "", fmt.Errorf("ResourceVersion field in %T is not *string", obj)
 	}
 	if rv.IsNil() {

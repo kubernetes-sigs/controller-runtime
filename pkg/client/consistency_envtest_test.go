@@ -22,7 +22,7 @@ var _ = Describe("ConsistentClient", func() {
 		cl      client.Client
 		ctx     context.Context
 		cancel  context.CancelFunc
-		counter uint64
+		counter atomic.Uint64
 	)
 
 	BeforeEach(func(specCtx context.Context) {
@@ -58,7 +58,7 @@ var _ = Describe("ConsistentClient", func() {
 	})
 
 	newConfigMap := func(ns string) *corev1.ConfigMap {
-		n := atomic.AddUint64(&counter, 1)
+		n := counter.Add(1)
 		return &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("consistency-test-%d", n),
@@ -76,7 +76,7 @@ var _ = Describe("ConsistentClient", func() {
 
 	DescribeTable("write then read",
 		func(ctx context.Context, write func(ctx context.Context, cl client.Client, cm *corev1.ConfigMap) (writeResult, error)) {
-			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("consistency-wtr-%d", atomic.AddUint64(&counter, 1))}}
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("consistency-wtr-%d", counter.Add(1))}}
 			Expect(cl.Create(ctx, ns)).To(Succeed())
 			DeferCleanup(func(ctx context.Context) {
 				Expect(client.IgnoreNotFound(cl.Delete(ctx, ns))).To(Succeed())
@@ -212,7 +212,7 @@ var _ = Describe("ConsistentClient", func() {
 
 	Describe("Create with namespace-scoped object", func() {
 		It("should work across different namespaces", func() {
-			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("consistency-ns-%d", atomic.AddUint64(&counter, 1))}}
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("consistency-ns-%d", counter.Add(1))}}
 			Expect(cl.Create(ctx, ns)).To(Succeed())
 			DeferCleanup(func(ctx context.Context) {
 				Expect(client.IgnoreNotFound(cl.Delete(ctx, ns))).To(Succeed())

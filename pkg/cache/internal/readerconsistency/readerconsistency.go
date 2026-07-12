@@ -22,6 +22,7 @@ import (
 	"maps"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -31,27 +32,29 @@ import (
 
 func NewHandler(rvCleanup func(int64)) *ConsistencyHandler {
 	return &ConsistencyHandler{
-		rvCond:             sync.NewCond(&sync.Mutex{}),
-		pendingDeletesCond: sync.NewCond(&sync.Mutex{}),
+		rvCond:             &broadcaster{},
+		pendingDeletesCond: &broadcaster{},
+		pendingDeletesLock: sync.RWMutex{},
 		pendingDeletes:     make(map[client.ObjectKey]sets.Set[types.UID]),
 		rvCleanup:          rvCleanup,
 	}
 }
 
 type ConsistencyHandler struct {
-	rvCond     *sync.Cond
-	observedRV int64
+	rvCond     *broadcaster
+	observedRV atomic.Int64
 
-	pendingDeletesCond *sync.Cond
-	// pendingDeletes holds pending deletes. Must only be acquired when holding pendingDeletesCond.L
+	pendingDeletesCond *broadcaster
+	pendingDeletesLock sync.RWMutex
+	// pendingDeletes holds pending deletes. Must only be acquired when holding pendingDeletesLock
 	pendingDeletes map[client.ObjectKey]sets.Set[types.UID]
 
 	rvCleanup func(int64)
 }
 
 func (h *ConsistencyHandler) AddPendingDelete(key client.ObjectKey, uid types.UID) {
-	h.pendingDeletesCond.L.Lock()
-	defer h.pendingDeletesCond.L.Unlock()
+	h.pendingDeletesLock.Lock()
+	defer h.pendingDeletesLock.Unlock()
 
 	if h.pendingDeletes[key] == nil {
 		h.pendingDeletes[key] = sets.New(uid)
@@ -61,15 +64,15 @@ func (h *ConsistencyHandler) AddPendingDelete(key client.ObjectKey, uid types.UI
 }
 
 func (h *ConsistencyHandler) RemovePendingDelete(key client.ObjectKey, uid types.UID) {
-	h.pendingDeletesCond.L.Lock()
-	defer h.pendingDeletesCond.L.Unlock()
+	h.pendingDeletesLock.Lock()
+	defer h.pendingDeletesLock.Unlock()
 
 	if h.pendingDeletes[key] != nil {
 		h.pendingDeletes[key].Delete(uid)
 		if len(h.pendingDeletes[key]) == 0 {
 			delete(h.pendingDeletes, key)
 		}
-		h.pendingDeletesCond.Broadcast()
+		h.pendingDeletesCond.broadcast()
 	}
 }
 
@@ -91,21 +94,21 @@ func (h *ConsistencyHandler) WaitForGet(ctx context.Context, key client.ObjectKe
 
 // waitDeletesForKey blocks until all pending deletes at the time of calling it were observed or context times out
 func (h *ConsistencyHandler) waitDeletesForKey(ctx context.Context, key client.ObjectKey) error {
-	h.pendingDeletesCond.L.Lock()
+	h.pendingDeletesLock.RLock()
 	pendingDeletes := maps.Clone(h.pendingDeletes[key])
-	h.pendingDeletesCond.L.Unlock()
+	h.pendingDeletesLock.RUnlock()
 
 	return h.waitDeletes(ctx, pendingDeletes)
 }
 
 // waitDeletesForGVK blocks until all pending deletes at the time of calling it were observed or context times out
 func (h *ConsistencyHandler) waitAllDeletes(ctx context.Context) error {
-	h.pendingDeletesCond.L.Lock()
+	h.pendingDeletesLock.RLock()
 	pendingDeletes := sets.Set[types.UID]{}
 	for _, uids := range h.pendingDeletes {
 		maps.Copy(pendingDeletes, uids)
 	}
-	h.pendingDeletesCond.L.Unlock()
+	h.pendingDeletesLock.RUnlock()
 
 	return h.waitDeletes(ctx, pendingDeletes)
 }
@@ -115,24 +118,23 @@ func (h *ConsistencyHandler) waitDeletes(ctx context.Context, uids sets.Set[type
 		return nil
 	}
 
-	allDeleted := make(chan struct{})
-	go func() {
-		h.pendingDeletesCond.L.Lock()
-		for !h.allDeletedLocked(uids) {
-			if ctx.Err() != nil {
-				break
-			}
-			h.pendingDeletesCond.Wait()
+	for {
+		// must store the chan before checking the deletes to guarantee that even if the deletes
+		// get  updated after our check and before the select, we still get an event.
+		updatedChan := h.pendingDeletesCond.wait()
+		h.pendingDeletesLock.RLock()
+		done := h.allDeletedLocked(uids)
+		h.pendingDeletesLock.RUnlock()
+		if done {
+			return nil
 		}
-		h.pendingDeletesCond.L.Unlock()
-		close(allDeleted)
-	}()
 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-allDeleted:
-		return nil
+		select {
+		case <-updatedChan:
+			continue
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 
@@ -150,12 +152,12 @@ func (h *ConsistencyHandler) allDeletedLocked(uids sets.Set[types.UID]) bool {
 
 func (h *ConsistencyHandler) observeDeletion(obj client.Object) {
 	key := client.ObjectKey{Namespace: obj.GetNamespace(), Name: obj.GetName()}
-	h.pendingDeletesCond.L.Lock()
-	defer h.pendingDeletesCond.L.Unlock()
+	h.pendingDeletesLock.Lock()
+	defer h.pendingDeletesLock.Unlock()
 
 	if h.pendingDeletes[key].Has(obj.GetUID()) {
 		h.pendingDeletes[key].Delete(obj.GetUID())
-		h.pendingDeletesCond.Broadcast()
+		h.pendingDeletesCond.broadcast()
 	}
 	if len(h.pendingDeletes[key]) == 0 {
 		delete(h.pendingDeletes, key)
@@ -163,24 +165,19 @@ func (h *ConsistencyHandler) observeDeletion(obj client.Object) {
 }
 
 func (h *ConsistencyHandler) waitForRV(ctx context.Context, rv int64) error {
-	observed := make(chan struct{})
-	go func() {
-		h.rvCond.L.Lock()
-		for h.observedRV < rv {
-			if ctx.Err() != nil {
-				break
-			}
-			h.rvCond.Wait()
+	for {
+		// must store the chan before checking the RV to guarantee that even if the RV
+		// gets updated after our check and before the select, we still get an event.
+		updatedChan := h.rvCond.wait()
+		if h.observedRV.Load() >= rv {
+			return nil
 		}
-		h.rvCond.L.Unlock()
-		close(observed)
-	}()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-observed:
-		return nil
+		select {
+		case <-updatedChan:
+			continue
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 
@@ -191,13 +188,18 @@ func (h *ConsistencyHandler) observeResourceVersion(rv string) {
 		return
 	}
 
-	h.rvCond.L.Lock()
-	defer h.rvCond.L.Unlock()
+	for {
+		current := h.observedRV.Load()
+		if parsed <= current {
+			return
+		}
 
-	if parsed > h.observedRV {
-		h.observedRV = parsed
-		h.rvCond.Broadcast()
+		if h.observedRV.CompareAndSwap(current, parsed) {
+			break
+		}
 	}
+
+	h.rvCond.broadcast()
 
 	go h.rvCleanup(parsed)
 }
@@ -233,4 +235,30 @@ func (h *ConsistencyHandler) OnDelete(raw any) {
 	}
 	go func() { h.observeResourceVersion(obj.GetResourceVersion()) }()
 	go func() { h.observeDeletion(obj) }()
+}
+
+type broadcaster struct {
+	lock sync.Mutex
+	ch   chan struct{}
+}
+
+func (b *broadcaster) broadcast() {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	// Lazily create the channel in wait to avoid creating a channel per event.
+	if b.ch != nil {
+		close(b.ch)
+		b.ch = nil
+	}
+}
+
+func (b *broadcaster) wait() <-chan struct{} {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	if b.ch == nil {
+		b.ch = make(chan struct{})
+	}
+
+	return b.ch
 }

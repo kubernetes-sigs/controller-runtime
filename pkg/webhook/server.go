@@ -77,8 +77,14 @@ type Options struct {
 	// It will be defaulted to 9443 if unspecified.
 	Port int
 
-	// CertDir is the directory that contains the server key and certificate. Defaults to
-	// <temp-dir>/k8s-webhook-server/serving-certs.
+	// CertDir is the directory that contains the server key and certificate.
+	// The server expects the files to be named CertName and KeyName (see
+	// below). If unset, CertDir defaults to
+	// <temp-dir>/k8s-webhook-server/serving-certs, where <temp-dir> comes
+	// from os.TempDir() (usually /tmp on Linux, but TMPDIR-dependent).
+	// Most operators should configure this explicitly (for example, to the
+	// cert directory mounted in by a Kubernetes Secret) rather than relying
+	// on the default.
 	CertDir string
 
 	// CertName is the server certificate name. Defaults to tls.crt.

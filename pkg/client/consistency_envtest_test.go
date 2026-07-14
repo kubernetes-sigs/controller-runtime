@@ -41,8 +41,10 @@ var _ = Describe("ConsistentClient", func() {
 		counter atomic.Uint64
 	)
 
-	BeforeEach(func(specCtx context.Context) {
-		ctx, cancel = context.WithCancel(specCtx)
+	BeforeEach(func() {
+		// NB: Don't derive from the BeforeEach's context, Ginkgo cancels it when the
+		// node returns and it thus would not outlive it, stopping the cache's watches.
+		ctx, cancel = context.WithCancel(context.Background())
 
 		c, err := cache.New(cfg, cache.Options{Scheme: kscheme.Scheme})
 		Expect(err).NotTo(HaveOccurred())

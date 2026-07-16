@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package webhookauth_test
+package admission_test
 
 import (
 	"bytes"
@@ -25,27 +25,23 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/webhook-auth/verify"
+	"k8s.io/webhookauth/verify"
 
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/webhookauth"
 )
 
 const (
 	testIssuer   = "https://issuer.example.com"
 	testAudience = "webhook.example.com"
 
-	// allowedAPIGroupClaimKey mirrors the (unexported) claim key in
-	// k8s.io/webhook-auth/verify; external consumers must hardcode the literal.
-	allowedAPIGroupClaimKey = "webhook-authentication.k8s.io/allowedAPIGroup"
-
 	// authFailureToken is a raw token that is NOT a decodable claims payload, so
-	// fakeAuthenticator's json.Unmarshal fails and it returns an error. In the v2
+	// fakeAuthenticator's json.Unmarshal fails and it returns an error. In the v3
 	// seam the core verify.Verifier no longer checks the signature or the standard
-	// iss/aud/exp claims — those move into the TokenAuthenticator — so this stands
+	// iss/aud/exp claims — those live in the TokenAuthenticator — so this stands
 	// in for the real authenticator rejecting an expired / wrong-audience /
 	// bad-signature token. The Verifier collapses that into its single generic
 	// failure and the adapter fails closed.
@@ -53,52 +49,37 @@ const (
 )
 
 // fakeAuthenticator is a stand-in verify.TokenAuthenticator that keeps the test
-// pure-stdlib and offline. It treats the raw token as the already
-// signature-verified JSON claims payload and decodes it into a
-// *verify.VerifiedClaims — the only supported way to populate the unexported
-// Kubernetes claims from outside the library. A json.Unmarshal failure plays the
-// role of the real authenticator rejecting a token whose signature or standard
-// claims (iss/aud/exp) did not verify.
+// pure-stdlib and offline. In the v3 seam AuthenticateToken returns the token's
+// allowedAPIGroup values (or an error simulating a signature / iss / aud / exp
+// failure); the webhook-binding and exactly-one-of-(validating|mutating) checks
+// now live inside the real authenticator, so they are not exercised through this
+// fake. It decodes the raw token as a JSON payload carrying the allowed groups; a
+// json.Unmarshal failure plays the role of the real authenticator rejecting a
+// token whose signature or standard claims did not verify.
 type fakeAuthenticator struct{}
 
-func (fakeAuthenticator) AuthenticateToken(_ context.Context, rawToken string) (*verify.VerifiedClaims, error) {
-	var claims verify.VerifiedClaims
-	if err := json.Unmarshal([]byte(rawToken), &claims); err != nil {
+func (fakeAuthenticator) AuthenticateToken(_ context.Context, rawToken string) ([]string, error) {
+	var payload struct {
+		AllowedAPIGroups []string `json:"allowedAPIGroups"`
+	}
+	if err := json.Unmarshal([]byte(rawToken), &payload); err != nil {
 		return nil, fmt.Errorf("simulated authentication failure: %w", err)
 	}
-	return &claims, nil
+	return payload.AllowedAPIGroups, nil
 }
 
-// mkToken mints a token string (== JSON claims payload) matching the KEP-6060
-// contract. Only the "kubernetes.io" object is consulted by fakeAuthenticator's
-// decode (and thus by the core policy); iss/sub/aud are carried for realism and
-// are inert here because the real signature/standard-claim checks live in the
-// authenticator, which this fake simulates. mutate customizes the
-// "kubernetes.io" claims before marshaling; nil leaves the valid baseline
-// (a single validating-webhook binding authorized for group).
-func mkToken(t *testing.T, group string, mutate func(k8s map[string]any)) string {
+// mkToken mints a token string for the offline fake: a JSON payload carrying the
+// allowedAPIGroup values fakeAuthenticator returns. In the v3 seam the
+// signature / iss / aud / exp checks and the webhook-binding checks live inside
+// the real authenticator, so this offline fake models only the allowedAPIGroup
+// list the Verifier matches against the review's group.
+func mkToken(t *testing.T, group string) string {
 	t.Helper()
-	k8s := map[string]any{
-		"validatingWebhookConfiguration": map[string]string{
-			"name": "my-webhook",
-			"uid":  "webhook-uid",
-		},
-		"attestationClaims": map[string][]string{
-			allowedAPIGroupClaimKey: {group},
-		},
-	}
-	if mutate != nil {
-		mutate(k8s)
-	}
-	claims := map[string]any{
-		"iss":           testIssuer,
-		"sub":           "system:serviceaccount:kube-system:webhook",
-		"aud":           []string{testAudience},
-		"kubernetes.io": k8s,
-	}
-	payload, err := json.Marshal(claims)
+	payload, err := json.Marshal(map[string]any{
+		"allowedAPIGroups": []string{group},
+	})
 	if err != nil {
-		t.Fatalf("marshal claims: %v", err)
+		t.Fatalf("marshal token payload: %v", err)
 	}
 	return string(payload)
 }
@@ -122,23 +103,17 @@ func reqForGroup(group string) admission.Request {
 	}
 }
 
-func TestAuthenticate(t *testing.T) {
-	validApps := mkToken(t, "apps", nil)
-	wildcard := mkToken(t, "*", nil)
-	mutatingApps := mkToken(t, "apps", func(k8s map[string]any) {
-		// Exactly one bound object, but mutating instead of validating: the
-		// exactly-one rule treats the two symmetrically, so this must be accepted.
-		delete(k8s, "validatingWebhookConfiguration")
-		k8s["mutatingWebhookConfiguration"] = map[string]string{"name": "mwc", "uid": "mwc-uid"}
-	})
-	bothBound := mkToken(t, "apps", func(k8s map[string]any) {
-		// Two bound objects violates the exactly-one rule.
-		k8s["mutatingWebhookConfiguration"] = map[string]string{"name": "mwc", "uid": "mwc-uid"}
-	})
-	noBound := mkToken(t, "apps", func(k8s map[string]any) {
-		// Zero bound objects violates the exactly-one rule.
-		delete(k8s, "validatingWebhookConfiguration")
-	})
+func TestNewAuthenticator(t *testing.T) {
+	validApps := mkToken(t, "apps")
+	wildcard := mkToken(t, "*")
+
+	// TODO(kep-6060): rebuild bothBound / noBound / mutatingApps binding-violation
+	// coverage under the v3 seam (commit 2, post-review). In v3 the
+	// exactly-one-of-(validating|mutating) webhook-binding checks moved INTO the
+	// real authenticator; the offline fakeAuthenticator only returns the
+	// allowedAPIGroup list, so those cases cannot be exercised through this
+	// Verifier fake without replicating the binding logic. They are dropped here
+	// to restore compilation and re-added with real v3 semantics in commit 2.
 
 	tests := []struct {
 		name        string
@@ -160,13 +135,6 @@ func TestAuthenticate(t *testing.T) {
 			setAuthHdr:  true,
 			token:       wildcard,
 			reqGroup:    "batch",
-			wantAllowed: true,
-		},
-		{
-			name:        "valid token bound to mutating webhook, matching group",
-			setAuthHdr:  true,
-			token:       mutatingApps,
-			reqGroup:    "apps",
 			wantAllowed: true,
 		},
 		{
@@ -192,25 +160,11 @@ func TestAuthenticate(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
-			// Stands in for expired / wrong-audience / bad-signature: in v2 those
+			// Stands in for expired / wrong-audience / bad-signature: in v3 those
 			// checks live in the authenticator, which here returns an error.
 			name:        "authenticator error",
 			setAuthHdr:  true,
 			token:       authFailureToken,
-			reqGroup:    "apps",
-			wantAllowed: false,
-		},
-		{
-			name:        "bound-object violation: both validating and mutating",
-			setAuthHdr:  true,
-			token:       bothBound,
-			reqGroup:    "apps",
-			wantAllowed: false,
-		},
-		{
-			name:        "bound-object violation: neither validating nor mutating",
-			setAuthHdr:  true,
-			token:       noBound,
 			reqGroup:    "apps",
 			wantAllowed: false,
 		},
@@ -223,7 +177,7 @@ func TestAuthenticate(t *testing.T) {
 		},
 	}
 
-	auth := webhookauth.NewAuthenticator(newVerifier(t))
+	auth := admission.NewAuthenticator(newVerifier(t))
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -252,12 +206,12 @@ func TestAuthenticate(t *testing.T) {
 	}
 }
 
-// TestNilVerifierFailsClosed ensures a misconfigured authenticator (nil verifier)
-// denies rather than panicking or allowing.
-func TestNilVerifierFailsClosed(t *testing.T) {
-	auth := webhookauth.NewAuthenticator(nil)
+// TestNewAuthenticatorNilVerifierFailsClosed ensures a misconfigured
+// authenticator (nil verifier) denies rather than panicking or allowing.
+func TestNewAuthenticatorNilVerifierFailsClosed(t *testing.T) {
+	auth := admission.NewAuthenticator(nil)
 	httpReq := httptest.NewRequest(http.MethodPost, "/", nil)
-	httpReq.Header.Set("Authorization", "Bearer "+mkToken(t, "apps", nil))
+	httpReq.Header.Set("Authorization", "Bearer "+mkToken(t, "apps"))
 
 	resp := auth.Authenticate(context.Background(), httpReq, reqForGroup("apps"))
 	if resp.Allowed {
@@ -265,11 +219,11 @@ func TestNilVerifierFailsClosed(t *testing.T) {
 	}
 }
 
-// TestAuthenticatorEndToEnd drives the authenticator through the real
-// admission.Webhook.ServeHTTP pipeline (decode -> Authenticate -> Handle),
-// proving the hook short-circuits an unauthenticated request before the handler
-// and reuses controller-runtime's single AdmissionReview decode.
-func TestAuthenticatorEndToEnd(t *testing.T) {
+// TestWithAuthenticatorEndToEnd drives a verifier-backed authenticator through
+// the real admission.Webhook.ServeHTTP pipeline (decode -> Authenticate ->
+// Handle), proving the hook short-circuits an unauthenticated request before the
+// handler and reuses controller-runtime's single AdmissionReview decode.
+func TestWithAuthenticatorEndToEnd(t *testing.T) {
 	v := newVerifier(t)
 
 	var reached bool
@@ -278,10 +232,9 @@ func TestAuthenticatorEndToEnd(t *testing.T) {
 		return admission.Allowed("")
 	})
 
-	wh := &admission.Webhook{
-		Handler:       spy,
-		Authenticator: webhookauth.NewAuthenticator(v),
-	}
+	wh := (&admission.Webhook{
+		Handler: spy,
+	}).WithAuthenticator(admission.NewAuthenticator(v))
 	srv := httptest.NewServer(wh)
 	defer srv.Close()
 
@@ -306,7 +259,7 @@ func TestAuthenticatorEndToEnd(t *testing.T) {
 		}
 		req.Header.Set("Content-Type", "application/json")
 		if withToken {
-			req.Header.Set("Authorization", "Bearer "+mkToken(t, "apps", nil))
+			req.Header.Set("Authorization", "Bearer "+mkToken(t, "apps"))
 		}
 		resp, err := srv.Client().Do(req)
 		if err != nil {
@@ -341,4 +294,66 @@ func TestAuthenticatorEndToEnd(t *testing.T) {
 			t.Fatal("expected downstream handler NOT to be reached")
 		}
 	})
+}
+
+// TestWithInClusterAuthenticatorErrorPropagation exercises the fail-fast method.
+// In a unit-test environment there is no projected service-account token at
+// /var/run/secrets/kubernetes.io/serviceaccount/token, so oidc.InCluster fails
+// and the method must surface that error (and a nil Webhook).
+//
+// The happy path performs live OIDC discovery and background JWKS refresh, so it
+// is intentionally not tested here — it is covered by the library's own tests and
+// by the compile-time examples. We do not stand up a real OIDC server.
+func TestWithInClusterAuthenticatorErrorPropagation(t *testing.T) {
+	wh, err := (&admission.Webhook{}).WithInClusterAuthenticator(context.Background())
+	if err == nil {
+		t.Fatalf("expected an error with no projected service-account token, got nil (wh=%v)", wh)
+	}
+	if wh != nil {
+		t.Fatalf("expected a nil Webhook on error, got %v", wh)
+	}
+}
+
+// TestWithRemoteAuthenticatorErrorPropagation exercises the explicit
+// issuer/audience path. A bogus, unreachable issuer combined with an
+// already-expired context makes OIDC discovery fail fast, so the method must
+// surface that error (and a nil Webhook) without any network round-trip
+// completing.
+func TestWithRemoteAuthenticatorErrorPropagation(t *testing.T) {
+	// Already-cancelled context so discovery fails immediately rather than
+	// waiting on a real network dial.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer cancel()
+
+	wh, err := (&admission.Webhook{}).WithRemoteAuthenticator(ctx, "https://issuer.invalid", testAudience, nil)
+	if err == nil {
+		t.Fatalf("expected an error for an unreachable issuer, got nil (wh=%v)", wh)
+	}
+	if wh != nil {
+		t.Fatalf("expected a nil Webhook on error, got %v", wh)
+	}
+}
+
+// TestWithRemoteAuthenticatorValidatesArgs confirms the empty-issuer/empty-audience
+// guards in the underlying oidc.NewRemoteVerifier propagate through the method.
+// This path is fully offline (the guards reject before any discovery).
+func TestWithRemoteAuthenticatorValidatesArgs(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		issuer   string
+		audience string
+	}{
+		{name: "empty issuer", issuer: "", audience: testAudience},
+		{name: "empty audience", issuer: testIssuer, audience: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wh, err := (&admission.Webhook{}).WithRemoteAuthenticator(context.Background(), tc.issuer, tc.audience, nil)
+			if err == nil {
+				t.Fatalf("expected an error for %s, got nil (wh=%v)", tc.name, wh)
+			}
+			if wh != nil {
+				t.Fatalf("expected a nil Webhook on error, got %v", wh)
+			}
+		})
+	}
 }

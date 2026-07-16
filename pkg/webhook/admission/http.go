@@ -117,8 +117,8 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	wh.getLogger(&req).V(5).Info("received request")
 
-	if wh.Authenticator != nil {
-		response := wh.Authenticator.Authenticate(ctx, r, req)
+	if wh.authenticator != nil {
+		response := wh.authenticator.Authenticate(ctx, r, req)
 		if !response.Allowed {
 			if err := completeDeniedAuthenticationResponse(&response, req); err != nil {
 				wh.getLogger(&req).Error(err, "unable to encode authentication response")

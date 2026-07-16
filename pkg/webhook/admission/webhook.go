@@ -147,9 +147,14 @@ type Webhook struct {
 	// outside the context of requests.
 	LogConstructor func(base logr.Logger, req *Request) logr.Logger
 
-	// Authenticator verifies the HTTP caller after the AdmissionReview is decoded
-	// and before Handler is called. Nil preserves existing behavior.
-	Authenticator Authenticator
+	// authenticator verifies the HTTP caller after the AdmissionReview is decoded
+	// and before Handler is called. Nil preserves existing behavior exactly.
+	//
+	// It is set only via the fluent With*Authenticator methods:
+	// WithInClusterAuthenticator (zero-config, in-cluster KEP-6060 auth),
+	// WithRemoteAuthenticator (explicit issuer/audience), or WithAuthenticator
+	// (bring-your-own / testing).
+	authenticator Authenticator
 
 	setupLogOnce sync.Once
 	log          logr.Logger

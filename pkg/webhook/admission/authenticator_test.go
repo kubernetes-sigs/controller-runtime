@@ -68,15 +68,14 @@ var _ = Describe("Admission webhook authenticators", func() {
 				return Allowed("handled")
 			},
 		}
-		webhook := &Webhook{
+		webhook := (&Webhook{
 			Handler: handler,
-			Authenticator: authenticatorFunc(func(ctx context.Context, httpReq *http.Request, req Request) Response {
-				events = append(events, "authenticator")
-				Expect(httpReq.Header.Get("Authorization")).To(Equal("Bearer token"))
-				Expect(req.Resource.Group).To(Equal("apps"))
-				return Allowed("")
-			}),
-		}
+		}).WithAuthenticator(authenticatorFunc(func(ctx context.Context, httpReq *http.Request, req Request) Response {
+			events = append(events, "authenticator")
+			Expect(httpReq.Header.Get("Authorization")).To(Equal("Bearer token"))
+			Expect(req.Resource.Group).To(Equal("apps"))
+			return Allowed("")
+		}))
 
 		req := newAdmissionReviewHTTPRequest(fmt.Sprintf(`{%s,"request":{"resource":{"group":"apps","version":"v1","resource":"deployments"}}}`, gvkJSONv1))
 		req.Header.Set("Authorization", "Bearer token")
@@ -91,13 +90,12 @@ var _ = Describe("Admission webhook authenticators", func() {
 	DescribeTable("short-circuits denied authentication responses with the request AdmissionReview version",
 		func(authResponse Response, expectedCode int32, expectedReason metav1.StatusReason, expectedMessage string) {
 			handler := &fakeHandler{}
-			webhook := &Webhook{
+			webhook := (&Webhook{
 				Handler: handler,
-				Authenticator: authenticatorFunc(func(ctx context.Context, httpReq *http.Request, req Request) Response {
-					Expect(req.Resource.Group).To(Equal("apps"))
-					return authResponse
-				}),
-			}
+			}).WithAuthenticator(authenticatorFunc(func(ctx context.Context, httpReq *http.Request, req Request) Response {
+				Expect(req.Resource.Group).To(Equal("apps"))
+				return authResponse
+			}))
 			req := newAdmissionReviewHTTPRequest(fmt.Sprintf(`{%s,"request":{"uid":"auth-uid","resource":{"group":"apps","version":"v1","resource":"deployments"}}}`, gvkJSONv1beta1))
 			respRecorder := httptest.NewRecorder()
 
@@ -131,36 +129,30 @@ var _ = Describe("Admission webhook authenticators", func() {
 		constructors := map[string]func(Authenticator) http.Handler{
 			"WithValidator": func(authenticator Authenticator) http.Handler {
 				webhook := WithValidator[*corev1.Pod](scheme, podValidator{})
-				webhook.Authenticator = authenticator
-				return webhook
+				return webhook.WithAuthenticator(authenticator)
 			},
 			"WithDefaulter": func(authenticator Authenticator) http.Handler {
 				webhook := WithDefaulter[*corev1.Pod](scheme, podDefaulter{})
-				webhook.Authenticator = authenticator
-				return webhook
+				return webhook.WithAuthenticator(authenticator)
 			},
 			"WithCustomDefaulter": func(authenticator Authenticator) http.Handler {
 				webhook := WithCustomDefaulter(scheme, &corev1.Pod{}, customPodDefaulter{})
-				webhook.Authenticator = authenticator
-				return webhook
+				return webhook.WithAuthenticator(authenticator)
 			},
 			"MultiValidatingHandler": func(authenticator Authenticator) http.Handler {
-				return &Webhook{
-					Handler:       MultiValidatingHandler(&fakeHandler{}),
-					Authenticator: authenticator,
-				}
+				return (&Webhook{
+					Handler: MultiValidatingHandler(&fakeHandler{}),
+				}).WithAuthenticator(authenticator)
 			},
 			"MultiMutatingHandler": func(authenticator Authenticator) http.Handler {
-				return &Webhook{
-					Handler:       MultiMutatingHandler(&fakeHandler{}),
-					Authenticator: authenticator,
-				}
+				return (&Webhook{
+					Handler: MultiMutatingHandler(&fakeHandler{}),
+				}).WithAuthenticator(authenticator)
 			},
 			"StandaloneWebhook": func(authenticator Authenticator) http.Handler {
-				handler, err := StandaloneWebhook(&Webhook{
-					Handler:       &fakeHandler{},
-					Authenticator: authenticator,
-				}, StandaloneOptions{})
+				handler, err := StandaloneWebhook((&Webhook{
+					Handler: &fakeHandler{},
+				}).WithAuthenticator(authenticator), StandaloneOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				return handler
 			},

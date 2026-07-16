@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -107,13 +108,17 @@ func TestNewAuthenticator(t *testing.T) {
 	validApps := mkToken(t, "apps")
 	wildcard := mkToken(t, "*")
 
-	// TODO(kep-6060): rebuild bothBound / noBound / mutatingApps binding-violation
-	// coverage under the v3 seam (commit 2, post-review). In v3 the
-	// exactly-one-of-(validating|mutating) webhook-binding checks moved INTO the
-	// real authenticator; the offline fakeAuthenticator only returns the
-	// allowedAPIGroup list, so those cases cannot be exercised through this
-	// Verifier fake without replicating the binding logic. They are dropped here
-	// to restore compilation and re-added with real v3 semantics in commit 2.
+	// NOTE: the old bothBound / noBound / mutatingApps binding-violation cases are
+	// intentionally NOT rebuilt as controller-runtime tests. In the v3 seam the
+	// exactly-one-of-(validating|mutating) webhook-binding checks live INSIDE the
+	// library authenticator, not in CR's adapter. The offline fakeAuthenticator only
+	// returns the allowedAPIGroup list, so it cannot drive that binding logic without
+	// re-implementing it — a hollow test that would only assert our own fake. At CR's
+	// layer every such violation collapses to the same observable outcome: the library
+	// returns an error and the adapter fails closed. That single fail-closed contract
+	// is exercised by the "authenticator error" case below and, end-to-end through the
+	// ServeHTTP seam, by TestWithAuthenticatorEndToEnd's "verify error" subtest. The
+	// binding rules themselves are owned and tested by k8s.io/webhookauth.
 
 	tests := []struct {
 		name        string
@@ -198,6 +203,9 @@ func TestNewAuthenticator(t *testing.T) {
 				if resp.Result == nil || resp.Result.Code != http.StatusUnauthorized {
 					t.Fatalf("denied response = %#v, want 401", resp.Result)
 				}
+				if resp.Result.Reason != metav1.StatusReasonUnauthorized {
+					t.Fatalf("denied reason = %q, want %q", resp.Result.Reason, metav1.StatusReasonUnauthorized)
+				}
 				if tc.token != "" && strings.Contains(resp.Result.Message, tc.token) {
 					t.Fatalf("response leaked token material: %q", resp.Result.Message)
 				}
@@ -207,15 +215,23 @@ func TestNewAuthenticator(t *testing.T) {
 }
 
 // TestNewAuthenticatorNilVerifierFailsClosed ensures a misconfigured
-// authenticator (nil verifier) denies rather than panicking or allowing.
+// authenticator (nil verifier) denies rather than panicking or allowing, and
+// that the denial is a generic 401 that leaks no token material.
 func TestNewAuthenticatorNilVerifierFailsClosed(t *testing.T) {
 	auth := admission.NewAuthenticator(nil)
 	httpReq := httptest.NewRequest(http.MethodPost, "/", nil)
-	httpReq.Header.Set("Authorization", "Bearer "+mkToken(t, "apps"))
+	token := mkToken(t, "apps")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
 
 	resp := auth.Authenticate(context.Background(), httpReq, reqForGroup("apps"))
 	if resp.Allowed {
 		t.Fatal("nil verifier must deny")
+	}
+	if resp.Result == nil || resp.Result.Code != http.StatusUnauthorized {
+		t.Fatalf("nil-verifier denial = %#v, want 401 Unauthenticated", resp.Result)
+	}
+	if strings.Contains(resp.Result.Message, token) {
+		t.Fatalf("nil-verifier denial leaked token material: %q", resp.Result.Message)
 	}
 }
 
@@ -223,6 +239,10 @@ func TestNewAuthenticatorNilVerifierFailsClosed(t *testing.T) {
 // the real admission.Webhook.ServeHTTP pipeline (decode -> Authenticate ->
 // Handle), proving the hook short-circuits an unauthenticated request before the
 // handler and reuses controller-runtime's single AdmissionReview decode.
+//
+// It also pins the load-bearing transport property: a denial is delivered as an
+// HTTP 200 carrying Allowed:false (never a non-2xx), so a webhook configured with
+// failurePolicy: Ignore cannot flip a deny into an admit.
 func TestWithAuthenticatorEndToEnd(t *testing.T) {
 	v := newVerifier(t)
 
@@ -251,31 +271,40 @@ func TestWithAuthenticatorEndToEnd(t *testing.T) {
 		t.Fatalf("marshal review: %v", err)
 	}
 
-	post := func(withToken bool) admissionv1.AdmissionReview {
+	// post sends the review with the given Authorization header (empty = none) and
+	// returns the decoded AdmissionReview, the HTTP transport status, and the raw
+	// response body (so callers can assert no token material leaked).
+	post := func(authHeader string) (out admissionv1.AdmissionReview, status int, raw []byte) {
 		t.Helper()
 		req, err := http.NewRequest(http.MethodPost, srv.URL, bytes.NewReader(body))
 		if err != nil {
 			t.Fatalf("new request: %v", err)
 		}
 		req.Header.Set("Content-Type", "application/json")
-		if withToken {
-			req.Header.Set("Authorization", "Bearer "+mkToken(t, "apps"))
+		if authHeader != "" {
+			req.Header.Set("Authorization", authHeader)
 		}
 		resp, err := srv.Client().Do(req)
 		if err != nil {
 			t.Fatalf("do request: %v", err)
 		}
 		defer resp.Body.Close()
-		var out admissionv1.AdmissionReview
-		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		raw, err = io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("read response body: %v", err)
+		}
+		if err := json.Unmarshal(raw, &out); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
-		return out
+		return out, resp.StatusCode, raw
 	}
 
-	t.Run("valid token reaches handler and is allowed", func(t *testing.T) {
+	t.Run("valid token reaches handler and is allowed (HTTP 200)", func(t *testing.T) {
 		reached = false
-		out := post(true)
+		out, status, _ := post("Bearer " + mkToken(t, "apps"))
+		if status != http.StatusOK {
+			t.Fatalf("transport status = %d, want 200", status)
+		}
 		if out.Response == nil || !out.Response.Allowed {
 			t.Fatalf("expected Allowed=true, got %+v", out.Response)
 		}
@@ -284,14 +313,42 @@ func TestWithAuthenticatorEndToEnd(t *testing.T) {
 		}
 	})
 
-	t.Run("missing token is denied before handler", func(t *testing.T) {
+	t.Run("missing token is denied before handler (HTTP 200)", func(t *testing.T) {
 		reached = false
-		out := post(false)
+		out, status, _ := post("")
+		if status != http.StatusOK {
+			t.Fatalf("transport status = %d, want 200 — a non-2xx would let failurePolicy:Ignore admit", status)
+		}
 		if out.Response == nil || out.Response.Allowed {
 			t.Fatalf("expected Allowed=false, got %+v", out.Response)
 		}
 		if reached {
 			t.Fatal("expected downstream handler NOT to be reached")
+		}
+	})
+
+	t.Run("verify error is denied before handler (HTTP 200, 401, no leak)", func(t *testing.T) {
+		// authFailureToken makes fakeAuthenticator return an error, so
+		// VerifyAdmissionRequest fails and the adapter fails closed. At CR's layer
+		// this single case SUBSUMES the old bothBound / noBound / mutatingApps
+		// binding violations — in v3 the library reports every one of them as the
+		// same generic error, and CR denies identically.
+		reached = false
+		out, status, raw := post("Bearer " + authFailureToken)
+		if status != http.StatusOK {
+			t.Fatalf("transport status = %d, want 200", status)
+		}
+		if out.Response == nil || out.Response.Allowed {
+			t.Fatalf("expected Allowed=false, got %+v", out.Response)
+		}
+		if reached {
+			t.Fatal("expected downstream handler NOT to be reached")
+		}
+		if out.Response.Result == nil || out.Response.Result.Code != http.StatusUnauthorized {
+			t.Fatalf("denied response = %#v, want 401", out.Response.Result)
+		}
+		if strings.Contains(string(raw), authFailureToken) {
+			t.Fatalf("response body leaked token material: %s", raw)
 		}
 	})
 }

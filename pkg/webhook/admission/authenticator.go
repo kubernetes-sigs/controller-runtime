@@ -28,11 +28,18 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+// healthChecker is implemented by Authenticators whose readiness can be probed
+// (e.g. the verifier-backed authenticator, which is not ready until its audience is bound).
+type healthChecker interface{ HealthCheck() error }
+
 // verifierAuthenticator adapts a k8s.io/webhookauth *verify.Verifier onto the
 // admission.Authenticator seam.
 type verifierAuthenticator struct{ v *verify.Verifier }
 
-var _ Authenticator = verifierAuthenticator{}
+var (
+	_ Authenticator = verifierAuthenticator{}
+	_ healthChecker = verifierAuthenticator{}
+)
 
 // NewAuthenticator wraps a k8s.io/webhookauth *verify.Verifier as an
 // Authenticator that enforces KEP-6060 API server authentication.
@@ -71,6 +78,38 @@ func (a verifierAuthenticator) Authenticate(ctx context.Context, r *http.Request
 		return Unauthenticated("unauthenticated")
 	}
 	return Allowed("")
+}
+
+// HealthCheck reports whether the backing verifier is ready to verify API server
+// tokens, delegating to the library verifier's own HealthCheck. A nil verifier
+// gates nothing and always reports ready.
+func (a verifierAuthenticator) HealthCheck() error {
+	if a.v == nil {
+		return nil // no verifier configured → nothing to gate readiness on
+	}
+	return a.v.HealthCheck()
+}
+
+// HealthCheck reports whether the webhook's KEP-6060 authenticator (if any) is
+// ready to verify API server tokens. It has the signature of healthz.Checker, so
+// it can be registered directly:
+//
+//	mgr.AddReadyzCheck("webhook-auth", wh.HealthCheck)
+//
+// This is a readiness check: register it with AddReadyzCheck, not AddHealthzCheck.
+// An authenticator that cannot yet bind its audience should stay not-ready (so the
+// pod is not sent traffic) rather than fail liveness, which would crash-loop the pod.
+//
+// When no verifier-backed authenticator is configured it always reports ready, so
+// it is safe to register unconditionally. When an in-cluster/remote authenticator
+// is configured, it reports not-ready until the verifier has bound its audience —
+// so a pod that can never derive its audience fails readiness and is restarted,
+// instead of silently denying all traffic.
+func (wh *Webhook) HealthCheck(_ *http.Request) error {
+	if hc, ok := wh.authenticator.(healthChecker); ok {
+		return hc.HealthCheck()
+	}
+	return nil
 }
 
 // WithAuthenticator sets a custom Authenticator (bring-your-own / testing) and

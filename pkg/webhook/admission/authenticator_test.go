@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -180,11 +181,55 @@ var _ = Describe("Admission webhook authenticators", func() {
 	})
 })
 
+var _ = Describe("Webhook.HealthCheck (readyz seam)", func() {
+	It("reports ready when no authenticator is configured", func() {
+		wh := &Webhook{Handler: &fakeHandler{}}
+		Expect(wh.HealthCheck(nil)).To(Succeed())
+	})
+
+	It("reports ready when the authenticator does not implement HealthCheck", func() {
+		// A plain authenticatorFunc has no HealthCheck method, so registering the
+		// checker unconditionally must be safe (always ready).
+		wh := (&Webhook{Handler: &fakeHandler{}}).WithAuthenticator(
+			authenticatorFunc(func(context.Context, *http.Request, Request) Response {
+				return Allowed("")
+			}))
+		Expect(wh.HealthCheck(nil)).To(Succeed())
+	})
+
+	It("surfaces the not-ready error from a health-aware authenticator", func() {
+		sentinel := errors.New("audience not bound")
+		wh := (&Webhook{Handler: &fakeHandler{}}).WithAuthenticator(
+			healthAwareAuthenticator{healthErr: sentinel})
+		Expect(wh.HealthCheck(nil)).To(MatchError(sentinel))
+	})
+
+	It("reports ready when a health-aware authenticator is ready", func() {
+		wh := (&Webhook{Handler: &fakeHandler{}}).WithAuthenticator(
+			healthAwareAuthenticator{healthErr: nil})
+		Expect(wh.HealthCheck(nil)).To(Succeed())
+	})
+
+	It("reports ready for a verifierAuthenticator with a nil verifier", func() {
+		Expect(verifierAuthenticator{}.HealthCheck()).To(Succeed())
+	})
+})
+
 type authenticatorFunc func(context.Context, *http.Request, Request) Response
 
 func (f authenticatorFunc) Authenticate(ctx context.Context, httpReq *http.Request, req Request) Response {
 	return f(ctx, httpReq, req)
 }
+
+// healthAwareAuthenticator is a minimal Authenticator that also implements the
+// unexported healthChecker seam, returning healthErr from HealthCheck.
+type healthAwareAuthenticator struct{ healthErr error }
+
+func (healthAwareAuthenticator) Authenticate(context.Context, *http.Request, Request) Response {
+	return Allowed("")
+}
+
+func (a healthAwareAuthenticator) HealthCheck() error { return a.healthErr }
 
 func newAdmissionReviewHTTPRequest(body string) *http.Request {
 	req := httptest.NewRequest(http.MethodPost, "/admission", bytes.NewBufferString(body))

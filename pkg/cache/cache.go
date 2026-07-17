@@ -96,6 +96,21 @@ type Informers interface {
 	client.FieldIndexer
 }
 
+// TypedObject is a client.Object that can be used with the type-safe informer API.
+type TypedObject interface {
+	client.Object
+	toolscache.Object
+}
+
+// GetTypedInformer fetches or constructs a type-safe informer for the given object.
+func GetTypedInformer[object TypedObject](ctx context.Context, informers Informers, obj object, opts ...InformerGetOption) (TypedInformer[object], error) {
+	informer, err := informers.GetInformer(ctx, obj, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return NewTypedInformer[object](informer), nil
+}
+
 // Informer allows you to interact with the underlying informer.
 type Informer interface {
 	// AddEventHandler adds an event handler to the shared informer using the shared informer's resync

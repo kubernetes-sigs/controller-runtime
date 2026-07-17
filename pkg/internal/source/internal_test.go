@@ -32,8 +32,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -81,6 +79,7 @@ var _ = Describe("Internal", func() {
 
 	Describe("EventHandler", func() {
 		var pod, newPod *corev1.Pod
+		var deletedPod cache.DeletedObject[client.Object]
 
 		BeforeEach(func() {
 			pod = &corev1.Pod{
@@ -90,6 +89,7 @@ var _ = Describe("Internal", func() {
 			}
 			newPod = pod.DeepCopy()
 			newPod.Labels = map[string]string{"foo": "bar"}
+			deletedPod = cache.DeletedObject[client.Object]{OptionalObj: pod}
 		})
 
 		It("should create a CreateEvent", func(ctx SpecContext) {
@@ -138,14 +138,6 @@ var _ = Describe("Internal", func() {
 			})
 			instance.OnAdd(pod, false)
 			Expect(set).To(BeTrue())
-		})
-
-		It("should not call Create EventHandler if the object is not a runtime.Object", func() {
-			instance.OnAdd(&metav1.ObjectMeta{}, false)
-		})
-
-		It("should not call Create EventHandler if the object does not have metadata", func() {
-			instance.OnAdd(FooRuntimeObject{}, false)
 		})
 
 		It("should create an UpdateEvent", func(ctx SpecContext) {
@@ -197,22 +189,12 @@ var _ = Describe("Internal", func() {
 			Expect(set).To(BeTrue())
 		})
 
-		It("should not call Update EventHandler if the object is not a runtime.Object", func() {
-			instance.OnUpdate(&metav1.ObjectMeta{}, &corev1.Pod{})
-			instance.OnUpdate(&corev1.Pod{}, &metav1.ObjectMeta{})
-		})
-
-		It("should not call Update EventHandler if the object does not have metadata", func() {
-			instance.OnUpdate(FooRuntimeObject{}, &corev1.Pod{})
-			instance.OnUpdate(&corev1.Pod{}, FooRuntimeObject{})
-		})
-
 		It("should create a DeleteEvent", func() {
 			funcs.DeleteFunc = func(ctx context.Context, evt event.DeleteEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				defer GinkgoRecover()
 				Expect(evt.Object).To(Equal(pod))
 			}
-			instance.OnDelete(pod)
+			instance.OnDelete(deletedPod)
 		})
 
 		It("should used Predicates to filter DeleteEvents", func(ctx SpecContext) {
@@ -220,14 +202,14 @@ var _ = Describe("Internal", func() {
 			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
 			})
-			instance.OnDelete(pod)
+			instance.OnDelete(deletedPod)
 			Expect(set).To(BeFalse())
 
 			set = false
 			instance = internal.NewEventHandler(ctx, &controllertest.Queue{}, setfuncs, []predicate.Predicate{
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 			})
-			instance.OnDelete(pod)
+			instance.OnDelete(deletedPod)
 			Expect(set).To(BeTrue())
 
 			set = false
@@ -235,7 +217,7 @@ var _ = Describe("Internal", func() {
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
 			})
-			instance.OnDelete(pod)
+			instance.OnDelete(deletedPod)
 			Expect(set).To(BeFalse())
 
 			set = false
@@ -243,7 +225,7 @@ var _ = Describe("Internal", func() {
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return false }},
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 			})
-			instance.OnDelete(pod)
+			instance.OnDelete(deletedPod)
 			Expect(set).To(BeFalse())
 
 			set = false
@@ -251,16 +233,8 @@ var _ = Describe("Internal", func() {
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 				predicate.Funcs{DeleteFunc: func(event.DeleteEvent) bool { return true }},
 			})
-			instance.OnDelete(pod)
+			instance.OnDelete(deletedPod)
 			Expect(set).To(BeTrue())
-		})
-
-		It("should not call Delete EventHandler if the object is not a runtime.Object", func() {
-			instance.OnDelete(&metav1.ObjectMeta{})
-		})
-
-		It("should not call Delete EventHandler if the object does not have metadata", func() {
-			instance.OnDelete(FooRuntimeObject{})
 		})
 
 		It("should create a DeleteEvent from a tombstone", func() {
@@ -273,17 +247,7 @@ var _ = Describe("Internal", func() {
 				Expect(evt.DeleteStateUnknown).Should(BeTrue())
 			}
 
-			instance.OnDelete(tombstone)
-		})
-
-		It("should ignore tombstone objects without meta", func() {
-			tombstone := cache.DeletedFinalStateUnknown{Obj: Foo{}}
-			instance.OnDelete(tombstone)
-		})
-		It("should ignore objects without meta", func() {
-			instance.OnAdd(Foo{}, false)
-			instance.OnUpdate(Foo{}, Foo{})
-			instance.OnDelete(Foo{})
+			instance.OnDelete(cache.DeletedObject[client.Object]{OptionalObj: pod, FinalStateUnknown: &tombstone})
 		})
 	})
 
@@ -318,12 +282,3 @@ var _ = Describe("Internal", func() {
 		})
 	})
 })
-
-type Foo struct{}
-
-var _ runtime.Object = FooRuntimeObject{}
-
-type FooRuntimeObject struct{}
-
-func (FooRuntimeObject) GetObjectKind() schema.ObjectKind { return nil }
-func (FooRuntimeObject) DeepCopyObject() runtime.Object   { return nil }

@@ -47,12 +47,12 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/net v0.55.1-0.20260602153038-42abb857022c // indirect
+	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/term v0.43.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/term v0.45.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
@@ -72,3 +72,13 @@ require (
 )
 
 replace sigs.k8s.io/controller-runtime => ../..
+
+replace (
+	k8s.io/api => github.com/pohly/kubernetes/staging/src/k8s.io/api v0.0.0-20260717130512-b13e45ea9824
+	k8s.io/apiextensions-apiserver => github.com/pohly/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20260717130512-b13e45ea9824
+	k8s.io/apimachinery => github.com/pohly/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20260717130512-b13e45ea9824
+	k8s.io/apiserver => github.com/pohly/kubernetes/staging/src/k8s.io/apiserver v0.0.0-20260717130512-b13e45ea9824
+	k8s.io/client-go => github.com/pohly/kubernetes/staging/src/k8s.io/client-go v0.0.0-20260717130512-b13e45ea9824
+	k8s.io/component-base => github.com/pohly/kubernetes/staging/src/k8s.io/component-base v0.0.0-20260717130512-b13e45ea9824
+	k8s.io/streaming => github.com/pohly/kubernetes/staging/src/k8s.io/streaming v0.0.0-20260717130512-b13e45ea9824
+)

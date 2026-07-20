@@ -2089,6 +2089,23 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep2Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 			})
+
+			It("should error when InNamespace targets a cluster-scoped object (issue #988)", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				err = cl.DeleteAllOf(ctx, node, client.InNamespace("some-namespace"))
+				Expect(err).To(MatchError(`failed to DeleteAllOf: /v1, Kind=Node is cluster-scoped and does not support to filter by namespace "some-namespace"`))
+			})
+
+			It("should still allow a cluster-wide delete collection of a cluster-scoped object when no namespace is specified", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("deleting a collection of Nodes matching a label that does not exist, so nothing is actually removed")
+				err = cl.DeleteAllOf(ctx, node, client.MatchingLabels{"this-label-does-not-exist-on-any-node": "true"})
+				Expect(err).NotTo(HaveOccurred())
+			})
 		})
 		Context("with unstructured objects", func() {
 			It("should delete an existing object from a go struct", func(ctx SpecContext) {
@@ -2195,6 +2212,22 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep2Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 			})
+
+			It("should error when InNamespace targets a cluster-scoped object (issue #988)", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				u := &unstructured.Unstructured{}
+				Expect(scheme.Convert(node, u, nil)).To(Succeed())
+				u.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "",
+					Kind:    "Node",
+					Version: "v1",
+				})
+
+				err = cl.DeleteAllOf(ctx, u, client.InNamespace("some-namespace"))
+				Expect(err).To(MatchError(`failed to DeleteAllOf: /v1, Kind=Node is cluster-scoped and does not support to filter by namespace "some-namespace"`))
+			})
 		})
 		Context("with metadata objects", func() {
 			It("should delete an existing object from a go struct", func(ctx SpecContext) {
@@ -2274,6 +2307,16 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(err).To(HaveOccurred())
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep2Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
+			})
+
+			It("should error when InNamespace targets a cluster-scoped object (issue #988)", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				metaObj := metaOnlyFromObj(node, scheme)
+
+				err = cl.DeleteAllOf(ctx, metaObj, client.InNamespace("some-namespace"))
+				Expect(err).To(MatchError(`failed to DeleteAllOf: /v1, Kind=Node is cluster-scoped and does not support to filter by namespace "some-namespace"`))
 			})
 		})
 	})
@@ -3067,6 +3110,23 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(deps.Items[1].Name).To(Equal(dep4.Name))
 			})
 
+			It("should error when InNamespace targets a cluster-scoped object (issue #988)", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				nodeList := &corev1.NodeList{}
+				err = cl.List(ctx, nodeList, client.InNamespace("some-namespace"))
+				Expect(err).To(MatchError(`failed to List: /v1, Kind=Node is cluster-scoped and does not support to filter by namespace "some-namespace"`))
+			})
+
+			It("should still allow listing a cluster-scoped object when no namespace is specified", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				nodeList := &corev1.NodeList{}
+				Expect(cl.List(ctx, nodeList)).To(Succeed())
+			})
+
 			PIt("should fail if the object doesn't have meta", func() {
 
 			})
@@ -3342,6 +3402,21 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				deleteDeployment(ctx, depFrontend4, "test-namespace-8")
 				deleteNamespace(ctx, tns3)
 				deleteNamespace(ctx, tns4)
+			})
+
+			It("should error when InNamespace targets a cluster-scoped object (issue #988)", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				nodeList := &unstructured.UnstructuredList{}
+				nodeList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "",
+					Kind:    "NodeList",
+					Version: "v1",
+				})
+
+				err = cl.List(ctx, nodeList, client.InNamespace("some-namespace"))
+				Expect(err).To(MatchError(`failed to List: /v1, Kind=Node is cluster-scoped and does not support to filter by namespace "some-namespace"`))
 			})
 
 			PIt("should fail if the object doesn't have meta", func() {
@@ -3789,6 +3864,21 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(metaList.Continue).To(BeEmpty())
 				Expect(metaList.Items[0].Name).To(Equal(dep3.Name))
 				Expect(metaList.Items[1].Name).To(Equal(dep4.Name))
+			})
+
+			It("should error when InNamespace targets a cluster-scoped object (issue #988)", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				metaList := &metav1.PartialObjectMetadataList{}
+				metaList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "",
+					Version: "v1",
+					Kind:    "NodeList",
+				})
+
+				err = cl.List(ctx, metaList, client.InNamespace("some-namespace"))
+				Expect(err).To(MatchError(`failed to List: /v1, Kind=Node is cluster-scoped and does not support to filter by namespace "some-namespace"`))
 			})
 
 			PIt("should fail if the object doesn't have meta", func() {

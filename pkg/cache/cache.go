@@ -99,7 +99,7 @@ type Informers interface {
 // TypedObject is a client.Object that can be used with the type-safe informer API.
 type TypedObject interface {
 	client.Object
-	toolscache.Object
+	comparable
 }
 
 // GetTypedInformer fetches or constructs a type-safe informer for the given object.

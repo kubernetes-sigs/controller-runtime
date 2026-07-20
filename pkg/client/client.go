@@ -331,6 +331,24 @@ func (c *client) Delete(ctx context.Context, obj Object, opts ...DeleteOption) e
 
 // DeleteAllOf implements client.Client.
 func (c *client) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllOfOption) error {
+	// Parse opts into a normalized DeleteAllOfOptions exactly once, then pass only
+	// that normalized value downstream. *DeleteAllOfOptions implements
+	// DeleteAllOfOption, so downstream layers can copy its already-resolved fields
+	// without re-invoking any caller-supplied option a second time.
+	deleteAllOfOpts := DeleteAllOfOptions{}
+	deleteAllOfOpts.ApplyOptions(opts)
+	opts = []DeleteAllOfOption{&deleteAllOfOpts}
+
+	if deleteAllOfOpts.Namespace != "" {
+		gvk, err := c.GroupVersionKindFor(obj)
+		if err != nil {
+			return err
+		}
+		if err := c.rejectNamespaceForClusterScoped("DeleteAllOf", gvk, deleteAllOfOpts.Namespace); err != nil {
+			return err
+		}
+	}
+
 	switch obj.(type) {
 	case runtime.Unstructured:
 		return c.unstructuredClient.DeleteAllOf(ctx, obj, opts...)
@@ -339,6 +357,19 @@ func (c *client) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllO
 	default:
 		return c.typedClient.DeleteAllOf(ctx, obj, opts...)
 	}
+}
+
+// rejectNamespaceForClusterScoped returns an error if gvk is cluster-scoped and
+// namespace is non-empty; it is a no-op for namespace-scoped resources.
+func (c *client) rejectNamespaceForClusterScoped(op string, gvk schema.GroupVersionKind, namespace string) error {
+	namespaced, err := apiutil.IsGVKNamespaced(gvk, c.mapper)
+	if err != nil {
+		return fmt.Errorf("failed to determine if %s is namespace-scoped: %w", gvk, err)
+	}
+	if namespaced {
+		return nil
+	}
+	return fmt.Errorf("failed to %s: %s is cluster-scoped and does not support namespace %q", op, gvk, namespace)
 }
 
 // Patch implements client.Client.
@@ -388,6 +419,26 @@ func (c *client) Get(ctx context.Context, key ObjectKey, obj Object, opts ...Get
 
 // List implements client.Client.
 func (c *client) List(ctx context.Context, obj ObjectList, opts ...ListOption) error {
+	// Parse opts into a normalized ListOptions exactly once, then pass only that
+	// normalized value downstream. *ListOptions implements ListOption, so
+	// downstream layers (cache, typed, unstructured, metadata) can copy its
+	// already-resolved fields without re-invoking any caller-supplied option a
+	// second time.
+	listOpts := ListOptions{}
+	listOpts.ApplyOptions(opts)
+	opts = []ListOption{&listOpts}
+
+	if listOpts.Namespace != "" {
+		gvk, err := c.GroupVersionKindFor(obj)
+		if err != nil {
+			return err
+		}
+		gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
+		if err := c.rejectNamespaceForClusterScoped("List", gvk, listOpts.Namespace); err != nil {
+			return err
+		}
+	}
+
 	if isUncached, err := c.shouldBypassCache(obj); err != nil {
 		return err
 	} else if !isUncached {

@@ -1198,6 +1198,9 @@ func (c *fakeClient) deleteObjectLocked(gvr schema.GroupVersionResource, accesso
 			if len(oldAccessor.GetFinalizers()) > 0 {
 				now := metav1.Now()
 				oldAccessor.SetDeletionTimestamp(&now)
+				// Reflect onto the caller's object so Delete matches Create/Update/Get
+				// and apiserver responses when finalizers delay removal.
+				accessor.SetDeletionTimestamp(&now)
 				// Call update directly with mutability parameter set to true to allow
 				// changes to deletionTimestamp
 				return c.tracker.update(gvr, old, accessor.GetNamespace(), false, true, metav1.UpdateOptions{})

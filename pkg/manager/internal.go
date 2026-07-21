@@ -51,14 +51,19 @@ import (
 
 const (
 	// Values taken from: https://github.com/kubernetes/component-base/blob/master/config/v1alpha1/defaults.go
-	defaultLeaseDuration          = 15 * time.Second
-	defaultRenewDeadline          = 10 * time.Second
-	defaultRetryPeriod            = 2 * time.Second
+	defaultLeaseDuration = 15 * time.Second
+	defaultRenewDeadline = 10 * time.Second
+	defaultRetryPeriod   = 2 * time.Second
+
 	defaultGracefulShutdownPeriod = 30 * time.Second
 
 	defaultReadinessEndpoint = "/readyz"
 	defaultLivenessEndpoint  = "/healthz"
 )
+
+// errLeaderElectionLost is returned by OnStoppedLeading when leader election is lost.
+// It is used to suppress this expected error during graceful shutdown.
+var errLeaderElectionLost = errors.New("leader election lost")
 
 var _ Runnable = &controllerManager{}
 
@@ -528,8 +533,15 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 				cm.internalCancel()
 			})
 			select {
+			// errLeaderElectionLost is safe to suppress here. This drain goroutine
+			// is only started from engageStopProcedure, which is called via defer
+			// in Start() — meaning Start() has already exited its select loop and
+			// returned any mid-run errLeaderElectionLost to the caller before this
+			// goroutine ever reads from errChan. Any errLeaderElectionLost seen
+			// here is therefore always the result of our own cm.internalCancel()
+			// call above, not a genuine unexpected loss.
 			case err := <-cm.errChan:
-				if !errors.Is(err, context.Canceled) {
+				if !errors.Is(err, context.Canceled) && !errors.Is(err, errLeaderElectionLost) {
 					cm.logger.Error(err, "error received after stop sequence was engaged")
 				}
 			case <-stopComplete:
@@ -634,7 +646,7 @@ func (cm *controllerManager) initLeaderElector() (*leaderelection.LeaderElector,
 				// Most implementations of leader election log.Fatal() here.
 				// Since Start is wrapped in log.Fatal when called, we can just return
 				// an error here which will cause the program to exit.
-				cm.errChan <- errors.New("leader election lost")
+				cm.errChan <- errLeaderElectionLost
 			},
 		},
 		ReleaseOnCancel: cm.leaderElectionReleaseOnCancel,

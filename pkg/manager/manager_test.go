@@ -45,6 +45,7 @@ import (
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -2072,6 +2073,32 @@ var _ = Describe("manger.Manager", func() {
 		By("Waiting for the leader election runnable to be executed after leader election was won")
 		<-m.Elected()
 		Expect(<-runnableExecutionOrderChan).To(Equal(leaderElectionRunnableName))
+	})
+
+	It("should not return leader election lost during graceful shutdown", func(ctx SpecContext) {
+		runCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		m, err := New(cfg, Options{
+			LeaderElection:          true,
+			LeaderElectionID:        "leader-election-lost-on-stop-test",
+			LeaderElectionNamespace: "default",
+			GracefulShutdownTimeout: ptr.To(5 * time.Second),
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		doneCh := make(chan error, 1)
+		go func() {
+			doneCh <- m.Start(runCtx)
+		}()
+
+		Eventually(m.Elected()).Should(BeClosed())
+
+		cancel()
+
+		Eventually(doneCh).Should(
+			Receive(Or(BeNil(), MatchError(context.Canceled))),
+		)
 	})
 })
 

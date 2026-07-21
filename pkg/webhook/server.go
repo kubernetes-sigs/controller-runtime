@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/internal/httpserver"
+	admissionmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/admission/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
@@ -183,6 +184,9 @@ func (s *DefaultServer) Register(path string, hook http.Handler) {
 		panic(fmt.Errorf("can't register duplicate path: %v", path))
 	}
 	s.webhooks[path] = hook
+	if _, ok := hook.(*Admission); ok {
+		admissionmetrics.InitializeAdmissionResponseTotal(path)
+	}
 	s.webhookMux.Handle(path, metrics.InstrumentedHook(path, hook))
 
 	regLog := log.WithValues("path", path)

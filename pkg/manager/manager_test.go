@@ -459,7 +459,7 @@ var _ = Describe("manger.Manager", func() {
 				_, isLeaseLock := cm.resourceLock.(*resourcelock.LeaseLock)
 				Expect(isLeaseLock).To(BeTrue())
 			})
-			It("should release lease if ElectionReleaseOnCancel is true", func(specCtx SpecContext) {
+			It("should release lease if ReleaseOnCancel is true", func(specCtx SpecContext) {
 				var rl resourcelock.Interface
 				m, err := New(cfg, Options{
 					LeaderElection:                true,
@@ -489,6 +489,106 @@ var _ = Describe("manger.Manager", func() {
 				record, _, err := rl.Get(specCtx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(record.HolderIdentity).To(BeEmpty())
+			})
+			It("should stop leader election runnables before releasing lease when ReleaseOnCancel is true", func(specCtx SpecContext) {
+				var rl resourcelock.Interface
+				m, err := New(cfg, Options{
+					LeaderElection:                true,
+					LeaderElectionResourceLock:    resourcelock.LeasesResourceLock,
+					LeaderElectionID:              "controller-runtime",
+					LeaderElectionNamespace:       "my-ns",
+					LeaderElectionReleaseOnCancel: true,
+					HealthProbeBindAddress:        "0",
+					Metrics:                       metricsserver.Options{BindAddress: "0"},
+					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+						var err error
+						rl, err = fakeleaderelection.NewResourceLock(config, recorderProvider, options)
+						return rl, err
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				cm := m.(*controllerManager)
+				cm.gracefulShutdownTimeout = 5 * time.Second
+
+				slowRunnable := RunnableFunc(func(ctx context.Context) error {
+					defer GinkgoRecover()
+					<-ctx.Done()
+					time.Sleep(200 * time.Millisecond)
+					// Verify the lease is still held while the runnable is shutting down.
+					record, _, err := rl.Get(context.Background())
+					Expect(err).ToNot(HaveOccurred())
+					Expect(record.HolderIdentity).ToNot(BeEmpty(), "lease was released before runnable finished")
+					return nil
+				})
+				Expect(m.Add(slowRunnable)).To(Succeed())
+
+				ctx, cancel := context.WithCancel(specCtx)
+				mgrDone := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					defer close(mgrDone)
+					Expect(m.Start(ctx)).NotTo(HaveOccurred())
+				}()
+				<-cm.elected
+				cancel()
+				<-mgrDone
+
+				record, _, err := rl.Get(specCtx)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(record.HolderIdentity).To(BeEmpty())
+			})
+			It("should stop leader election runnables before releasing lease on renewal failure", func(specCtx SpecContext) {
+				var rl resourcelock.Interface
+				m, err := New(cfg, Options{
+					LeaderElection:                true,
+					LeaderElectionResourceLock:    resourcelock.LeasesResourceLock,
+					LeaderElectionID:              "controller-runtime",
+					LeaderElectionNamespace:       "my-ns",
+					LeaderElectionReleaseOnCancel: true,
+					HealthProbeBindAddress:        "0",
+					Metrics:                       metricsserver.Options{BindAddress: "0"},
+					newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
+						var err error
+						rl, err = fakeleaderelection.NewResourceLock(config, recorderProvider, options)
+						return rl, err
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				cm := m.(*controllerManager)
+				cm.gracefulShutdownTimeout = 5 * time.Second
+
+				runnableStopped := make(chan struct{})
+				slowRunnable := RunnableFunc(func(ctx context.Context) error {
+					<-ctx.Done()
+					time.Sleep(200 * time.Millisecond)
+					close(runnableStopped)
+					return nil
+				})
+				Expect(m.Add(slowRunnable)).To(Succeed())
+
+				mgrDone := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					defer close(mgrDone)
+					err := m.Start(specCtx)
+					// Renewal failure causes "leader election lost"
+					Expect(err).To(HaveOccurred())
+				}()
+				<-cm.elected
+
+				// Block renewal to simulate failure
+				rl.(fakeleaderelection.ControllableResourceLockInterface).BlockLeaderElection()
+				<-mgrDone
+
+				// The runnable must have finished before Start returned.
+				select {
+				case <-runnableStopped:
+					// Success
+				default:
+					Fail("leader election runnable was not stopped before manager returned on renewal failure")
+				}
 			})
 			It("should set the leaselocks's label field when LeaderElectionLabels is set", func() {
 				labels := map[string]string{"my-key": "my-val"}
